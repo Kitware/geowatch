@@ -44,7 +44,7 @@ source deactivate
 To remove the watch environment, run:
 
 ```bash
-source deactivate (if watch is activated before)
+source deactivate #(if watch is activated before)
 conda remove --name watch --all
 ```
 To update the watch environment when new packages have been added, run:
