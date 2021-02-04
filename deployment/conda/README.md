@@ -25,7 +25,7 @@ conda update --name base conda --yes
 
 ### Create SMART Conda Environment
 
-The instructions below can be used to create the SMART Conda environment and install WATCH as a package. 
+The instructions below can be used to create the SMART Conda environment.
 
 ```bash
 mkdir SMART_DIR (pick a name of your choice)
@@ -34,7 +34,6 @@ git clone https://gitlab.kitware.com/smart/watch.git
 cd watch
 conda env create -f deployment/conda/conda_env.yml
 source activate watch
-pip install -e .
 ```
 
 To deactivate the watch environment, run:
