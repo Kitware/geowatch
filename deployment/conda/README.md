@@ -28,28 +28,28 @@ conda update --name base conda --yes
 The instructions below can be used to create the SMART Conda environment.
 
 ```bash
-mkdir SMART_DIR (pick a name of your choice)
+mkdir SMART_DIR #(pick a name of your choice)
 cd SMART_DIR
 git clone https://gitlab.kitware.com/smart/watch.git
 cd watch
 conda env create -f deployment/conda/conda_env.yml
-source activate watch
+conda activate watch
 ```
 
 To deactivate the watch environment, run:
 
 ```bash
-source deactivate
+conda deactivate
 ```
 To remove the watch environment, run:
 
 ```bash
-source deactivate #(if watch is activated before)
+conda deactivate #(if watch is activated before)
 conda remove --name watch --all
 ```
 To update the watch environment when new packages have been added, run:
 
 ```bash
-source activate watch
+conda activate watch
 conda env update -f deployment/conda/conda_env.yml
 ```
