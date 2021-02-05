@@ -12,4 +12,4 @@ dependencies on geospatial and computer vision libraries.  Provided with this
 repository are instructions for configuring a development environment with
 Conda.  Conda provides a consistent development environment with a known
 configuration of dependencies versions.  Follow the directions in
-[deployment/conda/README.rd](./deployment/conda/README.md) to setup this environment.
+[deployment/conda/README.md](./deployment/conda/README.md) to setup this environment.
