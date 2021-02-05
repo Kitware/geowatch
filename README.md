@@ -1,4 +1,4 @@
-# SMART WATCH
+# WATCH
 
 This repository addresses the algorithmic challenges of the IARPA SMART program. The goal of this software is analyze space-based imagery to perform broad-area search for natural and anthropogenic events and characterize their extent and progression in time and space.
 
