@@ -1,0 +1,56 @@
+{
+    "description": "This algorithm will pull the path to an image (RGB png currently supported) and image bounds (as defined by leaflet) from the chain ledger and re-enter this information with the correct keys needed by the Algorithm Toolkit to send an image back to a chain endpoint request for placement onto a map.",
+    "display_name": "Output Image To Web",
+    "homepage": "https://tiledriver.com/developer",
+    "license": "MIT",
+    "name": "output_image_to_client",
+    "optional_parameters": [],
+    "outputs": [
+        {
+            "data_type": "string",
+            "description": "Path of image to send to client",
+            "display_name": "Image Path",
+            "name": "image_url",
+            "sort_order": 0
+        },
+        {
+            "data_type": "string",
+            "description": "Array containing the leaflet bounds of image extent",
+            "display_name": "Image Bounds",
+            "name": "image_extent",
+            "sort_order": 1
+        }
+    ],
+    "private": false,
+    "required_parameters": [
+        {
+            "custom_validation": null,
+            "data_type": "string",
+            "default_value": null,
+            "description": "Path of image to send to client",
+            "display_name": "Image Path",
+            "field_type": "text",
+            "help_text": "Absolute path to image",
+            "max_value": null,
+            "min_value": null,
+            "name": "image_path",
+            "parameter_choices": [],
+            "sort_order": 0
+        },
+        {
+            "custom_validation": null,
+            "data_type": "string",
+            "default_value": null,
+            "description": "Array containing the leaflet bounds of image extent",
+            "display_name": "Image Bounds",
+            "field_type": "text",
+            "help_text": "String array containing image bounds numbers.",
+            "max_value": null,
+            "min_value": null,
+            "name": "image_bounds",
+            "parameter_choices": [],
+            "sort_order": 1
+        }
+    ],
+    "version": "0.0.1"
+}

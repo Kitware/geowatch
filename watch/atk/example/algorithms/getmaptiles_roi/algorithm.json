@@ -1,0 +1,49 @@
+{
+    "description": "This algorithm will gather up map tiles at a given zoom level that intersect with the provided polygon. The source is the national map provided by USGS. All tiles will be written out to disk at a specified location. This location is also saved onto the chain ledger.",
+    "display_name": "Get Map Tiles In ROI",
+    "homepage": "https://tiledriver.com/developer",
+    "license": "MIT",
+    "name": "getmaptiles_roi",
+    "optional_parameters": [],
+    "outputs": [
+        {
+            "data_type": "string",
+            "description": "Absolute paths to each image collected separated by commas.",
+            "display_name": "Names of images collected",
+            "name": "image_filenames",
+            "sort_order": 0
+        }
+    ],
+    "private": false,
+    "required_parameters": [
+        {
+            "custom_validation": null,
+            "data_type": "string",
+            "default_value": "POLYGON((-77.0419692993164 38.9933585922412,-77.17311859130861 38.891887936025896,-77.03853607177736 38.790272111428706,-76.91013336181642 38.891887936025896,-77.0419692993164 38.9933585922412))",
+            "description": "Polygon WKT to obtain tiles that intersect.",
+            "display_name": "Polygon WKT",
+            "field_type": "text",
+            "help_text": "Enter well known text (WKT) for the polygon region to obtain intersecting tiles.",
+            "max_value": null,
+            "min_value": null,
+            "name": "roi",
+            "parameter_choices": [],
+            "sort_order": 0
+        },
+        {
+            "custom_validation": null,
+            "data_type": "integer",
+            "default_value": 14,
+            "description": "Zoom level",
+            "display_name": "Zoom level",
+            "field_type": "number",
+            "help_text": "Enter an integer corresponding to the zoom level, 16 is max value supported.",
+            "max_value": 16,
+            "min_value": 5,
+            "name": "zoom",
+            "parameter_choices": [],
+            "sort_order": 1
+        }
+    ],
+    "version": "0.0.1"
+}
