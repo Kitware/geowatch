@@ -6,3 +6,5 @@ dependencies:
   - python=3.8
   - gdal
   - pip
+  - pip:
+    - pytest
