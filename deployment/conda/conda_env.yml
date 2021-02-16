@@ -8,3 +8,6 @@ dependencies:
   - pip
   - pip:
     - pytest
+    - xdoctest
+    - pytest-cov
+    - coverage
