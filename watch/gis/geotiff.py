@@ -5,24 +5,6 @@ import numpy as np
 from watch.gis import spatial_reference as watch_crs
 
 
-def demodata_rpc_geotiff():
-    """
-    Create a tif with RPC information for testing
-    """
-    import rasterio
-    import ubelt as ub
-    from os.path import join
-    dpath = ub.ensure_app_cache_dir('smart-watch/demodata')
-    gpath = join(dpath, 'test_rpc.tif')
-    rpcs = watch_crs.RPCTransform.demo()
-
-    with rasterio.open(gpath, 'w', driver='GTiff', dtype='uint8', count=1,
-                       width=2000, height=2000, rpcs=rpcs.rpcs) as dst:
-        dst,  # do nothing
-
-    return gpath
-
-
 def geotiff_crs_info(gpath, force_affine=False, elevation='open-elevation',
                      verbose=0):
     """
@@ -38,8 +20,9 @@ def geotiff_crs_info(gpath, force_affine=False, elevation='open-elevation',
 
     Example:
         >>> from watch.gis.geotiff import *  # NOQA
+        >>> from watch.demo.dummy_demodata import dummy_rpc_geotiff_fpath
         >>> import ubelt as ub
-        >>> gpath = demodata_rpc_geotiff()
+        >>> gpath = dummy_rpc_geotiff_fpath()
         >>> info = geotiff_crs_info(gpath)
         >>> print('info = {}'.format(ub.repr2(info, nl=1, sort=False)))
         >>> assert info['is_rpc']

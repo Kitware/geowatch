@@ -24,9 +24,18 @@ def utm_epsg_from_latlon(lat, lon):
         lat (float): degrees in latitude
         lon (float): degrees in longitude
 
+    Returns:
+        int : the ESPG code of the UTM zone
+
     References:
         https://gis.stackexchange.com/questions/190198/how-to-get-appropriate-crs-for-a-position-specified-in-lat-lon-coordinates
         https://gis.stackexchange.com/questions/365584/convert-utm-zone-into-epsg-code
+
+    Example:
+        >>> from watch.gis.spatial_reference import *  # NOQA
+        >>> epsg_code = utm_epsg_from_latlon(0, 0)
+        >>> print('epsg_code = {!r}'.format(epsg_code))
+        epsg_code = 32631
     """
     import utm
     # easting, northing, zone_num, zone_code = utm.from_latlon(min_lat, min_lon)
@@ -47,6 +56,12 @@ def check_latlons(lat, lon):
 
     Longitude is always between -180 and 180 (degrees east)
     Latitude is always between -90 and 90 (degrees north)
+
+    Example:
+        >>> from watch.gis.spatial_reference import *  # NOQA
+        >>> import pytest
+        >>> assert not check_latlons(1000, 1000)
+        >>> assert check_latlons(0, 0)
     """
     lat = np.asarray(lat)
     lon = np.asarray(lon)
