@@ -18,6 +18,8 @@ class DigitalGlobeBundle(ub.NiceRepr):
     Data structure to organize information in digital globe bundles
 
     TODO: need public digital globe demodata for a doctest
+
+    Maybe we can grab them from here? https://www.maxar.com/product-samples
     """
 
     def __init__(self, delivery_metadata_fpath, pointer=None, autobuild=True):
