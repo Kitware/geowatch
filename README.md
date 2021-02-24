@@ -89,8 +89,24 @@ The `run_tests.py` script provided here will run all tests in the `tests` direct
 
 ## Adding submodules
 
-Library code can be added by creating a new subdirectory under the `watch` directory.  You'll also want to create an empty `__init__.py` file in your new subdirectory (e.g. `touch watch/new_module/__init__.py`).
+Library code can be added to the relevant subdirectory under the `watch` directory.  The current submodules are as follows:
+
+- datacube/atmosphere
+- datacube/cloud
+- datacube/registration
+- datacube/reflectance
+- features/materials
+- features/semantics
+- features/invariants
+- features/reflectance
+- fusion
+- sequencing
+- validation
+- tools
+- utils
 
 ## Adding command line tools
 
 New Python command line scripts can be added under the `watch/tools` directory.  To have the command line tool be installed with the module, an entry can be added to the `setup.py` setup call, under `entrypoints['console_scripts']`.
+
+Scripts that don't quite belong in the WATCH Python module itself (e.g. due to a lack of general purpose use, or lack of polish) can be added to the `scripts` directory.
