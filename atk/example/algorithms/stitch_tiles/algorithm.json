@@ -1,0 +1,42 @@
+{
+    "description": "This algorithm stitches a group of map tiles saved in a directory together. The resulting image is saved in png format with the image path and bounds saved onto the chain ledger.",
+    "display_name": "Stitch together tiles",
+    "homepage": "https://tiledriver.com/developer",
+    "license": "MIT",
+    "name": "stitch_tiles",
+    "optional_parameters": [],
+    "outputs": [
+        {
+            "data_type": "string",
+            "description": "Path to image that was stitched together",
+            "display_name": "Stitched Image Path",
+            "name": "image_path",
+            "sort_order": 0
+        },
+        {
+            "data_type": "string",
+            "description": "Array containing the leaflet bounds of stiched image extent",
+            "display_name": "Stitched Image Bounds",
+            "name": "image_bounds",
+            "sort_order": 1
+        }
+    ],
+    "private": false,
+    "required_parameters": [
+        {
+            "custom_validation": null,
+            "data_type": "string",
+            "default_value": null,
+            "description": "List of image filenames to stitch together",
+            "display_name": "Images to Stitch Together",
+            "field_type": "text",
+            "help_text": "Comma separated list.",
+            "max_value": null,
+            "min_value": null,
+            "name": "image_filenames",
+            "parameter_choices": [],
+            "sort_order": 0
+        }
+    ],
+    "version": "0.0.1"
+}

@@ -64,6 +64,23 @@ The WATCH Python module can then be installed with `pip` via the following comma
 pip install -e /path/to/watch
 ```
 
+### Running the Algorithm Toolkit (ATK) example project
+
+Ensure that you have already setup the SMART Conda enviornment.
+
+Then enter the following commands in your terminal to run the ATK example project:
+
+```bash
+cd atk/example
+alg run
+```
+
+Point your browser to http://localhost:5000/. You should see the development environment welcome page.
+
+Refer to the [development enviornment](https://algorithm-toolkit.readthedocs.io/en/latest/dev-environment.html#) portion of the
+[atk docs](https://algorithm-toolkit.readthedocs.io/en/latest/index.html) for a crash course on how to use the web-based development environment.
+
+
 ## Running tests
 
 We're using the `pytest` module for running unit tests.  Unit tests should be added into the `tests` directory and files should be prefixed with `test_`.

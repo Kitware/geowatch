@@ -1,0 +1,36 @@
+{
+    "map_tiles": [
+        {
+            "algorithm": "getmaptiles_roi",
+            "parameter_source": "user"
+        },
+        {
+            "algorithm": "stitch_tiles",
+            "parameters": {
+                "image_filenames": {
+                    "source": "chain_ledger",
+                    "source_algorithm": "getmaptiles_roi",
+                    "key": "image_filenames",
+                    "occurrence": "first"
+                }
+            }
+        },
+        {
+            "algorithm": "output_image_to_client",
+            "parameters": {
+                "image_path": {
+                    "source": "chain_ledger",
+                    "source_algorithm": "stitch_tiles",
+                    "key": "image_path",
+                    "occurrence": "first"
+                },
+                "image_bounds": {
+                    "source": "chain_ledger",
+                    "source_algorithm": "stitch_tiles",
+                    "key": "image_bounds",
+                    "occurrence": "first"
+                }
+            }
+        }
+    ]
+}
