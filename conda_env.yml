@@ -16,3 +16,11 @@ dependencies:
     - xdoctest
     - pytest-cov
     - coverage
+    - affine
+    - utm
+    - ubelt
+    - pyproj >= 3.0.0.post1
+    - rasterio >= 1.2.0
+    # kitware tools
+    - kwarray
+    - kwimage
