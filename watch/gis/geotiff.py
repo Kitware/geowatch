@@ -280,7 +280,7 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
 
         wld_axis_mapping_int = osr.OAMS_TRADITIONAL_GIS_ORDER
         wld_axis_mapping = axis_mapping_int_to_text(wld_axis_mapping_int)
-        wld_crs_type = 'har-coded-rpc-crs'
+        wld_crs_type = 'hard-coded-rpc-crs'
         wld_crs = osr.SpatialReference()
         wld_crs.ImportFromEPSG(4326)  # 4326 is the EPSG id WGS84 of lat/lon crs
         wld_crs.SetAxisMappingStrategy(wld_axis_mapping_int)
