@@ -9,7 +9,7 @@ Notes:
 """
 import ubelt as ub
 import numpy as np
-import numbers
+from watch.gis.elevation import ElevationDatabase
 
 
 def utm_epsg_from_latlon(lat, lon):
@@ -78,15 +78,22 @@ class RPCTransform(object):
     Args:
         rpcs (rasterio.rpc.RPC): rasterio RPC data
         elevation (str): method used to determine the elevation when RPC
-            information is used. Currently only "open-elevation" is available.
+            information is used. Available options are:
+                * "open-elevation"
+                * "gtop30"
 
     Notes:
         * By definition rpcs are always referenced against WGS84 (EPSG:4326)
           coordinates.
-        * However, we are accept and return reversed lon/lat points here.
+        * However, we are accept and return lon/lat (i.e. reversed WGS84) points here.
+        * TODO: don't use reversed. Use authority compliant
 
     References:
         https://rasterio.readthedocs.io/en/latest/topics/reproject.html#reprojecting-with-other-georeferencing-metadata
+        http://geotiff.maptools.org/rpc_prop.html
+        https://github.com/mapbox/rasterio/blob/master/rasterio/rpc.py
+        https://github.com/mapbox/rasterio/blob/master/rasterio/_transform.pyx
+        https://gdal.org/doxygen/gdal__alg_8h.html#af4c3c0d4c79218995b3a1f0bac3700a0
 
     Example:
         >>> from watch.gis.spatial_reference import *  # NOQA
@@ -110,12 +117,16 @@ class RPCTransform(object):
         >>> print('pxl_pts = {}'.format(ub.repr2(pxl_pts, nl=1, precision=2)))
         pxl_pts = np.array([[17576.2 , 10690.73]]...)
     """
-    def __init__(self, rpcs, elevation='open-elevation'):
+    def __init__(self, rpcs, elevation='gtop30',
+                 axis_mapping='OAMS_TRADITIONAL_GIS_ORDER'):
         self.rpcs = rpcs
-        self.elevation = elevation
+        self.elevation = ElevationDatabase.coerce(elevation)
+        self.axis_mapping = axis_mapping
+        assert axis_mapping == 'OAMS_TRADITIONAL_GIS_ORDER', (
+            'we dont handle lat/lon yet, TODO')
 
     @classmethod
-    def demo(cls):
+    def demo(cls, **kw):
         """
         Return a demo RPCTransform for testing purposes
         """
@@ -160,7 +171,7 @@ class RPCTransform(object):
             'SAMP_OFF': '17589',
             'SAMP_SCALE': '17590',
         }
-        self = cls.from_gdal(rpc_info)
+        self = cls.from_gdal(rpc_info, **kw)
         return self
 
     @ub.memoize_method
@@ -168,14 +179,8 @@ class RPCTransform(object):
         """
         Determine a default elevation if none is provided.
         """
-        if isinstance(self.elevation, numbers.Number):
-            return self.elevation
-        elif self.elevation == 'open-elevation':
-            from watch.gis.elevation import query_open_elevation
-            approx_elevation = query_open_elevation(
-                self.rpcs.lat_off, self.rpcs.long_off)
-        else:
-            raise NotImplementedError(self.elevation)
+        approx_elevation = self.elevation.query(
+            self.rpcs.lat_off, self.rpcs.long_off)
         return approx_elevation
 
     @classmethod
@@ -185,7 +190,7 @@ class RPCTransform(object):
 
         Args:
             rpc_info (dict): gdal RPC dictionary. Typically aquired from
-                ``osgeo.gdal.Dataset(<path>).GetMetadata(domain='RPC')``
+                ``gdal.Open(<path>).GetMetadata(domain='RPC')``
 
             **kwargs : passed to `class`:RPCTransform
         """
@@ -203,49 +208,138 @@ class RPCTransform(object):
             raise ValueError('Expected a 2D array of points')
         N, D = pts_in.shape
         if D == 2:
+            # Note: we can actually supply a DEM
+            # via passing kwargs **{'RPC_DEM': <path>}
+
+            from rasterio._transform import _rpc_transform
             xs, ys = pts_in.T
             default_z = self._default_elevation()
             zs = np.full_like(xs, fill_value=default_z)
+
+            max_iters = 20
+            converge_thresh = 3
+            num_same = 0
+
+            for iter_num in range(max_iters):
+                transform_direction = 0
+                lons, lats = _rpc_transform(self.rpcs, xs, ys, zs,
+                                            transform_direction)
+                new_zs = self.elevation.query(lats, lons)
+
+                if np.all(new_zs == zs):
+                    num_same += 1
+                else:
+                    num_same = 0
+
+                zs = new_zs
+
+                if num_same > converge_thresh:
+                    # converged
+                    break
         else:
             xs, ys, zs = pts_in.T
         return xs, ys, zs
 
-    def warp_world_to_pixel(self, pts_in):
+    def _ensure_lonlatz(self, pts_in):
+        """
+        Ensure that points include elevation data. If not specified,
+        attempts to determine a "reasonable" default elevation.
+        """
+        if len(pts_in.shape) != 2:
+            raise ValueError('Expected a 2D array of points')
+        N, D = pts_in.shape
+        if D == 2:
+            xs, ys = pts_in.T
+            zs = self.elevation.query(ys, xs)
+            # default_z = self._default_elevation()
+            # zs = np.full_like(xs, fill_value=default_z)
+        else:
+            xs, ys, zs = pts_in.T
+        return xs, ys, zs
+
+    def warp_world_to_pixel(self, pts_in, return_elevation=False):
         """
         Args:
             pts_in (ndarray):
                 Either an Nx2 array of lon/lat WGS84 coordinates or
                 an Nx3 array of lon/lat/elevation coordinates.
 
+        TODO:
+            - [ ] Handle CRS
+
         Returns:
             pts_out (ndarray): An Nx2 array of pixel coordinates
         """
         from rasterio._transform import _rpc_transform
-        xs, ys, zs = self._ensure_xyz(pts_in)
+        lons, lats, elev = self._ensure_lonlatz(pts_in)
         transform_direction = 1
-        x_out, y_out = _rpc_transform(self.rpcs, xs, ys, zs,
+        x_out, y_out = _rpc_transform(self.rpcs, lons, lats, elev,
                                       transform_direction)
         x_out = np.array(x_out)[:, None]
         y_out = np.array(y_out)[:, None]
-        pts_out = np.concatenate([x_out, y_out], axis=1)
+
+        if return_elevation:
+            elev = np.array(elev)[:, None]
+            pts_out = np.concatenate([x_out, y_out, elev], axis=1)
+        else:
+            pts_out = np.concatenate([x_out, y_out], axis=1)
         return pts_out
 
-    def warp_pixel_to_world(self, pts_in):
+    def warp_pixel_to_world(self, pts_in, return_elevation=False):
         """
         Args:
             pts_in (ndarray):
                 Either an Nx2 array of x,y pixel coordinates, or
                 an Nx3 array of x,y,elevation coordinates.
 
+        TODO:
+            - [ ] Handle CRS
+
         Returns:
             pts_out (ndarray): An Nx2 array of lon/lat WGS84 coordinates
+
+        Ignore:
+            >>> from watch.gis.spatial_reference import *  # NOQA
+            >>> self = RPCTransform.demo(elevation='gtop30')
+            >>> pts_in = pxl_pts = np.array([
+            >>>     [    0,     0],
+            >>>     [    0, 20000],
+            >>>     [20000,     0],
+            >>>     [20000, 20000],
+            >>> ])
+            >>> wld_pts = self.warp_pixel_to_world(pxl_pts)
+            >>> print('wld_pts =\n{}'.format(ub.repr2(wld_pts, nl=1, precision=2)))
+
+            >>> import osgeo
+            >>> from watch.gis.spatial_reference import *  # NOQA
+            >>> gpath = '/home/joncrall/data/dvc-repos/smart_watch_dvc/drop1/KR-Pyeongchang-WV/_assets/20140131_a_KRG_011778204_10_0/011778204010_01_003/011778204010_01/011778204010_01_P002_PAN/14JAN31020440-P1BS-011778204010_01_P002.NTF'
+            >>> #gpath = '/home/joncrall/data/dvc-repos/smart_watch_dvc/drop1/KR-Pyeongchang-WV/_assets/20140131_a_KRG_011778204_10_0/011778204010_01_003/011778204010_01/011778204010_01_P001_PAN/14JAN31020439-P1BS-011778204010_01_P001.NTF'
+            >>> ref = gdal.Open(gpath)
+            >>> rpc_info = ref.GetMetadata(domain='RPC')
+            >>> pts_in = pxl_pts = np.array([
+            >>>     [    0,                         0],
+            >>>     [    0,           ref.RasterYSize],
+            >>>     [ref.RasterXSize, ref.RasterYSize],
+            >>>     [ref.RasterXSize,               0],
+            >>> ])
+            >>> self = RPCTransform.from_gdal(rpc_info, elevation='gtop30')
+            >>> wld_pts = self.warp_pixel_to_world(pxl_pts)
+            >>> kwimage.Polygon(exterior=wld_pts).draw(color='purple', alpha=0.5)
+
+            >>> self = RPCTransform.from_gdal(rpc_info, elevation='open-elevation')
+            >>> self.warp_pixel_to_world(pxl_pts)
         """
         from rasterio._transform import _rpc_transform
-        xs, ys, zs = self._ensure_xyz(pts_in)
+
         transform_direction = 0
+        xs, ys, zs = self._ensure_xyz(pts_in)
         x_out, y_out = _rpc_transform(self.rpcs, xs, ys, zs,
                                       transform_direction)
-        x_out = np.array(x_out)[:, None]
-        y_out = np.array(y_out)[:, None]
-        pts_out = np.concatenate([x_out, y_out], axis=1)
+        lons = np.array(x_out)[:, None]
+        lats = np.array(y_out)[:, None]
+        if return_elevation:
+            zs = np.array(zs)[:, None]
+            pts_out = np.concatenate([lons, lats, zs], axis=1)
+        else:
+            pts_out = np.concatenate([lons, lats], axis=1)
         return pts_out
