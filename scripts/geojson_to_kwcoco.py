@@ -355,7 +355,7 @@ def main(**kw):
                 img['dem_hint'] = 'ignore'
             else:
                 info = geotiff_metadata(fpath)
-                img['dem_hint'] = 'ignore'
+                img['dem_hint'] = 'use'
 
             height, width = info['img_shape']
 
