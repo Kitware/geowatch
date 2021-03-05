@@ -1,13 +1,57 @@
 """
-Tools for querying for elevation data.
+Tools for accessing querying for elevation data.
 """
 import requests
 import time
 import random
 import ubelt as ub
+import os
+import numbers
+from os.path import join
 
 
-def query_open_elevation(lat, lon, cache=True, attempts=10, verbose=0):
+class ElevationDatabase(object):
+    """
+    An object that might use various backends to query elevation for a given
+    latitude and longitude.
+
+    """
+    def __init__(self):
+        pass
+
+    @classmethod
+    def coerce(cls, key):
+        """
+        Attempt to resolve key to an elevation database.
+
+        Args:
+            key (str): Available options are:
+                * "open-elevation"
+                * "gtop30"
+                * A number for a constant elevation
+        """
+        if isinstance(key, numbers.Number):
+            self = ConstantElevationDatabase(key)
+        elif key == 'open-elevation':
+            self = OpenElevationDatabase()
+        elif key == 'gtop30':
+            self = girder_gtop30_elevation_dem()
+        else:
+            raise KeyError(key)
+        return self
+
+
+class ConstantElevationDatabase(ElevationDatabase):
+    """
+    Fallback compatibility API when no elevation information is available
+    """
+    def __init__(self, const):
+        self.const = const
+    def query(self, lat, lon):
+        return self.const
+
+
+class OpenElevationDatabase(ElevationDatabase):
     """
     Use open-elevation to query the elevation for a lat/lon point.
 
@@ -23,11 +67,6 @@ def query_open_elevation(lat, lon, cache=True, attempts=10, verbose=0):
     Returns:
         float : elevation in meters
 
-    Notes:
-        TODO: should download elevation maps locally:
-            https://data.kitware.com/#collection/59eb64168d777f31ac6477e7/folder/59fb784d8d777f31ac6480fb
-            https://www.google.com/url?sa=j&url=https%3A%2F%2Fwww.usgs.gov%2Fcenters%2Feros%2Fscience%2Fusgs-eros-archive-digital-elevation-global-30-arc-second-elevation-gtopo30%3Fqt-science_center_objects%3D0%23qt-science_center_objects&uct=1599876275&usg=jBvv8w64RCBJd2SyQA3kUtKhMQ4.&source=chat
-
     References:
         https://gis.stackexchange.com/questions/338392/getting-elevation-for-multiple-lat-long-coordinates-in-python
         https://gis.stackexchange.com/questions/212106/seeking-alternative-to-google-maps-elevation-api
@@ -39,10 +78,18 @@ def query_open_elevation(lat, lon, cache=True, attempts=10, verbose=0):
         >>> from watch.gis.elevation import *  # NOQA
         >>> lat = 37.65026538818887
         >>> lon = 128.81096081618637
-        >>> elevation = query_open_elevation(lat, lon, verbose=3)
+        >>> eldb = OpenElevationDatabase()
+        >>> elevation = eldb.query(lat, lon, verbose=3)
         >>> print('elevation = {!r}'.format(elevation))
         elevation = 449
     """
+    def query(self, lat, lon, **kwargs):
+        # We could vectorize this, but if is very slow, and we probably should
+        # always use gtop30 instead.
+        return _query_open_elevation(lat, lon, **kwargs)
+
+
+def _query_open_elevation(lat, lon, cache=True, attempts=10, verbose=0):
     url = 'https://api.open-elevation.com/api/v1/lookup?'
     suffix = 'locations={},{}'.format(float(lat), float(lon))
     query_url = url + suffix
@@ -67,3 +114,185 @@ def query_open_elevation(lat, lon, cache=True, attempts=10, verbose=0):
         cacher.save(body)
     elevation = body['results'][0]['elevation']
     return elevation
+
+
+class DEM_Collection(ElevationDatabase):
+    """
+    Manage a collection of DEM geotiffs
+
+    Example:
+        >>> # xdoctest: +REQUIRES(--network)
+        >>> # Use the gtop30 DEM dataset from GIRDER to find elevation.
+        >>> from watch.gis.elevation import *  # NOQA
+        >>> dems = DEM_Collection.gtop30()
+        >>> lat, lon = (37.7455555555556, 128.780555555556)
+        >>> print(dems.query(lat, lon))
+        499.0
+
+        >>> lat, lon = (37.7280555555556, 129.008888888889)
+        >>> print(dems.query(lat, lon))
+        0
+
+        >>> lat, lon = (37.6947222222222, 129.008888888889)
+        >>> print(dems.query(lat, lon))
+        95.0
+
+        >>> lat, lon = (37.7127777777778, 128.780555555556)
+        >>> print(dems.query(lat, lon))
+        452.0
+
+        >>> lat, lon = (0, 0)
+        >>> print(dems.query(lat, lon))
+        0
+
+        >>> lon_basis = np.linspace(-175, 175, 100)
+        >>> lat_basis = np.linspace(-85, 85, 100)
+        >>> lats_, lons_ = np.meshgrid(lat_basis, lon_basis)
+        >>> lats = lats_.ravel()
+        >>> lons = lons_.ravel()
+        >>> elevations = dems.query(lats, lons)
+    """
+    def __init__(dems, dem_paths):
+        from watch.gis.geotiff import geotiff_crs_info
+        import kwimage
+        dem_infos = []
+        for dem_fpath in dem_paths:
+            dem_info = geotiff_crs_info(dem_fpath)
+            dem_infos.append(dem_info)
+
+        dem_polys = []
+        for info in dem_infos:
+            kw_poly = kwimage.Polygon(exterior=info['wgs84_corners'])
+            sh_poly = kw_poly.to_shapely()
+            dem_polys.append(sh_poly)
+
+        dems.dem_paths = dem_paths
+        dems.dem_infos = dem_infos
+        dems.dem_polys = dem_polys
+
+    def find_reference_fpath(dems, lat, lon):
+        import numpy as np
+        import shapely
+
+        query = shapely.geometry.Point(lat, lon)
+        flags = [poly.contains(query) for poly in dems.dem_polys]
+        idxs = np.where(flags)[0]
+        assert len(idxs) == 1
+
+        idx = idxs[0]
+        dem_fpath = dems.dem_paths[idx]
+        dem_info = dems.dem_infos[idx]
+        return dem_fpath, dem_info
+
+    def query(dems, lats, lons):
+        """
+        TODO: the API supports vectorization, but we need to make it more
+        efficient.
+        """
+        import numpy as np
+        import gdal
+        import kwimage
+
+        lat_was_iterable = ub.iterable(lats)
+        lon_was_iterable = ub.iterable(lons)
+        was_iterable = lon_was_iterable or lat_was_iterable
+
+        if was_iterable:
+            if lon_was_iterable and not lat_was_iterable:
+                lons_ = lons
+                lats_ = [lats] * len(lons)
+            elif lat_was_iterable and not lon_was_iterable:
+                lats_ = lats
+                lons_ = [lons] * len(lats)
+            else:
+                lats_ = lats
+                lons_ = lons
+        else:
+            lats_ = [lats]
+            lons_ = [lons]
+
+        elevations = []
+
+        prev_dem_fpath = None
+        prev_dem_band = None
+
+        for lat_, lon_ in zip(lats_, lons_):
+            dem_fpath, dem_info = dems.find_reference_fpath(lat_, lon_)
+
+            latlon = kwimage.Coords(np.array([[lat_, lon_]], dtype=np.float64))
+            xy = latlon.warp(dem_info['wgs84_to_wld']).warp(dem_info['wld_to_pxl'])
+
+            x, y = np.floor(xy.data[0])
+            gdalkw = dict(xoff=x, yoff=y, win_xsize=1, win_ysize=1)
+
+            if prev_dem_fpath != dem_fpath:
+                dem_ref = gdal.Open(dem_fpath, gdal.GA_ReadOnly)
+                dem_band = dem_ref.GetRasterBand(1)
+                prev_dem_band = dem_band
+            else:
+                dem_band = prev_dem_band
+
+            nodata = dem_band.GetNoDataValue()
+
+            data = dem_band.ReadAsArray(**gdalkw)
+            data = data.ravel()
+            assert len(data) == 1
+            elevation = float(data[0])
+            if elevation == nodata:
+                # Assume when there is no data
+                elevation = 0
+            elevations.append(elevation)
+
+        if was_iterable:
+            elevations = np.array(elevations)
+            return elevations
+        else:
+            elevation = elevations[0]
+            return elevation
+
+    @classmethod
+    def gtop30(cls):
+        """
+        Build the gtop30 dataset
+
+        Example:
+            >>> # xdoctest: +REQUIRES(--network)
+            >>> dems = DEM_Collection.gtop30()
+            >>> lats = [1, 2, 3]
+            >>> lons = [1, 2, 3]
+            >>> dems.query(lats, lons)
+        """
+        print('Building elevation map')
+        gtop_dpath = ensure_girder_gtop30_elevation_maps()
+
+        dem_paths = []
+        for r, ds, fs in os.walk(gtop_dpath):
+            for f in fs:
+                dem_paths.append(join(r, f))
+
+        dems = DEM_Collection(dem_paths)
+        return dems
+
+
+@ub.memoize
+def girder_gtop30_elevation_dem():
+    print('Building elevation map')
+    dems = DEM_Collection.gtop30()
+    return dems
+
+
+@ub.memoize
+def ensure_girder_gtop30_elevation_maps():
+    """
+    Ensure that we have the GTOP30 Digital Elevation Maps (DEMS) available
+    locally.
+
+    References:
+        https://data.kitware.com/#collection/59eb64168d777f31ac6477e7/folder/59fb784d8d777f31ac6480fb
+        https://www.google.com/url?sa=j&url=https%3A%2F%2Fwww.usgs.gov%2Fcenters%2Feros%2Fscience%2Fusgs-eros-archive-digital-elevation-global-30-arc-second-elevation-gtopo30%3Fqt-science_center_objects%3D0%23qt-science_center_objects&uct=1599876275&usg=jBvv8w64RCBJd2SyQA3kUtKhMQ4.&source=chat
+    """
+    from watch.utils import util_girder
+    api_url = 'https://data.kitware.com/api/v1'
+    resource_id = '59fb784d8d777f31ac6480fb'
+    dl_path = util_girder.grabdata_girder(api_url, resource_id)
+    return dl_path
