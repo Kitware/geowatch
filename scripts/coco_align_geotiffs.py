@@ -333,7 +333,7 @@ class SimpleDataCube(object):
                                 gdalwarp
                                 -te {xmin} {ymin} {xmax} {ymax}
                                 -te_srs epsg:4326
-                                -s_srs epsg:4326
+                                -t_srs epsg:4326
                                 -rpc -et 0
                                 -to RPC_DEM={dem_fpath}
                                 -overwrite
@@ -346,7 +346,7 @@ class SimpleDataCube(object):
                                 gdalwarp
                                 -te {xmin} {ymin} {xmax} {ymax}
                                 -te_srs epsg:4326
-                                -s_srs epsg:4326
+                                -t_srs epsg:4326
                                 -rpc -et 0
                                 -overwrite
                                 {SRC} {DST}
