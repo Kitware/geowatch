@@ -1,6 +1,24 @@
 """
 Given the raw data in kwcoco format, this script will extract orthorectified
 regions around areas of interest across time.
+
+Notes:
+
+    # Given the output from geojson_to_kwcoco this script extracts
+    # orthorectified regions.
+
+    python ~/code/watch/scripts/coco_align_geotiffs.py \
+            --src ~/data/dvc-repos/smart_watch_dvc/drop0/drop0.kwcoco.json \
+            --dst ~/data/dvc-repos/smart_watch_dvc/drop0_aligned_v2 \
+            --context_factor=1.5
+
+    # Archive the data and upload to data.kitware.com
+    cd $HOME/data/dvc-repos/smart_watch_dvc/
+    7z a ~/data/dvc-repos/smart_watch_dvc/drop0_aligned_v2.zip ~/data/dvc-repos/smart_watch_dvc/drop0_aligned_v2
+
+    source $HOME/internal/secrets
+    cd $HOME/data/dvc-repos/smart_watch_dvc/
+    girder-client --api-url https://data.kitware.com/api/v1 upload 602c3e9e2fa25629b97e5b5e drop0_aligned.zip
 """
 import scriptconfig as scfg
 import ubelt as ub
@@ -42,23 +60,6 @@ class CocoAlignGeotiffs(scfg.Config):
 
 def main(**kw):
     """
-
-    CommandLine:
-        python ~/code/watch/scripts/coco_align_geotiffs.py \
-                --src ~/data/dvc-repos/smart_watch_dvc/drop0/drop0.kwcoco.json \
-                --dst ~/data/dvc-repos/smart_watch_dvc/drop0_aligned_v2 \
-                --context_factor=1.5
-
-        cd $HOME/data/dvc-repos/smart_watch_dvc/drop0-chipped/
-        7z a ~/data/dvc-repos/smart_watch_dvc/drop0_aligned.zip ~/data/dvc-repos/smart_watch_dvc/drop0_aligned
-
-        source $HOME/internal/secrets
-        cd $HOME/data/dvc-repos/smart_watch_dvc/
-        girder-client --api-url https://data.kitware.com/api/v1 upload 602c3e9e2fa25629b97e5b5e drop0_aligned.zip
-
-        cd ~/data/dvc-repos/smart_watch_dvc/drop0_aligned/BR-Rio-027_-22.9609-43.3428_-22.9542-43.3360
-        kwcoco reroot subdata.kwcoco.json --dst=subdata.kwcoco.json.rel \
-            --absolute=False --old_prefix=$PWD/ --new_prefix=""
 
     Ignore:
         import sys, ubelt
