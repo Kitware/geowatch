@@ -18,7 +18,7 @@ Notes:
 
     source $HOME/internal/secrets
     cd $HOME/data/dvc-repos/smart_watch_dvc/
-    girder-client --api-url https://data.kitware.com/api/v1 upload 602c3e9e2fa25629b97e5b5e drop0_aligned.zip
+    girder-client --api-url https://data.kitware.com/api/v1 upload 602c3e9e2fa25629b97e5b5e drop0_aligned_v2.zip
 """
 import scriptconfig as scfg
 import ubelt as ub
