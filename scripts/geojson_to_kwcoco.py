@@ -350,7 +350,7 @@ def main(**kw):
 
             # height, width = kwimage.load_image_shape(fpath)[0:2]
 
-            if config['ignore_dem']
+            if config['ignore_dem']:
                 info = geotiff_metadata(fpath, elevation=False)
                 img['dem_hint'] = 'ignore'
             else:
