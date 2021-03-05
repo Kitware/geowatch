@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Tools relating to coordinate reference systems
 

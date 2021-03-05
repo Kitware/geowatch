@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Tools to work with geotiff metadata.
 """

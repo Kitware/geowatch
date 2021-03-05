@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+import numpy as np
 
 
 def normalize_intensity(imdata, return_info=False):
@@ -36,7 +38,6 @@ def normalize_intensity(imdata, return_info=False):
         >>> kwplot.imshow(normed, pnum=(1, 2, 2), fnum=1)
     """
     import kwimage
-    import numpy as np
 
     info = {}
 

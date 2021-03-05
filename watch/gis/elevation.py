@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Tools for accessing querying for elevation data.
 """
