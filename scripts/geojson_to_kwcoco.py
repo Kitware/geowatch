@@ -125,7 +125,7 @@ def simple_mapping(regi, have):
     regi_base = set(regi_base_to_fpath)
     have_base = set(have_base_to_fpath)
 
-    try
+    try:
         import xdev
         overlaps = xdev.set_overlaps(regi_base, have_base, 'regi', 'have')
         print('overlaps = {}'.format(ub.repr2(overlaps, nl=1)))
