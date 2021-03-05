@@ -115,13 +115,6 @@ def simple_mapping(regi, have):
     if have_dups:
         print('have_dups = {}'.format(ub.repr2(have_dups, nl=1)))
 
-    if 0:
-        for k, v in have_dups.items():
-            hashes = [ub.hash_file(x, hasher='xxh64') for x in v]
-            if not ub.allsame(hashes):
-                print('k = {!r}'.format(k))
-                print('v = {!r}'.format(v))
-
     regi_base = set(regi_base_to_fpath)
     have_base = set(have_base_to_fpath)
 
@@ -372,7 +365,7 @@ def main(**kw):
         new_root=bundle_dpath, old_prefix=bundle_dpath, new_prefix='',
         absolute=False)
 
-    if True:
+    if False:
         # Developer checks / info
 
         # Find annots that reference multiple images
@@ -595,8 +588,7 @@ def main(**kw):
             window = window.to_cxywh().scale(1.5, about='center')
             print('window = {!r}'.format(window))
 
-            max_dim = max(window.width.ravel()[0], window.height.ravel()[0])
-            new_dim = max(max_dim, min_target_dim)
+            new_dim = max(window.width.ravel()[0], window.height.ravel()[0])
             window.data[:, 2:4] = new_dim
 
             window = window.to_ltrb().quantize()
@@ -613,7 +605,13 @@ def main(**kw):
             subdets = dets.translate((-min_x, -min_y))
             canvas = subdets.draw_on(canvas)
 
-            kwimage.imwrite()
+            # TODO: use a more robust name that is gaurenteed to not conflict
+            # should be fine for drop0 datasets.
+            viz_dpath = ub.ensuredir((bundle_dpath, '_viz_crops'))
+            base = basename(gpath)
+            suffix = '_crop_xywh_{}_{}_{}_{}'.format(*window.to_xywh().data[0])
+            viz_gpath = ub.augpath(base, suffix=suffix, dpath=viz_dpath, ext='.jpg')
+            kwimage.imwrite(viz_gpath, canvas)
 
             if 0:
                 from watch.gis.geotiff import geotiff_crs_info

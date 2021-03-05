@@ -6,6 +6,34 @@ def normalize_intensity(imdata, return_info=False):
 
     Args:
         imdata (ndarray): raw data read from the geotiff.
+        return_info (bool, default=False): if True, return information about
+            the chosen normalization hueristic.
+
+    Example:
+        >>> from watch.utils.util_norm import *  # NOQA
+        >>> import kwimage
+        >>> import kwarray
+        >>> s = 512
+        >>> bit_depth = 11
+        >>> dtype = np.uint16
+        >>> max_val = int(2 ** bit_depth)
+        >>> min_val = int(0)
+        >>> rng = kwarray.ensure_rng(0)
+        >>> background = np.random.randint(min_val, max_val, size=(s, s), dtype=dtype)
+        >>> poly1 = kwimage.Polygon.random(rng=rng).scale(s / 2)
+        >>> poly2 = kwimage.Polygon.random(rng=rng).scale(s / 2).translate(s / 2)
+        >>> forground = np.zeros_like(canvas, dtype=np.uint8)
+        >>> forground = poly1.fill(forground, value=255)
+        >>> forground = poly2.fill(forground, value=122)
+        >>> forground = (kwimage.ensure_float01(forground) * max_val).astype(dtype)
+        >>> imdata = background + forground
+        >>> normed, info = normalize_intensity(imdata, return_info=True)
+        >>> print('info = {}'.format(ub.repr2(info, nl=1)))
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(imdata, pnum=(1, 2, 1), fnum=1)
+        >>> kwplot.imshow(normed, pnum=(1, 2, 2), fnum=1)
     """
     import kwimage
     import numpy as np
