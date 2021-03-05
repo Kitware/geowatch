@@ -42,7 +42,8 @@ Notes:
 
     python ~/code/watch/scripts/geojson_to_kwcoco.py \
         --src ~/data/dvc-repos/smart_watch_dvc/raw/drop0/210210_D0_manualKR.geojson.json \
-        --bundle_dpath ~/data/dvc-repos/smart_watch_dvc/drop0/BR-Rio-0277
+        --bundle_dpath ~/data/dvc-repos/smart_watch_dvc/drop0/BR-Rio-0277 \
+        --visualize=True --ignore_dem=True
 
     python ~/code/watch/scripts/geojson_to_kwcoco.py \
         --src ~/data/dvc-repos/smart_watch_dvc/raw/drop0/210210_D0_manualKR.geojson.json \
@@ -91,7 +92,7 @@ class GeojsonToCocoConfig(scfg.Config):
         'ignore_dem': scfg.Value(False, help=ub.paragraph(
             '''
             if True, we ignore the digital elevation map
-            '''),
+            ''')),
 
         'visualize': scfg.Value(True, help=ub.paragraph(
             '''
