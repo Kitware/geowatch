@@ -476,7 +476,7 @@ def geotiff_filepath_info(gpath):
     Ignore:
         >>> from watch.gis.geotiff import *  # NOQA
         >>> import ubelt as ub
-        >>> gpath = ub.expandpath('$HOME/remote/namek/data/dvc-repos/smart_watch_dvc/drop1/KR-Pyeongchang-WV/_assets/20170907_a_KRP_011777481_10_0/011777481010_01_003/011777481010_01/011777481010_01_P001_MUL/17SEP07021826-M1BS-011777481010_01_P001.TIF')
+        >>> gpath = ub.expandpath('$HOME/remote/namek/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-WV/_assets/20170907_a_KRP_011777481_10_0/011777481010_01_003/011777481010_01/011777481010_01_P001_MUL/17SEP07021826-M1BS-011777481010_01_P001.TIF')
         >>> info = geotiff_filepath_info(gpath)
         >>> print('info = {}'.format(ub.repr2(info, nl=1)))
 
