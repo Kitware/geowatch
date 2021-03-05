@@ -93,7 +93,7 @@ class GeojsonToCocoConfig(scfg.Config):
             if True, we also write visualizations of annotation ROIs in pixel
             space.
             '''
-        )
+        ))
     }
 
 
