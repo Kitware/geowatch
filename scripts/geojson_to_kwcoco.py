@@ -613,6 +613,8 @@ def main(**kw):
             subdets = dets.translate((-min_x, -min_y))
             canvas = subdets.draw_on(canvas)
 
+            kwimage.imwrite()
+
             if 0:
                 from watch.gis.geotiff import geotiff_crs_info
                 info2 = geotiff_crs_info(info['gpath'], force_affine=True)
