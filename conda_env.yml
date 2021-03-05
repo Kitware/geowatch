@@ -16,6 +16,7 @@ dependencies:
     - xdoctest
     - pytest-cov
     - coverage
+    - xxhash >= 1.4.4
     - parse >= 1.14.0
     - affine >= 2.3.0
     - utm >= 0.7.0

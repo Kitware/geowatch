@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Tools to work with geotiff metadata.
 """
@@ -6,15 +7,19 @@ import ubelt as ub
 from watch.gis import spatial_reference as watch_crs
 
 
-def geotiff_metadata(gpath):
+def geotiff_metadata(gpath, elevation='gtop30'):
     """
     Extract all relevant metadata we know how to extract.
+
+    Args:
+        elevation (str): method for extracting elevation data.
+
     """
     import gdal
     infos = {}
     ref = gdal.Open(gpath, gdal.GA_ReadOnly)
     infos['fname'] = geotiff_filepath_info(gpath)
-    infos['cfs'] = geotiff_crs_info(ref)
+    infos['cfs'] = geotiff_crs_info(ref, elevation=elevation)
     infos['header'] = geotiff_header_info(ref)
 
     # Combine sensor candidates
@@ -476,7 +481,7 @@ def geotiff_filepath_info(gpath):
     Ignore:
         >>> from watch.gis.geotiff import *  # NOQA
         >>> import ubelt as ub
-        >>> gpath = ub.expandpath('$HOME/remote/namek/data/dvc-repos/smart_watch_dvc/drop1/KR-Pyeongchang-WV/_assets/20170907_a_KRP_011777481_10_0/011777481010_01_003/011777481010_01/011777481010_01_P001_MUL/17SEP07021826-M1BS-011777481010_01_P001.TIF')
+        >>> gpath = ub.expandpath('$HOME/remote/namek/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-WV/_assets/20170907_a_KRP_011777481_10_0/011777481010_01_003/011777481010_01/011777481010_01_P001_MUL/17SEP07021826-M1BS-011777481010_01_P001.TIF')
         >>> info = geotiff_filepath_info(gpath)
         >>> print('info = {}'.format(ub.repr2(info, nl=1)))
 
