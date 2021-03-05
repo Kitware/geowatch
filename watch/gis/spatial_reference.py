@@ -310,11 +310,12 @@ class RPCTransform(object):
             >>> ])
             >>> wld_pts = self.warp_pixel_to_world(pxl_pts)
             >>> print('wld_pts =\n{}'.format(ub.repr2(wld_pts, nl=1, precision=2)))
-
+            >>> #
             >>> import osgeo
             >>> from watch.gis.spatial_reference import *  # NOQA
             >>> gpath = '/home/joncrall/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-WV/_assets/20140131_a_KRG_011778204_10_0/011778204010_01_003/011778204010_01/011778204010_01_P002_PAN/14JAN31020440-P1BS-011778204010_01_P002.NTF'
             >>> #gpath = '/home/joncrall/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-WV/_assets/20140131_a_KRG_011778204_10_0/011778204010_01_003/011778204010_01/011778204010_01_P001_PAN/14JAN31020439-P1BS-011778204010_01_P001.NTF'
+            >>> import gdal
             >>> ref = gdal.Open(gpath)
             >>> rpc_info = ref.GetMetadata(domain='RPC')
             >>> pts_in = pxl_pts = np.array([
@@ -326,7 +327,7 @@ class RPCTransform(object):
             >>> self = RPCTransform.from_gdal(rpc_info, elevation='gtop30')
             >>> wld_pts = self.warp_pixel_to_world(pxl_pts)
             >>> kwimage.Polygon(exterior=wld_pts).draw(color='purple', alpha=0.5)
-
+            >>> #
             >>> self = RPCTransform.from_gdal(rpc_info, elevation='open-elevation')
             >>> self.warp_pixel_to_world(pxl_pts)
         """
