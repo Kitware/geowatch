@@ -13,8 +13,6 @@
 stages:
   - build
   - test
-  - gpgsign
-  - deploy
 
 
 ### TEMPLATES ###
@@ -118,16 +116,16 @@ test_full/conda-linux:
     image:
         gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda
 
-test_minimal/conda-linux:
-    <<: 
-        - *test_minimal_template
-    image:
-        gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda
-
+#test_minimal/conda-linux:
+#    <<: 
+#        - *test_minimal_template
+#    image:
+#        gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda
 
 
 .__local_docker_heredoc__:
         - | 
+            docker pull gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda
             docker run -it gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda bash
 
             cd $HOME
