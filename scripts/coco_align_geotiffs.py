@@ -46,7 +46,7 @@ def main(**kw):
     CommandLine:
         python ~/code/watch/scripts/coco_align_geotiffs.py \
                 --src ~/data/dvc-repos/smart_watch_dvc/drop0/drop0.kwcoco.json \
-                --dst ~/data/dvc-repos/smart_watch_dvc/drop0_aligned \
+                --dst ~/data/dvc-repos/smart_watch_dvc/drop0_aligned_v2 \
                 --context_factor=1.5
 
         cd $HOME/data/dvc-repos/smart_watch_dvc/drop0-chipped/
@@ -318,27 +318,38 @@ class SimpleDataCube(object):
                     elif align_method == 'orthorectify':
                         align_method = 'orthorectify'
 
+                        dst_dpath = ub.ensuredir((sub_bundle_dpath, sensor_coarse, align_method))
+                        dst_gpath = join(dst_dpath, name_string)
+
                         # HACK TO FIND an appropirate DEM file
                         # from watch.gis import elevation
                         # dems = elevation.girder_gtop30_elevation_dem()
                         rpcs = info['rpc_transform']
                         dems = rpcs.elevation
-                        dem_fpath, dem_info = dems.find_reference_fpath(latmin, lonmin)
-
-                        dst_dpath = ub.ensuredir((sub_bundle_dpath, sensor_coarse, align_method))
-                        dst_gpath = join(dst_dpath, name_string)
-
-                        template = ub.paragraph(
-                            '''
-                            gdalwarp
-                            -te {xmin} {ymin} {xmax} {ymax}
-                            -te_srs epsg:4326
-                            -s_srs epsg:4326
-                            -rpc -et 0
-                            -to RPC_DEM={dem_fpath}
-                            -overwrite
-                            {SRC} {DST}
-                            ''')
+                        if hasattr(dems, 'find_reference_fpath'):
+                            dem_fpath, dem_info = dems.find_reference_fpath(latmin, lonmin)
+                            template = ub.paragraph(
+                                '''
+                                gdalwarp
+                                -te {xmin} {ymin} {xmax} {ymax}
+                                -te_srs epsg:4326
+                                -s_srs epsg:4326
+                                -rpc -et 0
+                                -to RPC_DEM={dem_fpath}
+                                -overwrite
+                                {SRC} {DST}
+                                ''')
+                        else:
+                            template = ub.paragraph(
+                                '''
+                                gdalwarp
+                                -te {xmin} {ymin} {xmax} {ymax}
+                                -te_srs epsg:4326
+                                -s_srs epsg:4326
+                                -rpc -et 0
+                                -overwrite
+                                {SRC} {DST}
+                                ''')
                         command = template.format(
                             ymin=latmin,
                             xmin=lonmin,
