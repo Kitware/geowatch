@@ -340,6 +340,7 @@ class SimpleDataCube(object):
                                 {SRC} {DST}
                                 ''')
                         else:
+                            dem_fpath = None
                             template = ub.paragraph(
                                 '''
                                 gdalwarp
