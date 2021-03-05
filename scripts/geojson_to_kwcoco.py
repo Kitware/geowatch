@@ -47,23 +47,53 @@ Notes:
 
     python ~/code/watch/scripts/geojson_to_kwcoco.py \
         --src ~/data/dvc-repos/smart_watch_dvc/raw/drop0/210210_D0_manualKR.geojson.json \
-        --bundle_dpath ~/data/dvc-repos/smart_watch_dvc/drop0/BR-Rio-0270
+        --bundle_dpath ~/data/dvc-repos/smart_watch_dvc/drop0/BR-Rio-0270 \
+        --visualize=True --ignore_dem=True
 
     python ~/code/watch/scripts/geojson_to_kwcoco.py \
         --src ~/data/dvc-repos/smart_watch_dvc/raw/drop0/210210_D0_manualKR.geojson.json \
-        --bundle_dpath ~/data/dvc-repos/smart_watch_dvc/drop0/AE-Dubai-0001
+        --bundle_dpath ~/data/dvc-repos/smart_watch_dvc/drop0/AE-Dubai-0001 \
+        --visualize=True --ignore_dem=False
 
     python ~/code/watch/scripts/geojson_to_kwcoco.py \
         --src ~/data/dvc-repos/smart_watch_dvc/raw/drop0/210210_D0_manualKR.geojson.json \
-        --bundle_dpath ~/data/dvc-repos/smart_watch_dvc/drop0/US-Waynesboro-0001
+        --bundle_dpath ~/data/dvc-repos/smart_watch_dvc/drop0/US-Waynesboro-0001 \
+        --visualize=True --ignore_dem=False
 
     python ~/code/watch/scripts/geojson_to_kwcoco.py \
         --src ~/data/dvc-repos/smart_watch_dvc/raw/drop0/210210_D0_manualKR.geojson.json \
-        --bundle_dpath ~/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-S2
+        --bundle_dpath ~/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-S2 \
+        --visualize=True --ignore_dem=False
 
     python ~/code/watch/scripts/geojson_to_kwcoco.py \
         --src ~/data/dvc-repos/smart_watch_dvc/raw/drop0/210210_D0_manualKR.geojson.json \
-        --bundle_dpath ~/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-WV
+        --bundle_dpath ~/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-WV \
+        --visualize=True --ignore_dem=False
+
+    # --- STEP 2 ---
+    # Combine into a single dataset
+
+    cd $HOME/data/dvc-repos/smart_watch_dvc/drop0
+
+    kwcoco reroot --src AE-Dubai-0001/data.kwcoco.json      --dst AE-Dubai-0001/data.kwcoco.json.abs --absolute=True
+    kwcoco reroot --src BR-Rio-0270/data.kwcoco.json        --dst BR-Rio-0270/data.kwcoco.json.abs --absolute=True
+    kwcoco reroot --src BR-Rio-0277/data.kwcoco.json        --dst BR-Rio-0277/data.kwcoco.json.abs --absolute=True
+    kwcoco reroot --src KR-Pyeongchang-S2/data.kwcoco.json  --dst KR-Pyeongchang-S2/data.kwcoco.json.abs --absolute=True
+    kwcoco reroot --src KR-Pyeongchang-WV/data.kwcoco.json  --dst KR-Pyeongchang-WV/data.kwcoco.json.abs --absolute=True
+    kwcoco reroot --src US-Waynesboro-0001/data.kwcoco.json --dst US-Waynesboro-0001/data.kwcoco.json.abs --absolute=True
+    jq '.images[0]' AE-Dubai-0001/data.kwcoco.json.abs
+
+    kwcoco union --src  \
+        AE-Dubai-0001/data.kwcoco.json.abs \
+        BR-Rio-0270/data.kwcoco.json.abs \
+        BR-Rio-0277/data.kwcoco.json.abs \
+        KR-Pyeongchang-S2/data.kwcoco.json.abs \
+        KR-Pyeongchang-WV/data.kwcoco.json.abs \
+        US-Waynesboro-0001/data.kwcoco.json.abs \
+        --dst drop0.kwcoco.json.abs
+
+    kwcoco reroot --src drop0.kwcoco.json.abs --dst drop0.kwcoco.json --old_prefix="$PWD/" --new_prefix="" --absolute=False
+    kwcoco validate drop0.kwcoco.json
 
 """
 import json
@@ -416,7 +446,7 @@ def main(**kw):
     toconvert_anns = []
     bad_gids = []
     bad_aids = []
-    for feat in geojson['features']:
+    for feat in ub.ProgIter(geojson['features'], desc='load anns'):
         ann = {}
         ann_meta = feat['metadata'].copy()
 
@@ -523,7 +553,7 @@ def main(**kw):
 
     # Warp annotations from world space to pixel space
     valid_anns = []
-    for gid, anns in gid_to_anns.items():
+    for gid, anns in ub.ProgIter(gid_to_anns.items(), desc='warp anns'):
         gpath = dset.get_image_fpath(gid)
         if os.stat(gpath).st_size < 10:
             continue

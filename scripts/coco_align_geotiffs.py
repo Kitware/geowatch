@@ -1,3 +1,7 @@
+"""
+Given the raw data in kwcoco format, this script will extract orthorectified
+regions around areas of interest across time.
+"""
 import scriptconfig as scfg
 import ubelt as ub
 import kwcoco
@@ -5,7 +9,6 @@ import numpy as np
 import kwimage
 from shapely import ops
 from os.path import join, exists
-from os.path import relpath, realpath, commonprefix
 
 
 class CocoAlignGeotiffs(scfg.Config):
@@ -539,7 +542,11 @@ def update_coco_geotiff_metadata(dset, serializable=True):
 
         src_gpath = dset.get_image_fpath(img['id'])
         assert exists(src_gpath)
-        info = geotiff_metadata(src_gpath)
+
+        if img.get('dem_hint', 'use') == 'ignore':
+            info = geotiff_metadata(src_gpath, elevation=0)
+        else:
+            info = geotiff_metadata(src_gpath)
 
         # relevant_keys = [
         #     'utm_crs_info',
