@@ -1,12 +1,13 @@
 """
 Tools for accessing querying for elevation data.
 """
+import numbers
+import numpy as np
+import os
+import random
 import requests
 import time
-import random
 import ubelt as ub
-import os
-import numbers
 from os.path import join
 
 
@@ -30,7 +31,9 @@ class ElevationDatabase(object):
                 * "gtop30"
                 * A number for a constant elevation
         """
-        if isinstance(key, numbers.Number):
+        if key is False:
+            self = ConstantElevationDatabase(0)
+        elif isinstance(key, numbers.Number):
             self = ConstantElevationDatabase(key)
         elif key == 'open-elevation':
             self = OpenElevationDatabase()
@@ -47,8 +50,12 @@ class ConstantElevationDatabase(ElevationDatabase):
     """
     def __init__(self, const):
         self.const = const
-    def query(self, lat, lon):
-        return self.const
+    def query(self, lats, lons):
+        lats_, lons_, was_iterable = ensure_iterable_latlons(lats, lons)
+        if was_iterable:
+            return np.array([self.const] * len(lats_))
+        else:
+            return self.const
 
 
 class OpenElevationDatabase(ElevationDatabase):
@@ -171,7 +178,6 @@ class DEM_Collection(ElevationDatabase):
         dems.dem_polys = dem_polys
 
     def find_reference_fpath(dems, lat, lon):
-        import numpy as np
         import shapely
 
         query = shapely.geometry.Point(lat, lon)
@@ -189,27 +195,10 @@ class DEM_Collection(ElevationDatabase):
         TODO: the API supports vectorization, but we need to make it more
         efficient.
         """
-        import numpy as np
         import gdal
         import kwimage
 
-        lat_was_iterable = ub.iterable(lats)
-        lon_was_iterable = ub.iterable(lons)
-        was_iterable = lon_was_iterable or lat_was_iterable
-
-        if was_iterable:
-            if lon_was_iterable and not lat_was_iterable:
-                lons_ = lons
-                lats_ = [lats] * len(lons)
-            elif lat_was_iterable and not lon_was_iterable:
-                lats_ = lats
-                lons_ = [lons] * len(lats)
-            else:
-                lats_ = lats
-                lons_ = lons
-        else:
-            lats_ = [lats]
-            lons_ = [lons]
+        lats_, lons_, was_iterable = ensure_iterable_latlons(lats, lons)
 
         elevations = []
 
@@ -272,6 +261,28 @@ class DEM_Collection(ElevationDatabase):
 
         dems = DEM_Collection(dem_paths)
         return dems
+
+
+def ensure_iterable_latlons(lats, lons):
+    lat_was_iterable = ub.iterable(lats)
+    lon_was_iterable = ub.iterable(lons)
+    was_iterable = lon_was_iterable or lat_was_iterable
+
+    if was_iterable:
+        if lon_was_iterable and not lat_was_iterable:
+            lons_ = lons
+            lats_ = [lats] * len(lons)
+        elif lat_was_iterable and not lon_was_iterable:
+            lats_ = lats
+            lons_ = [lons] * len(lats)
+        else:
+            lats_ = lats
+            lons_ = lons
+    else:
+        lats_ = [lats]
+        lons_ = [lons]
+
+    return lats_, lons_, was_iterable
 
 
 @ub.memoize

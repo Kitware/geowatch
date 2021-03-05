@@ -6,15 +6,19 @@ import ubelt as ub
 from watch.gis import spatial_reference as watch_crs
 
 
-def geotiff_metadata(gpath):
+def geotiff_metadata(gpath, elevation='gtop30'):
     """
     Extract all relevant metadata we know how to extract.
+
+    Args:
+        elevation (str): method for extracting elevation data.
+
     """
     import gdal
     infos = {}
     ref = gdal.Open(gpath, gdal.GA_ReadOnly)
     infos['fname'] = geotiff_filepath_info(gpath)
-    infos['cfs'] = geotiff_crs_info(ref)
+    infos['cfs'] = geotiff_crs_info(ref, elevation=elevation)
     infos['header'] = geotiff_header_info(ref)
 
     # Combine sensor candidates

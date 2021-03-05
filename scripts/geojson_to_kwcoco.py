@@ -88,7 +88,12 @@ class GeojsonToCocoConfig(scfg.Config):
             DOCSTRING.
             ''')),
 
-        'visualize': scfg.Value(False, help=ub.paragraph(
+        'ignore_dem': scfg.Value(False, help=ub.paragraph(
+            '''
+            if True, we ignore the digital elevation map
+            '''),
+
+        'visualize': scfg.Value(True, help=ub.paragraph(
             '''
             if True, we also write visualizations of annotation ROIs in pixel
             space.
@@ -343,7 +348,14 @@ def main(**kw):
                 continue
 
             # height, width = kwimage.load_image_shape(fpath)[0:2]
-            info = geotiff_metadata(fpath)
+
+            if config['ignore_dem']
+                info = geotiff_metadata(fpath, elevation=False)
+                img['dem_hint'] = 'ignore'
+            else:
+                info = geotiff_metadata(fpath)
+                img['dem_hint'] = 'ignore'
+
             height, width = info['img_shape']
 
             gid = dset.add_image(file_name=fpath, height=height, width=width, **img)
@@ -585,8 +597,7 @@ def main(**kw):
         if visualize:
             dets = kwimage.Detections.from_coco_annots(anns, dset=dset)
             window = dets.boxes.bounding_box().quantize()
-            window = window.to_cxywh().scale(1.5, about='center')
-            print('window = {!r}'.format(window))
+            window = window.to_cxywh().scale(1.8, about='center')
 
             new_dim = max(window.width.ravel()[0], window.height.ravel()[0])
             window.data[:, 2:4] = new_dim
@@ -595,15 +606,10 @@ def main(**kw):
             min_x, min_y, max_x, max_y = [c.ravel()[0] for c in window.components]
             sl = tuple([slice(min_y, max_y), slice(min_x, max_x)])
 
-            imdata = LazyGDalFrameFile(gpath)
-            canvas, transform = kwimage.padded_slice(imdata, sl,
-                                                     return_info=True)
-
-            from watch.utils.util_norm import normalize_intensity
-            canvas, _info = normalize_intensity(canvas, return_info=True)
-
+            frame = LazyGDalFrameFile(gpath)
+            imdata, crop_transform = kwimage.padded_slice(frame, sl,
+                                                          return_info=True)
             subdets = dets.translate((-min_x, -min_y))
-            canvas = subdets.draw_on(canvas)
 
             # TODO: use a more robust name that is gaurenteed to not conflict
             # should be fine for drop0 datasets.
@@ -611,6 +617,17 @@ def main(**kw):
             base = basename(gpath)
             suffix = '_crop_xywh_{}_{}_{}_{}'.format(*window.to_xywh().data[0])
             viz_gpath = ub.augpath(base, suffix=suffix, dpath=viz_dpath, ext='.jpg')
+
+            from watch.utils.util_norm import normalize_intensity
+            canvas, _info = normalize_intensity(imdata, return_info=True)
+            canvas = kwimage.atleast_3channels(canvas)
+
+            canvas = kwimage.draw_text_on_image(
+                canvas, suffix, (5, 5), valign='top', color='red')
+
+            canvas = subdets.draw_on(canvas, color='green')
+
+            canvas = kwimage.ensure_uint255(canvas)
             kwimage.imwrite(viz_gpath, canvas)
 
             if 0:
