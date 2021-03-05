@@ -40,6 +40,8 @@ Notes:
     # --- STEP 1 ---
     # Given this setup, we run this script as follows
 
+    cd $HOME/data/dvc-repos/smart_watch_dvc/drop0
+
     python ~/code/watch/scripts/geojson_to_kwcoco.py \
         --src ~/data/dvc-repos/smart_watch_dvc/raw/drop0/210210_D0_manualKR.geojson.json \
         --bundle_dpath ~/data/dvc-repos/smart_watch_dvc/drop0/BR-Rio-0277 \
@@ -75,13 +77,12 @@ Notes:
 
     cd $HOME/data/dvc-repos/smart_watch_dvc/drop0
 
-    kwcoco reroot --src AE-Dubai-0001/data.kwcoco.json      --dst AE-Dubai-0001/data.kwcoco.json.abs --absolute=True
     kwcoco reroot --src BR-Rio-0270/data.kwcoco.json        --dst BR-Rio-0270/data.kwcoco.json.abs --absolute=True
     kwcoco reroot --src BR-Rio-0277/data.kwcoco.json        --dst BR-Rio-0277/data.kwcoco.json.abs --absolute=True
+    kwcoco reroot --src AE-Dubai-0001/data.kwcoco.json      --dst AE-Dubai-0001/data.kwcoco.json.abs --absolute=True
     kwcoco reroot --src KR-Pyeongchang-S2/data.kwcoco.json  --dst KR-Pyeongchang-S2/data.kwcoco.json.abs --absolute=True
     kwcoco reroot --src KR-Pyeongchang-WV/data.kwcoco.json  --dst KR-Pyeongchang-WV/data.kwcoco.json.abs --absolute=True
     kwcoco reroot --src US-Waynesboro-0001/data.kwcoco.json --dst US-Waynesboro-0001/data.kwcoco.json.abs --absolute=True
-    jq '.images[0]' AE-Dubai-0001/data.kwcoco.json.abs
 
     kwcoco union --src  \
         AE-Dubai-0001/data.kwcoco.json.abs \
