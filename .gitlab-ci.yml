@@ -132,23 +132,9 @@ test_full/conda-linux:
             git clone https://gitlab.kitware.com/smart/watch.git
             cd $HOME/watch
 
+            git checkout dev/add-ci
+
             conda env create -f conda_env.yml
 
-            git checkout dev/0.5.10
-
-            # python setup.py bdist_wheel --universal
-
-            python -V  # Print out python version for debugging
-            export PYVER=$(python -c "import sys; print('{}{}'.format(*sys.version_info[0:2]))")
-            pip install virtualenv
-            virtualenv venv$PYVER
-            source venv$PYVER/bin/activate
-            pip install pip -U
-            pip install pip setuptools -U
-            python -V  # Print out python version for debugging
-            pip install .[tests]
-
-            # Fixes the LibGL error
-            #apt update && apt install libgl1-mesa-glx -y && rm -rf /var/lib/apt/lists/*
-            
             ./run_tests.py
+
