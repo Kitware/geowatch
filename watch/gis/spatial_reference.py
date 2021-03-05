@@ -287,7 +287,7 @@ class RPCTransform(object):
         return pts_out
 
     def warp_pixel_to_world(self, pts_in, return_elevation=False):
-        """
+        r"""
         Args:
             pts_in (ndarray):
                 Either an Nx2 array of x,y pixel coordinates, or
