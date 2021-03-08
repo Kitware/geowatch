@@ -1,14 +1,23 @@
-# Note: expand yaml
-# yaml merge-expand .gitlab-ci.yml _expandyml && cat _expandyml
-# 
-# GITLAB LINTEs
-# https://gitlab.kitware.com/smart/watch/-/ci/lint
+# Abuse YAML notation to make a heredoc. This will be ignored by the CI.
+.__heredoc__: &__heredoc__
+    - | 
 
-# This CI file has 4 types of jobs:
-# (1) in the build stage we we build the wheels on a manylinux docker image
-# (2) then in the test stage we install the wheels, run unit tests, and measure coverage
-# (3) after testing we sign the wheels with the CI's GPG key
-# (4) finally if we are on the release branch we will push the signed wheels to pypi
+        # Note: expand yaml
+        yaml merge-expand .gitlab-ci.yml _expandyml && cat _expandyml
+         
+        # GITLAB LINTER
+        https://gitlab.kitware.com/smart/watch/-/ci/lint
+
+        * Make sure you add Runners to your project 
+        https://gitlab.org.com/smart/watch/-/settings/ci_cd 
+        in Runners-> Shared Runners
+        and Runners-> Available specific runners
+
+        * Ensure that you are auto-cancel redundant pipelines.
+        Navigate to https://gitlab.kitware.com/smart/watch/-/settings/ci_cd and ensure "Auto-cancel redundant pipelines" is checked.
+
+        More details are here https://docs.gitlab.com/ee/ci/pipelines/settings.html#auto-cancel-redundant-pipelines
+
 
 stages:
   - build
@@ -21,18 +30,20 @@ stages:
 .common_template: &common_template
     tags:
         # Tags define which runners will accept which jobs
+        - rukbat
         - docker
         - linux
+        - linux-3.17
         - build
+        - smart
 
     variables:
-        # Change pip's cache directory to be inside the project directory since we can
-        # only cache local items.
-        PIP_CACHE_DIR: "$CI_PROJECT_DIR/mb_work/cache_pip"
+      PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
 
 ### BUILD TEMPLATE VARIANTS
 
-.build_template: &build_template
+.build_loose_template: &build_loose_template
     # Tags define which runners will accept which jobs
     <<: 
         - *common_template
@@ -41,18 +52,18 @@ stages:
         build
 
     script: 
-        # TODO: is there a way to cache conda create step? It seems really bulky.
-        - conda env create -f conda_env.yml
-        - conda activate watch
+        - conda init bash
+        - source ~/.bashrc
+        - conda env create -f conda_env.yml --prefix "./loose-watch-env"
+
+    artifacts:
+      paths:
+        - loose-watch-env
 
     cache:
         paths:
             - .cache/pip
-            - /opt/conda/envs
-
-    artifacts:
-        paths:
-            - dist/*.whl
+            - loose-watch-env
 
 
 .build_strict_template: &build_strict_template
@@ -64,66 +75,64 @@ stages:
         build
 
     script: 
-        # TODO: is there a way to cache conda create step? It seems really bulky.
+        - conda init bash
+        - source ~/.bashrc
         - sed 's/>=/==/g' conda_env.yml > conda_env_strict.yml
-        - conda env create -f conda_env_strict.yml
-        - conda activate watch
+        - conda env create -f conda_env_strict.yml --prefix "./strict-watch-env"
+
+    artifacts:
+      paths:
+        - strict-watch-env
 
     cache:
         paths:
             - .cache/pip
-            - /opt/conda/envs
-
-    artifacts:
-        paths:
-            - dist/*.whl
+            - strict-watch-env
 
 
 ### TEST TEMPLATE VARIANTS
 
 
-# TODO: eventually differentiate between minimal and full installs
-.test_full_template: &test_full_template
-    # Tags define which runners will accept which jobs
+.test_loose_template: &test_loose_template
     <<: 
         - *common_template
     stage: 
         test
+
     before_script:
-        - conda activate watch
-        #- pip install .[all]  
+        - conda init bash
+        - source ~/.bashrc
+        - ls -al
+        - conda activate "./loose-watch-env"
         - pip install -e .
     script: 
         - ./run_tests.py
-    cache:
-        paths:
-            - .cache/pip
-            - .cache/smart_watch
-            - venv/
+
     # Coverage is a regex that will parse the coverage from the test stdout
     coverage: '/TOTAL.+ ([0-9]{1,3}%)/'
 
 
+.test_strict_template: &test_strict_template
+    <<: 
+        - *common_template
+    stage: 
+        test
+
+    before_script:
+        - conda init bash
+        - source ~/.bashrc
+        - ls -al
+        - conda activate "./strict-watch-env"
+        - pip install -e .
+    script: 
+        - ./run_tests.py
+
+    # Coverage is a regex that will parse the coverage from the test stdout
+    coverage: '/TOTAL.+ ([0-9]{1,3}%)/'
+
 
 # TODO: eventually differentiate between minimal and full installs
 #.test_minimal_template: &test_minimal_template
-#    # Tags define which runners will accept which jobs
-#    <<: 
-#        - *common_template
-#    stage: 
-#        test
-#    before_script:
-#        - conda activate watch
-#        # - pip install .[tests]  
-#        - pip install -e .
-#    script: 
-#        - ./run_tests.py
-#    cache:
-#        paths:
-#            - .cache/pip
-#            - venv/
-#    # Coverage is a regex that will parse the coverage from the test stdout
-#    coverage: '/TOTAL.+ ([0-9]{1,3}%)/'
 
 
 ### JOBS ###
@@ -132,57 +141,63 @@ stages:
 # ---------------
 # Python 3.8 Jobs
 
-build/conda-linux:
-    <<: 
-        - *build_template
-    image:
-        gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda
 
-test_full/conda-linux:
+build_loose/conda-linux:
     <<: 
-        - *test_full_template
+        - *build_loose_template
     image:
-        gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda
-
-    dependencies:
-        build/conda-linux
+        gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
 
 
 build_strict/conda-linux:
     <<: 
         - *build_strict_template
     image:
-        gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda
+        gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
 
+test_full_loose/conda-linux:
+    <<: 
+        - *test_loose_template
+    image:
+        gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
+        
 
 test_full_strict/conda-linux:
     <<: 
-        - *test_full_template
+        - *test_strict_template
     image:
-        gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda
-
-    dependencies:
-        build_strict/conda-linux
+        gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
 
 #test_minimal/conda-linux:
 #    <<: 
 #        - *test_minimal_template
 #    image:
-#        gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda
+#        gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
 
 
 .__local_docker_heredoc__:
         - | 
-            docker pull gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda
-            docker run -it gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda bash
+            docker login gitlab.kitware.com:4567
+            docker pull gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
+
+            docker run -v ~/.ssh:/tmp/.ssh:ro -it gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3 bash
+            #docker run -it gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3 bash
+            cp -R /tmp/.ssh /root/.ssh
+            chmod 700 /root/.ssh
+            chmod 600 /root/.ssh/id_*
+            chmod 644 /root/.ssh/*.pub
 
             cd $HOME
-            git clone https://gitlab.kitware.com/smart/watch.git
+            git clone git@gitlab.kitware.com:smart/watch.git
+
             cd $HOME/watch
+            git checkout dev/add_ci
 
-            git checkout dev/add-ci
+            sed 's/>=/==/g' conda_env.yml > conda_env_strict.yml
+            conda env create -f conda_env_strict.yml --prefix "./strict-watch-env"
 
-            conda env create -f conda_env.yml
+            ls -al
+            conda activate "./strict-watch-env"
 
             ./run_tests.py
 
