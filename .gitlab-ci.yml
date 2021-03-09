@@ -79,7 +79,7 @@ stages:
     cache:
         paths:
             - .cache/conda/pkgs
-            - .cache/conda/envs/loose-watch-env
+            #- .cache/conda/envs/loose-watch-env  # better with or without this?
             - .cache/pip
 
 
@@ -104,7 +104,7 @@ stages:
     cache:
         paths:
             - .cache/conda/pkgs
-            - .cache/conda/envs/strict-watch-env
+            #- .cache/conda/envs/strict-watch-env  # better with or without this?
             - .cache/pip
 
 

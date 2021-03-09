@@ -4,7 +4,7 @@ channels:
   - conda-forge
 dependencies:
   - python == 3.8
-  - gdal >= 3.0.2
+  - gdal == 3.0.2
   - numpy >= 1.20.1
   - shapely >= 1.7.1
   - pip >= 21.0.1
