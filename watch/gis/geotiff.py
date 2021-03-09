@@ -99,7 +99,7 @@ def geotiff_header_info(gpath_or_ref):
         if ns in ignore_domains:
             continue
         meta = ref.GetMetadata(ns)
-        if 1:
+        if 0:
             print('meta = {}'.format(ub.repr2(meta, nl=1)))
         for key, value in ub.dict_isect(meta, keys_of_interest).items():
             all_domain_img_meta['{}.{}'.format(ns, key)] = value
