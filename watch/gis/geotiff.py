@@ -31,6 +31,8 @@ def geotiff_metadata(gpath, elevation='gtop30'):
         ...        'LC08_L1TP_037029_20130602_20170310_01_T1_B2.TIF')
         >>> gpath = ub.grabdata(url, appname='smart_watch')
 
+        url = ('http://storage.googleapis.com/gcp-public-data-landsat/LC08/01/037/029/LC08_L1TP_037029_20130602_20170310_01_T1/LC08_L1TP_037029_20130602_20170310_01_T1_B2.TIF')
+
         >>> info = geotiff_metadata(gpath)
         >>> print('info = {}'.format(ub.repr2(info, nl=1)))
     """
@@ -497,18 +499,33 @@ def geotiff_filepath_info(gpath):
         >>>         assert len(info['sensor_candidates']) == len(set(info['sensor_candidates']))
         >>>         assert info['filename_meta']
 
+    Example:
+        >>> from watch.gis.geotiff import *  # NOQA
+        >>> gpath = 'LC08_L1TP_037029_20130602_20170310_01_T1_B1.TIF'
+        >>> info = geotiff_filepath_info(gpath)
+        >>> print('info = {}'.format(ub.repr2(info, nl=1)))
+        >>> assert info['filename_meta']['sensor_code'] == 'C'
+        >>> assert info['filename_meta']['sat_code'] == '08'
+        >>> assert info['filename_meta']['sat_code'] == '08'
+        >>> assert info['filename_meta']['collection_category'] == 'T1'
+        >>> assert info['filename_meta']['suffix'] == 'B1'
+        >>> assert info['filename_meta']['band_num'] == 1
+
     Ignore:
+        >>> # TODO : demodata for a digital globe archive
         >>> from watch.gis.geotiff import *  # NOQA
         >>> import ubelt as ub
         >>> gpath = ub.expandpath('$HOME/remote/namek/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-WV/_assets/20170907_a_KRP_011777481_10_0/011777481010_01_003/011777481010_01/011777481010_01_P001_MUL/17SEP07021826-M1BS-011777481010_01_P001.TIF')
         >>> info = geotiff_filepath_info(gpath)
         >>> print('info = {}'.format(ub.repr2(info, nl=1)))
 
-
     References:
         .. [LanSatName] https://www.usgs.gov/faqs/what-naming-convention-landsat-collections-level-1-scenes
         .. [S2_Name_2016] https://sentinel.esa.int/web/sentinel/user-guides/sentinel-2-msi/naming-convention
         .. [S3_Name] https://sentinel.esa.int/web/sentinel/user-guides/sentinel-3-altimetry/naming-conventions
+        .. [LS_578] https://github.com/dgketchum/Landsat578#-1
+        .. [ExampleLandSat]  https://console.cloud.google.com/storage/browser/gcp-public-data-landsat/LC08/01/044/034/LC08_L1GT_044034_20130330_20170310_01_T2?_ga=2.210779154.665659046.1615242530-37570621.1615242530
+        .. [LandSatSuffixFormat] https://prd-wret.s3.us-west-2.amazonaws.com/assets/palladium/production/atoms/files/LSDS-750_Landsat8_Level-0-Reformatted_DataFormatControlBook-v15.pdf (page 26 / 99)
     """
     from os.path import basename
     import parse
@@ -529,7 +546,8 @@ def geotiff_filepath_info(gpath):
 
     # Landsat filename pattern. See [LanSatName]_
     # LXSS_LLLL_PPPRRR_YYYYMMDD_yyyymmdd_CC_TX
-    landsat_pattern = 'L{X}{SS}_{LLL}_{PPPRRR}_{YYYYMMDD}_{yyyymmdd}_{CC}_{TX}'
+    #                   LXSS     _ LLLL_  PPPRRR _ YYYYMMDD _ yyyymmdd _ CC _ TX
+    landsat_pattern = 'L{X:1}{SS}_{LLLL}_{PPPRRR}_{YYYYMMDD}_{yyyymmdd}_{CC}_{TX}'
     result = parse.parse(landsat_pattern, base)
     if result:
         ls_sensor_code_to_text = {
@@ -540,20 +558,59 @@ def geotiff_filepath_info(gpath):
             # 'T': 'TM',  # ambiguous? That's in the spec
             'M': 'MSS',
         }
+
+        correction_code_to_text = {
+            'L1TP': 'Precision Terrain',
+            'L1GT': 'Systematic Terrain',
+            'L1GS': 'Systematic',
+        }
+
         try:
+            # When accessing files from google API, there might be an additional
+            # field specifying band information.
+            trailing = result.named['TX'].split('_')
+            tx = trailing[0]
+
             wrs = result.named['PPPRRR']
             sensor_code = result.named['X']
             sat_code = result.named['SS']
+
+            correction_code = result.named['LLLL']
+
             ls_meta = {}
+            ls_meta['sensor_text']: ls_sensor_code_to_text[sensor_code]
+            ls_meta['correction_level_text'] = correction_code_to_text[correction_code]
+
             ls_meta['sensor_code'] = sensor_code
             ls_meta['sat_code'] = sat_code
-            ls_meta['sensor_text']: ls_sensor_code_to_text[sensor_code]
             ls_meta['WRS_path'] = wrs[:3]
             ls_meta['WRS_now'] = wrs[3:]
+            ls_meta['correction_level_code'] = correction_code
             ls_meta['acquisition_date'] = result.named['YYYYMMDD']
             ls_meta['processing_date'] = result.named['yyyymmdd']
             ls_meta['collection_number'] = result.named['CC']
-            ls_meta['collection_category'] = result.named['TX']
+            ls_meta['collection_category'] = tx
+
+            if len(trailing) > 1:
+                suffix = '_'.join(trailing[1:])
+                ls_meta['suffix'] = suffix
+
+                if suffix == 'ANC':
+                    ls_meta['is_ancillary'] = True
+                elif suffix == 'MTA':
+                    ls_meta['is_metadata'] = True
+                elif suffix == 'MD5':
+                    ls_meta['is_checksum'] = True
+                else:
+                    # The suffix might represent something about band
+                    # information, we may parse it.
+                    # See [LandSatSuffixFormat]_.
+                    band_suffix_pat = 'B{band_num:d}'
+                    band_result = parse.parse(band_suffix_pat, suffix)
+                    print('band_result = {!r}'.format(band_result))
+                    if band_result is not None:
+                        ls_meta['band_num'] = band_result.named['band_num']
+
             sensor_cand = 'L' + sensor_code + sat_code
         except InvalidFormat:
             pass
