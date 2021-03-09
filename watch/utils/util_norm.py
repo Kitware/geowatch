@@ -13,6 +13,7 @@ def normalize_intensity(imdata, return_info=False):
 
     Example:
         >>> from watch.utils.util_norm import *  # NOQA
+        >>> import ubelt as ub
         >>> import kwimage
         >>> import kwarray
         >>> s = 512
@@ -24,7 +25,7 @@ def normalize_intensity(imdata, return_info=False):
         >>> background = np.random.randint(min_val, max_val, size=(s, s), dtype=dtype)
         >>> poly1 = kwimage.Polygon.random(rng=rng).scale(s / 2)
         >>> poly2 = kwimage.Polygon.random(rng=rng).scale(s / 2).translate(s / 2)
-        >>> forground = np.zeros_like(canvas, dtype=np.uint8)
+        >>> forground = np.zeros_like(background, dtype=np.uint8)
         >>> forground = poly1.fill(forground, value=255)
         >>> forground = poly2.fill(forground, value=122)
         >>> forground = (kwimage.ensure_float01(forground) * max_val).astype(dtype)
