@@ -23,7 +23,7 @@
 
             - [ ] Optimize caching and creation of the conda environments
 
-            - [ ] Allow some network tests to run (and ensure we cache the
+            - [X] Allow some network tests to run (and ensure we cache the
                   $HOME/.cache/smart_watch) directory to prevent large
                   downloads.
 
@@ -55,6 +55,7 @@ stages:
       PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
       CONDA_PKGS_DIRS: "$CI_PROJECT_DIR/.cache/conda/pkgs"
       CONDA_ENVS_PATH: "$CI_PROJECT_DIR/.cache/conda/envs"
+      XDG_CACHE_HOME: "$CI_PROJECT_DIR/.cache/xdg_cache"
 
 
 ### BUILD TEMPLATE VARIANTS
@@ -124,10 +125,17 @@ stages:
         - conda activate ".cache/conda/envs/loose-watch-env"
         - pip install -e .
     script: 
-        - ./run_tests.py
+        - ./run_tests.py --network
 
     # Coverage is a regex that will parse the coverage from the test stdout
     coverage: '/TOTAL.+ ([0-9]{1,3}%)/'
+
+    cache:
+        paths:
+            - .cache/conda/pkgs
+            - .cache/xdg_cache
+            #- .cache/conda/envs/loose-watch-env  # better with or without this?
+            - .cache/pip
 
 
 .test_strict_template: &test_strict_template
@@ -143,10 +151,17 @@ stages:
         - conda activate ".cache/conda/envs/strict-watch-env"
         - pip install -e .
     script: 
-        - ./run_tests.py
+        - ./run_tests.py --network
 
     # Coverage is a regex that will parse the coverage from the test stdout
     coverage: '/TOTAL.+ ([0-9]{1,3}%)/'
+
+    cache:
+        paths:
+            - .cache/conda/pkgs
+            - .cache/xdg_cache
+            #- .cache/conda/envs/loose-watch-env  # better with or without this?
+            - .cache/pip
 
 
 # TODO: eventually differentiate between minimal and full installs

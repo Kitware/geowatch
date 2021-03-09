@@ -43,6 +43,7 @@ def grabdata_girder(api_url, resource_id, name=None, dpath=None, hash_prefix=Non
     Example:
         >>> # xdoctest: +REQUIRES(--network)
         >>> from watch.utils.util_girder import *  # NOQA
+        >>> from os.path import basename
         >>> api_url = 'https://data.kitware.com/api/v1'
         >>> resource_id = '59eb64678d777f31ac6477eb'
         >>> fpath = grabdata_girder(api_url, resource_id,

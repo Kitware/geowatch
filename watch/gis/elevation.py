@@ -83,6 +83,7 @@ class OpenElevationDatabase(ElevationDatabase):
 
     Example:
         >>> # xdoctest: +REQUIRES(--network)
+        >>> # xdoctest: +REQUIRES(--slow)
         >>> from watch.gis.elevation import *  # NOQA
         >>> lat = 37.65026538818887
         >>> lon = 128.81096081618637

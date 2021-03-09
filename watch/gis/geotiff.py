@@ -12,8 +12,27 @@ def geotiff_metadata(gpath, elevation='gtop30'):
     Extract all relevant metadata we know how to extract.
 
     Args:
+        gpath (str): path to the geotiff of interest
         elevation (str): method for extracting elevation data.
 
+    Example:
+        >>> # xdoctest: +REQUIRES(--network)
+        >>> from watch.gis.geotiff import *  # NOQA
+        >>> url = ('http://storage.googleapis.com/gcp-public-data-landsat/'
+        ...        'LC08/01/044/034/LC08_L1GT_044034_20130330_20170310_01_T2/'
+        ...        'LC08_L1GT_044034_20130330_20170310_01_T2_B11.TIF')
+        >>> gpath = ub.grabdata(url, appname='smart_watch')
+        >>> info = geotiff_metadata(gpath)
+        >>> print('info = {}'.format(ub.repr2(info, nl=1)))
+
+        >>> import ubelt as ub
+        >>> url = ('http://storage.googleapis.com/gcp-public-data-landsat/'
+        ...        'LC08/01/037/029/LC08_L1TP_037029_20130602_20170310_01_T1/'
+        ...        'LC08_L1TP_037029_20130602_20170310_01_T1_B2.TIF')
+        >>> gpath = ub.grabdata(url, appname='smart_watch')
+
+        >>> info = geotiff_metadata(gpath)
+        >>> print('info = {}'.format(ub.repr2(info, nl=1)))
     """
     import gdal
     infos = {}
@@ -80,7 +99,7 @@ def geotiff_header_info(gpath_or_ref):
         if ns in ignore_domains:
             continue
         meta = ref.GetMetadata(ns)
-        if 0:
+        if 1:
             print('meta = {}'.format(ub.repr2(meta, nl=1)))
         for key, value in ub.dict_isect(meta, keys_of_interest).items():
             all_domain_img_meta['{}.{}'.format(ns, key)] = value
