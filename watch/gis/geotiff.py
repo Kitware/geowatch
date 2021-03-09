@@ -31,8 +31,6 @@ def geotiff_metadata(gpath, elevation='gtop30'):
         ...        'LC08_L1TP_037029_20130602_20170310_01_T1_B2.TIF')
         >>> gpath = ub.grabdata(url, appname='smart_watch')
 
-        url = ('http://storage.googleapis.com/gcp-public-data-landsat/LC08/01/037/029/LC08_L1TP_037029_20130602_20170310_01_T1/LC08_L1TP_037029_20130602_20170310_01_T1_B2.TIF')
-
         >>> info = geotiff_metadata(gpath)
         >>> print('info = {}'.format(ub.repr2(info, nl=1)))
     """
