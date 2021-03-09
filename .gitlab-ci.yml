@@ -19,6 +19,20 @@
         More details are here https://docs.gitlab.com/ee/ci/pipelines/settings.html#auto-cancel-redundant-pipelines
 
 
+        TODO:
+
+            - [ ] Optimize caching and creation of the conda environments
+
+            - [ ] Allow some network tests to run (and ensure we cache the
+                  $HOME/.cache/smart_watch) directory to prevent large
+                  downloads.
+
+            - [ ] Create a minimal no-network test suite
+
+            - [ ] Ensure this script follows gitlab-CI best practices (its
+                  current state did whataver was necessary to make it work)
+
+
 stages:
   - build
   - test
@@ -177,6 +191,11 @@ test_full_strict/conda-linux:
 
 .__local_docker_heredoc__:
         - | 
+
+            # Commands to help developers debug pipelines on their local machine
+            # Grab the base docker image, (forwarding your ssh credentials), clone
+            # the watch repo, create the environment, and run the tests. 
+            #
             docker login gitlab.kitware.com:4567
             docker pull gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
 
