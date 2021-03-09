@@ -1,5 +1,9 @@
 # WATCH
 
+[![master-pipeline](https://gitlab.kitware.com/smart/watch/badges/master/pipeline.svg)](https://gitlab.kitware.com/smart/watch/badges/master/pipeline.svg)
+[![master-coverage](https://gitlab.kitware.com/smart/watch/badges/master/coverage.svg)](https://gitlab.kitware.com/smart/watch/badges/master/coverage.svg)
+
+
 This repository addresses the algorithmic challenges of the IARPA SMART program. The goal of this software is analyze space-based imagery to perform broad-area search for natural and anthropogenic events and characterize their extent and progression in time and space.
 
 ## Getting Started
