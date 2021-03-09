@@ -53,6 +53,8 @@ stages:
 
     variables:
       PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+      CONDA_PKGS_DIRS: "$CI_PROJECT_DIR/.cache/conda/pkgs"
+      CONDA_ENVS_PATH: "$CI_PROJECT_DIR/.cache/conda/envs"
 
 
 ### BUILD TEMPLATE VARIANTS
@@ -68,16 +70,17 @@ stages:
     script: 
         - conda init bash
         - source ~/.bashrc
-        - conda env create -f conda_env.yml --prefix "./loose-watch-env"
+        - conda env create -f conda_env.yml --prefix ".cache/conda/envs/loose-watch-env"
 
     artifacts:
       paths:
-        - loose-watch-env
+        - .cache/conda/envs/loose-watch-env
 
     cache:
         paths:
+            - .cache/conda/pkgs
+            - .cache/conda/envs/loose-watch-env
             - .cache/pip
-            - loose-watch-env
 
 
 .build_strict_template: &build_strict_template
@@ -92,16 +95,17 @@ stages:
         - conda init bash
         - source ~/.bashrc
         - sed 's/>=/==/g' conda_env.yml > conda_env_strict.yml
-        - conda env create -f conda_env_strict.yml --prefix "./strict-watch-env"
+        - conda env create -f conda_env_strict.yml --prefix ".cache/conda/envs/strict-watch-env"
 
     artifacts:
       paths:
-        - strict-watch-env
+        - .cache/conda/envs/strict-watch-env
 
     cache:
         paths:
+            - .cache/conda/pkgs
+            - .cache/conda/envs/strict-watch-env
             - .cache/pip
-            - strict-watch-env
 
 
 ### TEST TEMPLATE VARIANTS
@@ -117,7 +121,7 @@ stages:
         - conda init bash
         - source ~/.bashrc
         - ls -al
-        - conda activate "./loose-watch-env"
+        - conda activate ".cache/conda/envs/loose-watch-env"
         - pip install -e .
     script: 
         - ./run_tests.py
@@ -136,7 +140,7 @@ stages:
         - conda init bash
         - source ~/.bashrc
         - ls -al
-        - conda activate "./strict-watch-env"
+        - conda activate ".cache/conda/envs/strict-watch-env"
         - pip install -e .
     script: 
         - ./run_tests.py
