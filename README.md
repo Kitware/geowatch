@@ -1,6 +1,6 @@
 # WATCH
 
-[![master-pipeline](https://gitlab.kitware.com/smart/watch/badges/master/pipeline.svg)](https://gitlab.kitware.com/smart/watch/badges/master/pipeline.svg)
+[![master-pipeline](https://gitlab.kitware.com/smart/watch/badges/master/pipeline.svg)](https://gitlab.kitware.com/smart/watch/-/pipelines/master/latest)
 [![master-coverage](https://gitlab.kitware.com/smart/watch/badges/master/coverage.svg)](https://gitlab.kitware.com/smart/watch/badges/master/coverage.svg)
 
 
