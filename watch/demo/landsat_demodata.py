@@ -2,13 +2,32 @@ import ubelt as ub
 from os.path import join
 
 
-def grab_landsat_item():
+def grab_landsat_item(scene_id=None):
     """
     Download and cache all items in a given landsat scene.
 
+    Args:
+        scene_id (str, default=None):
+            the scene id to download (currently NotImplemented).
+            if unspecified, an arbitrary scene is returned.
+
+    Returns:
+        List[str]: list of files associated with this landsat scene
+
+    Example:
+        >>> # xdoctest: +REQUIRES(--network)
+        >>> from watch.demo.landsat_demodata import *  # NOQA
+        >>> fpaths = grab_landsat_item()
+        >>> print('fpaths = {}'.format(ub.repr2(fpaths, nl=1)))
+
     TODO:
         - [ ] parametarize scene name / identifier
+        - [ ] bundle bands in a single file (gdal VRT?)
+        - [ ] separate data and metadata files in return structure?
     """
+    if scene_id is not None:
+        raise NotImplementedError('Must use the default scene')
+
     scene_name = 'LC08_L1TP_037029_20130602_20170310_01_T1'
     scene_path = join('LC08', '01', '037', '029', scene_name)
 
