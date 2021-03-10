@@ -472,7 +472,7 @@ def geotiff_filepath_info(gpath):
             (may include subdirectories that contain relevant information) .
 
     SeeAlso:
-        * parse_landsat_scene_name - specific to the landsat spec
+        * parse_landsat_product_id - specific to the landsat spec
 
     Example:
         >>> from watch.gis.geotiff import *  # NOQA
@@ -514,7 +514,17 @@ def geotiff_filepath_info(gpath):
         >>> assert info['filename_meta']['sat_code'] == '08'
         >>> assert info['filename_meta']['collection_category'] == 'T1'
         >>> assert info['filename_meta']['suffix'] == 'B1'
-        >>> assert info['filename_meta']['band_num'] == 1
+
+    Example:
+        >>> # xdoctest: +REQUIRES(--network)
+        >>> # Test extact info from real landsat product files
+        >>> from watch.demo.landsat_demodata import grab_landsat_product  # NOQA
+        >>> from watch.gis.geotiff import *  # NOQA
+        >>> product = grab_landsat_product()
+        >>> band_infos = [geotiff_filepath_info(gpath) for gpath in product['bands']]
+        >>> meta_infos = [geotiff_filepath_info(gpath) for gpath in product['meta'].values()]
+        >>> assert not any(d is None for d in band_infos)
+        >>> assert not any(d is None for d in meta_infos)
 
     Ignore:
         >>> # TODO : demodata for a digital globe archive
@@ -543,7 +553,7 @@ def geotiff_filepath_info(gpath):
     sensor_candidates = info['sensor_candidates']
     meta = info['filename_meta']
 
-    ls_meta = parse_landsat_scene_name(base)
+    ls_meta = parse_landsat_product_id(base)
     if ls_meta is not None:
         sensor_cand = 'L' + ls_meta['sensor_code'] + ls_meta['sat_code']
         meta.update(ls_meta)
@@ -627,20 +637,24 @@ def geotiff_filepath_info(gpath):
     return info
 
 
-def parse_landsat_scene_name(scene_name):
+def parse_landsat_product_id(product_id):
     """
-    Extract information from a landsat filename
+    Extract information from a landsat produt id
+
+    Args:
+        product_id (str): this is typically the filename (without extension!)
+            of a landsat product, as described in [LanSatName]_.
 
     Example:
         >>> from watch.gis.geotiff import *  # NOQA
         >>> from watch.gis.geotiff import _coerce_gdal_dataset
-        >>> scene_name = 'LC08_L1TP_037029_20130602_20170310_01_T1'
-        >>> ls_meta = parse_landsat_scene_name(scene_name)
+        >>> product_id = 'LC08_L1TP_037029_20130602_20170310_01_T1'
+        >>> ls_meta = parse_landsat_product_id(product_id)
 
     Example:
         >>> from watch.gis.geotiff import *  # NOQA
         >>> gpath = 'LC08_L1TP_037029_20130602_20170310_01_T1_B1'
-        >>> info = parse_landsat_scene_name(gpath)
+        >>> info = parse_landsat_product_id(gpath)
         >>> print('info = {}'.format(ub.repr2(info, nl=1)))
         >>> assert info['sensor_code'] == 'C'
         >>> assert info['sat_code'] == '08'
@@ -648,6 +662,19 @@ def parse_landsat_scene_name(scene_name):
         >>> assert info['collection_category'] == 'T1'
         >>> assert info['suffix'] == 'B1'
         >>> assert info['band_num'] == 1
+
+    Example:
+        >>> # xdoctest: +REQUIRES(--network)
+        >>> # Test on real landsat data
+        >>> from watch.demo.landsat_demodata import grab_landsat_product  # NOQA
+        >>> from watch.gis.geotiff import *  # NOQA
+        >>> product = grab_landsat_product()
+        >>> band_prodids = [ub.augpath(gpath, dpath='', ext='') for gpath in product['bands']]
+        >>> band_infos = [parse_landsat_product_id(product_id) for product_id in band_prodids]
+        >>> assert ub.allsame([ub.dict_diff(d, ['band_num', 'suffix']) for d in band_infos])
+        >>> meta_prodids = [ub.augpath(gpath, dpath='', ext='') for gpath in product['meta'].values()]
+        >>> meta_infos = [parse_landsat_product_id(product_id) for product_id in meta_prodids]
+        >>> assert ub.allsame([ub.dict_diff(d, ['suffix']) for d in meta_infos])
 
     References:
         .. [LanSatName] https://www.usgs.gov/faqs/what-naming-convention-landsat-collections-level-1-scenes
@@ -660,7 +687,7 @@ def parse_landsat_scene_name(scene_name):
     # LXSS_LLLL_PPPRRR_YYYYMMDD_yyyymmdd_CC_TX
     #                   LXSS     _ LLLL_  PPPRRR _ YYYYMMDD _ yyyymmdd _ CC _ TX
     landsat_pattern = 'L{X:1}{SS}_{LLLL}_{PPPRRR}_{YYYYMMDD}_{yyyymmdd}_{CC}_{TX}'
-    result = parse.parse(landsat_pattern, scene_name)
+    result = parse.parse(landsat_pattern, product_id)
     if result:
         ls_sensor_code_to_text = {
             'C': 'OLI/TIRS',
@@ -718,7 +745,6 @@ def parse_landsat_scene_name(scene_name):
                 # See [LandSatSuffixFormat]_.
                 band_suffix_pat = 'B{band_num:d}'
                 band_result = parse.parse(band_suffix_pat, suffix)
-                print('band_result = {!r}'.format(band_result))
                 if band_result is not None:
                     ls_meta['band_num'] = band_result.named['band_num']
         return ls_meta

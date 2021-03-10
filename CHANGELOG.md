@@ -9,7 +9,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 #### Added 
 
-* Add function `watch.demo.landsat_demodata.grab_landsat_item` to download / cache a landsat item for demo / test purposes
+* Add function `watch.demo.landsat_demodata.grab_landsat_product` to download / cache a landsat product for demo / test purposes
 
 * Add function `watch.utils.util_norm.normalize_intensity` for making raw geotiff data viewable.
 
