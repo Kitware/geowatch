@@ -40,6 +40,11 @@ def grab_landsat_item(scene_id=None):
         # Equivalent to above, but more fragile and less dependencies
         sat_code = scene_name[2:4]
 
+        try:
+            int(sat_code.lstrip('0'))
+        except Exception:
+            raise AssertionError('scene name does have landsat spec')
+
     uri_prefix = 'http://storage.googleapis.com/gcp-public-data-landsat'
 
     # Each satellite has a different set of files that it will produce
