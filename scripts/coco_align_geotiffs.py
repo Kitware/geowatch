@@ -161,8 +161,13 @@ class SimpleDataCube(object):
         # from watch.utils.util_place import conv_lat_lon
         # min_pt = conv_lat_lon(str(ymin), str(xmin), format='ISO-D')
         # max_pt = conv_lat_lon(str(ymax), str(xmax), format='ISO-D')
-        min_pt = '{:+2.4f}{:+3.4f}'.format(latmin, lonmin)
-        max_pt = '{:+2.4f}{:+3.4f}'.format(latmax, lonmax)
+
+        latmin_str = '{:+2.4f}'.format(latmin).replace('+', 'N').replace('-', 'S')
+        lonmin_str = '{:+3.4f}'.format(lonmin).replace('+', 'E').replace('-', 'W')
+        latmax_str = '{:+2.4f}'.format(latmax).replace('+', 'N').replace('-', 'S')
+        lonmax_str = '{:+3.4f}'.format(lonmax).replace('+', 'E').replace('-', 'W')
+        min_pt = '{}{}'.format(latmin_str, lonmin_str)
+        max_pt = '{}{}'.format(latmax_str, lonmax_str)
         # TODO: is there an ISO standard for encoding this?
         space_str = '{}_{}'.format(min_pt, max_pt)
 
