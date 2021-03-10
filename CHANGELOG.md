@@ -9,6 +9,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 #### Added 
 
+* Add function `watch.demo.landsat_demodata.grab_landsat_item` to download / cache a landsat item for demo / test purposes
+
 * Add function `watch.utils.util_norm.normalize_intensity` for making raw geotiff data viewable.
 
 * Add function `watch.utils.util_girder.grabdata_girder` for downloading and caching data from Girder. (This is used to download and cache the GTop30 DEM dataset). 
