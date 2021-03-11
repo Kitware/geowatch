@@ -467,7 +467,8 @@ def main(**kw):
     toconvert_anns = []
     bad_gids = []
     bad_aids = []
-    for feat in ub.ProgIter(geojson['features'], desc='load anns'):
+    prog = ub.ProgIter(geojson['features'], desc='load anns')
+    for feat in prog:
         ann = {}
         ann_meta = feat['metadata'].copy()
 
@@ -541,6 +542,7 @@ def main(**kw):
                 flags.append('does-not-belong')
 
         if set(flags) == set(['does-not-intersect']):
+            prog.ensure_newline()
             print('OOB aid = {}, gids={}'.format(orig_aid, gid_list))
             bad_aids.append(orig_aid)
 
@@ -652,8 +654,8 @@ def main(**kw):
             print(len(anns))
             print('{} / {} Any OOB Polys'.format(sum(is_any_oob), len(is_any_oob)))
             print('{} / {} All OOB Polys'.format(sum(is_all_oob), len(is_all_oob)))
-            print('is_any_info = {}'.format(ub.repr2(is_any_info, nl=2)))
-            print('is_all_info = {}'.format(ub.repr2(is_all_info, nl=2)))
+            print('is_any_info = {}'.format(ub.repr2(is_any_info, nl=1)))
+            print('is_all_info = {}'.format(ub.repr2(is_all_info, nl=1)))
             print('---')
 
         total_any_OOB += sum(is_any_oob)
