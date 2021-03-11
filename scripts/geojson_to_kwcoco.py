@@ -3,6 +3,9 @@ r"""
 This script is for converting the IARPA geojson to kwcoco. It relies on some
 initial preprocessing, which is listed here:
 
+See Also:
+    $HOME/data/dvc-repos/smart_watch_dvc/dev/prep_drop0.sh
+
 Notes:
 
     # --- STEP 0 ---
@@ -13,7 +16,6 @@ Notes:
     mkdir -p $HOME/data/dvc-repos/smart_watch_dvc/raw/drop0
     cd $HOME/data/dvc-repos/smart_watch_dvc/raw/drop0
     girder-client --api-url https://data.kitware.com/api/v1 download 602458192fa25629b95d17d7
-
 
     cd $HOME/data/dvc-repos/smart_watch_dvc/drop0
 
@@ -35,7 +37,6 @@ Notes:
     cd $HOME/data/dvc-repos/smart_watch_dvc/drop0
     7z x "../raw/drop0/KR-Pyeongchang/Sentinel 2/*.zip" KR-Pyeongchang-S2/_assets
     7z x "../raw/drop0/KR-Pyeongchang/WV/*.tar.gz" KR-Pyeongchang-WV/_assets
-
 
     # --- STEP 1 ---
     # Given this setup, we run this script as follows
@@ -125,6 +126,13 @@ class GeojsonToCocoConfig(scfg.Config):
             if True, we ignore the digital elevation map
             ''')),
 
+        'site_tag': scfg.Value(None, help=ub.paragraph(
+            '''
+            if given, inserts this site_tag into each image dict in the output
+            coco file.
+            '''
+        )),
+
         'visualize': scfg.Value(True, help=ub.paragraph(
             '''
             if True, we also write visualizations of annotation ROIs in pixel
@@ -149,6 +157,7 @@ def simple_mapping(regi, have):
     have_dups = {k: v for k, v in have_base_to_fpath.items() if len(v) > 1}
     if regi_dups:
         print('regi_dups = {}'.format(ub.repr2(regi_dups, nl=1)))
+        print('num regi dups {}'.format(len(regi_dups)))
     if have_dups:
         print('have_dups = {}'.format(ub.repr2(have_dups, nl=1)))
 
@@ -215,7 +224,7 @@ def _associate_images(geojson, asset_dpath, use_hack=True, dup_strat=None):
 
     # TODO : check if a DG bundle, and then only return relevant images
     # instead of using a blocklist
-    blocklist = {'HTML'}
+    blocklist = {'HTML', '_viz_crops'}
 
     all_image_fpaths = []
     for r, ds, fs in os.walk(asset_dpath, followlinks=True):
@@ -247,6 +256,10 @@ def _associate_images(geojson, asset_dpath, use_hack=True, dup_strat=None):
                 unambiguous_dups[k] = v
         for k, v in unambiguous_dups.items():
             fname_to_fpath[k] = v[0:1]
+
+        if 0:
+            print('ambiguous_dups = {}'.format(ub.repr2(ambiguous_dups, nl=2)))
+            print('unambiguous_dups = {}'.format(ub.repr2(unambiguous_dups, nl=2)))
 
         all_image_fpaths = list(ub.flatten(fname_to_fpath.values()))
 
@@ -400,6 +413,9 @@ def main(**kw):
             img['approx_meter_gsd'] = info['approx_meter_gsd']
             img['sensor_candidates'] = sorted(set(info['sensor_candidates']))
             img['num_bands'] = info['num_bands']
+
+            if config['site_tag']:
+                img['site_tag'] = config['site_tag']
         else:
             continue
 
@@ -490,8 +506,6 @@ def main(**kw):
                     # kw_gcp_poly.draw(alpha=0.5, color='orange', ax=ax)
                     kw_img_poly.draw(alpha=0.5, color='green', ax=ax, border=True)
 
-        info['wgs84_corners']
-
         orig_aid = ann['id']
         if isinstance(gid_spec, list):
             dupped_id = ann.pop('id')
@@ -554,7 +568,7 @@ def main(**kw):
 
     # Warp annotations from world space to pixel space
     valid_anns = []
-    for gid, anns in ub.ProgIter(gid_to_anns.items(), desc='warp anns'):
+    for gid, anns in ub.ProgIter(gid_to_anns.items(), desc='warp anns', verbose=3):
         gpath = dset.get_image_fpath(gid)
         if os.stat(gpath).st_size < 10:
             continue
