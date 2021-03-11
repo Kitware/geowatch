@@ -627,10 +627,14 @@ def main(**kw):
             is_all_oob.append(is_all)
 
             if is_any:
-                is_any_info.append(ann['orig_aid'], ann['orig_image_ids'])
+                is_any_info.append({
+                    'orig_aid': ann['orig_aid'],
+                    'orig_gids': ann['orig_image_ids']})
 
             if is_all:
-                is_all_info.append(ann['orig_aid'], ann['orig_image_ids'])
+                is_all_info.append({
+                    'orig_aid': ann['orig_aid'],
+                    'orig_gids': ann['orig_image_ids']})
 
             ann['segmentation'] = pxl_poly.to_coco(style='new')
             pxl_box = pxl_poly.bounding_box().quantize().to_xywh()
