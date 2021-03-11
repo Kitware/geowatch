@@ -571,7 +571,8 @@ def main(**kw):
 
     # Warp annotations from world space to pixel space
     valid_anns = []
-    for gid, anns in ub.ProgIter(gid_to_anns.items(), desc='warp anns', verbose=3):
+    prog = ub.ProgIter(gid_to_anns.items(), desc='warp anns', verbose=1)
+    for gid, anns in prog:
         gpath = dset.get_image_fpath(gid)
         if os.stat(gpath).st_size < 10:
             continue
@@ -640,6 +641,7 @@ def main(**kw):
         n_is_any = sum(is_any_oob)
 
         if n_is_all or n_is_any:
+            prog.ensure_newline()
             # if n_is_any or n_is_all:
             print('gpath = {!r}'.format(gpath))
             print('gid = {!r}'.format(gid))
