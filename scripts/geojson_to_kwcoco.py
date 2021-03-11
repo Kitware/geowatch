@@ -543,7 +543,9 @@ def main(**kw):
 
         if set(flags) == set(['does-not-intersect']):
             prog.ensure_newline()
-            print('OOB aid = {}, gids={}'.format(orig_aid, gid_list))
+            print('OOB orig_aid = {}, orig_gids={}'.format(orig_aid, gid_list))
+            for gid in gid_list:
+                print('gpath = {}'.format(dset.imgs[gid]['file_name']))
             bad_aids.append(orig_aid)
 
     assert not ub.find_duplicates([ann['id'] for ann in toconvert_anns if 'id' in ann])
@@ -651,7 +653,6 @@ def main(**kw):
             # if n_is_any or n_is_all:
             print('gpath = {!r}'.format(gpath))
             print('gid = {!r}'.format(gid))
-            print(len(anns))
             print('{} / {} Any OOB Polys'.format(sum(is_any_oob), len(is_any_oob)))
             print('{} / {} All OOB Polys'.format(sum(is_all_oob), len(is_all_oob)))
             print('is_any_info = {}'.format(ub.repr2(is_any_info, nl=1)))
