@@ -652,8 +652,8 @@ def main(**kw):
             print(len(anns))
             print('{} / {} Any OOB Polys'.format(sum(is_any_oob), len(is_any_oob)))
             print('{} / {} All OOB Polys'.format(sum(is_all_oob), len(is_all_oob)))
-            print('is_any_info = {!r}'.format(is_any_info))
-            print('is_all_info = {!r}'.format(is_all_info))
+            print('is_any_info = {}'.format(ub.repr2(is_any_info, nl=2)))
+            print('is_all_info = {}'.format(ub.repr2(is_all_info, nl=2)))
             print('---')
 
         total_any_OOB += sum(is_any_oob)
