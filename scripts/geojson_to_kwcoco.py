@@ -211,7 +211,7 @@ def simple_mapping(regi, have):
     return mapping
 
 
-def _associate_images(geojson, asset_dpath, use_hack=True, dup_strat=None):
+def _associate_images(geojson, asset_dpath):
     """
     In drop0 the geojson file paths are not perfectly aligned with paths on
     disk. Furthermore, we assume all datasets assets have been moved to their
@@ -246,7 +246,11 @@ def _associate_images(geojson, asset_dpath, use_hack=True, dup_strat=None):
         ambiguous_dups = {}
         for k, v in ub.ProgIter(disk_dups.items(), desc='check if dups are the same'):
             sizes = np.array([os.stat(f).st_size for f in v])
+            # print('sizes = {!r}'.format(sizes))
+            # if np.any(sizes <= 100):
+            #     print('At least one corrupted image : {}'.format(v))
             v = list(ub.compress(v, sizes > 100))
+
             hashes = [ub.hash_file(x, hasher='xxh64') for x in v]
             if not ub.allsame(hashes):
                 print('k = {!r}'.format(k))
@@ -508,13 +512,16 @@ def main(**kw):
 
         orig_aid = ann['id']
         if isinstance(gid_spec, list):
-            dupped_id = ann.pop('id')
+            orig_aid = ann.pop('id')
             # print('gid_spec = {!r}'.format(gid_spec))
-            # print('dupped_id = {!r}'.format(dupped_id))
+            # print('orig_aid = {!r}'.format(orig_aid))
             gid_list = gid_spec
         else:
-            dupped_id = None
             gid_list = [gid_spec]
+
+        # maintain where we came from
+        ann['orig_image_ids'] = gid_list
+        ann['orig_aid'] = orig_aid
 
         flags = []
         for gid in gid_list:
@@ -524,10 +531,6 @@ def main(**kw):
                 sh_img_poly = kw_img_poly.to_shapely()
                 if sh_img_poly.intersects(sh_ann_poly):
                     ann = ann.copy()
-                    if dupped_id is not None:
-                        ann['duped_id'] = dupped_id
-                    if len(gid_list) > 1:
-                        ann['orig_image_ids'] = gid_list
                     ann['image_id'] = gid
                     toconvert_anns.append(ann)
                     flags.append('does-intersect')
@@ -614,10 +617,19 @@ def main(**kw):
 
         is_any_oob = []
         is_all_oob = []
+
+        is_any_info = []
+        is_all_info = []
         for ann, pxl_poly in zip(anns, pxl_polys.data):
             is_any, is_all = _test_inbounds(pxl_poly)
             is_any_oob.append(is_any)
             is_all_oob.append(is_all)
+
+            if is_any:
+                is_any_info.append(ann['orig_aid'], ann['orig_image_ids'])
+
+            if is_all:
+                is_all_info.append(ann['orig_aid'], ann['orig_image_ids'])
 
             ann['segmentation'] = pxl_poly.to_coco(style='new')
             pxl_box = pxl_poly.bounding_box().quantize().to_xywh()
@@ -634,6 +646,8 @@ def main(**kw):
             print(len(anns))
             print('{} / {} Any OOB Polys'.format(sum(is_any_oob), len(is_any_oob)))
             print('{} / {} All OOB Polys'.format(sum(is_all_oob), len(is_all_oob)))
+            print('is_any_info = {!r}'.format(is_any_info))
+            print('is_all_info = {!r}'.format(is_all_info))
             print('---')
 
         total_any_OOB += sum(is_any_oob)
