@@ -413,7 +413,7 @@ class SimpleDataCube(object):
                     'site_tag',
                     # 'datetime_acquisition',
                 }))
-
+                new_img['parent_file_name'] = img['file_name']  # remember which image this came from
                 new_img['width'] = dst_info['img_shape'][1]
                 new_img['height'] = dst_info['img_shape'][0]
                 new_img['file_name'] = dst_gpath
