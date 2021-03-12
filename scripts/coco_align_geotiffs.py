@@ -521,19 +521,25 @@ class SimpleDataCube(object):
                     canvas = normalize_intensity(canvas)
                     canvas = kwimage.ensure_float01(canvas)
 
+                    view_img_dpath = ub.ensuredir(
+                        (sub_bundle_dpath, sensor_coarse,
+                         '_view_img_' + align_method))
+
+                    if HANDLE_ANNS:
+                        view_ann_dpath = ub.ensuredir(
+                            (sub_bundle_dpath, sensor_coarse,
+                             '_view_img_' + align_method))
+
                     if 0:
                         import kwplot
                         kwplot.autompl()
                         kwplot.imshow(canvas)
 
-                    from os.path import dirname
-                    view_img_dpath = ub.ensuredir((dirname(dst_gpath), '_view_img'))
                     view_img_fpath = ub.augpath(dst_gpath, dpath=view_img_dpath) + '.view_img.jpg'
                     kwimage.imwrite(view_img_fpath, kwimage.ensure_uint255(canvas))
 
                     if HANDLE_ANNS:
                         dets = kwimage.Detections.from_coco_annots(valid_anns, dset=dset)
-                        view_ann_dpath = ub.ensuredir((dirname(dst_gpath), '_view_ann'))
                         view_ann_fpath = ub.augpath(dst_gpath, dpath=view_ann_dpath) + '.view_ann.jpg'
                         ann_canvas = dets.draw_on(canvas)
                         kwimage.imwrite(view_ann_fpath, kwimage.ensure_uint255(ann_canvas))
