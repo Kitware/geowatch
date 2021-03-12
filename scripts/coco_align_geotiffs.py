@@ -199,26 +199,26 @@ class SimpleDataCube(object):
 
         # Hueristic: if all of the images are in the same folder, then that
         # folder might have an ROI name, so include that in the output.
-        all_gids = list(ub.flatten(date_to_gids.values()))
+        # all_gids = list(ub.flatten(date_to_gids.values()))
 
-        all_fpaths = [
-            cube.dset.get_image_fpath(gid)
-            for gid in all_gids
-        ]
+        # all_fpaths = [
+        #     cube.dset.get_image_fpath(gid)
+        #     for gid in all_gids
+        # ]
 
         rel_prefix = None
-        if True:
-            # HACK, very fragile hueristic
-            candidates = []
-            for p in all_fpaths:
-                try:
-                    parts = p.split('/')
-                    candidates.append(parts[parts.index('drop0') + 1])
-                except Exception:
-                    pass
-            candidates = set(candidates)
-            if len(candidates) == 1:
-                rel_prefix = ub.peek(candidates)
+        # if True:
+        #     # HACK, very fragile hueristic
+        #     candidates = []
+        #     for p in all_fpaths:
+        #         try:
+        #             parts = p.split('/')
+        #             candidates.append(parts[parts.index('drop0') + 1])
+        #         except Exception:
+        #             pass
+        #     candidates = set(candidates)
+        #     if len(candidates) == 1:
+        #         rel_prefix = ub.peek(candidates)
 
         # all_fnames = [
         #     relpath(abspath(cube.dset.get_image_fpath(gid)), abspath(cube.dset.bundle_dpath))
@@ -410,6 +410,7 @@ class SimpleDataCube(object):
                     'sensor_candidates',
                     'num_bands',
                     'sensor_coarse',
+                    'site_tag',
                     # 'datetime_acquisition',
                 }))
 
