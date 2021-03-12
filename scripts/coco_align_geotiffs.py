@@ -118,12 +118,12 @@ def main(**kw):
         >>>     meta['filename_meta']['acquisition_date'], '%Y%m%d')
         >>> date_captured = dt.strftime('%Y/%m/%d')
         >>> gid = dset.add_image(file_name=fpath, date_captured=date_captured)
-        >>> corners = meta['wgs84_corners'].data.tolist()
-        >>> corners + corners[:1]
-        >>> dummy_poly = kwimage.Polygon(exterior=np.array(corners))
+        >>> dummy_poly = kwimage.Polygon(exterior=meta['wgs84_corners'])
         >>> dummy_poly = dummy_poly.scale(0.3, about='center')
         >>> sseg_geos = dummy_poly.swap_axes().to_geojson()
-        >>> #
+        >>> # NOTE: script is not always robust to missing annotation
+        >>> # information like segmentation and bad bbox, but for thist
+        >>> # test config it is
         >>> dset.add_annotation(
         >>>     image_id=gid, bbox=[0, 0, 0, 0], segmentation_geos=sseg_geos)
         >>> #
