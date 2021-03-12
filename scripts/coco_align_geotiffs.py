@@ -124,7 +124,7 @@ def main(**kw):
     src_fpath = config['src']
     dst_dpath = config['dst']
     context_factor = config['context_factor']
-    rpc_align_method = config['orthorectify']
+    rpc_align_method = config['rpc_align_method']
     visualize = config['visualize']
     write_subsets = config['write_subsets']
 
