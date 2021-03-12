@@ -29,7 +29,7 @@ from shapely import ops
 from os.path import join, exists
 
 
-class CocoAlignGeotiffs(scfg.Config):
+class CocoAlignGeotiffConfig(scfg.Config):
     """
     Create an aligned dataset around objects of interest
 
@@ -74,7 +74,7 @@ def main(**kw):
             'dst': dst,
         }
     """
-    config = CocoAlignGeotiffs(default=kw, cmdline=True)
+    config = CocoAlignGeotiffConfig(default=kw, cmdline=True)
 
     src_fpath = config['src']
     dst_dpath = config['dst']
@@ -105,6 +105,16 @@ def main(**kw):
 
     # Create a new dataset that we will extend as we extract ROIs
     new_dset = kwcoco.CocoDataset()
+    new_dset.dataset['info'] = [
+        # Store that this dataset is a result of a process
+        {
+            'type': 'process',
+            'properties': {
+                'name': 'coco_align_geotiffs',
+                'args': config.to_dict(),
+            }
+        }
+    ]
 
     time_region = None
     rpc_align_method = 'orthorectify'
