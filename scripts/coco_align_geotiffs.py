@@ -74,6 +74,8 @@ def main(**kw):
             'dst': dst,
         }
     """
+    import socket
+    import os
     config = CocoAlignGeotiffConfig(default=kw, cmdline=True)
 
     src_fpath = config['src']
@@ -105,15 +107,24 @@ def main(**kw):
 
     # Create a new dataset that we will extend as we extract ROIs
     new_dset = kwcoco.CocoDataset()
-    new_dset.dataset['info'] = [
-        # Store that this dataset is a result of a process
-        {
-            'type': 'process',
-            'properties': {
-                'name': 'coco_align_geotiffs',
-                'args': config.to_dict(),
-            }
+
+    # Store that this dataset is a result of a process.
+    # Note what the process is, what its arguments are, and where the process
+    # was executed.
+    process_info = {
+        'type': 'process',
+        'properties': {
+            'name': 'coco_align_geotiffs',
+            'args': config.to_dict(),
+            'hostname': socket.gethostname(),
+            'cwd': os.getcwd(),
+            'timestamp': ub.timestamp(),
         }
+    }
+    print('process_info = {}'.format(ub.repr2(process_info, nl=2)))
+
+    new_dset.dataset['info'] = [
+        process_info,
     ]
 
     time_region = None
