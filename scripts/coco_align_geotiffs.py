@@ -103,17 +103,57 @@ def main(**kw):
             'src': src,
             'dst': dst,
         }
+
+    Example:
+        >>> from watch.demo.landsat_demodata import grab_landsat_product
+        >>> from watch.gis.geotiff import geotiff_filepath_info
+        >>> # Create a dead simple coco dataset with one image
+        >>> import kwcoco
+        >>> dset = kwcoco.CocoDataset()
+        >>> ls_prod = grab_landsat_product()
+        >>> fpath = ls_prod['bands'][0]
+        >>> meta = geotiff_metadata(fpath)
+        >>> # We need a date captured ATM in a specific format
+        >>> dt = datetime.datetime.strptime(
+        >>>     meta['filename_meta']['acquisition_date'], '%Y%m%d')
+        >>> date_captured = dt.strftime('%Y/%m/%d')
+        >>> gid = dset.add_image(file_name=fpath, date_captured=date_captured)
+        >>> corners = meta['wgs84_corners'].data.tolist()
+        >>> corners + corners[:1]
+        >>> dummy_poly = kwimage.Polygon(exterior=np.array(corners))
+        >>> dummy_poly = dummy_poly.scale(0.3, about='center')
+        >>> sseg_geos = dummy_poly.swap_axes().to_geojson()
+        >>> #
+        >>> dset.add_annotation(
+        >>>     image_id=gid, bbox=[0, 0, 0, 0], segmentation_geos=sseg_geos)
+        >>> #
+        >>> # Create arguments to the script
+        >>> dpath = ub.ensure_app_cache_dir('smart_watch/test/coco_align_geotiff')
+        >>> dst = ub.ensuredir((dpath, 'align_bundle'))
+        >>> ub.delete(dst)
+        >>> dst = ub.ensuredir(dst)
+        >>> kw = {
+        >>>     'src': dset.dataset,
+        >>>     'dst': dst,
+        >>> }
+        >>> new_dset = main(**kw)
     """
     config = CocoAlignGeotiffConfig(default=kw, cmdline=True)
 
     # Store that this dataset is a result of a process.
     # Note what the process is, what its arguments are, and where the process
     # was executed.
+    config_dict = config.to_dict()
+    if not isinstance(config_dict['src'], str):
+        # If the dataset was given in memory we don't know the path and we cant
+        # always serialize it, so we punt and mark it as such
+        config_dict['src'] = ':memory:'
+
     process_info = {
         'type': 'process',
         'properties': {
             'name': 'coco_align_geotiffs',
-            'args': config.to_dict(),
+            'args': config_dict,
             'hostname': socket.gethostname(),
             'cwd': os.getcwd(),
             'timestamp': ub.timestamp(),
@@ -148,8 +188,6 @@ def main(**kw):
 
     # For each ROI extract the aligned regions to the target path
     extract_dpath = ub.expandpath(output_bundle_dpath)
-    space_region = kw_all_box_rois[1]
-    print('kw_all_box_rois = {!r}'.format(kw_all_box_rois))
 
     # Create a new dataset that we will extend as we extract ROIs
     new_dset = kwcoco.CocoDataset()
@@ -159,8 +197,6 @@ def main(**kw):
     ]
 
     time_region = None
-
-    space_region = kw_all_box_rois[-3]
 
     to_extract = []
     for space_region in ub.ProgIter(kw_all_box_rois, desc='query overlaps', verbose=3):
@@ -184,6 +220,7 @@ def main(**kw):
     new_dset.reroot(new_root=output_bundle_dpath, absolute=False)
     new_dset.dump(new_dset.fpath, newlines=True)
     print('finished')
+    return new_dset
 
 
 class SimpleDataCube(object):
@@ -345,7 +382,7 @@ class SimpleDataCube(object):
                 img = cube.dset.imgs[gid]
 
                 # Construct a name for the subregion to extract.
-                sensor_coarse = img['sensor_coarse']
+                sensor_coarse = img.get('sensor_coarse', 'unknown')
                 name_string = 'crop_{}_{}_{}_{}.tif'.format(iso_time, space_str, sensor_coarse, num)
 
                 aids = cube.dset.index.gid_to_aids[img['id']]
@@ -487,18 +524,15 @@ class SimpleDataCube(object):
                     """
                     dset = cube.dset
 
-                    orig_pxl_poly_list = []
-                    for ann in anns:
-                        old_poly = kwimage.Polygon.from_coco(ann['segmentation'])
-                        orig_pxl_poly_list.append(old_poly)
-                    orig_pxl_polys = kwimage.MultiPolygon(orig_pxl_poly_list)
-
                     geo_poly_list = []
                     for ann in anns:
                         # Q: WHAT FORMAT ARE THESE COORDINATES IN?
                         # A: I'm fairly sure these coordinates are all Traditional-WGS84-Lon-Lat
                         # We convert them to authority compliant WGS84 (lat-lon)
-                        exterior = kwimage.Coords(np.array(ann['segmentation_geos']['coordinates'])[:, ::-1])
+                        # Hack to support real and orig drop0 geojson
+                        geo = _fix_geojson_poly(ann['segmentation_geos'])
+                        geo_coords = geo['coordinates'][0]
+                        exterior = kwimage.Coords(np.array(geo_coords)[:, ::-1])
                         geo_poly = kwimage.Polygon(exterior=exterior)
                         geo_poly_list.append(geo_poly)
                     geo_polys = kwimage.MultiPolygon(geo_poly_list)
@@ -509,6 +543,11 @@ class SimpleDataCube(object):
                         pxl_polys = geo_polys.warp(dst_info['wgs84_to_wld']).warp(dst_info['wld_to_pxl'])
                     elif align_method == 'pixel_crop':
                         yoff, xoff = transform['st_offset']
+                        orig_pxl_poly_list = []
+                        for ann in anns:
+                            old_poly = kwimage.Polygon.from_coco(ann['segmentation'])
+                            orig_pxl_poly_list.append(old_poly)
+                        orig_pxl_polys = kwimage.MultiPolygon(orig_pxl_poly_list)
                         pxl_polys = orig_pxl_polys.translate((-xoff, -yoff))
                     elif align_method == 'affine_warp':
                         # Warp Auth-WGS84 to whatever the image world space is,
@@ -557,7 +596,7 @@ class SimpleDataCube(object):
                     if HANDLE_ANNS:
                         view_ann_dpath = ub.ensuredir(
                             (sub_bundle_dpath, sensor_coarse,
-                             '_view_img_' + align_method))
+                             '_view_ann_' + align_method))
 
                     view_img_fpath = ub.augpath(dst_gpath, dpath=view_img_dpath) + '.view_img.jpg'
                     kwimage.imwrite(view_img_fpath, kwimage.ensure_uint255(canvas))
@@ -623,7 +662,8 @@ def find_roi_regions(dset):
     """
     aid_to_poly = {}
     for aid, ann in dset.anns.items():
-        latlon = np.array(ann['segmentation_geos']['coordinates'])[:, ::-1]
+        geo = _fix_geojson_poly(ann['segmentation_geos'])
+        latlon = np.array(geo['coordinates'][0])[:, ::-1]
         kw_poly = kwimage.structs.Polygon(exterior=latlon)
         aid_to_poly[aid] = kw_poly.to_shapely()
 
@@ -750,6 +790,48 @@ def visualize_rois(dset, kw_all_box_rois):
 
         ax.set_xlim(min_x - padx, max_x + padx)
         ax.set_ylim(min_y - pady, max_y + pady)
+
+
+def _fix_geojson_poly(geo):
+    """
+    We were given geojson polygons with one fewer layers of nesting than
+    the spec allows for. Fix this.
+
+    Example:
+        >>> geo1 = kwimage.Polygon.random().to_geojson()
+        >>> fixed1 = _fix_geojson_poly(geo1)
+        >>> #
+        >>> geo2 = {'type': 'Polygon', 'coordinates': geo1['coordinates'][0]}
+        >>> fixed2 = _fix_geojson_poly(geo2)
+        >>> assert fixed1 == fixed2
+        >>> assert fixed1 == geo1
+        >>> assert fixed2 != geo2
+    """
+    def check_leftmost_depth(data):
+        # quick check leftmost depth of a nested struct
+        item = data
+        depth = 0
+        while isinstance(item, list):
+            if len(item) == 0:
+                raise Exception('no child node')
+            item = item[0]
+            depth += 1
+        return depth
+    if geo['type'] == 'Polygon':
+        data = geo['coordinates']
+        depth = check_leftmost_depth(data)
+        if depth == 2:
+            # correctly format by adding the outer nesting
+            fixed = geo.copy()
+            fixed['coordinates'] = [geo['coordinates']]
+        elif depth == 3:
+            # already correct
+            fixed = geo
+        else:
+            raise Exception(depth)
+    else:
+        fixed = geo
+    return fixed
 
 
 if __name__ == '__main__':
