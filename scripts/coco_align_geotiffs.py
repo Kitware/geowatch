@@ -106,7 +106,7 @@ def main(**kw):
 
     Example:
         >>> from watch.demo.landsat_demodata import grab_landsat_product
-        >>> from watch.gis.geotiff import geotiff_filepath_info
+        >>> from watch.gis.geotiff import geotiff_metadata
         >>> # Create a dead simple coco dataset with one image
         >>> import kwcoco
         >>> dset = kwcoco.CocoDataset()
