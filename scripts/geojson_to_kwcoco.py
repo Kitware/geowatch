@@ -3,6 +3,9 @@ r"""
 This script is for converting the IARPA geojson to kwcoco. It relies on some
 initial preprocessing, which is listed here:
 
+See Also:
+    $HOME/data/dvc-repos/smart_watch_dvc/dev/prep_drop0.sh
+
 Notes:
 
     # --- STEP 0 ---
@@ -13,7 +16,6 @@ Notes:
     mkdir -p $HOME/data/dvc-repos/smart_watch_dvc/raw/drop0
     cd $HOME/data/dvc-repos/smart_watch_dvc/raw/drop0
     girder-client --api-url https://data.kitware.com/api/v1 download 602458192fa25629b95d17d7
-
 
     cd $HOME/data/dvc-repos/smart_watch_dvc/drop0
 
@@ -35,7 +37,6 @@ Notes:
     cd $HOME/data/dvc-repos/smart_watch_dvc/drop0
     7z x "../raw/drop0/KR-Pyeongchang/Sentinel 2/*.zip" KR-Pyeongchang-S2/_assets
     7z x "../raw/drop0/KR-Pyeongchang/WV/*.tar.gz" KR-Pyeongchang-WV/_assets
-
 
     # --- STEP 1 ---
     # Given this setup, we run this script as follows
@@ -125,6 +126,13 @@ class GeojsonToCocoConfig(scfg.Config):
             if True, we ignore the digital elevation map
             ''')),
 
+        'site_tag': scfg.Value(None, help=ub.paragraph(
+            '''
+            if given, inserts this site_tag into each image dict in the output
+            coco file.
+            '''
+        )),
+
         'visualize': scfg.Value(True, help=ub.paragraph(
             '''
             if True, we also write visualizations of annotation ROIs in pixel
@@ -149,6 +157,7 @@ def simple_mapping(regi, have):
     have_dups = {k: v for k, v in have_base_to_fpath.items() if len(v) > 1}
     if regi_dups:
         print('regi_dups = {}'.format(ub.repr2(regi_dups, nl=1)))
+        print('num regi dups {}'.format(len(regi_dups)))
     if have_dups:
         print('have_dups = {}'.format(ub.repr2(have_dups, nl=1)))
 
@@ -202,7 +211,7 @@ def simple_mapping(regi, have):
     return mapping
 
 
-def _associate_images(geojson, asset_dpath, use_hack=True, dup_strat=None):
+def _associate_images(geojson, asset_dpath):
     """
     In drop0 the geojson file paths are not perfectly aligned with paths on
     disk. Furthermore, we assume all datasets assets have been moved to their
@@ -215,7 +224,7 @@ def _associate_images(geojson, asset_dpath, use_hack=True, dup_strat=None):
 
     # TODO : check if a DG bundle, and then only return relevant images
     # instead of using a blocklist
-    blocklist = {'HTML'}
+    blocklist = {'HTML', '_viz_crops'}
 
     all_image_fpaths = []
     for r, ds, fs in os.walk(asset_dpath, followlinks=True):
@@ -237,7 +246,11 @@ def _associate_images(geojson, asset_dpath, use_hack=True, dup_strat=None):
         ambiguous_dups = {}
         for k, v in ub.ProgIter(disk_dups.items(), desc='check if dups are the same'):
             sizes = np.array([os.stat(f).st_size for f in v])
+            # print('sizes = {!r}'.format(sizes))
+            # if np.any(sizes <= 100):
+            #     print('At least one corrupted image : {}'.format(v))
             v = list(ub.compress(v, sizes > 100))
+
             hashes = [ub.hash_file(x, hasher='xxh64') for x in v]
             if not ub.allsame(hashes):
                 print('k = {!r}'.format(k))
@@ -247,6 +260,10 @@ def _associate_images(geojson, asset_dpath, use_hack=True, dup_strat=None):
                 unambiguous_dups[k] = v
         for k, v in unambiguous_dups.items():
             fname_to_fpath[k] = v[0:1]
+
+        if 0:
+            print('ambiguous_dups = {}'.format(ub.repr2(ambiguous_dups, nl=2)))
+            print('unambiguous_dups = {}'.format(ub.repr2(unambiguous_dups, nl=2)))
 
         all_image_fpaths = list(ub.flatten(fname_to_fpath.values()))
 
@@ -400,6 +417,9 @@ def main(**kw):
             img['approx_meter_gsd'] = info['approx_meter_gsd']
             img['sensor_candidates'] = sorted(set(info['sensor_candidates']))
             img['num_bands'] = info['num_bands']
+
+            if config['site_tag']:
+                img['site_tag'] = config['site_tag']
         else:
             continue
 
@@ -447,7 +467,8 @@ def main(**kw):
     toconvert_anns = []
     bad_gids = []
     bad_aids = []
-    for feat in ub.ProgIter(geojson['features'], desc='load anns'):
+    prog = ub.ProgIter(geojson['features'], desc='load anns')
+    for feat in prog:
         ann = {}
         ann_meta = feat['metadata'].copy()
 
@@ -490,17 +511,18 @@ def main(**kw):
                     # kw_gcp_poly.draw(alpha=0.5, color='orange', ax=ax)
                     kw_img_poly.draw(alpha=0.5, color='green', ax=ax, border=True)
 
-        info['wgs84_corners']
-
         orig_aid = ann['id']
         if isinstance(gid_spec, list):
-            dupped_id = ann.pop('id')
+            orig_aid = ann.pop('id')
             # print('gid_spec = {!r}'.format(gid_spec))
-            # print('dupped_id = {!r}'.format(dupped_id))
+            # print('orig_aid = {!r}'.format(orig_aid))
             gid_list = gid_spec
         else:
-            dupped_id = None
             gid_list = [gid_spec]
+
+        # maintain where we came from
+        ann['orig_image_ids'] = gid_list
+        ann['orig_aid'] = orig_aid
 
         flags = []
         for gid in gid_list:
@@ -510,10 +532,6 @@ def main(**kw):
                 sh_img_poly = kw_img_poly.to_shapely()
                 if sh_img_poly.intersects(sh_ann_poly):
                     ann = ann.copy()
-                    if dupped_id is not None:
-                        ann['duped_id'] = dupped_id
-                    if len(gid_list) > 1:
-                        ann['orig_image_ids'] = gid_list
                     ann['image_id'] = gid
                     toconvert_anns.append(ann)
                     flags.append('does-intersect')
@@ -524,7 +542,10 @@ def main(**kw):
                 flags.append('does-not-belong')
 
         if set(flags) == set(['does-not-intersect']):
-            print('OOB aid = {}, gids={}'.format(orig_aid, gid_list))
+            prog.ensure_newline()
+            print('OOB orig_aid = {}, orig_gids={}'.format(orig_aid, gid_list))
+            for gid in gid_list:
+                print('gpath = {}'.format(dset.imgs[gid]['file_name']))
             bad_aids.append(orig_aid)
 
     assert not ub.find_duplicates([ann['id'] for ann in toconvert_anns if 'id' in ann])
@@ -554,7 +575,8 @@ def main(**kw):
 
     # Warp annotations from world space to pixel space
     valid_anns = []
-    for gid, anns in ub.ProgIter(gid_to_anns.items(), desc='warp anns'):
+    prog = ub.ProgIter(gid_to_anns.items(), desc='warp anns', verbose=1)
+    for gid, anns in prog:
         gpath = dset.get_image_fpath(gid)
         if os.stat(gpath).st_size < 10:
             continue
@@ -600,10 +622,23 @@ def main(**kw):
 
         is_any_oob = []
         is_all_oob = []
+
+        is_any_info = []
+        is_all_info = []
         for ann, pxl_poly in zip(anns, pxl_polys.data):
             is_any, is_all = _test_inbounds(pxl_poly)
             is_any_oob.append(is_any)
             is_all_oob.append(is_all)
+
+            if is_any:
+                is_any_info.append({
+                    'orig_aid': ann['orig_aid'],
+                    'orig_gids': ann['orig_image_ids']})
+
+            if is_all:
+                is_all_info.append({
+                    'orig_aid': ann['orig_aid'],
+                    'orig_gids': ann['orig_image_ids']})
 
             ann['segmentation'] = pxl_poly.to_coco(style='new')
             pxl_box = pxl_poly.bounding_box().quantize().to_xywh()
@@ -614,12 +649,14 @@ def main(**kw):
         n_is_any = sum(is_any_oob)
 
         if n_is_all or n_is_any:
+            prog.ensure_newline()
             # if n_is_any or n_is_all:
             print('gpath = {!r}'.format(gpath))
             print('gid = {!r}'.format(gid))
-            print(len(anns))
             print('{} / {} Any OOB Polys'.format(sum(is_any_oob), len(is_any_oob)))
             print('{} / {} All OOB Polys'.format(sum(is_all_oob), len(is_all_oob)))
+            print('is_any_info = {}'.format(ub.repr2(is_any_info, nl=1)))
+            print('is_all_info = {}'.format(ub.repr2(is_all_info, nl=1)))
             print('---')
 
         total_any_OOB += sum(is_any_oob)

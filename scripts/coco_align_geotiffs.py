@@ -20,29 +20,32 @@ Notes:
     cd $HOME/data/dvc-repos/smart_watch_dvc/
     girder-client --api-url https://data.kitware.com/api/v1 upload 602c3e9e2fa25629b97e5b5e drop0_aligned_v2.zip
 """
-import scriptconfig as scfg
-import ubelt as ub
 import kwcoco
-import numpy as np
 import kwimage
+import numpy as np
+import os
+import scriptconfig as scfg
+import socket
+import ubelt as ub
+import datetime
 from shapely import ops
 from os.path import join, exists
 
 
-class CocoAlignGeotiffs(scfg.Config):
+class CocoAlignGeotiffConfig(scfg.Config):
     """
-    Create an aligned dataset around objects of interest
-
+    Create a dataset of aligned temporal sequences around objects of interest
+    in an unstructured collection of annotated geotiffs.
 
     High Level Steps:
-        * Find a set of geospatial AOIs, these can be positive or negative
+        * Find a set of geospatial AOIs
         * For each AOI find all images that overlap
-        * Crop that AOI out of each image, and warp its annotations
+        * Orthorectify (or warp) the selected spatial region and its
+          annotations to a cannonical space.
 
-    Details:
-        * What is the best way to select AOIs, do we need to ensure
-          we don't go beyond a specific size / scale?
-
+    TODO:
+        - [ ] Add method for extracting "negative ROIs" that are nearby
+            "positive ROIs".
     """
     default = {
         'src': scfg.Value('in.geojson.json', help='input dataset to chip'),
@@ -54,18 +57,45 @@ class CocoAlignGeotiffs(scfg.Config):
             scale factor for the clustered ROIs.
             Amount of context to extract around each ROI.
             '''
-        ))
+        )),
+
+        'rpc_align_method': scfg.Value('orthorectify', help=ub.paragraph(
+            '''
+            Can be one of:
+                (1) orthorectify - which uses gdalwarp with -rpc,
+                (2) pixel_crop - which warps annotations onto pixel with RPCs
+                    but only crops the original image without distortion,
+                (3) affine_warp - which ignores RPCs and uses the affine
+                    transform in the geotiff metadata.
+            '''
+        )),
+
+        'write_subsets': scfg.Value(True, help=ub.paragraph(
+            '''
+            if True, writes a separate kwcoco file for every discovered ROI
+            in addition to the final kwcoco file.
+            '''
+        )),
+
+        'visualize': scfg.Value(True, help=ub.paragraph(
+            '''
+            if True, normalize and draw image / annotation sequences when
+            extracting.
+            '''
+        )),
+
     }
 
 
 def main(**kw):
     """
+    Main function for coco_align_geotiffs.
+    See :class:``CocoAlignGeotiffConfig` for details
 
     Ignore:
         import sys, ubelt
         sys.path.append(ubelt.expandpath('~/code/watch/scripts'))
         from coco_align_geotiffs import *  # NOQA
-
         import kwcoco
         src = ub.expandpath('~/data/dvc-repos/smart_watch_dvc/drop0/drop0.kwcoco.json')
         dst = ub.expandpath('~/data/dvc-repos/smart_watch_dvc/drop0_aligned')
@@ -73,12 +103,70 @@ def main(**kw):
             'src': src,
             'dst': dst,
         }
+
+    Example:
+        >>> from watch.demo.landsat_demodata import grab_landsat_product
+        >>> from watch.gis.geotiff import geotiff_metadata
+        >>> # Create a dead simple coco dataset with one image
+        >>> import kwcoco
+        >>> dset = kwcoco.CocoDataset()
+        >>> ls_prod = grab_landsat_product()
+        >>> fpath = ls_prod['bands'][0]
+        >>> meta = geotiff_metadata(fpath)
+        >>> # We need a date captured ATM in a specific format
+        >>> dt = datetime.datetime.strptime(
+        >>>     meta['filename_meta']['acquisition_date'], '%Y%m%d')
+        >>> date_captured = dt.strftime('%Y/%m/%d')
+        >>> gid = dset.add_image(file_name=fpath, date_captured=date_captured)
+        >>> dummy_poly = kwimage.Polygon(exterior=meta['wgs84_corners'])
+        >>> dummy_poly = dummy_poly.scale(0.3, about='center')
+        >>> sseg_geos = dummy_poly.swap_axes().to_geojson()
+        >>> # NOTE: script is not always robust to missing annotation
+        >>> # information like segmentation and bad bbox, but for thist
+        >>> # test config it is
+        >>> dset.add_annotation(
+        >>>     image_id=gid, bbox=[0, 0, 0, 0], segmentation_geos=sseg_geos)
+        >>> #
+        >>> # Create arguments to the script
+        >>> dpath = ub.ensure_app_cache_dir('smart_watch/test/coco_align_geotiff')
+        >>> dst = ub.ensuredir((dpath, 'align_bundle'))
+        >>> ub.delete(dst)
+        >>> dst = ub.ensuredir(dst)
+        >>> kw = {
+        >>>     'src': dset.dataset,
+        >>>     'dst': dst,
+        >>> }
+        >>> new_dset = main(**kw)
     """
-    config = CocoAlignGeotiffs(default=kw, cmdline=True)
+    config = CocoAlignGeotiffConfig(default=kw, cmdline=True)
+
+    # Store that this dataset is a result of a process.
+    # Note what the process is, what its arguments are, and where the process
+    # was executed.
+    config_dict = config.to_dict()
+    if not isinstance(config_dict['src'], str):
+        # If the dataset was given in memory we don't know the path and we cant
+        # always serialize it, so we punt and mark it as such
+        config_dict['src'] = ':memory:'
+
+    process_info = {
+        'type': 'process',
+        'properties': {
+            'name': 'coco_align_geotiffs',
+            'args': config_dict,
+            'hostname': socket.gethostname(),
+            'cwd': os.getcwd(),
+            'timestamp': ub.timestamp(),
+        }
+    }
+    print('process_info = {}'.format(ub.repr2(process_info, nl=2)))
 
     src_fpath = config['src']
     dst_dpath = config['dst']
     context_factor = config['context_factor']
+    rpc_align_method = config['rpc_align_method']
+    visualize = config['visualize']
+    write_subsets = config['write_subsets']
 
     output_bundle_dpath = dst_dpath
 
@@ -100,46 +188,129 @@ def main(**kw):
 
     # For each ROI extract the aligned regions to the target path
     extract_dpath = ub.expandpath(output_bundle_dpath)
-    space_region = kw_all_box_rois[1]
-    print('kw_all_box_rois = {!r}'.format(kw_all_box_rois))
 
     # Create a new dataset that we will extend as we extract ROIs
     new_dset = kwcoco.CocoDataset()
 
-    time_region = None
-    rpc_align_method = 'orthorectify'
+    new_dset.dataset['info'] = [
+        process_info,
+    ]
 
-    space_region = kw_all_box_rois[-3]
+    time_region = None
 
     to_extract = []
     for space_region in ub.ProgIter(kw_all_box_rois, desc='query overlaps', verbose=3):
-        # image_overlaps = cube.query_image_overlaps()
         image_overlaps = cube.query_image_overlaps(space_region, time_region)
         to_extract.append(image_overlaps)
 
     for image_overlaps in ub.ProgIter(to_extract, desc='extract ROI videos', verbose=3):
-        space_roi_string = image_overlaps['space_roi_string']
-        print('space_roi_string = {!r}'.format(space_roi_string))
+        video_name = image_overlaps['video_name']
+        print('video_name = {!r}'.format(video_name))
 
-        sub_bundle_dpath = join(extract_dpath, space_roi_string)
+        sub_bundle_dpath = join(extract_dpath, video_name)
         print('sub_bundle_dpath = {!r}'.format(sub_bundle_dpath))
-        # sub_bundle_dpath = ub.ensuredir((extract_dpath, space_roi_string))
 
         cube.extract_overlaps(image_overlaps, extract_dpath,
                               rpc_align_method=rpc_align_method,
-                              new_dset=new_dset)
+                              new_dset=new_dset, visualize=visualize,
+                              write_subsets=write_subsets)
 
     new_dset.fpath = join(extract_dpath, 'data.kwcoco.json')
     print('Dumping new_dset.fpath = {!r}'.format(new_dset.fpath))
     new_dset.reroot(new_root=output_bundle_dpath, absolute=False)
     new_dset.dump(new_dset.fpath, newlines=True)
     print('finished')
+    return new_dset
+
+
+def latlon_text(lat, lon, precision=6):
+    """
+    Make a lat,lon string suitable for a filename.
+
+    Pads with leading zeros so file names will align nicely at the same level
+    of prcision.
+
+    Args:
+        lat (float): degrees latitude
+
+        lon (float): degrees longitude
+
+        precision (float, default=6):
+            Number of trailing decimal places. As rule of thumb set this to:
+                6 - for ~10cm accuracy,
+                5 - for ~1m accuracy,
+                2 - for ~1km accuracy,
+
+    Notes:
+        1 degree of latitude is *very* roughly the order of 100km, so the
+        default precision of 6 localizes down to ~0.1 meters, which will
+        usually be sufficient for satellite applications, but be mindful of
+        using this text in applications that require more precision. Note 1
+        degree of longitude will vary, but will always be at least as precise
+        as 1 degree of latitude.
+
+    Example:
+        >>> lat = 90
+        >>> lon = 180
+        >>> print(latlon_text(lat, lon))
+        N90.000000E180.000000
+
+        >>> lat = 0
+        >>> lon = 0
+        >>> print(latlon_text(lat, lon))
+        N00.000000E000.000000
+
+    Example:
+        >>> print(latlon_text(80.123, 170.123))
+        >>> print(latlon_text(10.123, 80.123))
+        >>> print(latlon_text(0.123, 0.123))
+        N80.123000E170.123000
+        N10.123000E080.123000
+        N00.123000E000.123000
+
+        >>> print(latlon_text(80.123, 170.123, precision=2))
+        >>> print(latlon_text(10.123, 80.123, precision=2))
+        >>> print(latlon_text(0.123, 0.123, precision=2))
+        N80.12E170.12
+        N10.12E080.12
+        N00.12E000.12
+
+        >>> print(latlon_text(80.123, 170.123, precision=5))
+        >>> print(latlon_text(10.123, 80.123, precision=5))
+        >>> print(latlon_text(0.123, 0.123, precision=5))
+        N80.12300E170.12300
+        N10.12300E080.12300
+        N00.12300E000.12300
+    """
+    def _build_float_precision_fmt(num_leading, num_trailing):
+        num2 = num_trailing
+        # 2 extra for radix and leading sign
+        num1 = num_leading + num_trailing + 2
+        fmtparts = ['{:+0', str(num1), '.', str(num2), 'F}']
+        fmtstr = ''.join(fmtparts)
+        return fmtstr
+
+    assert -90 <= lat <= 90, 'invalid lat'
+    assert -180 <= lon <= 180, 'invalid lon'
+
+    # Ensure latitude had 2 leading places and longitude has 3
+    latfmt = _build_float_precision_fmt(2, precision)
+    lonfmt = _build_float_precision_fmt(3, precision)
+
+    lat_str = latfmt.format(lat).replace('+', 'N').replace('-', 'S')
+    lon_str = lonfmt.format(lon).replace('+', 'E').replace('-', 'W')
+    text = lat_str + lon_str
+    return text
 
 
 class SimpleDataCube(object):
     """
-    Given a dataset containing geotiffs, provide a simple API to extract a
+    Given a CocoDataset containing geotiffs, provide a simple API to extract a
     region in some coordinate space.
+
+    Intended usage is to use :func:`query_image_overlaps` to find images that
+    overlap an ROI, then then :func:`extract_overlaps` to warp spatial subsets
+    of that data into an aligned temporal sequence.
     """
 
     def __init__(cube, dset):
@@ -152,9 +323,25 @@ class SimpleDataCube(object):
             sh_img_poly = kw_img_poly.to_shapely()
             cube.gid_to_poly[gid] = sh_img_poly
 
-    def query_image_overlaps(cube, space_region, time_region):
-        assert time_region is None, 'for now'
-        assert time_region is None, 'for now'
+    def query_image_overlaps(cube, space_region, time_region=None):
+        """
+        Find the images that overlap with a space-time region
+
+        Args:
+            space_region (kwimage.Polygon):
+                a polygon ROI in WGS84 coordinates
+
+            time_region (NotImplemented): NotImplemented
+
+        Returns:
+            dict :
+                Information about which images belong to this ROI and their
+                temporal sequence. Also contains strings to be used for
+                subdirectories in the extract step.
+        """
+        if time_region is not None:
+            raise NotImplementedError('have not implemented time ranges yet')
+
         space_box = space_region.bounding_box().to_ltrb()
 
         latmin, lonmin, latmax, lonmax = space_box.data[0]
@@ -162,12 +349,8 @@ class SimpleDataCube(object):
         # min_pt = conv_lat_lon(str(ymin), str(xmin), format='ISO-D')
         # max_pt = conv_lat_lon(str(ymax), str(xmax), format='ISO-D')
 
-        latmin_str = '{:+2.4f}'.format(latmin).replace('+', 'N').replace('-', 'S')
-        lonmin_str = '{:+3.4f}'.format(lonmin).replace('+', 'E').replace('-', 'W')
-        latmax_str = '{:+2.4f}'.format(latmax).replace('+', 'N').replace('-', 'S')
-        lonmax_str = '{:+3.4f}'.format(lonmax).replace('+', 'E').replace('-', 'W')
-        min_pt = '{}{}'.format(latmin_str, lonmin_str)
-        max_pt = '{}{}'.format(latmax_str, lonmax_str)
+        min_pt = latlon_text(latmin, lonmin)
+        max_pt = latlon_text(latmax, lonmax)
         # TODO: is there an ISO standard for encoding this?
         space_str = '{}_{}'.format(min_pt, max_pt)
 
@@ -194,72 +377,64 @@ class SimpleDataCube(object):
             max_date = max(dates)
             print('From {!r} to {!r}'.format(min_date, max_date))
 
-        # num_obs_per_date = list(ub.map_vals(len, date_to_gids).values())
-        # print('num_obs_per_date = {!r}'.format(num_obs_per_date))
-
-        # Hueristic: if all of the images are in the same folder, then that
-        # folder might have an ROI name, so include that in the output.
-        all_gids = list(ub.flatten(date_to_gids.values()))
-
-        all_fpaths = [
-            cube.dset.get_image_fpath(gid)
-            for gid in all_gids
-        ]
-
-        rel_prefix = None
-        if True:
-            # HACK, very fragile hueristic
-            candidates = []
-            for p in all_fpaths:
-                try:
-                    parts = p.split('/')
-                    candidates.append(parts[parts.index('drop0') + 1])
-                except Exception:
-                    pass
-            candidates = set(candidates)
-            if len(candidates) == 1:
-                rel_prefix = ub.peek(candidates)
-
-        # all_fnames = [
-        #     relpath(abspath(cube.dset.get_image_fpath(gid)), abspath(cube.dset.bundle_dpath))
-        #     for gid in all_gids
-        # ]
-        # # img['file_name'] for img in cube.dset.imgs.values()]
-        # # commonprefix(all_fnames)
-        # abs_prefix = commonprefix(all_fnames)
-        # print('abs_prefix = {!r}'.format(abs_prefix))
-        # rel_prefix = relpath(abspath(abs_prefix), realpath(cube.dset.bundle_dpath))
-
-        if rel_prefix:
-            space_roi_string = '{}_{}'.format(rel_prefix, space_str)
-        else:
-            space_roi_string = space_str
+        video_name = space_str
 
         image_overlaps = {
             'date_to_gids': date_to_gids,
             'space_region': space_region,
             'space_str': space_str,
             'space_box': space_box,
-            'space_roi_string': space_roi_string,
+            'video_name': video_name,
         }
         return image_overlaps
 
     def extract_overlaps(cube, image_overlaps, extract_dpath,
-                         rpc_align_method='orthorectify', new_dset=None):
+                         rpc_align_method='orthorectify', new_dset=None,
+                         write_subsets=True, visualize=True):
+        """
+        Given a region of interest, extract an aligned temporal sequence
+        of data to a specified directory.
+
+        Args:
+            image_overlaps (dict): Information about images in an ROI and their
+                temporal order computed from :func:``query_image_overlaps``.
+
+            extract_dpath (str):
+                where to dump the data extracted from this ROI.
+
+            rpc_align_method (str):
+                how to handle RPC information
+                (see :class:``CocoAlignGeotiffConfig`` for details)
+
+            new_dset (kwcoco.CocoDataset | None):
+                if specified, add extracted images and annotations to this
+                dataset, otherwise create a new dataset.
+
+            write_subset (bool, default=True):
+                if True, write out a separate manifest file containing only
+                information in this ROI.
+
+            visualize (bool, default=True):
+                if True, dump image and annotation visalizations parallel to
+                the extracted data.
+
+        Returns:
+            kwcoco.CocoDataset: the given or new dataset that was modified
+        """
 
         date_to_gids = image_overlaps['date_to_gids']
         space_str = image_overlaps['space_str']
         space_box = image_overlaps['space_box']
         space_region = image_overlaps['space_region']
-        space_roi_string = image_overlaps['space_roi_string']
+        video_name = image_overlaps['video_name']
 
-        sub_bundle_dpath = ub.ensuredir((extract_dpath, space_roi_string))
+        sub_bundle_dpath = ub.ensuredir((extract_dpath, video_name))
 
         latmin, lonmin, latmax, lonmax = space_box.data[0]
         dates = sorted(date_to_gids)
 
         new_video = {
-            'name': space_roi_string,
+            'name': video_name,
         }
 
         if new_dset is None:
@@ -273,22 +448,17 @@ class SimpleDataCube(object):
         for cat in cube.dset.cats.values():
             new_dset.ensure_category(**cat)
 
-        DRAW_VIEW = True
-
         for date in ub.ProgIter(dates, desc='extracting regions', verbose=3):
             gids = date_to_gids[date]
             iso_time = date.strftime('%Y-%m-%d')
 
-            # Is there any consideration we should make to handle this?
-            # if len(gids) != 1:
-            #     import warnings
-            #     warnings.warn('multiple observations at same time')
-
+            # TODO: Is there any other consideration we should make when
+            # multiple images have the same timestamp?
             for num, gid in enumerate(gids):
                 img = cube.dset.imgs[gid]
 
                 # Construct a name for the subregion to extract.
-                sensor_coarse = img['sensor_coarse']
+                sensor_coarse = img.get('sensor_coarse', 'unknown')
                 name_string = 'crop_{}_{}_{}_{}.tif'.format(iso_time, space_str, sensor_coarse, num)
 
                 aids = cube.dset.index.gid_to_aids[img['id']]
@@ -299,7 +469,6 @@ class SimpleDataCube(object):
 
                 # NOTE: https://github.com/dwtkns/gdal-cheat-sheet
                 if info['is_rpc']:
-                    # align_method = 'pixel_crop'
                     align_method = rpc_align_method
 
                     if align_method == 'pixel_crop':
@@ -390,16 +559,11 @@ class SimpleDataCube(object):
                     )
                     cmd_info = ub.cmd(command, verbose=0)  # NOQA
 
-                if 0:
-                    _ = ub.cmd('gdalinfo {}'.format(dst_gpath), verbose=3)
-                    _ = ub.cmd('gdalinfo {}'.format(src_gpath), verbose=3)
-
                 if align_method != 'pixel_crop':
                     # Re-parse any information in the new geotiff
                     from watch.gis.geotiff import geotiff_metadata
                     dst_info = geotiff_metadata(dst_gpath)
                     dst_info['wgs84_corners']
-                    # info['wgs84_corners']
 
                 new_img = {}
                 # Carry over appropriate metadata from original image
@@ -410,9 +574,9 @@ class SimpleDataCube(object):
                     'sensor_candidates',
                     'num_bands',
                     'sensor_coarse',
-                    # 'datetime_acquisition',
+                    'site_tag',
                 }))
-
+                new_img['parent_file_name'] = img['file_name']  # remember which image this came from
                 new_img['width'] = dst_info['img_shape'][1]
                 new_img['height'] = dst_info['img_shape'][0]
                 new_img['file_name'] = dst_gpath
@@ -436,18 +600,15 @@ class SimpleDataCube(object):
                     """
                     dset = cube.dset
 
-                    orig_pxl_poly_list = []
-                    for ann in anns:
-                        old_poly = kwimage.Polygon.from_coco(ann['segmentation'])
-                        orig_pxl_poly_list.append(old_poly)
-                    orig_pxl_polys = kwimage.MultiPolygon(orig_pxl_poly_list)
-
                     geo_poly_list = []
                     for ann in anns:
                         # Q: WHAT FORMAT ARE THESE COORDINATES IN?
                         # A: I'm fairly sure these coordinates are all Traditional-WGS84-Lon-Lat
                         # We convert them to authority compliant WGS84 (lat-lon)
-                        exterior = kwimage.Coords(np.array(ann['segmentation_geos']['coordinates'])[:, ::-1])
+                        # Hack to support real and orig drop0 geojson
+                        geo = _fix_geojson_poly(ann['segmentation_geos'])
+                        geo_coords = geo['coordinates'][0]
+                        exterior = kwimage.Coords(np.array(geo_coords)[:, ::-1])
                         geo_poly = kwimage.Polygon(exterior=exterior)
                         geo_poly_list.append(geo_poly)
                     geo_polys = kwimage.MultiPolygon(geo_poly_list)
@@ -458,6 +619,11 @@ class SimpleDataCube(object):
                         pxl_polys = geo_polys.warp(dst_info['wgs84_to_wld']).warp(dst_info['wld_to_pxl'])
                     elif align_method == 'pixel_crop':
                         yoff, xoff = transform['st_offset']
+                        orig_pxl_poly_list = []
+                        for ann in anns:
+                            old_poly = kwimage.Polygon.from_coco(ann['segmentation'])
+                            orig_pxl_poly_list.append(old_poly)
+                        orig_pxl_polys = kwimage.MultiPolygon(orig_pxl_poly_list)
                         pxl_polys = orig_pxl_polys.translate((-xoff, -yoff))
                     elif align_method == 'affine_warp':
                         # Warp Auth-WGS84 to whatever the image world space is,
@@ -492,50 +658,38 @@ class SimpleDataCube(object):
                         ann['image_id'] = new_gid
                         new_dset.add_annotation(**ann)
 
-                if DRAW_VIEW:
+                if visualize:
                     # See if we can look at what we made
                     from watch.utils.util_norm import normalize_intensity
                     canvas = kwimage.imread(dst_gpath)
                     canvas = normalize_intensity(canvas)
                     canvas = kwimage.ensure_float01(canvas)
 
-                    if 0:
-                        import kwplot
-                        kwplot.autompl()
-                        kwplot.imshow(canvas)
+                    view_img_dpath = ub.ensuredir(
+                        (sub_bundle_dpath, sensor_coarse,
+                         '_view_img_' + align_method))
 
-                    from os.path import dirname
-                    view_img_dpath = ub.ensuredir((dirname(dst_gpath), '_view_img'))
+                    if HANDLE_ANNS:
+                        view_ann_dpath = ub.ensuredir(
+                            (sub_bundle_dpath, sensor_coarse,
+                             '_view_ann_' + align_method))
+
                     view_img_fpath = ub.augpath(dst_gpath, dpath=view_img_dpath) + '.view_img.jpg'
                     kwimage.imwrite(view_img_fpath, kwimage.ensure_uint255(canvas))
 
                     if HANDLE_ANNS:
                         dets = kwimage.Detections.from_coco_annots(valid_anns, dset=dset)
-                        view_ann_dpath = ub.ensuredir((dirname(dst_gpath), '_view_ann'))
                         view_ann_fpath = ub.augpath(dst_gpath, dpath=view_ann_dpath) + '.view_ann.jpg'
                         ann_canvas = dets.draw_on(canvas)
                         kwimage.imwrite(view_ann_fpath, kwimage.ensure_uint255(ann_canvas))
 
-        if True:
+        if write_subsets:
             print('Writing data subset')
             sub_dset = new_dset.subset(sub_new_gids, copy=True)
             sub_dset.fpath = join(sub_bundle_dpath, 'subdata.kwcoco.json')
             sub_dset.reroot(new_root=sub_bundle_dpath, absolute=False)
             sub_dset.dump(sub_dset.fpath, newlines=True)
-
-    def extract(cube, space_region, time_region, extract_dpath,
-                rpc_align_method='orthorectify', new_dset=None):
-        """
-        cube = SimpleDataCube(dset)
-        space_region = kw_all_box_rois[2]
-        extract_dpath = ub.ensuredir('test-extract')
-        for space_region in kw_all_box_rois:
-            extract(cube, space_region, None, extract_dpath)
-        """
-        image_overlaps = cube.query_image_ids(space_region, time_region)
-        cube.extract_overlaps(image_overlaps, extract_dpath,
-                              rpc_align_method=rpc_align_method,
-                              new_dset=new_dset)
+        return new_dset
 
 
 def update_coco_geotiff_metadata(dset, serializable=True):
@@ -543,11 +697,10 @@ def update_coco_geotiff_metadata(dset, serializable=True):
     if serializable is True, then we should only update with information
     that can be coerced to json.
     """
-
     from watch.gis.geotiff import geotiff_metadata
-    import datetime
 
-    assert not serializable, 'we dont do this yet'
+    if serializable:
+        raise NotImplementedError('we dont do this yet')
     img_iter = ub.ProgIter(dset.imgs.values(),
                            total=len(dset.imgs),
                            desc='update meta',
@@ -562,18 +715,15 @@ def update_coco_geotiff_metadata(dset, serializable=True):
         assert exists(src_gpath)
 
         if img.get('dem_hint', 'use') == 'ignore':
+            # if an image specified its "dem_hint" as ignore, then we set the
+            # elevation to 0. NOTE: this convention might be generalized and
+            # replaced in the future. I.e. in the future the dem_hint might
+            # simply specify the constant elevation to use, or perhaps
+            # something else.
             info = geotiff_metadata(src_gpath, elevation=0)
         else:
             info = geotiff_metadata(src_gpath)
 
-        # relevant_keys = [
-        #     'utm_crs_info',
-        #     'utm_corners',
-        #     'wgs84_crs_info',
-        #     'wgs84_corners',
-        # ]
-        # relevant = ub.dict_isect(info, relevant_keys)
-        # relevant['utm_corners']
         if serializable:
             raise NotImplementedError
         else:
@@ -588,7 +738,8 @@ def find_roi_regions(dset):
     """
     aid_to_poly = {}
     for aid, ann in dset.anns.items():
-        latlon = np.array(ann['segmentation_geos']['coordinates'])[:, ::-1]
+        geo = _fix_geojson_poly(ann['segmentation_geos'])
+        latlon = np.array(geo['coordinates'][0])[:, ::-1]
         kw_poly = kwimage.structs.Polygon(exterior=latlon)
         aid_to_poly[aid] = kw_poly.to_shapely()
 
@@ -600,7 +751,7 @@ def find_roi_regions(dset):
             sh_annot_polys_ = [p.buffer(0.000001) for p in sh_annot_polys_]
 
             # What CRS should we be doing this in? Is WGS84 OK?
-
+            # Should we switch to UTM?
             img_rois_ = ops.cascaded_union(sh_annot_polys_)
             try:
                 img_rois = list(img_rois_)
@@ -635,9 +786,6 @@ def find_covered_regions(dset):
     """
     gid_to_poly = {}
     for gid, img in dset.imgs.items():
-        # infos = dset.images(gids).lookup('geotiff_metadata')
-        # gid_to_aids = ub.dict_isect(dset.index.gid_to_aids, gids)
-        # for gid, info in zip(gids, infos):
         info  = img['geotiff_metadata']
         kw_img_poly = kwimage.Polygon(exterior=info['wgs84_corners'])
         sh_img_poly = kw_img_poly.to_shapely()
@@ -654,13 +802,11 @@ def find_covered_regions(dset):
 def visualize_rois(dset, kw_all_box_rois):
     """
     matplotlib visualization of image and annotation regions on a world map
+
+    Developer function, unused in the script
     """
     sh_all_box_rois = [p.to_shapely()for p in  kw_all_box_rois]
     sh_coverage_rois = find_covered_regions(dset)
-
-    # Group Images
-    # utmzone_to_imgs = ub.group_items(dset.imgs.values(), lambda img: 'img_group_' + ub.hash_data(img['geotiff_metadata']['utm_crs_info']))
-    # utmzone_to_imgs.keys()
 
     def flip_xy(poly):
         if hasattr(poly, 'reorder_axes'):
@@ -722,9 +868,51 @@ def visualize_rois(dset, kw_all_box_rois):
         ax.set_ylim(min_y - pady, max_y + pady)
 
 
+def _fix_geojson_poly(geo):
+    """
+    We were given geojson polygons with one fewer layers of nesting than
+    the spec allows for. Fix this.
+
+    Example:
+        >>> geo1 = kwimage.Polygon.random().to_geojson()
+        >>> fixed1 = _fix_geojson_poly(geo1)
+        >>> #
+        >>> geo2 = {'type': 'Polygon', 'coordinates': geo1['coordinates'][0]}
+        >>> fixed2 = _fix_geojson_poly(geo2)
+        >>> assert fixed1 == fixed2
+        >>> assert fixed1 == geo1
+        >>> assert fixed2 != geo2
+    """
+    def check_leftmost_depth(data):
+        # quick check leftmost depth of a nested struct
+        item = data
+        depth = 0
+        while isinstance(item, list):
+            if len(item) == 0:
+                raise Exception('no child node')
+            item = item[0]
+            depth += 1
+        return depth
+    if geo['type'] == 'Polygon':
+        data = geo['coordinates']
+        depth = check_leftmost_depth(data)
+        if depth == 2:
+            # correctly format by adding the outer nesting
+            fixed = geo.copy()
+            fixed['coordinates'] = [geo['coordinates']]
+        elif depth == 3:
+            # already correct
+            fixed = geo
+        else:
+            raise Exception(depth)
+    else:
+        fixed = geo
+    return fixed
+
+
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/scripts/coco_align_geotiffs.py
+        python ~/code/watch/scripts/coco_align_geotiffs.py --help
     """
     main()
