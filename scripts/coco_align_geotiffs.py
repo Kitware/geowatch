@@ -223,6 +223,86 @@ def main(**kw):
     return new_dset
 
 
+def latlon_text(lat, lon, precision=6):
+    """
+    Make a lat,lon string suitable for a filename.
+
+    Pads with leading zeros so file names will align nicely at the same level
+    of prcision.
+
+    Args:
+        lat (float): degrees latitude
+
+        lon (float): degrees longitude
+
+        precision (float, default=6):
+            Number of trailing decimal places. As rule of thumb set this to:
+                6 - for ~10cm accuracy,
+                5 - for ~1m accuracy,
+                2 - for ~1km accuracy,
+
+    Notes:
+        1 degree of latitude is *very* roughly the order of 100km, so the
+        default precision of 6 localizes down to ~0.1 meters, which will
+        usually be sufficient for satellite applications, but be mindful of
+        using this text in applications that require more precision. Note 1
+        degree of longitude will vary, but will always be at least as precise
+        as 1 degree of latitude.
+
+    Example:
+        >>> lat = 90
+        >>> lon = 180
+        >>> print(latlon_text(lat, lon))
+        N90.000000E180.000000
+
+        >>> lat = 0
+        >>> lon = 0
+        >>> print(latlon_text(lat, lon))
+        N00.000000E000.000000
+
+    Example:
+        >>> print(latlon_text(80.123, 170.123))
+        >>> print(latlon_text(10.123, 80.123))
+        >>> print(latlon_text(0.123, 0.123))
+        N80.123000E170.123000
+        N10.123000E080.123000
+        N00.123000E000.123000
+
+        >>> print(latlon_text(80.123, 170.123, precision=2))
+        >>> print(latlon_text(10.123, 80.123, precision=2))
+        >>> print(latlon_text(0.123, 0.123, precision=2))
+        N80.12E170.12
+        N10.12E080.12
+        N00.12E000.12
+
+        >>> print(latlon_text(80.123, 170.123, precision=5))
+        >>> print(latlon_text(10.123, 80.123, precision=5))
+        >>> print(latlon_text(0.123, 0.123, precision=5))
+        N80.12300E170.12300
+        N10.12300E080.12300
+        N00.12300E000.12300
+    """
+    def _build_float_precision_fmt(num_leading, num_trailing):
+        num2 = num_trailing
+        # 2 extra for radix and leading sign
+        num1 = num_leading + num_trailing + 2
+        fmtparts = ['{:+0', str(num1), '.', str(num2), 'F}']
+        fmtstr = ''.join(fmtparts)
+        return fmtstr
+
+    assert -90 <= lat <= 90, 'invalid lat'
+    assert -180 <= lon <= 180, 'invalid lon'
+
+    # Ensure latitude had 2 leading places and longitude has 3
+    latfmt = _build_float_precision_fmt(2, precision)
+    lonfmt = _build_float_precision_fmt(3, precision)
+
+    lat_str = latfmt.format(lat).replace('+', 'N').replace('-', 'S')
+    lon_str = lonfmt.format(lon).replace('+', 'E').replace('-', 'W')
+    text = lat_str + lon_str
+    return text
+
+
 class SimpleDataCube(object):
     """
     Given a CocoDataset containing geotiffs, provide a simple API to extract a
@@ -269,12 +349,8 @@ class SimpleDataCube(object):
         # min_pt = conv_lat_lon(str(ymin), str(xmin), format='ISO-D')
         # max_pt = conv_lat_lon(str(ymax), str(xmax), format='ISO-D')
 
-        latmin_str = '{:+2.4f}'.format(latmin).replace('+', 'N').replace('-', 'S')
-        lonmin_str = '{:+3.4f}'.format(lonmin).replace('+', 'E').replace('-', 'W')
-        latmax_str = '{:+2.4f}'.format(latmax).replace('+', 'N').replace('-', 'S')
-        lonmax_str = '{:+3.4f}'.format(lonmax).replace('+', 'E').replace('-', 'W')
-        min_pt = '{}{}'.format(latmin_str, lonmin_str)
-        max_pt = '{}{}'.format(latmax_str, lonmax_str)
+        min_pt = latlon_text(latmin, lonmin)
+        max_pt = latlon_text(latmax, lonmax)
         # TODO: is there an ISO standard for encoding this?
         space_str = '{}_{}'.format(min_pt, max_pt)
 
