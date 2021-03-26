@@ -32,20 +32,31 @@ within Windows.
 
 .. code:: bash
 
-   # Download the conda install script into a temporary directory
-   mkdir -p ~/tmp
-   cd ~/tmp
-   CONDA_INSTALL_SCRIPT=Miniconda3-latest-Linux-x86_64.sh
-   curl https://repo.anaconda.com/miniconda/$CONDA_INSTALL_SCRIPT > $CONDA_INSTALL_SCRIPT
-   chmod +x $CONDA_INSTALL_SCRIPT
+    # Download the conda install script into a temporary directory
+    mkdir -p ~/tmp
+    cd ~/tmp
 
-   # Install miniconda to user local directory
-   _CONDA_ROOT=$HOME/.local/conda
-   sh $CONDA_INSTALL_SCRIPT -b -p $_CONDA_ROOT
-   # Activate the basic conda environment
-   source $_CONDA_ROOT/etc/profile.d/conda.sh
-   # Update the base
-   conda update --name base conda --yes
+    # To update to a newer version see:
+    # https://docs.conda.io/en/latest/miniconda_hashes.html for updating
+    CONDA_INSTALL_SCRIPT=Miniconda3-py38_4.9.2-Linux-x86_64.sh
+    CONDA_EXPECTED_SHA256=1314b90489f154602fd794accfc90446111514a5a72fe1f71ab83e07de9504a7
+    curl https://repo.anaconda.com/miniconda/$CONDA_INSTALL_SCRIPT > $CONDA_INSTALL_SCRIPT
+    CONDA_GOT_SHA256=$(sha256sum $CONDA_INSTALL_SCRIPT | cut -d' ' -f1)
+    # For security, it is important to verify the hash
+    if [[ "$CONDA_GOT_SHA256" != "$CONDA_EXPECTED_SHA256_HASH" ]]; then
+        echo "Downloaded file does not match hash! DO NOT CONTINUE!"
+        exit 1;
+    fi
+    chmod +x $CONDA_INSTALL_SCRIPT 
+
+    # Install miniconda to user local directory
+    _CONDA_ROOT=$HOME/.local/conda
+    sh $CONDA_INSTALL_SCRIPT -b -p $_CONDA_ROOT
+    # Activate the basic conda environment
+    source $_CONDA_ROOT/etc/profile.d/conda.sh
+    # Update the base and create a virtual environment named py38
+    conda update --name base conda --yes 
+
 
 Create SMART Conda environment
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
