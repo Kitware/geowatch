@@ -27,7 +27,7 @@ def parse_version(fpath):
 
 VERSION = parse_version('watch/__init__.py')
 
-with open('README.md') as readme_file:
+with open('README.rst') as readme_file:
     readme = readme_file.read()
 
 requirements = []
@@ -53,7 +53,7 @@ setup(
         ],
     },
     install_requires=requirements,
-    long_description_content_type='text/x-markdown',
+    long_description_content_type='text/x-rst',
     long_description=readme,
     include_package_data=True,
     name='watch',
