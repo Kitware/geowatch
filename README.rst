@@ -126,7 +126,46 @@ crash course on how to use the web-based development environment.
 Running tests
 -------------
 
-We’re using the ``pytest`` module for running unit tests. Unit
+We’re using the ``pytest`` module for running unit tests. Unit tests
+should be added into the ``tests`` directory and files should be
+prefixed with ``test_``.
+
+The ``run_tests.py`` script provided here will run all tests in the
+``tests`` directory.
+
+
+Adding submodules
+-----------------
+
+Library code can be added to the relevant subdirectory under the
+``watch`` directory. The current submodules are as follows:
+
+-  datacube/atmosphere
+-  datacube/cloud
+-  datacube/registration
+-  datacube/reflectance
+-  features/materials
+-  features/semantics
+-  features/invariants
+-  features/reflectance
+-  fusion
+-  sequencing
+-  validation
+-  tools
+-  utils
+
+Adding command line tools
+-------------------------
+
+New Python command line scripts can be added under the ``watch/tools``
+directory. To have the command line tool be installed with the module,
+an entry can be added to the ``setup.py`` setup call, under
+``entrypoints['console_scripts']``.
+
+Scripts that don’t quite belong in the WATCH Python module itself
+(e.g. due to a lack of general purpose use, or lack of polish) can be
+added to the ``scripts`` directory.
+
 
 .. _development enviornment: https://algorithm-toolkit.readthedocs.io/en/latest/dev-environment.html#
 .. _atk docs: https://algorithm-toolkit.readthedocs.io/en/latest/index.html
