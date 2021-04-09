@@ -80,7 +80,6 @@ def geotiff_header_info(gpath_or_ref):
     """
     Extract relevant metadata information from a geotiff header.
     """
-    # from osgeo import gdal
     ref = _coerce_gdal_dataset(gpath_or_ref)
     keys_of_interest = [
         'NITF_CSEXRA_MAX_GSD',
@@ -146,14 +145,14 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
     Example:
         >>> from watch.gis.geotiff import *  # NOQA
         >>> from watch.demo.dummy_demodata import dummy_rpc_geotiff_fpath
-        >>> gpath = dummy_rpc_geotiff_fpath()
+        >>> gpath_or_ref = gpath = dummy_rpc_geotiff_fpath()
         >>> info = geotiff_crs_info(gpath)
         >>> print('info = {}'.format(ub.repr2(info, nl=1, sort=False)))
         >>> assert info['is_rpc']
         >>> assert info['img_shape'] == (2000, 2000)
 
         >>> # xdoctest: +REQUIRES(--network)
-        >>> gpath = ub.grabdata(
+        >>> gpath_or_ref = gpath = ub.grabdata(
         >>>     'https://download.osgeo.org/geotiff/samples/gdal_eg/cea.tif',
         >>>     appname='smart_watch/demodata', hash_prefix='10a2ebcdcd95582')
         >>> info = geotiff_crs_info(gpath)
@@ -162,7 +161,7 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         >>> assert info['img_shape'] == (515, 514)
 
         >>> from watch.demo.nitf_demodata import grab_nitf_fpath
-        >>> gpath = grab_nitf_fpath('i_3004g.ntf')
+        >>> gpath_or_ref = gpath = grab_nitf_fpath('i_3004g.ntf')
         >>> info = geotiff_crs_info(gpath)
         >>> print('info = {}'.format(ub.repr2(info, nl=1, sort=False)))
         >>> assert not info['is_rpc']
@@ -191,7 +190,12 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
 
     # TODO: understand the conditions for when these will not be populated
     # will proj always exist if wld_crs exists?
-    aff_wld_crs = ref.GetSpatialRef()
+    if not hasattr(ref, 'GetSpatialRef'):
+        import warnings
+        warnings.warn('ref has no attribute GetSpatialRef, gdal version issue?')
+        aff_wld_crs = None
+    else:
+        aff_wld_crs = ref.GetSpatialRef()
     aff_proj = ref.GetProjection()
 
     gcps = ref.GetGCPs()
@@ -565,6 +569,10 @@ def geotiff_filepath_info(gpath):
     # SAFE = Standard Archive Format for Europe
     s2_name_2016 = '{MMM}_{MSIXXX}_{YYYYMMDDHHMMSS}_{Nxxyy}_{ROOO}_{Txxxxx}_{Discriminator}'
 
+    # known_s2_bands = {
+    #     'B01', 'B02', 'B03', 'B04', 'B05', 'B06', 'B07', 'B08',
+    #     'B09', 'B10', 'B11', 'B12', 'B8A',
+    # }
     for part_ in reversed(parts):
         part = part_.split('.')[0]
         result = parse.parse(s2_name_2016, part)
@@ -580,6 +588,7 @@ def geotiff_filepath_info(gpath):
                 s2_meta['pdgs_num'] = result.named['Nxxyy']
                 s2_meta['relative_oribt_num'] = result.named['ROOO']
                 s2_meta['tile_number'] = result.named['Txxxxx']
+                s2_meta['discriminator'] = result.named['Discriminator']
             except InvalidFormat:
                 pass
             else:

@@ -1,4 +1,9 @@
+"""
+mkinit ~/code/watch/watch/__init__.py --lazy --noattr -w
+"""
+
 __version__ = '0.0.1'
+
 
 def _hello_world():
     """
@@ -8,5 +13,61 @@ def _hello_world():
         >>> ans = _hello_world()
         >>> assert ans == 42
     """
-    print('hello world')
-    return 42
+
+
+def lazy_import(module_name, submodules, submod_attrs):
+    import importlib
+    import importlib.util
+    all_funcs = []
+    for mod, funcs in submod_attrs.items():
+        all_funcs.extend(funcs)
+    name_to_submod = {
+        func: mod for mod, funcs in submod_attrs.items()
+        for func in funcs
+    }
+
+    def __getattr__(name):
+        if name in submodules:
+            attr = importlib.import_module(
+                '{module_name}.{name}'.format(
+                    module_name=module_name, name=name)
+            )
+        elif name in name_to_submod:
+            modname = name_to_submod[name]
+            module = importlib.import_module(
+                '{module_name}.{modname}'.format(
+                    module_name=module_name, modname=modname)
+            )
+            attr = getattr(module, name)
+        else:
+            raise AttributeError(
+                'No {module_name} attribute {name}'.format(
+                    module_name=module_name, name=name))
+        globals()[name] = attr
+        return attr
+    return __getattr__
+
+
+__getattr__ = lazy_import(
+    __name__,
+    submodules=[
+        'datacube',
+        'demo',
+        'features',
+        'fusion',
+        'gis',
+        'io',
+        'sequencing',
+        'tools',
+        'utils',
+        'validation',
+    ],
+    submod_attrs={},
+)
+
+
+def __dir__():
+    return __all__
+
+__all__ = ['datacube', 'demo', 'features', 'fusion', 'gis', 'io', 'sequencing',
+           'tools', 'utils', 'validation']
