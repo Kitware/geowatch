@@ -40,3 +40,4 @@ dependencies:
     - pyproj >= 3.0.0.post1
     - rasterio >= 1.2.0
     - geopandas >= 0.8.1
+    - rgdc >= 0.1.0
