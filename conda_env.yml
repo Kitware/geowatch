@@ -41,3 +41,4 @@ dependencies:
     - rasterio >= 1.2.0
     - geopandas >= 0.8.1
     - rgdc >= 0.1.0
+    - git+https://gitlab.kitware.com/smart/fetchLandsatSentinelFromGoogleCloud.git
