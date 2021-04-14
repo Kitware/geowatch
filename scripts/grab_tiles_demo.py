@@ -102,17 +102,24 @@ def try_rgdc(username, password):
     }
 
     def _search(instrumentation):
-        query = client.search(**kwargs, instrumentation=instrumentation)
-        # fix dates
-        query = ([
-            entry for entry in query if (dt_min <= datetime.fromisoformat(
-                entry['acquisition_date'].strip('Z')) <= dt_max)
-        ])
-        # fix dupes
-        _, ixs = np.unique([entry['detail'] for entry in query],
-                           return_index=True)
-        query = list(np.array(query)[ixs])
-        return query
+        offset = 0
+        results = []
+        while (query := client.search(**kwargs, instrumentation=instrumentation, offset=offset)):
+            # fix dates
+            query = ([
+                entry for entry in query if (dt_min <= datetime.fromisoformat(
+                    entry['acquisition_date'].strip('Z')) <= dt_max)
+            ])
+            # fix dupes
+            _, ixs = np.unique([entry['detail'] for entry in query],
+                               return_index=True)
+            query = list(np.array(query)[ixs])
+            
+            results.extend(query)
+            
+            offset += kwargs['limit']
+        
+        return results
 
     query_s2 = _search('S2A') + _search('S2B')
     query_l7 = _search('ETM')
