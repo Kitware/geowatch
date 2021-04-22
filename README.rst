@@ -58,16 +58,16 @@ within Windows.
     conda update --name base conda --yes 
 
 
-Create SMART Conda environment
+Create WATCH Conda environment
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The instructions below can be used to create the SMART Conda
+The instructions below can be used to create the WATCH Conda
 environment.
 
 .. code:: bash
 
-   mkdir SMART_DIR #(pick a name of your choice)
-   cd SMART_DIR
+   mkdir WATCH_DIR #(pick a name of your choice)
+   cd WATCH_DIR
    git clone https://gitlab.kitware.com/smart/watch.git
    cd watch
    conda env create -f deployment/conda/conda_env.yml
@@ -104,10 +104,24 @@ directory containing this README.md file.
 
    pip install -e /path/to/watch
 
+Docker Image
+~~~~~~~~~~~~
+
+This repository also includes a ``Dockerfile`` that can be used to
+build the WATCH Docker image.  The built Docker image will have the
+WATCH Conda environment and WATCH Python module pre-installed.
+
+To build the Docker image:
+
+.. code:: bash
+
+   docker build .
+
+
 Running the Algorithm Toolkit (ATK) example project
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Ensure that you have already setup the SMART Conda enviornment.
+Ensure that you have already setup the WATCH Conda enviornment.
 
 Then enter the following commands in your terminal to run the ATK
 example project:
