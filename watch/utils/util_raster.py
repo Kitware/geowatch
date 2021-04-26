@@ -60,7 +60,7 @@ def resample_raster(raster, scale=2, read=True):
                    height=height,
                    width=width)
 
-    if return_data:
+    if read:
 
         data = raster.read(  # Note changed order of indexes, arrays are band, row, col order not row, col, band
             out_shape=(raster.count, height, width),
@@ -116,19 +116,107 @@ def reroot_vrt(old_path, new_path, keep_old=True):
         >>> # now move it somewhere more convenient
         >>> reroot_vrt(imgs_dpath + 'imgs.vrt', 'imgs_vrt', keep_old=False)
     '''
-    path_diff = os.path.join(
-        os.path.curdir,
-        os.path.relpath(os.path.dirname(old_path),
-                        start=os.path.dirname(new_path)))
+    path_diff = os.path.relpath(os.path.dirname(os.path.abspath(old_path)),
+                                start=os.path.dirname(
+                                    os.path.abspath(new_path)))
 
     tree = deepcopy(etree.parse(old_path))
     for elem in tree.iterfind('.//SourceFilename'):
-        assert elem.get('relativeToVRT') == '1', old_path
-        elem.text = os.path.join(path_diff, elem.text)
+        if elem.get('relativeToVRT') == '1':
+            elem.text = os.path.join(path_diff, elem.text)
+        else:
+            if not os.path.isabs(elem.text):
+                raise ValueError(f'''VRT file:
+                    {old_path}
+                cannot be rerooted because it contains path: 
+                    {elem.text}
+                relative to an unknown location [the original calling location].
+                To produce a rerootable VRT, call gdal.BuildVRT() with out_path relative to in_paths.'''
+                                 )
+            if not os.path.isfile(elem.text):
+                raise ValueError(f'''VRT file:
+                    {old_path}
+                references an nonexistent path: 
+                    {elem.text}''')
 
     with open(new_path, 'wb') as f:
         tree.write(f, encoding='utf-8')
 
     if not keep_old:
         os.remove(old_path)
+
+
+def make_vrt(in_paths, out_path, mode, **kwargs):
+    '''
+    Stack multiple band files in the same directory into a single VRT
+
+    Args:
+        in_paths: list(path)
+        out_path: file to save to; standard is '*.vrt'.
+        mode:
+            'stacked': Stack multiple band files covering the same area
+            'mosaicked': Mosaic/merge scenes with overlapping areas. Content will be taken from the first in_path without nodata.
+        kwargs: passed to gdal.BuildVRTOptions [1,2]
+
+    Returns:
+        path to VRT
+
+    References:
+        [1] https://gdal.org/programs/gdalbuildvrt.html
+        [2] https://gdal.org/python/osgeo.gdal-module.html#BuildVRTOptions
+    '''
+    from tempfile import NamedTemporaryFile
+
+    if mode == 'stacked':
+        kwargs['separate'] = True
+    elif mode == 'mosaicked':
+        kwargs['separate'] = False
+    else:
+        raise ValueError(f'mode: {mode} should be "stacked" or "mosaicked"')
+
+    # set sensible defaults
+    if 'resolution' not in kwargs:
+        kwargs['resolution'] = 'highest'
+    if 'resampleAlg' not in kwargs:
+        kwargs['resampleAlg'] = 'bilinear'
+
+    opts = gdal.BuildVRTOptions(**kwargs)
+
+    if len(in_paths) > 1:
+        common = os.path.commonpath(in_paths)
+    else:
+        common = os.path.dirname(in_paths[0])
+
+    # validate out_path
+    out_path = os.path.abspath(out_path)
+    if os.path.isfile(out_path):
+        print(f'warning: VRT {out_path} already exists! Removing...')
+        os.remove(out_path)
+    if os.path.splitext(out_path)[1]:  # is a file
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        final_path = out_path
+    else:  # is a dir
+        os.makedirs(out_path, exist_ok=True)
+        final_path = os.path.join(out_path, os.path.basename(common) + '.vrt')
+        print(f'warning: guessing filename {final_path}')
+
+    # generate an unused name
+    with NamedTemporaryFile(dir=common, suffix='.vrt', mode='r+') as f:
+
+        # First, create VRT in a place where it can definitely see the input files.
+        # Use a relative instead of absolute path to ensure that
+        # <SourceFilename> refs are relative, and therefore the VRT is rerootable
+        vrt = gdal.BuildVRT(os.path.relpath(f.name,
+                                            start=os.path.dirname(
+                                                os.path.abspath(__file__))),
+                            in_paths,
+                            options=opts)
+        del vrt  # write to disk
+
+        # then, move it to the desired location
+        # we do want the tmp file to be deleted, but let the with-block do it
+        # instead of keep_old=False, to avoid a FileNotFoundError
+        util_raster.reroot_vrt(f.name, final_path, keep_old=True)
+
+    return final_path
 
