@@ -155,7 +155,8 @@ def path_to_vrt_s2(paths):
     return util_raster.make_vrt(_bands(paths),
                                 os.path.join(vrt_root,
                                              paths.path.stem + '.vrt'),
-                                mode='stacked')
+                                mode='stacked',
+                                relative_to_path=os.getcwd())
 
 
 def path_to_vrt_ls(paths):
@@ -175,16 +176,20 @@ def path_to_vrt_ls(paths):
     tmp_vrts = [
         util_raster.make_vrt(_bands(p),
                              os.path.join(vrt_root, p.path.stem + '.vrt'),
-                             mode='stacked') for p in paths
+                             mode='stacked',
+                             relative_to_path=os.getcwd()) for p in paths
     ]
 
     # then mosaic them
     final_vrt = util_raster.make_vrt(
         tmp_vrts,
         os.path.join(vrt_root, paths[0].path.stem + f'_{len(paths)}.vrt'),
-        mode='mosaicked')
+        mode='mosaicked',
+        relative_to_path=os.getcwd())
+
     for t in tmp_vrts:
         os.remove(t)
+
     return final_vrt
 
 

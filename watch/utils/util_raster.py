@@ -1,15 +1,13 @@
-import numpy as np
 import os
+from copy import deepcopy
 from contextlib import contextmanager
+from tempfile import NamedTemporaryFile
+from lxml import etree
 
 import gdal
 
-import rasterio
 from rasterio import Affine, MemoryFile
 from rasterio.enums import Resampling
-
-from lxml import etree
-from copy import deepcopy
 
 
 # use context manager so DatasetReader and MemoryFile get cleaned up automatically
@@ -146,7 +144,7 @@ def reroot_vrt(old_path, new_path, keep_old=True):
         os.remove(old_path)
 
 
-def make_vrt(in_paths, out_path, mode, **kwargs):
+def make_vrt(in_paths, out_path, mode, relative_to_path=None, **kwargs):
     '''
     Stack multiple band files in the same directory into a single VRT
 
@@ -156,6 +154,7 @@ def make_vrt(in_paths, out_path, mode, **kwargs):
         mode:
             'stacked': Stack multiple band files covering the same area
             'mosaicked': Mosaic/merge scenes with overlapping areas. Content will be taken from the first in_path without nodata.
+        relative_to_path: if this function is being called from another process, pass in the cwd of the calling process, to trick gdal into creating a rerootable VRT
         kwargs: passed to gdal.BuildVRTOptions [1,2]
 
     Returns:
@@ -165,7 +164,6 @@ def make_vrt(in_paths, out_path, mode, **kwargs):
         [1] https://gdal.org/programs/gdalbuildvrt.html
         [2] https://gdal.org/python/osgeo.gdal-module.html#BuildVRTOptions
     '''
-    from tempfile import NamedTemporaryFile
 
     if mode == 'stacked':
         kwargs['separate'] = True
@@ -187,6 +185,9 @@ def make_vrt(in_paths, out_path, mode, **kwargs):
     else:
         common = os.path.dirname(in_paths[0])
 
+    if relative_to_path is None:
+        relative_to_path = os.path.dirname(os.path.abspath(__file__))
+
     # validate out_path
     out_path = os.path.abspath(out_path)
     if os.path.isfile(out_path):
@@ -206,9 +207,7 @@ def make_vrt(in_paths, out_path, mode, **kwargs):
         # First, create VRT in a place where it can definitely see the input files.
         # Use a relative instead of absolute path to ensure that
         # <SourceFilename> refs are relative, and therefore the VRT is rerootable
-        vrt = gdal.BuildVRT(os.path.relpath(f.name,
-                                            start=os.path.dirname(
-                                                os.path.abspath(__file__))),
+        vrt = gdal.BuildVRT(os.path.relpath(f.name, start=relative_to_path),
                             in_paths,
                             options=opts)
         del vrt  # write to disk
@@ -216,7 +215,6 @@ def make_vrt(in_paths, out_path, mode, **kwargs):
         # then, move it to the desired location
         # we do want the tmp file to be deleted, but let the with-block do it
         # instead of keep_old=False, to avoid a FileNotFoundError
-        util_raster.reroot_vrt(f.name, final_path, keep_old=True)
+        reroot_vrt(f.name, final_path, keep_old=True)
 
     return final_path
-
