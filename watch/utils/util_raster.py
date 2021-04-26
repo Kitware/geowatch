@@ -114,6 +114,9 @@ def reroot_vrt(old_path, new_path, keep_old=True):
         >>> # now move it somewhere more convenient
         >>> reroot_vrt(imgs_dpath + 'imgs.vrt', 'imgs_vrt', keep_old=False)
     '''
+    if os.path.abspath(old_path) == os.path.abspath(new_path):
+        return
+
     path_diff = os.path.relpath(os.path.dirname(os.path.abspath(old_path)),
                                 start=os.path.dirname(
                                     os.path.abspath(new_path)))
@@ -150,7 +153,7 @@ def make_vrt(in_paths, out_path, mode, relative_to_path=None, **kwargs):
 
     Args:
         in_paths: list(path)
-        out_path: file to save to; standard is '*.vrt'.
+        out_path: path to save to; standard is '*.vrt'. If None, a path will be generated.
         mode:
             'stacked': Stack multiple band files covering the same area
             'mosaicked': Mosaic/merge scenes with overlapping areas. Content will be taken from the first in_path without nodata.
@@ -189,20 +192,18 @@ def make_vrt(in_paths, out_path, mode, relative_to_path=None, **kwargs):
         relative_to_path = os.path.dirname(os.path.abspath(__file__))
 
     # validate out_path
-    out_path = os.path.abspath(out_path)
-    if os.path.isfile(out_path):
-        print(f'warning: VRT {out_path} already exists! Removing...')
-        os.remove(out_path)
-    if os.path.splitext(out_path)[1]:  # is a file
-        os.makedirs(os.path.dirname(out_path), exist_ok=True)
-        final_path = out_path
-    else:  # is a dir
-        os.makedirs(out_path, exist_ok=True)
-        final_path = os.path.join(out_path, os.path.basename(common) + '.vrt')
-        print(f'warning: guessing filename {final_path}')
+    if out_path is not None:
+        out_path = os.path.abspath(out_path)
+        if os.path.splitext(out_path)[1]:  # is a file
+            os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        elif os.path.isdir(out_path):  # is a dir
+            raise ValueError(f'{out_path} is an existing directory.')
 
     # generate an unused name
-    with NamedTemporaryFile(dir=common, suffix='.vrt', mode='r+') as f:
+    with NamedTemporaryFile(dir=common,
+                            suffix='.vrt',
+                            mode='r+',
+                            delete=(out_path is not None)) as f:
 
         # First, create VRT in a place where it can definitely see the input files.
         # Use a relative instead of absolute path to ensure that
@@ -213,8 +214,11 @@ def make_vrt(in_paths, out_path, mode, relative_to_path=None, **kwargs):
         del vrt  # write to disk
 
         # then, move it to the desired location
-        # we do want the tmp file to be deleted, but let the with-block do it
-        # instead of keep_old=False, to avoid a FileNotFoundError
-        reroot_vrt(f.name, final_path, keep_old=True)
+        if out_path is None:
+            out_path = f.name
+        elif os.path.isfile(out_path):
+            print(f'warning: {out_path} already exists! Removing...')
+            os.remove(out_path)
+        reroot_vrt(f.name, out_path, keep_old=True)
 
-    return final_path
+    return out_path
