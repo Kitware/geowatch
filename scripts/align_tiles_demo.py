@@ -8,9 +8,12 @@ import gdal
 import numpy as np
 import kwimage as ki
 from datetime import date, datetime, timedelta
+
 from watch.utils import util_raster
 
 from rgdc import Rgdc
+
+from fels import safedir_to_datetime, landsatdir_to_date
 
 # pick the AOI from the drop0 KR site
 
@@ -175,20 +178,22 @@ def path_to_vrt_ls(paths):
     # first make VRTs for individual tiles
     tmp_vrts = [
         util_raster.make_vrt(_bands(p),
-                             os.path.join(vrt_root, p.path.stem + '.vrt'),
+                             os.path.join(vrt_root,
+                                          f'{hash(p.path.stem)}.vrt'),
                              mode='stacked',
                              relative_to_path=os.getcwd()) for p in paths
     ]
 
     # then mosaic them
-    final_vrt = util_raster.make_vrt(
-        tmp_vrts,
-        os.path.join(vrt_root, paths[0].path.stem + f'_{len(paths)}.vrt'),
-        mode='mosaicked',
-        relative_to_path=os.getcwd())
+    final_vrt = util_raster.make_vrt(tmp_vrts,
+                                     os.path.join(vrt_root,
+                                                  paths[0].path.stem + '.vrt'),
+                                     mode='mosaicked',
+                                     relative_to_path=os.getcwd())
 
-    for t in tmp_vrts:
-        os.remove(t)
+    if 0:  # can't do this because final_vrt still references them
+        for t in tmp_vrts:
+            os.remove(t)
 
     return final_vrt
 
@@ -196,3 +201,27 @@ def path_to_vrt_ls(paths):
 paths_s2 = [path_to_vrt_s2(p) for p in paths_s2]
 paths_l7 = [path_to_vrt_ls(p) for p in paths_l7]
 paths_l8 = [path_to_vrt_ls(p) for p in paths_l8]
+
+
+def by_date(path):
+    '''
+    Sort function for a list of combined S2/LS paths
+    '''
+    basename = os.path.splitext(os.path.basename(path))[0]
+    try:
+        return safedir_to_datetime(basename).date()
+    except ValueError:
+        return landsatdir_to_date(basename)
+
+
+all_paths = sorted(paths_s2 + paths_l7 + paths_l8, key=by_date)
+
+
+def crop(vrt_path):
+    '''
+    Crop to common bounding box from earlier
+    '''
+    pass
+
+
+all_paths = [crop(p) for p in all_paths]
