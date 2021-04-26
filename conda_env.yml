@@ -40,5 +40,5 @@ dependencies:
     - pyproj >= 3.0.0.post1
     - rasterio >= 1.2.0
     - geopandas >= 0.8.1
-    - rgdc >= 0.1.0
+    - rgdc >= 0.1.1
     - git+https://gitlab.kitware.com/smart/fetchLandsatSentinelFromGoogleCloud.git

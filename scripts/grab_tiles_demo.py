@@ -87,56 +87,36 @@ def try_fels():
 # try_fels()
 
 
-def try_rgdc(username, password):
+def try_rgdc():
     '''
-    get your username and password from https://www.resonantgeodata.com/
+    Get your username and password from https://www.resonantgeodata.com/
+    If you do not enter your password you will be prompted for it
     '''
-    client = Rgdc(username=username,
-                  password=password)
+    client = Rgdc(username='matthew.bernstein@kitware.com')
     kwargs = {
         'query': json.dumps(geojson_bbox),
         'predicate': 'intersects',
         'datatype': 'raster',
         'acquired': (dt_min, dt_max),
-        'limit': int(1e3)
+        #'limit': int(1e3)
     }
 
-    def _search(instrumentation):
-        offset = 0
-        results = []
-        while (query := client.search(**kwargs, instrumentation=instrumentation, offset=offset)):
-            # fix dates
-            query = ([
-                entry for entry in query if (dt_min <= datetime.fromisoformat(
-                    entry['acquisition_date'].strip('Z')) <= dt_max)
-            ])
-            # fix dupes
-            _, ixs = np.unique([entry['detail'] for entry in query],
-                               return_index=True)
-            query = list(np.array(query)[ixs])
-            
-            results.extend(query)
-            
-            offset += kwargs['limit']
-        
-        return results
+    query_s2 = (client.search(**kwargs, instrumentation='S2A') +
+                client.search(**kwargs, instrumentation='S2B'))
+    query_l7 = client.search(**kwargs, instrumentation='ETM')
+    query_l8 = client.search(**kwargs, instrumentation='OLI_TIRS')
 
-    query_s2 = _search('S2A') + _search('S2B')
-    query_l7 = _search('ETM')
-    query_l8 = _search('OLI_TIRS')
-
-    # we are missing a couple due to
-    # https://github.com/ResonantGeoData/ResonantGeoData/issues/354
     print(f'S2, L7, L8: {len(query_s2)}, {len(query_l7)}, {len(query_l8)}')
 
     out_path = './grab_tiles_demo/rgdc/'
     os.makedirs(out_path, exist_ok=True)
 
     for search_result in query_s2 + query_l7 + query_l8:
-        paths = client.download_raster_entry(search_result['subentry_pk'],
-                                             out_path,
-                                             nest_with_name=True)
+        paths = client.download_raster(search_result,
+                                       out_path,
+                                       nest_with_name=True,
+                                       keep_existing=True)
         print(paths.path)
 
-try_rgdc(username='matthew.bernstein@kitware.com', password='UMa7KqKXCaaiDmR')
 
+try_rgdc()
