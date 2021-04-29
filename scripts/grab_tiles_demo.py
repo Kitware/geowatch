@@ -35,6 +35,11 @@ dt_min, dt_max = (datetime(2018, 11, 1), datetime(2018, 11, 8))
 
 
 def try_fels():
+    '''
+    This provides access to:
+        https://cloud.google.com/storage/docs/public-datasets/sentinel-2
+        https://cloud.google.com/storage/docs/public-datasets/landsat
+    '''
     # put this wherever you're ok with dumping 6GB of indexes
     cats_path = os.path.expanduser('~/smart/data/fels/')
 
@@ -84,12 +89,21 @@ def try_fels():
     print([landsatdir_to_date(u.split('/')[-1]) for u in l8_urls])
 
 
-# try_fels()
+try_fels()
 
 
 def try_rgdc():
     '''
-    Get your username and password from https://www.resonantgeodata.com/
+    The default public instance of RGD is https://www.resonantgeodata.com/.
+    You can go there to make a username and password.
+    
+    The WATCH instance is at rgd.beamio.co; it is still under construction.
+    Eventually, commercial (WV/Planet) data will live there as well.
+    Connect to that by passing
+        api_url="rgd.beamio.co/api"
+
+    Both have LS/S2 ingested over the KR site.
+
     If you do not enter your password you will be prompted for it
     '''
     client = Rgdc(username='matthew.bernstein@kitware.com')
