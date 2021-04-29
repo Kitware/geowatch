@@ -15,8 +15,22 @@ from fels import run_fels, safedir_to_datetime, landsatdir_to_date
 
 from rgdc import Rgdc
 
-# pick the AOI from the drop0 KR site
+# AOIs from drop0:
+# (coords from smart_watch_dvc/drop0_aligned/)
 
+# AE
+# top, left = (128.664256, 37.660143)
+# bottom, right = (128.674901, 37.663936)
+
+# BR
+# top, left = (-043.342788, 22.960878)
+# bottom, right = (-043.336003, 22.954186)
+
+# US
+# top, left = (-081.776670, 33.132338)
+# bottom, right = (-081.764686, 33.146012)
+
+# KR
 top, left = (128.6643, 37.6601)
 bottom, right = (128.6749, 37.6639)
 
