@@ -5,6 +5,7 @@ Download all the LS tiles matching a reference S2 tile in a time range and align
 import os
 import json
 import gdal
+import osr
 import numpy as np
 import kwimage as ki
 from datetime import date, datetime, timedelta
@@ -137,12 +138,32 @@ paths_s2 = _paths(query_s2)
 paths_l7 = list(map(_paths, query_l7))
 paths_l8 = list(map(_paths, query_l8))
 
+# TODO add in nodata for Landsat 7
+
 # convert to VRT
 
 vrt_root = os.path.join(out_path, 'vrt')
 
 
-def path_to_vrt_s2(paths):
+def _bbox_from_epsg4326(path, tlbr):
+    '''
+    Transform a EPSG:4326 lon-lat bounding box into the CRS of a dataset
+
+    Args:
+        path: path to the dataset
+        tlbr: tlbr lon-lat bounding box
+    '''
+    src_crs = osr.SpatialReference()
+    src_crs.ImportFromEPSG(4326)
+    with util_raster.gdal_open(path) as f:
+        dst_crs = osr.SpatialReference(wkt=f.GetProjection())
+    tfm = osr.CoordinateTransformation(dst_crs, src_crs)
+    t, l, _ = tfm.TransformPoint(tlbr[0], tlbr[1])
+    b, r, _ = tfm.TransformPoint(tlbr[2], tlbr[3])
+    return (t, l, b, r)
+
+
+def path_to_vrt_s2(paths, crop=True):
     '''
     Search for Sentinel-2 band files and stack them in a VRT
 
@@ -155,14 +176,22 @@ def path_to_vrt_s2(paths):
     def _bands(paths):
         return [str(p) for p in paths.images if p.match('*_B*.jp2')]
 
+    # for gdal.BuildVRTOptions
+    kwargs = {}
+    if crop:
+        kwargs['outputBounds'] = _bbox_from_epsg4326(
+            _bands(paths)[0], s2_min_bbox['coordinates'][0][0] +
+            s2_min_bbox['coordinates'][0][2])
+
     return util_raster.make_vrt(_bands(paths),
                                 os.path.join(vrt_root,
                                              paths.path.stem + '.vrt'),
                                 mode='stacked',
-                                relative_to_path=os.getcwd())
+                                relative_to_path=os.getcwd(),
+                                **kwargs)
 
 
-def path_to_vrt_ls(paths):
+def path_to_vrt_ls(paths, crop=True):
     '''
     Search for Landsat band files from compatible scenes and stack them in a single mosaicked VRT
 
@@ -177,19 +206,29 @@ def path_to_vrt_ls(paths):
 
     # first make VRTs for individual tiles
     tmp_vrts = [
-        util_raster.make_vrt(_bands(p),
-                             os.path.join(vrt_root,
-                                          f'{hash(p.path.stem)}.vrt'),
-                             mode='stacked',
-                             relative_to_path=os.getcwd()) for p in paths
+        util_raster.make_vrt(
+            _bands(p),
+            os.path.join(vrt_root, f'{hash(p.path.stem)}.vrt'),
+            mode='stacked',
+            relative_to_path=os.getcwd(),
+            #outputBounds=(top, left, bottom, right)
+        ) for p in paths
     ]
+
+    # for gdal.BuildVRTOptions
+    kwargs = {}
+    if crop:
+        kwargs['outputBounds'] = _bbox_from_epsg4326(
+            _bands(paths[0])[0], s2_min_bbox['coordinates'][0][0] +
+            s2_min_bbox['coordinates'][0][2])
 
     # then mosaic them
     final_vrt = util_raster.make_vrt(tmp_vrts,
                                      os.path.join(vrt_root,
                                                   paths[0].path.stem + '.vrt'),
                                      mode='mosaicked',
-                                     relative_to_path=os.getcwd())
+                                     relative_to_path=os.getcwd(),
+                                     **kwargs)
 
     if 0:  # can't do this because final_vrt still references them
         for t in tmp_vrts:
@@ -214,12 +253,17 @@ def by_date(path):
         return landsatdir_to_date(basename)
 
 
+# TODO sort by datetime instead of date
 all_paths = sorted(paths_s2 + paths_l7 + paths_l8, key=by_date)
+
+# orthorectification would happen here, before cropping away the margins
 
 
 def crop(vrt_path):
     '''
-    Crop to common bounding box from earlier
+    Convert to common CRS and crop to common bounding box
+
+    Unfortunately, this cannot be done in a single step
     '''
     pass
 
