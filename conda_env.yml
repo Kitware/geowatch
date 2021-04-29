@@ -27,6 +27,7 @@ dependencies:
     - pygments >= 2.6.1
     - requests >= 2.20.0
     - girder_client >= 3.1.0
+    - lxml >= 4.6.3
 
     # Image / numeric
     - kwarray >= 0.5.13
