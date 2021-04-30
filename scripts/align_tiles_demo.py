@@ -8,7 +8,8 @@ import gdal
 import osr
 import numpy as np
 import kwimage as ki
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
+from PIL import Image
 
 from watch.utils import util_raster
 
@@ -93,7 +94,7 @@ def group_landsat_tiles(query, timediff_sec=300):
        >>> # query == [[scene1], [scene2, scene3], [scene4]]
     '''
     # ensure we're only working with one satellite at a time
-    query = sorted(query, key=lambda q: q['acquisition_date'])
+    query = sorted(query, key=_dt)
     sensors, ixs = np.unique([q['instrumentation'] for q in query],
                              return_index=True)
     assert set(sensors).issubset({'ETM', 'OLI_TIRS'}), sensors
@@ -149,6 +150,8 @@ def _bbox_from_epsg4326(path, tlbr):
     '''
     Transform a EPSG:4326 lon-lat bounding box into the CRS of a dataset
 
+    This would be easier with rasterio, but it doesn't play nice with gdal due to
+    https://rasterio.readthedocs.io/en/latest/faq.html#why-can-t-rasterio-find-proj-db-rasterio-from-pypi-versions-1-2-0
     Args:
         path: path to the dataset
         tlbr: tlbr lon-lat bounding box
@@ -157,10 +160,11 @@ def _bbox_from_epsg4326(path, tlbr):
     src_crs.ImportFromEPSG(4326)
     with util_raster.gdal_open(path) as f:
         dst_crs = osr.SpatialReference(wkt=f.GetProjection())
-    tfm = osr.CoordinateTransformation(dst_crs, src_crs)
-    t, l, _ = tfm.TransformPoint(tlbr[0], tlbr[1])
-    b, r, _ = tfm.TransformPoint(tlbr[2], tlbr[3])
-    return (t, l, b, r)
+    tfm = osr.CoordinateTransformation(src_crs, dst_crs)
+    l, t, _ = tfm.TransformPoint(tlbr[1], tlbr[0])
+    r, b, _ = tfm.TransformPoint(tlbr[3], tlbr[2])
+    #return (t, l, b, r)
+    return (l,t,r,b)
 
 
 def path_to_vrt_s2(paths, crop=True):
@@ -259,13 +263,66 @@ all_paths = sorted(paths_s2 + paths_l7 + paths_l8, key=by_date)
 # orthorectification would happen here, before cropping away the margins
 
 
-def crop(vrt_path):
+def reproject_crop(vrt_path):
     '''
     Convert to common CRS and crop to common bounding box
 
-    Unfortunately, this cannot be done in a single step
+    Unfortunately, this cannot be done in a single step in path_to_vrt_{ls|s2}
+    because gdal.BuildVRT does not support warping between CRS, and the bbox wanted
+    is given in epsg:4326 (not the tiles' original CRS). gdal.BuildVRTOptions has an
+    outputBounds(=-te) kwarg for cropping, but not an equivalent of -te_srs.
+
+    This means another intermediate file is necessary.
+    
+    Returns:
+        Path to a new VRT
     '''
-    pass
+    root, name = os.path.split(vrt_path)
+    out_path = os.path.join(root, 'crop', name)
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+
+    dst_crs = osr.SpatialReference()
+    dst_crs.ImportFromEPSG(4326)
+    opts = gdal.WarpOptions(outputBounds=(s2_min_bbox['coordinates'][0][0] +
+                                          s2_min_bbox['coordinates'][0][2]),
+                            dstSRS=dst_crs)
+    vrt = gdal.Warp(out_path, vrt_path, options=opts)
+    del vrt
+
+    return out_path
 
 
-all_paths = [crop(p) for p in all_paths]
+# all_paths = [reproject_crop(p) for p in all_paths]
+
+def thumbnail(in_path, out_path=None):
+    '''
+    Create a small, true-color thumbnail from a satellite image.
+
+    Args:
+        in_path: path to a S2, L7, or L8 scene readable by gdal
+        out_path: if None, return image content in memory
+
+    Returns:
+        out_path or image content
+    '''
+    import rasterio
+    with rasterio.open(in_path) as f:
+        # for memory reasons
+        with util_raster.resample_raster(f, scale=1/10) as g:
+            band1 = g.read(1)
+    return Image.fromarray(np.uint8(band1), 'L').resize((1000,1000))
+
+
+def gif(imgs, out_path):
+    '''
+    Args:
+        imgs: list of PIL.Image
+        out_path: path to save to
+
+    References:
+        https://stackoverflow.com/a/57751793
+    '''
+    first, *rest = imgs
+    first.save(fp=out_path, format='GIF', append_images=rest, save_all=True, duration=200, loop=True)
+
+gif([thumbnail(p) for p in all_paths], 'test.gif')
