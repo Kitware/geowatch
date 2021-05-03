@@ -10,6 +10,7 @@ import numpy as np
 import kwimage as ki
 from datetime import datetime, timedelta
 from PIL import Image
+import rasterio
 
 from watch.utils import util_raster
 
@@ -71,6 +72,9 @@ def _dt(q):
 
 
 def _path_row(q):
+    '''
+    Returns LS path and row as strings. eg ('115', '034')
+    '''
     path_row = q['subentry_name'].split('_')[2]
     path, row = path_row[:3], path_row[3:]
     return path, row
@@ -109,9 +113,13 @@ def group_landsat_tiles(query, timediff_sec=300):
         ixs = np.where(diffs > timediff_sec)[0]
         for split in np.split(sensor, ixs):
             # each split should consist of adjacent rows in the same path
-            paths, rows = zip(*[_path_row(q) for q in split])
+            path_rows = [_path_row(s)for s in split]
+            paths, rows = zip(*path_rows)
             assert len(np.unique(paths)) == 1
             assert len(np.unique(rows)) == len(split)
+            # skip splits that don't contain the main overlapping image
+            if ('115', '034') not in path_rows:
+                continue
             result.append(split)
 
     return result
@@ -139,7 +147,14 @@ paths_s2 = _paths(query_s2)
 paths_l7 = list(map(_paths, query_l7))
 paths_l8 = list(map(_paths, query_l8))
 
-# TODO add in nodata for Landsat 7
+'''
+# add in nodata for Landsat 7
+for paths in paths_l7:
+    for p in paths:
+        for i in p.images:
+            with rasterio.open(i, 'r+') as f:
+                f.nodata = 0
+'''
 
 # convert to VRT
 
@@ -164,7 +179,7 @@ def _bbox_from_epsg4326(path, tlbr):
     l, t, _ = tfm.TransformPoint(tlbr[1], tlbr[0])
     r, b, _ = tfm.TransformPoint(tlbr[3], tlbr[2])
     #return (t, l, b, r)
-    return (l,t,r,b)
+    return (l, t, r, b)
 
 
 def path_to_vrt_s2(paths, crop=True):
@@ -294,6 +309,7 @@ def reproject_crop(vrt_path):
 
 # all_paths = [reproject_crop(p) for p in all_paths]
 
+
 def thumbnail(in_path, out_path=None):
     '''
     Create a small, true-color thumbnail from a satellite image.
@@ -305,12 +321,21 @@ def thumbnail(in_path, out_path=None):
     Returns:
         out_path or image content
     '''
-    import rasterio
     with rasterio.open(in_path) as f:
+
         # for memory reasons
-        with util_raster.resample_raster(f, scale=1/10) as g:
-            band1 = g.read(1)
-    return Image.fromarray(np.uint8(band1), 'L').resize((1000,1000))
+        # with util_raster.resample_raster(f, scale=1/10) as g:
+        #     band1 = g.read(1)
+
+        band1 = f.read(1)
+    # PIL doesn't support kernels on 16-bit images
+    sat_code = os.path.basename(in_path)[:2]
+    if sat_code == 'S2' or sat_code == 'LC':
+        return Image.fromarray(band1, 'I;16').resize((1000, 1000),
+                                                     resample=Image.NEAREST)
+    elif sat_code == 'LE':
+        return Image.fromarray(band1, 'L').resize((1000, 1000),
+                                                  resample=Image.NEAREST)
 
 
 def gif(imgs, out_path):
@@ -323,6 +348,12 @@ def gif(imgs, out_path):
         https://stackoverflow.com/a/57751793
     '''
     first, *rest = imgs
-    first.save(fp=out_path, format='GIF', append_images=rest, save_all=True, duration=200, loop=True)
+    first.save(fp=out_path,
+               format='GIF',
+               append_images=rest,
+               save_all=True,
+               duration=200,
+               loop=True)
+
 
 gif([thumbnail(p) for p in all_paths], 'test.gif')
