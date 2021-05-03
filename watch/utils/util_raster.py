@@ -19,9 +19,9 @@ def resample_raster(raster, scale=2, read=True):
     This changes the number of pixels in the raster while maintaining its geographic bounds, that is, it changes the raster's GSD.
 
     Args:
-        raster: a DatasetReader (the object returned by rasterio.open)
+        raster: a DatasetReader (the object returned by rasterio.open) or path to a dataset
         scale: factor to upscale the resolution, aka downscale the GSD, by
-        read: if True, read and return the resampled data (an expensive operation)
+        read: if True, read and return the resampled data (an expensive operation if scale>1)
             else, return the resampled dataset's .profile attribute (metadata)
 
     Example:
@@ -44,6 +44,9 @@ def resample_raster(raster, scale=2, read=True):
         https://rasterio.readthedocs.io/en/latest/topics/reading.html
         https://rasterio.readthedocs.io/en/latest/topics/profiles.html
     '''
+    if not isinstance(raster, rasterio.DatasetReader):
+        raster = rasterio.open(raster)
+
     t = raster.transform
 
     # rescale the metadata
