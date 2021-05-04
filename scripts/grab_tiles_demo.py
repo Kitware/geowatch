@@ -2,7 +2,6 @@
 A demo for grabbing the same set of Landsat and Sentinel-2 tiles 2 ways.
 
 1. from Google Cloud using https://gitlab.kitware.com/smart/fetchLandsatSentinelFromGoogleCloud
-You will need to pip install this manually.
 
 2. from Resonant GeoData (ultimately from Google Cloud as well) using https://pypi.org/project/rgdc/
 '''

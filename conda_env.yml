@@ -42,5 +42,4 @@ dependencies:
     - rasterio >= 1.2.0
     - geopandas >= 0.8.1
     - rgdc >= 0.1.1
-      #- git+ssh://git@github.com/matt-bernstein/fetchLandsatSentinelFromGoogleCloud.git
-      #- git+ssh://git@gitlab.kitware.com/smart/fetchLandsatSentinelFromGoogleCloud.git
+    - git+https://git@github.com/matt-bernstein/fetchLandsatSentinelFromGoogleCloud.git
