@@ -1,15 +1,17 @@
 '''
-Download all the LS tiles matching a reference S2 tile in a time range and align them to the S2 grid using VRTs
+Download all LS tiles overlapping an S2 tile in a time range and align them to the S2 grid using VRTs
 '''
 
 import os
 import json
-import gdal
-import osr
+import itertools
+import functools
+from osgeo import gdal, osr
 import numpy as np
 import kwimage as ki
-from datetime import datetime, timedelta
+from datetime import datetime
 from PIL import Image
+import imageio
 import rasterio
 
 from watch.utils import util_raster, util_norm
@@ -17,54 +19,6 @@ from watch.utils import util_raster, util_norm
 from rgdc import Rgdc
 
 from fels import safedir_to_datetime, landsatdir_to_date
-
-# pick the AOI from the drop0 KR site
-
-top, left = (128.6643, 37.6601)
-bottom, right = (128.6749, 37.6639)
-
-geojson_bbox = {
-    "type":
-    "Polygon",
-    "coordinates": [[[top, left], [top, right], [bottom, right],
-                     [bottom, left], [top, left]]]
-}
-
-# and a date range of 1 month
-
-dt_min, dt_max = (datetime(2018, 11, 1), datetime(2018, 11, 30))
-
-# query S2 tiles
-'''
-Get your username and password from https://www.resonantgeodata.com/
-If you do not enter a pw here, you will be prompted for it
-'''
-client = Rgdc(username='matthew.bernstein@kitware.com')
-kwargs = {
-    'query': json.dumps(geojson_bbox),
-    'predicate': 'intersects',
-    'datatype': 'raster',
-    'acquired': (dt_min, dt_max)
-}
-
-query_s2 = (client.search(**kwargs, instrumentation='S2A') +
-            client.search(**kwargs, instrumentation='S2B'))
-
-# match AOI and query LS tiles
-
-# S2 scenes do not overlap perfectly - get their intersection
-s2_bboxes = ki.Boxes.concatenate(
-    [ki.Polygon.from_geojson(q['footprint']).to_boxes() for q in query_s2])
-s2_min_bbox = s2_bboxes[0]
-for b in s2_bboxes:
-    s2_min_bbox = s2_min_bbox.intersection(b)
-s2_min_bbox = s2_min_bbox.to_polygons()[0].to_geojson()
-kwargs['query'] = json.dumps(s2_min_bbox)
-
-query_l7 = client.search(**kwargs, instrumentation='ETM')
-query_l8 = client.search(**kwargs, instrumentation='OLI_TIRS')
-
-print(f'S2, L7, L8: {len(query_s2)}, {len(query_l7)}, {len(query_l8)}')
 
 
 def _dt(q):
@@ -125,63 +79,7 @@ def group_landsat_tiles(query, timediff_sec=300):
     return result
 
 
-query_l7 = group_landsat_tiles(query_l7)
-query_l8 = group_landsat_tiles(query_l8)
-
-# download all tiles
-
-out_path = './align_tiles_demo/'
-os.makedirs(out_path, exist_ok=True)
-
-
-def _paths(query):
-    return [
-        client.download_raster(search_result,
-                               out_path,
-                               nest_with_name=True,
-                               keep_existing=True) for search_result in query
-    ]
-
-
-paths_s2 = _paths(query_s2)
-paths_l7 = list(map(_paths, query_l7))
-paths_l8 = list(map(_paths, query_l8))
-'''
-# add in nodata for Landsat 7
-for paths in paths_l7:
-    for p in paths:
-        for i in p.images:
-            with rasterio.open(i, 'r+') as f:
-                f.nodata = 0
-'''
-
-# convert to VRT
-
-vrt_root = os.path.join(out_path, 'vrt')
-
-
-def _bbox_from_epsg4326(path, tlbr):
-    '''
-    Transform a EPSG:4326 lon-lat bounding box into the CRS of a dataset
-
-    This would be easier with rasterio, but it doesn't play nice with gdal due to
-    https://rasterio.readthedocs.io/en/latest/faq.html#why-can-t-rasterio-find-proj-db-rasterio-from-pypi-versions-1-2-0
-    Args:
-        path: path to the dataset
-        tlbr: tlbr lon-lat bounding box
-    '''
-    src_crs = osr.SpatialReference()
-    src_crs.ImportFromEPSG(4326)
-    with util_raster.gdal_open(path) as f:
-        dst_crs = osr.SpatialReference(wkt=f.GetProjection())
-    tfm = osr.CoordinateTransformation(src_crs, dst_crs)
-    l, t, _ = tfm.TransformPoint(tlbr[1], tlbr[0])
-    r, b, _ = tfm.TransformPoint(tlbr[3], tlbr[2])
-    #return (t, l, b, r)
-    return (l, t, r, b)
-
-
-def path_to_vrt_s2(paths, crop=True):
+def path_to_vrt_s2(paths, vrt_root):
     '''
     Search for Sentinel-2 band files and stack them in a VRT
 
@@ -194,22 +92,16 @@ def path_to_vrt_s2(paths, crop=True):
     def _bands(paths):
         return [str(p) for p in paths.images if p.match('*_B*.jp2')]
 
-    # for gdal.BuildVRTOptions
-    kwargs = {}
-    if crop:
-        kwargs['outputBounds'] = _bbox_from_epsg4326(
-            _bands(paths)[0], s2_min_bbox['coordinates'][0][0] +
-            s2_min_bbox['coordinates'][0][2])
-
+    # TODO use https://rasterio.readthedocs.io/en/latest/topics/memory-files.html
+    # for these intermediate files?
     return util_raster.make_vrt(_bands(paths),
                                 os.path.join(vrt_root,
-                                             paths.path.stem + '.vrt'),
+                                             f'{hash(paths.path.stem)}.vrt'),
                                 mode='stacked',
-                                relative_to_path=os.getcwd(),
-                                **kwargs)
+                                relative_to_path=os.getcwd())
 
 
-def path_to_vrt_ls(paths, crop=True):
+def path_to_vrt_ls(paths, vrt_root):
     '''
     Search for Landsat band files from compatible scenes and stack them in a single mosaicked VRT
 
@@ -233,31 +125,18 @@ def path_to_vrt_ls(paths, crop=True):
         ) for p in paths
     ]
 
-    # for gdal.BuildVRTOptions
-    kwargs = {}
-    if crop:
-        kwargs['outputBounds'] = _bbox_from_epsg4326(
-            _bands(paths[0])[0], s2_min_bbox['coordinates'][0][0] +
-            s2_min_bbox['coordinates'][0][2])
-
     # then mosaic them
-    final_vrt = util_raster.make_vrt(tmp_vrts,
-                                     os.path.join(vrt_root,
-                                                  paths[0].path.stem + '.vrt'),
-                                     mode='mosaicked',
-                                     relative_to_path=os.getcwd(),
-                                     **kwargs)
+    final_vrt = util_raster.make_vrt(
+        tmp_vrts,
+        os.path.join(vrt_root, f'{hash(paths[0].path.stem + "final")}.vrt'),
+        mode='mosaicked',
+        relative_to_path=os.getcwd())
 
     if 0:  # can't do this because final_vrt still references them
         for t in tmp_vrts:
             os.remove(t)
 
     return final_vrt
-
-
-paths_s2 = [path_to_vrt_s2(p) for p in paths_s2]
-paths_l7 = [path_to_vrt_ls(p) for p in paths_l7]
-paths_l8 = [path_to_vrt_ls(p) for p in paths_l8]
 
 
 def by_date(path):
@@ -271,49 +150,41 @@ def by_date(path):
         return landsatdir_to_date(basename)
 
 
-# TODO sort by datetime instead of date
-all_paths = sorted(paths_s2 + paths_l7 + paths_l8, key=by_date)
-
-# orthorectification would happen here, before cropping away the margins
-
-
-def reproject_crop(vrt_path):
+def reproject_crop(in_path, bbox, vrt_root=None):
     '''
-    Convert to common CRS and crop to common bounding box
+    Convert to epsg:4326 CRS and crop to common bounding box
 
     Unfortunately, this cannot be done in a single step in path_to_vrt_{ls|s2}
     because gdal.BuildVRT does not support warping between CRS, and the bbox wanted
     is given in epsg:4326 (not the tiles' original CRS). gdal.BuildVRTOptions has an
     outputBounds(=-te) kwarg for cropping, but not an equivalent of -te_srs.
 
-    This means another intermediate file is necessary.
+    This means another intermediate file is necessary for each warp operation.
     
+    Args:
+        in_path: A georeferenced image. GTiff, VRT, etc.
+        bbox: A tlbr geospatial bounding box in epsg:4326 CRS to crop to
+        vrt_root: Root directory for output. If None, same dir as input.
+
     Returns:
         Path to a new VRT
     '''
-    root, name = os.path.split(vrt_path)
-    out_path = os.path.join(root, 'crop', name)
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    root, name = os.path.split(in_path)
+    if vrt_root is None:
+        vrt_root = root
+    os.makedirs(vrt_root, exist_ok=True)
+    out_path = os.path.join(vrt_root, f'{hash(name + "warp")}.vrt')
+    if os.path.isfile(out_path):
+        print(f'Warning: {out_path} already exists! Removing...')
+        os.remove(out_path)
 
     dst_crs = osr.SpatialReference()
     dst_crs.ImportFromEPSG(4326)
-    opts = gdal.WarpOptions(outputBounds=(s2_min_bbox['coordinates'][0][0] +
-                                          s2_min_bbox['coordinates'][0][2]),
-                            dstSRS=dst_crs)
-    vrt = gdal.Warp(out_path, vrt_path, options=opts)
+    opts = gdal.WarpOptions(outputBounds=bbox, dstSRS=dst_crs)
+    vrt = gdal.Warp(out_path, in_path, options=opts)
     del vrt
 
     return out_path
-
-
-# all_paths = [reproject_crop(p) for p in all_paths]
-
-
-def _to_uint8(arr):
-    if np.issubdtype(arr.dtype, np.integer):
-        return ((arr / np.iinfo(arr.dtype).max) * np.iinfo(np.uint8).max).astype(
-            np.uint8)
-    raise TypeError
 
 
 def thumbnail(in_path, out_path=None):
@@ -331,27 +202,164 @@ def thumbnail(in_path, out_path=None):
         [1] https://github.com/sentinel-hub/custom-scripts/tree/master
     '''
     with rasterio.open(in_path) as f:
-    # with util_raster.resample_raster(in_path, scale=1/6, resampling=rasterio.enums.Resampling.nearest) as f:
 
         sat_code = os.path.basename(in_path)[:2]
         if sat_code == 'S2':
             bands = np.stack([f.read(4), f.read(3), f.read(2)], axis=-1)
-            bands = _to_uint8(bands)
         elif sat_code == 'LC':  # L8
             bands = np.stack([f.read(4), f.read(3), f.read(2)], axis=-1)
-            bands = _to_uint8(bands)
         elif sat_code == 'LE':  # L7
             bands = np.stack([f.read(3), f.read(2), f.read(1)], axis=-1)
 
-    # PIL doesn't support kernels on 16-bit images
-    #return bands
-    return Image.fromarray((bands), 'RGB').resize((1000, 1000),
-    #return Image.fromarray(util_norm.normalize_intensity(bands), 'RGB').resize((1000, 1000),
-                                              resample=Image.NEAREST)
+    return Image.fromarray(util_norm.normalize_intensity(bands), 'RGB').resize(
+        (1000, 1000), resample=Image.BILINEAR)
+
+
+def main():
+
+    # pick the AOI from the drop0 KR site
+
+    top, left = (128.6643, 37.6601)
+    bottom, right = (128.6749, 37.6639)
+
+    geojson_bbox = {
+        "type":
+        "Polygon",
+        "coordinates": [[[top, left], [top, right], [bottom, right],
+                         [bottom, left], [top, left]]]
+    }
+
+    # and a date range of 1 month
+
+    dt_min, dt_max = (datetime(2018, 11, 1), datetime(2018, 11, 30))
+
+    # query S2 tiles
+    '''
+    Get your username and password from https://www.resonantgeodata.com/
+    If you do not enter a pw here, you will be prompted for it
+    '''
+    client = Rgdc(username='matthew.bernstein@kitware.com')
+    kwargs = {
+        'query': json.dumps(geojson_bbox),
+        'predicate': 'intersects',
+        'datatype': 'raster',
+        'acquired': (dt_min, dt_max)
+    }
+
+    query_s2 = (client.search(**kwargs, instrumentation='S2A') +
+                client.search(**kwargs, instrumentation='S2B'))
+
+    # match AOI and query LS tiles
+
+    # S2 scenes do not overlap perfectly - get their intersection
+    s2_bboxes = ki.Boxes.concatenate(
+        [ki.Polygon.from_geojson(q['footprint']).to_boxes() for q in query_s2])
+    s2_min_bbox = functools.reduce(lambda b1, b2: b1.intersection(b2),
+                                   s2_bboxes)
+    s2_min_bbox = s2_min_bbox.to_polygons()[0].to_geojson()
+    kwargs['query'] = json.dumps(s2_min_bbox)
+
+    query_l7 = client.search(**kwargs, instrumentation='ETM')
+    query_l8 = client.search(**kwargs, instrumentation='OLI_TIRS')
+
+    print(f'S2, L7, L8: {len(query_s2)}, {len(query_l7)}, {len(query_l8)}')
+
+    query_l7 = group_landsat_tiles(query_l7)
+    query_l8 = group_landsat_tiles(query_l8)
+
+    # download all tiles
+
+    out_path = './align_tiles_demo/'
+    os.makedirs(out_path, exist_ok=True)
+
+    def _paths(query):
+        return [
+            client.download_raster(search_result,
+                                   out_path,
+                                   nest_with_name=True,
+                                   keep_existing=True)
+            for search_result in query
+        ]
+
+    paths_s2 = _paths(query_s2)
+    paths_l7 = list(map(_paths, query_l7))
+    paths_l8 = list(map(_paths, query_l8))
+
+    '''
+    # add in nodata mask (not needed for this script, just a good idea in general)
+    for p in itertools.chain(paths_s2, *paths_l7, *paths_l8):
+        for i in p.images:
+            with rasterio.open(i, 'r+') as f:
+                if not f.nodata:
+                    print(f)
+                    f.nodata = 0
+    '''
+
+    # convert to VRT
+
+    vrt_root = os.path.join(out_path, 'vrt')
+
+    paths_s2 = [path_to_vrt_s2(p, vrt_root) for p in paths_s2]
+    paths_l7 = [path_to_vrt_ls(p, vrt_root) for p in paths_l7]
+    paths_l8 = [path_to_vrt_ls(p, vrt_root) for p in paths_l8]
+
+    # combine all tiles in correct time order
+
+    datetimes = ([_dt(q) for q in query_s2] +
+                 [_dt(q[0]) for q in query_l7] +
+                 [_dt(q[0]) for q in query_l8])
+    all_paths = [
+        p for _, p in sorted(zip(datetimes, paths_s2 + paths_l7 + paths_l8))
+    ]
+
+    # orthorectification would happen here, before cropping away the margins
+
+    all_paths = [
+        reproject_crop(p, (s2_min_bbox['coordinates'][0][0] +
+                           s2_min_bbox['coordinates'][0][2]))
+        for p in all_paths
+    ]
+
+    imageio.mimsave('test.gif', [thumbnail(p) for p in all_paths])
+
+
+if __name__ == '__main__':
+    main()
+
+# dead code:
+
+
+def _bbox_from_epsg4326(path, tlbr):
+    '''
+    Transform a EPSG:4326 lon-lat bounding box into the CRS of a dataset
+
+    This would be easier with rasterio, but it doesn't play nice with gdal due to
+    https://rasterio.readthedocs.io/en/latest/faq.html#why-can-t-rasterio-find-proj-db-rasterio-from-pypi-versions-1-2-0
+    Args:
+        path: path to the dataset
+        tlbr: tlbr lon-lat bounding box
+    '''
+    src_crs = osr.SpatialReference()
+    src_crs.ImportFromEPSG(4326)
+    with util_raster.gdal_open(path) as f:
+        dst_crs = osr.SpatialReference(wkt=f.GetProjection())
+    tfm = osr.CoordinateTransformation(src_crs, dst_crs)
+    l, t, _ = tfm.TransformPoint(tlbr[1], tlbr[0])
+    r, b, _ = tfm.TransformPoint(tlbr[3], tlbr[2])
+    return (l, t, r, b)
+
+
+def _to_uint8(arr):
+    if np.issubdtype(arr.dtype, np.integer):
+        return ((arr / np.iinfo(arr.dtype).max) *
+                np.iinfo(np.uint8).max).astype(np.uint8)
+    raise TypeError
 
 
 def gif(imgs, out_path):
     '''
+    Deprecated. This produces serious Bayer-pattern artifacts in output.
+
     Args:
         imgs: list of PIL.Image
         out_path: path to save to
@@ -359,18 +367,10 @@ def gif(imgs, out_path):
     References:
         https://stackoverflow.com/a/57751793
     '''
-    for i, (im, p) in enumerate(zip(imgs, all_paths)):
-        #print(im.mode)
-        #print(np.unique(np.array(im)))
-        #im.save(f'final{i}_{os.path.splitext(os.path.basename(p))[0]}.png')
-        continue
     first, *rest = imgs
     first.save(fp=out_path,
                format='GIF',
                append_images=rest,
                save_all=True,
                duration=200,
-               loop=True)
-
-
-# gif([thumbnail(p) for p in all_paths], 'test.gif')
+               loop=0)
