@@ -2,10 +2,12 @@ import os
 from copy import deepcopy
 from contextlib import contextmanager
 from tempfile import NamedTemporaryFile
+from tempenv import TemporaryEnvironment
 from lxml import etree
 
 import gdal
 
+import rasterio
 from rasterio import Affine, MemoryFile
 from rasterio.enums import Resampling
 
@@ -45,7 +47,10 @@ def resample_raster(raster, scale=2, read=True):
         https://rasterio.readthedocs.io/en/latest/topics/profiles.html
     '''
     if not isinstance(raster, rasterio.DatasetReader):
-        raster = rasterio.open(raster)
+        # workaround for 
+        # https://rasterio.readthedocs.io/en/latest/faq.html#why-can-t-rasterio-find-proj-db-rasterio-from-pypi-versions-1-2-0
+        with TemporaryEnvironment({'PROJ_LIB': None}):
+            raster = rasterio.open(raster)
 
     t = raster.transform
 
