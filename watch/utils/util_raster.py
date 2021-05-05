@@ -14,7 +14,7 @@ from rasterio.enums import Resampling
 
 # use context manager so DatasetReader and MemoryFile get cleaned up automatically
 @contextmanager
-def resample_raster(raster, scale=2, read=True):
+def resample_raster(raster, scale=2, read=True, resampling=Resampling.bilinear):
     '''
     Context manager to rescale a raster on the fly using rasterio
     
@@ -25,6 +25,7 @@ def resample_raster(raster, scale=2, read=True):
         scale: factor to upscale the resolution, aka downscale the GSD, by
         read: if True, read and return the resampled data (an expensive operation if scale>1)
             else, return the resampled dataset's .profile attribute (metadata)
+        resampling: resampling algorithm, from rasterio.enums.Resampling [1]
 
     Example:
         >>> path = 'path/to/band.jp2'
@@ -45,6 +46,7 @@ def resample_raster(raster, scale=2, read=True):
         https://gis.stackexchange.com/a/329439
         https://rasterio.readthedocs.io/en/latest/topics/reading.html
         https://rasterio.readthedocs.io/en/latest/topics/profiles.html
+        [1] https://rasterio.readthedocs.io/en/latest/api/rasterio.enums.html#rasterio.enums.Resampling
     '''
     if not isinstance(raster, rasterio.DatasetReader):
         # workaround for 
@@ -70,7 +72,7 @@ def resample_raster(raster, scale=2, read=True):
 
         data = raster.read(  # Note changed order of indexes, arrays are band, row, col order not row, col, band
             out_shape=(raster.count, height, width),
-            resampling=Resampling.bilinear,
+            resampling=resampling,
         )
 
         with MemoryFile() as memfile:
