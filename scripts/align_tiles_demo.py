@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from PIL import Image
 import rasterio
 
-from watch.utils import util_raster
+from watch.utils import util_raster, util_norm
 
 from rgdc import Rgdc
 
@@ -113,7 +113,7 @@ def group_landsat_tiles(query, timediff_sec=300):
         ixs = np.where(diffs > timediff_sec)[0]
         for split in np.split(sensor, ixs):
             # each split should consist of adjacent rows in the same path
-            path_rows = [_path_row(s)for s in split]
+            path_rows = [_path_row(s) for s in split]
             paths, rows = zip(*path_rows)
             assert len(np.unique(paths)) == 1
             assert len(np.unique(rows)) == len(split)
@@ -146,7 +146,6 @@ def _paths(query):
 paths_s2 = _paths(query_s2)
 paths_l7 = list(map(_paths, query_l7))
 paths_l8 = list(map(_paths, query_l8))
-
 '''
 # add in nodata for Landsat 7
 for paths in paths_l7:
@@ -310,9 +309,16 @@ def reproject_crop(vrt_path):
 # all_paths = [reproject_crop(p) for p in all_paths]
 
 
+def _to_uint8(arr):
+    if np.issubdtype(arr.dtype, np.integer):
+        return ((arr / np.iinfo(arr.dtype).max) * np.iinfo(np.uint8).max).astype(
+            np.uint8)
+    raise TypeError
+
+
 def thumbnail(in_path, out_path=None):
     '''
-    Create a small, true-color thumbnail from a satellite image.
+    Create a small, true-color [1] thumbnail from a satellite image.
 
     Args:
         in_path: path to a S2, L7, or L8 scene readable by gdal
@@ -320,22 +326,28 @@ def thumbnail(in_path, out_path=None):
 
     Returns:
         out_path or image content
+
+    References:
+        [1] https://github.com/sentinel-hub/custom-scripts/tree/master
     '''
     with rasterio.open(in_path) as f:
+    # with util_raster.resample_raster(in_path, scale=1/6, resampling=rasterio.enums.Resampling.nearest) as f:
 
-        # for memory reasons
-        # with util_raster.resample_raster(f, scale=1/10) as g:
-        #     band1 = g.read(1)
+        sat_code = os.path.basename(in_path)[:2]
+        if sat_code == 'S2':
+            bands = np.stack([f.read(4), f.read(3), f.read(2)], axis=-1)
+            bands = _to_uint8(bands)
+        elif sat_code == 'LC':  # L8
+            bands = np.stack([f.read(4), f.read(3), f.read(2)], axis=-1)
+            bands = _to_uint8(bands)
+        elif sat_code == 'LE':  # L7
+            bands = np.stack([f.read(3), f.read(2), f.read(1)], axis=-1)
 
-        band1 = f.read(1)
     # PIL doesn't support kernels on 16-bit images
-    sat_code = os.path.basename(in_path)[:2]
-    if sat_code == 'S2' or sat_code == 'LC':
-        return Image.fromarray(band1, 'I;16').resize((1000, 1000),
-                                                     resample=Image.NEAREST)
-    elif sat_code == 'LE':
-        return Image.fromarray(band1, 'L').resize((1000, 1000),
-                                                  resample=Image.NEAREST)
+    #return bands
+    return Image.fromarray((bands), 'RGB').resize((1000, 1000),
+    #return Image.fromarray(util_norm.normalize_intensity(bands), 'RGB').resize((1000, 1000),
+                                              resample=Image.NEAREST)
 
 
 def gif(imgs, out_path):
@@ -347,6 +359,11 @@ def gif(imgs, out_path):
     References:
         https://stackoverflow.com/a/57751793
     '''
+    for i, (im, p) in enumerate(zip(imgs, all_paths)):
+        #print(im.mode)
+        #print(np.unique(np.array(im)))
+        #im.save(f'final{i}_{os.path.splitext(os.path.basename(p))[0]}.png')
+        continue
     first, *rest = imgs
     first.save(fp=out_path,
                format='GIF',
@@ -356,4 +373,4 @@ def gif(imgs, out_path):
                loop=True)
 
 
-gif([thumbnail(p) for p in all_paths], 'test.gif')
+# gif([thumbnail(p) for p in all_paths], 'test.gif')
