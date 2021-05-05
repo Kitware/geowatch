@@ -5,7 +5,7 @@ from tempfile import NamedTemporaryFile
 from tempenv import TemporaryEnvironment
 from lxml import etree
 
-import gdal
+from osgeo import gdal
 
 import rasterio
 from rasterio import Affine, MemoryFile
@@ -14,7 +14,10 @@ from rasterio.enums import Resampling
 
 # use context manager so DatasetReader and MemoryFile get cleaned up automatically
 @contextmanager
-def resample_raster(raster, scale=2, read=True, resampling=Resampling.bilinear):
+def resample_raster(raster,
+                    scale=2,
+                    read=True,
+                    resampling=Resampling.bilinear):
     '''
     Context manager to rescale a raster on the fly using rasterio
     
@@ -28,17 +31,22 @@ def resample_raster(raster, scale=2, read=True, resampling=Resampling.bilinear):
         resampling: resampling algorithm, from rasterio.enums.Resampling [1]
 
     Example:
-        >>> path = 'path/to/band.jp2'
+        >>> # xdoctest: +REQUIRES(--network)
+        >>> from watch.utils.util_raster import *
+        >>> from watch.demo.landsat_demodata import grab_landsat_product
+        >>> path = grab_landsat_product()['bands'][0]
+        >>> 
         >>> current_gsd_meters = 60
         >>> desired_gsd_meters = 10
         >>> scale = current_gsd_meters / desired_gsd_meters
         >>> with rasterio.open(path) as old:
-        >>>     assert old.profile['width'] == 1830
+        >>>     
         >>>     with resample_raster(old, scale=scale, read=False) as new_profile:
-        >>>         assert new_profile['width'] == 10980
+        >>>         assert new_profile['width'] == int(old.profile['width'] * scale)
         >>>         assert new_profile['crs'] == old.profile['crs']
+        >>> 
         >>>     with resample_raster(old, scale=scale) as new:
-        >>>         assert new.profile['width'] == 10980
+        >>>         assert new.profile['width'] == int(old.profile['width'] * scale)
         >>>         assert new.profile['crs'] == old.profile['crs']
         >>>         # do other stuff with new
 
@@ -49,7 +57,7 @@ def resample_raster(raster, scale=2, read=True, resampling=Resampling.bilinear):
         [1] https://rasterio.readthedocs.io/en/latest/api/rasterio.enums.html#rasterio.enums.Resampling
     '''
     if not isinstance(raster, rasterio.DatasetReader):
-        # workaround for 
+        # workaround for
         # https://rasterio.readthedocs.io/en/latest/faq.html#why-can-t-rasterio-find-proj-db-rasterio-from-pypi-versions-1-2-0
         with TemporaryEnvironment({'PROJ_LIB': None}):
             raster = rasterio.open(raster)
@@ -94,14 +102,19 @@ def gdal_open(path):
     A simple context manager for friendlier gdal use.
 
     Example:
+        >>> # xdoctest: +REQUIRES(--network)
+        >>> from watch.utils.util_raster import *
+        >>> from watch.demo.landsat_demodata import grab_landsat_product
+        >>> path = grab_landsat_product()['bands'][0]
+        >>> 
         >>> # standard use:
         >>> dataset = gdal.Open(path)
-        >>> print(dataset.getDescription())  # [do stuff]
+        >>> print(dataset.GetDescription())  # do stuff
         >>> del dataset  # or 'dataset = None'
         >>> 
         >>> # equivalent:
         >>> with gdal_open(path) as dataset:
-        >>>     print(dataset.GetDescription())  # [do stuff]
+        >>>     print(dataset.GetDescription())  # do stuff
 
     '''
     try:
@@ -118,11 +131,19 @@ def reroot_vrt(old_path, new_path, keep_old=True):
     Copy a VRT file, fixing relative paths to its component images
 
     Example:
-        >>> imgs_dpath = 'long/path/to/imgs/'
+        >>> # xdoctest: +REQUIRES(--network)
+        >>> import os
+        >>> from osgeo import gdal
+        >>> from watch.utils.util_raster import *
+        >>> from watch.demo.landsat_demodata import grab_landsat_product
+        >>> bands = grab_landsat_product()['bands']
+        >>> 
         >>> # VRT must be created in the imgs' subtree
-        >>> gdal.BuildVRT(imgs_dpath + 'imgs.vrt', sorted(glob(imgs_dpath + '*.tif')))
+        >>> tmp_path = os.path.join(os.path.dirname(bands[0]), 'all_bands.vrt')
+        >>> # (consider using the wrapper util_raster.make_vrt instead of this)
+        >>> gdal.BuildVRT(tmp_path, sorted(bands))
         >>> # now move it somewhere more convenient
-        >>> reroot_vrt(imgs_dpath + 'imgs.vrt', 'imgs_vrt', keep_old=False)
+        >>> reroot_vrt(tmp_path, './bands.vrt', keep_old=False)
     '''
     if os.path.abspath(old_path) == os.path.abspath(new_path):
         return
@@ -172,6 +193,23 @@ def make_vrt(in_paths, out_path, mode, relative_to_path=None, **kwargs):
 
     Returns:
         path to VRT
+
+    Example:
+        >>> # xdoctest: +REQUIRES(--network)
+        >>> import os
+        >>> from osgeo import gdal
+        >>> from watch.utils.util_raster import *
+        >>> from watch.demo.landsat_demodata import grab_landsat_product
+        >>> bands = grab_landsat_product()['bands']
+        >>> 
+        >>> # stack bands from a scene
+        >>> make_vrt(sorted(bands), './bands1.vrt', mode='stacked', relative_to=os.getcwd())
+        >>> # pretend this is a different scene
+        >>> make_vrt(sorted(bands), './bands2.vrt', mode='stacked', relative_to=os.getcwd())
+        >>> # now, if they overlap, mosaic/merge them
+        >>> make_vrt(['./bands1.vrt', './bands2.vrt'], 'full_scene.vrt', mode='mosaicked', relative_to=os.getcwd())
+        >>> with gdal_open('full_scene.vrt') as f:
+        >>>     print(f.GetDescription())
 
     References:
         [1] https://gdal.org/programs/gdalbuildvrt.html

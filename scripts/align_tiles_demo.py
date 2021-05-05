@@ -43,13 +43,14 @@ def group_landsat_tiles(query, timediff_sec=300):
         timediff_sec: max allowed time between adjacent scenes.
             Should nominally be 23 seconds for Landsat 7 and 8. Some buffer is included.
     Example:
-       >>> from rgdc import Rgdc
-       >>> client = Rgdc('username', 'password')
-       >>> query = (client.search(**kwargs, instrumentation='ETM') +
-       >>>          client.search(**kwargs, instrumentation='OLI_TIRS'))
-       >>> # query == [scene1, scene2, scene3, scene4]
-       >>> query = group_landsat_tiles(query)
-       >>> # query == [[scene1], [scene2, scene3], [scene4]]
+        >>> # xdoctest: +SKIP   
+        >>> from rgdc import Rgdc
+        >>> client = Rgdc('username', 'password')
+        >>> query = (client.search(**kwargs, instrumentation='ETM') +
+        >>>          client.search(**kwargs, instrumentation='OLI_TIRS'))
+        >>> # query == [scene1, scene2, scene3, scene4]
+        >>> query = group_landsat_tiles(query)
+        >>> # query == [[scene1], [scene2, scene3], [scene4]]
     '''
     # ensure we're only working with one satellite at a time
     query = sorted(query, key=_dt)
