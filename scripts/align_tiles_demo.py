@@ -1,5 +1,15 @@
 '''
-Download all LS tiles overlapping an S2 tile in a time range and align them to the S2 grid using VRTs
+Download all LS tiles overlapping the S2 tiles in a time range and align them to the S2 grid using VRTs.
+
+Inputs:
+    AOI (GeoJSON Feature); currently KR bounding box
+    Datetime range; currently 01-11-2018 - 30-11-2018
+    Credentials for https://www.resonantgeodata.com/
+
+Outputs:
+    Downloaded S2, L7, and L8 tiles from Resonant GeoData in 'align_tiles_demo/'
+    Intermediate VRT files in 'align_tiles_demo/vrt/'
+    GIF of aligned, cropped, EPSG:4326-reprojected tiles 'align_tiles_demo/test.gif'
 '''
 
 import os
@@ -188,12 +198,13 @@ def reproject_crop(in_path, bbox, vrt_root=None):
     return out_path
 
 
-def thumbnail(in_path, out_path=None):
+def thumbnail(in_path, sat, out_path=None):
     '''
     Create a small, true-color [1] thumbnail from a satellite image.
 
     Args:
         in_path: path to a S2, L7, or L8 scene readable by gdal
+        sat: 'S2', 'L7', or 'L8'
         out_path: if None, return image content in memory
 
     Returns:
@@ -205,11 +216,11 @@ def thumbnail(in_path, out_path=None):
     with rasterio.open(in_path) as f:
 
         sat_code = os.path.basename(in_path)[:2]
-        if sat_code == 'S2':
+        if sat == 'S2':
             bands = np.stack([f.read(4), f.read(3), f.read(2)], axis=-1)
-        elif sat_code == 'LC':  # L8
+        elif sat == 'L8':
             bands = np.stack([f.read(4), f.read(3), f.read(2)], axis=-1)
-        elif sat_code == 'LE':  # L7
+        elif sat == 'L7':
             bands = np.stack([f.read(3), f.read(2), f.read(1)], axis=-1)
 
     return Image.fromarray(util_norm.normalize_intensity(bands), 'RGB').resize(
@@ -285,9 +296,9 @@ def main():
     paths_s2 = _paths(query_s2)
     paths_l7 = list(map(_paths, query_l7))
     paths_l8 = list(map(_paths, query_l8))
-
     '''
     # add in nodata mask (not needed for this script, just a good idea in general)
+    # actually don't do this, it clobbers the CRS for some reason
     for p in itertools.chain(paths_s2, *paths_l7, *paths_l8):
         for i in p.images:
             with rasterio.open(i, 'r+') as f:
@@ -306,11 +317,15 @@ def main():
 
     # combine all tiles in correct time order
 
-    datetimes = ([_dt(q) for q in query_s2] +
-                 [_dt(q[0]) for q in query_l7] +
+    datetimes = ([_dt(q) for q in query_s2] + [_dt(q[0]) for q in query_l7] +
                  [_dt(q[0]) for q in query_l8])
     all_paths = [
         p for _, p in sorted(zip(datetimes, paths_s2 + paths_l7 + paths_l8))
+    ]
+    sat_codes = [
+        p for _, p in sorted(
+            zip(datetimes, ['S2'] * len(paths_s2) + ['L7'] * len(paths_l7) +
+                ['L8'] * len(paths_l8)))
     ]
 
     # orthorectification would happen here, before cropping away the margins
@@ -321,7 +336,9 @@ def main():
         for p in all_paths
     ]
 
-    imageio.mimsave('test.gif', [thumbnail(p) for p in all_paths])
+    imageio.mimsave(
+        os.path.join(out_path, 'test.gif'),
+        [thumbnail(p, sat) for p, sat in zip(all_paths, sat_codes)])
 
 
 if __name__ == '__main__':
