@@ -203,11 +203,11 @@ def make_vrt(in_paths, out_path, mode, relative_to_path=None, **kwargs):
         >>> bands = grab_landsat_product()['bands']
         >>> 
         >>> # stack bands from a scene
-        >>> make_vrt(sorted(bands), './bands1.vrt', mode='stacked', relative_to=os.getcwd())
+        >>> make_vrt(sorted(bands), './bands1.vrt', mode='stacked', relative_to_path=os.getcwd())
         >>> # pretend this is a different scene
-        >>> make_vrt(sorted(bands), './bands2.vrt', mode='stacked', relative_to=os.getcwd())
+        >>> make_vrt(sorted(bands), './bands2.vrt', mode='stacked', relative_to_path=os.getcwd())
         >>> # now, if they overlap, mosaic/merge them
-        >>> make_vrt(['./bands1.vrt', './bands2.vrt'], 'full_scene.vrt', mode='mosaicked', relative_to=os.getcwd())
+        >>> make_vrt(['./bands1.vrt', './bands2.vrt'], 'full_scene.vrt', mode='mosaicked', relative_to_path=os.getcwd())
         >>> with gdal_open('full_scene.vrt') as f:
         >>>     print(f.GetDescription())
 
