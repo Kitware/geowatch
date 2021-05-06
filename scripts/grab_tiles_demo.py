@@ -108,17 +108,19 @@ try_fels()
 
 def try_rgdc():
     '''
-    The default public instance of RGD is https://www.resonantgeodata.com/.
-    You can go there to make a username and password.
     
-    The WATCH instance is at rgd.beamio.co; it is still under construction.
+    The WATCH instance of RGD is at https://watch.resonantgeodata.com/.
+    You can go there to make a username and password.
+    Landsat/Sentinel2 for all drop0 sites is being ingested here.
     Eventually, commercial (WV/Planet) data will live there as well.
     Connect to that by passing
-        api_url="rgd.beamio.co/api"
+        api_url="watch.resonantgeodata.com/api"
 
-    Both have LS/S2 ingested over the KR site.
+    If that instance is not working for some reason, you can use
+    the default public instance at https://www.resonantgeodata.com/.
+    It has LS/S2 ingested over the KR site.
 
-    If you do not enter your password you will be prompted for it
+    If you do not enter your password you will be prompted for it.
     '''
     client = Rgdc(username='matthew.bernstein@kitware.com')
     kwargs = {
