@@ -172,6 +172,8 @@ def reproject_crop(in_path, bbox, vrt_root=None):
 
     This means another intermediate file is necessary for each warp operation.
     
+    TODO check for this quantization error: https://gis.stackexchange.com/q/139906
+
     Args:
         in_path: A georeferenced image. GTiff, VRT, etc.
         bbox: A tlbr geospatial bounding box in epsg:4326 CRS to crop to
@@ -215,7 +217,7 @@ def thumbnail(in_path, sat, out_path=None):
     '''
     with rasterio.open(in_path) as f:
 
-        sat_code = os.path.basename(in_path)[:2]
+        # the delayed computation encoded in VRTs finally happens here in read()
         if sat == 'S2':
             bands = np.stack([f.read(4), f.read(3), f.read(2)], axis=-1)
         elif sat == 'L8':
@@ -223,8 +225,9 @@ def thumbnail(in_path, sat, out_path=None):
         elif sat == 'L7':
             bands = np.stack([f.read(3), f.read(2), f.read(1)], axis=-1)
 
-    return Image.fromarray(util_norm.normalize_intensity(bands), 'RGB').resize(
-        (1000, 1000), resample=Image.BILINEAR)
+    return Image.fromarray(
+        (255 * util_norm.normalize_intensity(bands, nodata=0)).astype(
+            np.uint8), 'RGB').resize((1000, 1000), resample=Image.BILINEAR)
 
 
 def main():
@@ -367,10 +370,24 @@ def _bbox_from_epsg4326(path, tlbr):
     return (l, t, r, b)
 
 
+def _unit(arr):
+    '''
+    Rescale to 0-1 while respecting nodata values
+    '''
+    data_min = arr[arr > 0].min()
+    return np.where(arr > 0, (arr - data_min) / (arr.max() - data_min), 0)
+
+
 def _to_uint8(arr):
-    if np.issubdtype(arr.dtype, np.integer):
+    #if np.issubdtype(arr.dtype, np.integer):
+    if arr.dtype.kind in {'i', 'u'}:
+        assert np.all(arr >= 0)
         return ((arr / np.iinfo(arr.dtype).max) *
                 np.iinfo(np.uint8).max).astype(np.uint8)
+
+    elif arr.dtype.kind == 'f':
+        return (_unit(arr) * np.iinfo(np.uint8).max).astype(np.uint8)
+
     raise TypeError
 
 
