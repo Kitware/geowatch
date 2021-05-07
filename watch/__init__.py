@@ -1,5 +1,13 @@
 """
-mkinit ~/code/watch/watch/__init__.py --lazy --noattr -w
+The SMART WATCH module
+"""
+
+
+__devnotes__ = """
+
+# Command to autogenerate lazy imports for this file
+mkinit -m watch --lazy --noattr
+mkinit -m watch --lazy --noattr -w
 """
 
 __version__ = '0.0.1'
@@ -13,14 +21,11 @@ def _hello_world():
         >>> ans = _hello_world()
         >>> assert ans == 42
     """
+    return 42
 
 
 def lazy_import(module_name, submodules, submod_attrs):
     import importlib
-    import importlib.util
-    all_funcs = []
-    for mod, funcs in submod_attrs.items():
-        all_funcs.extend(funcs)
     name_to_submod = {
         func: mod for mod, funcs in submod_attrs.items()
         for func in funcs
@@ -33,10 +38,10 @@ def lazy_import(module_name, submodules, submod_attrs):
                     module_name=module_name, name=name)
             )
         elif name in name_to_submod:
-            modname = name_to_submod[name]
+            submodname = name_to_submod[name]
             module = importlib.import_module(
-                '{module_name}.{modname}'.format(
-                    module_name=module_name, modname=modname)
+                '{module_name}.{submodname}'.format(
+                    module_name=module_name, submodname=submodname)
             )
             attr = getattr(module, name)
         else:
@@ -50,7 +55,7 @@ def lazy_import(module_name, submodules, submod_attrs):
 
 __getattr__ = lazy_import(
     __name__,
-    submodules=[
+    submodules={
         'datacube',
         'demo',
         'features',
@@ -61,7 +66,7 @@ __getattr__ = lazy_import(
         'tools',
         'utils',
         'validation',
-    ],
+    },
     submod_attrs={},
 )
 
