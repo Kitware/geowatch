@@ -2,6 +2,7 @@ import os
 from copy import deepcopy
 from contextlib import contextmanager
 from tempfile import NamedTemporaryFile
+import numpy as np
 from tempenv import TemporaryEnvironment
 from lxml import etree
 
@@ -66,9 +67,8 @@ def resample_raster(raster,
 
     # rescale the metadata
     transform = Affine(t.a / scale, t.b, t.c, t.d, t.e / scale, t.f)
-    # TODO get rid of floating point weirdness here
-    height = int(raster.height * scale)
-    width = int(raster.width * scale)
+    height = int(np.ceil(raster.height * scale))
+    width = int(np.ceil(raster.width * scale))
 
     profile = raster.profile
     profile.update(transform=transform,
