@@ -74,8 +74,7 @@ class ResampledRaster(ExitStack):
     resampling: Resampling = Resampling.bilinear
 
     def __post_init__(self):
-        # for closing memfile in contextlib.ExitStack
-        self._exit_callbacks = []
+        super().__init__()
 
     def __enter__(self):
         if not isinstance(self.raster, rasterio.DatasetReader) or self.raster.closed:
