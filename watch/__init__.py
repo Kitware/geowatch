@@ -21,6 +21,7 @@ def _hello_world():
         >>> ans = _hello_world()
         >>> assert ans == 42
     """
+    print('hello world')
     return 42
 
 
