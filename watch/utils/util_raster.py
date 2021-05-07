@@ -1,7 +1,9 @@
 import os
 from copy import deepcopy
-from contextlib import contextmanager
 from tempfile import NamedTemporaryFile
+from dataclasses import dataclass
+from typing import Union
+from contextlib import ExitStack
 import numpy as np
 from tempenv import TemporaryEnvironment
 from lxml import etree
@@ -13,12 +15,8 @@ from rasterio import Affine, MemoryFile
 from rasterio.enums import Resampling
 
 
-# use context manager so DatasetReader and MemoryFile get cleaned up automatically
-@contextmanager
-def resample_raster(raster,
-                    scale=2,
-                    read=True,
-                    resampling=Resampling.bilinear):
+@dataclass
+class ResampledRaster(ExitStack):
     '''
     Context manager to rescale a raster on the fly using rasterio
     
@@ -40,16 +38,29 @@ def resample_raster(raster,
         >>> current_gsd_meters = 60
         >>> desired_gsd_meters = 10
         >>> scale = current_gsd_meters / desired_gsd_meters
-        >>> with rasterio.open(path) as old:
-        >>>     
-        >>>     with resample_raster(old, scale=scale, read=False) as new_profile:
-        >>>         assert new_profile['width'] == int(old.profile['width'] * scale)
-        >>>         assert new_profile['crs'] == old.profile['crs']
         >>> 
-        >>>     with resample_raster(old, scale=scale) as new:
-        >>>         assert new.profile['width'] == int(old.profile['width'] * scale)
-        >>>         assert new.profile['crs'] == old.profile['crs']
-        >>>         # do other stuff with new
+        >>> with rasterio.open(path) as f:
+        >>>     old_profile = f.profile
+        >>> 
+        >>> # can instantiate this class in a with-block
+        >>> with ResampledRaster(path, scale=scale, read=False) as f:
+        >>>     pass
+        >>> 
+        >>> # or have it stick around and change the resampling on the fly
+        >>> resampled = ResampledRaster(path, scale=scale, read=False)
+        >>> 
+        >>> # the computation only happens when you invoke 'with'
+        >>> with resampled as new_profile:
+        >>>     assert new_profile['width'] == int(old_profile['width'] * scale)
+        >>>     assert new_profile['crs'] == old_profile['crs']
+        >>> 
+        >>> resampled.scale = scale / 2
+        >>> resampled.read = True
+        >>> 
+        >>> with resampled as new:
+        >>>     assert new.profile['width'] == int(old_profile['width'] * scale / 2)
+        >>>     assert new.profile['crs'] == old_profile['crs']
+        >>>     # do other stuff with new
 
     References:
         https://gis.stackexchange.com/a/329439
@@ -57,47 +68,61 @@ def resample_raster(raster,
         https://rasterio.readthedocs.io/en/latest/topics/profiles.html
         [1] https://rasterio.readthedocs.io/en/latest/api/rasterio.enums.html#rasterio.enums.Resampling
     '''
-    if not isinstance(raster, rasterio.DatasetReader):
-        # workaround for
-        # https://rasterio.readthedocs.io/en/latest/faq.html#why-can-t-rasterio-find-proj-db-rasterio-from-pypi-versions-1-2-0
-        with TemporaryEnvironment({'PROJ_LIB': None}):
-            raster = rasterio.open(raster)
+    raster: Union[str, rasterio.DatasetReader]
+    scale: float = 2
+    read: bool = True
+    resampling: Resampling = Resampling.bilinear
 
-    t = raster.transform
+    def __post_init__(self):
+        # for closing memfile in contextlib.ExitStack
+        self._exit_callbacks = []
 
-    # rescale the metadata
-    transform = Affine(t.a / scale, t.b, t.c, t.d, t.e / scale, t.f)
-    height = int(np.ceil(raster.height * scale))
-    width = int(np.ceil(raster.width * scale))
+    def __enter__(self):
+        if not isinstance(self.raster, rasterio.DatasetReader) or self.raster.closed:
+            # workaround for
+            # https://rasterio.readthedocs.io/en/latest/faq.html#why-can-t-rasterio-find-proj-db-rasterio-from-pypi-versions-1-2-0
+            with TemporaryEnvironment({'PROJ_LIB': None}):
+                self.raster = rasterio.open(self.raster)
 
-    profile = raster.profile
-    profile.update(transform=transform,
-                   driver='GTiff',
-                   height=height,
-                   width=width)
+        t = self.raster.transform
 
-    if read:
+        # rescale the metadata
+        transform = Affine(t.a / self.scale, t.b, t.c, t.d, t.e / self.scale, t.f)
+        height = int(np.ceil(self.raster.height * self.scale))
+        width = int(np.ceil(self.raster.width * self.scale))
 
-        data = raster.read(  # Note changed order of indexes, arrays are band, row, col order not row, col, band
-            out_shape=(raster.count, height, width),
-            resampling=resampling,
-        )
+        profile = self.raster.profile
+        profile.update(transform=transform,
+                       driver='GTiff',
+                       height=height,
+                       width=width)
 
-        with MemoryFile() as memfile:
+        if self.read:
+
+            data = self.raster.read(  # Note changed order of indexes, arrays are band, row, col order not row, col, band
+                out_shape=(self.raster.count, height, width),
+                resampling=self.resampling,
+            )
+
+            # enter_context is from contextlib.ExitStack, which takes care of closing these
+            memfile = self.enter_context(MemoryFile())
             with memfile.open(**profile) as dataset:  # Open as DatasetWriter
                 dataset.write(data)
                 del data
 
-            with memfile.open() as dataset:  # Reopen as DatasetReader
-                yield dataset  # Note yield not return
+            dataset = self.enter_context(memfile.open())  # Reopen as DatasetReader
+            return dataset
 
-    else:
+        else:
 
-        yield profile
+            return profile
+
+    def __exit__(self, *exc):
+        pass
 
 
-@contextmanager
-def gdal_open(path):
+@dataclass
+class GdalOpen:
     '''
     A simple context manager for friendlier gdal use.
 
@@ -113,16 +138,19 @@ def gdal_open(path):
         >>> del dataset  # or 'dataset = None'
         >>> 
         >>> # equivalent:
-        >>> with gdal_open(path) as dataset:
+        >>> with GdalOpen(path) as dataset:
         >>>     print(dataset.GetDescription())  # do stuff
 
     '''
-    try:
-        f = gdal.Open(path)
-        yield f
-    finally:
+    path: str
+
+    def __enter__(self):
+        self.f = gdal.Open(self.path)
+        return self.f
+    
+    def __exit__(self, *exc):
         # gdal.GDALClose(f)  # not implemented in this version of gdal?
-        del f  # this is ugly, but it works...
+        del self.f  # this is ugly, but it works...
         # gdal.Unlink(path)  # THIS DELETES THE FILE
 
 
@@ -208,7 +236,7 @@ def make_vrt(in_paths, out_path, mode, relative_to_path=None, **kwargs):
         >>> make_vrt(sorted(bands), './bands2.vrt', mode='stacked', relative_to_path=os.getcwd())
         >>> # now, if they overlap, mosaic/merge them
         >>> make_vrt(['./bands1.vrt', './bands2.vrt'], 'full_scene.vrt', mode='mosaicked', relative_to_path=os.getcwd())
-        >>> with gdal_open('full_scene.vrt') as f:
+        >>> with GdalOpen('full_scene.vrt') as f:
         >>>     print(f.GetDescription())
 
     References:
