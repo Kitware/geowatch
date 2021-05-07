@@ -5,50 +5,16 @@ A demo for grabbing the same set of Landsat and Sentinel-2 tiles 2 ways.
 
 2. from Resonant GeoData (ultimately from Google Cloud as well) using https://pypi.org/project/rgdc/
 '''
-
 import os
 import json
-import numpy as np
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 
 from fels import run_fels, safedir_to_datetime, landsatdir_to_date
 
 from rgdc import Rgdc
 
-# AOIs from drop0:
-# (coords from smart_watch_dvc/drop0_aligned/)
 
-# AE
-# top, left = (128.664256, 37.660143)
-# bottom, right = (128.674901, 37.663936)
-
-# BR
-# top, left = (-043.342788, 22.960878)
-# bottom, right = (-043.336003, 22.954186)
-
-# US
-# top, left = (-081.776670, 33.132338)
-# bottom, right = (-081.764686, 33.146012)
-
-# KR
-top, left = (128.6643, 37.6601)
-bottom, right = (128.6749, 37.6639)
-
-geojson_bbox = {
-    "type":
-    "Polygon",
-    "coordinates": [[[top, left], [top, right], [bottom, right],
-                     [bottom, left], [top, left]]]
-}
-
-# and a date range of 1 week
-
-dt_min, dt_max = (datetime(2018, 11, 1), datetime(2018, 11, 8))
-
-# run FetchLandsatSentinel
-
-
-def try_fels():
+def try_fels(geojson_bbox, dt_min, dt_max):
     '''
     This provides access to:
         https://cloud.google.com/storage/docs/public-datasets/sentinel-2
@@ -103,12 +69,8 @@ def try_fels():
     print([landsatdir_to_date(u.split('/')[-1]) for u in l8_urls])
 
 
-try_fels()
-
-
-def try_rgdc():
+def try_rgdc(geojson_bbox, dt_min, dt_max):
     '''
-    
     The WATCH instance of RGD is at https://watch.resonantgeodata.com/.
     You can go there to make a username and password.
     Landsat/Sentinel2 for all drop0 sites is being ingested here.
@@ -149,4 +111,45 @@ def try_rgdc():
         print(paths.path)
 
 
-try_rgdc()
+def main():
+    # AOIs from drop0:
+    # (coords from smart_watch_dvc/drop0_aligned/)
+
+    # AE
+    # top, left = (128.664256, 37.660143)
+    # bottom, right = (128.674901, 37.663936)
+
+    # BR
+    # top, left = (-043.342788, 22.960878)
+    # bottom, right = (-043.336003, 22.954186)
+
+    # US
+    # top, left = (-081.776670, 33.132338)
+    # bottom, right = (-081.764686, 33.146012)
+
+    # KR
+    top, left = (128.6643, 37.6601)
+    bottom, right = (128.6749, 37.6639)
+
+    geojson_bbox = {
+        "type":
+        "Polygon",
+        "coordinates": [[[top, left], [top, right], [bottom, right],
+                         [bottom, left], [top, left]]]
+    }
+
+    # and a date range of 1 week
+
+    dt_min, dt_max = (datetime(2018, 11, 1), datetime(2018, 11, 8))
+
+    # run FetchLandsatSentinel
+
+    try_fels(geojson_bbox, dt_min, dt_max)
+
+    # run ResonantGeoDataClient
+
+    try_rgdc(geojson_bbox, dt_min, dt_max)
+
+
+if __name__ == '__main__':
+    main()
