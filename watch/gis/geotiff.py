@@ -38,7 +38,8 @@ def geotiff_metadata(gpath, elevation='gtop30'):
     infos = {}
     ref = gdal.Open(gpath, gdal.GA_ReadOnly)
     infos['fname'] = geotiff_filepath_info(gpath)
-    infos['cfs'] = geotiff_crs_info(ref, elevation=elevation)
+    infos['crs'] = geotiff_crs_info(ref, elevation=elevation)
+    infos['cfs'] = infos['crs']  # TODO: backward compat to fix typo, remove
     infos['header'] = geotiff_header_info(ref)
 
     # Combine sensor candidates
@@ -47,18 +48,6 @@ def geotiff_metadata(gpath, elevation='gtop30'):
 
     info = ub.dict_union(*infos.values())
     info['sensor_candidates'] = sensor_candidates
-
-    if info['utm_corners'] is not None:
-        import kwimage
-        utm_box = kwimage.Polygon(exterior=info['utm_corners']).bounding_box()
-        meter_w = float(utm_box.width.ravel()[0])
-        meter_h = float(utm_box.height.ravel()[0])
-        meter_hw = np.mean([meter_h , meter_w])
-        pxl_hw = np.array(info['img_shape'])
-        gsd = (meter_hw / pxl_hw).mean()
-        minx, miny = info['utm_corners'].data.min(axis=0)
-        maxx, maxy = info['utm_corners'].data.min(axis=0)
-        info['approx_meter_gsd'] = gsd
     return info
 
 
@@ -452,6 +441,18 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         'bbox_geos': bbox_geos,
         'img_shape': shape,
     })
+
+    if info['utm_corners'] is not None:
+        import kwimage
+        utm_box = kwimage.Polygon(exterior=info['utm_corners']).bounding_box()
+        meter_w = float(utm_box.width.ravel()[0])
+        meter_h = float(utm_box.height.ravel()[0])
+        meter_hw = np.mean([meter_h , meter_w])
+        pxl_hw = np.array(info['img_shape'])
+        gsd = (meter_hw / pxl_hw).mean()
+        minx, miny = info['utm_corners'].data.min(axis=0)
+        maxx, maxy = info['utm_corners'].data.min(axis=0)
+        info['approx_meter_gsd'] = gsd
     return info
 
 
