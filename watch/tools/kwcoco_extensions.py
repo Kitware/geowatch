@@ -14,8 +14,7 @@ import kwimage
 import numpy as np
 from os.path import join
 
-#### NOTE: THIS WILL LIKELY CHANGE LOCATION IN THE FUTURE
-from ndsampler._transform import Affine
+from kwimage.transform import Affine
 
 
 def populate_watch_fields(dset, target_gsd=10.0):
