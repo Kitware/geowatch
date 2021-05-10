@@ -68,7 +68,7 @@ def main(args):
     if args.bbox:
         aoi_dict[args.AOI] = json.loads(args.bbox)
     if args.daterange:
-        date_dict[args.daterange] = json.loads(args.daterange)
+        date_dict[args.AOI] = json.loads(args.daterange)
     search = pull(args.out_dir, 
                   aoi_dict[args.AOI], 
                   date_dict[args.AOI], 
