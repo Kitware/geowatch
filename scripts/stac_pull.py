@@ -5,7 +5,7 @@ import json
 import argparse
 import sys
 
-def pull(out_dir, AOI, daterange, api_key, endpoint, jsondump):  
+def pull(out_dir, AOI, daterange, api_key, endpoint):  
     '''args:  out_dir = path/to/output/image/directory  
               AOI = [xmin, ymin, xmax, ymax]  
               datetime = ['year_min', 'year_max']
@@ -73,8 +73,7 @@ def main(args):
                   aoi_dict[args.AOI], 
                   date_dict[args.AOI], 
                   args.api_key, 
-                  args.endpoint, 
-                  args.jsondump)
+                  args.endpoint)
     if args.jsondump:
         with open(os.path.join(args.out_dir, 
                   args.AOI + '_catalog.json'), 'w') as f:
