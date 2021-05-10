@@ -1,0 +1,74 @@
+import os
+import json
+import subprocess
+import tempfile
+
+from algorithm_toolkit import Algorithm, AlgorithmChain
+
+
+class Main(Algorithm):
+
+    def run(self):
+        cl = self.cl  # type: AlgorithmChain.ChainLedger
+        params = self.params  # type: dict
+
+        stac_catalog = json.loads(params['stac-catalog'])
+
+        # Upload each feature's assets from the STAC catalog
+        for feature in stac_catalog.get('features', ()):
+            feature_id = feature['id']
+            local_path = feature['assets']['data']['href']
+
+            local_basename = os.path.basename(local_path)
+
+            upload_path = os.path.join(
+                params['s3-bucket'], feature_id, local_basename)
+
+            command = ['aws', 's3', '--profile', 'iarpa', 'cp']
+            if params['dry-run'] == 1:
+                command.append('--dryrun')
+
+            command.extend([local_path, upload_path])
+
+            # TODO: Manually check return code / output
+            self.logger.info("Running: {}".format(' '.join(command)))
+            if params['dry-run'] != 1:
+                subprocess.run(command, check=True)
+
+            # Update feature asset href to point to uploaded path on
+            # S3
+            feature['assets']['data']['href'] = upload_path
+
+        # Upload catalog as well
+        with tempfile.NamedTemporaryFile('w', suffix='.json') as out_catalog:
+            out_catalog.write(json.dumps(stac_catalog, indent=2))
+            out_catalog.flush()
+
+            catalog_upload_path = os.path.join(
+                params['s3-bucket'], 'catalog.json')
+
+            command = ['aws', 's3', '--profile', 'iarpa', 'cp']
+            if params['dry-run'] == 1:
+                command.append('--dryrun')
+
+            command.extend([out_catalog.name, catalog_upload_path])
+
+            # TODO: Manually check return code / output
+            self.logger.info("Running: {}".format(' '.join(command)))
+            subprocess.run(command, check=True)
+
+        stac_catalog_output = {
+            'output_type': 'text',
+            'output_value': json.dumps(
+                stac_catalog,
+                indent=2, sort_keys=True)}
+
+        s3_bucket_output = {
+            'output_type': 'text',
+            'output_value': params['s3-bucket']}
+
+        cl.add_to_metadata('stac-catalog', stac_catalog_output)
+        cl.add_to_metadata('s3-bucket', s3_bucket_output)
+
+        # Do not edit below this line
+        return cl
