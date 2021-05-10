@@ -43,5 +43,8 @@ dependencies:
     - pyproj >= 3.0.0.post1
     - rasterio >= 1.2.0
     - geopandas >= 0.8.1
+<<<<<<< HEAD
     - rgdc >= 0.1.1
     - git+https://git@github.com/matt-bernstein/fetchLandsatSentinelFromGoogleCloud.git
+=======
+>>>>>>> removed mgrs
