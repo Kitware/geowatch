@@ -217,6 +217,33 @@ def crop_to(pxl_polys, raster, bounds_policy, intersect_policy='crop'):
         else:
             result.append(None)
 
+def list_gdal_drivers():
+    '''
+    List all drivers currently available to GDAL to create a raster
+
+    Returns:
+        list((driver_shortname, driver_longname, list(driver_file_extension)))
+
+    Example:
+        >>> from watch.utils.util_raster import *
+        >>> drivers = list_gdal_drivers()
+        >>> assert ('GTiff', 'GeoTIFF', ['tif', 'tiff']) in drivers
+    '''
+    result = []
+    for idx in range(gdal.GetDriverCount()):
+        driver = gdal.GetDriver(idx)
+        if driver:
+            metadata = driver.GetMetadata()
+            if metadata.get(gdal.DCAP_CREATE) == 'YES' and metadata.get(
+                    gdal.DCAP_RASTER) == 'YES':
+                name = driver.GetDescription()
+                longname = metadata.get("DMD_LONGNAME")
+                exts = metadata.get("DMD_EXTENSIONS")
+                if exts is None:
+                    exts = []
+                else:
+                    exts = exts.split(' ')
+                result.append((name, longname, exts))
     return result
 
 
@@ -347,12 +374,17 @@ class GdalOpen:
         >>> # equivalent:
         >>> with GdalOpen(path) as dataset:
         >>>     print(dataset.GetDescription())  # do stuff
+        >>>
+        >>> # open for writing:
+        >>> with GdalOpen(path, gdal.GA_Update) as dataset:
+        >>>     print(dataset.GetDescription())  # do stuff
 
     '''
     path: str
+    mode: int = gdal.GA_ReadOnly
 
     def __enter__(self):
-        self.f = gdal.Open(self.path)
+        self.f = gdal.Open(self.path, self.mode)
         return self.f
 
     def __exit__(self, *exc):
@@ -379,6 +411,9 @@ def reroot_vrt(old_path, new_path, keep_old=True):
         >>> gdal.BuildVRT(tmp_path, sorted(bands))
         >>> # now move it somewhere more convenient
         >>> reroot_vrt(tmp_path, './bands.vrt', keep_old=False)
+        >>>
+        >>> # clean up
+        >>> os.remove('bands.vrt')
     '''
     if os.path.abspath(old_path) == os.path.abspath(new_path):
         return
@@ -445,11 +480,11 @@ def make_vrt(in_paths, out_path, mode, relative_to_path=None, **kwargs):
         >>> make_vrt(['./bands1.vrt', './bands2.vrt'], 'full_scene.vrt', mode='mosaicked', relative_to_path=os.getcwd())
         >>> with GdalOpen('full_scene.vrt') as f:
         >>>     print(f.GetDescription())
-        >>> #
+        >>>
         >>> # clean up
-        >>> os.remove('./bands1.vrt')
-        >>> os.remove('./bands2.vrt')
-        >>> os.remove('./full_scene.vrt')
+        >>> os.remove('bands1.vrt')
+        >>> os.remove('bands2.vrt')
+        >>> os.remove('full_scene.vrt')
 
     References:
         [1] https://gdal.org/programs/gdalbuildvrt.html
