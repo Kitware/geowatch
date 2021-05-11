@@ -2,14 +2,16 @@
 import numpy as np
 
 
-def normalize_intensity(imdata, return_info=False):
+def normalize_intensity(imdata, return_info=False, nodata=None):
     """
     Normalize data intensities, with an emphasis on visualization.
 
     Args:
         imdata (ndarray): raw data read from the geotiff.
         return_info (bool, default=False): if True, return information about
-            the chosen normalization hueristic.
+            the chosen normalization heuristic.
+        nodata: A value representing nodata to leave unchanged during
+            normalization, for example 0
 
     Example:
         >>> from watch.utils.util_norm import *  # NOQA
@@ -46,6 +48,11 @@ def normalize_intensity(imdata, return_info=False):
         # Just select one channel for now
         imdata = imdata[:, :, 0]
 
+    if nodata is not None:
+        imdata_valid = imdata[imdata != nodata]
+    else:
+        imdata_valid = imdata
+
     if imdata.dtype.itemsize > 1 and imdata.dtype.kind in {'i', 'u'}:
         # should center the desired distribution to visualize on zero
         # beta = np.median(imdata)
@@ -53,7 +60,7 @@ def normalize_intensity(imdata, return_info=False):
         quand_mid = 0.5
         quant_high = 0.99
 
-        quantiles = np.quantile(imdata, [0, quant_low, quand_mid, quant_high, 1])
+        quantiles = np.quantile(imdata_valid, [0, quant_low, quand_mid, quant_high, 1])
         (quant_low_abs, quant_low_val, quant_mid_val, quant_high_val,
          quant_high_abs) = quantiles
 
@@ -88,10 +95,17 @@ def normalize_intensity(imdata, return_info=False):
             'mode': 'sigmoid'
         })
 
-        imdata = kwimage.normalize(
+        imdata_normalized = kwimage.normalize(
             imdata.astype(np.float32), mode='sigmoid', beta=beta, alpha=alpha)
+    else:
+        imdata_normalized = imdata
+    
+    if nodata is not None:
+        result = np.where(imdata != nodata, imdata_normalized, imdata)
+    else:
+        result = imdata_normalized
 
     if return_info:
-        return imdata, info
+        return result, info
     else:
-        return imdata
+        return result
