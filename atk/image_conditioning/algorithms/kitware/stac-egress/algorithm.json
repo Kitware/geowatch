@@ -3,7 +3,7 @@
     "display_name": "STAC Egress",
     "homepage": "",
     "license": "Other",
-    "name": "stac-egress",
+    "name": "kitware/stac-egress",
     "optional_parameters": [],
     "outputs": [
         {

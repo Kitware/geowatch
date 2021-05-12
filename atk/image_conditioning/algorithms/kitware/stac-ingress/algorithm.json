@@ -3,7 +3,7 @@
     "display_name": "STAC Ingestion",
     "homepage": "",
     "license": "Other",
-    "name": "stac-ingress",
+    "name": "kitware/stac-ingress",
     "optional_parameters": [
         {
             "custom_validation": "",
