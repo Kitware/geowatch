@@ -17,7 +17,7 @@ from os.path import join
 from kwimage.transform import Affine
 
 
-def populate_watch_fields(dset, target_gsd=10.0):
+def populate_watch_fields(dset, target_gsd=10.0, overwrite=False):
     """
     Aggregate populate function for fields useful to WATCH.
 
@@ -62,7 +62,7 @@ def populate_watch_fields(dset, target_gsd=10.0):
     dset.conform(pycocotools_info=False)
 
     for gid in ub.ProgIter(dset.index.imgs.keys(), total=len(dset.index.imgs), desc='populate imgs'):
-        coco_populate_geo_img_heuristics(dset, gid)
+        coco_populate_geo_img_heuristics(dset, gid, overwrite=overwrite)
 
     for vidid in ub.ProgIter(dset.index.videos.keys(), total=len(dset.index.videos), desc='populate videos'):
         coco_populate_geo_video_stats(dset, vidid, target_gsd=target_gsd)
@@ -239,7 +239,23 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False):
             try:
                 import watch
                 crs_info = watch.gis.geotiff.geotiff_metadata(fpath)
-                obj_to_wld = Affine.coerce(crs_info['pxl_to_wld'])
+                # print('crs_info = {!r}'.format(crs_info))
+
+                # WE NEED TO ACCOUNT FOR WLD_CRS TO USE THIS
+                # obj_to_wld = Affine.coerce(crs_info['pxl_to_wld'])
+
+                # FIXME: FOR NOW JUST USE THIS BIG HACK
+                xy1_man = crs_info['pxl_corners'].data.astype(np.float64)
+                xy2_man = crs_info['utm_corners'].data.astype(np.float64)
+                hack_aff = fit_affine_matrix(xy1_man, xy2_man)
+                hack_aff = Affine.coerce(hack_aff)
+
+                # crs_info['utm_corners'].warp(np.asarray(hack_aff.inv()))
+                # crs_info['pxl_corners'].warp(np.asarray(hack_aff))
+
+                obj_to_wld = Affine.coerce(hack_aff)
+                # cv2.getAffineTransform(utm_corners, pxl_corners)
+
                 approx_meter_gsd = crs_info['approx_meter_gsd']
             except Exception:
                 warnings.warn('no crs info for img, assuming 1 gsd')
@@ -254,7 +270,9 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False):
 
         if overwrite or channels is None:
             if sensor_coarse is not None:
-                channels = _sensor_channel_hueristic(sensor_coarse, num_bands)
+                import xdev
+                with xdev.embed_on_exception_context:
+                    channels = _sensor_channel_hueristic(sensor_coarse, num_bands)
             elif num_bands is not None:
                 channels = _num_band_hueristic(num_bands)
             else:
@@ -266,6 +284,71 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False):
                     for obj={obj}
                     '''))
             obj['channels'] = channels
+
+
+def fit_affine_matrix(xy1_man, xy2_man):
+    """
+    Sympy:
+        import sympy as sym
+        x1, y1, x2, y2 = sym.symbols('x1, y1, x2, y2')
+        A = sym.Matrix([
+            [x1, y1,  0,  0, 1, 0],
+            [ 0,  0, x1, y1, 0, 1],
+        ])
+        b = sym.Matrix([[x2], [y2]])
+        x = (A.T.multiply(A)).inv().multiply(A.T.multiply(b))
+        x = (A.T.multiply(A)).pinv().multiply(A.T.multiply(b))
+
+    References:
+        https://www.cs.ubc.ca/~lowe/papers/ijcv04.pdf page 22
+    """
+    x1_mn = xy1_man.T[0]
+    y1_mn = xy1_man.T[1]
+    x2_mn = xy2_man.T[0]
+    y2_mn = xy2_man.T[1]
+    num_pts = x1_mn.shape[0]
+    Mx6 = np.empty((2 * num_pts, 6), dtype=np.float64)
+    b = np.empty((2 * num_pts, 1), dtype=np.float64)
+    for ix in range(num_pts):  # Loop over inliers
+        # Concatenate all 2x9 matrices into an Mx6 matrix
+        x1 = x1_mn[ix]
+        x2 = x2_mn[ix]
+        y1 = y1_mn[ix]
+        y2 = y2_mn[ix]
+        Mx6[ix * 2]     = (x1, y1,  0,  0,  1,  0)
+        Mx6[ix * 2 + 1] = ( 0,  0, x1, y1,  0,  1)
+        b[ix * 2] = x2
+        b[ix * 2 + 1] = y2
+
+    M = Mx6
+    try:
+        USV = np.linalg.svd(M, full_matrices=True, compute_uv=True)
+    except MemoryError:
+        import scipy.sparse as sps
+        import scipy.sparse.linalg as spsl
+        M_sparse = sps.lil_matrix(M)
+        USV = spsl.svds(M_sparse)
+    except np.linalg.LinAlgError:
+        raise
+    except Exception:
+        raise
+
+    U, s, Vt = USV
+
+    # Inefficient, but I think the math works
+    # We want to solve Ax=b (where A is the Mx6 in this case)
+    # Ax = b
+    # (U S V.T) x = b
+    # x = (U.T inv(S) V) b
+    Sinv = np.zeros((len(Vt), len(U)))
+    Sinv[np.diag_indices(len(s))] = 1 / s
+    a = Vt.T.dot(Sinv).dot(U.T).dot(b).T[0]
+    A = np.array([
+        [a[0], a[1], a[4]],
+        [a[2], a[3], a[5]],
+        [   0,    0,    1],
+    ])
+    return A
 
 
 def _sensor_channel_hueristic(sensor_coarse, num_bands):
@@ -280,7 +363,7 @@ def _sensor_channel_hueristic(sensor_coarse, num_bands):
         elif num_bands == 3:
             channels = 'r|g|b'
         elif num_bands == 8:
-            channels = 'wv1|wv2|wv3|wv4|wv4|wv6|wv7|wv8'
+            channels = 'wv1|wv2|wv3|wv4|wv5|wv6|wv7|wv8'
             # channels = 'cb|b|g|y|r|wv6|wv7|wv8'
         else:
             err = 1
@@ -307,6 +390,8 @@ def _sensor_channel_hueristic(sensor_coarse, num_bands):
     else:
         err = 1
     if err:
+        import xdev
+        xdev.embed()
         raise NotImplementedError(f'sensor_coarse={sensor_coarse}, num_bands={num_bands}')
     return channels
 
@@ -315,7 +400,13 @@ def _introspect_num_bands(fpath):
     try:
         shape = kwimage.load_image_shape(fpath)
     except Exception:
-        return None
+        from osgeo import gdal
+        try:
+            gdalfile = gdal.Open(fpath)
+            shape = (gdalfile.RasterYSize, gdalfile.RasterXSize, gdalfile.RasterCount)
+        except Exception:
+            print('failed to introspect shape of fpath = {!r}'.format(fpath))
+            return None
     if len(shape) == 1:
         return 1
     elif len(shape) == 3:

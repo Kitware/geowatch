@@ -19,6 +19,8 @@ class AddWatchFieldsConfig(scfg.Config):
         'dst': scfg.Value(None, help='bundle directory for the output'),
 
         'target_gsd': scfg.Value(10.0, help='compute transforms for a target gsd'),
+
+        'overwrite': scfg.Value(False, help='if True overwrites introspectable fields'),
     }
 
 
@@ -79,8 +81,21 @@ def main(**kwargs):
 
     print('start populate')
     target_gsd = config['target_gsd']
-    populate_watch_fields(dset, target_gsd=target_gsd)
+    overwrite = config['overwrite']
+    populate_watch_fields(dset, target_gsd=target_gsd, overwrite=overwrite)
     print('dset.index.videos = {}'.format(ub.repr2(dset.index.videos, nl=2, precision=4)))
+
+    for gid, img in dset.index.imgs.items():
+        import numpy as np
+        from kwimage.transform import Affine
+        offset =  np.asarray(Affine.coerce(img['warp_img_to_vid']))[:, 2]
+        if np.any(np.abs(offset) > 100):
+            print('img = {}'.format(ub.repr2(img, nl=1)))
+            print('warning there is a large offset')
+            print('offset = {!r}'.format(offset))
+            print('{}, {}'.format(gid, img['warp_img_to_vid']))
+
+    # print('dset.index.imgs[1] = {}'.format(ub.repr2(dset.index.imgs[1], nl=2, precision=4)))
 
     if config['dst'] is not None:
         print('write dataset')
