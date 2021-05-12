@@ -34,7 +34,7 @@ def geotiff_metadata(gpath, elevation='gtop30'):
         >>> info = geotiff_metadata(gpath)
         >>> print('info = {}'.format(ub.repr2(info, nl=1)))
     """
-    import gdal
+    from osgeo import gdal
     infos = {}
     ref = gdal.Open(gpath, gdal.GA_ReadOnly)
     infos['fname'] = geotiff_filepath_info(gpath)
@@ -63,7 +63,7 @@ def geotiff_metadata(gpath, elevation='gtop30'):
 
 
 def _coerce_gdal_dataset(data):
-    import gdal
+    from osgeo import gdal
     if isinstance(data, str):
         ref = gdal.Open(data, gdal.GA_ReadOnly)
     elif isinstance(data, gdal.Dataset):
@@ -80,7 +80,7 @@ def geotiff_header_info(gpath_or_ref):
     """
     Extract relevant metadata information from a geotiff header.
     """
-    # import gdal
+    # from osgeo import gdal
     ref = _coerce_gdal_dataset(gpath_or_ref)
     keys_of_interest = [
         'NITF_CSEXRA_MAX_GSD',
@@ -168,8 +168,8 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         >>> assert not info['is_rpc']
         >>> assert info['img_shape'] == (512, 512)
     """
-    import gdal
-    import osr
+    from osgeo import gdal
+    from osgeo import osr
     import affine
     import kwimage
 

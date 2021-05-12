@@ -4,11 +4,12 @@ channels:
   - conda-forge
 dependencies:
   - python == 3.8
-  - gdal == 3.0.2
-  - numpy >= 1.20.1
-  - shapely >= 1.7.1
   - pip >= 21.0.1
   - pip:
+    # Core
+    - numpy >= 1.20.0
+    - shapely >= 1.7.1
+
     # Frameworks
     - algorithm_toolkit == 0.2.0
 
@@ -32,9 +33,9 @@ dependencies:
     - pystac-client >= 0.1.1
 
     # Image / numeric
-    - kwarray >= 0.5.13
-    - kwimage >= 0.7.0
-    - kwcoco >= 0.1.12
+    - kwarray >= 0.5.18
+    - kwimage >= 0.7.3
+    - kwcoco >= 0.2.2
     - Pillow >= 8.0.1
     - imgaug >= 0.4.0
 
@@ -45,3 +46,8 @@ dependencies:
     - geopandas >= 0.8.1
     - rgdc >= 0.1.1
     - git+https://git@github.com/matt-bernstein/fetchLandsatSentinelFromGoogleCloud.git
+
+    # find-links applies to everything after it, so make sure this is the last dep
+    # References: https://stackoverflow.com/questions/60410173/find-links-conda-env
+    - --find-links https://girder.github.io/large_image_wheels
+    - GDAL >= 3.2.1

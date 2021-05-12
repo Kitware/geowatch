@@ -197,7 +197,7 @@ class DEM_Collection(ElevationDatabase):
         TODO: the API supports vectorization, but we need to make it more
         efficient.
         """
-        import gdal
+        from osgeo import gdal
         import kwimage
 
         lats_, lons_, was_iterable = ensure_iterable_latlons(lats, lons)
