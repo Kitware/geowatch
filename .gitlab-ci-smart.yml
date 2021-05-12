@@ -208,17 +208,23 @@ test_full_strict/conda-linux:
             # the watch repo, create the environment, and run the tests. 
             #
             docker login gitlab.kitware.com:4567
-            docker pull gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
 
-            docker run -v ~/.ssh:/tmp/.ssh:ro -it gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3 bash
+            -v $PWD:/io
+
+            docker pull registry.smartgitlab.com/kitware/watch/miniconda3
+
+            docker run -v ~/.ssh:/tmp/.ssh:ro -it registry.smartgitlab.com/kitware/watch/miniconda3 bash
             #docker run -it gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3 bash
             cp -R /tmp/.ssh /root/.ssh
             chmod 700 /root/.ssh
             chmod 600 /root/.ssh/id_*
             chmod 644 /root/.ssh/*.pub
 
+            docker run -v $PWD:/io:ro -it registry.smartgitlab.com/kitware/watch/miniconda3 bash
             cd $HOME
-            git clone git@gitlab.kitware.com:smart/watch.git
+            git clone /io ./watch
+            cd watch
+            #git clone git@gitlab.kitware.com:smart/watch.git
 
             cd $HOME/watch
             git checkout dev/add_ci
