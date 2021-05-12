@@ -70,7 +70,7 @@ environment.
    cd WATCH_DIR
    git clone https://gitlab.kitware.com/smart/watch.git
    cd watch
-   conda env create -f deployment/conda/conda_env.yml
+   conda env create -f conda_env.yml
    conda activate watch
 
 To deactivate the watch environment, run:
@@ -134,7 +134,7 @@ example project:
 Point your browser to http://localhost:5000/. You should see the
 development environment welcome page.
 
-Refer to the `development enviornment`_ portion of the `atk docs`_ for a
+Refer to the `development environment`_ portion of the `atk docs`_ for a
 crash course on how to use the web-based development environment.
 
 Running tests
@@ -144,9 +144,70 @@ We’re using the ``pytest`` module for running unit tests. Unit tests
 should be added into the ``tests`` directory and files should be
 prefixed with ``test_``.
 
-The ``run_tests.py`` script provided here will run all tests in the
-``tests`` directory.
+Additionally, code blocks in function docstrings will be interpreted as tests using `xdoctest <https://xdoctest.readthedocs.io/en/latest/autoapi/xdoctest/index.html>`_ as part of the `Google docstring convention <https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html>`_.
 
+For example:
+
+.. code:: python
+
+   class GdalOpen:
+    '''
+    A simple context manager for friendlier gdal use.
+
+    Example:
+        >>> # xdoctest: +REQUIRES(--network)
+        >>> from watch.utils.util_raster import *
+        >>> from watch.demo.landsat_demodata import grab_landsat_product
+        >>> path = grab_landsat_product()['bands'][0]
+        >>> 
+        >>> # standard use:
+        >>> dataset = gdal.Open(path)
+        >>> print(dataset.GetDescription())  # do stuff
+        >>> del dataset  # or 'dataset = None'
+        >>> 
+        >>> # equivalent:
+        >>> with GdalOpen(path) as dataset:
+        >>>     print(dataset.GetDescription())  # do stuff
+
+    '''
+    # code goes here
+
+
+The ``run_tests.py`` script provided here will run all tests in the
+``tests`` directory and in docstrings.
+
+How to contribute
+-----------------
+
+We follow a `merge requests <https://docs.gitlab.com/ee/user/project/merge_requests/>`_ workflow.
+
+Here is a complete, minimal example of how to add code to this repository, assuming you have followed the instructions above. You should be inside this repo's directory tree on your local machine and have the WATCH Conda environment active.
+
+.. code:: bash
+
+   git checkout -b my_new_branch
+
+   # example commit: change some files
+   git commit -am "changed some files"
+
+   # example commit: add a file
+   echo "some work" > new_file.py
+   git add new_file.py
+   git commit -am "added a file"
+
+   # now, integrate other changes that have occurred in this time
+   git merge origin/master
+
+   # make sure all tests pass (including ones you wrote!)
+   python run_tests.py
+
+   # and add your branch to gitlab.kitware.com
+   git push --set-upstream origin my_new_branch
+
+
+To get your code merged, create an MR from your branch `here <https://gitlab.kitware.com/smart/watch/-/merge_requests>`_ and @ someone from Kitware to take a look at it. It is a good idea to create a `draft MR <https://docs.gitlab.com/ee/user/project/merge_requests/drafts.html>`_ a bit before you are finished, in order to ask and answer questions about your new feature and make sure it is properly tested.
+
+You can use `markdown <https://docs.gitlab.com/ee/user/markdown.html>`_ to write an informative merge message.
 
 Adding submodules
 -----------------
@@ -181,7 +242,7 @@ Scripts that don’t quite belong in the WATCH Python module itself
 added to the ``scripts`` directory.
 
 
-.. _development enviornment: https://algorithm-toolkit.readthedocs.io/en/latest/dev-environment.html#
+.. _development environment: https://algorithm-toolkit.readthedocs.io/en/latest/dev-environment.html#
 .. _atk docs: https://algorithm-toolkit.readthedocs.io/en/latest/index.html
 
 .. |master-pipeline| image:: https://gitlab.kitware.com/smart/watch/badges/master/pipeline.svg
