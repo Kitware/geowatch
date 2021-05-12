@@ -70,6 +70,7 @@ class SimpleVideoDataset(torch.utils.data.Dataset):
         >>>     xdev.InteractiveIter.draw()
 
     Ignore:
+        from watch.datasets.video_dataset import *  # NOQA
         import kwcoco
         import ndsampler
         import ubelt as ub
@@ -87,6 +88,16 @@ class SimpleVideoDataset(torch.utils.data.Dataset):
         import kwplot
         kwplot.autompl()
         kwplot.imshow(stacked)
+
+        # xdoctest: +REQUIRES(--interact)
+        import xdev
+        loader = self.make_loader(batch_size=3)
+        loader_iter = iter(loader)
+        for index in xdev.InteractiveIter(list(range(len(loader)))):
+            batch = next(loader_iter)
+            stacked = draw_multispectral_batch(batch)
+            kwplot.imshow(stacked)
+            xdev.InteractiveIter.draw()
 
     """
     def __init__(self, sampler, window_dims, input_dims=None, channels=None,
@@ -181,11 +192,15 @@ class SimpleVideoDataset(torch.utils.data.Dataset):
                     pin_memory=False, drop_last=False, multiscale=False,
                     balance=False, num_batches='auto', xpu=None):
         """
+        Create a loader for this dataset with custom sampling logic and
+        container collation.
         """
         if len(self) == 0:
             raise ValueError('must have some data')
 
         if balance:
+            # Can use information in self.sample_grid to balance over
+            # categories.
             raise NotImplementedError
 
         # The case where where replacement is not allowed
@@ -290,17 +305,27 @@ def draw_multispectral_item(item):
         stack = kwimage.stack_images(tup, axis=1, overlap=-3)
         stack1.append(stack)
     stacked = kwimage.stack_images(stack1, axis=0, overlap=-6)
-
-    # if 0:
-    #     import kwplot
-    #     kwplot.autompl()
-    #     kwplot.imshow(stacked)
     return stacked
+
+
+def draw_multispectral_batch(batch):
+    decollated = decollate_batch(batch)
+    canvas_list = []
+    for item in decollated:
+        part = draw_multispectral_item(item)
+        canvas_list.append(part)
+
+    canvas = kwimage.stack_images_grid(canvas_list, axis=1, overlap=-12)
+    return canvas
 
 
 def decollate_batch(batch):
     """
-    hack to undo collate (should probably be a netharn function for this)
+    Breakup a collated batch of BatchContainers back into ItemContainers
+
+    TODO:
+        - [ ] This should be a function that lives in netharn or wherever the
+              container objects live.
 
     Example:
         >>> bsize = 5
@@ -328,14 +353,3 @@ def decollate_batch(batch):
                 decollated_walker[[bx] + path] = ItemContainer(item_val)
     decollated = list(decollated_dict.to_dict().values())
     return decollated
-
-
-def draw_multispectral_batch(batch):
-    decollated = decollate_batch(batch)
-    canvas_list = []
-    for item in decollated:
-        part = draw_multispectral_item(item)
-        canvas_list.append(part)
-
-    canvas = kwimage.stack_images_grid(canvas_list, axis=1, overlap=-12)
-    return canvas
