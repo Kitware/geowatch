@@ -37,6 +37,7 @@
 stages:
     - build
     - test
+    - .post
 
 
 ### TEMPLATES ###
@@ -70,6 +71,8 @@ stages:
     - build
     - aws
     - smart
+  before_script:
+    - docker info
 
 
 .test_loose_template:
@@ -172,8 +175,6 @@ build_docker_loose:
     *common_template_docker
   stage:
     build
-  before_script:
-    - docker info
   script:
     - docker build -t $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG .
   image:
@@ -181,6 +182,34 @@ build_docker_loose:
   variables:
     IMAGE_TAG: loose
 
+
+test_docker_loose:
+  <<:
+    *common_template_docker
+  stage:
+    test
+  script:
+    - cd watch
+    - python run_tests.py
+  image:
+    name: $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG
+  variables:
+    IMAGE_TAG: loose
+
+
+upload_docker_loose:
+  <<:
+    *common_template_docker
+  stage:
+    .post
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - echo "docker push $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG"
+    - docker push $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG
+  image:
+    docker:19.03.12
+  variables:
+    IMAGE_TAG: loose
 
 
 .__local_docker_heredoc__:
