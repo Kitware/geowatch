@@ -76,11 +76,21 @@ class SimpleVideoDataset(torch.utils.data.Dataset):
         import ubelt as ub
         coco_fpath = ub.expandpath('~/data/dvc-repos/smart_watch_dvc/drop0_aligned/data.kwcoco.json')
         dset = kwcoco.CocoDataset(coco_fpath)
+
+        for img in dset.imgs.values():
+            chan = img.get('channels', None)
+            print('img_chan = {!r}'.format(chan))
+            for aux in img.get('auxiliary', []):
+                chan = aux.get('channels', None)
+                print('aux_chan = {!r}'.format(chan))
+
         sampler = ndsampler.CocoSampler(dset)
 
         window_dims = (3, None, None)
         input_dims = (128, 128)
-        self = SimpleVideoDataset(sampler, window_dims, input_dims)
+        channels = 'r|g|b|gray|wv1'
+        # channels = 'gray'
+        self = SimpleVideoDataset(sampler, window_dims, input_dims, channels)
         index = 2
         item = self[index]
         stacked = draw_multispectral_item(item)
@@ -113,6 +123,7 @@ class SimpleVideoDataset(torch.utils.data.Dataset):
         self.input_dims = input_dims
 
         self.classes = self.sampler.classes
+        self.channels = channels
 
         sample_grid_spec = {
             'task': 'video_detection',
@@ -125,6 +136,9 @@ class SimpleVideoDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         tr = self.sample_grid['positives'][index]
+
+        if self.channels:
+            tr['channels'] = self.channels
 
         sampler = self.sampler
         sample = sampler.load_sample(tr)
