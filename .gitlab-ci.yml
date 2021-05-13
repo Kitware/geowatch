@@ -61,6 +61,15 @@ stages:
         - build
         - smart
 
+.common_template_docker:
+  &common_template_docker
+  tags:
+    - docker
+    - linux
+    - linux-3.17
+    - build
+    - aws
+    - smart
 
 
 .test_loose_template:
@@ -156,6 +165,19 @@ test_full_strict/conda-linux:
         *test_strict_template
     image:
         gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
+
+
+build_docker_loose:
+  <<:
+    *common_template_docker
+  stage:
+    build
+  before_script:
+    - docker info
+  script:
+    - docker build -t $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG .
+  image:
+    docker:19.03.12
 
 
 .__local_docker_heredoc__:
