@@ -155,7 +155,7 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         >>> # xdoctest: +REQUIRES(--network)
         >>> gpath = ub.grabdata(
         >>>     'https://download.osgeo.org/geotiff/samples/gdal_eg/cea.tif',
-        >>>     appname='smart-watch/demodata', hash_prefix='10a2ebcdcd95582')
+        >>>     appname='smart_watch/demodata', hash_prefix='10a2ebcdcd95582')
         >>> info = geotiff_crs_info(gpath)
         >>> print('info = {}'.format(ub.repr2(info, nl=1, sort=False)))
         >>> assert not info['is_rpc']
