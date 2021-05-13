@@ -9,7 +9,7 @@ dependencies:
   - pip:
 
     # Numeric
-    - kwarray >= 0.5.18
+    - kwarray >= 0.5.19
     - numpy >= 1.20.0
     - scipy >= 1.6.3
     - shapely >= 1.7.1
@@ -44,8 +44,8 @@ dependencies:
     - networkx >= 2.5.1
 
     # Imaging
-    - kwimage >= 0.7.3
-    - kwcoco >= 0.2.2
+    - kwimage >= 0.7.4
+    - kwcoco >= 0.2.3
     - Pillow >= 8.0.1
     - imgaug >= 0.4.0
     - opencv_python_headless >= 4.5.2.52  # This can be a problem library
