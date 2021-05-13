@@ -1,29 +1,3 @@
-"""
-The SMART WATCH module
-"""
-
-
-__devnotes__ = """
-
-# Command to autogenerate lazy imports for this file
-mkinit -m watch --lazy --noattr
-mkinit -m watch --lazy --noattr -w
-"""
-
-__version__ = '0.0.1'
-
-
-def _hello_world():
-    """
-    Demonstrate how to write a doctest for any function in this library.
-
-    Example:
-        >>> ans = _hello_world()
-        >>> assert ans == 42
-    """
-    print('hello world')
-    return 42
-
 
 def lazy_import(module_name, submodules, submod_attrs):
     import importlib
@@ -56,18 +30,7 @@ def lazy_import(module_name, submodules, submod_attrs):
 
 __getattr__ = lazy_import(
     __name__,
-    submodules={
-        'datacube',
-        'demo',
-        'features',
-        'fusion',
-        'gis',
-        'io',
-        'sequencing',
-        'tools',
-        'utils',
-        'validation',
-    },
+    submodules={},
     submod_attrs={},
 )
 
@@ -75,5 +38,4 @@ __getattr__ = lazy_import(
 def __dir__():
     return __all__
 
-__all__ = ['datacube', 'demo', 'features', 'fusion', 'gis', 'io', 'sequencing',
-           'tools', 'utils', 'validation']
+__all__ = []

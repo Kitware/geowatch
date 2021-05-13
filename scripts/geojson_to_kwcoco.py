@@ -44,32 +44,32 @@ Notes:
     cd $HOME/data/dvc-repos/smart_watch_dvc/drop0
 
     python ~/code/watch/scripts/geojson_to_kwcoco.py \
-        --src ~/data/dvc-repos/smart_watch_dvc/raw/drop0/210210_D0_manualKR.geojson.json \
+        --src ~/data/dvc-repos/smart_watch_dvc/drop0/210210_D0_manualKR.geojson.json \
         --bundle_dpath ~/data/dvc-repos/smart_watch_dvc/drop0/BR-Rio-0277 \
         --visualize=True --ignore_dem=True
 
     python ~/code/watch/scripts/geojson_to_kwcoco.py \
-        --src ~/data/dvc-repos/smart_watch_dvc/raw/drop0/210210_D0_manualKR.geojson.json \
+        --src ~/data/dvc-repos/smart_watch_dvc/drop0/210210_D0_manualKR.geojson.json \
         --bundle_dpath ~/data/dvc-repos/smart_watch_dvc/drop0/BR-Rio-0270 \
         --visualize=True --ignore_dem=True
 
     python ~/code/watch/scripts/geojson_to_kwcoco.py \
-        --src ~/data/dvc-repos/smart_watch_dvc/raw/drop0/210210_D0_manualKR.geojson.json \
+        --src ~/data/dvc-repos/smart_watch_dvc/drop0/210210_D0_manualKR.geojson.json \
         --bundle_dpath ~/data/dvc-repos/smart_watch_dvc/drop0/AE-Dubai-0001 \
         --visualize=True --ignore_dem=False
 
     python ~/code/watch/scripts/geojson_to_kwcoco.py \
-        --src ~/data/dvc-repos/smart_watch_dvc/raw/drop0/210210_D0_manualKR.geojson.json \
+        --src ~/data/dvc-repos/smart_watch_dvc/drop0/210210_D0_manualKR.geojson.json \
         --bundle_dpath ~/data/dvc-repos/smart_watch_dvc/drop0/US-Waynesboro-0001 \
         --visualize=True --ignore_dem=False
 
     python ~/code/watch/scripts/geojson_to_kwcoco.py \
-        --src ~/data/dvc-repos/smart_watch_dvc/raw/drop0/210210_D0_manualKR.geojson.json \
+        --src ~/data/dvc-repos/smart_watch_dvc/drop0/210210_D0_manualKR.geojson.json \
         --bundle_dpath ~/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-S2 \
         --visualize=True --ignore_dem=False
 
     python ~/code/watch/scripts/geojson_to_kwcoco.py \
-        --src ~/data/dvc-repos/smart_watch_dvc/raw/drop0/210210_D0_manualKR.geojson.json \
+        --src ~/data/dvc-repos/smart_watch_dvc/drop0/210210_D0_manualKR.geojson.json \
         --bundle_dpath ~/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-WV \
         --visualize=True --ignore_dem=False
 
@@ -362,6 +362,7 @@ def main(**kw):
     # and what we actually have on disk.
     asset_dpath = join(bundle_dpath, '_assets')
     all_mappings = _associate_images(geojson, asset_dpath)
+    print('all_mappings = {}'.format(ub.repr2(all_mappings, nl=1)))
 
     meta = geojson['metadata']
 
@@ -467,8 +468,8 @@ def main(**kw):
     toconvert_anns = []
     bad_gids = []
     bad_aids = []
-    prog = ub.ProgIter(geojson['features'], desc='load anns')
-    for feat in prog:
+    feat_prog = ub.ProgIter(geojson['features'], desc='load anns')
+    for feat in feat_prog:
         ann = {}
         ann_meta = feat['metadata'].copy()
 
@@ -542,7 +543,7 @@ def main(**kw):
                 flags.append('does-not-belong')
 
         if set(flags) == set(['does-not-intersect']):
-            prog.ensure_newline()
+            feat_prog.ensure_newline()
             print('OOB orig_aid = {}, orig_gids={}'.format(orig_aid, gid_list))
             for gid in gid_list:
                 print('gpath = {}'.format(dset.imgs[gid]['file_name']))
@@ -575,8 +576,8 @@ def main(**kw):
 
     # Warp annotations from world space to pixel space
     valid_anns = []
-    prog = ub.ProgIter(gid_to_anns.items(), desc='warp anns', verbose=1)
-    for gid, anns in prog:
+    group_prog = ub.ProgIter(gid_to_anns.items(), desc='warp anns', verbose=1)
+    for gid, anns in group_prog:
         gpath = dset.get_image_fpath(gid)
         if os.stat(gpath).st_size < 10:
             continue
@@ -649,7 +650,7 @@ def main(**kw):
         n_is_any = sum(is_any_oob)
 
         if n_is_all or n_is_any:
-            prog.ensure_newline()
+            group_prog.ensure_newline()
             # if n_is_any or n_is_all:
             print('gpath = {!r}'.format(gpath))
             print('gid = {!r}'.format(gid))
@@ -666,7 +667,7 @@ def main(**kw):
         if visualize:
             dets = kwimage.Detections.from_coco_annots(anns, dset=dset)
             window = dets.boxes.bounding_box().quantize()
-            window = window.to_cxywh().scale(1.8, about='center')
+            window = window.to_cxywh().scale(3.0, about='center')
 
             new_dim = max(window.width.ravel()[0], window.height.ravel()[0])
             window.data[:, 2:4] = new_dim
@@ -676,8 +677,8 @@ def main(**kw):
             sl = tuple([slice(min_y, max_y), slice(min_x, max_x)])
 
             frame = LazyGDalFrameFile(gpath)
-            imdata, crop_transform = kwimage.padded_slice(frame, sl,
-                                                          return_info=True)
+            imdata, crop_transform = kwimage.padded_slice(
+                frame, sl, return_info=True)
             subdets = dets.translate((-min_x, -min_y))
 
             # TODO: use a more robust name that is gaurenteed to not conflict
@@ -691,8 +692,9 @@ def main(**kw):
             canvas, _info = normalize_intensity(imdata, return_info=True)
             canvas = kwimage.atleast_3channels(canvas)
 
+            debug_text = suffix
             canvas = kwimage.draw_text_on_image(
-                canvas, suffix, (5, 5), valign='top', color='red')
+                canvas, debug_text, (5, 5), valign='top', color='red')
 
             canvas = subdets.draw_on(canvas, color='green')
 

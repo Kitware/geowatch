@@ -44,16 +44,12 @@ def normalize_intensity(imdata, return_info=False, nodata=None):
 
     info = {}
 
-    if len(imdata.shape) > 2 and imdata.shape[2] > 4:
-        # Just select one channel for now
-        imdata = imdata[:, :, 0]
-
     if nodata is not None:
         imdata_valid = imdata[imdata != nodata]
     else:
         imdata_valid = imdata
 
-    if imdata.dtype.itemsize > 1 and imdata.dtype.kind in {'i', 'u'}:
+    if imdata.dtype.itemsize > 1 and imdata.dtype.kind in {'i', 'u', 'f'}:
         # should center the desired distribution to visualize on zero
         # beta = np.median(imdata)
         quant_low = 0.01
@@ -99,7 +95,7 @@ def normalize_intensity(imdata, return_info=False, nodata=None):
             imdata.astype(np.float32), mode='sigmoid', beta=beta, alpha=alpha)
     else:
         imdata_normalized = imdata
-    
+
     if nodata is not None:
         result = np.where(imdata != nodata, imdata_normalized, imdata)
     else:
