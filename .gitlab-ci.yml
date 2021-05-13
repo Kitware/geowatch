@@ -37,7 +37,6 @@
 stages:
     - build
     - test
-    - .post
 
 
 ### TEMPLATES ###
@@ -73,6 +72,7 @@ stages:
     - smart
   before_script:
     - docker info
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
 
 
 .test_loose_template:
@@ -177,33 +177,7 @@ build_docker_loose:
     build
   script:
     - docker build -t $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG .
-  image:
-    docker:19.03.12
-  variables:
-    IMAGE_TAG: loose
-
-
-test_docker_loose:
-  <<:
-    *common_template_docker
-  stage:
-    test
-  script:
-    - cd watch
-    - python run_tests.py
-  image:
-    name: $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG
-  variables:
-    IMAGE_TAG: loose
-
-
-upload_docker_loose:
-  <<:
-    *common_template_docker
-  stage:
-    .post
-  script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker run --rm $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG /bin/bash -c "source /opt/conda/etc/profile.d/conda.sh && conda activate watch && cd /watch && python run_tests.py"
     - echo "docker push $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG"
     - docker push $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG
   image:
