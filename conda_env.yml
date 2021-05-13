@@ -40,11 +40,11 @@ dependencies:
     - imgaug >= 0.4.0
 
     # GIS
-    - utm >= 0.7.0
+    - geopandas >= 0.8.1
     - pyproj >= 3.0.0.post1
     - rasterio >= 1.2.0
-    - geopandas >= 0.8.1
     - rgdc >= 0.1.1
+    - utm >= 0.7.0
     - git+https://git@github.com/matt-bernstein/fetchLandsatSentinelFromGoogleCloud.git
 
     # find-links applies to everything after it, so make sure this is the last dep

@@ -1,5 +1,5 @@
 # Abuse YAML notation to make a heredoc. This will be ignored by the CI.
-.__heredoc__: &__heredoc__
+.__doc__: &__doc__
     - | 
 
         # Note: expand yaml
@@ -33,17 +33,27 @@
                   current state did whataver was necessary to make it work)
 
 
+# Abuse YAML notation to make a heredoc. This will be ignored by the CI.
 stages:
-  - build
-  - test
+    - build
+    - test
 
 
 ### TEMPLATES ###
 # Define common templates using YAML anchors
 
-.common_template: &common_template
+.common_template:
+    &common_template
+    variables:
+        PIP_CACHE_DIR:
+            "$CI_PROJECT_DIR/.cache/pip"
+        CONDA_PKGS_DIRS:
+            "$CI_PROJECT_DIR/.cache/conda/pkgs"
+        CONDA_ENVS_PATH:
+            "$CI_PROJECT_DIR/.cache/conda/envs"
+        XDG_CACHE_HOME:
+            "$CI_PROJECT_DIR/.cache/xdg_cache"
     tags:
-        # Tags define which runners will accept which jobs
         - rukbat
         - docker
         - linux
@@ -51,161 +61,101 @@ stages:
         - build
         - smart
 
-    variables:
-      PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
-      CONDA_PKGS_DIRS: "$CI_PROJECT_DIR/.cache/conda/pkgs"
-      CONDA_ENVS_PATH: "$CI_PROJECT_DIR/.cache/conda/envs"
-      XDG_CACHE_HOME: "$CI_PROJECT_DIR/.cache/xdg_cache"
 
 
-### BUILD TEMPLATE VARIANTS
-
-.build_loose_template: &build_loose_template
-    # Tags define which runners will accept which jobs
-    <<: 
-        - *common_template
-
-    stage: 
-        build
-
-    script: 
-        - conda init bash
-        - source ~/.bashrc
-        - conda env create -f conda_env.yml --prefix ".cache/conda/envs/loose-watch-env"
-
-    artifacts:
-      paths:
-        - .cache/conda/envs/loose-watch-env
-
-    cache:
-        paths:
-            - .cache/conda/pkgs
-            #- .cache/conda/envs/loose-watch-env  # better with or without this?
-            - .cache/pip
-
-
-.build_strict_template: &build_strict_template
-    # Tags define which runners will accept which jobs
-    <<: 
-        - *common_template
-
-    stage: 
-        build
-
-    script: 
-        - conda init bash
-        - source ~/.bashrc
-        - sed 's/>=/==/g' conda_env.yml > conda_env_strict.yml
-        - conda env create -f conda_env_strict.yml --prefix ".cache/conda/envs/strict-watch-env"
-
-    artifacts:
-      paths:
-        - .cache/conda/envs/strict-watch-env
-
-    cache:
-        paths:
-            - .cache/conda/pkgs
-            #- .cache/conda/envs/strict-watch-env  # better with or without this?
-            - .cache/pip
-
-
-### TEST TEMPLATE VARIANTS
-
-
-.test_loose_template: &test_loose_template
-    <<: 
-        - *common_template
-    stage: 
+.test_loose_template:
+    &test_loose_template
+    <<:
+        *common_template
+    stage:
         test
 
     before_script:
         - conda init bash
         - source ~/.bashrc
         - ls -al
+        - conda env create -f conda_env.yml --prefix ".cache/conda/envs/loose-watch-env"
         - conda activate ".cache/conda/envs/loose-watch-env"
         - pip install -e .
-    script: 
+
+    script:
         - ./run_tests.py --network
 
+    after_script:
+        - du -sh .cache/*
+        - du -sh .cache/xdg_cache/*
+        - du -sh .cache/conda/*
+        - du -sh .cache/pip/*
+
     # Coverage is a regex that will parse the coverage from the test stdout
-    coverage: '/TOTAL.+ ([0-9]{1,3}%)/'
+    coverage:
+        '/TOTAL.+ ([0-9]{1,3}%)/'
 
     cache:
+        key:
+            loose-cache-v1
         paths:
-            - .cache/conda/pkgs
-            - .cache/xdg_cache
+            
             #- .cache/conda/envs/loose-watch-env  # better with or without this?
+            - .cache/conda/pkgs
             - .cache/pip
+            - .cache/xdg_cache
 
 
-.test_strict_template: &test_strict_template
-    <<: 
-        - *common_template
-    stage: 
+.test_strict_template:
+    &test_strict_template
+    <<:
+        *common_template
+    stage:
         test
 
     before_script:
         - conda init bash
         - source ~/.bashrc
         - ls -al
+        - sed 's/>=/==/g' conda_env.yml > conda_env_strict.yml
+        - conda env create -f conda_env_strict.yml --prefix ".cache/conda/envs/strict-watch-env"
         - conda activate ".cache/conda/envs/strict-watch-env"
         - pip install -e .
-    script: 
+    script:
         - ./run_tests.py --network
 
+    after_script:
+        - du -sh .cache/*
+        - du -sh .cache/xdg_cache/*
+        - du -sh .cache/conda/*
+        - du -sh .cache/pip/*
+
     # Coverage is a regex that will parse the coverage from the test stdout
-    coverage: '/TOTAL.+ ([0-9]{1,3}%)/'
+    coverage:
+        '/TOTAL.+ ([0-9]{1,3}%)/'
 
     cache:
+        key:
+            strict-cache-v1
         paths:
+            
+            #- .cache/conda/envs/strict-watch-env  # better with or without this?
             - .cache/conda/pkgs
-            - .cache/xdg_cache
-            #- .cache/conda/envs/loose-watch-env  # better with or without this?
             - .cache/pip
+            - .cache/xdg_cache
 
 
-# TODO: eventually differentiate between minimal and full installs
-#.test_minimal_template: &test_minimal_template
+#### JOBS ###
 
-
-### JOBS ###
-# Define the actual jobs
-
-# ---------------
-# Python 3.8 Jobs
-
-
-build_loose/conda-linux:
-    <<: 
-        - *build_loose_template
-    image:
-        gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
 
 test_full_loose/conda-linux:
-    <<: 
-        - *test_loose_template
+    <<:
+        *test_loose_template
     image:
         gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
 
-
-build_strict/conda-linux:
-    <<: 
-        - *build_strict_template
-    image:
-        gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
-        
 
 test_full_strict/conda-linux:
-    <<: 
-        - *test_strict_template
+    <<:
+        *test_strict_template
     image:
         gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
-
-#test_minimal/conda-linux:
-#    <<: 
-#        - *test_minimal_template
-#    image:
-#        gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
 
 
 .__local_docker_heredoc__:
@@ -216,17 +166,23 @@ test_full_strict/conda-linux:
             # the watch repo, create the environment, and run the tests. 
             #
             docker login gitlab.kitware.com:4567
-            docker pull gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
 
-            docker run -v ~/.ssh:/tmp/.ssh:ro -it gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3 bash
+            -v $PWD:/io
+
+            docker pull registry.smartgitlab.com/kitware/watch/miniconda3
+
+            docker run -v ~/.ssh:/tmp/.ssh:ro -it registry.smartgitlab.com/kitware/watch/miniconda3 bash
             #docker run -it gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3 bash
             cp -R /tmp/.ssh /root/.ssh
             chmod 700 /root/.ssh
             chmod 600 /root/.ssh/id_*
             chmod 644 /root/.ssh/*.pub
 
+            docker run -v $PWD:/io:ro -it registry.smartgitlab.com/kitware/watch/miniconda3 bash
             cd $HOME
-            git clone git@gitlab.kitware.com:smart/watch.git
+            git clone /io ./watch
+            cd watch
+            #git clone git@gitlab.kitware.com:smart/watch.git
 
             cd $HOME/watch
             git checkout dev/add_ci
@@ -239,3 +195,40 @@ test_full_strict/conda-linux:
 
             ./run_tests.py
 
+            # Pushing miniconda3 env to smart gitlab
+            ~/code/ci-docker/miniconda3.dockerfile
+
+            docker login registry.smartgitlab.com --username $CRALL_SMART_GITLAB_USERNAME --password $CRALL_SMART_GITLAB_TOKEN
+            docker tag ci-docker/miniconda3 registry.smartgitlab.com/kitware/watch/miniconda3
+            docker push registry.smartgitlab.com/kitware/watch/miniconda3
+
+
+            # Running CI locally
+            # References: 
+            # https://stackoverflow.com/questions/32933174/use-gitlab-ci-to-run-tests-locally
+            cd $HOME/watch
+
+            docker run -d \
+              --name gitlab-runner \
+              --restart always \
+              -v $PWD:$PWD \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              gitlab/gitlab-runner:latest
+
+            docker exec -it -w $PWD gitlab-runner gitlab-runner exec docker test_full_loose/conda-linux
+
+
+            # Also
+            # # https://docs.gitlab.com/runner/install/
+            # https://docs.gitlab.com/runner/configuration/advanced-configuration.html
+            arch=$(dpkg-architecture -q DEB_BUILD_ARCH)
+            echo $arch
+            curl -LJO "https://gitlab-runner-downloads.s3.amazonaws.com/latest/deb/gitlab-runner_${arch}.deb"
+            sudo dpkg -i "gitlab-runner_${arch}.deb"
+
+            safe_symlink .gitlab-ci-kitware.yml .gitlab-ci.yml
+            safe_symlink .gitlab-ci-smart.yml .gitlab-ci.yml
+
+
+            gitlab-runner exec docker test_full_loose/conda-linux  \
+                --docker-volumes "$HOME/.ssh:/root/.ssh:ro"

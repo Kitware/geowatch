@@ -104,7 +104,7 @@ def _query_open_elevation(lat, lon, cache=True, attempts=10, verbose=0):
     query_url = url + suffix
 
     cacher = ub.Cacher('elevation', depends=query_url,
-                       appname='smart-watch/elevation_query', verbose=verbose)
+                       appname='smart_watch/elevation_query', verbose=verbose)
     body = cacher.tryload()
     if body is None:
         for i in range(attempts):

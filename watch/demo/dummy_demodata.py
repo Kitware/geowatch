@@ -6,7 +6,7 @@ def dummy_rpc_geotiff_fpath():
     import ubelt as ub
     from os.path import join
     from watch.gis import spatial_reference as watch_crs
-    dpath = ub.ensure_app_cache_dir('smart-watch/demodata')
+    dpath = ub.ensure_app_cache_dir('smart_watch/demodata')
     gpath = join(dpath, 'test_rpc.tif')
     rpcs = watch_crs.RPCTransform.demo()
 
