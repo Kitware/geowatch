@@ -80,14 +80,8 @@ class SimpleVideoDataset(torch.utils.data.Dataset):
         >>> coco_fpath = ub.expandpath('~/data/dvc-repos/smart_watch_dvc/drop0_aligned/data.kwcoco.json')
         >>> dset = kwcoco.CocoDataset(coco_fpath)
         >>> #
-        >>> for img in dset.imgs.values():
-        >>>     chan = img.get('channels', None)
-        >>>     print('img_chan = {!r}'.format(chan))
-        >>>     for aux in img.get('auxiliary', []):
-        >>>         chan = aux.get('channels', None)
-        >>>         print('aux_chan = {!r}'.format(chan))
-        >>> #
         >>> sampler = ndsampler.CocoSampler(dset)
+        >>> print(ub.repr2(self.sample_grid['positives'], nl=-1))
         >>> #
         >>> window_dims = (3, None, None)
         >>> input_dims = (128, 128)
@@ -128,6 +122,7 @@ class SimpleVideoDataset(torch.utils.data.Dataset):
         self.classes = self.sampler.classes
         self.channels = channels
 
+        # Build a simple space-time-grid
         sample_grid_spec = {
             'task': 'video_detection',
             'window_dims': window_dims
@@ -153,7 +148,6 @@ class SimpleVideoDataset(torch.utils.data.Dataset):
         # Break data down on a per-frame basis so we can apply image-based
         # augmentations.
         frame_ims = []
-        frame_dets = []
         frame_masks = []
         for raw_frame, raw_dets in zip(raw_frame_list, raw_det_list):
             frame = raw_frame.astype(np.float32)
@@ -182,7 +176,6 @@ class SimpleVideoDataset(torch.utils.data.Dataset):
 
             frame_masks.append(frame_mask)
             frame_ims.append(frame)
-            frame_dets.append(dets)
 
         # Perpare data for torch
         frame_data = np.concatenate([f[None, ...] for f in frame_ims], axis=0)
@@ -370,3 +363,15 @@ def decollate_batch(batch):
                 decollated_walker[[bx] + path] = ItemContainer(item_val)
     decollated = list(decollated_dict.to_dict().values())
     return decollated
+
+
+def __notes__():
+    """
+        >>> #
+        >>> for img in dset.imgs.values():
+        >>>     chan = img.get('channels', None)
+        >>>     print('img_chan = {!r}'.format(chan))
+        >>>     for aux in img.get('auxiliary', []):
+        >>>         chan = aux.get('channels', None)
+        >>>         print('aux_chan = {!r}'.format(chan))
+    """

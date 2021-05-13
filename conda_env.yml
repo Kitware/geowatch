@@ -50,7 +50,7 @@ dependencies:
     - imgaug >= 0.4.0
     - opencv_python_headless >= 4.5.2.52  # This can be a problem library
     - scikit_image >= 0.18.1
-    - ndsampler >= 0.6.0
+    - ndsampler >= 0.6.1
 
     # Plotting
     - matplotlib >= 3.4.1
