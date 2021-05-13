@@ -37,6 +37,7 @@
 stages:
     - build
     - test
+    - docker
 
 
 ### TEMPLATES ###
@@ -174,12 +175,12 @@ build_docker_loose:
   <<:
     *common_template_docker
   stage:
-    build
+    docker
   script:
     - docker build -t $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG .
     - docker run --rm $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG /bin/bash -c "source /opt/conda/etc/profile.d/conda.sh && conda activate watch && cd /watch && python run_tests.py"
-    - echo "docker push $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG"
-    - docker push $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG
+    # Pushing container only if merging into default branch (i.e. "master")
+    - test "$CI_COMMIT_REF_NAME" == "$CI_DEFAULT_BRANCH" && test "$CI_PIPELINE_SOURCE" == "push" && echo "docker push $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG" && docker push $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG
   image:
     docker:19.03.12
   variables:
