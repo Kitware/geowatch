@@ -30,12 +30,7 @@ VERSION = parse_version('watch/__init__.py')
 with open('README.rst') as readme_file:
     readme = readme_file.read()
 
-requirements = [
-    'utm',
-    'pyproj',
-    'rasterio',
-    'geopandas',
-]
+requirements = []
 
 setup(
     author="WATCH developers",
