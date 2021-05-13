@@ -44,10 +44,6 @@ def normalize_intensity(imdata, return_info=False, nodata=None):
 
     info = {}
 
-    # if len(imdata.shape) > 2 and imdata.shape[2] > 4:
-    #     # Just select one channel for now
-    #     imdata = imdata[:, :, 0]
-
     if nodata is not None:
         imdata_valid = imdata[imdata != nodata]
     else:
