@@ -48,7 +48,7 @@ dependencies:
     - kwcoco >= 0.2.2
     - Pillow >= 8.0.1
     - imgaug >= 0.4.0
-    - opencv_python_headless >= 4.5.2.52
+    - opencv_python_headless >= 4.5.2.52  # This can be a problem library
     - scikit_image >= 0.18.1
     - ndsampler >= 0.6.0
 
