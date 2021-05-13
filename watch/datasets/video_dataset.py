@@ -48,6 +48,7 @@ class SimpleVideoDataset(torch.utils.data.Dataset):
         >>> # Show interaction with a derived loader
         >>> from watch.datasets.video_dataset import *  # NOQA
         >>> import ndsampler
+        >>> import ubelt as ub
         >>> sampler = ndsampler.CocoSampler.demo('vidshapes8-multispectral')
         >>> window_dims = (2, 100, 100)
         >>> input_dims = (64, 64)
@@ -69,45 +70,47 @@ class SimpleVideoDataset(torch.utils.data.Dataset):
         >>>     kwplot.imshow(stacked)
         >>>     xdev.InteractiveIter.draw()
 
-    Ignore:
-        from watch.datasets.video_dataset import *  # NOQA
-        import kwcoco
-        import ndsampler
-        import ubelt as ub
-        coco_fpath = ub.expandpath('~/data/dvc-repos/smart_watch_dvc/drop0_aligned/data.kwcoco.json')
-        dset = kwcoco.CocoDataset(coco_fpath)
-
-        for img in dset.imgs.values():
-            chan = img.get('channels', None)
-            print('img_chan = {!r}'.format(chan))
-            for aux in img.get('auxiliary', []):
-                chan = aux.get('channels', None)
-                print('aux_chan = {!r}'.format(chan))
-
-        sampler = ndsampler.CocoSampler(dset)
-
-        window_dims = (3, None, None)
-        input_dims = (128, 128)
-        channels = 'r|g|b|gray|wv1'
-        # channels = 'gray'
-        self = SimpleVideoDataset(sampler, window_dims, input_dims, channels)
-        index = 2
-        item = self[index]
-        stacked = draw_multispectral_item(item)
-        # xdoctest: +REQUIRES(--show)
-        import kwplot
-        kwplot.autompl()
-        kwplot.imshow(stacked)
-
-        # xdoctest: +REQUIRES(--interact)
-        import xdev
-        loader = self.make_loader(batch_size=3)
-        loader_iter = iter(loader)
-        for index in xdev.InteractiveIter(list(range(len(loader)))):
-            batch = next(loader_iter)
-            stacked = draw_multispectral_batch(batch)
-            kwplot.imshow(stacked)
-            xdev.InteractiveIter.draw()
+    Example:
+        >>> # xdoctest: +SKIP
+        >>> # Example with Real Data
+        >>> from watch.datasets.video_dataset import *  # NOQA
+        >>> import kwcoco
+        >>> import ndsampler
+        >>> import ubelt as ub
+        >>> coco_fpath = ub.expandpath('~/data/dvc-repos/smart_watch_dvc/drop0_aligned/data.kwcoco.json')
+        >>> dset = kwcoco.CocoDataset(coco_fpath)
+        >>> #
+        >>> for img in dset.imgs.values():
+        >>>     chan = img.get('channels', None)
+        >>>     print('img_chan = {!r}'.format(chan))
+        >>>     for aux in img.get('auxiliary', []):
+        >>>         chan = aux.get('channels', None)
+        >>>         print('aux_chan = {!r}'.format(chan))
+        >>> #
+        >>> sampler = ndsampler.CocoSampler(dset)
+        >>> #
+        >>> window_dims = (3, None, None)
+        >>> input_dims = (128, 128)
+        >>> channels = 'r|g|b|gray|wv1'
+        >>> # channels = 'gray'
+        >>> self = SimpleVideoDataset(sampler, window_dims, input_dims, channels)
+        >>> index = 2
+        >>> item = self[index]
+        >>> stacked = draw_multispectral_item(item)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(stacked)
+        >>> #
+        >>> # xdoctest: +REQUIRES(--interact)
+        >>> import xdev
+        >>> loader = self.make_loader(batch_size=3)
+        >>> loader_iter = iter(loader)
+        >>> for index in xdev.InteractiveIter(list(range(len(loader)))):
+        >>>     batch = next(loader_iter)
+        >>>     stacked = draw_multispectral_batch(batch)
+        >>>     kwplot.imshow(stacked)
+        >>>     xdev.InteractiveIter.draw()
 
     """
     def __init__(self, sampler, window_dims, input_dims=None, channels=None,
@@ -356,8 +359,8 @@ def decollate_batch(batch):
         >>> assert len(decollated) == len(batch_items)
         >>> assert (decollated[0]['im'].data == batch_items[0]['im'].data).all()
     """
-    from kwcoco.util.util_json import IndexableWalker
     import ubelt as ub
+    from kwcoco.util.util_json import IndexableWalker
     walker = IndexableWalker(batch)
     decollated_dict = ub.AutoDict()
     decollated_walker = IndexableWalker(decollated_dict)
