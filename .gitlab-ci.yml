@@ -178,6 +178,9 @@ build_docker_loose:
     - docker build -t $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG .
   image:
     docker:19.03.12
+  variables:
+    IMAGE_TAG: loose
+
 
 
 .__local_docker_heredoc__:
