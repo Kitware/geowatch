@@ -40,6 +40,17 @@ stages:
     - docker
 
 
+### Conditionals ###
+
+.if-merge-request: &if-merge-request
+  if: >-
+    $CI_MERGE_REQUEST_IID
+
+.if-merged-into-default: &if-merged-into-default
+  if: >-
+    $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+
+
 ### TEMPLATES ###
 # Define common templates using YAML anchors
 
@@ -174,13 +185,32 @@ test_full_strict/conda-linux:
 build_docker_loose:
   <<:
     *common_template_docker
+  rules:
+    - <<: *if-merge-request
+  stage:
+    docker
+  script:
+    - docker build -t $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG .
+    - docker run --rm $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG /bin/bash -c "source /opt/conda/etc/profile.d/conda.sh && conda activate watch && cd /watch && python run_tests.py"
+  image:
+    docker:19.03.12
+  variables:
+    IMAGE_TAG: loose
+
+
+build_docker_and_upload_loose:
+  <<:
+    *common_template_docker
+  rules:
+    - <<: *if-merged-into-default
   stage:
     docker
   script:
     - docker build -t $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG .
     - docker run --rm $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG /bin/bash -c "source /opt/conda/etc/profile.d/conda.sh && conda activate watch && cd /watch && python run_tests.py"
     # Pushing container only if merging into default branch (i.e. "master")
-    - test "$CI_COMMIT_REF_NAME" == "$CI_DEFAULT_BRANCH" && test "$CI_PIPELINE_SOURCE" == "push" && echo "docker push $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG" && docker push $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG
+    - echo "docker push $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG"
+    - docker push $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG
   image:
     docker:19.03.12
   variables:
