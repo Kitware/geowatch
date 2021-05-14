@@ -113,7 +113,7 @@ class time_sort(pl.LightningModule):
 def main(args):
     if type(args)==dict:
             args = Namespace(**args)
-    log_dir = '{}/{}/train_vidio_{}/{}'.format(
+    log_dir = '{}/{}/train_video_{}/{}'.format(
         args.save_dir,
         'drop0_sort',
         args.train_video,

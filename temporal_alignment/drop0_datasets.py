@@ -13,9 +13,9 @@ import numpy as np
 from matplotlib.path import Path
 
 class drop0_pairs(torch.utils.data.Dataset):
-    def __init__(self, sensor='S2', sites='all', panchromatic=True, video=1, soften_by=0, min_time_step=1, change_labels=list(range(14))):
+    def __init__(self, root = '/u/eag-d1/data/watch/smart_watch_dvc/drop0_aligned/', sensor='S2', sites='all', panchromatic=True, video=1, soften_by=0, min_time_step=1, change_labels=list(range(14))):
         
-        self.dataset = drop0_aligned_segmented(sensor=sensor, sites=sites, panchromatic=panchromatic, video=video, change_labels=change_labels)
+        self.dataset = drop0_aligned_segmented(root=root, sensor=sensor, sites=sites, panchromatic=panchromatic, video=video, change_labels=change_labels)
         self.soften_by = soften_by
         self.length = len(self.dataset)
         self.min_time_step=min_time_step
@@ -44,8 +44,8 @@ class drop0_pairs(torch.utils.data.Dataset):
 
 
 class drop0_aligned_change(torch.utils.data.Dataset):
-    def __init__(self, sensor='S2', sites='all', panchromatic=True, video=1, soften_by=0, change_labels=list(range(14))):
-        self.dataset = drop0_aligned_segmented(sensor=sensor, sites=sites, panchromatic=panchromatic, video=video, change_labels=change_labels)
+    def __init__(self, root = '/u/eag-d1/data/watch/smart_watch_dvc/drop0_aligned/', sensor='S2', sites='all', panchromatic=True, video=1, soften_by=0, change_labels=list(range(14))):
+        self.dataset = drop0_aligned_segmented(sensor=sensor, sites=sites, panchromatic=panchromatic, video=video, change_labels=change_labels, root = root)
         self.soften_by = soften_by
         self.length = len(self.dataset)
     def __len__(self,):
@@ -88,7 +88,8 @@ class drop0_aligned_segmented(torch.utils.data.Dataset):
     WV panchromatic: Videos 1,2,5
     S2: Videos 3,4,5
     """
-    def __init__(self, sensor='S2', sites='all', panchromatic=True, video=1, change_labels=[2,3,4,7,8,9,11]):
+    def __init__(self, root = '/u/eag-d1/data/watch/smart_watch_dvc/drop0_aligned/',
+                 sensor='S2', sites='all', panchromatic=True, video=1, change_labels=[2,3,4,7,8,9,11]):
         
         self.sensor = sensor
         
@@ -103,7 +104,7 @@ class drop0_aligned_segmented(torch.utils.data.Dataset):
                      'US-Waynesboro-0001']
         
         self.video_id = video
-        self.root = '/u/eag-d1/data/watch/smart_watch_dvc/drop0_aligned/'        
+        self.root = root
         self.json_file = osp.join(self.root, 'data.kwcoco.json')        
         dset = kwcoco.CocoDataset(self.json_file)
         
