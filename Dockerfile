@@ -1,5 +1,7 @@
 FROM nvidia/cuda:10.2-cudnn8-devel-ubuntu18.04
 
+ARG BUILD_STRICT=0
+
 RUN apt-get update -q && \
     apt-get install -q -y --no-install-recommends \
         bzip2 \
@@ -40,6 +42,8 @@ RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-${CONDA_VERSION}
 SHELL ["/bin/bash", "--login", "-c"]
 
 COPY conda_env.yml /watch/
+
+RUN if [ "$BUILD_STRICT" -eq 1 ]; then sed -i 's/>=/==/g' /watch/conda_env.yml; fi
 
 RUN conda env create -f /watch/conda_env.yml
 

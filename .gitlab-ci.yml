@@ -198,6 +198,22 @@ build_docker_loose:
     IMAGE_TAG: loose
 
 
+build_docker_strict:
+  <<:
+    *common_template_docker
+  rules:
+    - <<: *if-merge-request
+  stage:
+    docker
+  script:
+    - docker build --build-arg BUILD_STRICT=1 -t $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG .
+    - docker run --rm $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG /bin/bash -c "source /opt/conda/etc/profile.d/conda.sh && conda activate watch && cd /watch && python run_tests.py"
+  image:
+    docker:19.03.12
+  variables:
+    IMAGE_TAG: strict
+
+
 build_docker_and_upload_loose:
   <<:
     *common_template_docker
@@ -215,6 +231,25 @@ build_docker_and_upload_loose:
     docker:19.03.12
   variables:
     IMAGE_TAG: loose
+
+
+build_docker_and_upload_strict:
+  <<:
+    *common_template_docker
+  rules:
+    - <<: *if-merged-into-default
+  stage:
+    docker
+  script:
+    - docker build --build-arg BUILD_STRICT=1 -t $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG .
+    - docker run --rm $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG /bin/bash -c "source /opt/conda/etc/profile.d/conda.sh && conda activate watch && cd /watch && python run_tests.py"
+    # Pushing container only if merging into default branch (i.e. "master")
+    - echo "docker push $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG"
+    - docker push $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG
+  image:
+    docker:19.03.12
+  variables:
+    IMAGE_TAG: strict
 
 
 .__local_docker_heredoc__:
