@@ -13,7 +13,14 @@ import numpy as np
 from matplotlib.path import Path
 
 class drop0_pairs(torch.utils.data.Dataset):
-    def __init__(self, root = '/u/eag-d1/data/watch/smart_watch_dvc/drop0_aligned/', sensor='S2', sites='all', panchromatic=True, video=1, soften_by=0, min_time_step=1, change_labels=list(range(14))):
+    def __init__(self, 
+                 root = '/u/eag-d1/data/watch/smart_watch_dvc/drop0_aligned/', 
+                 sensor='S2', 
+                 panchromatic=True, 
+                 video=1, ### set to 0 to include all videos
+                 soften_by=0, 
+                 min_time_step=1, 
+                 change_labels=list(range(14))):
         
         self.dataset = drop0_aligned_segmented(root=root, sensor=sensor, sites=sites, panchromatic=panchromatic, video=video, change_labels=change_labels)
         self.soften_by = soften_by
@@ -44,7 +51,13 @@ class drop0_pairs(torch.utils.data.Dataset):
 
 
 class drop0_aligned_change(torch.utils.data.Dataset):
-    def __init__(self, root = '/u/eag-d1/data/watch/smart_watch_dvc/drop0_aligned/', sensor='S2', sites='all', panchromatic=True, video=1, soften_by=0, change_labels=list(range(14))):
+    def __init__(self, root = '/u/eag-d1/data/watch/smart_watch_dvc/drop0_aligned/', 
+                 sensor='S2', 
+                 sites='all', 
+                 panchromatic=True, 
+                 video=1, 
+                 soften_by=0, 
+                 change_labels=list(range(14))):
         self.dataset = drop0_aligned_segmented(sensor=sensor, sites=sites, panchromatic=panchromatic, video=video, change_labels=change_labels, root = root)
         self.soften_by = soften_by
         self.length = len(self.dataset)
