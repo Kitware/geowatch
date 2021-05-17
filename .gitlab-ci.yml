@@ -171,6 +171,8 @@ stages:
 test_full_loose/conda-linux:
     <<:
         *test_loose_template
+    rules:
+      - <<: *if-merge-request
     image:
         gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
 
@@ -178,24 +180,10 @@ test_full_loose/conda-linux:
 test_full_strict/conda-linux:
     <<:
         *test_strict_template
+    rules:
+      - <<: *if-merge-request
     image:
         gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
-
-
-build_docker_loose:
-  <<:
-    *common_template_docker
-  rules:
-    - <<: *if-merge-request
-  stage:
-    docker
-  script:
-    - docker build -t $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG .
-    - docker run --rm $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG /bin/bash -c "source /opt/conda/etc/profile.d/conda.sh && conda activate watch && cd /watch && python run_tests.py"
-  image:
-    docker:19.03.12
-  variables:
-    IMAGE_TAG: loose
 
 
 build_docker_strict:
@@ -211,26 +199,7 @@ build_docker_strict:
   image:
     docker:19.03.12
   variables:
-    IMAGE_TAG: strict
-
-
-build_docker_and_upload_loose:
-  <<:
-    *common_template_docker
-  rules:
-    - <<: *if-merged-into-default
-  stage:
-    docker
-  script:
-    - docker build -t $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG .
-    - docker run --rm $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG /bin/bash -c "source /opt/conda/etc/profile.d/conda.sh && conda activate watch && cd /watch && python run_tests.py"
-    # Pushing container only if merging into default branch (i.e. "master")
-    - echo "docker push $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG"
-    - docker push $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG
-  image:
-    docker:19.03.12
-  variables:
-    IMAGE_TAG: loose
+    IMAGE_TAG: latest
 
 
 build_docker_and_upload_strict:
@@ -249,7 +218,7 @@ build_docker_and_upload_strict:
   image:
     docker:19.03.12
   variables:
-    IMAGE_TAG: strict
+    IMAGE_TAG: latest
 
 
 .__local_docker_heredoc__:
