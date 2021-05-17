@@ -66,7 +66,7 @@ stages:
         XDG_CACHE_HOME:
             "$CI_PROJECT_DIR/.cache/xdg_cache"
     tags:
-        - rukbat
+        - aws
         - docker
         - linux
         - linux-3.17
