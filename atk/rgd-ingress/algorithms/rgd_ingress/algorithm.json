@@ -1,0 +1,58 @@
+{
+    "description": "Query the WATCH RGD and pull down images within a specified date range and bounding box.",
+    "display_name": "RGD Ingress",
+    "homepage": "",
+    "license": "MIT",
+    "name": "rgd_ingress",
+    "optional_parameters": [],
+    "outputs": [
+        {
+            "data_type": "string",
+            "description": "Directory where output images / data will be written.  Will be created if it doesn't already exist.",
+            "display_name": "Output directory",
+            "name": "out_dir",
+            "sort_order": 0
+        },
+        {
+            "data_type": "string",
+            "description": "STAC Catalog JSON string",
+            "display_name": "STAC Catalog",
+            "name": "stac_catalog",
+            "sort_order": 1
+        }
+    ],
+    "private": false,
+    "required_parameters": [
+        {
+            "custom_validation": "",
+            "data_type": "array",
+            "default_value": "",
+            "description": "Spatial bounds of the Area of Interest (AOI).",
+            "display_name": "AOI Bounds",
+            "field_type": "text",
+            "help_text": "The AOI bounds should be in the form: '[min_lon, min_lat, max_lon, max_lat]'",
+            "max_value": "",
+            "min_value": "",
+            "name": "aoi_bounds",
+            "parameter_choices": "",
+            "required": true,
+            "sort_order": 0
+        },
+        {
+            "custom_validation": "",
+            "data_type": "array",
+            "default_value": "",
+            "description": "Pull down images from within this date range",
+            "display_name": "Date range",
+            "field_type": "text",
+            "help_text": "Date range should be in the form: '[\\\"start_date\\\", \\\"end_date\\\"]', where both start_date and end_date are in the form \"YYYY-MM-DD\"",
+            "max_value": "",
+            "min_value": "",
+            "name": "date_range",
+            "parameter_choices": "",
+            "required": true,
+            "sort_order": 1
+        }
+    ],
+    "version": "0.0.1"
+}
