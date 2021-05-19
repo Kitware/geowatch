@@ -1,0 +1,8 @@
+{
+    "rgd_ingress": [
+        {
+            "algorithm": "rgd_ingress",
+            "parameter_source": "user"
+        }
+    ]
+}
