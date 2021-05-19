@@ -27,9 +27,6 @@ class MainTestCase(AlgorithmTestCase):
         stac_catalog = json.loads(
             self.cl.get_from_metadata('stac-catalog')['output_value'])
 
-        with open("example_output_catalog.json", 'w') as f:
-            print(json.dumps(stac_catalog, indent=2), file=f)
-
         for feature in stac_catalog.get('features', ()):
             # Ensure that the asset paths have been updated to point
             # to the local copy
