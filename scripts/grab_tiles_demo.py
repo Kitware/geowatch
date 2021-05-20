@@ -8,6 +8,7 @@ A demo for grabbing the same set of Landsat and Sentinel-2 tiles 2 ways.
 import os
 import json
 from datetime import datetime, timedelta
+from dateutil.parser import isoparse
 from fels import run_fels, safedir_to_datetime, landsatdir_to_date
 from rgdc import Rgdc
 import scriptconfig as scfg
@@ -131,9 +132,9 @@ def try_rgdc(geojson_bbox, dt_min, dt_max, out_dpath=None, username=None,
 def coerce_regions(regions):
     if isinstance(regions, str):
         fpath = regions
-        with open(fpath, 'r'):
-            final = json.load(fpath)
-    elif isinstance(regions, list):
+        with open(fpath, 'r') as f:
+            regions = json.load(f)
+    if isinstance(regions, list):
         final = regions
     elif isinstance(regions, dict):
         final = [regions]
@@ -220,11 +221,10 @@ def main(**kwargs):
     regions = coerce_regions(config['regions'])
     out_dpath = config['out_dpath']
 
-    from watch.utils.util_time import Timestamp
     for region in regions:
         geojson_bbox = region['region_geos']
-        dt_min = Timestamp.coerce(region['min_time']).to_datetime()
-        dt_max = Timestamp.coerce(region['max_time']).to_datetime()
+        dt_min = isoparse(region['min_time'])
+        dt_max = isoparse(region['max_time'])
 
         if config['backend'] == 'rgdc':
             try_rgdc(geojson_bbox, dt_min, dt_max, out_dpath=out_dpath,
