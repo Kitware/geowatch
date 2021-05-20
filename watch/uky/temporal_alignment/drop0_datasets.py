@@ -26,7 +26,7 @@ class drop0_pairs(torch.utils.data.Dataset):
                  min_time_step=1, 
                  change_labels=list(range(14))):
         
-        self.dataset = drop0_aligned_segmented(root=root, sensor=sensor, sites=sites, panchromatic=panchromatic, video=video, change_labels=change_labels)
+        self.dataset = drop0_aligned_segmented(root=root, sensor=sensor, panchromatic=panchromatic, video=video, change_labels=change_labels)
         self.soften_by = soften_by
         self.length = len(self.dataset)
         self.min_time_step=min_time_step
