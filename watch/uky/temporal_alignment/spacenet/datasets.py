@@ -14,7 +14,7 @@ class S7_sort(data.Dataset):
     normalize_params = [[0.16198677, 0.22665408, 0.1745371], [0.06108317, 0.06515977, 0.04128775]]
     def __init__(self,
                 crop_size=[128,128],
-                splits = './spacenet/data/splits2/', #### unmasked images
+                splits = './spacenet/data/splits_unmasked/', #### unmasked images
                 train=True,
                 normalize=False,
                 num_images=2,
@@ -101,7 +101,7 @@ class S7_time_aligned(data.Dataset):
     normalize_params = [[0.16198677, 0.22665408, 0.1745371], [0.06108317, 0.06515977, 0.04128775]]
     def __init__(self,
                 crop_size=[128,128],
-                splits = './spacenet/data/splits2/', #### unmasked images
+                splits = './spacenet/data/splits_unmasked/', #### unmasked images
                 train=True,
                 normalize=False
                 ):
