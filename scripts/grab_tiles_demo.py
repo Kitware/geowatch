@@ -90,8 +90,6 @@ def try_rgdc(geojson_bbox, dt_min, dt_max, out_dpath=None, username=None,
     You can go there to make a username and password.
     Landsat/Sentinel2 for all drop0 sites is being ingested here.
     Eventually, commercial (WV/Planet) data will live there as well.
-    Connect to that by passing
-        api_url="watch.resonantgeodata.com/api"
 
     If that instance is not working for some reason, you can use
     the default public instance at https://www.resonantgeodata.com/.
@@ -100,12 +98,11 @@ def try_rgdc(geojson_bbox, dt_min, dt_max, out_dpath=None, username=None,
     If you do not enter your password you will be prompted for it.
     '''
     if out_dpath is None:
-        # put this wherever you're ok with dumping 6GB of indexes
         out_path = './grab_tiles_demo/rgdc/'
     else:
         out_path = os.path.join(out_dpath, 'rgdc')
 
-    client = Rgdc(username=username, password=password)
+    client = Rgdc(username=username, password=password, api_url='https://watch.resonantgeodata.com/api')
     kwargs = {
         'query': json.dumps(geojson_bbox),
         'predicate': 'intersects',
