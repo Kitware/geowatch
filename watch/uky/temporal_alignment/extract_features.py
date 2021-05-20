@@ -17,7 +17,7 @@ def extract_features(checkpoint,
                     panchromatic, 
                     device='cuda'
                     ):
-    """Function for extracting features given kwcoco reference to data and annotations. Output is copy of kwcoco file with paths towards saved pixel-wise feature vectors.
+    """Function for extracting features given kwcoco reference to data and annotations. Output is copy of input kwcoco file with path towards saved pixel-wise features for image_id x saved under dset.imgs[x]['features'].
 
     Arguments:
         checkpoint:  Path to checkpoint of lightning module. Default is UNet base trained on image sorting into before/after.
@@ -81,12 +81,12 @@ if __name__ == '__main__':
     
     ### drop0_aligned dataset arguments
     parser.add_argument('--panchromatic', help='set flag for using panchromatic landsat imagery', action='store_true')
-    parser.add_argument('--sensor', type=str, help='Choose from WV, LC, or S2', default='S2')   
-    parser.add_argument('--data_folder', default='/u/eag-d1/data/watch/drop0_aligned/')
-    parser.add_argument('--kwcoco_file', help='kwcoco file with dataset', default='/u/eag-d1/data/watch/drop0_aligned/data.kwcoco.json')
-    parser.add_argument('--output_kwcoco', help='Filename to save output kwcoco', default='/u/eag-d1/scratch/ben/test.kwcoco.json')
-    parser.add_argument('--output_folder', help='Folder to store output feature tenors as .pt files', default='/u/eag-d1/scratch/ben/drop0_features/')
-    parser.add_argument('--image_ids', nargs='+', type=int, help='Set to 0 for all available images. Otherwise input list of image ids for processing.', default=0)
+    parser.add_argument('--sensor', type=str, help='Choose from WV, LC, or S2', default='S2') #with default checkpoint, we must use RGB images  
+    parser.add_argument('--data_folder', default='/localdisk0/SCRATCH/watch/smart_watch_dvc/drop0_aligned/')
+    parser.add_argument('--kwcoco_file', help='kwcoco file with dataset', default='/localdisk0/SCRATCH/watch/smart_watch_dvc/drop0_aligned/data.kwcoco.json')
+    parser.add_argument('--output_kwcoco', help='Filename to save output kwcoco file', default='/localdisk0/SCRATCH/watch/smart_watch_dvc/drop0_features/test.kwcoco.json')
+    parser.add_argument('--output_folder', help='Folder to store output feature tenors as .pt files', default='/u/eag-d1/scratch/ben/drop0_features/tensors')
+    parser.add_argument('--image_ids', nargs='+', type=int, help='Set to 0 for all available images. Otherwise take list of image ids for processing. Images from non-matching sensors will be automatically skipped.', default=0)
     parser.add_argument('--device', type=str, default='cuda')
     
     args = parser.parse_args()

@@ -18,7 +18,7 @@ class drop0_pairs(torch.utils.data.Dataset):
     
     
     def __init__(self, 
-                 root = '/u/eag-d1/data/watch/smart_watch_dvc/drop0_aligned/', 
+                 root = '/localdisk0/SCRATCH/watch/smart_watch_dvc/drop0_aligned/', 
                  sensor='S2', 
                  panchromatic=True, 
                  video=1, ### set to 0 to include all videos
@@ -55,7 +55,7 @@ class drop0_pairs(torch.utils.data.Dataset):
 
 
 class drop0_aligned_change(torch.utils.data.Dataset):
-    def __init__(self, root = '/u/eag-d1/data/watch/smart_watch_dvc/drop0_aligned/', 
+    def __init__(self, root = '/localdisk0/SCRATCH/watch/smart_watch_dvc/drop0_aligned/', 
                  sensor='S2', 
                  sites='all', 
                  panchromatic=True, 
@@ -106,7 +106,7 @@ class drop0_aligned_segmented(torch.utils.data.Dataset):
     S2: Videos 3,4,5
     """
     
-    def __init__(self, root = '/u/eag-d1/data/watch/smart_watch_dvc/drop0_aligned/',
+    def __init__(self, root = '/localdisk0/SCRATCH/watch/smart_watch_dvc/drop0_aligned/',
                  sensor='S2', sites='all', panchromatic=True, video=1, change_labels=[2,3,4,7,8,9,11]):
         
         self.sensor = sensor
@@ -267,7 +267,7 @@ class drop0_aligned(torch.utils.data.Dataset):
                      'US-Waynesboro-0001']
         
         self.video_id = video
-        self.root = '/u/eag-d1/data/watch/smart_watch_dvc/drop0_aligned/'         
+        self.root = '/localdisk0/SCRATCH/watch/smart_watch_dvc/drop0_aligned/'         
         self.json_file = osp.join(self.root, 'data.kwcoco.json')        
         dset = kwcoco.CocoDataset(self.json_file)
 

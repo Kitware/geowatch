@@ -9,8 +9,6 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from utils import setup_python_logging
 import os
 
-import sys
-sys.path.append('/u/amo-d0/grad/brodie/smart_watch_ben/src/')
 from drop0_datasets import drop0_pairs
 
 
