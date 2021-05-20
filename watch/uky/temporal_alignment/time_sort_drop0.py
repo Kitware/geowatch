@@ -82,7 +82,7 @@ class time_sort(pl.LightningModule):
     
     def train_dataloader(self):
         return torch.utils.data.DataLoader(drop0_pairs(
-                    sensor=self.hparams.sensor, sites='all', panchromatic=self.hparams.panchromatic, video=self.hparams.train_video, soften_by=0, min_time_step=self.hparams.min_time_step
+                    sensor=self.hparams.sensor, panchromatic=self.hparams.panchromatic, video=self.hparams.train_video, soften_by=0, min_time_step=self.hparams.min_time_step
                     ), 
                 batch_size = self.hparams.batch_size,
                 num_workers = self.hparams.workers
@@ -90,7 +90,7 @@ class time_sort(pl.LightningModule):
 
     def val_dataloader(self):
         return torch.utils.data.DataLoader(drop0_pairs(
-                    sensor=self.hparams.sensor, sites='all', panchromatic=self.hparams.panchromatic, video=self.hparams.test_video, soften_by=0, min_time_step=self.hparams.min_time_step
+                    sensor=self.hparams.sensor, panchromatic=self.hparams.panchromatic, video=self.hparams.test_video, soften_by=0, min_time_step=self.hparams.min_time_step
                     ), 
                 batch_size = self.hparams.batch_size,
                 num_workers = self.hparams.workers
@@ -147,7 +147,7 @@ if __name__ == '__main__':
     
     parser.add_argument('--panchromatic', help='set flag for using panchromatic landsat imagery', action='store_true')
     parser.add_argument('--sensor', type=str, help='choose from WV, LC, or S2', default='S2')
-    parser.add_argument('--in_channels', default=3)
+    parser.add_argument('--in_channels', type=int, default=3)
     parser.add_argument('--train_video', type=int, default=1)
     parser.add_argument('--test_video', type=int, default=5)
     parser.add_argument('--min_time_step', type=int, default=1)
