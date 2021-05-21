@@ -19,7 +19,7 @@ import functools
 from osgeo import gdal, osr
 import numpy as np
 import kwimage as ki
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil.parser import isoparse
 import utm
 import pyproj
@@ -40,6 +40,8 @@ def scenes_to_vrt(scenes, vrt_root):
     
     A simple wrapper around watch.utils.util_raster.make_vrt that performs both
     the 'stacked' and 'mosaicked' modes
+    
+    TODO make sure nodata doesn't overwrite data in mosaic
 
     Args:
         scenes: list(scene), where scene := list(path) [of band files]
@@ -54,7 +56,7 @@ def scenes_to_vrt(scenes, vrt_root):
     tmp_vrts = [
         util_raster.make_vrt(
             scene,
-            os.path.join(vrt_root, f'{hash(scene.path.stem)}.vrt'),
+            os.path.join(vrt_root, f'{hash(scene[0])}.vrt'),
             mode='stacked',
             relative_to_path=os.getcwd(),
         ) for scene in scenes
@@ -63,7 +65,7 @@ def scenes_to_vrt(scenes, vrt_root):
     # then mosaic them
     final_vrt = util_raster.make_vrt(
         tmp_vrts,
-        os.path.join(vrt_root, f'{hash(scenes[0].path.stem + "final")}.vrt'),
+        os.path.join(vrt_root, f'{hash(scenes[0][0] + "final")}.vrt'),
         mode='mosaicked',
         relative_to_path=os.getcwd())
 
@@ -76,12 +78,11 @@ def scenes_to_vrt(scenes, vrt_root):
 
 def epsg_code_from_latlon(lat, lon):
     _, _, zone, south = utm.from_latlon(lat, lon)
-    authority, code = pyproj.CRS({
+    return pyproj.CRS({
         'proj': 'utm',
         'zone': zone,
         'south': (south == 'S')
-    })
-    return int(code)
+    }).to_epsg()
 
 
 def reproject_crop(in_path, bbox, vrt_root=None):
@@ -96,6 +97,7 @@ def reproject_crop(in_path, bbox, vrt_root=None):
     This means another intermediate file is necessary for each warp operation.
     
     TODO check for this quantization error: https://gis.stackexchange.com/q/139906
+    TODO bbox -> AOI
 
     Args:
         in_path: A georeferenced image. GTiff, VRT, etc.
@@ -116,13 +118,17 @@ def reproject_crop(in_path, bbox, vrt_root=None):
 
     # ensure both corner points are in the same UTM zone
     # TODO generalize this to a geojson Feature, handle edge case w/ warning
-    codes = set(epsg_code_from_latlon(lat, lon) for lon, lat in bbox)
+    codes = set(epsg_code_from_latlon(lat, lon) for lon, lat in [bbox[:2], bbox[2:]])
     assert len(codes) == 1
     code = codes.pop()
 
     dst_crs = osr.SpatialReference()
     dst_crs.ImportFromEPSG(code)
-    opts = gdal.WarpOptions(outputBounds=bbox, dstSRS=dst_crs)
+
+    bounds_crs = osr.SpatialReference()
+    bounds_crs.ImportFromEPSG(4326)
+
+    opts = gdal.WarpOptions(outputBounds=bbox, dstSRS=dst_crs, outputBoundsSRS=bounds_crs)
     vrt = gdal.Warp(out_path, in_path, options=opts)
     del vrt
 
@@ -167,6 +173,7 @@ def main():
     # match AOI and query LS tiles
 
     # S2 scenes do not overlap perfectly - get their intersection
+    # TODO use shapely for this to support non-bbox footprint
     s2_bboxes = ki.Boxes.concatenate(
         [ki.Polygon.from_geojson(q['footprint']).to_boxes() for q in query_s2])
     s2_min_bbox = functools.reduce(lambda b1, b2: b1.intersection(b2),
@@ -179,10 +186,9 @@ def main():
 
     print(f'S2, L7, L8: {len(query_s2)}, {len(query_l7)}, {len(query_l8)}')
 
-    query_s2 = util_rgdc.group_sentinel2_tiles(
-        query_s2)  # this has no effect for this AOI
-    query_l7 = util_rgdc.group_landsat_tiles(query_l7)
-    query_l8 = util_rgdc.group_landsat_tiles(query_l8)
+    query_s2 = util_rgdc.group_tiles(query_s2)  # this has no effect for this AOI
+    query_l7 = util_rgdc.group_tiles(query_l7)
+    query_l8 = util_rgdc.group_tiles(query_l8)
 
     def as_stac(scene):
         # this is a temporary workaround until STAC endpoint is in the client
@@ -190,8 +196,9 @@ def main():
         return requests.get(scene['detail'] + '/stac').json()
 
     def filter_cloud(scenes, max_cloud_frac):
+        # not all entries have this field
         cloud_frac = np.mean([
-            as_stac(scene)['properties']['eo:cloud_cover'] for scene in scenes
+            as_stac(scene)['properties'].get('eo:cloud_cover', 0) for scene in scenes
         ])
         return cloud_frac <= max_cloud_frac
 
@@ -207,9 +214,9 @@ def main():
     # overlap should have no effect for query_s2
     filter_fn = lambda s: filter_cloud(s, 0.5) and filter_overlap(s, 0.25)
 
-    query_s2 = filter(filter_fn, query_s2)
-    query_l7 = filter(filter_fn, query_l7)
-    query_l8 = filter(filter_fn, query_l8)
+    query_s2 = list(filter(filter_fn, query_s2))
+    query_l7 = list(filter(filter_fn, query_l7))
+    query_l8 = list(filter(filter_fn, query_l8))
 
     # combine all queries in correct time order,
     # with sat_codes to keep track of which are from each satellite
@@ -220,6 +227,8 @@ def main():
 
     nice = {'S2A': 'S2', 'S2B': 'S2', 'OLI_TIRS': 'L8', 'ETM': 'L7'}
     sat_codes = [nice[q[0]['instrumentation']] for q in query]
+
+    print(f'{len(query)} filtered and merged scenes')
 
     # download all tiles
 
@@ -248,8 +257,8 @@ def main():
     vrt_root = os.path.join(out_path, 'vrt')
 
     paths = [
-        scenes_to_vrt(_bands(p, sat), vrt_root)
-        for p, sat in zip(paths, sat_codes)
+        scenes_to_vrt([_bands(s, sat) for s in scenes], vrt_root)
+        for scenes, sat in zip(paths, sat_codes)
     ]
 
     # orthorectification would happen here, before cropping away the margins
@@ -260,10 +269,13 @@ def main():
     ]
 
     # output GIF of thumbnails
-
+    
+    # 1 second per 5 days between images
+    duration = (np.diff(datetimes, prepend=(datetimes[0]-timedelta(days=5))) / timedelta(days=5))
     imageio.mimsave(
         os.path.join(out_path, 'test.gif'),
-        [util_norm.thumbnail(p, sat) for p, sat in zip(paths, sat_codes)])
+        [util_norm.thumbnail(p, sat) for p, sat in zip(paths, sat_codes)],
+        duration=duration)
 
 
 if __name__ == '__main__':

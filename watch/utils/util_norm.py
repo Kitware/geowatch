@@ -144,7 +144,7 @@ def thumbnail(in_path, sat=None, max_dim=1000):
                 bands = np.stack([f.read(5), f.read(3), f.read(2)], axis=-1)
 
     bands = normalize_intensity(bands, nodata=0)
-    bands = ki.ensure_uint8(bands)
+    bands = ki.ensure_uint255(bands)
     bands = ki.imresize(bands, max_dim=max_dim)
     return bands
 
