@@ -1,5 +1,5 @@
 import numpy as np
-from dateutils.parser import isoparse
+from dateutil.parser import isoparse
 
 
 def group_tiles(query, timediff_sec=300):
