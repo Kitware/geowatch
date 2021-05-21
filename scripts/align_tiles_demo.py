@@ -24,6 +24,9 @@ from dateutil.parser import isoparse
 import utm
 import imageio
 import rasterio
+import shapely as shp
+import shapely.ops
+import shapely.geometry
 
 from watch.utils import util_raster, util_norm, util_rgdc
 
@@ -160,12 +163,47 @@ def main():
 
     print(f'S2, L7, L8: {len(query_s2)}, {len(query_l7)}, {len(query_l8)}')
 
-    query_s2 = group_sentinel2_tiles(
-        query_sentinel2)  # this has no effect for this AOI
-    query_l7 = group_landsat_tiles(query_l7)
-    query_l8 = group_landsat_tiles(query_l8)
+    query_s2 = util_rgdc.group_sentinel2_tiles(
+        query_s2)  # this has no effect for this AOI
+    query_l7 = util_rgdc.group_landsat_tiles(query_l7)
+    query_l8 = util_rgdc.group_landsat_tiles(query_l8)
 
-    # TODO filter by cloud cover and overlap with AOI here
+    def as_stac(scene):
+        # this is a temporary workaround until STAC endpoint is in the client
+        import requests
+        return requests.get(scene['detail'] + '/stac').json()
+
+    def filter_cloud(scenes, max_cloud_frac):
+        cloud_frac = np.mean([
+            as_stac(scene)['properties']['eo:cloud_cover'] for scene in scenes
+        ])
+        return cloud_frac <= max_cloud_frac
+
+    def filter_overlap(scenes, min_overlap):
+        polys = [as_stac(scene)['geometry'] for scene in scenes]
+        polys = [shp.geometry.shape(p).buffer(0) for p in polys]
+        u = shp.ops.cascaded_union(polys)
+        aoi = shp.geometry.shape(s2_min_bbox)
+        overlap = u.intersection(aoi).area / aoi.area
+        return overlap >= min_overlap
+
+    # filter out unwanted scenes before downloading
+    # overlap should have no effect for query_s2
+    filter_fn = lambda s: filter_cloud(s, 0.5) and filter_overlap(s, 0.25)
+
+    query_s2 = filter(filter_fn, query_s2)
+    query_l7 = filter(filter_fn, query_l7)
+    query_l8 = filter(filter_fn, query_l8)
+
+    # combine all queries in correct time order,
+    # with sat_codes to keep track of which are from each satellite
+
+    query = query_s2 + query_l7 + query_l8
+    datetimes = [isoparse(q[0]['acquisition_date']) for q in query]
+    datetimes, query = zip(*sorted(zip(datetimes, query)))
+
+    nice = {'S2A': 'S2', 'S2B': 'S2', 'OLI_TIRS': 'L8', 'ETM': 'L7'}
+    sat_codes = [nice[q[0]['instrumentation']] for q in query]
 
     # download all tiles
 
@@ -181,53 +219,35 @@ def main():
             for search_result in query
         ]
 
-    paths_s2 = list(map(_paths, query_s2))
-    paths_l7 = list(map(_paths, query_l7))
-    paths_l8 = list(map(_paths, query_l8))
+    paths = [_paths(q) for q in query]
 
     # convert to VRT
 
+    def _bands(paths, sat):
+        if sat == 'S2':
+            return util_rgdc.bands_sentinel2(paths)
+        elif sat == 'L7' or sat == 'L8':
+            return util_rgdc.bands_landsat(paths)
+
     vrt_root = os.path.join(out_path, 'vrt')
 
-    paths_s2 = [
-        scenes_to_vrt(util_rgdc.bands_sentinel2(p), vrt_root) for p in paths_s2
-    ]
-    paths_l7 = [
-        scenes_to_vrt(util_rgdc.bands_landsat(p), vrt_root) for p in paths_l7
-    ]
-    paths_l8 = [
-        scenes_to_vrt(util_rgdc.bands_landsat(p), vrt_root) for p in paths_l8
-    ]
-
-    # combine all tiles in correct time order
-
-    datetimes = [
-        isoparse(q['acquisition_date'])
-        for q in (query_s2 + query_l7 + query_l8)
-    ]
-    all_paths = [
-        p for _, p in sorted(zip(datetimes, paths_s2 + paths_l7 + paths_l8))
-    ]
-    nice = {'S2A': 'S2', 'S2B': 'S2', 'OLI_TIRS': 'L8', 'ETM': 'L7'}
-    sat_codes = [
-        p for _, p in sorted(
-            zip(datetimes, [
-                nice[q['instrumentation']]
-                for q in query_s2 + query_l7 + query_l8
-            ]))
+    paths = [
+        scenes_to_vrt(_bands(p, sat), vrt_root) for p, sat in zip(paths, sat_codes)
     ]
 
     # orthorectification would happen here, before cropping away the margins
 
-    all_paths = [
+    paths = [
         reproject_crop(p, (s2_min_bbox['coordinates'][0][0] +
                            s2_min_bbox['coordinates'][0][2]))
-        for p in all_paths
+        for p in paths
     ]
+
+    # output GIF of thumbnails
 
     imageio.mimsave(
         os.path.join(out_path, 'test.gif'),
-        [util_norm.thumbnail(p, sat) for p, sat in zip(all_paths, sat_codes)])
+        [util_norm.thumbnail(p, sat) for p, sat in zip(paths, sat_codes)])
 
 
 if __name__ == '__main__':
