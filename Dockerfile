@@ -18,9 +18,11 @@ RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-py38_4.9.2-Linux
 
 SHELL ["/bin/bash", "--login", "-c"]
 
-COPY . /watch
+COPY conda_env.yml /watch/
 
 RUN conda env create -f /watch/conda_env.yml
+
+COPY . /watch
 
 RUN conda activate watch && \
     pip install --no-deps -e /watch
