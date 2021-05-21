@@ -22,6 +22,7 @@ import kwimage as ki
 from datetime import datetime
 from dateutil.parser import isoparse
 import utm
+import pyproj
 import imageio
 import rasterio
 import shapely as shp
@@ -73,11 +74,21 @@ def scenes_to_vrt(scenes, vrt_root):
     return final_vrt
 
 
+def epsg_code_from_latlon(lat, lon):
+    _, _, zone, south = utm.from_latlon(lat, lon)
+    authority, code = pyproj.CRS({
+        'proj': 'utm',
+        'zone': zone,
+        'south': (south == 'S')
+    })
+    return int(code)
+
+
 def reproject_crop(in_path, bbox, vrt_root=None):
     '''
-    Convert to epsg:4326 CRS and crop to common bounding box
+    Convert to a UTM CRS and crop to common bounding box
 
-    Unfortunately, this cannot be done in a single step in path_to_vrt_{ls|s2}
+    Unfortunately, this cannot be done in a single step in scenes_to_vrt
     because gdal.BuildVRT does not support warping between CRS, and the bbox wanted
     is given in epsg:4326 (not the tiles' original CRS). gdal.BuildVRTOptions has an
     outputBounds(=-te) kwarg for cropping, but not an equivalent of -te_srs.
@@ -85,7 +96,6 @@ def reproject_crop(in_path, bbox, vrt_root=None):
     This means another intermediate file is necessary for each warp operation.
     
     TODO check for this quantization error: https://gis.stackexchange.com/q/139906
-    TODO make this UTM
 
     Args:
         in_path: A georeferenced image. GTiff, VRT, etc.
@@ -104,8 +114,14 @@ def reproject_crop(in_path, bbox, vrt_root=None):
         print(f'Warning: {out_path} already exists! Removing...')
         os.remove(out_path)
 
+    # ensure both corner points are in the same UTM zone
+    # TODO generalize this to a geojson Feature, handle edge case w/ warning
+    codes = set(epsg_code_from_latlon(lat, lon) for lon, lat in bbox)
+    assert len(codes) == 1
+    code = codes.pop()
+
     dst_crs = osr.SpatialReference()
-    dst_crs.ImportFromEPSG(4326)
+    dst_crs.ImportFromEPSG(code)
     opts = gdal.WarpOptions(outputBounds=bbox, dstSRS=dst_crs)
     vrt = gdal.Warp(out_path, in_path, options=opts)
     del vrt
@@ -232,15 +248,15 @@ def main():
     vrt_root = os.path.join(out_path, 'vrt')
 
     paths = [
-        scenes_to_vrt(_bands(p, sat), vrt_root) for p, sat in zip(paths, sat_codes)
+        scenes_to_vrt(_bands(p, sat), vrt_root)
+        for p, sat in zip(paths, sat_codes)
     ]
 
     # orthorectification would happen here, before cropping away the margins
 
     paths = [
         reproject_crop(p, (s2_min_bbox['coordinates'][0][0] +
-                           s2_min_bbox['coordinates'][0][2]))
-        for p in paths
+                           s2_min_bbox['coordinates'][0][2])) for p in paths
     ]
 
     # output GIF of thumbnails
