@@ -13,19 +13,19 @@ class MainTestCase(AlgorithmTestCase):
         output_dir = "/data/outdir"
         dry_run = 1
         self.params = {
-            'stac-api-key': os.environ['STAC_API_KEY'],
-            'aoi-bounds': [128.662489, 37.659517, 128.676673, 37.664560],
-            'date-range': ["2017", "2018"],
-            'stac-api-url': "https://api.smart-stac.com/",
-            'output-dir': output_dir,
+            'stac_api_key': os.environ['STAC_API_KEY'],
+            'aoi_bounds': [128.662489, 37.659517, 128.676673, 37.664560],
+            'date_range': ["2017", "2018"],
+            'stac_api_url': "https://api.smart-stac.com/",
+            'output_dir': output_dir,
             'collections': ["worldview-nitf"],
-            'dry-run': dry_run}
+            'dry_run': dry_run}
 
         self.alg = Main(cl=self.cl, params=self.params)
         self.alg.run()
 
         stac_catalog = json.loads(
-            self.cl.get_from_metadata('stac-catalog')['output_value'])
+            self.cl.get_from_metadata('stac_catalog')['output_value'])
 
         for feature in stac_catalog.get('features', ()):
             # Ensure that the asset paths have been updated to point

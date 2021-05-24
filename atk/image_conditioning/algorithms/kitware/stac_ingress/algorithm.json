@@ -3,7 +3,7 @@
     "display_name": "STAC Ingestion",
     "homepage": "",
     "license": "Other",
-    "name": "kitware/stac-ingress",
+    "name": "kitware/stac_ingress",
     "optional_parameters": [
         {
             "custom_validation": "",
@@ -15,7 +15,7 @@
             "help_text": "",
             "max_value": "",
             "min_value": "",
-            "name": "stac-api-key",
+            "name": "stac_api_key",
             "parameter_choices": "",
             "required": false,
             "sort_order": 3
@@ -30,7 +30,7 @@
             "help_text": "If set to '1' this algorithm will use the '--dryrun' flag on any aws commands, meaning that no data will be copied locally.",
             "max_value": 1,
             "min_value": 0,
-            "name": "dry-run",
+            "name": "dry_run",
             "parameter_choices": "",
             "required": false,
             "sort_order": 6
@@ -41,14 +41,14 @@
             "data_type": "string",
             "description": "STAC Catalog JSON string",
             "display_name": "STAC Catalog",
-            "name": "stac-catalog",
+            "name": "stac_catalog",
             "sort_order": 0
         },
         {
             "data_type": "string",
             "description": "Directory where images / data have been written.",
             "display_name": "Output directory",
-            "name": "output-dir",
+            "name": "output_dir",
             "sort_order": 1
         }
     ],
@@ -64,7 +64,7 @@
             "help_text": "The AOI bounds should be in the form: '[min_lon, min_lat, max_lon, max_lat]'",
             "max_value": "",
             "min_value": "",
-            "name": "aoi-bounds",
+            "name": "aoi_bounds",
             "parameter_choices": "",
             "required": true,
             "sort_order": 0
@@ -79,7 +79,7 @@
             "help_text": "Date range should be in the form: '[\"start_date\", \"end_date\"]' where \"start_date\" and \"end_date\" are UTC formatted date/timestamps.",
             "max_value": "",
             "min_value": "",
-            "name": "date-range",
+            "name": "date_range",
             "parameter_choices": "",
             "required": true,
             "sort_order": 1
@@ -94,7 +94,7 @@
             "help_text": "E.g.: https://api.smart-stac.com/",
             "max_value": "",
             "min_value": "",
-            "name": "stac-api-url",
+            "name": "stac_api_url",
             "parameter_choices": "",
             "required": true,
             "sort_order": 2
@@ -109,7 +109,7 @@
             "help_text": "",
             "max_value": "",
             "min_value": "",
-            "name": "output-dir",
+            "name": "output_dir",
             "parameter_choices": "",
             "required": true,
             "sort_order": 4

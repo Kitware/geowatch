@@ -3,21 +3,21 @@
     "display_name": "STAC Egress",
     "homepage": "",
     "license": "Other",
-    "name": "kitware/stac-egress",
+    "name": "kitware/stac_egress",
     "optional_parameters": [],
     "outputs": [
         {
             "data_type": "string",
             "description": "S3 bucket where data has been uploaded",
             "display_name": "Output S3 Bucket",
-            "name": "s3-bucket",
+            "name": "s3_bucket",
             "sort_order": 0
         },
         {
             "data_type": "string",
             "description": "STAC Catalog JSON string",
             "display_name": "STAC Catalog",
-            "name": "stac-catalog",
+            "name": "stac_catalog",
             "sort_order": 1
         }
     ],
@@ -33,7 +33,7 @@
             "help_text": "STAC catalog JSON string",
             "max_value": "",
             "min_value": "",
-            "name": "stac-catalog",
+            "name": "stac_catalog",
             "parameter_choices": "",
             "required": true,
             "sort_order": 0
@@ -48,7 +48,7 @@
             "help_text": "URI of the S3 bucket where the STAC catalog and assets should be uploaded",
             "max_value": "",
             "min_value": "",
-            "name": "s3-bucket",
+            "name": "s3_bucket",
             "parameter_choices": "",
             "required": true,
             "sort_order": 1
@@ -63,7 +63,7 @@
             "help_text": "If set to '1' this algorithm will use the '--dryrun' flag on any aws commands, meaning that no data will actually be uploaded",
             "max_value": 1,
             "min_value": 0,
-            "name": "dry-run",
+            "name": "dry_run",
             "parameter_choices": "",
             "required": true,
             "sort_order": 2

@@ -32,15 +32,15 @@ class MainTestCase(AlgorithmTestCase):
         s3_outpath = "s3://dry-run-bucket"
         dry_run = 1
         self.params = {
-            'stac-catalog': test_catalog,
-            's3-bucket': s3_outpath,
-            'dry-run': dry_run}
+            'stac_catalog': test_catalog,
+            's3_bucket': s3_outpath,
+            'dry_run': dry_run}
 
         self.alg = Main(cl=self.cl, params=self.params)
         self.alg.run()
 
         stac_catalog = json.loads(
-            self.cl.get_from_metadata('stac-catalog')['output_value'])
+            self.cl.get_from_metadata('stac_catalog')['output_value'])
 
         for feature in stac_catalog.get('features', ()):
             # Ensure that the asset paths have been updated to point
