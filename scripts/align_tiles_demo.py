@@ -9,22 +9,19 @@ Inputs:
 Outputs:
     Downloaded S2, L7, and L8 tiles from Resonant GeoData in 'align_tiles_demo/'
     Intermediate VRT files in 'align_tiles_demo/vrt/'
-    GIF of aligned, cropped, EPSG:4326-reprojected tiles 'align_tiles_demo/test.gif'
+    GIF of aligned, cropped, UTM-reprojected tiles 'align_tiles_demo/test.gif'
 '''
 
 import os
 import json
-import itertools
 import functools
 from osgeo import gdal, osr
 import numpy as np
-import kwimage as ki
 from datetime import datetime, timedelta
 from dateutil.parser import isoparse
 import utm
 import pyproj
 import imageio
-import rasterio
 import shapely as shp
 import shapely.ops
 import shapely.geometry
@@ -41,8 +38,6 @@ def scenes_to_vrt(scenes, vrt_root):
     A simple wrapper around watch.utils.util_raster.make_vrt that performs both
     the 'stacked' and 'mosaicked' modes
     
-    TODO make sure nodata doesn't overwrite data in mosaic
-
     Args:
         scenes: list(scene), where scene := list(path) [of band files]
         vrt_root: root dir to save VRT under
@@ -68,7 +63,7 @@ def scenes_to_vrt(scenes, vrt_root):
         os.path.join(vrt_root, f'{hash(scenes[0][0] + "final")}.vrt'),
         mode='mosaicked',
         relative_to_path=os.getcwd(),
-        srcNodata=0)
+        srcNodata=0)  # this ensures nodata doesn't overwrite data in LS
 
     if 0:  # can't do this because final_vrt still references them
         for t in tmp_vrts:
@@ -86,27 +81,31 @@ def epsg_code_from_latlon(lat, lon):
     }).to_epsg()
 
 
-def reproject_crop(in_path, bbox, vrt_root=None):
+def reproject_crop(in_path, aoi, epsg_code=None, vrt_root=None):
     '''
-    Convert to a UTM CRS and crop to common bounding box
+    Reproject to a new CRS and crop to a common AOI
 
     Unfortunately, this cannot be done in a single step in scenes_to_vrt
-    because gdal.BuildVRT does not support warping between CRS, and the bbox wanted
-    is given in epsg:4326 (not the tiles' original CRS). gdal.BuildVRTOptions has an
-    outputBounds(=-te) kwarg for cropping, but not an equivalent of -te_srs.
+    because gdal.BuildVRT does not support warping between CRS.
+    Cropping alone could be done in scenes_to_vrt. Note gdal.BuildVRTOptions has
+    an outputBounds(=-te) kwarg for cropping, but not an equivalent of -te_srs.
 
     This means another intermediate file is necessary for each warp operation.
     
     TODO check for this quantization error: https://gis.stackexchange.com/q/139906
-    TODO bbox -> AOI
 
     Args:
         in_path: A georeferenced image. GTiff, VRT, etc.
-        bbox: A tlbr geospatial bounding box in epsg:4326 CRS to crop to
+        aoi: A geojson Feature in epsg:4326 CRS to crop to
+        epsg_code: EPSG code [1] of the CRS to convert to.
+            if None, use the UTM CRS containing aoi.
         vrt_root: Root directory for output. If None, same dir as input.
 
     Returns:
         Path to a new VRT
+
+    References:
+        [1] http://epsg.io/
     '''
     root, name = os.path.split(in_path)
     if vrt_root is None:
@@ -117,11 +116,14 @@ def reproject_crop(in_path, bbox, vrt_root=None):
         print(f'Warning: {out_path} already exists! Removing...')
         os.remove(out_path)
 
-    # ensure both corner points are in the same UTM zone
-    # TODO generalize this to a geojson Feature, handle edge case w/ warning
-    codes = set(epsg_code_from_latlon(lat, lon) for lon, lat in [bbox[:2], bbox[2:]])
-    assert len(codes) == 1
-    code = codes.pop()
+    # find the UTM zone(s) of the AOI
+    codes = [
+        epsg_code_from_latlon(lat, lon) for lon, lat in aoi['coordinates'][0]
+    ]
+    u, counts = np.unique(codes, return_counts=True)
+    if len(u) > 1:
+        print(f'Warning: AOI crosses UTM zones {u}. Taking majority vote...')
+    code = int(u[np.argsort(-counts)][0])
 
     dst_crs = osr.SpatialReference()
     dst_crs.ImportFromEPSG(code)
@@ -129,7 +131,10 @@ def reproject_crop(in_path, bbox, vrt_root=None):
     bounds_crs = osr.SpatialReference()
     bounds_crs.ImportFromEPSG(4326)
 
-    opts = gdal.WarpOptions(outputBounds=bbox, dstSRS=dst_crs, outputBoundsSRS=bounds_crs)
+    opts = gdal.WarpOptions(
+        outputBounds=shp.geometry.shape(aoi).buffer(0).bounds,
+        outputBoundsSRS=bounds_crs,
+        dstSRS=dst_crs)
     vrt = gdal.Warp(out_path, in_path, options=opts)
     del vrt
 
@@ -174,12 +179,12 @@ def main():
     # match AOI and query LS tiles
 
     # S2 scenes do not overlap perfectly - get their intersection
-    # TODO use shapely for this to support non-bbox footprint
-    s2_bboxes = ki.Boxes.concatenate(
-        [ki.Polygon.from_geojson(q['footprint']).to_boxes() for q in query_s2])
+    s2_bboxes = [
+        shp.geometry.shape(q['footprint']).buffer(0) for q in query_s2
+    ]
     s2_min_bbox = functools.reduce(lambda b1, b2: b1.intersection(b2),
                                    s2_bboxes)
-    s2_min_bbox = s2_min_bbox.to_polygons()[0].to_geojson()
+    s2_min_bbox = shp.geometry.mapping(s2_min_bbox)
     kwargs['query'] = json.dumps(s2_min_bbox)
 
     query_l7 = client.search(**kwargs, instrumentation='ETM')
@@ -187,7 +192,8 @@ def main():
 
     print(f'S2, L7, L8: {len(query_s2)}, {len(query_l7)}, {len(query_l8)}')
 
-    query_s2 = util_rgdc.group_tiles(query_s2)  # this has no effect for this AOI
+    query_s2 = util_rgdc.group_tiles(
+        query_s2)  # this has no effect for this AOI
     query_l7 = util_rgdc.group_tiles(query_l7)
     query_l8 = util_rgdc.group_tiles(query_l8)
 
@@ -199,7 +205,8 @@ def main():
     def filter_cloud(scenes, max_cloud_frac):
         # not all entries have this field
         cloud_frac = np.mean([
-            as_stac(scene)['properties'].get('eo:cloud_cover', 0) for scene in scenes
+            as_stac(scene)['properties'].get('eo:cloud_cover', 0)
+            for scene in scenes
         ])
         return cloud_frac <= max_cloud_frac
 
@@ -215,21 +222,19 @@ def main():
     # overlap should have no effect for query_s2
     filter_fn = lambda s: filter_cloud(s, 0.5) and filter_overlap(s, 0.25)
 
-    query_s2 = list(filter(filter_fn, query_s2))
-    query_l7 = list(filter(filter_fn, query_l7))
-    query_l8 = list(filter(filter_fn, query_l8))
+    query = query_s2 + query_l7 + query_l8
+    query = list(filter(filter_fn, query))
 
-    # combine all queries in correct time order,
+    print(f'{len(query)} filtered and merged scenes')
+
+    # sort query in correct time order,
     # with sat_codes to keep track of which are from each satellite
 
-    query = query_s2 + query_l7 + query_l8
     datetimes = [isoparse(q[0]['acquisition_date']) for q in query]
     datetimes, query = zip(*sorted(zip(datetimes, query)))
 
     nice = {'S2A': 'S2', 'S2B': 'S2', 'OLI_TIRS': 'L8', 'ETM': 'L7'}
     sat_codes = [nice[q[0]['instrumentation']] for q in query]
-
-    print(f'{len(query)} filtered and merged scenes')
 
     # download all tiles
 
@@ -264,15 +269,12 @@ def main():
 
     # orthorectification would happen here, before cropping away the margins
 
-    paths = [
-        reproject_crop(p, (s2_min_bbox['coordinates'][0][0] +
-                           s2_min_bbox['coordinates'][0][2])) for p in paths
-    ]
+    paths = [reproject_crop(p, s2_min_bbox) for p in paths]
 
     # output GIF of thumbnails
-    
+
     # 1 second per 5 days between images
-    diffs = np.diff(datetimes, prepend=(datetimes[0]-timedelta(days=5)))
+    diffs = np.diff(datetimes, prepend=(datetimes[0] - timedelta(days=5)))
     duration = list((diffs / timedelta(days=5)).astype(float))
     imageio.mimsave(
         os.path.join(out_path, 'test.gif'),
