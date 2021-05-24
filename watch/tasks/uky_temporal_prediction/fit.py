@@ -44,7 +44,7 @@ if __name__ == '__main__':
     parser.add_argument('--learning_rate', type=float, default=.0003)
     parser.add_argument('--gamma', type=float, default=.1)
     parser.add_argument('--weight_decay', type=float, default=1e-5)
-    parser.add_argument('--save_dir', type=str, default='logs/')
+    parser.add_argument('--save_dir', type=str, default='logs')
     parser.add_argument('--gpus', type=int)
     parser.add_argument('--feature_dim', type=int, default=64)
     parser.add_argument('--backbone', help='choose from unet, unet_blur', default='unet_blur')
