@@ -241,6 +241,11 @@ def make_vrt(in_paths, out_path, mode, relative_to_path=None, **kwargs):
         >>> make_vrt(['./bands1.vrt', './bands2.vrt'], 'full_scene.vrt', mode='mosaicked', relative_to_path=os.getcwd())
         >>> with GdalOpen('full_scene.vrt') as f:
         >>>     print(f.GetDescription())
+        >>> 
+        >>> # clean up
+        >>> os.remove('./bands1.vrt')
+        >>> os.remove('./bands2.vrt')
+        >>> os.remove('./full_scene.vrt')
 
     References:
         [1] https://gdal.org/programs/gdalbuildvrt.html
@@ -326,10 +331,13 @@ def scenes_to_vrt(scenes, vrt_root, relative_to_path):
         >>> from watch.demo.landsat_demodata import grab_landsat_product
         >>> bands = grab_landsat_product()['bands']
         >>> 
-        >>> # pretend these are 2 different scenes
-        >>> out_path = make_vrt([sorted(bands), sorted(bands)] , vrt_root='.', relative_to_path=os.getcwd())
+        >>> # pretend there are more scenes here
+        >>> out_path = scenes_to_vrt([sorted(bands)] , vrt_root='.', relative_to_path=os.getcwd())
         >>> with GdalOpen(out_path) as f:
         >>>     print(f.GetDescription())
+        >>> 
+        >>> # clean up
+        >>> os.remove(out_path)
     '''
     # first make VRTs for individual tiles
     # TODO use https://rasterio.readthedocs.io/en/latest/topics/memory-files.html
@@ -404,6 +412,9 @@ def reproject_crop(in_path, aoi, code=None, out_path=None, vrt_root=None):
         >>> }
         >>> 
         >>> out_path = reproject_crop(band1, geojson_bbox)
+        >>> 
+        >>> # clean up
+        >>> os.remove(out_path)
     '''
     if out_path is None:
         root, name = os.path.split(in_path)
