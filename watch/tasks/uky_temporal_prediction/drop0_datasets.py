@@ -224,8 +224,10 @@ class drop0_aligned_segmented(torch.utils.data.Dataset):
             mask = grid.reshape(annotations['height'], annotations['width']) 
             mask = torch.tensor(mask).float()*segment[0]
             combined.append(mask.unsqueeze(0))
-
-        overall_mask = torch.max(torch.cat(combined, dim=0), dim =0)[0]   
+        if combined:
+            overall_mask = torch.max(torch.cat(combined, dim=0), dim =0)[0]   
+        else:
+            overall_mask = torch.zeros_like(im)
         #####
         
         return im, overall_mask, acquisition_date, annotations

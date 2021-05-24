@@ -4,7 +4,7 @@ import os
 import json 
 import tifffile
 
-from time_sort_drop0 import time_sort
+from time_sort_module import time_sort
 from drop0_datasets import drop0_pairs
 
 def extract_features(checkpoint,  
@@ -59,9 +59,14 @@ def extract_features(checkpoint,
             if not os.path.exists(os.path.join(output_folder,directory)):
                 os.makedirs(os.path.join(output_folder,directory))
             
-            image = torch.tensor(tifffile.imread(os.path.join(data_folder, file_name)).astype('int32')).to(device).permute(2,0,1).float()
-            while len(image.shape) < 4:
-                image = image.unsqueeze(0)
+            image = torch.tensor(tifffile.imread(os.path.join(data_folder, file_name)).astype('int32')).to(device).float()
+            
+            if len(image.shape) < 3:
+                image=image.unsqueeze(-1)
+                
+            image = image.permute(2,0,1)
+            image = image.unsqueeze(0)
+            
             features, _, _, _ = extractor(image, image, 'x', 'x')
             save_name = file_name[:-4] + '.pt' 
             torch.save(features.squeeze(), os.path.join(output_folder, save_name))
@@ -82,11 +87,12 @@ if __name__ == '__main__':
     ### drop0_aligned dataset arguments
     parser.add_argument('--panchromatic', help='set flag for using panchromatic landsat imagery', action='store_true')
     parser.add_argument('--sensor', type=str, help='Choose from WV, LC, or S2', default='S2') #with default checkpoint, we must use RGB images  
-    parser.add_argument('--dvc', help='path to dvc on local machine', default='/localdisk0/SCRATCH/watch/smart_watch_dvc/drop0_aligned/')
+    parser.add_argument('--data_folder', help='path to dvc on local machine', default='/localdisk0/SCRATCH/watch/smart_watch_dvc/drop0_aligned/')
     
     parser.add_argument('--dataset', help='kwcoco file with dataset', default='/localdisk0/SCRATCH/watch/smart_watch_dvc/drop0_aligned/data.kwcoco.json')
     
-    parser.add_argument('--output_kwcoco', help='Filename to save output kwcoco file. Can replace old version.', default='/localdisk0/SCRATCH/watch/smart_watch_dvc/drop0_features/data_uky_time_sort_features.kwcoco.json')
+    parser.add_argument('--output_kwcoco', help='Filename to save output kwcoco file. Can replace old version.', default='/localdisk0/SCRATCH/watch/drop0_features/data_uky_time_sort_features.kwcoco.json')
+    
     parser.add_argument('--output_folder', help='Folder to store output feature tenors as .pt files', default='/u/eag-d1/scratch/ben/drop0_features/tensors')
     
     parser.add_argument('--image_ids', nargs='+', type=int, help='Set to 0 for all available images. Otherwise take list of image ids for processing. Images from non-matching sensors will be automatically skipped.', default=0)
@@ -96,7 +102,7 @@ if __name__ == '__main__':
  
     extract_features(checkpoint=args.checkpoint,
                     data_folder=args.data_folder,
-                    kwcoco_file=args.kwcoco_file,
+                    kwcoco_file=args.dataset,
                     output_kwcoco=args.output_kwcoco,
                     output_folder=args.output_folder,
                     image_ids=args.image_ids,
