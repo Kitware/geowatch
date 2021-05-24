@@ -8,12 +8,15 @@ Project Data
 Training a UNet or UNet blur model on the temporal prediction task using project data can be accomplished using `fit.py`. The sensor, number of channels, identities of the train/validation video sequences should be specified. The script uses the [Pytorch Lightning](https://www.pytorchlightning.ai/) library. Models will be stored as Lightning checkpoints by default in the `logs/` folder. 
 
 Examples: 
+
 `python fit.py --max_epochs 100 --sensor S2 --train_video 5 --val_video 3 --in_channels 3 --train_dataset /u/eag-d1/data/watch/drop0_aligned/data.kwcoco.json --val_datset /u/eag-d1/data/watch/drop0_aligned/data.kwcoco.json`
+
 `python fit.py --max_epochs 100 --sensor LC --train_video 3 --val_video 4 --in_channels 1 --train_dataset /u/eag-d1/data/watch/drop0_aligned/data.kwcoco.json --val_datset /u/eag-d1/data/watch/drop0_aligned/data.kwcoco.json`
 
 To predict on drop0 data use `predict.py`. Arguments include lightning checkpoint and specify the sensor and number of channels corresponding to the trained model. The script also loads a kwcoco file and outputs another kwcoco file (these can be the same file). The output kwcoco file will include a path to features as an entry in the dictionary for each image. Features are stored in `args.output_folder` as .pt files. The script can accept a list of desired image ids to run on. If none are specified, the script will run on all available images and skip images that come from non-matching sensors.
 
 Example: 
+
 `python predict.py --sensor LC --in_channels 1 --dataset ~/smart_watch_dvc/drop0_aligned/data.kwcoco.json --output_kwcoco /localdisk0/SCRATCH/watch/drop0_features/data_uky_time_sort_features.kwcoco.json --output_folder /localdisk0/SCRATCH/watch/drop0_features/features/ --checkpoint logs/temporal_sequence_predict/LC/train_video_3/default/version_0/checkpoints/epoch=0-step=1.ckpt`
 
 
