@@ -8,25 +8,40 @@ A demo for grabbing the same set of Landsat and Sentinel-2 tiles 2 ways.
 import os
 import json
 from datetime import datetime, timedelta
-
+from dateutil.parser import isoparse
 from fels import run_fels, safedir_to_datetime, landsatdir_to_date
-
 from rgdc import Rgdc
+import scriptconfig as scfg
 
 
-def try_fels(geojson_bbox, dt_min, dt_max):
+class GrabTilesConfig(scfg.Config):
+    default = {
+        'regions': scfg.Value('regions.json', help='file containing geojson space-time bounds'),
+        'backend': scfg.Value('rgdc', help='either rgdc or fels'),
+        'out_dpath': scfg.Value('./grab_tiles_out', help='output directory'),
+
+        'rgdc_username': scfg.Value(None, help='username if using rgdc backend'),
+        'rgdc_password': scfg.Value(None, help='password if using rgdc backend'),
+    }
+
+
+def try_fels(geojson_bbox, dt_min, dt_max, out_dpath=None):
     '''
     This provides access to:
         https://cloud.google.com/storage/docs/public-datasets/sentinel-2
         https://cloud.google.com/storage/docs/public-datasets/landsat
     '''
-    # put this wherever you're ok with dumping 6GB of indexes
-    cats_path = os.path.expanduser('~/smart/data/fels/')
+    if out_dpath is None:
+        # put this wherever you're ok with dumping 6GB of indexes
+        cats_path = os.path.expanduser('~/smart/data/fels/')
+        out_path = './grab_tiles_demo/fels/'
+    else:
+        out_path = os.path.join(out_dpath, 'fels')
+        cats_path = os.path.join(out_dpath, 'cats')
 
     # fels works on dates, not datetimes, and is exclusive on start and end
     date_bounds = (dt_min - timedelta(days=1), dt_max + timedelta(days=1))
 
-    out_path = './grab_tiles_demo/fels/'
     os.makedirs(out_path, exist_ok=True)
 
     # args are identical to the fels CLI
@@ -69,14 +84,13 @@ def try_fels(geojson_bbox, dt_min, dt_max):
     print([landsatdir_to_date(u.split('/')[-1]) for u in l8_urls])
 
 
-def try_rgdc(geojson_bbox, dt_min, dt_max):
+def try_rgdc(geojson_bbox, dt_min, dt_max, out_dpath=None, username=None,
+             password=None):
     '''
     The WATCH instance of RGD is at https://watch.resonantgeodata.com/.
     You can go there to make a username and password.
     Landsat/Sentinel2 for all drop0 sites is being ingested here.
     Eventually, commercial (WV/Planet) data will live there as well.
-    Connect to that by passing
-        api_url="watch.resonantgeodata.com/api"
 
     If that instance is not working for some reason, you can use
     the default public instance at https://www.resonantgeodata.com/.
@@ -84,7 +98,12 @@ def try_rgdc(geojson_bbox, dt_min, dt_max):
 
     If you do not enter your password you will be prompted for it.
     '''
-    client = Rgdc(username='matthew.bernstein@kitware.com')
+    if out_dpath is None:
+        out_path = './grab_tiles_demo/rgdc/'
+    else:
+        out_path = os.path.join(out_dpath, 'rgdc')
+
+    client = Rgdc(username=username, password=password, api_url='https://watch.resonantgeodata.com/api')
     kwargs = {
         'query': json.dumps(geojson_bbox),
         'predicate': 'intersects',
@@ -100,7 +119,6 @@ def try_rgdc(geojson_bbox, dt_min, dt_max):
 
     print(f'S2, L7, L8: {len(query_s2)}, {len(query_l7)}, {len(query_l8)}')
 
-    out_path = './grab_tiles_demo/rgdc/'
     os.makedirs(out_path, exist_ok=True)
 
     for search_result in query_s2 + query_l7 + query_l8:
@@ -111,7 +129,21 @@ def try_rgdc(geojson_bbox, dt_min, dt_max):
         print(paths.path)
 
 
-def main():
+def coerce_regions(regions):
+    if isinstance(regions, str):
+        fpath = regions
+        with open(fpath, 'r') as f:
+            regions = json.load(f)
+    if isinstance(regions, list):
+        final = regions
+    elif isinstance(regions, dict):
+        final = [regions]
+    else:
+        raise TypeError(regions)
+    return final
+
+
+def __example__(self):
     # AOIs from drop0:
     # (coords from smart_watch_dvc/drop0_aligned/)
 
@@ -149,6 +181,48 @@ def main():
     # run ResonantGeoDataClient
 
     try_rgdc(geojson_bbox, dt_min, dt_max)
+
+
+def main(**kwargs):
+    """
+    region = {
+        "region_geos": {
+            "type": "Polygon",
+            "coordinates": [
+                [
+                    [128.6643, 37.6601],
+                    [128.6643, 37.6639],
+                    [128.6749, 37.6639],
+                    [128.6749, 37.6601],
+                    [128.6643, 37.6601]
+                ]
+                
+            ]
+        },
+        "max_time": "2018-12-26",
+        "min_time": "2015-03-11"
+    }
+    kwargs = {}
+    kwargs['regions'] = region
+    """
+
+    config = GrabTilesConfig(default=kwargs, cmdline=True)
+    regions = coerce_regions(config['regions'])
+    out_dpath = config['out_dpath']
+
+    for region in regions:
+        geojson_bbox = region['region_geos']
+        dt_min = isoparse(region['min_time'])
+        dt_max = isoparse(region['max_time'])
+
+        if config['backend'] == 'rgdc':
+            try_rgdc(geojson_bbox, dt_min, dt_max, out_dpath=out_dpath,
+                     username=config['rgdc_username'],
+                     password=config['rgdc_password'])
+        elif config['backend'] == 'fels':
+            try_fels(geojson_bbox, dt_min, dt_max, out_dpath=out_dpath)
+        else:
+            raise KeyError(config['backend'])
 
 
 if __name__ == '__main__':

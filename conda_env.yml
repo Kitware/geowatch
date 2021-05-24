@@ -63,7 +63,7 @@ dependencies:
     - rasterio >= 1.2.0
     - rgdc >= 0.1.1
     - utm >= 0.7.0
-    - git+https://git@github.com/matt-bernstein/fetchLandsatSentinelFromGoogleCloud.git
+    - fels >= 1.4.0
 
     # Machine learning
     - scikit_learn >= 0.24.2
