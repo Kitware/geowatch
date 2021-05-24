@@ -8,28 +8,26 @@ from .main import Main
 class MainTestCase(AlgorithmTestCase):
 
     def runTest(self):
-        test_catalog = '''
-{
-  "features": [
-    {
-      "assets": {
-        "data": {
-          "href": "/data/test/testfile1.NTF"
+        test_catalog = {
+          "features": [
+            {
+              "assets": {
+                "data": {
+                  "href": "/data/test/testfile1.NTF"
+                }
+              },
+              "id": "1"
+            },
+            {
+              "assets": {
+                "data": {
+                  "href": "/data/test/testfile2.NTF"
+                }
+              },
+              "id": "2"
+            }
+          ]
         }
-      },
-      "id": "1"
-    },
-    {
-      "assets": {
-        "data": {
-          "href": "/data/test/testfile2.NTF"
-        }
-      },
-      "id": "2"
-    }
-  ]
-}
-'''
 
         s3_outpath = "s3://dry-run-bucket"
         dry_run = 1

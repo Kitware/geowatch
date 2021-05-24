@@ -12,7 +12,7 @@ class Main(Algorithm):
         cl = self.cl  # type: AlgorithmChain.ChainLedger
         params = self.params  # type: dict
 
-        stac_catalog = json.loads(params['stac-catalog'])
+        stac_catalog = params['stac-catalog']
 
         # Upload each feature's assets from the STAC catalog
         for feature in stac_catalog.get('features', ()):
