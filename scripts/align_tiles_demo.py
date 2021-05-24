@@ -67,7 +67,8 @@ def scenes_to_vrt(scenes, vrt_root):
         tmp_vrts,
         os.path.join(vrt_root, f'{hash(scenes[0][0] + "final")}.vrt'),
         mode='mosaicked',
-        relative_to_path=os.getcwd())
+        relative_to_path=os.getcwd(),
+        srcNodata=0)
 
     if 0:  # can't do this because final_vrt still references them
         for t in tmp_vrts:
@@ -271,7 +272,8 @@ def main():
     # output GIF of thumbnails
     
     # 1 second per 5 days between images
-    duration = (np.diff(datetimes, prepend=(datetimes[0]-timedelta(days=5))) / timedelta(days=5))
+    diffs = np.diff(datetimes, prepend=(datetimes[0]-timedelta(days=5)))
+    duration = list((diffs / timedelta(days=5)).astype(float))
     imageio.mimsave(
         os.path.join(out_path, 'test.gif'),
         [util_norm.thumbnail(p, sat) for p, sat in zip(paths, sat_codes)],
