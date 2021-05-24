@@ -10,6 +10,18 @@
 stages:
     - build
     - test
+    - docker
+
+
+### Conditionals ###
+
+.if-merge-request: &if-merge-request
+  if: >-
+    $CI_MERGE_REQUEST_IID
+
+.if-merged-into-default: &if-merged-into-default
+  if: >-
+    $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
 
 
 ### TEMPLATES ###
@@ -27,6 +39,11 @@ stages:
         XDG_CACHE_HOME:
             "$CI_PROJECT_DIR/.cache/xdg_cache"
 
+.common_template_docker:
+  &common_template_docker
+  before_script:
+    - docker info
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
 
 
 .test_loose_template:
@@ -64,6 +81,7 @@ stages:
             
             #- .cache/conda/envs/loose-watch-env  # better with or without this?
             - .cache/xdg_cache/smart_watch
+
 .test_strict_template:
     &test_strict_template
     <<:
@@ -99,9 +117,14 @@ stages:
             
             #- .cache/conda/envs/strict-watch-env  # better with or without this?
             - .cache/xdg_cache/smart_watch
+
+#### JOBS ###
+
 test_full_loose/conda-linux:
     <<:
         *test_loose_template
+    rules:
+        - <<: *if-merged-into-default
     image:
         registry.smartgitlab.com/kitware/watch/miniconda3
 
@@ -109,5 +132,26 @@ test_full_loose/conda-linux:
 test_full_strict/conda-linux:
     <<:
         *test_strict_template
+    rules:
+        - <<: *if-merged-into-default
     image:
         registry.smartgitlab.com/kitware/watch/miniconda3
+
+
+build_docker_and_upload_strict:
+  <<:
+    *common_template_docker
+  rules:
+    - <<: *if-merged-into-default
+  stage:
+    docker
+  script:
+    - docker build --build-arg BUILD_STRICT=1 -t $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG .
+    - docker run --rm $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG /bin/bash -c "source /opt/conda/etc/profile.d/conda.sh && conda activate watch && cd /watch && python run_tests.py"
+    # Pushing container only if merging into default branch (i.e. "master")
+    - echo "docker push $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG"
+    - docker push $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG
+  image:
+    docker:19.03.12
+  variables:
+    IMAGE_TAG: latest
