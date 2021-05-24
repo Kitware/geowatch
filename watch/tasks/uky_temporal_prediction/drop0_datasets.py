@@ -21,13 +21,11 @@ class drop0_pairs(torch.utils.data.Dataset):
                  root = '/localdisk0/SCRATCH/watch/smart_watch_dvc/drop0_aligned/', 
                  sensor='S2', 
                  panchromatic=True, 
-                 video=1, ### set to 0 to include all videos
-                 soften_by=0, 
+                 video=1, 
                  min_time_step=1, 
                  change_labels=list(range(14))):
         
         self.dataset = drop0_aligned_segmented(root=root, sensor=sensor, panchromatic=panchromatic, video=video, change_labels=change_labels)
-        self.soften_by = soften_by
         self.length = len(self.dataset)
         self.min_time_step=min_time_step
     

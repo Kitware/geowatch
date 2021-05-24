@@ -35,6 +35,9 @@ class time_sort(pl.LightningModule):
         
         self.accuracy = pl.metrics.Accuracy()
         
+        self.train_data_root, _ = os.path.split(self.hparams.train_dataset)
+        self.val_data_root, _ = os.path.split(self.hparams.val_dataset)
+        
     def head(self, in_channels):
         return nn.Sequential(#nn.Conv2d(in_channels, in_channels // 2, 7, bias=False, padding=3),
                              #nn.ReLU(),
@@ -82,6 +85,7 @@ class time_sort(pl.LightningModule):
     
     def train_dataloader(self):
         return torch.utils.data.DataLoader(drop0_pairs(
+                    root=self.train_data_root,
                     sensor=self.hparams.sensor, panchromatic=self.hparams.panchromatic, video=self.hparams.train_video, soften_by=0, min_time_step=self.hparams.min_time_step
                     ), 
                 batch_size = self.hparams.batch_size,
@@ -90,7 +94,8 @@ class time_sort(pl.LightningModule):
 
     def val_dataloader(self):
         return torch.utils.data.DataLoader(drop0_pairs(
-                    sensor=self.hparams.sensor, panchromatic=self.hparams.panchromatic, video=self.hparams.test_video, soften_by=0, min_time_step=self.hparams.min_time_step
+                    root=self.val_data_root,
+                    sensor=self.hparams.sensor, panchromatic=self.hparams.panchromatic, video=self.hparams.val_video, soften_by=0, min_time_step=self.hparams.min_time_step
                     ), 
                 batch_size = self.hparams.batch_size,
                 num_workers = self.hparams.workers
@@ -111,9 +116,10 @@ class time_sort(pl.LightningModule):
 def main(args):
     if type(args)==dict:
             args = Namespace(**args)
-    log_dir = '{}/{}/train_video_{}/{}'.format(
+    log_dir = '{}/{}/{}/train_video_{}/{}'.format(
         args.save_dir,
-        'drop0_sort',
+        'temporal_sequence_predict',
+        args.sensor,
         args.train_video,
         str(date.today()),
         )
@@ -147,12 +153,14 @@ if __name__ == '__main__':
     
     parser.add_argument('--panchromatic', help='set flag for using panchromatic landsat imagery', action='store_true')
     parser.add_argument('--sensor', type=str, help='choose from WV, LC, or S2', default='S2')
-    parser.add_argument('--in_channels', type=int, default=3)
+    
+    parser.add_argument('--in_channels', help='specify the number of channels corresponding to the sensor type', type=int, default=3)
     parser.add_argument('--train_video', type=int, default=1)
-    parser.add_argument('--test_video', type=int, default=5)
-    parser.add_argument('--min_time_step', type=int, default=1)
+    parser.add_argument('--val_video', type=int, default=5)
+    parser.add_argument('--min_time_step', help='enforce minimum distance between image pairs', type=int, default=1)
     
-    
+    parser.add_argument('--train_dataset', type=str, default=)
+    parser.add_argument('--val_dataset', type=str, default=)
     
     parser.set_defaults(
         gpus=1,
