@@ -7,12 +7,16 @@ from contextlib import ExitStack
 import numpy as np
 from tempenv import TemporaryEnvironment
 from lxml import etree
+import shapely as shp
+import shapely.geometry
 
-from osgeo import gdal
+from osgeo import gdal, osr
 
 import rasterio
 from rasterio import Affine, MemoryFile
 from rasterio.enums import Resampling
+
+from watch.gis.spatial_reference import utm_epsg_from_latlon
 
 
 @dataclass
@@ -247,6 +251,7 @@ def make_vrt(in_paths, out_path, mode, relative_to_path=None, **kwargs):
         kwargs['separate'] = True
     elif mode == 'mosaicked':
         kwargs['separate'] = False
+        kwargs['srcNodata']= 0 # this ensures nodata doesn't overwrite data
     else:
         raise ValueError(f'mode: {mode} should be "stacked" or "mosaicked"')
 
@@ -295,5 +300,142 @@ def make_vrt(in_paths, out_path, mode, relative_to_path=None, **kwargs):
             print(f'warning: {out_path} already exists! Removing...')
             os.remove(out_path)
         reroot_vrt(f.name, out_path, keep_old=True)
+
+    return out_path
+
+
+def scenes_to_vrt(scenes, vrt_root, relative_to_path):
+    '''
+    Search for band files from compatible scenes and stack them in a single mosaicked VRT
+
+    A simple wrapper around watch.utils.util_raster.make_vrt that performs both
+    the 'stacked' and 'mosaicked' modes
+
+    Args:
+        scenes: list(scene), where scene := list(path) [of band files]
+        vrt_root: root dir to save VRT under
+
+    Returns:
+        path to the VRT
+
+    Example:
+        >>> # xdoctest: +REQUIRES(--network)
+        >>> import os
+        >>> from osgeo import gdal
+        >>> from watch.utils.util_raster import *
+        >>> from watch.demo.landsat_demodata import grab_landsat_product
+        >>> bands = grab_landsat_product()['bands']
+        >>> 
+        >>> # pretend these are 2 different scenes
+        >>> out_path = make_vrt([sorted(bands), sorted(bands)] , vrt_root='.', relative_to_path=os.getcwd())
+        >>> with GdalOpen(out_path) as f:
+        >>>     print(f.GetDescription())
+    '''
+    # first make VRTs for individual tiles
+    # TODO use https://rasterio.readthedocs.io/en/latest/topics/memory-files.html
+    # for these intermediate files?
+    tmp_vrts = [
+        make_vrt(
+            scene,
+            os.path.join(vrt_root, f'{hash(scene[0])}.vrt'),
+            mode='stacked',
+            relative_to_path=relative_to_path
+        ) for scene in scenes
+    ]
+
+    # then mosaic them
+    final_vrt = make_vrt(
+        tmp_vrts,
+        os.path.join(vrt_root, f'{hash(scenes[0][0] + "final")}.vrt'),
+        mode='mosaicked',
+        relative_to_path=relative_to_path)
+
+    if 0:  # can't do this because final_vrt still references them
+        for t in tmp_vrts:
+            os.remove(t)
+
+    return final_vrt
+
+
+def reproject_crop(in_path, aoi, code=None, out_path=None, vrt_root=None):
+    '''
+    Crop an image to an AOI and reproject to its UTM CRS (or another CRS)
+
+    Unfortunately, this cannot be done in a single step in scenes_to_vrt
+    because gdal.BuildVRT does not support warping between CRS.
+    Cropping alone could be done in scenes_to_vrt. Note gdal.BuildVRTOptions has
+    an outputBounds(=-te) kwarg for cropping, but not an equivalent of -te_srs.
+
+    This means another intermediate file is necessary for each warp operation.
+
+    TODO check for this quantization error: https://gis.stackexchange.com/q/139906
+
+    Args:
+        in_path: A georeferenced image. GTiff, VRT, etc.
+        aoi: A geojson Feature in epsg:4326 CRS to crop to.
+        code: EPSG code [1] of the CRS to convert to.
+            if None, use the UTM CRS containing aoi.
+        out_path: Name of output file to write to. If None, create a VRT file.
+        vrt_root: Root directory for VRT output. If None, same dir as input.
+
+    Returns:
+        Path to a new VRT or out_path
+
+    References:
+        [1] http://epsg.io/
+
+    Example:
+        >>> # xdoctest: +REQUIRES(--network)
+        >>> import os
+        >>> from osgeo import gdal
+        >>> from watch.utils.util_raster import *
+        >>> from watch.demo.landsat_demodata import grab_landsat_product
+        >>> band1 = grab_landsat_product()['bands'][0]
+        >>> 
+        >>> # pick the AOI from the drop0 KR site
+        >>> # (this doesn't actually intersect the demodata)
+        >>> top, left = (128.6643, 37.6601)
+        >>> bottom, right = (128.6749, 37.6639)
+        >>> geojson_bbox = {
+        >>>     "type":
+        >>>     "Polygon",
+        >>>     "coordinates": [[[top, left], [top, right], [bottom, right],
+        >>>                      [bottom, left], [top, left]]]
+        >>> }
+        >>> 
+        >>> out_path = reproject_crop(band1, geojson_bbox)
+    '''
+    if out_path is None:
+        root, name = os.path.split(in_path)
+        if vrt_root is None:
+            vrt_root = root
+        os.makedirs(vrt_root, exist_ok=True)
+        out_path = os.path.join(vrt_root, f'{hash(name + "warp")}.vrt')
+        if os.path.isfile(out_path):
+            print(f'Warning: {out_path} already exists! Removing...')
+            os.remove(out_path)
+
+    if code is None:
+        # find the UTM zone(s) of the AOI
+        codes = [
+            utm_epsg_from_latlon(lat, lon) for lon, lat in aoi['coordinates'][0]
+        ]
+        u, counts = np.unique(codes, return_counts=True)
+        if len(u) > 1:
+            print(f'Warning: AOI crosses UTM zones {u}. Taking majority vote...')
+        code = int(u[np.argsort(-counts)][0])
+
+    dst_crs = osr.SpatialReference()
+    dst_crs.ImportFromEPSG(code)
+
+    bounds_crs = osr.SpatialReference()
+    bounds_crs.ImportFromEPSG(4326)
+
+    opts = gdal.WarpOptions(
+        outputBounds=shp.geometry.shape(aoi).buffer(0).bounds,
+        outputBoundsSRS=bounds_crs,
+        dstSRS=dst_crs)
+    vrt = gdal.Warp(out_path, in_path, options=opts)
+    del vrt
 
     return out_path
