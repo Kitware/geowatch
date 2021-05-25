@@ -8,3 +8,4 @@ dependencies:
     - pytorch-lightning
     - kwcoco
     - tifffile
+    - albumentations
