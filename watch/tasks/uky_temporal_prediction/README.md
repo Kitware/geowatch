@@ -21,7 +21,7 @@ To predict on drop0 data use `predict.py`. Arguments include lightning checkpoin
 
 Example: 
 
-`python predict.py --sensor LC --dataset ~/smart_watch_dvc/drop0_aligned/data.kwcoco.json --output_kwcoco /localdisk0/SCRATCH/watch/drop0_features/data_uky_time_sort_features.kwcoco.json --output_folder /localdisk0/SCRATCH/watch/drop0_features/features/ --checkpoint logs/temporal_sequence_predict/LC/train_video_3/default/version_0/checkpoints/epoch=0-step=1.ckpt`
+`python predict.py --sensor LC --dataset ~/smart_watch_dvc/drop0_aligned/data.kwcoco.json --data_folder /localdisk0/SCRATCH/watch/smart_watch_dvc/drop0_aligned/ --output_kwcoco /localdisk0/SCRATCH/watch/drop0_features/data_uky_time_sort_features.kwcoco.json --output_folder /localdisk0/SCRATCH/watch/drop0_features/features/ --checkpoint logs/temporal_sequence_predict/LC/train_video_3/default/version_0/checkpoints/epoch=0-step=1.ckpt`
 
 
 Notes:
