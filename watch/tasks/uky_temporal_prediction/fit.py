@@ -1,14 +1,10 @@
-import torch
-import torch.nn as nn
 from argparse import ArgumentParser, Namespace
-from datetime import date
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from utils import setup_python_logging
 import os
 
-from drop0_datasets import drop0_pairs
 from time_sort_module import time_sort
 
 

@@ -1,14 +1,9 @@
 import tifffile as tif
 import torch
 from torch.utils import data
-from torchvision import transforms
-import pathlib
-import pandas as pd
 import albumentations as A
-from albumentations.pytorch import ToTensorV2
 import os
 import os.path as osp
-import random 
 
 class S7_sort(data.Dataset):
     normalize_params = [[0.16198677, 0.22665408, 0.1745371], [0.06108317, 0.06515977, 0.04128775]]

@@ -6,8 +6,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision import models
-from torch.distributions import Normal, Independent
 
 def count_trainable_parameters(model):  # to count trainable parameters
     return sum(p.numel() for p in model.parameters() if p.requires_grad)

@@ -1,11 +1,6 @@
 import torch
 import kwcoco
-import torch.nn.functional as F
-import PIL
-from PIL import Image
-import torchvision.transforms as transforms
 import tifffile
-import rasterio
 import os.path as osp
 import random
 

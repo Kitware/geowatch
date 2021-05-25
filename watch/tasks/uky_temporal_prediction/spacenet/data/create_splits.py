@@ -1,4 +1,3 @@
-import tifffile as tif
 import torch
 from torch.utils import data
 import os

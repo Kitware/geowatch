@@ -11,8 +11,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision import models
-from torch.distributions import Normal, Independent
 
 # Copyright (c) 2019, Adobe Inc. All rights reserved.
 #

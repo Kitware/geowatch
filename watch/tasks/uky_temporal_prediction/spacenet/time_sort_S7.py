@@ -1,16 +1,12 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import numpy as np
-import PIL
-import albumentations as A
 from argparse import ArgumentParser, Namespace
 from datetime import date
 from models import UNet, UNet_blur
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
-from utils import TripletLoss, setup_python_logging
+from utils import setup_python_logging
 import os
 
 from datasets import S7_sort

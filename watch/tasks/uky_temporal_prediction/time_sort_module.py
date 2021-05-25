@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
-from argparse import ArgumentParser, Namespace
-from datetime import date
+from argparse import Namespace
 from models import UNet, UNet_blur
 import pytorch_lightning as pl
 import os

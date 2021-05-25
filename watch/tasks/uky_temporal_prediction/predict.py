@@ -5,7 +5,6 @@ import json
 import tifffile
 
 from time_sort_module import time_sort
-from drop0_datasets import drop0_pairs
 
 def extract_features(checkpoint,  
                     data_folder,
