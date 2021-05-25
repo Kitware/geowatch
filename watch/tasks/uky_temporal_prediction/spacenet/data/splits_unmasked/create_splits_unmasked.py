@@ -36,18 +36,18 @@ if __name__ == '__main__':
     val_images = sorted(val_images)
     val_building_masks = sorted(val_building_masks)
     
-    with open('./spacenet7_train_images.txt', 'w') as file:
+    with open('./spacenet/data/splits_unmasked/spacenet7_train_images.txt', 'w') as file:
         for item in train_images:
             file.write('%s\n' % item)
         
-    with open('./spacenet7_train_building_masks.txt', 'w') as file:
+    with open('./spacenet/data/splits_unmasked/spacenet7_train_building_masks.txt', 'w') as file:
         for item in train_building_masks:
             file.write('%s\n' % item)
 
-    with open('./spacenet7_val_images.txt', 'w') as file:
+    with open('./spacenet/data/splits_unmasked/spacenet7_val_images.txt', 'w') as file:
         for item in val_images:
             file.write('%s\n' % item)
 
-    with open('./spacenet7_val_building_masks.txt', 'w') as file:
+    with open('./spacenet/data/splits_unmasked/spacenet7_val_building_masks.txt', 'w') as file:
         for item in val_building_masks:
             file.write('%s\n' % item)

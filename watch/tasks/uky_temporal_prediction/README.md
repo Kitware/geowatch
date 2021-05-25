@@ -33,5 +33,5 @@ SpaceNet 7
 ----
 To prepare to train on SpaceNet 7: run `python spacenet/data/create_splits.py  --data_dir /path/to/SpaceNet/7/train` and `python spacenet/data/splits_unmasked/create_splits.py  --data_dir /path/to/SpaceNet/7/train`.
 
-Train a model on SpaceNet 7 using `spacenet/time_sort_S7.py`. The module relies on the [Pytorch Lightning](https://www.pytorchlightning.ai/) library. Checkpoints will be stored by default in `./logs/` folder. Trained checkpoints can then be loaded into `predict.py` to evaluate on the before/after task using S2 RGB imagery from drop0_aligned.
+Train a model on SpaceNet 7 using `python time_sort_S7.py`. The module relies on the [Pytorch Lightning](https://www.pytorchlightning.ai/) library. Checkpoints will be stored by default in `./logs/` folder. Trained checkpoints can then be loaded into `predict.py` to evaluate on the before/after task using S2 RGB imagery from drop0_aligned.
 

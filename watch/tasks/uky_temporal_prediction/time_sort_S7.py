@@ -9,7 +9,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from utils import setup_python_logging
 import os
 
-from datasets import S7_sort
+from spacenet.datasets import S7_sort
 
 class space7_sort(pl.LightningModule):
     def __init__(self, hparams):
@@ -24,7 +24,7 @@ class space7_sort(pl.LightningModule):
         
         self.accuracy = pl.metrics.classification.Accuracy()
         
-        self.hparams = hparams
+        self.save_hyperparameters(hparams)
         
         if self.hparams.backbone == 'unet':
             self.backbone = UNet(3, hparams.feature_dim)
