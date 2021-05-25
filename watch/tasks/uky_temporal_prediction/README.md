@@ -3,6 +3,10 @@ UKy temporal ordering prediction.
 
 UKy code for predicting the arrow of time of image pairs using a Siamese Network with UNet/UNet blur backbone. Code for training on drop0_aligned is located in `fit.py` and evaluating on drop0_aligned is located in `predict.py`. In addition, scripts for setting up datasets and training on SpaceNet 7 are located in the `spacenet` folder. 
 
+Conda Environment
+----
+A minimal conda environment to run our code can be found in `conda_env.yml`. To install and activate the environment, run `conda env create -f conda_env.yml` followed by `conda activate uky_temporal_prediction`.
+
 Project Data
 ----
 Training a UNet or UNet blur model on the temporal prediction task using project data can be accomplished using `fit.py`. The sensor, number of channels, identities of the train/validation video sequences should be specified. The script uses the [Pytorch Lightning](https://www.pytorchlightning.ai/) library. Models will be stored as Lightning checkpoints by default in the `logs/` folder. 
