@@ -37,6 +37,18 @@
 stages:
     - build
     - test
+    - docker
+
+
+### Conditionals ###
+
+.if-merge-request: &if-merge-request
+  if: >-
+    $CI_MERGE_REQUEST_IID
+
+.if-merged-into-default: &if-merged-into-default
+  if: >-
+    $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
 
 
 ### TEMPLATES ###
@@ -54,13 +66,25 @@ stages:
         XDG_CACHE_HOME:
             "$CI_PROJECT_DIR/.cache/xdg_cache"
     tags:
-        - rukbat
+        - aws
         - docker
         - linux
         - linux-3.17
         - build
         - smart
 
+.common_template_docker:
+  &common_template_docker
+  tags:
+    - docker
+    - linux
+    - linux-3.17
+    - build
+    - aws
+    - smart
+  before_script:
+    - docker info
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
 
 
 .test_loose_template:
@@ -147,6 +171,9 @@ stages:
 test_full_loose/conda-linux:
     <<:
         *test_loose_template
+    rules:
+        - <<: *if-merge-request
+        - <<: *if-merged-into-default
     image:
         gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
 
@@ -154,8 +181,46 @@ test_full_loose/conda-linux:
 test_full_strict/conda-linux:
     <<:
         *test_strict_template
+    rules:
+        - <<: *if-merge-request
+        - <<: *if-merged-into-default
     image:
         gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
+
+
+build_docker_strict:
+  <<:
+    *common_template_docker
+  rules:
+    - <<: *if-merge-request
+  stage:
+    docker
+  script:
+    - docker build --build-arg BUILD_STRICT=1 -t $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG .
+    - docker run --rm $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG /bin/bash -c "source /opt/conda/etc/profile.d/conda.sh && conda activate watch && cd /watch && python run_tests.py"
+  image:
+    docker:19.03.12
+  variables:
+    IMAGE_TAG: latest
+
+
+build_docker_and_upload_strict:
+  <<:
+    *common_template_docker
+  rules:
+    - <<: *if-merged-into-default
+  stage:
+    docker
+  script:
+    - docker build --build-arg BUILD_STRICT=1 -t $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG .
+    - docker run --rm $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG /bin/bash -c "source /opt/conda/etc/profile.d/conda.sh && conda activate watch && cd /watch && python run_tests.py"
+    # Pushing container only if merging into default branch (i.e. "master")
+    - echo "docker push $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG"
+    - docker push $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG
+  image:
+    docker:19.03.12
+  variables:
+    IMAGE_TAG: latest
 
 
 .__local_docker_heredoc__:
