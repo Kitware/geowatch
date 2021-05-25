@@ -20,7 +20,7 @@ class time_sort(pl.LightningModule):
 
         self.accuracy = pl.metrics.classification.Accuracy()
         
-        self.hparams = hparams
+        self.save_hyperparameters(hparams)
         
         if self.hparams.backbone == 'unet':
             self.backbone = UNet(self.hparams.in_channels, hparams.feature_dim)
