@@ -132,7 +132,8 @@ def s2_coregister(mgrs_tile, input_folder, output_folder, baseline_scene=None):
 
     #getting a primary baseline scene
     if baseline_scene is None:
-        baseline_scene = os.path.join(input_folder, f'{mgrs_tile}.baseline.scene.csv')
+        baseline_scene = os.path.join(input_folder,
+                                      f'{mgrs_tile}.baseline.scene.csv')
 
     if isinstance(baseline_scene, str):
 
@@ -140,10 +141,10 @@ def s2_coregister(mgrs_tile, input_folder, output_folder, baseline_scene=None):
             print('[ERROR]: file %s with baseline scene not found' %
                   (baseline_scene))
             return
-        df = pd.read_csv(baseline_scene))
+        df = pd.read_csv(baseline_scene)
 
     elif isinstance(baseline_scene, pd.DataFrame):
-        
+
         df = baseline_scene
 
     if len(df) == 0:

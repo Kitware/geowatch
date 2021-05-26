@@ -1,9 +1,9 @@
 import ubelt as ub
-from os.path import join
+import os
 from pathlib import Path
 from glob import glob
 
-from fels import run_fels
+import fels
 from rgdc.rgdc import RasterDownload
 
 
@@ -46,15 +46,17 @@ def grab_sentinel2_product(index=0):
 
     # Cache the scene using the same path used by google cloud storage
     scene_dpath = ub.ensuredir((dset_dpath, url.split('tiles/')[1]))
-    
+
     # Download the scene
-    assert fels.get_sentinel2_image(url, scene_dpath, overwrite=False, reject_old=True)
-    
+    assert fels.get_sentinel2_image(url,
+                                    scene_dpath,
+                                    overwrite=False,
+                                    reject_old=True)
+
     # Build a rgdc object to return the scene
-    fpaths = sorted(glob(os.path.join(scene_dpath, '**', '*.*'), recursive=True))
+    fpaths = sorted(
+        glob(os.path.join(scene_dpath, '**', '*.*'), recursive=True))
     fpaths = [Path(os.path.relpath(f, start=scene_dpath)) for f in fpaths]
-    return RasterDownload(
-            path=Path(scene_dpath),
-            images=[f for f in fpaths if f.suffix == '.jp2'],
-            ancillary=[f for f in fpaths if f.suffix != '.jp2']
-            )
+    return RasterDownload(path=Path(scene_dpath),
+                          images=[f for f in fpaths if f.suffix == '.jp2'],
+                          ancillary=[f for f in fpaths if f.suffix != '.jp2'])
