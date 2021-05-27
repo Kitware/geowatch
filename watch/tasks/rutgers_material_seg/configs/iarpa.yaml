@@ -14,9 +14,9 @@ data:
     val_dir:
   server:
     model_save_dir: /data4/peri/cranberry_attention/models/
-    train_dir: /home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2.1/
-    test_dir: /home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2.1/
-    val_dir: /home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2.1/
+    train_dir: /data4/peri/datasets/smart_watch/processed/drop0_aligned_v2.1/
+    test_dir: /data4/peri/datasets/smart_watch/processed/drop0_aligned_v2.1/
+    val_dir: /data4/peri/datasets/smart_watch/processed/drop0_aligned_v2.1/
 
 training:
   backbone: resnet101

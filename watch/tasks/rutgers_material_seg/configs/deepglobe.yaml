@@ -1,6 +1,6 @@
 # Ours
-# location: server
-location: local
+location: server
+# location: local
 data:
   type: semantic_seg
   name: deepglobe
@@ -38,13 +38,10 @@ training:
   num_workers: 1
   test_with_full_supervision: 1
   train_classification_for: 0
-  pseudo_mask_training_epoch: -1 # best: 5
-  weights_update_epoch: 0 # best: 4
 
 pseudo_masks:
   train_cutoff: 0.75
   val_cutoff: 0.55
-
 
 evaluation:
   use_crf: False
