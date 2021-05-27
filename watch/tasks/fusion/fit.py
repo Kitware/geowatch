@@ -20,6 +20,7 @@ if __name__ == "__main__":
     parser.add_argument("--time_steps", default=2, type=int)
     parser.add_argument("--batch_size", default=32, type=int)
     parser.add_argument("--num_workers", default=4, type=int)
+    parser.add_argument("--channels", default=None, type=str)
     
     # model
     parser = baseline.ChangeDetector.add_model_specific_args(parser)
@@ -34,8 +35,10 @@ if __name__ == "__main__":
     onera_train_sampler = ndsampler.CocoSampler(onera_train)
     full_train_dataset = onera_2018.OneraDataset(
         onera_train_sampler, 
-        (args.time_steps, args.chip_size, args.chip_size),
+        sample_shape=(args.time_steps, args.chip_size, args.chip_size),
+        channels=args.channels,
     )
+    full_train_dataset.compute_stats(10)
     
     # split into train/valid
     num_examples = len(full_train_dataset)
@@ -64,15 +67,14 @@ if __name__ == "__main__":
     )
     
     # model
-    input_dim = len(list(onera_train.imgs.values())[0]["auxiliary"]) # TODO: maybe theres a better way to determine this...
+    input_dim = train_dataset[0]["images"].shape[1]
+        
     model_var_dict = utils.filter_args(
         vars(args),
         baseline.ChangeDetector.__init__,
     )
     model = baseline.ChangeDetector(
         input_dim=input_dim,
-#         feature_dim=args.feature_dim,
-#         lr=args.learning_rate,
         **model_var_dict
     )
     

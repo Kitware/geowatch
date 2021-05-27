@@ -7,6 +7,7 @@ import numpy as np
 from torch.utils import data
 import torch
 import einops
+import itertools as it
 
 class OneraDataset(data.Dataset):
     # TODO: add torchvision.transforms or albumentations
@@ -14,7 +15,34 @@ class OneraDataset(data.Dataset):
         self.sampler = sampler
         self.sample_shape = sample_shape
         self.channels = channels
-        self.sample_grid = self.sampler.new_sample_grid("video_detection", self.sample_shape)["positives"]
+        
+        full_sample_grid = self.sampler.new_sample_grid("video_detection", self.sample_shape)
+        self.sample_grid = list(it.chain(
+            full_sample_grid["positives"], 
+            full_sample_grid["negatives"],
+        ))
+        
+        self.num_channels = self.__getitem__(0)["images"].shape[1]
+        
+    def compute_stats(self, num_examples=1):
+        
+        # get some samples, reshape/flatten so that channels lead
+        images = torch.stack([
+            self.__getitem__(idx)["images"]
+            for idx in range(num_examples)
+        ], dim=0).numpy()
+        channel_images = einops.rearrange(
+            images,
+            "b t c h w -> c (b t h w)",
+        )
+        
+        # dump outliers
+        cmin, cmax = np.percentile(channel_images, [2, 98], axis=1)
+        channel_images[channel_images < cmin[:,None]] = np.nan
+        channel_images[channel_images > cmax[:,None]] = np.nan
+        
+        # compute stats
+        return channel_images.mean(axis=1), channel_images.std(axis=1)
     
     def __len__(self):
         return len(self.sample_grid)
@@ -37,9 +65,8 @@ class OneraDataset(data.Dataset):
         # augmentations.
         frame_ims = []
         frame_masks = []
-        for raw_frame, raw_dets in zip(raw_frame_list, raw_det_list):
-            frame = raw_frame.astype(np.float32)
-            dets = raw_dets
+        for frame, dets in zip(raw_frame_list, raw_det_list):
+            frame = frame.astype(np.float32)
             input_dsize = self.sample_shape[-2:]
 
             # Resize the sampled window to the target space for the network
@@ -72,12 +99,15 @@ class OneraDataset(data.Dataset):
         # rearrange image axes for pytorch
         frame_ims = einops.rearrange(frame_ims, "t h w c -> t c h w")
         
+        # catch nans
+        frame_ims[np.isnan(frame_ims)] = -1.
+        
         # compute change from masks
         changes = frame_masks[1:] != frame_masks[:-1]
 
         example = {
-            "images": frame_ims,
-            "changes": changes,
+            "images": torch.from_numpy(frame_ims).detach(),
+            "changes": torch.from_numpy(changes).detach().int(),
         }
         
         return example

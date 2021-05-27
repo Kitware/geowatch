@@ -40,31 +40,31 @@ class ChangeDetector(pl.LightningModule):
         return norms
     
     def training_step(self, batch, batch_idx=None):
-        images, changes = batch["images"], batch["changes"].float()
+        images, changes = batch["images"], batch["changes"]
         
         # compute predicted and target change masks
         norms = self(images)
         
         # compute metrics
         for key, metric in self.metrics.items():
-            self.log(key, metric(torch.sigmoid(norms), changes.int()), prog_bar=True)
+            self.log(key, metric(torch.sigmoid(norms), changes), prog_bar=True)
         
         # compute criterion
-        loss = self.criterion(norms, changes)
+        loss = self.criterion(norms, changes.float())
         return loss
     
     def validation_step(self, batch, batch_idx=None):
-        images, changes = batch["images"], batch["changes"].float()
+        images, changes = batch["images"], batch["changes"]
         
         # compute predicted and target change masks
         norms = self(images)
-        
+                
         # compute metrics
         for key, metric in self.metrics.items():
-            self.log("val_"+key, metric(torch.sigmoid(norms), changes.int()), prog_bar=True)
+            self.log("val_"+key, metric(torch.sigmoid(norms), changes), prog_bar=True)
         
         # compute loss
-        loss = self.criterion(norms, changes)
+        loss = self.criterion(norms, changes.float())
         self.log("val_loss", loss, prog_bar=True)
         return loss
     
