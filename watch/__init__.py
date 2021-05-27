@@ -59,11 +59,10 @@ __getattr__ = lazy_import(
     submodules={
         'datacube',
         'demo',
-        'features',
-        'fusion',
         'gis',
         'io',
         'sequencing',
+        'tasks',
         'tools',
         'utils',
         'validation',
@@ -75,5 +74,5 @@ __getattr__ = lazy_import(
 def __dir__():
     return __all__
 
-__all__ = ['datacube', 'demo', 'features', 'fusion', 'gis', 'io', 'sequencing',
-           'tools', 'utils', 'validation']
+__all__ = ['datacube', 'demo' 'gis', 'io', 'sequencing', 'tasks', 'tools',
+           'utils', 'validation']
