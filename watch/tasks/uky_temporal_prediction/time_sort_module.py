@@ -13,7 +13,7 @@ class time_sort(pl.LightningModule):
     def __init__(self, hparams):
         super().__init__()
 
-        if type(hparams)==dict:
+        if isinstance(hparams, dict):
             hparams = Namespace(**hparams)
 
         self.criterion = nn.BCEWithLogitsLoss()

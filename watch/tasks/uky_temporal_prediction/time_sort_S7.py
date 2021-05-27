@@ -15,7 +15,7 @@ class space7_sort(pl.LightningModule):
     def __init__(self, hparams):
         super().__init__()
 
-        if type(hparams)==dict:
+        if isinstance(hparams, dict):
             hparams = Namespace(**hparams)
 
         self.criterion = nn.BCEWithLogitsLoss()
@@ -108,7 +108,7 @@ class space7_sort(pl.LightningModule):
 
 
 def main(args):
-    if type(args)==dict:
+    if isinstance(args, dict):
             args = Namespace(**args)
     log_dir = '{}/{}/normalize_{}/{}'.format(
         args.save_dir,
