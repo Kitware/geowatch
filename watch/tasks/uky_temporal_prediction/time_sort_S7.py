@@ -17,51 +17,51 @@ class space7_sort(pl.LightningModule):
 
         if type(hparams)==dict:
             hparams = Namespace(**hparams)
-           
+
         self.criterion = nn.BCEWithLogitsLoss()
-        
+
         self.crop_size = hparams.crop_size
-        
+
         self.accuracy = pl.metrics.classification.Accuracy()
-        
+
         self.save_hyperparameters(hparams)
-        
+
         if self.hparams.backbone == 'unet':
             self.backbone = UNet(3, hparams.feature_dim)
         elif self.hparams.backbone == 'unet_blur':
             self.backbone = UNet_blur(3, hparams.feature_dim)
-        
+
         self.classifier = self.head(2*hparams.feature_dim)
-        
+
         self.accuracy = pl.metrics.Accuracy()
-        
+
     def head(self, in_channels):
         return nn.Sequential(#nn.Conv2d(in_channels, in_channels // 2, 7, bias=False, padding=3),
                              #nn.ReLU(),
                              #nn.BatchNorm2d(in_channels // 2),
                              nn.Conv2d(in_channels, 1, 1, bias=False, padding=0),
                             )
-        
+
     def forward(self, image1, image2, date1, date2):
         image1 = self.backbone(image1)
         image2 = self.backbone(image2)
-        
+
         return image1, image2, date1, date2
 
     def shared_step(self, batch):
-        image1, image2, date1, date2 = batch
+        image1, image2, date1, date2 = batch['image1'], batch['image2'], batch['date1'], batch['date2']
         image1, image2, date1, date2 = self(image1, image2, date1, date2)
         prediction = self.classifier(torch.cat((image1, image2), dim=1))
-        
+
         date1 = torch.stack(date1).permute(1,0)
         date2 = torch.stack(date2).permute(1,0)
-        
+
         labels = torch.tensor([tuple(date1[x]) < tuple(date2[x]) for x in range(date1.shape[0])]).float().cuda()
         labels = labels.unsqueeze(1).unsqueeze(1).repeat(1, self.crop_size, self.crop_size).unsqueeze(1)
-        
+
         loss = self.criterion(prediction, labels)
         accuracy = self.accuracy((prediction > 0.), labels.int())
-        
+
         output = {  #'prediction': prediction,
                     #  'labels': labels,
                     'accuracy': accuracy,
@@ -77,25 +77,25 @@ class space7_sort(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         output = self.shared_step(batch)
-         
+
         output = {key + "_val": val for key, val in output.items()}
         self.log('val_acc', output['accuracy_val'])
         self.log('val_loss', output['loss_val'])
         return output
-    
+
     def train_dataloader(self):
-        return torch.utils.data.DataLoader(S7_sort(train=True, normalize=self.hparams.normalize, crop_size=[self.hparams.crop_size,self.hparams.crop_size]), 
+        return torch.utils.data.DataLoader(S7_sort(train=True, normalize=self.hparams.normalize, crop_size=[self.hparams.crop_size,self.hparams.crop_size]),
                 batch_size = self.hparams.batch_size,
                 num_workers = self.hparams.workers
                 )
 
     def val_dataloader(self):
-        return torch.utils.data.DataLoader(S7_sort(train=False, normalize=self.hparams.normalize, crop_size=[self.hparams.crop_size,self.hparams.crop_size]), 
+        return torch.utils.data.DataLoader(S7_sort(train=False, normalize=self.hparams.normalize, crop_size=[self.hparams.crop_size,self.hparams.crop_size]),
                 batch_size = self.hparams.batch_size,
                 num_workers = self.hparams.workers
                 )
 
-    def configure_optimizers(self):       
+    def configure_optimizers(self):
         opt = torch.optim.AdamW(
             self.parameters(),
             lr=self.hparams.learning_rate)
@@ -118,9 +118,9 @@ def main(args):
         )
     exp_name = 'default'
     logger = TensorBoardLogger(log_dir, name=exp_name)
-    
+
     setup_python_logging(logger.log_dir)
-    
+
     model = space7_sort(hparams=args)
 
     checkpoint_callback = ModelCheckpoint(monitor='val_acc', mode='max', save_top_k=2)
@@ -128,10 +128,10 @@ def main(args):
 
     trainer = pl.Trainer.from_argparse_args(args, logger=logger, callbacks=[checkpoint_callback, lr_logger])
     trainer.fit(model)
-    
+
 if __name__ == '__main__':
     parser = ArgumentParser()
-    
+
     parser.add_argument('--max_epochs', type=int, default=100)
     parser.add_argument('--workers', type=int, default=8)
     parser.add_argument('--batch_size', type=int, default=32)
@@ -155,9 +155,8 @@ if __name__ == '__main__':
         single_unet=True,
         normalize=False
         )
-   
+
     args = parser.parse_args()
     args.default_save_path = os.path.join(args.save_dir, "logs")
-    
+
     main(args)
-    
