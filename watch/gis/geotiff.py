@@ -37,6 +37,12 @@ def geotiff_metadata(gpath, elevation='gtop30'):
     from osgeo import gdal
     infos = {}
     ref = gdal.Open(gpath, gdal.GA_ReadOnly)
+    if ref is None:
+        msg = gdal.GetLastErrorMsg()
+        # gdal.GetLastErrorType()
+        # gdal.GetLastErrorNo()
+        raise Exception(msg)
+
     infos['fname'] = geotiff_filepath_info(gpath)
     infos['crs'] = geotiff_crs_info(ref, elevation=elevation)
     infos['cfs'] = infos['crs']  # TODO: backward compat to fix typo, remove
@@ -388,24 +394,23 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
 
     if 1:
         # Is this a reasonable thing to do?
-        from pyproj import CRS
         utm_wkt = utm_crs.ExportToWkt()
         wld_wkt = wld_crs.ExportToWkt()
         wgs84_wkt = wgs84_crs.ExportToWkt()
 
         utm_crs_info = {
-            'auth': CRS.from_wkt(utm_wkt).to_authority(min_confidence=100),
+            'auth': memo_from_wkt(utm_wkt),
             'axis_mapping': utm_axis_mapping,
         }
 
         wld_crs_info = {
-            'auth': CRS.from_wkt(wld_wkt).to_authority(min_confidence=100),
+            'auth': memo_from_wkt(wld_wkt),
             'axis_mapping': wld_axis_mapping,
             'type': wld_crs_type,
         }
 
         wgs84_crs_info = {
-            'auth': CRS.from_wkt(wgs84_wkt).to_authority(min_confidence=100),
+            'auth': memo_from_wkt(wgs84_wkt),
             'axis_mapping': wgs84_axis_mapping,
         }
 
@@ -454,6 +459,15 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         maxx, maxy = info['utm_corners'].data.min(axis=0)
         info['approx_meter_gsd'] = gsd
     return info
+
+
+@ub.memoize
+def memo_from_wkt(wkt):
+    """
+    This benchmarks as an expensive operation, memoize it.
+    """
+    from pyproj import CRS
+    return CRS.from_wkt(wkt).to_authority(min_confidence=100)
 
 
 class InvalidFormat(Exception):
@@ -539,6 +553,9 @@ def geotiff_filepath_info(gpath):
         >>> info = geotiff_filepath_info(gpath)
         >>> print('info = {}'.format(ub.repr2(info, nl=1)))
 
+
+    # S2A_MSIL1C_20170926T092021_N0205_R093_T34UGC_20170926T092552.SAFE/GRANULE/L1C_T34UGC_A011816_20170926T092552/IMG_DATA/T34UGC_20170926T092021_B01.jp2
+
     References:
         .. [S2_Name_2016] https://sentinel.esa.int/web/sentinel/user-guides/sentinel-2-msi/naming-convention
         .. [S3_Name] https://sentinel.esa.int/web/sentinel/user-guides/sentinel-3-altimetry/naming-conventions
@@ -609,6 +626,13 @@ def geotiff_filepath_info(gpath):
                 assert meta['acquisition_date'] == result.named['date']
             meta['acquisition_date'] = result.named['date']
             sensor_candidates.append('S2-TrueColor')
+
+        if result.named['part1'] in {'T34UGC', 'T34UFC'}:  # what code is this?
+            if 'acquisition_date' in meta:
+                assert meta['acquisition_date'] == result.named['date']
+            meta['acquisition_date'] = result.named['date']
+            meta['suffix'] = result.named['part2']
+            sensor_candidates.append('S2')
 
     # WorldView3
     # TODO: find a reference for the spec
