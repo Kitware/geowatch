@@ -38,19 +38,19 @@ dependencies:
     - lxml >= 4.6.3
     - tempenv >= 0.2.0
     - pystac_client >= 0.1.1
-    - scriptconfig >= 0.5.7
+    - scriptconfig >= 0.5.8
     - pygtrie >= 2.3.3
     - protobuf >= 3.15.8
     - networkx >= 2.5.1
 
     # Imaging
-    - kwimage >= 0.7.4
-    - kwcoco >= 0.2.3
+    - kwimage >= 0.7.6
+    - kwcoco >= 0.2.4
     - Pillow >= 8.0.1
     - imgaug >= 0.4.0
     - opencv_python_headless >= 4.5.2.52  # This can be a problem library
     - scikit_image >= 0.18.1
-    - ndsampler >= 0.6.1
+    - ndsampler >= 0.6.3
 
     # Plotting
     - matplotlib >= 3.4.1
