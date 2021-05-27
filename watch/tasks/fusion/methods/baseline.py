@@ -9,7 +9,7 @@ import torchmetrics as metrics
 from models import unet_blur
 
 class ChangeDetector(pl.LightningModule):
-    def __init__(self, input_dim=13, feature_dim=64, learning_rate=1e-3):
+    def __init__(self, input_dim=13, feature_dim=64, learning_rate=1e-3, weight_decay=1e-5, pos_weight=1.):
         super().__init__()
         self.save_hyperparameters()
         
@@ -17,7 +17,7 @@ class ChangeDetector(pl.LightningModule):
         self.model = unet_blur.UNet(self.hparams.input_dim, self.hparams.feature_dim)
         
         # criterion and metrics
-        self.criterion = nn.BCEWithLogitsLoss()
+        self.criterion = nn.BCEWithLogitsLoss(pos_weight=torch.ones(1)*pos_weight)
         self.metrics = nn.ModuleDict({
             "acc": metrics.Accuracy(),
             "iou": metrics.IoU(2),
@@ -32,12 +32,12 @@ class ChangeDetector(pl.LightningModule):
                 self.model(images[:,t])
                 for t in range(T)
             ], dim=1)
+        feats = nn.functional.normalize(feats, dim=2)
         
         # distance between neighboring timesteps
-        diffs = feats[:,1:] - feats[:,:-1]
-        norms = diffs.norm(dim=2)
+        dists = torch.einsum("b t c h w , b t c h w -> b t h w", feats[:,:-1], feats[:,1:])
         
-        return norms
+        return dists
     
     def training_step(self, batch, batch_idx=None):
         images, changes = batch["images"], batch["changes"]
@@ -69,7 +69,12 @@ class ChangeDetector(pl.LightningModule):
         return loss
     
     def configure_optimizers(self):
-        optimizer = optim.RAdam(self.parameters(), lr=self.hparams.learning_rate)
+        optimizer = optim.RAdam(
+                self.model.parameters(), 
+                lr=self.hparams.learning_rate, 
+                weight_decay=self.hparams.weight_decay,
+                betas=(0.9, 0.99),
+            )
         scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.trainer.max_epochs)
         return [optimizer], [scheduler]
     
@@ -79,4 +84,6 @@ class ChangeDetector(pl.LightningModule):
         parser = parent_parser.add_argument_group("ChangeDetector")
         parser.add_argument("--feature_dim", default=64, type=int)
         parser.add_argument("--learning_rate", default=1e-3, type=float)
+        parser.add_argument("--weight_decay", default=1e-5, type=float)
+        parser.add_argument("--pos_weight", default=1.0, type=float)
         return parent_parser

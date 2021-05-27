@@ -98,6 +98,7 @@ class OneraDataset(data.Dataset):
         
         # rearrange image axes for pytorch
         frame_ims = einops.rearrange(frame_ims, "t h w c -> t c h w")
+        frame_ims = frame_ims / 2000.
         
         # catch nans
         frame_ims[np.isnan(frame_ims)] = -1.
