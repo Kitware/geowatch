@@ -8,28 +8,8 @@ from methods import baseline
 from datasets import onera_2018
 import utils
 
-if __name__ == "__main__":
-    
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("train_data_path", type=pathlib.Path)
-    
-    # dataset / dataloader
-    parser.add_argument("--valid_pct", default=0.1, type=float)
-    parser.add_argument("--chip_size", default=128, type=int)
-    parser.add_argument("--time_steps", default=2, type=int)
-    parser.add_argument("--batch_size", default=32, type=int)
-    parser.add_argument("--num_workers", default=4, type=int)
-    parser.add_argument("--channels", default=None, type=str)
-    
-    # model
-    parser = baseline.ChangeDetector.add_model_specific_args(parser)
-    
-    # trainer
-    parser = pl.Trainer.add_argparse_args(parser)
-    
-    args = parser.parse_args()
-    
+def main(args):
+
     # load dataset
     onera_train = kwcoco.CocoDataset(str(args.train_data_path))
     onera_train_sampler = ndsampler.CocoSampler(onera_train)
@@ -38,7 +18,7 @@ if __name__ == "__main__":
         sample_shape=(args.time_steps, args.chip_size, args.chip_size),
         channels=args.channels,
     )
-    full_train_dataset.compute_stats(10)
+    #full_train_dataset.compute_stats(10)
     
     # split into train/valid
     num_examples = len(full_train_dataset)
@@ -83,3 +63,28 @@ if __name__ == "__main__":
     
     # fit!
     trainer.fit(model, train_dataloader, valid_dataloader)
+
+if __name__ == "__main__":
+    
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("train_data_path", type=pathlib.Path)
+    
+    # dataset / dataloader
+    parser.add_argument("--valid_pct", default=0.1, type=float)
+    parser.add_argument("--chip_size", default=128, type=int)
+    parser.add_argument("--time_steps", default=2, type=int)
+    parser.add_argument("--batch_size", default=32, type=int)
+    parser.add_argument("--num_workers", default=4, type=int)
+    parser.add_argument("--channels", default=None, type=str)
+    
+    # model
+    parser = baseline.ChangeDetector.add_model_specific_args(parser)
+    
+    # trainer
+    parser = pl.Trainer.add_argparse_args(parser)
+
+    
+    args = parser.parse_args()
+    main(args)
+    

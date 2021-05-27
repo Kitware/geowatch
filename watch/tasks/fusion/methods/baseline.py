@@ -9,7 +9,7 @@ import torchmetrics as metrics
 from models import unet_blur
 
 class ChangeDetector(pl.LightningModule):
-    def __init__(self, input_dim=13, feature_dim=64, lr=1e-3):
+    def __init__(self, input_dim=13, feature_dim=64, learning_rate=1e-3):
         super().__init__()
         self.save_hyperparameters()
         
@@ -69,7 +69,7 @@ class ChangeDetector(pl.LightningModule):
         return loss
     
     def configure_optimizers(self):
-        optimizer = optim.RAdam(self.parameters(), lr=self.hparams.lr)
+        optimizer = optim.RAdam(self.parameters(), lr=self.hparams.learning_rate)
         scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.trainer.max_epochs)
         return [optimizer], [scheduler]
     
