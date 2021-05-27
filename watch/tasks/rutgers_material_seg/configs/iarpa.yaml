@@ -1,0 +1,48 @@
+# Ours
+location: server
+# location: local
+data:
+  type: semantic_seg
+  name: iarpa
+  image_size: 300x300
+  num_classes: 21
+  weights: []
+  local:
+    model_save_dir: /home/native/projects/data/cranberry_attention/models/
+    train_dir: /media/native/data/data/pascalvoc/VOC2012/
+    test_dir: /media/native/data/data/pascalvoc/VOC2012/
+    val_dir:
+  server:
+    model_save_dir: /data4/peri/cranberry_attention/models/
+    train_dir: /home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2.1/
+    test_dir: /home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2.1/
+    val_dir: /home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2.1/
+
+training:
+  backbone: resnet101
+  model_name: deeplabWS
+  gn_n_groups: 32
+  weight_std: True
+  beta: False
+  pretrained: False
+  distributed: False
+  learning_rate: 0.0001 # best: 0.00007
+  # resume: /data4/peri/cranberry_attention/models/pascalvoc_deeplab/cranberry_attention_pascalvoc_deeplab_2021-03-09-11:45/pascalvoc_deeplab_epoch_38_loss_0.31621180927788667_valmIoU_0.6021584182189197_time_2021-03-11-05:33:02.pth
+  resume: False
+  train_val_test_split: [0.95, 0.02, 0.03]
+  epochs: 200
+  batch_size: 4
+  drop_last_batch: True
+  momentum: 0.9
+  weight_decay: 0.0001
+  num_workers: 4
+  test_with_full_supervision: 1
+
+evaluation:
+  use_crf: True
+  crf_t: 1
+  crf_scale_factor: 1
+
+procedures:
+  train: True
+  validate: True
