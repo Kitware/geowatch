@@ -20,23 +20,61 @@ def safedir_to_xml(safedir):
     return xmls[0]
 
 
-def find_baseline_scene(xmls):
+def find_baseline_scene(xmls, return_paths=False):
     '''
     Choose a Sentinel-2 L1C scene to serve as a reference for coregistration.
 
     Args:
         xmls: list of 'MTD_TL.xml' files corresponding to scenes
+        return_paths: values of return dict are paths to baseline granuledirs instead
 
     Returns:
-        Dict[str, pd.DataFrame]:
-            for each MGRS tile represented in xmls, a dataframe containing the name of the chosen scene and its scores on quality heuristics
+        Dict[mgrs_tile: str, pd.DataFrame]:
+            for each MGRS tile represented in xmls,
+            the granuledir of the chosen scene and its scores on quality heuristics
 
     Example:
-        >>> from watch.datacube.registration import *
+        >>> # xdoctest: +REQUIRES(--network)
+        >>> from watch.datacube.registration.s2_baseline_scene import *
+        >>> from watch.demo.sentinel2_demodata import grab_sentinel2_product
+        >>> 
+        >>> safedirs = [str(grab_sentinel2_product().path)]
+        >>> baseline = find_baseline_scene([safedir_to_xml(s) for s in safedirs])
+        >>> 
+        >>> mgrs_tile = ''.join(safedirs[0].split(os.path.sep)[-4:-1])
+        >>> # not essential, could change with demodata
+        >>> assert mgrs_tile == '52SDG'
+        >>> # the tile matches
+        >>> assert baseline.keys() == {mgrs_tile}
+        >>> 
+        >>> df = baseline[mgrs_tile]
+        >>> assert df.shape == (1,8)
+        >>> # since it only has 1 row, let it act like a dict
+        >>> df = df.squeeze()
+        >>> # the tile matches
+        >>> df['mgrs_tile_id'] == mgrs_tile
+        >>> # the granuledir exists in the chosen safedir
+        >>> assert os.path.isdir(os.path.join(safedirs[0], 'GRANULE', df['granule_id']))
+        >>> 
+        >>> # alternate use:
+        >>> baseline = find_baseline_scene([safedir_to_xml(s) for s in safedirs], return_paths=True)
+        >>> assert baseline[mgrs_tile].startswith(os.path.abspath(safedirs[0]))
+        >>> 
+        >>> df.pop('granuledir')  # not portable for testing
+        df.to_dict() = {
+            'granule_id': 'L1C_T52SDG_A017589_20181104T022402',
+            'proc_ver': 2.06,
+            'sun_zenith_angle': 53.7076919780578,
+            'cloud': 0.00046,
+            'coverage': 0.9220606683454932,
+            'mgrs_tile_id': '52SDG',
+            'score': 0.8312121338139905
+        }
+
     '''
     header = [
-        'granule_id', 'proc_ver', 'sun_zenith_angle', 'cloud', 'coverage',
-        'mgrs_tile_id'
+        'granuledir', 'granule_id', 'proc_ver', 'sun_zenith_angle', 'cloud',
+        'coverage', 'mgrs_tile_id'
     ]
     df = pd.DataFrame(columns=header)
 
@@ -50,6 +88,7 @@ def find_baseline_scene(xmls):
         if len(granule_id) == 0:
             continue
         tmp_dict['granule_id'] = granule_id
+        tmp_dict['granuledir'] = path_to_xml
 
         # MGRS tile id from granule id without T
         tmp_dict['mgrs_tile_id'] = granule_id.split('_')[1][1:]
@@ -116,7 +155,10 @@ def find_baseline_scene(xmls):
     for mgrs_tile in mgrs_tile_list:
         df_tmp = df[df['mgrs_tile_id'] == mgrs_tile]
         df_best = df_tmp.loc[[df_tmp['score'].idxmax()]]
-        result[mgrs_tile] = df_best
+        if return_paths:
+            result[mgrs_tile] = os.path.normpath(df_best.squeeze()['granuledir'])
+        else:
+            result[mgrs_tile] = df_best
 
     return result
 
@@ -135,10 +177,10 @@ def main():
         safedir_to_xml(s)
         for s in glob.glob(os.path.join(input_folder, '*.SAFE'))
     ]
-    dfs = find_baseline_scene(xmls)
-    for mgrs_tile, df in dfs.items():
-        fname_ref_scene = '%s.baseline.scene.csv' % (mgrs_tile)
-        df.to_csv(os.path.join(input_folder, fname_ref_scene), index=False)
+    for mgrs_tile, df in find_baseline_scene(xmls):
+        df.to_csv(os.path.join(input_folder,
+                               f'{mgrs_tile}.baseline.scene.csv'),
+                  index=False)
 
 
 if __name__ == '__main__':
