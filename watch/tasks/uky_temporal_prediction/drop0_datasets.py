@@ -14,14 +14,14 @@ class drop0_pairs(torch.utils.data.Dataset):
 
 
     def __init__(self,
-                 root = '/localdisk0/SCRATCH/watch/smart_watch_dvc/drop0_aligned/',
+                 root='/localdisk0/SCRATCH/watch/smart_watch_dvc/drop0_aligned/',
                  sensor='S2',
                  panchromatic=True,
                  video=1,
                  min_time_step=1,
                  change_labels=list(range(14))):
 
-        self.dataset = drop0_aligned_segmented(root=root, sensor=sensor, panchromatic=panchromatic, video=video, change_labels=change_labels)
+        self.dataset = drop0_aligned(root=root, sensor=sensor, panchromatic=panchromatic, video=video, change_labels=change_labels)
         self.length = len(self.dataset)
         self.min_time_step=min_time_step
 
@@ -36,10 +36,10 @@ class drop0_pairs(torch.utils.data.Dataset):
             idx2 = random.randint(0,self.length-1)
 
         view2 = self.dataset.__getitem__(idx2)
-        im2, date2 = view2['image'], view2['mask']
+        im2, date2 = view2['image'], view2['date']
 
-        date = (int(date[:4]),int(date[5:7]),int(date[8:]))
-        date2 = (int(date2[:4]),int(date2[5:7]),int(date2[8:]))
+        date = (int(date[:4]), int(date[5:7]), int(date[8:]))
+        date2 = (int(date2[:4]), int(date2[5:7]), int(date2[8:]))
         
         if date2 < date:
             im, im2 = im2, im
@@ -107,7 +107,7 @@ class drop0_aligned_segmented(torch.utils.data.Dataset):
     Land Cover: Videos 1,4
     WV multi-sprectral: Video 5
     WV panchromatic: Videos 1,2,5
-    S2: Videos 3,4,5
+    S2: Videos 1,4,5
     """
 
     def __init__(self, root = '/localdisk0/SCRATCH/watch/smart_watch_dvc/drop0_aligned/',
@@ -115,7 +115,7 @@ class drop0_aligned_segmented(torch.utils.data.Dataset):
 
         self.sensor = sensor
 
-        self.accepted_labels = change_labels ### only take contruction based labels, ignore "transient construction"
+        self.accepted_labels = change_labels ###by default only take contruction based labels, ignore "transient construction"
 
         if sites == 'all':
             sites = ['AE-Dubai-0001',
@@ -261,11 +261,14 @@ class drop0_aligned(torch.utils.data.Dataset):
     Land Cover: Videos 1,4
     WV multi-sprectral: Video 5
     WV panchromatic: Videos 1,2,5
-    S2: Videos 3,4,5
+    S2: Videos 1,4,5
     """
-    def __init__(self, sensor='S2', sites='all', panchromatic=True, video=3):
+    def __init__(self, root = '/localdisk0/SCRATCH/watch/smart_watch_dvc/drop0_aligned/',
+                 sensor='S2', sites='all', panchromatic=True, video=1, change_labels=[2,3,4,7,8,9,11]):
 
         self.sensor = sensor
+
+        self.accepted_labels = change_labels ###by default only take contruction based labels, ignore "transient construction"
 
         if sites == 'all':
             sites = ['AE-Dubai-0001',
@@ -276,39 +279,42 @@ class drop0_aligned(torch.utils.data.Dataset):
                      'US-Waynesboro-0001']
 
         self.video_id = video
-        self.root = '/localdisk0/SCRATCH/watch/smart_watch_dvc/drop0_aligned/'
+        self.root = root
         self.json_file = osp.join(self.root, 'data.kwcoco.json')
         dset = kwcoco.CocoDataset(self.json_file)
-
+        
         if self.video_id:
-            video_list = dset.images().lookup('video_id', keepid=True)
-            video_ids = [ID for ID in video_list if video_list[ID] == self.video_id]
+            video_ids = dset.index.vidid_to_gids[self.video_id]
+            video_ids_of_interest = [self.video_id]
         else:
-            video_ids = [1,2,3,4,5]
+            video_ids = dset.images().gids
+            video_ids_of_interest = [1,2,3,4,5]
 
         sensor_list = dset.images().lookup('sensor_coarse', keepid=True)
         sensor_ids = [ID for ID in sensor_list if sensor_list[ID] == sensor]
 
+        
+        # A flat list of images belonging to those videos
+        valid_image_ids = list(it.chain.from_iterable([dset.index.vidid_to_gids[vidid] for vidid in video_ids_of_interest]))
 
-#         region_list = dset.images().lookup('site_tag', keepid=True)
-#         region_ids = [ID for ID in region_list if region_list[ID] in sites]
+        # An `Images` object for all the valid images
+        valid_images = dset.images(valid_image_ids)
+        
+        # Restrict to correct sensor
+        valid_images = valid_images.compress([x == sensor for x in valid_images.lookup('sensor_coarse')])
+
 
         if 'WV' == sensor:
-            band_list = dset.images().lookup('num_bands', keepid=True)
-            pan_ids = [ID for ID in band_list if band_list[ID] == 1]
-            ms_ids = [ID for ID in band_list if band_list[ID] == 8]
-
             if panchromatic:
-                sensor_ids = [ids for ids in sensor_ids if ids in pan_ids]
+                valid_images = valid_images.compress([num_bands == 1 for num_bands in valid_images.lookup('num_bands')])
                 self.ms = False
             else:
-                sensor_ids = [ids for ids in sensor_ids if ids in ms_ids]
+                valid_images = valid_images.compress([num_bands == 8 for num_bands in valid_images.lookup('num_bands')])
                 self.ms = True
 
-        self.dset_ids = sorted([ids for ids in sensor_ids if ids in video_ids])
-
+        self.dset_ids = valid_images.gids
         self.annotations = dset.annots
-        self.images = dset.images(self.dset_ids)
+        self.images = valid_images
 
         self.dset = dset
 
@@ -316,17 +322,20 @@ class drop0_aligned(torch.utils.data.Dataset):
         return len(self.dset_ids)
 
     def __getitem__(self, idx):
-        annot_ids = 1 + np.where(np.array(self.annotations().get('image_id')) == self.images.get('id')[idx])[0]
-
-        annotations = self.annotations(annot_ids)
-
-        bbox = annotations.lookup('bbox')
-        segmentation = [x['exterior'] for x in annotations.lookup('segmentation')]
-        category_id = annotations.lookup('category_id')
+        
+        gid = self.dset_ids[idx]
+        annot_ids = self.dset.index.gid_to_aids[gid]
+        
+        aids = self.dset.index.gid_to_aids[gid]
+        dets = kwimage.Detections.from_coco_annots(self.dset.annots(aids).objs, dset=self.dset)
+        
+        bbox = dets.data['boxes'].data
+        segmentation = dets.data['segmentations'].data
+        category_id = [dets.classes.idx_to_id[cidx] for cidx in dets.data['class_idxs']]
 
         filename = osp.join(self.root, self.images.lookup('file_name')[idx])
         acquisition_date = self.images.lookup('date_captured')[idx]
-        region = self.images.lookup('site_tag')[idx]
+#         region = self.images.lookup('site_tag')[idx]
 
         im = tifffile.imread(filename)
         im = torch.tensor(im.astype('int16'))
@@ -334,7 +343,7 @@ class drop0_aligned(torch.utils.data.Dataset):
         if len(im.shape) < 3:
             im = im.unsqueeze(0)
             if self.sensor == 'WV':
-                im = im / 2000. #rough normalization
+                im = im / 2048. #rough normalization
             else:
                 im = im / 32000. #rough normalization
 
@@ -343,26 +352,23 @@ class drop0_aligned(torch.utils.data.Dataset):
             if self.sensor == 'S2':
                 im = im / 255.
             elif self.sensor == 'WV':
-                im = im / 2000.
-
-        if annotations.get('image_id'):
-            if not self.images.get('id')[idx]==annotations.get('image_id')[0]:
-                print(annotations.get('image_id'))
-                print(self.images.get('id')[idx])
+                im = im / 2048.
 
         timestamp = self.images.lookup('timestamp')[idx]
         #assert(self.images.get('id')[idx]==annotations.get('image_id')[0])
 
-        annotations = {'region': region,
+        annotations = {#'region': region,
                          'bbox': bbox,
                          'segmentation': segmentation,
                          'category_id': category_id,
                          'video_id': self.images.lookup('video_id')[idx],
                          'frame_index': self.images.lookup('frame_index')[idx],
+                      'width': self.images.lookup('width')[idx],
+                       'height': self.images.lookup('height')[idx],
+                      'timestamp': timestamp
                       }
 
         return {'image': im,
                 'date': acquisition_date,
-                'timestamp': timestamp,
                 'annotations': annotations
                 }
