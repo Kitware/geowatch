@@ -14,6 +14,7 @@ import scriptconfig as scfg
 import ubelt as ub
 import watch
 
+from watch.utils import util_bands
 
 class GeotiffToKwcocoConfig(scfg.Config):
     default = {
@@ -81,21 +82,33 @@ def fake_band_info():
     1           0.34 m                 450-800 nm  Panchromatic
     """
 
+def filter_bands(band_files, names):
+
 
 def ingest_landsat_directory(lc_dpath):
-    tiffs = sorted(glob.glob(join(lc_dpath, '*.TIF')))
     name = basename(normpath(lc_dpath))
+    tiffs = sorted(glob.glob(join(lc_dpath, '*.TIF')))
+    band_names = [b['name'] for b in (util_bands.BANDS_LANDSAT7 +
+                                      util_bands.BANDS_LANDSAT8)]
+    tiffs = [t for t in tiffs if any(b in t for b in band_names)]
     img = make_coco_img_from_auxiliary_geotiffs(tiffs, name)
     baseinfo = watch.gis.geotiff.geotiff_filepath_info(name)
     capture_time = isoparse(baseinfo['filename_meta']['acquisition_date'])
     img['date_captured'] = datetime.datetime.isoformat(capture_time)
-    img['sensor_coarse'] = 'LC'
+    if name.startswith('LC'):
+        img['sensor_coarse'] = 'L8'
+    elif name.startswith('LE'):
+        img['sensor_coarse'] = 'L7'
+    else:
+        img['sensor_coarse'] = 'LS'
     return img
 
 
 def ingest_sentinal2_directory(s2_dpath):
     name = basename(normpath(s2_dpath)).rstrip('.SAFE')
     tiffs = sorted(glob.glob(join(s2_dpath, 'GRANULE', '*', 'IMG_DATA', '*.jp2')))
+    band_names = [b['name'] for b in util_bands.BANDS_SENTINEL2]
+    tiffs = [t for t in tiffs if any(b in t for b in band_names)]
     img = make_coco_img_from_auxiliary_geotiffs(tiffs, name)
 
     baseinfo = watch.gis.geotiff.geotiff_filepath_info(name)
