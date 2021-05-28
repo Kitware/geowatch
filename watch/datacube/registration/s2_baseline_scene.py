@@ -38,7 +38,7 @@ def find_baseline_scene(xmls, return_paths=False):
         >>> from watch.datacube.registration.s2_baseline_scene import *
         >>> from watch.demo.sentinel2_demodata import grab_sentinel2_product
         >>> 
-        >>> safedirs = [str(grab_sentinel2_product().path)]
+        >>> safedirs = [str(grab_sentinel2_product(i).path) for i in range(3)]
         >>> baseline = find_baseline_scene([safedir_to_xml(s) for s in safedirs])
         >>> 
         >>> mgrs_tile = ''.join(safedirs[0].split(os.path.sep)[-4:-1])
@@ -54,22 +54,22 @@ def find_baseline_scene(xmls, return_paths=False):
         >>> # the tile matches
         >>> df['mgrs_tile_id'] == mgrs_tile
         >>> # the granuledir exists in the chosen safedir
-        >>> assert os.path.isdir(os.path.join(safedirs[0], 'GRANULE', df['granule_id']))
+        >>> assert safedirs[1] in df['granuledir']
         >>> 
         >>> # alternate use:
         >>> baseline = find_baseline_scene([safedir_to_xml(s) for s in safedirs], return_paths=True)
-        >>> assert baseline[mgrs_tile].startswith(os.path.abspath(safedirs[0]))
+        >>> assert baseline[mgrs_tile].startswith(os.path.abspath(safedirs[1]))
         >>> 
         >>> df.pop('granuledir')  # not portable for testing
-        df.to_dict() = {
-            'granule_id': 'L1C_T52SDG_A017589_20181104T022402',
-            'proc_ver': 2.06,
-            'sun_zenith_angle': 53.7076919780578,
-            'cloud': 0.00046,
-            'coverage': 0.9220606683454932,
-            'mgrs_tile_id': '52SDG',
-            'score': 0.8312121338139905
-        }
+        >>> assert df.to_dict() == {
+        >>>     'granule_id': 'L1C_T52SDG_A017589_20181104T022402',
+        >>>     'proc_ver': 2.06,
+        >>>     'sun_zenith_angle': 53.7076919780578,
+        >>>     'cloud': 0.00046,
+        >>>     'coverage': 0.9220606683454932,
+        >>>     'mgrs_tile_id': '52SDG',
+        >>>     'score': 0.8300044043453915
+        >>> }
 
     '''
     header = [
