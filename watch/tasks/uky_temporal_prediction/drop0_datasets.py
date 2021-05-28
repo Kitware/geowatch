@@ -165,8 +165,10 @@ class drop0_aligned_segmented(torch.utils.data.Dataset):
         return len(self.dset_ids)
 
     def __getitem__(self, idx):
-        annot_ids = 1 + np.where(np.array(self.annotations().get('image_id')) == self.images.get('id')[idx])[0]
-
+        
+        gid = self.dset_ids[idx]
+        annot_ids = self.dset.index.gid_to_aids[gid]
+        
         annotations = self.annotations(annot_ids)
 
         bbox = annotations.lookup('bbox')
