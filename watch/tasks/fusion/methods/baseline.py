@@ -69,6 +69,21 @@ class ChangeDetector(pl.LightningModule):
         self.log("val_loss", loss, prog_bar=True)
         return loss
     
+    def test_step(self, batch, batch_idx=None):
+        images, changes = batch["images"], batch["changes"]
+        
+        # compute predicted and target change masks
+        distances = self(images)
+                
+        # compute metrics
+        for key, metric in self.metrics.items():
+            self.log("test_"+key, metric(torch.sigmoid(distances), changes), prog_bar=True)
+        
+        # compute loss
+        loss = self.criterion(distances, changes.float())
+        self.log("test_loss", loss, prog_bar=True)
+        return loss
+    
     def configure_optimizers(self):
         optimizer = optim.RAdam(
                 self.model.parameters(), 

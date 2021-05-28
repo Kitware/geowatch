@@ -11,10 +11,11 @@ import itertools as it
 
 class OneraDataset(data.Dataset):
     # TODO: add torchvision.transforms or albumentations
-    def __init__(self, sampler, sample_shape, channels=None):
+    def __init__(self, sampler, sample_shape, channels=None, mode="fit"):
         self.sampler = sampler
         self.sample_shape = sample_shape
         self.channels = channels
+        self.mode = mode
         
         full_sample_grid = self.sampler.new_sample_grid("video_detection", self.sample_shape)
         self.sample_grid = list(it.chain(
@@ -22,7 +23,11 @@ class OneraDataset(data.Dataset):
             full_sample_grid["negatives"],
         ))
         
-        self.num_channels = self.__getitem__(0)["images"].shape[1]
+        example_to_query = self.__getitem__(0)
+        if self.mode == "predict":
+            self.num_channels = example_to_query.shape[1]
+        else:
+            self.num_channels = example_to_query["images"].shape[1]
         
     def compute_stats(self, num_examples=1):
         
@@ -68,6 +73,11 @@ class OneraDataset(data.Dataset):
         for frame, dets in zip(raw_frame_list, raw_det_list):
             frame = frame.astype(np.float32)
             input_dsize = self.sample_shape[-2:]
+            
+            input_dsize = (
+                real if (nominal is None) else nominal
+                for nominal, real in zip(input_dsize, frame.shape)
+            )
 
             # Resize the sampled window to the target space for the network
             frame, info = kwimage.imresize(frame, dsize=input_dsize,
@@ -102,6 +112,9 @@ class OneraDataset(data.Dataset):
         
         # catch nans
         frame_ims[np.isnan(frame_ims)] = -1.
+        
+        if self.mode == "predict":
+            return torch.from_numpy(frame_ims).detach()
         
         # compute change from masks
         changes = frame_masks[1:] != frame_masks[:-1]
