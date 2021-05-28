@@ -131,47 +131,36 @@ class drop0_aligned_segmented(torch.utils.data.Dataset):
         
         if self.video_id:
             video_ids = dset.index.vidid_to_gids[self.video_id]
+            video_ids_of_interest = [self.video_id]
         else:
             video_ids = dset.images().gids
+            video_ids_of_interest = [1,2,3,4,5]
 
         sensor_list = dset.images().lookup('sensor_coarse', keepid=True)
         sensor_ids = [ID for ID in sensor_list if sensor_list[ID] == sensor]
 
+        
+        # A flat list of images belonging to those videos
+        valid_image_ids = list(it.chain.from_iterable([dset.index.vidid_to_gids[vidid] for vidid in video_ids_of_interest]))
 
-video_ids_of_interest = [1, 2, 3]
-
-# A flat list of images belonging to those videos
-valid_image_ids = list(it.chain.from_iterable([dset.index.vidid_to_gids[vidid] for vidid in video_ids_of_interest]))
-
-# An `Images` object for all the valid images
-valid_images = dset.images(valid_image_ids)
-
-# Mark if each image has the right sensor
-target_sensor = 'S2'
-flags = [sensor == target_sensor for sensor in valid_images.lookup('sensor_coarse')]
-# Filter out any image corresponding to "False" in the above list
-valid_images = valid_images.compress(flags)
-
-# One liner for similar logic, only keep images with 8 bands
-valid_images = valid_images.compress([num_bands == 8 for num_bands in valid_images.lookup('num_bands')])
+        # An `Images` object for all the valid images
+        valid_images = dset.images(valid_image_ids)
+        
+        # Restrict to correct sensor
+        valid_images = valid_images.compress([x == sensor for x in valid_images.lookup('sensor_coarse')])
 
 
         if 'WV' == sensor:
-            band_list = dset.images().lookup('num_bands', keepid=True)
-            pan_ids = [ID for ID in band_list if band_list[ID] == 1]
-            ms_ids = [ID for ID in band_list if band_list[ID] == 8]
-
             if panchromatic:
-                sensor_ids = [ids for ids in sensor_ids if ids in pan_ids]
+                valid_images = valid_images.compress([num_bands == 1 for num_bands in valid_images.lookup('num_bands')])
                 self.ms = False
             else:
-                sensor_ids = [ids for ids in sensor_ids if ids in ms_ids]
+                valid_images = valid_images.compress([num_bands == 8 for num_bands in valid_images.lookup('num_bands')])
                 self.ms = True
 
-        self.dset_ids = sorted([ids for ids in sensor_ids if ids in video_ids])
-
+        self.dset_ids = valid_images.gids
         self.annotations = dset.annots
-        self.images = dset.images(self.dset_ids)
+        self.images = valid_images
 
         self.dset = dset
 
