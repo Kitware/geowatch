@@ -34,7 +34,7 @@ Example:
     >>> # one image per band
     >>> bands = [v.to_dict()['eo:bands'][0] for k,v in i.assets.items() if k.startswith('B')]
     >>> 
-    >>> from watch.datacube.reflectance.bands import *
+    >>> from watch.utils.util_bands import *
     >>> assert dicts_contain(SENTINEL2, bands)
 '''
 SENTINEL2 = [
@@ -74,7 +74,7 @@ Example:
     >>> # one image for all bands
     >>> bands = [v.to_dict()['eo:bands'][0] for k,v in i.assets.items() if k.startswith('B') and (k != 'BQA')]
     >>> 
-    >>> from watch.datacube.reflectance.bands import *
+    >>> from watch.utils.util_bands import *
     >>> assert dicts_contain(LANDSAT8, bands)
 '''
 LANDSAT8 = [
@@ -107,7 +107,7 @@ Example:
     >>> keys = sorted(k for k in assets.keys() if 'B' in k)
     >>> bands = [assets[k]['eo:bands'][0] for k in keys]
     >>> 
-    >>> from watch.datacube.reflectance.bands import *
+    >>> from watch.utils.util_bands import *
     >>> assert dicts_contain(LANDSAT7, bands)
 '''
 LANDSAT7 = [
@@ -158,7 +158,7 @@ Example:
     >>> assert wv02_pan == wv03_pan
     >>> assert wv02_ms8 == wv03_ms8
     >>> 
-    >>> from watch.datacube.reflectance.bands import *
+    >>> from watch.utils.util_bands import *
     >>> assert dicts_contain(WORLDVIEW1_PAN, wv01_pan)
     >>> assert dicts_contain(WORLDVIEW2_PAN, wv02_pan)
     >>> assert dicts_contain(WORLDVIEW2_MS4, wv02_ms4)
@@ -223,7 +223,7 @@ TODO do we even need to conform to this? Should we only collect
 "true" synonyms like {'pan': 'panchromatic'} ?
 
 Example:
-    >>> from watch.datacube.reflectance.bands import *
+    >>> from watch.utils.util_bands import *
     >>> import itertools
     >>> names = set(b.get('common_name', '') for b in ALL_BANDS)
     >>> accounted_names = set(EO_COMMONNAMES.keys()).union(
@@ -262,7 +262,7 @@ Bands that are used to observe targets on the ground
 This is just a rough first pass
 
 Example:
-    >>> from watch.datacube.reflectance.bands import *
+    >>> from watch.utils.util_bands import *
     >>> assert GROUND.issubset(set(EO_COMMONNAMES.keys()))
 '''
 GROUND = {
@@ -283,7 +283,7 @@ These band fields can be accessed as python objects as well using pystac
 
 Example:
     >>> from pystac.extensions.eo import Band
-    >>> from watch.datacube.reflectance.bands import *
+    >>> from watch.utils.util_bands import *
     >>> for band in ALL_BANDS:
     >>>     band.pop('gsd', None)  # pystac doesn't support this yet
     >>>     b = Band.create(**band)
