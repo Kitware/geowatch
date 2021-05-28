@@ -425,3 +425,78 @@ def _num_band_hueristic(num_bands):
     else:
         raise Exception('num_bands=f{num_bands}')
     return channels
+
+
+def __WIP_add_auxiliary(dset, gid, fname, channels, data, warp_aux_to_img=None):
+    """
+    Snippet for adding an auxiliary image
+
+    Args:
+        dset (CocoDataset)
+        gid (int): image id to add auxiliary data to
+        channels (str): name of the new auxiliary channels
+        fname (str): path to save the new auxiliary channels (absolute or
+            relative to dset.bundle_dpath)
+        data (ndarray): actual auxiliary data
+        warp_aux_to_img (kwimage.Affine): spatial relationship between
+            auxiliary channel and the base image. If unspecified
+            it is assumed that a simple scaling will suffice.
+
+    Ignore:
+        import kwcoco
+        dset = kwcoco.CocoDataset.demo('shapes8')
+        gid = 1
+        data = np.random.rand(32, 55, 5)
+        fname = 'myaux1.png'
+        channels = 'hidden_logits'
+        warp_aux_to_img = None
+        __WIP_add_auxiliary(dset, gid, fname, channels, data, warp_aux_to_img)
+    """
+    from os.path import join
+    import kwimage
+    fpath = join(dset.bundle_dpath, fname)
+    aux_height, aux_width = data.shape[0:2]
+    img = dset.index.imgs[gid]
+
+    def Affine_concise(aff):
+        """
+        TODO: add to kwimage.Affine
+        """
+        import numpy as np
+        params = aff.decompose()
+        params['type'] = 'affine'
+        if np.allclose(params['offset'], (0, 0)):
+            params.pop('offset')
+        if np.allclose(params['scale'], (1, 1)):
+            params.pop('scale')
+        if np.allclose(params['shear'], 0):
+            params.pop('shear')
+        if np.allclose(params['theta'], 0):
+            params.pop('theta')
+        return params
+
+    if not hasattr(warp_aux_to_img, 'concise'):
+        ub.inject_method(warp_aux_to_img, Affine_concise, 'concise')
+
+    if warp_aux_to_img is None:
+        # Assume we can just scale up the auxiliary data to match the image
+        # space unless the user says otherwise
+        warp_aux_to_img = kwimage.Affine.scale((
+            img['width'] / aux_width, img['height'] / aux_height))
+
+    # Make the aux info dict
+    aux = {
+        'file_name': fname,
+        'height': aux_height,
+        'width': aux_width,
+        'channels': channels,
+        'warp_aux_to_img': warp_aux_to_img.concise(),
+    }
+
+    if 0:
+        # This function probably should not save the data to disk
+        kwimage.imwrite(fpath, data)
+
+    auxiliary = img.setdefault('auxiliary', [])
+    auxiliary.append(aux)
+    dset._invalidate_hashid()

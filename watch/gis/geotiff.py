@@ -482,7 +482,7 @@ def geotiff_filepath_info(gpath):
     information is not robust.
 
     Several huerstics are currently implemented for:
-        * Sentinal 2
+        * Sentinel 2
         * Landsat-8
         * WorldView3
 
@@ -553,6 +553,44 @@ def geotiff_filepath_info(gpath):
         >>> info = geotiff_filepath_info(gpath)
         >>> print('info = {}'.format(ub.repr2(info, nl=1)))
 
+    Ignore:
+        >>> from watch.gis.geotiff import *  # NOQA
+        >>> base_dpath = '/home/joncrall/data/grab_tiles_out/fels'
+        >>> paths = sorted(walk_geotiff_products(base_dpath, with_product_dirs=1, with_loose_images=0))
+        >>> infos = []
+        >>> for path in paths:
+        >>>     info = geotiff_filepath_info(path)
+        >>>     info['basename'] = basename(path)
+        >>>     print('info = {}'.format(ub.repr2(info, nl=1)))
+        >>>     infos.append(info)
+
+        >>> paths = sorted(walk_geotiff_products(base_dpath, with_product_dirs=0, with_loose_images=1))
+        >>> infos = []
+        >>> for path in paths:
+        >>>     info = geotiff_filepath_info(path)
+        >>>     info['basename'] = basename(path)
+        >>>     print('info = {}'.format(ub.repr2(info, nl=1)))
+        >>>     infos.append(info)
+        >>> print('infos = {}'.format(ub.repr2(infos[0:10], nl=1)))
+        >>> print('infos = {}'.format(ub.repr2(infos[-10:], nl=1)))
+
+        >>> infos = []
+        >>> for path in paths:
+        >>>     info = geotiff_filepath_info(path)
+        >>>     info['path'] = path
+        >>>     infos.append(info)
+
+        item = infos[0]
+
+        groups = ub.group_items(infos, key=lambda d:
+            '_'.join(basename(d['path']).split('_')[0:2])
+        )
+        def groupfunc(item):
+            return '_'.join(item['sensor_candidates'])
+
+        toshow = ub.map_vals(lambda x: set(map(groupfunc, x)), groups)
+        print('toshow = {}'.format(ub.repr2(toshow, nl=1)))
+
 
     # S2A_MSIL1C_20170926T092021_N0205_R093_T34UGC_20170926T092552.SAFE/GRANULE/L1C_T34UGC_A011816_20170926T092552/IMG_DATA/T34UGC_20170926T092021_B01.jp2
 
@@ -579,18 +617,26 @@ def geotiff_filepath_info(gpath):
     if ls_meta is not None:
         sensor_cand = 'L' + ls_meta['sensor_code'] + ls_meta['sat_code']
         meta.update(ls_meta)
+        meta['product_guess'] = 'landsat'
+        meta['guess_heuristic'] = 'landsat_parse'
         sensor_candidates.append(sensor_cand)
 
-    # Sentinal-2 2016+ filename pattern. See [S2_Name_2016]_
+    # Sentinel-2 2016+ filename pattern. See [S2_Name_2016]_
     # These filenames are often directories
     # MMM_MSIXXX_YYYYMMDDHHMMSS_Nxxyy_ROOO_Txxxxx_<Product Discriminator>.SAFE
     # SAFE = Standard Archive Format for Europe
     s2_name_2016 = '{MMM}_{MSIXXX}_{YYYYMMDDHHMMSS}_{Nxxyy}_{ROOO}_{Txxxxx}_{Discriminator}'
-
-    # known_s2_bands = {
-    #     'B01', 'B02', 'B03', 'B04', 'B05', 'B06', 'B07', 'B08',
-    #     'B09', 'B10', 'B11', 'B12', 'B8A',
-    # }
+    s2_channel_alias = {
+        'B01': 'costal',
+        'B02': 'blue',
+        'B03': 'green',
+        'B04': 'red',
+        'B08': 'nir',
+        'TCI': 'r|g|b',
+        'B10': 'cirrus',
+        'B11': 'swir16',
+        'B12': 'swir22',
+    }
     for part_ in reversed(parts):
         part = part_.split('.')[0]
         result = parse.parse(s2_name_2016, part)
@@ -607,6 +653,8 @@ def geotiff_filepath_info(gpath):
                 s2_meta['relative_oribt_num'] = result.named['ROOO']
                 s2_meta['tile_number'] = result.named['Txxxxx']
                 s2_meta['discriminator'] = result.named['Discriminator']
+                s2_meta['product_guess'] = 'sentinel2'
+                s2_meta['guess_heuristic'] = 'S2_2016_format'
             except InvalidFormat:
                 pass
             else:
@@ -614,24 +662,31 @@ def geotiff_filepath_info(gpath):
                 sensor_candidates.append(mission_id)
                 break
 
-    # Files ending in _TCI are true color images based on the Sentinal 2
+    # Files ending in _TCI are true color images based on the Sentinel 2
     # Handbook I'm not sure what the standard for this format is I just know a
-    # suffix of _TCI means true color image. ANd these are from sentinal2, I'm
+    # suffix of _TCI means true color image. ANd these are from sentinel2, I'm
     # guessing on the rest of the format.
-    s2_format_guess = '{part1}_{date}_{part2}'
+
+    # https://gitlab.kitware.com/smart/watch/-/blob/dev/stub_harmonization/watch/datacube/reflectance/bands.py
+    s2_format_guess = '{tile_number}_{date}_{band}'
     result = parse.parse(s2_format_guess, base)
     if result:
-        if result.named['part2'] == 'TCI':
-            if 'acquisition_date' in meta:
-                assert meta['acquisition_date'] == result.named['date']
-            meta['acquisition_date'] = result.named['date']
-            sensor_candidates.append('S2-TrueColor')
-
-        if result.named['part1'] in {'T34UGC', 'T34UFC'}:  # what code is this?
-            if 'acquisition_date' in meta:
-                assert meta['acquisition_date'] == result.named['date']
-            meta['acquisition_date'] = result.named['date']
-            meta['suffix'] = result.named['part2']
+        tile_number = result.named['tile_number']
+        if len(tile_number) == 6 and tile_number.startswith('T'):
+            if 'sense_start_time' in meta:
+                assert meta['sense_start_time'] == result.named['date']
+            # Changed from acquisition_date to match other S2 information
+            meta['sense_start_time'] = result.named['date']
+            band = result.named['band']
+            if band == 'TCI':
+                sensor_candidates.append('S2-TrueColor')
+            # TODO: normalized consise channel code
+            meta['tile_number'] = tile_number
+            meta['suffix'] = band
+            channels = s2_channel_alias.get(band, band)
+            meta['channels'] = channels
+            meta['product_guess'] = 'sentinel2'
+            meta['guess_heuristic'] = 'S2_tile_date_band_format'
             sensor_candidates.append('S2')
 
     # WorldView3
@@ -647,6 +702,8 @@ def geotiff_filepath_info(gpath):
             wv2_meta['date2'] = result.named['date2']
             wv2_meta['num'] = result.named['num']
             wv2_meta['part2'] = result.named['part2']
+            wv2_meta['product_guess'] = 'worldview'
+            meta['guess_heuristic'] = 'WV_heuristic1'
             meta.update(wv2_meta)
         except InvalidFormat:
             pass
@@ -667,6 +724,7 @@ def geotiff_filepath_info(gpath):
         for prod_meta in dg_bundle.data['product_metas']:
             sensor_candidates.append(prod_meta['sensorVehicle'])
 
+    # TODO: handle landsat and sentinel2 bundles
     info['is_dg_bundle'] = dg_bundle is not None
     return info
 
@@ -738,6 +796,21 @@ def parse_landsat_product_id(product_id):
             'L1GS': 'Systematic',
         }
 
+        # TODO: use harmonization tools
+        l8_channel_alias = {
+            'B1' : 'coastal',
+            'B2' : 'blue'   ,
+            'B3' : 'green'  ,
+            'B4' : 'red'    ,
+            'B5' : 'nir'    ,
+            'B6' : 'swir16' ,
+            'B7' : 'swir22' ,
+            'B8' : 'pan'    ,
+            'B9' : 'cirrus' ,
+            'B10': 'lwir11' ,
+            'B11': 'lwir12' ,
+        }
+
         # When accessing files from google API, there might be an additional
         # field specifying band information.
         trailing = result.named['TX'].split('_')
@@ -766,6 +839,8 @@ def parse_landsat_product_id(product_id):
         if len(trailing) > 1:
             suffix = '_'.join(trailing[1:])
             ls_meta['suffix'] = suffix
+            ls_meta['band'] = suffix
+            ls_meta['channels'] = l8_channel_alias.get(suffix, suffix)
 
             if suffix == 'ANC':
                 ls_meta['is_ancillary'] = True
@@ -782,3 +857,65 @@ def parse_landsat_product_id(product_id):
                 if band_result is not None:
                     ls_meta['band_num'] = band_result.named['band_num']
         return ls_meta
+
+
+# def normalize_sensor():
+#     pass
+
+
+def walk_geotiff_products(dpath, with_product_dirs=True,
+                          with_loose_images=True, recursive=True):
+    """
+    Walks a file path and returns directories and files that look
+    like standalone geotiff products.
+
+    Args:
+        dpath (str): directory to search
+
+    Yields:
+        str: paths of files or recognized geotiff product bundle directories
+
+    Example:
+        >>> # xdoctest: +REQUIRES(--network)
+        >>> # Test on real landsat data
+        >>> from watch.gis.geotiff import *  # NOQA
+        >>> import watch
+        >>> product = watch.demo.landsat_demodata.grab_landsat_product()
+        >>> dpath = dirname(dirname(ub.peek(product['bands'])))
+        >>> print(list(walk_geotiff_products(dpath)))
+        >>> print(list(walk_geotiff_products(dpath, with_product_dirs=False)))
+    """
+    import os
+    from os.path import join
+    # blocklist = set()
+    GEOTIFF_EXTENSIONS = ('.vrt', '.tiff', '.tif', '.jp2')
+
+    for r, ds, fs in os.walk(dpath):
+        handled = []
+        if with_product_dirs:
+            for didx, dname in enumerate(ds):
+                if dname.startswith('LE07'):
+                    dpath = join(r, dname)
+                    handled.append(didx)
+                    yield dpath
+                elif dname.startswith('LC08_'):
+                    dpath = join(r, dname)
+                    handled.append(didx)
+                    yield dpath
+                elif dname.startswith(('S2A_', 'S2B_')):
+                    handled.append(didx)
+                    dpath = join(r, dname)
+                    yield dpath
+                else:
+                    pass
+            for didx in reversed(handled):
+                del ds[didx]
+
+        if with_loose_images:
+            for fname in fs:
+                if fname.lower().endswith(GEOTIFF_EXTENSIONS):
+                    fpath = join(r, fname)
+                    yield fpath
+
+        if not recursive:
+            break

@@ -130,6 +130,7 @@ def grab_landsat_product(product_id=None):
     product = {
         'bands': [],
         'meta': {},
+        'scene_name': scene_name,
     }
     # Download band product-items
     for suffix in item_suffixes['bands']:
