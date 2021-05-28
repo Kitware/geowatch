@@ -41,6 +41,7 @@ __getattr__ = lazy_import(
     submodules={
         'dummy_demodata',
         'landsat_demodata',
+        'sentinel2_demodata',
         'nitf_demodata',
     },
     submod_attrs={
@@ -49,6 +50,9 @@ __getattr__ = lazy_import(
         ],
         'landsat_demodata': [
             'grab_landsat_product',
+        ],
+        'sentinel2_demodata': [
+            'grab_sentinel2_product',
         ],
         'nitf_demodata': [
             'DEFAULT_KEY',
