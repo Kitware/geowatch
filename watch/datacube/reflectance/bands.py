@@ -8,7 +8,13 @@ No guarantees that every value will be indentical, but close enough for heuristi
 Each constant is a list of 'eo:bands' Band Object dicts.
 They are sorted in the same order in which they appear if the bands come stacked in a single image,
 or in lexicographic order if the bands come in separate images.
+
+Coverage of the catalogs is inconsistent. Where necessary, info has been filled in by hand.
 '''
+
+def dicts_contain(d_list, dsub_list):
+    contains = lambda ds: all(ds[0][k] == ds[1][k] for k in ds[1])
+    return all(map(contains, zip(d_list, dsub_list)))
 
 '''
 This band info is taken from the sentinelhub AWS catalog.
@@ -29,7 +35,7 @@ Example:
     >>> bands = [v.to_dict()['eo:bands'][0] for k,v in i.assets.items() if k.startswith('B')]
     >>> 
     >>> from watch.datacube.reflectance.bands import *
-    >>> assert SENTINEL2 == bands
+    >>> assert dicts_contain(SENTINEL2, bands)
 '''
 SENTINEL2 = [
         { 'name': 'B01', 'common_name': 'coastal', 'gsd': 60, 'center_wavelength': 0.4439, 'full_width_half_max': 0.027 },
@@ -69,7 +75,7 @@ Example:
     >>> bands = [v.to_dict()['eo:bands'][0] for k,v in i.assets.items() if k.startswith('B') and (k != 'BQA')]
     >>> 
     >>> from watch.datacube.reflectance.bands import *
-    >>> assert LANDSAT8 == bands
+    >>> assert dicts_contain(LANDSAT8, bands)
 '''
 LANDSAT8 = [
         { 'name': 'B1', 'common_name': 'coastal', 'gsd': 30, 'center_wavelength': 0.48, 'full_width_half_max': 0.02 },
@@ -102,7 +108,7 @@ Example:
     >>> bands = [assets[k]['eo:bands'][0] for k in keys]
     >>> 
     >>> from watch.datacube.reflectance.bands import *
-    >>> assert LANDSAT7 == bands
+    >>> assert dicts_contain(LANDSAT7, bands)
 '''
 LANDSAT7 = [
     {'name': 'B1', 'common_name': 'blue', 'gsd': 30, 'center_wavelength': 0.49},
@@ -151,12 +157,12 @@ Example:
     >>> assert wv02_ms8 == wv03_ms8
     >>> 
     >>> from watch.datacube.reflectance.bands import *
-    >>> assert WORLDVIEW1_PAN == wv01_pan
-    >>> assert WORLDVIEW2_PAN == wv02_pan
-    >>> assert WORLDVIEW2_MS4 == wv02_ms4
-    >>> assert WORLDVIEW2_MS8 == wv02_ms8
-    >>> assert WORLDVIEW3_PAN == wv03_pan
-    >>> assert WORLDVIEW3_MS8 == wv03_ms8
+    >>> assert dicts_contain(WORLDVIEW1_PAN, wv01_pan)
+    >>> assert dicts_contain(WORLDVIEW2_PAN, wv02_pan)
+    >>> assert dicts_contain(WORLDVIEW2_MS4, wv02_ms4)
+    >>> assert dicts_contain(WORLDVIEW2_MS8, wv02_ms8)
+    >>> assert dicts_contain(WORLDVIEW3_PAN, wv03_pan)
+    >>> assert dicts_contain(WORLDVIEW3_MS8, wv03_ms8)
 '''
 WORLDVIEW1_PAN = [
     {'name': 'PAN', 'common_name': 'panchromatic', 'center_wavelength': 0.65}
