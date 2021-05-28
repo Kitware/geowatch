@@ -129,11 +129,14 @@ class drop0_aligned_segmented(torch.utils.data.Dataset):
         self.json_file = osp.join(self.root, 'data.kwcoco.json')
         dset = kwcoco.CocoDataset(self.json_file)
 
+        video_id = <target-video-id>
+        gids = dset.index.vidid_to_gids[video_id]
+
+        
         if self.video_id:
-            video_list = dset.images().lookup('video_id', keepid=True)
-            video_ids = [ID for ID in video_list if video_list[ID] == int(self.video_id)]
+            video_ids = dset.index.vidid_to_gids[self.video_id]
         else:
-            video_ids = [ID for ID in dset.images().lookup('video_id', keepid=True)]
+            video_ids = dset.images().gids
 
         sensor_list = dset.images().lookup('sensor_coarse', keepid=True)
         sensor_ids = [ID for ID in sensor_list if sensor_list[ID] == sensor]
