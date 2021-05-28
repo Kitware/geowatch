@@ -32,19 +32,19 @@ Example:
     >>> assert SENTINEL2 == bands
 '''
 SENTINEL2 = [
-    { 'name': 'B01', 'common_name': 'coastal', 'center_wavelength': 0.4439, 'full_width_half_max': 0.027 },
-    { 'name': 'B02', 'common_name': 'blue', 'center_wavelength': 0.4966, 'full_width_half_max': 0.098 },
-    { 'name': 'B03', 'common_name': 'green', 'center_wavelength': 0.56, 'full_width_half_max': 0.045 },
-    { 'name': 'B04', 'common_name': 'red', 'center_wavelength': 0.6645, 'full_width_half_max': 0.038 },
-    { 'name': 'B05', 'center_wavelength': 0.7039, 'full_width_half_max': 0.019 },
-    { 'name': 'B06', 'center_wavelength': 0.7402, 'full_width_half_max': 0.018 },
-    { 'name': 'B07', 'center_wavelength': 0.7825, 'full_width_half_max': 0.028 },
-    { 'name': 'B08', 'common_name': 'nir', 'center_wavelength': 0.8351, 'full_width_half_max': 0.145 },
-    { 'name': 'B8A', 'center_wavelength': 0.8648, 'full_width_half_max': 0.033 },
-    { 'name': 'B09', 'center_wavelength': 0.945, 'full_width_half_max': 0.026 },
-    { 'name': 'B10', 'common_name': 'cirrus', 'center_wavelength': 1.3735, 'full_width_half_max': 0.075 },
-    { 'name': 'B11', 'common_name': 'swir16', 'center_wavelength': 1.6137, 'full_width_half_max': 0.143 },
-    { 'name': 'B12', 'common_name': 'swir22', 'center_wavelength': 2.22024, 'full_width_half_max': 0.242 }
+        { 'name': 'B01', 'common_name': 'coastal', 'gsd': 60, 'center_wavelength': 0.4439, 'full_width_half_max': 0.027 },
+        { 'name': 'B02', 'common_name': 'blue', 'gsd': 10, 'center_wavelength': 0.4966, 'full_width_half_max': 0.098 },
+        { 'name': 'B03', 'common_name': 'green', 'gsd': 10, 'center_wavelength': 0.56, 'full_width_half_max': 0.045 },
+        { 'name': 'B04', 'common_name': 'red', 'gsd': 10, 'center_wavelength': 0.6645, 'full_width_half_max': 0.038 },
+        { 'name': 'B05', 'gsd': 20, 'center_wavelength': 0.7039, 'full_width_half_max': 0.019 },
+        { 'name': 'B06', 'gsd': 20, 'center_wavelength': 0.7402, 'full_width_half_max': 0.018 },
+        { 'name': 'B07', 'gsd': 20, 'center_wavelength': 0.7825, 'full_width_half_max': 0.028 },
+        { 'name': 'B08', 'gsd': 10, 'common_name': 'nir', 'center_wavelength': 0.8351, 'full_width_half_max': 0.145 },
+        { 'name': 'B8A', 'gsd': 20, 'center_wavelength': 0.8648, 'full_width_half_max': 0.033 },
+        { 'name': 'B09', 'gsd': 60, 'center_wavelength': 0.945, 'full_width_half_max': 0.026 },
+        { 'name': 'B10', 'gsd': 60, 'common_name': 'cirrus', 'center_wavelength': 1.3735, 'full_width_half_max': 0.075 },
+        { 'name': 'B11', 'gsd': 20, 'common_name': 'swir16', 'center_wavelength': 1.6137, 'full_width_half_max': 0.143 },
+        { 'name': 'B12', 'gsd': 20, 'common_name': 'swir22', 'center_wavelength': 2.22024, 'full_width_half_max': 0.242 }
 ]
 
 
@@ -72,17 +72,17 @@ Example:
     >>> assert LANDSAT8 == bands
 '''
 LANDSAT8 = [
-    { 'name': 'B1', 'common_name': 'coastal', 'center_wavelength': 0.48, 'full_width_half_max': 0.02 },
-    { 'name': 'B2', 'common_name': 'blue', 'center_wavelength': 0.44, 'full_width_half_max': 0.06 },
-    { 'name': 'B3', 'common_name': 'green', 'center_wavelength': 0.56, 'full_width_half_max': 0.06 },
-    { 'name': 'B4', 'common_name': 'red', 'center_wavelength': 0.65, 'full_width_half_max': 0.04 },
-    { 'name': 'B5', 'common_name': 'nir', 'center_wavelength': 0.86, 'full_width_half_max': 0.03 },
-    { 'name': 'B6', 'common_name': 'swir16', 'center_wavelength': 1.6, 'full_width_half_max': 0.08 },
-    { 'name': 'B7', 'common_name': 'swir22', 'center_wavelength': 2.2, 'full_width_half_max': 0.2 },
-    { 'name': 'B8', 'common_name': 'pan', 'center_wavelength': 0.59, 'full_width_half_max': 0.18 },
-    { 'name': 'B9', 'common_name': 'cirrus', 'center_wavelength': 1.37, 'full_width_half_max': 0.02 },
-    { 'name': 'B10', 'common_name': 'lwir11', 'center_wavelength': 10.9, 'full_width_half_max': 0.8 },
-    { 'name': 'B11', 'common_name': 'lwir12', 'center_wavelength': 12, 'full_width_half_max': 1 }
+        { 'name': 'B1', 'common_name': 'coastal', 'gsd': 30, 'center_wavelength': 0.48, 'full_width_half_max': 0.02 },
+        { 'name': 'B2', 'common_name': 'blue', 'gsd': 30, 'center_wavelength': 0.44, 'full_width_half_max': 0.06 },
+        { 'name': 'B3', 'common_name': 'green', 'gsd': 30, 'center_wavelength': 0.56, 'full_width_half_max': 0.06 },
+        { 'name': 'B4', 'common_name': 'red', 'gsd': 30, 'center_wavelength': 0.65, 'full_width_half_max': 0.04 },
+        { 'name': 'B5', 'common_name': 'nir', 'gsd': 30, 'center_wavelength': 0.86, 'full_width_half_max': 0.03 },
+        { 'name': 'B6', 'common_name': 'swir16', 'gsd': 30, 'center_wavelength': 1.6, 'full_width_half_max': 0.08 },
+        { 'name': 'B7', 'common_name': 'swir22', 'gsd': 30, 'center_wavelength': 2.2, 'full_width_half_max': 0.2 },
+        { 'name': 'B8', 'common_name': 'pan', 'gsd': 15, 'center_wavelength': 0.59, 'full_width_half_max': 0.18 },
+        { 'name': 'B9', 'common_name': 'cirrus', 'gsd': 30, 'center_wavelength': 1.37, 'full_width_half_max': 0.02 },
+        { 'name': 'B10', 'common_name': 'lwir11', 'gsd': 100, 'center_wavelength': 10.9, 'full_width_half_max': 0.8 },
+        { 'name': 'B11', 'common_name': 'lwir12', 'gsd': 100, 'center_wavelength': 12, 'full_width_half_max': 1 }
 ]
 
 
