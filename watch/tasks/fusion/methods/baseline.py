@@ -34,37 +34,38 @@ class ChangeDetector(pl.LightningModule):
             ], dim=1)
         feats = nn.functional.normalize(feats, dim=2)
         
-        # distance between neighboring timesteps
-        dists = torch.einsum("b t c h w , b t c h w -> b t h w", feats[:,:-1], feats[:,1:])
+        # similarity between neighboring timesteps
+        similarity = torch.einsum("b t c h w , b t c h w -> b t h w", feats[:,:-1], feats[:,1:])
+        distance = -3.0 * similarity
+
+        return distance
         
-        return dists
-    
     def training_step(self, batch, batch_idx=None):
         images, changes = batch["images"], batch["changes"]
         
         # compute predicted and target change masks
-        norms = self(images)
+        distances = self(images)
         
         # compute metrics
         for key, metric in self.metrics.items():
-            self.log(key, metric(torch.sigmoid(norms), changes), prog_bar=True)
+            self.log(key, metric(torch.sigmoid(distances), changes), prog_bar=True)
         
         # compute criterion
-        loss = self.criterion(norms, changes.float())
+        loss = self.criterion(distances, changes.float())
         return loss
     
     def validation_step(self, batch, batch_idx=None):
         images, changes = batch["images"], batch["changes"]
         
         # compute predicted and target change masks
-        norms = self(images)
+        distances = self(images)
                 
         # compute metrics
         for key, metric in self.metrics.items():
-            self.log("val_"+key, metric(torch.sigmoid(norms), changes), prog_bar=True)
+            self.log("val_"+key, metric(torch.sigmoid(distances), changes), prog_bar=True)
         
         # compute loss
-        loss = self.criterion(norms, changes.float())
+        loss = self.criterion(distances, changes.float())
         self.log("val_loss", loss, prog_bar=True)
         return loss
     
