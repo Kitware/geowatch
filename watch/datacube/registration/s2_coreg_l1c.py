@@ -148,7 +148,18 @@ def s2_coregister(granuledirs, output_folder, baseline_scene):
     
     This assumes that all scenes belong to the same MGRS tile.
     
-    Creates output scenes, GCPs, and log files in output_folder.
+    Creates output scenes, GCPs, and log files in the following structure:
+    {output_folder}/
+      T{mgrs_tile_id}/
+        {granule_id}/
+          GCP/
+            {band_file_used_for_coreg}_gcp_10.txt
+            {band_file_used_for_coreg}_gcp_20.txt
+            {band_file_used_for_coreg}_gcp_60.txt
+          Log/
+            {band_file_used_for_coreg}_coreg.log
+          {band_file}.tif
+          {band_file}.vrt
 
     Args:
         granuledirs: list of granuledirs for scenes to coregister.
@@ -189,6 +200,7 @@ def s2_coregister(granuledirs, output_folder, baseline_scene):
         x = os.path.normpath(x)
         scene_id = x.split(os.sep)[-3]
         path_out_data = os.path.join(output_folder, tile, scene_id)
+        os.makedirs(path_out_data, exist_ok=True)
 
         if x == pfname_master:
             print('This is a master scene - just copy/translate to GTiff %s' %
@@ -204,9 +216,9 @@ def s2_coregister(granuledirs, output_folder, baseline_scene):
             print('Coregistration is performed!')
             # this is where GCP will be stored
             path_to_gcp = os.path.join(path_out_data, 'GCP')
+            os.makedirs(path_to_gcp, exist_ok=True)
             # some info for logging
             path_to_log = os.path.join(path_out_data, 'Log')
-            os.makedirs(path_to_gcp, exist_ok=True)
             os.makedirs(path_to_log, exist_ok=True)
 
             # getting info on the master
@@ -375,9 +387,11 @@ def s2_coregister_all_tiles(input_folder_or_safedirs,
         >>> safedirs = [str(grab_sentinel2_product(i).path) for i in range(3)]
         >>> output_folder = './coregistered'
         >>> scenes, baseline_scenes = s2_coregister_all_tiles(safedirs, output_folder)
-        >>> assert scenes == {'52SDG': safedirs}
+        >>> assert len(scenes['52SDG']) == 3
         >>> 
         >>> # clean up
+        >>> for d in safedirs:
+        >>>     os.system(f'rm -r {d}')
         >>> os.system(f'rm -r {output_folder}')
     '''
     # Get list of all granuledirs
