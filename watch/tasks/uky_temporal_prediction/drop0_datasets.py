@@ -3,7 +3,7 @@ import kwcoco
 import tifffile
 import os.path as osp
 import random
-
+import itertools as it
 import numpy as np
 from matplotlib.path import Path
 
@@ -128,10 +128,6 @@ class drop0_aligned_segmented(torch.utils.data.Dataset):
         self.root = root
         self.json_file = osp.join(self.root, 'data.kwcoco.json')
         dset = kwcoco.CocoDataset(self.json_file)
-
-        video_id = <target-video-id>
-        gids = dset.index.vidid_to_gids[video_id]
-
         
         if self.video_id:
             video_ids = dset.index.vidid_to_gids[self.video_id]
@@ -142,8 +138,23 @@ class drop0_aligned_segmented(torch.utils.data.Dataset):
         sensor_ids = [ID for ID in sensor_list if sensor_list[ID] == sensor]
 
 
-#         region_list = dset.images().lookup('site_tag', keepid=True)
-#         region_ids = [ID for ID in region_list if region_list[ID] in sites]
+video_ids_of_interest = [1, 2, 3]
+
+# A flat list of images belonging to those videos
+valid_image_ids = list(it.chain.from_iterable([dset.index.vidid_to_gids[vidid] for vidid in video_ids_of_interest]))
+
+# An `Images` object for all the valid images
+valid_images = dset.images(valid_image_ids)
+
+# Mark if each image has the right sensor
+target_sensor = 'S2'
+flags = [sensor == target_sensor for sensor in valid_images.lookup('sensor_coarse')]
+# Filter out any image corresponding to "False" in the above list
+valid_images = valid_images.compress(flags)
+
+# One liner for similar logic, only keep images with 8 bands
+valid_images = valid_images.compress([num_bands == 8 for num_bands in valid_images.lookup('num_bands')])
+
 
         if 'WV' == sensor:
             band_list = dset.images().lookup('num_bands', keepid=True)
