@@ -164,6 +164,7 @@ class drop0_aligned_segmented(torch.utils.data.Dataset):
         self.images = valid_images
 
         self.dset = dset
+        
 
     def __len__(self):
         return len(self.dset_ids)
@@ -179,11 +180,11 @@ class drop0_aligned_segmented(torch.utils.data.Dataset):
         bbox = dets.data['boxes'].data
         segmentation = dets.data['segmentations'].data
         category_id = [dets.classes.idx_to_id[cidx] for cidx in dets.data['class_idxs']]
-
-        filename = osp.join(self.root, self.images.lookup('file_name')[idx])
-        acquisition_date = self.images.lookup('date_captured')[idx]
-#         region = self.images.lookup('site_tag')[idx]
-
+        
+        img = self.dset.index.imgs[gid]
+        filename = osp.join(self.root, img['file_name'])
+        acquisition_date = img['date_captured'] ########
+        
         im = tifffile.imread(filename)
         im = torch.tensor(im.astype('int16'))
 
@@ -201,23 +202,7 @@ class drop0_aligned_segmented(torch.utils.data.Dataset):
             elif self.sensor == 'WV':
                 im = im / 2048.
 
-        timestamp = self.images.lookup('timestamp')[idx]
-        #assert(self.images.get('id')[idx]==annotations.get('image_id')[0])
-
-        annotations = {#'region': region,
-                         'bbox': bbox,
-                         'segmentation': segmentation,
-                         'category_id': category_id,
-                         'video_id': self.images.lookup('video_id')[idx],
-                         'frame_index': self.images.lookup('frame_index')[idx],
-                      'width': self.images.lookup('width')[idx],
-                       'height': self.images.lookup('height')[idx],
-                      'timestamp': timestamp
-                      }
-
         #####create segmentation mask
-        
-        img = self.dset.index.imgs[gid]
 
         class_idxs = dets.data['class_idxs']                
         img_dims = (img['height'], img['width'])
@@ -238,7 +223,7 @@ class drop0_aligned_segmented(torch.utils.data.Dataset):
         return {'image': im,
                 'mask': overall_mask,
                 'date': acquisition_date,
-                'annotations': annotations
+                'annotations': img
                 }
 
 
@@ -332,10 +317,13 @@ class drop0_aligned(torch.utils.data.Dataset):
         bbox = dets.data['boxes'].data
         segmentation = dets.data['segmentations'].data
         category_id = [dets.classes.idx_to_id[cidx] for cidx in dets.data['class_idxs']]
-
-        filename = osp.join(self.root, self.images.lookup('file_name')[idx])
-        acquisition_date = self.images.lookup('date_captured')[idx]
-#         region = self.images.lookup('site_tag')[idx]
+        
+        img = self.dset.index.imgs[gid]
+        filename = osp.join(self.root, img['file_name'])
+        acquisition_date = img['date_captured'] ########
+        
+        im = tifffile.imread(filename)
+        im = torch.tensor(im.astype('int16'))
 
         im = tifffile.imread(filename)
         im = torch.tensor(im.astype('int16'))
@@ -353,22 +341,8 @@ class drop0_aligned(torch.utils.data.Dataset):
                 im = im / 255.
             elif self.sensor == 'WV':
                 im = im / 2048.
-
-        timestamp = self.images.lookup('timestamp')[idx]
-        #assert(self.images.get('id')[idx]==annotations.get('image_id')[0])
-
-        annotations = {#'region': region,
-                         'bbox': bbox,
-                         'segmentation': segmentation,
-                         'category_id': category_id,
-                         'video_id': self.images.lookup('video_id')[idx],
-                         'frame_index': self.images.lookup('frame_index')[idx],
-                      'width': self.images.lookup('width')[idx],
-                       'height': self.images.lookup('height')[idx],
-                      'timestamp': timestamp
-                      }
-
+        
         return {'image': im,
                 'date': acquisition_date,
-                'annotations': annotations
+                'annotations': img
                 }
