@@ -1,5 +1,6 @@
 import torch
 import kwcoco
+import kwimage
 import tifffile
 import os.path as osp
 import random
@@ -172,11 +173,12 @@ class drop0_aligned_segmented(torch.utils.data.Dataset):
         gid = self.dset_ids[idx]
         annot_ids = self.dset.index.gid_to_aids[gid]
         
-        annotations = self.annotations(annot_ids)
-
-        bbox = annotations.lookup('bbox')
-        segmentation = [x['exterior'] for x in annotations.lookup('segmentation')]
-        category_id = annotations.lookup('category_id')
+        aids = dset.index.gid_to_aids[gid]
+        dets = kwimage.Detections.from_coco_annots(dset.annots(aids).objs, dset=self.dset)
+        
+        bbox = dets.data['boxes'].data
+        segmentation = dets.data['segmentations'].data
+        category_id = [dets.classes.idx_to_id[cidx] for cidx in dets.data['class_idxs']]
 
         filename = osp.join(self.root, self.images.lookup('file_name')[idx])
         acquisition_date = self.images.lookup('date_captured')[idx]
