@@ -5,7 +5,7 @@ Attempts to register directory of geotiffs into a kwcoco dataset
 from dateutil.parser import isoparse
 from kwcoco.util import util_futures
 from kwimage.transform import Affine
-from os.path import join, basename
+from os.path import join, basename, normpath
 import datetime
 import glob
 import kwcoco
@@ -84,7 +84,7 @@ def fake_band_info():
 
 def ingest_landsat_directory(lc_dpath):
     tiffs = sorted(glob.glob(join(lc_dpath, '*.TIF')))
-    name = basename(lc_dpath)
+    name = basename(normpath(lc_dpath))
     img = make_coco_img_from_auxiliary_geotiffs(tiffs, name)
     baseinfo = watch.gis.geotiff.geotiff_filepath_info(name)
     capture_time = isoparse(baseinfo['filename_meta']['acquisition_date'])
@@ -94,7 +94,7 @@ def ingest_landsat_directory(lc_dpath):
 
 
 def ingest_sentinal2_directory(s2_dpath):
-    name = basename(s2_dpath).split('.SAFE')[0]
+    name = basename(normpath(s2_dpath)).rstrip('.SAFE')
     tiffs = sorted(glob.glob(join(s2_dpath, 'GRANULE', '*', 'IMG_DATA', '*.jp2')))
     img = make_coco_img_from_auxiliary_geotiffs(tiffs, name)
 
