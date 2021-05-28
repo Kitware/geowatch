@@ -147,10 +147,12 @@ Example:
     >>> wv02_ms4 = [p for p in wv02_ms if len(p) == 4][0]
     >>> wv02_ms8 = [p for p in wv02_ms if len(p) == 8][0]
     >>> 
-    >>> wv03 = [p for p in props if p['mission'] == 'WV02']
+    >>> wv03 = [p for p in props if p['mission'] == 'WV03']
     >>> assert np.all(np.unique([p['instruments'] for p in wv03]) == ['panchromatic', 'vis-multi'])
     >>> assert np.all(np.unique([len(p['eo:bands']) for p in wv03]) == [1, 8])
     >>> wv03_pan = [p for p in wv03 if p['instruments'] == ['panchromatic']][0]['eo:bands']
+    >>> wv03_ms = [p['eo:bands'] for p in wv03 if p['instruments'] == ['vis-multi']]
+    >>> wv03_ms8 = [p for p in wv03_ms if len(p) == 8][0]
     >>> 
     >>> # not sure if this must be true, but it is
     >>> assert wv02_pan == wv03_pan
@@ -203,4 +205,87 @@ WORLDVIEW3_MS8 = [
     {'name': 'B7', 'common_name': 'near-ir1', 'center_wavelength': 0.833},
     {'name': 'B8', 'common_name': 'near-ir2', 'center_wavelength': 0.95}
 ]
+
+'''
+TODO
+
+fix wv doctest
+'''
+
+ALL_BANDS = (SENTINEL2 + LANDSAT8 + LANDSAT7 +
+        WORLDVIEW1_PAN + WORLDVIEW2_PAN + WORLDVIEW2_MS4 +
+        WORLDVIEW2_MS8 + WORLDVIEW3_PAN + WORLDVIEW3_MS8)
+
+'''
+WIP
+Collect synonyms for allowed common_names values (not enforced by STAC)
+TODO do we even need to conform to this? Should we only collect
+"true" synonyms like {'pan': 'panchromatic'} ?
+
+Example:
+    >>> from watch.datacube.reflectance.bands import *
+    >>> import itertools
+    >>> names = set(b.get('common_name', '') for b in ALL_BANDS)
+    >>> accounted_names = set(EO_COMMONNAMES.keys()).union(
+    >>>     set(itertools.chain.from_iterable(EO_COMMONNAMES.values())))
+    >>> todo = names.difference(accounted_names)
+    >>> # not sure what to do with these
+    >>> print(todo)
+    {'', 'tir'}
+
+References:
+    https://github.com/stac-extensions/eo/blob/main/json-schema/schema.json#L151
+'''
+EO_COMMONNAMES = {
+        "coastal": [],
+        "blue": [],
+        "green": [],
+        "red": [],
+        "rededge": ['red-edge'],
+        "yellow": [],
+        "pan": ['panchromatic'],
+        "nir": ['near-ir1', 'near-ir2'],
+        "nir08": [],
+        "nir09": [],
+        "cirrus": [],
+        "swir16": [],
+        "swir22": [],
+        "lwir": [],
+        "lwir11": [],
+        "lwir12": []
+}
+
+
+'''
+WIP
+Bands that are used to observe targets on the ground
+This is just a rough first pass
+
+Example:
+    >>> from watch.datacube.reflectance.bands import *
+    >>> assert GROUND.issubset(set(EO_COMMONNAMES.keys()))
+'''
+GROUND = {
+        "coastal",
+        "blue",
+        "green",
+        "red",
+        "rededge",
+        "yellow",
+        "pan",
+        "nir",
+        "nir08",
+        "nir09",
+}
+
+'''
+These band fields can be accessed as python objects as well using pystac
+
+Example:
+    >>> from pystac.extensions.eo import Band
+    >>> from watch.datacube.reflectance.bands import *
+    >>> for band in ALL_BANDS:
+    >>>     band.pop('gsd', None)  # pystac doesn't support this yet
+    >>>     b = Band.create(**band)
+'''
 
