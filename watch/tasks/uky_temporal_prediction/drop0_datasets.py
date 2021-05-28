@@ -173,8 +173,8 @@ class drop0_aligned_segmented(torch.utils.data.Dataset):
         gid = self.dset_ids[idx]
         annot_ids = self.dset.index.gid_to_aids[gid]
         
-        aids = dset.index.gid_to_aids[gid]
-        dets = kwimage.Detections.from_coco_annots(dset.annots(aids).objs, dset=self.dset)
+        aids = self.dset.index.gid_to_aids[gid]
+        dets = kwimage.Detections.from_coco_annots(self.dset.annots(aids).objs, dset=self.dset)
         
         bbox = dets.data['boxes'].data
         segmentation = dets.data['segmentations'].data
@@ -201,11 +201,6 @@ class drop0_aligned_segmented(torch.utils.data.Dataset):
             elif self.sensor == 'WV':
                 im = im / 2048.
 
-        if annotations.get('image_id'):
-            if not self.images.get('id')[idx]==annotations.get('image_id')[0]:
-                print(annotations.get('image_id'))
-                print(self.images.get('id')[idx])
-
         timestamp = self.images.lookup('timestamp')[idx]
         #assert(self.images.get('id')[idx]==annotations.get('image_id')[0])
 
@@ -221,21 +216,19 @@ class drop0_aligned_segmented(torch.utils.data.Dataset):
                       }
 
         #####create segmentation mask
-        segments = sorted(list(zip(annotations['category_id'], annotations['segmentation'])))
-        segments = [segs for segs in segments if segs[0] in self.accepted_labels]
+        
+        img = self.dset.index.imgs[gid]
 
+        class_idxs = dets.data['class_idxs']                
+        img_dims = (img['height'], img['width'])
         combined = []
-        for segment in segments:
-
-            x, y = np.meshgrid(np.arange(annotations['width']), np.arange(annotations['height']))
-            x, y = x.flatten(), y.flatten()
-            points = np.vstack((x,y)).T
-
-            p = Path(segment[1]) # make a polygon
-            grid = p.contains_points(points)
-            mask = grid.reshape(annotations['height'], annotations['width'])
-            mask = torch.tensor(mask).float()*segment[0]
+        
+        for sseg, cid in zip(segmentation, category_id):
+            assert cid > 0
+            np_mask = sseg.to_mask(dims=img_dims).data.astype(float) * cid
+            mask = torch.from_numpy(np_mask)
             combined.append(mask.unsqueeze(0))
+            
         if combined:
             overall_mask = torch.max(torch.cat(combined, dim=0), dim =0)[0]
         else:
