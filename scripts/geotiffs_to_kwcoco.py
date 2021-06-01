@@ -19,15 +19,42 @@ from watch.utils import util_bands
 class KWCocoFromGeotiffConfig(scfg.Config):
     default = {
         'geotiff_dpath': scfg.Value(None, help='path containing geotiffs'),
-        'dst': scfg.Value(None, help='path to write new kwcoco file')
+        'relative': scfg.Value(False, help='if true make paths relative'),
+        'dst': scfg.Value(None, help='path to write new kwcoco file'),
+        'workers': scfg.Value(0, help='number of parallel jobs'),
     }
+
+
+def main(**kwargs):
+    """
+    Ignore:
+        geotiff_dpath = '/home/joncrall/data/grab_tiles_out/fels'
+        dst = '/home/joncrall/data/grab_tiles_out/fels/data.kwcoco.json'
+        kwargs = {
+            'geotiff_dpath': geotiff_dpath,
+            'dst': dst,
+        }
+        dset1 = kwcoco.CocoDataset(ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc/drop0/drop0.kwcoco.json'))
+        dset2 = kwcoco.CocoDataset(ub.expandpath('$HOME/data/grab_tiles_out/fels/data.kwcoco.json'))
+    """
+    config = KWCocoFromGeotiffConfig(default=kwargs, cmdline=True)
+    geotiff_dpath = config['geotiff_dpath']
+    dst = config['dst']
+
+    dset = find_geotiffs(geotiff_dpath, workers=config['workers'])
+    dset.fpath = dst
+
+    if config['relative']:
+        dset.reroot(dset.bundle_dpath, absolute=False)
+
+    dset.dump(dset.fpath, newlines=True)
 
 
 def ingest_landsat_directory(lc_dpath):
     name = basename(normpath(lc_dpath))
     tiffs = sorted(glob.glob(join(lc_dpath, '*.TIF')))
-    band_names = [b['name'] for b in (util_bands.BANDS_LANDSAT7 +
-                                      util_bands.BANDS_LANDSAT8)]
+    band_names = [b['name'] for b in (util_bands.LANDSAT7 +
+                                      util_bands.LANDSAT8)]
     tiffs = [t for t in tiffs if any(b in t for b in band_names)]
     img = make_coco_img_from_auxiliary_geotiffs(tiffs, name)
     baseinfo = watch.gis.geotiff.geotiff_filepath_info(name)
@@ -45,7 +72,7 @@ def ingest_landsat_directory(lc_dpath):
 def ingest_sentinal2_directory(s2_dpath):
     name = basename(normpath(s2_dpath)).rstrip('.SAFE')
     tiffs = sorted(glob.glob(join(s2_dpath, 'GRANULE', '*', 'IMG_DATA', '*.jp2')))
-    band_names = [b['name'] for b in util_bands.BANDS_SENTINEL2]
+    band_names = [b['name'] for b in util_bands.SENTINEL2]
     tiffs = [t for t in tiffs if any(b in t for b in band_names)]
     img = make_coco_img_from_auxiliary_geotiffs(tiffs, name)
 
@@ -108,12 +135,17 @@ def Affine_concise(aff):
     TODO: add to kwimage.Affine
     """
     import numpy as np
-    params = aff.decompose()
+    self = aff
+    params = self.decompose()
     params['type'] = 'affine'
     if np.allclose(params['offset'], (0, 0)):
         params.pop('offset')
+    elif ub.allsame(params['offset']):
+        params['offset'] = params['offset'][0]
     if np.allclose(params['scale'], (1, 1)):
         params.pop('scale')
+    elif ub.allsame(params['scale']):
+        params['scale'] = params['scale'][0]
     if np.allclose(params['shear'], 0):
         params.pop('shear')
     if np.allclose(params['theta'], 0):
@@ -168,13 +200,15 @@ def make_coco_img_from_auxiliary_geotiffs(tiffs, name):
     return img
 
 
-def find_geotiffs(geotiff_dpath):
+def find_geotiffs(geotiff_dpath, workers=0):
     """
     geotiff_dpath = '/home/joncrall/data/grab_tiles_out/fels'
     """
     dpath_list = list(watch.gis.geotiff.walk_geotiff_products(geotiff_dpath))
 
-    jobs = util_futures.JobPool(mode='thread', max_workers=14)
+    print(f'Found candidate {len(dpath_list)} geotiff products')
+
+    jobs = util_futures.JobPool(mode='thread', max_workers=workers)
 
     unknown_products = []
     for dpath in ub.ProgIter(dpath_list, desc='submit geotiffs jobs'):
@@ -201,9 +235,14 @@ def find_geotiffs(geotiff_dpath):
         try:
             img = job.result()
         except Exception as ex:
-            errors.append((job, job.dpath, ex))
+            err = (job, job.dpath, ex)
+            print('err = {!r}'.format(err))
+            errors.append(err)
         else:
             imgs.append(img)
+
+    print('Got {} errors'.format(len(errors)))
+    print('Found {} images to add'.format(len(imgs)))
 
     dset = kwcoco.CocoDataset()
 
@@ -211,28 +250,6 @@ def find_geotiffs(geotiff_dpath):
         dset.add_image(**img)
 
     return dset
-
-
-def main(**kwargs):
-    """
-    Ignore:
-        geotiff_dpath = '/home/joncrall/data/grab_tiles_out/fels'
-        dst = '/home/joncrall/data/grab_tiles_out/fels/data.kwcoco.json'
-        kwargs = {
-            'geotiff_dpath': geotiff_dpath,
-            'dst': dst,
-        }
-        dset1 = kwcoco.CocoDataset(ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc/drop0/drop0.kwcoco.json'))
-        dset2 = kwcoco.CocoDataset(ub.expandpath('$HOME/data/grab_tiles_out/fels/data.kwcoco.json'))
-    """
-    config = KWCocoFromGeotiffConfig(default=kwargs, cmdline=True)
-    geotiff_dpath = config['geotiff_dpath']
-    dst = config['dst']
-
-    dset = find_geotiffs(geotiff_dpath)
-
-    dset.fpath = dst
-    dset.dump(dset.fpath, newlines=True)
 
 
 if __name__ == '__main__':
@@ -261,7 +278,20 @@ if __name__ == '__main__':
 
         python ~/code/watch/scripts/geotiffs_to_kwcoco.py \
             --geotiff_dpath ~/data/grab_tiles_out/fels \
-            --dst $HOME/data/grab_tiles_out/fels/data.kwcoco.json
+            --dst $HOME/data/grab_tiles_out/fels/data.kwcoco.json --profile
 
+        python ~/code/watch/scripts/geotiffs_to_kwcoco.py \
+            --geotiff_dpath ~/data/dvc-repos/smart_watch_dvc/unannotated/AE-Dubai-0001 \
+            --dst ~/data/dvc-repos/smart_watch_dvc/unannotated/dubai-msi.kwcoco.json
+
+        cat ~/data/dvc-repos/smart_watch_dvc/unannotated/dubai-msi.kwcoco.json
+
+        python ~/code/watch/scripts/geotiffs_to_kwcoco.py \
+            --geotiff_dpath ~/data/dvc-repos/smart_watch_dvc/unannotated/KR-Pyeongchang-S2 \
+            --dst ~/data/dvc-repos/smart_watch_dvc/unannotated/korea-msi.kwcoco.json
+
+        python ~/code/watch/scripts/geotiffs_to_kwcoco.py \
+            --geotiff_dpath ~/data/dvc-repos/smart_watch_dvc/unannotated/US-Waynesboro-0001 \
+            --dst ~/data/dvc-repos/smart_watch_dvc/unannotated/waynesboro-msi.kwcoco.json
     """
     main()

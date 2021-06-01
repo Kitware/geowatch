@@ -27,6 +27,11 @@ Notes:
     cd $HOME/data/dvc-repos/smart_watch_dvc/
     girder-client --api-url https://data.kitware.com/api/v1 upload 602c3e9e2fa25629b97e5b5e drop0_aligned_v2_$stamp.zip
 
+    python ~/code/watch/scripts/coco_align_geotiffs.py \
+            --src ~/data/dvc-repos/smart_watch_dvc/drop0/drop0-msi.kwcoco.json \
+            --dst ~/data/dvc-repos/smart_watch_dvc/drop0_aligned_msi \
+            --context_factor=1.5
+
 
 Test:
 
@@ -448,6 +453,7 @@ class SimpleDataCube(object):
         Returns:
             kwcoco.CocoDataset: the given or new dataset that was modified
         """
+        import watch
 
         date_to_gids = image_overlaps['date_to_gids']
         space_str = image_overlaps['space_str']
@@ -490,6 +496,10 @@ class SimpleDataCube(object):
 
                 aids = cube.dset.index.gid_to_aids[img['id']]
                 anns = list(ub.take(cube.dset.index.anns, aids))
+
+                # TODO: handle auxiliary
+                import xdev
+                xdev.embed()
                 src_gpath = cube.dset.get_image_fpath(img['id'])
 
                 info = img['geotiff_metadata']
@@ -588,8 +598,7 @@ class SimpleDataCube(object):
 
                 if align_method != 'pixel_crop':
                     # Re-parse any information in the new geotiff
-                    from watch.gis.geotiff import geotiff_metadata
-                    dst_info = geotiff_metadata(dst_gpath)
+                    dst_info = watch.gis.geotiff.geotiff_metadata(dst_gpath)
                     dst_info['wgs84_corners']
 
                 new_img = {}
@@ -724,7 +733,8 @@ def update_coco_geotiff_metadata(dset, serializable=True):
     if serializable is True, then we should only update with information
     that can be coerced to json.
     """
-    from watch.gis.geotiff import geotiff_metadata
+    import watch
+    import dateutil.parser
 
     if serializable:
         raise NotImplementedError('we dont do this yet')
@@ -735,24 +745,48 @@ def update_coco_geotiff_metadata(dset, serializable=True):
     for img in img_iter:
 
         img['datetime_acquisition'] = (
-            datetime.datetime.strptime(img['date_captured'], '%Y/%m/%d')
+            dateutil.parser.parse(img['date_captured'])
         )
 
-        src_gpath = dset.get_image_fpath(img['id'])
-        assert exists(src_gpath)
+        import xdev
+        xdev.embed()
 
+        # if an image specified its "dem_hint" as ignore, then we set the
+        # elevation to 0. NOTE: this convention might be generalized and
+        # replaced in the future. I.e. in the future the dem_hint might simply
+        # specify the constant elevation to use, or perhaps something else.
+        dem_hint = img.get('dem_hint', 'use')
+        metakw = {}
+        if dem_hint == 'ignore':
+            metakw['elevation'] = 0
 
-        img_iter.ensure_newline()
-        print('src_gpath = {!r}'.format(src_gpath))
-        if img.get('dem_hint', 'use') == 'ignore':
-            # if an image specified its "dem_hint" as ignore, then we set the
-            # elevation to 0. NOTE: this convention might be generalized and
-            # replaced in the future. I.e. in the future the dem_hint might
-            # simply specify the constant elevation to use, or perhaps
-            # something else.
-            info = geotiff_metadata(src_gpath, elevation=0)
+        # only need rpc info, wgs84_corners, and and warps
+        keys_of_interest = {
+            'rpc_transform',
+            'is_rpc',
+            'wgs84_to_wld',
+            'wgs84_corners',
+            'wld_to_pxl',
+        }
+
+        fname = img.get('file_name', None)
+        if fname is None:
+            raise NotImplementedError
         else:
-            info = geotiff_metadata(src_gpath)
+            src_gpath = dset.get_image_fpath(img['id'])
+            assert exists(src_gpath)
+            img_iter.ensure_newline()
+            print('src_gpath = {!r}'.format(src_gpath))
+            info = watch.gis.geotiff.geotiff_metadata(src_gpath, **metakw)
+            info = ub.dict_isect(aux_info, keys_of_interest)
+
+        if 0:
+            auxiliary = img.get('auxiliary', [])
+            for aux in auxiliary:
+                aux_fpath = join(dset.bundle_dpath, aux['file_name'])
+                assert exists(aux_fpath)
+                aux_info = watch.gis.geotiff.geotiff_metadata(aux_fpath, **metakw)
+                info = ub.dict_isect(aux_info, keys_of_interest)
 
         if serializable:
             raise NotImplementedError

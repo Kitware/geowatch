@@ -3,7 +3,6 @@ mkinit ~/code/watch/watch/utils/__init__.py --lazy --noattr -w
 """
 
 
-
 def lazy_import(module_name, submodules, submod_attrs):
     import importlib
     import os
