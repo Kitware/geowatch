@@ -5,7 +5,7 @@ from torch.utils import data
 import pytorch_lightning as pl
 import tifffile
 import numpy as np
-import tempfile
+import tqdm
 
 from methods import baseline
 from datasets import onera_2018
@@ -23,19 +23,19 @@ def main(args):
         onera_test_sampler, 
         sample_shape=(2, None, None),
         channels=onera_experiment.channel_combos[args.channel_set],
-        mode="predict",
+        mode="test",
     )
     predict_dataloader = data.DataLoader(predict_dataset, batch_size=1)
 
     model = baseline.ChangeDetector.load_from_checkpoint(args.model_checkpoint_path)
     model.eval(); model.freeze();
 
-    tmp_root = tempfile.TemporaryDirectory()
-    trainer = pl.Trainer(default_root_dir=tmp_root.name)
+    results, targets = zip(*[
+        (model(example["images"][None])[0], example["changes"])
+        for example in tqdm.tqdm(predict_dataset)
+    ])
 
-    results = trainer.predict(model, predict_dataloader)
-
-    for video, result_stack in zip(onera_test.dataset["videos"], results):
+    for video, result_stack, target_stack in zip(onera_test.dataset["videos"], results, targets):
 
         frames = [
             img
@@ -43,17 +43,24 @@ def main(args):
             if img["video_id"] == video["id"]
         ][1:]
 
-        for frame, result in zip(frames, result_stack[0].detach().cpu().numpy()):
-
-            height, width = result.shape[0], result.shape[1]
+        result_stack = result_stack.detach().cpu().numpy()
+        target_stack = target_stack.detach().cpu().numpy()
+        for frame, result, target in zip(frames, result_stack, target_stack):
 
             result_fname = args.results_dir / fname_template.format(
                 location=video["name"], 
                 bands=args.channel_set,
                 frame_no=frame["frame_index"],
             )
-            result_fname.parents[0].mkdir(exist_ok=True)
-            tifffile.imwrite(result_fname, result)
+            target_fname = args.results_dir / fname_template.format(
+                location=video["name"], 
+                bands="target",
+                frame_no=frame["frame_index"],
+            )
+            result_fname.parents[0].mkdir(parents=True, exist_ok=True)
+
+            tifffile.imwrite(result_fname, result.transpose())
+            tifffile.imwrite(target_fname, target.transpose())
 
 if __name__ == "__main__":
     
