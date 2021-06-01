@@ -28,6 +28,7 @@ import qimage2ndarray
 import cmapy
 import kwcoco
 import random
+import kwimage
 
 def get_mpl_colormap(cmap_name):
     cmap = plt.get_cmap(cmap_name)
@@ -42,44 +43,55 @@ def get_mpl_colormap(cmap_name):
 
 
 class Window(QMainWindow):
-    def __init__(self, dataset, dset):
+    def __init__(self, dataset, dset, resume='', save_path=''):
         super().__init__()
         self.image_counter = 0
         self.dataset = dataset
+        self.channels, self.timesteps, self.im_width, self.im_height = self.dataset[self.image_counter]['inputs']['im'].data.shape
         self.dset = dset
-        self.k = 40
-        self.seen_labels = []self.material_dset = kwcoco.CocoDataset()
+        self.save_path = save_path
+        self.k = 80
+        self.seen_labels = []
         self.class_labels_all = []
         self.class_labels_pairs = {}
         self.class_label_with = "Concrete"
         self.class_label_to_index = {"Nothing":0, "Concrete":1, "Vegetation":2, "Soil":3, "Water":4}
+        if len(resume)>1:
+            self.material_dset = kwcoco.CocoDataset(resume)
+            self.image_counter = int(len(list(self.material_dset.index.imgs.keys()))/self.timesteps)
+            print(self.image_counter)
+        else:
+            self.material_dset = kwcoco.CocoDataset()
+            for key, value in self.class_label_to_index.items():
+                if key !=0:
+                    self.material_dset.add_category(name=key, id=value)
+        
+
         print(self.dataset[self.image_counter]['inputs']['im'].data.shape)
-        self.channels, self.timesteps, self.im_width, self.im_height = self.dataset[self.image_counter]['inputs']['im'].data.shape
         # self.data_dims = self.dataset[self.image_counter]['tr'].data['space_dims']
         self.width, self.height = self.dataset[self.image_counter]['tr'].data['space_dims']
         print(self.dataset[self.image_counter]['tr'].data['space_dims'])
-        self.vis_width, self.vis_height = 512, 512
-        # self.width_factor, self.height_factor = self.vis_width/self.width, self.vis_height/self.height
+
         self.scale_factor = 1
         self.scaled_height, self.scaled_width = int(self.height*self.scale_factor), int(self.width*self.scale_factor)
         self.current_mask = np.zeros((self.width, self.height)).astype(np.uint8)
+        self.separable_current_mask = np.zeros((len(list(self.class_label_to_index.keys())), self.width, self.height)).astype(np.uint8)
         self.widget = QWidget()
         self.widget.keyPressEvent = self.keyPressEvent
-        # self.initialize_transofmration_matrices()
         self.load_images(index=self.image_counter)
-        # print(self.current_mask)
         
         print(f"height: {self.height}, width: {self.width}")
         self.label_img = QLabel(self.widget)
         self.image = QPixmap(self.qImg)
         self.label_img.setPixmap(self.image)
         self.label_img.setGeometry(20,128,self.height, self.width)
+        self.label_img.mousePressEvent = self.getImagePixel
         
         self.label_prediction = QLabel(self.widget)
         self.prediction = QPixmap(self.qPred)
         self.label_prediction.setPixmap(self.prediction)
         self.label_prediction.setGeometry(self.width+20+120,128,self.height, self.width)
-        self.label_prediction.mousePressEvent = self.getPixel
+        self.label_prediction.mousePressEvent = self.getMaskPixel
         
         self.label_mask = QLabel(self.widget)
         self.mask = QPixmap(self.qMask)
@@ -95,7 +107,6 @@ class Window(QMainWindow):
         self.output_textbox_name.setObjectName("Labels of Selected Clusters")
         
         self.remove_cluster = QLineEdit(self.widget)
-        # self.remove_cluster.setGeometry(QtCore.QRect(2*self.width+256, 300, 100, 300))
         self.remove_cluster.setObjectName("Cluster Removal Tool")
         self.remove_cluster.move(256, self.height + 256 + 50)
         self.remove_cluster.resize(100,40)
@@ -111,10 +122,10 @@ class Window(QMainWindow):
         self.class_label.move(300,20)
         self.class_label.currentIndexChanged.connect(self.class_label_selection)
         
-        self.finalize_mask = QPushButton(self.widget)
-        self.finalize_mask.setText("Finalize Mask")
-        self.finalize_mask.move(500,20)
-        self.finalize_mask.clicked.connect(self.finalize_mask_clicked)
+        self.show_current_mask = QPushButton(self.widget)
+        self.show_current_mask.setText("Show Current Mask")
+        self.show_current_mask.move(500,20)
+        self.show_current_mask.clicked.connect(self.show_current_mask_clicked)
         
         self.increase_size = QPushButton(self.widget)
         self.increase_size.setText("Increase Image Size")
@@ -126,18 +137,13 @@ class Window(QMainWindow):
         self.decrease_size.move(900,20)
         self.decrease_size.clicked.connect(self.decrease_images_size)
         
-        # self.change_image_from_batch = QPushButton(self.widget)
-        # self.change_image_from_batch.setText("Change Inter-Batch_Image")
-        # self.change_image_from_batch.move(1100,20)
-        # self.change_image_from_batch.clicked.connect(self.change_inter_batch_image)
-        
         self.timestamp_label = QComboBox(self.widget)
         self.timestamp_label.addItems([str(x) for x in range(self.timesteps)])
         self.timestamp_label.move(1100,20)
         self.timestamp_label.currentIndexChanged.connect(self.change_inter_batch_image)
         
         self.save_images = QPushButton(self.widget)
-        self.save_images.setText("Save Images and Masks")
+        self.save_images.setText("Update Material Dataset")
         self.save_images.move(1200,20)
         self.save_images.clicked.connect(self.save_images_clicked)
 
@@ -168,14 +174,22 @@ class Window(QMainWindow):
         self.widget.setGeometry(50,50,1800,800)
         self.widget.show()
     
-    def convert_mask_to_binaries(self):
+    # def convert_mask_to_binaries(self):
         
     
     def save_images_clicked(self):
         gids = self.dataset[self.image_counter]['tr'].data['gids']
-        for gid in gids:
-            image_dict = dset.index.imgs[gid]
-            print(image_dict)
+        for i in range(1,len(list(self.class_label_to_index.keys()))):
+            if len(np.unique(self.separable_current_mask[i,:,:])) > 1:
+                binary_mask = kwimage.Mask(self.separable_current_mask[i,:,:], format='c_mask')
+                binary_polygon = binary_mask.to_multi_polygon()
+                # binary_coco = binary_polygon.to_coco(style='new')
+                binary_segmentation = kwimage.Segmentation.coerce(binary_polygon).to_coco(style="new")
+                for gid in gids:
+                    self.material_dset.add_annotation(image_id=gid, category_id=i, segmentation=binary_segmentation)
+        self.material_dset.validate()
+        self.material_dset._check_integrity()
+        self.material_dset.dump(self.save_path, newlines=True)
         
     def change_inter_batch_image(self):
         image_data = self.dataset[self.image_counter]['inputs']['im'].data # [b,c,t,h,w]
@@ -236,11 +250,28 @@ class Window(QMainWindow):
             self.class_label_with = keys_to_class_dict[event.key()]
             self.class_label.setCurrentText(keys_to_class_dict[event.key()])
         
-    def finalize_mask_clicked(self):
+    def show_current_mask_clicked(self):
         current_mask_no_bg = np.ma.masked_where(self.current_mask==0,self.current_mask)
         plt.imshow(self.image_show)
         plt.imshow(current_mask_no_bg, alpha=0.6, cmap='tab20')
         plt.show()
+        
+    def finalize_mask(self):
+        gids = self.dataset[self.image_counter]['tr'].data['gids']
+        for i in range(1,len(list(self.class_label_to_index.keys()))):
+            if len(np.unique(self.separable_current_mask[i,:,:])) > 1:
+                binary_mask = kwimage.Mask(self.separable_current_mask[i,:,:], format='c_mask')
+                binary_polygon = binary_mask.to_multi_polygon()
+                # binary_coco = binary_polygon.to_coco(style='new')
+                binary_segmentation = kwimage.Segmentation.coerce(binary_polygon)#.to_coco(style="new")
+                for gid in gids:
+                    self.material_dset.add_annotation(image_id=gid, 
+                                                      category_id=i, 
+                                                      bbox=list(binary_polygon.bounding_box().to_coco(style="new"))[0], 
+                                                      segmentation=binary_segmentation.to_coco(style="new"))
+        self.material_dset.validate()
+        self.material_dset._check_integrity()
+        self.material_dset.dump(self.save_path, newlines=True)
         
     def class_label_selection(self):
         self.class_label_with = self.class_label.currentText()
@@ -257,15 +288,35 @@ class Window(QMainWindow):
                 self.current_mask[xs,ys] = 0
                 self.update_mask()
                 self.seen_labels.remove(num)
-        
-    def getPixel(self, event):
+    
+    
+    def getImagePixel(self, event):
         x = int(event.pos().x()//self.scale_factor)
         y = int(event.pos().y()//self.scale_factor)
         self.value = self.prediction_show[y,x]
         xs, ys = np.where(self.prediction_show==self.value)
         
-        # if self.value not in self.seen_labels:
+        # print(self.value)
         self.current_mask[xs,ys] = self.class_label_to_index[self.class_label_with]
+        self.separable_current_mask[self.class_label_to_index[self.class_label_with],xs,ys] = 1
+        
+        self.update_mask()
+        self.class_labels_pairs[self.value] = self.class_label_with
+        self.seen_labels.append(self.value)
+        self.output_textbox.append(str(self.value))   
+        self.output_textbox_name.append(str(self.class_label_with))
+        # print(self.class_labels_pairs)
+            
+    def getMaskPixel(self, event):
+        x = int(event.pos().x()//self.scale_factor)
+        y = int(event.pos().y()//self.scale_factor)
+        self.value = self.prediction_show[y,x]
+        xs, ys = np.where(self.prediction_show==self.value)
+        
+        # print(self.value)
+        self.current_mask[xs,ys] = self.class_label_to_index[self.class_label_with]
+        self.separable_current_mask[self.class_label_to_index[self.class_label_with],xs,ys] = 1
+        
         self.update_mask()
         self.class_labels_pairs[self.value] = self.class_label_with
         self.seen_labels.append(self.value)
@@ -287,6 +338,7 @@ class Window(QMainWindow):
         
     def update_image(self):
         plt.close()
+        self.finalize_mask()
         self.class_labels_all.append(self.class_labels_pairs)
         # print(self.class_labels_all)
         self.class_labels_pairs = {}
@@ -313,18 +365,26 @@ class Window(QMainWindow):
         self.label_mask.setPixmap(self.mask)
         self.label_mask.setGeometry(2*self.width+128,128, self.height, self.width)
         
-        
     def load_images(self, index):
         kmeans = KMeans(n_clusters=self.k, random_state=0)
         image_data = self.dataset[index]['inputs']['im'].data # [b,c,t,h,w]
+        gids = self.dataset[self.image_counter]['tr'].data['gids']
+        for gid in gids:
+            image_dict =  self.dset.index.imgs[gid]
+            video_dict = self.dset.index.videos[image_dict['video_id']]
+            if gid not in self.material_dset.index.imgs.keys():
+                self.material_dset.add_image(**image_dict)
+            
+        if image_dict['video_id'] not in self.material_dset.index.videos.keys():
+            self.material_dset.add_video(**video_dict)
+        
         image_data = image_data[:,:, :self.width, :self.height]#.copy()
         c, t, h, w = image_data.shape
         image_show = np.array(image_data[:,1,:,:]).transpose(1, 2, 0).copy() # visualize 0 indexe
         image_min = np.min(image_show)
         image_max = np.max(image_show)
         self.image_show = (image_show - image_min)/(image_max - image_min)
-        # plt.imshow(self.image_show)
-        # plt.show()
+
         image_data = image_data.contiguous().view(c,t, h*w)
         image_data = torch.transpose(image_data,0,2)
         image_data = torch.flatten(image_data,start_dim=1, end_dim=2)
@@ -374,7 +434,7 @@ dset = kwcoco.CocoDataset(coco_fpath)
 sampler = ndsampler.CocoSampler(dset)
 
 # # print(sampler)
-number_of_timestamps, h, w = 2, 512, 512
+number_of_timestamps, h, w = 4, 512, 512
 window_dims = (number_of_timestamps, h, w) #[t,h,w]
 input_dims = (h, w)
 
@@ -388,8 +448,10 @@ loader = dataset.make_loader(batch_size=1)
 
 # for item in dataset:
 # print(dataset[1]['inputs']['im'])
-
-window = Window(dataset, dset)
+# resume = "/home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2/material_labels.kwcoco.json"
+resume = ""
+save_kwcoco_path = "/home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2/material_labels2.kwcoco.json"
+window = Window(dataset, dset, resume, save_path=save_kwcoco_path)
 # image=image_show[0,0,:,:,:], prediction=prediction
 # for batch in loader:    
 #     # pdb.set_trace()
