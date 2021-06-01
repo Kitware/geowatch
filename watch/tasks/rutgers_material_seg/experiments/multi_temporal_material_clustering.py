@@ -45,8 +45,11 @@ for batch in loader:
     # mask_show = np.array(mask_data) # [b,t,h,w]
     
     image_data = image_data.view(b, c*t, h*w)
+    print(image_data.shape)
     image_data = torch.transpose(image_data,1,2)
+    print(image_data.shape)
     image_data = torch.flatten(image_data,start_dim=0, end_dim=1)
+    print(image_data.shape)
     # image_data = torch.transpose(image_data,0,1)
     # print(image_data.shape)
     out_feat_embed = TSNE(n_components=2).fit_transform(image_data)
