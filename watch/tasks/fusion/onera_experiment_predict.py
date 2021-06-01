@@ -13,7 +13,7 @@ if __name__ == "__main__":
                         default="{channel_set}/lightning_logs/version_0/checkpoints/*.ckpt")
     args = parser.parse_args()
     
-    for channel_set in ["all", "uv", "rgb", "vnir", "swir"]:
+    for channel_set in ["all", "uv", "bgr", "vnir", "swir"]:
         
         pattern = args.checkpoint_pattern.format(channel_set=channel_set)
         model_checkpoint_path = next(args.model_checkpoint_root.glob(pattern))

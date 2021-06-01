@@ -10,7 +10,7 @@ import utils
 channel_combos = {
     "all": "<all>",
     "uv": "B01",
-    "rgb": "B02|B03|B04",
+    "bgr": "B02|B03|B04",
     "vnir": "B05|B06|B07|B08|B8A",
     "swir": "B09|B10|B11|B12",
 }
