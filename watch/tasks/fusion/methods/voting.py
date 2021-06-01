@@ -15,6 +15,7 @@ class VotingModel(pl.LightningModule):
         
         # simple feature extraction model
         self.model = nn.Conv2d(input_dim, 1, 1, bias=False)
+        nn.init.constant_(self.model.weight, 1/input_dim)
         
         # criterion and metrics
         self.criterion = nn.BCEWithLogitsLoss(pos_weight=torch.ones(1)*pos_weight)
