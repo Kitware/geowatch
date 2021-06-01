@@ -57,7 +57,7 @@ def main(args):
             results_ds.add_annotation(
                 frame["id"],
                 category_id=1,
-                bbox=[0, 0, video["width"], video["height"]],
+                bbox=[0, 0, video["height"], video["width"]],
                 segmentation=segmentation,
             )
 

@@ -59,8 +59,8 @@ def main(args):
             )
             result_fname.parents[0].mkdir(parents=True, exist_ok=True)
 
-            tifffile.imwrite(result_fname, result.transpose())
-            tifffile.imwrite(target_fname, target.transpose())
+            tifffile.imwrite(result_fname, result)
+            tifffile.imwrite(target_fname, target)
 
 if __name__ == "__main__":
     
