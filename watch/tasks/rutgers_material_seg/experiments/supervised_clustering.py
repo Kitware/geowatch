@@ -12,7 +12,7 @@ import torch
 import pdb
 from sklearn.cluster import KMeans
 from sklearn.manifold import TSNE
-from metric_learn import NCA
+from metric_learn import NCA, LMNN
 
 visualize_images=False
 coco_fpath = ub.expandpath('/home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2/material_labels.kwcoco.json')
@@ -34,14 +34,15 @@ loader = dataset.make_loader(batch_size=1)
 
 k = 40
 kmeans = KMeans(n_clusters=k, random_state=0)
-nca = NCA(max_iter=1000)
+nca = NCA(max_iter=10, verbose=True, random_state=0)
+lmnn = LMNN(k=40, verbose=True, random_state=0, learn_rate=0.001, max_iter=600)
 
 for batch in loader:    
     # pdb.set_trace()
     image_data = batch['inputs']['im'].data[0] # [b,c,t,h,w]
     b, c, t, h, w = image_data.shape
     mask_data = batch['label']['class_masks'].data[0] #len(mask_data) = b
-    mask_data = torch.stack(mask_data).numpy()
+    mask_data = torch.stack(mask_data)#.numpy()
     
     image_show = np.array(image_data).transpose(0, 2, 3, 4, 1)/500 # visualize 0 indexed in batch
     print(image_show.shape)
@@ -52,18 +53,27 @@ for batch in loader:
     # mask_show = np.array(mask_data) # [b,t,h,w]
     
     image_data = image_data.view(b, c*t, h*w)
+    mask_data = mask_data.view(b, t, h*w)
     # print(image_data.shape)
     image_data = torch.transpose(image_data,1,2)
+    mask_data = torch.transpose(mask_data,1,2)
     # print(image_data.shape)
     image_data = torch.flatten(image_data,start_dim=0, end_dim=1)
-    # print(image_data.shape)
+    mask_data = torch.flatten(mask_data,start_dim=0, end_dim=1)[:,0]
+    # mask_data = mask_data.view(-1,1)
+    print(torch.unique(mask_data))
+    # nca.fit(image_data, mask_data)
+    lmnn.fit(image_data, mask_data)
+    # X_nca = nca.transform(image_data)
+    X_lmnn = lmnn.transform(image_data)
+    print(mask_data.shape)
     # image_data = torch.transpose(image_data,0,1)
-    # print(image_data.shape)
-    out_feat_embed = TSNE(n_components=2).fit_transform(image_data)
+    print(image_data.shape)
+    out_feat_embed = TSNE(n_components=2, verbose=True).fit_transform(image_data)
+    out_feat_embed_lmnn = TSNE(n_components=2, verbose=True).fit_transform(X_lmnn)
     data = image_data
     # data = out_feat_embed
-    # nca.fit(X, Y)
-    kmeans.fit(data)
+    kmeans.fit(image_data)
     cluster_centers = kmeans.cluster_centers_
     cluster_labels = kmeans.labels_
     y_kmeans = kmeans.predict(data)
@@ -73,16 +83,23 @@ for batch in loader:
     prediction_no_bg = np.ma.masked_where(prediction==0,prediction)
     # print(f"image_data: {image_data.shape}, mask: {mask_data.shape}")
     # print(f"image min: {image_show.min()}, image max: {image_show.max()}")
-    plt.scatter(data[:,0], data[:,1], c=y_kmeans, marker='.', cmap='Set1')
-    plt.scatter(cluster_centers[:, 0], cluster_centers[:, 1], c='black', s=200, alpha=0.5);
+    fig = plt.figure()
+    ax1 = fig.add_subplot(1,2,1)
+    ax2 = fig.add_subplot(1,2,2)
+    ax1.scatter(out_feat_embed[:,0], out_feat_embed[:,1], c=mask_data, marker='.', cmap='Set1')
+    # plt.scatter(cluster_centers[:, 0], cluster_centers[:, 1], c='black', s=200, alpha=0.5);
+    # plt.show()
+
+    ax2.scatter(out_feat_embed_lmnn[:,0], out_feat_embed_lmnn[:,1], c=mask_data, marker='.', cmap='Set1')
+    # plt.scatter(cluster_centers[:, 0], cluster_centers[:, 1], c='black', s=200, alpha=0.5);
     plt.show()
-    
+
     figure = plt.figure(figsize=(15,15))
-    ax1 = figure.add_subplot(1,5,1)
-    ax2 = figure.add_subplot(1,5,2)
-    ax3 = figure.add_subplot(1,5,3)
-    ax4 = figure.add_subplot(1,5,4)
-    ax5 = figure.add_subplot(1,5,5)
+    ax1 = figure.add_subplot(2,5,1)
+    ax2 = figure.add_subplot(2,5,2)
+    ax3 = figure.add_subplot(2,5,3)
+    ax4 = figure.add_subplot(2,5,4)
+    ax5 = figure.add_subplot(2,5,5)
     ax6 = figure.add_subplot(2,5,6)
     ax7 = figure.add_subplot(2,5,7)
     ax8 = figure.add_subplot(2,5,8)

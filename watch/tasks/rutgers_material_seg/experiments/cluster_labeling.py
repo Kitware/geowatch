@@ -174,9 +174,6 @@ class Window(QMainWindow):
         self.widget.setGeometry(50,50,1800,800)
         self.widget.show()
     
-    # def convert_mask_to_binaries(self):
-        
-    
     def save_images_clicked(self):
         gids = self.dataset[self.image_counter]['tr'].data['gids']
         for i in range(1,len(list(self.class_label_to_index.keys()))):
@@ -348,6 +345,7 @@ class Window(QMainWindow):
         self.image_counter += 1
         self.label_img_title.setText(f"Image {self.image_counter}")
         self.width, self.height = self.dataset[self.image_counter]['tr'].data['space_dims']
+        self.scale_factor = 1
         self.current_mask = np.zeros((self.width, self.height)).astype(np.uint8)
         # self.width_factor, self.height_factor = self.vis_width/self.width, self.vis_height/self.height
         self.load_images(index=self.image_counter)
@@ -434,7 +432,7 @@ dset = kwcoco.CocoDataset(coco_fpath)
 sampler = ndsampler.CocoSampler(dset)
 
 # # print(sampler)
-number_of_timestamps, h, w = 4, 512, 512
+number_of_timestamps, h, w = 54, 512, 512
 window_dims = (number_of_timestamps, h, w) #[t,h,w]
 input_dims = (h, w)
 
