@@ -31,8 +31,8 @@ def main(args):
     model.eval(); model.freeze();
 
     results, targets = zip(*[
-        (model(example["images"][None])[0], example["changes"])
-        for example in tqdm.tqdm(predict_dataset)
+        (model(example["images"])[0], example["changes"][0])
+        for example in tqdm.tqdm(predict_dataloader)
     ])
 
     for video, result_stack, target_stack in zip(onera_test.dataset["videos"], results, targets):

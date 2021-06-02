@@ -52,12 +52,13 @@ def main(args):
             target_path = band_paths.pop(target_idx)
             
             segmentation = tifffile.imread(target_path)
-            segmentation = kwimage.Mask(segmentation, "f_mask").to_coco()
+            segmentation = kwimage.Mask(segmentation, "c_mask").to_coco()
 
             results_ds.add_annotation(
                 frame["id"],
                 category_id=1,
-                bbox=[0, 0, video["height"], video["width"]],
+                bbox=[0, 0, frame["width"], frame["height"]],
+                #bbox=[0, 0, frame["height"], frame["width"]],
                 segmentation=segmentation,
             )
 
@@ -67,10 +68,11 @@ def main(args):
                     frame["id"],
                     str(band_path.absolute()), 
                     band_path.stem.split("-")[0], 
-                    aux_width=video["width"],
-                    aux_height=video["height"],
+                    aux_width=frame["width"],
+                    aux_height=frame["height"],
                     warp_aux_to_img=None)
 
+    print(results_ds.validate())
     results_ds.dump(str(args.kwcoco_dest))
 
 if __name__ == "__main__":
