@@ -72,22 +72,23 @@ class OneraDataset(data.Dataset):
         frame_masks = []
         for frame, dets in zip(raw_frame_list, raw_det_list):
             frame = frame.astype(np.float32)
-            input_dsize = self.sample_shape[-2:]
+            input_dsize = self.sample_shape[-2:][::-1]
             
-            input_dsize = (
+            input_dsize = [
                 real if (nominal is None) else nominal
-                for nominal, real in zip(input_dsize, frame.shape)
-            )
+                for nominal, real in zip(input_dsize, frame.shape[:2][::-1])
+            ]
 
             # Resize the sampled window to the target space for the network
             frame, info = kwimage.imresize(frame, dsize=input_dsize,
                                            interpolation='linear',
+                                           antialias=True,
                                            return_info=True)
             # Remember to apply any transform to the dets as well
             dets = dets.scale(info['scale'])
             dets = dets.translate(info['offset'])
 
-            frame_mask = np.full(frame.shape[0:2], dtype=np.int32, fill_value=-1)
+            frame_mask = np.full(frame.shape[:2], dtype=np.int32, fill_value=-1)
             ann_polys = dets.data['segmentations'].to_polygon_list()
             ann_aids = dets.data['aids']
             ann_cids = dets.data['cids']
@@ -190,11 +191,11 @@ class SimpleDataset(data.Dataset):
         frame_masks = []
         for frame, dets in zip(raw_frame_list, raw_det_list):
             frame = frame.astype(np.float32)
-            input_dsize = self.sample_shape[-2:]
+            input_dsize = self.sample_shape[-2:][::-1]
             
             input_dsize = (
                 real if (nominal is None) else nominal
-                for nominal, real in zip(input_dsize, frame.shape)
+                for nominal, real in zip(input_dsize, frame.shape[:2][::-1])
             )
 
             # Resize the sampled window to the target space for the network
@@ -205,7 +206,7 @@ class SimpleDataset(data.Dataset):
             dets = dets.scale(info['scale'])
             dets = dets.translate(info['offset'])
 
-            frame_mask = np.full(frame.shape[0:2], dtype=np.int32, fill_value=-1)
+            frame_mask = np.full(frame.shape[:2], dtype=np.int32, fill_value=-1)
             ann_polys = dets.data['segmentations'].to_polygon_list()
             ann_aids = dets.data['aids']
             ann_cids = dets.data['cids']
