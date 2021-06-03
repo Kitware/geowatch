@@ -288,6 +288,7 @@ class Window(QMainWindow):
     
     
     def getImagePixel(self, event):
+        # self.widget.keyPressEvent = self.keyPressEvent
         x = int(event.pos().x()//self.scale_factor)
         y = int(event.pos().y()//self.scale_factor)
         self.value = self.prediction_show[y,x]
@@ -295,7 +296,7 @@ class Window(QMainWindow):
         
         # print(self.value)
         self.current_mask[xs,ys] = self.class_label_to_index[self.class_label_with]
-        self.separable_current_mask[self.class_label_to_index[self.class_label_with],xs,ys] = 1
+        self.separable_current_mask[self.class_label_to_index[self.class_label_with],xs,ys] = 1 ## need to account for removed pixels!
         
         self.update_mask()
         self.class_labels_pairs[self.value] = self.class_label_with
@@ -305,6 +306,7 @@ class Window(QMainWindow):
         # print(self.class_labels_pairs)
             
     def getMaskPixel(self, event):
+        # self.widget.keyPressEvent = self.keyPressEvent
         x = int(event.pos().x()//self.scale_factor)
         y = int(event.pos().y()//self.scale_factor)
         self.value = self.prediction_show[y,x]
@@ -343,10 +345,12 @@ class Window(QMainWindow):
         self.output_textbox.clear()
         self.output_textbox_name.clear()
         self.image_counter += 1
+        print(f"current iteration: {self.image_counter}")
         self.label_img_title.setText(f"Image {self.image_counter}")
         self.width, self.height = self.dataset[self.image_counter]['tr'].data['space_dims']
         self.scale_factor = 1
         self.current_mask = np.zeros((self.width, self.height)).astype(np.uint8)
+        self.separable_current_mask = np.zeros((len(list(self.class_label_to_index.keys())), self.width, self.height)).astype(np.uint8)
         # self.width_factor, self.height_factor = self.vis_width/self.width, self.vis_height/self.height
         self.load_images(index=self.image_counter)
         print("updated image and prediction")
@@ -421,7 +425,7 @@ class Window(QMainWindow):
         self.qMask = QPixmap(self.qmask)#.scaled(256,256)
 
 app = QApplication(sys.argv)
-coco_fpath = ub.expandpath('/home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2/data_fielded_filtered_rgb.kwcoco.json')
+coco_fpath = ub.expandpath('/home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2.1/data_fielded_filtered.kwcoco.json')
 dset = kwcoco.CocoDataset(coco_fpath)
 
 # material_coco_fpath = ub.expandpath('/home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2/material_labels.kwcoco.json')
@@ -432,7 +436,7 @@ dset = kwcoco.CocoDataset(coco_fpath)
 sampler = ndsampler.CocoSampler(dset)
 
 # # print(sampler)
-number_of_timestamps, h, w = 54, 512, 512
+number_of_timestamps, h, w = 3, 512, 512
 window_dims = (number_of_timestamps, h, w) #[t,h,w]
 input_dims = (h, w)
 
@@ -448,7 +452,7 @@ loader = dataset.make_loader(batch_size=1)
 # print(dataset[1]['inputs']['im'])
 # resume = "/home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2/material_labels.kwcoco.json"
 resume = ""
-save_kwcoco_path = "/home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2/material_labels2.kwcoco.json"
+save_kwcoco_path = "/home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2.1/material_labels.kwcoco.json"
 window = Window(dataset, dset, resume, save_path=save_kwcoco_path)
 # image=image_show[0,0,:,:,:], prediction=prediction
 # for batch in loader:    
