@@ -19,7 +19,7 @@ def main(args):
     onera_test = kwcoco.CocoDataset(str(args.test_data_path))
     onera_test_sampler = ndsampler.CocoSampler(onera_test)
 
-    predict_dataset = onera_2018.SimpleDataset(
+    predict_dataset = onera_2018.OneraDataset(
         onera_test_sampler, 
         sample_shape=(1, None, None),
         channels=args.channels,

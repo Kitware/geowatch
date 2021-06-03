@@ -33,6 +33,7 @@ class VotingModel(pl.LightningModule):
         
     def training_step(self, batch, batch_idx=None):
         images, changes = batch["images"], batch["labels"]
+        changes = changes + 1
         
         # compute predicted and target change masks
         distances = self(images)
@@ -47,6 +48,7 @@ class VotingModel(pl.LightningModule):
     
     def validation_step(self, batch, batch_idx=None):
         images, changes = batch["images"], batch["labels"]
+        changes = changes + 1
         
         # compute predicted and target change masks
         distances = self(images)
@@ -62,6 +64,7 @@ class VotingModel(pl.LightningModule):
     
     def test_step(self, batch, batch_idx=None):
         images, changes = batch["images"], batch["labels"]
+        changes = changes + 1
         
         # compute predicted and target change masks
         distances = self(images)

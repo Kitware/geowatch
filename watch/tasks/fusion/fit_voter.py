@@ -13,7 +13,7 @@ def main(args):
     # load dataset
     onera_train = kwcoco.CocoDataset(str(args.train_data_path))
     onera_train_sampler = ndsampler.CocoSampler(onera_train)
-    full_train_dataset = onera_2018.SimpleDataset(
+    full_train_dataset = onera_2018.OneraDataset(
         onera_train_sampler, 
         sample_shape=(1, args.chip_size, args.chip_size),
         channels=args.channels,

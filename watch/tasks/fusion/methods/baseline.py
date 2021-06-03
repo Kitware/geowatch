@@ -41,7 +41,8 @@ class ChangeDetector(pl.LightningModule):
         return distance
         
     def training_step(self, batch, batch_idx=None):
-        images, changes = batch["images"], batch["changes"]
+        images, labels = batch["images"], batch["changes"]
+        changes = labels[1:] != labels[:-1]
         
         # compute predicted and target change masks
         distances = self(images)
@@ -55,7 +56,8 @@ class ChangeDetector(pl.LightningModule):
         return loss
     
     def validation_step(self, batch, batch_idx=None):
-        images, changes = batch["images"], batch["changes"]
+        images, labels = batch["images"], batch["changes"]
+        changes = labels[1:] != labels[:-1]
         
         # compute predicted and target change masks
         distances = self(images)
@@ -70,7 +72,8 @@ class ChangeDetector(pl.LightningModule):
         return loss
     
     def test_step(self, batch, batch_idx=None):
-        images, changes = batch["images"], batch["changes"]
+        images, labels = batch["images"], batch["changes"]
+        changes = labels[1:] != labels[:-1]
         
         # compute predicted and target change masks
         distances = self(images)
