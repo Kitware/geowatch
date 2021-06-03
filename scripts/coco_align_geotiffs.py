@@ -59,7 +59,7 @@ import os
 import scriptconfig as scfg
 import socket
 import ubelt as ub
-import datetime
+import dateutil.parser
 from shapely import ops
 from os.path import join, exists
 
@@ -91,6 +91,7 @@ class CocoAlignGeotiffConfig(scfg.Config):
             '''
         )),
 
+        # TODO: change this name to just align-method or something
         'rpc_align_method': scfg.Value('orthorectify', help=ub.paragraph(
             '''
             Can be one of:
@@ -146,8 +147,8 @@ def main(**kw):
         >>> fpath = ls_prod['bands'][0]
         >>> meta = geotiff_metadata(fpath)
         >>> # We need a date captured ATM in a specific format
-        >>> dt = datetime.datetime.strptime(
-        >>>     meta['filename_meta']['acquisition_date'], '%Y%m%d')
+        >>> dt = dateutil.parser.parse(
+        >>>     meta['filename_meta']['acquisition_date'])
         >>> date_captured = dt.strftime('%Y/%m/%d')
         >>> gid = dset.add_image(file_name=fpath, date_captured=date_captured)
         >>> dummy_poly = kwimage.Polygon(exterior=meta['wgs84_corners'])
@@ -204,6 +205,7 @@ def main(**kw):
 
     # Load the dataset and extract geotiff metadata from each image.
     dset = kwcoco.CocoDataset(src_fpath)
+    # dset = dset.subset([1])
     update_coco_geotiff_metadata(dset, serializable=False)
 
     # Construct the "data cube"
@@ -346,14 +348,16 @@ class SimpleDataCube(object):
     """
 
     def __init__(cube, dset):
-        cube.dset = dset
 
-        cube.gid_to_poly = {}
-        for gid, img in cube.dset.imgs.items():
+        gid_to_poly = {}
+        for gid, img in dset.imgs.items():
             info = img['geotiff_metadata']
             kw_img_poly = kwimage.Polygon(exterior=info['wgs84_corners'])
             sh_img_poly = kw_img_poly.to_shapely()
-            cube.gid_to_poly[gid] = sh_img_poly
+            gid_to_poly[gid] = sh_img_poly
+
+        cube.dset = dset
+        cube.gid_to_poly = gid_to_poly
 
     def query_image_overlaps(cube, space_region, time_region=None):
         """
@@ -375,7 +379,6 @@ class SimpleDataCube(object):
             raise NotImplementedError('have not implemented time ranges yet')
 
         space_box = space_region.bounding_box().to_ltrb()
-
         latmin, lonmin, latmax, lonmax = space_box.data[0]
         # from watch.utils.util_place import conv_lat_lon
         # min_pt = conv_lat_lon(str(ymin), str(xmin), format='ISO-D')
@@ -420,6 +423,9 @@ class SimpleDataCube(object):
         }
         return image_overlaps
 
+    def _warp_image(cube, img):
+        pass
+
     def extract_overlaps(cube, image_overlaps, extract_dpath,
                          rpc_align_method='orthorectify', new_dset=None,
                          write_subsets=True, visualize=True):
@@ -453,7 +459,10 @@ class SimpleDataCube(object):
         Returns:
             kwcoco.CocoDataset: the given or new dataset that was modified
         """
-        import watch
+        # import watch
+        import datetime
+
+        dset = cube.dset
 
         date_to_gids = image_overlaps['date_to_gids']
         space_str = image_overlaps['space_str']
@@ -478,144 +487,107 @@ class SimpleDataCube(object):
 
         sub_new_gids = []
 
-        for cat in cube.dset.cats.values():
+        for cat in dset.cats.values():
             new_dset.ensure_category(**cat)
+
+        # TODO: parallelize over images
+        from kwcoco.util.util_futures import Executor
+        executor = Executor(mode='thread', max_workers=16)
 
         for date in ub.ProgIter(dates, desc='extracting regions', verbose=3):
             gids = date_to_gids[date]
-            iso_time = date.strftime('%Y-%m-%d')
+            iso_time = datetime.date.isoformat(date.date())
 
             # TODO: Is there any other consideration we should make when
             # multiple images have the same timestamp?
             for num, gid in enumerate(gids):
-                img = cube.dset.imgs[gid]
+                img = dset.imgs[gid]
+                auxiliary = img.get('auxiliary', [])
 
                 # Construct a name for the subregion to extract.
                 sensor_coarse = img.get('sensor_coarse', 'unknown')
-                name_string = 'crop_{}_{}_{}_{}.tif'.format(iso_time, space_str, sensor_coarse, num)
+                name = 'crop_{}_{}_{}_{}'.format(iso_time, space_str, sensor_coarse, num)
 
-                aids = cube.dset.index.gid_to_aids[img['id']]
-                anns = list(ub.take(cube.dset.index.anns, aids))
+                objs = []
+                has_base_image = img.get('file_name', None) is not None
+                if has_base_image:
+                    objs.append(ub.dict_diff(img, {'auxiliary'}))
+                objs.extend(auxiliary)
 
-                # TODO: handle auxiliary
-                import xdev
-                xdev.embed()
-                src_gpath = cube.dset.get_image_fpath(img['id'])
+                bundle_dpath = dset.bundle_dpath
 
-                info = img['geotiff_metadata']
+                is_rpcs = [obj['geotiff_metadata']['is_rpc'] for obj in objs]
+                assert ub.allsame(is_rpcs)
+                is_rpc = ub.peek(is_rpcs)
 
-                # NOTE: https://github.com/dwtkns/gdal-cheat-sheet
-                if info['is_rpc'] and rpc_align_method != 'affine_warp':
+                if is_rpc and rpc_align_method != 'affine_warp':
                     align_method = rpc_align_method
-
                     if align_method == 'pixel_crop':
                         align_method = 'pixel_crop'
-                        from ndsampler.utils.util_gdal import LazyGDalFrameFile
-                        imdata = LazyGDalFrameFile(src_gpath)
-                        # space_region = space_box.to_polygons()[0]
-                        space_region_pxl = space_region.warp(info['wgs84_to_wld']).warp(info['wld_to_pxl'])
-                        pxl_xmin, pxl_ymin, pxl_xmax, pxl_ymax = space_region_pxl.bounding_box().to_ltrb().quantize().data[0]
-                        sl = tuple([slice(pxl_ymin, pxl_ymax), slice(pxl_xmin, pxl_xmax)])
-                        subim, transform = kwimage.padded_slice(
-                            imdata, sl, return_info=True)
-
-                        dst_dpath = ub.ensuredir((sub_bundle_dpath, sensor_coarse, align_method))
-                        dst_gpath = join(dst_dpath, name_string)
-
-                        kwimage.imwrite(dst_gpath, subim, space=None, backend='gdal')
-
-                        dst_info = {
-                            'img_shape': subim.shape,
-                        }
-                    elif align_method == 'orthorectify':
-                        align_method = 'orthorectify'
-
-                        dst_dpath = ub.ensuredir((sub_bundle_dpath, sensor_coarse, align_method))
-                        dst_gpath = join(dst_dpath, name_string)
-
-                        # HACK TO FIND an appropirate DEM file
-                        # from watch.gis import elevation
-                        # dems = elevation.girder_gtop30_elevation_dem()
-                        rpcs = info['rpc_transform']
-                        dems = rpcs.elevation
-                        if hasattr(dems, 'find_reference_fpath'):
-                            dem_fpath, dem_info = dems.find_reference_fpath(latmin, lonmin)
-                            template = ub.paragraph(
-                                '''
-                                gdalwarp
-                                -te {xmin} {ymin} {xmax} {ymax}
-                                -te_srs epsg:4326
-                                -t_srs epsg:4326
-                                -rpc -et 0
-                                -to RPC_DEM={dem_fpath}
-                                -overwrite
-                                {SRC} {DST}
-                                ''')
-                        else:
-                            dem_fpath = None
-                            template = ub.paragraph(
-                                '''
-                                gdalwarp
-                                -te {xmin} {ymin} {xmax} {ymax}
-                                -te_srs epsg:4326
-                                -t_srs epsg:4326
-                                -rpc -et 0
-                                -overwrite
-                                {SRC} {DST}
-                                ''')
-                        command = template.format(
-                            ymin=latmin,
-                            xmin=lonmin,
-                            ymax=latmax,
-                            xmax=lonmax,
-
-                            dem_fpath=dem_fpath,
-                            SRC=src_gpath, DST=dst_gpath,
-                        )
-                        cmd_info = ub.cmd(command, verbose=0)  # NOQA
-                    else:
-                        raise KeyError(align_method)
-
                 else:
                     align_method = 'affine_warp'
-                    dst_dpath = ub.ensuredir((sub_bundle_dpath, sensor_coarse, align_method))
-                    dst_gpath = join(dst_dpath, name_string)
 
-                    template = (
-                        'gdalwarp '
-                        '-te {xmin} {ymin} {xmax} {ymax} '
-                        '-te_srs epsg:4326 '
-                        '-overwrite '
-                        '{SRC} {DST}')
-                    command = template.format(
-                        ymin=latmin,
-                        xmin=lonmin,
-                        ymax=latmax,
-                        xmax=lonmax,
-                        SRC=src_gpath, DST=dst_gpath,
-                    )
-                    cmd_info = ub.cmd(command, verbose=0)  # NOQA
+                dst_dpath = ub.ensuredir((sub_bundle_dpath, sensor_coarse,
+                                          align_method))
 
+                is_multi_image = len(objs) > 1
+
+                job_list = []
+                for obj in ub.ProgIter(objs, desc='warp auxiliaries', verbose=0):
+                    job = executor.submit(
+                        _aligncrop, obj, bundle_dpath, name, sensor_coarse,
+                        dst_dpath, space_region, space_box, align_method,
+                        is_multi_image)
+                    job_list.append(job)
+
+                dst_list = []
+                for job in ub.ProgIter(job_list, desc='warp auxiliaries'):
+                    dst = job.result()
+                    dst_list.append(dst)
+
+                from watch.tools.kwcoco_extensions import _populate_canvas_obj
+                from watch.tools.kwcoco_extensions import _recompute_auxiliary_transforms
                 if align_method != 'pixel_crop':
-                    # Re-parse any information in the new geotiff
-                    dst_info = watch.gis.geotiff.geotiff_metadata(dst_gpath)
-                    dst_info['wgs84_corners']
+                    # If we are a pixel crop, we can transform directly
+                    for dst in dst_list:
+                        # hack this in for heuristics
+                        dst['sensor_coarse'] = img['sensor_coarse']
+                        _populate_canvas_obj(bundle_dpath, dst, overwrite=True, with_wgs=True)
 
-                new_img = {}
-                # Carry over appropriate metadata from original image
-                new_img.update(ub.dict_isect(img, {
+                new_img = {
+                    'name': name,
+                }
+
+                if has_base_image:
+                    base_dst = dst_list[0]
+                    new_img.update(base_dst)
+                    aux_dst = dst_list[1:]
+                    assert len(aux_dst) == 0, 'cant have aux and base yet'
+                else:
+                    aux_dst = dst_list
+
+                # Hack because heurstics break when fnames change
+                for old_aux, new_aux in zip(auxiliary, aux_dst):
+                    new_aux['channels'] = old_aux['channels']
+                    new_aux['parent_file_name'] = old_aux['file_name']
+
+                if len(aux_dst):
+                    new_img['auxiliary'] = aux_dst
+                    _recompute_auxiliary_transforms(new_img)
+
+                carry_over = ub.dict_isect(img, {
                     'date_captured',
                     'approx_elevation',
-                    'approx_meter_gsd',
                     'sensor_candidates',
                     'num_bands',
                     'sensor_coarse',
                     'site_tag',
-                }))
+                    'channels',
+                })
+
+                # Carry over appropriate metadata from original image
+                new_img.update(carry_over)
                 new_img['parent_file_name'] = img['file_name']  # remember which image this came from
-                new_img['width'] = dst_info['img_shape'][1]
-                new_img['height'] = dst_info['img_shape'][0]
-                new_img['file_name'] = dst_gpath
                 new_img['video_id'] = new_vidid
                 new_img['frame_index'] = frame_index
                 new_img['timestamp'] = date.toordinal()
@@ -634,7 +606,8 @@ class SimpleDataCube(object):
                     img coords instead. Hopefully gdalwarp preserves metadata
                     enough to do this.
                     """
-                    dset = cube.dset
+                    aids = dset.index.gid_to_aids[img['id']]
+                    anns = list(ub.take(dset.index.anns, aids))
 
                     geo_poly_list = []
                     for ann in anns:
@@ -652,9 +625,10 @@ class SimpleDataCube(object):
                     if align_method == 'orthorectify':
                         # Is the affine mapping in the destination image good
                         # enough after the image has been orthorectified?
-                        pxl_polys = geo_polys.warp(dst_info['wgs84_to_wld']).warp(dst_info['wld_to_pxl'])
+                        pxl_polys = geo_polys.warp(new_img['wgs84_to_wld']).warp(new_img['wld_to_pxl'])
                     elif align_method == 'pixel_crop':
-                        yoff, xoff = transform['st_offset']
+                        raise NotImplementedError('fixme')
+                        yoff, xoff = new_img['transform']['st_offset']
                         orig_pxl_poly_list = []
                         for ann in anns:
                             old_poly = kwimage.Polygon.from_coco(ann['segmentation'])
@@ -664,7 +638,7 @@ class SimpleDataCube(object):
                     elif align_method == 'affine_warp':
                         # Warp Auth-WGS84 to whatever the image world space is,
                         # and then from there to pixel space.
-                        pxl_polys = geo_polys.warp(dst_info['wgs84_to_wld']).warp(dst_info['wld_to_pxl'])
+                        pxl_polys = geo_polys.warp(new_img['wgs84_to_wld']).warp(new_img['wld_to_pxl'])
                     else:
                         raise KeyError(align_method)
 
@@ -697,30 +671,61 @@ class SimpleDataCube(object):
                 if visualize:
                     # See if we can look at what we made
                     from watch.utils.util_norm import normalize_intensity
-                    canvas = kwimage.imread(dst_gpath)
-                    canvas = normalize_intensity(canvas)
-                    canvas = kwimage.ensure_float01(canvas)
 
-                    view_img_dpath = ub.ensuredir(
-                        (sub_bundle_dpath, sensor_coarse,
-                         '_view_img_' + align_method))
+                    new_delayed = new_dset.delayed_load(new_gid)
+                    if hasattr(new_delayed, 'components'):
+                        components = new_delayed.components
+                    else:
+                        components = [new_delayed]
 
-                    if HANDLE_ANNS:
-                        view_ann_dpath = ub.ensuredir(
+                    for chan in components:
+                        spec = chan.channels.spec
+                        canvas = chan.finalize()
+
+                        # canvas = kwimage.imread(dst_gpath)
+                        canvas = normalize_intensity(canvas)
+                        if len(canvas.shape) > 2 and canvas.shape[2] > 4:
+                            # hack for wv
+                            canvas = canvas[..., 0]
+                        canvas = kwimage.ensure_float01(canvas)
+
+                        view_img_dpath = ub.ensuredir(
                             (sub_bundle_dpath, sensor_coarse,
-                             '_view_ann_' + align_method))
+                             '_view_img_' + align_method))
 
-                    view_img_fpath = ub.augpath(dst_gpath, dpath=view_img_dpath) + '.view_img.jpg'
-                    kwimage.imwrite(view_img_fpath, kwimage.ensure_uint255(canvas))
+                        if HANDLE_ANNS:
+                            view_ann_dpath = ub.ensuredir(
+                                (sub_bundle_dpath, sensor_coarse,
+                                 '_view_ann_' + align_method))
 
-                    if HANDLE_ANNS:
-                        dets = kwimage.Detections.from_coco_annots(valid_anns, dset=dset)
-                        view_ann_fpath = ub.augpath(dst_gpath, dpath=view_ann_dpath) + '.view_ann.jpg'
-                        ann_canvas = dets.draw_on(canvas)
-                        kwimage.imwrite(view_ann_fpath, kwimage.ensure_uint255(ann_canvas))
+                        view_img_fpath = ub.augpath(name, dpath=view_img_dpath) + '_' + str(spec) + '.view_img.jpg'
+                        kwimage.imwrite(view_img_fpath, kwimage.ensure_uint255(canvas))
+
+                        if HANDLE_ANNS:
+                            dets = kwimage.Detections.from_coco_annots(valid_anns, dset=dset)
+                            view_ann_fpath = ub.augpath(name, dpath=view_ann_dpath) + '_' + str(spec) + '.view_ann.jpg'
+                            ann_canvas = dets.draw_on(canvas)
+                            kwimage.imwrite(view_ann_fpath, kwimage.ensure_uint255(ann_canvas))
+
+                if 1:
+                    # Fix json serializability
+                    print('new_gid = {!r}'.format(new_gid))
+                    new_img = new_dset.index.imgs[new_gid]
+                    new_objs = [new_img] + new_img.get('auxiliary', [])
+                    for obj in new_objs:
+                        if 'warp_to_wld' in obj:
+                            obj['warp_to_wld'] = kwimage.Affine.coerce(obj['warp_to_wld']).concise()
+                        if 'wld_to_pxl' in obj:
+                            obj['wld_to_pxl'] = kwimage.Affine.coerce(obj['wld_to_pxl']).concise()
+                        obj.pop('wgs84_to_wld', None)
+
+                    from kwcoco.util import util_json
+                    assert not list(util_json.find_json_unserializable(new_img))
 
         if write_subsets:
             print('Writing data subset')
+            new_dset._check_json_serializable()
+
             sub_dset = new_dset.subset(sub_new_gids, copy=True)
             sub_dset.fpath = join(sub_bundle_dpath, 'subdata.kwcoco.json')
             sub_dset.reroot(new_root=sub_bundle_dpath, absolute=False)
@@ -734,10 +739,10 @@ def update_coco_geotiff_metadata(dset, serializable=True):
     that can be coerced to json.
     """
     import watch
-    import dateutil.parser
 
     if serializable:
         raise NotImplementedError('we dont do this yet')
+
     img_iter = ub.ProgIter(dset.imgs.values(),
                            total=len(dset.imgs),
                            desc='update meta',
@@ -747,9 +752,6 @@ def update_coco_geotiff_metadata(dset, serializable=True):
         img['datetime_acquisition'] = (
             dateutil.parser.parse(img['date_captured'])
         )
-
-        import xdev
-        xdev.embed()
 
         # if an image specified its "dem_hint" as ignore, then we set the
         # elevation to 0. NOTE: this convention might be generalized and
@@ -770,30 +772,47 @@ def update_coco_geotiff_metadata(dset, serializable=True):
         }
 
         fname = img.get('file_name', None)
-        if fname is None:
-            raise NotImplementedError
-        else:
+        if fname is not None:
             src_gpath = dset.get_image_fpath(img['id'])
             assert exists(src_gpath)
-            img_iter.ensure_newline()
-            print('src_gpath = {!r}'.format(src_gpath))
-            info = watch.gis.geotiff.geotiff_metadata(src_gpath, **metakw)
-            info = ub.dict_isect(aux_info, keys_of_interest)
+            # img_iter.ensure_newline()
+            # print('src_gpath = {!r}'.format(src_gpath))
+            img_info = watch.gis.geotiff.geotiff_metadata(src_gpath, **metakw)
 
-        if 0:
-            auxiliary = img.get('auxiliary', [])
-            for aux in auxiliary:
-                aux_fpath = join(dset.bundle_dpath, aux['file_name'])
-                assert exists(aux_fpath)
-                aux_info = watch.gis.geotiff.geotiff_metadata(aux_fpath, **metakw)
-                info = ub.dict_isect(aux_info, keys_of_interest)
+            if serializable:
+                raise NotImplementedError
+            else:
+                # info['datetime_acquisition'] = img['datetime_acquisition']
+                # info['gpath'] = src_gpath
+                img_info = ub.dict_isect(img_info, keys_of_interest)
+                img['geotiff_metadata'] = img_info
 
-        if serializable:
-            raise NotImplementedError
-        else:
-            info['datetime_acquisition'] = img['datetime_acquisition']
-            info['gpath'] = src_gpath
-            img['geotiff_metadata'] = info
+        for aux in img.get('auxiliary', []):
+            aux_fpath = join(dset.bundle_dpath, aux['file_name'])
+            assert exists(aux_fpath)
+            aux_info = watch.gis.geotiff.geotiff_metadata(aux_fpath, **metakw)
+            aux_info = ub.dict_isect(aux_info, keys_of_interest)
+            if serializable:
+                raise NotImplementedError
+            else:
+                aux['geotiff_metadata'] = aux_info
+
+        if fname is None:
+            # need to choose one of the auxiliary images as the "main" image.
+            # We are assuming that there is one auxiliary image that exactly
+            # corresponds.
+            candidates = []
+            for aux in img.get('auxiliary', []):
+                if aux['width'] == img['width'] and aux['height'] == img['height']:
+                    candidates.append(aux)
+
+            if not candidates:
+                raise AssertionError(
+                    'Assumed at least one auxiliary image has identity '
+                    'transform, but this seems to not be the case')
+
+            aux = ub.peek(candidates)
+            img['geotiff_metadata'] = aux['geotiff_metadata']
 
 
 def find_roi_regions(dset):
@@ -972,6 +991,109 @@ def _fix_geojson_poly(geo):
     else:
         fixed = geo
     return fixed
+
+
+def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
+               space_box, align_method, is_multi_image):
+    # NOTE: https://github.com/dwtkns/gdal-cheat-sheet
+    latmin, lonmin, latmax, lonmax = space_box.data[0]
+
+    if is_multi_image:
+        # obj.get('channels', None)
+        multi_dpath = ub.ensuredir((dst_dpath, name))
+        dst_gpath = join(multi_dpath, name + '_' + obj['channels'] + '.tif')
+    else:
+        dst_gpath = join(dst_dpath, name + '.tif')
+
+    fname = obj.get('file_name', None)
+    assert fname is not None
+    src_gpath = join(bundle_dpath, fname)
+
+    dst = {
+        'file_name': dst_gpath,
+    }
+
+    if align_method == 'pixel_crop':
+        align_method = 'pixel_crop'
+        from ndsampler.utils.util_gdal import LazyGDalFrameFile
+        imdata = LazyGDalFrameFile(src_gpath)
+        info = obj['geotiff_metadata']
+        space_region_pxl = space_region.warp(info['wgs84_to_wld']).warp(info['wld_to_pxl'])
+        pxl_xmin, pxl_ymin, pxl_xmax, pxl_ymax = space_region_pxl.bounding_box().to_ltrb().quantize().data[0]
+        sl = tuple([slice(pxl_ymin, pxl_ymax), slice(pxl_xmin, pxl_xmax)])
+        subim, transform = kwimage.padded_slice(
+            imdata, sl, return_info=True)
+        kwimage.imwrite(dst_gpath, subim, space=None, backend='gdal')
+        dst['img_shape'] = subim.shape
+        dst['transform'] = transform
+        # TODO: do this with a gdal command so the tiff metdata is preserved
+
+    elif align_method == 'orthorectify':
+        # HACK TO FIND an appropirate DEM file
+        # from watch.gis import elevation
+        # dems = elevation.girder_gtop30_elevation_dem()
+        info = obj['geotiff_metadata']
+        rpcs = info['rpc_transform']
+        dems = rpcs.elevation
+
+        # TODO: reproject to utm
+        # https://gis.stackexchange.com/questions/193094/can-gdalwarp-reproject-from-espg4326-wgs84-to-utm
+        # '+proj=utm +zone=12 +datum=WGS84 +units=m +no_defs'
+
+        if hasattr(dems, 'find_reference_fpath'):
+            dem_fpath, dem_info = dems.find_reference_fpath(latmin, lonmin)
+            template = ub.paragraph(
+                '''
+                gdalwarp
+                -te {xmin} {ymin} {xmax} {ymax}
+                -te_srs epsg:4326
+                -t_srs epsg:4326
+                -rpc -et 0
+                -to RPC_DEM={dem_fpath}
+                -overwrite
+                {SRC} {DST}
+                ''')
+        else:
+            dem_fpath = None
+            template = ub.paragraph(
+                '''
+                gdalwarp
+                -te {xmin} {ymin} {xmax} {ymax}
+                -te_srs epsg:4326
+                -t_srs epsg:4326
+                -rpc -et 0
+                -overwrite
+                {SRC} {DST}
+                ''')
+        command = template.format(
+            ymin=latmin,
+            xmin=lonmin,
+            ymax=latmax,
+            xmax=lonmax,
+
+            dem_fpath=dem_fpath,
+            SRC=src_gpath, DST=dst_gpath,
+        )
+        cmd_info = ub.cmd(command, verbose=0)  # NOQA
+    elif align_method == 'affine_warp':
+        template = (
+            'gdalwarp '
+            '-te {xmin} {ymin} {xmax} {ymax} '
+            '-te_srs epsg:4326 '
+            '-overwrite '
+            '{SRC} {DST}')
+        command = template.format(
+            ymin=latmin,
+            xmin=lonmin,
+            ymax=latmax,
+            xmax=lonmax,
+            SRC=src_gpath, DST=dst_gpath,
+        )
+        cmd_info = ub.cmd(command, verbose=0)  # NOQA
+    else:
+        raise KeyError(align_method)
+
+    return dst
 
 
 if __name__ == '__main__':

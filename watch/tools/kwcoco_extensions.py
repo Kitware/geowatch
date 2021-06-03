@@ -197,7 +197,7 @@ def coco_populate_geo_video_stats(dset, vidid, target_gsd='max-resolution'):
         print(ub.repr2(dset.videos([vidid]).objs, nl=1))
 
 
-def coco_populate_geo_img_heuristics(dset, gid, overwrite=False):
+def coco_populate_geo_img_heuristics(dset, gid, overwrite=False, **kw):
     """
     Note: this will not overwrite existing channel info unless specified
 
@@ -221,7 +221,7 @@ def coco_populate_geo_img_heuristics(dset, gid, overwrite=False):
         _populate_canvas_obj(bundle_dpath, aux, overwrite=overwrite)
 
 
-def _populate_canvas_obj(bundle_dpath, obj, overwrite=False):
+def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False):
     """
     obj can be an img or aux
     """
@@ -238,15 +238,19 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False):
         if overwrite or warp_to_wld is None or approx_meter_gsd is None:
             try:
                 import watch
-                crs_info = watch.gis.geotiff.geotiff_metadata(fpath)
-                # print('crs_info = {!r}'.format(crs_info))
+                info = watch.gis.geotiff.geotiff_metadata(fpath)
+                height, width = info['img_shape'][0:2]
+
+                obj['height'] = height
+                obj['width'] = width
+                # print('info = {!r}'.format(info))
 
                 # WE NEED TO ACCOUNT FOR WLD_CRS TO USE THIS
-                # obj_to_wld = Affine.coerce(crs_info['pxl_to_wld'])
+                # obj_to_wld = Affine.coerce(info['pxl_to_wld'])
 
                 # FIXME: FOR NOW JUST USE THIS BIG HACK
-                xy1_man = crs_info['pxl_corners'].data.astype(np.float64)
-                xy2_man = crs_info['utm_corners'].data.astype(np.float64)
+                xy1_man = info['pxl_corners'].data.astype(np.float64)
+                xy2_man = info['utm_corners'].data.astype(np.float64)
                 hack_aff = fit_affine_matrix(xy1_man, xy2_man)
                 hack_aff = Affine.coerce(hack_aff)
 
@@ -256,7 +260,21 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False):
                 obj_to_wld = Affine.coerce(hack_aff)
                 # cv2.getAffineTransform(utm_corners, pxl_corners)
 
-                approx_meter_gsd = crs_info['approx_meter_gsd']
+                wld_crs_info = ub.dict_diff(info['wld_crs_info'], {'type'})
+                utm_crs_info = ub.dict_diff(info['utm_crs_info'], {'type'})
+                obj.update({
+                    'utm_corners': info['utm_corners'].data.tolist(),
+                    'wld_crs_info': wld_crs_info,
+                    'utm_crs_info': utm_crs_info,
+                })
+
+                if with_wgs:
+                    obj.update({
+                        'wgs84_to_wld': info['wgs84_to_wld'],
+                        'wld_to_pxl': info['wld_to_pxl'],
+                    })
+
+                approx_meter_gsd = info['approx_meter_gsd']
             except Exception:
                 warnings.warn('no crs info for img, assuming 1 gsd')
                 obj_to_wld = Affine.eye()
@@ -270,9 +288,7 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False):
 
         if overwrite or channels is None:
             if sensor_coarse is not None:
-                import xdev
-                with xdev.embed_on_exception_context:
-                    channels = _sensor_channel_hueristic(sensor_coarse, num_bands)
+                channels = _sensor_channel_hueristic(sensor_coarse, num_bands)
             elif num_bands is not None:
                 channels = _num_band_hueristic(num_bands)
             else:
@@ -284,6 +300,29 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False):
                     for obj={obj}
                     '''))
             obj['channels'] = channels
+
+
+def _make_coco_img_from_geotiff(tiff_fpath, name=None):
+    """
+    Example:
+        >>> from watch.demo.landsat_demodata import grab_landsat_product  # NOQA
+        >>> product = grab_landsat_product()
+        >>> tiffs = product['bands'] + [product['meta']['bqa']]
+        >>> tiff_fpath = product['bands'][0]
+        >>> name = None
+        >>> img = _make_coco_img_from_geotiff(tiff_fpath)
+        >>> print('img = {}'.format(ub.repr2(img, nl=1)))
+    """
+    obj = {}
+    if name is not None:
+        obj['name'] = name
+
+    bundle_dpath = '.'
+    obj = {
+        'file_name': tiff_fpath
+    }
+    _populate_canvas_obj(bundle_dpath, obj)
+    return obj
 
 
 def fit_affine_matrix(xy1_man, xy2_man):
@@ -500,3 +539,23 @@ def __WIP_add_auxiliary(dset, gid, fname, channels, data, warp_aux_to_img=None):
     auxiliary = img.setdefault('auxiliary', [])
     auxiliary.append(aux)
     dset._invalidate_hashid()
+
+
+def _recompute_auxiliary_transforms(img):
+    """
+    Uses geotiff info to repopulate metadata
+    """
+    import kwimage
+    auxiliary = img.get('auxiliary', [])
+    idx = ub.argmax(auxiliary, lambda x: (x['width'] * x['height']))
+    base = auxiliary[idx]
+    warp_img_to_wld = kwimage.Affine.coerce(base['warp_to_wld'])
+    warp_wld_to_img = warp_img_to_wld.inv()
+    img.update(ub.dict_isect(base, {
+        'utm_corners', 'wld_crs_info', 'utm_crs_info',
+        'width', 'height', 'wgs84_to_wld', 'wld_to_pxl',
+    }))
+    for aux in auxiliary:
+        warp_aux_to_wld = kwimage.Affine.coerce(aux['warp_to_wld'])
+        warp_aux_to_img = warp_wld_to_img @ warp_aux_to_wld
+        aux['warp_aux_to_img'] = warp_aux_to_img.concise()
