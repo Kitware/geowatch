@@ -4,8 +4,10 @@
 This is a Template for writing training logic.
 """
 import kwcoco
+import ndsampler
 import scriptconfig as scfg
 import ubelt as ub
+import numpy as np
 import torch
 import kwimage
 
@@ -36,13 +38,10 @@ class TemplateFitConfig(scfg.Config):
 
 #### A Netharn implementation of the training logic is optional.
 import netharn as nh  # NOQA
-import ndsampler  # NOQA
 
 
 # But if you do use it, you will find out that its outputs are fairly nice.
 class TemplateFitHarn(nh.FitHarn):
-    import netharn as nh
-
     def run_batch(harn, batch):
         """
         See netharn examples and docs for how to write this
@@ -100,8 +99,11 @@ class TemplateDataset(torch.utils.data.Dataset):
         self.input_dims = input_dims
         self.window_dims = window_dims
         self.sampler = ndsampler.CocoSampler(self.coco_dset)
-        self.task_grid = self.sampler.new_sample_grid(
-            task='image_detection',
+
+        self.task_grid = ndsampler.coco_regions.new_image_sample_grid(
+            self.sampler.dset,
+            # self.task_grid = self.sampler.regions.new_sample_grid(
+            #     task='image_detection',
             window_dims=window_dims,
             # window_dims='full',  # full image
             # window_dims=(128, 128),  # sub image
@@ -113,7 +115,6 @@ class TemplateDataset(torch.utils.data.Dataset):
         return len(self.grid)
 
     def __getitem__(self, index):
-        import numpy as np
         tr = self.grid[index]
         tr['channels'] = '<all>'
         # tr['channels'] = 'B1|B8|B11|B8a' # fixme on images
@@ -164,7 +165,7 @@ def setup_datasets_and_training_harness(cmdline=False, **kwargs):
         >>> cmdline = False
         >>> harn = setup_datasets_and_training_harness(**kwargs)
         >>> harn.initialize()
-        >>> harn.run()
+        >>> #harn.run()
 
     """
     config = TemplateFitConfig(default=kwargs, cmdline=cmdline)
