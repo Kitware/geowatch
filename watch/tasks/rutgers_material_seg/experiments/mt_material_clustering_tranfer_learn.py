@@ -1,7 +1,7 @@
 # from material_seg.datasets import build_dataset
 import os
 import sys
-from material_seg.datasets.iarpa_dataset import *
+from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
 import kwcoco
 import ndsampler
 import ubelt as ub
@@ -121,9 +121,12 @@ class Clusterer(object):
 
 if __name__== "__main__":
 
-    main_config_path = f"{os.getcwd()}/configs/main.yaml"
+    project_root = "/home/native/projects/watch/watch/tasks/rutgers_material_seg/"
+    # main_config_path = f"{os.getcwd()}/configs/main.yaml"
+    # main_config_path = f"{os.getcwd()}/configs/main.yaml"
+    main_config_path = f"{project_root}/configs/main.yaml"
     initial_config = utils.load_yaml_as_dict(main_config_path)
-    experiment_config_path = f"{os.getcwd()}/configs/{initial_config['dataset']}.yaml"
+    experiment_config_path = f"{project_root}/configs/{initial_config['dataset']}.yaml"
     
     experiment_config = utils.config_parser(experiment_config_path,experiment_type="training")
     config = {**initial_config, **experiment_config}
@@ -164,12 +167,12 @@ if __name__== "__main__":
     window_dims = (number_of_timestamps, h, w) #[t,h,w]
     input_dims = (h, w)
     
-    coco_fpath = ub.expandpath('/home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2/data_fielded_filtered_rgb.kwcoco.json')
+    coco_fpath = ub.expandpath(config['data'][config['location']]['coco_json'])
     dset = kwcoco.CocoDataset(coco_fpath)
 
     sampler = ndsampler.CocoSampler(dset)
     # # channels = 'r|g|b|gray|wv1'
-    dataset = IARPAVideoDataset(sampler, window_dims, input_dims, channels)
+    dataset = SequenceDataset(sampler, window_dims, input_dims, channels)
     loader = dataset.make_loader(batch_size=batch_size)
 
     model = build_model(model_name = config['training']['model_name'],
