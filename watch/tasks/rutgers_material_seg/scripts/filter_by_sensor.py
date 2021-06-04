@@ -32,33 +32,6 @@ def main(**kwargs):
             --src toydata.kwcoco.json \
             --dst toydata-gsd10.kwcoco.json \
 
-    Ignore:
-        python ~/code/watch/scripts/coco_add_watch_fields.py \
-            --src=$HOME/data/dvc-repos/smart_watch_dvc/drop0_aligned/data.kwcoco.json \
-            --dst=$HOME/data/dvc-repos/smart_watch_dvc/drop0_aligned/data.kwcoco.new.json \
-            --target_gsd=10
-
-    Example:
-        >>> import sys, ubelt
-        >>> sys.path.append(ubelt.expandpath('~/code/watch/scripts'))
-        >>> from coco_add_watch_fields import *  # NOQA
-        >>> import kwcoco
-        >>> # TODO: make a demo dataset with some sort of gsd metadata
-        >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
-        >>> print('dset = {!r}'.format(dset))
-        >>> target_gsd = 13.0
-        >>> populate_watch_fields(dset, target_gsd)
-        >>> print('dset.index.imgs[1] = ' + ub.repr2(dset.index.imgs[1], nl=2))
-        >>> print('dset.index.videos = {}'.format(ub.repr2(dset.index.videos, nl=1)))
-
-    Ignore:
-        kwargs = {
-            'src': ub.expandpath('~/data/dvc-repos/smart_watch_dvc/drop0_aligned/data.kwcoco.json'),
-            'target_gsd': 10.0,
-            'dst': None,
-        }
-        kwargs['src'] = kwargs['dst']
-        main(**kwargs)
     """
     config = AddWatchFieldsConfig(kwargs, cmdline=True)
     # print('config = {}'.format(ub.repr2(dict(config), nl=1)))
@@ -77,13 +50,8 @@ def main(**kwargs):
         if ann['image_id'] in gids_to_remove:
             aids_to_remove.append(aid)
             
-    
-    print(gids_to_remove)
-    # print(aids_to_remove)
 
     dset.remove_images(gids_to_remove)
-    # dset.remove_annotations(aids_to_remove)
-    # print('dset.index.imgs[1] = {}'.format(ub.repr2(dset.index.imgs[1], nl=2, precision=4)))
 
     if config['dst'] is not None:
         print('write dataset')
@@ -95,6 +63,6 @@ def main(**kwargs):
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/scripts/coco_add_watch_fields.py
+        python ~/code/watch/scripts/filter_by_sensor.py --src <existing kwcoco json> --dst <path to write new kwcoco json>
     """
     main()
