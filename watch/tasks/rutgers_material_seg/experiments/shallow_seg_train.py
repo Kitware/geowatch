@@ -24,7 +24,7 @@ from torch import nn
 from tqdm import tqdm
 
 import watch.tasks.rutgers_material_seg.utils.utils as utils
-# import watch.tasks.rutgers_material_seg.utils.eval_utils as eval_utils
+import watch.tasks.rutgers_material_seg.utils.eval_utils as eval_utils
 import watch.tasks.rutgers_material_seg.utils.visualization as visualization
 from watch.tasks.rutgers_material_seg.models import build_model
 from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import *
