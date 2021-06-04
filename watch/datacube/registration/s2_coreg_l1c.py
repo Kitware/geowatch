@@ -145,9 +145,9 @@ def ensure_baseline_scene(baseline_scene):
 def s2_coregister(granuledirs, output_folder, baseline_scene):
     '''
     Coregister Sentinel-2 scenes and save them to disk.
-    
+
     This assumes that all scenes belong to the same MGRS tile.
-    
+
     Creates output scenes, GCPs, and log files in the following structure:
     {output_folder}/
       T{mgrs_tile_id}/
@@ -317,6 +317,7 @@ def s2_coregister(granuledirs, output_folder, baseline_scene):
                 f_60.close()
 
                 # now transforming files
+                # TODO: this is easy to parallize
                 for b in S2_BANDS:  #['B01', 'B04', 'B11']:
                     fname_band = x.replace(base_band, b)
                     pfname_band = os.path.join(path_data, fname_band)
@@ -374,7 +375,7 @@ def s2_coregister_all_tiles(input_folder_or_safedirs,
 
             Finally, if that is not found, creates the baseline scenes.
         dry_run: if True, just populate the dict of scenes to coregister.
-    
+
     Returns:
         scenes, baseline_scenes:
             Dict[tile: str, scenes: list(path)],
@@ -383,12 +384,12 @@ def s2_coregister_all_tiles(input_folder_or_safedirs,
     Example:
         >>> from watch.datacube.registration.s2_coreg_l1c import *
         >>> from watch.demo.sentinel2_demodata import grab_sentinel2_product
-        >>> 
+        >>>
         >>> safedirs = [str(grab_sentinel2_product(i).path) for i in range(3)]
         >>> output_folder = './coregistered'
         >>> scenes, baseline_scenes = s2_coregister_all_tiles(safedirs, output_folder)
         >>> assert len(scenes['52SDG']) == 3
-        >>> 
+        >>>
         >>> # clean up
         >>> for d in safedirs:
         >>>     os.system(f'rm -r {d}')

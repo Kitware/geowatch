@@ -592,40 +592,6 @@ def geotiff_filepath_info(gpath, fast=True):
         >>>     info['path'] = path
         >>>     infos.append(info)
 
-        item = infos[0]
-
-        groups = ub.group_items(infos, key=lambda d:
-            '_'.join(basename(d['path']).split('_')[0:2])
-        )
-        def groupfunc(item):
-            return '_'.join(item['sensor_candidates'])
-
-        toshow = ub.map_vals(lambda x: set(map(groupfunc, x)), groups)
-        print('toshow = {}'.format(ub.repr2(toshow, nl=1)))
-
-
-    # S2A_MSIL1C_20170926T092021_N0205_R093_T34UGC_20170926T092552.SAFE/GRANULE/L1C_T34UGC_A011816_20170926T092552/IMG_DATA/T34UGC_20170926T092021_B01.jp2
-
-    Ignore:
-        import parse
-        pattern = '{MMM}_{MSIXXX}_{YYYYMMDDHHMMSS}_{Nxxyy}_{ROOO}_{Txxxxx}_{Discriminator}'
-
-        @ub.memoize
-        def parser_lut(pattern):
-            parser = parse.Parser(pattern)
-            return parser
-
-        import timerit
-        ti = timerit.Timerit(100, bestof=10, verbose=2)
-        for timer in ti.reset('time'):
-            with timer:
-                pasrser = parser_lut(pattern)
-                parser.parse('foo')
-
-        for timer in ti.reset('time'):
-            with timer:
-                parse.parse(pattern, 'foo')
-
     References:
         .. [S2_Name_2016] https://sentinel.esa.int/web/sentinel/user-guides/sentinel-2-msi/naming-convention
         .. [S3_Name] https://sentinel.esa.int/web/sentinel/user-guides/sentinel-3-altimetry/naming-conventions
@@ -927,6 +893,7 @@ def walk_geotiff_products(dpath, with_product_dirs=True,
         >>> # Test on real landsat data
         >>> from watch.gis.geotiff import *  # NOQA
         >>> import watch
+        >>> from os.path import dirname
         >>> product = watch.demo.landsat_demodata.grab_landsat_product()
         >>> dpath = dirname(dirname(ub.peek(product['bands'])))
         >>> print(list(walk_geotiff_products(dpath)))

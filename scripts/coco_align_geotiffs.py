@@ -551,7 +551,8 @@ class SimpleDataCube(object):
                     # If we are a pixel crop, we can transform directly
                     for dst in dst_list:
                         # hack this in for heuristics
-                        dst['sensor_coarse'] = img['sensor_coarse']
+                        if 'sensor_coarse' in img:
+                            dst['sensor_coarse'] = img['sensor_coarse']
                         _populate_canvas_obj(bundle_dpath, dst, overwrite=True, with_wgs=True)
 
                 new_img = {
