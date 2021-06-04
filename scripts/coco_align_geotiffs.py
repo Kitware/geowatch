@@ -713,6 +713,10 @@ class SimpleDataCube(object):
                     print('new_gid = {!r}'.format(new_gid))
                     new_img = new_dset.index.imgs[new_gid]
                     new_objs = [new_img] + new_img.get('auxiliary', [])
+
+                    # hack
+                    from watch.tools.kwcoco_extensions import Affine_concise
+                    kwimage.Affine.concise = Affine_concise
                     for obj in new_objs:
                         if 'warp_to_wld' in obj:
                             obj['warp_to_wld'] = kwimage.Affine.coerce(obj['warp_to_wld']).concise()

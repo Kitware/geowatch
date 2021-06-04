@@ -19,6 +19,7 @@ def grab_landsat_product(product_id=None):
         >>> # xdoctest: +REQUIRES(--network)
         >>> from watch.demo.landsat_demodata import *  # NOQA
         >>> product = grab_landsat_product()
+        >>> # xdoctest: +IGNORE_WANT
         >>> print('product = {}'.format(ub.repr2(product, nl=2)))
         product = {
             'bands': [

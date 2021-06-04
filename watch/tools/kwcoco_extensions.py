@@ -466,6 +466,29 @@ def _num_band_hueristic(num_bands):
     return channels
 
 
+def Affine_concise(aff):
+    """
+    TODO: add to kwimage.Affine
+    """
+    import numpy as np
+    self = aff
+    params = self.decompose()
+    params['type'] = 'affine'
+    if np.allclose(params['offset'], (0, 0)):
+        params.pop('offset')
+    elif ub.allsame(params['offset']):
+        params['offset'] = params['offset'][0]
+    if np.allclose(params['scale'], (1, 1)):
+        params.pop('scale')
+    elif ub.allsame(params['scale']):
+        params['scale'] = params['scale'][0]
+    if np.allclose(params['shear'], 0):
+        params.pop('shear')
+    if np.allclose(params['theta'], 0):
+        params.pop('theta')
+    return params
+
+
 def __WIP_add_auxiliary(dset, gid, fname, channels, data, warp_aux_to_img=None):
     """
     Snippet for adding an auxiliary image
@@ -496,23 +519,6 @@ def __WIP_add_auxiliary(dset, gid, fname, channels, data, warp_aux_to_img=None):
     fpath = join(dset.bundle_dpath, fname)
     aux_height, aux_width = data.shape[0:2]
     img = dset.index.imgs[gid]
-
-    def Affine_concise(aff):
-        """
-        TODO: add to kwimage.Affine
-        """
-        import numpy as np
-        params = aff.decompose()
-        params['type'] = 'affine'
-        if np.allclose(params['offset'], (0, 0)):
-            params.pop('offset')
-        if np.allclose(params['scale'], (1, 1)):
-            params.pop('scale')
-        if np.allclose(params['shear'], 0):
-            params.pop('shear')
-        if np.allclose(params['theta'], 0):
-            params.pop('theta')
-        return params
 
     if not hasattr(warp_aux_to_img, 'concise'):
         ub.inject_method(warp_aux_to_img, Affine_concise, 'concise')

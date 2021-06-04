@@ -775,10 +775,10 @@ def parse_landsat_product_id(product_id):
         >>> product = grab_landsat_product()
         >>> band_prodids = [ub.augpath(gpath, dpath='', ext='') for gpath in product['bands']]
         >>> band_infos = [parse_landsat_product_id(product_id) for product_id in band_prodids]
-        >>> assert ub.allsame([ub.dict_diff(d, ['band_num', 'suffix']) for d in band_infos])
+        >>> assert ub.allsame([ub.dict_diff(d, ['band_num', 'suffix', 'channels', 'band']) for d in band_infos])
         >>> meta_prodids = [ub.augpath(gpath, dpath='', ext='') for gpath in product['meta'].values()]
         >>> meta_infos = [parse_landsat_product_id(product_id) for product_id in meta_prodids]
-        >>> assert ub.allsame([ub.dict_diff(d, ['suffix']) for d in meta_infos])
+        >>> assert ub.allsame([ub.dict_diff(d, ['suffix', 'channels', 'band']) for d in meta_infos])
 
     References:
         .. [LanSatName] https://www.usgs.gov/faqs/what-naming-convention-landsat-collections-level-1-scenes
