@@ -9,7 +9,6 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import ubelt as ub
-from material_seg.datasets.iarpa_dataset import *
 import kwcoco
 import ndsampler
 import watch
@@ -29,17 +28,7 @@ import cmapy
 import kwcoco
 import random
 import kwimage
-
-def get_mpl_colormap(cmap_name):
-    cmap = plt.get_cmap(cmap_name)
-
-    # Initialize the matplotlib color map
-    sm = plt.cm.ScalarMappable(cmap=cmap)
-    # print(sm)
-    # Obtain linear color range
-    color_range = sm.to_rgba(np.linspace(0, 1, 256), bytes=True)[:,2::-1]
-    return color_range.reshape(256, 1, 3)
-
+from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
 
 
 class Window(QMainWindow):
@@ -447,7 +436,7 @@ if __name__== "__main__":
     # # channels = 'r|g|b|gray|wv1'
     channels = 'r|g|b'
     # channels = 'gray'
-    dataset = IARPAVideoDataset(sampler, window_dims, input_dims, channels)
+    dataset = SequenceDataset(sampler, window_dims, input_dims, channels)
     loader = dataset.make_loader(batch_size=1)
 
     # resume = "/home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2/material_labels.kwcoco.json"

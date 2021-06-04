@@ -6,23 +6,24 @@ import matplotlib
 import gc
 import cv2
 import comet_ml
-import utils.utils as utils
-import utils.visualization as visualization
 import torch
 from scipy import ndimage
 import torch.optim as optim
 from torch import nn
-from models import build_model
-from datasets import build_dataset
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
-import utils.eval_utils as eval_utils
 import datetime
 import torch.nn.functional as F
 import warnings
 import yaml
 import random
+
+import watch.tasks.rutgers_material_seg.utils.utils as utils
+import watch.tasks.rutgers_material_seg.utils.visualization as visualization
+from watch.tasks.rutgers_material_seg.models import build_model
+from watch.tasks.rutgers_material_seg.datasets import build_dataset
+import watch.tasks.rutgers_material_seg.utils.eval_utils as eval_utils
 torch.backends.cudnn.enabled = False
 torch.backends.cudnn.deterministic = True
 torch.set_printoptions(precision=6, sci_mode=False)

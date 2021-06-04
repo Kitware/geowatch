@@ -1,5 +1,4 @@
-# from material_seg.datasets import build_dataset
-from material_seg.datasets.iarpa_dataset import *
+
 import kwcoco
 import ndsampler
 import ubelt as ub
@@ -12,6 +11,7 @@ import torch
 import pdb
 from sklearn.cluster import KMeans
 from sklearn.manifold import TSNE
+from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
 
 visualize_images=False
 coco_fpath = ub.expandpath('/home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2/data_fielded_filtered_rgb.kwcoco.json')
@@ -27,7 +27,7 @@ input_dims = (h, w)
 # # channels = 'r|g|b|gray|wv1'
 channels = 'r|g|b'
 # channels = 'gray'
-dataset = IARPAVideoDataset(sampler, window_dims, input_dims, channels)
+dataset = SequenceDataset(sampler, window_dims, input_dims, channels)
 loader = dataset.make_loader(batch_size=1)
 
 k = 40

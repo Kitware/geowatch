@@ -1,7 +1,6 @@
 # from material_seg.datasets import build_dataset
 import os
 import sys
-from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
 import kwcoco
 import ndsampler
 import ubelt as ub
@@ -14,9 +13,11 @@ import torch
 import pdb
 from sklearn.cluster import KMeans, SpectralClustering
 from sklearn.manifold import TSNE
-from material_seg.models import build_model
 import torch.nn as nn
 import torch.optim as optim
+
+from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
+from watch.tasks.rutgers_material_seg.models import build_model
 
 
 class Clusterer(object):
