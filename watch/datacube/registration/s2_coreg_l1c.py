@@ -382,6 +382,7 @@ def s2_coregister_all_tiles(input_folder_or_safedirs,
             Dict[tile: str, scenes: path]
 
     Example:
+        >>> # xdoctest: +REQUIRES(--slow)
         >>> from watch.datacube.registration.s2_coreg_l1c import *
         >>> from watch.demo.sentinel2_demodata import grab_sentinel2_product
         >>>
