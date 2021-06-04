@@ -1,12 +1,7 @@
 import sys
 import os
 current_path = os.getcwd().split("/")
-if 'projects' in current_path:
-    sys.path.append("/home/native/projects/cranberry_attention/")
-else:
-    sys.path.append("/data/cranberry_attention/")
 import matplotlib; 
-# matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
