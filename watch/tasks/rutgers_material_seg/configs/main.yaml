@@ -1,24 +1,24 @@
-dataset: deepglobe
+dataset: iarpa
 use_cuda: True
 seed: 128
 
 visualization:
   batch_index_to_show: 0
-  train_visualizer: False
+  train_visualizer: True
   val_visualizer: False
   visualize_training_every: 2
   visualize_val_every: 2
-  train_visualization_divisor: 1000
+  train_visualization_divisor: 39
   val_visualization_divisor: 10
   save_individual_plots: False
   save_individual_plots_train: False
   titles: True
-  train_imshow: False
+  train_imshow: True
   val_imshow: False
   fg_alpha: 0.7
   bg_alpha: 0.8
   font_size: 8
-  fig_size: 30
+  fig_size: 10
 
 cometml:
   api_key: 9GTK1r9PK4NzMAoLsnC6XxI7p

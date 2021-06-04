@@ -95,7 +95,7 @@ class Trainer(object):
         pbar = tqdm(enumerate(self.train_loader), total=len(self.train_loader))
         batch_index_to_show = config['visualization']['batch_index_to_show']
         for batch_index, batch in pbar:
-            if batch_index < 75:
+            if batch_index < 20:
                 continue
             outputs = batch
             image1, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0]
@@ -500,7 +500,7 @@ if __name__== "__main__":
     sampler = ndsampler.CocoSampler(dset)
 
     # # print(sampler)
-    number_of_timestamps, h, w = 1, 128, 128
+    number_of_timestamps, h, w = 1, 512, 512
     window_dims = (number_of_timestamps, h, w) #[t,h,w]
     input_dims = (h, w)
 

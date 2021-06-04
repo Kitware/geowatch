@@ -294,16 +294,19 @@ class Window(QMainWindow):
         self.value = self.prediction_show[y,x]
         xs, ys = np.where(self.prediction_show==self.value)
         
-        # print(self.value)
         self.current_mask[xs,ys] = self.class_label_to_index[self.class_label_with]
         self.separable_current_mask[self.class_label_to_index[self.class_label_with],xs,ys] = 1 ## need to account for removed pixels!
+        
+        non_label_indices = np.array(list(set(list(self.class_label_to_index.values()))-set([self.class_label_to_index[self.class_label_with]])))
+        # self.separable_current_mask[non_label_indices,xs,ys] = 0 ## only keep latest label - this does not work for some reason!
+        for label_index in non_label_indices:
+            self.separable_current_mask[label_index,xs,ys] = 0
         
         self.update_mask()
         self.class_labels_pairs[self.value] = self.class_label_with
         self.seen_labels.append(self.value)
         self.output_textbox.append(str(self.value))   
         self.output_textbox_name.append(str(self.class_label_with))
-        # print(self.class_labels_pairs)
             
     def getMaskPixel(self, event):
         # self.widget.keyPressEvent = self.keyPressEvent
@@ -315,6 +318,10 @@ class Window(QMainWindow):
         # print(self.value)
         self.current_mask[xs,ys] = self.class_label_to_index[self.class_label_with]
         self.separable_current_mask[self.class_label_to_index[self.class_label_with],xs,ys] = 1
+        non_label_indices = np.array(list(set(list(self.class_label_to_index.values()))-set([self.class_label_to_index[self.class_label_with]])))
+        # self.separable_current_mask[non_label_indices,xs,ys] = 0 ## only keep latest label - this does not work for some reason!
+        for label_index in non_label_indices:
+            self.separable_current_mask[label_index,xs,ys] = 0
         
         self.update_mask()
         self.class_labels_pairs[self.value] = self.class_label_with
@@ -428,14 +435,8 @@ app = QApplication(sys.argv)
 coco_fpath = ub.expandpath('/home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2.1/data_fielded_filtered.kwcoco.json')
 dset = kwcoco.CocoDataset(coco_fpath)
 
-# material_coco_fpath = ub.expandpath('/home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2/material_labels.kwcoco.json')
-
-
-# print(material_dset)
-
 sampler = ndsampler.CocoSampler(dset)
 
-# # print(sampler)
 number_of_timestamps, h, w = 3, 512, 512
 window_dims = (number_of_timestamps, h, w) #[t,h,w]
 input_dims = (h, w)
@@ -445,45 +446,10 @@ channels = 'r|g|b'
 # channels = 'gray'
 dataset = IARPAVideoDataset(sampler, window_dims, input_dims, channels)
 loader = dataset.make_loader(batch_size=1)
-# print(dset.dataset[2])
 
-
-# for item in dataset:
-# print(dataset[1]['inputs']['im'])
 # resume = "/home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2/material_labels.kwcoco.json"
 resume = ""
 save_kwcoco_path = "/home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2.1/material_labels.kwcoco.json"
 window = Window(dataset, dset, resume, save_path=save_kwcoco_path)
-# image=image_show[0,0,:,:,:], prediction=prediction
-# for batch in loader:    
-#     # pdb.set_trace()
-#     image_data = batch['inputs']['im'].data[0] # [b,c,t,h,w]
-#     b, c, t, h, w = image_data.shape
-#     mask_data = batch['label']['class_masks'].data[0] #len(mask_data) = b
-#     mask_data = torch.stack(mask_data)
-    
-#     image_show = np.array(image_data).transpose(0, 2, 3, 4, 1)/500 # visualize 0 indexed in batch
-#     # image_show = image_show[0,]
-#     # mask_show = np.array(mask_data) # [b,t,h,w]
-    
-#     image_data = image_data.view(b, c*t, h*w)
-#     image_data = torch.transpose(image_data,1,2)
-#     image_data = torch.flatten(image_data,start_dim=0, end_dim=1)
-#     # image_data = torch.transpose(image_data,0,1)
-#     # print(image_data.shape)
-#     out_feat_embed = TSNE(n_components=2).fit_transform(image_data)
-#     # data = image_data
-#     data = out_feat_embed
-#     kmeans.fit(data)
-#     cluster_centers = kmeans.cluster_centers_
-#     cluster_labels = kmeans.labels_
-#     y_kmeans = kmeans.predict(data)
-#     print(cluster_centers)
-#     print(cluster_labels)
-#     prediction = cluster_labels.reshape(h,w)
-    
-#     window.update_image(image_show[0,0,:,:,:])
-# window.show()
-# WaitKey(0)
     
 sys.exit(app.exec_())

@@ -1,13 +1,13 @@
-from material_seg.datasets import deepglobe
-from material_seg.datasets import iarpa_dataset
+from watch.tasks.rutgers_material_seg.datasets import deepglobe
+from watch.tasks.rutgers_material_seg.datasets import iarpa_dataset
 
-from material_seg.datasets.deepglobe import (DeepGlobeDataset, IMG_EXTENSIONS,
-                                             mean_std,)
-from material_seg.datasets.iarpa_dataset import (SequenceDataset,
-                                                 decollate_batch,
-                                                 draw_multispectral_batch,
-                                                 draw_multispectral_item,
-                                                 worker_init_fn,)
+from watch.tasks.rutgers_material_seg.datasets.deepglobe import (DeepGlobeDataset, IMG_EXTENSIONS,
+                                                                mean_std,)
+from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import (SequenceDataset,
+                                                                    decollate_batch,
+                                                                    # draw_multispectral_batch,
+                                                                    # draw_multispectral_item,
+                                                                    worker_init_fn,)
 
 from .deepglobe import DeepGlobeDataset
 from .iarpa_dataset import SequenceDataset

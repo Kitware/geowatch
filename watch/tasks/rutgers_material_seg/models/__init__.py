@@ -1,9 +1,10 @@
 # from models.unet_stn import  UNet
-from material_seg.models import deeplabWS
+from watch.tasks.rutgers_material_seg.models import deeplabWS
+from watch.tasks.rutgers_material_seg.models.shallow_seg import ShallowSeg
 
 models = {
             'deeplabWS': deeplabWS,
-            # 'unet': unet_stn,
+            'shallow_seg': ShallowSeg,
             }
 
 def build_model(model_name: str = "deeplabWS", backbone: str = "resnet101", **kwargs) -> object:
@@ -21,5 +22,8 @@ def build_model(model_name: str = "deeplabWS", backbone: str = "resnet101", **kw
     model 
         model object
     """
-    model = getattr(models[model_name], backbone)(**kwargs)
+    if backbone:
+        model = getattr(models[model_name], backbone)(**kwargs)
+    else:
+        model = models[model_name](**kwargs)
     return model

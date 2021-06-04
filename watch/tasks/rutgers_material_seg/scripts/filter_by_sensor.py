@@ -1,0 +1,100 @@
+"""
+Adds fields needed by ndsampler to correctly "watch" a region.
+
+Some of this is done hueristically. We assume images come from certain sensors.
+We assume input is orthorectified.  We assume some GSD "target" gsd for video
+and image processing. Note a video GSD will typically be much higher (i.e.
+lower resolution) than an image GSD.
+"""
+import kwcoco
+import ubelt as ub
+import scriptconfig as scfg
+# from watch.tools.kwcoco_extensions import populate_watch_fields
+
+
+class AddWatchFieldsConfig(scfg.Config):
+    default = {
+        'src': scfg.Value('in.geojson.json', help='input dataset to chip'),
+
+        'dst': scfg.Value(None, help='bundle directory for the output'),
+
+        'channels': scfg.Value(['r|g|b'], help='expected channels'),
+
+        # 'overwrite': scfg.Value(False, help='if True overwrites introspectable fields'),
+    }
+
+
+def main(**kwargs):
+    r"""
+    CommandLine:
+
+        python ~/code/watch/scripts/filter_by_sensor.py \
+            --src toydata.kwcoco.json \
+            --dst toydata-gsd10.kwcoco.json \
+
+    Ignore:
+        python ~/code/watch/scripts/coco_add_watch_fields.py \
+            --src=$HOME/data/dvc-repos/smart_watch_dvc/drop0_aligned/data.kwcoco.json \
+            --dst=$HOME/data/dvc-repos/smart_watch_dvc/drop0_aligned/data.kwcoco.new.json \
+            --target_gsd=10
+
+    Example:
+        >>> import sys, ubelt
+        >>> sys.path.append(ubelt.expandpath('~/code/watch/scripts'))
+        >>> from coco_add_watch_fields import *  # NOQA
+        >>> import kwcoco
+        >>> # TODO: make a demo dataset with some sort of gsd metadata
+        >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
+        >>> print('dset = {!r}'.format(dset))
+        >>> target_gsd = 13.0
+        >>> populate_watch_fields(dset, target_gsd)
+        >>> print('dset.index.imgs[1] = ' + ub.repr2(dset.index.imgs[1], nl=2))
+        >>> print('dset.index.videos = {}'.format(ub.repr2(dset.index.videos, nl=1)))
+
+    Ignore:
+        kwargs = {
+            'src': ub.expandpath('~/data/dvc-repos/smart_watch_dvc/drop0_aligned/data.kwcoco.json'),
+            'target_gsd': 10.0,
+            'dst': None,
+        }
+        kwargs['src'] = kwargs['dst']
+        main(**kwargs)
+    """
+    config = AddWatchFieldsConfig(kwargs, cmdline=True)
+    # print('config = {}'.format(ub.repr2(dict(config), nl=1)))
+
+    print('read dataset')
+    dset = kwcoco.CocoDataset(config['src'])
+
+    print('dset.index.videos = {}'.format(ub.repr2(dset.index.videos, nl=2, precision=4)))
+    gids_to_remove = []
+    aids_to_remove = []
+    for gid, img in dset.index.imgs.items():
+        # print(gid)
+        if img['channels'] not in config['channels']:
+            gids_to_remove.append(gid)
+    for aid, ann in dset.index.anns.items():
+        if ann['image_id'] in gids_to_remove:
+            aids_to_remove.append(aid)
+            
+    
+    print(gids_to_remove)
+    # print(aids_to_remove)
+
+    dset.remove_images(gids_to_remove)
+    # dset.remove_annotations(aids_to_remove)
+    # print('dset.index.imgs[1] = {}'.format(ub.repr2(dset.index.imgs[1], nl=2, precision=4)))
+
+    if config['dst'] is not None:
+        print('write dataset')
+        dset.fpath = config['dst']
+        dset.dump(dset.fpath, newlines=True)
+    else:
+        print('not writing')
+
+if __name__ == '__main__':
+    """
+    CommandLine:
+        python ~/code/watch/scripts/coco_add_watch_fields.py
+    """
+    main()

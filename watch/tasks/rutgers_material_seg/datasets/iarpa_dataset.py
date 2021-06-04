@@ -17,7 +17,6 @@ class SequenceDataset(torch.utils.data.Dataset):
     def __init__(self, sampler, window_dims, input_dims=None, channels=None,
                  rng=None):
         super().__init__()
-
         if input_dims is None:
             input_dims = window_dims[-2:]
         # print(sampler)
@@ -34,11 +33,13 @@ class SequenceDataset(torch.utils.data.Dataset):
         }
         # print(sample_grid_spec)
         self.sample_grid = sampler.new_sample_grid(**sample_grid_spec)
+        # print(len(self.sample_grid['positives']))
 
     def __len__(self):
         return len(self.sample_grid['positives'])
 
     def __getitem__(self, index):
+        
         tr = self.sample_grid['positives'][index]
 
         if self.channels:

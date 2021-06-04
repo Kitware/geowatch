@@ -1,26 +1,28 @@
 # Ours
-location: server
-# location: local
+# location: server
+location: local
 data:
   type: semantic_seg
   name: iarpa
   image_size: 300x300
-  num_classes: 21
+  num_classes: 4
   weights: []
   local:
-    model_save_dir: /home/native/projects/data/cranberry_attention/models/
-    train_dir: /media/native/data/data/pascalvoc/VOC2012/
-    test_dir: /media/native/data/data/pascalvoc/VOC2012/
+    model_save_dir: /home/native/projects/data/smart_watch/models/
+    train_dir: /home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2/
+    test_dir: /home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2/
+    coco_json: /home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2.1/material_labels.kwcoco.json
     val_dir:
   server:
-    model_save_dir: /data4/peri/cranberry_attention/models/
+    model_save_dir: /data4/peri/smart_watch/models/
     train_dir: /data4/peri/datasets/smart_watch/processed/drop0_aligned_v2.1/
     test_dir: /data4/peri/datasets/smart_watch/processed/drop0_aligned_v2.1/
     val_dir: /data4/peri/datasets/smart_watch/processed/drop0_aligned_v2.1/
+    coco_json:  /data4/datasets/smart_watch/processed/drop0_aligned_v2.1/material_labels.kwcoco.json
 
 training:
-  backbone: resnet101
-  model_name: deeplabWS
+  backbone: 
+  model_name: shallow_seg
   gn_n_groups: 32
   weight_std: True
   beta: False
@@ -39,7 +41,7 @@ training:
   test_with_full_supervision: 1
 
 evaluation:
-  use_crf: True
+  use_crf: False
   crf_t: 1
   crf_scale_factor: 1
 
