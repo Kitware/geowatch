@@ -50,7 +50,7 @@ class Window(QMainWindow):
         self.channels, self.timesteps, self.im_width, self.im_height = self.dataset[self.image_counter]['inputs']['im'].data.shape
         self.dset = dset
         self.save_path = save_path
-        self.k = 80
+        self.k = 100
         self.seen_labels = []
         self.class_labels_all = []
         self.class_labels_pairs = {}
@@ -431,25 +431,28 @@ class Window(QMainWindow):
         self.qPred = QPixmap(self.qprediction)#.scaled(256,256)
         self.qMask = QPixmap(self.qmask)#.scaled(256,256)
 
-app = QApplication(sys.argv)
-coco_fpath = ub.expandpath('/home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2.1/data_fielded_filtered.kwcoco.json')
-dset = kwcoco.CocoDataset(coco_fpath)
 
-sampler = ndsampler.CocoSampler(dset)
+if __name__== "__main__":
 
-number_of_timestamps, h, w = 3, 512, 512
-window_dims = (number_of_timestamps, h, w) #[t,h,w]
-input_dims = (h, w)
+    app = QApplication(sys.argv)
+    coco_fpath = ub.expandpath('/home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2.1/data_fielded_filtered.kwcoco.json')
+    dset = kwcoco.CocoDataset(coco_fpath)
 
-# # channels = 'r|g|b|gray|wv1'
-channels = 'r|g|b'
-# channels = 'gray'
-dataset = IARPAVideoDataset(sampler, window_dims, input_dims, channels)
-loader = dataset.make_loader(batch_size=1)
+    sampler = ndsampler.CocoSampler(dset)
 
-# resume = "/home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2/material_labels.kwcoco.json"
-resume = ""
-save_kwcoco_path = "/home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2.1/material_labels.kwcoco.json"
-window = Window(dataset, dset, resume, save_path=save_kwcoco_path)
-    
-sys.exit(app.exec_())
+    number_of_timestamps, h, w = 3, 512, 512
+    window_dims = (number_of_timestamps, h, w) #[t,h,w]
+    input_dims = (h, w)
+
+    # # channels = 'r|g|b|gray|wv1'
+    channels = 'r|g|b'
+    # channels = 'gray'
+    dataset = IARPAVideoDataset(sampler, window_dims, input_dims, channels)
+    loader = dataset.make_loader(batch_size=1)
+
+    # resume = "/home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2/material_labels.kwcoco.json"
+    resume = ""
+    save_kwcoco_path = "/home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2.1/material_labels.kwcoco.json"
+    window = Window(dataset, dset, resume, save_path=save_kwcoco_path)
+        
+    sys.exit(app.exec_())
