@@ -1,16 +1,13 @@
 """
-Adds fields needed by ndsampler to correctly "watch" a region.
+Filter out images that don't correspond with the desired channels and 
+creates a new dataset json file.
 
-Some of this is done hueristically. We assume images come from certain sensors.
-We assume input is orthorectified.  We assume some GSD "target" gsd for video
-and image processing. Note a video GSD will typically be much higher (i.e.
-lower resolution) than an image GSD.
+Warning: make sure that the dst path is different than the source path, 
+or it will re-write the original dataset json file.
 """
 import kwcoco
 import ubelt as ub
 import scriptconfig as scfg
-# from watch.tools.kwcoco_extensions import populate_watch_fields
-
 
 class AddWatchFieldsConfig(scfg.Config):
     default = {
@@ -20,7 +17,6 @@ class AddWatchFieldsConfig(scfg.Config):
 
         'channels': scfg.Value(['r|g|b'], help='expected channels'),
 
-        # 'overwrite': scfg.Value(False, help='if True overwrites introspectable fields'),
     }
 
 
