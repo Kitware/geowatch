@@ -2,7 +2,7 @@ from watch.tasks.rutgers_material_seg.models.transformer_seg import SETRModel
 import torch 
 
 if __name__ == "__main__":
-    net = SETRModel(patch_size=(32, 32), 
+    model = SETRModel(patch_size=(32, 32), 
                     in_channels=3, 
                     out_channels=1, 
                     hidden_size=1024, 
@@ -13,4 +13,4 @@ if __name__ == "__main__":
     print("input: " + str(t1.shape))
     
     # print(net)
-    print("output: " + str(net(t1).shape))
+    print("output: " + str(model(t1).shape))

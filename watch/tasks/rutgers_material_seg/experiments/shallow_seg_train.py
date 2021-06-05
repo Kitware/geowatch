@@ -95,8 +95,8 @@ class Trainer(object):
         pbar = tqdm(enumerate(self.train_loader), total=len(self.train_loader))
         batch_index_to_show = config['visualization']['batch_index_to_show']
         for batch_index, batch in pbar:
-            if batch_index < 20:
-                continue
+            # if batch_index < 75:
+            #     continue
             outputs = batch
             image1, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0]
             image_name = outputs['tr'].data[0][batch_index_to_show]['gids']
@@ -494,13 +494,13 @@ if __name__== "__main__":
     #                             #    kwargs={"image_size": config['data']['image_size']},
     #                                image_size=config['data']['image_size'],
     #                                )
-
+    print(config['data']['image_size'])
     coco_fpath = ub.expandpath(config['data'][config['location']]['coco_json'])
     dset = kwcoco.CocoDataset(coco_fpath)
     sampler = ndsampler.CocoSampler(dset)
 
     # # print(sampler)
-    number_of_timestamps, h, w = 1, 512, 512
+    number_of_timestamps, h, w = 1, 64, 64
     window_dims = (number_of_timestamps, h, w) #[t,h,w]
     input_dims = (h, w)
 
