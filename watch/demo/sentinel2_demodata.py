@@ -7,14 +7,15 @@ import fels
 from rgdc.rgdc import RasterDownload
 
 
-def grab_sentinel2_product(index=0):
+def grab_sentinel2_product(index=0, overwrite=False):
     """
     Download and cache all items for a Sentinel-2 product.
-    
+
     TODO when RGD supports API keys, give one to this repo and use that instead of fels.
-    
+
     Args:
         index: 0, 1, or 2. Currently this function just picks 3 scenes over KR in Nov 2018.
+        overwrite (bool, default=False): if True, always downloads the files
 
     Returns:
         rgdc.rgdc.RasterDownload(

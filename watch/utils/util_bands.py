@@ -10,10 +10,71 @@ They are sorted in the same order in which they appear if the bands come stacked
 or in lexicographic order if the bands come in separate images.
 
 Coverage of the catalogs is inconsistent. Where necessary, info has been filled in by hand.
+
+
+Notes:
+
+    Sentinal 2 Band Table
+    =====================
+    Band    Resolution    Central Wavelength    Description
+    B1            60 m                443 nm    Ultra blue (Coastal and Aerosol)
+    B2            10 m                490 nm    Blue
+    B3            10 m                560 nm    Green
+    B4            10 m                665 nm    Red
+    B5            20 m                705 nm    Visible and Near Infrared (VNIR)
+    B6            20 m                740 nm    Visible and Near Infrared (VNIR)
+    B7            20 m                783 nm    Visible and Near Infrared (VNIR)
+    B8            10 m                842 nm    Visible and Near Infrared (VNIR)
+    B8a           20 m                865 nm    Visible and Near Infrared (VNIR)
+    B9            60 m                940 nm    Short Wave Infrared (SWIR)
+    B10           60 m               1375 nm    Short Wave Infrared (SWIR)
+    B11           20 m               1610 nm    Short Wave Infrared (SWIR)
+    B12           20 m               2190 nm    Short Wave Infrared (SWIR)
+
+
+    Landsat 8 Band Table
+    =====================
+    Band    Resolution    Central Wavelength    Description
+    1            30 m                 430 nm    Coastal aerosol
+    2            30 m                 450 nm    Blue
+    3            30 m                 530 nm    Green
+    4            30 m                 640 nm    Red
+    5            30 m                 850 nm    Near Infrared (NIR)
+    6            30 m                1570 nm    SWIR 1
+    7            30 m                2110 nm    SWIR 2
+    8            15 m                 500 nm    Panchromatic
+    9            30 m                1360 nm    Cirrus
+    10           100 m              10600 nm    Thermal Infrared (TIRS) 1
+    11           100 m              11500 nm    Thermal Infrared (TIRS) 2
+
+
+    Worldview 3 MUL Band Table
+    ==========================
+    Band    Resolution    Central Wavelength    Description
+    1           1.38 m                 400 nm    Coastal aerosol
+    2           1.38 m                 450 nm    Blue
+    3           1.38 m                 510 nm    Green
+    4           1.38 m                 585 nm    Yellow
+    5           1.38 m                 630 nm    Red
+    6           1.38 m                 705 nm    Red edge
+    7           1.38 m                 770 nm    Near-IR1
+    8           1.38 m                 860 nm    Near-IR2
+
+    Worldview 3 PAN Band Table
+    ==========================
+    1           0.34 m                 450-800 nm  Panchromatic
+
+References:
+    https://gis.stackexchange.com/questions/290796/how-to-edit-the-metadata-for-individual-bands-of-a-multiband-raster-preferably
+    https://gisgeography.com/sentinel-2-bands-combinations/
+    https://earth.esa.int/eogateway/missions/worldview-3
+    https://www.usgs.gov/faqs/what-are-band-designations-landsat-satellites?qt-news_science_products=0#qt-news_science_products
 '''
 
+
 def dicts_contain(d_list, dsub_list):
-    contains = lambda ds: all(ds[0][k] == ds[1][k] for k in ds[1])
+    def contains(ds):
+        return all(ds[0][k] == ds[1][k] for k in ds[1])
     return all(map(contains, zip(d_list, dsub_list)))
 
 '''
@@ -33,7 +94,7 @@ Example:
     >>> i = list(search.items())[0]
     >>> # one image per band
     >>> bands = [v.to_dict()['eo:bands'][0] for k,v in i.assets.items() if k.startswith('B')]
-    >>> 
+    >>>
     >>> from watch.utils.util_bands import *
     >>> assert dicts_contain(SENTINEL2, bands)
 '''
@@ -73,7 +134,7 @@ Example:
     >>> i = list(search.items())[0]
     >>> # one image for all bands
     >>> bands = [v.to_dict()['eo:bands'][0] for k,v in i.assets.items() if k.startswith('B') and (k != 'BQA')]
-    >>> 
+    >>>
     >>> from watch.utils.util_bands import *
     >>> assert dicts_contain(LANDSAT8, bands)
 '''
@@ -106,7 +167,7 @@ Example:
     >>> assets = item['assets']
     >>> keys = sorted(k for k in assets.keys() if 'B' in k)
     >>> bands = [assets[k]['eo:bands'][0] for k in keys]
-    >>> 
+    >>>
     >>> from watch.utils.util_bands import *
     >>> assert dicts_contain(LANDSAT7, bands)
 '''
@@ -134,11 +195,11 @@ Example:
     >>> search = catalog.search(collections=['worldview-nitf'], bbox=[128.662489, 37.659517, 128.676673, 37.664560])
     >>> items = list(search.items())
     >>> props = [i.to_dict()['properties'] for i in items]
-    >>> 
+    >>>
     >>> wv01 = [p for p in props if p['mission'] == 'WV01']
     >>> assert np.unique([p['instruments'] for p in wv01]) == ['panchromatic']
     >>> wv01_pan = [p for p in wv01 if p['instruments'] == ['panchromatic']][0]['eo:bands']
-    >>> 
+    >>>
     >>> wv02 = [p for p in props if p['mission'] == 'WV02']
     >>> assert np.all(np.unique([p['instruments'] for p in wv02]) == ['panchromatic', 'vis-multi'])
     >>> assert np.all(np.unique([len(p['eo:bands']) for p in wv02]) == [1, 4, 8])
@@ -146,18 +207,18 @@ Example:
     >>> wv02_ms = [p['eo:bands'] for p in wv02 if p['instruments'] == ['vis-multi']]
     >>> wv02_ms4 = [p for p in wv02_ms if len(p) == 4][0]
     >>> wv02_ms8 = [p for p in wv02_ms if len(p) == 8][0]
-    >>> 
+    >>>
     >>> wv03 = [p for p in props if p['mission'] == 'WV03']
     >>> assert np.all(np.unique([p['instruments'] for p in wv03]) == ['panchromatic', 'vis-multi'])
     >>> assert np.all(np.unique([len(p['eo:bands']) for p in wv03]) == [1, 8])
     >>> wv03_pan = [p for p in wv03 if p['instruments'] == ['panchromatic']][0]['eo:bands']
     >>> wv03_ms = [p['eo:bands'] for p in wv03 if p['instruments'] == ['vis-multi']]
     >>> wv03_ms8 = [p for p in wv03_ms if len(p) == 8][0]
-    >>> 
+    >>>
     >>> # not sure if this must be true, but it is
     >>> assert wv02_pan == wv03_pan
     >>> assert wv02_ms8 == wv03_ms8
-    >>> 
+    >>>
     >>> from watch.utils.util_bands import *
     >>> assert dicts_contain(WORLDVIEW1_PAN, wv01_pan)
     >>> assert dicts_contain(WORLDVIEW2_PAN, wv02_pan)
@@ -212,9 +273,9 @@ TODO
 fix wv doctest
 '''
 
-ALL_BANDS = (SENTINEL2 + LANDSAT8 + LANDSAT7 +
-        WORLDVIEW1_PAN + WORLDVIEW2_PAN + WORLDVIEW2_MS4 +
-        WORLDVIEW2_MS8 + WORLDVIEW3_PAN + WORLDVIEW3_MS8)
+ALL_BANDS = (
+    SENTINEL2 + LANDSAT8 + LANDSAT7 + WORLDVIEW1_PAN + WORLDVIEW2_PAN +
+    WORLDVIEW2_MS4 + WORLDVIEW2_MS8 + WORLDVIEW3_PAN + WORLDVIEW3_MS8)
 
 '''
 WIP
@@ -288,4 +349,3 @@ Example:
     >>>     band.pop('gsd', None)  # pystac doesn't support this yet
     >>>     b = Band.create(**band)
 '''
-

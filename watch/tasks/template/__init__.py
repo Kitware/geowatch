@@ -1,11 +1,8 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+__dev__ = """
+mkinit ~/code/watch/watch/tasks/template/__init__.py --noattrs --lazy -w
 """
-Module for access to simple data for demo and testing purposes.
-"""
-
-__devnotes__ = """
-mkinit -m watch.demo --lazy -w
-"""
-
 
 def lazy_import(module_name, submodules, submod_attrs):
     import importlib
@@ -48,32 +45,14 @@ def lazy_import(module_name, submodules, submod_attrs):
 __getattr__ = lazy_import(
     __name__,
     submodules={
-        'dummy_demodata',
-        'landsat_demodata',
-        'sentinel2_demodata',
-        'nitf_demodata',
+        'fit',
+        'predict',
     },
-    submod_attrs={
-        'dummy_demodata': [
-            'dummy_rpc_geotiff_fpath',
-        ],
-        'landsat_demodata': [
-            'grab_landsat_product',
-        ],
-        'sentinel2_demodata': [
-            'grab_sentinel2_product',
-        ],
-        'nitf_demodata': [
-            'DEFAULT_KEY',
-            'grab_nitf_fpath',
-        ],
-    },
+    submod_attrs={},
 )
 
 
 def __dir__():
     return __all__
 
-__all__ = ['DEFAULT_KEY', 'dummy_demodata', 'dummy_rpc_geotiff_fpath',
-           'grab_landsat_product', 'grab_nitf_fpath', 'landsat_demodata',
-           'nitf_demodata']
+__all__ = ['fit', 'predict']

@@ -19,6 +19,7 @@ def grab_landsat_product(product_id=None):
         >>> # xdoctest: +REQUIRES(--network)
         >>> from watch.demo.landsat_demodata import *  # NOQA
         >>> product = grab_landsat_product()
+        >>> # xdoctest: +IGNORE_WANT
         >>> print('product = {}'.format(ub.repr2(product, nl=2)))
         product = {
             'bands': [
@@ -130,6 +131,7 @@ def grab_landsat_product(product_id=None):
     product = {
         'bands': [],
         'meta': {},
+        'scene_name': scene_name,
     }
     # Download band product-items
     for suffix in item_suffixes['bands']:
