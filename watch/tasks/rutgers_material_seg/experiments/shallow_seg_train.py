@@ -92,8 +92,6 @@ class Trainer(object):
 
         # for each class extract the max confidence
         features_max, _ = features.max(-1, keepdim=True)
-        # features_max[:, c-1:] *= 0.8
-        # features_max[:, :c-1] *= cutoff_top
         features_max *= cutoff_top
 
         # if the top score is too low, ignore it
@@ -518,32 +516,6 @@ if __name__== "__main__":
     experiment.log_parameters(config['evaluation'])
     experiment.log_parameters(config['visualization'])
     
-    # train_dataloader = build_dataset(dataset_name=config['data']['name'],
-    #                                  root=config['data'][config['location']]['test_dir'], 
-    #                                  batch_size=config['training']['batch_size'],
-    #                                  num_workers=config['training']['num_workers'],
-    #                                  split="train",
-    #                                 #  kwargs={"image_size": config['data']['image_size']},
-    #                                  image_size=config['data']['image_size'],
-    #                                  )
-    
-    # validation_dataloader = build_dataset(dataset_name=config['data']['name'],
-    #                                       root=config['data'][config['location']]['test_dir'], 
-    #                                       batch_size=config['training']['batch_size'],
-    #                                       num_workers=config['training']['num_workers'],
-    #                                       split="val",
-    #                                     #   kwargs={"image_size": config['data']['image_size']},
-    #                                       image_size=config['data']['image_size'],
-    #                                       )
-    
-    # fs_test_loader = build_dataset(dataset_name=config['data']['name'],
-    #                                root=config['data'][config['location']]['test_dir'], 
-    #                                batch_size=config['training']['batch_size'],
-    #                                num_workers=config['training']['num_workers'],
-    #                                split="val",
-    #                             #    kwargs={"image_size": config['data']['image_size']},
-    #                                image_size=config['data']['image_size'],
-    #                                )
     print(config['data']['image_size'])
     coco_fpath = ub.expandpath(config['data'][config['location']]['coco_json'])
     dset = kwcoco.CocoDataset(coco_fpath)
