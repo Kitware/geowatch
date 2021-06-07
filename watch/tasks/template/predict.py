@@ -77,12 +77,18 @@ def predict_on_dataset(cmdline=False, **kwargs):
 
         # Dummy random outputs
         import kwimage
+        import kwarray
+
+        rng = kwarray.ensure_rng(None)
         for gid, img in sampler.dset.imgs.items():
-            rando_dets = kwimage.Detections.random(segmentations=True, classes=sampler.classes)
+            rando_dets = kwimage.Detections.random(
+                segmentations=True, classes=sampler.classes, rng=rng)
             rando_dets = rando_dets.scale((img['width'], img['height']))
 
         anns = list(rando_dets.to_coco(dset=output_dset))
         for ann in anns:
+            # Should add a score for the annotation
+            ann['score'] = rng.rand()
             output_dset.add_annotation(image_id=gid, **ann)
 
         # TODO: add random auxiliary channels
