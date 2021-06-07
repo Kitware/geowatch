@@ -5,7 +5,7 @@ data:
   type: semantic_seg
   name: iarpa
   image_size: 300x300
-  num_classes: 4
+  num_classes: 5
   weights: []
   local:
     model_save_dir: /home/native/projects/data/smart_watch/models/

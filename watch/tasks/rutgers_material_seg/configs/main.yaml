@@ -8,12 +8,12 @@ visualization:
   val_visualizer: False
   visualize_training_every: 2
   visualize_val_every: 2
-  train_visualization_divisor: 39
+  train_visualization_divisor: 27
   val_visualization_divisor: 10
   save_individual_plots: False
   save_individual_plots_train: False
   titles: True
-  train_imshow: True
+  train_imshow: False
   val_imshow: False
   fg_alpha: 0.7
   bg_alpha: 0.8

@@ -74,7 +74,37 @@ class Trainer(object):
                                             bg_alpha=config['visualization']['bg_alpha'],
                                             fg_alpha=config['visualization']['fg_alpha'])
         
+    def high_confidence_filter(self, features: torch.Tensor, cutoff_top: float =0.75, 
+                               cutoff_low: float =0.2, eps: float =1e-8) -> torch.Tensor:
+        """Select high confidence regions to select as predictions
 
+        Args:
+            features (torch.Tensor): initial mask
+            cutoff_top (float, optional): cutoff of the object. Defaults to 0.75.
+            cutoff_low (float, optional): low cutoff. Defaults to 0.2.
+            eps (float, optional): small number. Defaults to 1e-8.
+
+        Returns:
+            torch.Tensor: pseudo mask generated
+        """
+        bs,c,h,w = features.size()
+        features = features.view(bs,c,-1)
+
+        # for each class extract the max confidence
+        features_max, _ = features.max(-1, keepdim=True)
+        # features_max[:, c-1:] *= 0.8
+        # features_max[:, :c-1] *= cutoff_top
+        features_max *= cutoff_top
+
+        # if the top score is too low, ignore it
+        lowest = torch.Tensor([cutoff_low]).type_as(features_max)
+        features_max = features_max.max(lowest)
+
+        filtered_features = (features > features_max).type_as(features)
+        filtered_features = filtered_features.view(bs,c,h,w)
+        
+        return filtered_features
+    
     def train(self, epoch: int, cometml_experiemnt: object) -> float:
         """training single epoch
 
@@ -100,6 +130,7 @@ class Trainer(object):
             outputs = batch
             image1, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0]
             image_name = outputs['tr'].data[0][batch_index_to_show]['gids']
+            original_width, original_height = outputs['tr'].data[0][batch_index_to_show]['space_dims']
             # print(image_name)
             # print(len(image_name))
             mask = torch.stack(mask)
@@ -133,6 +164,7 @@ class Trainer(object):
 
             masks = F.softmax(output1, dim=1)#.detach()
             masks = F.interpolate(masks, size=mask.size()[-2:], mode="bilinear", align_corners=True)
+            masks = self.high_confidence_filter(masks)
             pred = masks.max(1)[1].cpu().detach()#.numpy()
             total_loss += loss.item()
             
@@ -162,11 +194,16 @@ class Trainer(object):
                         # image_show = np.transpose(outputs['visuals']['image'][batch_index_to_show,:,:,:].numpy(),(1,2,0))
                         logits_show = masks.max(1)[1].cpu().detach().numpy()[batch_index_to_show,:,:]
                         gt_mask_show = mask.cpu().detach()[batch_index_to_show,:,:].numpy().squeeze()
+                        output1_sample = masks[batch_index_to_show,class_to_show,:,:].cpu().detach().numpy().squeeze()
                         # gt_mask_show[gt_mask_show==-1] = 0
+                        image_show = image_show[:original_width, :original_height,:]
+                        logits_show = logits_show[:original_width, :original_height]
+                        gt_mask_show = gt_mask_show[:original_width, :original_height]
+                        output1_sample = output1_sample[:original_width, :original_height]
+                        
+                        logits_show[logits_show==-1]=0
                         gt_mask_show_no_bg = np.ma.masked_where(gt_mask_show==0,gt_mask_show)
                         logits_show_no_bg = np.ma.masked_where(logits_show==0,logits_show)
-                        output1_sample = masks[batch_index_to_show,class_to_show,:,:].cpu().detach().numpy().squeeze()
-                        logits_show[logits_show==-1]=0
 
                         classes_in_gt = np.unique(gt_mask_show)
                         ax1.imshow(image_show)
@@ -265,9 +302,10 @@ class Trainer(object):
             for batch_index,batch in pbar:
                 outputs = batch
                 image1, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0]
+                original_width, original_height = outputs['tr'].data[0][batch_index_to_show]['space_dims']
+                
                 mask = torch.stack(mask)
                 mask = mask.long().squeeze(1)
-                
                 image1 = image1.to(device)
                 mask = mask.to(device)
                 # image_raw = utils.denorm(image1.clone().detach())
@@ -278,8 +316,15 @@ class Trainer(object):
 
                 masks = F.softmax(output, dim=1) ## (B, 22, 300, 300)
                 masks = F.interpolate(masks, size=mask.size()[-2:], mode="bilinear", align_corners=True)
+                masks = self.high_confidence_filter(masks)
                 pred = masks.max(1)[1].cpu().detach()#.numpy()
                 # pred[pred==self.max_label] = 0
+                # print(f"pred before: {pred.shape}")
+                # print(f"mask before: {mask.shape}")
+                # pred = pred[:,:original_width, :original_height]
+                # mask = mask[:,:original_width, :original_height]
+                # print(f"pred after: {pred.shape}")
+                # print(f"mask after: {mask.shape}")
                 preds.append(pred)
                 targets.append(mask.cpu())#.numpy())
 
@@ -292,7 +337,7 @@ class Trainer(object):
                                                           labels=config['evaluation']['crf_labels'])
                     crf_probs = crf_probs.squeeze()
                     crf_pred = crf_probs.max(1)[1]
-                    crf_pred[crf_pred==self.max_label]=0
+                    # crf_pred[crf_pred==self.max_label]=0
                     crf_preds.append(crf_pred)
 
                 if config['visualization']['val_visualizer']:
@@ -310,11 +355,15 @@ class Trainer(object):
                             transformed_image_show = np.transpose(utils.denorm(image1).cpu().detach().numpy()[0,:,:,:],(1,2,0))
                             image_show = np.transpose(outputs['visuals']['image'][0,:,:,:].numpy(),(1,2,0))
                             gt_mask_show = mask.cpu().numpy()[0,:,:].squeeze()
-                            gt_mask_show[gt_mask_show==self.max_label] = 0
+                            # gt_mask_show[gt_mask_show==self.max_label] = 0
                             image_name = outputs['visuals']['image_name'][batch_index_to_show]
                             logits_show = pred[0,:,:]
                             classes_predicted = np.unique(logits_show)
                             classes_in_gt = np.unique(gt_mask_show)
+                            
+                            image_show = image_show[:original_width, :original_height,:]
+                            logits_show = logits_show[:original_width, :original_height]
+                            gt_mask_show = gt_mask_show[:original_width, :original_height]
                             
                             gt_mask_show_no_bg = np.ma.masked_where(gt_mask_show==0,gt_mask_show)
                             logits_show_no_bg = np.ma.masked_where(logits_show==0,logits_show)
@@ -393,8 +442,9 @@ class Trainer(object):
         """
         train_losses, val_losses = [], []
         mean_ious_val,mean_ious_val_list,count_metrics_list = [], [], []
-        best_val_loss = np.infty
+        best_val_loss, train_loss = np.infty, np.infty
         best_val_mean_iou = 0
+        
         model_save_dir = config['data'][config['location']]['model_save_dir']+f"{current_path[-1]}_{config['dataset']}/{cometml_experiment.project_name}_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}/"
         utils.create_dir_if_doesnt_exist(model_save_dir)
         for epoch in range(0,self.epochs):
@@ -500,7 +550,7 @@ if __name__== "__main__":
     sampler = ndsampler.CocoSampler(dset)
 
     # # print(sampler)
-    number_of_timestamps, h, w = 1, 64, 64
+    number_of_timestamps, h, w = 1, 512, 512
     window_dims = (number_of_timestamps, h, w) #[t,h,w]
     input_dims = (h, w)
 

@@ -12,5 +12,4 @@ if __name__ == "__main__":
     t1 = torch.rand(1, 3, 256, 256)
     print("input: " + str(t1.shape))
     
-    # print(net)
     print("output: " + str(model(t1).shape))
