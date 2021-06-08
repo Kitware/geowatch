@@ -11,6 +11,8 @@ import utils
 
 def main(args):
 
+    transform = utils.Lambda(lambda x: x / 2000.)
+
     # load dataset
     onera_train = kwcoco.CocoDataset(str(args.train_data_path))
     onera_train_sampler = ndsampler.CocoSampler(onera_train)
@@ -18,6 +20,7 @@ def main(args):
         onera_train_sampler, 
         sample_shape=(args.time_steps, args.chip_size, args.chip_size),
         channels="<all>",
+        transform=transform,
     )
     
     # split into train/valid

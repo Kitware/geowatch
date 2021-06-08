@@ -1,3 +1,12 @@
+from torch import nn
+class Lambda(nn.Module):
+    def __init__(self, lambda_):
+        super().__init__()
+        self.lambda_ = lambda_
+
+    def forward(self, x):
+        return self.lambda_(x)
+
 import inspect
 def filter_args(args, func):
     signature = inspect.signature(func)

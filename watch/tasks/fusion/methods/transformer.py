@@ -72,6 +72,9 @@ class ChangeDetector(pl.LightningModule):
             for _ in range(n_layers)
         ] + [
             nn.Linear(embedding_size, embedding_size),
+            nn.Dropout(dropout),
+            nn.GELU(),
+            nn.Linear(embedding_size, embedding_size),
         ]
         self.model = nn.Sequential(*layers)
         
@@ -82,15 +85,16 @@ class ChangeDetector(pl.LightningModule):
             "iou": metrics.IoU(2),
             "f1": metrics.F1(),
         })
-        
+
     def forward(self, images):
         B, T, C, H, W = images.shape
         feats = self.model(images)
         feats = einops.rearrange(feats,
                                  "(t h w) b f -> b t f h w",
-                                 b=B, t=T, 
+                                 b=B, t=T, f=self.hparams.embedding_size, 
                                  h=H//self.hparams.window_size, 
                                  w=W//self.hparams.window_size)
+        feats = nn.functional.normalize(feats, dim=2)
         
         # similarity between neighboring timesteps
         similarity = torch.einsum("b t c h w , b t c h w -> b t h w", feats[:,:-1], feats[:,1:])
