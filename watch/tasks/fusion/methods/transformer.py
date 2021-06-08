@@ -20,13 +20,24 @@ class AddPositionalEncoding(nn.Module):
         super().__init__()
         self.dest_dim = dest_dim
         self.dims_to_encode = dims_to_encode
+        assert self.dest_dim not in self.dims_to_encode
         
     def forward(self, x):
-        encoding = torch.stack(torch.meshgrid([
-            torch.linspace(0, 1, x.shape[dim])
-            for dim in self.dims_to_encode
-        ]))
-        x = torch.cat([x, encoding], dim=self.dest_dim)
+
+        inds = [
+            slice(0, size) if (dim in self.dims_to_encode) else slice(0, 1)
+            for dim, size in enumerate(x.shape)
+        ]
+        inds[self.dest_dim] = self.dims_to_encode
+
+        encoding = torch.cat(torch.meshgrid([
+            torch.linspace(0, 1, x.shape[dim]) if (dim in self.dims_to_encode) else torch.tensor(-1.)
+            for dim in range(len(x.shape))
+        ]), dim=self.dest_dim)[inds]
+
+        expanded_shape = list(x.shape)
+        expanded_shape[self.dest_dim] = -1
+        x = torch.cat([x, encoding.expand(expanded_shape).type_as(x)], dim=self.dest_dim)
         return x
 
 class ChangeDetector(pl.LightningModule):
@@ -50,8 +61,9 @@ class ChangeDetector(pl.LightningModule):
                       hs=self.hparams.window_size, 
                       ws=self.hparams.window_size),
             AddPositionalEncoding(2, [1, 3, 4]),
-            Rearrange("b t f h w -> (t h w) b f"),
+            Rearrange("b t f h w -> b (t h w) f"),
             nn.LazyLinear(embedding_size),
+            Rearrange("b s f -> s b f"),
         ] + [
             nn.TransformerEncoderLayer(
                 embedding_size, n_heads, 
@@ -59,10 +71,7 @@ class ChangeDetector(pl.LightningModule):
                 dropout=dropout, activation="gelu")
             for _ in range(n_layers)
         ] + [
-            nn.Linear(embedding_size, fc_dim),
-            nn.Dropout(dropout),
-            nn.GELU(),
-            nn.Linear(fc_dim, 10),
+            nn.Linear(embedding_size, embedding_size),
         ]
         self.model = nn.Sequential(*layers)
         
@@ -78,17 +87,14 @@ class ChangeDetector(pl.LightningModule):
         B, T, C, H, W = images.shape
         feats = self.model(images)
         feats = einops.rearrange(feats,
-                                 "(t h w) b f -> (b t) f h w",
+                                 "(t h w) b f -> b t f h w",
                                  b=B, t=T, 
                                  h=H//self.hparams.window_size, 
                                  w=W//self.hparams.window_size)
-        feats = nn.functional.upsample_bilinear(feats, size=[H, W])
-        feats = einops.rearrange(feats,
-                                 "(b t) f h w -> b t f h w",
-                                 b=B, t=T, h=H, w=W)
         
         # similarity between neighboring timesteps
         similarity = torch.einsum("b t c h w , b t c h w -> b t h w", feats[:,:-1], feats[:,1:])
+        similarity = nn.functional.interpolate(similarity, [H, W], mode="bilinear")
         distance = -3.0 * similarity
 
         return distance
@@ -142,7 +148,7 @@ class ChangeDetector(pl.LightningModule):
     
     def configure_optimizers(self):
         optimizer = optim.RAdam(
-                self.model.parameters(), 
+                self.parameters(), 
                 lr=self.hparams.learning_rate, 
                 weight_decay=self.hparams.weight_decay,
                 betas=(0.9, 0.99),
@@ -163,4 +169,5 @@ class ChangeDetector(pl.LightningModule):
         parser.add_argument("--fc_dim", default=1024, type=int)
         parser.add_argument("--learning_rate", default=1e-3, type=float)
         parser.add_argument("--weight_decay", default=0., type=float)
+        parser.add_argument("--pos_weight", default=1.0, type=float)
         return parent_parser

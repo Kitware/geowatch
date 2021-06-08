@@ -54,6 +54,12 @@ def main(args):
     model = transformer.ChangeDetector(
         **model_var_dict
     )
+
+    # prime the model, it has a lazy linear layer
+    batch = next(iter(train_dataloader))
+    result = model(batch["images"])
+    print(result)
+    print(result.shape, batch["labels"].shape)
     
     # trainer
     trainer = pl.Trainer.from_argparse_args(args)
