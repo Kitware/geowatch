@@ -11,11 +11,12 @@ import itertools as it
 
 class OneraDataset(data.Dataset):
     # TODO: add torchvision.transforms or albumentations
-    def __init__(self, sampler, sample_shape, channels=None, mode="fit"):
+    def __init__(self, sampler, sample_shape, channels=None, mode="fit", transform=None):
         self.sampler = sampler
         self.sample_shape = sample_shape
         self.channels = channels
         self.mode = mode
+        self.transform = transform
         
         full_sample_grid = self.sampler.new_sample_grid("video_detection", self.sample_shape)
         self.sample_grid = list(it.chain(
@@ -113,6 +114,9 @@ class OneraDataset(data.Dataset):
         
         # catch nans
         frame_ims[np.isnan(frame_ims)] = -1.
+        
+        if self.transform:
+            frame_ims = self.transform(frame_ims)
         
         if self.mode == "predict":
             return torch.from_numpy(frame_ims).detach()
