@@ -11,14 +11,15 @@ import itertools as it
 
 class OneraDataset(data.Dataset):
     # TODO: add torchvision.transforms or albumentations
-    def __init__(self, sampler, sample_shape, channels=None, mode="fit", transform=None):
+    def __init__(self, sampler, sample_shape, channels=None, mode="fit", window_overlap=0, transform=None):
         self.sampler = sampler
         self.sample_shape = sample_shape
         self.channels = channels
         self.mode = mode
         self.transform = transform
+        self.window_overlap = window_overlap
         
-        full_sample_grid = self.sampler.new_sample_grid("video_detection", self.sample_shape)
+        full_sample_grid = self.sampler.new_sample_grid("video_detection", self.sample_shape, window_overlap=self.window_overlap)
         self.sample_grid = list(it.chain(
             full_sample_grid["positives"], 
             full_sample_grid["negatives"],
