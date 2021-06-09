@@ -50,22 +50,25 @@ def main(args):
     )
     
     # model        
+    if args.channelwise:
+        model_class = transformer.ChannelwiseChangeDetector
+    else:
+        model_class = transformer.ChangeDetector
+
     model_var_dict = utils.filter_args(
         vars(args),
-        transformer.ChangeDetector.__init__,
+        model_class.__init__,
     )
-    model = transformer.ChangeDetector(
+    model = model_class(
         **model_var_dict
     )
-
-    # prime the model, it has a lazy linear layer
-    batch = next(iter(train_dataloader))
-    result = model(batch["images"])
-    print(result)
-    print(result.shape, batch["labels"].shape)
     
     # trainer
     trainer = pl.Trainer.from_argparse_args(args)
+
+    # prime the model, it has a lazy linear layer
+    batch = next(iter(train_dataloader))
+    result = model(batch["images"][[0],...])
     
     # fit!
     trainer.fit(model, train_dataloader, valid_dataloader)
@@ -77,18 +80,24 @@ if __name__ == "__main__":
     parser.add_argument("train_data_path", type=pathlib.Path)
     
     # dataset / dataloader
+    parser.add_argument("--channelwise", action="store_true")
     parser.add_argument("--valid_pct", default=0.1, type=float)
     parser.add_argument("--chip_size", default=128, type=int)
     parser.add_argument("--time_steps", default=2, type=int)
     parser.add_argument("--batch_size", default=32, type=int)
     parser.add_argument("--num_workers", default=4, type=int)
+
+    temp_args, _ = parser.parse_known_args()
     
     # model
-    parser = transformer.ChangeDetector.add_model_specific_args(parser)
+    if temp_args.channelwise:
+        model_class = transformer.ChannelwiseChangeDetector
+    else:
+        model_class = transformer.ChangeDetector
+    parser = model_class.add_model_specific_args(parser)
     
     # trainer
     parser = pl.Trainer.add_argparse_args(parser)
-
     
     args = parser.parse_args()
     main(args)
