@@ -1,5 +1,4 @@
 import os
-import json
 import subprocess
 
 from algorithm_toolkit import Algorithm, AlgorithmChain
@@ -29,14 +28,18 @@ class Main(Algorithm):
             # TODO: Wrap in a try catch for KeyError?
             asset_href = feature['assets']['data']['href']
 
-            _, asset_ext = os.path.splitext(asset_href)
+            asset_basename = os.path.basename(asset_href)
+
+            feature_output_dir = os.path.join(
+                params['output_dir'], feature['id'])
             asset_outpath = os.path.join(
-                params['output_dir'],
-                '{}{}'.format(feature['id'], asset_ext))
+                feature_output_dir, asset_basename)
 
             command = ['aws', 's3', '--profile', 'iarpa', 'cp']
             if params['dry_run'] == 1:
                 command.append('--dryrun')
+            else:
+                os.makedirs(feature_output_dir, exist_ok=True)
 
             command.extend([asset_href, asset_outpath])
 
@@ -47,18 +50,8 @@ class Main(Algorithm):
             # Update feature asset href to point to local outpath
             feature['assets']['data']['href'] = asset_outpath
 
-        stac_catalog_output = {
-            'output_type': 'text',
-            'output_value': json.dumps(
-                search_results_catalog,
-                indent=2, sort_keys=True)}
-
-        output_dir_output = {
-            'output_type': 'text',
-            'output_value': params['output_dir']}
-
-        cl.add_to_metadata('stac_catalog', stac_catalog_output)
-        cl.add_to_metadata('output_dir', output_dir_output)
+        cl.add_to_metadata('stac_catalog', search_results_catalog)
+        cl.add_to_metadata('output_dir', params['output_dir'])
 
         # Do not edit below this line
         return cl
