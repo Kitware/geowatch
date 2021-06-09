@@ -1,3 +1,4 @@
+import datetime
 import logging
 from pathlib import Path
 
@@ -7,7 +8,6 @@ import kwimage
 import ndsampler
 from tqdm import tqdm
 
-from pprint import pprint
 from . import detector
 from .tables import facc_description
 from .utils import setup_logging
@@ -16,14 +16,24 @@ log = logging.getLogger(__name__)
 
 
 @click.command()
-@click.option('--dataset', required=True, type=click.Path(exists=True))
-@click.option('--deployed', required=True, type=click.Path(exists=True))
-def predict(dataset, deployed):
+@click.option('--dataset', required=True, type=click.Path(exists=True), help='input kwcoco dataset')
+@click.option('--deployed', required=True, type=click.Path(exists=True), help='pytorch weights file')
+@click.option('--output', required=False, type=click.Path(), help='output kwcoco dataset')
+def predict(dataset, deployed, output):
     dset = kwcoco.CocoDataset(dataset)
     dataset = Path(dataset)
 
+    default_output_filename = 'out_{}.kwcoco.json'.format(datetime.datetime.now().strftime('%Y%m%d_%H%M%S'))
+    if output is None:
+        output = Path('/tmp', default_output_filename)
+    else:
+        output = Path(output)
+        if output.is_dir():
+            output = output.joinpath(default_output_filename)
+
     log.debug('dset {}'.format(dset))
     log.debug('weights: {}'.format(deployed))
+    log.debug('output: {}'.format(output))
 
     output_dset = kwcoco.CocoDataset()
     for cid, cat in enumerate(detector.feature_mapping[1:], start=0):
@@ -68,15 +78,14 @@ def predict(dataset, deployed):
                     bbox=box,
                     segmentation=poly.to_coco('new')
                 )
-
         except KeyboardInterrupt:
             log.info('interrupted')
             break
         except Exception as e:
             log.exception('Unable to load {}'.format(filename))
 
-    # TODO where to write output?
-    output_dset.dump('/tmp/out.kwcoco.json', indent=2)
+    output_dset.dump(str(output), indent=2)
+    log.info('output written to {}'.format(output))
 
 
 if __name__ == '__main__':
