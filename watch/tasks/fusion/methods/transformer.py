@@ -71,10 +71,12 @@ class ChangeDetector(pl.LightningModule):
                 dropout=dropout, activation="gelu")
             for _ in range(n_layers)
         ] + [
+            Rearrange("s b f -> b s f"),
             nn.Linear(embedding_size, embedding_size),
-            nn.Dropout(dropout),
+            #nn.Dropout(dropout),
             nn.GELU(),
             nn.Linear(embedding_size, embedding_size),
+            Rearrange("b s f -> s b f"),
         ]
         self.model = nn.Sequential(*layers)
         
@@ -94,13 +96,13 @@ class ChangeDetector(pl.LightningModule):
                                  b=B, t=T, f=self.hparams.embedding_size, 
                                  h=H//self.hparams.window_size, 
                                  w=W//self.hparams.window_size)
-        feats = nn.functional.normalize(feats, dim=2)
         
         # similarity between neighboring timesteps
+        feats = nn.functional.normalize(feats, dim=2)
         similarity = torch.einsum("b t c h w , b t c h w -> b t h w", feats[:,:-1], feats[:,1:])
-        similarity = nn.functional.interpolate(similarity, [H, W], mode="bilinear")
         distance = -3.0 * similarity
 
+        distance = nn.functional.interpolate(distance, [H, W], mode="bilinear")
         return distance
         
     def training_step(self, batch, batch_idx=None):
