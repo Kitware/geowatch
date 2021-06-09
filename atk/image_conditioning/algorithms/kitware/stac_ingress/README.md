@@ -7,7 +7,7 @@ Homepage: []
 ## Parameters:
 Name|Description|Required
 ---|---|:---:
-aoi_bounds|Spatial bounds of the Area of Interest (AOI).|Yes
+aoi_bounds|Spatial bounds of the Area of Interest (AOI), in WGS84 (EPSG4326).|Yes
 date_range|Only retrieve images with timestamps within the specified start and end date.|Yes
 stac_api_url|URL for the STAC API endpoint|Yes
 output_dir|Directory where output images / data will be written.  Will be created if it doesn't already exist.|Yes

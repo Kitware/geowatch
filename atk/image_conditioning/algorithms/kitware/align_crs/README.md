@@ -8,7 +8,7 @@ Homepage: []
 Name|Description|Required
 ---|---|:---:
 stac_catalog|Input STAC catalog of images|Yes
-aoi_bounds|Spatial bounds of the Area of Interest (AOI).|Yes
+aoi_bounds|Spatial bounds of the Area of Interest (AOI), in WGS84 (EPSG4326).|Yes
 output_dir|Directory where output images / data will be written.  Will be created if it doesn't already exist.|Yes
 
 ## Outputs:
