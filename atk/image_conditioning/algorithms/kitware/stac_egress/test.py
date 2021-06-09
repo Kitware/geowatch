@@ -1,5 +1,3 @@
-import json
-
 from algorithm_toolkit import AlgorithmTestCase
 
 from .main import Main
@@ -39,8 +37,7 @@ class MainTestCase(AlgorithmTestCase):
         self.alg = Main(cl=self.cl, params=self.params)
         self.alg.run()
 
-        stac_catalog = json.loads(
-            self.cl.get_from_metadata('stac_catalog')['output_value'])
+        stac_catalog = self.cl.get_from_metadata('stac_catalog')
 
         for feature in stac_catalog.get('features', ()):
             # Ensure that the asset paths have been updated to point

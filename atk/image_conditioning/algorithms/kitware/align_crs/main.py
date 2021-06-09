@@ -3,21 +3,10 @@ import itertools
 import json
 import copy
 
-import utm
-import pyproj
 from osgeo import gdal, osr
 
 from algorithm_toolkit import Algorithm, AlgorithmChain
-
-
-# TODO: Put in Watch module somewhere
-def _epsg_code_from_latlon(lat, lon):
-    _, _, zone, south = utm.from_latlon(lat, lon)
-    return pyproj.CRS({
-        'proj': 'utm',
-        'zone': zone,
-        'south': (south == 'S')
-    }).to_epsg()
+from watch.gis.spatial_reference import utm_epsg_from_latlon
 
 
 def _aoi_bounds_to_utm_zone(aoi_bounds):
@@ -27,7 +16,7 @@ def _aoi_bounds_to_utm_zone(aoi_bounds):
     '''
     lon0, lat0, lon1, lat1 = aoi_bounds
 
-    codes = [_epsg_code_from_latlon(lat, lon)
+    codes = [utm_epsg_from_latlon(lat, lon)
              for lat, lon in itertools.product((lat0, lat1), (lon0, lon1))]
 
     code_counts = {}
@@ -61,17 +50,18 @@ class Main(Algorithm):
             except KeyError:
                 continue
 
-            input_basename = os.path.basename(input_path)
+            input_base, input_ext = os.path.splitext(
+                os.path.basename(input_path))
 
             feature_output_dir = os.path.join(output_dir, feature['id'])
             os.makedirs(feature_output_dir, exist_ok=True)
 
             output_path = os.path.join(
-                feature_output_dir, input_basename)
+                feature_output_dir, "{}.tif".format(input_base))
 
             dst_crs = osr.SpatialReference()
             dst_crs.ImportFromEPSG(epsg_code)
-            opts = gdal.WarpOptions(dstSRS=dst_crs)
+            opts = gdal.WarpOptions(dstSRS=dst_crs, format="GTiff")
             out = gdal.Warp(output_path, input_path, options=opts)
             del out  # this is necessary, it writes out to disk
 

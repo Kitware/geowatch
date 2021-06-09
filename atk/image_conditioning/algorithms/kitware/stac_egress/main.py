@@ -2,6 +2,7 @@ import os
 import json
 import subprocess
 import tempfile
+import copy
 
 from algorithm_toolkit import Algorithm, AlgorithmChain
 
@@ -12,7 +13,7 @@ class Main(Algorithm):
         cl = self.cl  # type: AlgorithmChain.ChainLedger
         params = self.params  # type: dict
 
-        stac_catalog = params['stac_catalog']
+        stac_catalog = copy.deepcopy(params['stac_catalog'])
 
         # Upload each feature's assets from the STAC catalog
         for feature in stac_catalog.get('features', ()):
@@ -57,18 +58,8 @@ class Main(Algorithm):
             self.logger.info("Running: {}".format(' '.join(command)))
             subprocess.run(command, check=True)
 
-        stac_catalog_output = {
-            'output_type': 'text',
-            'output_value': json.dumps(
-                stac_catalog,
-                indent=2, sort_keys=True)}
-
-        s3_bucket_output = {
-            'output_type': 'text',
-            'output_value': params['s3_bucket']}
-
-        cl.add_to_metadata('stac_catalog', stac_catalog_output)
-        cl.add_to_metadata('s3_bucket', s3_bucket_output)
+        cl.add_to_metadata('stac_catalog', stac_catalog)
+        cl.add_to_metadata('s3_bucket', params['s3_bucket'])
 
         # Do not edit below this line
         return cl
