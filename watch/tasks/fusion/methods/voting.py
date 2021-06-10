@@ -97,7 +97,7 @@ class VotingModel(pl.LightningModule):
         parser.add_argument("--pos_weight", default=1.0, type=float)
         return parent_parser
 
-class MultiChangeDetector(pl.LightningModule):
+class End2EndVotingModel(pl.LightningModule):
     def __init__(self, channel_sets, feature_dim=64, learning_rate=1e-3, weight_decay=1e-5, pos_weight=1.):
         super().__init__()
         self.save_hyperparameters()

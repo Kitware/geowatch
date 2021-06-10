@@ -8,7 +8,7 @@ import torchmetrics as metrics
 
 from models import unet_blur
 
-class ChangeDetector(pl.LightningModule):
+class UNetChangeDetector(pl.LightningModule):
     def __init__(self, input_dim=13, feature_dim=64, learning_rate=1e-3, weight_decay=1e-5, pos_weight=1.):
         super().__init__()
         self.save_hyperparameters()

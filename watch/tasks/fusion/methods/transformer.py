@@ -40,7 +40,7 @@ class AddPositionalEncoding(nn.Module):
         x = torch.cat([x, encoding.expand(expanded_shape).type_as(x)], dim=self.dest_dim)
         return x
 
-class ChangeDetector(pl.LightningModule):
+class TransformerChangeDetector(pl.LightningModule):
     def __init__(self, 
                  window_size=8, 
                  embedding_size=128, 
