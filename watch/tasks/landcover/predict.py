@@ -61,8 +61,7 @@ def predict(dataset, deployed, output):
         filename = dataset.parent.joinpath(img_info['file_name'])
         try:
             # remove video info
-            for key in ('video_id', 'warp_img_to_vid', 'frame_index'):
-                img_info.pop(key, None)
+            img_info = {k: v for k, v in img_info.items() if k not in ('video_id', 'warp_img_to_vid', 'frame_index')}
 
             output_dset.add_image(**img_info)
             # log.info('loading file: {}  {}'.format(gid, filename.name))
