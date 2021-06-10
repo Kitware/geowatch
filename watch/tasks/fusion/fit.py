@@ -32,12 +32,12 @@ def main(args):
 
     # prime the model, incase it has a lazy layer
     batch = next(iter(dataset.train_dataloader()))
-    result = model(batch["images"][[0],...])
+    result = method(batch["images"][[0],...])
     
     # fit the model
-    trainer.fit(model, dataset)
+    trainer.fit(method, dataset)
 
-if __name == "__main__":
+if __name__ == "__main__":
     
     import argparse
     parser = argparse.ArgumentParser()
