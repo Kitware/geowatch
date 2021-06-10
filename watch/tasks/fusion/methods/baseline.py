@@ -9,12 +9,15 @@ import torchmetrics as metrics
 from models import unet_blur
 
 class UNetChangeDetector(pl.LightningModule):
-    def __init__(self, input_dim=13, feature_dim=64, learning_rate=1e-3, weight_decay=1e-5, pos_weight=1.):
+    def __init__(self, feature_dim=64, learning_rate=1e-3, weight_decay=1e-5, pos_weight=1.):
         super().__init__()
         self.save_hyperparameters()
         
         # simple feature extraction model
-        self.model = unet_blur.UNet(self.hparams.input_dim, self.hparams.feature_dim)
+        self.model = nn.Sequential(
+            nn.LazyConv2d(16, 1),
+            unet_blur.UNet(16, self.hparams.feature_dim),
+        )
         
         # criterion and metrics
         self.criterion = nn.BCEWithLogitsLoss(pos_weight=torch.ones(1)*pos_weight)

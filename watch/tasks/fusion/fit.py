@@ -1,90 +1,61 @@
-import kwcoco
-import ndsampler
-import pathlib
-from torch.utils import data
 import pytorch_lightning as pl
 
-from methods import baseline
-from datasets import onera_2018
+import datasets
+import methods
 import utils
 
 def main(args):
-
-    # load dataset
-    onera_train = kwcoco.CocoDataset(str(args.train_data_path))
-    onera_train_sampler = ndsampler.CocoSampler(onera_train)
-    full_train_dataset = onera_2018.OneraDataset(
-        onera_train_sampler, 
-        sample_shape=(args.time_steps, args.chip_size, args.chip_size),
-        channels=args.channels,
-    )
-    #full_train_dataset.compute_stats(10)
     
-    # split into train/valid
-    num_examples = len(full_train_dataset)
-    num_valid = int(args.valid_pct * num_examples)
-    num_train = num_examples - num_valid
-    
-    train_dataset, valid_dataset = data.random_split(
-        full_train_dataset, 
-        [num_train, num_valid],
-    )
-    
-    # dataloaders
-    train_dataloader = data.DataLoader(
-        train_dataset, 
-        batch_size=args.batch_size, 
-        num_workers=args.num_workers,
-        shuffle=True,
-        pin_memory=True,
-    )
-    valid_dataloader = data.DataLoader(
-        valid_dataset, 
-        batch_size=args.batch_size, 
-        num_workers=args.num_workers,
-        shuffle=False,
-        pin_memory=True,
-    )
-    
-    # model
-    input_dim = train_dataset[0]["images"].shape[1]
-        
-    model_var_dict = utils.filter_args(
+    # init dataset from args
+    dataset_class = getattr(datasets, args.dataset)
+    dataset_var_dict = utils.filter_args(
         vars(args),
-        baseline.ChangeDetector.__init__,
+        dataset_class.__init__,
     )
-    model = baseline.ChangeDetector(
-        input_dim=input_dim,
-        **model_var_dict
+    dataset = dataset_class(
+        **dataset_var_dict
     )
     
-    # trainer
+    # init method from args
+    method_class = getattr(methods, args.method)
+    method_var_dict = utils.filter_args(
+        vars(args),
+        method_class.__init__,
+    )
+    method = method_class(
+        **method_var_dict
+    )
+    
+    # init trainer from args
     trainer = pl.Trainer.from_argparse_args(args)
-    
-    # fit!
-    trainer.fit(model, train_dataloader, valid_dataloader)
 
-if __name__ == "__main__":
+    # prime the model, incase it has a lazy layer
+    batch = next(iter(dataset.train_dataloader()))
+    result = model(batch["images"][[0],...])
+    
+    # fit the model
+    trainer.fit(model, dataset)
+
+if __name == "__main__":
     
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("train_data_path", type=pathlib.Path)
+    parser.add_argument("dataset")
+    parser.add_argument("method")
     
-    # dataset / dataloader
-    parser.add_argument("--valid_pct", default=0.1, type=float)
-    parser.add_argument("--chip_size", default=128, type=int)
-    parser.add_argument("--time_steps", default=2, type=int)
-    parser.add_argument("--batch_size", default=32, type=int)
-    parser.add_argument("--num_workers", default=4, type=int)
-    parser.add_argument("--channels", default=None, type=str)
+    # parse the dataset and method strings
+    temp_args, _ = parser.parse_known_args()
     
-    # model
-    parser = baseline.ChangeDetector.add_model_specific_args(parser)
+    # get the dataset and method classes
+    dataset_class = getattr(datasets, temp_args.dataset)
+    method_class = getattr(methods, temp_args.method)
     
-    # trainer
+    # add the appropriate args to the parse 
+    # for dataset, method, and trainer
+    parser = dataset_class.add_data_specific_args(parser)
+    parser = method_class.add_model_specific_args(parser)
     parser = pl.Trainer.add_argparse_args(parser)
-
     
+    # parse and pass to main
     args = parser.parse_args()
     main(args)
-    
