@@ -7,6 +7,7 @@ import pytorch_lightning as pl
 from torch.utils import data
 from datasets import common
 import utils
+import pathlib
 
 class Drop0AlignMSI_S2(pl.LightningDataModule):
     def __init__(
@@ -153,3 +154,18 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
             shuffle=false,
             pin_memory=True,
         )
+    
+    @staticmethod
+    def add_data_specific_args(parent_parser):
+        parser = parent_parser.add_argument_group("Drop0AlignMSI_S2")
+        parser.add_argument("--train_kwcoco_path", default=None, type=pathlib.Path) 
+        parser.add_argument("--test_kwcoco_path", default=None, type=pathlib.Path)
+        parser.add_argument("--time_steps", default=2, type=int)
+        parser.add_argument("--chip_size", default=128, type=int)
+        parser.add_argument("--time_overlap", default=0, type=int)
+        parser.add_argument("--chip_overlap", default=0.1, type=float)
+        parser.add_argument("--channels", default='costal|blue|green|red|B05|B06|B07|nir|B09|cirrus|swir16|swir22|B8A', type=str)
+        parser.add_argument("--valid_pct", default=0.1, type=float)
+        parser.add_argument("--batch_size", default=4, type=int)
+        parser.add_argument("--num_workers", default=4, type=int)
+        return parent_parser
