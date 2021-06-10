@@ -15,6 +15,7 @@ def main(args):
     dataset = dataset_class(
         **dataset_var_dict
     )
+    dataset.setup("fit")
     
     # init method from args
     method_class = getattr(methods, args.method)
