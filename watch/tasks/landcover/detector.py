@@ -158,14 +158,12 @@ def get_features(img, tolerance_pixels=1.0):
     smoothing tolerance is roughly in pixels, None for no smoothing
     """
 
-    # TODO transform or keep in pixel coords?
-    transform = affine.identity
-
     img = img.astype(np.int16)
 
     mask = img != PRED_NODATA
 
-    geometries = rasterio.features.shapes(img, mask=mask, transform=transform)
+    # geometries are in pixel coords
+    geometries = rasterio.features.shapes(img, mask=mask)
     geometries = [(shape(geom), v) for geom, v in geometries]
 
     return geometries
