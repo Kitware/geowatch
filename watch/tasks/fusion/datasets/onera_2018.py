@@ -39,7 +39,7 @@ class OneraCD_2018(pl.LightningDataModule):
         transform = utils.Lambda(lambda x: x/2000.)
         
         if stage == "fit" or stage is None:
-            kwcoco_ds = kwcoco.CocoDataset(str(self.train_kwcoco_path))
+            kwcoco_ds = kwcoco.CocoDataset(str(self.train_kwcoco_path.expanduser()))
             kwcoco_sampler = ndsampler.CocoSampler(kwcoco_ds)
             train_val_ds = common.VideoDataset(
                 kwcoco_sampler,
@@ -59,7 +59,7 @@ class OneraCD_2018(pl.LightningDataModule):
             )
             
         if stage == "test" or stage is None:
-            kwcoco_ds = kwcoco.CocoDataset(str(self.test_kwcoco_path))
+            kwcoco_ds = kwcoco.CocoDataset(str(self.test_kwcoco_path.expanduser()))
             kwcoco_sampler = ndsampler.CocoSampler(kwcoco_ds)
             test_ds = common.VideoDataset(
                 kwcoco_sampler,

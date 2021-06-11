@@ -96,7 +96,7 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
         transform = utils.Lambda(lambda x: x/2000.)
         
         if stage == "fit" or stage is None:
-            kwcoco_ds = kwcoco.CocoDataset(self.train_kwcoco_path)
+            kwcoco_ds = kwcoco.CocoDataset(str(self.train_kwcoco_path.expanduser()))
             kwcoco_ds = self.preprocess_ds(kwcoco_ds)
             kwcoco_sampler = ndsampler.CocoSampler(kwcoco_ds)
             train_val_ds = common.VideoDataset(
@@ -117,7 +117,7 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
             )
             
         if stage == "test" or stage is None:
-            kwcoco_ds = kwcoco.CocoDataset(self.test_kwcoco_path)
+            kwcoco_ds = kwcoco.CocoDataset(str(self.test_kwcoco_path.expanduser()))
             kwcoco_ds = self.preprocess_ds(kwcoco_ds)
             kwcoco_sampler = ndsampler.CocoSampler(kwcoco_ds)
             test_ds = common.VideoDataset(
