@@ -44,7 +44,7 @@ class UNetChangeDetector(pl.LightningModule):
         return distance
         
     def training_step(self, batch, batch_idx=None):
-        images, labels = batch["images"], batch["changes"]
+        images, labels = batch["images"], batch["labels"]
         changes = labels[:,1:] != labels[:,:-1]
         
         # compute predicted and target change masks
@@ -59,7 +59,7 @@ class UNetChangeDetector(pl.LightningModule):
         return loss
     
     def validation_step(self, batch, batch_idx=None):
-        images, labels = batch["images"], batch["changes"]
+        images, labels = batch["images"], batch["labels"]
         changes = labels[:,1:] != labels[:,:-1]
         
         # compute predicted and target change masks
@@ -75,7 +75,7 @@ class UNetChangeDetector(pl.LightningModule):
         return loss
     
     def test_step(self, batch, batch_idx=None):
-        images, labels = batch["images"], batch["changes"]
+        images, labels = batch["images"], batch["labels"]
         changes = labels[:,1:] != labels[:,:-1]
         
         # compute predicted and target change masks
