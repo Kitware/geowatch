@@ -22,6 +22,9 @@ class OneraCD_2018(pl.LightningDataModule):
         valid_pct=0.1,
         batch_size=4,
         num_workers=4,
+        transform_key="none",
+        tfms_scale=2000.,
+        tfms_window_size=8,
     ):
         super().__init__()
         self.train_kwcoco_path = train_kwcoco_path
@@ -35,8 +38,26 @@ class OneraCD_2018(pl.LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
         
+        if transform_key == "none":
+            self.train_tfms, self.test_tfms = None, None
+        elif transform_key == "scale":
+            self.train_tfms = utils.Lambda(lambda x: x/tfms_scale)
+            self.test_tfms = utils.Lambda(lambda x: x/tfms_scale)
+        elif transform_key == "transformer":
+            self.train_tfms = transforms.Compose([
+                Rearrange("t c (h hs) (w ws) -> t c h w (ws hs)",
+                          hs=tfms_window_size, 
+                          ws=tfms_window_size),
+                AddPositionalEncoding(4, [0, 1, 2, 3]),
+            ])
+            self.test_tfms = transforms.Compose([
+                Rearrange("t c (h hs) (w ws) -> t c h w (ws hs)",
+                          hs=tfms_window_size, 
+                          ws=tfms_window_size),
+                AddPositionalEncoding(4, [0, 1, 2, 3]),
+            ])
+        
     def setup(self, stage):
-        transform = utils.Lambda(lambda x: x/2000.)
         
         if stage == "fit" or stage is None:
             kwcoco_ds = kwcoco.CocoDataset(str(self.train_kwcoco_path.expanduser()))
@@ -46,7 +67,7 @@ class OneraCD_2018(pl.LightningDataModule):
                 sample_shape=(self.time_steps, self.chip_size, self.chip_size),
                 window_overlap=(self.time_overlap, self.chip_overlap, self.chip_overlap),
                 channels=self.channels,
-                transform=transform,
+                transform=self.train_tfms,
             )
             
             num_examples = len(train_val_ds)
@@ -66,7 +87,7 @@ class OneraCD_2018(pl.LightningDataModule):
                 sample_shape=(self.time_steps, self.chip_size, self.chip_size),
                 window_overlap=(self.time_overlap, self.chip_overlap, self.chip_overlap),
                 channels=self.channels,
-                transform=transform,
+                transform=self.test_tfms,
             )
             
     def train_dataloader(self):
@@ -109,4 +130,7 @@ class OneraCD_2018(pl.LightningDataModule):
         parser.add_argument("--valid_pct", default=0.1, type=float)
         parser.add_argument("--batch_size", default=4, type=int)
         parser.add_argument("--num_workers", default=4, type=int)
+        parser.add_argument("--transform_key", default="none", type=str)
+        parser.add_argument("--tfms_scale", default=2000., type=float)
+        parser.add_argument("--tfms_window_size", default=8, type=int)
         return parent_parser

@@ -103,11 +103,6 @@ class _TransformerChangeDetector(pl.LightningModule):
         self.save_hyperparameters()
         
         layers = [
-            # nn.Transformer* expect inputs shaped (sequence, batch, feature)
-            Rearrange("b t c (h hs) (w ws) -> b t c h w (ws hs)",
-                      hs=self.hparams.window_size, 
-                      ws=self.hparams.window_size),
-            AddPositionalEncoding(5, [1, 2, 3, 4]),
             nn.LazyLinear(embedding_size),
             Rearrange("b t c h w f -> b f t c h w"),
         ] + [
@@ -134,7 +129,6 @@ class _TransformerChangeDetector(pl.LightningModule):
         similarity = einops.reduce(similarity, "b t c h w -> b t h w", "mean")
         distance = -3.0 * similarity
 
-        distance = nn.functional.interpolate(distance, [H, W], mode="bilinear")
         return distance
         
     def training_step(self, batch, batch_idx=None):
@@ -142,7 +136,12 @@ class _TransformerChangeDetector(pl.LightningModule):
         changes = labels[:,1:] != labels[:,:-1]
         
         # compute predicted and target change masks
+        _, _, H, W = changes.shape
         distances = self(images)
+        distances = nn.functional.interpolate(
+            distances, 
+            [H, W], 
+            mode="bilinear")
         
         # compute metrics
         for key, metric in self.metrics.items():
@@ -157,7 +156,12 @@ class _TransformerChangeDetector(pl.LightningModule):
         changes = labels[:,1:] != labels[:,:-1]
         
         # compute predicted and target change masks
+        _, _, H, W = changes.shape
         distances = self(images)
+        distances = nn.functional.interpolate(
+            distances, 
+            [H, W], 
+            mode="bilinear")
                 
         # compute metrics
         for key, metric in self.metrics.items():
@@ -173,7 +177,12 @@ class _TransformerChangeDetector(pl.LightningModule):
         changes = labels[:,1:] != labels[:,:-1]
         
         # compute predicted and target change masks
+        _, _, H, W = changes.shape
         distances = self(images)
+        distances = nn.functional.interpolate(
+            distances, 
+            [H, W], 
+            mode="bilinear")
                 
         # compute metrics
         for key, metric in self.metrics.items():
