@@ -61,7 +61,7 @@ class OneraCD_2018(pl.LightningDataModule):
         if stage == "test" or stage is None:
             kwcoco_ds = kwcoco.CocoDataset(str(self.test_kwcoco_path.expanduser()))
             kwcoco_sampler = ndsampler.CocoSampler(kwcoco_ds)
-            test_ds = common.VideoDataset(
+            self.test_dataset = common.VideoDataset(
                 kwcoco_sampler,
                 sample_shape=(self.time_steps, self.chip_size, self.chip_size),
                 window_overlap=(self.time_overlap, self.chip_overlap, self.chip_overlap),
@@ -92,7 +92,7 @@ class OneraCD_2018(pl.LightningDataModule):
             self.test_dataset,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
-            shuffle=false,
+            shuffle=False,
             pin_memory=True,
         )
     

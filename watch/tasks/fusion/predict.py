@@ -3,6 +3,9 @@ import pathlib
 import numpy as np
 import tqdm
 import tifffile
+import kwcoco
+import kwimage
+import ndsampler
 
 import datasets
 import methods
@@ -25,6 +28,13 @@ def main(args):
     
     test_dataset = dataset.test_dataset
     test_dataloader = dataset.test_dataloader()
+
+    # load or init results ds
+    if args.results_path.exists():
+        results_ds = kwcoco.CocoDataset(str(args.results_path.expanduser()))
+    else:
+        results_ds = kwcoco.CocoDataset()
+        results_ds.add_category("change")
     
     # init method from checkpoint
     method_class = getattr(methods, args.method)
@@ -35,28 +45,28 @@ def main(args):
     result_canvases = {
         video["id"]: np.full([
                 video["num_frames"]-1, video["height"], video["width"],
-            ], -2)
-        for video in test_dataset.dataset["videos"]
+            ], -2.0)
+        for video in test_dataset.sampler.dset.dataset["videos"]
     }
     result_counts = {
         video["id"]: np.full([
                 video["num_frames"]-1, video["height"], video["width"],
             ], 0)
-        for video in test_dataset.dataset["videos"]
+        for video in test_dataset.sampler.dset.dataset["videos"]
     }
     target_canvases = {
         video["id"]: np.full([
                 video["num_frames"]-1, video["height"], video["width"],
             ], -2)
-        for video in test_dataset.dataset["videos"]
+        for video in test_dataset.sampler.dset.dataset["videos"]
     }
     
     # fill canvases
     for example, meta in zip(tqdm.tqdm(test_dataloader), test_dataset.sample_grid):
         images, labels = example["images"], example["labels"]
-        changes = labels[0, 1:] != labels[0, :-1]
+        changes = (labels[0, 1:] != labels[0, :-1]).detach().cpu().numpy()
         
-        preds = model(images)[0]
+        preds = (method(images)[0]).detach().cpu().numpy()
         
         space_time_slice = (meta["time_slice"],) + meta["space_slice"]
         
@@ -71,37 +81,89 @@ def main(args):
     targets = target_canvases
     
     # save canvases to disk
-    for video in test_dataset.dataset["videos"]:
+    video_keys = {video["id"] for video in results_ds.dataset["videos"]}
+    image_keys = {image["id"] for image in results_ds.dataset["images"]}
+    
+    for video in test_dataset.sampler.dset.dataset["videos"]:
         
+        # if video not in results_ds, add it
+        if video["id"] not in video_keys:
+            # TODO: just copy all video metadata? (**video)
+            results_ds.add_video(
+                name=video["name"],
+                id=video["id"],
+                width=video["width"],
+                height=video["height"],
+                target_gsd=video["target_gsd"],
+                warp_wld_to_vid=video["warp_wld_to_vid"],
+                min_gsd=video["min_gsd"],
+                max_gsd=video["max_gsd"],
+            )
+            
+        # index into results
         result_stack = results[video["id"]]
         target_stack = targets[video["id"]]
 
         frames = [
             img
-            for img in test_dataset.imgs.values()
+            for img in test_dataset.sampler.dset.imgs.values()
             if img["video_id"] == video["id"]
         ][1:]
 
-        result_stack = result_stack.detach().cpu().numpy()
-        target_stack = target_stack.detach().cpu().numpy()
+        result_stack = result_stack
+        target_stack = target_stack
         for frame, result, target in zip(frames, result_stack, target_stack):
+        
+            # if frame not in results_ds, add it
+            if frame["id"] not in image_keys:
+                # TODO: just copy all frame metadata? (**frame)
+                results_ds.add_image(
+                    id=frame["id"],
+                    name="{}-{}".format(video["name"], frame["frame_index"]),
+                    width=frame["width"],
+                    height=frame["height"],
+                    video_id=video["id"],
+                    frame_index=frame["frame_index"],
+                    img_to_vid=frame["img_to_vid"], 
+                    warp_img_to_vid=frame["warp_img_to_vid"],
+                )
+                
+                # new frame needs an annotation too
+                segmentation = kwimage.Mask(target, "c_mask").to_coco()
 
+                results_ds.add_annotation(
+                    frame["id"],
+                    category_id=1,
+                    bbox=[0, 0, frame["width"], frame["height"]],
+                    #bbox=[0, 0, frame["height"], frame["width"]],
+                    segmentation=segmentation,
+                )
+
+            # save result to file
             result_fname = args.results_dir / fname_template.format(
                 location=video["name"], 
                 bands=args.tag,
                 frame_no=frame["frame_index"],
             )
-            target_fname = args.results_dir / fname_template.format(
-                location=video["name"], 
-                bands="target",
-                frame_no=frame["frame_index"],
-            )
             result_fname.parents[0].mkdir(parents=True, exist_ok=True)
 
             tifffile.imwrite(result_fname, result)
-            tifffile.imwrite(target_fname, target)
+            
+            # add result to dataset
+            utils.add_auxiliary(
+                results_ds,
+                frame["id"],
+                str(result_fname.absolute()), 
+                result_fname.stem.split("-")[0], 
+                aux_width=frame["width"],
+                aux_height=frame["height"],
+                warp_aux_to_img=None)
 
-if __name == "__main__":
+    # validate and save results
+    print(results_ds.validate())
+    results_ds.dump(str(args.results_path))
+
+if __name__ == "__main__":
     
     import argparse
     parser = argparse.ArgumentParser()
@@ -109,6 +171,8 @@ if __name == "__main__":
     parser.add_argument("method")
     parser.add_argument("tag")
     parser.add_argument("checkpoint_path", type=pathlib.Path)
+    parser.add_argument("results_dir", type=pathlib.Path)
+    parser.add_argument("results_path", type=pathlib.Path)
     
     # parse the dataset and method strings
     temp_args, _ = parser.parse_known_args()
