@@ -40,7 +40,7 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
         elif transform_key == "scale":
             self.train_tfms = utils.Lambda(lambda x: x/tfms_scale)
             self.test_tfms = utils.Lambda(lambda x: x/tfms_scale)
-        elif transform_key == "transformer":
+        elif transform_key == "channel_transformer":
             self.train_tfms = transforms.Compose([
                 Rearrange("t c (h hs) (w ws) -> t c h w (ws hs)",
                           hs=tfms_window_size, 

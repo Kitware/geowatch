@@ -43,14 +43,16 @@ class OneraCD_2018(pl.LightningDataModule):
         elif transform_key == "scale":
             self.train_tfms = utils.Lambda(lambda x: x/tfms_scale)
             self.test_tfms = utils.Lambda(lambda x: x/tfms_scale)
-        elif transform_key == "transformer":
+        elif transform_key == "channel_transformer":
             self.train_tfms = transforms.Compose([
+                utils.Lambda(lambda x: x/tfms_scale),
                 Rearrange("t c (h hs) (w ws) -> t c h w (ws hs)",
                           hs=tfms_window_size, 
                           ws=tfms_window_size),
                 AddPositionalEncoding(4, [0, 1, 2, 3]),
             ])
             self.test_tfms = transforms.Compose([
+                utils.Lambda(lambda x: x/tfms_scale),
                 Rearrange("t c (h hs) (w ws) -> t c h w (ws hs)",
                           hs=tfms_window_size, 
                           ws=tfms_window_size),
