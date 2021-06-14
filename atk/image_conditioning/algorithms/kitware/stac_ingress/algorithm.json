@@ -34,6 +34,21 @@
             "parameter_choices": "",
             "required": false,
             "sort_order": 6
+        },
+        {
+            "custom_validation": "",
+            "data_type": "integer",
+            "default_value": 0,
+            "description": "Maximum number of results to ingress.",
+            "display_name": "Max Results",
+            "field_type": "number",
+            "help_text": "Set a maximum number of results to ingress, if less than or equal to 0 no maximum will be imposed.  Useful for testing and debugging.",
+            "max_value": null,
+            "min_value": null,
+            "name": "max_results",
+            "parameter_choices": "",
+            "required": false,
+            "sort_order": 7
         }
     ],
     "outputs": [

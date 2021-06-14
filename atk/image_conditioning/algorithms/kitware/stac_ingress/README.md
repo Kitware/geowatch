@@ -14,6 +14,7 @@ output_dir|Directory where output images / data will be written.  Will be create
 collections|List of STAC collections to retrieve results from|Yes
 stac_api_key|API Key for accessing the STAC endpoint|
 dry_run|Don't actually download the retrieved imagery|
+max_results|Maximum number of results to ingress.|
 
 ## Outputs:
 Name|Description
