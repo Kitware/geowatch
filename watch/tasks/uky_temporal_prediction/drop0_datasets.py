@@ -89,10 +89,10 @@ class drop0_aligned_change(torch.utils.data.Dataset):
         idx2 = idx
         while abs(idx2 - idx) < 1:
             idx2 = random.randint(0, self.length - 1)
-        
+
         item2 = self.dataset.__getitem__(idx2)
         im2, seg2, date2 = item2['image'], item2['mask'], item2['date']
-        
+
         if date2 < date:
             im, im2 = im2, im
             seg, seg2 = seg2, seg
@@ -257,8 +257,6 @@ class drop0_aligned_segmented(torch.utils.data.Dataset):
             'image': im,
             'mask': overall_mask,
             'date': acquisition_date,
-            # FIXME? This does not seem to actually return annotations
-            'annotations': img
         }
         return item
 
@@ -396,11 +394,8 @@ class drop0_aligned(torch.utils.data.Dataset):
             elif self.sensor == 'WV':
                 im = im / 2048.
 
-        # TODO: Was there intent to use data from dets instead of img in the
-        # annotations item?
         item = {
             'image': im,
             'date': acquisition_date,
-            'annotations': img
         }
         return item
