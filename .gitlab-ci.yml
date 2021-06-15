@@ -235,6 +235,7 @@ data:
     - apt-get update && apt-get install jq -y
     - pip install awscli pystac-client
   script:
+    - mkdir -p $CI_PROJECT_DIR/imagery
     - stac-client search --url https://api.smart-stac.com/ -c worldview-nitf --max-items 1 --bbox 124 37 131 43
       --header x-api-key=${STAC_API_KEY} --save $CI_PROJECT_DIR/imagery/stac_output.json
     - FILENAME=$(cat $CI_PROJECT_DIR/imagery/stac_output.json | jq -r '.features[0] .assets .data .href')
