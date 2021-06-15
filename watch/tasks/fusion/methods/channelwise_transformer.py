@@ -120,7 +120,6 @@ class _TransformerChangeDetector(pl.LightningModule):
         })
 
     def forward(self, images):
-        B, T, C, H, W = images.shape
         feats = self.model(images) # b f t c h w
         
         # similarity between neighboring timesteps

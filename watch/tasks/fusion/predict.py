@@ -68,7 +68,18 @@ def main(args):
         
         preds = (method(images)[0]).detach().cpu().numpy()
         
-        space_time_slice = (meta["time_slice"],) + meta["space_slice"]
+        time_slice = slice(
+                meta["time_slice"].start,
+                meta["time_slice"].stop-1,
+                meta["time_slice"].step,
+            )
+        space_time_slice = (time_slice,) + meta["space_slice"]
+
+        #print(
+        #    space_time_slice, 
+        #    result_canvases[meta["vidid"]][space_time_slice].shape,
+        #    preds.shape,
+        #)
         
         result_canvases[meta["vidid"]][space_time_slice] += preds
         result_counts[meta["vidid"]][space_time_slice] += 1

@@ -5,9 +5,35 @@ import ndsampler
 import pathlib
 import numpy as np
 from torch.utils import data
+from torch import nn
 import torch
 import einops
 import itertools as it
+
+class AddPositionalEncoding(nn.Module):
+    def __init__(self, dest_dim, dims_to_encode):
+        super().__init__()
+        self.dest_dim = dest_dim
+        self.dims_to_encode = dims_to_encode
+        assert self.dest_dim not in self.dims_to_encode
+        
+    def forward(self, x):
+
+        inds = [
+            slice(0, size) if (dim in self.dims_to_encode) else slice(0, 1)
+            for dim, size in enumerate(x.shape)
+        ]
+        inds[self.dest_dim] = self.dims_to_encode
+
+        encoding = torch.cat(torch.meshgrid([
+            torch.linspace(0, 1, x.shape[dim]) if (dim in self.dims_to_encode) else torch.tensor(-1.)
+            for dim in range(len(x.shape))
+        ]), dim=self.dest_dim)[inds]
+
+        expanded_shape = list(x.shape)
+        expanded_shape[self.dest_dim] = -1
+        x = torch.cat([x, encoding.expand(expanded_shape).type_as(x)], dim=self.dest_dim)
+        return x
 
 class VideoDataset(data.Dataset):
     # TODO: add torchvision.transforms or albumentations
@@ -95,16 +121,20 @@ class VideoDataset(data.Dataset):
         
         # catch nans
         frame_ims[np.isnan(frame_ims)] = -1.
+
+        # convert to tensors
+        frame_ims = torch.from_numpy(frame_ims).detach()
+        frame_masks = torch.from_numpy(frame_masks).detach().int()
         
         if self.transform:
             frame_ims = self.transform(frame_ims)
         
         if self.mode == "predict":
-            return torch.from_numpy(frame_ims).detach()
+            return frame_ims
 
         example = {
-            "images": torch.from_numpy(frame_ims).detach(),
-            "labels": torch.from_numpy(frame_masks).detach().int(),
+            "images": frame_ims,
+            "labels": frame_masks,
         }
         
         return example

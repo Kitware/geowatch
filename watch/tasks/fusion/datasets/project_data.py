@@ -4,8 +4,10 @@ import matplotlib.pyplot as plt
 import tifffile
 import itertools as it
 import pytorch_lightning as pl
+from torchvision import transforms
 from torch.utils import data
 from datasets import common
+from einops.layers.torch import Rearrange, Reduce
 import utils
 import pathlib
 
@@ -42,16 +44,18 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
             self.test_tfms = utils.Lambda(lambda x: x/tfms_scale)
         elif transform_key == "channel_transformer":
             self.train_tfms = transforms.Compose([
+                utils.Lambda(lambda x: x/tfms_scale),
                 Rearrange("t c (h hs) (w ws) -> t c h w (ws hs)",
                           hs=tfms_window_size, 
                           ws=tfms_window_size),
-                AddPositionalEncoding(4, [0, 1, 2, 3]),
+                common.AddPositionalEncoding(4, [0, 1, 2, 3]),
             ])
             self.test_tfms = transforms.Compose([
+                utils.Lambda(lambda x: x/tfms_scale),
                 Rearrange("t c (h hs) (w ws) -> t c h w (ws hs)",
                           hs=tfms_window_size, 
                           ws=tfms_window_size),
-                AddPositionalEncoding(4, [0, 1, 2, 3]),
+                common.AddPositionalEncoding(4, [0, 1, 2, 3]),
             ])
         
     def preprocess_ds(self, project_ds):
