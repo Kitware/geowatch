@@ -48,9 +48,11 @@ dependencies:
     - kwcoco >= 0.2.4
     - Pillow >= 8.0.1
     - imgaug >= 0.4.0
+    - albumentations >= 1.0.0
     - opencv_python_headless >= 4.5.2.52  # This can be a problem library
     - scikit_image >= 0.18.1
     - ndsampler >= 0.6.3
+    - tifffile >= 2021.4.8
 
     # Plotting
     - matplotlib >= 3.4.1
@@ -70,6 +72,7 @@ dependencies:
     - torch >= 1.8.0
     - torch_liberator >= 0.1.0
     - torch_optimizer >= 0.1.0
+    - pytorch_lightning >= 1.3.5
     - netharn >= 0.5.15
 
     - tensorboard_logger >= 0.1.0 
@@ -157,7 +160,6 @@ dependencies:
       tensorboard_data_server >= 0.6.1
       tensorboard_plugin_wit >= 1.8.0
       threadpoolctl >= 2.1.0
-      tifffile >= 2021.4.8
       torchvision >= 0.9.1
       tqdm >= 4.60.0
       typing >= extensions >= 3.10.0.0
