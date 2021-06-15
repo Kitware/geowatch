@@ -183,12 +183,8 @@ def batch_crf_inference(img: torch.Tensor, probs: torch.Tensor,
         b_image[b_image > 255] = 255
         b_image[b_image < 0] = 0
         b_image = b_image.astype(np.uint8)
-        b_pred = crf_inference(
-            b_image,
-            b_probs,
-            t=t,
-            scale_factor=scale_factor,
-            labels=labels)
+        b_pred = crf_inference(b_image, b_probs, t=t,
+                               scale_factor=scale_factor, labels=labels)
         preds_probs[b, :, :, :] = torch.from_numpy(b_pred)
         # print(f"pred min: {b_pred.min()} max: {b_pred.max()}")
         # b_pred = b_pred.max(1)[1]
@@ -367,15 +363,12 @@ def load_config_as_dict(path_to_config):
 def config_parser(path_to_config, experiment_type):
     if experiment_type.lower() == "training":
         config = yaml.safe_load(open(path_to_config))
-        config['data']['height'], config['data']['width'] = parse(
-            '{}x{}', config['data']['image_size'])
-        config['data']['height'], config['data']['width'] = int(
-            config['data']['height']), int(config['data']['width'])
+        config['data']['height'], config['data']['width'] = parse('{}x{}', config['data']['image_size'])
+        config['data']['height'], config['data']['width'] = int(config['data']['height']), int(config['data']['width'])
         return config
 
     elif experiment_type.lower() == "testing":
-        print("incomplete parser for testing")
-        sys.exit()
+        raise Exception("incomplete parser for testing")
 
 
 def load_json_as_dict(path_to_json):
