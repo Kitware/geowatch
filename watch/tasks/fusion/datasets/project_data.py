@@ -27,6 +27,7 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
         transform_key="none",
         tfms_scale=2000.,
         tfms_window_size=8,
+        tfms_channel_subset=None,
     ):
         super().__init__()
         self.train_kwcoco_path = train_kwcoco_path
@@ -40,6 +41,15 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
         
+        tfms_channel_subset = channels if (tfms_channel_subset is None) else tfms_channel_subset
+        
+        channel_split = channels.split("|")
+        tfms_channel_subset = [
+            idx
+            for idx, channel in enumerate(tfms_channel_subset.split("|"))
+            if channel in channel_split
+        ]
+        
         if transform_key == "none":
             self.train_tfms, self.test_tfms = None, None
         elif transform_key == "scale":
@@ -52,6 +62,7 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
                           hs=tfms_window_size, 
                           ws=tfms_window_size),
                 common.AddPositionalEncoding(4, [0, 1, 2, 3]),
+                utils.Lambda(lambda x: x[:,tfms_channel_subset]),
             ])
             self.test_tfms = transforms.Compose([
                 utils.Lambda(lambda x: x/tfms_scale),
@@ -59,6 +70,7 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
                           hs=tfms_window_size, 
                           ws=tfms_window_size),
                 common.AddPositionalEncoding(4, [0, 1, 2, 3]),
+                utils.Lambda(lambda x: x[:,tfms_channel_subset]),
             ])
         
     def preprocess_ds(self, project_ds):
