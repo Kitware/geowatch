@@ -11,6 +11,8 @@ stages:
     - build
     - test
     - docker
+    - data
+    - run
 
 
 ### Conditionals ###
@@ -155,3 +157,44 @@ build_docker_and_upload_strict:
     docker:19.03.12
   variables:
     IMAGE_TAG: latest
+
+
+data:
+# This stage will download one image from the SMART STAC API and persist it for 5 minutes as an artifact (please no caching here)
+  <<:
+    *common_template
+  image: python:3.8
+  stage: data
+  before_script:
+    - apt-get update && apt-get install jq -y
+    - pip install awscli pystac-client
+  script:
+    - mkdir -p $CI_PROJECT_DIR/imagery
+    - stac-client search --url https://api.smart-stac.com/ -c worldview-nitf --max-items 1 --bbox 124 37 131 43
+      --header x-api-key=${STAC_API_KEY} --save $CI_PROJECT_DIR/imagery/stac_output.json
+    - FILENAME=$(cat $CI_PROJECT_DIR/imagery/stac_output.json | jq -r '.features[0] .assets .data .href')
+    - aws s3 cp $FILENAME $CI_PROJECT_DIR/imagery/
+  artifacts:
+    name: "Input Imagery"
+    paths:
+      - imagery/
+    expire_in: 5 minutes
+
+
+run:
+# Fun Part: Run the container you built here and import artifacts from the previous stage
+  <<:
+    *common_template
+  image:
+    name: $CI_REGISTRY_IMAGE/watch:latest
+  stage: run
+  script:
+    - echo "Is there any imagery here?"
+    - ls -lah $CI_PROJECT_DIR/imagery/
+  dependencies:
+    - data
+  artifacts:
+    name: "Output Imagery"
+    paths:
+      - imagery/
+    expire_in: 1 day
