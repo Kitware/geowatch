@@ -1,0 +1,11 @@
+name: uky_temporal_prediction
+channels:
+  - defaults
+dependencies:
+  - python
+  - pip
+  - pip:
+    - pytorch-lightning
+    - kwcoco
+    - tifffile
+    - albumentations
