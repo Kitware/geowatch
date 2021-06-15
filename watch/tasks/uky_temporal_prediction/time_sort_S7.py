@@ -7,12 +7,9 @@ import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 
-
-# TODO: these need to be imported relative to the module
-from utils import setup_python_logging
-from models import UNet, UNet_blur
-
-from spacenet.datasets import S7_sort
+from .utils import setup_python_logging
+from .models import UNet, UNet_blur
+from .spacenet.datasets import S7_sort
 
 
 class space7_sort(pl.LightningModule):

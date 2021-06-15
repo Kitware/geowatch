@@ -4,9 +4,8 @@ from argparse import Namespace
 import pytorch_lightning as pl
 import os
 
-# TODO: these need to be imported relative to the module
-from models import UNet, UNet_blur
-from drop0_datasets import drop0_pairs
+from .models import UNet, UNet_blur
+from .drop0_datasets import drop0_pairs
 
 
 class time_sort(pl.LightningModule):

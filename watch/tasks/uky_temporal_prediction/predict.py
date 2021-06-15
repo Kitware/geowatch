@@ -3,9 +3,7 @@ import kwcoco
 import os
 import json
 import tifffile
-
-# TODO: this needs a relative import
-from time_sort_module import time_sort
+from .time_sort_module import time_sort
 
 
 def extract_features(checkpoint,
