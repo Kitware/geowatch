@@ -100,9 +100,7 @@ def rand_cmap(nlabels, type='bright', first_color_black=True, last_color_black=F
         # Convert HSV list to RGB
         randRGBcolors = []
         for HSVcolor in randHSVcolors:
-            randRGBcolors.append(
-                (*colorsys.hsv_to_rgb(HSVcolor[0], HSVcolor[1], HSVcolor[2]),
-                 fg_alpha))
+            randRGBcolors.append((*colorsys.hsv_to_rgb(HSVcolor[0], HSVcolor[1], HSVcolor[2]), fg_alpha))
         # randRGBcolors[17] = (*matplotlib.colors.to_rgb('magenta'),fg_alpha)
         if first_color_black:
             randRGBcolors[0] = (0, 0, 0, bg_alpha)
@@ -110,8 +108,7 @@ def rand_cmap(nlabels, type='bright', first_color_black=True, last_color_black=F
         if last_color_black:
             randRGBcolors[-1] = (0, 0, 0, bg_alpha)
 
-        random_colormap = LinearSegmentedColormap.from_list(
-            'new_map', randRGBcolors, N=nlabels)
+        random_colormap = LinearSegmentedColormap.from_list('new_map', randRGBcolors, N=nlabels)
 
     # Generate soft pastel colors, by limiting the RGB spectrum
     if type == 'soft':
@@ -126,8 +123,7 @@ def rand_cmap(nlabels, type='bright', first_color_black=True, last_color_black=F
 
         if last_color_black:
             randRGBcolors[-1] = [0, 0, 0]
-        random_colormap = LinearSegmentedColormap.from_list(
-            'new_map', randRGBcolors, N=nlabels)
+        random_colormap = LinearSegmentedColormap.from_list('new_map', randRGBcolors, N=nlabels)
 
     # Display colorbar
     if verbose:
@@ -138,9 +134,9 @@ def rand_cmap(nlabels, type='bright', first_color_black=True, last_color_black=F
         bounds = np.linspace(0, nlabels, nlabels + 1)
         norm = colors.BoundaryNorm(bounds, nlabels)
 
-        cb = colorbar.ColorbarBase(
-            ax, cmap=random_colormap, norm=norm, spacing='proportional',
-            ticks=None, boundaries=bounds, format='%1i',
-            orientation=u'horizontal')
+        cb = colorbar.ColorbarBase(ax, cmap=random_colormap, norm=norm,
+                                   spacing='proportional', ticks=None,
+                                   boundaries=bounds, format='%1i',
+                                   orientation=u'horizontal')
 
     return random_colormap

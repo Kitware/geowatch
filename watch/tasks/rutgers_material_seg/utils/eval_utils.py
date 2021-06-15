@@ -18,10 +18,7 @@ def get_ap_score(y_true, y_scores):
     Returns:
         sum of batch average precision
     """
-    scores = average_precision_score(
-        y_true=y_true,
-        y_score=y_scores,
-        average='samples')
+    scores = average_precision_score(y_true=y_true, y_score=y_scores, average='samples')
     return scores
 
 

@@ -537,12 +537,12 @@ if __name__ == "__main__":
     train_dataloader = dataset.make_loader(batch_size=config['training']['batch_size'])
 
     model = SETRModel(patch_size=(32, 32),
-                    in_channels=3,
-                    out_channels=1,
-                    hidden_size=1024,
-                    num_hidden_layers=8,
-                    num_attention_heads=16,
-                    decode_features=[512, 256, 128, 64])
+                      in_channels=3,
+                      out_channels=1,
+                      hidden_size=1024,
+                      num_hidden_layers=8,
+                      num_attention_heads=16,
+                      decode_features=[512, 256, 128, 64])
 
     # model = build_model(model_name = config['training']['model_name'],
     #                     backbone=config['training']['backbone'],

@@ -22,15 +22,13 @@ class DeepGlobeDataset(object):
         self.masks_paths = utils.dictionary_contents(
             path=self.masks_root, types=['*.png'])
 
-        self.mask_mapping = {
-            0: 0,    # 0, unknown
-            179: 1,  # 179, urban land
-            226: 2,  # 226, agriculture land
-            105: 3,  # 105, rangeland, non-forest, non farm, green land
-            150: 4,  # 150, forest land
-            29: 5,   # 29, water
-            255: 6,  # 255, barren land, mountain, rock, dessert
-        }
+        self.mask_mapping = {0: 0,    # 0, unknown
+                             179: 1,  # 179, urban land
+                             226: 2,  # 226, agriculture land
+                             105: 3,  # 105, rangeland, non-forest, non farm, green land
+                             150: 4,  # 150, forest land
+                             29: 5,   # 29, water
+                             255: 6}  # 255, barren land, mountain, rock, dessert
 
     def __getitem__(self, idx):
 
@@ -45,10 +43,7 @@ class DeepGlobeDataset(object):
 
         new_image = self.transforms(img)
         outputs = {}
-        outputs['visuals'] = {
-            'image': new_image,
-            'mask': new_mask,
-            'image_name': image_name}
+        outputs['visuals'] = {'image': new_image, 'mask': new_mask, 'image_name': image_name}
         outputs['inputs'] = {'image': new_image, 'mask': new_mask}
 
         return outputs

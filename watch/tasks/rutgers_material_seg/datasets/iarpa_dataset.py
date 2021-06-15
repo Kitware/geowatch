@@ -73,8 +73,7 @@ class SequenceDataset(torch.utils.data.Dataset):
             # print(info)
             dets = dets.translate(info['offset'])
 
-            frame_mask = np.full(
-                frame.shape[0:2], dtype=np.int32, fill_value=-1)
+            frame_mask = np.full(frame.shape[0:2], dtype=np.int32, fill_value=-1)
             ann_polys = dets.data['segmentations'].to_polygon_list()
             ann_aids = dets.data['aids']
             ann_cids = dets.data['cids']
@@ -97,8 +96,7 @@ class SequenceDataset(torch.utils.data.Dataset):
 
         # Perpare data for torch
         frame_data = np.concatenate([f[None, ...] for f in frame_ims], axis=0)
-        class_masks = np.concatenate([m[None, ...]
-                                     for m in frame_masks], axis=0)
+        class_masks = np.concatenate([m[None, ...] for m in frame_masks], axis=0)
 
         cthw_im = frame_data.transpose(3, 0, 1, 2)
 

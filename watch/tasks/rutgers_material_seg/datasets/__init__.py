@@ -38,12 +38,10 @@ def build_dataset(dataset_name: str, root: str, batch_size: int,
         torch loader
     """
     height, width = int(kwargs["image_size"].split("x")[0]), int(kwargs["image_size"].split("x")[1])
-    transformer = transforms.Compose([
-        transforms.Resize((height, width)),
-        # transforms.ColorJitter(),
-        transforms.ToTensor(),
-        transforms.Normalize(*mean_std),
-    ])
+    transformer = transforms.Compose([transforms.Resize((height, width)),
+                                      # transforms.ColorJitter(),
+                                      transforms.ToTensor(),
+                                      transforms.Normalize(*mean_std)])
     print(f"Building {split} dataset {dataset_name} with root: {root}")
     dataset = datasets[dataset_name](root=root, transforms=transformer, split=split)
     dataloader = DataLoader(dataset,

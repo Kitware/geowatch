@@ -13,8 +13,7 @@ from parse import parse
 import random
 
 
-def denorm(image: torch.Tensor, mean: list = [
-           0.485, 0.456, 0.406], std: list = [0.229, 0.224, 0.225]) -> torch.Tensor:
+def denorm(image: torch.Tensor, mean: list = [0.485, 0.456, 0.406], std: list = [0.229, 0.224, 0.225]) -> torch.Tensor:
     """denorm shifted image
 
     Parameters
@@ -230,11 +229,8 @@ def crf_inference(img: np.array, probs: np.array, t: int = 10,
 
     d.setUnaryEnergy(unary)
     d.addPairwiseGaussian(sxy=3 / scale_factor, compat=3)
-    d.addPairwiseBilateral(
-        sxy=80 / scale_factor,
-        srgb=13,
-        rgbim=np.copy(img),
-        compat=10)
+    d.addPairwiseBilateral(sxy=80 / scale_factor, srgb=13,
+                           rgbim=np.copy(img), compat=10)
     Q = d.inference(t)
 
     return np.array(Q).reshape((n_labels, h, w))

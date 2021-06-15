@@ -32,11 +32,9 @@ class Conv2d(nn.Conv2d):
     def forward(self, x):
         # return super(Conv2d, self).forward(x)
         weight = self.weight
-        weight_mean = weight.mean(dim=1, keepdim=True).mean(
-            dim=2, keepdim=True).mean(dim=3, keepdim=True)
+        weight_mean = weight.mean(dim=(1, 2, 3), keepdim=True)
         weight = weight - weight_mean
-        std = weight.view(weight.size(
-            0), -1).std(dim=1).view(-1, 1, 1, 1) + 1e-5
+        std = weight.view(weight.size(0), -1).std(dim=1).view(-1, 1, 1, 1) + 1e-5
         weight = weight / std.expand_as(weight)
         return F.conv2d(x, weight, self.bias, self.stride,
                         self.padding, self.dilation, self.groups)
@@ -105,8 +103,7 @@ class ASPP(nn.Module):
 class Bottleneck(nn.Module):
     expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1,
-                 downsample=None, dilation=1, conv=None, norm=None):
+    def __init__(self, inplanes, planes, stride=1, downsample=None, dilation=1, conv=None, norm=None):
         super(Bottleneck, self).__init__()
         self.conv1 = conv(inplanes, planes, kernel_size=1, bias=False)
         self.bn1 = norm(planes)
@@ -177,13 +174,7 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=1,
                                        dilation=2)
         # self.aspp = ASPP(512 * block.expansion, 256, num_classes, conv=self.conv, norm=self.norm)
-        self.aspp = ASPP(
-            512 *
-            block.expansion,
-            256,
-            64,
-            conv=self.conv,
-            norm=self.norm)
+        self.aspp = ASPP(512 * block.expansion, 256, 64, conv=self.conv, norm=self.norm)
 
         for m in self.modules():
             if isinstance(m, self.conv):
@@ -198,51 +189,32 @@ class ResNet(nn.Module):
 
         # Stochastic Gate
         self.sg = StochasticGate()
-        self.fc8_skip = nn.Sequential(
-
-            #   conv2d(256, 48, 1, bias=False),
-            Conv2d(256, 48, 1, bias=False),
-            #   nn.BatchNorm2d(48, track_running_stats = False),
-            nn.GroupNorm(24, 48),
-            nn.ReLU(),
-        )
-        self.fc8_x = nn.Sequential(
-            #    conv2d(304, 256, kernel_size=3, stride=1, padding=1, bias=False),
-            #    Conv2d(304,256,kernel_size=3, stride=1, padding=1, bias=False),
-            Conv2d(112, 256, kernel_size=3, stride=1, padding=1, bias=False),
-            #    nn.BatchNorm2d(256, track_running_stats = False),
-            nn.GroupNorm(32, 256),
-            nn.ReLU(),
-
-        )
+        self.fc8_skip = nn.Sequential(Conv2d(256, 48, 1, bias=False),
+                                      # nn.BatchNorm2d(48, track_running_stats = False),
+                                      nn.GroupNorm(24, 48),
+                                      nn.ReLU())
+        self.fc8_x = nn.Sequential(Conv2d(112, 256, kernel_size=3, stride=1, padding=1, bias=False),
+                                   #    nn.BatchNorm2d(256, track_running_stats = False),
+                                   nn.GroupNorm(32, 256),
+                                   nn.ReLU())
 
         # decoder
-        self.last_conv = nn.Sequential(
-            # conv2d(256, 256, kernel_size=3, stride=1, padding=1, bias=False),
-            Conv2d(
-                256, 256, kernel_size=3, stride=1, padding=1, bias=False),
-            # nn.BatchNorm2d(256, track_running_stats = False),
-            nn.GroupNorm(32, 256),
-            nn.LeakyReLU(0.2),
-            nn.Dropout(0.5),
-            # conv2d(256, 256, kernel_size=3, stride=1, padding=1, bias=False),
-            Conv2d(
-                256, 256, kernel_size=3, stride=1, padding=1, bias=False),
-            # nn.BatchNorm2d(256, track_running_stats = False),
-            nn.GroupNorm(32, 256),
-            nn.LeakyReLU(0.2),
-            nn.Dropout(0.1),
-            nn.Upsample(
-                scale_factor=2, mode='bilinear', align_corners=True),
-            nn.LeakyReLU(0.2),
-            nn.Conv2d(
-                256, 256, kernel_size=1, stride=1),
-            nn.Upsample(
-                scale_factor=2, mode='bilinear', align_corners=True),
-            nn.LeakyReLU(0.2),
-            nn.Conv2d(
-                256, num_classes, kernel_size=1, stride=1)
-        )
+        self.last_conv = nn.Sequential(Conv2d(256, 256, kernel_size=3, stride=1, padding=1, bias=False),
+                                       # nn.BatchNorm2d(256, track_running_stats = False),
+                                       nn.GroupNorm(32, 256),
+                                       nn.LeakyReLU(0.2),
+                                       nn.Dropout(0.5),
+                                       Conv2d(256, 256, kernel_size=3, stride=1, padding=1, bias=False),
+                                       # nn.BatchNorm2d(256, track_running_stats = False),
+                                       nn.GroupNorm(32, 256),
+                                       nn.LeakyReLU(0.2),
+                                       nn.Dropout(0.1),
+                                       nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True),
+                                       nn.LeakyReLU(0.2),
+                                       nn.Conv2d(256, 256, kernel_size=1, stride=1),
+                                       nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True),
+                                       nn.LeakyReLU(0.2),
+                                       nn.Conv2d(256, num_classes, kernel_size=1, stride=1))
 
     def _make_layer(self, block, planes, blocks, stride=1, dilation=1):
         downsample = None
@@ -254,26 +226,13 @@ class ResNet(nn.Module):
             )
 
         layers = []
-        layers.append(
-            block(
-                self.inplanes,
-                planes,
-                stride,
-                downsample,
-                dilation=max(
-                    1,
-                    dilation / 2),
-                conv=self.conv,
-                norm=self.norm))
+        layers.append(block(self.inplanes, planes, stride, downsample,
+                            dilation=max(1, dilation / 2), conv=self.conv,
+                            norm=self.norm))
         self.inplanes = planes * block.expansion
         for i in range(1, blocks):
-            layers.append(
-                block(
-                    self.inplanes,
-                    planes,
-                    dilation=dilation,
-                    conv=self.conv,
-                    norm=self.norm))
+            layers.append(block(self.inplanes, planes, dilation=dilation,
+                                conv=self.conv, norm=self.norm))
 
         return nn.Sequential(*layers)
 
@@ -315,9 +274,8 @@ def resnet50(pretrained=False, **kwargs):
     if pretrained:
         model_dict = model.state_dict()
         pretrained_dict = model_zoo.load_url(model_urls['resnet50'])
-        overlap_dict = {
-            k: v for k,
-            v in pretrained_dict.items() if k in model_dict}
+        overlap_dict = {k: v for k, v in pretrained_dict.items()
+                        if k in model_dict}
         model_dict.update(overlap_dict)
         model.load_state_dict(model_dict)
     return model
@@ -329,21 +287,19 @@ def resnet101(pretrained=False, num_groups=None, weight_std=False, **kwargs):
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = ResNet(
-        Bottleneck, [
-            3, 4, 23, 3], num_groups=num_groups, weight_std=weight_std, **kwargs)
+    model = ResNet(Bottleneck, [3, 4, 23, 3],
+                   num_groups=num_groups, weight_std=weight_std, **kwargs)
     if pretrained:
         model_dict = model.state_dict()
         if num_groups and weight_std:
             pretrained_dict = torch.load('./data/R-101-GN-WS.pth.tar')
-            overlap_dict = {k[7:]: v for k,
-                            v in pretrained_dict.items() if k[7:] in model_dict}
+            overlap_dict = {k[7:]: v for k, v in pretrained_dict.items()
+                            if k[7:] in model_dict}
             assert len(overlap_dict) == 312
         elif not num_groups and not weight_std:
             pretrained_dict = model_zoo.load_url(model_urls['resnet101'])
-            overlap_dict = {
-                k: v for k,
-                v in pretrained_dict.items() if k in model_dict}
+            overlap_dict = {k: v for k, v in pretrained_dict.items()
+                            if k in model_dict}
         else:
             raise ValueError('Currently only support BN or GN+WS')
         model_dict.update(overlap_dict)
