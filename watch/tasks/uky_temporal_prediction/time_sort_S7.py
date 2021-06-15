@@ -1,15 +1,19 @@
+import os
 import torch
 import torch.nn as nn
 from argparse import ArgumentParser, Namespace
 from datetime import date
-from models import UNet, UNet_blur
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
+
+
+# TODO: these need to be imported relative to the module
 from utils import setup_python_logging
-import os
+from models import UNet, UNet_blur
 
 from spacenet.datasets import S7_sort
+
 
 class space7_sort(pl.LightningModule):
     def __init__(self, hparams):
@@ -31,16 +35,17 @@ class space7_sort(pl.LightningModule):
         elif self.hparams.backbone == 'unet_blur':
             self.backbone = UNet_blur(3, hparams.feature_dim)
 
-        self.classifier = self.head(2*hparams.feature_dim)
+        self.classifier = self.head(2 * hparams.feature_dim)
 
         self.accuracy = pl.metrics.Accuracy()
 
     def head(self, in_channels):
-        return nn.Sequential(#nn.Conv2d(in_channels, in_channels // 2, 7, bias=False, padding=3),
-                             #nn.ReLU(),
-                             #nn.BatchNorm2d(in_channels // 2),
-                             nn.Conv2d(in_channels, 1, 1, bias=False, padding=0),
-                            )
+        return nn.Sequential(
+            #nn.Conv2d(in_channels, in_channels // 2, 7, bias=False, padding=3),
+            #nn.ReLU(),
+            #nn.BatchNorm2d(in_channels // 2),
+            nn.Conv2d(in_channels, 1, 1, bias=False, padding=0),
+        )
 
     def forward(self, image1, image2, date1, date2):
         image1 = self.backbone(image1)
@@ -53,20 +58,23 @@ class space7_sort(pl.LightningModule):
         image1, image2, date1, date2 = self(image1, image2, date1, date2)
         prediction = self.classifier(torch.cat((image1, image2), dim=1))
 
-        date1 = torch.stack(date1).permute(1,0)
-        date2 = torch.stack(date2).permute(1,0)
+        date1 = torch.stack(date1).permute(1, 0)
+        date2 = torch.stack(date2).permute(1, 0)
 
-        labels = torch.tensor([tuple(date1[x]) < tuple(date2[x]) for x in range(date1.shape[0])]).float().cuda()
+        labels = torch.tensor([
+            tuple(date1[x]) < tuple(date2[x]) for x in range(date1.shape[0])
+        ]).float().cuda()
         labels = labels.unsqueeze(1).unsqueeze(1).repeat(1, self.crop_size, self.crop_size).unsqueeze(1)
 
         loss = self.criterion(prediction, labels)
         accuracy = self.accuracy((prediction > 0.), labels.int())
 
-        output = {  #'prediction': prediction,
-                    #  'labels': labels,
-                    'accuracy': accuracy,
-                    'loss': loss,
-                }
+        output = {
+            # 'prediction': prediction,
+            # 'labels': labels,
+            'accuracy': accuracy,
+            'loss': loss,
+        }
         return output
 
     def training_step(self, batch, batch_idx):
@@ -84,16 +92,21 @@ class space7_sort(pl.LightningModule):
         return output
 
     def train_dataloader(self):
-        return torch.utils.data.DataLoader(S7_sort(train=True, normalize=self.hparams.normalize, crop_size=[self.hparams.crop_size,self.hparams.crop_size]),
-                batch_size = self.hparams.batch_size,
-                num_workers = self.hparams.workers
-                )
+        return torch.utils.data.DataLoader(
+            S7_sort(train=True,
+                    normalize=self.hparams.normalize,
+                    crop_size=[self.hparams.crop_size, self.hparams.crop_size]),
+            batch_size=self.hparams.batch_size,
+            num_workers=self.hparams.workers
+        )
 
     def val_dataloader(self):
-        return torch.utils.data.DataLoader(S7_sort(train=False, normalize=self.hparams.normalize, crop_size=[self.hparams.crop_size,self.hparams.crop_size]),
-                batch_size = self.hparams.batch_size,
-                num_workers = self.hparams.workers
-                )
+        return torch.utils.data.DataLoader(
+            S7_sort(train=False, normalize=self.hparams.normalize,
+                    crop_size=[self.hparams.crop_size, self.hparams.crop_size]),
+            batch_size=self.hparams.batch_size,
+            num_workers=self.hparams.workers
+        )
 
     def configure_optimizers(self):
         opt = torch.optim.AdamW(
@@ -109,7 +122,8 @@ class space7_sort(pl.LightningModule):
 
 def main(args):
     if isinstance(args, dict):
-            args = Namespace(**args)
+        args = Namespace(**args)
+
     log_dir = '{}/{}/normalize_{}/{}'.format(
         args.save_dir,
         'space7_sort/',

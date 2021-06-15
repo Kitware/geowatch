@@ -1,12 +1,12 @@
 import torch
 import torch.nn as nn
 from argparse import Namespace
-from models import UNet, UNet_blur
 import pytorch_lightning as pl
 import os
 
+# TODO: these need to be imported relative to the module
+from models import UNet, UNet_blur
 from drop0_datasets import drop0_pairs
-
 
 
 class time_sort(pl.LightningModule):
@@ -27,7 +27,7 @@ class time_sort(pl.LightningModule):
         elif self.hparams.backbone == 'unet_blur':
             self.backbone = UNet_blur(self.hparams.in_channels, hparams.feature_dim)
 
-        self.classifier = self.head(2*hparams.feature_dim)
+        self.classifier = self.head(2 * hparams.feature_dim)
 
         self.accuracy = pl.metrics.Accuracy()
 
@@ -35,11 +35,12 @@ class time_sort(pl.LightningModule):
         self.val_data_root, _ = os.path.split(self.hparams.val_dataset)
 
     def head(self, in_channels):
-        return nn.Sequential(#nn.Conv2d(in_channels, in_channels // 2, 7, bias=False, padding=3),
-                             #nn.ReLU(),
-                             #nn.BatchNorm2d(in_channels // 2),
-                             nn.Conv2d(in_channels, 1, 1, bias=False, padding=0),
-                            )
+        return nn.Sequential(
+            #nn.Conv2d(in_channels, in_channels // 2, 7, bias=False, padding=3),
+            #nn.ReLU(),
+            #nn.BatchNorm2d(in_channels // 2),
+            nn.Conv2d(in_channels, 1, 1, bias=False, padding=0),
+        )
 
     def forward(self, image1, image2, date1, date2):
         image1 = self.backbone(image1)
@@ -52,17 +53,20 @@ class time_sort(pl.LightningModule):
         image1, image2, date1, date2 = self(image1, image2, date1, date2)
         prediction = self.classifier(torch.cat((image1, image2), dim=1))
 
-        labels = torch.tensor([tuple(date1[x]) < tuple(date2[x]) for x in range(date1.shape[0])]).float().cuda()
+        labels = torch.tensor([
+            tuple(date1[x]) < tuple(date2[x]) for x in range(date1.shape[0])
+        ]).float().cuda()
         labels = labels.unsqueeze(1).unsqueeze(1).repeat(1, image1.shape[2], image1.shape[3]).unsqueeze(1)
 
         loss = self.criterion(prediction, labels)
         accuracy = self.accuracy((prediction > 0.), labels.int())
 
-        output = {  #'prediction': prediction,
-                    #  'labels': labels,
-                    'accuracy': accuracy,
-                    'loss': loss,
-                }
+        output = {
+            # 'prediction': prediction,
+            # 'labels': labels,
+            'accuracy': accuracy,
+            'loss': loss,
+        }
         return output
 
     def training_step(self, batch, batch_idx):
@@ -80,22 +84,30 @@ class time_sort(pl.LightningModule):
         return output
 
     def train_dataloader(self):
-        return torch.utils.data.DataLoader(drop0_pairs(
-                    root=self.train_data_root,
-                    sensor=self.hparams.sensor, panchromatic=self.hparams.panchromatic, video=self.hparams.train_video,  min_time_step=self.hparams.min_time_step
-                    ),
-                batch_size = self.hparams.batch_size,
-                num_workers = self.hparams.workers
-                )
+        return torch.utils.data.DataLoader(
+            drop0_pairs(
+                root=self.train_data_root,
+                sensor=self.hparams.sensor,
+                panchromatic=self.hparams.panchromatic,
+                video=self.hparams.train_video,
+                min_time_step=self.hparams.min_time_step
+            ),
+            batch_size=self.hparams.batch_size,
+            num_workers=self.hparams.workers
+        )
 
     def val_dataloader(self):
-        return torch.utils.data.DataLoader(drop0_pairs(
-                    root=self.val_data_root,
-                    sensor=self.hparams.sensor, panchromatic=self.hparams.panchromatic, video=self.hparams.val_video,  min_time_step=self.hparams.min_time_step
-                    ),
-                batch_size = self.hparams.batch_size,
-                num_workers = self.hparams.workers
-                )
+        return torch.utils.data.DataLoader(
+            drop0_pairs(
+                root=self.val_data_root,
+                sensor=self.hparams.sensor,
+                panchromatic=self.hparams.panchromatic,
+                video=self.hparams.val_video,
+                min_time_step=self.hparams.min_time_step
+            ),
+            batch_size=self.hparams.batch_size,
+            num_workers=self.hparams.workers
+        )
 
     def configure_optimizers(self):
         opt = torch.optim.AdamW(
