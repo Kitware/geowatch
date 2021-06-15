@@ -28,9 +28,8 @@ class StochasticGate(nn.Module):
                 self._mask_drop = torch.ones_like(x1)
 
             # a mask of {0,1}
-            mask_drop = (
-                (1 - alpha_rate) *
-                F.dropout(self._mask_drop, alpha_rate))
+            mask_drop = ((1 - alpha_rate) * F.dropout(self._mask_drop,
+                                                      alpha_rate))
 
             # shift and scale deep features
             # at train time: E[x] = x1

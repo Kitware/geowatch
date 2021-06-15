@@ -53,33 +53,32 @@ class GCI(nn.Module):
 
     def _init_params(self):
 
-        self.fc_deep = nn.Sequential(
-            #  self._conv2d(256, 512, 1, bias=False),
-            Pre_Norm_Conv2d(256, 512, 1, bias=False),
-            #  Pre_Norm_Conv2d(64, 512, 1, bias=False),
-            #  self._bnorm(512),
-            #  nn.BatchNorm2d(512, track_running_stats = False),
-            nn.GroupNorm(32, 512),
-            nn.ReLU())
-
-        self.fc_skip = nn.Sequential(
-            #  self._conv2d(256, 256, 1, bias=False),
-            Pre_Norm_Conv2d(256, 256, 1, bias=False),
-            #  Pre_Norm_Conv2d(64, 256, 1, bias=False),
-            #  nn.BatchNorm2d(256, track_running_stats = False, affine=False),
-            nn.GroupNorm(32, 256),
-            #  self._bnorm(256, affine=False)
+        self.fc_deep = nn.Sequential(#  self._conv2d(256, 512, 1, bias=False),
+                                     Pre_Norm_Conv2d(256, 512, 1, bias=False),
+                                     #  Pre_Norm_Conv2d(64, 512, 1, bias=False),
+                                     #  self._bnorm(512),
+                                     #  nn.BatchNorm2d(512, track_running_stats = False),
+                                     nn.GroupNorm(32, 512),
+                                     nn.ReLU()
         )
 
-        self.fc_cls = nn.Sequential(
-            # self._conv2d(256, 256, 1, bias=False),
-            Pre_Norm_Conv2d(256, 256, 1, bias=False),
-            # Pre_Norm_Conv2d(256, 64, 1, bias=False),
-            # nn.BatchNorm2d(256, track_running_stats = False),
-            nn.GroupNorm(32, 256),
-            # nn.GroupNorm(32,64),
-            # self._bnorm(64),
-            nn.ReLU())
+        self.fc_skip = nn.Sequential(#  self._conv2d(256, 256, 1, bias=False),
+                                     Pre_Norm_Conv2d(256, 256, 1, bias=False),
+                                     #  Pre_Norm_Conv2d(64, 256, 1, bias=False),
+                                     #  nn.BatchNorm2d(256, track_running_stats = False, affine=False),
+                                     nn.GroupNorm(32, 256),
+                                     #  self._bnorm(256, affine=False)
+        )
+
+        self.fc_cls = nn.Sequential(# self._conv2d(256, 256, 1, bias=False),
+                                    Pre_Norm_Conv2d(256, 256, 1, bias=False),
+                                    # Pre_Norm_Conv2d(256, 64, 1, bias=False),
+                                    # nn.BatchNorm2d(256, track_running_stats = False),
+                                    nn.GroupNorm(32, 256),
+                                    # nn.GroupNorm(32,64),
+                                    # self._bnorm(64),
+                                    nn.ReLU()
+        )
 
     def forward(self, x, y):
         """Forward pass

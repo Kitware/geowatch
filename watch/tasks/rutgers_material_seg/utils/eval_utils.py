@@ -45,8 +45,7 @@ def val_mae(pred_counts, gt_counts):
 def mae(pred_counts, gt_counts):
     assert len(pred_counts) == len(gt_counts)
     n = len(gt_counts)
-    absolute_e_list = [abs(b_i - a_i)
-                       for a_i, b_i in zip(pred_counts, gt_counts)]
+    absolute_e_list = [abs(b_i - a_i) for a_i, b_i in zip(pred_counts, gt_counts)]
     sum_e_list = sum(absolute_e_list)
     mae = sum_e_list / n
     return mae
@@ -56,8 +55,7 @@ def rmse(pred_counts, gt_counts):
     assert len(pred_counts) == len(gt_counts)
     n = len(gt_counts)
 
-    absolute_e_list = [abs(b_i - a_i) * abs(b_i - a_i)
-                       for a_i, b_i in zip(pred_counts, gt_counts)]
+    absolute_e_list = [abs(b_i - a_i) * abs(b_i - a_i) for a_i, b_i in zip(pred_counts, gt_counts)]
     sum_e_list = sum(absolute_e_list)
     sum_e_list = sum_e_list / n
     rmse = math.sqrt(sum_e_list)
@@ -68,8 +66,7 @@ def mape(pred_counts, gt_counts):
     assert len(pred_counts) == len(gt_counts)
     n = len(gt_counts)
 
-    absolute_e_list = [abs(b_i - a_i) / b_i for a_i,
-                       b_i in zip(pred_counts, gt_counts)]
+    absolute_e_list = [abs(b_i - a_i) / b_i for a_i, b_i in zip(pred_counts, gt_counts)]
     sum_e_list = sum(absolute_e_list)
     sum_e_list = sum_e_list / n
     mape = 100 * sum_e_list
@@ -80,14 +77,10 @@ def _take_channels(*xs, ignore_channels=None):
     if ignore_channels is None:
         return xs
     else:
-        channels = [
-            channel for channel in range(
-                xs[0].shape[1]) if channel not in ignore_channels]
-        xs = [
-            torch.index_select(
-                x,
-                dim=1,
-                index=torch.tensor(channels)) for x in xs]
+        channels = [channel for channel in range(xs[0].shape[1])
+                    if channel not in ignore_channels]
+        xs = [torch.index_select(x, dim=1, index=torch.tensor(channels))
+              for x in xs]
         return xs
 
 
@@ -157,8 +150,8 @@ def f_score(pr, gt, beta=1, eps=1e-7, threshold=None, ignore_channels=None):
     fp = torch.sum(pr) - tp
     fn = torch.sum(gt) - tp
 
-    score = ((1 + beta ** 2) * tp + eps) \
-        / ((1 + beta ** 2) * tp + beta ** 2 * fn + fp + eps)
+    score = (((1 + beta ** 2) * tp + eps) /
+             ((1 + beta ** 2) * tp + beta ** 2 * fn + fp + eps))
 
     return score
 
@@ -292,8 +285,7 @@ class Metric(BaseObject):
 class IoU(Metric):
     __name__ = 'iou_score'
 
-    def __init__(self, eps=1e-7, threshold=0.5, activation=None,
-                 ignore_channels=None, **kwargs):
+    def __init__(self, eps=1e-7, threshold=0.5, activation=None, ignore_channels=None, **kwargs):
         super().__init__(**kwargs)
         self.eps = eps
         self.threshold = threshold
@@ -312,8 +304,7 @@ class IoU(Metric):
 
 class Fscore(Metric):
 
-    def __init__(self, beta=1, eps=1e-7, threshold=0.5,
-                 activation=None, ignore_channels=None, **kwargs):
+    def __init__(self, beta=1, eps=1e-7, threshold=0.5, activation=None, ignore_channels=None, **kwargs):
         super().__init__(**kwargs)
         self.eps = eps
         self.beta = beta
@@ -334,8 +325,7 @@ class Fscore(Metric):
 
 class Accuracy(Metric):
 
-    def __init__(self, threshold=0.5, activation=None,
-                 ignore_channels=None, **kwargs):
+    def __init__(self, threshold=0.5, activation=None, ignore_channels=None, **kwargs):
         super().__init__(**kwargs)
         self.threshold = threshold
         self.activation = Activation(activation)
@@ -352,8 +342,7 @@ class Accuracy(Metric):
 
 class Recall(Metric):
 
-    def __init__(self, eps=1e-7, threshold=0.5, activation=None,
-                 ignore_channels=None, **kwargs):
+    def __init__(self, eps=1e-7, threshold=0.5, activation=None, ignore_channels=None, **kwargs):
         super().__init__(**kwargs)
         self.eps = eps
         self.threshold = threshold
@@ -372,8 +361,7 @@ class Recall(Metric):
 
 class Precision(Metric):
 
-    def __init__(self, eps=1e-7, threshold=0.5, activation=None,
-                 ignore_channels=None, **kwargs):
+    def __init__(self, eps=1e-7, threshold=0.5, activation=None, ignore_channels=None, **kwargs):
         super().__init__(**kwargs)
         self.eps = eps
         self.threshold = threshold
@@ -420,15 +408,16 @@ def compute_jaccard(preds_masks_all, targets_masks_all, num_classes=21):
             fps[label] += np.maximum(0., diff).float().sum().item()
             fns[label] += np.maximum(0., -diff).float().sum().item()
 
-    jaccards = [None] * num_classes
+    eps = 1e-3
+    jaccards  = [None] * num_classes
     precision = [None] * num_classes
-    recall = [None] * num_classes
+    recall    = [None] * num_classes
     for i in range(num_classes):
         tp = tps[i]
         fn = fns[i]
         fp = fps[i]
-        jaccards[i] = tp / max(1e-3, fn + fp + tp)
-        precision[i] = tp / max(1e-3, tp + fp)
-        recall[i] = tp / max(1e-3, tp + fn)
+        jaccards[i]  = tp / max(eps, fn + fp + tp)
+        precision[i] = tp / max(eps, tp + fp)
+        recall[i]    = tp / max(eps, tp + fn)
 
     return jaccards, precision, recall

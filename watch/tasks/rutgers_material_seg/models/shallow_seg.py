@@ -13,11 +13,9 @@ class Conv2d(nn.Conv2d):
     def forward(self, x):
         # return super(Conv2d, self).forward(x)
         weight = self.weight
-        weight_mean = weight.mean(dim=1, keepdim=True).mean(
-            dim=2, keepdim=True).mean(dim=3, keepdim=True)
+        weight_mean = weight.mean(dim=1, keepdim=True).mean(dim=2, keepdim=True).mean(dim=3, keepdim=True)
         weight = weight - weight_mean
-        std = weight.view(weight.size(
-            0), -1).std(dim=1).view(-1, 1, 1, 1) + 1e-5
+        std = weight.view(weight.size(0), -1).std(dim=1).view(-1, 1, 1, 1) + 1e-5
         weight = weight / std.expand_as(weight)
         return F.conv2d(x, weight, self.bias, self.stride,
                         self.padding, self.dilation, self.groups)
@@ -29,13 +27,11 @@ class DoubleConv(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.double_conv = nn.Sequential(
-            Conv2d(in_channels, out_channels, kernel_size=3,
-                   stride=1, padding=1),
+            Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1),
             nn.GroupNorm(32, out_channels),
             nn.LeakyReLU(0.2),
             nn.Dropout(0.5),
-            Conv2d(out_channels, out_channels, kernel_size=3,
-                   stride=1, padding=1),
+            Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1),
             nn.GroupNorm(32, out_channels),
             nn.LeakyReLU(0.2),
         )
@@ -67,16 +63,9 @@ class Up(nn.Module):
         # if bilinear, use the normal convolutions to reduce the number of
         # channels
         if bilinear:
-            self.up = nn.Upsample(
-                scale_factor=2,
-                mode='bilinear',
-                align_corners=True)
+            self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
         else:
-            self.up = nn.ConvTranspose2d(
-                in_channels // 2,
-                in_channels // 2,
-                kernel_size=2,
-                stride=2)
+            self.up = nn.ConvTranspose2d(in_channels // 2, in_channels // 2, kernel_size=2, stride=2)
 
         self.conv = DoubleConv(in_channels, out_channels)
         # Given transposed=1, weight of size [48, 48, 2, 2], 48 -> 32+64//2, instead,
@@ -90,8 +79,7 @@ class Up(nn.Module):
         diffY = x2.size()[2] - x1.size()[2]
         diffX = x2.size()[3] - x1.size()[3]
 
-        x1 = F.pad(x1, [diffX // 2, diffX - diffX // 2,
-                        diffY // 2, diffY - diffY // 2])
+        x1 = F.pad(x1, [diffX // 2, diffX - diffX // 2, diffY // 2, diffY - diffY // 2])
 
         x = torch.cat([x2, x1], dim=1)
         return self.conv(x)

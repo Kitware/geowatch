@@ -1,7 +1,6 @@
 import math
 
 from torch import nn
-from torch.nn import CrossEntropyLoss, MSELoss
 from einops import rearrange
 from watch.tasks.rutgers_material_seg.models.transformer_model import TransModel2d, TransConfig
 
@@ -14,15 +13,9 @@ class Encoder2D(nn.Module):
         self.bert_model = TransModel2d(config)
         sample_rate = config.sample_rate
         sample_v = int(math.pow(2, sample_rate))
-        assert config.patch_size[0] * config.patch_size[1] * \
-            config.hidden_size % (sample_v**2) == 0, "不能除尽"
-        self.final_dense = nn.Linear(
-            config.hidden_size,
-            config.patch_size[0] *
-            config.patch_size[1] *
-            config.hidden_size //
-            (
-                sample_v**2))
+        assert (config.patch_size[0] * config.patch_size[1] * config.hidden_size % (sample_v**2)) == 0, "不能除尽"
+        self.final_dense = nn.Linear(config.hidden_size,
+                                     config.patch_size[0] * config.patch_size[1] * config.hidden_size // (sample_v ** 2))
         self.patch_size = config.patch_size
         self.hh = self.patch_size[0] // sample_v
         self.ww = self.patch_size[1] // sample_v
@@ -43,25 +36,15 @@ class Encoder2D(nn.Module):
         hh = h // p1
         ww = w // p2
 
-        x = rearrange(
-            x,
-            'b c (h p1) (w p2) -> b (h w) (p1 p2 c)',
-            p1=p1,
-            p2=p2)
+        x = rearrange(x, 'b c (h p1) (w p2) -> b (h w) (p1 p2 c)', p1=p1, p2=p2)
 
         encode_x = self.bert_model(x)[-1]  # 取出来最后一层
         if not self.is_segmentation:
             return encode_x
 
         x = self.final_dense(encode_x)
-        x = rearrange(
-            x,
-            "b (h w) (p1 p2 c) -> b c (h p1) (w p2)",
-            p1=self.hh,
-            p2=self.ww,
-            h=hh,
-            w=ww,
-            c=self.config.hidden_size)
+        x = rearrange(x, "b (h w) (p1 p2 c) -> b c (h p1) (w p2)",
+                      p1=self.hh, p2=self.ww, h=hh, w=ww, c=self.config.hidden_size)
         return encode_x, x
 
 
@@ -176,11 +159,9 @@ class SETRModel(nn.Module):
                              num_hidden_layers=num_hidden_layers,
                              num_attention_heads=num_attention_heads)
         self.encoder_2d = Encoder2D(config)
-        self.decoder_2d = Decoder2D(
-            in_channels=config.hidden_size,
-            out_channels=config.out_channels,
-            features=decode_features)
-
+        self.decoder_2d = Decoder2D(in_channels=config.hidden_size,
+                                    out_channels=config.out_channels,
+                                    features=decode_features)
     def forward(self, x):
         _, final_x = self.encoder_2d(x)
         x = self.decoder_2d(final_x)

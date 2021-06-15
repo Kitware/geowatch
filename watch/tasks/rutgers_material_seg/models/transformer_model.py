@@ -8,8 +8,6 @@ def swish(x):
 
 
 def gelu(x):
-    """
-    """
     return x * 0.5 * (1.0 + torch.erf(x / math.sqrt(2.0)))
 
 
@@ -21,7 +19,8 @@ ACT2FN = {
     "gelu": gelu,
     "relu": torch.nn.functional.relu,
     "swish": swish,
-    "mish": mish}
+    "mish": mish
+}
 
 
 class TransConfig(object):
@@ -129,8 +128,7 @@ class TransSelfAttention(nn.Module):
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
 
     def transpose_for_scores(self, x):
-        new_x_shape = x.size()[
-            :-1] + (self.num_attention_heads, self.attention_head_size)
+        new_x_shape = x.size()[:-1] + (self.num_attention_heads, self.attention_head_size)
         x = x.view(*new_x_shape)
 
         ## 最后xshape (batch_size, num_attention_heads, seq_len, head_size)
@@ -150,10 +148,8 @@ class TransSelfAttention(nn.Module):
 
         # Take the dot product between "query" and "key" to get the raw
         # attention scores.
-        attention_scores = torch.matmul(
-            query_layer, key_layer.transpose(-1, -2))
-        attention_scores = attention_scores / \
-            math.sqrt(self.attention_head_size)
+        attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
+        attention_scores = attention_scores / math.sqrt(self.attention_head_size)
 
         # Apply the attention mask is (precomputed for all layers in BertModel
         # forward() function)
@@ -170,8 +166,7 @@ class TransSelfAttention(nn.Module):
         context_layer = torch.matmul(attention_probs, value_layer)
         # 把加权后的V reshape, 得到[batch_size, length, embedding_dimension]
         context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
-        new_context_layer_shape = context_layer.size()[
-            :-2] + (self.all_head_size,)
+        new_context_layer_shape = context_layer.size()[:-2] + (self.all_head_size,)
         context_layer = context_layer.view(*new_context_layer_shape)
 
         return context_layer
@@ -181,8 +176,7 @@ class TransSelfOutput(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
-        self.LayerNorm = TransLayerNorm(
-            config.hidden_size, eps=config.layer_norm_eps)
+        self.LayerNorm = TransLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
     def forward(self, hidden_states, input_tensor):
@@ -224,8 +218,7 @@ class TransOutput(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
-        self.LayerNorm = TransLayerNorm(
-            config.hidden_size, eps=config.layer_norm_eps)
+        self.LayerNorm = TransLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
     def forward(self, hidden_states, input_tensor):
@@ -255,8 +248,7 @@ class TransLayer(nn.Module):
 class TransEncoder(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.layer = nn.ModuleList([TransLayer(config)
-                                   for _ in range(config.num_hidden_layers)])
+        self.layer = nn.ModuleList([TransLayer(config) for _ in range(config.num_hidden_layers)])
 
     def forward(
         self,
@@ -280,14 +272,9 @@ class TransEncoder(nn.Module):
 class InputDense2d(nn.Module):
     def __init__(self, config):
         super(InputDense2d, self).__init__()
-        self.dense = nn.Linear(
-            config.patch_size[0] *
-            config.patch_size[1] *
-            config.in_channels,
-            config.hidden_size)
+        self.dense = nn.Linear(config.patch_size[0] * config.patch_size[1] * config.in_channels, config.hidden_size)
         self.transform_act_fn = ACT2FN[config.hidden_act]
-        self.LayerNorm = TransLayerNorm(
-            config.hidden_size, eps=config.layer_norm_eps)
+        self.LayerNorm = TransLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
 
     def forward(self, hidden_states):
         hidden_states = self.dense(hidden_states)
@@ -299,15 +286,9 @@ class InputDense2d(nn.Module):
 class InputDense3d(nn.Module):
     def __init__(self, config):
         super(InputDense3d, self).__init__()
-        self.dense = nn.Linear(
-            config.patch_size[0] *
-            config.patch_size[1] *
-            config.patch_size[2] *
-            config.in_channels,
-            config.hidden_size)
+        self.dense = nn.Linear(config.patch_size[0] * config.patch_size[1] * config.patch_size[2] * config.in_channels, config.hidden_size)
         self.transform_act_fn = ACT2FN[config.hidden_act]
-        self.LayerNorm = TransLayerNorm(
-            config.hidden_size, eps=config.layer_norm_eps)
+        self.LayerNorm = TransLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
 
     def forward(self, hidden_states):
         hidden_states = self.dense(hidden_states)
