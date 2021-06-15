@@ -1,15 +1,16 @@
 """
-Filter out images that don't correspond with the desired channels and 
+Filter out images that don't correspond with the desired channels and
 creates a new dataset json file.
 
-Warning: make sure that the dst path is different than the source path, 
+Warning: make sure that the dst path is different than the source path,
 or it will re-write the original dataset json file.
 """
 import kwcoco
 import ubelt as ub
 import scriptconfig as scfg
 
-class AddWatchFieldsConfig(scfg.Config):
+
+class FilterBySensorConfig(scfg.Config):
     default = {
         'src': scfg.Value('in.geojson.json', help='input dataset to chip'),
 
@@ -23,13 +24,12 @@ class AddWatchFieldsConfig(scfg.Config):
 def main(**kwargs):
     r"""
     CommandLine:
-
-        python ~/code/watch/scripts/filter_by_sensor.py \
+        python -m watch.tasks.rutgers_material_seg.scripts.filter_by_sensor \
             --src toydata.kwcoco.json \
             --dst toydata-gsd10.kwcoco.json \
 
     """
-    config = AddWatchFieldsConfig(kwargs, cmdline=True)
+    config = FilterBySensorConfig(kwargs, cmdline=True)
     # print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
     print('read dataset')
@@ -45,7 +45,6 @@ def main(**kwargs):
     for aid, ann in dset.index.anns.items():
         if ann['image_id'] in gids_to_remove:
             aids_to_remove.append(aid)
-            
 
     dset.remove_images(gids_to_remove)
 
@@ -59,6 +58,7 @@ def main(**kwargs):
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/scripts/filter_by_sensor.py --src <existing kwcoco json> --dst <path to write new kwcoco json>
+        python -m watch.tasks.rutgers_material_seg.scripts.filter_by_sensor \
+            --src <existing kwcoco json> --dst <path to write new kwcoco json>
     """
     main()

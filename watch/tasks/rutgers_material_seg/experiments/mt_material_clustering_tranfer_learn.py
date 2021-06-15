@@ -7,7 +7,6 @@ import ndsampler
 import ubelt as ub
 import watch
 import numpy as np
-from watch.utils.util_norm import *
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import torch
@@ -26,7 +25,7 @@ import watch.tasks.rutgers_material_seg.utils.utils as utils
 
 class Clusterer(object):
     def __init__(self, loader: torch.utils.data.DataLoader,
-                 optimizer: object, scheduler: object, 
+                 optimizer: object, scheduler: object,
                  clusterer: str="kmeans", k: int=20, **clusterer_kwargs) -> None:
         """clustering object
 
@@ -50,16 +49,16 @@ class Clusterer(object):
         self.loader = loader
         self.optimizer = optimizer
         self.scheduler = scheduler
-        
-        self.cmap = visualization.rand_cmap(nlabels=config['data']['num_classes']+1, type='bright', 
-                                            first_color_black=True, last_color_black=True, 
+
+        self.cmap = visualization.rand_cmap(nlabels=config['data']['num_classes']+1, type='bright',
+                                            first_color_black=True, last_color_black=True,
                                             bg_alpha=config['visualization']['bg_alpha'],
                                             fg_alpha=config['visualization']['fg_alpha'])
 
     def multitemporal_cluster(self):
         """Clustering algorithm considers features from multiple timesteps.
         """
-        for batch in loader:    
+        for batch in loader:
             # pdb.set_trace()
             image_data = batch['inputs']['im'].data[0] # [b,c,t,h,w]
             b, c, t, h, w = image_data.shape
@@ -72,10 +71,10 @@ class Clusterer(object):
                     output = model(b_t_image_input) # [1,num_classes + 1, h, w]
                     output.cpu().detach()
                     outputs[sub_batch,:,timestep,:,:] = output
-            
+
             image_show = np.array(image_data).transpose(0, 2, 3, 4, 1)/500 # visualize 0 indexed in batch
             # mask_show = np.array(mask_data) # [b,t,h,w]
-            
+
             b, c, t, h, w = outputs.shape
             image_data = outputs.view(b, c*t, h*w).detach()
             image_data = torch.transpose(image_data,1,2)
@@ -95,7 +94,7 @@ class Clusterer(object):
             plt.scatter(out_feat_embed[:,0], out_feat_embed[:,1], c=y_kmeans, marker='.', cmap='tab20c')
             # plt.scatter(clustering_model_tsne.cluster_centers_[:, 0], clustering_model_tsne.cluster_centers_[:, 1], c='black', s=200, alpha=0.5);
             plt.show()
-            
+
             figure = plt.figure(figsize=(15,15))
             ax1 = figure.add_subplot(1,5,1)
             ax2 = figure.add_subplot(1,5,2)
@@ -108,7 +107,7 @@ class Clusterer(object):
             ax4.imshow(image_show[0,3,:,:,:])
             ax5.imshow(prediction, vmin=0, vmax=k,cmap='tab20c')
             plt.show()
-            
+
             if visualize_images:
                 mask_show = mask_show[0] # [b,t,h,w]
                 image_show = image_show[0]
@@ -132,11 +131,11 @@ if __name__== "__main__":
     main_config_path = f"{project_root}/configs/main.yaml"
     initial_config = utils.load_yaml_as_dict(main_config_path)
     experiment_config_path = f"{project_root}/configs/{initial_config['dataset']}.yaml"
-    
+
     experiment_config = utils.config_parser(experiment_config_path,experiment_type="training")
     config = {**initial_config, **experiment_config}
     config['start_time'] = datetime.datetime.today().strftime('%Y-%m-%d-%H:%M:%S')
-    
+
     project_name = f"{project_root[-3]}_{project_root[-1]}"#_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}"
     experiment_name = f"SMART_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M:%S')}"
     experiment = comet_ml.Experiment(api_key=config['cometml']['api_key'],
@@ -144,13 +143,13 @@ if __name__== "__main__":
                                      workspace=config['cometml']['workspace'],
                                      display_summary_level=0)
     experiment.set_name(experiment_name)
-    
+
     torch.manual_seed(config['seed'])
     torch.cuda.manual_seed(config['seed'])
     np.random.seed(config['seed'])
     random.seed(config['seed'])
     torch.set_default_dtype(torch.float32)
-    
+
     # device_cpu = torch.device('cpu')
     # print(config['data']['image_size'])
     device_ids = list(range(torch.cuda.device_count()))
@@ -166,12 +165,12 @@ if __name__== "__main__":
     experiment.log_parameters(config['training'])
     experiment.log_parameters(config['evaluation'])
     experiment.log_parameters(config['visualization'])
-    
+
     channels = 'r|g|b'
     number_of_timestamps, h, w = 4, 128, 128
     window_dims = (number_of_timestamps, h, w) #[t,h,w]
     input_dims = (h, w)
-    
+
     coco_fpath = ub.expandpath(config['data'][config['location']]['coco_json'])
     dset = kwcoco.CocoDataset(coco_fpath)
 
@@ -195,23 +194,23 @@ if __name__== "__main__":
                         num_groups=config['training']['gn_n_groups'],
                         weight_std=config['training']['weight_std'],
                         beta=config['training']['beta'])
-    
+
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print("model has {} trainable parameters".format(num_params))
     model = nn.DataParallel(model)
     model.to(device)
-    
+
     for m in model.modules():
         if isinstance(m, nn.BatchNorm2d):
             m.eval()
             m.weight.requires_grad = False
             m.bias.requires_grad = False
-    
-    optimizer = optim.SGD(model.parameters(), 
-                          lr=config['training']['learning_rate'], 
-                          momentum=config['training']['momentum'], 
+
+    optimizer = optim.SGD(model.parameters(),
+                          lr=config['training']['learning_rate'],
+                          momentum=config['training']['momentum'],
                           weight_decay=config['training']['weight_decay'])
-    
+
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer,len(train_dataloader),
                                                      eta_min = config['training']['learning_rate'])
 
@@ -227,7 +226,7 @@ if __name__== "__main__":
         else:
             print("no checkpoint found at {}".format(config['training']['resume']))
             exit()
-        
+
     clusterer = Clusterer(model,
                       train_dataloader,
                       train_dataloader,
@@ -237,5 +236,3 @@ if __name__== "__main__":
                       test_loader=train_dataloader
                       )
     train_losses, val_losses, mean_ious_val = clusterer.multitemporal_cluster(experiment)
-
-

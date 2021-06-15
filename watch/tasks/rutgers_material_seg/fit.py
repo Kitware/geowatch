@@ -1,2 +1,2 @@
-imoprt os
+import os
 import sys

@@ -15,25 +15,28 @@ model_urls = {
     'resnet152': 'https://download.pytorch.org/models/resnet152-b121ed2d.pth',
 }
 
+
 def rescale_as(x, y, mode="bilinear", align_corners=True):
     h, w = y.size()[2:]
     x = F.interpolate(x, size=[h, w], mode=mode, align_corners=align_corners)
     return x
+
 
 class Conv2d(nn.Conv2d):
 
     def __init__(self, in_channels, out_channels, kernel_size, stride=1,
                  padding=0, dilation=1, groups=1, bias=True):
         super(Conv2d, self).__init__(in_channels, out_channels, kernel_size, stride,
-                 padding, dilation, groups, bias)
+                                     padding, dilation, groups, bias)
 
     def forward(self, x):
         # return super(Conv2d, self).forward(x)
         weight = self.weight
-        weight_mean = weight.mean(dim=1, keepdim=True).mean(dim=2,
-                                  keepdim=True).mean(dim=3, keepdim=True)
+        weight_mean = weight.mean(dim=1, keepdim=True).mean(
+            dim=2, keepdim=True).mean(dim=3, keepdim=True)
         weight = weight - weight_mean
-        std = weight.view(weight.size(0), -1).std(dim=1).view(-1, 1, 1, 1) + 1e-5
+        std = weight.view(weight.size(
+            0), -1).std(dim=1).view(-1, 1, 1, 1) + 1e-5
         weight = weight / std.expand_as(weight)
         return F.conv2d(x, weight, self.bias, self.stride,
                         self.padding, self.dilation, self.groups)
@@ -41,7 +44,8 @@ class Conv2d(nn.Conv2d):
 
 class ASPP(nn.Module):
 
-    def __init__(self, C, depth, num_classes, conv=nn.Conv2d, norm=nn.BatchNorm2d, momentum=0.0003, mult=1):
+    def __init__(self, C, depth, num_classes, conv=nn.Conv2d,
+                 norm=nn.BatchNorm2d, momentum=0.0003, mult=1):
         super(ASPP, self).__init__()
         self._C = C
         self._depth = depth
@@ -51,14 +55,14 @@ class ASPP(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         self.aspp1 = conv(C, depth, kernel_size=1, stride=1, bias=False)
         self.aspp2 = conv(C, depth, kernel_size=3, stride=1,
-                               dilation=int(6*mult), padding=int(6*mult),
-                               bias=False)
+                          dilation=int(6 * mult), padding=int(6 * mult),
+                          bias=False)
         self.aspp3 = conv(C, depth, kernel_size=3, stride=1,
-                               dilation=int(12*mult), padding=int(12*mult),
-                               bias=False)
+                          dilation=int(12 * mult), padding=int(12 * mult),
+                          bias=False)
         self.aspp4 = conv(C, depth, kernel_size=3, stride=1,
-                               dilation=int(18*mult), padding=int(18*mult),
-                               bias=False)
+                          dilation=int(18 * mult), padding=int(18 * mult),
+                          bias=False)
         self.aspp5 = conv(C, depth, kernel_size=1, stride=1, bias=False)
         self.aspp1_bn = norm(depth, momentum)
         self.aspp2_bn = norm(depth, momentum)
@@ -66,7 +70,7 @@ class ASPP(nn.Module):
         self.aspp4_bn = norm(depth, momentum)
         self.aspp5_bn = norm(depth, momentum)
         self.conv2 = conv(depth * 5, depth, kernel_size=1, stride=1,
-                               bias=False)
+                          bias=False)
         self.bn2 = norm(depth, momentum)
         self.conv3 = nn.Conv2d(depth, num_classes, kernel_size=1, stride=1)
 
@@ -101,14 +105,16 @@ class ASPP(nn.Module):
 class Bottleneck(nn.Module):
     expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None, dilation=1, conv=None, norm=None):
+    def __init__(self, inplanes, planes, stride=1,
+                 downsample=None, dilation=1, conv=None, norm=None):
         super(Bottleneck, self).__init__()
         self.conv1 = conv(inplanes, planes, kernel_size=1, bias=False)
         self.bn1 = norm(planes)
         self.conv2 = conv(planes, planes, kernel_size=3, stride=stride,
-                               dilation=dilation, padding=dilation, bias=False)
+                          dilation=dilation, padding=dilation, bias=False)
         self.bn2 = norm(planes)
-        self.conv3 = conv(planes, planes * self.expansion, kernel_size=1, bias=False)
+        self.conv3 = conv(planes, planes * self.expansion, kernel_size=1,
+                          bias=False)
         self.bn3 = norm(planes * self.expansion)
         self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
@@ -139,9 +145,12 @@ class Bottleneck(nn.Module):
 
 class ResNet(nn.Module):
 
-    def __init__(self, block, layers, num_classes, num_groups=None, weight_std=False, beta=False, num_channels=3):
+    def __init__(self, block, layers, num_classes, num_groups=None,
+                 weight_std=False, beta=False, num_channels=3):
         self.inplanes = 64
-        self.norm = lambda planes, momentum=0.05: nn.BatchNorm2d(planes, momentum=momentum) if num_groups is None else nn.GroupNorm(num_groups, planes)
+        self.norm = lambda planes, momentum=0.05: nn.BatchNorm2d(
+            planes, momentum=momentum) if num_groups is None else nn.GroupNorm(
+            num_groups, planes)
         self.conv = Conv2d if weight_std else nn.Conv2d
 
         super(ResNet, self).__init__()
@@ -150,7 +159,13 @@ class ResNet(nn.Module):
                                    bias=False)
         else:
             self.conv1 = nn.Sequential(
-                self.conv(num_channels, 64, 3, stride=2, padding=1, bias=False),
+                self.conv(
+                    num_channels,
+                    64,
+                    3,
+                    stride=2,
+                    padding=1,
+                    bias=False),
                 self.conv(64, 64, 3, stride=1, padding=1, bias=False),
                 self.conv(64, 64, 3, stride=1, padding=1, bias=False))
         self.bn1 = self.norm(64)
@@ -162,7 +177,13 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=1,
                                        dilation=2)
         # self.aspp = ASPP(512 * block.expansion, 256, num_classes, conv=self.conv, norm=self.norm)
-        self.aspp = ASPP(512 * block.expansion, 256, 64, conv=self.conv, norm=self.norm)
+        self.aspp = ASPP(
+            512 *
+            block.expansion,
+            256,
+            64,
+            conv=self.conv,
+            norm=self.norm)
 
         for m in self.modules():
             if isinstance(m, self.conv):
@@ -171,72 +192,93 @@ class ResNet(nn.Module):
             elif isinstance(m, nn.BatchNorm2d) or isinstance(m, nn.GroupNorm):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
-                
+
         self.shallow_mask = GCI()
         # self.from_scratch_layers += self.shallow_mask.from_scratch_layers
 
         # Stochastic Gate
         self.sg = StochasticGate()
         self.fc8_skip = nn.Sequential(
-                                      
-                                    #   conv2d(256, 48, 1, bias=False), 
-                                      Conv2d(256,48,1,bias=False),
-                                    #   nn.BatchNorm2d(48, track_running_stats = False), 
-                                      nn.GroupNorm(24,48), 
-                                      nn.ReLU(),
-                                      )
+
+            #   conv2d(256, 48, 1, bias=False),
+            Conv2d(256, 48, 1, bias=False),
+            #   nn.BatchNorm2d(48, track_running_stats = False),
+            nn.GroupNorm(24, 48),
+            nn.ReLU(),
+        )
         self.fc8_x = nn.Sequential(
-                                #    conv2d(304, 256, kernel_size=3, stride=1, padding=1, bias=False),
-                                #    Conv2d(304,256,kernel_size=3, stride=1, padding=1, bias=False),
-                                   Conv2d(112,256,kernel_size=3, stride=1, padding=1, bias=False),
-                                #    nn.BatchNorm2d(256, track_running_stats = False), 
-                                   nn.GroupNorm(32,256), 
-                                   nn.ReLU(),
-                                   
-                                   )
+            #    conv2d(304, 256, kernel_size=3, stride=1, padding=1, bias=False),
+            #    Conv2d(304,256,kernel_size=3, stride=1, padding=1, bias=False),
+            Conv2d(112, 256, kernel_size=3, stride=1, padding=1, bias=False),
+            #    nn.BatchNorm2d(256, track_running_stats = False),
+            nn.GroupNorm(32, 256),
+            nn.ReLU(),
+
+        )
 
         # decoder
         self.last_conv = nn.Sequential(
-                                        # conv2d(256, 256, kernel_size=3, stride=1, padding=1, bias=False),
-                                        Conv2d(256, 256, kernel_size=3, stride=1, padding=1, bias=False),
-                                        # nn.BatchNorm2d(256, track_running_stats = False),
-                                        nn.GroupNorm(32,256), 
-                                        nn.LeakyReLU(0.2),
-                                        nn.Dropout(0.5),
-                                        # conv2d(256, 256, kernel_size=3, stride=1, padding=1, bias=False),
-                                        Conv2d(256, 256, kernel_size=3, stride=1, padding=1, bias=False),
-                                        # nn.BatchNorm2d(256, track_running_stats = False), 
-                                        nn.GroupNorm(32,256), 
-                                        nn.LeakyReLU(0.2),
-                                        nn.Dropout(0.1),
-                                        nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True),
-                                        nn.LeakyReLU(0.2),
-                                        nn.Conv2d(256, 256, kernel_size=1, stride=1),
-                                        nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True),
-                                        nn.LeakyReLU(0.2),
-                                        nn.Conv2d(256, num_classes, kernel_size=1, stride=1)
-                                        )
-        
-        
+            # conv2d(256, 256, kernel_size=3, stride=1, padding=1, bias=False),
+            Conv2d(
+                256, 256, kernel_size=3, stride=1, padding=1, bias=False),
+            # nn.BatchNorm2d(256, track_running_stats = False),
+            nn.GroupNorm(32, 256),
+            nn.LeakyReLU(0.2),
+            nn.Dropout(0.5),
+            # conv2d(256, 256, kernel_size=3, stride=1, padding=1, bias=False),
+            Conv2d(
+                256, 256, kernel_size=3, stride=1, padding=1, bias=False),
+            # nn.BatchNorm2d(256, track_running_stats = False),
+            nn.GroupNorm(32, 256),
+            nn.LeakyReLU(0.2),
+            nn.Dropout(0.1),
+            nn.Upsample(
+                scale_factor=2, mode='bilinear', align_corners=True),
+            nn.LeakyReLU(0.2),
+            nn.Conv2d(
+                256, 256, kernel_size=1, stride=1),
+            nn.Upsample(
+                scale_factor=2, mode='bilinear', align_corners=True),
+            nn.LeakyReLU(0.2),
+            nn.Conv2d(
+                256, num_classes, kernel_size=1, stride=1)
+        )
+
     def _make_layer(self, block, planes, blocks, stride=1, dilation=1):
         downsample = None
         if stride != 1 or dilation != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
                 self.conv(self.inplanes, planes * block.expansion,
-                          kernel_size=1, stride=stride, dilation=max(1, dilation/2), bias=False),
+                          kernel_size=1, stride=stride, dilation=max(1, dilation / 2), bias=False),
                 self.norm(planes * block.expansion),
             )
 
         layers = []
-        layers.append(block(self.inplanes, planes, stride, downsample, dilation=max(1, dilation/2), conv=self.conv, norm=self.norm))
+        layers.append(
+            block(
+                self.inplanes,
+                planes,
+                stride,
+                downsample,
+                dilation=max(
+                    1,
+                    dilation / 2),
+                conv=self.conv,
+                norm=self.norm))
         self.inplanes = planes * block.expansion
         for i in range(1, blocks):
-            layers.append(block(self.inplanes, planes, dilation=dilation, conv=self.conv, norm=self.norm))
+            layers.append(
+                block(
+                    self.inplanes,
+                    planes,
+                    dilation=dilation,
+                    conv=self.conv,
+                    norm=self.norm))
 
         return nn.Sequential(*layers)
 
     def forward(self, x):
-        size = (x.shape[2], x.shape[3])
+        # size = (x.shape[2], x.shape[3])
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -248,7 +290,7 @@ class ResNet(nn.Module):
         x = self.layer3(x)
         x = self.layer4(x)
         x = self.aspp(x)
-        
+
         x2_x = self.fc8_skip(conv3)
         x_up = rescale_as(x, x2_x)
         x = self.fc8_x(torch.cat([x_up, x2_x], 1))
@@ -273,7 +315,9 @@ def resnet50(pretrained=False, **kwargs):
     if pretrained:
         model_dict = model.state_dict()
         pretrained_dict = model_zoo.load_url(model_urls['resnet50'])
-        overlap_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+        overlap_dict = {
+            k: v for k,
+            v in pretrained_dict.items() if k in model_dict}
         model_dict.update(overlap_dict)
         model.load_state_dict(model_dict)
     return model
@@ -285,16 +329,21 @@ def resnet101(pretrained=False, num_groups=None, weight_std=False, **kwargs):
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = ResNet(Bottleneck, [3, 4, 23, 3], num_groups=num_groups, weight_std=weight_std, **kwargs)
+    model = ResNet(
+        Bottleneck, [
+            3, 4, 23, 3], num_groups=num_groups, weight_std=weight_std, **kwargs)
     if pretrained:
         model_dict = model.state_dict()
         if num_groups and weight_std:
             pretrained_dict = torch.load('./data/R-101-GN-WS.pth.tar')
-            overlap_dict = {k[7:]: v for k, v in pretrained_dict.items() if k[7:] in model_dict}
+            overlap_dict = {k[7:]: v for k,
+                            v in pretrained_dict.items() if k[7:] in model_dict}
             assert len(overlap_dict) == 312
         elif not num_groups and not weight_std:
             pretrained_dict = model_zoo.load_url(model_urls['resnet101'])
-            overlap_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+            overlap_dict = {
+                k: v for k,
+                v in pretrained_dict.items() if k in model_dict}
         else:
             raise ValueError('Currently only support BN or GN+WS')
         model_dict.update(overlap_dict)

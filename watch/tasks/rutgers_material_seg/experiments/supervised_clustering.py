@@ -4,7 +4,6 @@ import ndsampler
 import ubelt as ub
 import watch
 import numpy as np
-from watch.utils.util_norm import *
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import torch
@@ -40,24 +39,24 @@ mmc = MMC_Supervised(max_iter=100, max_proj=10000, verbose=True, random_state=0)
 lsml = LSML_Supervised(verbose=True, random_state=0)
 n_points = 300
 
-for batch in loader:    
+for batch in loader:
     # pdb.set_trace()
     image_data = batch['inputs']['im'].data[0] # [b,c,t,h,w]
     b, c, t, h, w = image_data.shape
     mask_data = batch['label']['class_masks'].data[0] #len(mask_data) = b
     mask_data = torch.stack(mask_data)#.numpy()
-    
+
     image_show = np.array(image_data).transpose(0, 2, 3, 4, 1)/500 # visualize 0 indexed in batch
     # plt.imshow(image_show)
     # plt.show()
     # image_show = image_show[0,]
     # mask_show = np.array(mask_data) # [b,t,h,w]
-    
+
     image_data = image_data.view(b, c*t, h*w)
     mask_data = mask_data.view(b, t, h*w).squeeze(0)
     image_data = torch.transpose(image_data,1,2)
     image_data = torch.flatten(image_data,start_dim=0, end_dim=1)
-    
+
     mask_data = mask_data[0,:]
     # mask_data = mask_data.reshape(h,w)
 
@@ -72,18 +71,18 @@ for batch in loader:
     soil_indices = np.where(mask_data==3)[0][:n_points]
     water_indices = np.where(mask_data==4)[0][:n_points]
     material_indices = np.concatenate((concrete_indices, veg_indices, soil_indices, water_indices),axis=0)
-    
+
     # print(f"concrete: {concrete_indices.shape}, veg: {veg_indices.shape}, soil: {soil_indices.shape}, water: {water_indices.shape}")
     # print(f"concrete: {concrete_indices}, veg: {veg_indices}, soil: {soil_indices}, water: {water_indices}")
     # print(f"concrete: {type(concrete_indices)}, veg: {type(veg_indices)}, soil: {type(soil_indices)}, water: {type(water_indices)}")
     mask_data_filtered = mask_data[material_indices]
     image_data_filtered = image_data[material_indices]
-    
+
     # nca.fit(image_data[non_bg_indices,:], mask_data[non_bg_indices])
     lmnn.fit(image_data_filtered, mask_data_filtered)
     # mmc.fit(image_data[non_bg_indices,:], mask_data[non_bg_indices])
     # lsml.fit(image_data[non_bg_indices,:], mask_data[non_bg_indices])
-    
+
     # X_nca = nca.transform(image_data)
     X_lmnn = lmnn.transform(image_data)[material_indices]
     # X_mmc = mmc.transform(image_data)
@@ -93,7 +92,7 @@ for batch in loader:
     print(X_lmnn.shape)
     # plt.imshow(X_lsml_show[0,:,:,:])
     # plt.show()
-    
+
     out_feat_embed = TSNE(n_components=2, verbose=True, random_state=0).fit_transform(image_data_filtered)
     # out_feat_embed_nca = TSNE(n_components=2, verbose=True).fit_transform(X_nca)
     out_feat_embed_lmnn = TSNE(n_components=2, verbose=True, random_state=0).fit_transform(X_lmnn)
@@ -133,7 +132,7 @@ for batch in loader:
     # ax8 = figure.add_subplot(2,5,8)
     # ax9 = figure.add_subplot(2,5,9)
     # # ax10 = figure.add_subplot(2,5,10)
-    
+
 
     # ax1.imshow(image_show[0,0,:,:,:])
     # ax2.imshow(image_show[0,1,:,:,:])
@@ -149,7 +148,7 @@ for batch in loader:
 #     ax4.scatter(x_clusters_scatters, y_clusters_scatters, color=(len(x_clusters_scatters)//channels)*['red','green','blue','yellow','black'])
 
     plt.show()
-    
+
     if visualize_images:
         mask_show = mask_show[0] # [b,t,h,w]
         image_show = image_show[0]
@@ -164,4 +163,3 @@ for batch in loader:
                 axes[key].imshow(mask_show[key-t-1,:,:],vmin=-1, vmax=7)
         figure.tight_layout()
         plt.show()
-    

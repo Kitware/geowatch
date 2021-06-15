@@ -1,5 +1,5 @@
 from watch.tasks.rutgers_material_seg.models.transformer_seg import SETRModel
-import torch 
+import torch
 
 import sys
 import os
@@ -30,7 +30,7 @@ import watch.tasks.rutgers_material_seg.utils.utils as utils
 import watch.tasks.rutgers_material_seg.utils.eval_utils as eval_utils
 import watch.tasks.rutgers_material_seg.utils.visualization as visualization
 from watch.tasks.rutgers_material_seg.models import build_model
-from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import *
+from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
 from watch.tasks.rutgers_material_seg.datasets import build_dataset
 torch.backends.cudnn.enabled = False
 torch.backends.cudnn.deterministic = True
@@ -39,10 +39,10 @@ np.set_printoptions(precision=3, suppress=True)
 
 
 class Trainer(object):
-    def __init__(self, model: object, train_loader: torch.utils.data.DataLoader, 
-                 val_loader: torch.utils.data.DataLoader, epochs: int, 
-                 optimizer: object, scheduler: object, 
-                 test_loader: torch.utils.data.DataLoader =None, 
+    def __init__(self, model: object, train_loader: torch.utils.data.DataLoader,
+                 val_loader: torch.utils.data.DataLoader, epochs: int,
+                 optimizer: object, scheduler: object,
+                 test_loader: torch.utils.data.DataLoader =None,
                  test_with_full_supervision: int =0) -> None:
         """trainer class
 
@@ -65,19 +65,19 @@ class Trainer(object):
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.class_weights = torch.Tensor(config['data']['weights']).float().to(device)
-        
+
         self.max_label = config['data']['num_classes']
-        
+
         if test_loader is not None:
             self.test_loader = test_loader
             self.test_with_full_supervision = test_with_full_supervision
-        
-        self.cmap = visualization.rand_cmap(nlabels=self.max_label+1, type='bright', 
-                                            first_color_black=True, last_color_black=True, 
+
+        self.cmap = visualization.rand_cmap(nlabels=self.max_label+1, type='bright',
+                                            first_color_black=True, last_color_black=True,
                                             bg_alpha=config['visualization']['bg_alpha'],
                                             fg_alpha=config['visualization']['fg_alpha'])
-        
-    def high_confidence_filter(self, features: torch.Tensor, cutoff_top: float =0.75, 
+
+    def high_confidence_filter(self, features: torch.Tensor, cutoff_top: float =0.75,
                                cutoff_low: float =0.2, eps: float =1e-8) -> torch.Tensor:
         """Select high confidence regions to select as predictions
 
@@ -103,9 +103,9 @@ class Trainer(object):
 
         filtered_features = (features > features_max).type_as(features)
         filtered_features = filtered_features.view(bs,c,h,w)
-        
+
         return filtered_features
-    
+
     def train(self, epoch: int, cometml_experiemnt: object) -> float:
         """training single epoch
 
@@ -116,7 +116,7 @@ class Trainer(object):
         Returns:
             float: training loss of that epoch
         """
-        total_loss = 0 
+        total_loss = 0
         total_loss_seg = 0
         preds, targets = [], []
         self.model.train()
@@ -139,7 +139,7 @@ class Trainer(object):
             # print(torch.unique(mask))
             bs, c, t, h, w = image1.shape
             image1 = image1.squeeze(2)
-            
+
             class_to_show = max(0,torch.unique(mask)[-1]-1)
             image1 = image1.to(device)
             mask = mask.to(device)
@@ -148,14 +148,14 @@ class Trainer(object):
 
             # print(image1.shape)
             output1 = self.model(image1) # torch.Size([B, C+1, H, W])
-            output1_interpolated = F.interpolate(output1, size=mask.size()[-2:], 
+            output1_interpolated = F.interpolate(output1, size=mask.size()[-2:],
                                                  mode="bilinear", align_corners=True)
 
             # bs, c, h, w = output1.size()
-            
-            loss = 30*F.cross_entropy(output1, 
+
+            loss = 30*F.cross_entropy(output1,
                                       mask,
-                                      ignore_index=-1, 
+                                      ignore_index=-1,
                                       reduction="mean")
 
             self.optimizer.zero_grad()
@@ -168,7 +168,7 @@ class Trainer(object):
             masks = self.high_confidence_filter(masks)
             pred = masks.max(1)[1].cpu().detach()#.numpy()
             total_loss += loss.item()
-            
+
             if config['visualization']['train_visualizer'] :
                 if (epoch) % config['visualization']['visualize_training_every'] == 0:
                     if (batch_index % iter_visualization) == 0:
@@ -186,10 +186,10 @@ class Trainer(object):
                         ax11 = figure.add_subplot(4,3,11)
                         ax12 = figure.add_subplot(4,3,12)
 
-                        cmap_gradients = plt.cm.get_cmap('jet') 
+                        cmap_gradients = plt.cm.get_cmap('jet')
                         transformed_image_show = np.transpose(utils.denorm(image1).cpu().detach().numpy()[batch_index_to_show,:,:,:],(1,2,0))
                         image_show = np.transpose(image1.cpu().detach().numpy()[batch_index_to_show,:,:,:],(1,2,0))
-                        
+
                         image_show = (image_show - image_show.min())/(image_show.max() - image_show.min())
                         # print(f"min: {image_show.min()}, max: {image_show.max()}")
                         # image_show = np.transpose(outputs['visuals']['image'][batch_index_to_show,:,:,:].numpy(),(1,2,0))
@@ -201,7 +201,7 @@ class Trainer(object):
                         logits_show = logits_show[:original_width, :original_height]
                         gt_mask_show = gt_mask_show[:original_width, :original_height]
                         output1_sample = output1_sample[:original_width, :original_height]
-                        
+
                         logits_show[logits_show==-1]=0
                         gt_mask_show_no_bg = np.ma.masked_where(gt_mask_show==0,gt_mask_show)
                         logits_show_no_bg = np.ma.masked_where(logits_show==0,logits_show)
@@ -214,9 +214,9 @@ class Trainer(object):
 
                         ax4.imshow(image_show)
                         ax4.imshow(logits_show, cmap=self.cmap, vmin=0, vmax=self.max_label)#, alpha=alphas_final_gt)
-                        
+
                         ax5.imshow(output1_sample, cmap=cmap_gradients)
-                        
+
                         ax10.imshow(gt_mask_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
                         # ax4.imshow(transformed_image_show)
@@ -235,7 +235,7 @@ class Trainer(object):
                         ax11.axis('off')
                         ax12.axis('off')
                         figure.tight_layout()
-                        
+
                         if config['visualization']['titles']:
                             ax1.set_title(f"Input Image", fontsize=config['visualization']['font_size'])
                             ax3.set_title(f"GT Mask overlaid", fontsize=config['visualization']['font_size'])
@@ -244,7 +244,7 @@ class Trainer(object):
                             ax10.set_title(f"GT Mask", fontsize=config['visualization']['font_size'])
                             ax11.set_title(f"Prediction", fontsize=config['visualization']['font_size'])
                             figure.suptitle(f"GT labels for classification: {classes_in_gt}, \nunique in predictions: {np.unique(logits_show)}", fontsize=config['visualization']['font_size'])
-                            
+
                         # cometml_experiemnt.log_figure(figure_name=f"Training, image name: {image_name}, epoch: {epoch}, classes in gt: {classes_in_gt}, classifier predictions: {labels_predicted_indices}",figure=figure)
                         cometml_experiemnt.log_figure(figure_name=f"Training, image name: {image_name}",figure=figure)
 
@@ -258,7 +258,7 @@ class Trainer(object):
                         plt.close(figure)
                         gc.collect()
 
-            
+
             # total_loss_cls += loss_cls.item()
             # total_loss += loss_cls.item()
 
@@ -266,7 +266,7 @@ class Trainer(object):
 
         # mean_iou, precision, recall = eval_utils.compute_jaccard(preds, targets, num_classes=config['data']['num_classes'])
         # overall_miou = sum(mean_iou)/len(mean_iou)
-        
+
         cometml_experiemnt.log_metric("Training Loss", total_loss, epoch=epoch+1)
         cometml_experiemnt.log_metric("Segmentation Loss", total_loss_seg, epoch=epoch+1)
         # cometml_experiemnt.log_metric("Training mIoU", overall_miou, epoch=epoch+1)
@@ -274,7 +274,7 @@ class Trainer(object):
         print("Training Epoch {0:2d} average loss: {1:1.2f}".format(epoch+1, total_loss/self.train_loader.__len__()))
 
         return total_loss/self.train_loader.__len__()
-            
+
     def validate(self, epoch: int, cometml_experiemnt: object) -> tuple:
         """validating single epoch
 
@@ -304,7 +304,7 @@ class Trainer(object):
                 outputs = batch
                 image1, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0]
                 original_width, original_height = outputs['tr'].data[0][batch_index_to_show]['space_dims']
-                
+
                 mask = torch.stack(mask)
                 mask = mask.long().squeeze(1)
                 image1 = image1.to(device)
@@ -312,7 +312,7 @@ class Trainer(object):
                 # image_raw = utils.denorm(image1.clone().detach())
                 bs, c, t, h, w = image1.shape
                 image1 = image1.squeeze(2)
-                
+
                 output = self.model(image1)  ## [B,22,150,150]
 
                 masks = F.softmax(output, dim=1) ## (B, 22, 300, 300)
@@ -329,12 +329,12 @@ class Trainer(object):
                 preds.append(pred)
                 targets.append(mask.cpu())#.numpy())
 
-                
+
                 if self.use_crf:
-                    crf_probs = utils.batch_crf_inference(image_raw.detach().cpu(), 
+                    crf_probs = utils.batch_crf_inference(image_raw.detach().cpu(),
                                                           masks.detach().cpu(),
-                                                          t=config['evaluation']['crf_t'], 
-                                                          scale_factor=config['evaluation']['crf_scale_factor'], 
+                                                          t=config['evaluation']['crf_t'],
+                                                          scale_factor=config['evaluation']['crf_scale_factor'],
                                                           labels=config['evaluation']['crf_labels'])
                     crf_probs = crf_probs.squeeze()
                     crf_pred = crf_probs.max(1)[1]
@@ -351,7 +351,7 @@ class Trainer(object):
                             ax4 = figure.add_subplot(2,3,4)
                             ax5 = figure.add_subplot(2,3,5)
                             ax6 = figure.add_subplot(2,3,6)
-                            
+
                             cmap_gradients = plt.cm.get_cmap('jet')
                             transformed_image_show = np.transpose(utils.denorm(image1).cpu().detach().numpy()[0,:,:,:],(1,2,0))
                             image_show = np.transpose(outputs['visuals']['image'][0,:,:,:].numpy(),(1,2,0))
@@ -361,15 +361,15 @@ class Trainer(object):
                             logits_show = pred[0,:,:]
                             classes_predicted = np.unique(logits_show)
                             classes_in_gt = np.unique(gt_mask_show)
-                            
+
                             image_show = image_show[:original_width, :original_height,:]
                             logits_show = logits_show[:original_width, :original_height]
                             gt_mask_show = gt_mask_show[:original_width, :original_height]
-                            
+
                             gt_mask_show_no_bg = np.ma.masked_where(gt_mask_show==0,gt_mask_show)
                             logits_show_no_bg = np.ma.masked_where(logits_show==0,logits_show)
                             # pseudo_gt_show_no_bg = np.ma.masked_where(pseudo_gt_show==0,pseudo_gt_show)
-                            
+
                             ax1.imshow(image_show)
                             ax2.imshow(transformed_image_show)
                             ax2.imshow(gt_mask_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
@@ -415,7 +415,7 @@ class Trainer(object):
                             plt.close('all')
                             plt.close(figure)
                             gc.collect()
-        
+
         mean_iou, precision, recall = eval_utils.compute_jaccard(preds, targets, num_classes=config['data']['num_classes'])
         overall_miou = sum(mean_iou)/len(mean_iou)
         if self.use_crf:
@@ -423,14 +423,14 @@ class Trainer(object):
             crf_overall_miou = sum(crf_mean_iou)/len(crf_mean_iou)
             print(f"Validation class-wise +CRF mIoU value: \n{np.array(crf_mean_iou)} \noverall mIoU: {crf_overall_miou}")
             cometml_experiemnt.log_metric("Validation +CRF mIoU", crf_overall_miou, epoch=epoch+1)
-            
+
         print(f"Validation class-wise mIoU value: \n{np.array(mean_iou)} \noverall mIoU: {overall_miou}")
         print("Validation Epoch {0:2d} average loss: {1:1.2f}".format(epoch+1, total_loss/loader.__len__()))
         cometml_experiemnt.log_metric("Validation mIoU", overall_miou, epoch=epoch+1)
         cometml_experiemnt.log_metric("Validation Average Loss",total_loss/loader.__len__(),epoch=epoch+1)
-        
+
         return total_loss/loader.__len__(), overall_miou
-    
+
     def forward(self, cometml_experiment: object, world_size: int =8) -> tuple:
         """forward pass for all epochs
 
@@ -445,7 +445,7 @@ class Trainer(object):
         mean_ious_val,mean_ious_val_list,count_metrics_list = [], [], []
         best_val_loss, train_loss = np.infty, np.infty
         best_val_mean_iou = 0
-        
+
         model_save_dir = config['data'][config['location']]['model_save_dir']+f"{current_path[-1]}_{config['dataset']}/{cometml_experiment.project_name}_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}/"
         utils.create_dir_if_doesnt_exist(model_save_dir)
         for epoch in range(0,self.epochs):
@@ -461,18 +461,18 @@ class Trainer(object):
                 # best_train_loss = train_loss
                 best_val_mean_iou = val_mean_iou
                 model_save_name = f"{current_path[-1]}_epoch_{epoch}_loss_{train_loss}_valmIoU_{val_mean_iou}_time_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M:%S')}.pth"
-                
+
                 if config['procedures']['train']:
                     with open(model_save_dir+"config.yaml",'w') as file:
                         yaml.dump(config, file)
-                
-                    torch.save({'epoch': epoch, 
-                                'model': self.model.state_dict(), 
+
+                    torch.save({'epoch': epoch,
+                                'model': self.model.state_dict(),
                                 'optimizer': self.optimizer.state_dict(),
                                 'scheduler': self.scheduler.state_dict(),
                                 'loss':train_loss},
                                 model_save_dir+model_save_name)
-            
+
         return train_losses, val_losses, mean_ious_val
 
 
@@ -481,16 +481,16 @@ if __name__ == "__main__":
     # main_config_path = f"{os.getcwd()}/configs/main.yaml"
     main_config_path = f"{project_root}/configs/main.yaml"
 
-    
+
     initial_config = utils.load_yaml_as_dict(main_config_path)
     # experiment_config_path = f"{os.getcwd()}/configs/{initial_config['dataset']}.yaml"
     experiment_config_path = f"{project_root}/configs/{initial_config['dataset']}.yaml"
     # config_path = utils.dictionary_contents(os.getcwd()+"/",types=["*.yaml"])[0]
-    
+
     experiment_config = utils.config_parser(experiment_config_path,experiment_type="training")
     config = {**initial_config, **experiment_config}
     config['start_time'] = datetime.datetime.today().strftime('%Y-%m-%d-%H:%M:%S')
-    
+
     project_name = f"{current_path[-3]}_{current_path[-1]}"#_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}"
     experiment_name = f"attention_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M:%S')}"
     experiment = comet_ml.Experiment(api_key=config['cometml']['api_key'],
@@ -498,13 +498,13 @@ if __name__ == "__main__":
                                      workspace=config['cometml']['workspace'],
                                      display_summary_level=0)
     experiment.set_name(experiment_name)
-    
+
     torch.manual_seed(config['seed'])
     torch.cuda.manual_seed(config['seed'])
     np.random.seed(config['seed'])
     random.seed(config['seed'])
     torch.set_default_dtype(torch.float32)
-    
+
     device_ids = list(range(torch.cuda.device_count()))
     config['device_ids'] = device_ids
     gpu_devices = ','.join([str(id) for id in device_ids])
@@ -518,7 +518,7 @@ if __name__ == "__main__":
     experiment.log_parameters(config['training'])
     experiment.log_parameters(config['evaluation'])
     experiment.log_parameters(config['visualization'])
-    
+
     print(config['data']['image_size'])
     coco_fpath = ub.expandpath(config['data'][config['location']]['coco_json'])
     dset = kwcoco.CocoDataset(coco_fpath)
@@ -535,15 +535,15 @@ if __name__ == "__main__":
     dataset = SequenceDataset(sampler, window_dims, input_dims, channels)
     print(dataset.__len__())
     train_dataloader = dataset.make_loader(batch_size=config['training']['batch_size'])
-    
-    model = SETRModel(patch_size=(32, 32), 
-                    in_channels=3, 
-                    out_channels=1, 
-                    hidden_size=1024, 
-                    num_hidden_layers=8, 
-                    num_attention_heads=16, 
+
+    model = SETRModel(patch_size=(32, 32),
+                    in_channels=3,
+                    out_channels=1,
+                    hidden_size=1024,
+                    num_hidden_layers=8,
+                    num_attention_heads=16,
                     decode_features=[512, 256, 128, 64])
-    
+
     # model = build_model(model_name = config['training']['model_name'],
     #                     backbone=config['training']['backbone'],
     #                     pretrained=config['training']['pretrained'],
@@ -551,23 +551,23 @@ if __name__ == "__main__":
     #                     num_groups=config['training']['gn_n_groups'],
     #                     weight_std=config['training']['weight_std'],
     #                     beta=config['training']['beta'])
-    
+
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print("model has {} trainable parameters".format(num_params))
     model = nn.DataParallel(model)
     model.to(device)
-    
+
     for m in model.modules():
         if isinstance(m, nn.BatchNorm2d):
             m.eval()
             m.weight.requires_grad = False
             m.bias.requires_grad = False
-    
-    optimizer = optim.SGD(model.parameters(), 
-                          lr=config['training']['learning_rate'], 
-                          momentum=config['training']['momentum'], 
+
+    optimizer = optim.SGD(model.parameters(),
+                          lr=config['training']['learning_rate'],
+                          momentum=config['training']['momentum'],
                           weight_decay=config['training']['weight_decay'])
-    
+
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer,len(train_dataloader),
                                                      eta_min = config['training']['learning_rate'])
 
@@ -583,7 +583,7 @@ if __name__ == "__main__":
         else:
             print("no checkpoint found at {}".format(config['training']['resume']))
             exit()
-        
+
     trainer = Trainer(model,
                       train_dataloader,
                       train_dataloader,
@@ -594,8 +594,8 @@ if __name__ == "__main__":
                       test_with_full_supervision=config['training']['test_with_full_supervision']
                       )
     train_losses, val_losses, mean_ious_val = trainer.forward(experiment)
-    
+
     # t1 = torch.rand(1, 3, 256, 256)
     # print("input: " + str(t1.shape))
-    
+
     # print("output: " + str(model(t1).shape))

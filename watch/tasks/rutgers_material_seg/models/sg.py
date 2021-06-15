@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 class StochasticGate(nn.Module):
-    """Stochastically merges features from two levels 
+    """Stochastically merges features from two levels
     with varying size of the receptive field
     """
 
@@ -16,11 +16,11 @@ class StochasticGate(nn.Module):
         """Stochastic Gate (SG)
 
         SG stochastically mixes deep and shallow features
-        at training time and deterministically combines 
+        at training time and deterministically combines
         them at test time with a hyperparam. alpha
         """
 
-        if self.training: # training time
+        if self.training:  # training time
             # dropout: selecting either x1 or x2
             if self._mask_drop is None:
                 bs, c, h, w = x1.size()
@@ -28,7 +28,9 @@ class StochasticGate(nn.Module):
                 self._mask_drop = torch.ones_like(x1)
 
             # a mask of {0,1}
-            mask_drop = (1 - alpha_rate) * F.dropout(self._mask_drop, alpha_rate)
+            mask_drop = (
+                (1 - alpha_rate) *
+                F.dropout(self._mask_drop, alpha_rate))
 
             # shift and scale deep features
             # at train time: E[x] = x1

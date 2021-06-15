@@ -35,13 +35,13 @@ def from_json(labeled_data, coco_output):
         # Download and get image name
         try:
             response = requests.get(data['Labeled Data'], stream=True)
-        except requests.exceptions.MissingSchema as e:
+        except requests.exceptions.MissingSchema:
             logging.exception(('"Labeled Data" field must be a URL. '
-                                'Support for local files coming soon'))
+                               'Support for local files coming soon'))
             continue
-        except requests.exceptions.ConnectionError as e:
+        except requests.exceptions.ConnectionError:
             logging.exception('Failed to fetch image from {}'
-                                .format(data['Labeled Data']))
+                              .format(data['Labeled Data']))
             continue
 
         response.raw.decode_content = True
@@ -67,8 +67,8 @@ def from_json(labeled_data, coco_output):
             try:
                 # check if label category exists in 'categories' field
                 cat_id = [c['id'] for c in coco['categories']
-                            if c['supercategory'] == cat][0]
-            except IndexError as e:
+                          if c['supercategory'] == cat][0]
+            except IndexError:
                 cat_id = len(coco['categories']) + 1
                 category = {
                     'supercategory': cat,
@@ -84,7 +84,7 @@ def from_json(labeled_data, coco_output):
             for m in multipolygon:
                 segmentation = []
                 for x, y in m.exterior.coords:
-                    segmentation.extend([x, height-y])
+                    segmentation.extend([x, height - y])
 
                 annotation = {
                     "id": len(coco['annotations']) + 1,
@@ -93,8 +93,8 @@ def from_json(labeled_data, coco_output):
                     "segmentation": [segmentation],
                     "area": m.area,  # float
                     "bbox": [m.bounds[0], m.bounds[1],
-                                m.bounds[2]-m.bounds[0],
-                                m.bounds[3]-m.bounds[1]],
+                             m.bounds[2] - m.bounds[0],
+                             m.bounds[3] - m.bounds[1]],
                     "iscrowd": 0
                 }
 
@@ -103,7 +103,8 @@ def from_json(labeled_data, coco_output):
     with open(coco_output, 'w+') as f:
         f.write(json.dumps(coco))
 
-if __name__== "__main__":
+
+if __name__ == "__main__":
     labeled_data = '/home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2/labelbox_weak_labels.json'
 
     # set coco_output to the file name you want the COCO data to be written to

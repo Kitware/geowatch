@@ -2,24 +2,26 @@ import torch.nn as nn
 import torch
 from torch.nn import functional as F
 
+
 class Conv2d(nn.Conv2d):
 
     def __init__(self, in_channels, out_channels, kernel_size, stride=1,
                  padding=0, dilation=1, groups=1, bias=True):
         super(Conv2d, self).__init__(in_channels, out_channels, kernel_size, stride,
-                 padding, dilation, groups, bias)
+                                     padding, dilation, groups, bias)
 
     def forward(self, x):
         # return super(Conv2d, self).forward(x)
         weight = self.weight
-        weight_mean = weight.mean(dim=1, keepdim=True).mean(dim=2,
-                                  keepdim=True).mean(dim=3, keepdim=True)
+        weight_mean = weight.mean(dim=1, keepdim=True).mean(
+            dim=2, keepdim=True).mean(dim=3, keepdim=True)
         weight = weight - weight_mean
-        std = weight.view(weight.size(0), -1).std(dim=1).view(-1, 1, 1, 1) + 1e-5
+        std = weight.view(weight.size(
+            0), -1).std(dim=1).view(-1, 1, 1, 1) + 1e-5
         weight = weight / std.expand_as(weight)
         return F.conv2d(x, weight, self.bias, self.stride,
                         self.padding, self.dilation, self.groups)
-        
+
 
 class DoubleConv(nn.Module):
     """(convolution => [BN] => ReLU) * 2"""
@@ -27,17 +29,20 @@ class DoubleConv(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.double_conv = nn.Sequential(
-            Conv2d(in_channels, out_channels, kernel_size=3, stride=1,padding=1),
-            nn.GroupNorm(32,out_channels), 
+            Conv2d(in_channels, out_channels, kernel_size=3,
+                   stride=1, padding=1),
+            nn.GroupNorm(32, out_channels),
             nn.LeakyReLU(0.2),
             nn.Dropout(0.5),
-            Conv2d(out_channels, out_channels, kernel_size=3,stride=1, padding=1),
-            nn.GroupNorm(32,out_channels), 
+            Conv2d(out_channels, out_channels, kernel_size=3,
+                   stride=1, padding=1),
+            nn.GroupNorm(32, out_channels),
             nn.LeakyReLU(0.2),
         )
 
     def forward(self, x):
         return self.double_conv(x)
+
 
 class Down(nn.Module):
     """Downscaling with maxpool then double conv"""
@@ -52,21 +57,32 @@ class Down(nn.Module):
     def forward(self, x):
         return self.maxpool_conv(x)
 
+
 class Up(nn.Module):
     """Upscaling then double conv"""
 
     def __init__(self, in_channels, out_channels, bilinear=True):
         super().__init__()
 
-        # if bilinear, use the normal convolutions to reduce the number of channels
+        # if bilinear, use the normal convolutions to reduce the number of
+        # channels
         if bilinear:
-            self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+            self.up = nn.Upsample(
+                scale_factor=2,
+                mode='bilinear',
+                align_corners=True)
         else:
-            self.up = nn.ConvTranspose2d(in_channels // 2, in_channels // 2, kernel_size=2, stride=2)
+            self.up = nn.ConvTranspose2d(
+                in_channels // 2,
+                in_channels // 2,
+                kernel_size=2,
+                stride=2)
 
         self.conv = DoubleConv(in_channels, out_channels)
-        #Given transposed=1, weight of size [48, 48, 2, 2], 48 -> 32+64//2, instead, 
-        #               expected input[4, 64, 128, 128] to have 48 channels, but got 64 channels instead
+        # Given transposed=1, weight of size [48, 48, 2, 2], 48 -> 32+64//2, instead,
+        # expected input[4, 64, 128, 128] to have 48 channels, but got 64
+        # channels instead
+
     def forward(self, x1, x2):
         # print(x1.shape)
         x1 = self.up(x1)
@@ -80,6 +96,7 @@ class Up(nn.Module):
         x = torch.cat([x2, x1], dim=1)
         return self.conv(x)
 
+
 class OutConv(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(OutConv, self).__init__()
@@ -92,8 +109,9 @@ class OutConv(nn.Module):
     def forward(self, x):
         return self.conv(x)
 
+
 class ShallowSeg(nn.Module):
-    def __init__(self, num_channels=3, num_classes=3, 
+    def __init__(self, num_channels=3, num_classes=3,
                  bilinear=True, pretrained=False,
                  beta=False, weight_std=False,
                  num_groups=32):
@@ -102,7 +120,7 @@ class ShallowSeg(nn.Module):
         self.num_classes = num_classes
         self.bilinear = bilinear
         # feats = [64,128,256,512,1024]
-        feats = [32,64]
+        feats = [32, 64]
 
         self.inc = DoubleConv(num_channels, feats[0])
         self.down1 = Down(feats[0], feats[1])
@@ -114,7 +132,7 @@ class ShallowSeg(nn.Module):
         # self.up2 = Up(feats[2] + feats[3], feats[2], bilinear)
         # self.up3 = Up(feats[1] + feats[2], feats[1], bilinear)
         self.up4 = Up(feats[0] + feats[1], feats[0], bilinear)
-        
+
         self.outc = OutConv(feats[0], num_classes)
 
     def forward(self, x):
@@ -126,6 +144,6 @@ class ShallowSeg(nn.Module):
         # x = self.up1(x5, x4)
         # x = self.up2(x4,x3)
         # x = self.up3(x,x2)
-        x = self.up4(x2,x1)
+        x = self.up4(x2, x1)
         logits = self.outc(x)
         return logits

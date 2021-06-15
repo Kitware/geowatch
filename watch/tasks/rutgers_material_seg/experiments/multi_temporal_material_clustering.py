@@ -4,7 +4,6 @@ import ndsampler
 import ubelt as ub
 import watch
 import numpy as np
-from watch.utils.util_norm import *
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import torch
@@ -35,14 +34,14 @@ k = 80
 kmeans = KMeans(n_clusters=k, random_state=0)
 kmeans_tsne = KMeans(n_clusters=k, random_state=0)
 
-for batch_index, batch in enumerate(loader):    
+for batch_index, batch in enumerate(loader):
     # pdb.set_trace()
     image_data = batch['inputs']['im'].data[0] # [b,c,t,h,w]
     print(f"image_data min: {image_data.min()}, image_data max: {image_data.max()}")
     b, c, t, h, w = image_data.shape
     mask_data = batch['label']['class_masks'].data[0] #len(mask_data) = b
     mask_data = torch.stack(mask_data)
-    
+
     image_show = np.array(image_data).transpose(0, 2, 3, 4, 1)#/50000 # visualize 0 indexed in batch
     image_show = image_show/image_show.max()
     print(f"image min: {image_show.min()}, image max: {image_show.max()}")
@@ -51,7 +50,7 @@ for batch_index, batch in enumerate(loader):
     # plt.imshow(image_show[0,0,:,:,:3])
     # plt.show()
     # mask_show = np.array(mask_data) # [b,t,h,w]
-    
+
     image_data = image_data.view(b, c*t, h*w)
     # print(image_data.shape)
     image_data = torch.transpose(image_data,1,2)
@@ -78,7 +77,7 @@ for batch_index, batch in enumerate(loader):
     plt.scatter(out_feat_embed[:,0], out_feat_embed[:,1], c=y_kmeans_tse, marker='.', cmap='tab20c')
     plt.scatter(kmeans_tsne.cluster_centers_[:, 0], kmeans_tsne.cluster_centers_[:, 1], c='black', s=200, alpha=0.5);
     plt.show()
-    
+
     figure = plt.figure(figsize=(15,15))
     ax1 = figure.add_subplot(1,5,1)
     ax2 = figure.add_subplot(1,5,2)
@@ -100,7 +99,7 @@ for batch_index, batch in enumerate(loader):
 #     ax4.scatter(x_clusters_scatters, y_clusters_scatters, color=(len(x_clusters_scatters)//channels)*['red','green','blue','yellow','black'])
 
     plt.show()
-    
+
     # if visualize_images:
     #     mask_show = mask_show[0] # [b,t,h,w]
     #     image_show = image_show[0]
@@ -115,4 +114,3 @@ for batch_index, batch in enumerate(loader):
     #             axes[key].imshow(mask_show[key-t-1,:,:],vmin=-1, vmax=7)
     #     figure.tight_layout()
     #     plt.show()
-    
