@@ -24,6 +24,9 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
         valid_pct=0.1,
         batch_size=4,
         num_workers=4,
+        transform_key="none",
+        tfms_scale=2000.,
+        tfms_window_size=8,
     ):
         super().__init__()
         self.train_kwcoco_path = train_kwcoco_path

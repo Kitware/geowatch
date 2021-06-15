@@ -6,6 +6,7 @@ import tifffile
 import kwcoco
 import kwimage
 import ndsampler
+from torch import nn
 
 import datasets
 import methods
@@ -65,8 +66,14 @@ def main(args):
     for example, meta in zip(tqdm.tqdm(test_dataloader), test_dataset.sample_grid):
         images, labels = example["images"], example["labels"]
         changes = (labels[0, 1:] != labels[0, :-1]).detach().cpu().numpy()
+        T, H, W = changes.shape
         
-        preds = (method(images)[0]).detach().cpu().numpy()
+        preds = (method(images)).detach()
+        preds = nn.functional.interpolate(
+            preds, 
+            size=(H, W), 
+            mode="bilinear")[0]
+        preds = preds.cpu().numpy()
         
         time_slice = slice(
                 meta["time_slice"].start,
