@@ -83,12 +83,16 @@ class drop0_aligned_change(torch.utils.data.Dataset):
         return self.length
 
     def __getitem__(self, idx):
-        im, seg, date, _ = self.dataset.__getitem__(idx)
+        item1 = self.dataset.__getitem__(idx)
+        im, seg, date = item1['image'], item1['mask'], item1['date']
+
         idx2 = idx
         while abs(idx2 - idx) < 1:
             idx2 = random.randint(0, self.length - 1)
-        im2, seg2, date2, _ = self.dataset.__getitem__(idx2)
-
+        
+        item2 = self.dataset.__getitem__(idx2)
+        im2, seg2, date2 = item2['image'], item2['mask'], item2['date']
+        
         if date2 < date:
             im, im2 = im2, im
             seg, seg2 = seg2, seg
