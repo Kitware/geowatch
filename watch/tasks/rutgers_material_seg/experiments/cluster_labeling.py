@@ -216,8 +216,8 @@ class Window(QMainWindow):
         self.label_prediction.setPixmap(self.prediction)
         self.label_prediction.setGeometry(self.scaled_width+20+70*(1+self.scale_factor),128,self.scaled_height, self.scaled_width)
         
-        self.mask = QPixmap(self.qMask).scaled(self.scaled_height, self.scaled_width)
-        self.label_mask.setPixmap(self.mask)
+        # self.mask = QPixmap(self.qMask).scaled(self.scaled_height, self.scaled_width)
+        # self.label_mask.setPixmap(self.mask)
         self.label_mask.setGeometry(3*self.scaled_width,128, self.scaled_height, self.scaled_width)
     
     def decrease_images_size(self):
@@ -232,8 +232,8 @@ class Window(QMainWindow):
         self.label_prediction.setPixmap(self.prediction)
         self.label_prediction.setGeometry(self.scaled_width+20+50*(1+self.scale_factor),128,self.scaled_height, self.scaled_width)
         
-        self.mask = QPixmap(self.qMask).scaled(self.scaled_height, self.scaled_width)
-        self.label_mask.setPixmap(self.mask)
+        # self.mask = QPixmap(self.qMask).scaled(self.scaled_height, self.scaled_width)
+        # self.label_mask.setPixmap(self.mask)
         self.label_mask.setGeometry(3*self.scaled_width,128, self.scaled_height, self.scaled_width)
     
     def keyPressEvent(self, event):
@@ -258,7 +258,8 @@ class Window(QMainWindow):
                 print(f"separable current mask: {self.separable_current_mask[i,:,:].shape}")
                 print(f"original shape: {self.dataset[self.image_counter]['tr'].data['space_dims']}")
                 print(f"current mask: {self.current_mask.shape}")
-                print(f"current mask: {self.current_mask.shape}")
+                print(f"scaled height: {self.scaled_height}, scaled width: {self.scaled_width}")
+                # print(f"current mask: {self.current_mask.shape}")
                 
                 binary_mask = kwimage.Mask(self.separable_current_mask[i,:,:], format='c_mask')
                 binary_polygon = binary_mask.to_multi_polygon()
@@ -390,7 +391,7 @@ class Window(QMainWindow):
         self.output_textbox.clear()
         self.output_textbox_name.clear()
         self.image_counter += 1
-        print(f"current iteration: {self.image_counter}")
+        print(f"current iteration: {self.image_counter} \n width, height: {self.dataset[self.image_counter]['tr'].data['space_dims']}")
         self.label_img_title.setText(f"Image {str(self.image_counter)}")
         self.width, self.height = self.dataset[self.image_counter]['tr'].data['space_dims']
         self.scale_factor = 1
@@ -421,6 +422,7 @@ class Window(QMainWindow):
         for gid in gids:
             image_dict =  self.dset.index.imgs[gid]
             video_dict = self.dset.index.videos[image_dict['video_id']]
+            print(f"image dict: {image_dict} \nvideo dict: {video_dict}")
             if gid not in self.material_dset.index.imgs.keys():
                 self.material_dset.add_image(**image_dict)
             

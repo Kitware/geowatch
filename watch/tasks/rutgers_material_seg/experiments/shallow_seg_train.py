@@ -546,6 +546,7 @@ if __name__== "__main__":
     # # channels = 'r|g|b|gray|wv1'
     # channels = 'r|g|b'
     channels = 'red|green|blue|nir|swir16|swir22'
+    # channels = 'red|green|blue'
     # channels = 'gray'
     dataset = SequenceDataset(sampler, window_dims, input_dims, channels)
     print(dataset.__len__())

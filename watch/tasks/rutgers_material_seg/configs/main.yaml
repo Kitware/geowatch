@@ -4,7 +4,7 @@ seed: 128
 
 visualization:
   batch_index_to_show: 0
-  train_visualizer: True
+  train_visualizer: False
   val_visualizer: True
   visualize_training_every: 2
   visualize_val_every: 2

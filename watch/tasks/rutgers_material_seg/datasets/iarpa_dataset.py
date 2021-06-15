@@ -70,6 +70,7 @@ class SequenceDataset(torch.utils.data.Dataset):
                                            return_info=True)
             # Remember to apply any transform to the dets as well
             dets = dets.scale(info['scale'])
+            # print(info)
             dets = dets.translate(info['offset'])
 
             frame_mask = np.full(frame.shape[0:2], dtype=np.int32, fill_value=-1)
@@ -84,12 +85,12 @@ class SequenceDataset(torch.utils.data.Dataset):
             # ensure channel dim is not squeezed
             frame = kwarray.atleast_nd(frame, 3)
             
-            fig = plt.figure()
-            ax1 = fig.add_subplot(1,2,1)
-            ax2 = fig.add_subplot(1,2,2)
-            ax1.imshow(frame[:,:,:3])
-            ax2.imshow(frame_mask)
-            plt.show()
+            # fig = plt.figure()
+            # ax1 = fig.add_subplot(1,2,1)
+            # ax2 = fig.add_subplot(1,2,2)
+            # ax1.imshow(frame[:,:,:3])
+            # ax2.imshow(frame_mask)
+            # plt.show()
             
             frame_masks.append(frame_mask)
             frame_ims.append(frame)
