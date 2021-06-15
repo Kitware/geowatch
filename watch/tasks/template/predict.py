@@ -39,6 +39,7 @@ def predict_on_dataset(cmdline=False, **kwargs):
         See TemplatePredictConfig
 
     Example:
+        >>> from watch.tasks.template.predict import *  # NOQA
         >>> kwargs = {
         >>>     'dataset': 'special:vidshapes8',
         >>> }
@@ -71,22 +72,44 @@ def predict_on_dataset(cmdline=False, **kwargs):
     # do something to load model
     model = config['deployed']
 
-    loader = []
+    USE_RANDOM_OUTPUTS = True
+    if USE_RANDOM_OUTPUTS:
 
-    # This code is not run in the template
-    print('make predictions')
-    for batch in loader:
-        outputs = model(batch)
+        # Dummy random outputs
+        import kwimage
+        import kwarray
 
-        # Convert outputs to coco
-        # need to be able to associate gid with a prediction
-        gid_to_coco_outputs = outputs.to_coco()
-        for gid, coco_outputs in gid_to_coco_outputs.items():
-            for ann in coco_outputs['anns']:
-                output_dset.add_annotation(image_id=gid, **ann)
-            for aux in coco_outputs['auxs']:
-                # Handle writing the data to disk
-                output_dset.add_auxiliary_image(image_id=gid, **aux)
+        rng = kwarray.ensure_rng(None)
+        for gid, img in sampler.dset.imgs.items():
+            rando_dets = kwimage.Detections.random(
+                segmentations=True, classes=sampler.classes, rng=rng)
+            rando_dets = rando_dets.scale((img['width'], img['height']))
+
+        anns = list(rando_dets.to_coco(dset=output_dset))
+        for ann in anns:
+            # Should add a score for the annotation
+            ann['score'] = rng.rand()
+            output_dset.add_annotation(image_id=gid, **ann)
+
+        # TODO: add random auxiliary channels
+
+    else:
+        loader = []
+
+        # This code is not run in the template
+        print('make predictions')
+        for batch in loader:
+            outputs = model(batch)
+
+            # Convert outputs to coco
+            # need to be able to associate gid with a prediction
+            gid_to_coco_outputs = outputs.to_coco()
+            for gid, coco_outputs in gid_to_coco_outputs.items():
+                for ann in coco_outputs['anns']:
+                    output_dset.add_annotation(image_id=gid, **ann)
+                for aux in coco_outputs['auxs']:
+                    # Handle writing the data to disk
+                    output_dset.add_auxiliary_image(image_id=gid, **aux)
 
     # Save predictions to disk
     print('write output_dset.fpath = {!r}'.format(output_dset.fpath))
