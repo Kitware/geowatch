@@ -139,18 +139,18 @@ class Bottleneck(nn.Module):
 
 class ResNet(nn.Module):
 
-    def __init__(self, block, layers, num_classes, num_groups=None, weight_std=False, beta=False):
+    def __init__(self, block, layers, num_classes, num_groups=None, weight_std=False, beta=False, num_channels=3):
         self.inplanes = 64
         self.norm = lambda planes, momentum=0.05: nn.BatchNorm2d(planes, momentum=momentum) if num_groups is None else nn.GroupNorm(num_groups, planes)
         self.conv = Conv2d if weight_std else nn.Conv2d
 
         super(ResNet, self).__init__()
         if not beta:
-            self.conv1 = self.conv(3, 64, kernel_size=7, stride=2, padding=3,
+            self.conv1 = self.conv(num_channels, 64, kernel_size=7, stride=2, padding=3,
                                    bias=False)
         else:
             self.conv1 = nn.Sequential(
-                self.conv(3, 64, 3, stride=2, padding=1, bias=False),
+                self.conv(num_channels, 64, 3, stride=2, padding=1, bias=False),
                 self.conv(64, 64, 3, stride=1, padding=1, bias=False),
                 self.conv(64, 64, 3, stride=1, padding=1, bias=False))
         self.bn1 = self.norm(64)

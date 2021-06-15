@@ -9,9 +9,9 @@ data:
   weights: []
   local:
     model_save_dir: /home/native/projects/data/smart_watch/models/
-    train_dir: /home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2/
-    test_dir: /home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2/
-    coco_json: /home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2.1/material_labels.kwcoco.json
+    train_dir: /media/native/data/data/smart_watch_dvc/drop0_aligned_msi/
+    test_dir: /media/native/data/data/smart_watch_dvc/drop0_aligned_msi/
+    coco_json: /media/native/data/data/smart_watch_dvc/drop0_aligned_msi/material_labels2.kwcoco.json
     val_dir:
   server:
     model_save_dir: /data4/peri/smart_watch/models/
@@ -24,21 +24,28 @@ training:
   backbone: 
   model_name: shallow_seg
   gn_n_groups: 32
+  num_channels: 6
   weight_std: True
   beta: False
   pretrained: False
   distributed: False
   learning_rate: 0.0001 # best: 0.00007
-  # resume: /data4/peri/cranberry_attention/models/pascalvoc_deeplab/cranberry_attention_pascalvoc_deeplab_2021-03-09-11:45/pascalvoc_deeplab_epoch_38_loss_0.31621180927788667_valmIoU_0.6021584182189197_time_2021-03-11-05:33:02.pth
+  # resume: /home/native/projects/data/smart_watch/models/experiments_iarpa/tasks_experiments_2021-06-07-12:19/experiments_epoch_147_loss_3.3501133032334156_valmIoU_0.21981567095240662_time_2021-06-07-14:47:07.pth
   resume: False
   train_val_test_split: [0.95, 0.02, 0.03]
   epochs: 200
-  batch_size: 4
+  start_epoch: 0
+  batch_size: 2
   drop_last_batch: True
   momentum: 0.9
   weight_decay: 0.0001
   num_workers: 4
   test_with_full_supervision: 1
+
+high_confidence_threshold:
+  train_cutoff: 0.8
+  val_cutoff: 0.8
+
 
 evaluation:
   use_crf: False

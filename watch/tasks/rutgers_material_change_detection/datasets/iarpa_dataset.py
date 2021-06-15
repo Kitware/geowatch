@@ -2,7 +2,7 @@ import kwarray
 import kwimage
 import numpy as np
 import torch
-import matplotlib.pyplot as plt
+
 # from kwcoco.channel_spec import ChannelSpec  # NOQA
 from functools import partial
 from netharn.data.batch_samplers import PatchedBatchSampler
@@ -83,14 +83,7 @@ class SequenceDataset(torch.utils.data.Dataset):
 
             # ensure channel dim is not squeezed
             frame = kwarray.atleast_nd(frame, 3)
-            
-            fig = plt.figure()
-            ax1 = fig.add_subplot(1,2,1)
-            ax2 = fig.add_subplot(1,2,2)
-            ax1.imshow(frame[:,:,:3])
-            ax2.imshow(frame_mask)
-            plt.show()
-            
+
             frame_masks.append(frame_mask)
             frame_ims.append(frame)
 

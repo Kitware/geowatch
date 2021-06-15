@@ -1,6 +1,7 @@
 # from material_seg.datasets import build_dataset
 import os
 import sys
+import comet_ml
 import kwcoco
 import ndsampler
 import ubelt as ub
@@ -15,9 +16,12 @@ from sklearn.cluster import KMeans, SpectralClustering
 from sklearn.manifold import TSNE
 import torch.nn as nn
 import torch.optim as optim
+import datetime
+import random
 
 from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
 from watch.tasks.rutgers_material_seg.models import build_model
+import watch.tasks.rutgers_material_seg.utils.utils as utils
 
 
 class Clusterer(object):
@@ -133,7 +137,7 @@ if __name__== "__main__":
     config = {**initial_config, **experiment_config}
     config['start_time'] = datetime.datetime.today().strftime('%Y-%m-%d-%H:%M:%S')
     
-    project_name = f"{current_path[-3]}_{current_path[-1]}"#_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}"
+    project_name = f"{project_root[-3]}_{project_root[-1]}"#_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}"
     experiment_name = f"SMART_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M:%S')}"
     experiment = comet_ml.Experiment(api_key=config['cometml']['api_key'],
                                      project_name=project_name,
@@ -174,7 +178,7 @@ if __name__== "__main__":
     sampler = ndsampler.CocoSampler(dset)
     # # channels = 'r|g|b|gray|wv1'
     dataset = SequenceDataset(sampler, window_dims, input_dims, channels)
-    loader = dataset.make_loader(batch_size=batch_size)
+    train_dataloader = dataset.make_loader(batch_size=config['training']['batch_size'])
 
     model = build_model(model_name = config['training']['model_name'],
                         backbone=config['training']['backbone'],
@@ -183,14 +187,6 @@ if __name__== "__main__":
                         num_groups=config['training']['gn_n_groups'],
                         weight_std=config['training']['weight_std'],
                         beta=config['training']['beta'])
-
-    optimizer = optim.SGD(model.parameters(), 
-                            lr=lr, 
-                            momentum=momentum, 
-                            weight_decay=weight_decay)
-
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer,len(loader),
-                                                        eta_min = lr)
 
     model = build_model(model_name = config['training']['model_name'],
                         backbone=config['training']['backbone'],
@@ -234,12 +230,12 @@ if __name__== "__main__":
         
     clusterer = Clusterer(model,
                       train_dataloader,
-                      validation_dataloader,
+                      train_dataloader,
                       config['training']['epochs'],
                       optimizer,
                       scheduler,
-                      test_loader=fs_test_loader
+                      test_loader=train_dataloader
                       )
-    train_losses, val_losses, mean_ious_val = clusterer.imagewise_cluster(experiment)
+    train_losses, val_losses, mean_ious_val = clusterer.multitemporal_cluster(experiment)
 
 
