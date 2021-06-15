@@ -9,10 +9,8 @@ from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import (
 from torchvision import transforms
 from torch.utils.data import DataLoader
 
-datasets = {
-    'deepglobe': DeepGlobeDataset,
-    'iarpa': SequenceDataset,
-}
+datasets = {'deepglobe': DeepGlobeDataset,
+            'iarpa': SequenceDataset}
 
 
 def build_dataset(dataset_name: str, root: str, batch_size: int,
