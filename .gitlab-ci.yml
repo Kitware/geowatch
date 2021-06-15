@@ -228,7 +228,7 @@ build_docker_and_upload_strict:
 data:
 # This stage will download one image from the SMART STAC API and persist it for 5 minutes as an artifact (please no caching here)
   <<:
-    *common_template_docker
+    *common_template
   image: python:3.8
   stage: data
   before_script:
@@ -250,7 +250,7 @@ data:
 run:
 # Fun Part: Run the container you built here and import artifacts from the previous stage
   <<:
-    *common_template_docker
+    *common_template
   image:
     name: $CI_REGISTRY_IMAGE/watch:latest
   stage: run
