@@ -163,6 +163,8 @@ data:
 # This stage will download one image from the SMART STAC API and persist it for 5 minutes as an artifact (please no caching here)
   <<:
     *common_template
+  rules:
+    - <<: *if-merged-into-default
   image: python:3.8
   stage: data
   before_script:
@@ -185,6 +187,8 @@ run:
 # Fun Part: Run the container you built here and import artifacts from the previous stage
   <<:
     *common_template
+  rules:
+    - <<: *if-merged-into-default
   image:
     name: $CI_REGISTRY_IMAGE/watch:latest
   stage: run
