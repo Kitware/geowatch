@@ -3,10 +3,12 @@ from torch.utils import data
 import os
 import os.path as osp
 
+
 def main(data_dir):
     data_folder = os.listdir(data_dir)
 
-    train_folders, val_folders = data.random_split(data_folder, [50,10], generator=torch.Generator().manual_seed(12))
+    train_folders, val_folders = data.random_split(
+        data_folder, [50, 10], generator=torch.Generator().manual_seed(12))
 
     train_images = []
     train_building_masks = []
