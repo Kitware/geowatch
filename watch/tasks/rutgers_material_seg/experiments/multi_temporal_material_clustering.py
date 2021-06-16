@@ -13,7 +13,7 @@ from sklearn.manifold import TSNE
 from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
 
 visualize_images=False
-coco_fpath = ub.expandpath('/media/native/data/data/smart_watch_dvc/drop0_aligned_msi/data_fielded.kwcoco.json')
+coco_fpath = ub.expandpath('/media/native/data/data/smart_watch_dvc/drop0_aligned_msi/material_labels.kwcoco.json')
 dset = kwcoco.CocoDataset(coco_fpath)
 
 sampler = ndsampler.CocoSampler(dset)

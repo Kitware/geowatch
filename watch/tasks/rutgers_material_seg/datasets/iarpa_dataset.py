@@ -50,8 +50,16 @@ class SequenceDataset(torch.utils.data.Dataset):
         # import pdb
         # pdb.set_trace()
         # print(f"frame min: {frame.min()}, frame max: {frame.max()}")
-        sample = sampler.load_sample(tr)
-
+        sample = sampler.load_sample(tr, with_annots="segmentation")
+        # print(sample.keys())
+        # print(sample['annots'].keys())
+        # print(sample['annots']['rel_ssegs'])
+        # print(sample['annots']['frame_dets'])
+        # rel_ssegs = sample['annots']['rel_ssegs']
+        # print(rel_ssegs.data)
+        # seg = kwimage.Segmentation.coerce(rel_ssegs.data)
+        # plt.imshow(rel_ssegs)
+        # plt.show()
         # Access the sampled image and annotation data
         raw_frame_list = sample['im']
         raw_det_list = sample['annots']['frame_dets']
@@ -72,9 +80,10 @@ class SequenceDataset(torch.utils.data.Dataset):
             dets = dets.scale(info['scale'])
             # print(info)
             dets = dets.translate(info['offset'])
-
+            # print(frame.shape[0:2])
             frame_mask = np.full(frame.shape[0:2], dtype=np.int32, fill_value=-1)
             ann_polys = dets.data['segmentations'].to_polygon_list()
+            # print(ann_polys)
             ann_aids = dets.data['aids']
             ann_cids = dets.data['cids']
 

@@ -19,6 +19,7 @@ from tqdm import tqdm
 import torch
 import pdb
 from sklearn.cluster import KMeans
+from skimage.transform import resize
 from sklearn.manifold import TSNE
 import scipy
 from PIL import Image
@@ -253,23 +254,38 @@ class Window(QMainWindow):
         
     def finalize_mask(self):
         gids = self.dataset[self.image_counter]['tr'].data['gids']
+        # widths_list = [x['width'] for x in self.dset.index.imgs[gids[0]]['auxiliary']]
+        # max_dim_index = widths_list.index(max(widths_list))
+        # max_dim_index = self.dset.index.imgs[gids[0]]['auxiliary'].index(max(self.dset.index.imgs[gids[0]]['auxiliary']))
+        
+        # im_space_width, im_space_height = self.dset.index.imgs[gids[0]]['auxiliary'][max_dim_index]['width'], self.dset.index.imgs[gids[0]]['auxiliary'][max_dim_index]['height']
+        transform = np.array([[1., 0, 0], [0, 1, 0], [0, 0, 1]])
         for i in range(1,len(list(self.class_label_to_index.keys()))):
             if len(np.unique(self.separable_current_mask[i,:,:])) > 1:
-                print(f"separable current mask: {self.separable_current_mask[i,:,:].shape}")
-                print(f"original shape: {self.dataset[self.image_counter]['tr'].data['space_dims']}")
-                print(f"current mask: {self.current_mask.shape}")
-                print(f"scaled height: {self.scaled_height}, scaled width: {self.scaled_width}")
+                # print(f"separable current mask: {self.separable_current_mask[i,:,:].shape}")
+                # print(f"original shape: {self.dataset[self.image_counter]['tr'].data['space_dims']}")
                 # print(f"current mask: {self.current_mask.shape}")
+                # print(f"scaled height: {self.scaled_height}, scaled width: {self.scaled_width}")
                 
-                binary_mask = kwimage.Mask(self.separable_current_mask[i,:,:], format='c_mask')
-                binary_polygon = binary_mask.to_multi_polygon()
+                binary_mask = self.separable_current_mask[i,:,:]
+                binary_mask = kwimage.Mask(binary_mask, format='c_mask')
                 # binary_coco = binary_polygon.to_coco(style='new')
-                binary_segmentation = kwimage.Segmentation.coerce(binary_polygon)#.to_coco(style="new")
+                # binary_segmentation = kwimage.Segmentation.coerce(binary_polygon)#.to_coco(style="new")
                 for gid in gids:
+                    image_dict =  self.dset.index.imgs[gid]
+                    im_space_height, im_space_width = image_dict['height'], image_dict['width']
+                    img_to_vid_transform = image_dict['warp_img_to_vid']['matrix']
+                    img_to_vid_transform_npy = np.array(img_to_vid_transform)
+                    img_to_vid_transform_inv_npy = np.linalg.inv(img_to_vid_transform_npy)
+                    # print(img_to_vid_transform_inv_npy)
+                    binary_mask = binary_mask.warp(img_to_vid_transform_inv_npy, output_dims=(im_space_height, im_space_width))
+                    binary_polygon = binary_mask.to_multi_polygon()
                     self.material_dset.add_annotation(image_id=gid, 
                                                       category_id=i, 
                                                       bbox=list(binary_polygon.bounding_box().to_coco(style="new"))[0], 
-                                                      segmentation=binary_segmentation.to_coco(style="new"))
+                                                    #   segmentation=binary_segmentation.to_coco(style="new")
+                                                      segmentation=binary_polygon.to_coco(style="new")
+                                                      )
                     
         self.material_dset.validate()
         self.material_dset._check_integrity()
@@ -360,14 +376,14 @@ class Window(QMainWindow):
         self.output_textbox.clear()
         self.output_textbox_name.clear()
         self.image_counter = int(self.gotoimage_label.currentText())
-        print(f"current iteration: {self.image_counter}")
+        # print(f"current iteration: {self.image_counter}")
         self.label_img_title.setText(f"Image {self.image_counter}")
         self.width, self.height = self.dataset[self.image_counter]['tr'].data['space_dims']
         self.scale_factor = 1
         self.current_mask = np.zeros((self.width, self.height)).astype(np.uint8)
         self.separable_current_mask = np.zeros((len(list(self.class_label_to_index.keys())), self.width, self.height)).astype(np.uint8)
         self.load_images(index=self.image_counter)
-        print("updated image and prediction")
+        # print("updated image and prediction")
         
         self.image = QPixmap(self.qImg)
         self.label_img.setPixmap(self.image)
@@ -391,7 +407,7 @@ class Window(QMainWindow):
         self.output_textbox.clear()
         self.output_textbox_name.clear()
         self.image_counter += 1
-        print(f"current iteration: {self.image_counter} \n width, height: {self.dataset[self.image_counter]['tr'].data['space_dims']}")
+        # print(f"current iteration: {self.image_counter} \n width, height: {self.dataset[self.image_counter]['tr'].data['space_dims']}")
         self.label_img_title.setText(f"Image {str(self.image_counter)}")
         self.width, self.height = self.dataset[self.image_counter]['tr'].data['space_dims']
         self.scale_factor = 1
@@ -399,7 +415,7 @@ class Window(QMainWindow):
         self.separable_current_mask = np.zeros((len(list(self.class_label_to_index.keys())), self.width, self.height)).astype(np.uint8)
         # self.width_factor, self.height_factor = self.vis_width/self.width, self.vis_height/self.height
         self.load_images(index=self.image_counter)
-        print("updated image and prediction")
+        # print("updated image and prediction")
         
         self.image = QPixmap(self.qImg)
         self.label_img.setPixmap(self.image)
@@ -418,11 +434,18 @@ class Window(QMainWindow):
         image_data = self.dataset[index]['inputs']['im'].data # [b,c,t,h,w]
         # print(f"image min:{image_data.min()} max: {image_data.max()}")
         gids = self.dataset[self.image_counter]['tr'].data['gids']
-        # print(self.dataset[self.image_counter]['tr'].data)
         for gid in gids:
             image_dict =  self.dset.index.imgs[gid]
+            img_to_vid_transform = image_dict['warp_img_to_vid']['matrix']
+            print(np.array(img_to_vid_transform))
+            # print(type(img_to_vid_transform))
+            # print(image_dict.keys())
             video_dict = self.dset.index.videos[image_dict['video_id']]
-            print(f"image dict: {image_dict} \nvideo dict: {video_dict}")
+            # print(f"image dict: {image_dict} \nvideo dict: {video_dict}")
+            # print(self.dset.index.imgs[gid]['auxiliary'])
+            # for item in self.dset.index.imgs[gid]['auxiliary']:
+            #     print(f"height: {item['height']}")
+            #     print(f"width: {item['width']}")
             if gid not in self.material_dset.index.imgs.keys():
                 self.material_dset.add_image(**image_dict)
             
@@ -470,7 +493,7 @@ class Window(QMainWindow):
         # ax.imshow(self.prediction_show_cmap, cmap='viridis')
         # self.fig.show()
 
-        print(f"height: {self.height}, width: {self.width}")
+        # print(f"height: {self.height}, width: {self.width}")
         self.qimage = qimage2ndarray.array2qimage(self.image_show*255)#.scaled(self.height, self.width)
         self.qprediction = qimage2ndarray.array2qimage(self.prediction_show_cmap)#.scaled(self.height, self.width)
         self.qmask = qimage2ndarray.array2qimage(self.current_mask)#.scaled(self.height, self.width)
