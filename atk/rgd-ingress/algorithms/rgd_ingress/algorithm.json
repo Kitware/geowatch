@@ -1,16 +1,16 @@
 {
-    "description": "Query the WATCH RGD and pull down images within a specified date range and bounding box.",
+    "description": "Query the WATCH RGD instance and pull down images from within a specified date range and bounding box.",
     "display_name": "RGD Ingress",
     "homepage": "",
-    "license": "MIT",
+    "license": "Other",
     "name": "rgd_ingress",
     "optional_parameters": [],
     "outputs": [
         {
             "data_type": "string",
-            "description": "Directory where output images / data will be written.  Will be created if it doesn't already exist.",
+            "description": "Directory where output images / data have been written.",
             "display_name": "Output directory",
-            "name": "out_dir",
+            "name": "output_dir",
             "sort_order": 0
         },
         {
@@ -52,6 +52,51 @@
             "parameter_choices": "",
             "required": true,
             "sort_order": 1
+        },
+        {
+            "custom_validation": "",
+            "data_type": "string",
+            "default_value": "",
+            "description": "Username for RGD account",
+            "display_name": "RGD Username",
+            "field_type": "text",
+            "help_text": "Example: 'first.last@kitware.com'",
+            "max_value": "",
+            "min_value": "",
+            "name": "username",
+            "parameter_choices": "",
+            "required": true,
+            "sort_order": 2
+        },
+        {
+            "custom_validation": "",
+            "data_type": "string",
+            "default_value": "",
+            "description": "Password for RGD account",
+            "display_name": "RGD Password",
+            "field_type": "text",
+            "help_text": "",
+            "max_value": "",
+            "min_value": "",
+            "name": "password",
+            "parameter_choices": "",
+            "required": true,
+            "sort_order": 3
+        },
+        {
+            "custom_validation": "",
+            "data_type": "string",
+            "default_value": "",
+            "description": "Directory where output images / data will be written. Will be created if it doesn't already exist. ",
+            "display_name": "Output Directory",
+            "field_type": "text",
+            "help_text": "",
+            "max_value": "",
+            "min_value": "",
+            "name": "output_dir",
+            "parameter_choices": "",
+            "required": true,
+            "sort_order": 4
         }
     ],
     "version": "0.0.1"
