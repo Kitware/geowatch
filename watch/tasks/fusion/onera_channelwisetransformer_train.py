@@ -25,25 +25,27 @@ if __name__ == "__main__":
         
         # dataset params
         train_kwcoco_path=pathlib.Path("~/Projects/smart_watch_dvc/extern/onera_2018/onera_train.kwcoco.json"),
-        batch_size=16,
+        batch_size=32,
         num_workers=8,
+        chip_size=128,
         transform_key="channel_transformer",
         tfms_scale=2000.,
         tfms_window_size=8,
         
         # model params
-        window_size=8,
         embedding_dim=256,
-        n_layers=8,
+        n_layers=4,
         learning_rate=1e-3,
         weight_decay=1e-5,
         pos_weight=5.0,
         
         # trainer params
         gpus=1,
+        #accelerator="ddp",
         precision=16,
         max_epochs=200,
         accumulate_grad_batches=2,
+        terminate_on_nan=True,
     )
     
     for key, method in ctf_methods.items():
