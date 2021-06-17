@@ -183,11 +183,11 @@ def coco_populate_geo_video_stats(dset, vidid, target_gsd='max-resolution'):
         img = dset.index.imgs[gid]
         img_to_wld = frame_infos[gid]['img_to_wld']
         img_to_vid = wld_to_vid @ img_to_wld
-        img['warp_img_to_vid'] = img_to_vid.__json__()
+        img['warp_img_to_vid'] = img_to_vid.concise()
 
         for aux in img.get('auxiliary', []):
             aux_to_vid = img_to_vid @ Affine.coerce(aux['warp_aux_to_img'])
-            aux['warp_img_to_aux'] = aux_to_vid.__json__()
+            aux['warp_aux_to_vid'] = aux_to_vid.concise()
 
     if 0:
         dset.imgs[min_gsd_gid]
@@ -468,7 +468,7 @@ def _num_band_hueristic(num_bands):
 
 def Affine_concise(aff):
     """
-    TODO: add to kwimage.Affine
+    TODO: remove after kwimage is updated to 0.7.8
     """
     import numpy as np
     self = aff

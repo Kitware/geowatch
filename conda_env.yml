@@ -44,8 +44,8 @@ dependencies:
     - networkx >= 2.5.1
 
     # Imaging
-    - kwimage >= 0.7.6
-    - kwcoco >= 0.2.4
+    - kwimage >= 0.7.8
+    - kwcoco >= 0.2.5
     - Pillow >= 8.0.1
     - imgaug >= 0.4.0
     - albumentations >= 1.0.0

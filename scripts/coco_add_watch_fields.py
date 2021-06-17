@@ -47,9 +47,12 @@ def main(**kwargs):
 
     Ignore:
         python ~/code/watch/scripts/coco_add_watch_fields.py \
-            --src=$HOME/data/dvc-repos/smart_watch_dvc/drop0_aligned/data.kwcoco.json \
-            --dst=$HOME/data/dvc-repos/smart_watch_dvc/drop0_aligned/data.kwcoco.new.json \
+            --src=$HOME/data/dvc-repos/smart_watch_dvc/drop0_aligned_msi/data.kwcoco.json \
+            --dst=$HOME/data/dvc-repos/smart_watch_dvc/drop0_aligned_msi/data.kwcoco.new.json \
             --target_gsd=10
+
+    jq .images[0].auxiliary[0] $HOME/data/dvc-repos/smart_watch_dvc/drop0_aligned_msi/data.kwcoco.new.json
+    jq .images[0].auxiliary[0] $HOME/data/dvc-repos/smart_watch_dvc/drop0_aligned_msi/data.kwcoco.json
 
     Example:
         >>> import sys, ubelt
