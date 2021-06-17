@@ -65,6 +65,7 @@ class TransformerChangeDetector(pl.LightningModule):
             "f1": metrics.F1(),
         })
 
+    @pl.core.decorators.auto_move_data
     def forward(self, images):
         B, T, C, H, W = images.shape
         feats = self.model(images)

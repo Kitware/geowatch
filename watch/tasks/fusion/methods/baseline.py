@@ -27,6 +27,7 @@ class UNetChangeDetector(pl.LightningModule):
             "f1": metrics.F1(),
         })
         
+    @pl.core.decorators.auto_move_data
     def forward(self, images):
         T = images.shape[1] # how many time steps?
         

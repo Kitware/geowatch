@@ -82,6 +82,13 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
         project_ds.remove_videos([2,3])
 
         for image in project_ds.dataset["images"]:
+            image["img_to_vid"] = {
+                'type': 'affine',
+                'matrix': [
+                    [1.0, 0.0, 0.0],
+                    [0.0, 1.0, 0.0],
+                    [0.0, 0.0, 1.0],
+                ]}
             image["warp_img_to_vid"] = {
                 'type': 'affine',
                 'matrix': [
@@ -126,6 +133,9 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
                     [0.0, 1.0, 0.0],
                     [0.0, 0.0, 1.0],
                 ]}
+            video["target_gsd"] = 10.0
+            video["min_gsd"] = 10.0
+            video["max_gsd"] = 10.0
 
         project_ds.validate()
         return project_ds

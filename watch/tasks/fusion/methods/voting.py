@@ -24,6 +24,7 @@ class VotingModel(pl.LightningModule):
             "f1": metrics.F1(),
         })
         
+    @pl.core.decorators.auto_move_data
     def forward(self, x):
         B = x.shape[0]
         x = einops.rearrange(x, "b t c h w -> (b t) c h w")
@@ -121,6 +122,7 @@ class End2EndVotingModel(pl.LightningModule):
             "f1": metrics.F1(),
         })
         
+    @pl.core.decorators.auto_move_data
     def forward(self, images):
         B = images.shape[0]
         T = images.shape[1] # how many time steps?

@@ -41,6 +41,9 @@ def main(args):
     method_class = getattr(methods, args.method)
     method = method_class.load_from_checkpoint(args.checkpoint_path)
     method.eval(); method.freeze();
+
+    if args.use_gpu:
+        method = method.to("cuda:0")
     
     # set up canvases for prediction
     result_canvases = {
@@ -61,7 +64,7 @@ def main(args):
             ], -2)
         for video in test_dataset.sampler.dset.dataset["videos"]
     }
-    
+
     # fill canvases
     for example, meta in zip(tqdm.tqdm(test_dataloader), test_dataset.sample_grid):
         images, labels = example["images"], example["labels"]
@@ -91,6 +94,14 @@ def main(args):
         result_canvases[meta["vidid"]][space_time_slice] += preds
         result_counts[meta["vidid"]][space_time_slice] += 1
         target_canvases[meta["vidid"]][space_time_slice] = changes
+
+    #print({
+    #    key: {
+    #        idx: np.unique(layer, return_counts=True)
+    #        for idx, layer in enumerate(canvas)
+    #        }
+    #    for key, canvas in target_canvases.items()
+    #})
         
     results = {
         key: canvas / result_counts[key]
@@ -191,6 +202,7 @@ if __name__ == "__main__":
     parser.add_argument("checkpoint_path", type=pathlib.Path)
     parser.add_argument("results_dir", type=pathlib.Path)
     parser.add_argument("results_path", type=pathlib.Path)
+    parser.add_argument("--use_gpu", action="store_true")
     
     # parse the dataset and method strings
     temp_args, _ = parser.parse_known_args()
