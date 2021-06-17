@@ -20,6 +20,11 @@ class Main(Algorithm):
 
         search_results_catalog = search_results.items_as_collection().to_dict()
 
+        max_results = params.get('max_results', 0)
+        if max_results > 0:
+            search_results_catalog['features'] =\
+                search_results_catalog['features'][:max_results]
+
         if params['dry_run'] != 1:
             os.makedirs(params['output_dir'], exist_ok=True)
 
