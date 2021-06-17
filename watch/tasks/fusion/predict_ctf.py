@@ -17,11 +17,13 @@ dataset_channel_sets = {
         "all": None,
         "bgr": "B02|B03|B04",
         "sample": "B01|B02|B03|B04|B08|B10|B12",
+        "no60": "B02|B03|B04|B05|B06|B07|B08|B11|B12|B8A",
     },
     "drop0_s2": {
         "all": None,
         "bgr": "blue|green|red",
         "sample": "costal|blue|green|red|nir|cirrus|swir22",
+        "no60": "blue|green|red|B05|B06|B07|nir|swir16|swir22|B8A",
     },
 }
 
@@ -36,15 +38,20 @@ methods = {
 }
 
 for ckpt_dir in pathlib.Path("_trained_models").glob("*/ctf/*/"):
-    dataset = datasets[ckpt_dir.parts[-3]]
-    method = methods[ckpt_dir.parts[-1]]
-    test_kwcoco_path = dataset_kwcocos[ckpt_dir.parts[-3]]
+    dataset_name = ckpt_dir.parts[-3]
+    method_name = ckpt_dir.parts[-1]
+
+    dataset = datasets[dataset_name]
+    method = methods[method_name]
+    test_kwcoco_path = dataset_kwcocos[dataset_name]
 
     ckpt_paths = ckpt_dir.glob("lightning_logs/version_*/checkpoints/*.ckpt")
     ckpt_paths = sorted(list(ckpt_paths))
     ckpt_path = ckpt_paths[-1]
     
-    for channel_key, channel_subset in dataset_channel_sets[dataset].items():
+    for channel_key, channel_subset in dataset_channel_sets[dataset_name].items():
+
+        print(f"{method}_{dataset}_{channel_key}\n=========================")
 
         args = SimpleNamespace(
             dataset=dataset,
@@ -56,14 +63,15 @@ for ckpt_dir in pathlib.Path("_trained_models").glob("*/ctf/*/"):
             test_kwcoco_path=test_kwcoco_path,
             tfms_channel_subset=channel_subset,
             # common args
+            use_gpu=True,
             batch_size=1,
             time_steps=2,
-            chip_size=128,
-            time_overlap=0,
+            chip_size=32,
+            time_overlap=0.5,
             chip_overlap=0.1,
             transform_key="channel_transformer",
             tfms_scale=2000.,
-            tfms_window_size=8,
+            tfms_window_size=2,
         )
         predict.main(args)
 
