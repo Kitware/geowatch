@@ -130,29 +130,6 @@ def make_coco_img_from_geotiff(tiff_fpath, name=None):
     return img
 
 
-def Affine_concise(aff):
-    """
-    TODO: add to kwimage.Affine
-    """
-    import numpy as np
-    self = aff
-    params = self.decompose()
-    params['type'] = 'affine'
-    if np.allclose(params['offset'], (0, 0)):
-        params.pop('offset')
-    elif ub.allsame(params['offset']):
-        params['offset'] = params['offset'][0]
-    if np.allclose(params['scale'], (1, 1)):
-        params.pop('scale')
-    elif ub.allsame(params['scale']):
-        params['scale'] = params['scale'][0]
-    if np.allclose(params['shear'], 0):
-        params.pop('shear')
-    if np.allclose(params['theta'], 0):
-        params.pop('theta')
-    return params
-
-
 def make_coco_img_from_auxiliary_geotiffs(tiffs, name):
     """
     TODO: move to coco extensions
@@ -180,7 +157,7 @@ def make_coco_img_from_auxiliary_geotiffs(tiffs, name):
     base = auxiliary[idx]
     warp_img_to_wld = base['warp_pxl_to_wld']
     warp_wld_to_img = warp_img_to_wld.inv()
-    img['warp_img_to_wld'] = Affine_concise(warp_img_to_wld)
+    img['warp_img_to_wld'] = warp_img_to_wld.concise()
     img.update(ub.dict_isect(base, {'utm_corners', 'wld_crs_info', 'utm_crs_info'}))
 
     # img[' = aux.pop('utm_corners')
@@ -192,7 +169,7 @@ def make_coco_img_from_auxiliary_geotiffs(tiffs, name):
         aux.pop('utm_crs_info')
         aux.pop('wld_crs_info')
         warp_aux_to_img = warp_wld_to_img @ aux.pop('warp_pxl_to_wld')
-        aux['warp_aux_to_img'] = Affine_concise(warp_aux_to_img)
+        aux['warp_aux_to_img'] = warp_aux_to_img.concise()
 
     img['width'] = base['width']
     img['height'] = base['height']
