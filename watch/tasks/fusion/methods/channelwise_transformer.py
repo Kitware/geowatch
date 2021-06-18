@@ -289,3 +289,207 @@ class AxialTransformerChangeDetector(_TransformerChangeDetector):
             ],
             **kwargs,
         )
+
+class _TransformerSegmentation(pl.LightningModule):
+    
+    def transformer_layer(self, **kwargs):
+        raise NotImplemented()
+    
+    def __init__(self, 
+                 n_classes,
+                 window_size=8, 
+                 embedding_size=128, 
+                 n_layers=4, 
+                 n_heads=8, 
+                 dropout=0.0, 
+                 fc_dim=1024, 
+                 learning_rate=1e-3, 
+                 weight_decay=0., 
+                ):
+        super().__init__()
+        self.save_hyperparameters()
+        
+        layers = [
+            nn.LazyLinear(embedding_size),
+            Rearrange("b t c h w f -> b f t c h w"),
+        ] + [
+            self.transformer_layer(embedding_size=embedding_size, n_heads=n_heads, dropout=dropout)
+            for _ in range(n_layers)
+        ] + [
+            Reduce("b f t c h w -> b t h w f", "mean"),
+            nn.Linear(embedding_size, embedding_size),
+            nn.Dropout(dropout),
+            nn.GELU(),
+            nn.Linear(embedding_size, n_classes),
+            Rearrange("b t h w f -> b f t h w"),
+        ]
+        self.model = nn.Sequential(*layers)
+        
+        # criterion and metrics
+        self.criterion = nn.CrossEntropyLoss()
+        self.metrics = nn.ModuleDict({
+            "acc": metrics.Accuracy(),
+            "iou": metrics.IoU(2),
+            "f1": metrics.F1(),
+        })
+
+    @pl.core.decorators.auto_move_data
+    def forward(self, images):
+        return self.model(images) # b f t h w
+        
+    def training_step(self, batch, batch_idx=None):
+        images, labels = batch["images"], batch["labels"]
+        
+        # compute predicted and target change masks
+        _, _, H, W = labels.shape
+        logits = self(images) # b f t h w
+        logits = nn.functional.interpolate(
+            logits, 
+            [H, W], 
+            mode="bilinear")
+        
+        # compute metrics
+        for key, metric in self.metrics.items():
+            self.log(key, metric(torch.sigmoid(logits), labels), prog_bar=True)
+        
+        # compute criterion
+        loss = self.criterion(logits, labels)
+        return loss
+    
+    def validation_step(self, batch, batch_idx=None):
+        images, labels = batch["images"], batch["labels"]
+        
+        # compute predicted and target change masks
+        _, _, H, W = labels.shape
+        logits = self(images)
+        logits = nn.functional.interpolate(
+            logits, 
+            [H, W], 
+            mode="bilinear")
+                
+        # compute metrics
+        for key, metric in self.metrics.items():
+            self.log("val_"+key, metric(torch.sigmoid(logits), labels), prog_bar=True)
+        
+        # compute loss
+        loss = self.criterion(logits, labels)
+        self.log("val_loss", loss, prog_bar=True)
+        return loss
+    
+    def test_step(self, batch, batch_idx=None):
+        images, labels = batch["images"], batch["labels"]
+        
+        # compute predicted and target change masks
+        _, _, H, W = labels.shape
+        logits = self(images)
+        logits = nn.functional.interpolate(
+            logits, 
+            [H, W], 
+            mode="bilinear")
+                
+        # compute metrics
+        for key, metric in self.metrics.items():
+            self.log("test_"+key, metric(torch.sigmoid(logits), labels), prog_bar=True)
+        
+        # compute loss
+        loss = self.criterion(logits, labels)
+        self.log("test_loss", loss, prog_bar=True)
+        return loss
+    
+    def configure_optimizers(self):
+        optimizer = optim.RAdam(
+                self.parameters(), 
+                lr=self.hparams.learning_rate, 
+                weight_decay=self.hparams.weight_decay,
+                betas=(0.9, 0.99),
+            )
+        scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.trainer.max_epochs)
+        return [optimizer], [scheduler]
+    
+    
+    @staticmethod
+    def add_model_specific_args(parent_parser):
+        parser = parent_parser.add_argument_group("Segmentation")
+        
+        parser.add_argument("--n_classes", required=True, type=int)
+        parser.add_argument("--window_size", default=8, type=int)
+        parser.add_argument("--embedding_size", default=64, type=int)
+        parser.add_argument("--n_layers", default=4, type=int)
+        parser.add_argument("--n_heads", default=8, type=int)
+        parser.add_argument("--dropout", default=0.1, type=float)
+        parser.add_argument("--fc_dim", default=1024, type=int)
+        parser.add_argument("--learning_rate", default=1e-3, type=float)
+        parser.add_argument("--weight_decay", default=0., type=float)
+        parser.add_argument("--pos_weight", default=1.0, type=float)
+        return parent_parser
+    
+class JointTransformerSegmentation(_TransformerSegmentation):
+    def transformer_layer(self, **kwargs):
+        return AxialTransformerEncoderLayer(
+            axes=[
+                ("time", "mode", "height", "width"),
+            ],
+            **kwargs,
+        )
+
+class SpaceTimeModeTransformerSegmentation(_TransformerSegmentation):
+    def transformer_layer(self, **kwargs):
+        return AxialTransformerEncoderLayer(
+            axes=[
+                ("height", "width"),
+                ("time",), 
+                ("mode",),
+            ],
+            **kwargs,
+        )
+
+class SpaceModeTransformerSegmentation(_TransformerSegmentation):
+    def transformer_layer(self, **kwargs):
+        return AxialTransformerEncoderLayer(
+            axes=[
+                ("height", "width"),
+                ("mode",),
+            ],
+            **kwargs,
+        )
+
+class SpaceTimeTransformerSegmentation(_TransformerSegmentation):
+    def transformer_layer(self, **kwargs):
+        return AxialTransformerEncoderLayer(
+            axes=[
+                ("height", "width"),
+                ("time",), 
+            ],
+            **kwargs,
+        )
+
+class TimeModeTransformerSegmentation(_TransformerSegmentation):
+    def transformer_layer(self, **kwargs):
+        return AxialTransformerEncoderLayer(
+            axes=[
+                ("time",), 
+                ("mode",),
+            ],
+            **kwargs,
+        )
+
+class SpaceTransformerSegmentation(_TransformerSegmentation):
+    def transformer_layer(self, **kwargs):
+        return AxialTransformerEncoderLayer(
+            axes=[
+                ("height", "width"),
+            ],
+            **kwargs,
+        )
+
+class AxialTransformerSegmentation(_TransformerSegmentation):
+    def transformer_layer(self, **kwargs):
+        return AxialTransformerEncoderLayer(
+            axes=[
+                ("height",), 
+                ("width",),
+                ("time",), 
+                ("mode",),
+            ],
+            **kwargs,
+        )
