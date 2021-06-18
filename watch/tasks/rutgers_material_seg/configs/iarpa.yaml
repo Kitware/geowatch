@@ -24,7 +24,7 @@ training:
   backbone: 
   model_name: shallow_seg
   gn_n_groups: 32
-  num_channels: 6
+  num_channels: 7
   weight_std: True
   beta: False
   pretrained: False

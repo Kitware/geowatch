@@ -33,7 +33,7 @@ from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceData
 
 
 class Window(QMainWindow):
-    def __init__(self, dataset, dset, resume='', save_path='', k=150):
+    def __init__(self, dataset, dset, resume='', save_path='', k=255):
         super().__init__()
         self.image_counter = 0
         self.dataset = dataset
@@ -88,16 +88,16 @@ class Window(QMainWindow):
         self.label_mask.setGeometry(3*self.width+20,128, self.height, self.width)
         
         self.output_textbox = QTextBrowser(self.widget)
-        self.output_textbox.setGeometry(QtCore.QRect(20, self.height + 512 + 50, 100, 100))
+        self.output_textbox.setGeometry(QtCore.QRect(20, self.height + 256 + 128 + 50, 100, 100))
         self.output_textbox.setObjectName("Current Clusters selected")
         
         self.output_textbox_name = QTextBrowser(self.widget)
-        self.output_textbox_name.setGeometry(QtCore.QRect(140, self.height + 512 + 50, 100, 100))
+        self.output_textbox_name.setGeometry(QtCore.QRect(140, self.height + 256 + 128 + 50, 100, 100))
         self.output_textbox_name.setObjectName("Labels of Selected Clusters")
         
         self.remove_cluster = QLineEdit(self.widget)
         self.remove_cluster.setObjectName("Cluster Removal Tool")
-        self.remove_cluster.move(256, self.height + 512 + 50)
+        self.remove_cluster.move(256, self.height + 256 + 128 + 50)
         self.remove_cluster.resize(100,40)
         self.remove_cluster.textChanged.connect(self.textchanged)
 
@@ -160,32 +160,18 @@ class Window(QMainWindow):
         
         self.remove_cluster_title = QLabel(self.widget)
         self.remove_cluster_title.setText("Write cluster to remove from the mask")
-        self.remove_cluster_title.move(256, self.height + 512)
+        self.remove_cluster_title.move(256, self.height + 256 + 128)
         
         self.output_textbox_title = QLabel(self.widget)
         self.output_textbox_title.setText("Current Clusters")
-        self.output_textbox_title.move(20, self.height + 512)
+        self.output_textbox_title.move(20, self.height + 256 + 128)
         
         self.output_textbox_name_title = QLabel(self.widget)
         self.output_textbox_name_title.setText("Clusters Labels")
-        self.output_textbox_name_title.move(140, self.height + 512)
+        self.output_textbox_name_title.move(140, self.height + 256 + 128)
         
         self.widget.setGeometry(50,50,1800,800)
         self.widget.show()
-    
-    def save_images_clicked(self):
-        gids = self.dataset[self.image_counter]['tr'].data['gids']
-        for i in range(1,len(list(self.class_label_to_index.keys()))):
-            if len(np.unique(self.separable_current_mask[i,:,:])) > 1:
-                binary_mask = kwimage.Mask(self.separable_current_mask[i,:,:], format='c_mask')
-                binary_polygon = binary_mask.to_multi_polygon()
-                # binary_coco = binary_polygon.to_coco(style='new')
-                binary_segmentation = kwimage.Segmentation.coerce(binary_polygon).to_coco(style="new")
-                for gid in gids:
-                    self.material_dset.add_annotation(image_id=gid, category_id=i, segmentation=binary_segmentation)
-        self.material_dset.validate()
-        self.material_dset._check_integrity()
-        self.material_dset.dump(self.save_path, newlines=True)
         
     def change_inter_batch_image(self):
         image_data = self.dataset[self.image_counter]['inputs']['im'].data # [b,c,t,h,w]
@@ -259,7 +245,8 @@ class Window(QMainWindow):
         # max_dim_index = self.dset.index.imgs[gids[0]]['auxiliary'].index(max(self.dset.index.imgs[gids[0]]['auxiliary']))
         
         # im_space_width, im_space_height = self.dset.index.imgs[gids[0]]['auxiliary'][max_dim_index]['width'], self.dset.index.imgs[gids[0]]['auxiliary'][max_dim_index]['height']
-        transform = np.array([[1., 0, 0], [0, 1, 0], [0, 0, 1]])
+        # transform = np.array([[1., 0, 0], [0, 1, 0], [0, 0, 1]])
+        # type="polygon"
         for i in range(1,len(list(self.class_label_to_index.keys()))):
             if len(np.unique(self.separable_current_mask[i,:,:])) > 1:
                 # print(f"separable current mask: {self.separable_current_mask[i,:,:].shape}")
@@ -269,6 +256,7 @@ class Window(QMainWindow):
                 
                 binary_mask = self.separable_current_mask[i,:,:]
                 binary_mask = kwimage.Mask(binary_mask, format='c_mask')
+                # print(binary_mask)
                 # binary_coco = binary_polygon.to_coco(style='new')
                 # binary_segmentation = kwimage.Segmentation.coerce(binary_polygon)#.to_coco(style="new")
                 for gid in gids:
@@ -277,14 +265,17 @@ class Window(QMainWindow):
                     img_to_vid_transform = image_dict['warp_img_to_vid']['matrix']
                     img_to_vid_transform_npy = np.array(img_to_vid_transform)
                     img_to_vid_transform_inv_npy = np.linalg.inv(img_to_vid_transform_npy)
-                    # print(img_to_vid_transform_inv_npy)
-                    binary_mask = binary_mask.warp(img_to_vid_transform_inv_npy, output_dims=(im_space_height, im_space_width))
+
                     binary_polygon = binary_mask.to_multi_polygon()
+                    mask = binary_polygon.warp(img_to_vid_transform_inv_npy)#, output_dims=(im_space_height, im_space_width))
+                    # binary_mask_2 = binary_mask.warp(img_to_vid_transform_inv_npy, output_dims=(im_space_height, im_space_width))
+                    # binary_polygon_2 = binary_mask.to_multi_polygon()
                     self.material_dset.add_annotation(image_id=gid, 
-                                                      category_id=i, 
-                                                      bbox=list(binary_polygon.bounding_box().to_coco(style="new"))[0], 
-                                                    #   segmentation=binary_segmentation.to_coco(style="new")
-                                                      segmentation=binary_polygon.to_coco(style="new")
+                                                      category_id=i,
+                                                      bbox=ub.peek(mask.bounding_box().to_coco()),
+                                                      segmentation=mask.to_coco(style="new")
+                                                    #   bbox=ub.peek(binary_polygon.bounding_box().to_coco()),
+                                                    #   segmentation=binary_polygon.to_coco(style="new")
                                                       )
                     
         self.material_dset.validate()
@@ -306,7 +297,6 @@ class Window(QMainWindow):
                 self.current_mask[xs,ys] = 0
                 self.update_mask()
                 self.seen_labels.remove(num)
-    
     
     def getImagePixel(self, event):
         # self.widget.keyPressEvent = self.keyPressEvent
@@ -361,7 +351,6 @@ class Window(QMainWindow):
         self.mask = QPixmap(self.qmask)#.scaled(256,256)
         # self.image = QPixmap(self.qImg)
         self.label_mask.setPixmap(self.mask)
-        # print(np.unique(self.current_mask))
     
     def previous_image(self):
         pass
@@ -407,7 +396,7 @@ class Window(QMainWindow):
         self.output_textbox.clear()
         self.output_textbox_name.clear()
         self.image_counter += 1
-        # print(f"current iteration: {self.image_counter} \n width, height: {self.dataset[self.image_counter]['tr'].data['space_dims']}")
+        print(f"current iteration: {self.image_counter} \n width, height: {self.dataset[self.image_counter]['tr'].data['space_dims']}")
         self.label_img_title.setText(f"Image {str(self.image_counter)}")
         self.width, self.height = self.dataset[self.image_counter]['tr'].data['space_dims']
         self.scale_factor = 1
@@ -437,15 +426,7 @@ class Window(QMainWindow):
         for gid in gids:
             image_dict =  self.dset.index.imgs[gid]
             img_to_vid_transform = image_dict['warp_img_to_vid']['matrix']
-            print(np.array(img_to_vid_transform))
-            # print(type(img_to_vid_transform))
-            # print(image_dict.keys())
             video_dict = self.dset.index.videos[image_dict['video_id']]
-            # print(f"image dict: {image_dict} \nvideo dict: {video_dict}")
-            # print(self.dset.index.imgs[gid]['auxiliary'])
-            # for item in self.dset.index.imgs[gid]['auxiliary']:
-            #     print(f"height: {item['height']}")
-            #     print(f"width: {item['width']}")
             if gid not in self.material_dset.index.imgs.keys():
                 self.material_dset.add_image(**image_dict)
             
@@ -453,6 +434,7 @@ class Window(QMainWindow):
             self.material_dset.add_video(**video_dict)
         
         image_data = image_data[:,:, :self.width, :self.height]#/20000#.copy()
+        print(f"before image_data shape:{image_data.shape}")
         c, t, h, w = image_data.shape
         image_show = np.array(image_data[:3,1,:,:]).transpose(1, 2, 0).copy() # visualize 0 indexe
         image_min = np.min(image_show)
@@ -467,11 +449,11 @@ class Window(QMainWindow):
         image_data = image_data.contiguous().view(c,t, h*w)
         image_data = torch.transpose(image_data,0,2)
         image_data = torch.flatten(image_data,start_dim=1, end_dim=2)
-        
+        print(f"after image_data shape:{image_data.shape}")
         # print(f"image min:{image_data.min()} max: {image_data.max()}")
         kmeans.fit(image_data)
         cluster_labels = kmeans.labels_
-        self.prediction_show = (cluster_labels.reshape(h,w)*6).astype(np.uint8)
+        self.prediction_show = (cluster_labels.reshape(h,w)).astype(np.uint8) #*6
         
         # self.fig = plt.figure()
         # ax = self.fig.add_subplot(1,1,1)
@@ -508,12 +490,20 @@ if __name__== "__main__":
     app = QApplication(sys.argv)
     # save_kwcoco_path = "/home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2.1/material_labels.kwcoco.json"
     resume = ""
-    # resume = "/media/native/data/data/smart_watch_dvc/drop0_aligned_msi/material_labels.kwcoco.json"
+    # resume = "/media/native/data/data/smart_watch_dvc/drop0_aligned_msi/material_labels2.kwcoco.json"
     save_kwcoco_path = "/media/native/data/data/smart_watch_dvc/drop0_aligned_msi/material_labels2.kwcoco.json"
     
     coco_fpath = ub.expandpath('/media/native/data/data/smart_watch_dvc/drop0_aligned_msi/data_fielded.kwcoco.json')
     # coco_fpath = ub.expandpath('/home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2.1/data_fielded_filtered.kwcoco.json')
-    expected_channels = ["red", "green", "blue", "nir", "swir16", "swir22"]
+
+    # "cirrus", "coastal", "costal", "green", "lwir11", "lwir12", "nir", "pan", "red", "swir16", "swir22"]
+    # channels = 'red|green|blue|nir|lwir11|lwir12|swir16|swir22'#|coastal|costal'
+    channels = 'red|green|blue|nir|swir16|swir22|cirrus'
+    # channels = 'red|green|blue|nir|swir22|cirrus'
+
+    expected_channels = channels.split('|')
+    print(expected_channels)
+    # expected_channels = [ "red"  ,"green", "blue", "nir", "lwir11", "lwir12", "swir16", "swir22", "cirrus"]
     dset = kwcoco.CocoDataset(coco_fpath)
     
     ## Only select images with the correct channels
@@ -538,10 +528,6 @@ if __name__== "__main__":
     window_dims = (number_of_timestamps, h, w) #[t,h,w]
     input_dims = (h, w)
 
-    # # channels = 'r|g|b|gray|wv1'
-    # channels = 'r|g|b'
-    channels = 'red|green|blue|nir|swir16|swir22'
-    # channels = 'gray'
     dataset = SequenceDataset(sampler, window_dims, input_dims, channels)
     loader = dataset.make_loader(batch_size=1)
 

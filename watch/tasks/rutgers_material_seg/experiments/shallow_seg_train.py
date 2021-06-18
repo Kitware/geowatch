@@ -207,10 +207,10 @@ class Trainer(object):
                         gt_mask_show = mask.cpu().detach()[batch_index_to_show,:,:].numpy().squeeze()
                         output1_sample = masks[batch_index_to_show,class_to_show,:,:].cpu().detach().numpy().squeeze()
                         # gt_mask_show[gt_mask_show==-1] = 0
-                        # image_show = image_show[:original_width, :original_height,:]
-                        # logits_show = logits_show[:original_width, :original_height]
-                        # gt_mask_show = gt_mask_show[:original_width, :original_height]
-                        # output1_sample = output1_sample[:original_width, :original_height]
+                        image_show = image_show[:original_width, :original_height,:]
+                        logits_show = logits_show[:original_width, :original_height]
+                        gt_mask_show = gt_mask_show[:original_width, :original_height]
+                        output1_sample = output1_sample[:original_width, :original_height]
                         
                         logits_show[logits_show==-1]=0
                         gt_mask_show_no_bg = np.ma.masked_where(gt_mask_show==0,gt_mask_show)
@@ -329,7 +329,7 @@ class Trainer(object):
                 # masks = F.interpolate(masks, size=mask.size()[-2:], mode="bilinear", align_corners=True)
                 masks = self.high_confidence_filter(masks, cutoff_top=config['high_confidence_threshold']['val_cutoff'])
                 pred = masks.max(1)[1].cpu().detach()#.numpy()
-                print(f"uniques in pred: {torch.unique(pred, return_counts=True)}")
+                # print(f"uniques in pred: {torch.unique(pred, return_counts=True)}")
                 # pred[pred==self.max_label] = 0
                 # print(f"pred before: {pred.shape}")
                 # print(f"mask before: {mask.shape}")
@@ -367,7 +367,7 @@ class Trainer(object):
                             cmap_gradients = plt.cm.get_cmap('jet')
                             # transformed_image_show = np.transpose(utils.denorm(image1).cpu().detach().numpy()[0,:,:,:],(1,2,0))
                             # image_show = np.transpose(outputs['visuals']['image'][0,:,:,:].numpy(),(1,2,0))
-                            image_show = np.transpose(image1.cpu().detach().numpy()[batch_index_to_show,:,:,:],(1,2,0))
+                            image_show = np.transpose(image1.cpu().detach().numpy()[batch_index_to_show,:,:,:],(1,2,0))[:,:,:3]
                             image_show = (image_show - image_show.min())/(image_show.max() - image_show.min())
                             gt_mask_show = mask.cpu().numpy()[0,:,:].squeeze()
                             # gt_mask_show[gt_mask_show==self.max_label] = 0
@@ -376,9 +376,9 @@ class Trainer(object):
                             classes_predicted = np.unique(logits_show)
                             classes_in_gt = np.unique(gt_mask_show)
                             
-                            # image_show = image_show[:original_width, :original_height,:]
-                            # logits_show = logits_show[:original_width, :original_height]
-                            # gt_mask_show = gt_mask_show[:original_width, :original_height]
+                            image_show = image_show[:original_width, :original_height,:]
+                            logits_show = logits_show[:original_width, :original_height]
+                            gt_mask_show = gt_mask_show[:original_width, :original_height]
                             
                             gt_mask_show_no_bg = np.ma.masked_where(gt_mask_show==0,gt_mask_show)
                             logits_show_no_bg = np.ma.masked_where(logits_show==0,logits_show)
@@ -545,7 +545,7 @@ if __name__== "__main__":
 
     # # channels = 'r|g|b|gray|wv1'
     # channels = 'r|g|b'
-    channels = 'red|green|blue|nir|swir16|swir22'
+    channels = 'red|green|blue|nir|swir16|swir22|cirrus'
     # channels = 'red|green|blue'
     # channels = 'gray'
     dataset = SequenceDataset(sampler, window_dims, input_dims, channels)
