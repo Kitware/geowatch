@@ -5,6 +5,12 @@ import ubelt as ub
 class WatchCocoStats(scfg.Config):
     """
     Print watch-relevant information about a kwcoco dataset
+
+    TODO:
+        - [ ] Add other useful watch stats to this script
+
+    SeeAlso:
+        kwcoco stats
     """
     default = {
         'src': scfg.Value(['special:shapes8'], nargs='+', help='path to dataset', position=1),
