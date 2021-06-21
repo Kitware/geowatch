@@ -155,16 +155,9 @@ class Trainer(object):
 
             
             output1 = self.model(image1) # torch.Size([B, C+1, H, W])
-            # print(output1.shape)
-            # output1_interpolated = F.interpolate(output1, size=mask.size()[-2:], 
-            #                                      mode="bilinear", align_corners=True)
 
-            # bs, c, h, w = output1.size()
-            
-            # loss = 30*F.cross_entropy(output1, 
-            #                           mask,
-            #                           ignore_index=-1, 
-            #                           reduction="mean")
+            output1 = output1.view(bs, -1)
+            mask = mask.view(bs, -1)
             
             loss = self.criterion(output1, mask)
 
