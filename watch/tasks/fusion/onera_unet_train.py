@@ -13,6 +13,8 @@ channel_combos = {
     "bgr": "B02|B03|B04",
     "vnir": "B05|B06|B07|B08|B8A",
     "swir": "B09|B10|B11|B12",
+    "sample": "B01|B02|B03|B04|B08|B10|B12",
+    "no60": "B02|B03|B04|B05|B06|B07|B08|B11|B12|B8A",
 }
 
 if __name__ == "__main__":

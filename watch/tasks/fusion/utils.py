@@ -16,7 +16,7 @@ def filter_args(args, func):
         if key in signature.parameters.keys()
     }
 
-def add_auxiliary(dset, gid, fname, channels, aux_height, aux_width, warp_aux_to_img=None):
+def add_auxiliary(dset, gid, fname, channels, aux_height, aux_width, warp_aux_to_img=None, extra_info=None):
     """
     Snippet for adding an auxiliary image
 
@@ -79,6 +79,10 @@ def add_auxiliary(dset, gid, fname, channels, aux_height, aux_width, warp_aux_to
         'channels': channels,
         'warp_aux_to_img': Affine_concise(warp_aux_to_img),
     }
+
+    if extra_info is not None:
+        assert isinstance(extra_info, dict)
+        aux = {**extra_info, **aux}
 
     # Save the data to disk
 #     kwimage.imwrite(fpath, data)

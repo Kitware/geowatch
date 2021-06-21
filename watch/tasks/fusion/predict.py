@@ -42,6 +42,8 @@ def main(args):
     method = method_class.load_from_checkpoint(args.checkpoint_path)
     method.eval(); method.freeze();
 
+    total_params = sum(p.numel() for p in method.parameters())
+
     if args.use_gpu:
         method = method.to("cuda:0")
     
@@ -186,7 +188,9 @@ def main(args):
                 result_fname.stem.split("-")[0], 
                 aux_width=frame["width"],
                 aux_height=frame["height"],
-                warp_aux_to_img=None)
+                warp_aux_to_img=None,
+                extra_info={"params": total_params},
+            )
 
     # validate and save results
     print(results_ds.validate())

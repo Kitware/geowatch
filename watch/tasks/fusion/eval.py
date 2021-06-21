@@ -58,7 +58,7 @@ def main(args):
                 for aux in frame["auxiliary"]
             ]
 
-            for pred, label in zip(pred_row, channel_names):
+            for pred, label in tqdm.tqdm(zip(pred_row, channel_names)):
                 confusion_matrices[label][video["name"]] = skm.confusion_matrix(target.flat, (pred > 0).flat)
 
     rows = []

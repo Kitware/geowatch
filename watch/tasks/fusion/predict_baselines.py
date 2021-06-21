@@ -18,12 +18,17 @@ channel_combos = {
     "bgr": "B02|B03|B04",
     "vnir": "B05|B06|B07|B08|B8A",
     "swir": "B09|B10|B11|B12",
+    "sample": "B01|B02|B03|B04|B08|B10|B12",
+    "no60": "B02|B03|B04|B05|B06|B07|B08|B11|B12|B8A",
 }
 
 for ckpt_dir in pathlib.Path("_trained_models").glob("onera/unet/*/"):
     dataset_name = ckpt_dir.parts[-3]
     method_name = "UNet"
     channel_name = ckpt_dir.parts[-1]
+
+    if channel_name not in channel_combos:
+        continue
 
     dataset = datasets[dataset_name]
     method = "UNetChangeDetector"
@@ -41,7 +46,7 @@ for ckpt_dir in pathlib.Path("_trained_models").glob("onera/unet/*/"):
         tag=f"{method}_{channel_name}",
         checkpoint_path=ckpt_path,
         results_dir=pathlib.Path("_results") / dataset,
-        results_path=pathlib.Path("_results") / f"{dataset}_results2.kwcoco.json",
+        results_path=pathlib.Path("_results") / f"{dataset}_results.kwcoco.json",
         test_kwcoco_path=test_kwcoco_path,
         channels=channel_combos[channel_name],
         # common args

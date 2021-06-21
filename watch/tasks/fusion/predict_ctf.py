@@ -15,15 +15,21 @@ dataset_kwcocos = {
 dataset_channel_sets = {
     "onera": {
         "all": None,
+        "uv": "B01",
         "bgr": "B02|B03|B04",
+        "vnir": "B05|B06|B07|B08|B8A",
+        "swir": "B09|B10|B11|B12",
         "sample": "B01|B02|B03|B04|B08|B10|B12",
         "no60": "B02|B03|B04|B05|B06|B07|B08|B11|B12|B8A",
     },
     "drop0_s2": {
         "all": None,
-        "bgr": "blue|green|red",
-        "sample": "costal|blue|green|red|nir|cirrus|swir22",
-        "no60": "blue|green|red|B05|B06|B07|nir|swir16|swir22|B8A",
+        "uv": "B01",
+        "bgr": "B02|B03|B04",
+        "vnir": "B05|B06|B07|B08|B8A",
+        "swir": "B09|B10|B11|B12",
+        "sample": "B01|B02|B03|B04|B08|B10|B12",
+        "no60": "B02|B03|B04|B05|B06|B07|B08|B11|B12|B8A",
     },
 }
 
@@ -59,19 +65,19 @@ for ckpt_dir in pathlib.Path("_trained_models").glob("*/ctf/*/"):
             tag=f"{method}_{channel_key}",
             checkpoint_path=ckpt_path,
             results_dir=pathlib.Path("_results") / dataset,
-            results_path=pathlib.Path("_results") / f"{dataset}_results2.kwcoco.json",
+            results_path=pathlib.Path("_results") / f"{dataset}_results.kwcoco.json",
             test_kwcoco_path=test_kwcoco_path,
             tfms_channel_subset=channel_subset,
             # common args
             use_gpu=True,
             batch_size=1,
             time_steps=2,
-            chip_size=32,
+            chip_size=128,
             time_overlap=0.5,
             chip_overlap=0.1,
             transform_key="channel_transformer",
             tfms_scale=2000.,
-            tfms_window_size=2,
+            tfms_window_size=8,
         )
         predict.main(args)
 
