@@ -25,24 +25,3 @@ class AddPositionalEncoding(nn.Module):
         expanded_shape[self.dest_dim] = -1
         x = torch.cat([x, encoding.expand(expanded_shape).type_as(x)], dim=self.dest_dim)
         return x
-    
-class ResidualLayer(nn.Module):
-    def __init__(self, module: nn.Module):
-        super().__init__()
-        self.module = module
-        
-    def forward(self, x):
-        return x + self.module(x)
-    
-class KthOutput(nn.Module):
-    def __init__(self, module: nn.Module, k: int):
-        super().__init__()
-        self.module = module
-        self.k = k
-        
-    def forward(self, x):
-        return self.module(x)[self.k]
-    
-class MultiheadSelfAttention(nn.MultiheadAttention):
-    def forward(self, x):
-        return super().forward(x, x, x)

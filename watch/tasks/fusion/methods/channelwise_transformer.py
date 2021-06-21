@@ -14,87 +14,14 @@ import kwcoco
 import ndsampler
 
 import torchmetrics as metrics
-from .common import AddPositionalEncoding, ResidualLayer, KthOutput, MultiheadSelfAttention
+from .common import AddPositionalEncoding
+from models import transformer
 
-def new_attention_layer(embedding_size, n_heads, **kwargs): 
-    return ResidualLayer(
-        nn.Sequential(
-            nn.LayerNorm(embedding_size),
-            KthOutput(
-                MultiheadSelfAttention(embedding_size, n_heads, **kwargs), 
-                k=0),
-        ))
-
-def new_mlp_layer(embedding_size, dropout, **kwargs):
-    return ResidualLayer(
-        nn.Sequential(
-            nn.Linear(embedding_size, embedding_size, **kwargs),
-            nn.Dropout(dropout),
-            nn.GELU(),
-            nn.Linear(embedding_size, embedding_size, **kwargs),
-        ))
-
-class AxialTransformerEncoderLayer(nn.Module):
-    def __init__(
-        self, 
-        axes, 
-        embedding_size, 
-        n_heads, 
-        dropout=0.,
-        default_shape=["batch", "feature", "time", "mode", "height", "width"],
-        feature_axis="feature",
-        batch_axis="batch",
-    ):
-        super().__init__()
-        self.axes = axes
-        self.default_shape = default_shape
-        self.feature_axis = feature_axis
-        self.batch_axis = batch_axis
-        self.default_shape_str = " ".join(default_shape)
-        
-        self.attention_modules = nn.ModuleDict({
-            " ".join(axis): new_attention_layer(embedding_size, n_heads)
-            for axis in axes
-        })
-        self.mlp = new_mlp_layer(embedding_size, dropout)
-        
-    def forward(self, x):
-        shape_dict = dict(zip(self.default_shape, x.shape))
-        
-        previous_axial_shape = self.default_shape_str
-        for axis in self.axes:
-            if not isinstance(axis, (list, tuple)):
-                axis = [axis]
-                
-            sequence_axes = " ".join(axis)
-            batch_axes = " ".join([a for a in self.default_shape if (a == self.batch_axis or a not in axis) and a != self.feature_axis])
-            axial_shape = f"({sequence_axes}) ({batch_axes}) {self.feature_axis}"
-            
-            x = einops.rearrange(x, f"{previous_axial_shape} -> {axial_shape}", **shape_dict)
-            x = self.attention_modules[" ".join(axis)](x)
-            
-            previous_axial_shape = axial_shape
-                
-        sequence_axes = " ".join([a for a in self.default_shape if a not in (self.batch_axis, self.feature_axis)])
-        axial_shape = f"({sequence_axes}) {self.batch_axis} {self.feature_axis}"
-
-        x = einops.rearrange(x, f"{previous_axial_shape} -> {axial_shape}", **shape_dict)
-        x = self.mlp(x)
-        x = einops.rearrange(x, f"{axial_shape} -> {self.default_shape_str}", **shape_dict)
-        return x
-
-class _TransformerChangeDetector(pl.LightningModule):
-    
-    def transformer_layer(self, **kwargs):
-        raise NotImplemented()
+class MultimodalTransformerChangeDetector(pl.LightningModule):
     
     def __init__(self, 
-                 window_size=8, 
-                 embedding_size=128, 
-                 n_layers=4, 
-                 n_heads=8, 
+                 model_name,
                  dropout=0.0, 
-                 fc_dim=1024, 
                  learning_rate=1e-3, 
                  weight_decay=0., 
                  pos_weight=1.,
@@ -102,14 +29,7 @@ class _TransformerChangeDetector(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
         
-        layers = [
-            nn.LazyLinear(embedding_size),
-            Rearrange("b t c h w f -> b f t c h w"),
-        ] + [
-            self.transformer_layer(embedding_size=embedding_size, n_heads=n_heads, dropout=dropout)
-            for _ in range(n_layers)
-        ]
-        self.model = nn.Sequential(*layers)
+        self.model = getattr(transformer, model_name)(dropout=dropout)
         
         # criterion and metrics
         self.criterion = nn.BCEWithLogitsLoss(pos_weight=torch.ones(1)*pos_weight)
@@ -121,11 +41,11 @@ class _TransformerChangeDetector(pl.LightningModule):
 
     @pl.core.decorators.auto_move_data
     def forward(self, images):
-        feats = self.model(images) # b f t c h w
+        feats = self.model(images)
         
         # similarity between neighboring timesteps
-        feats = nn.functional.normalize(feats, dim=1)
-        similarity = torch.einsum("b f t c h w , b f t c h w -> b t c h w", feats[:,:,:-1], feats[:,:,1:])
+        feats = nn.functional.normalize(feats, dim=-1)
+        similarity = torch.einsum("b t c h w f , b t c h w f -> b t c h w", feats[:,:-1], feats[:,1:])
         similarity = einops.reduce(similarity, "b t c h w -> b t h w", "mean")
         distance = -3.0 * similarity
 
@@ -208,122 +128,34 @@ class _TransformerChangeDetector(pl.LightningModule):
     def add_model_specific_args(parent_parser):
         parser = parent_parser.add_argument_group("ChangeDetector")
         
-        parser.add_argument("--window_size", default=8, type=int)
-        parser.add_argument("--embedding_size", default=64, type=int)
-        parser.add_argument("--n_layers", default=4, type=int)
-        parser.add_argument("--n_heads", default=8, type=int)
+        parser.add_argument("--model_name", required=True, type=str)
         parser.add_argument("--dropout", default=0.1, type=float)
-        parser.add_argument("--fc_dim", default=1024, type=int)
         parser.add_argument("--learning_rate", default=1e-3, type=float)
         parser.add_argument("--weight_decay", default=0., type=float)
         parser.add_argument("--pos_weight", default=1.0, type=float)
         return parent_parser
-    
-class JointTransformerChangeDetector(_TransformerChangeDetector):
-    def transformer_layer(self, **kwargs):
-        return AxialTransformerEncoderLayer(
-            axes=[
-                ("time", "mode", "height", "width"),
-            ],
-            **kwargs,
-        )
 
-class SpaceTimeModeTransformerChangeDetector(_TransformerChangeDetector):
-    def transformer_layer(self, **kwargs):
-        return AxialTransformerEncoderLayer(
-            axes=[
-                ("height", "width"),
-                ("time",), 
-                ("mode",),
-            ],
-            **kwargs,
-        )
-
-class SpaceModeTransformerChangeDetector(_TransformerChangeDetector):
-    def transformer_layer(self, **kwargs):
-        return AxialTransformerEncoderLayer(
-            axes=[
-                ("height", "width"),
-                ("mode",),
-            ],
-            **kwargs,
-        )
-
-class SpaceTimeTransformerChangeDetector(_TransformerChangeDetector):
-    def transformer_layer(self, **kwargs):
-        return AxialTransformerEncoderLayer(
-            axes=[
-                ("height", "width"),
-                ("time",), 
-            ],
-            **kwargs,
-        )
-
-class TimeModeTransformerChangeDetector(_TransformerChangeDetector):
-    def transformer_layer(self, **kwargs):
-        return AxialTransformerEncoderLayer(
-            axes=[
-                ("time",), 
-                ("mode",),
-            ],
-            **kwargs,
-        )
-
-class SpaceTransformerChangeDetector(_TransformerChangeDetector):
-    def transformer_layer(self, **kwargs):
-        return AxialTransformerEncoderLayer(
-            axes=[
-                ("height", "width"),
-            ],
-            **kwargs,
-        )
-
-class AxialTransformerChangeDetector(_TransformerChangeDetector):
-    def transformer_layer(self, **kwargs):
-        return AxialTransformerEncoderLayer(
-            axes=[
-                ("height",), 
-                ("width",),
-                ("time",), 
-                ("mode",),
-            ],
-            **kwargs,
-        )
-
-class _TransformerSegmentation(pl.LightningModule):
-    
-    def transformer_layer(self, **kwargs):
-        raise NotImplemented()
+class MultimodalTransformerSegmentation(pl.LightningModule):
     
     def __init__(self, 
                  n_classes,
-                 window_size=8, 
-                 embedding_size=128, 
-                 n_layers=4, 
-                 n_heads=8, 
+                 model_name,
                  dropout=0.0, 
-                 fc_dim=1024, 
                  learning_rate=1e-3, 
                  weight_decay=0., 
                 ):
         super().__init__()
         self.save_hyperparameters()
         
-        layers = [
-            nn.LazyLinear(embedding_size),
-            Rearrange("b t c h w f -> b f t c h w"),
-        ] + [
-            self.transformer_layer(embedding_size=embedding_size, n_heads=n_heads, dropout=dropout)
-            for _ in range(n_layers)
-        ] + [
-            Reduce("b f t c h w -> b t h w f", "mean"),
+        self.feature_model = getattr(transformer, model_name)(dropout=dropout)
+        self.predictor = nn.Sequential(
+            Reduce("b t c h w f -> b t h w f", "mean"),
             nn.Linear(embedding_size, embedding_size),
             nn.Dropout(dropout),
             nn.GELU(),
             nn.Linear(embedding_size, n_classes),
             Rearrange("b t h w f -> b f t h w"),
-        ]
-        self.model = nn.Sequential(*layers)
+        )
         
         # criterion and metrics
         self.criterion = nn.CrossEntropyLoss()
@@ -335,7 +167,7 @@ class _TransformerSegmentation(pl.LightningModule):
 
     @pl.core.decorators.auto_move_data
     def forward(self, images):
-        return self.model(images) # b f t h w
+        return self.predictor(self.feature_model(images))
         
     def training_step(self, batch, batch_idx=None):
         images, labels = batch["images"], batch["labels"]
@@ -411,85 +243,10 @@ class _TransformerSegmentation(pl.LightningModule):
     def add_model_specific_args(parent_parser):
         parser = parent_parser.add_argument_group("Segmentation")
         
+        parser.add_argument("--model_name", required=True, type=str)
         parser.add_argument("--n_classes", required=True, type=int)
-        parser.add_argument("--window_size", default=8, type=int)
-        parser.add_argument("--embedding_size", default=64, type=int)
-        parser.add_argument("--n_layers", default=4, type=int)
-        parser.add_argument("--n_heads", default=8, type=int)
         parser.add_argument("--dropout", default=0.1, type=float)
-        parser.add_argument("--fc_dim", default=1024, type=int)
         parser.add_argument("--learning_rate", default=1e-3, type=float)
         parser.add_argument("--weight_decay", default=0., type=float)
         parser.add_argument("--pos_weight", default=1.0, type=float)
         return parent_parser
-    
-class JointTransformerSegmentation(_TransformerSegmentation):
-    def transformer_layer(self, **kwargs):
-        return AxialTransformerEncoderLayer(
-            axes=[
-                ("time", "mode", "height", "width"),
-            ],
-            **kwargs,
-        )
-
-class SpaceTimeModeTransformerSegmentation(_TransformerSegmentation):
-    def transformer_layer(self, **kwargs):
-        return AxialTransformerEncoderLayer(
-            axes=[
-                ("height", "width"),
-                ("time",), 
-                ("mode",),
-            ],
-            **kwargs,
-        )
-
-class SpaceModeTransformerSegmentation(_TransformerSegmentation):
-    def transformer_layer(self, **kwargs):
-        return AxialTransformerEncoderLayer(
-            axes=[
-                ("height", "width"),
-                ("mode",),
-            ],
-            **kwargs,
-        )
-
-class SpaceTimeTransformerSegmentation(_TransformerSegmentation):
-    def transformer_layer(self, **kwargs):
-        return AxialTransformerEncoderLayer(
-            axes=[
-                ("height", "width"),
-                ("time",), 
-            ],
-            **kwargs,
-        )
-
-class TimeModeTransformerSegmentation(_TransformerSegmentation):
-    def transformer_layer(self, **kwargs):
-        return AxialTransformerEncoderLayer(
-            axes=[
-                ("time",), 
-                ("mode",),
-            ],
-            **kwargs,
-        )
-
-class SpaceTransformerSegmentation(_TransformerSegmentation):
-    def transformer_layer(self, **kwargs):
-        return AxialTransformerEncoderLayer(
-            axes=[
-                ("height", "width"),
-            ],
-            **kwargs,
-        )
-
-class AxialTransformerSegmentation(_TransformerSegmentation):
-    def transformer_layer(self, **kwargs):
-        return AxialTransformerEncoderLayer(
-            axes=[
-                ("height",), 
-                ("width",),
-                ("time",), 
-                ("mode",),
-            ],
-            **kwargs,
-        )
