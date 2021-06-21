@@ -212,6 +212,9 @@ class drop0_aligned_segmented(torch.utils.data.Dataset):
                     [num_bands == 8 for num_bands in valid_images.lookup('num_bands')])
                 self.ms = True
 
+        print('Built drop0_aligned_segmented dataset with {} valid images'.format(
+            len(valid_images)))
+
         self.dset_ids = valid_images.gids
         self.annotations = dset.annots
         self.images = valid_images
@@ -346,8 +349,13 @@ class drop0_aligned(torch.utils.data.Dataset):
         else:
             video_ids_of_interest = [self.video_id]
 
-        # sensor_list = dset.images().lookup('sensor_coarse', keepid=True)
-        # sensor_ids = [ID for ID in sensor_list if sensor_list[ID] == sensor]
+        if 0:
+            # print number of images per sensor for each video
+            import ubelt as ub
+            for vidid, gids in dset.index.vidid_to_gids.items():
+                avail_sensors = dset.images(gids).lookup('sensor_coarse', None)
+                sensor_freq = ub.dict_hist(avail_sensors)
+                print('vidid = {} sensor_freq = {}'.format(vidid, sensor_freq))
 
         # A flat list of images belonging to those videos
         valid_image_ids = list(it.chain.from_iterable(
@@ -371,6 +379,9 @@ class drop0_aligned(torch.utils.data.Dataset):
                 valid_images = valid_images.compress(
                     [num_bands == 8 for num_bands in valid_images.lookup('num_bands')])
                 self.ms = True
+
+        if len(valid_images) == 0:
+            raise ValueError('Dataset and filter criteria have no images')
 
         self.dset_ids = valid_images.gids
         self.annotations = dset.annots

@@ -18,14 +18,17 @@ Examples:
 WATCH_DATA_DPATH=/u/eag-d1/data/watch
 WATCH_DATA_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 
+# Print stats about the videos in the dataset
+python -m watch.scripts.watch_coco_stats $WATCH_DATA_DPATH/drop0_aligned/data.kwcoco.json
+
 python -m watch.tasks.uky_temporal_prediction.fit \
-    --max_epochs 100 --sensor S2 --train_video 5 --val_video 3 --in_channels 3 \
+    --max_epochs 100 --sensor S2 --train_video 5 --val_video 4 --in_channels 3 \
     --train_dataset $WATCH_DATA_DPATH/drop0_aligned/data.kwcoco.json \
     --val_dataset $WATCH_DATA_DPATH/drop0_aligned/data.kwcoco.json
 
 
 python -m watch.tasks.uky_temporal_prediction.fit \
-    --max_epochs 100 --sensor LC --train_video 3 --val_video 4 --in_channels 1 \
+    --max_epochs 100 --sensor LC --train_video 2 --val_video 4 --in_channels 1 \
     --train_dataset $WATCH_DATA_DPATH/drop0_aligned/data.kwcoco.json \
     --val_dataset $WATCH_DATA_DPATH/drop0_aligned/data.kwcoco.json
 ```
