@@ -61,7 +61,10 @@ class OneraCD_2018(pl.LightningDataModule):
                 Rearrange("t c (h hs) (w ws) -> t c h w (ws hs)",
                           hs=tfms_window_size, 
                           ws=tfms_window_size),
-                common.AddPositionalEncoding(4, [0, 1, 2, 3]),
+                utils.SinePositionalEncoding(4, 0, sine_pairs=4),
+                utils.SinePositionalEncoding(4, 1, sine_pairs=4),
+                utils.SinePositionalEncoding(4, 2, sine_pairs=4),
+                utils.SinePositionalEncoding(4, 3, sine_pairs=4),
                 utils.Lambda(lambda x: x[:,tfms_channel_subset]),
             ])
             self.test_tfms = transforms.Compose([
@@ -69,7 +72,10 @@ class OneraCD_2018(pl.LightningDataModule):
                 Rearrange("t c (h hs) (w ws) -> t c h w (ws hs)",
                           hs=tfms_window_size, 
                           ws=tfms_window_size),
-                common.AddPositionalEncoding(4, [0, 1, 2, 3]),
+                utils.SinePositionalEncoding(4, 0, sine_pairs=4),
+                utils.SinePositionalEncoding(4, 1, sine_pairs=4),
+                utils.SinePositionalEncoding(4, 2, sine_pairs=4),
+                utils.SinePositionalEncoding(4, 3, sine_pairs=4),
                 utils.Lambda(lambda x: x[:,tfms_channel_subset]),
             ])
         
