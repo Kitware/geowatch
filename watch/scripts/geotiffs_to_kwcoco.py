@@ -49,12 +49,15 @@ def main(**kwargs):
 
     dset.dump(dset.fpath, newlines=True)
 
+def filter_bands(band_files, names):
+    pass
+
 
 def ingest_landsat_directory(lc_dpath):
     name = basename(normpath(lc_dpath))
     tiffs = sorted(glob.glob(join(lc_dpath, '*.TIF')))
-    band_names = [b['name'] for b in (util_bands.LANDSAT7 +
-                                      util_bands.LANDSAT8)]
+    band_names = set(b['name'] for b in (util_bands.LANDSAT7 +
+                                      util_bands.LANDSAT8))
     tiffs = [t for t in tiffs if any(b in t for b in band_names)]
     img = make_coco_img_from_auxiliary_geotiffs(tiffs, name)
     baseinfo = watch.gis.geotiff.geotiff_filepath_info(name)
@@ -69,14 +72,23 @@ def ingest_landsat_directory(lc_dpath):
     return img
 
 
-def ingest_sentinal2_directory(s2_dpath):
-    name = basename(normpath(s2_dpath)).rstrip('.SAFE')
-    tiffs = sorted(glob.glob(join(s2_dpath, 'GRANULE', '*', 'IMG_DATA', '*.jp2')))
+def ingest_sentinel2_directory(s2_dpath):
+    # Are we in the safedir or the granuledir?
+    # Either way, use the granuledir as name if available;
+    # it's a better unique ID.
+    granules = sorted(glob.glob(join(s2_dpath, 'GRANULE', '*')))
+    if len(granules) == 1:
+        name = basename(normpath(granules[0]))
+    else:
+        name = basename(normpath(s2_dpath)).rstrip('.SAFE')
+    # Then grab the bands.
+    tiffs = (sorted(glob.glob(join(s2_dpath, 'GRANULE', '*', 'IMG_DATA', '*.jp2'))) or
+             sorted(glob.glob(join(s2_dpath, 'IMG_DATA', '*.jp2'))))
     band_names = [b['name'] for b in util_bands.SENTINEL2]
     tiffs = [t for t in tiffs if any(b in t for b in band_names)]
     img = make_coco_img_from_auxiliary_geotiffs(tiffs, name)
 
-    baseinfo = watch.gis.geotiff.geotiff_filepath_info(name)
+    baseinfo = watch.gis.geotiff.geotiff_filepath_info(s2_dpath)
     capture_time = isoparse(baseinfo['filename_meta']['sense_start_time'])
     img['date_captured'] = datetime.datetime.isoformat(capture_time)
     img['sensor_coarse'] = 'S2'
