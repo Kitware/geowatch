@@ -24,9 +24,7 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
         valid_pct=0.1,
         batch_size=4,
         num_workers=4,
-        transform_key="none",
-        tfms_scale=2000.,
-        tfms_window_size=8,
+        preprocessing_step=None,
         tfms_channel_subset=None,
     ):
         super().__init__()
@@ -40,6 +38,7 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
         self.valid_pct = valid_pct
         self.batch_size = batch_size
         self.num_workers = num_workers
+        self.preprocessing_step = preprocessing_step
         
         tfms_channel_subset = channels if (tfms_channel_subset is None) else tfms_channel_subset
         
@@ -50,34 +49,11 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
             if channel in channel_split
         ]
         
-        if transform_key == "none":
-            self.train_tfms, self.test_tfms = None, None
-        elif transform_key == "scale":
-            self.train_tfms = utils.Lambda(lambda x: x/tfms_scale)
-            self.test_tfms = utils.Lambda(lambda x: x/tfms_scale)
-        elif transform_key == "channel_transformer":
-            self.train_tfms = transforms.Compose([
-                utils.Lambda(lambda x: x/tfms_scale),
-                Rearrange("t c (h hs) (w ws) -> t c h w (ws hs)",
-                          hs=tfms_window_size, 
-                          ws=tfms_window_size),
-                utils.SinePositionalEncoding(4, 0, sine_pairs=4),
-                utils.SinePositionalEncoding(4, 1, sine_pairs=4),
-                utils.SinePositionalEncoding(4, 2, sine_pairs=4),
-                utils.SinePositionalEncoding(4, 3, sine_pairs=4),
-                utils.Lambda(lambda x: x[:,tfms_channel_subset]),
-            ])
-            self.test_tfms = transforms.Compose([
-                utils.Lambda(lambda x: x/tfms_scale),
-                Rearrange("t c (h hs) (w ws) -> t c h w (ws hs)",
-                          hs=tfms_window_size, 
-                          ws=tfms_window_size),
-                utils.SinePositionalEncoding(4, 0, sine_pairs=4),
-                utils.SinePositionalEncoding(4, 1, sine_pairs=4),
-                utils.SinePositionalEncoding(4, 2, sine_pairs=4),
-                utils.SinePositionalEncoding(4, 3, sine_pairs=4),
-                utils.Lambda(lambda x: x[:,tfms_channel_subset]),
-            ])
+        self.train_tfms = self.preprocessing_step
+        self.test_tfms = transforms.Compose([
+            self.preprocessing_step,
+            utils.Lambda(lambda x: x[:,tfms_channel_subset]),
+        ])
         
     def preprocess_ds(self, project_ds):
         project_ds.remove_images([

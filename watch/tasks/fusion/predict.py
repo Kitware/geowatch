@@ -16,12 +16,18 @@ fname_template = "{location}/{bands}-{frame_no}.tif"
 
 def main(args):
     
+    # init method from checkpoint
+    method_class = getattr(methods, args.method)
+    method = method_class.load_from_checkpoint(args.checkpoint_path)
+    method.eval(); method.freeze();
+    
     # init dataset from args
     dataset_class = getattr(datasets, args.dataset)
     dataset_var_dict = utils.filter_args(
         vars(args),
         dataset_class.__init__,
     )
+    dataset_var_dict["preprocessing_step"] = method.preprocessing_step
     dataset = dataset_class(
         **dataset_var_dict
     )
@@ -36,11 +42,6 @@ def main(args):
     else:
         results_ds = kwcoco.CocoDataset()
         results_ds.add_category("change")
-    
-    # init method from checkpoint
-    method_class = getattr(methods, args.method)
-    method = method_class.load_from_checkpoint(args.checkpoint_path)
-    method.eval(); method.freeze();
 
     total_params = sum(p.numel() for p in method.parameters())
 

@@ -6,17 +6,6 @@ import utils
 
 def main(args):
     
-    # init dataset from args
-    dataset_class = getattr(datasets, args.dataset)
-    dataset_var_dict = utils.filter_args(
-        vars(args),
-        dataset_class.__init__,
-    )
-    dataset = dataset_class(
-        **dataset_var_dict
-    )
-    dataset.setup("fit")
-    
     # init method from args
     method_class = getattr(methods, args.method)
     method_var_dict = utils.filter_args(
@@ -26,6 +15,18 @@ def main(args):
     method = method_class(
         **method_var_dict
     )
+    
+    # init dataset from args
+    dataset_class = getattr(datasets, args.dataset)
+    dataset_var_dict = utils.filter_args(
+        vars(args),
+        dataset_class.__init__,
+    )
+    dataset_var_dict["preprocessing_step"] = method.preprocessing_step
+    dataset = dataset_class(
+        **dataset_var_dict
+    )
+    dataset.setup("fit")
     
     # init trainer from args
     trainer = pl.Trainer.from_argparse_args(args)
