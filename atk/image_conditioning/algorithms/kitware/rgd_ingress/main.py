@@ -47,7 +47,7 @@ class Main(Algorithm):
                                  href=os.path.join(params['output_dir'], 'catalog.json'))
         catalog.set_root(catalog)
         for search_result in query_s2 + query_l7 + query_l8:
-            if not params.dry_run:
+            if not params['dry_run']:
                 paths = client.download_raster(search_result, 
                                                params['output_dir'], 
                                                nest_with_name=True, 
@@ -66,8 +66,7 @@ class Main(Algorithm):
                 item.assets[asset] = pystac.Asset.from_dict(dic)
             catalog.add_item(item)
 
-        if not params.dry_run:
-            catalog.save(catalog_type=pystac.CatalogType.ABSOLUTE_PUBLISHED)
+        catalog.save(catalog_type=pystac.CatalogType.ABSOLUTE_PUBLISHED)
         stac_catalog_output = catalog.to_dict()
 
         output_dir_output = params['output_dir']

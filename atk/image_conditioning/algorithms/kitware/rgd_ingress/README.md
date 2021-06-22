@@ -12,6 +12,7 @@ date_range|Pull down images from within this date range|Yes
 username|Username for RGD account|Yes
 password|Password for RGD account|Yes
 output_dir|Directory where output images / data will be written. Will be created if it doesn't already exist. |Yes
+dry_run|Don't actually download the retrieved imagery|
 
 ## Outputs:
 Name|Description

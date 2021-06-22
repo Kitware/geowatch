@@ -3,8 +3,24 @@
     "display_name": "RGD Ingress",
     "homepage": "",
     "license": "Other",
-    "name": "rgd_ingress",
-    "optional_parameters": [],
+    "name": "kitware/rgd_ingress",
+    "optional_parameters": [
+        {
+            "custom_validation": "",
+            "data_type": "integer",
+            "default_value": 0,
+            "description": "Don't actually download the retrieved imagery",
+            "display_name": "Dry run",
+            "field_type": "number",
+            "help_text": "If set to 1, no image data will be copied locally. Only the STAC catalog structure will be created.",
+            "max_value": 1,
+            "min_value": 0,
+            "name": "dry_run",
+            "parameter_choices": "",
+            "required": false,
+            "sort_order": 5
+        }
+    ],
     "outputs": [
         {
             "data_type": "string",
