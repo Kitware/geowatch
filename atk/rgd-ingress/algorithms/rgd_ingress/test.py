@@ -24,11 +24,10 @@ class MainTestCase(AlgorithmTestCase):
         self.alg.run()
 
         # Add tests and assertions below
-        stac_catalog = json.loads(
-            self.cl.get_from_metadata('stac_catalog')['output_value'])
+        stac_catalog = json.loads(self.cl.get_from_metadata('stac_catalog'))
         stac_catalog = pystac.Catalog.from_dict(stac_catalog)
 
-        self.assertTrue(out_dir==self.cl.get_from_metadata('output_dir')['output_value'])
+        self.assertTrue(out_dir==self.cl.get_from_metadata('output_dir'))
         self.assertTrue(stac_catalog.get_self_href().startswith(out_dir))
         self.assertTrue(os.path.isfile(stac_catalog.get_self_href()))
         for item in stac_catalog.get_items():

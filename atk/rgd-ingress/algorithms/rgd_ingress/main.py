@@ -47,10 +47,11 @@ class Main(Algorithm):
                                  href=os.path.join(params['output_dir'], 'catalog.json'))
         catalog.set_root(catalog)
         for search_result in query_s2 + query_l7 + query_l8:
-            paths = client.download_raster(search_result, 
-                                           params['output_dir'], 
-                                           nest_with_name=True, 
-                                           keep_existing=True)
+            if not params.dry_run:
+                paths = client.download_raster(search_result, 
+                                               params['output_dir'], 
+                                               nest_with_name=True, 
+                                               keep_existing=True)
             stac_item = requests.get(search_result['detail'] + '/stac').json()
             stac_item['id'] = search_result['subentry_name']
             item = pystac.Item.from_dict(stac_item)
@@ -65,15 +66,11 @@ class Main(Algorithm):
                 item.assets[asset] = pystac.Asset.from_dict(dic)
             catalog.add_item(item)
 
-        catalog.save(catalog_type=pystac.CatalogType.ABSOLUTE_PUBLISHED)
-        stac_catalog_output = {
-            'output_type': 'text',
-            'output_value': json.dumps(catalog.to_dict(), 
-                                       indent=2, sort_keys=True)}
+        if not params.dry_run:
+            catalog.save(catalog_type=pystac.CatalogType.ABSOLUTE_PUBLISHED)
+        stac_catalog_output = catalog.to_dict()
 
-        output_dir_output = {
-            'output_type': 'text',
-            'output_value': params['output_dir']}
+        output_dir_output = params['output_dir']
 
         cl.add_to_metadata('stac_catalog', stac_catalog_output)
         cl.add_to_metadata('output_dir', output_dir_output)
