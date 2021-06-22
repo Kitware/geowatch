@@ -1,20 +1,21 @@
 import fit
 import pathlib
 import pytorch_lightning as pl
-
+import itertools as it
 import methods
 from datasets import onera_2018
 import utils
 
-ctf_methods = {
-#    "Joint": "JointTransformerChangeDetector",
-    "SpaceTimeMode": "SpaceTimeModeTransformerChangeDetector",
-    "SpaceMode": "SpaceModeTransformerChangeDetector",
-    "SpaceTime": "SpaceTimeTransformerChangeDetector",
-    "TimeMode": "TimeModeTransformerChangeDetector",
-    "Space": "SpaceTransformerChangeDetector",
-    "Axial": "AxialTransformerChangeDetector",
-}
+model_names = [
+    "smt_it_joint_p8",
+    "smt_it_stm_p8",
+    "smt_it_hwtm_p8",
+]
+
+methods = [
+    "MultimodalTransformerDotProdCD",
+    "MultimodalTransformerDirectCD",
+]
 
 if __name__ == "__main__":
     
@@ -28,15 +29,12 @@ if __name__ == "__main__":
         batch_size=32,
         num_workers=8,
         chip_size=128,
-        transform_key="channel_transformer",
-        tfms_scale=2000.,
-        tfms_window_size=8,
         
         # model params
-        embedding_dim=256,
-        n_layers=4,
+        window_size=8,
         learning_rate=1e-3,
-        weight_decay=1e-5,
+        weight_decay=0,
+        dropout=0,
         pos_weight=5.0,
         
         # trainer params
@@ -48,8 +46,9 @@ if __name__ == "__main__":
         terminate_on_nan=True,
     )
     
-    for key, method in ctf_methods.items():
-        print(key, "\n====================")
+    for method, model_name in zip(methods, model_names):
+        print(f"{method} / {model_name}\n====================")
         args.method = method
-        args.default_root_dir = f"_trained_models/onera/ctf/{key}"
+        args.model_name = model_name
+        args.default_root_dir = f"_trained_models/onera/ctf/{method}-{model_name}"
         fit.main(args)
