@@ -15,6 +15,7 @@ class UNetChangeDetector(ChangeDetectorBase):
                  learning_rate=1e-3, 
                  weight_decay=1e-5, 
                  pos_weight=1.,
+                 input_scale=2000.,
                 ):
         super().__init__(
             learning_rate=learning_rate,
@@ -28,6 +29,13 @@ class UNetChangeDetector(ChangeDetectorBase):
             nn.LazyConv2d(64, 1),
             unet_blur.UNet(64, self.hparams.feature_dim),
         )
+        
+    @property
+    def preprocessing_step(self):
+        return transforms.Compose([
+            transforms.ToTensor(),
+            utils.Lambda(lambda x: x/self.hparams.input_scale),
+        ])
         
     @pl.core.decorators.auto_move_data
     def forward(self, images):
@@ -50,4 +58,5 @@ class UNetChangeDetector(ChangeDetectorBase):
     def add_model_specific_args(parent_parser):
         parser = super(UNetChangeDetector, UNetChangeDetector).add_model_specific_args(parent_parser)
         parser.add_argument("--feature_dim", default=64, type=int)
+        parser.add_argument("--input_scale", default=2000.0, type=float)
         return parent_parser

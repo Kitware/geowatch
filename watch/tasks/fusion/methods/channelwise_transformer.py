@@ -25,6 +25,8 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
                  learning_rate=1e-3, 
                  weight_decay=0., 
                  pos_weight=1.,
+                 input_scale=2000.,
+                 window_size=8,
                 ):
         super().__init__(
             learning_rate=learning_rate,
@@ -34,6 +36,20 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
         self.save_hyperparameters()
         
         self.model = getattr(transformer, model_name)(dropout=dropout)
+        
+    @property
+    def preprocessing_step(self):
+        return transforms.Compose([
+            transforms.ToTensor(),
+            utils.Lambda(lambda x: x/self.hparams.input_scale),
+            Rearrange("t c (h hs) (w ws) -> t c h w (ws hs)",
+                      hs=self.hparams.window_size, 
+                      ws=self.hparams.window_size),
+            utils.SinePositionalEncoding(4, 0, sine_pairs=4),
+            utils.SinePositionalEncoding(4, 1, sine_pairs=4),
+            utils.SinePositionalEncoding(4, 2, sine_pairs=4),
+            utils.SinePositionalEncoding(4, 3, sine_pairs=4),
+        ])
 
     @pl.core.decorators.auto_move_data
     def forward(self, images):
@@ -53,6 +69,8 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
         
         parser.add_argument("--model_name", required=True, type=str)
         parser.add_argument("--dropout", default=0.1, type=float)
+        parser.add_argument("--input_scale", default=2000.0, type=float)
+        parser.add_argument("--window_size", default=8, type=int)
         return parent_parser
 
 class MultimodalTransformerDirectCD(ChangeDetectorBase):
@@ -63,6 +81,8 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
                  learning_rate=1e-3, 
                  weight_decay=0., 
                  pos_weight=1.,
+                 input_scale=2000.,
+                 window_size=8,
                 ):
         super().__init__(
             learning_rate=learning_rate,
@@ -75,6 +95,20 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
             getattr(transformer, model_name)(dropout=dropout),
             nn.LazyLinear(1),
         )
+        
+    @property
+    def preprocessing_step(self):
+        return transforms.Compose([
+            transforms.ToTensor(),
+            utils.Lambda(lambda x: x/self.hparams.input_scale),
+            Rearrange("t c (h hs) (w ws) -> t c h w (ws hs)",
+                      hs=self.hparams.window_size, 
+                      ws=self.hparams.window_size),
+            utils.SinePositionalEncoding(4, 0, sine_pairs=4),
+            utils.SinePositionalEncoding(4, 1, sine_pairs=4),
+            utils.SinePositionalEncoding(4, 2, sine_pairs=4),
+            utils.SinePositionalEncoding(4, 3, sine_pairs=4),
+        ])
 
     @pl.core.decorators.auto_move_data
     def forward(self, images):        
@@ -88,6 +122,8 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
         
         parser.add_argument("--model_name", required=True, type=str)
         parser.add_argument("--dropout", default=0.1, type=float)
+        parser.add_argument("--input_scale", default=2000.0, type=float)
+        parser.add_argument("--window_size", default=8, type=int)
         return parent_parser
 
 class MultimodalTransformerSegmentation(pl.LightningModule):
