@@ -59,8 +59,6 @@ class Main(Algorithm):
             # Update feature asset href to point to local outpath
             feature['assets']['data']['href'] = asset_outpath
 
-            print(feature)
-
             item = pystac.Item.from_dict(feature)
             item.set_self_href(os.path.join(params['output_dir'], 
                                             feature['id'], 
