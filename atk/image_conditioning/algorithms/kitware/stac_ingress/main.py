@@ -26,7 +26,6 @@ class Main(Algorithm):
             search_results_catalog['features'] =\
                 search_results_catalog['features'][:max_results]
 
-        #if params['dry_run'] != 1:
         os.makedirs(params['output_dir'], exist_ok=True)
         catalog = pystac.Catalog('STAC ingress catalog', 
                                  'STAC catalog of SMART search results', 
