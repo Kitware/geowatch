@@ -3,6 +3,7 @@ import subprocess
 
 from algorithm_toolkit import Algorithm, AlgorithmChain
 from pystac_client import Client
+import pystac
 
 
 class Main(Algorithm):
@@ -25,8 +26,12 @@ class Main(Algorithm):
             search_results_catalog['features'] =\
                 search_results_catalog['features'][:max_results]
 
-        if params['dry_run'] != 1:
-            os.makedirs(params['output_dir'], exist_ok=True)
+        #if params['dry_run'] != 1:
+        os.makedirs(params['output_dir'], exist_ok=True)
+        catalog = pystac.Catalog('STAC ingress catalog', 
+                                 'STAC catalog of SMART search results', 
+                                 href=os.path.join(params['output_dir'], 'catalog.json'))
+        catalog.set_root(catalog)
 
         # TODO: Parallelize this download step?
         for feature in search_results_catalog.get('features', ()):
@@ -55,7 +60,17 @@ class Main(Algorithm):
             # Update feature asset href to point to local outpath
             feature['assets']['data']['href'] = asset_outpath
 
-        cl.add_to_metadata('stac_catalog', search_results_catalog)
+            print(feature)
+
+            item = pystac.Item.from_dict(feature)
+            item.set_self_href(os.path.join(params['output_dir'], 
+                                            feature['id'], 
+                                            feature['id']+'.json'))
+            catalog.add_item(item)
+
+        catalog.save(catalog_type=pystac.CatalogType.ABSOLUTE_PUBLISHED)
+
+        cl.add_to_metadata('stac_catalog', catalog.to_dict())
         cl.add_to_metadata('output_dir', params['output_dir'])
 
         # Do not edit below this line

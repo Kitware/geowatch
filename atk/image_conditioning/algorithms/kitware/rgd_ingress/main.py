@@ -67,12 +67,9 @@ class Main(Algorithm):
             catalog.add_item(item)
 
         catalog.save(catalog_type=pystac.CatalogType.ABSOLUTE_PUBLISHED)
-        stac_catalog_output = catalog.to_dict()
-
-        output_dir_output = params['output_dir']
-
-        cl.add_to_metadata('stac_catalog', stac_catalog_output)
-        cl.add_to_metadata('output_dir', output_dir_output)
+        
+        cl.add_to_metadata('stac_catalog', catalog.to_dict())
+        cl.add_to_metadata('output_dir', params['output_dir'])
 
         # Do not edit below this line
         return cl
