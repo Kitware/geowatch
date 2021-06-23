@@ -39,7 +39,7 @@ class SinePositionalEncoding(nn.Module):
     def __init__(self, dest_dim, dim_to_encode, sine_pairs=2):
         super().__init__()
         self.dest_dim = dest_dim
-        self.dim_to_encode = dims_to_encode
+        self.dim_to_encode = dim_to_encode
         self.sine_pairs = sine_pairs
         assert self.dest_dim != self.dim_to_encode
         
@@ -61,7 +61,7 @@ class SinePositionalEncoding(nn.Module):
             for idx in range(2*self.sine_pairs)
         ], dim=1)
         
-        encoding = encoding[expand_dims].expand(expanded_shape).shape
+        encoding = encoding[expand_dims].expand(expanded_shape)
 
         x = torch.cat([x, encoding.type_as(x)], dim=self.dest_dim)
         return x

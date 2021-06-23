@@ -14,8 +14,9 @@ import kwcoco
 import ndsampler
 
 import torchmetrics as metrics
-from .common import ChangeDetectorBase, AddPositionalEncoding
+from .common import ChangeDetectorBase
 from models import transformer
+import utils
 
 class MultimodalTransformerDotProdCD(ChangeDetectorBase):
     
@@ -40,7 +41,7 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
     @property
     def preprocessing_step(self):
         return transforms.Compose([
-            transforms.ToTensor(),
+            utils.Lambda(lambda x: torch.from_numpy(x)),
             utils.Lambda(lambda x: x/self.hparams.input_scale),
             Rearrange("t c (h hs) (w ws) -> t c h w (ws hs)",
                       hs=self.hparams.window_size, 
@@ -99,7 +100,7 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
     @property
     def preprocessing_step(self):
         return transforms.Compose([
-            transforms.ToTensor(),
+            utils.Lambda(lambda x: torch.from_numpy(x)),
             utils.Lambda(lambda x: x/self.hparams.input_scale),
             Rearrange("t c (h hs) (w ws) -> t c h w (ws hs)",
                       hs=self.hparams.window_size, 

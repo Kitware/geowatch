@@ -123,7 +123,7 @@ class VideoDataset(data.Dataset):
         frame_ims[np.isnan(frame_ims)] = -1.
 
         # convert to tensors
-        frame_ims = torch.from_numpy(frame_ims).detach()
+        #frame_ims = torch.from_numpy(frame_ims).detach()
         frame_masks = torch.from_numpy(frame_masks).detach().int()
         
         if self.transform:

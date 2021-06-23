@@ -41,7 +41,7 @@ def main(args):
     confusion_matrices = ddict(dict)
 
     for example, video in zip(results_ds, results_coco.dataset["videos"]):
-        preds = example["images"].detach().numpy()
+        preds = example["images"]
         targets = example["labels"].detach().numpy() + 1
 
         frames = [

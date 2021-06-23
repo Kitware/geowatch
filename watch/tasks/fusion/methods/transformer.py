@@ -15,7 +15,7 @@ import ndsampler
 
 import torchmetrics as metrics
 
-from .common import AddPositionalEncoding
+import utils
 
 class TransformerChangeDetector(pl.LightningModule):
     def __init__(self, 
@@ -37,7 +37,7 @@ class TransformerChangeDetector(pl.LightningModule):
             Rearrange("b t c (h hs) (w ws) -> b t (c ws hs) h w",
                       hs=self.hparams.window_size, 
                       ws=self.hparams.window_size),
-            AddPositionalEncoding(2, [1, 3, 4]),
+            utils.AddPositionalEncoding(2, [1, 3, 4]),
             Rearrange("b t f h w -> b (t h w) f"),
             nn.LazyLinear(embedding_size),
             Rearrange("b s f -> s b f"),

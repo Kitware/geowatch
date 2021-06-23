@@ -186,7 +186,7 @@ def main(args):
                 results_ds,
                 frame["id"],
                 str(result_fname.absolute()), 
-                result_fname.stem.split("-")[0], 
+                args.tag, 
                 aux_width=frame["width"],
                 aux_height=frame["height"],
                 warp_aux_to_img=None,
