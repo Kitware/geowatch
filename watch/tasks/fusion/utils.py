@@ -1,4 +1,6 @@
 from torch import nn
+
+
 class Lambda(nn.Module):
     def __init__(self, lambda_):
         super().__init__()
@@ -6,9 +8,11 @@ class Lambda(nn.Module):
 
     def forward(self, x):
         return self.lambda_(x)
-    
+
+
 import torch
 from torch import nn
+
 
 class AddPositionalEncoding(nn.Module):
     def __init__(self, dest_dim, dims_to_encode):
@@ -16,7 +20,7 @@ class AddPositionalEncoding(nn.Module):
         self.dest_dim = dest_dim
         self.dims_to_encode = dims_to_encode
         assert self.dest_dim not in self.dims_to_encode
-        
+
     def forward(self, x):
 
         inds = [
@@ -35,6 +39,7 @@ class AddPositionalEncoding(nn.Module):
         x = torch.cat([x, encoding.expand(expanded_shape).type_as(x)], dim=self.dest_dim)
         return x
 
+
 class SinePositionalEncoding(nn.Module):
     def __init__(self, dest_dim, dim_to_encode, sine_pairs=2):
         super().__init__()
@@ -42,31 +47,34 @@ class SinePositionalEncoding(nn.Module):
         self.dim_to_encode = dim_to_encode
         self.sine_pairs = sine_pairs
         assert self.dest_dim != self.dim_to_encode
-        
+
     def forward(self, x):
 
         expanded_shape = list(x.shape)
         expanded_shape[self.dest_dim] = -1
 
-        expand_dims = [None]*len(x.shape)
+        expand_dims = [None] * len(x.shape)
         expand_dims[self.dim_to_encode] = slice(0, None)
         expand_dims[self.dest_dim] = slice(0, None)
-        
+
         scale = lambda d: 1 / 10000 ** (d)
-        
+
         encoding = torch.stack([
-            torch.sin(torch.arange(x.shape[self.dim_to_encode]) * scale(idx / (2*self.sine_pairs)))
+            torch.sin(torch.arange(x.shape[self.dim_to_encode]) * scale(idx / (2 * self.sine_pairs)))
             if idx % 2 == 0
-            else torch.cos(torch.arange(x.shape[self.dim_to_encode]) * scale(idx / (2*self.sine_pairs)))
-            for idx in range(2*self.sine_pairs)
+            else torch.cos(torch.arange(x.shape[self.dim_to_encode]) * scale(idx / (2 * self.sine_pairs)))
+            for idx in range(2 * self.sine_pairs)
         ], dim=1)
-        
+
         encoding = encoding[expand_dims].expand(expanded_shape)
 
         x = torch.cat([x, encoding.type_as(x)], dim=self.dest_dim)
         return x
 
+
 import inspect
+
+
 def filter_args(args, func):
     signature = inspect.signature(func)
     return {
@@ -74,6 +82,7 @@ def filter_args(args, func):
         for key, value in args.items()
         if key in signature.parameters.keys()
     }
+
 
 def add_auxiliary(dset, gid, fname, channels, aux_height, aux_width, warp_aux_to_img=None, extra_info=None):
     """

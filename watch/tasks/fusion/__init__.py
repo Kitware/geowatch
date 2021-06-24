@@ -3,7 +3,6 @@ mkinit -m watch.tasks.fusion --lazy --noattrs -w
 """
 
 
-
 def lazy_import(module_name, submodules, submod_attrs):
     import importlib
     import os
@@ -55,5 +54,6 @@ __getattr__ = lazy_import(
 
 def __dir__():
     return __all__
+
 
 __all__ = ['fit', 'fusion_transformer_v1', 'predict']

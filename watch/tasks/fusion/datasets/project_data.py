@@ -11,10 +11,11 @@ from einops.layers.torch import Rearrange, Reduce
 import utils
 import pathlib
 
+
 class Drop0AlignMSI_S2(pl.LightningDataModule):
     def __init__(
-        self, 
-        train_kwcoco_path=None, 
+        self,
+        train_kwcoco_path=None,
         test_kwcoco_path=None,
         time_steps=2,
         chip_size=128,
@@ -39,29 +40,29 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.preprocessing_step = preprocessing_step
-        
+
         tfms_channel_subset = channels if (tfms_channel_subset is None) else tfms_channel_subset
-        
+
         channel_split = channels.split("|")
         tfms_channel_subset = [
             idx
             for idx, channel in enumerate(tfms_channel_subset.split("|"))
             if channel in channel_split
         ]
-        
+
         self.train_tfms = self.preprocessing_step
         self.test_tfms = transforms.Compose([
             self.preprocessing_step,
-            utils.Lambda(lambda x: x[:,tfms_channel_subset]),
+            utils.Lambda(lambda x: x[:, tfms_channel_subset]),
         ])
-        
+
     def preprocess_ds(self, project_ds):
         project_ds.remove_images([
             image
             for image in project_ds.dataset["images"]
             if "S2-TrueColor" not in image["sensor_candidates"]
         ])
-        project_ds.remove_videos([2,3])
+        project_ds.remove_videos([2, 3])
 
         for image in project_ds.dataset["images"]:
             image["img_to_vid"] = {
@@ -121,9 +122,9 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
 
         project_ds.validate()
         return project_ds
-        
+
     def setup(self, stage):
-        
+
         if stage == "fit" or stage is None:
             kwcoco_ds = kwcoco.CocoDataset(str(self.train_kwcoco_path.expanduser()))
             kwcoco_ds = self.preprocess_ds(kwcoco_ds)
@@ -135,16 +136,16 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
                 channels=self.channels,
                 transform=self.train_tfms,
             )
-            
+
             num_examples = len(train_val_ds)
             num_valid = int(self.valid_pct * num_examples)
             num_train = num_examples - num_valid
-            
+
             self.train_dataset, self.valid_dataset = data.random_split(
-                train_val_ds, 
+                train_val_ds,
                 [num_train, num_valid],
             )
-            
+
         if stage == "test" or stage is None:
             kwcoco_ds = kwcoco.CocoDataset(str(self.test_kwcoco_path.expanduser()))
             kwcoco_ds = self.preprocess_ds(kwcoco_ds)
@@ -156,7 +157,7 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
                 channels=self.channels,
                 transform=self.test_tfms,
             )
-            
+
     def train_dataloader(self):
         return data.DataLoader(
             self.train_dataset,
@@ -165,7 +166,7 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
             shuffle=True,
             pin_memory=True,
         )
-            
+
     def val_dataloader(self):
         return data.DataLoader(
             self.valid_dataset,
@@ -174,7 +175,7 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
             shuffle=False,
             pin_memory=True,
         )
-            
+
     def test_dataloader(self):
         return data.DataLoader(
             self.test_dataset,
@@ -183,11 +184,11 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
             shuffle=False,
             pin_memory=True,
         )
-    
+
     @staticmethod
     def add_data_specific_args(parent_parser):
         parser = parent_parser.add_argument_group("Drop0AlignMSI_S2")
-        parser.add_argument("--train_kwcoco_path", default=None, type=pathlib.Path) 
+        parser.add_argument("--train_kwcoco_path", default=None, type=pathlib.Path)
         parser.add_argument("--test_kwcoco_path", default=None, type=pathlib.Path)
         parser.add_argument("--time_steps", default=2, type=int)
         parser.add_argument("--chip_size", default=128, type=int)
@@ -202,10 +203,11 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
         parser.add_argument("--tfms_window_size", default=8, type=int)
         return parent_parser
 
+
 class Drop0Raw_S2(pl.LightningDataModule):
     def __init__(
-        self, 
-        train_kwcoco_path=None, 
+        self,
+        train_kwcoco_path=None,
         test_kwcoco_path=None,
         time_steps=2,
         chip_size=128,
@@ -231,39 +233,39 @@ class Drop0Raw_S2(pl.LightningDataModule):
         self.valid_pct = valid_pct
         self.batch_size = batch_size
         self.num_workers = num_workers
-        
+
         tfms_channel_subset = channels if (tfms_channel_subset is None) else tfms_channel_subset
-        
+
         channel_split = channels.split("|")
         tfms_channel_subset = [
             idx
             for idx, channel in enumerate(tfms_channel_subset.split("|"))
             if channel in channel_split
         ]
-        
+
         if transform_key == "none":
             self.train_tfms, self.test_tfms = None, None
         elif transform_key == "scale":
-            self.train_tfms = utils.Lambda(lambda x: x/tfms_scale)
-            self.test_tfms = utils.Lambda(lambda x: x/tfms_scale)
+            self.train_tfms = utils.Lambda(lambda x: x / tfms_scale)
+            self.test_tfms = utils.Lambda(lambda x: x / tfms_scale)
         elif transform_key == "channel_transformer":
             self.train_tfms = transforms.Compose([
-                utils.Lambda(lambda x: x/tfms_scale),
+                utils.Lambda(lambda x: x / tfms_scale),
                 Rearrange("t c (h hs) (w ws) -> t c h w (ws hs)",
-                          hs=tfms_window_size, 
+                          hs=tfms_window_size,
                           ws=tfms_window_size),
                 common.AddPositionalEncoding(4, [0, 1, 2, 3]),
-                utils.Lambda(lambda x: x[:,tfms_channel_subset]),
+                utils.Lambda(lambda x: x[:, tfms_channel_subset]),
             ])
             self.test_tfms = transforms.Compose([
-                utils.Lambda(lambda x: x/tfms_scale),
+                utils.Lambda(lambda x: x / tfms_scale),
                 Rearrange("t c (h hs) (w ws) -> t c h w (ws hs)",
-                          hs=tfms_window_size, 
+                          hs=tfms_window_size,
                           ws=tfms_window_size),
                 common.AddPositionalEncoding(4, [0, 1, 2, 3]),
-                utils.Lambda(lambda x: x[:,tfms_channel_subset]),
+                utils.Lambda(lambda x: x[:, tfms_channel_subset]),
             ])
-        
+
     def preprocess_ds(self, project_ds):
         project_ds.remove_images([
             image
@@ -313,7 +315,7 @@ class Drop0Raw_S2(pl.LightningDataModule):
             ]
             frames = sorted(frames, key=lambda x: x["date_captured"])
             for idx, frame in enumerate(frames):
-                frame["frame_index"] = idx+1
+                frame["frame_index"] = idx + 1
 
             video["width"] = max([
                     image["width"]
@@ -351,9 +353,9 @@ class Drop0Raw_S2(pl.LightningDataModule):
 
         project_ds.validate()
         return project_ds
-        
+
     def setup(self, stage):
-        
+
         if stage == "fit" or stage is None:
             kwcoco_ds = kwcoco.CocoDataset(str(self.train_kwcoco_path.expanduser()))
             kwcoco_ds = self.preprocess_ds(kwcoco_ds)
@@ -365,16 +367,16 @@ class Drop0Raw_S2(pl.LightningDataModule):
                 channels=self.channels,
                 transform=self.train_tfms,
             )
-            
+
             num_examples = len(train_val_ds)
             num_valid = int(self.valid_pct * num_examples)
             num_train = num_examples - num_valid
-            
+
             self.train_dataset, self.valid_dataset = data.random_split(
-                train_val_ds, 
+                train_val_ds,
                 [num_train, num_valid],
             )
-            
+
         if stage == "test" or stage is None:
             kwcoco_ds = kwcoco.CocoDataset(str(self.test_kwcoco_path.expanduser()))
             kwcoco_ds = self.preprocess_ds(kwcoco_ds)
@@ -386,7 +388,7 @@ class Drop0Raw_S2(pl.LightningDataModule):
                 channels=self.channels,
                 transform=self.test_tfms,
             )
-            
+
     def train_dataloader(self):
         return data.DataLoader(
             self.train_dataset,
@@ -395,7 +397,7 @@ class Drop0Raw_S2(pl.LightningDataModule):
             shuffle=True,
             pin_memory=True,
         )
-            
+
     def val_dataloader(self):
         return data.DataLoader(
             self.valid_dataset,
@@ -404,7 +406,7 @@ class Drop0Raw_S2(pl.LightningDataModule):
             shuffle=False,
             pin_memory=True,
         )
-            
+
     def test_dataloader(self):
         return data.DataLoader(
             self.test_dataset,
@@ -413,11 +415,11 @@ class Drop0Raw_S2(pl.LightningDataModule):
             shuffle=False,
             pin_memory=True,
         )
-    
+
     @staticmethod
     def add_data_specific_args(parent_parser):
         parser = parent_parser.add_argument_group("Drop0AlignMSI_S2")
-        parser.add_argument("--train_kwcoco_path", default=None, type=pathlib.Path) 
+        parser.add_argument("--train_kwcoco_path", default=None, type=pathlib.Path)
         parser.add_argument("--test_kwcoco_path", default=None, type=pathlib.Path)
         parser.add_argument("--time_steps", default=2, type=int)
         parser.add_argument("--chip_size", default=128, type=int)

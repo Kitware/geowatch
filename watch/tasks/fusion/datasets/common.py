@@ -10,13 +10,14 @@ import torch
 import einops
 import itertools as it
 
+
 class AddPositionalEncoding(nn.Module):
     def __init__(self, dest_dim, dims_to_encode):
         super().__init__()
         self.dest_dim = dest_dim
         self.dims_to_encode = dims_to_encode
         assert self.dest_dim not in self.dims_to_encode
-        
+
     def forward(self, x):
 
         inds = [
@@ -35,6 +36,7 @@ class AddPositionalEncoding(nn.Module):
         x = torch.cat([x, encoding.expand(expanded_shape).type_as(x)], dim=self.dest_dim)
         return x
 
+
 class VideoDataset(data.Dataset):
     # TODO: add torchvision.transforms or albumentations
     def __init__(self, sampler, sample_shape, channels=None, mode="fit", window_overlap=0, transform=None):
@@ -44,29 +46,29 @@ class VideoDataset(data.Dataset):
         self.mode = mode
         self.transform = transform
         self.window_overlap = window_overlap
-        
+
         full_sample_grid = self.sampler.new_sample_grid("video_detection", self.sample_shape, window_overlap=self.window_overlap)
         self.sample_grid = list(it.chain(
-            full_sample_grid["positives"], 
+            full_sample_grid["positives"],
             full_sample_grid["negatives"],
         ))
-        
+
         example_to_query = self.__getitem__(0)
         if self.mode == "predict":
             self.num_channels = example_to_query.shape[1]
         else:
             self.num_channels = example_to_query["images"].shape[1]
-    
+
     def __len__(self):
         return len(self.sample_grid)
-    
+
     def __getitem__(self, idx):
-        
+
         # get positive sample definition
         tr = self.sample_grid[idx]
         if self.channels:
             tr["channels"] = self.channels
-        
+
         # collect sample
         sample = self.sampler.load_sample(tr)
 
@@ -81,7 +83,7 @@ class VideoDataset(data.Dataset):
         for frame, dets in zip(raw_frame_list, raw_det_list):
             frame = frame.astype(np.float32)
             input_dsize = self.sample_shape[-2:][::-1]
-            
+
             input_dsize = [
                 real if (nominal is None) else nominal
                 for nominal, real in zip(input_dsize, frame.shape[:2][::-1])
@@ -110,25 +112,25 @@ class VideoDataset(data.Dataset):
 
             frame_masks.append(frame_mask)
             frame_ims.append(frame)
-            
+
         # stack along temporal axis
         frame_masks = np.stack(frame_masks, axis=0)
         frame_ims = np.stack(frame_ims, axis=0)
-        
+
         # rearrange image axes for pytorch
         frame_ims = einops.rearrange(frame_ims, "t h w c -> t c h w")
 #         frame_ims = frame_ims / 2000.
-        
+
         # catch nans
         frame_ims[np.isnan(frame_ims)] = -1.
 
         # convert to tensors
         #frame_ims = torch.from_numpy(frame_ims).detach()
         frame_masks = torch.from_numpy(frame_masks).detach().int()
-        
+
         if self.transform:
             frame_ims = self.transform(frame_ims)
-        
+
         if self.mode == "predict":
             return frame_ims
 
@@ -136,5 +138,5 @@ class VideoDataset(data.Dataset):
             "images": frame_ims,
             "labels": frame_masks,
         }
-        
+
         return example

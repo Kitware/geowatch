@@ -14,13 +14,14 @@ import utils
 
 fname_template = "{location}/{bands}-{frame_no}.tif"
 
+
 def main(args):
-    
+
     onera_test = kwcoco.CocoDataset(str(args.test_data_path))
     onera_test_sampler = ndsampler.CocoSampler(onera_test)
 
     predict_dataset = onera_2018.OneraDataset(
-        onera_test_sampler, 
+        onera_test_sampler,
         sample_shape=(1, None, None),
         channels=args.channels,
         mode="test",
@@ -47,16 +48,17 @@ def main(args):
         for frame, result in zip(frames, result_stack):
 
             result_fname = args.results_dir / fname_template.format(
-                location=video["name"], 
-                bands="voting_"+args.channels.replace("|", "-"),
+                location=video["name"],
+                bands="voting_" + args.channels.replace("|", "-"),
                 frame_no=frame["frame_index"],
             )
             result_fname.parents[0].mkdir(parents=True, exist_ok=True)
 
             tifffile.imwrite(result_fname, result)
 
+
 if __name__ == "__main__":
-    
+
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("test_data_path", type=pathlib.Path)
@@ -64,5 +66,5 @@ if __name__ == "__main__":
     parser.add_argument("model_checkpoint_path", type=pathlib.Path)
     parser.add_argument("results_dir", type=pathlib.Path)
     args = parser.parse_args()
-    
+
     main(args)

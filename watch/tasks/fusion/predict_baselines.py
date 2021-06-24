@@ -13,7 +13,7 @@ dataset_kwcocos = {
 }
 
 channel_combos = {
-    "all": None, 
+    "all": None,
     "uv": "B01",
     "bgr": "B02|B03|B04",
     "vnir": "B05|B06|B07|B08|B8A",
@@ -37,7 +37,7 @@ for ckpt_dir in pathlib.Path("_trained_models").glob("onera/unet/*/"):
     ckpt_paths = ckpt_dir.glob("lightning_logs/version_*/checkpoints/*.ckpt")
     ckpt_paths = sorted(list(ckpt_paths))
     ckpt_path = ckpt_paths[-1]
-    
+
     print(f"{method}_{dataset}_{channel_name}\n=========================")
 
     args = SimpleNamespace(
@@ -60,4 +60,3 @@ for ckpt_dir in pathlib.Path("_trained_models").glob("onera/unet/*/"):
         tfms_scale=2000.,
     )
     predict.main(args)
-
