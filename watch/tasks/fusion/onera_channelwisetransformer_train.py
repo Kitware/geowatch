@@ -9,7 +9,7 @@ model_names = [
 
 methods = [
     "MultimodalTransformerDotProdCD",
-    "MultimodalTransformerDirectCD",
+    #"MultimodalTransformerDirectCD",
 ]
 
 
