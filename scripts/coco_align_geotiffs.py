@@ -33,6 +33,12 @@ Notes:
             --context_factor=1.5
 
 
+    python ~/code/watch/scripts/coco_align_geotiffs.py \
+            --src ~/data/dvc-repos/smart_watch_dvc/drop0/drop0-msi.kwcoco.json \
+            --dst ~/data/dvc-repos/smart_watch_dvc/drop0_aligned_msi_big \
+            --context_factor=3.5
+
+
 Test:
 
     There was a bug in KR-WV, run the script only on that region to test if we
@@ -84,12 +90,19 @@ class CocoAlignGeotiffConfig(scfg.Config):
 
         'dst': scfg.Value(None, help='bundle directory for the output'),
 
-        'context_factor': scfg.Value(1.5, help=ub.paragraph(
+        'context_factor': scfg.Value(1.0, help=ub.paragraph(
             '''
             scale factor for the clustered ROIs.
             Amount of context to extract around each ROI.
             '''
         )),
+
+        'regions': scfg.Value('annots', help=ub.paragraph(
+            '''
+            Strategy for extracting regions, if annots, uses the convex hulls
+            of clustered annotations. Can also be a path to a geojson file
+            to use pre-defined regions.
+            ''')),
 
         # TODO: change this name to just align-method or something
         'rpc_align_method': scfg.Value('orthorectify', help=ub.paragraph(
@@ -196,6 +209,7 @@ def main(**kw):
 
     src_fpath = config['src']
     dst_dpath = config['dst']
+    regions = config['regions']
     context_factor = config['context_factor']
     rpc_align_method = config['rpc_align_method']
     visualize = config['visualize']
@@ -211,8 +225,19 @@ def main(**kw):
     # Construct the "data cube"
     cube = SimpleDataCube(dset)
 
-    # Find the clustered ROI regions
-    sh_all_rois, kw_all_rois = find_roi_regions(dset)
+    if regions == 'annots':
+        # Find the clustered ROI regions
+        sh_all_rois, kw_all_rois = find_roi_regions(dset)
+    elif exists(regions):
+        # Read custom ROI regions
+        import geopandas
+        region_df = geopandas.read_file(regions)
+        kw_all_rois = [
+            kwimage.Polygon.from_shapely(sh_poly)
+            for sh_poly in region_df.geometry
+        ]
+    else:
+        raise KeyError(regions)
 
     # Exapnd the ROI by the context factor and convert to a bounding box
     kw_all_box_rois = [

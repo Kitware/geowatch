@@ -44,16 +44,16 @@ def main(**kwargs):
     mode = config['mode']
 
     # Find the clustered ROI regions
-    regions = find_spacetime_cluster_regions(dset, mode, breakup_times)
+    geojson = find_spacetime_cluster_regions(dset, mode, breakup_times)
 
     dst_fpath = config['dst']
 
     if dst_fpath is None:
-        print(json.dumps(regions, indent=' ' * 4))
+        print(json.dumps(geojson, indent=' ' * 4))
     else:
         print(f'Writing to dst_fpath={dst_fpath}')
         with open(dst_fpath, 'w') as file:
-            json.dump(regions, file, indent=' ' * 4)
+            json.dump(geojson, file, indent=' ' * 4)
 
     # json.dumps(regions)
     # print('regions = {}'.format(ub.repr2(regions, nl=2)))
@@ -196,7 +196,12 @@ def find_spacetime_cluster_regions(dset, mode='annots', breakup_times=False):
                     }
                 }
                 regions.append(feat)
-    return regions
+
+    geojson = {
+        'type': 'FeatureCollection',
+        'features': regions,
+    }
+    return geojson
 
 
 def _fix_geojson_poly(geo):
