@@ -1,16 +1,19 @@
 import pathlib
+import itertools as it
 from . import fit
 from .datasets import onera_2018
 
 model_names = [
-    "smt_it_joint_p8",
-    "smt_it_stm_p8",
-    "smt_it_hwtm_p8",
+    #"smt_it_joint_t12",
+    #"smt_it_stm_t12",
+    "smt_it_st_t12",
+    "smt_it_stm_s12",
+    "smt_it_st_s12",
 ]
 
 methods = [
     "MultimodalTransformerDotProdCD",
-    "MultimodalTransformerDirectCD",
+    #"MultimodalTransformerDirectCD",
 ]
 
 if __name__ == "__main__":
@@ -22,7 +25,7 @@ if __name__ == "__main__":
 
         # dataset params
         train_kwcoco_path=pathlib.Path("~/Projects/smart_watch_dvc/extern/onera_2018/onera_train.kwcoco.json"),
-        batch_size=32,
+        batch_size=8,
         num_workers=8,
         chip_size=128,
 
@@ -34,15 +37,15 @@ if __name__ == "__main__":
         pos_weight=5.0,
 
         # trainer params
-        gpus=1,
-        #accelerator="ddp",
+        gpus=2,
+        accelerator="ddp",
         precision=16,
-        max_epochs=200,
-        accumulate_grad_batches=2,
+        max_epochs=400,
+        accumulate_grad_batches=4,
         terminate_on_nan=True,
     )
-
-    for method, model_name in zip(methods, model_names):
+    
+    for method, model_name in it.product(methods, model_names):
         print(f"{method} / {model_name}\n====================")
         args.method = method
         args.model_name = model_name

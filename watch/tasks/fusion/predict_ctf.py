@@ -33,22 +33,12 @@ dataset_channel_sets = {
     },
 }
 
-methods = {
-    "Axial": "AxialTransformerChangeDetector",
-    # "Joint": "JointTransformerChangeDetector",
-    "SpaceTimeMode": "SpaceTimeModeTransformerChangeDetector",
-    "SpaceMode": "SpaceModeTransformerChangeDetector",
-    "SpaceTime": "SpaceTimeTransformerChangeDetector",
-    "TimeMode": "TimeModeTransformerChangeDetector",
-    "Space": "SpaceTransformerChangeDetector",
-}
-
 for ckpt_dir in pathlib.Path("_trained_models").glob("*/ctf/*/"):
     dataset_name = ckpt_dir.parts[-3]
-    method_name = ckpt_dir.parts[-1]
+    method_model_name = ckpt_dir.parts[-1]
+    method, model_name = method_model_name.split("-")
 
     dataset = datasets[dataset_name]
-    method = methods[method_name]
     test_kwcoco_path = dataset_kwcocos[dataset_name]
 
     ckpt_paths = ckpt_dir.glob("lightning_logs/version_*/checkpoints/*.ckpt")
@@ -57,12 +47,12 @@ for ckpt_dir in pathlib.Path("_trained_models").glob("*/ctf/*/"):
 
     for channel_key, channel_subset in dataset_channel_sets[dataset_name].items():
 
-        print(f"{method}_{dataset}_{channel_key}\n=========================")
+        print(f"{method_model_name}_{dataset}_{channel_key}\n=========================")
 
         args = SimpleNamespace(
             dataset=dataset,
             method=method,
-            tag=f"{method}_{channel_key}",
+            tag=f"{method_model_name}_{channel_key}",
             checkpoint_path=ckpt_path,
             results_dir=pathlib.Path("_results") / dataset,
             results_path=pathlib.Path("_results") / f"{dataset}_results.kwcoco.json",
@@ -75,8 +65,5 @@ for ckpt_dir in pathlib.Path("_trained_models").glob("*/ctf/*/"):
             chip_size=128,
             time_overlap=0.5,
             chip_overlap=0.1,
-            transform_key="channel_transformer",
-            tfms_scale=2000.,
-            tfms_window_size=8,
         )
         predict.main(args)
