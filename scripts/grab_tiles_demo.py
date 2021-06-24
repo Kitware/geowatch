@@ -295,7 +295,7 @@ def main(**kwargs):
     regions = coerce_regions(config['regions'])
     out_dpath = config['out_dpath']
 
-    sensor_flags = ub.dict_isect(config, {'with_l7', 'with_l8', 'with_s2'}
+    sensor_flags = ub.dict_isect(config, {'with_l7', 'with_l8', 'with_s2'})
 
     for region in ub.ProgIter(regions, desc='query for geo regions', verbose=3):
         geojson_bbox = region['geometry']
