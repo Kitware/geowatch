@@ -5,8 +5,9 @@ Tools to work with geotiff metadata.
 import numpy as np
 import ubelt as ub
 from watch.gis import spatial_reference as watch_crs
+from watch.utils.util_bands import SENTINEL2, LANDSAT7, LANDSAT8
 import parse
-from os.path import basename
+from os.path import basename, isfile
 
 try:
     from xdev import profile
@@ -597,6 +598,7 @@ def geotiff_filepath_info(gpath, fast=True):
         .. [S3_Name] https://sentinel.esa.int/web/sentinel/user-guides/sentinel-3-altimetry/naming-conventions
 
     """
+
     base_ext = basename(gpath)
     base, *exts = base_ext.split('.')
     ext = '.'.join(exts)  # NOQA
@@ -623,17 +625,14 @@ def geotiff_filepath_info(gpath, fast=True):
         # MMM_MSIXXX_YYYYMMDDHHMMSS_Nxxyy_ROOO_Txxxxx_<Product Discriminator>.SAFE
         # SAFE = Standard Archive Format for Europe
         s2_name_2016 = '{MMM}_{MSIXXX}_{YYYYMMDDHHMMSS}_{Nxxyy}_{ROOO}_{Txxxxx}_{Discriminator}'
+        # use util_bands for this
         s2_channel_alias = {
-            'B01': 'costal',
-            'B02': 'blue',
-            'B03': 'green',
-            'B04': 'red',
-            'B08': 'nir',
-            'TCI': 'r|g|b',
-            'B10': 'cirrus',
-            'B11': 'swir16',
-            'B12': 'swir22',
+            band['name']: band['common_name'] for band in SENTINEL2 if 'common_name' in band
         }
+        # ...except for TCI, which is not a true band, but often included anyway
+        # and this channel code is more specific to kwcoco
+        s2_channel_alias.update({'TCI': 'r|g|b'})
+
         s2_2016_parser = _parser_lut(s2_name_2016)
         for part_ in reversed(parts):
             part = part_.split('.')[0]
@@ -648,7 +647,7 @@ def geotiff_filepath_info(gpath, fast=True):
                     s2_meta['product_level'] = result.named['MSIXXX']
                     s2_meta['sense_start_time'] = result.named['YYYYMMDDHHMMSS']
                     s2_meta['pdgs_num'] = result.named['Nxxyy']
-                    s2_meta['relative_oribt_num'] = result.named['ROOO']
+                    s2_meta['relative_orbit_num'] = result.named['ROOO']
                     s2_meta['tile_number'] = result.named['Txxxxx']
                     s2_meta['discriminator'] = result.named['Discriminator']
                     s2_meta['product_guess'] = 'sentinel2'
@@ -665,7 +664,6 @@ def geotiff_filepath_info(gpath, fast=True):
         # suffix of _TCI means true color image. ANd these are from sentinel2, I'm
         # guessing on the rest of the format.
 
-        # https://gitlab.kitware.com/smart/watch/-/blob/dev/stub_harmonization/watch/datacube/reflectance/bands.py
         s2_format_guess = '{tile_number}_{date}_{band}'
         s2_parser = _parser_lut(s2_format_guess)
         result = s2_parser.parse(base)
@@ -728,6 +726,26 @@ def geotiff_filepath_info(gpath, fast=True):
 
     # TODO: handle landsat and sentinel2 bundles
     info['is_dg_bundle'] = dg_bundle is not None
+
+    def _is_rgb(gpath):
+        # fallback for 'channels'
+        # often, a gtiff is a TCI that was postprocessed in some way that destroys
+        # the original naming convention
+        # 
+        # this opens the image to check for that case as a fallback
+        from osgeo import gdal
+        info = gdal.Info(gpath, format='json')
+        if len(info['bands']) == 3:
+            # TODO sometimes colorInterpretation is stripped, but it's still RGB
+            # should this return True for any gpath with 3 bands?
+            if [b['colorInterpretation'] for b in info['bands']] == ['Red', 'Green', 'Blue']:
+                return True
+        return False
+
+    if 'channels' not in meta:
+        if isfile(gpath) and _is_rgb(gpath):
+            meta['channels'] = 'r|g|b'
+
     return info
 
 
@@ -807,20 +825,13 @@ def parse_landsat_product_id(product_id):
             'L1GT': 'Systematic Terrain',
             'L1GS': 'Systematic',
         }
-
-        # TODO: use harmonization tools
+        
+        # use util_bands for this
+        l7_channel_alias = {
+            band['name']: band['common_name'] for band in LANDSAT7 if 'common_name' in band
+        }
         l8_channel_alias = {
-            'B1' : 'coastal',
-            'B2' : 'blue'   ,
-            'B3' : 'green'  ,
-            'B4' : 'red'    ,
-            'B5' : 'nir'    ,
-            'B6' : 'swir16' ,
-            'B7' : 'swir22' ,
-            'B8' : 'pan'    ,
-            'B9' : 'cirrus' ,
-            'B10': 'lwir11' ,
-            'B11': 'lwir12' ,
+            band['name']: band['common_name'] for band in LANDSAT8 if 'common_name' in band
         }
 
         # When accessing files from google API, there might be an additional
@@ -841,7 +852,7 @@ def parse_landsat_product_id(product_id):
         ls_meta['sensor_code'] = sensor_code
         ls_meta['sat_code'] = sat_code
         ls_meta['WRS_path'] = wrs[:3]
-        ls_meta['WRS_now'] = wrs[3:]
+        ls_meta['WRS_row'] = wrs[3:]
         ls_meta['correction_level_code'] = correction_code
         ls_meta['acquisition_date'] = result.named['YYYYMMDD']
         ls_meta['processing_date'] = result.named['yyyymmdd']

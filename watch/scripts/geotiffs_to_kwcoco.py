@@ -5,7 +5,7 @@ Attempts to register directory of geotiffs into a kwcoco dataset
 from dateutil.parser import isoparse
 from kwcoco.util import util_futures
 from kwimage.transform import Affine
-from os.path import join, basename, normpath
+from os.path import join, basename, normpath, splitext
 import datetime
 import glob
 import kwcoco
@@ -49,43 +49,50 @@ def main(**kwargs):
 
     dset.dump(dset.fpath, newlines=True)
 
-def filter_bands(band_files, names):
-    pass
 
+def filter_band_files(fpaths, band_list):
+    '''
+    band_list is any subset of util_bands.ALL_BANDS
+    '''
+    band_names = set(b['name'] for b in band_list)
+    # use endswith() instead of in
+    # to avoid false positives, eg from a tile code in the filename
+    is_band_file = lambda path: any(splitext(basename(path))[0].endswith(b) for b in band_names)
+    return list(filter(is_band_file, fpaths))
 
 def ingest_landsat_directory(lc_dpath):
     name = basename(normpath(lc_dpath))
     tiffs = sorted(glob.glob(join(lc_dpath, '*.TIF')))
-    band_names = set(b['name'] for b in (util_bands.LANDSAT7 +
-                                      util_bands.LANDSAT8))
-    tiffs = [t for t in tiffs if any(b in t for b in band_names)]
-    img = make_coco_img_from_auxiliary_geotiffs(tiffs, name)
     baseinfo = watch.gis.geotiff.geotiff_filepath_info(name)
-    capture_time = isoparse(baseinfo['filename_meta']['acquisition_date'])
-    img['date_captured'] = datetime.datetime.isoformat(capture_time)
-    if name.startswith('LC'):
-        img['sensor_coarse'] = 'L8'
-    elif name.startswith('LE'):
-        img['sensor_coarse'] = 'L7'
-    else:
-        img['sensor_coarse'] = 'LS'
+    capture_time = isoparse(baseinfo['filename_meta']['acquisition_date']).isoformat()
+    sensor_coarse = 'LS'
+    if baseinfo['sensor_code'] == 'C':
+        sensor_coarse = 'L8'
+    elif baseinfo['sensor_coarse'] == 'E':
+        sensor_coarse = 'L7'
+    # take L8 as the default guess for a mangled name
+    tiffs = filter_band_files(tiffs, (util_bands.LANDSAT7 if sensor_coarse == 'L7' else util_bands.LANDSAT8))
+    img = make_coco_img_from_auxiliary_geotiffs(tiffs, name)
+    img['date_captured'] = capture_time
+    img['sensor_coarse'] = sensor_coarse
     return img
 
 
 def ingest_sentinel2_directory(s2_dpath):
-    # Are we in the safedir or the granuledir?
-    # Either way, use the granuledir as name if available;
+    # Are we in the safedir, the granuledir or some arbitrary dir?
+    # Try to use the granuledir as name if available;
     # it's a better unique ID.
     granules = sorted(glob.glob(join(s2_dpath, 'GRANULE', '*')))
     if len(granules) == 1:
-        name = basename(normpath(granules[0]))
+        granule = granules[0]
+        tiffs = sorted(glob.glob(join(granule, 'IMG_DATA', '*.jp2')))
+        name = basename(normpath(granule))
     else:
-        name = basename(normpath(s2_dpath)).rstrip('.SAFE')
+        tiffs = (sorted(glob.glob(join(s2_dpath, 'GRANULE', '*', 'IMG_DATA', '*.jp2'))) or
+                 sorted(glob.glob(join(s2_dpath, '**', '*.jp2'), recursive=True)))
+        name = basename(normpath(s2_dpath)).replace('.SAFE', '')
     # Then grab the bands.
-    tiffs = (sorted(glob.glob(join(s2_dpath, 'GRANULE', '*', 'IMG_DATA', '*.jp2'))) or
-             sorted(glob.glob(join(s2_dpath, 'IMG_DATA', '*.jp2'))))
-    band_names = [b['name'] for b in util_bands.SENTINEL2]
-    tiffs = [t for t in tiffs if any(b in t for b in band_names)]
+    tiffs = filter_band_files(tiffs, util_bands.SENTINEL2)
     img = make_coco_img_from_auxiliary_geotiffs(tiffs, name)
 
     baseinfo = watch.gis.geotiff.geotiff_filepath_info(s2_dpath)
