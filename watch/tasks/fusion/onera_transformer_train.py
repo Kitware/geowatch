@@ -1,10 +1,5 @@
-import fit
 import pathlib
-import pytorch_lightning as pl
-
-from methods import baseline
-from datasets import onera_2018
-import utils
+from . import fit
 
 
 channel_combos = {
@@ -18,18 +13,18 @@ channel_combos = {
 }
 
 if __name__ == "__main__":
-    
+
     from types import SimpleNamespace
-    
+
     args = SimpleNamespace(
         dataset="OneraCD_2018",
         method="TransformerChangeDetector",
-        
+
         # dataset params
         train_kwcoco_path=pathlib.Path("~/Projects/smart_watch_dvc/extern/onera_2018/onera_train.kwcoco.json"),
         batch_size=64,
         num_workers=8,
-        
+
         # model params
         window_size=8,
         embedding_dim=256,
@@ -37,12 +32,12 @@ if __name__ == "__main__":
         learning_rate=1e-3,
         weight_decay=1e-5,
         pos_weight=5.0,
-        
+
         # trainer params
         gpus=1,
         max_epochs=200,
     )
-    
+
     for key, channels in channel_combos.items():
         args.channels = channels
         args.default_root_dir = f"_trained_models/onera/tf/{key}"

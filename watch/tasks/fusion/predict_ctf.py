@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 import pathlib
-import predict
+from . import predict
 
 datasets = {
     "onera": "OneraCD_2018",
@@ -54,7 +54,7 @@ for ckpt_dir in pathlib.Path("_trained_models").glob("*/ctf/*/"):
     ckpt_paths = ckpt_dir.glob("lightning_logs/version_*/checkpoints/*.ckpt")
     ckpt_paths = sorted(list(ckpt_paths))
     ckpt_path = ckpt_paths[-1]
-    
+
     for channel_key, channel_subset in dataset_channel_sets[dataset_name].items():
 
         print(f"{method}_{dataset}_{channel_key}\n=========================")
@@ -80,4 +80,3 @@ for ckpt_dir in pathlib.Path("_trained_models").glob("*/ctf/*/"):
             tfms_window_size=8,
         )
         predict.main(args)
-
