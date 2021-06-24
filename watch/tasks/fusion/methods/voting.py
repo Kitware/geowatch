@@ -6,7 +6,7 @@ from torch.optim import lr_scheduler
 import einops
 import torchmetrics as metrics
 
-from models import unet_blur
+from ..models import unet_blur
 
 
 class VotingModel(pl.LightningModule):

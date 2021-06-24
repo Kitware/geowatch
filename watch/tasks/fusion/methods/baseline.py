@@ -1,13 +1,11 @@
 import torch
 from torch import nn
 import pytorch_lightning as pl
-import torch_optimizer as optim
-from torch.optim import lr_scheduler
-import einops
-import torchmetrics as metrics
+from torchvision import transforms
 
 from .common import ChangeDetectorBase
-from models import unet_blur
+from ..models import unet_blur
+from .. import utils
 
 
 class UNetChangeDetector(ChangeDetectorBase):
@@ -40,7 +38,7 @@ class UNetChangeDetector(ChangeDetectorBase):
 
     @pl.core.decorators.auto_move_data
     def forward(self, images):
-        T = images.shape[1] # how many time steps?
+        T = images.shape[1]  # how many time steps?
 
         # extract features for each timestep
         feats = torch.stack([

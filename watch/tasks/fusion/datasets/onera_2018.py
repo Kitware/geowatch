@@ -3,9 +3,9 @@ import ndsampler
 import pytorch_lightning as pl
 from torchvision import transforms
 from torch.utils import data
-from datasets import common
-import utils
 import pathlib
+from . import common
+from .. import utils
 
 
 class OneraCD_2018(pl.LightningDataModule):

@@ -8,15 +8,12 @@ import einops
 import torch_optimizer as optim
 from torch.optim import lr_scheduler
 
-from torchvision import datasets, transforms
-from torch.utils import data
-import kwcoco
-import ndsampler
+from torchvision import transforms
 
 import torchmetrics as metrics
 from .common import ChangeDetectorBase
-from models import transformer
-import utils
+from ..models import transformer
+from .. import utils
 
 
 class MultimodalTransformerDotProdCD(ChangeDetectorBase):

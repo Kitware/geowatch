@@ -4,9 +4,9 @@ import itertools as it
 import pytorch_lightning as pl
 from torchvision import transforms
 from torch.utils import data
-from datasets import common
-import utils
 import pathlib
+from . import common
+from .. import utils
 
 
 class Drop0AlignMSI_S2(pl.LightningDataModule):

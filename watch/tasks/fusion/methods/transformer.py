@@ -10,7 +10,7 @@ from torch.optim import lr_scheduler
 
 import torchmetrics as metrics
 
-import utils
+from .. import utils
 
 
 class TransformerChangeDetector(pl.LightningModule):
