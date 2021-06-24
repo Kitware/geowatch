@@ -5,12 +5,11 @@ import tqdm
 import tifffile
 import kwcoco
 import kwimage
-import ndsampler
 from torch import nn
 
-import datasets
-import methods
-import utils
+from . import datasets
+from . import methods
+from . import utils
 
 fname_template = "{location}/{bands}-{frame_no}.tif"
 
@@ -20,7 +19,8 @@ def main(args):
     # init method from checkpoint
     method_class = getattr(methods, args.method)
     method = method_class.load_from_checkpoint(args.checkpoint_path)
-    method.eval(); method.freeze();
+    method.eval()
+    method.freeze()
 
     # init dataset from args
     dataset_class = getattr(datasets, args.dataset)

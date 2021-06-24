@@ -1,4 +1,6 @@
 from torch import nn
+import inspect
+import torch
 
 
 class Lambda(nn.Module):
@@ -8,10 +10,6 @@ class Lambda(nn.Module):
 
     def forward(self, x):
         return self.lambda_(x)
-
-
-import torch
-from torch import nn
 
 
 class AddPositionalEncoding(nn.Module):
@@ -72,9 +70,6 @@ class SinePositionalEncoding(nn.Module):
         return x
 
 
-import inspect
-
-
 def filter_args(args, func):
     signature = inspect.signature(func)
     return {
@@ -110,10 +105,10 @@ def add_auxiliary(dset, gid, fname, channels, aux_height, aux_width, warp_aux_to
         add_auxiliary(dset, gid, fname, channels, data, warp_aux_to_img)
 
     """
-    from os.path import join
+    # from os.path import join
     import kwimage
-    fpath = join(dset.bundle_dpath, fname)
-#     aux_height, aux_width = data.shape[0:2]
+    # fpath = join(dset.bundle_dpath, fname)
+    # aux_height, aux_width = data.shape[0:2]
     img = dset.index.imgs[gid]
 
     def Affine_concise(aff):
@@ -153,7 +148,7 @@ def add_auxiliary(dset, gid, fname, channels, aux_height, aux_width, warp_aux_to
         aux = {**extra_info, **aux}
 
     # Save the data to disk
-#     kwimage.imwrite(fpath, data)
+    # kwimage.imwrite(fpath, data)
 
     auxiliary = img.setdefault('auxiliary', [])
     auxiliary.append(aux)

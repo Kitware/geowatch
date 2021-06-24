@@ -1,11 +1,10 @@
-from datasets import common
 import kwcoco
 import ndsampler
-import numpy as np
 import sklearn.metrics as skm
 from collections import defaultdict as ddict
 import tqdm
 import pandas as pd
+from .datasets import common
 
 metrics = {
     "sensitivity": lambda tn, fp, fn, tp:

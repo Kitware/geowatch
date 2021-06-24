@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 import pathlib
-import predict
+from . import predict
 
 datasets = {
     "onera": "OneraCD_2018",

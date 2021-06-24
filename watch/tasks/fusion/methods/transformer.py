@@ -2,16 +2,11 @@ import pytorch_lightning as pl
 
 import torch
 from torch import nn
-from einops.layers.torch import Rearrange, Reduce
+from einops.layers.torch import Rearrange
 import einops
 
 import torch_optimizer as optim
 from torch.optim import lr_scheduler
-
-from torchvision import datasets, transforms
-from torch.utils import data
-import kwcoco
-import ndsampler
 
 import torchmetrics as metrics
 

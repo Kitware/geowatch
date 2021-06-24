@@ -2,15 +2,13 @@ import kwcoco
 import ndsampler
 import pathlib
 from torch.utils import data
-import pytorch_lightning as pl
 import tifffile
-import numpy as np
 import tqdm
 
-from methods import voting
-from datasets import onera_2018
-import onera_experiment_train as onera_experiment
-import utils
+from .methods import voting
+from .datasets import onera_2018
+from . import onera_experiment_train as onera_experiment
+from . import utils
 
 fname_template = "{location}/{bands}-{frame_no}.tif"
 
@@ -29,7 +27,8 @@ def main(args):
     predict_dataloader = data.DataLoader(predict_dataset, batch_size=1)
 
     model = voting.VotingModel.load_from_checkpoint(args.model_checkpoint_path)
-    model.eval(); model.freeze();
+    model.eval()
+    model.freeze()
 
     results = [
         model(example["images"][None])[0]

@@ -1,10 +1,6 @@
-import fit
 import pathlib
-import pytorch_lightning as pl
-import itertools as it
-import methods
-from datasets import onera_2018
-import utils
+from . import fit
+from .datasets import onera_2018
 
 model_names = [
     "smt_it_joint_p8",

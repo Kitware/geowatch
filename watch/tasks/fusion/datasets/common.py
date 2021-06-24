@@ -1,8 +1,5 @@
-import kwcoco
 import kwimage
 import kwarray
-import ndsampler
-import pathlib
 import numpy as np
 from torch.utils import data
 from torch import nn
@@ -119,7 +116,7 @@ class VideoDataset(data.Dataset):
 
         # rearrange image axes for pytorch
         frame_ims = einops.rearrange(frame_ims, "t h w c -> t c h w")
-#         frame_ims = frame_ims / 2000.
+        # frame_ims = frame_ims / 2000.
 
         # catch nans
         frame_ims[np.isnan(frame_ims)] = -1.

@@ -1,13 +1,9 @@
 import kwcoco
 import ndsampler
-import matplotlib.pyplot as plt
-import tifffile
-import itertools as it
 import pytorch_lightning as pl
 from torchvision import transforms
 from torch.utils import data
 from datasets import common
-from einops.layers.torch import Rearrange, Reduce
 import utils
 import pathlib
 

@@ -1,10 +1,5 @@
-import fit
 import pathlib
-import pytorch_lightning as pl
-
-from methods import baseline
-from datasets import onera_2018
-import utils
+from . import fit
 
 
 channel_combos = {

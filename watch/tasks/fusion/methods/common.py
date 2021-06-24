@@ -2,7 +2,6 @@ import torch
 from torch import nn
 import pytorch_lightning as pl
 import torchmetrics as metrics
-from einops.layers.torch import Rearrange, Reduce
 import torch_optimizer as optim
 from torch.optim import lr_scheduler
 

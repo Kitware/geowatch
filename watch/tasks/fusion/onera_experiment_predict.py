@@ -1,5 +1,5 @@
-import predict
 import pathlib
+from . import predict
 
 if __name__ == "__main__":
 

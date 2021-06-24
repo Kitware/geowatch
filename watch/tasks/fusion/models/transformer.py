@@ -1,6 +1,4 @@
-import torch
 from torch import nn
-from einops.layers.torch import Rearrange, Reduce
 import einops
 
 

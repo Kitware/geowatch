@@ -1,8 +1,8 @@
 import pytorch_lightning as pl
 
-import datasets
-import methods
-import utils
+from . import datasets
+from . import methods
+from . import utils
 
 
 def main(args):
