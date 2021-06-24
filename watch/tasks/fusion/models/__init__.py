@@ -1,8 +1,6 @@
+__dev__ = """
+mkinit -m watch.tasks.fusion.models -w --lazy --noattrs
 """
-mkinit -m watch.tasks.fusion --lazy --noattrs -w
-"""
-
-
 
 def lazy_import(module_name, submodules, submod_attrs):
     import importlib
@@ -45,24 +43,8 @@ def lazy_import(module_name, submodules, submod_attrs):
 __getattr__ = lazy_import(
     __name__,
     submodules={
-        'datasets',
-        'eval',
-        'fit',
-        'fit_bigvoter',
-        'fit_voter',
-        'fusion_transformer_v1',
-        'methods',
-        'models',
-        'onera_channelwisetransformer_train',
-        'onera_experiment_predict',
-        'onera_transformer_train',
-        'onera_unet_train',
-        'predict',
-        'predict_baselines',
-        'predict_bigvoter',
-        'predict_ctf',
-        'predict_voter',
-        'utils',
+        'transformer',
+        'unet_blur',
     },
     submod_attrs={},
 )
@@ -71,9 +53,4 @@ __getattr__ = lazy_import(
 def __dir__():
     return __all__
 
-__all__ = ['datasets', 'eval', 'fit', 'fit_bigvoter', 'fit_voter',
-           'fusion_transformer_v1', 'methods', 'models',
-           'onera_channelwisetransformer_train', 'onera_experiment_predict',
-           'onera_transformer_train', 'onera_unet_train', 'predict',
-           'predict_baselines', 'predict_bigvoter', 'predict_ctf',
-           'predict_voter', 'utils']
+__all__ = ['transformer', 'unet_blur']
