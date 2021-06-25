@@ -10,3 +10,4 @@ from watch.tasks.fusion.datasets.project_data import (Drop0AlignMSI_S2,
 
 __all__ = ['AddPositionalEncoding', 'Drop0AlignMSI_S2', 'Drop0Raw_S2',
            'OneraCD_2018', 'VideoDataset', 'WatchDataModule']
+

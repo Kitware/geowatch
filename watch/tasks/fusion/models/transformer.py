@@ -313,3 +313,51 @@ def smt_it_hwtm_s12(**kwargs): return smt_it_hwtm(n_layers=12, embedding_size=38
 def smt_it_hwtm_s24(**kwargs): return smt_it_hwtm(n_layers=24, embedding_size=384, n_heads=8, **kwargs)
 def smt_it_hwtm_m24(**kwargs): return smt_it_hwtm(n_layers=24, embedding_size=512, n_heads=8, **kwargs)
 def smt_it_hwtm_l24(**kwargs): return smt_it_hwtm(n_layers=24, embedding_size=768, n_heads=8, **kwargs)
+
+
+
+def space_mode_transformer_encoder(axes, **kwargs):
+    return transformer_encoder(
+        axes,
+        default_shape=["batch", "mode", "height", "width", "feature"],
+        feature_axis="feature",
+        batch_axis="batch",
+        **kwargs,
+    )
+
+def sm_it_joint(**kwargs):
+    return space_mode_transformer_encoder(
+        axes=[
+            ("mode", "height", "width"),
+        ],
+        **kwargs,
+    )
+
+
+def sm_it_joint_p8(**kwargs): return sm_it_joint(n_layers=8, embedding_size=128, n_heads=4, **kwargs)
+def sm_it_joint_n12(**kwargs): return sm_it_joint(n_layers=12, embedding_size=128, n_heads=4, **kwargs)
+def sm_it_joint_t12(**kwargs): return sm_it_joint(n_layers=12, embedding_size=192, n_heads=4, **kwargs)
+def sm_it_joint_t24(**kwargs): return sm_it_joint(n_layers=24, embedding_size=192, n_heads=4, **kwargs)
+def sm_it_joint_s12(**kwargs): return sm_it_joint(n_layers=12, embedding_size=384, n_heads=8, **kwargs)
+def sm_it_joint_s24(**kwargs): return sm_it_joint(n_layers=24, embedding_size=384, n_heads=8, **kwargs)
+def sm_it_joint_m24(**kwargs): return sm_it_joint(n_layers=24, embedding_size=512, n_heads=8, **kwargs)
+def sm_it_joint_l24(**kwargs): return sm_it_joint(n_layers=24, embedding_size=768, n_heads=8, **kwargs)
+
+def sm_it_sm(**kwargs):
+    return space_mode_transformer_encoder(
+        axes=[
+            ("height", "width"),
+            ("mode",),
+        ],
+        **kwargs,
+    )
+
+
+def sm_it_sm_p8(**kwargs): return sm_it_sm(n_layers=8, embedding_size=128, n_heads=4, **kwargs)
+def sm_it_sm_n12(**kwargs): return sm_it_sm(n_layers=12, embedding_size=128, n_heads=4, **kwargs)
+def sm_it_sm_t12(**kwargs): return sm_it_sm(n_layers=12, embedding_size=192, n_heads=4, **kwargs)
+def sm_it_sm_t24(**kwargs): return sm_it_sm(n_layers=24, embedding_size=192, n_heads=4, **kwargs)
+def sm_it_sm_s12(**kwargs): return sm_it_sm(n_layers=12, embedding_size=384, n_heads=8, **kwargs)
+def sm_it_sm_s24(**kwargs): return sm_it_sm(n_layers=24, embedding_size=384, n_heads=8, **kwargs)
+def sm_it_sm_m24(**kwargs): return sm_it_sm(n_layers=24, embedding_size=512, n_heads=8, **kwargs)
+def sm_it_sm_l24(**kwargs): return sm_it_sm(n_layers=24, embedding_size=768, n_heads=8, **kwargs)
