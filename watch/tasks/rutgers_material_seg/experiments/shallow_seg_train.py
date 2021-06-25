@@ -152,7 +152,6 @@ class Trainer(object):
             # image_raw = utils.denorm(image1.clone().detach())
             # image_name = outputs['visuals']['image_name'][batch_index_to_show]
 
-            
             output1 = self.model(image1) # torch.Size([B, C+1, H, W])
             # print(output1.shape)
             # output1_interpolated = F.interpolate(output1, size=mask.size()[-2:], 

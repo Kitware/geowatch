@@ -1,4 +1,4 @@
-dataset: iarpa
+dataset: deepglobe
 use_cuda: True
 seed: 128
 

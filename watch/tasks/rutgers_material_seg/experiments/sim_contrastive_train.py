@@ -30,11 +30,30 @@ from watch.tasks.rutgers_material_seg.models.losses import SupConLoss
 from watch.tasks.rutgers_material_seg.models import build_model
 from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
 from watch.tasks.rutgers_material_seg.datasets import build_dataset
+from watch.tasks.rutgers_material_seg.models.supcon import SupConResNet
 torch.backends.cudnn.enabled = False
 torch.backends.cudnn.deterministic = True
 torch.set_printoptions(precision=6, sci_mode=False)
 np.set_printoptions(precision=3, suppress=True)
 
+mask_mapping = {0: "unknown",    # 0, unknown
+                1: "urban" ,  # 179, urban land
+                2: "agriculture",  # 226, agriculture land
+                3: "rangeland",  # 105, rangeland, non-forest, non farm, green land
+                4: "forest",  # 150, forest land
+                5: "water",   # 29, water
+                6: "barren"}  # 255, barren land, mountain, rock, dessert
+
+possible_combinations = [list(i) for i in itertools.product([0, 1], repeat=len(mask_mapping.keys()))]
+possible_combinations = np.divide(possible_combinations, len(mask_mapping.keys()))
+# print(possible_combinations.shape)
+verbose_labels = {}
+for index, item in enumerate(possible_combinations):
+    verbose_label = ""
+    for label_index, label in enumerate(item):
+        if label!=0:
+            verbose_label += f"{mask_mapping[label_index]}: {label}, "
+    verbose_labels[index]=verbose_label
 
 class Trainer(object):
     def __init__(self, model: object, train_loader: torch.utils.data.DataLoader, 
@@ -136,30 +155,37 @@ class Trainer(object):
             # if batch_index < 75:
             #     continue
             outputs = batch
-            image1, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0]
-            image_name = outputs['tr'].data[0][batch_index_to_show]['gids']
-            original_width, original_height = outputs['tr'].data[0][batch_index_to_show]['space_dims']
-            # print(image_name)
-            # print(len(image_name))
-            mask = torch.stack(mask)
+            # image1, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0]
+            # image_name = outputs['tr'].data[0][batch_index_to_show]['gids']
+            # original_width, original_height = outputs['tr'].data[0][batch_index_to_show]['space_dims']
+            # mask = torch.stack(mask)
+            
+            image1 = batch['inputs']['image']
+            mask = batch['inputs']['mask']
+            labels = batch['inputs']['labels']
+            # print(labels)
+            # labels = labels.long().squeeze(2)
+            labels = labels.to(device)
+
             mask = mask.long().squeeze(1)
-            # print(torch.unique(mask))
-            bs, c, t, h, w = image1.shape
+
             image1 = image1.squeeze(2)
+            images = torch.cat([image1, image1], dim=0)
+            bs, c, h, w = images.shape
+            # labels = torch.Tensor([1 for x in range(bs)])
+            # print(images.shape)
             
             class_to_show = max(0,torch.unique(mask)[-1]-1)
-            image1 = image1.to(device)
+            images = images.to(device)
             mask = mask.to(device)
-            # image_raw = utils.denorm(image1.clone().detach())
-            # image_name = outputs['visuals']['image_name'][batch_index_to_show]
-
             
-            output1 = self.model(image1) # torch.Size([B, C+1, H, W])
-
-            output1 = output1.view(bs, -1)
-            mask = mask.view(bs, -1)
-            
-            loss = self.criterion(output1, mask)
+            output1 = self.model(images) # torch.Size([B, C+1, H, W])
+            # print(output1.shape)
+            f1, f2 = torch.split(output1, [bs//2, bs//2], dim=0)
+            features = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
+            # print(labels.shape)
+            # print(features.shape)
+            loss = self.criterion(features, labels=labels)
 
             self.optimizer.zero_grad()
             loss.backward()
@@ -168,87 +194,87 @@ class Trainer(object):
 
             masks = F.softmax(output1, dim=1)#.detach()
             # masks = F.interpolate(masks, size=mask.size()[-2:], mode="bilinear", align_corners=True)
-            masks = self.high_confidence_filter(masks, cutoff_top=config['high_confidence_threshold']['train_cutoff'])
+            # masks = self.high_confidence_filter(masks, cutoff_top=config['high_confidence_threshold']['train_cutoff'])
+            print(masks.shape)
             pred = masks.max(1)[1].cpu().detach()#.numpy()
-            # print(f"uniques in pred: {torch.unique(pred)}")
+
             total_loss += loss.item()
-            mask[mask==-1]=0
-            preds.append(pred)
-            targets.append(mask.cpu())#.numpy())
+            # preds.append(pred)
+            # targets.append(mask.cpu())#.numpy())
             
             if config['visualization']['train_visualizer'] :
                 if (epoch) % config['visualization']['visualize_training_every'] == 0:
                     if (batch_index % iter_visualization) == 0:
                         figure = plt.figure(figsize=(config['visualization']['fig_size'],config['visualization']['fig_size']))
-                        ax1 = figure.add_subplot(4,3,1)
-                        ax2 = figure.add_subplot(4,3,2)
-                        ax3 = figure.add_subplot(4,3,3)
-                        ax4 = figure.add_subplot(4,3,4)
-                        ax5 = figure.add_subplot(4,3,5)
-                        ax6 = figure.add_subplot(4,3,6)
-                        ax7 = figure.add_subplot(4,3,7)
-                        ax8 = figure.add_subplot(4,3,8)
-                        ax9 = figure.add_subplot(4,3,9)
-                        ax10 = figure.add_subplot(4,3,10)
-                        ax11 = figure.add_subplot(4,3,11)
-                        ax12 = figure.add_subplot(4,3,12)
+                        ax1 = figure.add_subplot(1,1,1)
+                        # ax2 = figure.add_subplot(4,3,2)
+                        # ax3 = figure.add_subplot(4,3,3)
+                        # ax4 = figure.add_subplot(4,3,4)
+                        # ax5 = figure.add_subplot(4,3,5)
+                        # ax6 = figure.add_subplot(4,3,6)
+                        # ax7 = figure.add_subplot(4,3,7)
+                        # ax8 = figure.add_subplot(4,3,8)
+                        # ax9 = figure.add_subplot(4,3,9)
+                        # ax10 = figure.add_subplot(4,3,10)
+                        # ax11 = figure.add_subplot(4,3,11)
+                        # ax12 = figure.add_subplot(4,3,12)
 
                         cmap_gradients = plt.cm.get_cmap('jet') 
-                        image_show = np.transpose(image1.cpu().detach().numpy()[batch_index_to_show,:,:,:],(1,2,0))[:,:,:3]
+                        image_show = np.transpose(images.cpu().detach().numpy()[batch_index_to_show,:,:,:],(1,2,0))[:,:,:3]
                         
                         image_show = (image_show - image_show.min())/(image_show.max() - image_show.min())
                         # print(f"min: {image_show.min()}, max: {image_show.max()}")
                         # image_show = np.transpose(outputs['visuals']['image'][batch_index_to_show,:,:,:].numpy(),(1,2,0))
-                        logits_show = masks.max(1)[1].cpu().detach().numpy()[batch_index_to_show,:,:]
-                        gt_mask_show = mask.cpu().detach()[batch_index_to_show,:,:].numpy().squeeze()
-                        output1_sample = masks[batch_index_to_show,class_to_show,:,:].cpu().detach().numpy().squeeze()
+                        # logits_show = masks.max(1)[1].cpu().detach().numpy()[batch_index_to_show,:,:]
+                        # gt_mask_show = mask.cpu().detach()[batch_index_to_show,:,:].numpy().squeeze()
+                        # output1_sample = masks[batch_index_to_show,class_to_show,:,:].cpu().detach().numpy().squeeze()
                         # gt_mask_show[gt_mask_show==-1] = 0
-                        image_show = image_show[:original_width, :original_height,:]
-                        logits_show = logits_show[:original_width, :original_height]
-                        gt_mask_show = gt_mask_show[:original_width, :original_height]
-                        output1_sample = output1_sample[:original_width, :original_height]
+                        # image_show = image_show[:original_width, :original_height,:]
+                        # logits_show = logits_show[:original_width, :original_height]
+                        # gt_mask_show = gt_mask_show[:original_width, :original_height]
+                        # output1_sample = output1_sample[:original_width, :original_height]
                         
-                        logits_show[logits_show==-1]=0
-                        gt_mask_show_no_bg = np.ma.masked_where(gt_mask_show==0,gt_mask_show)
-                        logits_show_no_bg = np.ma.masked_where(logits_show==0,logits_show)
+                        # logits_show[logits_show==-1]=0
+                        # gt_mask_show_no_bg = np.ma.masked_where(gt_mask_show==0,gt_mask_show)
+                        # logits_show_no_bg = np.ma.masked_where(logits_show==0,logits_show)
 
-                        classes_in_gt = np.unique(gt_mask_show)
+                        # classes_in_gt = np.unique(gt_mask_show)
                         ax1.imshow(image_show)
 
-                        ax3.imshow(image_show)
-                        ax3.imshow(gt_mask_show_no_bg, cmap=self.cmap, vmin=0, vmax=self.max_label)#, alpha=alphas_final_gt)
+                        # ax3.imshow(image_show)
+                        # ax3.imshow(gt_mask_show_no_bg, cmap=self.cmap, vmin=0, vmax=self.max_label)#, alpha=alphas_final_gt)
 
-                        ax4.imshow(image_show)
-                        ax4.imshow(logits_show, cmap=self.cmap, vmin=0, vmax=self.max_label)#, alpha=alphas_final_gt)
+                        # ax4.imshow(image_show)
+                        # ax4.imshow(logits_show, cmap=self.cmap, vmin=0, vmax=self.max_label)#, alpha=alphas_final_gt)
                         
-                        ax5.imshow(output1_sample, cmap=cmap_gradients)
+                        # # ax5.imshow(output1_sample, cmap=cmap_gradients)
                         
-                        ax10.imshow(gt_mask_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
+                        # ax10.imshow(gt_mask_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
-                        # ax4.imshow(transformed_image_show)
-                        ax11.imshow(logits_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
+                        # # ax4.imshow(transformed_image_show)
+                        # ax11.imshow(logits_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
-                        ax1.axis('off')
-                        ax2.axis('off')
-                        ax3.axis('off')
-                        ax4.axis('off')
-                        ax5.axis('off')
-                        ax6.axis('off')
-                        ax7.axis('off')
-                        ax8.axis('off')
-                        ax9.axis('off')
-                        ax10.axis('off')
-                        ax11.axis('off')
-                        ax12.axis('off')
+                        # ax1.axis('off')
+                        # ax2.axis('off')
+                        # ax3.axis('off')
+                        # ax4.axis('off')
+                        # ax5.axis('off')
+                        # ax6.axis('off')
+                        # ax7.axis('off')
+                        # ax8.axis('off')
+                        # ax9.axis('off')
+                        # ax10.axis('off')
+                        # ax11.axis('off')
+                        # ax12.axis('off')
                         figure.tight_layout()
                         
                         if config['visualization']['titles']:
-                            ax1.set_title(f"Input Image", fontsize=config['visualization']['font_size'])
-                            ax3.set_title(f"GT Mask overlaid", fontsize=config['visualization']['font_size'])
-                            ax4.set_title(f"Prediction overlaid", fontsize=config['visualization']['font_size'])
-                            ax5.set_title(f"output1_sample for class: {class_to_show} min: {output1_sample.min():0.2f}, max: {output1_sample.max():0.2f}", fontsize=config['visualization']['font_size'])
-                            ax10.set_title(f"GT Mask", fontsize=config['visualization']['font_size'])
-                            ax11.set_title(f"Prediction", fontsize=config['visualization']['font_size'])
+                            # ax1.set_title(f"Input Image", fontsize=config['visualization']['font_size'])
+                            # ax3.set_title(f"GT Mask overlaid", fontsize=config['visualization']['font_size'])
+                            # ax4.set_title(f"Prediction overlaid", fontsize=config['visualization']['font_size'])
+                            # # ax5.set_title(f"output1_sample for class: {class_to_show} min: {output1_sample.min():0.2f}, max: {output1_sample.max():0.2f}", fontsize=config['visualization']['font_size'])
+                            # ax10.set_title(f"GT Mask", fontsize=config['visualization']['font_size'])
+                            # ax11.set_title(f"Prediction", fontsize=config['visualization']['font_size'])
                             figure.suptitle(f"GT labels for classification: {classes_in_gt}, \nunique in predictions: {np.unique(logits_show)}", fontsize=config['visualization']['font_size'])
                             
                         # cometml_experiemnt.log_figure(figure_name=f"Training, image name: {image_name}, epoch: {epoch}, classes in gt: {classes_in_gt}, classifier predictions: {labels_predicted_indices}",figure=figure)
@@ -530,32 +556,42 @@ if __name__== "__main__":
     experiment.log_parameters(config['visualization'])
     
     print(config['data']['image_size'])
-    coco_fpath = ub.expandpath(config['data'][config['location']]['coco_json'])
-    dset = kwcoco.CocoDataset(coco_fpath)
-    sampler = ndsampler.CocoSampler(dset)
+    # coco_fpath = ub.expandpath(config['data'][config['location']]['coco_json'])
+    # dset = kwcoco.CocoDataset(coco_fpath)
+    # sampler = ndsampler.CocoSampler(dset)
 
-    # # print(sampler)
-    number_of_timestamps, h, w = 1, 512, 512
-    window_dims = (number_of_timestamps, h, w) #[t,h,w]
-    input_dims = (h, w)
+    # # # print(sampler)
+    # number_of_timestamps, h, w = 1, 64, 64
+    # window_dims = (number_of_timestamps, h, w) #[t,h,w]
+    # input_dims = (h, w)
 
-    # # channels = 'r|g|b|gray|wv1'
-    # channels = 'r|g|b'
-    channels = 'red|green|blue|nir|swir16|swir22|cirrus'
-    # channels = 'red|green|blue'
-    # channels = 'gray'
-    dataset = SequenceDataset(sampler, window_dims, input_dims, channels)
-    print(dataset.__len__())
-    train_dataloader = dataset.make_loader(batch_size=config['training']['batch_size'])
+    # # # channels = 'r|g|b|gray|wv1'
+    # # channels = 'r|g|b'
+    # channels = 'red|green|blue|nir|swir16|swir22|cirrus'
+    # # channels = 'red|green|blue'
+    # # channels = 'gray'
+    # dataset = SequenceDataset(sampler, window_dims, input_dims, channels)
+    # print(dataset.__len__())
+    # train_dataloader = dataset.make_loader(batch_size=config['training']['batch_size'])
     
-    model = build_model(model_name = config['training']['model_name'],
-                        backbone=config['training']['backbone'],
-                        pretrained=config['training']['pretrained'],
-                        num_classes=config['data']['num_classes'],
-                        num_groups=config['training']['gn_n_groups'],
-                        weight_std=config['training']['weight_std'],
-                        beta=config['training']['beta'],
-                        num_channels=config['training']['num_channels'])
+    train_dataloader = build_dataset(dataset_name="deepglobe",
+                                     root="/media/native/data/data/DeepGlobe/crops/", 
+                                     batch_size=config['training']['batch_size'],
+                                     num_workers=1,
+                                     split="train",
+                                     image_size="300x300",
+                                     )
+    
+    # model = build_model(model_name = config['training']['model_name'],
+    #                     backbone=config['training']['backbone'],
+    #                     pretrained=config['training']['pretrained'],
+    #                     num_classes=config['data']['num_classes'],
+    #                     num_groups=config['training']['gn_n_groups'],
+    #                     weight_std=config['training']['weight_std'],
+    #                     beta=config['training']['beta'],
+    #                     num_channels=config['training']['num_channels'])
+    
+    model = SupConResNet(name=config['training']['backbone'])
     
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print("model has {} trainable parameters".format(num_params))
