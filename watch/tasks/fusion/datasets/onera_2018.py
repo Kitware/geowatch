@@ -23,6 +23,7 @@ class OneraCD_2018(pl.LightningDataModule):
         num_workers=4,
         preprocessing_step=None,
         tfms_channel_subset=None,
+        tfms_train_channel_size=1000,
     ):
         super().__init__()
         self.train_kwcoco_path = train_kwcoco_path
@@ -36,6 +37,7 @@ class OneraCD_2018(pl.LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.preprocessing_step = preprocessing_step
+        self.tfms_train_channel_size = tfms_train_channel_size
 
         tfms_channel_subset = channels if (tfms_channel_subset is None) else tfms_channel_subset
 
@@ -46,7 +48,10 @@ class OneraCD_2018(pl.LightningDataModule):
             if channel in channel_split
         ]
 
-        self.train_tfms = self.preprocessing_step
+        self.train_tfms = transforms.Compose([
+            self.preprocessing_step,
+            utils.DimensionDropout(1, self.tfms_train_channel_size),
+        ])
         self.test_tfms = transforms.Compose([
             self.preprocessing_step,
             utils.Lambda(lambda x: x[:, tfms_channel_subset]),
@@ -125,7 +130,5 @@ class OneraCD_2018(pl.LightningDataModule):
         parser.add_argument("--valid_pct", default=0.1, type=float)
         parser.add_argument("--batch_size", default=4, type=int)
         parser.add_argument("--num_workers", default=4, type=int)
-        parser.add_argument("--transform_key", default="none", type=str)
-        parser.add_argument("--tfms_scale", default=2000., type=float)
-        parser.add_argument("--tfms_window_size", default=8, type=int)
+        parser.add_argument("--tfms_train_channel_size", default=1000, type=int)
         return parent_parser
