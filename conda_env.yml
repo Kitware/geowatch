@@ -46,7 +46,7 @@ dependencies:
 
     # Imaging
     - kwimage >= 0.7.8
-    - kwcoco >= 0.2.5
+    - kwcoco >= 0.2.7
     - Pillow >= 8.0.1
     - imgaug >= 0.4.0
     - albumentations >= 1.0.0
