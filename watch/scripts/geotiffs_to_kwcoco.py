@@ -63,12 +63,14 @@ def filter_band_files(fpaths, band_list):
 def ingest_landsat_directory(lc_dpath):
     name = basename(normpath(lc_dpath))
     tiffs = sorted(glob.glob(join(lc_dpath, '*.TIF')))
+    if len(tiffs) == 0:
+        tiffs = sorted(glob.glob(join(lc_dpath, '**', '*.TIF'), recursive=True))
     baseinfo = watch.gis.geotiff.geotiff_filepath_info(name)
     capture_time = isoparse(baseinfo['filename_meta']['acquisition_date']).isoformat()
     sensor_coarse = 'LS'
-    if baseinfo['sensor_code'] == 'C':
+    if baseinfo['filename_meta']['sensor_code'] == 'C':
         sensor_coarse = 'L8'
-    elif baseinfo['sensor_coarse'] == 'E':
+    elif baseinfo['filename_meta']['sensor_code'] == 'E':
         sensor_coarse = 'L7'
     # take L8 as the default guess for a mangled name
     tiffs = filter_band_files(tiffs, (util_bands.LANDSAT7 if sensor_coarse == 'L7' else util_bands.LANDSAT8))
@@ -88,8 +90,9 @@ def ingest_sentinel2_directory(s2_dpath):
         tiffs = sorted(glob.glob(join(granule, 'IMG_DATA', '*.jp2')))
         name = basename(normpath(granule))
     else:
-        tiffs = (sorted(glob.glob(join(s2_dpath, 'GRANULE', '*', 'IMG_DATA', '*.jp2'))) or
-                 sorted(glob.glob(join(s2_dpath, '**', '*.jp2'), recursive=True)))
+        tiffs = sorted(glob.glob(join(s2_dpath, 'GRANULE', '*', 'IMG_DATA', '*.jp2')))
+        if len(tiffs) == 0:
+            tiffs = sorted(glob.glob(join(s2_dpath, '**', '*.jp2'), recursive=True))
         name = basename(normpath(s2_dpath)).replace('.SAFE', '')
     # Then grab the bands.
     tiffs = filter_band_files(tiffs, util_bands.SENTINEL2)
@@ -102,7 +105,7 @@ def ingest_sentinel2_directory(s2_dpath):
     return img
 
 
-def make_coco_img_from_geotiff(tiff_fpath, name=None):
+def make_coco_img_from_geotiff(tiff_fpath, name=None, force_affine=True):
     """
     TODO: move to coco extensions
 
@@ -120,15 +123,36 @@ def make_coco_img_from_geotiff(tiff_fpath, name=None):
         img['name'] = name
 
     info = watch.gis.geotiff.geotiff_metadata(tiff_fpath)
+    # only affine transformations are supported in auxiliary channels
+    info.update(**watch.gis.geotiff.geotiff_crs_info(tiff_fpath, force_affine=force_affine))
 
     warp_pxl_to_wld = Affine.coerce(info['pxl_to_wld'])
     height, width = info['img_shape']
     file_meta = info['filename_meta']
-    # print('file_meta = {!r}'.format(file_meta))
     channels = file_meta.get('channels', None)
 
     if channels is None:
-        raise Exception('must be able to introspect channels')
+        # fix this for known WV channel signature, which isn't obvious from filename
+        if file_meta.get('product_guess') == 'worldview':
+
+            from osgeo import gdal
+            bands = gdal.Info(tiff_fpath, format='json')['bands']
+
+            # the channel names are the same for all WV, just the center_wavelength is different
+            # so we can safely use this info from WV2
+            def _code(band_dicts):
+                return '|'.join(b.get('common_name', b['name']) for b in band_dicts)
+
+            if len(bands) == 1:
+                channels = _code(util_bands.WORLDVIEW2_PAN)
+            elif len(bands) == 4:
+                channels = _code(util_bands.WORLDVIEW2_MS4)
+            elif len(bands) == 8:
+                channels = _code(util_bands.WORLDVIEW2_MS8)
+            else:
+                raise Exception('unknown channel signature for WV')
+        else:
+            raise Exception('must be able to introspect channels')
 
     wld_crs_info = ub.dict_diff(info['wld_crs_info'], {'type'})
     utm_crs_info = ub.dict_diff(info['utm_crs_info'], {'type'})
@@ -168,7 +192,7 @@ def make_coco_img_from_auxiliary_geotiffs(tiffs, name):
     auxiliary = []
 
     for fpath in tiffs:
-        aux = make_coco_img_from_geotiff(fpath)
+        aux = make_coco_img_from_geotiff(fpath, force_affine=True)
         auxiliary.append(aux)
 
     # Choose a base image canvas and the relationship between auxiliary images

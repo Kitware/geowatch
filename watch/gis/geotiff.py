@@ -8,6 +8,8 @@ from watch.gis import spatial_reference as watch_crs
 from watch.utils.util_bands import SENTINEL2, LANDSAT7, LANDSAT8
 import parse
 from os.path import basename, isfile
+from dateutil.parser import isoparse
+from datetime import datetime
 
 try:
     from xdev import profile
@@ -53,7 +55,6 @@ def geotiff_metadata(gpath, elevation='gtop30'):
 
     infos['fname'] = geotiff_filepath_info(gpath)
     infos['crs'] = geotiff_crs_info(ref, elevation=elevation)
-    infos['cfs'] = infos['crs']  # TODO: backward compat to fix typo, remove
     infos['header'] = geotiff_header_info(ref)
 
     # Combine sensor candidates
@@ -620,71 +621,12 @@ def geotiff_filepath_info(gpath, fast=True):
         sensor_candidates.append(sensor_cand)
 
     if not sensor_candidates or not fast:
-        # Sentinel-2 2016+ filename pattern. See [S2_Name_2016]_
-        # These filenames are often directories
-        # MMM_MSIXXX_YYYYMMDDHHMMSS_Nxxyy_ROOO_Txxxxx_<Product Discriminator>.SAFE
-        # SAFE = Standard Archive Format for Europe
-        s2_name_2016 = '{MMM}_{MSIXXX}_{YYYYMMDDHHMMSS}_{Nxxyy}_{ROOO}_{Txxxxx}_{Discriminator}'
-        # use util_bands for this
-        s2_channel_alias = {
-            band['name']: band['common_name'] for band in SENTINEL2 if 'common_name' in band
-        }
-        # ...except for TCI, which is not a true band, but often included anyway
-        # and this channel code is more specific to kwcoco
-        s2_channel_alias.update({'TCI': 'r|g|b'})
-
-        s2_2016_parser = _parser_lut(s2_name_2016)
-        for part_ in reversed(parts):
-            part = part_.split('.')[0]
-            result = s2_2016_parser.parse(part)
-            if result:
-                try:
-                    mission_id = result.named['MMM']
-                    if mission_id not in {'S2A', 'S2B'}:
-                        raise InvalidFormat
-                    s2_meta = {}
-                    s2_meta['mission_id'] = mission_id
-                    s2_meta['product_level'] = result.named['MSIXXX']
-                    s2_meta['sense_start_time'] = result.named['YYYYMMDDHHMMSS']
-                    s2_meta['pdgs_num'] = result.named['Nxxyy']
-                    s2_meta['relative_orbit_num'] = result.named['ROOO']
-                    s2_meta['tile_number'] = result.named['Txxxxx']
-                    s2_meta['discriminator'] = result.named['Discriminator']
-                    s2_meta['product_guess'] = 'sentinel2'
-                    s2_meta['guess_heuristic'] = 'S2_2016_format'
-                except InvalidFormat:
-                    pass
-                else:
-                    meta.update(s2_meta)
-                    sensor_candidates.append(mission_id)
-                    break
-
-        # Files ending in _TCI are true color images based on the Sentinel 2
-        # Handbook I'm not sure what the standard for this format is I just know a
-        # suffix of _TCI means true color image. ANd these are from sentinel2, I'm
-        # guessing on the rest of the format.
-
-        s2_format_guess = '{tile_number}_{date}_{band}'
-        s2_parser = _parser_lut(s2_format_guess)
-        result = s2_parser.parse(base)
-        if result:
-            tile_number = result.named['tile_number']
-            if len(tile_number) == 6 and tile_number.startswith('T'):
-                if 'sense_start_time' in meta:
-                    assert meta['sense_start_time'] == result.named['date']
-                # Changed from acquisition_date to match other S2 information
-                meta['sense_start_time'] = result.named['date']
-                band = result.named['band']
-                if band == 'TCI':
-                    sensor_candidates.append('S2-TrueColor')
-                # TODO: normalized consise channel code
-                meta['tile_number'] = tile_number
-                meta['suffix'] = band
-                channels = s2_channel_alias.get(band, band)
-                meta['channels'] = channels
-                meta['product_guess'] = 'sentinel2'
-                meta['guess_heuristic'] = 'S2_tile_date_band_format'
-                sensor_candidates.append('S2')
+        s2_meta = parse_sentinel2_product_id(parts)
+        if s2_meta is not None:
+            meta.update(s2_meta)
+            sensor_candidates.append(meta['mission_id'])
+            if meta.get('suffix', None) == 'TCI':
+                sensor_candidates.append('S2-TrueColor')
 
     dg_bundle = None
     if not sensor_candidates or not fast:
@@ -757,6 +699,164 @@ def _parser_lut(pattern):
     """
     return parse.Parser(pattern)
 
+def parse_sentinel2_product_id(parts):
+    '''
+    Try to parse the Sentinel-2 pre-2016 and post-2016 safedir formats.
+    
+    Note that unlike parse_landsat_product_id, which expects a band file basename,
+    this presently purports to plurally parse pieces of path postfixedly
+    (it parses the whole path, backwards :))
+
+    TODO extend this to parsing the granuledir and band file formats as well.
+    For now, we just need all names to be minimally parseable, even if some info is incorrect.
+
+    General plan is to check the old formats strictly first, and then check the new safedir loosely as a default
+    '''
+    
+    def _dt(name):
+        # expand to a named ISO 8601 datetime without separators, which is not supported by parse
+        # example: 20190901T234135
+        # {{ escapes {
+
+        # trying to be too clever here...
+        # return f'{{{name}.Y:04d}}{{{name}.M:02d}}{{{name}.D:02d}}T{{{name}.h:02d}}{{{name}.m:02d}}{{{name}.s:02d}}'
+        # return f'{{{name}.date:08d}}T{{{name}.time:06d}}'
+        return f'{{{name}:.15}}'
+    
+    # unfortunately parse() doesn't seem to support a format specifier for "string of length exactly n"
+    # {name:n} is ">= n"
+    # {name:.n} is "<= n"  <- going with this one as a better approximation of "exactly n"
+    
+    # this also EXCLUDES the trailing '.SAFE' for all safedirs, again because parse can't handle optional pieces
+
+    s2_safedir_2015 = '{MMM:.3}_{CCCC:.4}_PRD_{MSIXXX:.6}_{ssss:.4}_' + _dt('creation') + '_R{OOO:03d}_V' + _dt('sensing_start') + '_' + _dt('sensing_end')
+    s2_safedir_2015_parser = _parser_lut(s2_safedir_2015)
+
+    # parse also doesn't support 'or'
+    # A could instead be the Validity Start Time
+    # T could instead be the Detector ID
+    # but these are the more common (and useful) choices
+    s2_granuledir_2015 = '{MMM:.3}_{CCCC:.4}_MSI_{YYY:.3}_{ZZ:.2}_{ssss:.4}_' + _dt('validity_start') + '_A{ffffff:06d}_T{xxxxx:.5}_N{xx:02d}.{yy:02d}'
+    s2_granuledir_2015_parser = _parser_lut(s2_granuledir_2015)
+
+    # Sentinel-2 2016+ filename pattern. See [S2_Name_2016]_
+    # These filenames are often directories
+    # MMM_MSIXXX_YYYYMMDDHHMMSS_Nxxyy_ROOO_Txxxxx_<Product Discriminator>.SAFE
+    # SAFE = Standard Archive Format for Europe
+    s2_name_2016 = '{MMM:.3}_{MSIXXX:.6}_{YYYYMMDDHHMMSS:.15}_{Nxxyy:.5}_{ROOO:.4}_{Txxxxx:.6}_{Discriminator}'
+    s2_2016_parser = _parser_lut(s2_name_2016)
+
+    # use util_bands for this
+    s2_channel_alias = {
+        band['name']: band['common_name'] for band in SENTINEL2 if 'common_name' in band
+    }
+    # ...except for TCI, which is not a true band, but often included anyway
+    # and this channel code is more specific to kwcoco
+    s2_channel_alias.update({'TCI': 'r|g|b'})
+    
+    meta = {}
+
+    # TODO allow for parsing multiple parts once safedir, granuledir, and band file are all implemented
+    for _part in reversed(parts):
+        
+        part = _part.split('.')[0]
+        result = s2_safedir_2015_parser.parse(part)
+        if result:
+            s2_meta = {}
+            try:
+                mission_id = result.named['MMM']
+                if mission_id not in {'S2A', 'S2B'}:
+                    raise InvalidFormat
+                s2_meta['mission_id'] = mission_id
+                s2_meta['product_level'] = result.named['MSIXXX']
+                s2_meta['sense_start_time'] = isoparse(result.named['sensing_start']
+                                                       ).isoformat()
+                s2_meta['relative_orbit_num'] = result.named['ROOO']
+                s2_meta['discriminator'] = result.named['Discriminator']
+                s2_meta['product_guess'] = 'sentinel2'
+                s2_meta['guess_heuristic'] = 'S2_safedir_2015_format'
+            except InvalidFormat:
+                pass
+            else:
+                meta.update(s2_meta)
+                break
+
+        part = '.'.join(_part.split('.')[:2])
+        result = s2_granuledir_2015_parser.parse(part)
+        if result:
+            s2_meta = {}
+            try:
+                mission_id = result.named['MMM']
+                if mission_id not in {'S2A', 'S2B'}:
+                    raise InvalidFormat
+                s2_meta['mission_id'] = mission_id
+                s2_meta['product_level'] = result.named['YYY']
+                # TODO warning, this date can differ between the 2 in safedir and 1 in granuledir!
+                # it's an open question which should be "canonical"
+                s2_meta['sense_start_time'] = isoparse(result.named['validity_start']
+                                                       ).isoformat()
+                s2_meta['pdgs_num'] = f"N{result.named['xx']:02d}{result.named['yy']:02d}"
+                s2_meta['absolute_orbit_num'] = result.named['ffffff']
+                s2_meta['tile_number'] = 'T' + result.named['xxxxx']
+                s2_meta['product_guess'] = 'sentinel2'
+                s2_meta['guess_heuristic'] = 'S2_2016_format'
+            except InvalidFormat:
+                pass
+            else:
+                meta.update(s2_meta)
+                break
+
+        part = _part.split('.')[0]
+        result = s2_2016_parser.parse(part)
+        if result:
+            s2_meta = {}
+            try:
+                mission_id = result.named['MMM']
+                if mission_id not in {'S2A', 'S2B'}:
+                    raise InvalidFormat
+                s2_meta['mission_id'] = mission_id
+                s2_meta['product_level'] = result.named['MSIXXX']
+                s2_meta['sense_start_time'] = result.named['YYYYMMDDHHMMSS']
+                s2_meta['pdgs_num'] = result.named['Nxxyy']
+                s2_meta['relative_orbit_num'] = result.named['ROOO']
+                s2_meta['tile_number'] = result.named['Txxxxx']
+                s2_meta['discriminator'] = result.named['Discriminator']
+                s2_meta['product_guess'] = 'sentinel2'
+                s2_meta['guess_heuristic'] = 'S2_2016_format'
+            except InvalidFormat:
+                pass
+            else:
+                meta.update(s2_meta)
+                break
+
+    # Files ending in _TCI are true color images based on the Sentinel 2
+    # Handbook I'm not sure what the standard for this format is I just know a
+    # suffix of _TCI means true color image. ANd these are from sentinel2, I'm
+    # guessing on the rest of the format.
+
+    s2_format_guess = '{tile_number:.6}_{date:.15}_{band:.3}.{ext}'
+    s2_parser = _parser_lut(s2_format_guess)
+    result = s2_parser.parse(parts[-1])
+    if result:
+        tile_number = result.named['tile_number']
+        if len(tile_number) == 6 and tile_number.startswith('T'):
+            if 'sense_start_time' in meta:
+                assert meta['sense_start_time'] == result.named['date']
+            # Changed from acquisition_date to match other S2 information
+            meta['sense_start_time'] = result.named['date']
+            band = result.named['band']
+            # TODO: normalized consise channel code
+            meta['tile_number'] = tile_number
+            meta['suffix'] = band
+            channels = s2_channel_alias.get(band, band)
+            meta['channels'] = channels
+            meta['product_guess'] = 'sentinel2'
+            meta['guess_heuristic'] = 'S2_tile_date_band_format'
+            if 'mission_id' not in meta:
+                meta['mission_id'] = 'S2'
+   
+    if meta:
+        return meta
 
 @profile
 def parse_landsat_product_id(product_id):
