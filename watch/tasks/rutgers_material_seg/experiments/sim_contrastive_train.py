@@ -289,8 +289,8 @@ class Trainer(object):
                         # # ax4.imshow(transformed_image_show)
                         # ax11.imshow(logits_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
-                        # ax1.axis('off')
-                        # ax2.axis('off')
+                        ax1.axis('off')
+                        ax2.axis('off')
                         # ax3.axis('off')
                         # ax4.axis('off')
                         # ax5.axis('off')
@@ -360,6 +360,7 @@ class Trainer(object):
         preds, crf_preds, targets  = [], [], []
         accuracies = 0
         running_ap = 0.0
+        accuracies = []
         batch_index_to_show = config['visualization']['batch_index_to_show']
         if self.test_with_full_supervision == 1:
             loader = self.test_loader
@@ -372,22 +373,37 @@ class Trainer(object):
             pbar = tqdm(enumerate(loader), total=len(loader))
             for batch_index,batch in pbar:
                 outputs = batch
-                image1, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0]
-                original_width, original_height = outputs['tr'].data[0][batch_index_to_show]['space_dims']
+                # image1, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0]
+                # original_width, original_height = outputs['tr'].data[0][batch_index_to_show]['space_dims']
+                # mask = torch.stack(mask)
                 
-                mask = torch.stack(mask)
+                image1 = batch['inputs']['image']
+                mask = batch['inputs']['mask']
+                labels = batch['inputs']['labels']
+                
                 mask = mask.long().squeeze(1)
+                
                 image1 = image1.to(device)
                 mask = mask.to(device)
+                labels = labels.to(device)
                 # image_raw = utils.denorm(image1.clone().detach())
-                bs, c, t, h, w = image1.shape
+                bs, c, h, w = image1.shape
                 image1 = image1.squeeze(2)
                 
-                output = self.model(image1)  ## [B,22,150,150]
-
+                images = torch.cat([image1, image1], dim=0)
+                labels = torch.cat([labels, labels],dim=0)
+                
+                output = self.model(images)  ## [B,22,150,150]
+                
+                acc1, preds = accuracy(output, labels, topk=(1,))
+                
+                verbose_preds = [verbose_labels[pred.item()] for pred in preds]
+                batch_verboe_labels = [verbose_labels[label.item()] for label in labels]
+                accuracies += acc1
+                
                 masks = F.softmax(output, dim=1) ## (B, 22, 300, 300)
                 # masks = F.interpolate(masks, size=mask.size()[-2:], mode="bilinear", align_corners=True)
-                masks = self.high_confidence_filter(masks, cutoff_top=config['high_confidence_threshold']['val_cutoff'])
+                # masks = self.high_confidence_filter(masks, cutoff_top=config['high_confidence_threshold']['val_cutoff'])
                 pred = masks.max(1)[1].cpu().detach()#.numpy()
                 # print(f"uniques in pred: {torch.unique(pred, return_counts=True)}")
                 # pred[pred==self.max_label] = 0
@@ -398,9 +414,9 @@ class Trainer(object):
                 # print(f"pred after: {pred.shape}")
                 # print(f"mask after: {mask.shape}")
                 
-                preds.append(pred)
-                mask[mask==-1]=0
-                targets.append(mask.cpu())#.numpy())
+                # preds.append(pred)
+                # mask[mask==-1]=0
+                # targets.append(mask.cpu())#.numpy())
 
                 if self.use_crf:
                     crf_probs = utils.batch_crf_inference(image_raw.detach().cpu(), 
@@ -417,72 +433,73 @@ class Trainer(object):
                     if (epoch)%config['visualization']['visualize_val_every'] == 0:
                         if (batch_index % iter_visualization) == 0:
                             figure = plt.figure(figsize=(config['visualization']['fig_size'],config['visualization']['fig_size']))
-                            ax1 = figure.add_subplot(2,3,1)
-                            ax2 = figure.add_subplot(2,3,2)
-                            ax3 = figure.add_subplot(2,3,3)
-                            ax4 = figure.add_subplot(2,3,4)
-                            ax5 = figure.add_subplot(2,3,5)
-                            ax6 = figure.add_subplot(2,3,6)
+                            ax1 = figure.add_subplot(1,2,1)
+                            ax2 = figure.add_subplot(1,2,2)
+                            # ax3 = figure.add_subplot(2,3,3)
+                            # ax4 = figure.add_subplot(2,3,4)
+                            # ax5 = figure.add_subplot(2,3,5)
+                            # ax6 = figure.add_subplot(2,3,6)
                             
                             cmap_gradients = plt.cm.get_cmap('jet')
                             # transformed_image_show = np.transpose(utils.denorm(image1).cpu().detach().numpy()[0,:,:,:],(1,2,0))
                             # image_show = np.transpose(outputs['visuals']['image'][0,:,:,:].numpy(),(1,2,0))
                             image_show = np.transpose(image1.cpu().detach().numpy()[batch_index_to_show,:,:,:],(1,2,0))[:,:,:3]
                             image_show = (image_show - image_show.min())/(image_show.max() - image_show.min())
-                            gt_mask_show = mask.cpu().numpy()[0,:,:].squeeze()
+                            gt_mask_show = mask.cpu().numpy()[batch_index_to_show,:,:].squeeze()
                             # gt_mask_show[gt_mask_show==self.max_label] = 0
                             # image_name = outputs['visuals']['image_name'][batch_index_to_show]
-                            logits_show = pred[0,:,:]
-                            classes_predicted = np.unique(logits_show)
-                            classes_in_gt = np.unique(gt_mask_show)
+                            # logits_show = pred[0,:,:]
+                            # classes_predicted = np.unique(logits_show)
+                            # classes_in_gt = np.unique(gt_mask_show)
                             
-                            image_show = image_show[:original_width, :original_height,:]
-                            logits_show = logits_show[:original_width, :original_height]
-                            gt_mask_show = gt_mask_show[:original_width, :original_height]
+                            # image_show = image_show[:original_width, :original_height,:]
+                            # logits_show = logits_show[:original_width, :original_height]
+                            # gt_mask_show = gt_mask_show[:original_width, :original_height]
                             
                             gt_mask_show_no_bg = np.ma.masked_where(gt_mask_show==0,gt_mask_show)
-                            logits_show_no_bg = np.ma.masked_where(logits_show==0,logits_show)
+                            # logits_show_no_bg = np.ma.masked_where(logits_show==0,logits_show)
                             # pseudo_gt_show_no_bg = np.ma.masked_where(pseudo_gt_show==0,pseudo_gt_show)
                             
                             ax1.imshow(image_show)
+                            
                             ax2.imshow(image_show)
                             ax2.imshow(gt_mask_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
-                            ax3.imshow(image_show)
-                            ax3.imshow(logits_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
+                            # ax3.imshow(image_show)
+                            # ax3.imshow(logits_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
 
-                            if self.use_crf:
-                                crf_pred_show = crf_pred[0,:,:].squeeze()
-                                crf_pred_show_no_bg = np.ma.masked_where(crf_pred_show==0,crf_pred_show)
-                                crf_prob_show = crf_probs[0,class_to_show,:,:].squeeze()
-                                ax4.imshow(image_show)
-                                ax4.imshow(crf_pred_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
+                            # if self.use_crf:
+                            #     crf_pred_show = crf_pred[0,:,:].squeeze()
+                            #     crf_pred_show_no_bg = np.ma.masked_where(crf_pred_show==0,crf_pred_show)
+                            #     crf_prob_show = crf_probs[0,class_to_show,:,:].squeeze()
+                            #     ax4.imshow(image_show)
+                            #     ax4.imshow(crf_pred_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
-                            ax5.imshow(gt_mask_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
+                            # ax5.imshow(gt_mask_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
-                            ax6.imshow(logits_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
+                            # ax6.imshow(logits_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
                             ax1.axis('off')
                             ax2.axis('off')
-                            ax3.axis('off')
-                            ax4.axis('off')
-                            ax5.axis('off')
-                            ax6.axis('off')
+                            # ax3.axis('off')
+                            # ax4.axis('off')
+                            # ax5.axis('off')
+                            # ax6.axis('off')
 
                             if config['visualization']['train_imshow']:
                                 plt.show()
-                            cometml_experiemnt.log_figure(figure_name=f"Validation, Image name:",figure=figure)
                             if config['visualization']['titles']:
-                                figure.suptitle(f"GT labels for classification: {classes_in_gt}, classes predicted: {classes_predicted}") #\nP
+                                figure.suptitle(f"Pred: {verbose_preds[batch_index_to_show]}\nGT label: {batch_verboe_labels[batch_index_to_show]}") #\nP
                                 ax1.set_title(f"Input Image", fontsize=config['visualization']['font_size'])
                                 ax2.set_title(f"GT Mask", fontsize=config['visualization']['font_size'])
-                                ax3.set_title(f"Prediction", fontsize=config['visualization']['font_size'])
-                                ax6.set_title(f"Prediction", fontsize=config['visualization']['font_size'])
-                                ax5.set_title(f"GT Mask", fontsize=config['visualization']['font_size'])
-                                if self.use_crf:
-                                    ax4.set_title(f"+CRF Prediction", fontsize=config['visualization']['font_size'])
+                                # ax3.set_title(f"Prediction", fontsize=config['visualization']['font_size'])
+                                # ax6.set_title(f"Prediction", fontsize=config['visualization']['font_size'])
+                                # ax5.set_title(f"GT Mask", fontsize=config['visualization']['font_size'])
+                                # if self.use_crf:
+                                #     ax4.set_title(f"+CRF Prediction", fontsize=config['visualization']['font_size'])
 
+                            cometml_experiemnt.log_figure(figure_name=f"Validation, Image name:",figure=figure)
                             figure.clear()
                             plt.cla()
                             plt.clf()
@@ -490,18 +507,20 @@ class Trainer(object):
                             plt.close(figure)
                             gc.collect()
 
-        mean_iou, precision, recall = eval_utils.compute_jaccard(preds, targets, num_classes=config['data']['num_classes'])
-        overall_miou = sum(mean_iou)/len(mean_iou)
-        if self.use_crf:
-            crf_mean_iou, crf_precision, crf_recall = eval_utils.compute_jaccard(crf_preds, targets, num_classes=config['data']['num_classes'])
-            crf_overall_miou = sum(crf_mean_iou)/len(crf_mean_iou)
-            print(f"Validation class-wise +CRF mIoU value: \n{np.array(crf_mean_iou)} \noverall mIoU: {crf_overall_miou}")
-            cometml_experiemnt.log_metric("Validation +CRF mIoU", crf_overall_miou, epoch=epoch+1)
+        # mean_iou, precision, recall = eval_utils.compute_jaccard(preds, targets, num_classes=config['data']['num_classes'])
+        # overall_miou = sum(mean_iou)/len(mean_iou)
+        # if self.use_crf:
+        #     crf_mean_iou, crf_precision, crf_recall = eval_utils.compute_jaccard(crf_preds, targets, num_classes=config['data']['num_classes'])
+        #     crf_overall_miou = sum(crf_mean_iou)/len(crf_mean_iou)
+        #     print(f"Validation class-wise +CRF mIoU value: \n{np.array(crf_mean_iou)} \noverall mIoU: {crf_overall_miou}")
+        #     cometml_experiemnt.log_metric("Validation +CRF mIoU", crf_overall_miou, epoch=epoch+1)
             
-        print(f"Validation class-wise mIoU value: \n{np.array(mean_iou)} \noverall mIoU: {overall_miou}")
+        mean_acc = torch.mean(torch.stack(accuracies))
+        # print(f"Validation class-wise mIoU value: \n{np.array(mean_iou)} \noverall mIoU: {overall_miou}")
         print("Validation Epoch {0:2d} average loss: {1:1.2f}".format(epoch+1, total_loss/loader.__len__()))
-        cometml_experiemnt.log_metric("Validation mIoU", overall_miou, epoch=epoch+1)
+        # cometml_experiemnt.log_metric("Validation mIoU", overall_miou, epoch=epoch+1)
         cometml_experiemnt.log_metric("Validation Average Loss",total_loss/loader.__len__(),epoch=epoch+1)
+        cometml_experiemnt.log_metric("Accuracy", mean_acc, epoch=epoch+1)
         
         return total_loss/loader.__len__(), overall_miou
     

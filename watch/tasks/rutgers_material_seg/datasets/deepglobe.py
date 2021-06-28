@@ -56,7 +56,7 @@ class RandomCrop(object):
 
 
 class DeepGlobeDataset(object):
-    def __init__(self, root, transforms, split=False, crop_size=128):
+    def __init__(self, root, transforms, split=False, crop_size=64):
         self.root = root
         self.transforms = transforms
         self.split = split
