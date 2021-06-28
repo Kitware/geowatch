@@ -1,8 +1,8 @@
 import torch
 import kwcoco
 import os
-import json
-import tifffile
+import ubelt as ub
+import kwimage
 from .time_sort_module import time_sort
 
 
@@ -32,64 +32,116 @@ def extract_features(checkpoint,
         panchromatic: Set to True to return panchromatic (single channel) WV images where applicable. Otherwise 8 channel images will be returned.
 
     """
-
     extractor = time_sort.load_from_checkpoint(
         checkpoint, map_location='cuda').to(device)
 
-    #  dataset = kwcoco.CocoDataset(kwcoco)
-    with open(kwcoco_file) as read:
-        dataset = json.load(read)
-
-    if not os.path.exists(output_kwcoco):
-        with open(output_kwcoco, 'w') as new_file:
-            json.dump(dataset, new_file)
-
-    dataset = kwcoco.CocoDataset(output_kwcoco)
+    input_dset = kwcoco.CocoDataset.coerce(kwcoco_file)
+    output_dset = input_dset.copy()
 
     if not image_ids:
         # include all available images if none are specified
-        image_ids = range(1, 1 + len(dataset.imgs))
+        image_ids = list(output_dset.index.imgs.keys())
 
-    sensor_list = dataset.images().lookup('sensor_coarse', keepid=True)
-    sensor_ids = [ID for ID in sensor_list if sensor_list[ID] == sensor]
+    # Only take images that match the requested sensor
+    valid_images = output_dset.images(image_ids)
+    flags = [sensor == _ for _ in valid_images.lookup('sensor_coarse')]
+    image_ids = valid_images.compress(flags)
 
-    for x in image_ids:
-        if x in sensor_ids:
-            print('Processing image {}'.format(x))
-            file_name = dataset.imgs[x]['file_name']
+    # TODO: could add a subdirectory using some tag associated with the
+    # model to differentiate between features from different trained models
+    os.makedirs(output_folder, exist_ok=True)
 
-            directory, _ = os.path.split(file_name)
+    # TODO: prediction would be faster with a dataset that loaded images
+    # in the background while the GPU was predicting.
 
-            if not os.path.exists(os.path.join(output_folder, directory)):
-                os.makedirs(os.path.join(output_folder, directory))
+    # TODO: prediction will likely need to be done on a sliding window
 
-            image = torch.tensor(
-                tifffile.imread(
-                    os.path.join(
-                        data_folder,
-                        file_name)).astype('int32')).to(device).float()
+    for gid in ub.ProgIter(image_ids, 'Process image'):
 
-            if len(image.shape) < 3:
-                image = image.unsqueeze(-1)
+        img = output_dset.index.imgs[gid]
+        # The image name should be unique, but if it does not exist, then
+        # we have to get creative
+        name = img.get('name', None)
+        if name is None:
+            name = 'timefeat_{:06d}'.format(gid)
+        # Construct the filepath we will save the features to
+        feature_fpath = os.path.join(output_folder, name + '.tiff')
 
-            image = image.permute(2, 0, 1)
-            image = image.unsqueeze(0)
+        # TODO: ensure the correct channels and scale wrt to the model are used
+        delayed_image = output_dset.delayed_load(gid)
+        im = delayed_image.finalize()
 
-            features, _, _, _ = extractor(image, image, 'x', 'x')
-            save_name = file_name[:-4] + '.pt'
-            torch.save(
-                features.squeeze(),
-                os.path.join(
-                    output_folder,
-                    save_name))
-            dataset.imgs[x]['time_sort_features'] = os.path.join(
-                output_folder, save_name)
-            dataset.dump(dataset.fpath, newlines=True)
-        else:
-            print('Skipping image {}, sensor doesn\'t match'.format(x))
+        # TODO: Ensure normalization is the same as in training
+        # This should be accomplished by storing that info with the model
+        image = torch.from_numpy(im.astype('float32')).to(device)
+
+        if len(image.shape) < 3:
+            image = image.unsqueeze(-1)
+
+        image = image.permute(2, 0, 1)
+        image = image.unsqueeze(0)
+
+        batch_features, _, _, _ = extractor(image, image, 'x', 'x')
+
+        # Assume batch size of 1
+        item_features = batch_features[0]
+
+        item_features_np = item_features.data.cpu().numpy().transpose(1, 2, 0)
+
+        height, width, num_bands = item_features_np.shape
+
+        # The input to the network is in "video-space", and the output is given
+        # in the same "video-space" space. The output is going to be added as a
+        # new auxiliary channel(s) to the image, so we need to specify the warp
+        # from auxiliary space to image space, because auxiliary space in this
+        # case is video space, we can use the inverse of the image-to-video
+        # transform in the image dictionary.
+        warp_img_to_vid = kwimage.Affine.coerce(img.get('warp_img_to_vid', None))
+        warp_aux_to_img = warp_img_to_vid.inv()
+
+        # TODO: need to come up with a channel code to represent this.
+        # currently this could be done by any random 64 codes separated by
+        # pipes but we may want to update kwcoco to be nicer in the way
+        # it handles larger numbers of channels
+        quick_chan_codes = ['UKy{:02d}'.format(i) for i in range(num_bands)]
+        channels = '|'.join(quick_chan_codes)
+
+        # Write the data to disk
+        kwimage.imwrite(feature_fpath, item_features_np, backend='gdal', space=None)
+
+        # Register the data in the output kwcoco manifest
+        _temp_add_auxiliary(output_dset, gid, feature_fpath, width, height,
+                            warp_aux_to_img, channels, num_bands)
+
+    output_dset.fpath = output_kwcoco
+    print('Write to output_dset.fpath = {!r}'.format(output_dset.fpath))
+    output_dset.dump(output_dset.fpath, newlines=True)
 
 
-if __name__ == '__main__':
+def _temp_add_auxiliary(self, gid, fpath, width, height, warp_aux_to_img, channels, num_bands):
+    """
+    Adds an auxiliary file to an image.
+
+    Temporary function while the kwcoco API is finalized
+    """
+    aux = {
+        'file_name': fpath,
+        'width': width,
+        'height': height,
+        'warp_aux_to_img': kwimage.Affine.coerce(warp_aux_to_img).concise(),
+        'channels': channels,
+        'num_bands': num_bands,
+    }
+    # lookup the image you want to add to
+    img = self.index.imgs[gid]
+    # Ensure there is an auxiliary image list
+    auxiliary = img.setdefault('auxiliary', [])
+    # Add the auxiliary information to the image
+    auxiliary.append(aux)
+    self._invalidate_hashid()
+
+
+def main():
     # TODO: this should be broken out into a function.
     from argparse import ArgumentParser
 
@@ -148,3 +200,6 @@ if __name__ == '__main__':
                      panchromatic=args.panchromatic,
                      device=args.device
                      )
+
+if __name__ == '__main__':
+    main()
