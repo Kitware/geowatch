@@ -304,8 +304,8 @@ class Trainer(object):
                         # figure.tight_layout()
                         
                         if config['visualization']['titles']:
-                            # ax1.set_title(f"Input Image", fontsize=config['visualization']['font_size'])
-                            # ax3.set_title(f"GT Mask overlaid", fontsize=config['visualization']['font_size'])
+                            ax1.set_title(f"Input Image", fontsize=config['visualization']['font_size'])
+                            ax2.set_title(f"GT Mask overlaid", fontsize=config['visualization']['font_size'])
                             # ax4.set_title(f"Prediction overlaid", fontsize=config['visualization']['font_size'])
                             # # ax5.set_title(f"output1_sample for class: {class_to_show} min: {output1_sample.min():0.2f}, max: {output1_sample.max():0.2f}", fontsize=config['visualization']['font_size'])
                             # ax10.set_title(f"GT Mask", fontsize=config['visualization']['font_size'])
@@ -522,7 +522,7 @@ class Trainer(object):
         cometml_experiemnt.log_metric("Validation Average Loss",total_loss/loader.__len__(),epoch=epoch+1)
         cometml_experiemnt.log_metric("Accuracy", mean_acc, epoch=epoch+1)
         
-        return total_loss/loader.__len__(), overall_miou
+        return total_loss/loader.__len__(), mean_acc
     
     def forward(self, cometml_experiment: object, world_size: int =8) -> tuple:
         """forward pass for all epochs
