@@ -66,6 +66,7 @@ class SUN_RGBD(pl.LightningDataModule):
         batch_size=4,
         num_workers=4,
         preprocessing_step=None,
+        tfms_train_channel_size=1000,
     ):
         super().__init__()
         
@@ -74,6 +75,15 @@ class SUN_RGBD(pl.LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.preprocessing_step = preprocessing_step
+        self.tfms_train_channel_size = tfms_train_channel_size
+
+        self.train_tfms = transforms.Compose([
+            self.preprocessing_step,
+            utils.DimensionDropout(0, self.tfms_train_channel_size),
+        ])
+        self.test_tfms = transforms.Compose([
+            self.preprocessing_step,
+        ])
         
     def setup(self, stage):
         
@@ -91,7 +101,7 @@ class SUN_RGBD(pl.LightningDataModule):
                 pathlib.Path(self.data_root), 
                 split="train",
                 augment_step=aug,
-                transform_step=self.preprocessing_step,
+                transform_step=self.train_tfms,
             )
 
             num_examples = len(train_val_ds)
@@ -108,7 +118,7 @@ class SUN_RGBD(pl.LightningDataModule):
             self.test_dataset = SUN_RGBD_Dataset(
                 pathlib.Path(self.data_root), 
                 split="test",
-                transform_step=self.preprocessing_step,
+                transform_step=self.test_tfms,
             )
 
     def train_dataloader(self):
@@ -145,4 +155,5 @@ class SUN_RGBD(pl.LightningDataModule):
         parser.add_argument("--valid_pct", default=0.1, type=float)
         parser.add_argument("--batch_size", default=4, type=int)
         parser.add_argument("--num_workers", default=4, type=int)
+        parser.add_argument("--tfms_train_channel_size", default=1000, type=int)
         return parent_parser

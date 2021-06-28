@@ -10,6 +10,22 @@ class Lambda(nn.Module):
 
     def forward(self, x):
         return self.lambda_(x)
+    
+
+class DimensionDropout(nn.Module):
+    def __init__(self, dim, n_keep):
+        super().__init__()
+        self.dim = dim
+        self.n_keep = n_keep
+        
+    def forward(self, x):
+        shape = x.shape
+        dim_size = shape[self.dim]
+        
+        index = [slice(0,None)] * len(shape)
+        index[self.dim] = torch.randperm(dim_size)[:self.n_keep]
+        
+        return x[index]
 
 
 class AddPositionalEncoding(nn.Module):
