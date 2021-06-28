@@ -124,8 +124,15 @@ mask_mapping = {0: "unknown",    # 0, unknown
                 6: "barren"}  # 255, barren land, mountain, rock, dessert
 
 possible_combinations = [list(i) for i in itertools.product([0, 1], repeat=len(mask_mapping.keys()))]
-possible_combinations = np.divide(possible_combinations, len(mask_mapping.keys()))
-# print(possible_combinations.shape)
+for index, item in enumerate(possible_combinations):
+    num_labels = len(np.argwhere(np.array(item)==1))
+    if num_labels==0:
+        continue
+    possible_combinations[index] = np.divide(possible_combinations[index], num_labels)
+
+# print(np.unique(possible_combinations, return_counts=True, axis=0))
+# possible_combinations = np.divide(possible_combinations, len(mask_mapping.keys()))
+# print(possible_combinations)
 verbose_labels = {}
 for index, item in enumerate(possible_combinations):
     verbose_label = ""

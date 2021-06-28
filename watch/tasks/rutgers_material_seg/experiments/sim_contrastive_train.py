@@ -22,6 +22,8 @@ import torch.nn.functional as F
 from scipy import ndimage
 from torch import nn
 from tqdm import tqdm
+import itertools
+from statistics import mean
 
 import watch.tasks.rutgers_material_seg.utils.utils as utils
 import watch.tasks.rutgers_material_seg.utils.eval_utils as eval_utils
@@ -45,8 +47,15 @@ mask_mapping = {0: "unknown",    # 0, unknown
                 6: "barren"}  # 255, barren land, mountain, rock, dessert
 
 possible_combinations = [list(i) for i in itertools.product([0, 1], repeat=len(mask_mapping.keys()))]
-possible_combinations = np.divide(possible_combinations, len(mask_mapping.keys()))
-# print(possible_combinations.shape)
+for index, item in enumerate(possible_combinations):
+    num_labels = len(np.argwhere(np.array(item)==1))
+    if num_labels==0:
+        continue
+    possible_combinations[index] = np.divide(possible_combinations[index], num_labels)
+
+# print(np.unique(possible_combinations, return_counts=True, axis=0))
+# possible_combinations = np.divide(possible_combinations, len(mask_mapping.keys()))
+# print(possible_combinations)
 verbose_labels = {}
 for index, item in enumerate(possible_combinations):
     verbose_label = ""
@@ -54,6 +63,22 @@ for index, item in enumerate(possible_combinations):
         if label!=0:
             verbose_label += f"{mask_mapping[label_index]}: {label}, "
     verbose_labels[index]=verbose_label
+
+def accuracy(output, target, topk=(1,)):
+    """Computes the accuracy over the k top predictions for the specified values of k"""
+    with torch.no_grad():
+        maxk = max(topk)
+        batch_size = target.size(0)
+
+        _, pred = output.topk(maxk, 1, True, True)
+        pred = pred.t()
+        correct = pred.eq(target.view(1, -1).expand_as(pred))
+
+        res = []
+        for k in topk:
+            correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
+            res.append(correct_k.mul_(100.0 / batch_size))
+        return res, pred[0]
 
 class Trainer(object):
     def __init__(self, model: object, train_loader: torch.utils.data.DataLoader, 
@@ -145,6 +170,7 @@ class Trainer(object):
         total_loss = 0 
         total_loss_seg = 0
         preds, targets = [], []
+        accuracies = []
         self.model.train()
         print(f"starting epoch {epoch}")
         loader_size = len(self.train_loader)
@@ -180,6 +206,8 @@ class Trainer(object):
             mask = mask.to(device)
             
             output1 = self.model(images) # torch.Size([B, C+1, H, W])
+            
+            
             # print(output1.shape)
             f1, f2 = torch.split(output1, [bs//2, bs//2], dim=0)
             features = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
@@ -187,6 +215,12 @@ class Trainer(object):
             # print(features.shape)
             loss = self.criterion(features, labels=labels)
 
+            labels = torch.cat([labels, labels],dim=0)
+            acc1, preds = accuracy(output1, labels, topk=(1,))
+            # print(preds[0])
+            verbose_preds = [verbose_labels[pred.item()] for pred in preds]
+            batch_verboe_labels = [verbose_labels[label.item()] for label in labels]
+            # print(batch_verboe_labels)
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
@@ -195,19 +229,20 @@ class Trainer(object):
             masks = F.softmax(output1, dim=1)#.detach()
             # masks = F.interpolate(masks, size=mask.size()[-2:], mode="bilinear", align_corners=True)
             # masks = self.high_confidence_filter(masks, cutoff_top=config['high_confidence_threshold']['train_cutoff'])
-            print(masks.shape)
             pred = masks.max(1)[1].cpu().detach()#.numpy()
 
             total_loss += loss.item()
             # preds.append(pred)
             # targets.append(mask.cpu())#.numpy())
+            accuracies += acc1
+            # print(accuracies)
             
             if config['visualization']['train_visualizer'] :
                 if (epoch) % config['visualization']['visualize_training_every'] == 0:
                     if (batch_index % iter_visualization) == 0:
                         figure = plt.figure(figsize=(config['visualization']['fig_size'],config['visualization']['fig_size']))
-                        ax1 = figure.add_subplot(1,1,1)
-                        # ax2 = figure.add_subplot(4,3,2)
+                        ax1 = figure.add_subplot(1,2,1)
+                        ax2 = figure.add_subplot(1,2,2)
                         # ax3 = figure.add_subplot(4,3,3)
                         # ax4 = figure.add_subplot(4,3,4)
                         # ax5 = figure.add_subplot(4,3,5)
@@ -226,7 +261,7 @@ class Trainer(object):
                         # print(f"min: {image_show.min()}, max: {image_show.max()}")
                         # image_show = np.transpose(outputs['visuals']['image'][batch_index_to_show,:,:,:].numpy(),(1,2,0))
                         # logits_show = masks.max(1)[1].cpu().detach().numpy()[batch_index_to_show,:,:]
-                        # gt_mask_show = mask.cpu().detach()[batch_index_to_show,:,:].numpy().squeeze()
+                        gt_mask_show = mask.cpu().detach()[batch_index_to_show,:,:].numpy().squeeze()
                         # output1_sample = masks[batch_index_to_show,class_to_show,:,:].cpu().detach().numpy().squeeze()
                         # gt_mask_show[gt_mask_show==-1] = 0
                         # image_show = image_show[:original_width, :original_height,:]
@@ -235,14 +270,14 @@ class Trainer(object):
                         # output1_sample = output1_sample[:original_width, :original_height]
                         
                         # logits_show[logits_show==-1]=0
-                        # gt_mask_show_no_bg = np.ma.masked_where(gt_mask_show==0,gt_mask_show)
+                        gt_mask_show_no_bg = np.ma.masked_where(gt_mask_show==0,gt_mask_show)
                         # logits_show_no_bg = np.ma.masked_where(logits_show==0,logits_show)
 
                         # classes_in_gt = np.unique(gt_mask_show)
                         ax1.imshow(image_show)
 
-                        # ax3.imshow(image_show)
-                        # ax3.imshow(gt_mask_show_no_bg, cmap=self.cmap, vmin=0, vmax=self.max_label)#, alpha=alphas_final_gt)
+                        ax2.imshow(image_show)
+                        ax2.imshow(gt_mask_show_no_bg, cmap=self.cmap, vmin=0, vmax=self.max_label)#, alpha=alphas_final_gt)
 
                         # ax4.imshow(image_show)
                         # ax4.imshow(logits_show, cmap=self.cmap, vmin=0, vmax=self.max_label)#, alpha=alphas_final_gt)
@@ -266,7 +301,7 @@ class Trainer(object):
                         # ax10.axis('off')
                         # ax11.axis('off')
                         # ax12.axis('off')
-                        figure.tight_layout()
+                        # figure.tight_layout()
                         
                         if config['visualization']['titles']:
                             # ax1.set_title(f"Input Image", fontsize=config['visualization']['font_size'])
@@ -275,10 +310,10 @@ class Trainer(object):
                             # # ax5.set_title(f"output1_sample for class: {class_to_show} min: {output1_sample.min():0.2f}, max: {output1_sample.max():0.2f}", fontsize=config['visualization']['font_size'])
                             # ax10.set_title(f"GT Mask", fontsize=config['visualization']['font_size'])
                             # ax11.set_title(f"Prediction", fontsize=config['visualization']['font_size'])
-                            figure.suptitle(f"GT labels for classification: {classes_in_gt}, \nunique in predictions: {np.unique(logits_show)}", fontsize=config['visualization']['font_size'])
+                            figure.suptitle(f"Pred: {verbose_preds[batch_index_to_show]}\nGT label: {batch_verboe_labels[batch_index_to_show]}", fontsize=config['visualization']['font_size'])
                             
                         # cometml_experiemnt.log_figure(figure_name=f"Training, image name: {image_name}, epoch: {epoch}, classes in gt: {classes_in_gt}, classifier predictions: {labels_predicted_indices}",figure=figure)
-                        cometml_experiemnt.log_figure(figure_name=f"Training, image name: {image_name}",figure=figure)
+                        cometml_experiemnt.log_figure(figure_name=f"Training, image name",figure=figure)
 
                         if config['visualization']['train_imshow']:
                             plt.show()
@@ -296,11 +331,14 @@ class Trainer(object):
 
         ### define new distance map confidence score nomalization
 
-        mean_iou, precision, recall = eval_utils.compute_jaccard(preds, targets, num_classes=config['data']['num_classes'])
-        overall_miou = sum(mean_iou)/len(mean_iou)
-        print(f"Training class-wise mIoU value: \n{np.array(mean_iou)} \noverall mIoU: {overall_miou}")
+        # mean_iou, precision, recall = eval_utils.compute_jaccard(preds, targets, num_classes=config['data']['num_classes'])
+        # overall_miou = sum(mean_iou)/len(mean_iou)
+        # print(f"Training class-wise mIoU value: \n{np.array(mean_iou)} \noverall mIoU: {overall_miou}")
+        # print(accuracies)
+        mean_acc = torch.mean(torch.stack(accuracies))
         cometml_experiemnt.log_metric("Training Loss", total_loss, epoch=epoch+1)
         cometml_experiemnt.log_metric("Segmentation Loss", total_loss_seg, epoch=epoch+1)
+        cometml_experiemnt.log_metric("Accuracy", mean_acc, epoch=epoch+1)
         # cometml_experiemnt.log_metric("Training mIoU", overall_miou, epoch=epoch+1)
 
         print("Training Epoch {0:2d} average loss: {1:1.2f}".format(epoch+1, total_loss/self.train_loader.__len__()))
@@ -573,12 +611,19 @@ if __name__== "__main__":
     # dataset = SequenceDataset(sampler, window_dims, input_dims, channels)
     # print(dataset.__len__())
     # train_dataloader = dataset.make_loader(batch_size=config['training']['batch_size'])
+    # transformers = {}
+    # transformers['image'] = transforms.Compose([transforms.Resize((height, width)),
+    #                                 # transforms.ColorJitter(),
+    #                                 transforms.ToTensor(),
+    #                                 transforms.Normalize(([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]))])
+    
     
     train_dataloader = build_dataset(dataset_name="deepglobe",
                                      root="/media/native/data/data/DeepGlobe/crops/", 
                                      batch_size=config['training']['batch_size'],
                                      num_workers=1,
                                      split="train",
+                                    #  transforms=transformers,
                                      image_size="300x300",
                                      )
     

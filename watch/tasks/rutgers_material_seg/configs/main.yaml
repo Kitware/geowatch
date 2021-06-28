@@ -8,7 +8,7 @@ visualization:
   val_visualizer: True
   visualize_training_every: 2
   visualize_val_every: 2
-  train_visualization_divisor: 78
+  train_visualization_divisor: 2000
   val_visualization_divisor: 10
   save_individual_plots: False
   save_individual_plots_train: False
@@ -18,7 +18,7 @@ visualization:
   fg_alpha: 0.7
   bg_alpha: 0.8
   font_size: 8
-  fig_size: 15
+  fig_size: 8
 
 cometml:
   api_key: 9GTK1r9PK4NzMAoLsnC6XxI7p
