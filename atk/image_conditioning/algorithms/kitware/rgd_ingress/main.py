@@ -41,7 +41,8 @@ class Main(Algorithm):
                     client.search(**kwargs, instrumentation='S2B'))
         query_l7 = client.search(**kwargs, instrumentation='ETM')
         query_l8 = client.search(**kwargs, instrumentation='OLI_TIRS')
-        os.makedirs(params['output_dir'], exist_ok=True)
+        if not params['dry_run']:
+            os.makedirs(params['output_dir'], exist_ok=True)
         catalog = pystac.Catalog('RGD ingress catalog', 
                                  'STAC catalog of RGD search results', 
                                  href=os.path.join(params['output_dir'], 'catalog.json'))

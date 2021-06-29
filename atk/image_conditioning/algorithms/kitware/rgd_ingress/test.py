@@ -5,13 +5,14 @@ from .main import Main
 import os
 import json
 import pystac
+import tempfile
 
 
 class MainTestCase(AlgorithmTestCase):
 
     def runTest(self):
         # configure params for your algorithm
-        output_dir = '/output/directory'
+        output_dir = tempfile.TemporaryDirectory().name
         dry_run = 1
         self.params = {'username':os.environ['WATCH_RGD_USER'],
                        'password':os.environ['WATCH_RGD_PW'],
