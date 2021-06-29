@@ -279,29 +279,8 @@ class Trainer(object):
                         ax2.imshow(image_show)
                         ax2.imshow(gt_mask_show_no_bg, cmap=self.cmap, vmin=0, vmax=self.max_label)#, alpha=alphas_final_gt)
 
-                        # ax4.imshow(image_show)
-                        # ax4.imshow(logits_show, cmap=self.cmap, vmin=0, vmax=self.max_label)#, alpha=alphas_final_gt)
-                        
-                        # # ax5.imshow(output1_sample, cmap=cmap_gradients)
-                        
-                        # ax10.imshow(gt_mask_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
-
-                        # # ax4.imshow(transformed_image_show)
-                        # ax11.imshow(logits_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
-
                         ax1.axis('off')
                         ax2.axis('off')
-                        # ax3.axis('off')
-                        # ax4.axis('off')
-                        # ax5.axis('off')
-                        # ax6.axis('off')
-                        # ax7.axis('off')
-                        # ax8.axis('off')
-                        # ax9.axis('off')
-                        # ax10.axis('off')
-                        # ax11.axis('off')
-                        # ax12.axis('off')
-                        # figure.tight_layout()
                         
                         if config['visualization']['titles']:
                             ax1.set_title(f"Input Image", fontsize=config['visualization']['font_size'])

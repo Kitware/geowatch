@@ -1,3 +1,11 @@
+    """This method uses K-Means clusters as region proposals, 
+        which this tool allows you to label. Note that this tool:
+            - Does not have "free brush" tool. It can only label clusters.
+            - The processing time of each region proposal depends on the 
+                number of clusters, timesteps, and channels. It may take
+                up to 2 minutes with some configurations.
+    """
+
 import sys
 from PyQt5.QtGui import QPixmap, QImage
 from PyQt5.QtWidgets import (QApplication, QWidget, QPushButton, QSizePolicy, 
@@ -34,6 +42,21 @@ from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceData
 
 class Window(QMainWindow):
     def __init__(self, dataset, dset, resume='', save_path='', k=255):
+        """Main interactive window
+
+        Parameters
+        ----------
+        dataset : kwcoco
+            KWCOCO dataset to use (with sampler)
+        dset : kwcoco
+            KWCOCO dataset to use (before sampler)
+        resume : str, optional
+            path to dataset to continue annotating, by default ''
+        save_path : str, optional
+            where to save the newly annotated dataset, by default ''
+        k : int, optional
+            number of clusters for K-Means algorithm, by default 255
+        """
         super().__init__()
         self.image_counter = 0
         self.dataset = dataset
@@ -48,18 +71,13 @@ class Window(QMainWindow):
         if len(resume)>1:
             self.material_dset = kwcoco.CocoDataset(resume)
             self.image_counter = int(len(list(self.material_dset.index.imgs.keys()))/self.timesteps) + 1
-            # print(self.image_counter)
         else:
             self.material_dset = kwcoco.CocoDataset()
             for key, value in self.class_label_to_index.items():
                 if key !=0:
                     self.material_dset.add_category(name=key, id=value)
         
-
-        # print(self.dataset[self.image_counter]['inputs']['im'].data.shape)
-        # self.data_dims = self.dataset[self.image_counter]['tr'].data['space_dims']
         self.width, self.height = self.dataset[self.image_counter]['tr'].data['space_dims']
-        # print(self.dataset[self.image_counter]['tr'].data['space_dims'])
 
         self.scale_factor = 1
         self.scaled_height, self.scaled_width = int(self.height*self.scale_factor), int(self.width*self.scale_factor)
@@ -69,7 +87,6 @@ class Window(QMainWindow):
         self.widget.keyPressEvent = self.keyPressEvent
         self.load_images(index=self.image_counter)
         
-        # print(f"height: {self.height}, width: {self.width}")
         self.label_img = QLabel(self.widget)
         self.image = QPixmap(self.qImg)
         self.label_img.setPixmap(self.image)
@@ -140,11 +157,6 @@ class Window(QMainWindow):
         self.gotoimage_label.addItems([str(x) for x in range(self.dataset.__len__())])
         self.gotoimage_label.move(1200,20)
         self.gotoimage_label.currentIndexChanged.connect(self.go_to_image)
-        
-        # self.save_images = QPushButton(self.widget)
-        # self.save_images.setText("Update Material Dataset")
-        # self.save_images.move(1200,20)
-        # self.save_images.clicked.connect(self.save_images_clicked)
 
         self.label_mask_title = QLabel(self.widget)
         self.label_mask_title.setText("Intermediate Mask")
@@ -174,6 +186,8 @@ class Window(QMainWindow):
         self.widget.show()
         
     def change_inter_batch_image(self):
+        """view a different image within the batch
+        """
         image_data = self.dataset[self.image_counter]['inputs']['im'].data # [b,c,t,h,w]
         image_data = image_data[:3,:, :self.width, :self.height]#.copy()
         c, t, h, w = image_data.shape
@@ -192,6 +206,8 @@ class Window(QMainWindow):
         # self.label_img.setGeometry(20,128,self.scaled_height, self.scaled_width)
     
     def increase_images_size(self):
+        """enlarge size of displayed image and clusters
+        """
         self.scale_factor += 0.25
         self.scaled_height, self.scaled_width = int(self.scale_factor*self.height), int(self.scale_factor*self.width)
         
@@ -208,6 +224,8 @@ class Window(QMainWindow):
         self.label_mask.setGeometry(3*self.scaled_width,128, self.scaled_height, self.scaled_width)
     
     def decrease_images_size(self):
+        """reduce size of displayed image and clusters
+        """
         self.scale_factor -= 0.25
         self.scaled_height, self.scaled_width = int(self.scale_factor*self.height), int(self.scale_factor*self.width)
         
@@ -224,10 +242,15 @@ class Window(QMainWindow):
         self.label_mask.setGeometry(3*self.scaled_width,128, self.scaled_height, self.scaled_width)
     
     def keyPressEvent(self, event):
-        # if event.key() == Qt.Key_Space:
+        """allow change class to label with key press
+
+        Parameters
+        ----------
+        event : int
+            key press code
+        """
         
         keys_to_class_dict = {48:"Nothing",49:"Concrete", 50:"Vegetation", 51:"Soil", 52:"Water"}
-        # print(event.key())
         if event.key() in keys_to_class_dict.keys():
             self.class_label_with = keys_to_class_dict[event.key()]
             self.class_label.setCurrentText(keys_to_class_dict[event.key()])
@@ -239,6 +262,8 @@ class Window(QMainWindow):
         plt.show()
         
     def finalize_mask(self):
+        """Process current mask and add it to kwcoco dataset.
+        """
         gids = self.dataset[self.image_counter]['tr'].data['gids']
         # widths_list = [x['width'] for x in self.dset.index.imgs[gids[0]]['auxiliary']]
         # max_dim_index = widths_list.index(max(widths_list))
@@ -249,14 +274,9 @@ class Window(QMainWindow):
         # type="polygon"
         for i in range(1,len(list(self.class_label_to_index.keys()))):
             if len(np.unique(self.separable_current_mask[i,:,:])) > 1:
-                # print(f"separable current mask: {self.separable_current_mask[i,:,:].shape}")
-                # print(f"original shape: {self.dataset[self.image_counter]['tr'].data['space_dims']}")
-                # print(f"current mask: {self.current_mask.shape}")
-                # print(f"scaled height: {self.scaled_height}, scaled width: {self.scaled_width}")
                 
                 binary_mask = self.separable_current_mask[i,:,:]
                 binary_mask = kwimage.Mask(binary_mask, format='c_mask')
-                # print(binary_mask)
                 # binary_coco = binary_polygon.to_coco(style='new')
                 # binary_segmentation = kwimage.Segmentation.coerce(binary_polygon)#.to_coco(style="new")
                 for gid in gids:
@@ -283,15 +303,15 @@ class Window(QMainWindow):
         self.material_dset.dump(self.save_path, newlines=True)
         
     def class_label_selection(self):
+        """Select class to label.
+        """
         self.class_label_with = self.class_label.currentText()
     
     def textchanged(self, text):
-        # if text in self.output_textbox:
-        # self.output_textbox.remove(text)
+        """Remove a cluster
+        """
         num, ok = QInputDialog.getInt(self,"Select a cluster to remove", "enter a number")
-        # print(ok)
         if ok and num:
-            # self.remove_cluster.setText(str(num))
             if num in self.seen_labels:
                 xs, ys = np.where(self.prediction_show==num)
                 self.current_mask[xs,ys] = 0
@@ -299,7 +319,6 @@ class Window(QMainWindow):
                 self.seen_labels.remove(num)
     
     def getImagePixel(self, event):
-        # self.widget.keyPressEvent = self.keyPressEvent
         x = int(event.pos().x()//self.scale_factor)
         y = int(event.pos().y()//self.scale_factor)
         self.value = self.prediction_show[y,x]
@@ -309,7 +328,6 @@ class Window(QMainWindow):
         self.separable_current_mask[self.class_label_to_index[self.class_label_with],xs,ys] = 1 ## need to account for removed pixels!
         
         non_label_indices = np.array(list(set(list(self.class_label_to_index.values()))-set([self.class_label_to_index[self.class_label_with]])))
-        # self.separable_current_mask[non_label_indices,xs,ys] = 0 ## only keep latest label - this does not work for some reason!
         for label_index in non_label_indices:
             self.separable_current_mask[label_index,xs,ys] = 0
         
@@ -320,17 +338,14 @@ class Window(QMainWindow):
         self.output_textbox_name.append(str(self.class_label_with))
             
     def getMaskPixel(self, event):
-        # self.widget.keyPressEvent = self.keyPressEvent
         x = int(event.pos().x()//self.scale_factor)
         y = int(event.pos().y()//self.scale_factor)
         self.value = self.prediction_show[y,x]
         xs, ys = np.where(self.prediction_show==self.value)
         
-        # print(self.value)
         self.current_mask[xs,ys] = self.class_label_to_index[self.class_label_with]
         self.separable_current_mask[self.class_label_to_index[self.class_label_with],xs,ys] = 1
         non_label_indices = np.array(list(set(list(self.class_label_to_index.values()))-set([self.class_label_to_index[self.class_label_with]])))
-        # self.separable_current_mask[non_label_indices,xs,ys] = 0 ## only keep latest label - this does not work for some reason!
         for label_index in non_label_indices:
             self.separable_current_mask[label_index,xs,ys] = 0
         
@@ -339,13 +354,9 @@ class Window(QMainWindow):
         self.seen_labels.append(self.value)
         self.output_textbox.append(str(self.value))   
         self.output_textbox_name.append(str(self.class_label_with))
-        # print(self.class_labels_pairs)
     
     def update_mask(self):
-        # plt.imshow(self.current_mask)
-        # plt.show()
         self.current_mask_cmap = (self.current_mask*20).astype(np.uint8)
-        # print(self.current_mask_cmap)
         self.current_mask_cmap = cv2.applyColorMap(self.current_mask_cmap, cmapy.cmap('viridis'))     
         self.qmask = qimage2ndarray.array2qimage(self.current_mask_cmap).scaled(self.height, self.width)
         self.mask = QPixmap(self.qmask)#.scaled(256,256)
@@ -359,13 +370,11 @@ class Window(QMainWindow):
         plt.close()
         self.finalize_mask()
         self.class_labels_all.append(self.class_labels_pairs)
-        # print(self.class_labels_all)
         self.class_labels_pairs = {}
         self.seen_labels = []
         self.output_textbox.clear()
         self.output_textbox_name.clear()
         self.image_counter = int(self.gotoimage_label.currentText())
-        # print(f"current iteration: {self.image_counter}")
         self.label_img_title.setText(f"Image {self.image_counter}")
         self.width, self.height = self.dataset[self.image_counter]['tr'].data['space_dims']
         self.scale_factor = 1
