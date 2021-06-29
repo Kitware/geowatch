@@ -24,7 +24,8 @@ from torch import nn
 from tqdm import tqdm
 import itertools
 from statistics import mean
-
+from scipy.spatial import distance
+from torchvision import transforms
 import watch.tasks.rutgers_material_seg.utils.utils as utils
 import watch.tasks.rutgers_material_seg.utils.eval_utils as eval_utils
 import watch.tasks.rutgers_material_seg.utils.visualization as visualization
@@ -110,14 +111,16 @@ class Trainer(object):
         self.criterion = SupConLoss()
         self.max_label = config['data']['num_classes']
         
+        self.train_second_transform = transforms.Compose([
+                                                            transforms.RandomHorizontalFlip(),
+                                                            transforms.ColorJitter(0.4, 0.4, 0.4, 0.1),
+                                                            transforms.RandomGrayscale(p=0.2),
+                                                            # transforms.ToTensor(),
+                                                        ])
+        
         if test_loader is not None:
             self.test_loader = test_loader
             self.test_with_full_supervision = test_with_full_supervision
-        
-        # self.cmap = visualization.rand_cmap(nlabels=self.max_label+1, type='bright', 
-        #                                     first_color_black=True, last_color_black=True, 
-        #                                     bg_alpha=config['visualization']['bg_alpha'],
-        #                                     fg_alpha=config['visualization']['fg_alpha'])
         
         self.cmap = visualization.n_distinguishable_colors(nlabels=self.max_label,
                                                            first_color_black=True, last_color_black=True, 
@@ -170,7 +173,7 @@ class Trainer(object):
         total_loss = 0 
         total_loss_seg = 0
         preds, targets = [], []
-        accuracies = []
+        accuracies, distances_to_gt_dist = [], []
         self.model.train()
         print(f"starting epoch {epoch}")
         loader_size = len(self.train_loader)
@@ -196,7 +199,7 @@ class Trainer(object):
             mask = mask.long().squeeze(1)
 
             image1 = image1.squeeze(2)
-            images = torch.cat([image1, image1], dim=0)
+            images = torch.cat([image1, self.train_second_transform(image1)], dim=0)
             bs, c, h, w = images.shape
             # labels = torch.Tensor([1 for x in range(bs)])
             # print(images.shape)
@@ -220,7 +223,20 @@ class Trainer(object):
             # print(preds[0])
             verbose_preds = [verbose_labels[pred.item()] for pred in preds]
             batch_verboe_labels = [verbose_labels[label.item()] for label in labels]
-            # print(batch_verboe_labels)
+
+            dist_preds = [possible_combinations[pred.item()] for pred in preds]
+            dist_labels = [possible_combinations[label.item()] for label in labels]
+            
+            distances = distance.cdist(dist_preds, dist_labels)
+            diagonal = np.diagonal(distances)
+            batch_mean_distance_to_gt = np.mean(diagonal)
+            # distances_to_gt_dist += list(diagonal)
+            # print(f"dist_preds: {dist_preds}")
+            # print(f"dist_labels: {dist_labels}")
+            # print(f"distances: {distances}")
+            # print(f"diagonal: {diagonal}")
+            cometml_experiemnt.log_metric("Training Mean Distance to GT", batch_mean_distance_to_gt, epoch=epoch+1)
+            
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
@@ -380,22 +396,19 @@ class Trainer(object):
                 batch_verboe_labels = [verbose_labels[label.item()] for label in labels]
                 accuracies += acc1
                 
+                dist_preds = [possible_combinations[pred.item()] for pred in preds]
+                dist_labels = [possible_combinations[label.item()] for label in labels]
+            
+                distances = distance.cdist(dist_preds, dist_labels)
+                diagonal = np.diagonal(distances)
+                batch_mean_distance_to_gt = np.mean(diagonal)
+
+                cometml_experiemnt.log_metric("Validation Mean Distance to GT", batch_mean_distance_to_gt, epoch=epoch+1)
+                
                 masks = F.softmax(output, dim=1) ## (B, 22, 300, 300)
                 # masks = F.interpolate(masks, size=mask.size()[-2:], mode="bilinear", align_corners=True)
                 # masks = self.high_confidence_filter(masks, cutoff_top=config['high_confidence_threshold']['val_cutoff'])
                 pred = masks.max(1)[1].cpu().detach()#.numpy()
-                # print(f"uniques in pred: {torch.unique(pred, return_counts=True)}")
-                # pred[pred==self.max_label] = 0
-                # print(f"pred before: {pred.shape}")
-                # print(f"mask before: {mask.shape}")
-                # pred = pred[:,:original_width, :original_height]
-                # mask = mask[:,:original_width, :original_height]
-                # print(f"pred after: {pred.shape}")
-                # print(f"mask after: {mask.shape}")
-                
-                # preds.append(pred)
-                # mask[mask==-1]=0
-                # targets.append(mask.cpu())#.numpy())
 
                 if self.use_crf:
                     crf_probs = utils.batch_crf_inference(image_raw.detach().cpu(), 

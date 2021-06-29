@@ -28,8 +28,8 @@ training:
   pretrained: False
   distributed: False
   learning_rate: 0.0001 # best: 0.00007
-  # resume: /home/native/projects/data/watch_material_seg/models/material_seg_deepglobe/projects_material_seg_2021-05-24-13:35/material_seg_epoch_45_loss_3.553624237035688_valmIoU_0.5732883343458904_time_2021-05-25-08:23:57.pth
-  resume: False
+  resume: /home/native/projects/data/watch_material_seg/models/experiments_deepglobe/tasks_experiments_2021-06-28-12:23/experiments_epoch_48_loss_0.5978398986210951_valmIoU_0.007405213546007872_time_2021-06-29-09:28:38.pth
+  # resume: False
   train_val_test_split: [0.95, 0.02, 0.03]
   epochs: 200
   batch_size: 2
