@@ -20,6 +20,7 @@ class OneraUnetTrainConfig(scfg.Config):
         'train_dataset': scfg.Path(None, help='path to train kwcoco file'),
         'workdir': scfg.Path('_trained_models/onera/unet/', help=ub.paragraph(
             '''
+            Directory where training data can be written
             '''))
     }
 
