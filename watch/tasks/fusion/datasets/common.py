@@ -35,6 +35,11 @@ class AddPositionalEncoding(nn.Module):
 
 
 class VideoDataset(data.Dataset):
+    """
+    Example:
+        import ndsampler
+
+    """
     # TODO: add torchvision.transforms or albumentations
     def __init__(self, sampler, sample_shape, channels=None, mode="fit", window_overlap=0, transform=None):
         self.sampler = sampler

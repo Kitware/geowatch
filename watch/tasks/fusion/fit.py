@@ -1,8 +1,8 @@
 import pytorch_lightning as pl
 
-from . import datasets
-from . import methods
-from . import utils
+from watch.tasks.fusion import datasets
+from watch.tasks.fusion import methods
+from watch.tasks.fusion import utils
 
 
 def main(args):
