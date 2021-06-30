@@ -19,6 +19,21 @@
             "parameter_choices": "",
             "required": false,
             "sort_order": 5
+        },
+        {
+            "custom_validation": "",
+            "data_type": "integer",
+            "default_value": 0,
+            "description": "Return KWCOCO of RGD search results",
+            "display_name": "KWCOCO",
+            "field_type": "number",
+            "help_text": "If set to 1, return a KWCOCO file of the search results",
+            "max_value": 1,
+            "min_value": 0,
+            "name": "kwcoco",
+            "parameter_choices": "",
+            "required": false,
+            "sort_order": 6
         }
     ],
     "outputs": [
@@ -35,6 +50,13 @@
             "display_name": "STAC Catalog",
             "name": "stac_catalog",
             "sort_order": 1
+        },
+        {
+            "data_type": "string",
+            "description": "KWCOCO of RGD search results as JSON string",
+            "display_name": "KWCOCO Output",
+            "name": "kwcoco_output",
+            "sort_order": 2
         }
     ],
     "private": false,
