@@ -9,7 +9,7 @@ Notes:
 
     # https://data.kitware.com/#collection/602457272fa25629b95d1718/folder/602c3e9e2fa25629b97e5b5e
 
-    python ~/code/watch/scripts/coco_align_geotiffs.py \
+    python -m watch.scripts.coco_align_geotiffs \
             --src ~/data/dvc-repos/smart_watch_dvc/drop0/drop0.kwcoco.json \
             --dst ~/data/dvc-repos/smart_watch_dvc/drop0_aligned_v2 \
             --context_factor=1.5
@@ -27,13 +27,13 @@ Notes:
     cd $HOME/data/dvc-repos/smart_watch_dvc/
     girder-client --api-url https://data.kitware.com/api/v1 upload 602c3e9e2fa25629b97e5b5e drop0_aligned_v2_$stamp.zip
 
-    python ~/code/watch/scripts/coco_align_geotiffs.py \
+    python -m watch.scripts.coco_align_geotiffs \
             --src ~/data/dvc-repos/smart_watch_dvc/drop0/drop0-msi.kwcoco.json \
             --dst ~/data/dvc-repos/smart_watch_dvc/drop0_aligned_msi \
             --context_factor=1.5
 
 
-    python ~/code/watch/scripts/coco_align_geotiffs.py \
+    python -m watch.scripts.coco_align_geotiffs \
             --src ~/data/dvc-repos/smart_watch_dvc/drop0/drop0-msi.kwcoco.json \
             --dst ~/data/dvc-repos/smart_watch_dvc/drop0_aligned_msi_big \
             --context_factor=3.5
@@ -50,7 +50,7 @@ Test:
 
     kwcoco subset ~/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-WV/data.kwcoco.json --gids=1129,1130 --dst ~/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-WV/subtmp.kwcoco.json
 
-    python ~/code/watch/scripts/coco_align_geotiffs.py \
+    python -m watch.scripts.coco_align_geotiffs \
             --src ~/remote/namek/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-WV/subtmp.kwcoco.json \
             --dst ~/remote/namek/data/dvc-repos/smart_watch_dvc/drop0_aligned_WV_Fix \
             --rpc_align_method pixel_crop \
@@ -139,9 +139,7 @@ def main(**kw):
     See :class:``CocoAlignGeotiffConfig` for details
 
     Ignore:
-        import sys, ubelt
-        sys.path.append(ubelt.expandpath('~/code/watch/scripts'))
-        from coco_align_geotiffs import *  # NOQA
+        from watch.scripts.coco_align_geotiffs import *  # NOQA
         import kwcoco
         src = ub.expandpath('~/data/dvc-repos/smart_watch_dvc/drop0/drop0.kwcoco.json')
         dst = ub.expandpath('~/data/dvc-repos/smart_watch_dvc/drop0_aligned')
@@ -1078,6 +1076,9 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
                 -t_srs epsg:4326
                 -rpc -et 0
                 -to RPC_DEM={dem_fpath}
+                -co TILED=YES
+                -co BLOCKXSIZE=256
+                -co BLOCKYSIZE=256
                 -overwrite
                 {SRC} {DST}
                 ''')
@@ -1090,6 +1091,9 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
                 -te_srs epsg:4326
                 -t_srs epsg:4326
                 -rpc -et 0
+                -co TILED=YES
+                -co BLOCKXSIZE=256
+                -co BLOCKYSIZE=256
                 -overwrite
                 {SRC} {DST}
                 ''')
@@ -1109,6 +1113,9 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
             '-te {xmin} {ymin} {xmax} {ymax} '
             '-te_srs epsg:4326 '
             '-overwrite '
+            '-co TILED=YES '
+            '-co BLOCKXSIZE=256 '
+            '-co BLOCKYSIZE=256 '
             '{SRC} {DST}')
         command = template.format(
             ymin=latmin,
@@ -1127,6 +1134,6 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/scripts/coco_align_geotiffs.py --help
+        python -m watch.scripts.coco_align_geotiffs --help
     """
     main()
