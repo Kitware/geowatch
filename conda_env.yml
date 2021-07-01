@@ -63,7 +63,7 @@ dependencies:
     - geopandas >= 0.8.1
     - pyproj >= 3.0.0.post1
     - rasterio >= 1.2.0
-    - rgdc >= 0.1.1
+    - rgd-client >= 0.2.2
     - utm >= 0.7.0
     - fels >= 1.4.0
 
