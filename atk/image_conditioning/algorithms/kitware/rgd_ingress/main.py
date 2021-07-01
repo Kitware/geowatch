@@ -2,7 +2,7 @@ from algorithm_toolkit import Algorithm, AlgorithmChain
 import os
 import json
 from datetime import datetime, timedelta
-from rgdc import Rgdc
+from rgd_client import Rgdc
 import pystac
 import requests
 
@@ -34,7 +34,6 @@ class Main(Algorithm):
         kwargs = {
             'query': json.dumps(geojson_bbox),
             'predicate': 'intersects',
-            'datatype': 'raster',
             'acquired': (dt_min, dt_max)
         }
         query_s2 = (client.search(**kwargs, instrumentation='S2A') +
@@ -53,7 +52,7 @@ class Main(Algorithm):
                                                params['output_dir'], 
                                                nest_with_name=True, 
                                                keep_existing=True)
-            stac_item = requests.get(search_result['detail'] + '/stac').json()
+            stac_item = client.get_raster(search_result, stac=True)
             stac_item['id'] = search_result['subentry_name']
             item = pystac.Item.from_dict(stac_item)
             item.set_self_href(os.path.join(params['output_dir'], 
