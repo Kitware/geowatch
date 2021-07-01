@@ -127,7 +127,6 @@ def try_rgdc(geojson_bbox, dt_min, dt_max, out_dpath=None, username=None,
     kwargs = {
         'query': json.dumps(geojson_bbox),
         'predicate': 'intersects',
-        'datatype': 'raster',
         'acquired': (dt_min, dt_max),
         #'limit': int(1e3)
     }

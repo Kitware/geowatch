@@ -56,7 +56,6 @@ def main():
     kwargs = {
         'query': json.dumps(geojson_bbox),
         'predicate': 'intersects',
-        'datatype': 'raster',
         'acquired': (dt_min, dt_max)
     }
 
