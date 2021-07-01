@@ -4,8 +4,8 @@ import pytorch_lightning as pl
 from torchvision import transforms
 from torch.utils import data
 import pathlib
-from . import common
-from .. import utils
+from watch.tasks.fusion.datasets import common
+from watch.tasks.fusion import utils
 
 
 class OneraCD_2018(pl.LightningDataModule):
