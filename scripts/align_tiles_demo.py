@@ -25,7 +25,7 @@ import shapely.geometry
 
 from watch.utils import util_raster, util_norm, util_rgdc
 
-from rgdc import Rgdc
+from rgd_client import Rgdc
 
 
 def main():
