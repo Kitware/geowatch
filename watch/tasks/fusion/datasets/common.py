@@ -37,8 +37,37 @@ class AddPositionalEncoding(nn.Module):
 class VideoDataset(data.Dataset):
     """
     Example:
-        import ndsampler
-
+        >>> from watch.tasks.fusion.datasets.common import *  # NOQA
+        >>> import ndsampler
+        >>> import kwcoco
+        >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
+        >>> coco_dset.ensure_category('background')
+        >>> sampler = ndsampler.CocoSampler(coco_dset)
+        >>> channels = 'B1|B8'
+        >>> sample_shape = (3, 530, 610)
+        >>> self = VideoDataset(sampler, sample_shape=sample_shape, channels=channels)
+        >>> index = len(self) // 4
+        >>> item = self[index]
+        >>> import watch
+        >>> frame_ims = item['images']
+        >>> frame_masks = item['labels'].numpy()
+        >>> frame_ims = watch.utils.util_norm.normalize_intensity(frame_ims)
+        >>> frame_list = []
+        >>> for frame_idx, (im_chw, mask) in enumerate(zip(frame_ims, frame_masks)):
+        >>>     chan_list = []
+        >>>     for chan_idx, chan in enumerate(im_chw):
+        >>>         heatmap = kwimage.Heatmap(class_idx=mask, classes=sampler.classes)
+        >>>         part = heatmap.draw_on(chan, with_alpha=0.5)
+        >>>         part = kwimage.draw_text_on_image(part, 'Frame = {}, Chan = {}'.format(frame_idx, chan_idx), (0, 0), valign='top')
+        >>>         chan_list.append(part)
+        >>>     frame_canvas = kwimage.stack_images(chan_list)
+        >>>     frame_list.append(frame_canvas)
+        >>> canvas = kwimage.stack_images(frame_list, axis=1)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(canvas)
+        >>> kwplot.show_if_requested()
     """
     # TODO: add torchvision.transforms or albumentations
     def __init__(self, sampler, sample_shape, channels=None, mode="fit", window_overlap=0, transform=None):

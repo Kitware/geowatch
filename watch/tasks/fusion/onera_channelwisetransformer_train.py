@@ -40,12 +40,12 @@ def main():
 
         # Invoke the training script
         python -m watch.tasks.fusion.onera_channelwisetransformer_train \
-            --model_name=smt_it_joint_p8 \
+            --model_name=smt_it_stm_p8 \
             --method=MultimodalTransformerDotProdCD \
             --train_dataset=$TRAIN_FPATH \
-            --batch_size=2 \
+            --batch_size=32 \
             --num_workers=1 \
-            --chip_size=64 \
+            --chip_size=128 \
             --workdir=$HOME/work/watch/onera/ctf/
 
     """
