@@ -16,7 +16,7 @@ def group_tiles(query, timediff_sec=300):
             TODO what is it for Sentinel?
     Example:
         >>> # xdoctest: +SKIP   
-        >>> from rgdc import Rgdc
+        >>> from rgd_client import Rgdc
         >>> client = Rgdc('username', 'password')
         >>> query = (client.search(**kwargs, instrumentation='ETM') +
         >>>          client.search(**kwargs, instrumentation='OLI_TIRS'))
