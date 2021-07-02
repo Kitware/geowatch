@@ -39,15 +39,26 @@ def main():
         TRAIN_FPATH=$DVC_DPATH/extern/onera_2018/onera_train.kwcoco.json
 
         # Invoke the training script
+
+        # This task required 17GB on a 3090
         python -m watch.tasks.fusion.onera_channelwisetransformer_train \
             --model_name=smt_it_stm_p8 \
             --method=MultimodalTransformerDotProdCD \
             --train_dataset=$TRAIN_FPATH \
-            --batch_size=32 \
-            --num_workers=1 \
+            --batch_size=16 \
+            --num_workers=4 \
             --chip_size=128 \
             --workdir=$HOME/work/watch/onera/ctf/
 
+        # This task required 20GB on a 3090
+        python -m watch.tasks.fusion.onera_channelwisetransformer_train \
+            --model_name=smt_it_joint_p8 \
+            --method=MultimodalTransformerDirectCD \
+            --train_dataset=$TRAIN_FPATH \
+            --batch_size=4 \
+            --num_workers=4 \
+            --chip_size=96 \
+            --workdir=$HOME/work/watch/onera/ctf/
     """
     from types import SimpleNamespace
 
