@@ -11,9 +11,9 @@ from torch.optim import lr_scheduler
 from torchvision import transforms
 
 import torchmetrics as metrics
-from .common import ChangeDetectorBase
-from ..models import transformer
-from .. import utils
+from watch.tasks.fusion.methods.common import ChangeDetectorBase
+from watch.tasks.fusion.models import transformer
+from watch.tasks.fusion import utils
 
 
 class MultimodalTransformerDotProdCD(ChangeDetectorBase):
@@ -166,7 +166,7 @@ class MultimodalTransformerSegmentation(pl.LightningModule):
 
         # compute predicted and target change masks
         _, _, H, W = labels.shape
-        logits = self(images) # b f t h w
+        logits = self(images)  # b f t h w
         logits = nn.functional.interpolate(
             logits,
             [H, W],

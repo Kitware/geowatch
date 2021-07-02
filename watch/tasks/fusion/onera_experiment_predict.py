@@ -1,12 +1,12 @@
 import pathlib
-from . import predict
+from watch.tasks.fusion import predict
 
-if __name__ == "__main__":
 
+def main():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("test_data_path", type=pathlib.Path)
-#     parser.add_argument("channel_set")
+    # parser.add_argument("channel_set")
     parser.add_argument("model_checkpoint_root", type=pathlib.Path)
     parser.add_argument("results_dir", type=pathlib.Path)
     parser.add_argument("--checkpoint_pattern", type=str,
@@ -21,3 +21,6 @@ if __name__ == "__main__":
         args.channel_set = channel_set
         args.model_checkpoint_path = model_checkpoint_path
         predict.main(args)
+
+if __name__ == "__main__":
+    main()

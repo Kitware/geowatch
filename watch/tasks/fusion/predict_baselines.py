@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 import pathlib
-from . import predict
+from watch.tasks.fusion import predict
 
 datasets = {
     "onera": "OneraCD_2018",
