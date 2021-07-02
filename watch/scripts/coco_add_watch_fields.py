@@ -9,10 +9,16 @@ lower resolution) than an image GSD.
 import kwcoco
 import ubelt as ub
 import scriptconfig as scfg
+import numpy as np
+import kwimage
 from watch.tools.kwcoco_extensions import populate_watch_fields
 
 
 class AddWatchFieldsConfig(scfg.Config):
+    """
+    Updates image transforms in a kwcoco json file to align all videos to a
+    target GSD.
+    """
     default = {
         'src': scfg.Value('in.geojson.json', help='input dataset to chip'),
 
@@ -37,7 +43,7 @@ def main(**kwargs):
         jq .videos toydata.kwcoco.json
         jq .images[0] toydata.kwcoco.json
 
-        python ~/code/watch/scripts/coco_add_watch_fields.py \
+        python -m watch.scripts.coco_add_watch_fields \
             --src toydata.kwcoco.json \
             --dst toydata-gsd10.kwcoco.json \
             --target_gsd=10
@@ -46,7 +52,7 @@ def main(**kwargs):
         jq .images[0] toydata-gsd10.kwcoco.json
 
     Ignore:
-        python ~/code/watch/scripts/coco_add_watch_fields.py \
+        python -m watch.scripts.coco_add_watch_fields \
             --src=$HOME/data/dvc-repos/smart_watch_dvc/drop0_aligned_msi/data.kwcoco.json \
             --dst=$HOME/data/dvc-repos/smart_watch_dvc/drop0_aligned_msi/data.kwcoco.new.json \
             --target_gsd=10
@@ -55,9 +61,7 @@ def main(**kwargs):
     jq .images[0].auxiliary[0] $HOME/data/dvc-repos/smart_watch_dvc/drop0_aligned_msi/data.kwcoco.json
 
     Example:
-        >>> import sys, ubelt
-        >>> sys.path.append(ubelt.expandpath('~/code/watch/scripts'))
-        >>> from coco_add_watch_fields import *  # NOQA
+        >>> from watch.scripts.coco_add_watch_fields import *  # NOQA
         >>> import kwcoco
         >>> # TODO: make a demo dataset with some sort of gsd metadata
         >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
@@ -89,16 +93,12 @@ def main(**kwargs):
     print('dset.index.videos = {}'.format(ub.repr2(dset.index.videos, nl=2, precision=4)))
 
     for gid, img in dset.index.imgs.items():
-        import numpy as np
-        from kwimage.transform import Affine
-        offset =  np.asarray(Affine.coerce(img['warp_img_to_vid']))[:, 2]
+        offset =  np.asarray(kwimage.Affine.coerce(img['warp_img_to_vid']))[:, 2]
         if np.any(np.abs(offset) > 100):
             print('img = {}'.format(ub.repr2(img, nl=1)))
             print('warning there is a large offset')
             print('offset = {!r}'.format(offset))
             print('{}, {}'.format(gid, img['warp_img_to_vid']))
-
-    # print('dset.index.imgs[1] = {}'.format(ub.repr2(dset.index.imgs[1], nl=2, precision=4)))
 
     if config['dst'] is not None:
         print('write dataset')
@@ -110,6 +110,6 @@ def main(**kwargs):
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/scripts/coco_add_watch_fields.py
+        python  -m watch.scripts.coco_add_watch_fields
     """
     main()

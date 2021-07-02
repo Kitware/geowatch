@@ -249,7 +249,7 @@ def _fix_geojson_poly(geo):
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/scripts/coco_extract_geo_bounds.py \
+        python -m watch.scripts.coco_extract_geo_bounds \
           --src $HOME/data/dvc-repos/smart_watch_dvc/drop0/drop0.kwcoco.json \
           --dst $HOME/data/grab_tiles_out/regions2.geojson.json \
           --breakup_times=True \
@@ -260,7 +260,7 @@ if __name__ == '__main__':
             --out_dpath $HOME/data/grab_tiles_out \
             --backend fels
 
-        python ~/code/watch/scripts/coco_extract_geo_bounds.py \
+        python -m watch.scripts.coco_extract_geo_bounds \
           --src $HOME/data/dvc-repos/smart_watch_dvc/drop0/drop0.kwcoco.json \
           --breakup_times=True \
           --dst $HOME/data/grab_tiles_out/regions.geojson.json
@@ -278,7 +278,7 @@ if __name__ == '__main__':
             --out_dpath $HOME/data/grab_tiles_out \
             --backend fels
 
-        python ~/code/watch/scripts/geotiffs_to_kwcoco.py \
+        python -m watch.scripts.geotiffs_to_kwcoco.py \
             --geotiff_dpath ~/data/grab_tiles_out/fels \
             --dst $HOME/data/grab_tiles_out/fels/data.kwcoco.json
 
