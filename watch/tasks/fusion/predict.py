@@ -7,9 +7,9 @@ import kwcoco
 import kwimage
 from torch import nn
 
-from . import datasets
-from . import methods
-from . import utils
+from watch.tasks.fusion import datasets
+from watch.tasks.fusion import methods
+from watch.tasks.fusion import utils
 
 fname_template = "{location}/{bands}-{frame_no}.tif"
 

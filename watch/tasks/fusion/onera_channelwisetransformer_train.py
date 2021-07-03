@@ -1,8 +1,3 @@
-import pathlib
-from watch.tasks.fusion import fit
-import scriptconfig as scfg
-import ubelt as ub
-
 model_names = [
     "smt_it_joint_p8",
     "smt_it_stm_p8",
@@ -12,22 +7,8 @@ model_names = [
 methods = [
     "MultimodalTransformerDotProdCD",
     "MultimodalTransformerDirectCD",
+    'voting',
 ]
-
-
-class OneraChannelwiseTransformerTrainConfig(scfg.Config):
-    default = {
-        'train_dataset': scfg.Path(None, help='path to train kwcoco file'),
-        'method': scfg.Value(methods[0], choices=methods),
-        'model_name': scfg.Value(methods[0], choices=model_names),
-        'batch_size': scfg.Value(32, help='numer of samples per batch'),
-        'num_workers': scfg.Value(8, help='number of dataloader workers'),
-        'chip_size': scfg.Value(128, help='width and height of patches'),
-        'workdir': scfg.Path('_trained_models/onera/ctf/', help=ub.paragraph(
-            '''
-            Directory where training data can be written
-            '''))
-    }
 
 
 def main():
@@ -41,63 +22,61 @@ def main():
         # Invoke the training script
 
         # This task required 17GB on a 3090
-        python -m watch.tasks.fusion.onera_channelwisetransformer_train \
+        python -m watch.tasks.fusion.fit \
             --model_name=smt_it_stm_p8 \
             --method=MultimodalTransformerDotProdCD \
             --train_dataset=$TRAIN_FPATH \
             --batch_size=16 \
             --num_workers=4 \
             --chip_size=128 \
-            --workdir=$HOME/work/watch/onera/ctf/
+            --workdir=$HOME/work/watch/fit/runs
 
         # This task required 20GB on a 3090
-        python -m watch.tasks.fusion.onera_channelwisetransformer_train \
+        python -m watch.tasks.fusion.fit \
             --model_name=smt_it_joint_p8 \
             --method=MultimodalTransformerDirectCD \
             --train_dataset=$TRAIN_FPATH \
             --batch_size=4 \
             --num_workers=4 \
             --chip_size=96 \
-            --workdir=$HOME/work/watch/onera/ctf/
+            --workdir=$HOME/work/watch/fit/runs
     """
-    from types import SimpleNamespace
+    from watch.tasks.fusion import fit
+    fit.main(dataset='OneraCD_2018')
 
-    config = OneraChannelwiseTransformerTrainConfig(cmdline=True)
+    # args = SimpleNamespace(**dict(config))
+    #     dataset="OneraCD_2018",
 
-    args = SimpleNamespace(
-        dataset="OneraCD_2018",
+    #     # dataset params
+    #     train_kwcoco_path=pathlib.Path(config['train_dataset']),
+    #     batch_size=config['batch_size'],
+    #     num_workers=config['num_workers'],
+    #     chip_size=config['chip_size'],
 
-        # dataset params
-        train_kwcoco_path=pathlib.Path(config['train_dataset']),
-        batch_size=config['batch_size'],
-        num_workers=config['num_workers'],
-        chip_size=config['chip_size'],
+    #     # model params
+    #     window_size=8,
+    #     learning_rate=1e-3,
+    #     weight_decay=0,
+    #     dropout=0,
+    #     pos_weight=5.0,
 
-        # model params
-        window_size=8,
-        learning_rate=1e-3,
-        weight_decay=0,
-        dropout=0,
-        pos_weight=5.0,
+    #     # trainer params
+    #     gpus=1,
+    #     #accelerator="ddp",
+    #     precision=16,
+    #     max_epochs=200,
+    #     accumulate_grad_batches=2,
+    #     terminate_on_nan=True,
+    # )
+    # train_hashid = ub.hash_data(ub.map_vals(str, args.__dict__))[0:16]
 
-        # trainer params
-        gpus=1,
-        #accelerator="ddp",
-        precision=16,
-        max_epochs=200,
-        accumulate_grad_batches=2,
-        terminate_on_nan=True,
-    )
-    train_hashid = ub.hash_data(ub.map_vals(str, args.__dict__))[0:16]
-
-    method = config['method']
-    model_name = config['model_name']
-    print(f"{method} / {model_name}\n====================")
-    args.method = method
-    args.model_name = model_name
-    key = f"{method}-{model_name}-{train_hashid}"
-    args.default_root_dir = pathlib.Path(config['workdir']) / key
-    fit.main(args)
+    # method = config['method']
+    # model_name = config['model_name']
+    # print(f"{method} / {model_name}\n====================")
+    # args.method = method
+    # args.model_name = model_name
+    # key = f"{method}-{model_name}-{train_hashid}"
+    # args.default_root_dir = pathlib.Path(config['workdir']) / key
 
 
 if __name__ == "__main__":
