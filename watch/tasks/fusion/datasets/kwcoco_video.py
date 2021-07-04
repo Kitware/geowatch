@@ -14,8 +14,8 @@ class WatchDataModule(pl.LightningDataModule):
     """
     def __init__(
         self,
-        train_kwcoco_path=None,
-        test_kwcoco_path=None,
+        train_dataset=None,
+        test_dataset=None,
         time_steps=2,
         chip_size=128,
         time_overlap=0,
@@ -28,8 +28,8 @@ class WatchDataModule(pl.LightningDataModule):
         tfms_channel_subset=None,
     ):
         super().__init__()
-        self.train_kwcoco_path = train_kwcoco_path
-        self.test_kwcoco_path = test_kwcoco_path
+        self.train_kwcoco_path = train_dataset
+        self.test_kwcoco_path = test_dataset
         self.time_steps = time_steps
         self.chip_size = chip_size
         self.time_overlap = time_overlap
@@ -58,7 +58,10 @@ class WatchDataModule(pl.LightningDataModule):
     def setup(self, stage):
 
         if stage == "fit" or stage is None:
-            kwcoco_ds = kwcoco.CocoDataset(str(self.train_kwcoco_path.expanduser()))
+            train_data = self.train_kwcoco_path
+            if isinstance(train_data, pathlib.Path):
+                train_data = str(train_data.expanduser())
+            kwcoco_ds = kwcoco.CocoDataset.coerce(train_data)
             kwcoco_sampler = ndsampler.CocoSampler(kwcoco_ds)
             train_val_ds = common.VideoDataset(
                 kwcoco_sampler,
@@ -78,7 +81,10 @@ class WatchDataModule(pl.LightningDataModule):
             )
 
         if stage == "test" or stage is None:
-            kwcoco_ds = kwcoco.CocoDataset(str(self.test_kwcoco_path.expanduser()))
+            test_data = self.test_kwcoco_path
+            if isinstance(test_data, pathlib.Path):
+                test_data = str(test_data.expanduser())
+            kwcoco_ds = kwcoco.CocoDataset.coerce(test_data)
             kwcoco_sampler = ndsampler.CocoSampler(kwcoco_ds)
             self.test_dataset = common.VideoDataset(
                 kwcoco_sampler,
@@ -118,8 +124,9 @@ class WatchDataModule(pl.LightningDataModule):
     @staticmethod
     def add_data_specific_args(parent_parser):
         parser = parent_parser.add_argument_group("kwcoco_video")
-        parser.add_argument("--train_kwcoco_path", default=None, type=pathlib.Path)
-        parser.add_argument("--test_kwcoco_path", default=None, type=pathlib.Path)
+        parser.add_argument("--train_dataset", default=None, type=pathlib.Path)
+        # parser.add_argument("--vali_dataset", default=None, type=pathlib.Path)
+        parser.add_argument("--test_dataset", default=None, type=pathlib.Path)
         parser.add_argument("--time_steps", default=2, type=int)
         parser.add_argument("--chip_size", default=128, type=int)
         parser.add_argument("--time_overlap", default=0, type=int)
