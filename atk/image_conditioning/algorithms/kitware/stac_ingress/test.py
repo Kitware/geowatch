@@ -20,11 +20,13 @@ class MainTestCase(AlgorithmTestCase):
                 'stac_api_url': "https://api.smart-stac.com/",
                 'output_dir': output_dir,
                 'collections': ["worldview-nitf"],
-                'dry_run': dry_run}
+                'dry_run': dry_run,
+                'max_results': 5,
+                'min_aoi_overlap': 0.25}
 
             self.alg = Main(cl=self.cl, params=self.params)
             self.alg.run()
-            
+
             stac_catalog = pystac.Catalog.from_dict(self.cl.get_from_metadata('stac_catalog'))
 
             self.assertTrue(output_dir==self.cl.get_from_metadata('output_dir'))
