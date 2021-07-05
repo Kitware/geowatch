@@ -632,6 +632,7 @@ def geotiff_filepath_info(gpath, fast=True):
     if not sensor_candidates or not fast:
         # WorldView3
         # TODO: find a reference for the spec
+        # TODO fix date handling for eg 03JUL15WV020200015JUL03021500-P1BS-011777484010_01_P001.NTF or 15JUL03021500
         wv3_pat = '{date1:w}-{part1:w}-{date2:w}_{num:w}_{part2:w}'
         wv3_parser = _parser_lut(wv3_pat)
         prefix = base.split('____')[0]

@@ -50,11 +50,15 @@ def main(**kwargs):
     dset.dump(dset.fpath, newlines=True)
 
 
-def filter_band_files(fpaths, band_list):
+def filter_band_files(fpaths, band_list, with_tci=True):
     '''
     band_list is any subset of util_bands.ALL_BANDS
+
+    with_tci: include true color thumbnail
     '''
     band_names = set(b['name'] for b in band_list)
+    if with_tci:
+        band_names.add('TCI')
     # use endswith() instead of in
     # to avoid false positives, eg from a tile code in the filename
     is_band_file = lambda path: any(splitext(basename(path))[0].endswith(b) for b in band_names)
@@ -124,6 +128,7 @@ def make_coco_img_from_geotiff(tiff_fpath, name=None, force_affine=True):
 
     info = watch.gis.geotiff.geotiff_metadata(tiff_fpath)
     # only affine transformations are supported in auxiliary channels
+    # TODO support RPC
     info.update(**watch.gis.geotiff.geotiff_crs_info(tiff_fpath, force_affine=force_affine))
 
     warp_pxl_to_wld = Affine.coerce(info['pxl_to_wld'])
