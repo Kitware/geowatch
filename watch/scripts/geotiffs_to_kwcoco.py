@@ -5,7 +5,7 @@ Attempts to register directory of geotiffs into a kwcoco dataset
 from dateutil.parser import isoparse
 from kwcoco.util import util_futures
 from kwimage.transform import Affine
-from os.path import join, basename, normpath
+from os.path import join, basename, normpath, splitext
 import datetime
 import glob
 import kwcoco
@@ -50,40 +50,66 @@ def main(**kwargs):
     dset.dump(dset.fpath, newlines=True)
 
 
+def filter_band_files(fpaths, band_list, with_tci=True):
+    '''
+    band_list is any subset of util_bands.ALL_BANDS
+
+    with_tci: include true color thumbnail
+    '''
+    band_names = set(b['name'] for b in band_list)
+    if with_tci:
+        band_names.add('TCI')
+    # use endswith() instead of in
+    # to avoid false positives, eg from a tile code in the filename
+    is_band_file = lambda path: any(splitext(basename(path))[0].endswith(b) for b in band_names)
+    return list(filter(is_band_file, fpaths))
+
 def ingest_landsat_directory(lc_dpath):
     name = basename(normpath(lc_dpath))
     tiffs = sorted(glob.glob(join(lc_dpath, '*.TIF')))
-    band_names = [b['name'] for b in (util_bands.LANDSAT7 +
-                                      util_bands.LANDSAT8)]
-    tiffs = [t for t in tiffs if any(b in t for b in band_names)]
-    img = make_coco_img_from_auxiliary_geotiffs(tiffs, name)
+    if len(tiffs) == 0:
+        tiffs = sorted(glob.glob(join(lc_dpath, '**', '*.TIF'), recursive=True))
     baseinfo = watch.gis.geotiff.geotiff_filepath_info(name)
-    capture_time = isoparse(baseinfo['filename_meta']['acquisition_date'])
-    img['date_captured'] = datetime.datetime.isoformat(capture_time)
-    if name.startswith('LC'):
-        img['sensor_coarse'] = 'L8'
-    elif name.startswith('LE'):
-        img['sensor_coarse'] = 'L7'
-    else:
-        img['sensor_coarse'] = 'LS'
+    capture_time = isoparse(baseinfo['filename_meta']['acquisition_date']).isoformat()
+    sensor_coarse = 'LS'
+    if baseinfo['filename_meta']['sensor_code'] == 'C':
+        sensor_coarse = 'L8'
+    elif baseinfo['filename_meta']['sensor_code'] == 'E':
+        sensor_coarse = 'L7'
+    # take L8 as the default guess for a mangled name
+    tiffs = filter_band_files(tiffs, (util_bands.LANDSAT7 if sensor_coarse == 'L7' else util_bands.LANDSAT8))
+    img = make_coco_img_from_auxiliary_geotiffs(tiffs, name)
+    img['date_captured'] = capture_time
+    img['sensor_coarse'] = sensor_coarse
     return img
 
 
-def ingest_sentinal2_directory(s2_dpath):
-    name = basename(normpath(s2_dpath)).rstrip('.SAFE')
-    tiffs = sorted(glob.glob(join(s2_dpath, 'GRANULE', '*', 'IMG_DATA', '*.jp2')))
-    band_names = [b['name'] for b in util_bands.SENTINEL2]
-    tiffs = [t for t in tiffs if any(b in t for b in band_names)]
+def ingest_sentinel2_directory(s2_dpath):
+    # Are we in the safedir, the granuledir or some arbitrary dir?
+    # Try to use the granuledir as name if available;
+    # it's a better unique ID.
+    granules = sorted(glob.glob(join(s2_dpath, 'GRANULE', '*')))
+    if len(granules) == 1:
+        granule = granules[0]
+        tiffs = sorted(glob.glob(join(granule, 'IMG_DATA', '*.jp2')))
+        name = basename(normpath(granule))
+    else:
+        tiffs = sorted(glob.glob(join(s2_dpath, 'GRANULE', '*', 'IMG_DATA', '*.jp2')))
+        if len(tiffs) == 0:
+            tiffs = sorted(glob.glob(join(s2_dpath, '**', '*.jp2'), recursive=True))
+        name = basename(normpath(s2_dpath)).replace('.SAFE', '')
+    # Then grab the bands.
+    tiffs = filter_band_files(tiffs, util_bands.SENTINEL2)
     img = make_coco_img_from_auxiliary_geotiffs(tiffs, name)
 
-    baseinfo = watch.gis.geotiff.geotiff_filepath_info(name)
+    baseinfo = watch.gis.geotiff.geotiff_filepath_info(s2_dpath)
     capture_time = isoparse(baseinfo['filename_meta']['sense_start_time'])
     img['date_captured'] = datetime.datetime.isoformat(capture_time)
     img['sensor_coarse'] = 'S2'
     return img
 
 
-def make_coco_img_from_geotiff(tiff_fpath, name=None):
+def make_coco_img_from_geotiff(tiff_fpath, name=None, force_affine=True):
     """
     TODO: move to coco extensions
 
@@ -101,15 +127,37 @@ def make_coco_img_from_geotiff(tiff_fpath, name=None):
         img['name'] = name
 
     info = watch.gis.geotiff.geotiff_metadata(tiff_fpath)
+    # only affine transformations are supported in auxiliary channels
+    # TODO support RPC
+    info.update(**watch.gis.geotiff.geotiff_crs_info(tiff_fpath, force_affine=force_affine))
 
     warp_pxl_to_wld = Affine.coerce(info['pxl_to_wld'])
     height, width = info['img_shape']
     file_meta = info['filename_meta']
-    # print('file_meta = {!r}'.format(file_meta))
     channels = file_meta.get('channels', None)
 
     if channels is None:
-        raise Exception('must be able to introspect channels')
+        # fix this for known WV channel signature, which isn't obvious from filename
+        if file_meta.get('product_guess') == 'worldview':
+
+            from osgeo import gdal
+            bands = gdal.Info(tiff_fpath, format='json')['bands']
+
+            # the channel names are the same for all WV, just the center_wavelength is different
+            # so we can safely use this info from WV2
+            def _code(band_dicts):
+                return '|'.join(b.get('common_name', b['name']) for b in band_dicts)
+
+            if len(bands) == 1:
+                channels = _code(util_bands.WORLDVIEW2_PAN)
+            elif len(bands) == 4:
+                channels = _code(util_bands.WORLDVIEW2_MS4)
+            elif len(bands) == 8:
+                channels = _code(util_bands.WORLDVIEW2_MS8)
+            else:
+                raise Exception('unknown channel signature for WV')
+        else:
+            raise Exception('must be able to introspect channels')
 
     wld_crs_info = ub.dict_diff(info['wld_crs_info'], {'type'})
     utm_crs_info = ub.dict_diff(info['utm_crs_info'], {'type'})
@@ -149,7 +197,7 @@ def make_coco_img_from_auxiliary_geotiffs(tiffs, name):
     auxiliary = []
 
     for fpath in tiffs:
-        aux = make_coco_img_from_geotiff(fpath)
+        aux = make_coco_img_from_geotiff(fpath, force_affine=True)
         auxiliary.append(aux)
 
     # Choose a base image canvas and the relationship between auxiliary images

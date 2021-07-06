@@ -74,5 +74,5 @@ __getattr__ = lazy_import(
 def __dir__():
     return __all__
 
-__all__ = ['datacube', 'demo' 'gis', 'io', 'sequencing', 'tasks', 'tools',
+__all__ = ['datacube', 'demo', 'gis', 'io', 'sequencing', 'tasks', 'tools',
            'utils', 'validation']
