@@ -14,7 +14,8 @@ class UNetChangeDetector(ChangeDetectorBase):
                  learning_rate=1e-3,
                  weight_decay=1e-5,
                  pos_weight=1.,
-                 input_scale=2000.,
+                 input_mean=1.,
+                 input_std=1.,
                 ):
         super().__init__(
             learning_rate=learning_rate,
@@ -22,6 +23,9 @@ class UNetChangeDetector(ChangeDetectorBase):
             pos_weight=pos_weight,
         )
         self.save_hyperparameters()
+        
+        self.hparams.input_mean = torch.Tensor(self.hparams.input_mean)[None, :, None, None]
+        self.hparams.input_std = torch.Tensor(self.hparams.input_std)[None, :, None, None]
 
         # simple feature extraction model
         self.model = nn.Sequential(
@@ -32,8 +36,8 @@ class UNetChangeDetector(ChangeDetectorBase):
     @property
     def preprocessing_step(self):
         return transforms.Compose([
-            transforms.ToTensor(),
-            utils.Lambda(lambda x: x / self.hparams.input_scale),
+            utils.Lambda(lambda x: torch.from_numpy(x)),
+            utils.Lambda(lambda x: (x - self.hparams.input_mean) / self.hparams.input_std),
         ])
 
     @pl.core.decorators.auto_move_data
@@ -57,5 +61,5 @@ class UNetChangeDetector(ChangeDetectorBase):
     def add_model_specific_args(parent_parser):
         parser = super(UNetChangeDetector, UNetChangeDetector).add_model_specific_args(parent_parser)
         parser.add_argument("--feature_dim", default=64, type=int)
-        parser.add_argument("--input_scale", default=2000.0, type=float)
+#         parser.add_argument("--input_scale", default=2000.0, type=float)
         return parent_parser

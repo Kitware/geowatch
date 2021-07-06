@@ -7,18 +7,25 @@ from . import utils
 
 def main(args):
 
-    # init method from args
+    # get data and method classes
+    dataset_class = getattr(datasets, args.dataset)
     method_class = getattr(methods, args.method)
+    
+    # init method from args
     method_var_dict = utils.filter_args(
         vars(args),
         method_class.__init__,
     )
+    
+    # TODO: need a better way to indicate that a method needs parameters from a dataset, and maybe the reverse too
+    method_var_dict["input_mean"] = getattr(dataset_class, "mean", 1.)
+    method_var_dict["input_std"] = getattr(dataset_class, "std", 1.)
+    method_var_dict["pos_weight"] = getattr(dataset_class, "bce_weight", 1.)
     method = method_class(
         **method_var_dict
     )
 
     # init dataset from args
-    dataset_class = getattr(datasets, args.dataset)
     dataset_var_dict = utils.filter_args(
         vars(args),
         dataset_class.__init__,
