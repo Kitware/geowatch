@@ -19,6 +19,36 @@
             "parameter_choices": "",
             "required": false,
             "sort_order": 5
+        },
+        {
+            "custom_validation": "",
+            "data_type": "integer",
+            "default_value": null,
+            "description": "Maximum amount of cloud cover allowed before a STAC item is filtered out",
+            "display_name": "Max Cloud Cover",
+            "field_type": "number",
+            "help_text": "The cloud cover value here is as reported in the STAC item's \"properties\" \"eo:cloudcover\" field, if specified.  If the property is not specified, the item is not filtered out.",
+            "max_value": null,
+            "min_value": null,
+            "name": "max_cloud_cover",
+            "parameter_choices": "",
+            "required": false,
+            "sort_order": 8
+        },
+        {
+            "custom_validation": "",
+            "data_type": "float",
+            "default_value": null,
+            "description": "Minimum amount of overlap an image must have with the selected AOI to be kept",
+            "display_name": "Min AOI Overlap",
+            "field_type": "number",
+            "help_text": "",
+            "max_value": null,
+            "min_value": null,
+            "name": "min_aoi_overlap",
+            "parameter_choices": "",
+            "required": false,
+            "sort_order": 9
         }
     ],
     "outputs": [

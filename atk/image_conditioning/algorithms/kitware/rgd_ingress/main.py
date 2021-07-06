@@ -1,10 +1,13 @@
-from algorithm_toolkit import Algorithm, AlgorithmChain
 import os
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
+
+from algorithm_toolkit import Algorithm, AlgorithmChain
 from rgd_client import Rgdc
 import pystac
-import requests
+import shapely as shp
+import shapely.ops
+import shapely.geometry
 
 
 class Main(Algorithm):
@@ -28,8 +31,8 @@ class Main(Algorithm):
         dt_min = self.date(params['date_range'][0])
         dt_max = self.date(params['date_range'][1])
 
-        client = Rgdc(username=params['username'], 
-                      password=params['password'], 
+        client = Rgdc(username=params['username'],
+                      password=params['password'],
                       api_url="https://watch.resonantgeodata.com/api")
         kwargs = {
             'query': json.dumps(geojson_bbox),
@@ -42,26 +45,52 @@ class Main(Algorithm):
         query_l8 = client.search(**kwargs, instrumentation='OLI_TIRS')
         if not params['dry_run']:
             os.makedirs(params['output_dir'], exist_ok=True)
-        catalog = pystac.Catalog('RGD ingress catalog', 
-                                 'STAC catalog of RGD search results', 
-                                 href=os.path.join(params['output_dir'], 'catalog.json'))
+        catalog = pystac.Catalog('RGD ingress catalog',
+                                 'STAC catalog of RGD search results',
+                                 href=os.path.join(params['output_dir'],
+                                                   'catalog.json'))
         catalog.set_root(catalog)
         for search_result in query_s2 + query_l7 + query_l8:
-            if not params['dry_run']:
-                paths = client.download_raster(search_result, 
-                                               params['output_dir'], 
-                                               nest_with_name=True, 
-                                               keep_existing=True)
             stac_item = client.get_raster(search_result, stac=True)
             stac_item['id'] = search_result['subentry_name']
             item = pystac.Item.from_dict(stac_item)
-            item.set_self_href(os.path.join(params['output_dir'], 
-                                            stac_item['id'], 
+            item.set_self_href(os.path.join(params['output_dir'],
+                                            stac_item['id'],
                                             stac_item['id']+'.json'))
+
+            # TODO: Refactor these filtering steps out to separate ATK
+            # algorithms
+
+            # Completely skip ingress of STAC item if 'eo:cloud_cover'
+            # is present and not <= the max value
+            if('max_cloud_cover' in params
+               and stac_item['properties'].get('eo:cloud_cover', 0) >
+               params['max_cloud_cover']):
+                continue
+
+            # Completely skip ingress of STAC item when a minimum AOI
+            # overlap is specified and the item's geometry doesn't
+            # meet that threshold
+            if 'min_aoi_overlap' in params:
+                polys = shp.geometry.shape(stac_item['geometry']).buffer(0)
+                union_poly = shp.ops.cascaded_union(polys)
+                aoi_poly = shp.geometry.shape(geojson_bbox)
+                overlap =\
+                    union_poly.intersection(aoi_poly).area / aoi_poly.area
+
+                if overlap < params['min_aoi_overlap']:
+                    continue
+
+            if not params['dry_run']:
+                paths = client.download_raster(search_result,
+                                               params['output_dir'],
+                                               nest_with_name=True,
+                                               keep_existing=True)
+
             for asset in item.get_assets():
                 dic = item.assets[asset].to_dict()
-                dic['href'] = os.path.join(params['output_dir'], 
-                                           stac_item['id'], 
+                dic['href'] = os.path.join(params['output_dir'],
+                                           stac_item['id'],
                                            dic['title'])
                 item.assets[asset] = pystac.Asset.from_dict(dic)
             catalog.add_item(item)

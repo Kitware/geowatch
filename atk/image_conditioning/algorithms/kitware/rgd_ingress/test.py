@@ -19,7 +19,9 @@ class MainTestCase(AlgorithmTestCase):
                          'date_range':['2018-11-01', '2018-11-08'],
                          'output_dir':output_dir,
                          'aoi_bounds':[128.662489, 37.659517, 128.676673, 37.664560],
-                         'dry_run': dry_run
+                         'dry_run': dry_run,
+                         'max_cloud_cover': 0.5,
+                         'min_aoi_overlap': 0.25
                         }
 
           self.alg = Main(cl=self.cl, params=self.params)

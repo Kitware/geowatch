@@ -13,6 +13,8 @@ username|Username for RGD account|Yes
 password|Password for RGD account|Yes
 output_dir|Directory where output images / data will be written. Will be created if it doesn't already exist. |Yes
 dry_run|Don't actually download the retrieved imagery|
+max_cloud_cover|Maximum amount of cloud cover allowed before a STAC item is filtered out|
+min_aoi_overlap|Minimum amount of overlap an image must have with the selected AOI to be kept|
 
 ## Outputs:
 Name|Description
