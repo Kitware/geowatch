@@ -33,7 +33,7 @@ dataset_channel_sets = {
     },
 }
 
-for ckpt_dir in pathlib.Path("_trained_models").glob("*/ctf/*/"):
+for ckpt_dir in pathlib.Path("_trained_models").glob("onera/ctf_drop8/*/"):
     dataset_name = ckpt_dir.parts[-3]
     method_model_name = ckpt_dir.parts[-1]
     method, model_name = method_model_name.split("-")

@@ -4,11 +4,10 @@ from . import fit
 from .datasets import onera_2018
 
 model_names = [
-    #"smt_it_joint_t12",
-    #"smt_it_stm_t12",
+    "smt_it_t_t12",
     "smt_it_st_t12",
-    "smt_it_stm_s12",
-    "smt_it_st_s12",
+    "smt_it_stm_t12",
+    #"smt_it_joint_t12",
 ]
 
 methods = [
@@ -25,22 +24,24 @@ if __name__ == "__main__":
 
         # dataset params
         train_kwcoco_path=pathlib.Path("~/Projects/smart_watch_dvc/extern/onera_2018/onera_train.kwcoco.json"),
-        batch_size=8,
+        batch_size=16,
         num_workers=8,
         chip_size=128,
+        tfms_train_channel_size=10,
 
         # model params
         window_size=8,
         learning_rate=1e-3,
-        weight_decay=0,
-        dropout=0,
+        weight_decay=1e-5,
+        dropout=0.1,
         pos_weight=5.0,
 
         # trainer params
-        gpus=2,
-        accelerator="ddp",
+        gpus=1,
+        #accelerator="ddp",
         precision=16,
         max_epochs=400,
+        gradient_clip_val=1.0,
         accumulate_grad_batches=4,
         terminate_on_nan=True,
     )
@@ -49,5 +50,5 @@ if __name__ == "__main__":
         print(f"{method} / {model_name}\n====================")
         args.method = method
         args.model_name = model_name
-        args.default_root_dir = f"_trained_models/onera/ctf/{method}-{model_name}"
+        args.default_root_dir = f"_trained_models/onera/ctf_drop8/{method}-{model_name}"
         fit.main(args)
