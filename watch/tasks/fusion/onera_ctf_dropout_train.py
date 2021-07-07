@@ -29,7 +29,7 @@ if __name__ == "__main__":
         batch_size=16,
         num_workers=8,
         chip_size=128,
-        tfms_train_channel_size=13,
+        tfms_train_channel_size=8,
 
         # model params
         window_size=8,
@@ -51,7 +51,7 @@ if __name__ == "__main__":
         print(f"{method} / {model_name}\n====================")
         args.method = method
         args.model_name = model_name
-        args.default_root_dir = f"_trained_models/onera/ctf/{method}-{model_name}"
+        args.default_root_dir = f"_trained_models/onera/ctf_drop{args.tfms_train_channel_size}/{method}-{model_name}"
         try:
             fit.main(args)
         except:

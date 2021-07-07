@@ -3,7 +3,7 @@ from . import fit
 
 
 channel_combos = {
-    "all": "<all>",
+    "all": "B01|B02|B03|B04|B05|B06|B07|B08|B09|B10|B11|B12|B8A",
     "uv": "B01",
     "bgr": "B02|B03|B04",
     "vnir": "B05|B06|B07|B08|B8A",
@@ -29,11 +29,10 @@ if __name__ == "__main__":
         feature_dim=128,
         learning_rate=1e-3,
         weight_decay=1e-5,
-        pos_weight=5.0,
 
         # trainer params
         gpus=1,
-        max_epochs=200,
+        max_epochs=400,
     )
 
     for key, channels in channel_combos.items():

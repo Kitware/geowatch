@@ -44,7 +44,8 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
     def preprocessing_step(self):
         return transforms.Compose([
             utils.Lambda(lambda x: torch.from_numpy(x)),
-            utils.Lambda(lambda x: (x - self.hparams.input_mean) / self.hparams.input_std),
+            #utils.Lambda(lambda x: (x - self.hparams.input_mean) / self.hparams.input_std),
+            utils.Lambda(lambda x: (x - x.mean()) / x.std()),
             Rearrange("t c (h hs) (w ws) -> t c h w (ws hs)",
                       hs=self.hparams.window_size,
                       ws=self.hparams.window_size),
@@ -108,7 +109,8 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
     def preprocessing_step(self):
         return transforms.Compose([
             utils.Lambda(lambda x: torch.from_numpy(x)),
-            utils.Lambda(lambda x: (x - self.hparams.input_mean) / self.hparams.input_std),
+            #utils.Lambda(lambda x: (x - self.hparams.input_mean) / self.hparams.input_std),
+            utils.Lambda(lambda x: (x - x.mean()) / x.std()),
             Rearrange("t c (h hs) (w ws) -> t c h w (ws hs)",
                       hs=self.hparams.window_size,
                       ws=self.hparams.window_size),
