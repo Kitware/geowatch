@@ -49,9 +49,26 @@ available_datasets = [
 ]
 
 
-class TrainFusionConfig(scfg.Config):
-    default = {
+class ExtendableConfig(scfg.Config):
+    """
+    Add experimental features to scriptconfig such that args can be
+    programatically extended for torch-lightning
+    """
 
+    def add_argument_group(self, *args):
+        # does nothing
+        return self
+
+    def add_argument(self, name, default=None, required=None, **kw):
+        if name.startswith('--'):
+            key = name[2:]
+        else:
+            raise NotImplementedError
+        self.default[key] = scfg.Value(default, **kw)
+
+
+class BaseFitConfig(ExtendableConfig):
+    default = {
         # Basic parameters
         'method': scfg.Value('MultimodalTransformerDirectCD', choices=available_methods),
         # 'model_name': scfg.Value("smt_it_stm_p8", choices=available_models),
@@ -96,9 +113,23 @@ def fit(args=None, cmdline=False, **kwargs):
     """
     Example:
         from watch.tasks.fusion.fit import *  # NOQA
-        fit(train_dataset='vidshapes8-multispectral', )
+        kwargs = dict(train_dataset='vidshapes8-multispectral')
+        fit(, )
     """
-    config = dict(TrainFusionConfig(default=kwargs, cmdline=cmdline))
+    base_kwargs = ub.dict_isect(kwargs, BaseFitConfig.default)
+    base_config = BaseFitConfig(default=base_kwargs, cmdline=cmdline)
+
+    # Get subcomponents
+    method_class = getattr(methods, base_config['method'])
+    dataset_class = getattr(datasets, base_config['dataset'], None)
+
+    # Hack to define the full config as a scriptconfig object
+    method_class.add_model_specific_args(base_config)
+    dataset_class.add_data_specific_args(base_config)
+    class SpecificFitConfig(scfg.Config):
+        default = base_config.default
+    config = SpecificFitConfig(cmdline=True)
+
     if args is not None:
         config.update(args.__dict__)
 
@@ -116,14 +147,15 @@ def fit(args=None, cmdline=False, **kwargs):
     key = f"{method}-{train_hashid}"
     print(f"{key}\n====================")
 
-    # init method from args
     method_class = getattr(methods, config['method'])
+    dataset_class = getattr(datasets, config['dataset'], None)
+
+    # init method from args
     method_var_dict = utils.filter_args(config, method_class.__init__)
     # Note: Changed name from method to model
     model = method_class(**method_var_dict)
 
     # init dataset from args
-    dataset_class = getattr(datasets, config['dataset'], None)
 
     dataset_var_dict = utils.filter_args(config, dataset_class.__init__)
     dataset_var_dict["preprocessing_step"] = model.preprocessing_step

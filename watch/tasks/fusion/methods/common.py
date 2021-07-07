@@ -11,13 +11,13 @@ class ChangeDetectorBase(pl.LightningModule):
     def __init__(self,
                  learning_rate=1e-3,
                  weight_decay=0.,
-                 pos_weight=1.,
-                ):
+                 pos_weight=1.):
         super().__init__()
         self.save_hyperparameters()
 
         # criterion and metrics
-        self.criterion = nn.BCEWithLogitsLoss(pos_weight=torch.ones(1) * pos_weight)
+        self.criterion = nn.BCEWithLogitsLoss(
+                pos_weight=torch.ones(1) * pos_weight)
         self.metrics = nn.ModuleDict({
             "acc": metrics.Accuracy(),
             "iou": metrics.IoU(2),
@@ -42,7 +42,8 @@ class ChangeDetectorBase(pl.LightningModule):
 
         # compute metrics
         for key, metric in self.metrics.items():
-            self.log(key, metric(torch.sigmoid(distances), changes), prog_bar=True)
+            val = metric(torch.sigmoid(distances), changes)
+            self.log(key, val, prog_bar=True)
 
         # compute criterion
         loss = self.criterion(distances, changes.float())
@@ -62,7 +63,8 @@ class ChangeDetectorBase(pl.LightningModule):
 
         # compute metrics
         for key, metric in self.metrics.items():
-            self.log("val_" + key, metric(torch.sigmoid(distances), changes), prog_bar=True)
+            val = metric(torch.sigmoid(distances), changes)
+            self.log("val_" + key, val, prog_bar=True)
 
         # compute loss
         loss = self.criterion(distances, changes.float())
@@ -83,7 +85,8 @@ class ChangeDetectorBase(pl.LightningModule):
 
         # compute metrics
         for key, metric in self.metrics.items():
-            self.log("test_" + key, metric(torch.sigmoid(distances), changes), prog_bar=True)
+            val = metric(torch.sigmoid(distances), changes)
+            self.log("test_" + key, val, prog_bar=True)
 
         # compute loss
         loss = self.criterion(distances, changes.float())
@@ -95,9 +98,9 @@ class ChangeDetectorBase(pl.LightningModule):
                 self.parameters(),
                 lr=self.hparams.learning_rate,
                 weight_decay=self.hparams.weight_decay,
-                betas=(0.9, 0.99),
-            )
-        scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.trainer.max_epochs)
+                betas=(0.9, 0.99))
+        scheduler = lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=self.trainer.max_epochs)
         return [optimizer], [scheduler]
 
     @staticmethod
