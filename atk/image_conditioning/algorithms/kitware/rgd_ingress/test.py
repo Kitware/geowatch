@@ -13,7 +13,9 @@ class MainTestCase(AlgorithmTestCase):
     def runTest(self):
         # configure params for your algorithm
         with tempfile.TemporaryDirectory() as output_dir:
-          dry_run = 1
+          dry_run = 0
+          kwcoco = os.path.join(output_dir, 'rgd_results.kwcoco.json')
+          ignore_dem = 1
           self.params = {'username':os.environ['WATCH_RGD_USER'],
                          'password':os.environ['WATCH_RGD_PW'],
                          'date_range':['2018-11-01', '2018-11-08'],
@@ -21,7 +23,9 @@ class MainTestCase(AlgorithmTestCase):
                          'aoi_bounds':[128.662489, 37.659517, 128.676673, 37.664560],
                          'dry_run': dry_run,
                          'max_cloud_cover': 0.5,
-                         'min_aoi_overlap': 0.25
+                         'min_aoi_overlap': 0.25,
+                         'kwcoco': kwcoco,
+                         'ignore_dem': ignore_dem
                         }
 
           self.alg = Main(cl=self.cl, params=self.params)
@@ -32,6 +36,13 @@ class MainTestCase(AlgorithmTestCase):
 
           self.assertTrue(output_dir==self.cl.get_from_metadata('output_dir'))
           self.assertTrue(stac_catalog.get_self_href().startswith(output_dir))
+          if kwcoco:
+            self.assertTrue(os.path.isfile(kwcoco))
+            self.assertTrue(kwcoco.startswith(output_dir))
+            kwfile = json.load(open(kwcoco))
+            for img in kwfile['images']:
+              self.assertTrue(os.path.isfile(img['file_name']))
+              self.assertTrue(img['file_name'].startswith(output_dir))
           if not dry_run:
               self.assertTrue(os.path.isfile(stac_catalog.get_self_href()))
           for item in stac_catalog.get_items():

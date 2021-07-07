@@ -15,6 +15,8 @@ output_dir|Directory where output images / data will be written. Will be created
 dry_run|Don't actually download the retrieved imagery|
 max_cloud_cover|Maximum amount of cloud cover allowed before a STAC item is filtered out|
 min_aoi_overlap|Minimum amount of overlap an image must have with the selected AOI to be kept|
+kwcoco|Path to location where KWCOCO file of RGD search results will be written.|
+ignore_dem|If set to 1, don't use the digital elevation map|
 
 ## Outputs:
 Name|Description
