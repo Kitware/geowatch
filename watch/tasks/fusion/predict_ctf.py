@@ -9,7 +9,7 @@ datasets = {
 
 dataset_kwcocos = {
     "onera": pathlib.Path("~/Projects/smart_watch_dvc/extern/onera_2018/onera_all.kwcoco.json").expanduser(),
-    "drop0_s2": pathlib.Path("~/Projects/smart_watch_dvc/drop0_aligned_msi/data.kwcoco.json").expanduser(),
+    "drop0_s2": pathlib.Path("~/Projects/smart_watch_dvc/drop0_aligned_context5/data.kwcoco.json").expanduser(),
 }
 
 dataset_channel_sets = {
@@ -33,37 +33,43 @@ dataset_channel_sets = {
     },
 }
 
-for ckpt_dir in pathlib.Path("_trained_models").glob("onera/ctf_drop8/*/"):
-    dataset_name = ckpt_dir.parts[-3]
-    method_model_name = ckpt_dir.parts[-1]
-    method, model_name = method_model_name.split("-")
+for dataset_name in ["onera", "drop0_s2"]:
+    for ckpt_dir in pathlib.Path("_trained_models").glob("onera/ctf*/*/"):
+        #dataset_name = ckpt_dir.parts[-3]
+        method_model_name = ckpt_dir.parts[-1]
+        method, model_name = method_model_name.split("-")
 
-    dataset = datasets[dataset_name]
-    test_kwcoco_path = dataset_kwcocos[dataset_name]
+        dataset = datasets[dataset_name]
+        test_kwcoco_path = dataset_kwcocos[dataset_name]
 
-    ckpt_paths = ckpt_dir.glob("lightning_logs/version_*/checkpoints/*.ckpt")
-    ckpt_paths = sorted(list(ckpt_paths))
-    ckpt_path = ckpt_paths[-1]
+        ckpt_paths = ckpt_dir.glob("lightning_logs/version_*/checkpoints/*.ckpt")
+        ckpt_paths = sorted(list(ckpt_paths))
+        if len(ckpt_paths) < 1:
+            continue
+        ckpt_path = ckpt_paths[-1]
 
-    for channel_key, channel_subset in dataset_channel_sets[dataset_name].items():
+        for channel_key, channel_subset in dataset_channel_sets[dataset_name].items():
 
-        print(f"{method_model_name}_{dataset}_{channel_key}\n=========================")
+            print(f"{method_model_name}_{dataset}_{channel_key}\n=========================")
 
-        args = SimpleNamespace(
-            dataset=dataset,
-            method=method,
-            tag=f"{method_model_name}_{channel_key}",
-            checkpoint_path=ckpt_path,
-            results_dir=pathlib.Path("_results") / dataset,
-            results_path=pathlib.Path("_results") / f"{dataset}_results.kwcoco.json",
-            test_kwcoco_path=test_kwcoco_path,
-            tfms_channel_subset=channel_subset,
-            # common args
-            use_gpu=True,
-            batch_size=1,
-            time_steps=2,
-            chip_size=128,
-            time_overlap=0.5,
-            chip_overlap=0.1,
-        )
-        predict.main(args)
+            args = SimpleNamespace(
+                dataset=dataset,
+                method=method,
+                tag=f"{method_model_name}_{channel_key}",
+                checkpoint_path=ckpt_path,
+                results_dir=pathlib.Path("_results") / dataset,
+                results_path=pathlib.Path("_results") / f"{dataset}_results.kwcoco.json",
+                test_kwcoco_path=test_kwcoco_path,
+                tfms_channel_subset=channel_subset,
+                # common args
+                use_gpu=True,
+                batch_size=1,
+                time_steps=2,
+                chip_size=128,
+                time_overlap=0.5,
+                chip_overlap=0.1,
+            )
+            try:
+                predict.main(args)
+            except:
+                continue

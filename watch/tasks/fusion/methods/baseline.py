@@ -37,7 +37,8 @@ class UNetChangeDetector(ChangeDetectorBase):
     def preprocessing_step(self):
         return transforms.Compose([
             utils.Lambda(lambda x: torch.from_numpy(x)),
-            utils.Lambda(lambda x: (x - self.hparams.input_mean) / self.hparams.input_std),
+        #    utils.Lambda(lambda x: (x - self.hparams.input_mean) / self.hparams.input_std),
+            utils.Lambda(lambda x: (x - x.mean()) / x.std()),
         ])
 
     @pl.core.decorators.auto_move_data
