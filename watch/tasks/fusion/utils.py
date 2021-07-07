@@ -140,7 +140,7 @@ def add_auxiliary(dset, gid, fname, channels, aux_height, aux_width, warp_aux_to
         'height': aux_height,
         'width': aux_width,
         'channels': channels,
-        'warp_aux_to_img': Affine_concise(warp_aux_to_img),
+        'warp_aux_to_img': kwimage.Affine.coerce(warp_aux_to_img).concise(),
     }
 
     if extra_info is not None:

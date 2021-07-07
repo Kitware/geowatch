@@ -55,7 +55,12 @@ class OneraCD_2018(pl.LightningDataModule):
     def setup(self, stage):
 
         if stage == "fit" or stage is None:
-            kwcoco_ds = kwcoco.CocoDataset(str(self.train_kwcoco_path.expanduser()))
+            if isinstance(self.train_kwcoco_path, pathlib.Path):
+                coco_fpath = str(self.train_kwcoco_path.expanduser())
+            else:
+                coco_fpath = str(self.train_kwcoco_path)
+            print('coco_fpath = {!r}'.format(coco_fpath))
+            kwcoco_ds = kwcoco.CocoDataset(coco_fpath)
             kwcoco_sampler = ndsampler.CocoSampler(kwcoco_ds)
             train_val_ds = common.VideoDataset(
                 kwcoco_sampler,
@@ -75,7 +80,11 @@ class OneraCD_2018(pl.LightningDataModule):
             )
 
         if stage == "test" or stage is None:
-            kwcoco_ds = kwcoco.CocoDataset(str(self.test_kwcoco_path.expanduser()))
+            if isinstance(self.test_kwcoco_path, pathlib.Path):
+                coco_fpath = str(self.test_kwcoco_path.expanduser())
+            else:
+                coco_fpath = str(self.test_kwcoco_path)
+            kwcoco_ds = kwcoco.CocoDataset(coco_fpath)
             kwcoco_sampler = ndsampler.CocoSampler(kwcoco_ds)
             self.test_dataset = common.VideoDataset(
                 kwcoco_sampler,
