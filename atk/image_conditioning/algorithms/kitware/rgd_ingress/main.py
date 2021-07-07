@@ -8,6 +8,7 @@ import pystac
 import shapely as shp
 import shapely.ops
 import shapely.geometry
+from watch.tools.stac_to_kwcoco import convert
 
 
 class Main(Algorithm):
@@ -96,6 +97,11 @@ class Main(Algorithm):
             catalog.add_item(item)
 
         catalog.save(catalog_type=pystac.CatalogType.ABSOLUTE_PUBLISHED)
+
+        if params['kwcoco']:
+            convert(params['kwcoco'], 
+                    os.path.join(params['output_dir'], 'catalog.json'),
+                    params['ignore_dem'])
 
         cl.add_to_metadata('stac_catalog', catalog.to_dict())
         cl.add_to_metadata('output_dir', params['output_dir'])
