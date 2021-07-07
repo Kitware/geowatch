@@ -5,26 +5,27 @@ data:
   type: semantic_seg
   name: iarpa
   image_size: 300x300
-  num_classes: 5
+  num_classes: 60
   weights: []
   local:
     model_save_dir: /home/native/projects/data/smart_watch/models/
-    train_dir: /media/native/data/data/smart_watch_dvc/drop0_aligned_msi/
-    test_dir: /media/native/data/data/smart_watch_dvc/drop0_aligned_msi/
-    coco_json: /media/native/data/data/smart_watch_dvc/drop0_aligned_msi/material_labels2.kwcoco.json
+    train_dir: /media/native/data/data/smart_watch_dvc/extern/onera_2018/
+    test_dir: /media/native/data/data/smart_watch_dvc/extern/onera_2018/
+    coco_json: /media/native/data/data/smart_watch_dvc/extern/onera_2018/onera_all.kwcoco.json
     val_dir:
   server:
     model_save_dir: /data4/peri/smart_watch/models/
-    train_dir: /data4/peri/datasets/smart_watch/processed/drop0_aligned_v2.1/
-    test_dir: /data4/peri/datasets/smart_watch/processed/drop0_aligned_v2.1/
-    val_dir: /data4/peri/datasets/smart_watch/processed/drop0_aligned_v2.1/
-    coco_json:  /data4/datasets/smart_watch/processed/drop0_aligned_v2.1/material_labels.kwcoco.json
+    train_dir: /data4/datasets/smart_watch_dvc/extern/onera_2018/
+    test_dir: /data4/datasets/smart_watch_dvc/extern/onera_2018/
+    val_dir: /data4/datasets/smart_watch_dvc/extern/onera_2018/
+    coco_json:  /data4/datasets/smart_watch_dvc/extern/onera_2018/onera_train.kwcoco.json
 
 training:
   backbone: 
-  model_name: vsnet
+  model_name: shallow_seg
   gn_n_groups: 32
-  num_channels: 7
+  num_channels: 13
+  out_features_dim: 64
   weight_std: True
   beta: False
   pretrained: False
@@ -35,7 +36,7 @@ training:
   train_val_test_split: [0.95, 0.02, 0.03]
   epochs: 200
   start_epoch: 0
-  batch_size: 2
+  batch_size: 1
   drop_last_batch: True
   momentum: 0.9
   weight_decay: 0.0001
@@ -43,8 +44,8 @@ training:
   test_with_full_supervision: 1
 
 high_confidence_threshold:
-  train_cutoff: 0.9
-  val_cutoff: 0.9
+  train_cutoff: 0.95
+  val_cutoff: 0.95
 
 evaluation:
   use_crf: False

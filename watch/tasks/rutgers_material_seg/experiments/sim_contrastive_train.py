@@ -208,7 +208,8 @@ class Trainer(object):
             images = images.to(device)
             mask = mask.to(device)
             
-            output1 = self.model(images) # torch.Size([B, C+1, H, W])
+            print(images.shape)
+            output1 = self.model(images) # torch.Size([B, C+1, H, W]) torch.Size([4, 3, 64, 64])
             
             
             # print(output1.shape)

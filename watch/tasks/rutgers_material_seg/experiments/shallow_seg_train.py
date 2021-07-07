@@ -69,10 +69,6 @@ class Trainer(object):
             self.test_loader = test_loader
             self.test_with_full_supervision = test_with_full_supervision
         
-        # self.cmap = visualization.rand_cmap(nlabels=self.max_label+1, type='bright', 
-        #                                     first_color_black=True, last_color_black=True, 
-        #                                     bg_alpha=config['visualization']['bg_alpha'],
-        #                                     fg_alpha=config['visualization']['fg_alpha'])
         
         self.cmap = visualization.n_distinguishable_colors(nlabels=self.max_label,
                                                            first_color_black=True, last_color_black=True, 
@@ -153,12 +149,12 @@ class Trainer(object):
             # image_name = outputs['visuals']['image_name'][batch_index_to_show]
 
             output1 = self.model(image1) # torch.Size([B, C+1, H, W])
-            # print(output1.shape)
             # output1_interpolated = F.interpolate(output1, size=mask.size()[-2:], 
             #                                      mode="bilinear", align_corners=True)
 
             # bs, c, h, w = output1.size()
-            
+            print(output1.shape)
+            print(mask.shape)
             loss = 30*F.cross_entropy(output1, 
                                       mask,
                                       ignore_index=-1, 
@@ -171,7 +167,7 @@ class Trainer(object):
 
             masks = F.softmax(output1, dim=1)#.detach()
             # masks = F.interpolate(masks, size=mask.size()[-2:], mode="bilinear", align_corners=True)
-            masks = self.high_confidence_filter(masks, cutoff_top=config['high_confidence_threshold']['train_cutoff'])
+            # masks = self.high_confidence_filter(masks, cutoff_top=config['high_confidence_threshold']['train_cutoff'])
             pred = masks.max(1)[1].cpu().detach()#.numpy()
             # print(f"uniques in pred: {torch.unique(pred)}")
             total_loss += loss.item()
@@ -266,7 +262,6 @@ class Trainer(object):
                         plt.close('all')
                         plt.close(figure)
                         gc.collect()
-
             
             # total_loss_cls += loss_cls.item()
             # total_loss += loss_cls.item()
@@ -313,7 +308,8 @@ class Trainer(object):
                 outputs = batch
                 image1, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0]
                 original_width, original_height = outputs['tr'].data[0][batch_index_to_show]['space_dims']
-                
+                image_name = str(outputs['tr'].data[0][batch_index_to_show]['gids'][0])
+                # print(image_name)
                 mask = torch.stack(mask)
                 mask = mask.long().squeeze(1)
                 image1 = image1.to(device)
@@ -326,7 +322,7 @@ class Trainer(object):
 
                 masks = F.softmax(output, dim=1) ## (B, 22, 300, 300)
                 # masks = F.interpolate(masks, size=mask.size()[-2:], mode="bilinear", align_corners=True)
-                masks = self.high_confidence_filter(masks, cutoff_top=config['high_confidence_threshold']['val_cutoff'])
+                # masks = self.high_confidence_filter(masks, cutoff_top=config['high_confidence_threshold']['val_cutoff'])
                 pred = masks.max(1)[1].cpu().detach()#.numpy()
                 # print(f"uniques in pred: {torch.unique(pred, return_counts=True)}")
                 # pred[pred==self.max_label] = 0
@@ -411,17 +407,38 @@ class Trainer(object):
 
                             if config['visualization']['train_imshow']:
                                 plt.show()
-                            cometml_experiemnt.log_figure(figure_name=f"Validation, Image name:",figure=figure)
                             if config['visualization']['titles']:
                                 figure.suptitle(f"GT labels for classification: {classes_in_gt}, classes predicted: {classes_predicted}") #\nP
                                 ax1.set_title(f"Input Image", fontsize=config['visualization']['font_size'])
-                                ax2.set_title(f"GT Mask", fontsize=config['visualization']['font_size'])
-                                ax3.set_title(f"Prediction", fontsize=config['visualization']['font_size'])
-                                ax6.set_title(f"Prediction", fontsize=config['visualization']['font_size'])
+                                ax2.set_title(f"GT Mask Overlay", fontsize=config['visualization']['font_size'])
+                                ax3.set_title(f"Prediction Overlay", fontsize=config['visualization']['font_size'])
                                 ax5.set_title(f"GT Mask", fontsize=config['visualization']['font_size'])
+                                ax6.set_title(f"Prediction", fontsize=config['visualization']['font_size'])
                                 if self.use_crf:
                                     ax4.set_title(f"+CRF Prediction", fontsize=config['visualization']['font_size'])
+                            else:
+                                figure.tight_layout()
+                            
+                            if config['visualization']['save_individual_plots']:
 
+                                plots_path_save = f"{config['visualization']['save_individual_plots_path']}{config['dataset']}/"
+                                fig_save_image_root = (f"{plots_path_save}/image_root/",ax1)
+                                fig_save_prediction_root = (f"{plots_path_save}/predictions/",ax3)
+                                fig_save_overlaid_full_supervised_mask_on_image_alpha_with_bg = (f"{plots_path_save}/overlaid_full_alpha_w_bg/",ax2)
+                                roots = [
+                                        fig_save_image_root, 
+                                        fig_save_prediction_root,
+                                        fig_save_overlaid_full_supervised_mask_on_image_alpha_with_bg
+                                        ]
+                                figure.savefig(f"{plots_path_save}/figs/{image_name}.png", bbox_inches='tight')
+                                for root, ax in roots:
+                                    utils.create_dir_if_doesnt_exist(root)
+                                    file_path = f"{root}/{image_name}.png"
+                                    # extent = ax.get_window_extent().transformed(figure.dpi_scale_trans.inverted())
+                                    extent = ax.get_tightbbox(figure.canvas.get_renderer()).transformed(figure.dpi_scale_trans.inverted())
+                                    figure.savefig(file_path, bbox_inches=extent)
+                            
+                            cometml_experiemnt.log_figure(figure_name=f"Validation, Image name:",figure=figure)
                             figure.clear()
                             plt.cla()
                             plt.clf()
