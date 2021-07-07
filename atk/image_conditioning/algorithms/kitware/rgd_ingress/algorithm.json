@@ -33,7 +33,7 @@
             "name": "max_cloud_cover",
             "parameter_choices": "",
             "required": false,
-            "sort_order": 8
+            "sort_order": 6
         },
         {
             "custom_validation": "",
@@ -46,6 +46,36 @@
             "max_value": null,
             "min_value": null,
             "name": "min_aoi_overlap",
+            "parameter_choices": "",
+            "required": false,
+            "sort_order": 7
+        },
+        {
+            "custom_validation": "",
+            "data_type": "string",
+            "default_value": "",
+            "description": "Path to location where KWCOCO file of RGD search results will be written.",
+            "display_name": "KWCOCO",
+            "field_type": "text",
+            "help_text": "Cannot be used with the dry_run option as it requires the images to be locally available.",
+            "max_value": "",
+            "min_value": "",
+            "name": "kwcoco",
+            "parameter_choices": "",
+            "required": false,
+            "sort_order": 8
+        },
+        {
+            "custom_validation": "",
+            "data_type": "integer",
+            "default_value": 1,
+            "description": "If set to 1, don't use the digital elevation map",
+            "display_name": "Ignore DEM",
+            "field_type": "number",
+            "help_text": "Only to be used with the kwcoco option",
+            "max_value": 1,
+            "min_value": 0,
+            "name": "ignore_dem",
             "parameter_choices": "",
             "required": false,
             "sort_order": 9
