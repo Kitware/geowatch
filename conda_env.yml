@@ -93,6 +93,9 @@ dependencies:
 .__doc__: &__doc__
   - |
 
+      pip uninstall osgeo GDAL
+      pip install GDAL==3.2.1 --find-links https://girder.github.io/large_image_wheels
+
       rm -rf ".cache/conda/envs/loose-watch-env"
       conda env create -f conda_env.yml --prefix ".cache/conda/envs/loose-watch-env" -v -v
 

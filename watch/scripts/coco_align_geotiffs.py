@@ -214,6 +214,8 @@ def main(**kw):
     write_subsets = config['write_subsets']
 
     output_bundle_dpath = dst_dpath
+    # import xdev
+    # xdev.embed()
 
     # Load the dataset and extract geotiff metadata from each image.
     dset = kwcoco.CocoDataset(src_fpath)
@@ -229,9 +231,12 @@ def main(**kw):
     elif exists(regions):
         # Read custom ROI regions
         import geopandas
+        # For whatever reason geopandas reads in geojson (which is supposed to
+        # be traditional order long/lat) with a authority compliant wgs84
+        # lat/long crs
         region_df = geopandas.read_file(regions)
         kw_all_rois = [
-            kwimage.Polygon.from_shapely(sh_poly)
+            kwimage.Polygon.from_shapely(sh_poly).swap_axes()
             for sh_poly in region_df.geometry
         ]
     else:
@@ -576,7 +581,8 @@ class SimpleDataCube(object):
                         # hack this in for heuristics
                         if 'sensor_coarse' in img:
                             dst['sensor_coarse'] = img['sensor_coarse']
-                        _populate_canvas_obj(bundle_dpath, dst, overwrite=True, with_wgs=True)
+                        _populate_canvas_obj(bundle_dpath, dst,
+                                             overwrite={'warp'}, with_wgs=True)
 
                 new_img = {
                     'name': name,
@@ -772,7 +778,7 @@ def update_coco_geotiff_metadata(dset, serializable=True):
     img_iter = ub.ProgIter(dset.imgs.values(),
                            total=len(dset.imgs),
                            desc='update meta',
-                           verbose=1)
+                           verbose=1, freq=1, adjust=False)
     for img in img_iter:
 
         img['datetime_acquisition'] = (
@@ -796,6 +802,56 @@ def update_coco_geotiff_metadata(dset, serializable=True):
             'wgs84_corners',
             'wld_to_pxl',
         }
+
+        HACK_METADATA = 0
+        if HACK_METADATA:
+            ### HACK: See if we can construct the keys from the metadata
+            # in the coco file instead of reading the geotiff
+            hack_keys = {
+                'utm_corners',
+                'warp_img_to_wld',
+                'utm_crs_info',
+                'wld_crs_info',
+            }
+            have_hacks = ub.dict_isect(img, hack_keys)
+            if len(have_hacks) == len(hack_keys):
+                print('have hacks: {}'.format(img['sensor_coarse']))
+                from osgeo import osr
+                def _make_osgeo_crs(crs_info):
+                    from osgeo import osr
+                    axis_mapping_int = getattr(osr, crs_info['axis_mapping'])
+                    auth = crs_info['auth']
+                    assert len(auth) == 2
+                    assert auth[0] == 'EPSG'
+                    crs = osr.SpatialReference()
+                    crs.ImportFromEPSG(int(auth[1]))
+                    crs.SetAxisMappingStrategy(axis_mapping_int)
+                    return crs
+
+                wgs84_crs = osr.SpatialReference()
+                wgs84_crs.ImportFromEPSG(4326)  # 4326 is the EPSG id WGS84 of lat/lon crs
+
+                wld_to_pxl = kwimage.Affine.coerce(img['warp_img_to_wld']).inv()
+                utm_crs = _make_osgeo_crs(have_hacks['utm_crs_info'])
+                wld_crs = _make_osgeo_crs(have_hacks['wld_crs_info'])
+                utm_to_wgs84 = osr.CoordinateTransformation(utm_crs, wgs84_crs)
+                wgs84_to_wld = osr.CoordinateTransformation(wgs84_crs, wld_crs)
+                utm_corners = kwimage.Coords(np.array(have_hacks['utm_corners']))
+                wgs84_corners = utm_corners.warp(utm_to_wgs84)
+
+                hack_info = {
+                    'rpc_transform': None,
+                    'is_rpc': False,
+                    'wgs84_to_wld': wgs84_to_wld,
+                    'wgs84_corners': wgs84_corners,
+                    'wld_to_pxl': wld_to_pxl,
+                }
+                img['geotiff_metadata'] = hack_info
+                continue
+            else:
+                print('missing hacks: {}'.format(img['sensor_coarse']))
+
+        # ub.dict_isect(img, keys_of_interest)
 
         fname = img.get('file_name', None)
         if fname is not None:
@@ -848,8 +904,15 @@ def find_roi_regions(dset):
     aid_to_poly = {}
     for aid, ann in dset.anns.items():
         geo = _fix_geojson_poly(ann['segmentation_geos'])
-        latlon = np.array(geo['coordinates'][0])[:, ::-1]
-        kw_poly = kwimage.structs.Polygon(exterior=latlon)
+        # wgs84 = pyproj.CRS.from_epsg(4326)
+        # wgs84_traditional = pyproj.CRS.from_epsg(4326)
+        # from pyproj import CRS
+        # geopandas.GeoDataFrame.from_dict(geo, crs)
+        # latlon = np.array(geo['coordinates'][0])[:, ::-1]
+        # kw_poly = kwimage.structs.Polygon(exterior=latlon)
+
+        # Geojson is lon/lat, so swap to wgs84 lat/lon
+        kw_poly = kwimage.structs.MultiPolygon.from_geojson(geo).swap_axes()
         aid_to_poly[aid] = kw_poly.to_shapely()
 
     gid_to_rois = {}

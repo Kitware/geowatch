@@ -16,6 +16,11 @@ from os.path import join
 
 from kwimage.transform import Affine
 
+try:
+    from xdev import profile
+except Exception:
+    profile = ub.identity
+
 
 def populate_watch_fields(dset, target_gsd=10.0, overwrite=False):
     """
@@ -24,6 +29,9 @@ def populate_watch_fields(dset, target_gsd=10.0, overwrite=False):
     Args:
         dset (Dataset): dataset to work with
         target_gsd (float): target gsd in meters
+        overwrite (bool | List[str]): if True or False overwrites everything or
+            nothing. Otherwise it can be a list of strings indicating what is
+            overwritten. Valid keys are warp, band, and channels.
 
     Ignore:
         >>> from watch.tools.kwcoco_extensions import *  # NOQA
@@ -222,6 +230,7 @@ def coco_populate_geo_img_heuristics(dset, gid, overwrite=False, **kw):
         _populate_canvas_obj(bundle_dpath, aux, overwrite=overwrite)
 
 
+@profile
 def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False):
     """
     obj can be an img or aux
@@ -232,11 +241,23 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False):
     fname = obj.get('file_name', None)
     warp_to_wld = obj.get('warp_to_wld', None)
     approx_meter_gsd = obj.get('approx_meter_gsd', None)
+
+    valid_overwrites = {'warp', 'band', 'channels'}
+    if overwrite is True:
+        overwrite = valid_overwrites
+    elif overwrite is False:
+        overwrite = {}
+    else:
+        overwrite = set(overwrite)
+        unexpected = overwrite - valid_overwrites
+        if unexpected:
+            raise ValueError(f'Got unexpected overwrites: {unexpected}')
+
     # Can only do this for images with file names
     if fname is not None:
         fpath = join(bundle_dpath, fname)
 
-        if overwrite or warp_to_wld is None or approx_meter_gsd is None:
+        if 'warp' in overwrite or warp_to_wld is None or approx_meter_gsd is None:
             try:
                 import watch
                 info = watch.gis.geotiff.geotiff_metadata(fpath)
@@ -283,11 +304,11 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False):
             obj['approx_meter_gsd'] = approx_meter_gsd
             obj['warp_to_wld'] = Affine.coerce(obj_to_wld).__json__()
 
-        if overwrite or num_bands is None:
+        if 'band' in overwrite or num_bands is None:
             num_bands = _introspect_num_bands(fpath)
             obj['num_bands'] = num_bands
 
-        if overwrite or channels is None:
+        if 'channels' in overwrite or channels is None:
             if sensor_coarse is not None:
                 channels = _sensor_channel_hueristic(sensor_coarse, num_bands)
             elif num_bands is not None:
@@ -459,9 +480,9 @@ def _sensor_channel_hueristic(sensor_coarse, num_bands):
     else:
         err = 1
     if err:
-        import xdev
-        xdev.embed()
-        raise NotImplementedError(f'sensor_coarse={sensor_coarse}, num_bands={num_bands}')
+        msg = f'sensor_coarse={sensor_coarse}, num_bands={num_bands}'
+        print('ERROR: mgs = {!r}'.format(msg))
+        raise NotImplementedError(msg)
     return channels
 
 
@@ -492,7 +513,7 @@ def _num_band_hueristic(num_bands):
     elif num_bands == 4:
         channels = 'r|g|b|a'
     else:
-        raise Exception('num_bands=f{num_bands}')
+        raise Exception(f'num_bands={num_bands}')
     return channels
 
 
