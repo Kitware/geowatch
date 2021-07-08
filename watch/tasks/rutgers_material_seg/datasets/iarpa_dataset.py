@@ -94,7 +94,7 @@ class SequenceDataset(torch.utils.data.Dataset):
 
             # ensure channel dim is not squeezed
             frame = kwarray.atleast_nd(frame, 3)
-<<<<<<< HEAD
+
             # fig = plt.figure()
             # ax1 = fig.add_subplot(1,2,1)
             # ax2 = fig.add_subplot(1,2,2)
@@ -102,18 +102,6 @@ class SequenceDataset(torch.utils.data.Dataset):
             # ax2.imshow(frame_mask)
             # plt.show()
             
-=======
-
-            # fig = plt.figure()
-            # image_show = frame[:, :, :3]
-            # image_show = (image_show - image_show.min())/(image_show.max() - image_show.min())
-            # ax1 = fig.add_subplot(1, 2, 1)
-            # ax2 = fig.add_subplot(1, 2, 2)
-            # ax1.imshow(image_show)
-            # ax2.imshow(frame_mask)
-            # plt.show()
-
->>>>>>> 545fc36... multi-spectral cluster labeling, warp bug fixed, shallow seg network training with multi-spectral labeled data
             frame_masks.append(frame_mask)
             frame_ims.append(frame)
 
