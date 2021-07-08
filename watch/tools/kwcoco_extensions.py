@@ -395,15 +395,33 @@ def _sensor_channel_hueristic(sensor_coarse, num_bands):
     """
     Given a sensor and the number of bands in the image, return likely channel
     codes for the image
+
+    Note these are "pseudo-harmonized" by common_name, but not harmonized
+    that is, one sensor's 'red' is roughly similar to another's but not corrected to match.
+    Bands without a common_name will have a sensor-unique prefix appended to prevent this behavior.
     """
+    from watch.utils.util_bands import WORLDVIEW2_PAN, WORLDVIEW2_MS4, WORLDVIEW2_MS8, SENTINEL2, LANDSAT8, LANDSAT7
+
+    def code(bands, prefix):
+        names = []
+        for band_dict in bands:
+            if 'common_name' in band_dict:
+                names.append(band_dict['common_name'])
+            else:
+                names.append(prefix + band_dict['name'])
+        return '|'.join(names)
+
     err = 0
     if sensor_coarse == 'WV':
         if num_bands == 1:
-            channels = 'gray'
+            channels = 'panchromatic'
         elif num_bands == 3:
             channels = 'r|g|b'
+        elif num_bands == 4:
+            channels = code(WORLDVIEW2_MS4, 'w')
         elif num_bands == 8:
-            channels = 'wv1|wv2|wv3|wv4|wv5|wv6|wv7|wv8'
+            channels = code(WORLDVIEW2_MS8, 'w')
+            #channels = 'wv1|wv2|wv3|wv4|wv5|wv6|wv7|wv8'
             # channels = 'cb|b|g|y|r|wv6|wv7|wv8'
         else:
             err = 1
@@ -413,18 +431,29 @@ def _sensor_channel_hueristic(sensor_coarse, num_bands):
         elif num_bands == 3:
             channels = 'r|g|b'
         elif num_bands == 13:
-            channels = 's1|s2|s3|s4|s4|s6|s7|s8|s8a|s9|s10|s11|s12'
+            channels = code(SENTINEL2, 's')
+            # channels = 's1|s2|s3|s4|s4|s6|s7|s8|s8a|s9|s10|s11|s12'
             # channels = 'cb|b|g|r|s4|s6|s7|s8|s8a|s9|s10|s11|s12'
         else:
             err = 1
-    elif sensor_coarse == 'LC':
+    elif sensor_coarse in {'LC', 'L8', 'LS'}:
         if num_bands == 1:
-            channels = 'gray'
+            channels = 'panchromatic'
         elif num_bands == 3:
             channels = 'r|g|b'
         elif num_bands == 11:
-            channels = 'lc1|lc2|lc3|lc4|lc5|lc6|lc7|lc8|lc9|lc10|lc11'
+            channels = code(LANDSAT8, 'l8')
+            # channels = 'lc1|lc2|lc3|lc4|lc5|lc6|lc7|lc8|lc9|lc10|lc11'
             # channels = 'cb|b|g|r|lc5|lc6|lc7|pan|lc9|lc10|lc11'
+        else:
+            err = 1
+    elif sensor_coarse in {'LE', 'L7'}:
+        if num_bands == 1:
+            channels = 'panchromatic'
+        elif num_bands == 3:
+            channels = 'r|g|b'
+        elif num_bands == 8:
+            channels = code(LANDSAT7, 'l7')
         else:
             err = 1
     else:
