@@ -5,12 +5,12 @@ seed: 11
 visualization:
   batch_index_to_show: 0
   train_visualizer: True
-  val_visualizer: False
+  val_visualizer: True
   visualize_training_every: 2
   visualize_val_every: 4
-  train_visualization_divisor: 10
+  train_visualization_divisor: 221
   val_visualization_divisor: 114
-  save_individual_plots: True
+  save_individual_plots: False
   save_individual_plots_train: False
   save_individual_plots_path: /home/native/projects/data/smart_watch/visualization/research_deep_dive_presentation_3/
   titles: True

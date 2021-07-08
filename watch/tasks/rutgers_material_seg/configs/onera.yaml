@@ -30,7 +30,7 @@ training:
   beta: False
   pretrained: False
   distributed: False
-  learning_rate: 0.001 # best: 0.00007
+  learning_rate: 0.00075 # best: 0.00007
   # resume: /home/native/projects/data/smart_watch/models/experiments_iarpa/tasks_experiments_2021-06-30-17:49/experiments_epoch_11_loss_15182018.848935883_valmIoU_0.4333376202246598_time_2021-06-30-17:57:50.pth
   resume: False
   train_val_test_split: [0.95, 0.02, 0.03]
@@ -44,8 +44,8 @@ training:
   test_with_full_supervision: 1
 
 high_confidence_threshold:
-  train_cutoff: 0.95
-  val_cutoff: 0.95
+  train_cutoff: 0.8
+  val_cutoff: 0.8
 
 evaluation:
   use_crf: False

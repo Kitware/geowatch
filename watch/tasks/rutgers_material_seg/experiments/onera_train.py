@@ -67,7 +67,7 @@ class Trainer(object):
         self.scheduler = scheduler
         self.class_weights = torch.Tensor(config['data']['weights']).float().to(device)
         
-        self.k = 17
+        self.k = 30
         self.max_label = self.k
         
         if test_loader is not None:
@@ -79,7 +79,7 @@ class Trainer(object):
                                                         transforms.ColorJitter(0.4, 0.4, 0.4, 0.1),
                                                         transforms.RandomGrayscale(p=0.2),
                                                         ])
-        self.crop_size=(20,20)
+        self.crop_size=(12,12)
         
         self.cmap = visualization.n_distinguishable_colors(nlabels=self.max_label,
                                                            first_color_black=True, last_color_black=True, 
@@ -153,6 +153,8 @@ class Trainer(object):
             bs, c, t, h, w = images.shape
             image1 = images[:,:,0,:,:]
             image2 = images[:,:,1,:,:]
+            mask1 = mask[:,0,:,:]
+            mask2 = mask[:,1,:,:]
             
             class_to_show = max(0,torch.unique(mask)[-1]-1)
             images = images.to(device)
@@ -162,7 +164,7 @@ class Trainer(object):
             
             image_change_magnitude = torch.sqrt((image1 - image2)*(image1 - image2))
             image_change_magnitude = torch.mean(image_change_magnitude, dim=1, keepdims=True)
-            image_change_magnitude_binary = (image_change_magnitude>1600).long().squeeze(1) #torch.Size([1, 256, 256])
+            image_change_magnitude_binary = (image_change_magnitude>1350).long().squeeze(1) #torch.Size([1, 256, 256])
             
             # plt.imshow(image_change_magnitude_binary.squeeze().cpu().detach().numpy())
             # plt.show()
@@ -172,12 +174,10 @@ class Trainer(object):
             
             params = random_crop.get_params(images, output_size=self.crop_size)
             half_crop_size = self.crop_size[0]//2
-            # print(half_crop_size)
-            # cropped_images = random_crop(images)
             # print(params)
             cm_binary_crop = image_change_magnitude_binary[:, params[0]-half_crop_size:params[0]+half_crop_size,
                                                            params[1]-half_crop_size:params[1]+half_crop_size]
-            # print(cm_binary_crop.shape)
+            
             if 1 in cm_binary_crop:
                 while not torch.equal(torch.unique(cm_binary_crop), torch.zeros(1).to(device)):
                     params = list(params)
@@ -190,11 +190,9 @@ class Trainer(object):
             cropped_images = transforms.functional.crop(images, *params)
             cropped_image1 = cropped_images[:,:,0,:,:]
             cropped_image2 = cropped_images[:,:,1,:,:]
-            # image1, image2 = get_anchors(image1, image2, window_size=11)
-            # print(cropped_image1.shape)
+
             cropped_image1_flat = torch.transpose(torch.flatten(cropped_image1.squeeze(),start_dim=1, end_dim=2),0,1)
             
-            # print(cropped_image1_flat.shape) # torch.Size([2, 13, 2, 256, 256])
             output1, _ = self.model(image1)  ## [B,22,150,150]
             output2, _ = self.model(image2)
             
@@ -203,9 +201,7 @@ class Trainer(object):
             
             stacked_for_cropping = torch.cat([output1.unsqueeze(1), output2.unsqueeze(1)], dim=1)
             stacked_for_loss = torch.cat([output1.unsqueeze(1), output2.unsqueeze(1)], dim=2)
-            # print(stacked_for_loss.shape)
-            
-            # cropped_features = random_crop(stacked_for_cropping)
+
             cropped_features = transforms.functional.crop(stacked_for_cropping, *params)
             
             cropped_bs, cropped_t, cropped_c, cropped_h, cropped_w = cropped_features.shape
@@ -215,7 +211,6 @@ class Trainer(object):
             
             cropped_features1_flat = torch.transpose(torch.flatten(cropped_features1.squeeze(),start_dim=1, end_dim=2),0,1)
             cropped_features2_flat = torch.transpose(torch.flatten(cropped_features2.squeeze(),start_dim=1, end_dim=2),0,1)
-            # print(cropped_features1_flat.shape)
             
             kmeans = KMeans(n_clusters=self.k, mode='euclidean', verbose=0, minibatch=None)
             # dictionary = kmeans.fit_predict(cropped_features1_flat)#.to(device)
@@ -233,35 +228,33 @@ class Trainer(object):
             # ax2.imshow(dictionary.squeeze().cpu().detach().numpy())
             # plt.show()
             # change_inds = image_change_magnitude_binary.squeeze()==1
-            # print(change_inds)
 
-            loss1 = 15*F.cross_entropy(cropped_features1, 
-                                      dictionary,
-                                      ignore_index=-1, 
-                                      reduction="mean")
+            # loss1 = 8*F.cross_entropy(cropped_features1, 
+            #                           dictionary,
+            #                           ignore_index=-1, 
+            #                           reduction="mean")
             
-            loss2 = 15*F.cross_entropy(cropped_features2, 
-                                      dictionary,
-                                      ignore_index=-1, 
-                                      reduction="mean")
+            # loss2 = 8*F.cross_entropy(cropped_features2, 
+            #                           dictionary,
+            #                           ignore_index=-1, 
+            #                           reduction="mean")
             
-            loss = loss1 + loss2
-            # print(torch.unique(image_change_magnitude_binary.squeeze()==1, return_counts=True))
+            # loss = loss1 + loss2
+            
+            loss = 30*F.cosine_embedding_loss(cropped_features1.unsqueeze(0), 
+                                              cropped_features2.unsqueeze(0), 
+                                              torch.ones_like(cropped_features1))
+            
             features_change1 = output1[:,:,image_change_magnitude_binary.squeeze()==1]
             features_change2 = output2[:,:,image_change_magnitude_binary.squeeze()==1]
-            # print(cropped_features_change.shape)
             if features_change1.shape[2]!=0:
                 features_change1 = torch.transpose(features_change1.squeeze(0),0,1)
                 features_change2 = torch.transpose(features_change2.squeeze(0),0,1)
                 # print(features_change1.shape)
                 # print(features_change2.shape)
-                loss += 30*F.cosine_embedding_loss(features_change1.unsqueeze(0), 
-                                                features_change2.unsqueeze(0), 
-                                                -torch.ones_like(features_change1))
-                
-
-            
-            # loss_similarity = F.cosine_embedding_loss(cropped_features1, cropped_features2, torch.ones_like(cropped_features1))
+                loss += 20*F.cosine_embedding_loss(features_change1.unsqueeze(0), 
+                                                   features_change2.unsqueeze(0), 
+                                                   -torch.ones_like(features_change1))
 
             self.optimizer.zero_grad()
             loss.backward()
@@ -280,7 +273,8 @@ class Trainer(object):
             
             masks1 = F.softmax(output1, dim=1)#.detach()
             masks2 = F.softmax(output2, dim=1)#.detach()
-            # masks = self.high_confidence_filter(masks, cutoff_top=config['high_confidence_threshold']['train_cutoff'])
+            masks1 = self.high_confidence_filter(masks1, cutoff_top=config['high_confidence_threshold']['train_cutoff'])
+            masks2 = self.high_confidence_filter(masks2, cutoff_top=config['high_confidence_threshold']['train_cutoff'])
             pred1 = masks1.max(1)[1].cpu().detach()#.numpy()
             pred2 = masks2.max(1)[1].cpu().detach()#.numpy()
             change_detection_prediction = (pred1!=pred2).type(torch.uint8)
@@ -290,20 +284,23 @@ class Trainer(object):
             pred_stacked[pred_stacked!=1] = 0
             
             total_loss += loss.item()
-            mask[mask==-1]=0
-            # preds.append(pred)
-            # targets.append(mask.cpu())#.numpy())
+            mask1[mask1==-1]=0
+            preds.append(image_change_magnitude_binary.cpu())
+            targets.append(mask1.cpu())#.numpy())
             
             if config['visualization']['train_visualizer'] :
                 if (epoch) % config['visualization']['visualize_training_every'] == 0:
                     if (batch_index % iter_visualization) == 0:
                         figure = plt.figure(figsize=(config['visualization']['fig_size'],config['visualization']['fig_size']))
-                        ax1 = figure.add_subplot(2,3,1)
-                        ax2 = figure.add_subplot(2,3,2)
-                        ax3 = figure.add_subplot(2,3,3)
-                        ax4 = figure.add_subplot(2,3,4)
-                        ax5 = figure.add_subplot(2,3,5)
-                        ax6 = figure.add_subplot(2,3,6)
+                        ax1 = figure.add_subplot(3,3,1)
+                        ax2 = figure.add_subplot(3,3,2)
+                        ax3 = figure.add_subplot(3,3,3)
+                        ax4 = figure.add_subplot(3,3,4)
+                        ax5 = figure.add_subplot(3,3,5)
+                        ax6 = figure.add_subplot(3,3,6)
+                        ax7 = figure.add_subplot(3,3,7)
+                        ax8 = figure.add_subplot(3,3,8)
+                        ax9 = figure.add_subplot(3,3,9)
 
                         cmap_gradients = plt.cm.get_cmap('jet') 
                         # image_show = np.transpose(image1.cpu().detach().numpy()[batch_index_to_show,:,:,:],(1,2,0))[:,:,:3]
@@ -327,15 +324,11 @@ class Trainer(object):
                         gt_mask_show2 = mask.cpu().detach()[batch_index_to_show,1,:,:].numpy().squeeze()
                         output1_sample1 = masks1[batch_index_to_show,class_to_show,:,:].cpu().detach().numpy().squeeze()
 
+                        vca_pseudomask_show = image_change_magnitude_binary.cpu().detach()[batch_index_to_show,:,:].numpy()
+                        vca_pseudomask_crop_show = cm_binary_crop.cpu().detach()[batch_index_to_show,:,:].numpy()
+                        # print(vca_pseudomask_crop_show.shape)
+
                         fp_tp_fn_prediction_mask = gt_mask_show1 + (2*change_detection_show)
-                        # print(np.unique(fp_tp_fn_prediction_mask))
-                        # print(np.unique(gt_mask_show1))
-                        # print(np.unique(change_detection_show))
-                        # gt_mask_show[gt_mask_show==-1] = 0
-                        # image_show = image_show[:original_width, :original_height,:]
-                        # logits_show = logits_show[:original_width, :original_height]
-                        # gt_mask_show = gt_mask_show[:original_width, :original_height]
-                        # output1_sample = output1_sample[:original_width, :original_height]
                         
                         logits_show1[logits_show1==-1]=0
                         logits_show2[logits_show2==-1]=0
@@ -362,6 +355,9 @@ class Trainer(object):
                         ax6.imshow(change_detection_show, cmap=self.cmap, vmin=0, vmax=self.max_label)#, alpha=alphas_final_gt)
                         # ax6.imshow(fp_tp_fn_prediction_mask, cmap='tab20c', vmin=0, vmax=6)#, alpha=alphas_final_gt)
 
+                        ax7.imshow(vca_pseudomask_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
+                        
+                        ax8.imshow(vca_pseudomask_crop_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
                         ax1.axis('off')
                         ax2.axis('off')
@@ -393,9 +389,20 @@ class Trainer(object):
                         plt.close(figure)
                         gc.collect()
             
-        # mean_iou, precision, recall = eval_utils.compute_jaccard(preds, targets, num_classes=2)
-        # overall_miou = sum(mean_iou)/len(mean_iou)
-        # print(f"Training class-wise mIoU value: \n{np.array(mean_iou)} \noverall mIoU: {overall_miou}")
+        mean_iou, precision, recall = eval_utils.compute_jaccard(preds, targets, num_classes=2)
+        
+        # mean_precision = sum(precision)/len(precision)
+        # mean_recall = sum(recall)/len(recall)
+        mean_precision = precision[1]
+        mean_recall = recall[1]
+        f1_score = 2*(mean_precision*mean_recall)/(mean_precision+mean_recall)
+        
+        overall_miou = sum(mean_iou)/len(mean_iou)
+        print(f"Training class-wise mIoU value: \n{np.array(mean_iou)} \noverall mIoU: {overall_miou}")
+        print(f"Training class-wise Precision value: \n{np.array(precision)} \noverall Precision: {mean_precision}")
+        print(f"Training class-wise Recall value: \n{np.array(recall)} \noverall Recall: {mean_recall}")
+        print(f"Training overall F1 Score: {f1_score}")
+        
         cometml_experiemnt.log_metric("Training Loss", total_loss, epoch=epoch+1)
         cometml_experiemnt.log_metric("Segmentation Loss", total_loss_seg, epoch=epoch+1)
         # cometml_experiemnt.log_metric("Training mIoU", overall_miou, epoch=epoch+1)
@@ -456,7 +463,8 @@ class Trainer(object):
                 masks1 = F.softmax(output1, dim=1)#.detach()
                 masks2 = F.softmax(output2, dim=1)#.detach()
                 # masks = F.interpolate(masks, size=mask.size()[-2:], mode="bilinear", align_corners=True)
-                # masks = self.high_confidence_filter(masks, cutoff_top=config['high_confidence_threshold']['val_cutoff'])
+                masks1 = self.high_confidence_filter(masks1, cutoff_top=config['high_confidence_threshold']['val_cutoff'])
+                masks2 = self.high_confidence_filter(masks2, cutoff_top=config['high_confidence_threshold']['val_cutoff'])
                 pred1 = masks1.max(1)[1].cpu().detach()#.numpy()
                 pred2 = masks2.max(1)[1].cpu().detach()#.numpy()
                 change_detection_prediction = (pred1!=pred2).type(torch.uint8)
@@ -501,12 +509,7 @@ class Trainer(object):
                             # change_detection_show = stacked_change_detection_prediction_show
                             gt_mask_show1 = mask.cpu().detach()[batch_index_to_show,0,:,:].numpy().squeeze()
                             gt_mask_show2 = mask.cpu().detach()[batch_index_to_show,1,:,:].numpy().squeeze()
-                            # output1_sample1 = masks1[batch_index_to_show,class_to_show,:,:].cpu().detach().numpy().squeeze()
-                            # gt_mask_show[gt_mask_show==-1] = 0
-                            # image_show = image_show[:original_width, :original_height,:]
-                            # logits_show = logits_show[:original_width, :original_height]
-                            # gt_mask_show = gt_mask_show[:original_width, :original_height]
-                            # output1_sample = output1_sample[:original_width, :original_height]
+                            
                             
                             fp_tp_fn_prediction_mask = gt_mask_show1 + (2*change_detection_show)
                             
