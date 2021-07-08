@@ -117,7 +117,7 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
     def add_model_specific_args(parent_parser):
         parser = super(MultimodalTransformerDirectCD, MultimodalTransformerDirectCD).add_model_specific_args(parent_parser)
 
-        parser.add_argument("--model_name", default='smt_it_joint_p8', type=str)
+        parser.add_argument("--model_name", default='smt_it_stm_p8', type=str)
         parser.add_argument("--dropout", default=0.1, type=float)
         parser.add_argument("--input_scale", default=2000.0, type=float)
         parser.add_argument("--window_size", default=8, type=int)
