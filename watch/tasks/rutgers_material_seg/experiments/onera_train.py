@@ -229,21 +229,22 @@ class Trainer(object):
             # plt.show()
             # change_inds = image_change_magnitude_binary.squeeze()==1
 
-            # loss1 = 8*F.cross_entropy(cropped_features1, 
-            #                           dictionary,
-            #                           ignore_index=-1, 
-            #                           reduction="mean")
+            loss1 = 8*F.cross_entropy(cropped_features1, 
+                                      dictionary,
+                                      ignore_index=-1, 
+                                      reduction="mean")
             
-            # loss2 = 8*F.cross_entropy(cropped_features2, 
-            #                           dictionary,
-            #                           ignore_index=-1, 
-            #                           reduction="mean")
+            loss2 = 8*F.cross_entropy(cropped_features2, 
+                                      dictionary,
+                                      ignore_index=-1, 
+                                      reduction="mean")
             
-            # loss = loss1 + loss2
+            loss = loss1 + loss2
             
-            loss = 30*F.cosine_embedding_loss(cropped_features1.unsqueeze(0), 
+            loss += 8*F.cosine_embedding_loss(cropped_features1.unsqueeze(0), 
                                               cropped_features2.unsqueeze(0), 
-                                              torch.ones_like(cropped_features1))
+                                              torch.ones_like(cropped_features1), 
+                                              margin=0.5)
             
             features_change1 = output1[:,:,image_change_magnitude_binary.squeeze()==1]
             features_change2 = output2[:,:,image_change_magnitude_binary.squeeze()==1]
@@ -254,7 +255,8 @@ class Trainer(object):
                 # print(features_change2.shape)
                 loss += 20*F.cosine_embedding_loss(features_change1.unsqueeze(0), 
                                                    features_change2.unsqueeze(0), 
-                                                   -torch.ones_like(features_change1))
+                                                   -torch.ones_like(features_change1), 
+                                                   margin=0.5)
 
             self.optimizer.zero_grad()
             loss.backward()
