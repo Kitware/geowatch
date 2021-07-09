@@ -1,13 +1,15 @@
 model_names = [
-    "smt_it_joint_p8",
-    "smt_it_stm_p8",
-    "smt_it_hwtm_p8",
+    "smt_it_stm_n12",
+    "smt_it_hwtm_n12",
+    "smt_it_stm_t12",
+    "smt_it_hwtm_t12",
+    "smt_it_stm_s12",
+    "smt_it_hwtm_s12",
 ]
 
 methods = [
     "MultimodalTransformerDotProdCD",
     "MultimodalTransformerDirectCD",
-    'voting',
 ]
 
 
@@ -22,35 +24,37 @@ def main():
 
         # Invoke the training script
         python -m watch.tasks.fusion.onera_channelwisetransformer_train \
-            --method=MultimodalTransformerDotProdCD \
-            --model_name=smt_it_joint_p8 \
             --train_kwcoco_path=$TRAIN_FPATH \
             --batch_size=1 \
             --num_workers=0 \
             --chip_size=32 \
             --workdir=$HOME/work/watch/fit/runs
     """
+    import itertools as it
     from watch.tasks.fusion import fit
-    defaults = dict(
-        dataset="OneraCD_2018",
-        method='MultimodalTransformerDotProdCD',
+    
+    for method, model_name in it.product(methods, model_names):
+    
+        defaults = dict(
+            dataset="OneraCD_2018",
+            method=method,
+            model_name=model_name,
 
-        # model params
-        window_size=8,
-        learning_rate=1e-3,
-        weight_decay=0,
-        dropout=0,
-        pos_weight=5.0,
+            # model params
+            window_size=8,
+            learning_rate=1e-3,
+            weight_decay=1e-4,
+            dropout=0.1,
 
-        # trainer params
-        gpus=1,
-        #accelerator="ddp",
-        precision=16,
-        max_epochs=200,
-        accumulate_grad_batches=2,
-        terminate_on_nan=True,
-    )
-    fit.main(**defaults)
+            # trainer params
+            gpus=1,
+            #accelerator="ddp",
+            precision=16,
+            max_epochs=200,
+            accumulate_grad_batches=2,
+            terminate_on_nan=True,
+        )
+        fit.main(**defaults)
 
 
 if __name__ == "__main__":
