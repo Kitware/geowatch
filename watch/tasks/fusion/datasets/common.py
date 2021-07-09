@@ -70,13 +70,23 @@ class VideoDataset(data.Dataset):
         >>> kwplot.show_if_requested()
     """
     # TODO: add torchvision.transforms or albumentations
-    def __init__(self, sampler, sample_shape, channels=None, mode="fit", window_overlap=0, transform=None):
+    def __init__(
+        self, 
+        sampler, 
+        sample_shape,
+        channels=None,
+        mode="fit",
+        window_overlap=0,
+        transform=None,
+        occlusion_class_id=1,
+    ):
         self.sampler = sampler
         self.sample_shape = sample_shape
         self.channels = channels
         self.mode = mode
         self.transform = transform
         self.window_overlap = window_overlap
+        self.occlusion_class_id = occlusion_class_id
 
         full_sample_grid = self.sampler.new_sample_grid("video_detection", self.sample_shape, window_overlap=self.window_overlap)
         self.sample_grid = list(it.chain(
@@ -145,19 +155,20 @@ class VideoDataset(data.Dataset):
             frame_ims.append(frame)
 
         # stack along temporal axis
-        frame_masks = np.stack(frame_masks, axis=0)
         frame_ims = np.stack(frame_ims, axis=0)
+        frame_masks = np.stack(frame_masks, axis=0) + 1
+        frame_ignores = (frame_masks == self.occlusion_class_id)
 
         # rearrange image axes for pytorch
-        frame_ims = einops.rearrange(frame_ims, "t h w c -> t c h w")
-        # frame_ims = frame_ims / 2000.
+        frame_ims = einops.rearrange(frame_ims, "t h w c -> c t h w")
 
         # catch nans
         frame_ims[np.isnan(frame_ims)] = -1.
 
-        # convert to tensors
-        #frame_ims = torch.from_numpy(frame_ims).detach()
-        frame_masks = torch.from_numpy(frame_masks).detach().int()
+        # convert to torch
+        frame_ims = torch.from_numpy(frame_ims)
+        frame_masks = torch.from_numpy(frame_masks)
+        frame_ignores = torch.from_numpy(frame_ignores)
 
         if self.transform:
             frame_ims = self.transform(frame_ims)
@@ -168,6 +179,7 @@ class VideoDataset(data.Dataset):
         example = {
             "images": frame_ims,
             "labels": frame_masks,
+            "ignore": frame_ignores,
         }
 
         return example

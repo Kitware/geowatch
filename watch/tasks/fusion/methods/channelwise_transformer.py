@@ -145,7 +145,8 @@ class MultimodalTransformerSegmentation(SemanticSegmentationBase):
                  dropout=0.0,
                  learning_rate=1e-3,
                  weight_decay=0.,
-                 input_scale=255.0,
+                 input_mean=128.,
+                 input_std=128.,
                  window_size=8,
                 ):
         super().__init__(
@@ -162,8 +163,9 @@ class MultimodalTransformerSegmentation(SemanticSegmentationBase):
     @property
     def preprocessing_step(self):
         return transforms.Compose([
-            utils.Lambda(lambda x: torch.from_numpy(x)),
-            utils.Lambda(lambda x: x / self.hparams.input_scale),
+            utils.Lambda(lambda x: torch.from_numpy(x).float()),
+            #utils.Lambda(lambda x: (x - self.hparams.input_mean) / self.hparams.input_std),
+            utils.Lambda(lambda x: (x - x.mean()) / x.std()),
             Rearrange("(h hs) (w ws) c -> c h w (ws hs)",
                       hs=self.hparams.window_size,
                       ws=self.hparams.window_size),
@@ -191,6 +193,6 @@ class MultimodalTransformerSegmentation(SemanticSegmentationBase):
         parser.add_argument("--model_name", required=True, type=str)
         parser.add_argument("--n_classes", required=True, type=int)
         parser.add_argument("--dropout", default=0.0, type=float)
-        parser.add_argument("--input_scale", default=255.0, type=float)
+#         parser.add_argument("--input_scale", default=255.0, type=float)
         parser.add_argument("--window_size", default=8, type=int)
         return parent_parser

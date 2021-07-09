@@ -213,7 +213,6 @@ def make_fit_config(args=None, cmdline=False, **kwargs):
     # similar to how scriptconfig works
     return args
 
-
 def fit(args=None, cmdline=False, **kwargs):
     """
     Example:
@@ -228,7 +227,17 @@ def fit(args=None, cmdline=False, **kwargs):
     dataset_class = getattr(datasets, args.dataset, None)
 
     # init method from args
-    method_var_dict = utils.filter_args(args.__dict__, method_class.__init__)
+    method_var_dict = args.__dict__
+
+    # TODO: need a better way to indicate that a method needs parameters from a dataset, and maybe the reverse too
+    if hasattr(dataset_class, "mean"): 
+        method_var_dict["input_mean"] = getattr(dataset_class, "mean")
+    if hasattr(dataset_class, "std"): 
+        method_var_dict["input_std"] = getattr(dataset_class, "std")
+    if hasattr(dataset_class, "bce_weight"): 
+        method_var_dict["pos_weight"] = getattr(dataset_class, "bce_weight")
+
+    method_var_dict = utils.filter_args(method_var_dict, method_class.__init__)
     # Note: Changed name from method to model
     model = method_class(**method_var_dict)
 
