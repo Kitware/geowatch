@@ -35,7 +35,10 @@ def main():
 
 
 def run_s2_coreg_l1c(stac_catalog, outdir):
-    catalog = pystac.read_file(href=stac_catalog)
+    if isinstance(stac_catalog, str):
+        catalog = pystac.read_file(href=stac_catalog)
+    else:
+        catalog = stac_catalog
 
     s2_l1c_items = {}
     for item in catalog.get_all_items():
