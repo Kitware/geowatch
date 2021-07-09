@@ -230,10 +230,6 @@ def fit(args=None, cmdline=False, **kwargs):
     method_var_dict = args.__dict__
 
     # TODO: need a better way to indicate that a method needs parameters from a dataset, and maybe the reverse too
-    if hasattr(dataset_class, "mean"): 
-        method_var_dict["input_mean"] = getattr(dataset_class, "mean")
-    if hasattr(dataset_class, "std"): 
-        method_var_dict["input_std"] = getattr(dataset_class, "std")
     if hasattr(dataset_class, "bce_weight"): 
         method_var_dict["pos_weight"] = getattr(dataset_class, "bce_weight")
 
