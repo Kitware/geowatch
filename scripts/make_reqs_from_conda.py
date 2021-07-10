@@ -19,5 +19,10 @@ def main():
                     found.append(' '.join([line] + context))
 
     text = '\n'.join(found)
-    with open('requirements.txt', 'w') as file:
-        file.write(text)
+    print(text)
+    #with open('requirements.txt', 'w') as file:
+    #    file.write(text)
+
+
+if __name__ == '__main__':
+    main()
