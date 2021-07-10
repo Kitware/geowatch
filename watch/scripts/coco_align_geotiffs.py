@@ -217,6 +217,22 @@ def main(**kw):
     # import xdev
     # xdev.embed()
 
+    if regions == 'annots':
+        pass
+    elif exists(regions):
+        # Read custom ROI regions
+        import geopandas
+        # For whatever reason geopandas reads in geojson (which is supposed to
+        # be traditional order long/lat) with a authority compliant wgs84
+        # lat/long crs
+        region_df = geopandas.read_file(regions)
+        kw_all_rois = [
+            kwimage.Polygon.from_shapely(sh_poly).swap_axes()
+            for sh_poly in region_df.geometry
+        ]
+    else:
+        raise KeyError(regions)
+
     # Load the dataset and extract geotiff metadata from each image.
     dset = kwcoco.CocoDataset(src_fpath)
     # dset = dset.subset([1])
@@ -229,16 +245,8 @@ def main(**kw):
         # Find the clustered ROI regions
         sh_all_rois, kw_all_rois = find_roi_regions(dset)
     elif exists(regions):
-        # Read custom ROI regions
-        import geopandas
-        # For whatever reason geopandas reads in geojson (which is supposed to
-        # be traditional order long/lat) with a authority compliant wgs84
-        # lat/long crs
-        region_df = geopandas.read_file(regions)
-        kw_all_rois = [
-            kwimage.Polygon.from_shapely(sh_poly).swap_axes()
-            for sh_poly in region_df.geometry
-        ]
+        # this was done earlier
+        pass
     else:
         raise KeyError(regions)
 
