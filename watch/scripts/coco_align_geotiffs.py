@@ -226,10 +226,12 @@ def main(**kw):
         # be traditional order long/lat) with a authority compliant wgs84
         # lat/long crs
         region_df = geopandas.read_file(regions)
+        print('region_df = {!r}'.format(region_df))
         kw_all_rois = [
             kwimage.Polygon.from_shapely(sh_poly).swap_axes()
             for sh_poly in region_df.geometry
         ]
+        print('kw_all_rois = {!r}'.format(kw_all_rois))
     else:
         raise KeyError(regions)
 
