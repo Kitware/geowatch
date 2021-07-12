@@ -207,7 +207,7 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
 
         if stage == "fit" or stage is None:
             kwcoco_ds = kwcoco.CocoDataset(str(self.train_kwcoco_path.expanduser()))
-            kwcoco_ds = self.preprocess_ds(kwcoco_ds)
+            #kwcoco_ds = self.preprocess_ds(kwcoco_ds)
             kwcoco_sampler = ndsampler.CocoSampler(kwcoco_ds)
             train_val_ds = common.VideoDataset(
                 kwcoco_sampler,
@@ -228,7 +228,7 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
 
         if stage == "test" or stage is None:
             kwcoco_ds = kwcoco.CocoDataset(str(self.test_kwcoco_path.expanduser()))
-            kwcoco_ds = self.preprocess_ds(kwcoco_ds)
+            #kwcoco_ds = self.preprocess_ds(kwcoco_ds)
             kwcoco_sampler = ndsampler.CocoSampler(kwcoco_ds)
             self.test_dataset = common.VideoDataset(
                 kwcoco_sampler,
@@ -436,7 +436,7 @@ class Drop0Raw_S2(pl.LightningDataModule):
 
         if stage == "fit" or stage is None:
             kwcoco_ds = kwcoco.CocoDataset(str(self.train_kwcoco_path.expanduser()))
-            kwcoco_ds = self.preprocess_ds(kwcoco_ds)
+            #kwcoco_ds = self.preprocess_ds(kwcoco_ds)
             kwcoco_sampler = ndsampler.CocoSampler(kwcoco_ds)
             train_val_ds = common.VideoDataset(
                 kwcoco_sampler,
@@ -457,7 +457,7 @@ class Drop0Raw_S2(pl.LightningDataModule):
 
         if stage == "test" or stage is None:
             kwcoco_ds = kwcoco.CocoDataset(str(self.test_kwcoco_path.expanduser()))
-            kwcoco_ds = self.preprocess_ds(kwcoco_ds)
+            #kwcoco_ds = self.preprocess_ds(kwcoco_ds)
             kwcoco_sampler = ndsampler.CocoSampler(kwcoco_ds)
             self.test_dataset = common.VideoDataset(
                 kwcoco_sampler,
