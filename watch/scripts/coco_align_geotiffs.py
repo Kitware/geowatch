@@ -587,9 +587,9 @@ class SimpleDataCube(object):
             max_pt = latlon_text(latmax, lonmax)
             space_str = '{}_{}'.format(min_pt, max_pt)
 
-            if region_row.type == 'region':
+            if region_row.get('type', None) == 'region':
                 # Special case where we are extracting a region with a name
-                video_name = region_row.region_model_id
+                video_name = region_row.get('region_model_id', space_str)
             else:
                 video_name = space_str
 
