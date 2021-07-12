@@ -96,6 +96,7 @@ class CocoAlignGeotiffConfig(scfg.Config):
         'dst': scfg.Value(None, help='bundle directory for the output'),
 
         'max_workers': scfg.Value(4, help='number of parallel procs'),
+        'aux_workers': scfg.Value(4, help='additional inner threads for aux imgs'),
 
         'context_factor': scfg.Value(1.0, help=ub.paragraph(
             '''
@@ -222,6 +223,7 @@ def main(**kw):
     visualize = config['visualize']
     write_subsets = config['write_subsets']
     max_workers = config['max_workers']
+    aux_workers = config['aux_workers']
 
     output_bundle_dpath = dst_dpath
 
@@ -278,7 +280,7 @@ def main(**kw):
                               rpc_align_method=rpc_align_method,
                               new_dset=new_dset, visualize=visualize,
                               write_subsets=write_subsets,
-                              max_workers=max_workers)
+                              max_workers=max_workers, aux_workers=aux_workers)
 
     new_dset.fpath = join(extract_dpath, 'data.kwcoco.json')
     print('Dumping new_dset.fpath = {!r}'.format(new_dset.fpath))
@@ -642,7 +644,8 @@ class SimpleDataCube(object):
 
     def extract_overlaps(cube, image_overlaps, extract_dpath,
                          rpc_align_method='orthorectify', new_dset=None,
-                         write_subsets=True, visualize=True, max_workers=0):
+                         write_subsets=True, visualize=True, max_workers=0,
+                         aux_workers=0):
         """
         Given a region of interest, extract an aligned temporal sequence
         of data to a specified directory.
@@ -751,14 +754,14 @@ class SimpleDataCube(object):
                                   rpc_align_method, sub_bundle_dpath,
                                   space_str, space_region, space_box,
                                   start_gid, start_aid, aux_workers)
-                start_gid += 1
+                start_gid = start_gid + 1
                 start_aid += len(anns)
                 frame_index += 1
 
         sub_new_gids = []
         Prog = ub.ProgIter
-        import tqdm
-        Prog = tqdm.tqdm
+        # import tqdm
+        # Prog = tqdm.tqdm
         for job in Prog(pool.as_completed(), total=len(pool),
                         desc='collect extract jobs'):
             new_img, new_anns = job.result()
@@ -849,8 +852,8 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
     # iamges instead
     from kwcoco.util.util_futures import Executor
     Prog = ub.ProgIter
-    import tqdm
-    Prog = tqdm.tqdm
+    # import tqdm
+    # Prog = tqdm.tqdm
     executor = Executor(mode='serial', max_workers=aux_workers)
     for obj in ub.ProgIter(objs, desc='submit warp auxiliaries', verbose=0):
         job = executor.submit(
