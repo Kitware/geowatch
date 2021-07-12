@@ -755,7 +755,7 @@ class SimpleDataCube(object):
                                   space_str, space_region, space_box,
                                   start_gid, start_aid, aux_workers)
                 start_gid = start_gid + 1
-                start_aid += len(anns)
+                start_aid = start_aid + len(anns)
                 frame_index += 1
 
         sub_new_gids = []
