@@ -865,7 +865,8 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
 
     dst_list = []
     for job in Prog(job_list, total=len(job_list),
-                    desc='collect warp auxiliaries {}'.format(name), disable=0):
+                    desc='collect warp auxiliaries {}'.format(name),
+                    disable=1):
         dst = job.result()
         dst_list.append(dst)
 
