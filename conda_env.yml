@@ -67,6 +67,8 @@ dependencies:
     - rgd-client >= 0.2.2
     - utm >= 0.7.0
     - fels >= 1.4.0
+    - rtree >= 0.9.7
+    #- pygeos >= 1.21.0
 
     # Machine learning
     - scikit_learn >= 0.24.2
