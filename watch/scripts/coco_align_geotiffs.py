@@ -69,6 +69,7 @@ import socket
 import ubelt as ub
 import dateutil.parser
 import geopandas as gpd
+import datetime
 import shapely
 from shapely import ops
 from os.path import join, exists
@@ -94,7 +95,7 @@ class CocoAlignGeotiffConfig(scfg.Config):
 
         'dst': scfg.Value(None, help='bundle directory for the output'),
 
-        'max_workers': scfg.Value(16, help='number of parallel procs'),
+        'max_workers': scfg.Value(4, help='number of parallel procs'),
 
         'context_factor': scfg.Value(1.0, help=ub.paragraph(
             '''
@@ -189,57 +190,6 @@ def main(**kw):
         >>>     'regions': 'annots',
         >>> }
         >>> new_dset = main(**kw)
-
-    Example:
-        >>> # Test using a regions file
-        >>> from watch.scripts.coco_align_geotiffs import *  # NOQA
-        >>> from watch.demo.landsat_demodata import grab_landsat_product
-        >>> from watch.gis.geotiff import geotiff_metadata
-        >>> # Create a dead simple coco dataset with one image
-        >>> import kwcoco
-        >>> dset = kwcoco.CocoDataset()
-        >>> ls_prod = grab_landsat_product()
-        >>> fpath = ls_prod['bands'][0]
-        >>> meta = geotiff_metadata(fpath)
-        >>> # We need a date captured ATM in a specific format
-        >>> dt = dateutil.parser.parse(
-        >>>     meta['filename_meta']['acquisition_date'])
-        >>> date_captured = dt.strftime('%Y/%m/%d')
-        >>> gid = dset.add_image(file_name=fpath, date_captured=date_captured)
-        >>> img_poly = kwimage.Polygon(exterior=meta['wgs84_corners'])
-        >>> ann_poly = img_poly.scale(0.1, about='center')
-        >>> sseg_geos = ann_poly.swap_axes().to_geojson()
-        >>> # NOTE: script is not always robust to missing annotation
-        >>> # information like segmentation and bad bbox, but for this
-        >>> # test config it is
-        >>> dset.add_annotation(
-        >>>     image_id=gid, bbox=[0, 0, 0, 0], segmentation_geos=sseg_geos)
-        >>> #
-        >>> # Create arguments to the script
-        >>> dpath = ub.ensure_app_cache_dir('smart_watch/test/coco_align_geotiff')
-        >>> region_fpath = join(dpath, 'regions.geojson')
-        >>> region_geojson =  {
-        >>>     'type': 'FeatureCollection',
-        >>>     'features': [
-        >>>         {
-        >>>             'type': 'Feature',
-        >>>             'properties': {'type': 'region', 'region_model_id': 'demo_region', 'version': '1.0.1', 'mgrs': None, 'start_date': None, 'end_date': None},
-        >>>             'geometry': img_poly.scale(0.2, about='center').swap_axes().to_geojson(),
-        >>>         },
-        >>>     ]
-        >>> }
-        >>> import json
-        >>> with open(region_fpath, 'w') as file:
-        >>>     json.dump(region_geojson, file)
-        >>> dst = ub.ensuredir((dpath, 'align_bundle2'))
-        >>> ub.delete(dst)
-        >>> dst = ub.ensuredir(dst)
-        >>> kw = {
-        >>>     'src': dset,
-        >>>     'dst': dst,
-        >>>     'regions': region_fpath,
-        >>> }
-        >>> new_dset = main(**kw)
     """
     config = CocoAlignGeotiffConfig(default=kw, cmdline=True)
 
@@ -274,8 +224,6 @@ def main(**kw):
     max_workers = config['max_workers']
 
     output_bundle_dpath = dst_dpath
-    # import xdev
-    # xdev.embed()
 
     if regions == 'annots':
         pass
@@ -300,14 +248,9 @@ def main(**kw):
             {'geometry': geos, 'start_date': None, 'end_date': None}
             for geos in sh_all_rois
         ], geometry='geometry', crs='epsg:4326')
-    elif exists(regions):
-        # this was done earlier
-        pass
-    else:
-        raise KeyError(regions)
 
     # Exapnd the ROI by the context factor and convert to a bounding box
-    region_df['geometry'] = region_df['geometry'].apply(_shapely_bounding_box)
+    region_df['geometry'] = region_df['geometry'].apply(shapely_bounding_box)
     if context_factor != 1:
         region_df['geometry'] = region_df['geometry'].scale(
             xfact=context_factor, yfact=context_factor, origin='center')
@@ -345,7 +288,7 @@ def main(**kw):
     return new_dset
 
 
-def _demo_regions_geojson_text():
+def demo_regions_geojson_text():
     geojson_text = ub.codeblock(
         '''
         {
@@ -389,7 +332,7 @@ def read_geojson(file, default_axis_mapping='OAMS_TRADITIONAL_GIS_ORDER'):
     Example:
         >>> import io
         >>> from watch.scripts.coco_align_geotiffs import *  # NOQA
-        >>> geojson_text = _demo_regions_geojson_text()
+        >>> geojson_text = demo_regions_geojson_text()
         >>> file = io.StringIO()
         >>> file.write(geojson_text)
         >>> file.seek(0)
@@ -410,7 +353,7 @@ def read_geojson(file, default_axis_mapping='OAMS_TRADITIONAL_GIS_ORDER'):
         # be traditional order long/lat) with a authority compliant wgs84
         # lat/long crs
         region_df['geometry'] = region_df['geometry'].apply(
-            _shapely_flip_xy)
+            shapely_flip_xy)
     elif default_axis_mapping == 'OAMS_AUTHORITY_COMPLIANT':
         pass
     else:
@@ -561,6 +504,48 @@ class SimpleDataCube(object):
         cube.img_geos_df = gpd.GeoDataFrame(
             df_input, geometry='geometry', crs='epsg:4326')
 
+    @classmethod
+    def demo(SimpleDataCube, num_imgs=1, with_region=False):
+        from watch.demo.landsat_demodata import grab_landsat_product
+        from watch.gis.geotiff import geotiff_metadata
+        # Create a dead simple coco dataset with one image
+        import kwcoco
+        dset = kwcoco.CocoDataset()
+        ls_prod = grab_landsat_product()
+        fpath = ls_prod['bands'][0]
+        meta = geotiff_metadata(fpath)
+        # We need a date captured ATM in a specific format
+        dt = dateutil.parser.parse(
+            meta['filename_meta']['acquisition_date'])
+        date_captured = dt.strftime('%Y/%m/%d')
+
+        gid = dset.add_image(file_name=fpath, date_captured=date_captured)
+        img_poly = kwimage.Polygon(exterior=meta['wgs84_corners'])
+        ann_poly = img_poly.scale(0.1, about='center')
+        sseg_geos = ann_poly.swap_axes().to_geojson()
+        dset.add_annotation(
+            image_id=gid, bbox=[0, 0, 0, 0], segmentation_geos=sseg_geos)
+
+        update_coco_geotiff_metadata(dset, serializable=False, max_workers=0)
+        cube = SimpleDataCube(dset)
+        if with_region:
+            img_poly = kwimage.Polygon(exterior=cube.dset.imgs[1]['geotiff_metadata']['wgs84_corners'])
+            img_poly.swap_axes().to_geojson()
+            region_geojson =  {
+                'type': 'FeatureCollection',
+                'features': [
+                    {
+                        'type': 'Feature',
+                        'properties': {'type': 'region', 'region_model_id': 'demo_region', 'version': '1.0.1', 'mgrs': None, 'start_date': None, 'end_date': None},
+                        'geometry': img_poly.scale(0.2, about='center').swap_axes().to_geojson(),
+                    },
+                ]
+            }
+            region_df = gpd.GeoDataFrame.from_features(region_geojson)
+            region_df['geometry'] = region_df['geometry'].apply(shapely_flip_xy)
+            return cube, region_df
+        return cube
+
     def query_image_overlaps2(cube, region_df):
         """
         Find the images that overlap with a each space-time region
@@ -577,62 +562,83 @@ class SimpleDataCube(object):
                 Information about which images belong to this ROI and their
                 temporal sequence. Also contains strings to be used for
                 subdirectories in the extract step.
+
+        Example:
+            >>> cube, region_df = SimpleDataCube.demo(with_region=True)
+            >>> to_extract = cube.query_image_overlaps2(region_df)
         """
         # New maybe faster and safer way of finding overlaps?
         ridx_to_gidsx = geopandas_pairwise_overlaps(region_df, cube.img_geos_df)
+        print('ridx_to_gidsx = {!r}'.format(ridx_to_gidsx))
+
+        # TODO: maybe check for self-overlap?
+        # ridx_to_ridx = geopandas_pairwise_overlaps(region_df, region_df)
+
         to_extract = []
         for ridx, gidxs in ridx_to_gidsx.items():
             region_row = region_df.iloc[ridx]
-            print('Found {} overlaps for {}'.format(len(gidxs), region_row))
-            if len(gidxs) == 0:
-                print('WARNING: No matches on this region, skip extraction')
+
+            space_region = kwimage.Polygon.from_shapely(region_row.geometry)
+            space_box = space_region.bounding_box().to_ltrb()
+            latmin, lonmin, latmax, lonmax = space_box.data[0]
+            min_pt = latlon_text(latmin, lonmin)
+            max_pt = latlon_text(latmax, lonmax)
+            space_str = '{}_{}'.format(min_pt, max_pt)
+
+            if region_row.type == 'region':
+                # Special case where we are extracting a region with a name
+                video_name = region_row.region_model_id
             else:
-                space_region = kwimage.Polygon.from_shapely(region_row.geometry)
+                video_name = space_str
 
-                space_box = space_region.bounding_box().to_ltrb()
-                latmin, lonmin, latmax, lonmax = space_box.data[0]
-
-                min_pt = latlon_text(latmin, lonmin)
-                max_pt = latlon_text(latmax, lonmax)
-                space_str = '{}_{}'.format(min_pt, max_pt)
+            if len(gidxs) == 0:
+                print('WARNING: No spatial matches to {}'.format(video_name))
+            else:
 
                 # TODO: filter dates out of range
                 query_start_date = region_row.get('start_date', None)
                 query_end_date = region_row.get('end_date', None)
 
-                unordered_gids = cube.img_geos_df.iloc[gidxs].gid
+                cand_gids = cube.img_geos_df.iloc[gidxs].gid
+                cand_datetimes = cube.dset.images(cand_gids).lookup('datetime_acquisition')
 
-                date_to_gids = ub.group_items(
-                    unordered_gids,
-                    key=lambda gid: cube.dset.imgs[gid]['datetime_acquisition']
-                )
-                dates = sorted(date_to_gids)
+                if 0 and query_start_date is not None:
+                    query_start_datetime = dateutil.parser.parse(query_start_date)
+                    flags = [dt >= query_start_datetime for dt in cand_datetimes]
+                    cand_datetimes = list(ub.compress(cand_datetimes, flags))
+                    cand_gids = list(ub.compress(cand_gids, flags))
 
-                if len(dates) == 0:
-                    raise Exception('Found no overlaping images')
+                if 0 and query_end_date is not None:
+                    query_end_datetime = dateutil.parser.parse(query_end_date)
+                    flags = [dt <= query_end_datetime for dt in cand_datetimes]
+                    cand_datetimes = list(ub.compress(cand_datetimes, flags))
+                    cand_gids = list(ub.compress(cand_gids, flags))
+
+                if len(cand_gids) == 0:
+                    print('WARNING: No temporal matches to {}'.format(video_name))
                 else:
-                    min_date = min(dates)
-                    max_date = max(dates)
-                    print('From {!r} to {!r}'.format(min_date, max_date))
+                    date_to_gids = ub.group_items(cand_gids, cand_datetimes)
+                    dates = sorted(date_to_gids)
+                    print('Found {} overlaps for {} from {} to {}'.format(
+                        len(cand_gids),
+                        video_name,
+                        min(dates).isoformat(),
+                        max(dates).isoformat(),
+                    ))
 
-                if region_row.type == 'region':
-                    # Special case where we are extracting a region with a name
-                    video_name = region_row.region_model_id
-                else:
-                    video_name = space_str
+                    region_props = ub.dict_diff(
+                        region_row.to_dict(), {'geometry'})
 
-                image_overlaps = {
-                    'date_to_gids': date_to_gids,
-                    'space_region': space_region,
-                    'space_str': space_str,
-                    'space_box': space_box,
-                    'video_name': video_name,
-                }
-                to_extract.append(image_overlaps)
-            return to_extract
-
-    def _warp_image(cube, img):
-        pass
+                    image_overlaps = {
+                        'date_to_gids': date_to_gids,
+                        'space_region': space_region,
+                        'space_str': space_str,
+                        'space_box': space_box,
+                        'video_name': video_name,
+                        'properties': region_props,
+                    }
+                    to_extract.append(image_overlaps)
+        return to_extract
 
     def extract_overlaps(cube, image_overlaps, extract_dpath,
                          rpc_align_method='orthorectify', new_dset=None,
@@ -666,12 +672,22 @@ class SimpleDataCube(object):
 
         Returns:
             kwcoco.CocoDataset: the given or new dataset that was modified
+
+        Example:
+            >>> cube, region_df = SimpleDataCube.demo(with_region=True)
+            >>> extract_dpath = ub.ensure_app_cache_dir('smart_watch/test/coco_align_geotiff/demo_extract_overlaps')
+            >>> rpc_align_method = 'orthorectify'
+            >>> new_dset = kwcoco.CocoDataset()
+            >>> write_subsets = True
+            >>> visualize = True
+            >>> max_workers = 32
+            >>> to_extract = cube.query_image_overlaps2(region_df)
+            >>> image_overlaps = to_extract[0]
+            >>> cube.extract_overlaps(image_overlaps, extract_dpath,
+            >>>                       new_dset=new_dset, visualize=visualize,
+            >>>                       max_workers=max_workers)
         """
         # import watch
-        import datetime
-        from watch.tools.kwcoco_extensions import _populate_canvas_obj
-        from watch.tools.kwcoco_extensions import _recompute_auxiliary_transforms
-
         dset = cube.dset
 
         date_to_gids = image_overlaps['date_to_gids']
@@ -679,6 +695,7 @@ class SimpleDataCube(object):
         space_box = image_overlaps['space_box']
         space_region = image_overlaps['space_region']
         video_name = image_overlaps['video_name']
+        video_props = image_overlaps['properties']
 
         sub_bundle_dpath = ub.ensuredir((extract_dpath, video_name))
 
@@ -687,259 +704,94 @@ class SimpleDataCube(object):
 
         new_video = {
             'name': video_name,
+            'properties': video_props,
         }
 
         if new_dset is None:
             new_dset = kwcoco.CocoDataset()
         new_vidid = new_dset.add_video(**new_video)
 
-        frame_index = 0
-
-        sub_new_gids = []
-
         for cat in dset.cats.values():
             new_dset.ensure_category(**cat)
 
-        # TODO: parallelize over images
-        from kwcoco.util.util_futures import Executor
-        # max_workers = 16
-        # max_workers = 1
-        executor = Executor(mode='thread', max_workers=max_workers)
+        bundle_dpath = dset.bundle_dpath
+        new_anns = []
 
-        for date in ub.ProgIter(dates, desc='extracting regions', verbose=3):
+        # Manage new ids such that parallelization does not impact their order
+        start_gid = new_dset._next_ids.get('images')
+        start_aid = new_dset._next_ids.get('annotations')
+        frame_index = 0
+
+        # Hueristic to choose if we parallize the inner or outer loop
+        num_imgs_to_warp = sum(map(len, date_to_gids.values()))
+        # if num_imgs_to_warp <= max_workers:
+        #     img_workers = 0
+        #     aux_workers = max_workers
+        # else:
+        # Internal threading might be beneficial as well
+        aux_workers = 6
+        img_workers = max_workers // aux_workers
+
+        # parallelize over images
+        from kwcoco.util.util_futures import JobPool
+        print('img_workers = {!r}'.format(img_workers))
+        print('aux_workers = {!r}'.format(aux_workers))
+        pool = JobPool(mode='thread', max_workers=img_workers)
+
+        for date in ub.ProgIter(dates, desc='submit extract jobs', verbose=1):
             gids = date_to_gids[date]
-            iso_time = datetime.date.isoformat(date.date())
-
             # TODO: Is there any other consideration we should make when
             # multiple images have the same timestamp?
             for num, gid in enumerate(gids):
                 img = dset.imgs[gid]
-                auxiliary = img.get('auxiliary', [])
-
-                # Construct a name for the subregion to extract.
-                sensor_coarse = img.get('sensor_coarse', 'unknown')
-                name = 'crop_{}_{}_{}_{}'.format(iso_time, space_str, sensor_coarse, num)
-
-                objs = []
-                has_base_image = img.get('file_name', None) is not None
-                if has_base_image:
-                    objs.append(ub.dict_diff(img, {'auxiliary'}))
-                objs.extend(auxiliary)
-
-                bundle_dpath = dset.bundle_dpath
-
-                is_rpcs = [obj['geotiff_metadata']['is_rpc'] for obj in objs]
-                assert ub.allsame(is_rpcs)
-                is_rpc = ub.peek(is_rpcs)
-
-                if is_rpc and rpc_align_method != 'affine_warp':
-                    align_method = rpc_align_method
-                    if align_method == 'pixel_crop':
-                        align_method = 'pixel_crop'
-                else:
-                    align_method = 'affine_warp'
-
-                dst_dpath = ub.ensuredir((sub_bundle_dpath, sensor_coarse,
-                                          align_method))
-
-                is_multi_image = len(objs) > 1
-
-                job_list = []
-                for obj in ub.ProgIter(objs, desc='warp auxiliaries', verbose=0):
-                    job = executor.submit(
-                        _aligncrop, obj, bundle_dpath, name, sensor_coarse,
-                        dst_dpath, space_region, space_box, align_method,
-                        is_multi_image)
-                    job_list.append(job)
-
-                dst_list = []
-                for job in ub.ProgIter(job_list, desc='warp auxiliaries'):
-                    dst = job.result()
-                    dst_list.append(dst)
-
-                if align_method != 'pixel_crop':
-                    # If we are a pixel crop, we can transform directly
-                    for dst in dst_list:
-                        # hack this in for heuristics
-                        if 'sensor_coarse' in img:
-                            dst['sensor_coarse'] = img['sensor_coarse']
-                        # We need to overwrite because we changed the bounds
-                        _populate_canvas_obj(bundle_dpath, dst,
-                                             overwrite={'warp'}, with_wgs=True)
-
-                new_img = {
-                    'name': name,
-                }
-
-                if has_base_image:
-                    base_dst = dst_list[0]
-                    new_img.update(base_dst)
-                    aux_dst = dst_list[1:]
-                    assert len(aux_dst) == 0, 'cant have aux and base yet'
-                else:
-                    aux_dst = dst_list
-
-                # Hack because heurstics break when fnames change
-                for old_aux, new_aux in zip(auxiliary, aux_dst):
-                    new_aux['channels'] = old_aux['channels']
-                    new_aux['parent_file_name'] = old_aux['file_name']
-
-                if len(aux_dst):
-                    new_img['auxiliary'] = aux_dst
-                    _recompute_auxiliary_transforms(new_img)
-
-                carry_over = ub.dict_isect(img, {
-                    'date_captured',
-                    'approx_elevation',
-                    'sensor_candidates',
-                    'num_bands',
-                    'sensor_coarse',
-                    'site_tag',
-                    'channels',
-                })
-
-                # Carry over appropriate metadata from original image
-                new_img.update(carry_over)
-                new_img['parent_file_name'] = img['file_name']  # remember which image this came from
-                new_img['video_id'] = new_vidid
-                new_img['frame_index'] = frame_index
-                new_img['timestamp'] = date.toordinal()
-
+                anns = [dset.index.anns[aid] for aid in
+                        dset.index.gid_to_aids[gid]]
+                job = pool.submit(extract_image_job, img, anns, bundle_dpath,
+                                  date, num, frame_index, new_vidid,
+                                  rpc_align_method, sub_bundle_dpath,
+                                  space_str, space_region, space_box,
+                                  start_gid, start_aid, aux_workers)
+                start_gid += 1
+                start_aid += len(anns)
                 frame_index += 1
-                new_gid = new_dset.add_image(**new_img)
-                sub_new_gids.append(new_gid)
 
-                # HANDLE ANNOTATIONS
-                HANDLE_ANNS = True
-                if HANDLE_ANNS:
-                    """
-                    It would probably be better to warp pixel coordinates using the
-                    same transform found by gdalwarp, but I'm not sure how to do
-                    that. Thus we transform the geocoordinates to the new extracted
-                    img coords instead. Hopefully gdalwarp preserves metadata
-                    enough to do this.
-                    """
-                    aids = dset.index.gid_to_aids[img['id']]
-                    anns = list(ub.take(dset.index.anns, aids))
+        sub_new_gids = []
+        Prog = ub.ProgIter
+        import tqdm
+        Prog = tqdm.tqdm
+        for job in Prog(pool.as_completed(), total=len(pool),
+                        desc='collect extract jobs'):
+            new_img, new_anns = job.result()
+            new_img['video_id'] = new_vidid
 
-                    geo_poly_list = []
-                    for ann in anns:
-                        # Q: WHAT FORMAT ARE THESE COORDINATES IN?
-                        # A: I'm fairly sure these coordinates are all Traditional-WGS84-Lon-Lat
-                        # We convert them to authority compliant WGS84 (lat-lon)
-                        # Hack to support real and orig drop0 geojson
-                        geo = _fix_geojson_poly(ann['segmentation_geos'])
-                        geo_poly = kwimage.structs.MultiPolygon.from_geojson(geo).swap_axes()
-                        # geo_coords = geo['coordinates'][0]
-                        # exterior = kwimage.Coords(np.array(geo_coords)[:, ::-1])
-                        # geo_poly = kwimage.Polygon(exterior=exterior)
-                        geo_poly_list.append(geo_poly)
-                    geo_polys = kwimage.SegmentationList(geo_poly_list)
+            new_gid = new_dset.add_image(**new_img)
+            sub_new_gids.append(new_gid)
 
-                    if align_method == 'orthorectify':
-                        # Is the affine mapping in the destination image good
-                        # enough after the image has been orthorectified?
-                        pxl_polys = geo_polys.warp(new_img['wgs84_to_wld']).warp(new_img['wld_to_pxl'])
-                    elif align_method == 'pixel_crop':
-                        raise NotImplementedError('fixme')
-                        yoff, xoff = new_img['transform']['st_offset']
-                        orig_pxl_poly_list = []
-                        for ann in anns:
-                            old_poly = kwimage.Polygon.from_coco(ann['segmentation'])
-                            orig_pxl_poly_list.append(old_poly)
-                        orig_pxl_polys = kwimage.MultiPolygon(orig_pxl_poly_list)
-                        pxl_polys = orig_pxl_polys.translate((-xoff, -yoff))
-                    elif align_method == 'affine_warp':
-                        # Warp Auth-WGS84 to whatever the image world space is,
-                        # and then from there to pixel space.
-                        pxl_polys = geo_polys.warp(new_img['wgs84_to_wld']).warp(new_img['wld_to_pxl'])
-                    else:
-                        raise KeyError(align_method)
+            for ann in new_anns:
+                ann['image_id'] = new_gid
+                new_dset.add_annotation(**ann)
 
-                    def _test_inbounds(pxl_multi_poly):
-                        is_any = False
-                        is_all = True
-                        for pxl_poly in pxl_multi_poly.data:
-                            xs, ys = pxl_poly.data['exterior'].data.T
-                            flags_x1 = xs < 0
-                            flags_y1 = ys < 0
-                            flags_x2 = xs >= new_img['width']
-                            flags_y2 = ys >= new_img['height']
-                            flags = flags_x1 | flags_x2 | flags_y1 | flags_y2
-                            n_oob = flags.sum()
-                            is_any &= (n_oob > 0)
-                            is_all &= (n_oob == len(flags))
-                        return is_any, is_all
+            if visualize:
+                new_img = new_dset.imgs[new_gid]
+                new_anns = new_dset.annots(gid=new_gid).objs
+                _write_ann_visualizations(new_dset, new_img, new_anns,
+                                          sub_bundle_dpath)
 
-                    flags = [not _test_inbounds(p)[1] for p in pxl_polys]
+        if True:
+            for new_gid in sub_new_gids:
+                # Fix json serializability
+                new_img = new_dset.index.imgs[new_gid]
+                new_objs = [new_img] + new_img.get('auxiliary', [])
 
-                    valid_anns = [ann.copy() for ann in ub.compress(anns, flags)]
-                    valid_pxl_polys = list(ub.compress(pxl_polys, flags))
-
-                    print('Num annots warped {} / {}'.format(len(valid_anns), len(anns)))
-                    for ann, pxl_poly in zip(valid_anns, valid_pxl_polys):
-                        ann['segmentation'] = pxl_poly.to_coco(style='new')
-                        pxl_box = pxl_poly.bounding_box().quantize().to_xywh()
-                        xywh = list(pxl_box.to_coco())[0]
-                        ann['bbox'] = xywh
-                        ann['image_id'] = new_gid
-                        new_dset.add_annotation(**ann)
-
-                if visualize:
-                    # See if we can look at what we made
-                    from watch.utils.util_norm import normalize_intensity
-
-                    new_delayed = new_dset.delayed_load(new_gid)
-                    if hasattr(new_delayed, 'components'):
-                        components = new_delayed.components
-                    else:
-                        components = [new_delayed]
-
-                    for chan in components:
-                        spec = chan.channels.spec
-                        canvas = chan.finalize()
-
-                        # canvas = kwimage.imread(dst_gpath)
-                        canvas = normalize_intensity(canvas)
-                        if len(canvas.shape) > 2 and canvas.shape[2] > 4:
-                            # hack for wv
-                            canvas = canvas[..., 0]
-                        canvas = kwimage.ensure_float01(canvas)
-
-                        view_img_dpath = ub.ensuredir(
-                            (sub_bundle_dpath, sensor_coarse,
-                             '_view_img_' + align_method))
-
-                        if HANDLE_ANNS:
-                            view_ann_dpath = ub.ensuredir(
-                                (sub_bundle_dpath, sensor_coarse,
-                                 '_view_ann_' + align_method))
-
-                        view_img_fpath = ub.augpath(name, dpath=view_img_dpath) + '_' + str(spec) + '.view_img.jpg'
-                        kwimage.imwrite(view_img_fpath, kwimage.ensure_uint255(canvas))
-
-                        if HANDLE_ANNS:
-                            dets = kwimage.Detections.from_coco_annots(valid_anns, dset=dset)
-                            view_ann_fpath = ub.augpath(name, dpath=view_ann_dpath) + '_' + str(spec) + '.view_ann.jpg'
-                            ann_canvas = dets.draw_on(canvas)
-                            kwimage.imwrite(view_ann_fpath, kwimage.ensure_uint255(ann_canvas))
-
-                if 1:
-                    # Fix json serializability
-                    print('new_gid = {!r}'.format(new_gid))
-                    new_img = new_dset.index.imgs[new_gid]
-                    new_objs = [new_img] + new_img.get('auxiliary', [])
-
-                    # hack
-                    for obj in new_objs:
-                        if 'warp_to_wld' in obj:
-                            obj['warp_to_wld'] = kwimage.Affine.coerce(obj['warp_to_wld']).concise()
-                        if 'wld_to_pxl' in obj:
-                            obj['wld_to_pxl'] = kwimage.Affine.coerce(obj['wld_to_pxl']).concise()
-                        obj.pop('wgs84_to_wld', None)
-
-                    from kwcoco.util import util_json
-                    assert not list(util_json.find_json_unserializable(new_img))
+                # hack
+                for obj in new_objs:
+                    if 'warp_to_wld' in obj:
+                        obj['warp_to_wld'] = kwimage.Affine.coerce(obj['warp_to_wld']).concise()
+                    if 'wld_to_pxl' in obj:
+                        obj['wld_to_pxl'] = kwimage.Affine.coerce(obj['wld_to_pxl']).concise()
+                    obj.pop('wgs84_to_wld', None)
+                from kwcoco.util import util_json
+                assert not list(util_json.find_json_unserializable(new_img))
 
         if write_subsets:
             print('Writing data subset')
@@ -952,12 +804,248 @@ class SimpleDataCube(object):
         return new_dset
 
 
+def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
+                      new_vidid, rpc_align_method, sub_bundle_dpath, space_str,
+                      space_region, space_box, start_gid, start_aid,
+                      aux_workers=0):
+    """
+    Threaded worker function for :func:`SimpleDataCube.extract_overlaps`.
+    """
+    from watch.tools.kwcoco_extensions import _populate_canvas_obj
+    from watch.tools.kwcoco_extensions import _recompute_auxiliary_transforms
+
+    iso_time = datetime.date.isoformat(date.date())
+    sensor_coarse = img.get('sensor_coarse', 'unknown')
+
+    # Construct a name for the subregion to extract.
+    name = 'crop_{}_{}_{}_{}'.format(iso_time, space_str, sensor_coarse, num)
+
+    auxiliary = img.get('auxiliary', [])
+
+    objs = []
+    has_base_image = img.get('file_name', None) is not None
+    if has_base_image:
+        objs.append(ub.dict_diff(img, {'auxiliary'}))
+    objs.extend(auxiliary)
+
+    is_rpcs = [obj['geotiff_metadata']['is_rpc'] for obj in objs]
+    assert ub.allsame(is_rpcs)
+    is_rpc = ub.peek(is_rpcs)
+
+    if is_rpc and rpc_align_method != 'affine_warp':
+        align_method = rpc_align_method
+        if align_method == 'pixel_crop':
+            align_method = 'pixel_crop'
+    else:
+        align_method = 'affine_warp'
+
+    dst_dpath = ub.ensuredir((sub_bundle_dpath, sensor_coarse, align_method))
+
+    is_multi_image = len(objs) > 1
+
+    job_list = []
+
+    # Turn off internal threading because we refactored this to thread over all
+    # iamges instead
+    from kwcoco.util.util_futures import Executor
+    Prog = ub.ProgIter
+    import tqdm
+    Prog = tqdm.tqdm
+    executor = Executor(mode='serial', max_workers=aux_workers)
+    for obj in ub.ProgIter(objs, desc='submit warp auxiliaries', verbose=0):
+        job = executor.submit(
+            _aligncrop, obj, bundle_dpath, name, sensor_coarse,
+            dst_dpath, space_region, space_box, align_method,
+            is_multi_image)
+        job_list.append(job)
+
+    dst_list = []
+    for job in Prog(job_list, total=len(job_list),
+                    desc='collect warp auxiliaries {}'.format(name), disable=0):
+        dst = job.result()
+        dst_list.append(dst)
+
+    if align_method != 'pixel_crop':
+        # If we are a pixel crop, we can transform directly
+        for dst in dst_list:
+            # hack this in for heuristics
+            if 'sensor_coarse' in img:
+                dst['sensor_coarse'] = img['sensor_coarse']
+            # We need to overwrite because we changed the bounds
+            # Note: if band info is not popluated above, this
+            # might write bad data based on hueristics
+            _populate_canvas_obj(bundle_dpath, dst,
+                                 overwrite={'warp'}, with_wgs=True)
+
+    new_gid = start_gid
+
+    new_img = {
+        'id': new_gid,
+        'name': name,
+        'align_method': align_method,
+    }
+
+    if has_base_image:
+        base_dst = dst_list[0]
+        new_img.update(base_dst)
+        aux_dst = dst_list[1:]
+        assert len(aux_dst) == 0, 'cant have aux and base yet'
+    else:
+        aux_dst = dst_list
+
+    # Hack because heurstics break when fnames change
+    for old_aux, new_aux in zip(auxiliary, aux_dst):
+        # new_aux['channels'] = old_aux['channels']
+        new_aux['parent_file_name'] = old_aux['file_name']
+
+    if len(aux_dst):
+        new_img['auxiliary'] = aux_dst
+        _recompute_auxiliary_transforms(new_img)
+
+    carry_over = ub.dict_isect(img, {
+        'date_captured',
+        'approx_elevation',
+        'sensor_candidates',
+        'num_bands',
+        'sensor_coarse',
+        'site_tag',
+        'channels',
+    })
+
+    # Carry over appropriate metadata from original image
+    new_img.update(carry_over)
+    new_img['parent_file_name'] = img['file_name']  # remember which image this came from
+    # new_img['video_id'] = new_vidid  # Done outside of this worker
+    new_img['frame_index'] = frame_index
+    new_img['timestamp'] = date.toordinal()
+
+    # HANDLE ANNOTATIONS
+    """
+    It would probably be better to warp pixel coordinates using the
+    same transform found by gdalwarp, but I'm not sure how to do
+    that. Thus we transform the geocoordinates to the new extracted
+    img coords instead. Hopefully gdalwarp preserves metadata
+    enough to do this.
+    """
+    new_anns = []
+    geo_poly_list = []
+    for ann in anns:
+        # Q: WHAT FORMAT ARE THESE COORDINATES IN?
+        # A: I'm fairly sure these coordinates are all Traditional-WGS84-Lon-Lat
+        # We convert them to authority compliant WGS84 (lat-lon)
+        # Hack to support real and orig drop0 geojson
+        geo = _fix_geojson_poly(ann['segmentation_geos'])
+        geo_poly = kwimage.structs.MultiPolygon.from_geojson(geo).swap_axes()
+        # geo_coords = geo['coordinates'][0]
+        # exterior = kwimage.Coords(np.array(geo_coords)[:, ::-1])
+        # geo_poly = kwimage.Polygon(exterior=exterior)
+        geo_poly_list.append(geo_poly)
+    geo_polys = kwimage.SegmentationList(geo_poly_list)
+
+    if align_method == 'orthorectify':
+        # Is the affine mapping in the destination image good
+        # enough after the image has been orthorectified?
+        pxl_polys = geo_polys.warp(new_img['wgs84_to_wld']).warp(new_img['wld_to_pxl'])
+    elif align_method == 'pixel_crop':
+        raise NotImplementedError('fixme')
+        yoff, xoff = new_img['transform']['st_offset']
+        orig_pxl_poly_list = []
+        for ann in anns:
+            old_poly = kwimage.Polygon.from_coco(ann['segmentation'])
+            orig_pxl_poly_list.append(old_poly)
+        orig_pxl_polys = kwimage.MultiPolygon(orig_pxl_poly_list)
+        pxl_polys = orig_pxl_polys.translate((-xoff, -yoff))
+    elif align_method == 'affine_warp':
+        # Warp Auth-WGS84 to whatever the image world space is,
+        # and then from there to pixel space.
+        pxl_polys = geo_polys.warp(new_img['wgs84_to_wld']).warp(new_img['wld_to_pxl'])
+    else:
+        raise KeyError(align_method)
+
+    def _test_inbounds(pxl_multi_poly):
+        is_any = False
+        is_all = True
+        for pxl_poly in pxl_multi_poly.data:
+            xs, ys = pxl_poly.data['exterior'].data.T
+            flags_x1 = xs < 0
+            flags_y1 = ys < 0
+            flags_x2 = xs >= new_img['width']
+            flags_y2 = ys >= new_img['height']
+            flags = flags_x1 | flags_x2 | flags_y1 | flags_y2
+            n_oob = flags.sum()
+            is_any &= (n_oob > 0)
+            is_all &= (n_oob == len(flags))
+        return is_any, is_all
+
+    flags = [not _test_inbounds(p)[1] for p in pxl_polys]
+
+    valid_anns = [ann.copy() for ann in ub.compress(anns, flags)]
+    valid_pxl_polys = list(ub.compress(pxl_polys, flags))
+
+    new_aid = start_aid
+    for ann, pxl_poly in zip(valid_anns, valid_pxl_polys):
+        ann.pop('image_id', None)
+        ann['segmentation'] = pxl_poly.to_coco(style='new')
+        pxl_box = pxl_poly.bounding_box().quantize().to_xywh()
+        xywh = list(pxl_box.to_coco())[0]
+        ann['bbox'] = xywh
+        ann['image_id'] = new_gid
+        ann['id'] = new_aid
+        new_aid = new_aid + 1
+        new_anns.append(ann)
+
+    return new_img, new_anns
+
+
+def _write_ann_visualizations(new_dset, new_img, new_anns, sub_bundle_dpath):
+    """
+    Helper for :func:`SimpleDataCube.extract_overlaps`.
+    """
+    # See if we can look at what we made
+    from watch.utils.util_norm import normalize_intensity
+    sensor_coarse = new_img.get('sensor_coarse', 'unknown')
+    align_method = new_img.get('align_method', 'unknown')
+    name = new_img.get('name', 'unknown')
+
+    new_delayed = new_dset.delayed_load(new_img['id'])
+    if hasattr(new_delayed, 'components'):
+        components = new_delayed.components
+    else:
+        components = [new_delayed]
+
+    for chan in components:
+        spec = chan.channels.spec
+        canvas = chan.finalize()
+
+        # canvas = kwimage.imread(dst_gpath)
+        canvas = normalize_intensity(canvas)
+        if len(canvas.shape) > 2 and canvas.shape[2] > 4:
+            # hack for wv
+            canvas = canvas[..., 0]
+        canvas = kwimage.ensure_float01(canvas)
+
+        view_img_dpath = ub.ensuredir(
+            (sub_bundle_dpath, sensor_coarse,
+             '_view_img_' + align_method))
+
+        view_ann_dpath = ub.ensuredir(
+            (sub_bundle_dpath, sensor_coarse,
+             '_view_ann_' + align_method))
+
+        view_img_fpath = ub.augpath(name, dpath=view_img_dpath) + '_' + str(spec) + '.view_img.jpg'
+        kwimage.imwrite(view_img_fpath, kwimage.ensure_uint255(canvas))
+
+        dets = kwimage.Detections.from_coco_annots(new_anns, dset=new_dset)
+        view_ann_fpath = ub.augpath(name, dpath=view_ann_dpath) + '_' + str(spec) + '.view_ann.jpg'
+        ann_canvas = dets.draw_on(canvas)
+        kwimage.imwrite(view_ann_fpath, kwimage.ensure_uint255(ann_canvas))
+
+
 def update_coco_geotiff_metadata(dset, serializable=True, max_workers=0):
     """
     if serializable is True, then we should only update with information
     that can be coerced to json.
     """
-    import watch
     if serializable:
         raise NotImplementedError('we dont do this yet')
 
@@ -1110,6 +1198,7 @@ def single_geotiff_metadata(bundle_dpath, img, serializable=False):
     img['geotiff_metadata'] = geotiff_metadata
     return geotiff_metadata, aux_metadata
 
+
 def find_roi_regions(dset):
     """
     Given a dataset find spatial regions of interest that contain annotations
@@ -1176,15 +1265,15 @@ def find_covered_regions(dset):
         sh_img_poly = kw_img_poly.to_shapely()
         gid_to_poly[gid] = sh_img_poly
 
-    df_input = [
-        {'gid': gid, 'bounds': poly, 'name': dset.imgs[gid].get('name', None),
-         'video_id': dset.imgs[gid].get('video_id', None) }
-        for gid, poly in gid_to_poly.items()
-    ]
-    img_geos = gpd.GeoDataFrame(df_input, geometry='bounds', crs='epsg:4326')
+    # df_input = [
+    #     {'gid': gid, 'bounds': poly, 'name': dset.imgs[gid].get('name', None),
+    #      'video_id': dset.imgs[gid].get('video_id', None) }
+    #     for gid, poly in gid_to_poly.items()
+    # ]
+    # img_geos = gpd.GeoDataFrame(df_input, geometry='bounds', crs='epsg:4326')
 
     # Can merge like this, but we lose membership info
-    coverage_df = gpd.GeoDataFrame(img_geos.unary_union)
+    # coverage_df = gpd.GeoDataFrame(img_geos.unary_union)
 
     coverage_rois_ = ops.unary_union(gid_to_poly.values())
     if hasattr(coverage_rois_, 'geoms'):
@@ -1199,10 +1288,12 @@ def find_covered_regions(dset):
 def _flip(x, y):
     return (y, x)
 
-def _shapely_flip_xy(geom):
+
+def shapely_flip_xy(geom):
     return ops.transform(_flip, geom)
 
-def _shapely_bounding_box(geom):
+
+def shapely_bounding_box(geom):
     return shapely.geometry.box(*geom.bounds)
 
 
@@ -1265,7 +1356,6 @@ def visualize_rois(dset, kw_all_box_rois):
             gpd.datasets.get_path('naturalearth_lowres')
         )
         ax = wld_map_gdf.plot()
-
 
         cov_centroids = cov_poly_gdf.geometry.centroid
         cov_poly_gdf.plot(ax=ax, facecolor='none', edgecolor='green', alpha=0.5)
@@ -1353,6 +1443,10 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
     dst = {
         'file_name': dst_gpath,
     }
+    if obj.get('channels', None):
+        dst['channels'] = obj['channels']
+    if obj.get('num_bands', None):
+        dst['num_bands'] = obj['num_bands']
 
     if align_method == 'pixel_crop':
         align_method = 'pixel_crop'
