@@ -766,12 +766,18 @@ class SimpleDataCube(object):
         for job in Prog(pool.as_completed(), total=len(pool),
                         desc='collect extract jobs'):
             new_img, new_anns = job.result()
+
+            # Hack, the next ids dont update when new images are added
+            # with explicit ids. This is a quick fix.
+            new_img.pop('id', None)
+
             new_img['video_id'] = new_vidid
 
             new_gid = new_dset.add_image(**new_img)
             sub_new_gids.append(new_gid)
 
             for ann in new_anns:
+                ann.pop('id', None)  # quick hack fix
                 ann['image_id'] = new_gid
                 new_dset.add_annotation(**ann)
 
