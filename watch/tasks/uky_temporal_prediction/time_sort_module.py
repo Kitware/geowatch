@@ -30,8 +30,8 @@ class time_sort(pl.LightningModule):
 
         self.accuracy = pl.metrics.Accuracy()
 
-        self.train_data_root, _ = os.path.split(self.hparams.train_dataset)
-        self.val_data_root, _ = os.path.split(self.hparams.val_dataset)
+        self.train_data_fpath = self.hparams.train_dataset
+        self.val_data_fpath = self.hparams.val_dataset
 
     def head(self, in_channels):
         return nn.Sequential(
@@ -85,7 +85,7 @@ class time_sort(pl.LightningModule):
     def train_dataloader(self):
         return torch.utils.data.DataLoader(
             drop0_pairs(
-                root=self.train_data_root,
+                coco_dset=self.train_data_fpath,
                 sensor=self.hparams.sensor,
                 panchromatic=self.hparams.panchromatic,
                 video=self.hparams.train_video,
@@ -98,7 +98,7 @@ class time_sort(pl.LightningModule):
     def val_dataloader(self):
         return torch.utils.data.DataLoader(
             drop0_pairs(
-                root=self.val_data_root,
+                coco_dset=self.val_data_fpath,
                 sensor=self.hparams.sensor,
                 panchromatic=self.hparams.panchromatic,
                 video=self.hparams.val_video,

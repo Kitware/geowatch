@@ -10,7 +10,7 @@ from torch.optim import lr_scheduler
 
 import torchmetrics as metrics
 
-from .. import utils
+from watch.tasks.fusion import utils
 
 
 class TransformerChangeDetector(pl.LightningModule):
@@ -23,8 +23,7 @@ class TransformerChangeDetector(pl.LightningModule):
                  fc_dim=1024,
                  learning_rate=1e-3,
                  weight_decay=0.,
-                 pos_weight=1.,
-                ):
+                 pos_weight=1.):
         super().__init__()
         self.save_hyperparameters()
 
@@ -131,9 +130,9 @@ class TransformerChangeDetector(pl.LightningModule):
                 self.parameters(),
                 lr=self.hparams.learning_rate,
                 weight_decay=self.hparams.weight_decay,
-                betas=(0.9, 0.99),
-            )
-        scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.trainer.max_epochs)
+                betas=(0.9, 0.99))
+        scheduler = lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=self.trainer.max_epochs)
         return [optimizer], [scheduler]
 
     @staticmethod

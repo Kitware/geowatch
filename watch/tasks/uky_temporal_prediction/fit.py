@@ -78,6 +78,7 @@ if __name__ == '__main__':
         '--train_dataset',
         type=str,
         default='/u/eag-d1/data/watch/drop0_aligned/data.kwcoco.json')
+
     parser.add_argument(
         '--val_dataset',
         type=str,

@@ -367,6 +367,7 @@ def decollate_batch(batch):
 
 def __notes__():
     """
+    Ignore:
         >>> #
         >>> for img in dset.imgs.values():
         >>>     chan = img.get('channels', None)

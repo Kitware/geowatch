@@ -35,14 +35,58 @@ class AddPositionalEncoding(nn.Module):
 
 
 class VideoDataset(data.Dataset):
+    """
+    Example:
+        >>> from watch.tasks.fusion.datasets.common import *  # NOQA
+        >>> import ndsampler
+        >>> import kwcoco
+        >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
+        >>> coco_dset.ensure_category('background')
+        >>> sampler = ndsampler.CocoSampler(coco_dset)
+        >>> channels = 'B1|B8'
+        >>> sample_shape = (3, 530, 610)
+        >>> self = VideoDataset(sampler, sample_shape=sample_shape, channels=channels)
+        >>> index = len(self) // 4
+        >>> item = self[index]
+        >>> import watch
+        >>> frame_ims = item['images']
+        >>> frame_masks = item['labels'].numpy()
+        >>> frame_ims = watch.utils.util_norm.normalize_intensity(frame_ims)
+        >>> frame_list = []
+        >>> for frame_idx, (im_chw, mask) in enumerate(zip(frame_ims, frame_masks)):
+        >>>     chan_list = []
+        >>>     for chan_idx, chan in enumerate(im_chw):
+        >>>         heatmap = kwimage.Heatmap(class_idx=mask, classes=sampler.classes)
+        >>>         part = heatmap.draw_on(chan, with_alpha=0.5)
+        >>>         part = kwimage.draw_text_on_image(part, 'Frame = {}, Chan = {}'.format(frame_idx, chan_idx), (0, 0), valign='top')
+        >>>         chan_list.append(part)
+        >>>     frame_canvas = kwimage.stack_images(chan_list)
+        >>>     frame_list.append(frame_canvas)
+        >>> canvas = kwimage.stack_images(frame_list, axis=1)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(canvas)
+        >>> kwplot.show_if_requested()
+    """
     # TODO: add torchvision.transforms or albumentations
-    def __init__(self, sampler, sample_shape, channels=None, mode="fit", window_overlap=0, transform=None):
+    def __init__(
+        self, 
+        sampler, 
+        sample_shape,
+        channels=None,
+        mode="fit",
+        window_overlap=0,
+        transform=None,
+        occlusion_class_id=1,
+    ):
         self.sampler = sampler
         self.sample_shape = sample_shape
         self.channels = channels
         self.mode = mode
         self.transform = transform
         self.window_overlap = window_overlap
+        self.occlusion_class_id = occlusion_class_id
 
         full_sample_grid = self.sampler.new_sample_grid("video_detection", self.sample_shape, window_overlap=self.window_overlap)
         self.sample_grid = list(it.chain(
@@ -111,19 +155,20 @@ class VideoDataset(data.Dataset):
             frame_ims.append(frame)
 
         # stack along temporal axis
-        frame_masks = np.stack(frame_masks, axis=0)
         frame_ims = np.stack(frame_ims, axis=0)
+        frame_masks = np.stack(frame_masks, axis=0) + 1
+        frame_ignores = (frame_masks == self.occlusion_class_id)
 
         # rearrange image axes for pytorch
-        frame_ims = einops.rearrange(frame_ims, "t h w c -> t c h w")
-        # frame_ims = frame_ims / 2000.
+        frame_ims = einops.rearrange(frame_ims, "t h w c -> c t h w")
 
         # catch nans
         frame_ims[np.isnan(frame_ims)] = -1.
 
-        # convert to tensors
-        #frame_ims = torch.from_numpy(frame_ims).detach()
-        frame_masks = torch.from_numpy(frame_masks).detach().int()
+        # convert to torch
+        frame_ims = torch.from_numpy(frame_ims)
+        frame_masks = torch.from_numpy(frame_masks)
+        frame_ignores = torch.from_numpy(frame_ignores)
 
         if self.transform:
             frame_ims = self.transform(frame_ims)
@@ -134,6 +179,7 @@ class VideoDataset(data.Dataset):
         example = {
             "images": frame_ims,
             "labels": frame_masks,
+            "ignore": frame_ignores,
         }
 
         return example

@@ -3,14 +3,14 @@ A demo for grabbing the same set of Landsat and Sentinel-2 tiles 2 ways.
 
 1. from Google Cloud using https://gitlab.kitware.com/smart/fetchLandsatSentinelFromGoogleCloud
 
-2. from Resonant GeoData (ultimately from Google Cloud as well) using https://pypi.org/project/rgdc/
+2. from Resonant GeoData (ultimately from Google Cloud as well) using https://pypi.org/project/rgd-client/
 '''
 import os
 import json
 import dateutil
 from datetime import datetime, timedelta
 from fels import run_fels, safedir_to_datetime, landsatdir_to_date
-from rgdc import Rgdc
+from rgd_client import Rgdc
 import ubelt as ub
 import scriptconfig as scfg
 
@@ -127,7 +127,6 @@ def try_rgdc(geojson_bbox, dt_min, dt_max, out_dpath=None, username=None,
     kwargs = {
         'query': json.dumps(geojson_bbox),
         'predicate': 'intersects',
-        'datatype': 'raster',
         'acquired': (dt_min, dt_max),
         #'limit': int(1e3)
     }

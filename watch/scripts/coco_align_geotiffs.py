@@ -9,7 +9,7 @@ Notes:
 
     # https://data.kitware.com/#collection/602457272fa25629b95d1718/folder/602c3e9e2fa25629b97e5b5e
 
-    python ~/code/watch/scripts/coco_align_geotiffs.py \
+    python -m watch.scripts.coco_align_geotiffs \
             --src ~/data/dvc-repos/smart_watch_dvc/drop0/drop0.kwcoco.json \
             --dst ~/data/dvc-repos/smart_watch_dvc/drop0_aligned_v2 \
             --context_factor=1.5
@@ -27,10 +27,16 @@ Notes:
     cd $HOME/data/dvc-repos/smart_watch_dvc/
     girder-client --api-url https://data.kitware.com/api/v1 upload 602c3e9e2fa25629b97e5b5e drop0_aligned_v2_$stamp.zip
 
-    python ~/code/watch/scripts/coco_align_geotiffs.py \
+    python -m watch.scripts.coco_align_geotiffs \
             --src ~/data/dvc-repos/smart_watch_dvc/drop0/drop0-msi.kwcoco.json \
             --dst ~/data/dvc-repos/smart_watch_dvc/drop0_aligned_msi \
             --context_factor=1.5
+
+
+    python -m watch.scripts.coco_align_geotiffs \
+            --src ~/data/dvc-repos/smart_watch_dvc/drop0/drop0-msi.kwcoco.json \
+            --dst ~/data/dvc-repos/smart_watch_dvc/drop0_aligned_msi_big \
+            --context_factor=3.5
 
 
 Test:
@@ -44,7 +50,7 @@ Test:
 
     kwcoco subset ~/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-WV/data.kwcoco.json --gids=1129,1130 --dst ~/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-WV/subtmp.kwcoco.json
 
-    python ~/code/watch/scripts/coco_align_geotiffs.py \
+    python -m watch.scripts.coco_align_geotiffs \
             --src ~/remote/namek/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-WV/subtmp.kwcoco.json \
             --dst ~/remote/namek/data/dvc-repos/smart_watch_dvc/drop0_aligned_WV_Fix \
             --rpc_align_method pixel_crop \
@@ -84,12 +90,19 @@ class CocoAlignGeotiffConfig(scfg.Config):
 
         'dst': scfg.Value(None, help='bundle directory for the output'),
 
-        'context_factor': scfg.Value(1.5, help=ub.paragraph(
+        'context_factor': scfg.Value(1.0, help=ub.paragraph(
             '''
             scale factor for the clustered ROIs.
             Amount of context to extract around each ROI.
             '''
         )),
+
+        'regions': scfg.Value('annots', help=ub.paragraph(
+            '''
+            Strategy for extracting regions, if annots, uses the convex hulls
+            of clustered annotations. Can also be a path to a geojson file
+            to use pre-defined regions.
+            ''')),
 
         # TODO: change this name to just align-method or something
         'rpc_align_method': scfg.Value('orthorectify', help=ub.paragraph(
@@ -126,9 +139,7 @@ def main(**kw):
     See :class:``CocoAlignGeotiffConfig` for details
 
     Ignore:
-        import sys, ubelt
-        sys.path.append(ubelt.expandpath('~/code/watch/scripts'))
-        from coco_align_geotiffs import *  # NOQA
+        from watch.scripts.coco_align_geotiffs import *  # NOQA
         import kwcoco
         src = ub.expandpath('~/data/dvc-repos/smart_watch_dvc/drop0/drop0.kwcoco.json')
         dst = ub.expandpath('~/data/dvc-repos/smart_watch_dvc/drop0_aligned')
@@ -196,6 +207,7 @@ def main(**kw):
 
     src_fpath = config['src']
     dst_dpath = config['dst']
+    regions = config['regions']
     context_factor = config['context_factor']
     rpc_align_method = config['rpc_align_method']
     visualize = config['visualize']
@@ -211,8 +223,19 @@ def main(**kw):
     # Construct the "data cube"
     cube = SimpleDataCube(dset)
 
-    # Find the clustered ROI regions
-    sh_all_rois, kw_all_rois = find_roi_regions(dset)
+    if regions == 'annots':
+        # Find the clustered ROI regions
+        sh_all_rois, kw_all_rois = find_roi_regions(dset)
+    elif exists(regions):
+        # Read custom ROI regions
+        import geopandas
+        region_df = geopandas.read_file(regions)
+        kw_all_rois = [
+            kwimage.Polygon.from_shapely(sh_poly)
+            for sh_poly in region_df.geometry
+        ]
+    else:
+        raise KeyError(regions)
 
     # Exapnd the ROI by the context factor and convert to a bounding box
     kw_all_box_rois = [
@@ -1053,6 +1076,9 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
                 -t_srs epsg:4326
                 -rpc -et 0
                 -to RPC_DEM={dem_fpath}
+                -co TILED=YES
+                -co BLOCKXSIZE=256
+                -co BLOCKYSIZE=256
                 -overwrite
                 {SRC} {DST}
                 ''')
@@ -1065,6 +1091,9 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
                 -te_srs epsg:4326
                 -t_srs epsg:4326
                 -rpc -et 0
+                -co TILED=YES
+                -co BLOCKXSIZE=256
+                -co BLOCKYSIZE=256
                 -overwrite
                 {SRC} {DST}
                 ''')
@@ -1084,6 +1113,9 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
             '-te {xmin} {ymin} {xmax} {ymax} '
             '-te_srs epsg:4326 '
             '-overwrite '
+            '-co TILED=YES '
+            '-co BLOCKXSIZE=256 '
+            '-co BLOCKYSIZE=256 '
             '{SRC} {DST}')
         command = template.format(
             ymin=latmin,
@@ -1102,6 +1134,6 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/scripts/coco_align_geotiffs.py --help
+        python -m watch.scripts.coco_align_geotiffs --help
     """
     main()

@@ -44,16 +44,16 @@ def main(**kwargs):
     mode = config['mode']
 
     # Find the clustered ROI regions
-    regions = find_spacetime_cluster_regions(dset, mode, breakup_times)
+    geojson = find_spacetime_cluster_regions(dset, mode, breakup_times)
 
     dst_fpath = config['dst']
 
     if dst_fpath is None:
-        print(json.dumps(regions, indent=' ' * 4))
+        print(json.dumps(geojson, indent=' ' * 4))
     else:
         print(f'Writing to dst_fpath={dst_fpath}')
         with open(dst_fpath, 'w') as file:
-            json.dump(regions, file, indent=' ' * 4)
+            json.dump(geojson, file, indent=' ' * 4)
 
     # json.dumps(regions)
     # print('regions = {}'.format(ub.repr2(regions, nl=2)))
@@ -196,7 +196,12 @@ def find_spacetime_cluster_regions(dset, mode='annots', breakup_times=False):
                     }
                 }
                 regions.append(feat)
-    return regions
+
+    geojson = {
+        'type': 'FeatureCollection',
+        'features': regions,
+    }
+    return geojson
 
 
 def _fix_geojson_poly(geo):
@@ -244,7 +249,7 @@ def _fix_geojson_poly(geo):
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/scripts/coco_extract_geo_bounds.py \
+        python -m watch.scripts.coco_extract_geo_bounds \
           --src $HOME/data/dvc-repos/smart_watch_dvc/drop0/drop0.kwcoco.json \
           --dst $HOME/data/grab_tiles_out/regions2.geojson.json \
           --breakup_times=True \
@@ -255,7 +260,7 @@ if __name__ == '__main__':
             --out_dpath $HOME/data/grab_tiles_out \
             --backend fels
 
-        python ~/code/watch/scripts/coco_extract_geo_bounds.py \
+        python -m watch.scripts.coco_extract_geo_bounds \
           --src $HOME/data/dvc-repos/smart_watch_dvc/drop0/drop0.kwcoco.json \
           --breakup_times=True \
           --dst $HOME/data/grab_tiles_out/regions.geojson.json
@@ -273,7 +278,7 @@ if __name__ == '__main__':
             --out_dpath $HOME/data/grab_tiles_out \
             --backend fels
 
-        python ~/code/watch/scripts/geotiffs_to_kwcoco.py \
+        python -m watch.scripts.geotiffs_to_kwcoco.py \
             --geotiff_dpath ~/data/grab_tiles_out/fels \
             --dst $HOME/data/grab_tiles_out/fels/data.kwcoco.json
 

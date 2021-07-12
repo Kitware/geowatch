@@ -31,6 +31,8 @@ class BlurPool(nn.Module):
             a = np.array([1., 5., 10., 10., 5., 1.])
         elif(self.filt_size == 7):
             a = np.array([1., 6., 15., 20., 15., 6., 1.])
+        else:
+            raise ValueError(self.filt_size)
 
         filt = torch.Tensor(a[:, None] * a[None, :])
         filt = filt / torch.sum(filt)

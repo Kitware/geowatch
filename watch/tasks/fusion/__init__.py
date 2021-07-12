@@ -3,7 +3,6 @@ mkinit -m watch.tasks.fusion --lazy --noattrs -w
 """
 
 
-
 def lazy_import(module_name, submodules, submod_attrs):
     import importlib
     import os

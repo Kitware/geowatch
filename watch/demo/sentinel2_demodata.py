@@ -4,7 +4,7 @@ from pathlib import Path
 from glob import glob
 
 import fels
-from rgdc.rgdc import RasterDownload
+from rgd_client.rgdc import RasterDownload
 
 
 def grab_sentinel2_product(index=0, overwrite=False):
@@ -18,7 +18,7 @@ def grab_sentinel2_product(index=0, overwrite=False):
         overwrite (bool, default=False): if True, always downloads the files
 
     Returns:
-        rgdc.rgdc.RasterDownload(
+        rgd_client.rgdc.RasterDownload(
             path: pathlib.Path,
             images: List[pathlib.Path],
             ancillary: List[pathlib.Path]

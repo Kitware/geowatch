@@ -11,9 +11,9 @@ from torch.optim import lr_scheduler
 from torchvision import transforms
 
 import torchmetrics as metrics
-from .common import ChangeDetectorBase, SemanticSegmentationBase
-from ..models import transformer
-from .. import utils
+from watch.tasks.fusion.methods.common import ChangeDetectorBase
+from watch.tasks.fusion.models import transformer
+from watch.tasks.fusion import utils
 
 
 class MultimodalTransformerDotProdCD(ChangeDetectorBase):
@@ -24,8 +24,6 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
                  learning_rate=1e-3,
                  weight_decay=0.,
                  pos_weight=1.,
-                 input_mean=1.,
-                 input_std=1.,
                  window_size=8,
                 ):
         super().__init__(
@@ -35,16 +33,12 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
         )
         self.save_hyperparameters()
         
-        self.hparams.input_mean = torch.Tensor(self.hparams.input_mean)[None, :, None, None]
-        self.hparams.input_std = torch.Tensor(self.hparams.input_std)[None, :, None, None]
-
         self.model = getattr(transformer, model_name)(dropout=dropout)
 
     @property
     def preprocessing_step(self):
         return transforms.Compose([
             utils.Lambda(lambda x: torch.from_numpy(x)),
-            #utils.Lambda(lambda x: (x - self.hparams.input_mean) / self.hparams.input_std),
             utils.Lambda(lambda x: (x - x.mean()) / x.std()),
             Rearrange("t c (h hs) (w ws) -> t c h w (ws hs)",
                       hs=self.hparams.window_size,
@@ -71,7 +65,7 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
     def add_model_specific_args(parent_parser):
         parser = super(MultimodalTransformerDotProdCD, MultimodalTransformerDotProdCD).add_model_specific_args(parent_parser)
 
-        parser.add_argument("--model_name", required=True, type=str)
+        parser.add_argument("--model_name", default='smt_it_joint_p8', type=str)
         parser.add_argument("--dropout", default=0.1, type=float)
 #         parser.add_argument("--input_scale", default=2000.0, type=float)
         parser.add_argument("--window_size", default=8, type=int)
@@ -86,8 +80,6 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
                  learning_rate=1e-3,
                  weight_decay=0.,
                  pos_weight=1.,
-                 input_mean=1.,
-                 input_std=1.,
                  window_size=8,
                 ):
         super().__init__(
@@ -97,9 +89,6 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
         )
         self.save_hyperparameters()
         
-        self.hparams.input_mean = torch.Tensor(self.hparams.input_mean)[None, :, None, None]
-        self.hparams.input_std = torch.Tensor(self.hparams.input_std)[None, :, None, None]
-
         self.model = nn.Sequential(
             getattr(transformer, model_name)(dropout=dropout),
             nn.LazyLinear(1),
@@ -109,7 +98,6 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
     def preprocessing_step(self):
         return transforms.Compose([
             utils.Lambda(lambda x: torch.from_numpy(x)),
-            #utils.Lambda(lambda x: (x - self.hparams.input_mean) / self.hparams.input_std),
             utils.Lambda(lambda x: (x - x.mean()) / x.std()),
             Rearrange("t c (h hs) (w ws) -> t c h w (ws hs)",
                       hs=self.hparams.window_size,
@@ -130,7 +118,7 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
     def add_model_specific_args(parent_parser):
         parser = super(MultimodalTransformerDirectCD, MultimodalTransformerDirectCD).add_model_specific_args(parent_parser)
 
-        parser.add_argument("--model_name", required=True, type=str)
+        parser.add_argument("--model_name", default='smt_it_stm_p8', type=str)
         parser.add_argument("--dropout", default=0.1, type=float)
 #         parser.add_argument("--input_scale", default=2000.0, type=float)
         parser.add_argument("--window_size", default=8, type=int)
@@ -145,7 +133,6 @@ class MultimodalTransformerSegmentation(SemanticSegmentationBase):
                  dropout=0.0,
                  learning_rate=1e-3,
                  weight_decay=0.,
-                 input_scale=255.0,
                  window_size=8,
                 ):
         super().__init__(
@@ -162,8 +149,8 @@ class MultimodalTransformerSegmentation(SemanticSegmentationBase):
     @property
     def preprocessing_step(self):
         return transforms.Compose([
-            utils.Lambda(lambda x: torch.from_numpy(x)),
-            utils.Lambda(lambda x: x / self.hparams.input_scale),
+            utils.Lambda(lambda x: torch.from_numpy(x).float()),
+            utils.Lambda(lambda x: (x - x.mean()) / x.std()),
             Rearrange("(h hs) (w ws) c -> c h w (ws hs)",
                       hs=self.hparams.window_size,
                       ws=self.hparams.window_size),
@@ -191,6 +178,6 @@ class MultimodalTransformerSegmentation(SemanticSegmentationBase):
         parser.add_argument("--model_name", required=True, type=str)
         parser.add_argument("--n_classes", required=True, type=int)
         parser.add_argument("--dropout", default=0.0, type=float)
-        parser.add_argument("--input_scale", default=255.0, type=float)
+#         parser.add_argument("--input_scale", default=255.0, type=float)
         parser.add_argument("--window_size", default=8, type=int)
         return parent_parser

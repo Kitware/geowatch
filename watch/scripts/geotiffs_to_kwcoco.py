@@ -232,10 +232,10 @@ def find_geotiffs(geotiff_dpath, workers=0):
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/scripts/geotiffs_to_kwcoco.py
+        python -m watch.scripts.geotiffs_to_kwcoco.py
 
     CommandLine:
-        python ~/code/watch/scripts/coco_extract_geo_bounds.py \
+        python -m watch.scripts.coco_extract_geo_bounds \
           --src $HOME/data/dvc-repos/smart_watch_dvc/drop0/drop0.kwcoco.json \
           --breakup_times=True \
           --dst $HOME/data/grab_tiles_out/regions.geojson.json
@@ -253,21 +253,21 @@ if __name__ == '__main__':
             --out_dpath $HOME/data/grab_tiles_out \
             --backend fels --profile
 
-        python ~/code/watch/scripts/geotiffs_to_kwcoco.py \
+        python -m watch.scripts.geotiffs_to_kwcoco.py \
             --geotiff_dpath ~/data/grab_tiles_out/fels \
             --dst $HOME/data/grab_tiles_out/fels/data.kwcoco.json --profile
 
-        python ~/code/watch/scripts/geotiffs_to_kwcoco.py \
+        python -m watch.scripts.geotiffs_to_kwcoco.py \
             --geotiff_dpath ~/data/dvc-repos/smart_watch_dvc/unannotated/AE-Dubai-0001 \
             --dst ~/data/dvc-repos/smart_watch_dvc/unannotated/dubai-msi.kwcoco.json
 
         cat ~/data/dvc-repos/smart_watch_dvc/unannotated/dubai-msi.kwcoco.json
 
-        python ~/code/watch/scripts/geotiffs_to_kwcoco.py \
+        python -m watch.scripts.geotiffs_to_kwcoco.py \
             --geotiff_dpath ~/data/dvc-repos/smart_watch_dvc/unannotated/KR-Pyeongchang-S2 \
             --dst ~/data/dvc-repos/smart_watch_dvc/unannotated/korea-msi.kwcoco.json
 
-        python ~/code/watch/scripts/geotiffs_to_kwcoco.py \
+        python -m -m watch.scripts.geotiffs_to_kwcoco.py \
             --geotiff_dpath ~/data/dvc-repos/smart_watch_dvc/unannotated/US-Waynesboro-0001 \
             --dst ~/data/dvc-repos/smart_watch_dvc/unannotated/waynesboro-msi.kwcoco.json
     """

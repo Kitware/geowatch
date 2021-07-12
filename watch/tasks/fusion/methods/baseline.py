@@ -14,8 +14,6 @@ class UNetChangeDetector(ChangeDetectorBase):
                  learning_rate=1e-3,
                  weight_decay=1e-5,
                  pos_weight=1.,
-                 input_mean=1.,
-                 input_std=1.,
                 ):
         super().__init__(
             learning_rate=learning_rate,
@@ -24,9 +22,6 @@ class UNetChangeDetector(ChangeDetectorBase):
         )
         self.save_hyperparameters()
         
-        self.hparams.input_mean = torch.Tensor(self.hparams.input_mean)[None, :, None, None]
-        self.hparams.input_std = torch.Tensor(self.hparams.input_std)[None, :, None, None]
-
         # simple feature extraction model
         self.model = nn.Sequential(
             nn.LazyConv2d(64, 1),
@@ -37,7 +32,6 @@ class UNetChangeDetector(ChangeDetectorBase):
     def preprocessing_step(self):
         return transforms.Compose([
             utils.Lambda(lambda x: torch.from_numpy(x)),
-        #    utils.Lambda(lambda x: (x - self.hparams.input_mean) / self.hparams.input_std),
             utils.Lambda(lambda x: (x - x.mean()) / x.std()),
         ])
 
