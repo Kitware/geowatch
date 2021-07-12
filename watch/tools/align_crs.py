@@ -65,7 +65,9 @@ def align_crs(stac_catalog, outdir, aoi_bounds):
     catalog_outpath = os.path.abspath(os.path.join(outdir, 'catalog.json'))
     catalog.set_self_href(catalog_outpath)
 
-    aoi_bounds = json.loads(aoi_bounds)
+    if isinstance(aoi_bounds, str):
+        aoi_bounds = json.loads(aoi_bounds)
+
     epsg_code = _aoi_bounds_to_utm_zone(aoi_bounds)
 
     output_items = []
