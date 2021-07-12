@@ -733,7 +733,7 @@ class SimpleDataCube(object):
         # else:
         # Internal threading might be beneficial as well
         # aux_workers = 6
-        img_workers = num_workers
+        img_workers = max_workers
         # // aux_workers
 
         # parallelize over images
