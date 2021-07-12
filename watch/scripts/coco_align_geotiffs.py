@@ -726,14 +726,15 @@ class SimpleDataCube(object):
         frame_index = 0
 
         # Hueristic to choose if we parallize the inner or outer loop
-        num_imgs_to_warp = sum(map(len, date_to_gids.values()))
+        # num_imgs_to_warp = sum(map(len, date_to_gids.values()))
         # if num_imgs_to_warp <= max_workers:
         #     img_workers = 0
         #     aux_workers = max_workers
         # else:
         # Internal threading might be beneficial as well
-        aux_workers = 6
-        img_workers = max_workers // aux_workers
+        # aux_workers = 6
+        img_workers = num_workers
+        # // aux_workers
 
         # parallelize over images
         from kwcoco.util.util_futures import JobPool
