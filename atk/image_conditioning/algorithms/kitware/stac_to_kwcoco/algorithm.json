@@ -1,0 +1,58 @@
+{
+    "description": "Conversion tool to convert a STAC catalog to a KWCOCO dataset",
+    "display_name": "STAC to KWCOCO",
+    "homepage": "",
+    "license": "MIT",
+    "name": "kitware/stac_to_kwcoco",
+    "optional_parameters": [],
+    "outputs": [
+        {
+            "data_type": "string",
+            "description": "Path to location where KWCOCO file was written",
+            "display_name": "Output Path",
+            "name": "output_path",
+            "sort_order": 0
+        },
+        {
+            "data_type": "string",
+            "description": "Output KWCOCO file as a JSON string",
+            "display_name": "Dataset",
+            "name": "dataset",
+            "sort_order": 1
+        }
+    ],
+    "private": false,
+    "required_parameters": [
+        {
+            "custom_validation": "",
+            "data_type": "string",
+            "default_value": "",
+            "description": "Path to location where KWCOCO file of converted STAC catalog will be written.",
+            "display_name": "KWCOCO",
+            "field_type": "text",
+            "help_text": "",
+            "max_value": "",
+            "min_value": "",
+            "name": "kwcoco",
+            "parameter_choices": "",
+            "required": true,
+            "sort_order": 0
+        },
+        {
+            "custom_validation": "",
+            "data_type": "string",
+            "default_value": "",
+            "description": "Path to the root of the STAC catalog to convert.",
+            "display_name": "Catalog",
+            "field_type": "text",
+            "help_text": "",
+            "max_value": "",
+            "min_value": "",
+            "name": "catalog",
+            "parameter_choices": "",
+            "required": true,
+            "sort_order": 1
+        }
+    ],
+    "version": "0.0.1"
+}

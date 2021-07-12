@@ -8,6 +8,7 @@ import requests
 from osgeo import gdal
 import ubelt as ub
 from watch.gis import geotiff
+import watch.scripts.geotiffs_to_kwcoco as gtk
 
 def hack_resolve_sensor_candidate(dset):
     """
@@ -38,38 +39,35 @@ def hack_resolve_sensor_candidate(dset):
         assert len(coarsend) == 1
         img['sensor_coarse'] = ub.peek(coarsend)
 
-def convert(out_file, cat, ignore_dem):
+def convert(out_file, cat, ignore_dem=True):
     dset = kwcoco.CocoDataset()
     catalog = Catalog.from_file(cat)
     index = 0
     for item in catalog.get_items():
         meta = item.to_dict()
         date = meta['properties']['datetime']
+        images = []
+        name = item.id
         for asset in item.get_assets():
             if asset!='data' and 'data' not in item.assets[asset].roles:
                 continue
-            file = item.assets[asset].get_absolute_href()
-            pic = gdal.Open(file, gdal.GA_ReadOnly)   
-            info = geotiff.geotiff_metadata(file)
-            if ignore_dem:
-                dem = 'ignore'
-            else:
-                dem = 'use'
-            dset.add_image(file_name=file, 
-                           id=index, 
-                           width=pic.RasterXSize, 
-                           height=pic.RasterYSize,
-                           date_captured=date[0:4]+'/'+date[5:7]+'/'+date[8:10],
-                           num_bands=pic.RasterCount,
-                           dem_hint=dem,
-                           approx_elevation=info['approx_elevation'],
-                           approx_meter_gsd=info['approx_meter_gsd'],
-                           sensor_candidates=info['sensor_candidates']
-                           )
-            index+=1
+            images.append(item.assets[asset].get_absolute_href())
+        if len(images)>1:
+            img = gtk.make_coco_img_from_auxiliary_geotiffs(images, name)
+        else:
+            img = gtk.make_coco_img_from_geotiff(images[0], name)
+            img['warp_pxl_to_wld'] = img['warp_pxl_to_wld'].__json__()
+        info = geotiff.geotiff_metadata(images[0])
+        img['date_captured'] = date[0:4]+'/'+date[5:7]+'/'+date[8:10]
+        img['sensor_candidates'] = info['sensor_candidates']
+        dset.add_image(**img, id=index)
+        index+=1
+            
     hack_resolve_sensor_candidate(dset)
     with open(out_file, 'w') as f:
         dset.dump(f, indent=2)
+
+    return json.dumps(dset.dataset)
 
 def main(args):
     parser = argparse.ArgumentParser(description="Convert STAC catalog to KWCOCO")
