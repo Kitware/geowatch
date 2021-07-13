@@ -19,7 +19,7 @@ class Main(Algorithm):
                                    params['output_dir'],
                                    params['aoi_bounds'])
 
-        cl.add_to_metadata('stac_catalog', output_catalog)
+        cl.add_to_metadata('stac_catalog', output_catalog.to_dict())
         cl.add_to_metadata('output_dir', params['output_dir'])
 
         # Do not edit below this line

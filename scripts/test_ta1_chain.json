@@ -1,0 +1,50 @@
+{
+  "chain_name": "initial_ta1",
+  "algorithms": [
+    {
+      "name": "kitware/rgd_ingress",
+      "parameters": {
+        "username": "$WATCH_RGD_USER",
+        "password": "$WATCH_RGD_PW",
+        "date_range": [
+          "2018-11-01",
+          "2018-11-08"
+        ],
+        "output_dir": "/tmp/rgd_ingress_working",
+        "aoi_bounds": [
+          128.662489,
+          37.659517,
+          128.676673,
+          37.66456
+        ],
+        "min_aoi_overlap": 0.25,
+        "dry_run": 0
+      }
+    },
+    {
+      "name": "UMD/coregistration",
+      "parameters": {
+        "output_dir": "/tmp/umd_coregistration_working"
+      }
+    },
+    {
+      "name": "kitware/align_crs",
+      "parameters": {
+        "aoi_bounds": [
+          128.662489,
+          37.659517,
+          128.676673,
+          37.66456
+        ],
+        "output_dir": "/tmp/align_crs_working"
+      }
+    },
+    {
+      "name": "kitware/stac_egress",
+      "parameters": {
+        "s3_bucket": "s3://kitware-smart-watch-data/runs/test_ta1_chain",
+        "dry_run": 0
+      }
+    }
+  ]
+}
