@@ -39,10 +39,18 @@ class MainTestCase(AlgorithmTestCase):
           if kwcoco:
             self.assertTrue(os.path.isfile(kwcoco))
             self.assertTrue(kwcoco.startswith(output_dir))
-            kwfile = json.load(open(kwcoco))
+            with open(kwcoco, 'r') as f:
+              kwfile = json.load(f)
             for img in kwfile['images']:
-              self.assertTrue(os.path.isfile(img['file_name']))
-              self.assertTrue(img['file_name'].startswith(output_dir))
+              if img['file_name']:
+                paths = [img['file_name']]
+              else:
+                paths = [f['file_name'] for f in img['auxiliary']]
+              for path in paths:         
+                if path.startswith(output_dir):
+                  self.assertTrue(os.path.isfile(path))
+                else:
+                  self.assertTrue(os.path.isfile(os.path.join(output_dir, path)))
           if not dry_run:
               self.assertTrue(os.path.isfile(stac_catalog.get_self_href()))
           for item in stac_catalog.get_items():
