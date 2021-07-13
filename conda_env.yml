@@ -50,7 +50,6 @@ dependencies:
     - Pillow >= 8.0.1
     - imgaug >= 0.4.0
     - albumentations >= 1.0.0
-    - opencv_python_headless >= 4.5.2.52  # This can be a problem library
     - scikit_image >= 0.18.1
     - ndsampler >= 0.6.3
     - tifffile >= 2021.4.8
@@ -68,7 +67,7 @@ dependencies:
     - utm >= 0.7.0
     - fels >= 1.4.0
     - rtree >= 0.9.7
-    #- pygeos >= 1.21.0
+    - pygeos >= 1.21.0
 
     # Machine learning
     - scikit_learn >= 0.24.2
@@ -77,11 +76,16 @@ dependencies:
     - torch_optimizer >= 0.1.0
     - pytorch_lightning >= 1.3.5
     - netharn >= 0.5.15
-    
     - torchmetrics >= 0.3.2
-
     - tensorboard_logger >= 0.1.0 
     - tensorboard >= 2.4.1
+
+    # PIA Dependencies
+    # This can be a problem library because opencv-python-headless conflicts
+    # with opencv-python, and some other libraries depend on opencv-python. 
+    # This can be worked via:
+    # `pip uninstall opencv-python opencv-python-headless && pip install opencv-python-headless`
+    - opencv_python_headless >= 4.5.2.52  
       
     # find-links applies to everything after it, so make sure this is the last dep
     # References: https://stackoverflow.com/questions/60410173/find-links-conda-env

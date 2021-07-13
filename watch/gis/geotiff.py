@@ -9,10 +9,6 @@ from watch.utils.util_bands import SENTINEL2, LANDSAT7, LANDSAT8
 import parse
 from os.path import basename, isfile
 from dateutil.parser import isoparse
-from datetime import datetime
-import parse
-from os.path import basename
-from watch.gis import spatial_reference as watch_crs
 
 try:
     from xdev import profile
@@ -704,6 +700,7 @@ def _parser_lut(pattern):
     """
     return parse.Parser(pattern)
 
+
 def parse_sentinel2_product_id(parts):
     '''
     Try to parse the Sentinel-2 pre-2016 and post-2016 safedir formats.
@@ -1046,30 +1043,6 @@ def walk_geotiff_products(dpath, with_product_dirs=True,
                 if fname.lower().endswith(GEOTIFF_EXTENSIONS):
                     fpath = join(r, fname)
                     yield fpath
-
-        if not recursive:
-            break
-
-
-def walk_images(dpath, recursive=True):
-    """
-    Walks a file path and returns image paths
-
-    Args:
-        dpath (str): directory to search
-
-    Yields:
-        str: paths of files or recognized image files
-    """
-    import os
-    from os.path import join
-    from kwimage import im_io
-
-    for r, ds, fs in os.walk(dpath):
-        for fname in fs:
-            if fname.lower().endswith(im_io.IMAGE_EXTENSIONS):
-                fpath = join(r, fname)
-                yield fpath
 
         if not recursive:
             break
