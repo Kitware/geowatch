@@ -8,6 +8,8 @@ import pathlib
 from watch.tasks.fusion.datasets import common
 from watch.tasks.fusion import utils
 from einops.layers.torch import Rearrange
+import numpy as np
+import torch
 
 
 class Drop0AlignMSI_S2(pl.LightningDataModule):
@@ -56,7 +58,7 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
 #             983.4251876271745, #B12
 #             950.995883516169, #B8A
 #         ]
-    mean = [
+    mean = torch.tensor([
             1562.0766579032488, #B01
             1338.2290704889197, #B02
             1244.4365473161317, #B03
@@ -70,8 +72,8 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
             1960.5317996244119, #B11
             1412.116801289823, #B12
             2343.9090645496567, #B8A
-        ]
-    std = [
+        ])
+    std = torch.tensor([
             239.70035979139226, #B01
             325.0655318620384, #B02
             415.1683138256359, #B03
@@ -85,7 +87,7 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
             896.0873314714964, #B11
             752.2534022942613, #B12
             777.9910284369854, #B8A
-        ]
+        ])
     bce_weight = 30
     
     def __init__(
@@ -128,10 +130,13 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
         ]
 
         self.train_tfms = transforms.Compose([
+            utils.Lambda(lambda x: (x - self.mean[tfms_channel_subset][None,:,None,None]) / self.std[tfms_channel_subset][None,:,None,None]),
             self.preprocessing_step,
+            utils.Lambda(lambda x: x[:, tfms_channel_subset]),
             utils.DimensionDropout(1, self.tfms_train_channel_size),
         ])
         self.test_tfms = transforms.Compose([
+            utils.Lambda(lambda x: (x - self.mean[tfms_channel_subset][None,:,None,None]) / self.std[tfms_channel_subset][None,:,None,None]),
             self.preprocessing_step,
             utils.Lambda(lambda x: x[:, tfms_channel_subset]),
         ])

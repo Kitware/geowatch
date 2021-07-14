@@ -31,7 +31,7 @@ class ChangeDetectorBase(pl.LightningModule):
         raise NotImplementedError
 
     def training_step(self, batch, batch_idx=None):
-        images, labels = batch["images"], batch["labels"]
+        images, labels = batch["images"].float(), batch["labels"]
         changes = labels[:, 1:] != labels[:, :-1]
 
         # compute predicted and target change masks
@@ -52,7 +52,7 @@ class ChangeDetectorBase(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx=None):
-        images, labels = batch["images"], batch["labels"]
+        images, labels = batch["images"].float(), batch["labels"]
         changes = labels[:, 1:] != labels[:, :-1]
 
         # compute predicted and target change masks
@@ -74,7 +74,7 @@ class ChangeDetectorBase(pl.LightningModule):
         return loss
 
     def test_step(self, batch, batch_idx=None):
-        images, labels = batch["images"], batch["labels"]
+        images, labels = batch["images"].float(), batch["labels"]
         changes = labels[:, 1:] != labels[:, :-1]
 
         # compute predicted and target change masks
@@ -134,7 +134,7 @@ class SemanticSegmentationBase(pl.LightningModule):
         raise NotImplementedError
 
     def training_step(self, batch, batch_idx=None):
-        images, labels = batch["images"], batch["labels"]
+        images, labels = batch["images"].float(), batch["labels"]
         if isinstance(labels, np.ndarray):
             labels = torch.from_numpy(labels)
 
@@ -152,7 +152,7 @@ class SemanticSegmentationBase(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx=None):
-        images, labels = batch["images"], batch["labels"]
+        images, labels = batch["images"].float(), batch["labels"]
         
         if isinstance(labels, np.ndarray):
             labels = torch.from_numpy(labels)
@@ -172,7 +172,7 @@ class SemanticSegmentationBase(pl.LightningModule):
         return loss
 
     def test_step(self, batch, batch_idx=None):
-        images, labels = batch["images"], batch["labels"]
+        images, labels = batch["images"].float(), batch["labels"]
         if isinstance(labels, np.ndarray):
             labels = torch.from_numpy(labels)
 

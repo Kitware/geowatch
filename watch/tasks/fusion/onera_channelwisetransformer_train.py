@@ -48,11 +48,6 @@ def main():
             dropout=0.1,
 
             # trainer params
-            gpus=1,
-            #accelerator="ddp",
-            precision=16,
-            max_epochs=200,
-            accumulate_grad_batches=2,
             terminate_on_nan=True,
         )
         fit.fit_model(cmdline=False, **defaults)

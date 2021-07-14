@@ -11,7 +11,7 @@ from torch.optim import lr_scheduler
 from torchvision import transforms
 
 import torchmetrics as metrics
-from watch.tasks.fusion.methods.common import ChangeDetectorBase
+from watch.tasks.fusion.methods.common import ChangeDetectorBase, SemanticSegmentationBase
 from watch.tasks.fusion.models import transformer
 from watch.tasks.fusion import utils
 
@@ -38,7 +38,6 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
     @property
     def preprocessing_step(self):
         return transforms.Compose([
-            utils.Lambda(lambda x: torch.from_numpy(x)),
             Rearrange("t c (h hs) (w ws) -> t c h w (ws hs)",
                       hs=self.hparams.window_size,
                       ws=self.hparams.window_size),
@@ -96,7 +95,6 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
     @property
     def preprocessing_step(self):
         return transforms.Compose([
-            utils.Lambda(lambda x: torch.from_numpy(x)),
             Rearrange("t c (h hs) (w ws) -> t c h w (ws hs)",
                       hs=self.hparams.window_size,
                       ws=self.hparams.window_size),

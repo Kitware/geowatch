@@ -228,7 +228,6 @@ def fit_model(args=None, cmdline=False, **kwargs):
     """
     args = make_fit_config(args=None, cmdline=cmdline, **kwargs)
     print("{train_name}\n====================".format(**args.__dict__))
-    return
 
     method_class = getattr(methods, args.method)
     dataset_class = getattr(datasets, args.dataset)
@@ -256,7 +255,7 @@ def fit_model(args=None, cmdline=False, **kwargs):
 
     # prime the model, incase it has a lazy layer
     batch = next(iter(dataset.train_dataloader()))
-    result = model(batch["images"][[0], ...])
+    result = model(batch["images"][[0], ...].float())
 
     # fit the model
     trainer.fit(model, dataset)

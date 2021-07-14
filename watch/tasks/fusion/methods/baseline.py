@@ -31,7 +31,7 @@ class UNetChangeDetector(ChangeDetectorBase):
     @property
     def preprocessing_step(self):
         return transforms.Compose([
-            utils.Lambda(lambda x: torch.from_numpy(x)),
+            utils.Lambda(lambda x: x),
         ])
 
     @pl.core.decorators.auto_move_data

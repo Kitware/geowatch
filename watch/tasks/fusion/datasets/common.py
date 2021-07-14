@@ -160,13 +160,13 @@ class VideoDataset(data.Dataset):
         frame_ignores = (frame_masks == self.occlusion_class_id)
 
         # rearrange image axes for pytorch
-        frame_ims = einops.rearrange(frame_ims, "t h w c -> c t h w")
+        frame_ims = einops.rearrange(frame_ims, "t h w c -> t c h w")
 
         # catch nans
         frame_ims[np.isnan(frame_ims)] = -1.
 
         # convert to torch
-        frame_ims = torch.from_numpy(frame_ims)
+        frame_ims = torch.from_numpy(frame_ims.astype("float"))
         frame_masks = torch.from_numpy(frame_masks)
         frame_ignores = torch.from_numpy(frame_ignores)
 
