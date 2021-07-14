@@ -43,7 +43,7 @@ dependencies:
     - protobuf >= 3.15.8
     - networkx >= 2.5.1
     - einops >= 0.3.0
-    - lru-dict >= 1.1.7
+    #- lru-dict >= 1.1.7  # breaks on CI, optional for ndsampler
 
     # Imaging
     - kwimage >= 0.7.8
