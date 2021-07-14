@@ -655,7 +655,7 @@ def geotiff_filepath_info(gpath, fast=True):
                 sensor_candidates.append('WV03')
 
         # Add DG information if it exists
-        from watch.io import digital_globe as dg_parser
+        from watch.gis import digital_globe as dg_parser
         try:
             # technically, this does read files, so its not all about the path
             dg_bundle = dg_parser.DigitalGlobeBundle.from_pointer(gpath)

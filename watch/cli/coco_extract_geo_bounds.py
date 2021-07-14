@@ -21,6 +21,9 @@ from shapely import ops
 
 
 class CocoExtractBoundsConfig(scfg.Config):
+    """
+    Extract bounds of geojson tiffs (in a kwcoco file) into a regions file
+    """
     default = {
         'src': scfg.Value('in.kwcoco.json', help='input dataset'),
         'dst': scfg.Value(None, help='output dataset, if none writes to stdout'),
@@ -246,10 +249,13 @@ def _fix_geojson_poly(geo):
     return fixed
 
 
+_SubConfig = CocoExtractBoundsConfig
+
+
 if __name__ == '__main__':
     """
     CommandLine:
-        python -m watch.scripts.coco_extract_geo_bounds \
+        python -m watch.cli.coco_extract_geo_bounds \
           --src $HOME/data/dvc-repos/smart_watch_dvc/drop0/drop0.kwcoco.json \
           --dst $HOME/data/grab_tiles_out/regions2.geojson.json \
           --breakup_times=True \
@@ -260,7 +266,7 @@ if __name__ == '__main__':
             --out_dpath $HOME/data/grab_tiles_out \
             --backend fels
 
-        python -m watch.scripts.coco_extract_geo_bounds \
+        python -m watch.cli.coco_extract_geo_bounds \
           --src $HOME/data/dvc-repos/smart_watch_dvc/drop0/drop0.kwcoco.json \
           --breakup_times=True \
           --dst $HOME/data/grab_tiles_out/regions.geojson.json
@@ -278,7 +284,7 @@ if __name__ == '__main__':
             --out_dpath $HOME/data/grab_tiles_out \
             --backend fels
 
-        python -m watch.scripts.geotiffs_to_kwcoco.py \
+        python -m watch.cli.geotiffs_to_kwcoco.py \
             --geotiff_dpath ~/data/grab_tiles_out/fels \
             --dst $HOME/data/grab_tiles_out/fels/data.kwcoco.json
 

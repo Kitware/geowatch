@@ -17,6 +17,9 @@ from watch.utils import util_bands
 
 
 class KWCocoFromGeotiffConfig(scfg.Config):
+    """
+    Create a kwcoco manifest of a set of on-disk geotiffs
+    """
     default = {
         'geotiff_dpath': scfg.Value(None, help='path containing geotiffs'),
         'relative': scfg.Value(False, help='if true make paths relative'),
@@ -61,8 +64,10 @@ def filter_band_files(fpaths, band_list, with_tci=True):
         band_names.add('TCI')
     # use endswith() instead of in
     # to avoid false positives, eg from a tile code in the filename
-    is_band_file = lambda path: any(splitext(basename(path))[0].endswith(b) for b in band_names)
+    def is_band_file(path):
+        return any(splitext(basename(path))[0].endswith(b) for b in band_names)
     return list(filter(is_band_file, fpaths))
+
 
 def ingest_landsat_directory(lc_dpath):
     name = basename(normpath(lc_dpath))
@@ -244,6 +249,7 @@ def find_geotiffs(geotiff_dpath, workers=0):
             job.dpath = dpath
         elif dname.startswith('S2'):
             s2_dpath = dpath
+            # FIXME: undefined name
             job = jobs.submit(ingest_sentinal2_directory, s2_dpath)
             job.dpath = dpath
         else:
@@ -277,13 +283,16 @@ def find_geotiffs(geotiff_dpath, workers=0):
     return dset
 
 
+_SubConfig = KWCocoFromGeotiffConfig
+
+
 if __name__ == '__main__':
     """
     CommandLine:
-        python -m watch.scripts.geotiffs_to_kwcoco.py
+        python -m watch.cli.geotiffs_to_kwcoco.py
 
     CommandLine:
-        python -m watch.scripts.coco_extract_geo_bounds \
+        python -m watch.cli.coco_extract_geo_bounds \
           --src $HOME/data/dvc-repos/smart_watch_dvc/drop0/drop0.kwcoco.json \
           --breakup_times=True \
           --dst $HOME/data/grab_tiles_out/regions.geojson.json
@@ -301,21 +310,21 @@ if __name__ == '__main__':
             --out_dpath $HOME/data/grab_tiles_out \
             --backend fels --profile
 
-        python -m watch.scripts.geotiffs_to_kwcoco.py \
+        python -m watch.cli.geotiffs_to_kwcoco.py \
             --geotiff_dpath ~/data/grab_tiles_out/fels \
             --dst $HOME/data/grab_tiles_out/fels/data.kwcoco.json --profile
 
-        python -m watch.scripts.geotiffs_to_kwcoco.py \
+        python -m watch.cli.geotiffs_to_kwcoco.py \
             --geotiff_dpath ~/data/dvc-repos/smart_watch_dvc/unannotated/AE-Dubai-0001 \
             --dst ~/data/dvc-repos/smart_watch_dvc/unannotated/dubai-msi.kwcoco.json
 
         cat ~/data/dvc-repos/smart_watch_dvc/unannotated/dubai-msi.kwcoco.json
 
-        python -m watch.scripts.geotiffs_to_kwcoco.py \
+        python -m watch.cli.geotiffs_to_kwcoco.py \
             --geotiff_dpath ~/data/dvc-repos/smart_watch_dvc/unannotated/KR-Pyeongchang-S2 \
             --dst ~/data/dvc-repos/smart_watch_dvc/unannotated/korea-msi.kwcoco.json
 
-        python -m -m watch.scripts.geotiffs_to_kwcoco.py \
+        python -m -m watch.cli.geotiffs_to_kwcoco.py \
             --geotiff_dpath ~/data/dvc-repos/smart_watch_dvc/unannotated/US-Waynesboro-0001 \
             --dst ~/data/dvc-repos/smart_watch_dvc/unannotated/waynesboro-msi.kwcoco.json
     """

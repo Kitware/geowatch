@@ -49,7 +49,8 @@ setup(
     description="",
     entry_points={
         'console_scripts': [
-            'watch_hello_world=watch.tools.hello_world:main',
+            'watch_hello_world=watch.cli.hello_world:main',
+            'watch-cli = watch.cli.__main__:main',
         ],
     },
     install_requires=requirements,

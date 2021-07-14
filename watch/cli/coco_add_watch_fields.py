@@ -11,7 +11,7 @@ import ubelt as ub
 import scriptconfig as scfg
 import numpy as np
 import kwimage
-from watch.tools.kwcoco_extensions import populate_watch_fields
+from watch.utils.kwcoco_extensions import populate_watch_fields
 
 
 class AddWatchFieldsConfig(scfg.Config):
@@ -43,7 +43,7 @@ def main(**kwargs):
         jq .videos toydata.kwcoco.json
         jq .images[0] toydata.kwcoco.json
 
-        python -m watch.scripts.coco_add_watch_fields \
+        python -m watch.cli.coco_add_watch_fields \
             --src toydata.kwcoco.json \
             --dst toydata-gsd10.kwcoco.json \
             --target_gsd=10
@@ -52,7 +52,7 @@ def main(**kwargs):
         jq .images[0] toydata-gsd10.kwcoco.json
 
     Ignore:
-        python -m watch.scripts.coco_add_watch_fields \
+        python -m watch.cli.coco_add_watch_fields \
             --src=$HOME/data/dvc-repos/smart_watch_dvc/drop0_aligned_msi/data.kwcoco.json \
             --dst=$HOME/data/dvc-repos/smart_watch_dvc/drop0_aligned_msi/data.kwcoco.new.json \
             --target_gsd=10
@@ -61,7 +61,7 @@ def main(**kwargs):
     jq .images[0].auxiliary[0] $HOME/data/dvc-repos/smart_watch_dvc/drop0_aligned_msi/data.kwcoco.json
 
     Example:
-        >>> from watch.scripts.coco_add_watch_fields import *  # NOQA
+        >>> from watch.cli.coco_add_watch_fields import *  # NOQA
         >>> import kwcoco
         >>> # TODO: make a demo dataset with some sort of gsd metadata
         >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
@@ -107,9 +107,12 @@ def main(**kwargs):
     else:
         print('not writing')
 
+
+_SubConfig = AddWatchFieldsConfig
+
 if __name__ == '__main__':
     """
     CommandLine:
-        python  -m watch.scripts.coco_add_watch_fields
+        python  -m watch.cli.coco_add_watch_fields
     """
     main()

@@ -9,7 +9,7 @@ Notes:
 
     # https://data.kitware.com/#collection/602457272fa25629b95d1718/folder/602c3e9e2fa25629b97e5b5e
 
-    python -m watch.scripts.coco_align_geotiffs \
+    python -m watch.cli.coco_align_geotiffs \
             --src ~/data/dvc-repos/smart_watch_dvc/drop0/drop0.kwcoco.json \
             --dst ~/data/dvc-repos/smart_watch_dvc/drop0_aligned_v2 \
             --context_factor=1.5
@@ -29,13 +29,13 @@ Notes:
     girder-client --api-url https://data.kitware.com/api/v1 upload \
             602c3e9e2fa25629b97e5b5e drop0_aligned_v2_$stamp.zip
 
-    python -m watch.scripts.coco_align_geotiffs \
+    python -m watch.cli.coco_align_geotiffs \
             --src ~/data/dvc-repos/smart_watch_dvc/drop0/drop0-msi.kwcoco.json \
             --dst ~/data/dvc-repos/smart_watch_dvc/drop0_aligned_msi \
             --context_factor=1.5
 
 
-    python -m watch.scripts.coco_align_geotiffs \
+    python -m watch.cli.coco_align_geotiffs \
             --src ~/data/dvc-repos/smart_watch_dvc/drop0/drop0-msi.kwcoco.json \
             --dst ~/data/dvc-repos/smart_watch_dvc/drop0_aligned_msi_big \
             --context_factor=3.5
@@ -52,13 +52,17 @@ Test:
 
     kwcoco subset ~/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-WV/data.kwcoco.json --gids=1129,1130 --dst ~/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-WV/subtmp.kwcoco.json
 
-    python -m watch.scripts.coco_align_geotiffs \
+    python -m watch.cli.coco_align_geotiffs \
             --src ~/remote/namek/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-WV/subtmp.kwcoco.json \
             --dst ~/remote/namek/data/dvc-repos/smart_watch_dvc/drop0_aligned_WV_Fix \
             --rpc_align_method pixel_crop \
             --context_factor=3.5
 
            # --src ~/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-WV/data.kwcoco.json \
+
+    TODO:
+        - [ ] Add method for extracting "negative ROIs" that are nearby
+            "positive ROIs".
 """
 import kwcoco
 import kwimage
@@ -85,10 +89,6 @@ class CocoAlignGeotiffConfig(scfg.Config):
         * For each AOI find all images that overlap
         * Orthorectify (or warp) the selected spatial region and its
           annotations to a cannonical space.
-
-    TODO:
-        - [ ] Add method for extracting "negative ROIs" that are nearby
-            "positive ROIs".
     """
     default = {
         'src': scfg.Value('in.geojson.json', help='input dataset to chip'),
@@ -147,7 +147,7 @@ def main(**kw):
     See :class:``CocoAlignGeotiffConfig` for details
 
     Ignore:
-        from watch.scripts.coco_align_geotiffs import *  # NOQA
+        from watch.cli.coco_align_geotiffs import *  # NOQA
         import kwcoco
         src = ub.expandpath('~/data/dvc-repos/smart_watch_dvc/drop0/drop0.kwcoco.json')
         dst = ub.expandpath('~/data/dvc-repos/smart_watch_dvc/drop0_aligned')
@@ -157,7 +157,7 @@ def main(**kw):
         }
 
     Example:
-        >>> from watch.scripts.coco_align_geotiffs import *  # NOQA
+        >>> from watch.cli.coco_align_geotiffs import *  # NOQA
         >>> from watch.demo.landsat_demodata import grab_landsat_product
         >>> from watch.gis.geotiff import geotiff_metadata
         >>> # Create a dead simple coco dataset with one image
@@ -334,7 +334,7 @@ def read_geojson(file, default_axis_mapping='OAMS_TRADITIONAL_GIS_ORDER'):
 
     Example:
         >>> import io
-        >>> from watch.scripts.coco_align_geotiffs import *  # NOQA
+        >>> from watch.cli.coco_align_geotiffs import *  # NOQA
         >>> geojson_text = demo_regions_geojson_text()
         >>> file = io.StringIO()
         >>> file.write(geojson_text)
@@ -822,8 +822,8 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
     """
     Threaded worker function for :func:`SimpleDataCube.extract_overlaps`.
     """
-    from watch.tools.kwcoco_extensions import _populate_canvas_obj
-    from watch.tools.kwcoco_extensions import _recompute_auxiliary_transforms
+    from watch.utils.kwcoco_extensions import _populate_canvas_obj
+    from watch.utils.kwcoco_extensions import _recompute_auxiliary_transforms
 
     iso_time = datetime.date.isoformat(date.date())
     sensor_coarse = img.get('sensor_coarse', 'unknown')
@@ -1552,9 +1552,12 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
     return dst
 
 
+_CLI = CocoAlignGeotiffConfig
+
+
 if __name__ == '__main__':
     """
     CommandLine:
-        python -m watch.scripts.coco_align_geotiffs --help
+        python -m watch.cli.coco_align_geotiffs --help
     """
     main()

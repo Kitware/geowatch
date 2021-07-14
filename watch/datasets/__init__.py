@@ -1,6 +1,7 @@
 
 def lazy_import(module_name, submodules, submod_attrs):
     import importlib
+    import os
     name_to_submod = {
         func: mod for mod, funcs in submod_attrs.items()
         for func in funcs
@@ -25,12 +26,22 @@ def lazy_import(module_name, submodules, submod_attrs):
                     module_name=module_name, name=name))
         globals()[name] = attr
         return attr
+
+    if os.environ.get('EAGER_IMPORT', ''):
+        for name in name_to_submod.values():
+            __getattr__(name)
+
+        for attrs in submod_attrs.values():
+            for attr in attrs:
+                __getattr__(attr)
     return __getattr__
 
 
 __getattr__ = lazy_import(
     __name__,
-    submodules={},
+    submodules={
+        'video_dataset',
+    },
     submod_attrs={},
 )
 
@@ -38,4 +49,4 @@ __getattr__ = lazy_import(
 def __dir__():
     return __all__
 
-__all__ = []
+__all__ = ['video_dataset']
