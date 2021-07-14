@@ -8,7 +8,7 @@ import pystac
 import shapely as shp
 import shapely.ops
 import shapely.geometry
-from watch.tools.stac_to_kwcoco import convert
+from watch.cli.stac_to_kwcoco import convert
 
 
 class Main(Algorithm):

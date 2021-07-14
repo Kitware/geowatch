@@ -1,6 +1,6 @@
 from algorithm_toolkit import Algorithm, AlgorithmChain
 
-from watch.tools.stac_to_kwcoco import convert
+from watch.cli.stac_to_kwcoco import convert
 
 class Main(Algorithm):
 
