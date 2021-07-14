@@ -106,6 +106,9 @@ dependencies:
       rm -rf ".cache/conda/envs/loose-watch-env"
       conda env create -f conda_env.yml --prefix ".cache/conda/envs/loose-watch-env" -v -v
 
+      # Note: work in dev/make_reqs_from_conda.py has work on doing interesting
+      # things with this file. 
+
       # List of other sub-deps not explicitly listed, but that will get
       # pulled down. Should these be added to the requirment spec
       Jinja2 >= 3.0.0
