@@ -69,6 +69,7 @@ dependencies:
     - pygeos >= 0.10.1
     - rgd-client >= 0.2.2
     - fels >= 1.4.0
+    - geojson >= 2.5.0
 
     # Machine learning
     - scikit_learn >= 0.24.2

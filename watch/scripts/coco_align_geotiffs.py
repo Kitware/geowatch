@@ -1,6 +1,6 @@
 """
 Given the raw data in kwcoco format, this script will extract orthorectified
-regions around areas of interest across time.
+regions around areas of intere/t across time.
 
 Notes:
 
@@ -259,6 +259,7 @@ def main(**kw):
 
     # For each ROI extract the aligned regions to the target path
     extract_dpath = ub.expandpath(output_bundle_dpath)
+    ub.ensuredir(extract_dpath)
 
     # Create a new dataset that we will extend as we extract ROIs
     new_dset = kwcoco.CocoDataset()
@@ -571,7 +572,7 @@ class SimpleDataCube(object):
         """
         # New maybe faster and safer way of finding overlaps?
         ridx_to_gidsx = geopandas_pairwise_overlaps(region_df, cube.img_geos_df)
-        print('ridx_to_gidsx = {!r}'.format(ridx_to_gidsx))
+        print('ridx_to_gidsx = {}'.format(ub.repr2(ridx_to_gidsx, nl=1)))
 
         # TODO: maybe check for self-overlap?
         # ridx_to_ridx = geopandas_pairwise_overlaps(region_df, region_df)
