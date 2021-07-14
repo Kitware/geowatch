@@ -4,6 +4,7 @@ __dev__ = """
 mkinit ~/code/watch/watch/tasks/template/__init__.py --noattrs --lazy -w
 """
 
+
 def lazy_import(module_name, submodules, submod_attrs):
     import importlib
     import os

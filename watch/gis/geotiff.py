@@ -860,6 +860,7 @@ def parse_sentinel2_product_id(parts):
     if meta:
         return meta
 
+
 @profile
 def parse_landsat_product_id(product_id):
     """
