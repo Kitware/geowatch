@@ -1,10 +1,10 @@
 model_names = [
-    "smt_it_stm_n12",
-    "smt_it_hwtm_n12",
-    "smt_it_stm_t12",
-    "smt_it_hwtm_t12",
+    #"smt_it_stm_n12",
+    #"smt_it_hwtm_n12",
+    #"smt_it_stm_t12",
+    #"smt_it_hwtm_t12",
     "smt_it_stm_s12",
-    "smt_it_hwtm_s12",
+    #"smt_it_hwtm_s12",
 ]
 
 methods = [
@@ -31,7 +31,8 @@ def main():
             --workdir=$HOME/work/watch/fit/runs
     """
     import itertools as it
-    from watch.tasks.fusion import fit
+    from types import SimpleNamespace
+    from . import fit
     
     for method, model_name in it.product(methods, model_names):
     
@@ -54,7 +55,7 @@ def main():
             accumulate_grad_batches=2,
             terminate_on_nan=True,
         )
-        fit.main(**defaults)
+        fit.fit_model(cmdline=False, **defaults)
 
 
 if __name__ == "__main__":

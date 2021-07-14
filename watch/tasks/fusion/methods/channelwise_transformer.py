@@ -39,7 +39,6 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
     def preprocessing_step(self):
         return transforms.Compose([
             utils.Lambda(lambda x: torch.from_numpy(x)),
-            utils.Lambda(lambda x: (x - x.mean()) / x.std()),
             Rearrange("t c (h hs) (w ws) -> t c h w (ws hs)",
                       hs=self.hparams.window_size,
                       ws=self.hparams.window_size),
@@ -98,7 +97,6 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
     def preprocessing_step(self):
         return transforms.Compose([
             utils.Lambda(lambda x: torch.from_numpy(x)),
-            utils.Lambda(lambda x: (x - x.mean()) / x.std()),
             Rearrange("t c (h hs) (w ws) -> t c h w (ws hs)",
                       hs=self.hparams.window_size,
                       ws=self.hparams.window_size),
@@ -150,7 +148,6 @@ class MultimodalTransformerSegmentation(SemanticSegmentationBase):
     def preprocessing_step(self):
         return transforms.Compose([
             utils.Lambda(lambda x: torch.from_numpy(x).float()),
-            utils.Lambda(lambda x: (x - x.mean()) / x.std()),
             Rearrange("(h hs) (w ws) c -> c h w (ws hs)",
                       hs=self.hparams.window_size,
                       ws=self.hparams.window_size),
@@ -175,8 +172,8 @@ class MultimodalTransformerSegmentation(SemanticSegmentationBase):
     def add_model_specific_args(parent_parser):
         parser = super(MultimodalTransformerSegmentation, MultimodalTransformerSegmentation).add_model_specific_args(parent_parser)
 
-        parser.add_argument("--model_name", required=True, type=str)
-        parser.add_argument("--n_classes", required=True, type=int)
+        parser.add_argument("--model_name", type=str)
+        parser.add_argument("--n_classes", type=int)
         parser.add_argument("--dropout", default=0.0, type=float)
 #         parser.add_argument("--input_scale", default=255.0, type=float)
         parser.add_argument("--window_size", default=8, type=int)

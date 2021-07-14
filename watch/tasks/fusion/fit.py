@@ -43,7 +43,8 @@ available_models = [
 available_datasets = [
     'Drop0AlignMSI_S2',
     'Drop0Raw_S2',
-    'WatchDataModule',
+    #'WatchDataModule',
+    'OneraCD_2018',
     # # 'common',
     # 'onera_2018',
     # 'project_data'
@@ -99,7 +100,7 @@ def make_fit_config(args=None, cmdline=False, **kwargs):
     # Setup common fields and modal switches
     modal_parser = parser.add_argument_group("Modal")
     modal_parser.add_argument(
-        '--dataset', default='WatchDataModule', choices=available_datasets,
+        '--dataset', choices=available_datasets,
         help=ub.paragraph(
             '''
             Modal parameter indicating the family of dataset to train on.
@@ -107,7 +108,7 @@ def make_fit_config(args=None, cmdline=False, **kwargs):
             '''))
 
     modal_parser.add_argument(
-        '--method', default='MultimodalTransformerDirectCD',
+        '--method',
         choices=available_methods, help=ub.paragraph(
             '''
             Modal parameter indicating the family of model to train.
@@ -120,6 +121,9 @@ def make_fit_config(args=None, cmdline=False, **kwargs):
     # The specific parser will depend on the modal arguments
     modal, _ = parser.parse_known_args(ignore_help_args=True)
 
+    print(kwargs)
+    print(modal)
+
     common_parser = parser.add_argument_group("Common")
     common_parser.add_argument(
         '--workdir', default='./_trained_models',
@@ -130,9 +134,11 @@ def make_fit_config(args=None, cmdline=False, **kwargs):
             ''')
     )
 
+    print(modal)
+
     # Get subcomponents
     method_class = getattr(methods, modal.method)
-    dataset_class = getattr(datasets, modal.dataset, None)
+    dataset_class = getattr(datasets, modal.dataset)
 
     # Extend the parser based on the chosen dataset / method modes
     dataset_class.add_data_specific_args(parser)
@@ -213,7 +219,7 @@ def make_fit_config(args=None, cmdline=False, **kwargs):
     # similar to how scriptconfig works
     return args
 
-def fit(args=None, cmdline=False, **kwargs):
+def fit_model(args=None, cmdline=False, **kwargs):
     """
     Example:
         from watch.tasks.fusion.fit import *  # NOQA
@@ -222,9 +228,10 @@ def fit(args=None, cmdline=False, **kwargs):
     """
     args = make_fit_config(args=None, cmdline=cmdline, **kwargs)
     print("{train_name}\n====================".format(**args.__dict__))
+    return
 
     method_class = getattr(methods, args.method)
-    dataset_class = getattr(datasets, args.dataset, None)
+    dataset_class = getattr(datasets, args.dataset)
 
     # init method from args
     method_var_dict = args.__dict__
@@ -311,7 +318,7 @@ def main(args=None, **kwargs):
             --chip_size=96 \
             --workdir=$HOME/work/watch/fit
     """
-    fit(args=args, cmdline=True, **kwargs)
+    fit_model(args=args, cmdline=True, **kwargs)
 
 
 if __name__ == "__main__":
