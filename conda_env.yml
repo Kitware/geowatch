@@ -43,6 +43,7 @@ dependencies:
     - protobuf >= 3.15.8
     - networkx >= 2.5.1
     - einops >= 0.3.0
+    - lru-dict >= 1.1.7
 
     # Imaging
     - kwimage >= 0.7.8
@@ -60,14 +61,14 @@ dependencies:
     - seaborn >= 0.11.1
 
     # GIS
-    - geopandas >= 0.8.1
-    - pyproj >= 3.0.0.post1
+    - geopandas >= 0.9.0
+    - pyproj >= 3.1.0
     - rasterio >= 1.2.0
-    - rgd-client >= 0.2.2
     - utm >= 0.7.0
-    - fels >= 1.4.0
     - rtree >= 0.9.7
     - pygeos >= 0.10.1
+    - rgd-client >= 0.2.2
+    - fels >= 1.4.0
 
     # Machine learning
     - scikit_learn >= 0.24.2
