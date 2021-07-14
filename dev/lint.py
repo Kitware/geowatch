@@ -59,25 +59,3 @@ if __name__ == '__main__':
     """
     import fire
     fire.Fire(custom_lint)
-
-
-def demo_stac_catalog():
-    import json
-    import ubelt as ub
-    import os
-    dpath = ub.ensure_app_cache_dir('watch/demo/demo_stac')
-    fpath = os.path.join(dpath, 'demo_catalog.json')
-    expected_sha512 = '1b813bfe5661963c08dff322734f8d34a6d8b06bcc15fc4'
-
-    if os.path.exists(fpath):
-        # Dont rewrite if we dont need to
-        got_sha512 = ub.hash_file(fpath)
-        if got_sha512.startswith(expected_sha512):
-            return fpath
-
-    catalog = {
-        'some': {'json': 'structure'},
-    }
-    with open(fpath, 'w') as file:
-        json.dump(catalog, file)
-    return fpath
