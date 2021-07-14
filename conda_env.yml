@@ -43,6 +43,7 @@ dependencies:
     - protobuf >= 3.15.8
     - networkx >= 2.5.1
     - einops >= 0.3.0
+    #- lru-dict >= 1.1.7  # breaks on CI, optional for ndsampler
 
     # Imaging
     - kwimage >= 0.7.8
@@ -50,7 +51,6 @@ dependencies:
     - Pillow >= 8.0.1
     - imgaug >= 0.4.0
     - albumentations >= 1.0.0
-    - opencv_python_headless >= 4.5.2.52  # This can be a problem library
     - scikit_image >= 0.18.1
     - ndsampler >= 0.6.3
     - tifffile >= 2021.4.8
@@ -61,12 +61,15 @@ dependencies:
     - seaborn >= 0.11.1
 
     # GIS
-    - geopandas >= 0.8.1
-    - pyproj >= 3.0.0.post1
+    - geopandas >= 0.9.0
+    - pyproj >= 3.1.0
     - rasterio >= 1.2.0
-    - rgd-client >= 0.2.2
     - utm >= 0.7.0
+    - rtree >= 0.9.7
+    - pygeos >= 0.10.1
+    - rgd-client >= 0.2.2
     - fels >= 1.4.0
+    - geojson >= 2.5.0
 
     # Machine learning
     - scikit_learn >= 0.24.2
@@ -75,16 +78,21 @@ dependencies:
     - torch_optimizer >= 0.1.0
     - pytorch_lightning >= 1.3.5
     - netharn >= 0.5.15
-    
     - torchmetrics >= 0.3.2
-
     - tensorboard_logger >= 0.1.0 
     - tensorboard >= 2.4.1
+
+    # PIA Dependencies
+    # This can be a problem library because opencv-python-headless conflicts
+    # with opencv-python, and some other libraries depend on opencv-python. 
+    # This can be worked via:
+    # `pip uninstall opencv-python opencv-python-headless && pip install opencv-python-headless`
+    - opencv_python_headless >= 4.5.2.52  
       
     # find-links applies to everything after it, so make sure this is the last dep
     # References: https://stackoverflow.com/questions/60410173/find-links-conda-env
     - --find-links https://girder.github.io/large_image_wheels
-    - GDAL >= 3.2.1
+    - GDAL >= 3.3.1
 
 
 # Abuse conda environment spec and YAML notation to make a heredoc for notes
@@ -93,8 +101,14 @@ dependencies:
 .__doc__: &__doc__
   - |
 
+      pip uninstall osgeo GDAL
+      pip install GDAL==3.2.1 --find-links https://girder.github.io/large_image_wheels
+
       rm -rf ".cache/conda/envs/loose-watch-env"
       conda env create -f conda_env.yml --prefix ".cache/conda/envs/loose-watch-env" -v -v
+
+      # Note: work in dev/make_reqs_from_conda.py has work on doing interesting
+      # things with this file. 
 
       # List of other sub-deps not explicitly listed, but that will get
       # pulled down. Should these be added to the requirment spec

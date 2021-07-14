@@ -16,6 +16,9 @@ def normalize_intensity(imdata, return_info=False, nodata=None):
         nodata: A value representing nodata to leave unchanged during
             normalization, for example 0
 
+    Notes:
+        - [ ] Moved to kwimage as a general utility
+
     Example:
         >>> from watch.utils.util_norm import *  # NOQA
         >>> import ubelt as ub
@@ -130,7 +133,7 @@ def thumbnail(in_path, sat=None, max_dim=1000):
     # https://rasterio.readthedocs.io/en/latest/faq.html#why-can-t-rasterio-find-proj-db-rasterio-from-pypi-versions-1-2-0
     with TemporaryEnvironment({'PROJ_LIB': None}):
         with rasterio.open(in_path) as f:
-            if sat == None:
+            if sat is None:
                 assert f.indexes.issubset((1,), (3,)), f'{in_path} is not PAN or TCI.'
                 bands = f.read()
                 bands = ki.atleast_3channels(bands)
@@ -147,4 +150,3 @@ def thumbnail(in_path, sat=None, max_dim=1000):
     bands = ki.ensure_uint255(bands)
     bands = ki.imresize(bands, max_dim=max_dim)
     return bands
-

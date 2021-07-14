@@ -9,7 +9,6 @@ from watch.utils.util_bands import SENTINEL2, LANDSAT7, LANDSAT8
 import parse
 from os.path import basename, isfile
 from dateutil.parser import isoparse
-from datetime import datetime
 
 try:
     from xdev import profile
@@ -17,6 +16,7 @@ except Exception:
     profile = ub.identity
 
 
+@profile
 def geotiff_metadata(gpath, elevation='gtop30'):
     """
     Extract all relevant metadata we know how to extract.
@@ -131,6 +131,7 @@ def geotiff_header_info(gpath_or_ref):
     return img_info
 
 
+@profile
 def geotiff_crs_info(gpath_or_ref, force_affine=False,
                      elevation='gtop30', verbose=0):
     """
@@ -457,7 +458,6 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
     })
 
     if info['utm_corners'] is not None:
-        import kwimage
         utm_box = kwimage.Polygon(exterior=info['utm_corners']).bounding_box()
         meter_w = float(utm_box.width.ravel()[0])
         meter_h = float(utm_box.height.ravel()[0])
@@ -674,7 +674,7 @@ def geotiff_filepath_info(gpath, fast=True):
         # fallback for 'channels'
         # often, a gtiff is a TCI that was postprocessed in some way that destroys
         # the original naming convention
-        # 
+        #
         # this opens the image to check for that case as a fallback
         from osgeo import gdal
         info = gdal.Info(gpath, format='json')
@@ -700,10 +700,11 @@ def _parser_lut(pattern):
     """
     return parse.Parser(pattern)
 
+
 def parse_sentinel2_product_id(parts):
     '''
     Try to parse the Sentinel-2 pre-2016 and post-2016 safedir formats.
-    
+
     Note that unlike parse_landsat_product_id, which expects a band file basename,
     this presently purports to plurally parse pieces of path postfixedly
     (it parses the whole path, backwards :))
@@ -713,7 +714,7 @@ def parse_sentinel2_product_id(parts):
 
     General plan is to check the old formats strictly first, and then check the new safedir loosely as a default
     '''
-    
+
     def _dt(name):
         # expand to a named ISO 8601 datetime without separators, which is not supported by parse
         # example: 20190901T234135
@@ -723,11 +724,11 @@ def parse_sentinel2_product_id(parts):
         # return f'{{{name}.Y:04d}}{{{name}.M:02d}}{{{name}.D:02d}}T{{{name}.h:02d}}{{{name}.m:02d}}{{{name}.s:02d}}'
         # return f'{{{name}.date:08d}}T{{{name}.time:06d}}'
         return f'{{{name}:.15}}'
-    
+
     # unfortunately parse() doesn't seem to support a format specifier for "string of length exactly n"
     # {name:n} is ">= n"
     # {name:.n} is "<= n"  <- going with this one as a better approximation of "exactly n"
-    
+
     # this also EXCLUDES the trailing '.SAFE' for all safedirs, again because parse can't handle optional pieces
 
     s2_safedir_2015 = '{MMM:.3}_{CCCC:.4}_PRD_{MSIXXX:.6}_{ssss:.4}_' + _dt('creation') + '_R{OOO:03d}_V' + _dt('sensing_start') + '_' + _dt('sensing_end')
@@ -754,12 +755,12 @@ def parse_sentinel2_product_id(parts):
     # ...except for TCI, which is not a true band, but often included anyway
     # and this channel code is more specific to kwcoco
     s2_channel_alias.update({'TCI': 'r|g|b'})
-    
+
     meta = {}
 
     # TODO allow for parsing multiple parts once safedir, granuledir, and band file are all implemented
     for _part in reversed(parts):
-        
+
         part = _part.split('.')[0]
         result = s2_safedir_2015_parser.parse(part)
         if result:
@@ -855,7 +856,7 @@ def parse_sentinel2_product_id(parts):
             meta['guess_heuristic'] = 'S2_tile_date_band_format'
             if 'mission_id' not in meta:
                 meta['mission_id'] = 'S2'
-   
+
     if meta:
         return meta
 
@@ -926,7 +927,7 @@ def parse_landsat_product_id(product_id):
             'L1GT': 'Systematic Terrain',
             'L1GS': 'Systematic',
         }
-        
+
         # use util_bands for this
         l7_channel_alias = {
             band['name']: band['common_name'] for band in LANDSAT7 if 'common_name' in band
