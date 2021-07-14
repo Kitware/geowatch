@@ -1,17 +1,17 @@
 """
 Script to help transfer metadata from the original drop0 to drop0-msi
 
-python -m watch.scripts.geotiffs_to_kwcoco.py \
+python -m watch.cli.geotiffs_to_kwcoco.py \
     --geotiff_dpath ~/data/dvc-repos/smart_watch_dvc/unannotated/AE-Dubai-0001 \
     --dst ~/data/dvc-repos/smart_watch_dvc/unannotated/dubai-msi.kwcoco.json \
     --relative True
 
-python -m watch.scripts.geotiffs_to_kwcoco.py \
+python -m watch.cli.geotiffs_to_kwcoco.py \
     --geotiff_dpath ~/data/dvc-repos/smart_watch_dvc/unannotated/KR-Pyeongchang-S2 \
     --dst ~/data/dvc-repos/smart_watch_dvc/unannotated/korea-msi.kwcoco.json \
     --relative True
 
-python -m watch.scripts.geotiffs_to_kwcoco.py \
+python -m watch.cli.geotiffs_to_kwcoco.py \
     --geotiff_dpath ~/data/dvc-repos/smart_watch_dvc/unannotated/US-Waynesboro-0001 \
     --dst ~/data/dvc-repos/smart_watch_dvc/unannotated/waynesboro-msi.kwcoco.json \
     --relative True

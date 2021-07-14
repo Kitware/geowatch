@@ -25,12 +25,11 @@ class WatchCocoStats(scfg.Config):
         assert len(fpaths) == 1, 'only 1 for now'
 
         fpath = fpaths[0]
+        dset = kwcoco.CocoDataset.coerce(fpath)
         coco_watch_stats(dset)
 
 
 def coco_watch_stats(dset):
-    dset = kwcoco.CocoDataset.coerce(fpath)
-
     print('Per-video stats summary')
     for vidid, gids in dset.index.vidid_to_gids.items():
         avail_sensors = dset.images(gids).lookup('sensor_coarse', None)
@@ -50,7 +49,7 @@ def coco_watch_stats(dset):
         channels = []
         fname = img.get('file_name', None)
         if fname is not None:
-            channels.append(aux.get('channels', 'img-unknown-chan'))
+            channels.append(img.get('channels', 'img-unknown-chan'))
 
         auxiliary = img.get('auxiliary', [])
         for aux in auxiliary:
@@ -61,9 +60,11 @@ def coco_watch_stats(dset):
     print('chan_hist = {}'.format(ub.repr2(chan_hist, nl=1)))
 
 
+_SubConfig = WatchCocoStats
+
 if __name__ == '__main__':
     """
     CommandLine:
-        python -m watch.scripts.watch_coco_stats --src=special:vidshapes8-multispectral
+        python -m watch.cli.watch_coco_stats --src=special:vidshapes8-multispectral
     """
     WatchCocoStats.main()

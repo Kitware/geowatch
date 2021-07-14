@@ -34,7 +34,7 @@ def populate_watch_fields(dset, target_gsd=10.0, overwrite=False):
             overwritten. Valid keys are warp, band, and channels.
 
     Ignore:
-        >>> from watch.tools.kwcoco_extensions import *  # NOQA
+        >>> from watch.utils.kwcoco_extensions import *  # NOQA
         >>> import kwcoco
         >>> # root_dpath = ub.expandpath('~/data/dvc-repos/smart_watch_dvc/extern/onera_2018')
         >>> # coco_fpath = join(root_dpath, 'onera_all.kwcoco.json')
@@ -48,7 +48,7 @@ def populate_watch_fields(dset, target_gsd=10.0, overwrite=False):
         >>> print('dset.index.imgs[1] = ' + ub.repr2(dset.index.imgs[1], nl=1))
 
     Example:
-        >>> from watch.tools.kwcoco_extensions import *  # NOQA
+        >>> from watch.utils.kwcoco_extensions import *  # NOQA
         >>> import kwcoco
         >>> # TODO: make a demo dataset with some sort of gsd metadata
         >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
@@ -211,7 +211,7 @@ def coco_populate_geo_img_heuristics(dset, gid, overwrite=False, **kw):
     Note: this will not overwrite existing channel info unless specified
 
     Example:
-        >>> from watch.tools.kwcoco_extensions import *  # NOQA
+        >>> from watch.utils.kwcoco_extensions import *  # NOQA
         >>> import kwcoco
         >>> ###
         >>> gid = 1

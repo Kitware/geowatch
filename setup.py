@@ -35,21 +35,21 @@ requirements = []
 setup(
     author="WATCH developers",
     author_email='kitware@kitware.com',
-    python_requires='>=3.5',
+    python_requires='>=3.7',
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
         'Intended Audience :: Developers',
         'Natural Language :: English',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.5',
-        'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
     ],
     description="",
     entry_points={
         'console_scripts': [
-            'watch_hello_world=watch.tools.hello_world:main',
+            'watch_hello_world=watch.cli.hello_world:main',
+            'watch-cli = watch.cli.__main__:main',
         ],
     },
     install_requires=requirements,
