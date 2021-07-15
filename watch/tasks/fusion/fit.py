@@ -43,7 +43,7 @@ available_models = [
 available_datasets = [
     'Drop0AlignMSI_S2',
     'Drop0Raw_S2',
-    #'WatchDataModule',
+    'WatchDataModule',
     'OneraCD_2018',
     # # 'common',
     # 'onera_2018',
@@ -100,7 +100,7 @@ def make_fit_config(args=None, cmdline=False, **kwargs):
     # Setup common fields and modal switches
     modal_parser = parser.add_argument_group("Modal")
     modal_parser.add_argument(
-        '--dataset', choices=available_datasets,
+        '--dataset', choices=available_datasets, default='WatchDataModule',
         help=ub.paragraph(
             '''
             Modal parameter indicating the family of dataset to train on.
@@ -108,7 +108,7 @@ def make_fit_config(args=None, cmdline=False, **kwargs):
             '''))
 
     modal_parser.add_argument(
-        '--method',
+        '--method', default='MultimodalTransformerDotProdCD',
         choices=available_methods, help=ub.paragraph(
             '''
             Modal parameter indicating the family of model to train.
@@ -236,7 +236,7 @@ def fit_model(args=None, cmdline=False, **kwargs):
     method_var_dict = args.__dict__
 
     # TODO: need a better way to indicate that a method needs parameters from a dataset, and maybe the reverse too
-    if hasattr(dataset_class, "bce_weight"): 
+    if hasattr(dataset_class, "bce_weight"):
         method_var_dict["pos_weight"] = getattr(dataset_class, "bce_weight")
 
     method_var_dict = utils.filter_args(method_var_dict, method_class.__init__)

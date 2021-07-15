@@ -49,7 +49,7 @@ class VideoDataset(data.Dataset):
         >>> index = len(self) // 4
         >>> item = self[index]
         >>> import watch
-        >>> frame_ims = item['images']
+        >>> frame_ims = item['images'].numpy()
         >>> frame_masks = item['labels'].numpy()
         >>> frame_ims = watch.utils.util_norm.normalize_intensity(frame_ims)
         >>> frame_list = []
@@ -71,8 +71,8 @@ class VideoDataset(data.Dataset):
     """
     # TODO: add torchvision.transforms or albumentations
     def __init__(
-        self, 
-        sampler, 
+        self,
+        sampler,
         sample_shape,
         channels=None,
         mode="fit",
