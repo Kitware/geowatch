@@ -3,13 +3,13 @@ from . import fit
 
 
 channel_combos = {
-    "all": "<all>",
-    "uv": "B01",
+    "all": "costal|B02|B03|B04|B05|B06|B07|nir|B09|cirrus|swir16|swir22|B8A",
+    "uv": "costal",
     "bgr": "B02|B03|B04",
-    "vnir": "B05|B06|B07|B08|B8A",
-    "swir": "B09|B10|B11|B12",
-    "sample": "B01|B02|B03|B04|B08|B10|B12",
-    "no60": "B02|B03|B04|B05|B06|B07|B08|B11|B12|B8A",
+    "vnir": "B05|B06|B07|nir|B8A",
+    "swir": "B09|cirrus|swir16|swir22",
+    "sample": "costal|B02|B03|B04|nir|cirrus|swir22",
+    "no60": "B02|B03|B04|B05|B06|B07|nir|swir16|swir22|B8A",
 }
 
 if __name__ == "__main__":
@@ -17,11 +17,11 @@ if __name__ == "__main__":
     from types import SimpleNamespace
 
     args = SimpleNamespace(
-        dataset="OneraCD_2018",
+        dataset="Drop0AlignMSI_S2",
         method="UNetChangeDetector",
 
         # dataset params
-        train_kwcoco_path=pathlib.Path("~/Projects/smart_watch_dvc/extern/onera_2018/onera_train.kwcoco.json"),
+        train_kwcoco_path=pathlib.Path("~/Projects/smart_watch_dvc/drop0_aligned_context5/train_data.kwcoco.json").expanduser(),
         batch_size=64,
         num_workers=8,
 
@@ -29,14 +29,13 @@ if __name__ == "__main__":
         feature_dim=128,
         learning_rate=1e-3,
         weight_decay=1e-5,
-        pos_weight=5.0,
 
         # trainer params
         gpus=1,
-        max_epochs=200,
+        max_epochs=400,
     )
 
     for key, channels in channel_combos.items():
         args.channels = channels
-        args.default_root_dir = f"_trained_models/onera/unet/{key}"
+        args.default_root_dir = f"_trained_models/drop0/unet/{key}"
         fit.main(args)

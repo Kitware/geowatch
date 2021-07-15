@@ -1,7 +1,17 @@
 from torch import nn
 import inspect
 import torch
+import numpy as np
+import math
 
+millnames = ['',' K',' M',' B',' T']
+
+def millify(n):
+    n = float(n)
+    millidx = max(0,min(len(millnames)-1,
+                        int(math.floor(0 if n == 0 else math.log10(abs(n))/3))))
+
+    return '{:.2f}{}'.format(n / 10**(3 * millidx), millnames[millidx])
 
 class Lambda(nn.Module):
     def __init__(self, lambda_):
@@ -10,6 +20,22 @@ class Lambda(nn.Module):
 
     def forward(self, x):
         return self.lambda_(x)
+    
+
+class DimensionDropout(nn.Module):
+    def __init__(self, dim, n_keep):
+        super().__init__()
+        self.dim = dim
+        self.n_keep = n_keep
+        
+    def forward(self, x):
+        shape = x.shape
+        dim_size = shape[self.dim]
+        
+        index = [slice(0,None)] * len(shape)
+        index[self.dim] = torch.randperm(dim_size)[:self.n_keep]
+        
+        return x[index]
 
 
 class AddPositionalEncoding(nn.Module):
@@ -140,7 +166,7 @@ def add_auxiliary(dset, gid, fname, channels, aux_height, aux_width, warp_aux_to
         'height': aux_height,
         'width': aux_width,
         'channels': channels,
-        'warp_aux_to_img': Affine_concise(warp_aux_to_img),
+        'warp_aux_to_img': kwimage.Affine.coerce(warp_aux_to_img).concise(),
     }
 
     if extra_info is not None:
@@ -153,3 +179,11 @@ def add_auxiliary(dset, gid, fname, channels, aux_height, aux_width, warp_aux_to
     auxiliary = img.setdefault('auxiliary', [])
     auxiliary.append(aux)
     dset._invalidate_hashid()
+
+def confusion_image(pred, target):
+    canvas = np.zeros_like(pred)
+    np.putmask(canvas, (target==0) & (pred==0), 0) # true-neg
+    np.putmask(canvas, (target==1) & (pred==1), 1) # true-pos
+    np.putmask(canvas, (target==1) & (pred==0), 2) # false-neg
+    np.putmask(canvas, (target==0) & (pred==1), 3) # false-pos
+    return canvas

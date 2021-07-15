@@ -1,5 +1,5 @@
 import pathlib
-from . import fit
+from watch.tasks.fusion import fit
 
 
 channel_combos = {

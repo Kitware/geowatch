@@ -26,6 +26,7 @@ dependencies:
     - coverage >= 5.4
 
     # Utilities
+    - configargparse >= 1.5.1
     - psutil >= 5.8.0
     - xxhash >= 1.4.4
     - parse >= 1.14.0
