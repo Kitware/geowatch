@@ -7,7 +7,7 @@ from pystac import Catalog
 from osgeo import gdal
 import ubelt as ub
 from watch.gis import geotiff
-import watch.scripts.geotiffs_to_kwcoco as gtk
+import watch.cli.geotiffs_to_kwcoco as gtk
 import datetime
 import dateutil.parser
 
