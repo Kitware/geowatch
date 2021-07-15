@@ -71,7 +71,7 @@ def main(args):
 
     # fill canvases
     for example, meta in zip(tqdm.tqdm(test_dataloader), test_dataset.sample_grid):
-        images, labels = example["images"], example["labels"]
+        images, labels = example["images"].float(), example["labels"]
         changes = (labels[0, 1:] != labels[0, :-1]).detach().cpu().numpy()
         T, H, W = changes.shape
 

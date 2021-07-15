@@ -130,13 +130,13 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
         ]
 
         self.train_tfms = transforms.Compose([
-            utils.Lambda(lambda x: (x - self.mean[tfms_channel_subset][None,:,None,None]) / self.std[tfms_channel_subset][None,:,None,None]),
+            utils.Lambda(lambda x: (x - self.mean[None,:,None,None]) / self.std[None,:,None,None]),
             self.preprocessing_step,
             utils.Lambda(lambda x: x[:, tfms_channel_subset]),
             utils.DimensionDropout(1, self.tfms_train_channel_size),
         ])
         self.test_tfms = transforms.Compose([
-            utils.Lambda(lambda x: (x - self.mean[tfms_channel_subset][None,:,None,None]) / self.std[tfms_channel_subset][None,:,None,None]),
+            utils.Lambda(lambda x: (x - self.mean[None,:,None,None]) / self.std[None,:,None,None]),
             self.preprocessing_step,
             utils.Lambda(lambda x: x[:, tfms_channel_subset]),
         ])

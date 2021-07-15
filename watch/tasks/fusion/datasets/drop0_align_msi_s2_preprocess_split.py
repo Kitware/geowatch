@@ -90,6 +90,9 @@ print("Available names:", [
 train_ds = project_ds.copy()
 valid_ds = project_ds.copy()
 
+combo_path = args.orig_kwcoco_path.parent / ("combo_" + args.orig_kwcoco_path.name)
+project_ds.dump(str(combo_path.expanduser()))
+
 train_ds.remove_videos(valid_sites)
 valid_ds.remove_videos(train_sites)
 

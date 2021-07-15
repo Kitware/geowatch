@@ -1,9 +1,12 @@
-import kwcoco
+import kwcoco, kwimage
 import ndsampler
 import sklearn.metrics as skm
 from collections import defaultdict as ddict
 import tqdm
 import pandas as pd
+import numpy as np
+import pathlib
+import tifffile
 from .datasets import common
 from . import utils
 
@@ -32,7 +35,7 @@ metrics = {
 
 
 def compute_metrics(result_kwcoco_path, metrics_path):
-    results_coco = kwcoco.CocoDataset(result_kwcoco_path)
+    results_coco = kwcoco.CocoDataset(str(result_kwcoco_path))
     results_sampler = ndsampler.CocoSampler(results_coco)
     results_ds = common.VideoDataset(
         results_sampler,
@@ -42,8 +45,8 @@ def compute_metrics(result_kwcoco_path, metrics_path):
     confusion_matrices = ddict(dict)
 
     for example, video in zip(results_ds, results_coco.dataset["videos"]):
-        preds = example["images"]
-        targets = example["labels"].detach().numpy() + 1
+        preds = example["images"].detach().numpy()
+        targets = example["labels"].detach().numpy()# + 1
 
         frames = [
             image
@@ -79,13 +82,10 @@ def compute_metrics(result_kwcoco_path, metrics_path):
 
 def plot_frames(frames, target, row, cmap, thresh=0.):
     for ax, (channel, file_name) in zip(row, frames.items()):
-        try:
-            logits = tifffile.imread(file_name)
-            pred = (logits > thresh).astype("int")
-            confusion_image = utils.confusion_image(pred, target)
-            ax.matshow(confusion_image, cmap=cmap)
-        except:
-            pass
+        logits = tifffile.imread(file_name)
+        pred = (logits > thresh).astype("int")
+        confusion_image = utils.confusion_image(pred, target)
+        ax.matshow(confusion_image, cmap=cmap)
 
 #             ax.set_axis_off()
         ax.set_xticks([])
@@ -105,15 +105,15 @@ def make_confusion_plots(result_kwcoco_path, figure_root):
 
     cmap = colors.ListedColormap(["w", "k", "r", "y"], N=4)
 
-    results = kwcoco.CocoDataset(result_kwcoco_path)
+    results = kwcoco.CocoDataset(str(result_kwcoco_path))
     
     models = sorted(list({
         aux["channels"].rsplit("_", 1)[0]
         for aux in results.dataset["images"][0]["auxiliary"]
     }))
     
-    for video in results.dataset["videos"]:
-        for model_name in models:
+    for video in tqdm.tqdm(results.dataset["videos"]):
+        for model_name in tqdm.tqdm(models):
     
         #     if video["name"] not in test_cities: continue
 
@@ -124,9 +124,9 @@ def make_confusion_plots(result_kwcoco_path, figure_root):
             ]
 
             H = len(images)
-            W = len(channels)
+            W = len(images[0]["auxiliary"])
 
-            fig, axs = plt.subplots(H, W, figsize=(3*W, 4*H))
+            fig, axs = plt.subplots(H, W, figsize=(3*W, 4*H), squeeze=False)
             if len(axs.shape) == 1: 
                 axs = axs[None]
 
@@ -161,19 +161,19 @@ def make_confusion_plots(result_kwcoco_path, figure_root):
             fig.tight_layout()
             fig.patch.set_facecolor('white')
             
-            figure_path = figure_root / vide['name'] / (model_name + ".png")
+            figure_path = figure_root / video['name']
             figure_path.mkdir(parents=True, exist_ok=True)
-            fig.savefig(figure_path)
+            fig.savefig(figure_path / (model_name + ".png"))
     
 def main(args):
-    compute_metrics(args.result_kwcoco_path, args.metrics_path)
     make_confusion_plots(args.result_kwcoco_path, args.figure_root)
+    compute_metrics(args.result_kwcoco_path, args.metrics_path)
 
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("result_kwcoco_path")
-    parser.add_argument("metrics_path")
-    parser.add_argument("figure_root")
+    parser.add_argument("result_kwcoco_path", type=pathlib.Path)
+    parser.add_argument("metrics_path", type=pathlib.Path)
+    parser.add_argument("figure_root", type=pathlib.Path)
     args = parser.parse_args()
     main(args)

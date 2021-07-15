@@ -52,7 +52,4 @@ if __name__ == "__main__":
         args.method = method
         args.model_name = model_name
         args.default_root_dir = f"_trained_models/drop0/ctf/{method}-{model_name}"
-        try:
-            fit.main(args)
-        except:
-            continue
+        fit.main(args)
