@@ -96,13 +96,34 @@ To update the watch environment when new packages have been added, run:
 Installation
 ~~~~~~~~~~~~
 
-The WATCH Python module can then be installed with ``pip`` via the
-following command, where ``/path/to/watch`` is the absolute path to the
-directory containing this README.md file.
+The WATCH Python module can then be installed with ``pip`` via the following
+command, where ``/path/to/watch-repo`` is the absolute path to the directory
+containing this README.md file.
 
-::
+NOTE: It is important you install the module with the editable (``-e``) flag,
+otherwise changes you make to the module, will not be reflected when you run
+your scripts.
 
-   pip install -e /path/to/watch
+.. code:: bash
+
+   pip install -e /path/to/watch-repo
+
+
+This is more commonly done as
+
+.. code:: bash
+
+   cd /path/to/watch-repo
+   pip install -e .
+
+
+After the ``watch`` module has been installed to your python environment, it
+can be imported from anywhere regardless of the current working directory.
+
+
+NOTE: The ``conda_env.yml`` was written such that all dependencies are
+installed via pip. This allows for alternatives to conda such as 
+`pyenv <docs/pyenv_alternative.rst>`_ to be used.
 
 Docker Image
 ~~~~~~~~~~~~
@@ -140,41 +161,60 @@ crash course on how to use the web-based development environment.
 Running tests
 -------------
 
-We’re using the ``pytest`` module for running unit tests. Unit tests
+Watch uses the ``pytest`` module for running unit tests. Unit tests
 should be added into the ``tests`` directory and files should be
 prefixed with ``test_``.
 
-Additionally, code blocks in function docstrings will be interpreted as tests using `xdoctest <https://xdoctest.readthedocs.io/en/latest/autoapi/xdoctest/index.html>`_ as part of the `Google docstring convention <https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html>`_.
+Additionally, code blocks in function docstrings will be interpreted as tests using 
+`xdoctest <https://xdoctest.readthedocs.io/en/latest/autoapi/xdoctest/index.html>`_ 
+as part of the `Google docstring convention <https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html>`_.
 
-For example:
+For example here are what doctests look like for a class and for a function:
 
 .. code:: python
 
-   class GdalOpen:
-    '''
-    A simple context manager for friendlier gdal use.
+    class GdalOpen:
+        """
+        A simple context manager for friendlier gdal use.
 
-    Example:
-        >>> # xdoctest: +REQUIRES(--network)
-        >>> from watch.utils.util_raster import *
-        >>> from watch.demo.landsat_demodata import grab_landsat_product
-        >>> path = grab_landsat_product()['bands'][0]
-        >>> 
-        >>> # standard use:
-        >>> dataset = gdal.Open(path)
-        >>> print(dataset.GetDescription())  # do stuff
-        >>> del dataset  # or 'dataset = None'
-        >>> 
-        >>> # equivalent:
-        >>> with GdalOpen(path) as dataset:
-        >>>     print(dataset.GetDescription())  # do stuff
+        Example:
+            >>> # xdoctest: +REQUIRES(--network)
+            >>> from watch.utils.util_raster import *
+            >>> from watch.demo.landsat_demodata import grab_landsat_product
+            >>> path = grab_landsat_product()['bands'][0]
+            >>> 
+            >>> # standard use:
+            >>> dataset = gdal.Open(path)
+            >>> print(dataset.GetDescription())  # do stuff
+            >>> del dataset  # or 'dataset = None'
+            >>> 
+            >>> # equivalent:
+            >>> with GdalOpen(path) as dataset:
+            >>>     print(dataset.GetDescription())  # do stuff
+        """
+        # code goes here
 
-    '''
-    # code goes here
+    def my_cool_function(inputs):
+        """
+        The purpose of this function is to demonstrate how to write a doctest. 
+
+        Example:
+            >>> # An example of how to use my cool function
+            >>> # The xdoctest module will run this as a test
+            >>> inputs = 'construct-demo-data'
+            >>> my_cool_function(inputs)
+        """
+        import this
+        print('You input: {}'.format(inputs))
 
 
-The ``run_tests.py`` script provided here will run all tests in the
-``tests`` directory and in docstrings.
+The ``run_tests.py`` script provided here will run all tests in the ``tests``
+directory and in docstrings and report coverage. This script is simply a
+wrapper around the ``pytest`` command.
+
+Alternatively doctests can be invoked specivially via ``xdoctest -m watch`` to
+run all doctests, or ``xdoctest -m <path-to-file>`` to run all doctests in a
+file.
 
 How to contribute
 -----------------
@@ -215,31 +255,49 @@ Adding submodules
 Library code can be added to the relevant subdirectory under the
 ``watch`` directory. The current submodules are as follows:
 
--  datacube/atmosphere
--  datacube/cloud
--  datacube/registration
--  datacube/reflectance
--  features/materials
--  features/semantics
--  features/invariants
--  features/reflectance
--  fusion
--  sequencing
--  validation
--  tools
--  utils
+
+
+.. code:: bash
+
+
+    watch
+    ├── cli
+    ├── demo
+    ├── datacube
+    │   ├── atmosphere
+    │   ├── cloud
+    │   ├── reflectance
+    │   └── registration
+    ├── sequencing
+    ├── validation
+    ├── datasets
+    ├── tasks
+    │   ├── fusion
+    │   ├── invariants
+    │   ├── landcover
+    │   ├── materials
+    │   ├── reflectance
+    │   ├── semantics
+    │   ├── template
+    │   └── uky_temporal_prediction
+    ├── utils
+    ├── gis
+    └── validation
+
 
 Adding command line tools
 -------------------------
 
-New Python command line scripts can be added under the ``watch/tools``
-directory. To have the command line tool be installed with the module,
-an entry can be added to the ``setup.py`` setup call, under
-``entrypoints['console_scripts']``.
+New Python command line scripts can be added under the ``watch/cli``
+directory. New tools can be registered with the ``watch-cli`` tool in the
+``watch/cli/__main__.py`` file, or invoked explicitly via ``python -m
+watch.cli.<script-name>``.
 
 Scripts that don’t quite belong in the WATCH Python module itself
 (e.g. due to a lack of general purpose use, or lack of polish) can be
-added to the ``scripts`` directory.
+added to the ``scripts`` or ``dev`` directory. Generally, the ``scripts``
+directory is for data processing and ``dev`` is for scripts related to
+repository maintenence. 
 
 
 .. _development environment: https://algorithm-toolkit.readthedocs.io/en/latest/dev-environment.html#
@@ -249,4 +307,3 @@ added to the ``scripts`` directory.
    :target: https://gitlab.kitware.com/smart/watch/-/pipelines/master/latest
 .. |master-coverage| image:: https://gitlab.kitware.com/smart/watch/badges/master/coverage.svg
    :target: https://gitlab.kitware.com/smart/watch/badges/master/coverage.svg
-
