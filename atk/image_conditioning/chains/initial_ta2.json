@@ -1,0 +1,30 @@
+{
+    "initial_ta2": [
+        {
+            "algorithm": "kitware/rgd_ingress",
+            "parameter_source": "user"
+        },
+        {
+            "algorithm": "kitware/stac_to_kwcoco",
+            "parameters": {
+                "catalog": {
+                    "source": "chain_ledger",
+                    "source_algorithm": "kitware/rgd_ingress",
+                    "key": "stac_catalog",
+                    "occurrence": "first"
+                }
+            }
+        },
+        {
+            "algorithm": "kitware/random_detections",
+            "parameters": {
+                "kwcoco_path": {
+                    "source": "chain_ledger",
+                    "source_algorithm": "kitware/stac_to_kwcoco",
+                    "key": "output_path",
+                    "occurrence": "first"
+                }
+            }
+        }
+    ]
+}
