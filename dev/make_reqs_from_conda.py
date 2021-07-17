@@ -1,12 +1,9 @@
-def main():
-    """
-    Export pip requirements in a conda env file to a requirements.txt file
-    """
+
+
+def parse_conda_reqs(fpath):
     import yaml
-    fpath = 'conda_env.yml'
     with open(fpath, 'r') as file:
         data = yaml.load(file, Loader=yaml.SafeLoader)
-
     context = []
     found = []
     for dep in data['dependencies']:
@@ -16,32 +13,76 @@ def main():
                     context.append(line)
                 else:
                     found.append(' '.join([line] + context))
+    return found
 
+
+def main():
+    """
+    Export pip requirements in a conda env file to a requirements.txt file
+    """
+    fpath = 'conda_env.yml'
+    found = parse_conda_reqs(fpath)
     text = '\n'.join(found)
+    with open('requirements/conda-pip.txt', 'w') as file:
+       file.write(text)
     print(text)
-    #with open('requirements.txt', 'w') as file:
-    #    file.write(text)
+
+
+# def query_pypi_dependencies(package_name, version=None):
+#     """
+#     Args:
+#         >>> package_name = 'sympy'
+#         >>> version = None
+#     """
+#     import requests
+#     if version is not None:
+#         url = f'https://pypi.python.org/pypi/{package_name}/{version}/json'
+#     else:
+#         url = f'https://pypi.python.org/pypi/{package_name}/json'
+#     resp = requests.get(url)
+#     assert resp.status_code == 200
+#     depinfo = resp.json()
+#     print('depinfo = {}'.format(ub.repr2(depinfo, nl=-1)))
+
+
+def pip_explore_deps(package_name, version=None):
+    cache_dpath = ub.ensure_app_cache_dir('watch/pypi_dep_resolve')
+    cmd = f'pip download -r requirements.txt -d {cache_dpath}'
+    print(cmd)
+    pass
 
 
 def trace_all_deps():
     """
-    TODO: make this work
+    TODO: make this work.
+
+    The issue is that the packages dependencies need to be installed for this
+    to correctly find the dependencies.
 
     pip install requirements-parser
-
     """
     # import requirements
     # with open('requirements.txt', 'r') as fd:
     #     for req in requirements.parse(fd):
     #         print(req.name, req.specs)
 
-    from pip._internal.req import parse_requirements
-    from pip._internal.network.session import PipSession
+    # from pip._internal.req import parse_requirements
+    # from pip._internal.network.session import PipSession
+    # declared_deps = []
+    # for req in parse_requirements('requirements.txt', session=PipSession()):
+    #     declared_deps.append(req.requirement.split(' ')[0])
 
-    declared_deps = []
-    for req in parse_requirements('requirements.txt', session=PipSession()):
-        declared_deps.append(req.requirement.split(' ')[0])
-    declared_deps = pkg_names
+    conda_req_lines = parse_conda_reqs('conda_env.yml')
+
+    def normalize_name(name):
+        return name.lower().replace('-', '_')
+
+
+    name_to_conda_line = {
+        normalize_name(line.split(' ')[0]): line
+        for line in conda_req_lines
+    }
+    declared_deps = list(name_to_conda_line.keys())
 
     import pipdeptree
     pkgs = pipdeptree.get_installed_distributions()
@@ -52,12 +93,13 @@ def trace_all_deps():
     #     pkg_label = '{0} >= {1}'.format(pkg.project_name, pkg.version)
     #     print(pkg_label)
 
+    frozen = False
+    list_all = True
+
     tree = tree.sort()
     nodes = tree.keys()
     branch_keys = set(r.key for r in pipdeptree.flatten(tree.values()))
     use_bullets = not frozen
-    frozen = False
-    list_all = True
 
     if not list_all:
         nodes = [p for p in nodes if p.key not in branch_keys]
@@ -76,14 +118,49 @@ def trace_all_deps():
                 yield from aux(c, node, indent=indent+2, chain=chain+[c.project_name])
 
     items = list(pipdeptree.flatten([aux(p) for p in nodes]))
-    unique_items = list(ub.oset([item['package_name'] for item in items]))
+    item_variants = ub.group_items(items, key=lambda d: d['key'])
 
-    declared_pkgs = sorted(set(declared_deps) | set(unique_items))
-    declared_pkgs = sorted(set([p.replace('-', '_') for p in declared_pkgs]))
-    print('declared_pkgs = {}'.format(ub.repr2(declared_pkgs, nl=1)))
-    # print('unique_items = {}'.format(ub.repr2(unique_items, nl=1, sort=0)))
-    # deptree = pipdeptree.render_json_tree(tree, indent=4)
+    blocklist = {
+        'opencv-python',
+    }
+    from distutils.version import LooseVersion
 
+    resolved = []
+    for pkg_name, variants in item_variants.items():
+        variants = list(ub.unique(variants, key=ub.hash_data))
+        if len(variants) == 1:
+            variant = variants[0]
+        else:
+            variant = max(variants, key=lambda x: (LooseVersion(x['installed_version']), 'required_version' in x))
+            # print('RESOLVE pkg_name = {!r}'.format(pkg_name))
+            # for variant in variants:
+            #     print('variant = {!r}'.format(variant))
+        if variant['key'] not in blocklist:
+            resolved.append(variant)
+
+    key_to_newline = {}
+    for item in resolved:
+        key = normalize_name(item['package_name'])
+        if key in conda_req_lines:
+            line = conda_req_lines[key]
+        else:
+            line = key + '>=' + item['installed_version']
+        key_to_newline[key] = line
+
+    toplevel = list(name_to_conda_line.values())
+    remain = list(ub.dict_diff(key_to_newline, ub.oset(name_to_conda_line)).values())
+
+    header = ub.codeblock(
+        '''
+        # This is semi-autogenerated such that a working environment should be
+        # able to be installed via
+        # `pip install -r requirements/resolved.txt --no-deps`
+        # which might help in avoiding opencv issues
+        ''')
+
+    lines = [header, '', '# Explicit'] + toplevel + ['', '# Implicit'] + remain
+    new_text = ('\n'.join(lines))
+    print(new_text)
 
 
 if __name__ == '__main__':
