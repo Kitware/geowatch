@@ -1,4 +1,6 @@
 """
+python -m watch.tasks.fusion
+
 mkinit ~/code/watch/watch/tasks/fusion/datasets/__init__.py --nomods -w
 """
 from watch.tasks.fusion.datasets import common

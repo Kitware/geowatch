@@ -14,16 +14,25 @@ def millify(n):
 
     return '{:.2f}{}'.format(n / 10**(3 * millidx), millnames[millidx])
 
+
 def create_package(model, package_path, module_name="watch_tasks_fusion", model_name="model.pkl", verbose=False):
     """
+
+    CommandLine:
+        xdoctest watch.tasks.fusion.utils create_package
+        xdoctest ~/code/watch/watch/tasks/fusion/utils.py
+
     Example:
         >>> import ubelt as ub
         >>> from os.path import join
+        >>> from watch.tasks.fusion.utils import create_package  # NOQA
         >>> dpath = ub.ensure_app_cache_dir('watch/tests/package')
         >>> package_path = join(dpath, 'my_package.pt')
         >>> from watch.tasks.fusion import methods
         >>> model = methods.MultimodalTransformerDirectCD("smt_it_stm_p8")
         >>> create_package(model, package_path)
+
+        >>> recon = load_model_from_package(package_path)
     """
     with package.PackageExporter(package_path, verbose=verbose) as exp:
         # TODO: this is not a problem yet, but some package types will (mainly binaries) will need to be excluded also and added as mocks
@@ -31,9 +40,11 @@ def create_package(model, package_path, module_name="watch_tasks_fusion", model_
         exp.intern("watch.tasks.fusion.**")
         exp.save_pickle(module_name, model_name, model)
 
+
 def load_model_from_package(package_path, module_name="watch_tasks_fusion", model_name="model.pkl"):
     imp = package.PackageImporter(package_path)
     return imp.load_pickle(module_name, model_name)
+
 
 class Lambda(nn.Module):
     def __init__(self, lambda_):
@@ -201,6 +212,7 @@ def add_auxiliary(dset, gid, fname, channels, aux_height, aux_width, warp_aux_to
     auxiliary = img.setdefault('auxiliary', [])
     auxiliary.append(aux)
     dset._invalidate_hashid()
+
 
 def confusion_image(pred, target):
     canvas = np.zeros_like(pred)
