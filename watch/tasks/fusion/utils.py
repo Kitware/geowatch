@@ -15,12 +15,22 @@ def millify(n):
     return '{:.2f}{}'.format(n / 10**(3 * millidx), millnames[millidx])
 
 def create_package(model, package_path, module_name="watch_tasks_fusion", model_name="model.pkl", verbose=False):
+    """
+    Example:
+        >>> import ubelt as ub
+        >>> from os.path import join
+        >>> dpath = ub.ensure_app_cache_dir('watch/tests/package')
+        >>> package_path = join(dpath, 'my_package.pt')
+        >>> from watch.tasks.fusion import methods
+        >>> model = methods.MultimodalTransformerDirectCD("smt_it_stm_p8")
+        >>> create_package(model, package_path)
+    """
     with package.PackageExporter(package_path, verbose=verbose) as exp:
         # TODO: this is not a problem yet, but some package types will (mainly binaries) will need to be excluded also and added as mocks
         exp.extern("**", exclude=["watch.tasks.fusion.**"])
         exp.intern("watch.tasks.fusion.**")
         exp.save_pickle(module_name, model_name, model)
-    
+
 def load_model_from_package(package_path, module_name="watch_tasks_fusion", model_name="model.pkl"):
     imp = package.PackageImporter(package_path)
     return imp.load_pickle(module_name, model_name)
@@ -32,21 +42,21 @@ class Lambda(nn.Module):
 
     def forward(self, x):
         return self.lambda_(x)
-    
+
 
 class DimensionDropout(nn.Module):
     def __init__(self, dim, n_keep):
         super().__init__()
         self.dim = dim
         self.n_keep = n_keep
-        
+
     def forward(self, x):
         shape = x.shape
         dim_size = shape[self.dim]
-        
+
         index = [slice(0,None)] * len(shape)
         index[self.dim] = torch.randperm(dim_size)[:self.n_keep]
-        
+
         return x[index]
 
 
