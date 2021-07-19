@@ -3,6 +3,7 @@ import inspect
 import torch
 import numpy as np
 import math
+from torch import package
 
 millnames = ['',' K',' M',' B',' T']
 
@@ -12,6 +13,17 @@ def millify(n):
                         int(math.floor(0 if n == 0 else math.log10(abs(n))/3))))
 
     return '{:.2f}{}'.format(n / 10**(3 * millidx), millnames[millidx])
+
+def create_package(model, package_path, module_name="watch_tasks_fusion", model_name="model.pkl", verbose=False):
+    with package.PackageExporter(package_path, verbose=verbose) as exp:
+        # TODO: this is not a problem yet, but some package types will (mainly binaries) will need to be excluded also and added as mocks
+        exp.extern("**", exclude=["watch.tasks.fusion.**"])
+        exp.intern("watch.tasks.fusion.**")
+        exp.save_pickle(module_name, model_name, model)
+    
+def load_model_from_package(package_path, module_name="watch_tasks_fusion", model_name="model.pkl"):
+    imp = package.PackageImporter(package_path)
+    return imp.load_pickle(module_name, model_name)
 
 class Lambda(nn.Module):
     def __init__(self, lambda_):
