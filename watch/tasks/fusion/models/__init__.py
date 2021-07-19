@@ -41,7 +41,8 @@ def lazy_import(module_name, submodules, submod_attrs):
 
 
 __getattr__ = lazy_import(
-    __name__,
+#     __name__,
+    "watch.tasks.fusion.models",
     submodules={
         'transformer',
         'unet_blur',
