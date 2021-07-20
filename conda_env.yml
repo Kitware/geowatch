@@ -10,6 +10,11 @@ dependencies:
     - -r file:requirements/production.txt
     - -r file:requirements/development.txt
 
+    # Brings in opencv-python, which conflicts with opencv-python-headless
+    - imgaug >= 0.4.0
+    # Brings in imgaug, which has the same opencv-problem
+    - netharn >= 0.5.16
+    # Can conflict with opencv-python
     - opencv_python_headless >= 4.5.2.52
 
     # find-links applies to everything after it, so make sure this is the last dep
@@ -25,7 +30,7 @@ dependencies:
   - |
 
       pip uninstall osgeo GDAL
-      pip install GDAL==3.2.1 --find-links https://girder.github.io/large_image_wheels
+      pip install GDAL==3.3.1 --find-links https://girder.github.io/large_image_wheels
 
       rm -rf ".cache/conda/envs/loose-watch-env"
       conda env create -f conda_env.yml --prefix ".cache/conda/envs/loose-watch-env" -v -v

@@ -58,5 +58,6 @@ geojson >= 2.5.0
 # Machine learning
 scikit_learn >= 0.24.2
 torch >= 1.9.0
+torchvision >= 0.10.0
 torch_liberator >= 0.1.0
 pytorch_lightning >= 1.3.5
