@@ -62,6 +62,13 @@ class TransformerChangeDetector(pl.LightningModule):
 
     @pl.core.decorators.auto_move_data
     def forward(self, images):
+        """
+        Example:
+            >>> from watch.tasks.fusion.methods.transformer import *  # NOQA
+            >>> self = TransformerChangeDetector()
+            >>> images = torch.zeros(1, 2, 3, 128, 128)
+            >>> distance = self(images)
+        """
         B, T, C, H, W = images.shape
         feats = self.model(images)
         feats = einops.rearrange(feats,

@@ -20,19 +20,34 @@ def create_package(model, package_path, module_name="watch_tasks_fusion", model_
 
     CommandLine:
         xdoctest watch.tasks.fusion.utils create_package
-        xdoctest ~/code/watch/watch/tasks/fusion/utils.py
 
     Example:
         >>> import ubelt as ub
         >>> from os.path import join
-        >>> from watch.tasks.fusion.utils import create_package  # NOQA
+        >>> from watch.tasks.fusion.utils import *  # NOQA
         >>> dpath = ub.ensure_app_cache_dir('watch/tests/package')
         >>> package_path = join(dpath, 'my_package.pt')
+
+        >>> # Use one of our fusion models in a test
         >>> from watch.tasks.fusion import methods
         >>> model = methods.MultimodalTransformerDirectCD("smt_it_stm_p8")
+        >>> # We have to run an input through the module because it is lazy
+        >>> inputs = torch.rand(1, 2, 13, 16, 16, 96)
+        >>> model(inputs)
+
+        >>> # Save the model
         >>> create_package(model, package_path)
 
+        >>> # Test that the package can be reloaded
         >>> recon = load_model_from_package(package_path)
+        >>> # Check consistency and data is actually different
+        >>> recon_state = recon.state_dict()
+        >>> model_state = model.state_dict()
+        >>> assert recon is not model
+        >>> assert set(recon_state) == set(recon_state)
+        >>> for key in recon_state.keys():
+        >>>     assert (model_state[key] == recon_state[key]).all()
+        >>>     assert model_state[key] is not recon_state[key]
     """
     with package.PackageExporter(package_path, verbose=verbose) as exp:
         # TODO: this is not a problem yet, but some package types will (mainly binaries) will need to be excluded also and added as mocks

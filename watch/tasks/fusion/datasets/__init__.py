@@ -1,14 +1,19 @@
 """
 python -m watch.tasks.fusion
 
+
 mkinit ~/code/watch/watch/tasks/fusion/datasets/__init__.py --nomods -w
 """
-from watch.tasks.fusion.datasets import common
-from watch.tasks.fusion.datasets import drop0_align_msi_s2_preprocess_split
-from watch.tasks.fusion.datasets import kwcoco_video
-from watch.tasks.fusion.datasets import onera_2018
-from watch.tasks.fusion.datasets import project_data
-from watch.tasks.fusion.datasets import sun_rgbd
+from watch.tasks.fusion.datasets.common import (AddPositionalEncoding,
+                                                VideoDataset,)
+from watch.tasks.fusion.datasets.drop0_align_msi_s2_preprocess_split import (
+    main,)
+from watch.tasks.fusion.datasets.kwcoco_video import (WatchDataModule,)
+from watch.tasks.fusion.datasets.onera_2018 import (OneraCD_2018,)
+from watch.tasks.fusion.datasets.project_data import (Drop0AlignMSI_S2,
+                                                      Drop0Raw_S2,)
+from watch.tasks.fusion.datasets.sun_rgbd import (SUN_RGBD, SUN_RGBD_Dataset,)
 
-__all__ = ['common', 'drop0_align_msi_s2_preprocess_split', 'kwcoco_video',
-           'onera_2018', 'project_data', 'sun_rgbd']
+__all__ = ['AddPositionalEncoding', 'Drop0AlignMSI_S2', 'Drop0Raw_S2',
+           'OneraCD_2018', 'SUN_RGBD', 'SUN_RGBD_Dataset', 'VideoDataset',
+           'WatchDataModule', 'main']
