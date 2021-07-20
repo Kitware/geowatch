@@ -259,6 +259,9 @@ def fit_model(args=None, cmdline=False, **kwargs):
 
     # fit the model
     trainer.fit(model, dataset)
+    
+    # save model to package
+    utils.create_package(model, args.default_root_dir / "package.pt")
 
 
 def main(args=None, **kwargs):
