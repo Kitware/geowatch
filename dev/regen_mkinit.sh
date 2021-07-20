@@ -9,3 +9,4 @@ mkinit -m watch.tasks.fusion.methods -w
 
 ## Test:
 python -c "import watch.tasks.fusion"
+python -c "import xdev; xdev.make_warnings_print_tracebacks(); import watch.tasks.fusion"
