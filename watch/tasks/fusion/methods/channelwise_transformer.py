@@ -1,16 +1,10 @@
-import pytorch_lightning as pl
-
 import torch
 from torch import nn
-from einops.layers.torch import Rearrange, Reduce
+from einops.layers.torch import Rearrange
 import einops
-
-import torch_optimizer as optim
-from torch.optim import lr_scheduler
 
 from torchvision import transforms
 
-import torchmetrics as metrics
 from watch.tasks.fusion.methods.common import ChangeDetectorBase, SemanticSegmentationBase
 from watch.tasks.fusion.models import transformer
 from watch.tasks.fusion import utils
@@ -24,8 +18,7 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
                  learning_rate=1e-3,
                  weight_decay=0.,
                  pos_weight=1.,
-                 window_size=8,
-                ):
+                 window_size=8):
         super().__init__(
             learning_rate=learning_rate,
             weight_decay=weight_decay,
@@ -47,7 +40,7 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
             utils.SinePositionalEncoding(4, 3, sine_pairs=4),
         ])
 
-    @pl.core.decorators.auto_move_data
+    # @pl.core.decorators.auto_move_data
     def forward(self, images):
         feats = self.model(images)
 
@@ -65,7 +58,7 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
 
         parser.add_argument("--model_name", default='smt_it_joint_p8', type=str)
         parser.add_argument("--dropout", default=0.1, type=float)
-#         parser.add_argument("--input_scale", default=2000.0, type=float)
+        # parser.add_argument("--input_scale", default=2000.0, type=float)
         parser.add_argument("--window_size", default=8, type=int)
         return parent_parser
 
@@ -78,8 +71,7 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
                  learning_rate=1e-3,
                  weight_decay=0.,
                  pos_weight=1.,
-                 window_size=8,
-                ):
+                 window_size=8):
         super().__init__(
             learning_rate=learning_rate,
             weight_decay=weight_decay,
@@ -104,7 +96,7 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
             utils.SinePositionalEncoding(4, 3, sine_pairs=4),
         ])
 
-    @pl.core.decorators.auto_move_data
+    # @pl.core.decorators.auto_move_data
     def forward(self, images):
         similarity = self.model(images)[:, 1:, ..., 0]
         similarity = einops.reduce(similarity, "b t c h w -> b t h w", "mean")
@@ -129,8 +121,7 @@ class MultimodalTransformerSegmentation(SemanticSegmentationBase):
                  dropout=0.0,
                  learning_rate=1e-3,
                  weight_decay=0.,
-                 window_size=8,
-                ):
+                 window_size=8):
         super().__init__(
             learning_rate=learning_rate,
             weight_decay=weight_decay,
@@ -154,12 +145,10 @@ class MultimodalTransformerSegmentation(SemanticSegmentationBase):
             utils.SinePositionalEncoding(3, 2, sine_pairs=4),
         ])
 
-    @pl.core.decorators.auto_move_data
+    # @pl.core.decorators.auto_move_data
     def forward(self, images):
         logits = self.model(images).mean(dim=1)
-        logits = einops.rearrange(
-            logits,
-             "b h w c -> b c h w")
+        logits = einops.rearrange(logits, "b h w c -> b c h w")
         logits = nn.functional.interpolate(
             logits,
             scale_factor=[self.hparams.window_size, self.hparams.window_size],
@@ -173,6 +162,6 @@ class MultimodalTransformerSegmentation(SemanticSegmentationBase):
         parser.add_argument("--model_name", type=str)
         parser.add_argument("--n_classes", type=int)
         parser.add_argument("--dropout", default=0.0, type=float)
-#         parser.add_argument("--input_scale", default=255.0, type=float)
+        # parser.add_argument("--input_scale", default=255.0, type=float)
         parser.add_argument("--window_size", default=8, type=int)
         return parent_parser
