@@ -3,6 +3,7 @@ import inspect
 import torch
 import numpy as np
 import math
+from torch import package
 
 millnames = ['',' K',' M',' B',' T']
 
@@ -13,6 +14,53 @@ def millify(n):
 
     return '{:.2f}{}'.format(n / 10**(3 * millidx), millnames[millidx])
 
+
+def create_package(model, package_path, module_name="watch_tasks_fusion", model_name="model.pkl", verbose=False):
+    """
+
+    CommandLine:
+        xdoctest watch.tasks.fusion.utils create_package
+
+    Example:
+        >>> import ubelt as ub
+        >>> from os.path import join
+        >>> from watch.tasks.fusion.utils import *  # NOQA
+        >>> dpath = ub.ensure_app_cache_dir('watch/tests/package')
+        >>> package_path = join(dpath, 'my_package.pt')
+
+        >>> # Use one of our fusion models in a test
+        >>> from watch.tasks.fusion import methods
+        >>> model = methods.MultimodalTransformerDirectCD("smt_it_stm_p8")
+        >>> # We have to run an input through the module because it is lazy
+        >>> inputs = torch.rand(1, 2, 13, 16, 16, 96)
+        >>> model(inputs)
+
+        >>> # Save the model
+        >>> create_package(model, package_path)
+
+        >>> # Test that the package can be reloaded
+        >>> recon = load_model_from_package(package_path)
+        >>> # Check consistency and data is actually different
+        >>> recon_state = recon.state_dict()
+        >>> model_state = model.state_dict()
+        >>> assert recon is not model
+        >>> assert set(recon_state) == set(recon_state)
+        >>> for key in recon_state.keys():
+        >>>     assert (model_state[key] == recon_state[key]).all()
+        >>>     assert model_state[key] is not recon_state[key]
+    """
+    with package.PackageExporter(package_path, verbose=verbose) as exp:
+        # TODO: this is not a problem yet, but some package types (mainly binaries) will need to be excluded and added as mocks
+        exp.extern("**", exclude=["watch.tasks.fusion.**"])
+        exp.intern("watch.tasks.fusion.**")
+        exp.save_pickle(module_name, model_name, model)
+
+
+def load_model_from_package(package_path, module_name="watch_tasks_fusion", model_name="model.pkl"):
+    imp = package.PackageImporter(package_path)
+    return imp.load_pickle(module_name, model_name)
+
+
 class Lambda(nn.Module):
     def __init__(self, lambda_):
         super().__init__()
@@ -20,21 +68,21 @@ class Lambda(nn.Module):
 
     def forward(self, x):
         return self.lambda_(x)
-    
+
 
 class DimensionDropout(nn.Module):
     def __init__(self, dim, n_keep):
         super().__init__()
         self.dim = dim
         self.n_keep = n_keep
-        
+
     def forward(self, x):
         shape = x.shape
         dim_size = shape[self.dim]
-        
+
         index = [slice(0,None)] * len(shape)
         index[self.dim] = torch.randperm(dim_size)[:self.n_keep]
-        
+
         return x[index]
 
 
@@ -179,6 +227,7 @@ def add_auxiliary(dset, gid, fname, channels, aux_height, aux_width, warp_aux_to
     auxiliary = img.setdefault('auxiliary', [])
     auxiliary.append(aux)
     dset._invalidate_hashid()
+
 
 def confusion_image(pred, target):
     canvas = np.zeros_like(pred)

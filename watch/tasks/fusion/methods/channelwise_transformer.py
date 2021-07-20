@@ -32,7 +32,7 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
             pos_weight=pos_weight,
         )
         self.save_hyperparameters()
-        
+
         self.model = getattr(transformer, model_name)(dropout=dropout)
 
     @property
@@ -86,7 +86,7 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
             pos_weight=pos_weight,
         )
         self.save_hyperparameters()
-        
+
         self.model = nn.Sequential(
             getattr(transformer, model_name)(dropout=dropout),
             nn.LazyLinear(1),
@@ -116,7 +116,7 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
 
         parser.add_argument("--model_name", default='smt_it_stm_p8', type=str)
         parser.add_argument("--dropout", default=0.1, type=float)
-#         parser.add_argument("--input_scale", default=2000.0, type=float)
+        # parser.add_argument("--input_scale", default=2000.0, type=float)
         parser.add_argument("--window_size", default=8, type=int)
         return parent_parser
 
@@ -136,7 +136,7 @@ class MultimodalTransformerSegmentation(SemanticSegmentationBase):
             weight_decay=weight_decay,
         )
         self.save_hyperparameters()
-        
+
         self.model = nn.Sequential(
             getattr(transformer, model_name)(dropout=dropout),
             nn.LazyLinear(n_classes),
