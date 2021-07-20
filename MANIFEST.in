@@ -1,0 +1,15 @@
+include *.md
+include *.py
+include *.txt
+include LICENSE
+include setup.py
+include run_tests.py
+include pytest.ini
+include conftest.py
+include conda_env.yml
+include Dockerfile
+recursive-include watch
+recursive-include docs *
+recursive-include atk *
+recursive-include requirements *.txt
+recursive-include tests *.py
