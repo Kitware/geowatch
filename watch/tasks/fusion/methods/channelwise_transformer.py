@@ -11,6 +11,12 @@ from watch.tasks.fusion import utils
 
 
 class MultimodalTransformerDotProdCD(ChangeDetectorBase):
+    """
+
+    Example:
+        self = MultimodalTransformerDotProdCD
+
+    """
 
     def __init__(self,
                  model_name,

@@ -12,7 +12,6 @@ class WatchDataModule(pl.LightningDataModule):
     """
     Prepare the kwcoco dataset as torch video datasets
 
-
     Ignore:
         >>> # xdoctest: +SKIP
         >>> # Run the following tests on real watch data if DVC is available

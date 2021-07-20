@@ -88,7 +88,10 @@ class VideoDataset(data.Dataset):
         self.window_overlap = window_overlap
         self.occlusion_class_id = occlusion_class_id
 
-        full_sample_grid = self.sampler.new_sample_grid("video_detection", self.sample_shape, window_overlap=self.window_overlap)
+        full_sample_grid = self.sampler.new_sample_grid(
+            "video_detection", self.sample_shape,
+            window_overlap=self.window_overlap)
+
         self.sample_grid = list(it.chain(
             full_sample_grid["positives"],
             full_sample_grid["negatives"],

@@ -1,3 +1,8 @@
+"""
+Notes:
+    pip install reformer_pytorch
+    pip install performer-pytorch  <- this one
+"""
 from torch import nn
 import einops
 
@@ -26,17 +31,56 @@ class MultiheadSelfAttention(nn.MultiheadAttention):
         return super().forward(x, x, x)
 
 
-def new_attention_layer(embedding_size, n_heads, **kwargs):
-    return ResidualLayer(
+def new_attention_layer(embedding_size, n_heads, attention_impl='exact', **kwargs):
+    """
+    Example:
+        >>> import torch
+        >>> batch_size = 1
+        >>> embedding_size = 4
+        >>> n_heads = 2
+        >>> num_tokens = 3
+        >>> input_shape = (batch_size, num_tokens, embedding_size)
+        >>> inputs = torch.rand(*input_shape)
+        >>> layer1 = new_attention_layer(embedding_size, n_heads, 'exact')
+        >>> outputs1 = layer1(inputs)
+        >>> assert outputs1.shape == input_shape
+        >>> # xdoctest: +REQUIRES(module:performer_pytorch)
+        >>> layer2 = new_attention_layer(embedding_size, n_heads, 'performer')
+        >>> outputs2 = layer2(inputs)
+        >>> assert outputs2.shape == input_shape
+    """
+    if attention_impl == 'exact':
+        attention = MultiheadSelfAttention(embedding_size, n_heads, **kwargs)
+    elif attention_impl == 'performer':
+        from performer_pytorch import SelfAttention
+        attention = SelfAttention(
+            dim=embedding_size,
+            heads=n_heads,
+            causal=False,
+        )
+    else:
+        raise KeyError(attention_impl)
+
+    layer = ResidualLayer(
         nn.Sequential(
             nn.LayerNorm(embedding_size),
-            KthOutput(
-                MultiheadSelfAttention(embedding_size, n_heads, **kwargs),
-                k=0),
+            KthOutput(attention, k=0),
         ))
+    return layer
 
 
 def new_mlp_layer(embedding_size, dropout, **kwargs):
+    """
+    Example:
+        >>> import torch
+        >>> embedding_size = 3
+        >>> batch_size = 1
+        >>> layer = new_mlp_layer(embedding_size, dropout=0)
+        >>> input_shape = (batch_size, embedding_size)
+        >>> inputs = torch.rand(*input_shape)
+        >>> outputs = layer(inputs)
+        >>> assert outputs.shape == (batch_size, embedding_size)
+    """
     return ResidualLayer(
         nn.Sequential(
             nn.Linear(embedding_size, embedding_size, **kwargs),
@@ -47,6 +91,58 @@ def new_mlp_layer(embedding_size, dropout, **kwargs):
 
 
 class ChannelwiseTransformerEncoderLayer(nn.Module):
+    """
+
+    Notes:
+        * Currently "mode" might indicate something like a sensor or special
+          computation. Each "mode" might have a differet number of "features".
+          In the future this might be better specified as a dictionary that
+          maps "mode"-codes to a tensor containing only the "features" for that
+          mode. E.g.:
+
+              inputs = {
+                  'S2':        Tensor([B, T, H, W, 13]),
+                  'WV':        Tensor([B, T, H, W, 8]),
+                  'Latent':    Tensor([B, T, H, W, 512]),
+                  'Materials': Tensor([B, T, H, W, 16]),
+              }
+
+        Currently these are all stacked into a B x T x M x H x W x max(F)
+        and padded with zeros.
+
+        Correction: the last statement is not correct.
+        Curently F is hard coded to be F = 1 * ws * ws (where ws is the window
+        size), so features are really spatial positions in a window. And
+        the "width" and "height" here refer to the "number of windows"
+        in the area.
+
+    Example:
+        >>> from watch.tasks.fusion.models.transformer import *  # NOQA
+        >>> import torch
+        >>> image_size = 128
+        >>> #
+        >>> ws = window_size = 32
+        >>> W = H = image_size // ws
+        >>> B = batch_size = 2
+        >>> T = num_times = 3
+        >>> M = num_modes = 13  # hack for number of features in S2
+        >>> F = 1 * ws * ws # hack to use spatial positions in a windows as features
+        >>> input_shape = (B, T, M, H, W, F)
+        >>> x = torch.rand(*input_shape)
+        >>> #
+        >>> # Embedding size must be equal to F
+        >>> embedding_size = F
+        >>> self = ChannelwiseTransformerEncoderLayer(
+        >>>     axes=[("time", "mode", "height", "width")],
+        >>>     default_shape=["batch", "time", "mode", "height", "width", "feature"],
+        >>>     feature_axis="feature",
+        >>>     batch_axis="batch",
+        >>>     embedding_size=embedding_size,
+        >>>     n_heads=4
+        >>> )
+        >>> outputs = self(x)
+        >>> assert tuple(outputs.shape) == (2, 3, 13, 4, 4, 1024)
+    """
     def __init__(
         self,
         axes,
@@ -79,7 +175,10 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
                 axis = [axis]
 
             sequence_axes = " ".join(axis)
-            batch_axes = " ".join([a for a in self.default_shape if (a == self.batch_axis or a not in axis) and a != self.feature_axis])
+            batch_axes = " ".join([
+                a for a in self.default_shape
+                if (a == self.batch_axis or a not in axis) and a != self.feature_axis
+            ])
             axial_shape = f"({sequence_axes}) ({batch_axes}) {self.feature_axis}"
 
             x = einops.rearrange(x, f"{previous_axial_shape} -> {axial_shape}", **shape_dict)
@@ -87,7 +186,10 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
 
             previous_axial_shape = axial_shape
 
-        sequence_axes = " ".join([a for a in self.default_shape if a not in (self.batch_axis, self.feature_axis)])
+        sequence_axes = " ".join([
+            a for a in self.default_shape
+            if a not in (self.batch_axis, self.feature_axis)
+        ])
         axial_shape = f"({sequence_axes}) {self.batch_axis} {self.feature_axis}"
 
         x = einops.rearrange(x, f"{previous_axial_shape} -> {axial_shape}", **shape_dict)
@@ -107,10 +209,54 @@ def transformer_encoder(
         n_layers=4,
         n_heads=8,
         dropout=0.0,
-    ):
+        in_features=None):
+    """
+    Primary entry point to create a feature transformer
+
+    Example:
+        >>> from watch.tasks.fusion.models.transformer import *  # NOQA
+        >>> import torch
+        >>> in_features = 7
+        >>> model = transformer_encoder(
+        >>>     in_features=in_features,
+        >>>     axes=[("time", "mode", "height", "width")],
+        >>>     default_shape=["batch", "time", "mode", "height", "width", "feature"],
+        >>>     feature_axis="feature",
+        >>>     batch_axis="batch",
+        >>>     n_layers=8,
+        >>>     embedding_size=256,
+        >>>     n_heads=4
+        >>> )
+        >>> input_shape = B, T, M, H, W, F = (2, 3, 5, 2, 2, in_features)
+        >>> inputs = torch.rand(*input_shape)
+        >>> model(inputs)
+        >>> output = model(inputs)
+        >>> assert output.shape == (2, 3, 5, 2, 2, 256)
+        >>> #
+        >>> # Test Lazy variant
+        >>> model = transformer_encoder(
+        >>>     in_features=None,
+        >>>     axes=[("time", "mode", "height", "width")],
+        >>>     default_shape=["batch", "time", "mode", "height", "width", "feature"],
+        >>>     feature_axis="feature",
+        >>>     batch_axis="batch",
+        >>>     n_layers=8,
+        >>>     embedding_size=256,
+        >>>     n_heads=4
+        >>> )
+        >>> inputs = torch.rand(*input_shape)
+        >>> output = model(inputs)
+        >>> assert output.shape == (2, 3, 5, 2, 2, 256)
+    """
+
+    if in_features is None:
+        # Use lazy linear to allow data to specify the channel dims
+        first = nn.LazyLinear(embedding_size)
+    else:
+        first = nn.Linear(in_features=in_features, out_features=embedding_size)
 
     layers = [
-        nn.LazyLinear(embedding_size),
+        first
     ] + [
         ChannelwiseTransformerEncoderLayer(
             axes,
