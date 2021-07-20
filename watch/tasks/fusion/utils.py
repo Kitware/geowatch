@@ -50,7 +50,7 @@ def create_package(model, package_path, module_name="watch_tasks_fusion", model_
         >>>     assert model_state[key] is not recon_state[key]
     """
     with package.PackageExporter(package_path, verbose=verbose) as exp:
-        # TODO: this is not a problem yet, but some package types will (mainly binaries) will need to be excluded also and added as mocks
+        # TODO: this is not a problem yet, but some package types (mainly binaries) will need to be excluded and added as mocks
         exp.extern("**", exclude=["watch.tasks.fusion.**"])
         exp.intern("watch.tasks.fusion.**")
         exp.save_pickle(module_name, model_name, model)
