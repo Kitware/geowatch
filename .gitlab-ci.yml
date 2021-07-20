@@ -194,24 +194,24 @@ run_linter:
 #### JOBS ###
 
 
-test_full_loose/conda-linux:
-    <<:
-        *test_loose_template
-    rules:
-        - <<: *if-merge-request
-        - <<: *if-merged-into-default
-    image:
-        gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
+#test_full_loose/conda-linux:
+#    <<:
+#        *test_loose_template
+#    rules:
+#        - <<: *if-merge-request
+#        - <<: *if-merged-into-default
+#    image:
+#        gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
 
 
-test_full_strict/conda-linux:
-    <<:
-        *test_strict_template
-    rules:
-        - <<: *if-merge-request
-        - <<: *if-merged-into-default
-    image:
-        gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
+#test_full_strict/conda-linux:
+#    <<:
+#        *test_strict_template
+#    rules:
+#        - <<: *if-merge-request
+#        - <<: *if-merged-into-default
+#    image:
+#        gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
 
 
 build_docker_strict:
