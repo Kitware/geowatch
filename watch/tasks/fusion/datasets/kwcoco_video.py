@@ -11,6 +11,94 @@ from watch.tasks.fusion import utils
 class WatchDataModule(pl.LightningDataModule):
     """
     Prepare the kwcoco dataset as torch video datasets
+
+
+    Ignore:
+        >>> # xdoctest: +SKIP
+        >>> # Run the following tests on real watch data if DVC is available
+        >>> from os.path import join
+        >>> dvc_dpath = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
+        >>> coco_fpath = join(dvc_dpath, 'drop1_S2_aligned_c1/data.kwcoco.json')
+        >>> import kwcoco
+        >>> train_dataset = kwcoco.CocoDataset(coco_fpath)
+        >>> test_dataset = None
+        >>> img = ub.peek(train_dataset.imgs.values())
+        >>> channels = '|'.join([aux['channels'] for aux in img['auxiliary']])
+        >>> chan_spec = kwcoco.channel_spec.FusedChannelSpec.coerce(channels)
+        >>> #
+        >>> batch_size = 2
+        >>> time_steps = 3
+        >>> chip_size = 330
+        >>> channels = channels
+        >>> self = WatchDataModule(
+        >>>     train_dataset=train_dataset,
+        >>>     test_dataset=test_dataset,
+        >>>     batch_size=batch_size,
+        >>>     channels=channels,
+        >>>     num_workers=0,
+        >>>     time_steps=time_steps,
+        >>>     chip_size=chip_size,
+        >>> )
+        >>> self.setup("fit")
+        >>> dl = self.train_dataloader()
+        >>> batch = next(iter(dl))
+        >>> expect_shape = (batch_size, time_steps, len(chan_spec), chip_size, chip_size)
+        >>> got_shape = tuple(batch['images'].shape)
+        >>> assert got_shape == expect_shape
+        >>> # Visualize
+        >>> import watch
+        >>> frame_ims = batch['images'].numpy()[0]
+        >>> frame_masks = batch['labels'].numpy()[0]
+        >>> frame_ims = watch.utils.util_norm.normalize_intensity(frame_ims, axis=2)
+        >>> frame_list = []
+        >>> for frame_idx, (im_chw, mask) in enumerate(zip(frame_ims, frame_masks)):
+        >>>     chan_list = []
+        >>>     for chan_idx, chan in enumerate(im_chw):
+        >>>         heatmap = kwimage.Heatmap(class_idx=mask, classes=sampler.classes)
+        >>>         part = kwimage.atleast_3channels(chan)
+        >>>         #part = heatmap.draw_on(part, with_alpha=0.5)
+        >>>         part = kwimage.imresize(part, dsize=(330, 330)).clip(0, 1)
+        >>>         text = 'Frame={}, Chan={}'.format(frame_idx, chan_idx)
+        >>>         print(f'{text} {chan.sum()}')
+        >>>         part = kwimage.draw_text_on_image(part, text, (0, 0), valign='top')
+        >>>         chan_list.append(part)
+        >>>     frame_canvas = kwimage.stack_images(chan_list)
+        >>>     frame_list.append(frame_canvas)
+        >>> canvas = kwimage.stack_images(frame_list, axis=1)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(canvas)
+        >>> kwplot.show_if_requested()
+
+    Example:
+        >>> # Run the data module on coco demo datasets for the CI
+        >>> from watch.tasks.fusion.datasets.kwcoco_video import *  # NOQA
+        >>> import kwcoco
+        >>> train_dataset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
+        >>> test_dataset = kwcoco.CocoDataset.demo('vidshapes1-multispectral', num_frames=5)
+        >>> channels = '|'.join([aux['channels'] for aux in train_dataset.imgs[1]['auxiliary']])
+        >>> chan_spec = kwcoco.channel_spec.FusedChannelSpec.coerce(channels)
+        >>> #
+        >>> batch_size = 2
+        >>> time_steps = 3
+        >>> chip_size = 128
+        >>> channels = channels
+        >>> self = WatchDataModule(
+        >>>     train_dataset=train_dataset,
+        >>>     test_dataset=test_dataset,
+        >>>     batch_size=batch_size,
+        >>>     channels=channels,
+        >>>     num_workers=0,
+        >>>     time_steps=time_steps,
+        >>>     chip_size=chip_size,
+        >>> )
+        >>> self.setup("fit")
+        >>> dl = self.train_dataloader()
+        >>> batch = next(iter(dl))
+        >>> expect_shape = (batch_size, time_steps, len(chan_spec), chip_size, chip_size)
+        >>> got_shape = tuple(batch['images'].shape)
+        >>> assert got_shape == expect_shape
     """
     def __init__(
         self,
@@ -20,7 +108,7 @@ class WatchDataModule(pl.LightningDataModule):
         chip_size=128,
         time_overlap=0,
         chip_overlap=0.1,
-        channels='B01|B02|B03|B04|B05|B06|B07|B08|B09|B10|B11|B12|B8A',
+        channels='<TODO-AUTO>',
         valid_pct=0.1,
         batch_size=4,
         num_workers=4,
@@ -28,8 +116,8 @@ class WatchDataModule(pl.LightningDataModule):
         tfms_channel_subset=None,
     ):
         super().__init__()
-        self.train_kwcoco_path = train_dataset
-        self.test_kwcoco_path = test_dataset
+        self.train_kwcoco = train_dataset
+        self.test_kwcoco = test_dataset
         self.time_steps = time_steps
         self.chip_size = chip_size
         self.time_overlap = time_overlap
@@ -48,6 +136,7 @@ class WatchDataModule(pl.LightningDataModule):
             for idx, channel in enumerate(tfms_channel_subset.split("|"))
             if channel in channel_split
         ]
+        self.tfms_channel_subset = tfms_channel_subset
 
         self.train_tfms = self.preprocessing_step
         self.test_tfms = transforms.Compose([
@@ -58,7 +147,7 @@ class WatchDataModule(pl.LightningDataModule):
     def setup(self, stage):
 
         if stage == "fit" or stage is None:
-            train_data = self.train_kwcoco_path
+            train_data = self.train_kwcoco
             if isinstance(train_data, pathlib.Path):
                 train_data = str(train_data.expanduser())
             kwcoco_ds = kwcoco.CocoDataset.coerce(train_data)
@@ -81,7 +170,7 @@ class WatchDataModule(pl.LightningDataModule):
             )
 
         if stage == "test" or stage is None:
-            test_data = self.test_kwcoco_path
+            test_data = self.test_kwcoco
             if isinstance(test_data, pathlib.Path):
                 test_data = str(test_data.expanduser())
             kwcoco_ds = kwcoco.CocoDataset.coerce(test_data)
@@ -131,7 +220,7 @@ class WatchDataModule(pl.LightningDataModule):
         parser.add_argument("--chip_size", default=128, type=int)
         parser.add_argument("--time_overlap", default=0, type=int)
         parser.add_argument("--chip_overlap", default=0.1, type=float)
-        parser.add_argument("--channels", default='B01|B02|B03|B04|B05|B06|B07|B08|B09|B10|B11|B12|B8A', type=str)
+        parser.add_argument("--channels", default='<TODO-AUTO>', type=str)
         parser.add_argument("--valid_pct", default=0.1, type=float)
         parser.add_argument("--batch_size", default=4, type=int)
         parser.add_argument("--num_workers", default=4, type=int)
