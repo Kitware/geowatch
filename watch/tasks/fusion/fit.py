@@ -192,9 +192,7 @@ def make_fit_config(args=None, cmdline=False, **kwargs):
     learning_irrelevant = {
         'workdir',
         'num_workers',
-        'model_name',
         'gpus',
-        'limit_train_batches',
         'limit_val_batches',
         'limit_test_batches',
         'limit_predict_batches',
