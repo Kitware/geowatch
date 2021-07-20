@@ -58,7 +58,7 @@ except Exception:
     README = ''
 
 try:
-    REQUIREMENTS = parse_requirements(fpath='requirements/conda-pip.txt')
+    REQUIREMENTS = parse_requirements(fpath='requirements.txt')
 except Exception:
     REQUIREMENTS = []
 

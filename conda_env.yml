@@ -7,12 +7,15 @@ dependencies:
   - python == 3.8
   - pip >= 21.0.1
   - pip:
-    - -r file:requirements/simple-deps.txt
+    - -r file:requirements/production.txt
+    - -r file:requirements/development.txt
 
-    ## find-links applies to everything after it, so make sure this is the last dep
-    ## References: https://stackoverflow.com/questions/60410173/find-links-conda-env
-    #- --find-links https://girder.github.io/large_image_wheels
-    #- GDAL >= 3.3.1
+    - opencv_python_headless >= 4.5.2.52
+
+    # find-links applies to everything after it, so make sure this is the last dep
+    # References: https://stackoverflow.com/questions/60410173/find-links-conda-env
+    - --find-links https://girder.github.io/large_image_wheels
+    - GDAL >= 3.3.1
 
 
 # Abuse conda environment spec and YAML notation to make a heredoc for notes
@@ -26,6 +29,11 @@ dependencies:
 
       rm -rf ".cache/conda/envs/loose-watch-env"
       conda env create -f conda_env.yml --prefix ".cache/conda/envs/loose-watch-env" -v -v
+
+      # Note: in the case where an implicit requirement pulls down
+      # opencv-python, run the following command to replace it with
+      # opencv-python-headless
+      pip uninstall opencv-python opencv-python-headless; pip install opencv-python-headless
 
       # Note: work in dev/make_reqs_from_conda.py has work on doing interesting
       # things with this file. 
