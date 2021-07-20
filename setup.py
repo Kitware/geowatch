@@ -1,8 +1,6 @@
 #!/usr/bin/env python
-
 """The setup script."""
 from os.path import exists
-
 from setuptools import setup, find_packages
 
 
@@ -25,12 +23,44 @@ def parse_version(fpath):
     visitor.visit(pt)
     return visitor.version
 
+
+def parse_requirements(fpath='requirements.txt', pinned='free'):
+    """
+    Args:
+        pinned (str): can be
+            free - remove all constraints
+            loose - use the greater or equal (>=) in the req file
+            strict - replace all greater equal with equals
+    """
+    # Note: different versions of pip might have different internals.
+    # This may need to be fixed.
+    from pip._internal.req import parse_requirements
+    from pip._internal.network.session import PipSession
+    requirements = []
+    for req in parse_requirements(fpath, session=PipSession()):
+        if pinned == 'free':
+            req_name = req.requirement.split(' ')[0]
+            requirements.append(req_name)
+        elif pinned == 'loose':
+            requirements.append(req.requirement)
+        elif pinned == 'strict':
+            requirements.append(req.requirement.replace('>=', '=='))
+        else:
+            raise KeyError(pinned)
+    return requirements
+
 VERSION = parse_version('watch/__init__.py')
 
-with open('README.rst') as readme_file:
-    readme = readme_file.read()
+try:
+    with open('README.rst') as readme_file:
+        README = readme_file.read()
+except Exception:
+    README = ''
 
-requirements = []
+try:
+    REQUIREMENTS = parse_requirements(fpath='requirements/conda-pip.txt')
+except Exception:
+    REQUIREMENTS = []
 
 setup(
     author="WATCH developers",
@@ -52,9 +82,9 @@ setup(
             'watch-cli = watch.cli.__main__:main',
         ],
     },
-    install_requires=requirements,
+    install_requires=REQUIREMENTS,
     long_description_content_type='text/x-rst',
-    long_description=readme,
+    long_description=README,
     include_package_data=True,
     name='watch',
     packages=find_packages(include=['watch', 'watch.*']),
