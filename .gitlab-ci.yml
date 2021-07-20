@@ -181,6 +181,7 @@ run_linter:
     before_script:
         - conda init bash
         - source ~/.bashrc
+        - conda install pip
         - ls -al
         - pip install flake8 ubelt fire
 
