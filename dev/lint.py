@@ -4,7 +4,7 @@ def custom_lint(dpath: str):
     Runs our custom "watch" linting rules on a specific directory.
 
     Args:
-        dpath (str): the path to lint
+        dpath (str|list): the path or paths to lint
     """
     import ubelt as ub
     flake8_errors = [
@@ -45,7 +45,11 @@ def custom_lint(dpath: str):
         '--ignore=' + ','.join(flake8_errors)
     ]
     flake8_exe = 'flake8'
-    info = ub.cmd([flake8_exe] + flake8_args_list + [dpath], verbose=1)
+    if isinstance(dpath, str):
+        dpaths = [dpath]
+    else:
+        dpaths = dpath
+    info = ub.cmd([flake8_exe] + flake8_args_list + dpaths, verbose=1)
     return info['ret']
 
 
@@ -56,6 +60,8 @@ if __name__ == '__main__':
 
         cd $HOME/code/watch
         python ~/code/watch/dev/lint.py watch
+        python ~/code/watch/dev/lint.py [watch,atk]
     """
     import fire
-    fire.Fire(custom_lint)
+    import sys
+    sys.exit(fire.Fire(custom_lint))

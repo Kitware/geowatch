@@ -35,6 +35,7 @@
 
 # Abuse YAML notation to make a heredoc. This will be ignored by the CI.
 stages:
+    - lint
     - build
     - test
     - docker
@@ -221,6 +222,32 @@ build_docker_and_upload_strict:
     docker:19.03.12
   variables:
     IMAGE_TAG: latest
+
+
+run_linter:
+    <<:
+        *common_template
+    stage:
+        lint
+
+    before_script:
+        - conda init bash
+        - source ~/.bashrc
+        - ls -al
+        - pip install flake8 ubelt fire
+
+    script:
+        - python dev/lint.py [atk,watch]
+
+    # We should eventually enforce linting
+    allow_failure: true
+
+    cache:
+        key:
+            linter-cache-v1
+        paths:
+            - .cache/conda/pkgs
+            - .cache/pip
 
 
 .__local_docker_heredoc__:
