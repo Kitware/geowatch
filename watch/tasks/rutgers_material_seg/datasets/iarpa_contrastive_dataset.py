@@ -11,7 +11,7 @@ from netharn.data.data_containers import BatchContainer
 from netharn.data.data_containers import container_collate
 from netharn.data.batch_samplers import PatchedRandomSampler
 from netharn.data.batch_samplers import SubsetSampler
-
+import random
 
 class SequenceDataset(torch.utils.data.Dataset):
     def __init__(self, sampler, window_dims, input_dims=None, channels=None,
@@ -42,9 +42,18 @@ class SequenceDataset(torch.utils.data.Dataset):
     def __getitem__(self, index):
 
         tr = self.sample_grid['positives'][index]
+        
+        negative_index = random.randint(0,self.__len__()-2)
+        # print(index)
+        # print(negative_index)
+        tr_negative = self.sample_grid['positives'][negative_index]
+        
         # tr = self.sample_grid['negatives'][index]
+        # print(tr)
+        # print(tr_negative)
         if self.channels:
             tr['channels'] = self.channels
+            tr_negative['channels'] = self.channels
 
         sampler = self.sampler
 
@@ -52,6 +61,8 @@ class SequenceDataset(torch.utils.data.Dataset):
         # pdb.set_trace()
         # print(f"frame min: {frame.min()}, frame max: {frame.max()}")
         sample = sampler.load_sample(tr, with_annots="segmentation")
+        negative_sample = sampler.load_sample(tr_negative, with_annots="segmentation")
+        
         # print(sample.keys())
         # print(sample['annots'].keys())
         # print(sample['annots']['rel_ssegs'])
@@ -64,7 +75,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         # Access the sampled image and annotation data
         raw_frame_list = sample['im']
         raw_det_list = sample['annots']['frame_dets']
-        # print(sample)
+
         # Break data down on a per-frame basis so we can apply image-based
         # augmentations.
         frame_ims = []
@@ -105,14 +116,59 @@ class SequenceDataset(torch.utils.data.Dataset):
             frame_masks.append(frame_mask)
             frame_ims.append(frame)
 
+        negative_raw_frame_list = negative_sample['im']
+        negative_raw_det_list = negative_sample['annots']['frame_dets']
+        
+        negative_frame_ims = []
+        negative_frame_masks = []
+        for negative_raw_frame, negative_raw_dets in zip(negative_raw_frame_list, negative_raw_det_list):
+            frame = negative_raw_frame.astype(np.float32)
+            dets = negative_raw_dets
+            input_dsize = self.input_dims[-2:][::-1]
+            # Resize the sampled window to the target space for the network
+            frame, info = kwimage.imresize(frame, dsize=input_dsize,
+                                           interpolation='linear',
+                                           return_info=True)
+            # Remember to apply any transform to the dets as well
+            dets = dets.scale(info['scale'])
+            dets = dets.translate(info['offset'])
+            frame_mask = np.full(frame.shape[0:2], dtype=np.int32, fill_value=-1)
+            ann_polys = dets.data['segmentations'].to_polygon_list()
+
+            ann_aids = dets.data['aids']
+            ann_cids = dets.data['cids']
+
+            for poly, aid, cid in zip(ann_polys, ann_aids, ann_cids):
+                cidx = self.classes.id_to_idx[cid]
+                poly.fill(frame_mask, value=cidx)
+
+            # ensure channel dim is not squeezed
+            frame = kwarray.atleast_nd(frame, 3)
+            
+            # fig = plt.figure()
+            # ax1 = fig.add_subplot(1,2,1)
+            # ax2 = fig.add_subplot(1,2,2)
+            # ax1.imshow(frame[:,:,:3])
+            # ax2.imshow(frame_mask)
+            # plt.show()
+            
+            negative_frame_ims.append(frame)
+            negative_frame_masks.append(frame_mask)
+
         # Perpare data for torch
         frame_data = np.concatenate([f[None, ...] for f in frame_ims], axis=0)
         class_masks = np.concatenate([m[None, ...] for m in frame_masks], axis=0)
 
+        negative_frame_data = np.concatenate([f[None, ...] for f in negative_frame_ims], axis=0)
+        negative_class_masks = np.concatenate([m[None, ...] for m in negative_frame_masks], axis=0)
+        
+
         cthw_im = frame_data.transpose(3, 0, 1, 2)
+        negative_cthw_im = negative_frame_data.transpose(3, 0, 1, 2)
 
         inputs = {
             'im': ItemContainer(torch.from_numpy(cthw_im), stack=True),
+            'negative_im': ItemContainer(torch.from_numpy(negative_cthw_im), stack=True),
         }
         label = {
             'class_masks': ItemContainer(
@@ -124,6 +180,7 @@ class SequenceDataset(torch.utils.data.Dataset):
             'label': label,
             'tr': ItemContainer(sample['tr'], stack=False),
         }
+
         return item
 
     def make_loader(self, batch_size=16, num_workers=0, shuffle=False,

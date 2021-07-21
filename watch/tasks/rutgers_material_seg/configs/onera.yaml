@@ -5,8 +5,11 @@ data:
   type: semantic_seg
   name: iarpa
   image_size: 300x300
-  num_classes: 60
+  num_classes: 20
+  window_size: 7
   weights: []
+  # channels: B02|B03|B04|B05|B06|B07|B08|B11|B12|B8A
+  channels: B02|B03|B04|B05
   local:
     model_save_dir: /home/native/projects/data/smart_watch/models/
     train_dir: /media/native/data/data/smart_watch_dvc/extern/onera_2018/
@@ -25,13 +28,13 @@ training:
   model_name: shallow_seg
   gn_n_groups: 32
   num_channels: 13
-  out_features_dim: 64
+  out_features_dim: 10
   weight_std: True
   beta: False
   pretrained: False
   distributed: False
-  learning_rate: 0.00075 # best: 0.00007
-  # resume: /home/native/projects/data/smart_watch/models/experiments_iarpa/tasks_experiments_2021-06-30-17:49/experiments_epoch_11_loss_15182018.848935883_valmIoU_0.4333376202246598_time_2021-06-30-17:57:50.pth
+  learning_rate: 0.001 # best: 0.00007
+  # resume: /home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-07-21-11:59/experiments_epoch_55_loss_0.9299376284428704_valmIoU_0_time_2021-07-21-13:32:06.pth
   resume: False
   train_val_test_split: [0.95, 0.02, 0.03]
   epochs: 200
@@ -44,8 +47,8 @@ training:
   test_with_full_supervision: 1
 
 high_confidence_threshold:
-  train_cutoff: 0.8
-  val_cutoff: 0.8
+  train_cutoff: 0.6
+  val_cutoff: 0.6
 
 evaluation:
   use_crf: False

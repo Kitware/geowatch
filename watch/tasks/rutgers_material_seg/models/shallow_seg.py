@@ -103,22 +103,22 @@ class ShallowSeg(nn.Module):
     def __init__(self, num_channels=3, num_classes=3,
                  bilinear=True, pretrained=False,
                  beta=False, weight_std=False,
-                 num_groups=32, out_dim=128):
+                 num_groups=32, out_dim=128, hw=128):
         super(ShallowSeg, self).__init__()
         self.num_channels = num_channels
         self.num_classes = num_classes
         self.bilinear = bilinear
         self.out_dim = out_dim
         # feats = [64,128,256,512,1024]
-        feats = [32, 32, 64, 128]
+        feats = [32, 32, 64, 64, 128]
 
         self.inc = DoubleConv(num_channels, feats[0])
         self.down1 = Down(feats[0], feats[1])
         self.down2 = Down(feats[1], feats[2])
         self.down3 = Down(feats[2], feats[3])
-        # self.down4 = Down(feats[3], feats[4])
+        self.down4 = Down(feats[3], feats[4])
 
-        # self.up1 = Up(feats[4] + feats[3], feats[3], bilinear)
+        self.up1 = Up(feats[4] + feats[3], feats[3], bilinear)
         self.up2 = Up(feats[2] + feats[3], feats[2], bilinear)
         self.up3 = Up(feats[1] + feats[2], feats[1], bilinear)
         self.up4 = Up(feats[0] + feats[1], feats[0], bilinear)
@@ -127,15 +127,18 @@ class ShallowSeg(nn.Module):
         self.features_outc = OutConv(feats[0], out_dim)
 
     def forward(self, x):
+        b, c, h, w = x.shape
+        # print(x.shape)
         x1 = self.inc(x)
         x2 = self.down1(x1)
-        # x3 = self.down2(x2)
-        # x4 = self.down3(x3)
-        # x5 = self.down4(x4)
-        # x = self.up1(x5, x4)
-        # x = self.up2(x4,x3)
-        # x = self.up3(x3, x2)
-        x = self.up4(x2, x1)
+        x3 = self.down2(x2)
+        x4 = self.down3(x3)
+        x5 = self.down4(x4)
+        x = self.up1(x5, x4)
+        x = self.up2(x, x3)
+        x = self.up3(x, x2)
+        x = self.up4(x, x1)
+        # features = self.features_outc(x)
+        # print(dictionary.shape)
         logits = self.outc(x)
-        features = self.features_outc(x)
-        return logits, features
+        return logits, x5

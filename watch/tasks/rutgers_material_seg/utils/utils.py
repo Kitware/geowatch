@@ -12,6 +12,65 @@ import json
 from parse import parse
 import random
 
+def otsu(image, num=400, get_bcm=False):
+    c, h, w = image.shape
+    image = image.view(1,-1)
+    # print(image.shape)
+    max_value = image.max()
+    min_value = image.min()
+    total_num = h*w
+    step_value = (max_value-min_value)/num
+    value = min_value + step_value
+    best_inter_class_var = 0
+    while value <= max_value:
+        data_1 = image[image <= value]
+        data_2 = image[image > value]
+        # print(value)
+        if data_1.shape[0] == 0 or data_2.shape[0] == 0:
+            value += step_value
+            continue
+        w1 = data_1.shape[0] / total_num
+        w2 = data_2.shape[0] / total_num
+
+        mean_1 = data_1.mean()
+        mean_2 = data_2.mean()
+
+        inter_class_var = w1 * w2 * torch.pow((mean_1 - mean_2), 2)
+        if best_inter_class_var < inter_class_var:
+            best_inter_class_var = inter_class_var
+            best_threshold = value
+        value += step_value
+    print(f"best: {best_threshold} max value: {max_value}")
+    return best_threshold
+    
+
+def stad_image(image, channel_first=True, get_params=False, patches=False):
+    if channel_first:
+        if patches:
+            bs, ps, c, h, w = image.shape
+            image = image.reshape(bs,ps,c,h*w)  # (bs, ps, c, h*w)
+            mean = image.mean(dim=3, keepdims=True) # (bs, ps, c, 1)
+            center = image - mean # (bs, ps, c, h*w)
+            var = torch.var(center, dim=3, keepdims=True) # (bs, ps, c, h*w])
+        else:
+            bs, c, h, w = image.shape
+            image = image.reshape(bs,c,h*w)  # (bs, c, h*w)
+            mean = image.mean(dim=2, keepdims=True) # (bs, c, 1)
+            center = image - mean # (bs, c, h*w)
+            var = torch.var(center, dim=2, keepdims=True) # (bs, c, h*w])
+        # var = torch.sum(torch.pow(center,2), axis=2, keepdims=True) / (h * w) # (bs, c, 1)
+        std = torch.sqrt(var)
+        nm_image = center/std # (bs, c, h*w)
+        if patches:
+            nm_image = nm_image.view(bs, ps, c, h, w)
+        else:
+            nm_image = nm_image.view(bs, c, h, w)
+    
+    if get_params:
+        return nm_image, mean, std
+    else:
+        return nm_image
+    
 
 def denorm(image: torch.Tensor, mean: list = [0.485, 0.456, 0.406], std: list = [0.229, 0.224, 0.225]) -> torch.Tensor:
     """denorm shifted image

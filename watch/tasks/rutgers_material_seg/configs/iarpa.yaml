@@ -5,13 +5,14 @@ data:
   type: semantic_seg
   name: iarpa
   image_size: 300x300
-  num_classes: 5
-  weights: []
+  num_classes: 1
+  weights: [1,1]
+  channels: red|green|blue|nir|swir16|swir22
   local:
     model_save_dir: /home/native/projects/data/smart_watch/models/
     train_dir: /media/native/data/data/smart_watch_dvc/drop0_aligned_msi/
     test_dir: /media/native/data/data/smart_watch_dvc/drop0_aligned_msi/
-    coco_json: /media/native/data/data/smart_watch_dvc/drop0_aligned_msi/material_labels2.kwcoco.json
+    coco_json: /home/native/core534_data/datasets/smart_watch_dvc/drop0_aligned_msi_cf6/train.kwcoco.json
     val_dir:
   server:
     model_save_dir: /data4/peri/smart_watch/models/
@@ -22,9 +23,10 @@ data:
 
 training:
   backbone: 
-  model_name: vsnet
+  model_name: shallow_seg
   gn_n_groups: 32
-  num_channels: 7
+  num_channels: 6
+  out_features_dim: 16
   weight_std: True
   beta: False
   pretrained: False
@@ -35,7 +37,7 @@ training:
   train_val_test_split: [0.95, 0.02, 0.03]
   epochs: 200
   start_epoch: 0
-  batch_size: 2
+  batch_size: 1
   drop_last_batch: True
   momentum: 0.9
   weight_decay: 0.0001
