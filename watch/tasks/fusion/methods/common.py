@@ -136,6 +136,9 @@ class SemanticSegmentationBase(pl.LightningModule):
         if isinstance(labels, np.ndarray):
             labels = torch.from_numpy(labels)
 
+        import xdev
+        xdev.embed()
+
         # compute predicted and target change masks
         logits = self(images)
 

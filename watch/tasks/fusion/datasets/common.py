@@ -48,21 +48,7 @@ class VideoDataset(data.Dataset):
         >>> self = VideoDataset(sampler, sample_shape=sample_shape, channels=channels)
         >>> index = len(self) // 4
         >>> item = self[index]
-        >>> import watch
-        >>> frame_ims = item['images'].numpy()
-        >>> frame_masks = item['labels'].numpy()
-        >>> frame_ims = watch.utils.util_norm.normalize_intensity(frame_ims)
-        >>> frame_list = []
-        >>> for frame_idx, (im_chw, mask) in enumerate(zip(frame_ims, frame_masks)):
-        >>>     chan_list = []
-        >>>     for chan_idx, chan in enumerate(im_chw):
-        >>>         heatmap = kwimage.Heatmap(class_idx=mask, classes=sampler.classes)
-        >>>         part = heatmap.draw_on(chan, with_alpha=0.5)
-        >>>         part = kwimage.draw_text_on_image(part, 'Frame = {}, Chan = {}'.format(frame_idx, chan_idx), (0, 0), valign='top')
-        >>>         chan_list.append(part)
-        >>>     frame_canvas = kwimage.stack_images(chan_list)
-        >>>     frame_list.append(frame_canvas)
-        >>> canvas = kwimage.stack_images(frame_list, axis=1)
+        >>> canvas = self.draw_item(item)
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> kwplot.autompl()
@@ -186,3 +172,36 @@ class VideoDataset(data.Dataset):
         }
 
         return example
+
+    def draw_item(self, item):
+        import watch
+        import kwcoco
+
+        min_dim = 296
+        chan_names = kwcoco.channel_spec.FusedChannelSpec.coerce(self.channels).as_list()
+        classes = self.sampler.classes
+        frame_ims = item['images'].numpy()
+        frame_masks = item['labels'].numpy()
+        frame_ims = watch.utils.util_norm.normalize_intensity(frame_ims, axis=1)
+        frame_list = []
+        for frame_idx, (im_chw, mask) in enumerate(zip(frame_ims, frame_masks)):
+            chan_list = []
+            for chan_idx, chan in enumerate(im_chw):
+                chan_name = chan_names[chan_idx]
+                heatmap = kwimage.Heatmap(class_idx=mask, classes=classes)
+
+                text = 't={}, c={}:{}'.format(frame_idx, chan_idx, chan_name)
+
+                part = chan
+                part = kwimage.atleast_3channels(part)
+                part = heatmap.draw_on(part, with_alpha=0.5)
+                part = kwimage.imresize(part, min_dim=min_dim)
+                part = part.clip(0, 1)
+                part = kwimage.draw_text_on_image(
+                    part, text, (1, 1), valign='top', color='limegreen')
+
+                chan_list.append(part)
+            frame_canvas = kwimage.stack_images(chan_list)
+            frame_list.append(frame_canvas)
+        canvas = kwimage.stack_images(frame_list, axis=1)
+        return canvas

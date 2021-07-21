@@ -9,6 +9,9 @@ Notes:
 
     Automated dynamics / plugins?
 
+CommandLine:
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.fit __doc__:0
+
 Example:
     >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
     >>> from watch.tasks.fusion.fit import *  # NOQA
@@ -20,6 +23,11 @@ Example:
 
     >>> import kwcoco
     >>> dset = kwcoco.CocoDataset(coco_fpath)
+    >>> available_channel_profiles = {
+    >>>     frozenset(aux.get('channels', None) for aux in img.get('auxiliary', []))
+    >>>      for img in dset.index.imgs.values()}
+    >>> print('available_channel_profiles = {!r}'.format(available_channel_profiles))
+
     >>> args = None
     >>> cmdline = False
     >>> kwargs = {
@@ -88,6 +96,36 @@ learning_irrelevant = {
     'logger',
     'checkpoint_callback',
 }
+
+
+class FusionCallbacks(pl.callbacks.Callback):
+    """
+    These are callbacks used to monitor the training
+    """
+
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
+        import kwarray
+        import watch
+        impl = kwarray.ArrayAPI.coerce('torch')
+        images = impl.numpy(batch['images'])
+        import xdev
+        xdev.embed()
+
+    def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
+        pass
+
+    def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
+        pass
+
+    # def on_init_start(self, trainer):
+    #     print('Starting to init trainer!')
+
+    # def on_init_end(self, trainer):
+    #     print('trainer is init now')
+
+    # def on_train_end(self, trainer, pl_module):
+    #     print('do something when training ends')
+
 
 
 def make_fit_config(args=None, cmdline=False, **kwargs):
@@ -279,7 +317,9 @@ def fit_model(args=None, cmdline=False, **kwargs):
     dataset.setup("fit")
 
     # init trainer from args
-    trainer = pl.Trainer.from_argparse_args(args)
+    trainer = pl.Trainer.from_argparse_args(args, callbacks=[
+        FusionCallbacks()
+    ])
 
     # prime the model, incase it has a lazy layer
     batch = next(iter(dataset.train_dataloader()))
