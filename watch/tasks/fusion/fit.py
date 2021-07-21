@@ -8,6 +8,27 @@ Notes:
     The auto-deploy files
 
     Automated dynamics / plugins?
+
+Example:
+    >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+    >>> from watch.tasks.fusion.fit import *  # NOQA
+    >>> from os.path import join
+    >>> import os
+    >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
+    >>> dvc_dpath = os.environ.get('DVC_DPATH', _default)
+    >>> coco_fpath = join(dvc_dpath, 'drop1_S2_aligned_c1/data.kwcoco.json')
+
+    >>> import kwcoco
+    >>> dset = kwcoco.CocoDataset(coco_fpath)
+    >>> args = None
+    >>> cmdline = False
+    >>> kwargs = {
+    ...     'train_dataset': coco_fpath,
+    ...     'dataset': 'WatchDataModule',
+    ... }
+    >>> args = make_fit_config(args=None, cmdline=cmdline, **kwargs)
+    >>> print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
+    >>> fit_model(**kwargs)
 """
 
 import pytorch_lightning as pl
@@ -218,12 +239,20 @@ def make_fit_config(args=None, cmdline=False, **kwargs):
     # similar to how scriptconfig works
     return args
 
-def fit_model(args=None, **kwargs):
+
+def fit_model(args=None, cmdline=False, **kwargs):
     """
     Example:
-        from watch.tasks.fusion.fit import *  # NOQA
-        kwargs = dict(train_dataset='vidshapes8-multispectral')
-        fit(, )
+        >>> from watch.tasks.fusion.fit import *  # NOQA
+        >>> args = None
+        >>> cmdline = False
+        >>> kwargs = {
+        ...     'train_dataset': 'special:vidshapes8-multispectral',
+        ...     'dataset': 'WatchDataModule',
+        ... }
+        >>> args = make_fit_config(args=None, cmdline=cmdline, **kwargs)
+        >>> print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
+        >>> fit_model(**kwargs)
     """
     print("{train_name}\n====================".format(**args.__dict__))
 
@@ -233,7 +262,8 @@ def fit_model(args=None, **kwargs):
     # init method from args
     method_var_dict = args.__dict__
 
-    # TODO: need a better way to indicate that a method needs parameters from a dataset, and maybe the reverse too
+    # TODO: need a better way to indicate that a method needs parameters from a
+    # dataset, and maybe the reverse too
     if hasattr(dataset_class, "bce_weight"):
         method_var_dict["pos_weight"] = getattr(dataset_class, "bce_weight")
 
@@ -253,20 +283,23 @@ def fit_model(args=None, **kwargs):
 
     # prime the model, incase it has a lazy layer
     batch = next(iter(dataset.train_dataloader()))
+
+    batch_shapes = ub.map_vals(lambda x: x.shape, batch)
+    print('batch_shapes = {}'.format(ub.repr2(batch_shapes, nl=1)))
+
     result = model(batch["images"][[0], ...].float())
-    
+
     # if requested, tune model
     trainer.tune(model, dataset)
 
     # fit the model
     trainer.fit(model, dataset)
-    
+
     # save model to package
     utils.create_package(model, args.default_root_dir / "package.pt")
-    
+
     # save learning relevant training options
     learning_config = ub.dict_diff(args.__dict__, learning_irrelevant)
-    
 
 
 def main(args=None, **kwargs):

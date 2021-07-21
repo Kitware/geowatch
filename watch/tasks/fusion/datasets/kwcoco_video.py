@@ -13,10 +13,13 @@ class WatchDataModule(pl.LightningDataModule):
     Prepare the kwcoco dataset as torch video datasets
 
     Ignore:
-        >>> # xdoctest: +SKIP
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> # Run the following tests on real watch data if DVC is available
+        >>> from watch.tasks.fusion.datasets.kwcoco_video import *  # NOQA
         >>> from os.path import join
-        >>> dvc_dpath = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
+        >>> import os
+        >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
+        >>> dvc_dpath = os.environ.get('DVC_DPATH', _default)
         >>> coco_fpath = join(dvc_dpath, 'drop1_S2_aligned_c1/data.kwcoco.json')
         >>> import kwcoco
         >>> train_dataset = kwcoco.CocoDataset(coco_fpath)
