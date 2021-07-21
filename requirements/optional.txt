@@ -3,3 +3,10 @@
 
 
 PyQt5 >= 5.15
+
+ipython
+xdev
+flake8
+autopep8
+fire
+mkinit

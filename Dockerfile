@@ -43,9 +43,11 @@ SHELL ["/bin/bash", "--login", "-c"]
 
 COPY conda_env.yml /watch/
 
-RUN if [ "$BUILD_STRICT" -eq 1 ]; then sed -i 's/>=/==/g' /watch/conda_env.yml; fi
-
-RUN conda env create -f /watch/conda_env.yml
+RUN if [ "$BUILD_STRICT" -eq 1 ]; then \
+    ./dev/make_strict_req.sh && conda env create -f /watch/conda_env_strict.yml; \
+else \
+    conda env create -f /watch/conda_env.yml; \
+fi
 
 COPY . /watch
 

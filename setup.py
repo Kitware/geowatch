@@ -59,8 +59,13 @@ except Exception:
 
 try:
     REQUIREMENTS = parse_requirements(fpath='requirements.txt')
+    EXTRAS_REQUIRE = {
+        'problematic': parse_requirements('requirements/problematic.txt'),
+        'optional': parse_requirements('requirements/optional.txt'),
+    }
 except Exception:
     REQUIREMENTS = []
+    EXTRAS_REQUIRE = {}
 
 setup(
     author="WATCH developers",
@@ -83,6 +88,7 @@ setup(
         ],
     },
     install_requires=REQUIREMENTS,
+    extras_require=EXTRAS_REQUIRE,
     long_description_content_type='text/x-rst',
     long_description=README,
     include_package_data=True,
