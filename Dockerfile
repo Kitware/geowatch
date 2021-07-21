@@ -41,15 +41,22 @@ RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-${CONDA_VERSION}
 
 SHELL ["/bin/bash", "--login", "-c"]
 
+RUN echo $(pwd)
+
 COPY conda_env.yml /watch/
+COPY requirements /watch/requirements
+COPY dev /watch/dev
 
 RUN if [ "$BUILD_STRICT" -eq 1 ]; then \
-    ./dev/make_strict_req.sh && conda env create -f /watch/conda_env_strict.yml; \
+    (cd /watch && ./dev/make_strict_req.sh && conda env create -f conda_env_strict.yml); \
 else \
-    conda env create -f /watch/conda_env.yml; \
+    (cd /watch && conda env create -f conda_env.yml); \
 fi
 
 COPY . /watch
 
 RUN conda activate watch && \
     pip install --no-deps -e /watch
+
+
+# docker build --build-arg BUILD_STRICT=1 .
