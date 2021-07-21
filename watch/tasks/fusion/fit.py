@@ -33,6 +33,7 @@ Example:
     >>> kwargs = {
     ...     'train_dataset': coco_fpath,
     ...     'dataset': 'WatchDataModule',
+    ...     'model_name': 'smt_it_stm_t12',
     ... }
     >>> args = make_fit_config(args=None, cmdline=cmdline, **kwargs)
     >>> print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
@@ -66,6 +67,7 @@ available_models = [
     "smt_it_joint_p8",
     "smt_it_stm_p8",
     "smt_it_hwtm_p8",
+    "smt_it_stm_t12",
 ]
 
 # dir(datasets)
@@ -104,10 +106,10 @@ class FusionCallbacks(pl.callbacks.Callback):
     """
 
     def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
-        import kwarray
-        import watch
-        impl = kwarray.ArrayAPI.coerce('torch')
-        images = impl.numpy(batch['images'])
+        # import kwarray
+        # import watch
+        # impl = kwarray.ArrayAPI.coerce('torch')
+        # images = impl.numpy(batch['images'])
         import xdev
         xdev.embed()
 
@@ -125,7 +127,6 @@ class FusionCallbacks(pl.callbacks.Callback):
 
     # def on_train_end(self, trainer, pl_module):
     #     print('do something when training ends')
-
 
 
 def make_fit_config(args=None, cmdline=False, **kwargs):
@@ -278,7 +279,7 @@ def make_fit_config(args=None, cmdline=False, **kwargs):
     return args
 
 
-def fit_model(args=None, cmdline=False, **kwargs):
+def make_lightning_modules(args=None, cmdline=False, **kwargs):
     """
     Example:
         >>> from watch.tasks.fusion.fit import *  # NOQA
@@ -288,9 +289,7 @@ def fit_model(args=None, cmdline=False, **kwargs):
         ...     'train_dataset': 'special:vidshapes8-multispectral',
         ...     'dataset': 'WatchDataModule',
         ... }
-        >>> args = make_fit_config(args=None, cmdline=cmdline, **kwargs)
-        >>> print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
-        >>> fit_model(**kwargs)
+        >>> modules = make_lightning_modules(args=None, cmdline=cmdline, **kwargs)
     """
     print("{train_name}\n====================".format(**args.__dict__))
 
@@ -312,20 +311,47 @@ def fit_model(args=None, cmdline=False, **kwargs):
     # init dataset from args
 
     dataset_var_dict = utils.filter_args(args.__dict__, dataset_class.__init__)
-    dataset_var_dict["preprocessing_step"] = model.preprocessing_step
-    dataset = dataset_class(**dataset_var_dict)
-    dataset.setup("fit")
+    # dataset_var_dict["preprocessing_step"] = model.preprocessing_step
+    datamodule = dataset_class(**dataset_var_dict)
+    datamodule.setup("fit")
 
     # init trainer from args
     trainer = pl.Trainer.from_argparse_args(args, callbacks=[
         FusionCallbacks()
     ])
 
-    # prime the model, incase it has a lazy layer
-    batch = next(iter(dataset.train_dataloader()))
+    modules = {
+        'datamodule': datamodule,
+        'model': model,
+        'trainer': trainer,
+    }
+    return modules
 
-    batch_shapes = ub.map_vals(lambda x: x.shape, batch)
-    print('batch_shapes = {}'.format(ub.repr2(batch_shapes, nl=1)))
+
+def fit_model(args=None, cmdline=False, **kwargs):
+    """
+    Example:
+        >>> from watch.tasks.fusion.fit import *  # NOQA
+        >>> args = None
+        >>> cmdline = False
+        >>> kwargs = {
+        ...     'train_dataset': 'special:vidshapes8-multispectral',
+        ...     'dataset': 'WatchDataModule',
+        ... }
+        >>> args = make_fit_config(args=None, cmdline=cmdline, **kwargs)
+        >>> print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
+        >>> fit_model(**kwargs)
+    """
+    modules = make_lightning_modules(args=args, cmdline=cmdline, **kwargs)
+    trainer = modules['trainer']
+    datamodule = modules['datamodule']
+    model = modules['model']
+
+    # prime the model, incase it has a lazy layer
+    batch = next(iter(datamodule.train_dataloader()))
+
+    # batch_shapes = ub.map_vals(lambda x: x.shape, batch)
+    # print('batch_shapes = {}'.format(ub.repr2(batch_shapes, nl=1)))
 
     result = model(batch["images"][[0], ...].float())
 
@@ -333,7 +359,7 @@ def fit_model(args=None, cmdline=False, **kwargs):
     trainer.tune(model, dataset)
 
     # fit the model
-    trainer.fit(model, dataset)
+    trainer.fit(model, datamodule)
 
     # save model to package
     utils.create_package(model, args.default_root_dir / "package.pt")

@@ -70,6 +70,7 @@ class TransformerChangeDetector(pl.LightningModule):
             >>> distance = self(images)
         """
         B, T, C, H, W = images.shape
+        print('images.shape = {!r}'.format(images.shape))
         feats = self.model(images)
         feats = einops.rearrange(feats,
                                  "(t h w) b f -> b t f h w",

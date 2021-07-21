@@ -167,6 +167,7 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
         self.mlp = new_mlp_layer(embedding_size, dropout)
 
     def forward(self, x):
+        print('x.shape = {!r}'.format(x.shape))
         shape_dict = dict(zip(self.default_shape, x.shape))
 
         previous_axial_shape = self.default_shape_str

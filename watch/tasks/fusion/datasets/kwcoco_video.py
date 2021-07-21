@@ -48,25 +48,7 @@ class WatchDataModule(pl.LightningDataModule):
         >>> got_shape = tuple(batch['images'].shape)
         >>> assert got_shape == expect_shape
         >>> # Visualize
-        >>> import watch
-        >>> frame_ims = batch['images'].numpy()[0]
-        >>> frame_masks = batch['labels'].numpy()[0]
-        >>> frame_ims = watch.utils.util_norm.normalize_intensity(frame_ims, axis=2)
-        >>> frame_list = []
-        >>> for frame_idx, (im_chw, mask) in enumerate(zip(frame_ims, frame_masks)):
-        >>>     chan_list = []
-        >>>     for chan_idx, chan in enumerate(im_chw):
-        >>>         heatmap = kwimage.Heatmap(class_idx=mask, classes=sampler.classes)
-        >>>         part = kwimage.atleast_3channels(chan)
-        >>>         #part = heatmap.draw_on(part, with_alpha=0.5)
-        >>>         part = kwimage.imresize(part, dsize=(330, 330)).clip(0, 1)
-        >>>         text = 'Frame={}, Chan={}'.format(frame_idx, chan_idx)
-        >>>         print(f'{text} {chan.sum()}')
-        >>>         part = kwimage.draw_text_on_image(part, text, (0, 0), valign='top')
-        >>>         chan_list.append(part)
-        >>>     frame_canvas = kwimage.stack_images(chan_list)
-        >>>     frame_list.append(frame_canvas)
-        >>> canvas = kwimage.stack_images(frame_list, axis=1)
+        >>> canvas = self.draw_batch(batch)
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> kwplot.autompl()
@@ -145,45 +127,27 @@ class WatchDataModule(pl.LightningDataModule):
             self.preprocessing_step,
             utils.Lambda(lambda x: x[:, tfms_channel_subset]),
         ])
+        # Store train / test / vali
+        self.datasets = {}
 
-    def draw_batch(self, batch, max_items=2):
+    def draw_batch(self, batch, stage='train', max_items=2):
         """
         Helper method to draw a batch of data.
         """
+        dataset = self.datasets['train']
+        # Get the raw dataset class
+        while hasattr(dataset, 'dataset'):
+            dataset = dataset.dataset
         import kwimage
         batch_items = _decollate_batch(batch)
         canvas_list = []
         for item_idx, item in zip(range(max_items), batch_items):
-            part = _draw_multispectral_item(item)
+            part = dataset.draw_item(item)
             canvas_list.append(part)
         canvas = kwimage.stack_images_grid(canvas_list, axis=1, overlap=-12)
-
-
-
-        # Visualize
-        import kwimage
-        import watch
-        frame_ims = batch['images'].numpy()[0]
-        frame_masks = batch['labels'].numpy()[0]
-        frame_ims = watch.utils.util_norm.normalize_intensity(frame_ims, axis=2)
-        frame_list = []
-        for frame_idx, (im_chw, mask) in enumerate(zip(frame_ims, frame_masks)):
-            chan_list = []
-            for chan_idx, chan in enumerate(im_chw):
-                heatmap = kwimage.Heatmap(class_idx=mask, classes=sampler.classes)
-                part = kwimage.atleast_3channels(chan)
-                #part = heatmap.draw_on(part, with_alpha=0.5)
-                part = kwimage.imresize(part, dsize=(330, 330)).clip(0, 1)
-                text = 'Frame={}, Chan={}'.format(frame_idx, chan_idx)
-                print(f'{text} {chan.sum()}')
-                part = kwimage.draw_text_on_image(part, text, (0, 0), valign='top')
-                chan_list.append(part)
-            frame_canvas = kwimage.stack_images(chan_list)
-            frame_list.append(frame_canvas)
-        canvas = kwimage.stack_images(frame_list, axis=1)
+        return canvas
 
     def setup(self, stage):
-
         if stage == "fit" or stage is None:
             train_data = self.train_kwcoco
             if isinstance(train_data, pathlib.Path):
@@ -202,10 +166,13 @@ class WatchDataModule(pl.LightningDataModule):
             num_valid = int(self.valid_pct * num_examples)
             num_train = num_examples - num_valid
 
-            self.train_dataset, self.valid_dataset = data.random_split(
+            # FIXME Probably not the right way to do this, too much leakage
+            train_dataset, vali_dataset = data.random_split(
                 train_val_ds,
                 [num_train, num_valid],
             )
+            self.datasets['train'] = train_dataset
+            self.datasets['vali'] = vali_dataset
 
         if stage == "test" or stage is None:
             test_data = self.test_kwcoco
@@ -213,7 +180,7 @@ class WatchDataModule(pl.LightningDataModule):
                 test_data = str(test_data.expanduser())
             kwcoco_ds = kwcoco.CocoDataset.coerce(test_data)
             kwcoco_sampler = ndsampler.CocoSampler(kwcoco_ds)
-            self.test_dataset = common.VideoDataset(
+            self.datasets['test'] = common.VideoDataset(
                 kwcoco_sampler,
                 sample_shape=(self.time_steps, self.chip_size, self.chip_size),
                 window_overlap=(self.time_overlap, self.chip_overlap, self.chip_overlap),
@@ -223,7 +190,7 @@ class WatchDataModule(pl.LightningDataModule):
 
     def train_dataloader(self):
         return data.DataLoader(
-            self.train_dataset,
+            self.datasets['train'],
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             shuffle=True,
@@ -232,7 +199,7 @@ class WatchDataModule(pl.LightningDataModule):
 
     def val_dataloader(self):
         return data.DataLoader(
-            self.valid_dataset,
+            self.datasets['vali'],
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             shuffle=False,
@@ -241,7 +208,7 @@ class WatchDataModule(pl.LightningDataModule):
 
     def test_dataloader(self):
         return data.DataLoader(
-            self.test_dataset,
+            self.datasets['test'],
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             shuffle=False,

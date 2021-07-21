@@ -5,6 +5,7 @@ from torch.utils import data
 from torch import nn
 import torch
 import einops
+from kwcoco import channel_spec
 import itertools as it
 
 
@@ -56,51 +57,57 @@ class VideoDataset(data.Dataset):
         >>> kwplot.show_if_requested()
     """
     # TODO: add torchvision.transforms or albumentations
-    def __init__(
-        self,
-        sampler,
-        sample_shape,
-        channels=None,
-        mode="fit",
-        window_overlap=0,
-        transform=None,
-        occlusion_class_id=1,
-    ):
-        self.sampler = sampler
-        self.sample_shape = sample_shape
-        self.channels = channels
-        self.mode = mode
-        self.transform = transform
-        self.window_overlap = window_overlap
-        self.occlusion_class_id = occlusion_class_id
+    def __init__(self, sampler, sample_shape, channels=None, mode="fit",
+                 window_overlap=0, transform=None, occlusion_class_id=1):
 
-        full_sample_grid = self.sampler.new_sample_grid(
-            "video_detection", self.sample_shape,
-            window_overlap=self.window_overlap)
+        if channels is None:
+            # Hack to use all channels in the first image.
+            # (Does not handle heterogeneous channels yet)
+            for img in sampler.dset.index.imgs.values():
+                chan_list = [
+                    aux.get('channels', None)
+                    for aux in img.get('auxiliary', [])
+                ]
+                break
+            channels = '|'.join(chan_list)
+        channels = channel_spec.ChannelSpec.coerce(channels)
 
-        self.sample_grid = list(it.chain(
+        if transform is not None:
+            raise Exception('I do not like injecting the transforms')
+
+        full_sample_grid = sampler.new_sample_grid(
+            "video_detection", sample_shape,
+            window_overlap=window_overlap)
+
+        sample_grid = list(it.chain(
             full_sample_grid["positives"],
             full_sample_grid["negatives"],
         ))
 
-        example_to_query = self.__getitem__(0)
-        if self.mode == "predict":
-            self.num_channels = example_to_query.shape[1]
-        else:
-            self.num_channels = example_to_query["images"].shape[1]
+        self.sample_grid = sample_grid
+        self.transform = transform
+        self.window_overlap = window_overlap
+        self.occlusion_class_id = occlusion_class_id
+        self.sampler = sampler
+        self.sample_shape = sample_shape
+        self.channels = channels
+        self.mode = mode
+        # self.num_channels = len(channels)
 
     def __len__(self):
         return len(self.sample_grid)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, index):
 
         # get positive sample definition
-        tr = self.sample_grid[idx]
+        tr = self.sample_grid[index]
         if self.channels:
             tr["channels"] = self.channels
 
+        tr['as_xarray'] = True
         # collect sample
         sample = self.sampler.load_sample(tr)
+        channel_keys = sample['im'].coords['c'].values.tolist()
 
         # Access the sampled image and annotation data
         raw_frame_list = sample['im']
@@ -111,7 +118,7 @@ class VideoDataset(data.Dataset):
         frame_ims = []
         frame_masks = []
         for frame, dets in zip(raw_frame_list, raw_det_list):
-            frame = frame.astype(np.float32)
+            frame = np.asarray(frame, dtype=np.float32)
             input_dsize = self.sample_shape[-2:][::-1]
 
             input_dsize = [
@@ -159,13 +166,14 @@ class VideoDataset(data.Dataset):
         frame_masks = torch.from_numpy(frame_masks)
         frame_ignores = torch.from_numpy(frame_ignores)
 
-        if self.transform:
-            frame_ims = self.transform(frame_ims)
+        # if self.transform:
+        #     frame_ims = self.transform(frame_ims)
 
-        if self.mode == "predict":
-            return frame_ims
+        # if self.mode == "predict":
+        #     return frame_ims
 
         example = {
+            "channel_keys": channel_keys,
             "images": frame_ims,
             "labels": frame_masks,
             "ignore": frame_ignores,
@@ -176,7 +184,6 @@ class VideoDataset(data.Dataset):
     def draw_item(self, item):
         import watch
         import kwcoco
-
         min_dim = 296
         chan_names = kwcoco.channel_spec.FusedChannelSpec.coerce(self.channels).as_list()
         classes = self.sampler.classes
@@ -189,9 +196,7 @@ class VideoDataset(data.Dataset):
             for chan_idx, chan in enumerate(im_chw):
                 chan_name = chan_names[chan_idx]
                 heatmap = kwimage.Heatmap(class_idx=mask, classes=classes)
-
                 text = 't={}, c={}:{}'.format(frame_idx, chan_idx, chan_name)
-
                 part = chan
                 part = kwimage.atleast_3channels(part)
                 part = heatmap.draw_on(part, with_alpha=0.5)
@@ -205,3 +210,22 @@ class VideoDataset(data.Dataset):
             frame_list.append(frame_canvas)
         canvas = kwimage.stack_images(frame_list, axis=1)
         return canvas
+
+    def make_loader(self, batch_size=1, num_workers=0, shuffle=False,
+                    pin_memory=False):
+        """
+        Example:
+            >>> from watch.tasks.fusion.datasets.common import *  # NOQA
+            >>> import ndsampler
+            >>> import kwcoco
+            >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
+            >>> coco_dset.ensure_category('background')
+            >>> sampler = ndsampler.CocoSampler(coco_dset)
+            >>> self = VideoDataset(sampler, sample_shape=(3, 530, 610))
+            >>> loader = self.make_loader(batch_size=2)
+            >>> batch = next(iter(loader))
+        """
+        loader = torch.utils.data.DataLoader(
+            self, batch_size=batch_size, num_workers=num_workers,
+            shuffle=shuffle, pin_memory=pin_memory)
+        return loader
