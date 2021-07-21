@@ -138,7 +138,7 @@ stages:
         - conda init bash
         - source ~/.bashrc
         - ls -al
-        - sed 's/>=/==/g' conda_env.yml > conda_env_strict.yml
+        - ./dev/make_strict_req.sh
         - conda env create -f conda_env_strict.yml --prefix ".cache/conda/envs/strict-watch-env"
         - conda activate ".cache/conda/envs/strict-watch-env"
         - pip install -e .

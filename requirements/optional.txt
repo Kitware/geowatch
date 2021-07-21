@@ -1,0 +1,12 @@
+# Installing LR-Dict 
+#- lru-dict >= 1.1.7  # breaks on CI, optional for ndsampler
+
+
+PyQt5 >= 5.15
+
+ipython
+xdev
+flake8
+autopep8
+fire
+mkinit

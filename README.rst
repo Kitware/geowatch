@@ -116,6 +116,8 @@ This is more commonly done as
    cd /path/to/watch-repo
    pip install -e .
 
+This installation process is also scripted in the top-level
+``run_developer_setup.sh`` script.
 
 After the ``watch`` module has been installed to your python environment, it
 can be imported from anywhere regardless of the current working directory.

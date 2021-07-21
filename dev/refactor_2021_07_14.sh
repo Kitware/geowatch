@@ -9,7 +9,7 @@ tree -I "*.pyc|__pycache__|*.egg-info|htmlcov|logs"
 
 
 sedr(){
-    __heredoc__="""
+    __doc__="""
     Recursive sed
 
     Args:
@@ -18,15 +18,13 @@ sedr(){
         pattern (defaults to *.py)
 
     Example:
-        source ~/local/homelinks/helpers/alias_helpers.sh
-        sedr foo bar
+        source ~/code/watch/dev/refactor_2021_07_14.sh
+        sedr foobefoobe barbebarbe
     """
-    SEARCH=$1
-    REPLACE=$2
-    PATTERN=$3
-    LIVE_RUN=$4
-
-    PATTERN=${PATTERN:="*.py"}
+    SEARCH="${SEARCH:=${1}}"
+    REPLACE="${REPLACE:=${2}}"
+    PATTERN="${PATTERN:=${3:='*.py'}}"
+    LIVE_RUN="${LIVE_RUN:=${4:='False'}}"
 
     echo "
     === sedr ===
@@ -46,6 +44,7 @@ sedr(){
         find . -type f -iname "${PATTERN}" -exec sed --quiet "s|${SEARCH}|${REPLACE}|gp" {} + | grep "${REPLACE}" -C 100
     fi
 }
+
 
 git mv watch/io/digital_globe.py  watch/gis/digital_globe.py
 git mv watch/tools/digital_globe.py  watch/gis/digital_globe.py

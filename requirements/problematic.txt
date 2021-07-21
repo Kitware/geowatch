@@ -1,0 +1,11 @@
+# Brings in opencv-python, which conflicts with opencv-python-headless
+imgaug >= 0.4.0
+
+# Brings in imgaug, which has the same opencv-problem
+netharn >= 0.5.16
+
+# This is usually the opencv version we want, but other packages might conflict with it
+opencv_python_headless >= 4.5.2.52  
+
+# The wheels for GDAL are on our server
+GDAL >= 3.3.1 --find-links https://girder.github.io/large_image_wheels
