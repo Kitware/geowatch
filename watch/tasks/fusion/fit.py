@@ -322,6 +322,7 @@ def main(args=None, **kwargs):
         python -m watch.tasks.fusion.fit \
             --model_name=smt_it_stm_p8 \
             --method=MultimodalTransformerDotProdCD \
+            --dataset=WatchDataModule \
             --train_dataset=vidshapes8-multispectral \
             --batch_size=4 \
             --num_workers=4 \
