@@ -3,7 +3,7 @@ import copy
 import pystac
 from algorithm_toolkit import Algorithm, AlgorithmChain
 
-from watch.tools.align_crs import align_crs
+from watch.cli.align_crs import align_crs
 
 
 class Main(Algorithm):

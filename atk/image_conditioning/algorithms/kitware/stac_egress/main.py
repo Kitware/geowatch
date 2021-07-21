@@ -3,7 +3,7 @@ import copy
 import pystac
 from algorithm_toolkit import Algorithm, AlgorithmChain
 
-from watch.tools.stac_egress import stac_egress
+from watch.cli.stac_egress import stac_egress
 
 
 class Main(Algorithm):

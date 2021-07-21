@@ -3,7 +3,7 @@ import copy
 import pystac
 from algorithm_toolkit import Algorithm, AlgorithmChain
 
-from watch.tools.s2_coreg import run_s2_coreg_l1c
+from watch.cli.s2_coreg import run_s2_coreg_l1c
 
 
 class Main(Algorithm):
