@@ -4,11 +4,12 @@ import random
 import argparse
 import sys
 import re
+import string
 
 import requests
 
 
-http_chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+http_chars = string.ascii_letters + string.digits
 all_chars = http_chars + '`~!@#$%*()-_=+[]{}|;:,./?'
 ENV_VAR_RE = re.compile(r'^\$(\w+)$')
 
