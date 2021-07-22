@@ -7,13 +7,12 @@ import pathlib
 from watch.tasks.fusion.datasets import common
 import ubelt as ub
 from watch.tasks.fusion import utils
-from functools import partial
+from functools import partial  # NOQA
 
 
 class WatchDataModule(pl.LightningDataModule):
     """
     Prepare the kwcoco dataset as torch video datasets
-
 
     Ignore:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -86,16 +85,6 @@ class WatchDataModule(pl.LightningDataModule):
         >>> expect_shape = (batch_size, time_steps, len(chan_spec), chip_size, chip_size)
         >>> got_shape = tuple(batch['images'].shape)
         >>> assert got_shape == expect_shape
-
-    Example:
-        >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
-        >>> from watch.tasks.fusion import datasets
-        >>> datamodule = datasets.WatchDataModule(
-        >>>     train_dataset='special:vidshapes8-multispectral', num_workers=0)
-        >>> datamodule.setup('fit')
-        >>> loader = datamodule.train_dataloader()
-        >>> batch = next(iter(loader))
-
     """
     def __init__(
         self,
@@ -156,6 +145,23 @@ class WatchDataModule(pl.LightningDataModule):
     def draw_batch(self, batch, stage='train', max_items=2):
         """
         Helper method to draw a batch of data.
+
+        Example:
+            >>> from watch.tasks.fusion.datasets.kwcoco_video import *  # NOQA
+            >>> from watch.tasks.fusion.datasets.kwcoco_video import _decollate_batch
+            >>> from watch.tasks.fusion import datasets
+            >>> self = datasets.WatchDataModule(
+            >>>     train_dataset='special:vidshapes8-multispectral', num_workers=0)
+            >>> self.setup('fit')
+            >>> loader = self.train_dataloader()
+            >>> batch = next(iter(loader))
+            >>> # Visualize
+            >>> canvas = self.draw_batch(batch)
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas)
+            >>> kwplot.show_if_requested()
         """
         dataset = self.torch_datasets[stage]
         # Get the raw dataset class
@@ -292,7 +298,7 @@ class WatchDataModule(pl.LightningDataModule):
         parser.add_argument("--chip_size", default=128, type=int)
         parser.add_argument("--time_overlap", default=0, type=int)
         parser.add_argument("--chip_overlap", default=0.1, type=float)
-        parser.add_argument("--channels", default='<TODO-AUTO>', type=str)
+        parser.add_argument("--channels", default=None, type=str)
         parser.add_argument("--valid_pct", default=0.1, type=float)
         parser.add_argument("--batch_size", default=4, type=int)
         parser.add_argument("--num_workers", default=4, type=int)

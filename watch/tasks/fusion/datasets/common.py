@@ -144,10 +144,10 @@ class VideoDataset(data.Dataset):
         if self.channels:
             tr["channels"] = self.channels
 
-        tr['as_xarray'] = True
+        tr['as_xarray'] = False
         # collect sample
         sample = self.sampler.load_sample(tr)
-        channel_keys = sample['im'].coords['c'].values.tolist()
+        # channel_keys = sample['im'].coords['c'].values.tolist()
 
         # Access the sampled image and annotation data
         raw_frame_list = sample['im']
@@ -192,7 +192,11 @@ class VideoDataset(data.Dataset):
 
         # stack along temporal axis
         frame_ims = np.stack(frame_ims, axis=0)
-        frame_masks = np.stack(frame_masks, axis=0) + 1
+
+        # DO NOT ADD 1, THE CLASS INDEXES SHOULD BE RESPECTED
+        # frame_masks = np.stack(frame_masks, axis=0) + 1
+        frame_masks = np.stack(frame_masks, axis=0)
+
         frame_ignores = (frame_masks == self.occlusion_class_id)
 
         # rearrange image axes for pytorch
@@ -336,11 +340,18 @@ class VideoDataset(data.Dataset):
             chan_list = []
             for chan_idx, chan in enumerate(im_chw):
                 chan_name = chan_names[chan_idx]
+                # cidxs = mask
                 heatmap = kwimage.Heatmap(class_idx=mask, classes=classes)
+                # Hack: -1 is given the last color by colorize, it would
+                # be better if there was a non-negative background class index
+                class_overlay = heatmap.colorize('class_idx')
+                class_overlay[..., 3] = 0.5
+                class_overlay[mask == -1, 3] = 0
+                part = kwimage.overlay_alpha_layers([class_overlay, chan])
                 text = 't={}, c={}:{}'.format(frame_idx, chan_idx, chan_name)
-                part = chan
+                # part = chan
                 part = kwimage.atleast_3channels(part)
-                part = heatmap.draw_on(part, with_alpha=0.5)
+                # part = heatmap.draw_on(part, with_alpha=0.5)
                 part = kwimage.imresize(part, min_dim=min_dim)
                 part = part.clip(0, 1)
                 part = kwimage.draw_text_on_image(
@@ -350,6 +361,8 @@ class VideoDataset(data.Dataset):
             frame_canvas = kwimage.stack_images(chan_list)
             frame_list.append(frame_canvas)
         canvas = kwimage.stack_images(frame_list, axis=1)
+        canvas = canvas[..., 0:3]  # drop alpha
+        canvas = kwimage.ensure_uint255(canvas)  # convert to uint8
         return canvas
 
     def make_loader(self, batch_size=1, num_workers=0, shuffle=False,
