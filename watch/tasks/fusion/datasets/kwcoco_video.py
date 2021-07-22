@@ -14,7 +14,7 @@ class WatchDataModule(pl.LightningDataModule):
     """
     Prepare the kwcoco dataset as torch video datasets
 
-    Ignore:
+    Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> # Run the following tests on real watch data if DVC is available
         >>> from watch.tasks.fusion.datasets.kwcoco_video import *  # NOQA
@@ -27,13 +27,13 @@ class WatchDataModule(pl.LightningDataModule):
         >>> train_dataset = kwcoco.CocoDataset(coco_fpath)
         >>> test_dataset = None
         >>> img = ub.peek(train_dataset.imgs.values())
-        >>> channels = '|'.join([aux['channels'] for aux in img['auxiliary']])
-        >>> chan_spec = kwcoco.channel_spec.FusedChannelSpec.coerce(channels)
+        >>> #channels = '|'.join([aux['channels'] for aux in img['auxiliary']])
+        >>> #chan_spec = kwcoco.channel_spec.FusedChannelSpec.coerce(channels)
+        >>> channels None
         >>> #
         >>> batch_size = 2
         >>> time_steps = 3
         >>> chip_size = 330
-        >>> channels = channels
         >>> self = WatchDataModule(
         >>>     train_dataset=train_dataset,
         >>>     test_dataset=test_dataset,
