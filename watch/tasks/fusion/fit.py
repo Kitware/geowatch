@@ -120,8 +120,6 @@ class FusionCallbacks(pl.callbacks.Callback):
             import numpy as np
             import kwimage
             from os.path import join
-            import xdev
-            xdev.embed()
 
             # outputs['distances']
             import watch

@@ -5,6 +5,13 @@ import torchmetrics as metrics
 import torch_optimizer as optim
 from torch.optim import lr_scheduler
 import numpy as np
+import ubelt as ub
+
+try:
+    import xdev
+    profile = xdev.profile
+except Exception:
+    profile = ub.identity
 
 
 class ChangeDetectorBase(pl.LightningModule):
@@ -29,6 +36,7 @@ class ChangeDetectorBase(pl.LightningModule):
     def preprocessing_step(self):
         raise NotImplementedError
 
+    @profile
     def training_step(self, batch, batch_idx=None):
         """
         Example:
@@ -72,6 +80,7 @@ class ChangeDetectorBase(pl.LightningModule):
         }
         return outputs
 
+    @profile
     def validation_step(self, batch, batch_idx=None):
         images, labels = batch["images"].float(), batch["labels"]
         changes = labels[:, 1:] != labels[:, :-1]
@@ -94,6 +103,7 @@ class ChangeDetectorBase(pl.LightningModule):
         self.log("val_loss", loss, prog_bar=True)
         return loss
 
+    @profile
     def test_step(self, batch, batch_idx=None):
         images, labels = batch["images"].float(), batch["labels"]
         changes = labels[:, 1:] != labels[:, :-1]
