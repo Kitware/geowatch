@@ -128,15 +128,8 @@ class FusionCallbacks(pl.callbacks.Callback):
 
             datamodule = trainer.datamodule
             # dataset = datamodule.torch_datasets[stage]
-            images = batch['images']
-            # print('batch min = {}'.format(images.min()))
-            # print('batch max = {}'.format(images.max()))
-            # print('images.shape = {}'.format(images.shape))
-            # import xdev
-            # xdev.embed()
-            canvas = datamodule.draw_batch(batch)
-            canvas = canvas[..., 0:3]  # drop alpha
-            canvas = kwimage.ensure_uint255(canvas)
+            # images = batch['images']
+            canvas = datamodule.draw_batch(batch, outputs=outputs)
 
             if 0:
                 import kwplot

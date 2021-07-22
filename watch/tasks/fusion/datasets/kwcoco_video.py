@@ -142,7 +142,7 @@ class WatchDataModule(pl.LightningDataModule):
         self.torch_datasets = {}
         self.coco_datasets = {}
 
-    def draw_batch(self, batch, stage='train', max_items=2):
+    def draw_batch(self, batch, stage='train', outputs=None, max_items=2):
         """
         Helper method to draw a batch of data.
 
@@ -156,7 +156,10 @@ class WatchDataModule(pl.LightningDataModule):
             >>> loader = self.train_dataloader()
             >>> batch = next(iter(loader))
             >>> # Visualize
-            >>> canvas = self.draw_batch(batch)
+            >>> B, T, C, H, W = batch['images'].shape
+            >>> outputs = {'distances': torch.rand(B, T - 1, H, W)}
+            >>> stage = 'train'
+            >>> canvas = self.draw_batch(batch, stage=stage, outputs=outputs)
             >>> # xdoctest: +REQUIRES(--show)
             >>> import kwplot
             >>> kwplot.autompl()
@@ -171,7 +174,15 @@ class WatchDataModule(pl.LightningDataModule):
         batch_items = _decollate_batch(batch)
         canvas_list = []
         for item_idx, item in zip(range(max_items), batch_items):
-            part = dataset.draw_item(item)
+
+            # HACK: I'm not sure how general accepting outputs is
+            binprobs = None
+            if outputs is not None:
+                if 'distances' in outputs:
+                    logits = outputs['distances'][item_idx]
+                    binprobs = logits.sigmoid().data.cpu().numpy()
+
+            part = dataset.draw_item(item, binprobs=binprobs)
             canvas_list.append(part)
         canvas = kwimage.stack_images_grid(canvas_list, axis=1, overlap=-12)
         return canvas
@@ -260,33 +271,6 @@ class WatchDataModule(pl.LightningDataModule):
             shuffle=shuffle,
             pin_memory=True,
         )
-
-    # def train_dataloader(self):
-    #     return data.DataLoader(
-    #         self.torch_datasets['train'],
-    #         batch_size=self.batch_size,
-    #         num_workers=self.num_workers,
-    #         shuffle=True,
-    #         pin_memory=True,
-    #     )
-
-    # def val_dataloader(self):
-    #     return data.DataLoader(
-    #         self.torch_datasets['vali'],
-    #         batch_size=self.batch_size,
-    #         num_workers=self.num_workers,
-    #         shuffle=False,
-    #         pin_memory=True,
-    #     )
-
-    # def test_dataloader(self):
-    #     return data.DataLoader(
-    #         self.torch_datasets['test'],
-    #         batch_size=self.batch_size,
-    #         num_workers=self.num_workers,
-    #         shuffle=False,
-    #         pin_memory=True,
-    #     )
 
     @staticmethod
     def add_data_specific_args(parent_parser):

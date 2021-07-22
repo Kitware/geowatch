@@ -334,36 +334,57 @@ class VideoDataset(data.Dataset):
         return input_stats
         # _dset.disable_augmenter = False  # hack
 
-    def draw_item(self, item):
+    def draw_item(self, item, binprobs=None):
         import watch
         import kwcoco
         min_dim = 296
         chan_names = kwcoco.channel_spec.FusedChannelSpec.coerce(self.channels).as_list()
         classes = self.sampler.classes
-        frame_ims = item['images'].numpy()
-        frame_masks = item['labels'].numpy()
+        frame_ims = item['images'].data.cpu().numpy()
+        frame_masks = item['labels'].data.cpu().numpy()
         frame_ims = watch.utils.util_norm.normalize_intensity(frame_ims, axis=1)
         frame_list = []
         for frame_idx, (im_chw, mask) in enumerate(zip(frame_ims, frame_masks)):
             chan_list = []
             for chan_idx, chan in enumerate(im_chw):
                 chan_name = chan_names[chan_idx]
+
+                signal = kwimage.atleast_3channels(chan)
+
                 # cidxs = mask
-                heatmap = kwimage.Heatmap(class_idx=mask, classes=classes)
+
+                true_heatmap = kwimage.Heatmap(class_idx=mask, classes=classes)
+                # true_part = heatmap.draw_on(true_part, with_alpha=0.5)
                 # Hack: -1 is given the last color by colorize, it would
                 # be better if there was a non-negative background class index
-                class_overlay = heatmap.colorize('class_idx')
+                class_overlay = true_heatmap.colorize('class_idx')
                 class_overlay[..., 3] = 0.5
                 class_overlay[mask == -1, 3] = 0
-                part = kwimage.overlay_alpha_layers([class_overlay, chan])
                 text = 't={}, c={}:{}'.format(frame_idx, chan_idx, chan_name)
-                # part = chan
-                part = kwimage.atleast_3channels(part)
-                # part = heatmap.draw_on(part, with_alpha=0.5)
-                part = kwimage.imresize(part, min_dim=min_dim)
-                part = part.clip(0, 1)
-                part = kwimage.draw_text_on_image(
-                    part, text, (1, 1), valign='top', color='limegreen')
+
+                true_part = kwimage.overlay_alpha_layers([class_overlay, signal])
+                true_part = true_part[..., 0:3]
+                true_part = kwimage.imresize(true_part, min_dim=min_dim).clip(0, 1)
+                true_part = kwimage.draw_text_on_image(
+                    true_part, text, (1, 1), valign='top', color='limegreen')
+
+                if binprobs is not None:
+                    if frame_idx == 0:
+                        #
+                        pred_part = np.zeros_like(true_part)
+                    else:
+                        # Hack, output is assumed to only be for subsequent
+                        # frames it would be better if we had some sort of
+                        # standardized output encoding.
+                        pred_mask = kwimage.make_heatmask(binprobs[frame_idx - 1])
+                        pred_part = kwimage.overlay_alpha_layers([pred_mask, signal])
+                        pred_part = pred_part[..., 0:3]
+                        pred_part = kwimage.imresize(pred_part, min_dim=min_dim).clip(0, 1)
+                    pred_part = kwimage.draw_text_on_image(
+                        pred_part, 'pred ' + text, (1, 1), valign='top', color='blue')
+                    part = kwimage.stack_images([true_part, pred_part], axis=1)
+                else:
+                    part = true_part
 
                 chan_list.append(part)
             frame_canvas = kwimage.stack_images(chan_list)

@@ -53,7 +53,10 @@ class ChangeDetectorBase(pl.LightningModule):
 
             >>> # Choose subclass to test this with (does not cover all cases)
             >>> self = methods.MultimodalTransformerDotProdCD(model_name='smt_it_joint_p8')
-            >>> self.training_step(batch)
+            >>> outputs = self.training_step(batch)
+
+            # outputs['distances']
+            canvas = datamodule.draw_batch(batch, outputs=outputs)
         """
         images, labels = batch["images"].float(), batch["labels"]
         changes = labels[:, 1:] != labels[:, :-1]
