@@ -14,7 +14,7 @@ an auxiliary file for the image in question.
 
 For instance consider the following kwcoco image json from drop1.
 
-```
+```python
 {'id': 2,
  'file_name': None,
  'name': 'crop_2018-10-16_N30.298499W081.695322_N30.366761W081.596884_S2_0',
@@ -168,7 +168,7 @@ computed by your neural network. In your prediction script, you would read in
 the input kwcoco, and then write an augmented output kwcoco file, where the new
 entry in each image's auxiliary list might look like this:
 
-```
+```python
 {
     'file_name': 'US_Jacksonville_R01/S2/affine_warp/crop_2018-10-16_N30.298499W081.695322_N30.366761W081.596884_S2_0/DATA_FOR_YOUR_NEW_FEATURE.tif',
     'channels': 'myinv1|myinv2|myinv3|myinv4|myinv5|myinv6|myinv7|myinv8',
