@@ -265,14 +265,19 @@ class Trainer(object):
 
             features1_flat = torch.flatten(features1, start_dim=2, end_dim=3)
             
-            cropped_features = transforms.functional.crop(stacked_for_cropping, *params)
-            cropped_negative_features1 = transforms.functional.crop(negative_output1, *params)
+            # cropped_features = transforms.functional.crop(stacked_for_cropping, *params)
+            # cropped_negative_features1 = transforms.functional.crop(negative_output1, *params)
+            
+            cropped_features = torch.stack([transforms.functional.crop(stacked_for_cropping, *params) for params in all_crops_params],dim=1)
+            
             # cropped_negative_features2 = transforms.functional.crop(negative_output2, *params)
             
             cropped_bs, cropped_t, cropped_c, cropped_h, cropped_w = cropped_features.shape
             
-            cropped_features1 = cropped_features[:,0,:,:,:]#.squeeze(0)
-            cropped_features2 = cropped_features[:,1,:,:,:]#.squeeze(0)
+            cropped_features1 = cropped_features[:,:,0,:,:,:]#.squeeze(0)
+            cropped_features2 = cropped_features[:,:,1,:,:,:]#.squeeze(0)
+            
+            print(cropped_features1)
             
             cropped_features1_flat = torch.flatten(cropped_features1, start_dim=2, end_dim=3)
             cropped_features2_flat = torch.flatten(cropped_features2, start_dim=2, end_dim=3)
@@ -317,22 +322,22 @@ class Trainer(object):
                 #                                params[1]-1:params[1]+1] = b_dictionary1[index]
 
 
-                dictionary1_test = self.kmeans.predict(b_test_full_image1)
-                dictionary2_test = self.kmeans.predict(b_test_full_image2)
-                root_shape = int(math.sqrt(dictionary1_test.shape[0]))
-                dictionary1_test = dictionary1_test.view((root_shape,root_shape))
-                dictionary2_test = dictionary2_test.view((root_shape,root_shape))
-                # print(dictionary_test.shape)
-                dictionary1_test = F.pad(dictionary1_test,
-                                         pad=((400-root_shape)//2, (400-root_shape+1)//2, (400-root_shape)//2, (400-root_shape+1)//2), 
-                                         mode='constant', value=0)
+                # dictionary1_test = self.kmeans.predict(b_test_full_image1)
+                # dictionary2_test = self.kmeans.predict(b_test_full_image2)
+                # root_shape = int(math.sqrt(dictionary1_test.shape[0]))
+                # dictionary1_test = dictionary1_test.view((root_shape,root_shape))
+                # dictionary2_test = dictionary2_test.view((root_shape,root_shape))
+                # # print(dictionary_test.shape)
+                # dictionary1_test = F.pad(dictionary1_test,
+                #                          pad=((400-root_shape)//2, (400-root_shape+1)//2, (400-root_shape)//2, (400-root_shape+1)//2), 
+                #                          mode='constant', value=0)
                 
-                dictionary2_test = F.pad(dictionary2_test,
-                                        pad=((400-root_shape)//2, (400-root_shape+1)//2, (400-root_shape)//2, (400-root_shape+1)//2), 
-                                        mode='constant', value=0)
+                # dictionary2_test = F.pad(dictionary2_test,
+                #                         pad=((400-root_shape)//2, (400-root_shape+1)//2, (400-root_shape)//2, (400-root_shape+1)//2), 
+                #                         mode='constant', value=0)
                 
-                dictionary1_post_assignment[b,:,:] = dictionary1_test
-                dictionary2_post_assignment[b,:,:] = dictionary2_test
+                # dictionary1_post_assignment[b,:,:] = dictionary1_test
+                # dictionary2_post_assignment[b,:,:] = dictionary2_test
                 # dictionary_test = nn.ConstantPad1d((400 - root_shape, 400 - root_shape), 0)(dictionary_test)
                 # print(dictionary_test.shape)
                 # b_dictionary1_clusters, b_dictionary1_distribution = torch.unique(b_dictionary1, return_counts=True)
@@ -365,7 +370,7 @@ class Trainer(object):
             # residuals1 = residuals1.view(bs, self.k, texton_h*texton_w)
             # residuals2 = residuals2.view(bs, self.k, texton_h*texton_w)
             # negative_residuals = negative_residuals.view(bs, self.k, texton_h*texton_w)
-            cropped_dictionary = transforms.functional.crop(dictionary1, *params)
+            # cropped_dictionary = transforms.functional.crop(dictionary1, *params)
             # dictionary = dictionary.view(texton_h*texton_w).unsqueeze(0)
             
             
@@ -377,9 +382,9 @@ class Trainer(object):
             #                     residuals,
             #                     reduction="mean")
             
-            # loss1 = 5*F.cross_entropy(cropped_features1, 
-            #                           cropped_dictionary,
-            #                           reduction="mean")
+            loss1 = 5*F.cross_entropy(cropped_features1, 
+                                      cropped_dictionary,
+                                      reduction="mean")
             
             # loss2 = 5*F.cross_entropy(cropped_features2, 
             #                           cropped_dictionary,
