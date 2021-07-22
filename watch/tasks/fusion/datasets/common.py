@@ -35,6 +35,32 @@ class AddPositionalEncoding(nn.Module):
         return x
 
 
+def coco_channel_profiles(coco_dset, max_checks=float('inf')):
+    """
+    Example:
+        >>> from watch.tasks.fusion.datasets.common import *  # NOQA
+        >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
+        >>> candidates = coco_channel_profiles(coco_dset)
+    """
+    import ubelt as ub
+    candidates = ub.oset()
+    for check_idx, img in enumerate(coco_dset.index.imgs.values()):
+
+        objs = []
+        if img.get('file_name', None):
+            objs.append(img)
+        objs.extend(img.get('auxiliary', []))
+
+        chan_list = [obj.get('channels', None) for obj in objs]
+        candidates.add(tuple(chan_list))
+
+        if check_idx > max_checks:
+            break
+    if len(candidates) == 0:
+        raise Exception('no candidate channel profiles')
+    return candidates
+
+
 class VideoDataset(data.Dataset):
     """
     Example:
@@ -55,6 +81,24 @@ class VideoDataset(data.Dataset):
         >>> kwplot.autompl()
         >>> kwplot.imshow(canvas)
         >>> kwplot.show_if_requested()
+
+    Example:
+        >>> from watch.tasks.fusion.datasets.common import *  # NOQA
+        >>> import ndsampler
+        >>> import kwcoco
+        >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
+        >>> coco_dset.ensure_category('background')
+        >>> sampler = ndsampler.CocoSampler(coco_dset)
+        >>> sample_shape = (2, 128, 128)
+        >>> self = VideoDataset(sampler, sample_shape=sample_shape, channels=None)
+        >>> index = 0
+        >>> item = self[index]
+        >>> canvas = self.draw_item(item)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(canvas)
+        >>> kwplot.show_if_requested()
     """
     # TODO: add torchvision.transforms or albumentations
     def __init__(self, sampler, sample_shape, channels=None, mode="fit",
@@ -63,12 +107,8 @@ class VideoDataset(data.Dataset):
         if channels is None:
             # Hack to use all channels in the first image.
             # (Does not handle heterogeneous channels yet)
-            for img in sampler.dset.index.imgs.values():
-                chan_list = [
-                    aux.get('channels', None)
-                    for aux in img.get('auxiliary', [])
-                ]
-                break
+            candidates = coco_channel_profiles(sampler.dset, 3)
+            chan_list = candidates[0]
             channels = '|'.join(chan_list)
         channels = channel_spec.ChannelSpec.coerce(channels)
 
@@ -173,7 +213,7 @@ class VideoDataset(data.Dataset):
         #     return frame_ims
 
         example = {
-            "channel_keys": channel_keys,
+            # "channel_keys": channel_keys,
             "images": frame_ims,
             "labels": frame_masks,
             "ignore": frame_ignores,

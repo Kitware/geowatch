@@ -113,6 +113,9 @@ class AddPositionalEncoding(nn.Module):
 
 
 class SinePositionalEncoding(nn.Module):
+    """
+    SinePositionalEncoding(4, 0, sine_pairs=4)
+    """
     def __init__(self, dest_dim, dim_to_encode, sine_pairs=2):
         super().__init__()
         self.dest_dim = dest_dim

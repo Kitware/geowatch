@@ -12,10 +12,19 @@ from watch.tasks.fusion import utils
 
 class MultimodalTransformerDotProdCD(ChangeDetectorBase):
     """
-
     Example:
-        self = MultimodalTransformerDotProdCD
+        >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+        >>> from watch.tasks.fusion import datasets
+        >>> datamodule = datasets.WatchDataModule(
+        >>>     train_dataset='special:vidshapes8', num_workers=0)
+        >>> datamodule.setup('fit')
+        >>> loader = datamodule.train_dataloader()
+        >>> batch = next(iter(loader))
+        >>> self = MultimodalTransformerDotProdCD(model_name='smt_it_joint_p8')
+        >>> images = batch['images'].float()
+        >>> distance = self(images)
 
+        # nh.util.number_of_parameters(self)
     """
 
     def __init__(self,
@@ -31,12 +40,14 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
             pos_weight=pos_weight,
         )
         self.save_hyperparameters()
-
-        self.model = getattr(transformer, model_name)(dropout=dropout)
+        encoder_config = transformer.encoder_configs[model_name]
+        encoder = transformer.FusionEncoder(**encoder_config, dropout=dropout)
+        self.encoder = encoder
 
     @property
     def preprocessing_step(self):
-        return transforms.Compose([
+        # DEPRECATE
+        preproc_tfms = transforms.Compose([
             Rearrange("t c (h hs) (w ws) -> t c h w (ws hs)",
                       hs=self.hparams.window_size,
                       ws=self.hparams.window_size),
@@ -45,10 +56,27 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
             utils.SinePositionalEncoding(4, 2, sine_pairs=4),
             utils.SinePositionalEncoding(4, 3, sine_pairs=4),
         ])
+        return preproc_tfms
+
+    def batch_preprocessing_step(self, images):
+        """
+        Add positional encoding to the batch
+        """
+        batch_preproc_tfms = transforms.Compose([
+            Rearrange("b t c (h hs) (w ws) -> b t c h w (ws hs)",
+                      hs=self.hparams.window_size,
+                      ws=self.hparams.window_size),
+            utils.SinePositionalEncoding(5, 1, sine_pairs=4),
+            utils.SinePositionalEncoding(5, 2, sine_pairs=4),
+            utils.SinePositionalEncoding(5, 3, sine_pairs=4),
+            utils.SinePositionalEncoding(5, 4, sine_pairs=4),
+        ])
+        return batch_preproc_tfms(images)
 
     # @pl.core.decorators.auto_move_data
     def forward(self, images):
-        feats = self.model(images)
+        preproced = self.batch_preprocessing_step(images)
+        feats = self.encoder(preproced)
 
         # similarity between neighboring timesteps
         feats = nn.functional.normalize(feats, dim=-1)
@@ -70,6 +98,21 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
 
 
 class MultimodalTransformerDirectCD(ChangeDetectorBase):
+    """
+    Example:
+        >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+        >>> from watch.tasks.fusion import datasets
+        >>> datamodule = datasets.WatchDataModule(
+        >>>     train_dataset='special:vidshapes8', num_workers=0)
+        >>> datamodule.setup('fit')
+        >>> loader = datamodule.train_dataloader()
+        >>> batch = next(iter(loader))
+        >>> self = MultimodalTransformerDirectCD(model_name='smt_it_joint_p8')
+        >>> images = batch['images'].float()
+        >>> similarity = self(images)
+
+        # nh.util.number_of_parameters(self)
+    """
 
     def __init__(self,
                  model_name,
@@ -85,13 +128,14 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
         )
         self.save_hyperparameters()
 
-        self.model = nn.Sequential(
-            getattr(transformer, model_name)(dropout=dropout),
-            nn.LazyLinear(1),
-        )
+        encoder_config = transformer.encoder_configs[model_name]
+        encoder = transformer.FusionEncoder(**encoder_config, dropout=dropout)
+        self.encoder = encoder
+        self.binary_clf = nn.LazyLinear(1)
 
     @property
     def preprocessing_step(self):
+        # DEPRECATE
         return transforms.Compose([
             Rearrange("t c (h hs) (w ws) -> t c h w (ws hs)",
                       hs=self.hparams.window_size,
@@ -102,9 +146,22 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
             utils.SinePositionalEncoding(4, 3, sine_pairs=4),
         ])
 
+    def batch_preprocessing_step(self, images):
+        return transforms.Compose([
+            Rearrange("b t c (h hs) (w ws) -> b t c h w (ws hs)",
+                      hs=self.hparams.window_size,
+                      ws=self.hparams.window_size),
+            utils.SinePositionalEncoding(5, 1, sine_pairs=4),
+            utils.SinePositionalEncoding(5, 2, sine_pairs=4),
+            utils.SinePositionalEncoding(5, 3, sine_pairs=4),
+            utils.SinePositionalEncoding(5, 4, sine_pairs=4),
+        ])(images)
+
     # @pl.core.decorators.auto_move_data
     def forward(self, images):
-        similarity = self.model(images)[:, 1:, ..., 0]
+        preproced = self.batch_preprocessing_step(images)
+        fused_feats = self.encoder(preproced)[:, 1:, ..., 0]
+        similarity = self.binary_clf(fused_feats)
         similarity = einops.reduce(similarity, "b t c h w -> b t h w", "mean")
         return similarity
 
@@ -120,6 +177,26 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
 
 
 class MultimodalTransformerSegmentation(SemanticSegmentationBase):
+    """
+    Example:
+        >>> # xdoctest: +SKIP
+        >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+        >>> from watch.tasks.fusion import datasets
+        >>> datamodule = datasets.WatchDataModule(
+        >>>     train_dataset='special:vidshapes8', num_workers=0)
+        >>> datamodule.setup('fit')
+        >>> loader = datamodule.train_dataloader()
+        >>> batch = next(iter(loader))
+        >>> classes = datamodule.coco_datasets['train'].object_categories()
+        >>> n_classes = len(classes)
+        >>> self = MultimodalTransformerSegmentation(n_classes=n_classes, model_name='smt_it_joint_p8')
+        >>> images = batch['images'].float()
+        >>> logits = self(images)
+
+    TODO:
+        - [ ] Dont pass the number of classes, instead pass the list of class
+              names. This helps prevent mistakes in production.
+    """
 
     def __init__(self,
                  n_classes,
@@ -134,10 +211,10 @@ class MultimodalTransformerSegmentation(SemanticSegmentationBase):
         )
         self.save_hyperparameters()
 
-        self.model = nn.Sequential(
-            getattr(transformer, model_name)(dropout=dropout),
-            nn.LazyLinear(n_classes),
-        )
+        encoder_config = transformer.encoder_configs[model_name]
+        encoder = transformer.FusionEncoder(**encoder_config, dropout=dropout)
+        self.encoder = encoder
+        self.classifier = nn.LazyLinear(n_classes)
 
     @property
     def preprocessing_step(self):
@@ -151,9 +228,22 @@ class MultimodalTransformerSegmentation(SemanticSegmentationBase):
             utils.SinePositionalEncoding(3, 2, sine_pairs=4),
         ])
 
+    def batch_preprocessing_step(self, images):
+        return transforms.Compose([
+            # utils.Lambda(lambda x: torch.from_numpy(x).float()),
+            Rearrange("b c (h hs) (w ws) -> b c h w (ws hs)",
+                      hs=self.hparams.window_size,
+                      ws=self.hparams.window_size),
+            utils.SinePositionalEncoding(4, 1, sine_pairs=4),
+            utils.SinePositionalEncoding(4, 2, sine_pairs=4),
+            utils.SinePositionalEncoding(4, 3, sine_pairs=4),
+        ])(images)
+
     # @pl.core.decorators.auto_move_data
     def forward(self, images):
-        logits = self.model(images).mean(dim=1)
+        preproced = self.batch_preprocessing_step(images)
+        features = self.encoder(preproced)
+        logits = self.classifier(features).mean(dim=1)
         logits = einops.rearrange(logits, "b h w c -> b c h w")
         logits = nn.functional.interpolate(
             logits,

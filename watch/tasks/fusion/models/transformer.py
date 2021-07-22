@@ -5,6 +5,7 @@ Notes:
 """
 from torch import nn
 import einops
+import ubelt as ub  # NOQA
 
 
 class ResidualLayer(nn.Module):
@@ -152,6 +153,7 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
         default_shape=["batch", "time", "mode", "height", "width", "feature"],
         feature_axis="feature",
         batch_axis="batch",
+        attention_impl='exact'
     ):
         super().__init__()
         self.axes = axes
@@ -161,13 +163,13 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
         self.default_shape_str = " ".join(default_shape)
 
         self.attention_modules = nn.ModuleDict({
-            " ".join(axis): new_attention_layer(embedding_size, n_heads)
+            " ".join(axis): new_attention_layer(embedding_size, n_heads,
+                                                attention_impl=attention_impl)
             for axis in axes
         })
         self.mlp = new_mlp_layer(embedding_size, dropout)
 
     def forward(self, x):
-        print('x.shape = {!r}'.format(x.shape))
         shape_dict = dict(zip(self.default_shape, x.shape))
 
         previous_axial_shape = self.default_shape_str
@@ -198,19 +200,8 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
         x = einops.rearrange(x, f"{axial_shape} -> {self.default_shape_str}", **shape_dict)
         return x
 
-#   default_shape=["batch", "time", "mode", "height", "width", "feature"],
 
-
-def transformer_encoder(
-        axes,
-        default_shape=["batch", "sequence", "feature"],
-        feature_axis="feature",
-        batch_axis="batch",
-        embedding_size=128,
-        n_layers=4,
-        n_heads=8,
-        dropout=0.0,
-        in_features=None):
+class FusionEncoder(nn.Module):
     """
     Primary entry point to create a feature transformer
 
@@ -218,7 +209,7 @@ def transformer_encoder(
         >>> from watch.tasks.fusion.models.transformer import *  # NOQA
         >>> import torch
         >>> in_features = 7
-        >>> model = transformer_encoder(
+        >>> model = FusionEncoder(
         >>>     in_features=in_features,
         >>>     axes=[("time", "mode", "height", "width")],
         >>>     default_shape=["batch", "time", "mode", "height", "width", "feature"],
@@ -235,7 +226,7 @@ def transformer_encoder(
         >>> assert output.shape == (2, 3, 5, 2, 2, 256)
         >>> #
         >>> # Test Lazy variant
-        >>> model = transformer_encoder(
+        >>> model = FusionEncoder(
         >>>     in_features=None,
         >>>     axes=[("time", "mode", "height", "width")],
         >>>     default_shape=["batch", "time", "mode", "height", "width", "feature"],
@@ -249,262 +240,347 @@ def transformer_encoder(
         >>> output = model(inputs)
         >>> assert output.shape == (2, 3, 5, 2, 2, 256)
     """
+    def __init__(self, axes,
+                 default_shape=["batch", "sequence", "feature"],
+                 feature_axis="feature",
+                 batch_axis="batch",
+                 embedding_size=128,
+                 n_layers=4,
+                 n_heads=8,
+                 dropout=0.0,
+                 attention_impl='exact',
+                 in_features=None):
+        super().__init__()
+        if in_features is None:
+            # Use lazy linear to allow data to specify the channel dims
+            first = nn.LazyLinear(embedding_size)
+        else:
+            first = nn.Linear(in_features=in_features, out_features=embedding_size)
 
-    if in_features is None:
-        # Use lazy linear to allow data to specify the channel dims
-        first = nn.LazyLinear(embedding_size)
-    else:
-        first = nn.Linear(in_features=in_features, out_features=embedding_size)
+        _layers = [
+            ChannelwiseTransformerEncoderLayer(
+                axes,
+                embedding_size=embedding_size,
+                n_heads=n_heads,
+                dropout=dropout,
+                default_shape=default_shape,
+                feature_axis=feature_axis,
+                batch_axis=batch_axis,
+                attention_impl=attention_impl,
+            )
+            for _ in range(n_layers)
+        ]
 
-    layers = [
-        first
-    ] + [
-        ChannelwiseTransformerEncoderLayer(
+        self.first = first
+        self.layers = nn.Sequential(*_layers)
+
+    def forward(self, x):
+        x = self.first(x)
+        x = self.layers(x)
+        return x
+
+
+# TODO: dont define tons of functions, use a configuration dictionary
+_smt_axes_basis = dict(
+    joint=[("time", "mode", "height", "width")],
+    stm=[("height", "width"), ("time",), ("mode",)],
+    sm=[("height", "width"), ("mode",)],
+    st=[("height", "width"), ("time",)],
+    tm=[("time",), ("mode",)],
+    s=[("height", "width")],
+    t=[("time",)],
+    hwtm=[("height",), ("width",), ("time",), ("mode",)],
+    m=[("mode",)],
+)
+
+_encoder_size_basis = {
+    'p8': dict(n_layers=8, embedding_size=128, n_heads=4),
+    'n12': dict(n_layers=12, embedding_size=128, n_heads=4),
+    't12': dict(n_layers=12, embedding_size=192, n_heads=4),
+    't24': dict(n_layers=24, embedding_size=192, n_heads=4),
+    's12': dict(n_layers=12, embedding_size=384, n_heads=8),
+    's24': dict(n_layers=24, embedding_size=384, n_heads=8),
+    'm24': dict(n_layers=24, embedding_size=512, n_heads=8),
+    'l24': dict(n_layers=24, embedding_size=768, n_heads=8),
+}
+
+
+# space-mode-time transformer params
+_smt_value = dict(
+    default_shape=["batch", "time", "mode", "height", "width", "feature"],
+    feature_axis="feature",
+    batch_axis="batch",
+)
+
+encoder_configs = {}
+for axes_code, axes_value in _smt_axes_basis.items():
+    for size_code, size_value in _encoder_size_basis.items():
+        code = f'smt_it_{axes_code}_{size_code}'
+        encoder_configs[code] = ub.dict_union(
+            size_value, _smt_value, dict(axes=axes_value))
+
+
+# space-mode transformer params
+_sm_value = dict(
+    default_shape=["batch", "mode", "height", "width", "feature"],
+    feature_axis="feature",
+    batch_axis="batch",
+)
+
+_sm_axes_basis = {
+    'joint': [("mode", "height", "width")],
+    'sm': [("height", "width"), ("mode",)],
+}
+
+for axes_code, axes_value in _sm_axes_basis.items():
+    for size_code, size_value in _encoder_size_basis.items():
+        code = f'sm_it_{axes_code}_{size_code}'
+        encoder_configs[code] = ub.dict_union(
+            size_value, _sm_value, dict(axes=axes_value))
+
+# print('encoder_configs = {}'.format(ub.repr2(encoder_configs, nl=1)))
+
+if 1:
+    # TODO: deprecate the following code
+    def transformer_encoder(*args, **kw):
+        """
+        Primary entry point to create a feature transformer
+        """
+        return FusionEncoder(*args, **kw)
+
+
+    def space_mode_time_transformer_encoder(axes, **kwargs):
+        return transformer_encoder(
             axes,
-            embedding_size=embedding_size,
-            n_heads=n_heads,
-            dropout=dropout,
-            default_shape=default_shape,
-            feature_axis=feature_axis,
-            batch_axis=batch_axis,
+            default_shape=["batch", "time", "mode", "height", "width", "feature"],
+            feature_axis="feature",
+            batch_axis="batch",
+            **kwargs,
         )
-        for _ in range(n_layers)
-    ]
-    return nn.Sequential(*layers)
 
 
-def space_mode_time_transformer_encoder(axes, **kwargs):
-    return transformer_encoder(
-        axes,
-        default_shape=["batch", "time", "mode", "height", "width", "feature"],
-        feature_axis="feature",
-        batch_axis="batch",
-        **kwargs,
-    )
+    def smt_it_joint(**kwargs):
+        return space_mode_time_transformer_encoder(
+            axes=[
+                ("time", "mode", "height", "width"),
+            ],
+            **kwargs,
+        )
 
 
-def smt_it_joint(**kwargs):
-    return space_mode_time_transformer_encoder(
-        axes=[
-            ("time", "mode", "height", "width"),
-        ],
-        **kwargs,
-    )
+    def smt_it_joint_p8(**kwargs): return smt_it_joint(n_layers=8, embedding_size=128, n_heads=4, **kwargs)
+    def smt_it_joint_n12(**kwargs): return smt_it_joint(n_layers=12, embedding_size=128, n_heads=4, **kwargs)
+    def smt_it_joint_t12(**kwargs): return smt_it_joint(n_layers=12, embedding_size=192, n_heads=4, **kwargs)
+    def smt_it_joint_t24(**kwargs): return smt_it_joint(n_layers=24, embedding_size=192, n_heads=4, **kwargs)
+    def smt_it_joint_s12(**kwargs): return smt_it_joint(n_layers=12, embedding_size=384, n_heads=8, **kwargs)
+    def smt_it_joint_s24(**kwargs): return smt_it_joint(n_layers=24, embedding_size=384, n_heads=8, **kwargs)
+    def smt_it_joint_m24(**kwargs): return smt_it_joint(n_layers=24, embedding_size=512, n_heads=8, **kwargs)
+    def smt_it_joint_l24(**kwargs): return smt_it_joint(n_layers=24, embedding_size=768, n_heads=8, **kwargs)
 
 
-def smt_it_joint_p8(**kwargs): return smt_it_joint(n_layers=8, embedding_size=128, n_heads=4, **kwargs)
-def smt_it_joint_n12(**kwargs): return smt_it_joint(n_layers=12, embedding_size=128, n_heads=4, **kwargs)
-def smt_it_joint_t12(**kwargs): return smt_it_joint(n_layers=12, embedding_size=192, n_heads=4, **kwargs)
-def smt_it_joint_t24(**kwargs): return smt_it_joint(n_layers=24, embedding_size=192, n_heads=4, **kwargs)
-def smt_it_joint_s12(**kwargs): return smt_it_joint(n_layers=12, embedding_size=384, n_heads=8, **kwargs)
-def smt_it_joint_s24(**kwargs): return smt_it_joint(n_layers=24, embedding_size=384, n_heads=8, **kwargs)
-def smt_it_joint_m24(**kwargs): return smt_it_joint(n_layers=24, embedding_size=512, n_heads=8, **kwargs)
-def smt_it_joint_l24(**kwargs): return smt_it_joint(n_layers=24, embedding_size=768, n_heads=8, **kwargs)
+    def smt_it_stm(**kwargs):
+        return space_mode_time_transformer_encoder(
+            axes=[
+                ("height", "width"),
+                ("time",),
+                ("mode",),
+            ],
+            **kwargs,
+        )
 
 
-def smt_it_stm(**kwargs):
-    return space_mode_time_transformer_encoder(
-        axes=[
-            ("height", "width"),
-            ("time",),
-            ("mode",),
-        ],
-        **kwargs,
-    )
+    def smt_it_stm_p8(**kwargs): return smt_it_stm(n_layers=8, embedding_size=128, n_heads=4, **kwargs)
+    def smt_it_stm_n12(**kwargs): return smt_it_stm(n_layers=12, embedding_size=128, n_heads=4, **kwargs)
+    def smt_it_stm_t12(**kwargs): return smt_it_stm(n_layers=12, embedding_size=192, n_heads=4, **kwargs)
+    def smt_it_stm_t24(**kwargs): return smt_it_stm(n_layers=24, embedding_size=192, n_heads=4, **kwargs)
+    def smt_it_stm_s12(**kwargs): return smt_it_stm(n_layers=12, embedding_size=384, n_heads=8, **kwargs)
+    def smt_it_stm_s24(**kwargs): return smt_it_stm(n_layers=24, embedding_size=384, n_heads=8, **kwargs)
+    def smt_it_stm_m24(**kwargs): return smt_it_stm(n_layers=24, embedding_size=512, n_heads=8, **kwargs)
+    def smt_it_stm_l24(**kwargs): return smt_it_stm(n_layers=24, embedding_size=768, n_heads=8, **kwargs)
 
 
-def smt_it_stm_p8(**kwargs): return smt_it_stm(n_layers=8, embedding_size=128, n_heads=4, **kwargs)
-def smt_it_stm_n12(**kwargs): return smt_it_stm(n_layers=12, embedding_size=128, n_heads=4, **kwargs)
-def smt_it_stm_t12(**kwargs): return smt_it_stm(n_layers=12, embedding_size=192, n_heads=4, **kwargs)
-def smt_it_stm_t24(**kwargs): return smt_it_stm(n_layers=24, embedding_size=192, n_heads=4, **kwargs)
-def smt_it_stm_s12(**kwargs): return smt_it_stm(n_layers=12, embedding_size=384, n_heads=8, **kwargs)
-def smt_it_stm_s24(**kwargs): return smt_it_stm(n_layers=24, embedding_size=384, n_heads=8, **kwargs)
-def smt_it_stm_m24(**kwargs): return smt_it_stm(n_layers=24, embedding_size=512, n_heads=8, **kwargs)
-def smt_it_stm_l24(**kwargs): return smt_it_stm(n_layers=24, embedding_size=768, n_heads=8, **kwargs)
+    def smt_it_sm(**kwargs):
+        return space_mode_time_transformer_encoder(
+            axes=[
+                ("height", "width"),
+                ("mode",),
+            ],
+            **kwargs,
+        )
 
 
-def smt_it_sm(**kwargs):
-    return space_mode_time_transformer_encoder(
-        axes=[
-            ("height", "width"),
-            ("mode",),
-        ],
-        **kwargs,
-    )
+    def smt_it_sm_p8(**kwargs): return smt_it_sm(n_layers=8, embedding_size=128, n_heads=4, **kwargs)
+    def smt_it_sm_n12(**kwargs): return smt_it_sm(n_layers=12, embedding_size=128, n_heads=4, **kwargs)
+    def smt_it_sm_t12(**kwargs): return smt_it_sm(n_layers=12, embedding_size=192, n_heads=4, **kwargs)
+    def smt_it_sm_t24(**kwargs): return smt_it_sm(n_layers=24, embedding_size=192, n_heads=4, **kwargs)
+    def smt_it_sm_s12(**kwargs): return smt_it_sm(n_layers=12, embedding_size=384, n_heads=8, **kwargs)
+    def smt_it_sm_s24(**kwargs): return smt_it_sm(n_layers=24, embedding_size=384, n_heads=8, **kwargs)
+    def smt_it_sm_m24(**kwargs): return smt_it_sm(n_layers=24, embedding_size=512, n_heads=8, **kwargs)
+    def smt_it_sm_l24(**kwargs): return smt_it_sm(n_layers=24, embedding_size=768, n_heads=8, **kwargs)
 
 
-def smt_it_sm_p8(**kwargs): return smt_it_sm(n_layers=8, embedding_size=128, n_heads=4, **kwargs)
-def smt_it_sm_n12(**kwargs): return smt_it_sm(n_layers=12, embedding_size=128, n_heads=4, **kwargs)
-def smt_it_sm_t12(**kwargs): return smt_it_sm(n_layers=12, embedding_size=192, n_heads=4, **kwargs)
-def smt_it_sm_t24(**kwargs): return smt_it_sm(n_layers=24, embedding_size=192, n_heads=4, **kwargs)
-def smt_it_sm_s12(**kwargs): return smt_it_sm(n_layers=12, embedding_size=384, n_heads=8, **kwargs)
-def smt_it_sm_s24(**kwargs): return smt_it_sm(n_layers=24, embedding_size=384, n_heads=8, **kwargs)
-def smt_it_sm_m24(**kwargs): return smt_it_sm(n_layers=24, embedding_size=512, n_heads=8, **kwargs)
-def smt_it_sm_l24(**kwargs): return smt_it_sm(n_layers=24, embedding_size=768, n_heads=8, **kwargs)
+    def smt_it_st(**kwargs):
+        return space_mode_time_transformer_encoder(
+            axes=[
+                ("height", "width"),
+                ("time",),
+            ],
+            **kwargs,
+        )
 
 
-def smt_it_st(**kwargs):
-    return space_mode_time_transformer_encoder(
-        axes=[
-            ("height", "width"),
-            ("time",),
-        ],
-        **kwargs,
-    )
+    def smt_it_st_p8(**kwargs): return smt_it_st(n_layers=8, embedding_size=128, n_heads=4, **kwargs)
+    def smt_it_st_n12(**kwargs): return smt_it_st(n_layers=12, embedding_size=128, n_heads=4, **kwargs)
+    def smt_it_st_t12(**kwargs): return smt_it_st(n_layers=12, embedding_size=192, n_heads=4, **kwargs)
+    def smt_it_st_t24(**kwargs): return smt_it_st(n_layers=24, embedding_size=192, n_heads=4, **kwargs)
+    def smt_it_st_s12(**kwargs): return smt_it_st(n_layers=12, embedding_size=384, n_heads=8, **kwargs)
+    def smt_it_st_s24(**kwargs): return smt_it_st(n_layers=24, embedding_size=384, n_heads=8, **kwargs)
+    def smt_it_st_m24(**kwargs): return smt_it_st(n_layers=24, embedding_size=512, n_heads=8, **kwargs)
+    def smt_it_st_l24(**kwargs): return smt_it_st(n_layers=24, embedding_size=768, n_heads=8, **kwargs)
 
 
-def smt_it_st_p8(**kwargs): return smt_it_st(n_layers=8, embedding_size=128, n_heads=4, **kwargs)
-def smt_it_st_n12(**kwargs): return smt_it_st(n_layers=12, embedding_size=128, n_heads=4, **kwargs)
-def smt_it_st_t12(**kwargs): return smt_it_st(n_layers=12, embedding_size=192, n_heads=4, **kwargs)
-def smt_it_st_t24(**kwargs): return smt_it_st(n_layers=24, embedding_size=192, n_heads=4, **kwargs)
-def smt_it_st_s12(**kwargs): return smt_it_st(n_layers=12, embedding_size=384, n_heads=8, **kwargs)
-def smt_it_st_s24(**kwargs): return smt_it_st(n_layers=24, embedding_size=384, n_heads=8, **kwargs)
-def smt_it_st_m24(**kwargs): return smt_it_st(n_layers=24, embedding_size=512, n_heads=8, **kwargs)
-def smt_it_st_l24(**kwargs): return smt_it_st(n_layers=24, embedding_size=768, n_heads=8, **kwargs)
+    def smt_it_tm(**kwargs):
+        return space_mode_time_transformer_encoder(
+            axes=[
+                ("time",),
+                ("mode",),
+            ],
+            **kwargs,
+        )
 
 
-def smt_it_tm(**kwargs):
-    return space_mode_time_transformer_encoder(
-        axes=[
-            ("time",),
-            ("mode",),
-        ],
-        **kwargs,
-    )
+    def smt_it_tm_p8(**kwargs): return smt_it_tm(n_layers=8, embedding_size=128, n_heads=4, **kwargs)
+    def smt_it_tm_n12(**kwargs): return smt_it_tm(n_layers=12, embedding_size=128, n_heads=4, **kwargs)
+    def smt_it_tm_t12(**kwargs): return smt_it_tm(n_layers=12, embedding_size=192, n_heads=4, **kwargs)
+    def smt_it_tm_t24(**kwargs): return smt_it_tm(n_layers=24, embedding_size=192, n_heads=4, **kwargs)
+    def smt_it_tm_s12(**kwargs): return smt_it_tm(n_layers=12, embedding_size=384, n_heads=8, **kwargs)
+    def smt_it_tm_s24(**kwargs): return smt_it_tm(n_layers=24, embedding_size=384, n_heads=8, **kwargs)
+    def smt_it_tm_m24(**kwargs): return smt_it_tm(n_layers=24, embedding_size=512, n_heads=8, **kwargs)
+    def smt_it_tm_l24(**kwargs): return smt_it_tm(n_layers=24, embedding_size=768, n_heads=8, **kwargs)
 
 
-def smt_it_tm_p8(**kwargs): return smt_it_tm(n_layers=8, embedding_size=128, n_heads=4, **kwargs)
-def smt_it_tm_n12(**kwargs): return smt_it_tm(n_layers=12, embedding_size=128, n_heads=4, **kwargs)
-def smt_it_tm_t12(**kwargs): return smt_it_tm(n_layers=12, embedding_size=192, n_heads=4, **kwargs)
-def smt_it_tm_t24(**kwargs): return smt_it_tm(n_layers=24, embedding_size=192, n_heads=4, **kwargs)
-def smt_it_tm_s12(**kwargs): return smt_it_tm(n_layers=12, embedding_size=384, n_heads=8, **kwargs)
-def smt_it_tm_s24(**kwargs): return smt_it_tm(n_layers=24, embedding_size=384, n_heads=8, **kwargs)
-def smt_it_tm_m24(**kwargs): return smt_it_tm(n_layers=24, embedding_size=512, n_heads=8, **kwargs)
-def smt_it_tm_l24(**kwargs): return smt_it_tm(n_layers=24, embedding_size=768, n_heads=8, **kwargs)
+    def smt_it_s(**kwargs):
+        return space_mode_time_transformer_encoder(
+            axes=[
+                ("height", "width"),
+            ],
+            **kwargs,
+        )
 
 
-def smt_it_s(**kwargs):
-    return space_mode_time_transformer_encoder(
-        axes=[
-            ("height", "width"),
-        ],
-        **kwargs,
-    )
+    def smt_it_s_p8(**kwargs): return smt_it_s(n_layers=8, embedding_size=128, n_heads=4, **kwargs)
+    def smt_it_s_n12(**kwargs): return smt_it_s(n_layers=12, embedding_size=128, n_heads=4, **kwargs)
+    def smt_it_s_t12(**kwargs): return smt_it_s(n_layers=12, embedding_size=192, n_heads=4, **kwargs)
+    def smt_it_s_t24(**kwargs): return smt_it_s(n_layers=24, embedding_size=192, n_heads=4, **kwargs)
+    def smt_it_s_s12(**kwargs): return smt_it_s(n_layers=12, embedding_size=384, n_heads=8, **kwargs)
+    def smt_it_s_s24(**kwargs): return smt_it_s(n_layers=24, embedding_size=384, n_heads=8, **kwargs)
+    def smt_it_s_m24(**kwargs): return smt_it_s(n_layers=24, embedding_size=512, n_heads=8, **kwargs)
+    def smt_it_s_l24(**kwargs): return smt_it_s(n_layers=24, embedding_size=768, n_heads=8, **kwargs)
 
 
-def smt_it_s_p8(**kwargs): return smt_it_s(n_layers=8, embedding_size=128, n_heads=4, **kwargs)
-def smt_it_s_n12(**kwargs): return smt_it_s(n_layers=12, embedding_size=128, n_heads=4, **kwargs)
-def smt_it_s_t12(**kwargs): return smt_it_s(n_layers=12, embedding_size=192, n_heads=4, **kwargs)
-def smt_it_s_t24(**kwargs): return smt_it_s(n_layers=24, embedding_size=192, n_heads=4, **kwargs)
-def smt_it_s_s12(**kwargs): return smt_it_s(n_layers=12, embedding_size=384, n_heads=8, **kwargs)
-def smt_it_s_s24(**kwargs): return smt_it_s(n_layers=24, embedding_size=384, n_heads=8, **kwargs)
-def smt_it_s_m24(**kwargs): return smt_it_s(n_layers=24, embedding_size=512, n_heads=8, **kwargs)
-def smt_it_s_l24(**kwargs): return smt_it_s(n_layers=24, embedding_size=768, n_heads=8, **kwargs)
+    def smt_it_t(**kwargs):
+        return space_mode_time_transformer_encoder(
+            axes=[
+                ("time",),
+            ],
+            **kwargs,
+        )
 
 
-def smt_it_t(**kwargs):
-    return space_mode_time_transformer_encoder(
-        axes=[
-            ("time",),
-        ],
-        **kwargs,
-    )
+    def smt_it_t_p8(**kwargs): return smt_it_t(n_layers=8, embedding_size=128, n_heads=4, **kwargs)
+    def smt_it_t_n12(**kwargs): return smt_it_t(n_layers=12, embedding_size=128, n_heads=4, **kwargs)
+    def smt_it_t_t12(**kwargs): return smt_it_t(n_layers=12, embedding_size=192, n_heads=4, **kwargs)
+    def smt_it_t_t24(**kwargs): return smt_it_t(n_layers=24, embedding_size=192, n_heads=4, **kwargs)
+    def smt_it_t_s12(**kwargs): return smt_it_t(n_layers=12, embedding_size=384, n_heads=8, **kwargs)
+    def smt_it_t_s24(**kwargs): return smt_it_t(n_layers=24, embedding_size=384, n_heads=8, **kwargs)
+    def smt_it_t_m24(**kwargs): return smt_it_t(n_layers=24, embedding_size=512, n_heads=8, **kwargs)
+    def smt_it_t_l24(**kwargs): return smt_it_t(n_layers=24, embedding_size=768, n_heads=8, **kwargs)
 
 
-def smt_it_t_p8(**kwargs): return smt_it_t(n_layers=8, embedding_size=128, n_heads=4, **kwargs)
-def smt_it_t_n12(**kwargs): return smt_it_t(n_layers=12, embedding_size=128, n_heads=4, **kwargs)
-def smt_it_t_t12(**kwargs): return smt_it_t(n_layers=12, embedding_size=192, n_heads=4, **kwargs)
-def smt_it_t_t24(**kwargs): return smt_it_t(n_layers=24, embedding_size=192, n_heads=4, **kwargs)
-def smt_it_t_s12(**kwargs): return smt_it_t(n_layers=12, embedding_size=384, n_heads=8, **kwargs)
-def smt_it_t_s24(**kwargs): return smt_it_t(n_layers=24, embedding_size=384, n_heads=8, **kwargs)
-def smt_it_t_m24(**kwargs): return smt_it_t(n_layers=24, embedding_size=512, n_heads=8, **kwargs)
-def smt_it_t_l24(**kwargs): return smt_it_t(n_layers=24, embedding_size=768, n_heads=8, **kwargs)
+    def smt_it_m(**kwargs):
+        return space_mode_time_transformer_encoder(
+            axes=[
+                ("mode",),
+            ],
+            **kwargs,
+        )
 
 
-def smt_it_m(**kwargs):
-    return space_mode_time_transformer_encoder(
-        axes=[
-            ("mode",),
-        ],
-        **kwargs,
-    )
+    def smt_it_m_p8(**kwargs): return smt_it_m(n_layers=8, embedding_size=128, n_heads=4, **kwargs)
+    def smt_it_m_n12(**kwargs): return smt_it_m(n_layers=12, embedding_size=128, n_heads=4, **kwargs)
+    def smt_it_m_t12(**kwargs): return smt_it_m(n_layers=12, embedding_size=192, n_heads=4, **kwargs)
+    def smt_it_m_t24(**kwargs): return smt_it_m(n_layers=24, embedding_size=192, n_heads=4, **kwargs)
+    def smt_it_m_s12(**kwargs): return smt_it_m(n_layers=12, embedding_size=384, n_heads=8, **kwargs)
+    def smt_it_m_s24(**kwargs): return smt_it_m(n_layers=24, embedding_size=384, n_heads=8, **kwargs)
+    def smt_it_m_m24(**kwargs): return smt_it_m(n_layers=24, embedding_size=512, n_heads=8, **kwargs)
+    def smt_it_m_l24(**kwargs): return smt_it_m(n_layers=24, embedding_size=768, n_heads=8, **kwargs)
 
 
-def smt_it_m_p8(**kwargs): return smt_it_m(n_layers=8, embedding_size=128, n_heads=4, **kwargs)
-def smt_it_m_n12(**kwargs): return smt_it_m(n_layers=12, embedding_size=128, n_heads=4, **kwargs)
-def smt_it_m_t12(**kwargs): return smt_it_m(n_layers=12, embedding_size=192, n_heads=4, **kwargs)
-def smt_it_m_t24(**kwargs): return smt_it_m(n_layers=24, embedding_size=192, n_heads=4, **kwargs)
-def smt_it_m_s12(**kwargs): return smt_it_m(n_layers=12, embedding_size=384, n_heads=8, **kwargs)
-def smt_it_m_s24(**kwargs): return smt_it_m(n_layers=24, embedding_size=384, n_heads=8, **kwargs)
-def smt_it_m_m24(**kwargs): return smt_it_m(n_layers=24, embedding_size=512, n_heads=8, **kwargs)
-def smt_it_m_l24(**kwargs): return smt_it_m(n_layers=24, embedding_size=768, n_heads=8, **kwargs)
+    def smt_it_hwtm(**kwargs):
+        return space_mode_time_transformer_encoder(
+            axes=[
+                ("height",),
+                ("width",),
+                ("time",),
+                ("mode",),
+            ],
+            **kwargs,
+        )
 
 
-def smt_it_hwtm(**kwargs):
-    return space_mode_time_transformer_encoder(
-        axes=[
-            ("height",),
-            ("width",),
-            ("time",),
-            ("mode",),
-        ],
-        **kwargs,
-    )
-
-
-def smt_it_hwtm_p8(**kwargs): return smt_it_hwtm(n_layers=8, embedding_size=128, n_heads=4, **kwargs)
-def smt_it_hwtm_n12(**kwargs): return smt_it_hwtm(n_layers=12, embedding_size=128, n_heads=4, **kwargs)
-def smt_it_hwtm_t12(**kwargs): return smt_it_hwtm(n_layers=12, embedding_size=192, n_heads=4, **kwargs)
-def smt_it_hwtm_t24(**kwargs): return smt_it_hwtm(n_layers=24, embedding_size=192, n_heads=4, **kwargs)
-def smt_it_hwtm_s12(**kwargs): return smt_it_hwtm(n_layers=12, embedding_size=384, n_heads=8, **kwargs)
-def smt_it_hwtm_s24(**kwargs): return smt_it_hwtm(n_layers=24, embedding_size=384, n_heads=8, **kwargs)
-def smt_it_hwtm_m24(**kwargs): return smt_it_hwtm(n_layers=24, embedding_size=512, n_heads=8, **kwargs)
-def smt_it_hwtm_l24(**kwargs): return smt_it_hwtm(n_layers=24, embedding_size=768, n_heads=8, **kwargs)
+    def smt_it_hwtm_p8(**kwargs): return smt_it_hwtm(n_layers=8, embedding_size=128, n_heads=4, **kwargs)
+    def smt_it_hwtm_n12(**kwargs): return smt_it_hwtm(n_layers=12, embedding_size=128, n_heads=4, **kwargs)
+    def smt_it_hwtm_t12(**kwargs): return smt_it_hwtm(n_layers=12, embedding_size=192, n_heads=4, **kwargs)
+    def smt_it_hwtm_t24(**kwargs): return smt_it_hwtm(n_layers=24, embedding_size=192, n_heads=4, **kwargs)
+    def smt_it_hwtm_s12(**kwargs): return smt_it_hwtm(n_layers=12, embedding_size=384, n_heads=8, **kwargs)
+    def smt_it_hwtm_s24(**kwargs): return smt_it_hwtm(n_layers=24, embedding_size=384, n_heads=8, **kwargs)
+    def smt_it_hwtm_m24(**kwargs): return smt_it_hwtm(n_layers=24, embedding_size=512, n_heads=8, **kwargs)
+    def smt_it_hwtm_l24(**kwargs): return smt_it_hwtm(n_layers=24, embedding_size=768, n_heads=8, **kwargs)
 
 
 
-def space_mode_transformer_encoder(axes, **kwargs):
-    return transformer_encoder(
-        axes,
-        default_shape=["batch", "mode", "height", "width", "feature"],
-        feature_axis="feature",
-        batch_axis="batch",
-        **kwargs,
-    )
+    def space_mode_transformer_encoder(axes, **kwargs):
+        return transformer_encoder(
+            axes,
+            default_shape=["batch", "mode", "height", "width", "feature"],
+            feature_axis="feature",
+            batch_axis="batch",
+            **kwargs,
+        )
 
-def sm_it_joint(**kwargs):
-    return space_mode_transformer_encoder(
-        axes=[
-            ("mode", "height", "width"),
-        ],
-        **kwargs,
-    )
-
-
-def sm_it_joint_p8(**kwargs): return sm_it_joint(n_layers=8, embedding_size=128, n_heads=4, **kwargs)
-def sm_it_joint_n12(**kwargs): return sm_it_joint(n_layers=12, embedding_size=128, n_heads=4, **kwargs)
-def sm_it_joint_t12(**kwargs): return sm_it_joint(n_layers=12, embedding_size=192, n_heads=4, **kwargs)
-def sm_it_joint_t24(**kwargs): return sm_it_joint(n_layers=24, embedding_size=192, n_heads=4, **kwargs)
-def sm_it_joint_s12(**kwargs): return sm_it_joint(n_layers=12, embedding_size=384, n_heads=8, **kwargs)
-def sm_it_joint_s24(**kwargs): return sm_it_joint(n_layers=24, embedding_size=384, n_heads=8, **kwargs)
-def sm_it_joint_m24(**kwargs): return sm_it_joint(n_layers=24, embedding_size=512, n_heads=8, **kwargs)
-def sm_it_joint_l24(**kwargs): return sm_it_joint(n_layers=24, embedding_size=768, n_heads=8, **kwargs)
-
-def sm_it_sm(**kwargs):
-    return space_mode_transformer_encoder(
-        axes=[
-            ("height", "width"),
-            ("mode",),
-        ],
-        **kwargs,
-    )
+    def sm_it_joint(**kwargs):
+        return space_mode_transformer_encoder(
+            axes=[
+                ("mode", "height", "width"),
+            ],
+            **kwargs,
+        )
 
 
-def sm_it_sm_p8(**kwargs): return sm_it_sm(n_layers=8, embedding_size=128, n_heads=4, **kwargs)
-def sm_it_sm_n12(**kwargs): return sm_it_sm(n_layers=12, embedding_size=128, n_heads=4, **kwargs)
-def sm_it_sm_t12(**kwargs): return sm_it_sm(n_layers=12, embedding_size=192, n_heads=4, **kwargs)
-def sm_it_sm_t24(**kwargs): return sm_it_sm(n_layers=24, embedding_size=192, n_heads=4, **kwargs)
-def sm_it_sm_s12(**kwargs): return sm_it_sm(n_layers=12, embedding_size=384, n_heads=8, **kwargs)
-def sm_it_sm_s24(**kwargs): return sm_it_sm(n_layers=24, embedding_size=384, n_heads=8, **kwargs)
-def sm_it_sm_m24(**kwargs): return sm_it_sm(n_layers=24, embedding_size=512, n_heads=8, **kwargs)
-def sm_it_sm_l24(**kwargs): return sm_it_sm(n_layers=24, embedding_size=768, n_heads=8, **kwargs)
+    def sm_it_joint_p8(**kwargs): return sm_it_joint(n_layers=8, embedding_size=128, n_heads=4, **kwargs)
+    def sm_it_joint_n12(**kwargs): return sm_it_joint(n_layers=12, embedding_size=128, n_heads=4, **kwargs)
+    def sm_it_joint_t12(**kwargs): return sm_it_joint(n_layers=12, embedding_size=192, n_heads=4, **kwargs)
+    def sm_it_joint_t24(**kwargs): return sm_it_joint(n_layers=24, embedding_size=192, n_heads=4, **kwargs)
+    def sm_it_joint_s12(**kwargs): return sm_it_joint(n_layers=12, embedding_size=384, n_heads=8, **kwargs)
+    def sm_it_joint_s24(**kwargs): return sm_it_joint(n_layers=24, embedding_size=384, n_heads=8, **kwargs)
+    def sm_it_joint_m24(**kwargs): return sm_it_joint(n_layers=24, embedding_size=512, n_heads=8, **kwargs)
+    def sm_it_joint_l24(**kwargs): return sm_it_joint(n_layers=24, embedding_size=768, n_heads=8, **kwargs)
+
+    def sm_it_sm(**kwargs):
+        return space_mode_transformer_encoder(
+            axes=[
+                ("height", "width"),
+                ("mode",),
+            ],
+            **kwargs,
+        )
+
+
+    def sm_it_sm_p8(**kwargs): return sm_it_sm(n_layers=8, embedding_size=128, n_heads=4, **kwargs)
+    def sm_it_sm_n12(**kwargs): return sm_it_sm(n_layers=12, embedding_size=128, n_heads=4, **kwargs)
+    def sm_it_sm_t12(**kwargs): return sm_it_sm(n_layers=12, embedding_size=192, n_heads=4, **kwargs)
+    def sm_it_sm_t24(**kwargs): return sm_it_sm(n_layers=24, embedding_size=192, n_heads=4, **kwargs)
+    def sm_it_sm_s12(**kwargs): return sm_it_sm(n_layers=12, embedding_size=384, n_heads=8, **kwargs)
+    def sm_it_sm_s24(**kwargs): return sm_it_sm(n_layers=24, embedding_size=384, n_heads=8, **kwargs)
+    def sm_it_sm_m24(**kwargs): return sm_it_sm(n_layers=24, embedding_size=512, n_heads=8, **kwargs)
+    def sm_it_sm_l24(**kwargs): return sm_it_sm(n_layers=24, embedding_size=768, n_heads=8, **kwargs)

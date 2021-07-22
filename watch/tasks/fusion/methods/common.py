@@ -30,6 +30,23 @@ class ChangeDetectorBase(pl.LightningModule):
         raise NotImplementedError
 
     def training_step(self, batch, batch_idx=None):
+        """
+        Example:
+            >>> from watch.tasks.fusion.methods.common import *  # NOQA
+            >>> from watch.tasks.fusion import methods
+            >>> from watch.tasks.fusion import datasets
+            >>> datamodule = datasets.WatchDataModule(
+            >>>     train_dataset='special:vidshapes8',
+            >>>     num_workers=0,
+            >>> )
+            >>> datamodule.setup('fit')
+            >>> loader = datamodule.train_dataloader()
+            >>> batch = next(iter(loader))
+
+            >>> # Choose subclass to test this with (does not cover all cases)
+            >>> self = methods.MultimodalTransformerDotProdCD(model_name='smt_it_joint_p8')
+            >>> self.training_step(batch)
+        """
         images, labels = batch["images"].float(), batch["labels"]
         changes = labels[:, 1:] != labels[:, :-1]
 
@@ -48,7 +65,12 @@ class ChangeDetectorBase(pl.LightningModule):
 
         # compute criterion
         loss = self.criterion(distances, changes.float())
-        return loss
+
+        outputs = {
+            'loss': loss,
+            'distances': distances,
+        }
+        return outputs
 
     def validation_step(self, batch, batch_idx=None):
         images, labels = batch["images"].float(), batch["labels"]
@@ -135,9 +157,6 @@ class SemanticSegmentationBase(pl.LightningModule):
         images, labels = batch["images"], batch["labels"]
         if isinstance(labels, np.ndarray):
             labels = torch.from_numpy(labels)
-
-        import xdev
-        xdev.embed()
 
         # compute predicted and target change masks
         logits = self(images)

@@ -33,10 +33,10 @@ Example:
     >>> kwargs = {
     ...     'train_dataset': coco_fpath,
     ...     'dataset': 'WatchDataModule',
+    ...     'method': 'MultimodalTransformerDirectCD',
     ...     'model_name': 'smt_it_stm_t12',
     ... }
-    >>> args = make_fit_config(args=None, cmdline=cmdline, **kwargs)
-    >>> print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
+    >>> #modules = make_lightning_modules(args=None, cmdline=cmdline, **kwargs)
     >>> fit_model(**kwargs)
 """
 
@@ -44,6 +44,7 @@ import pytorch_lightning as pl
 
 from watch.tasks.fusion import datasets
 from watch.tasks.fusion import methods
+from watch.tasks.fusion import models
 from watch.tasks.fusion import utils
 
 # import scriptconfig as scfg
@@ -63,14 +64,16 @@ available_methods = [
     'VotingModel',
 ]
 
-available_models = [
-    "smt_it_joint_p8",
-    "smt_it_stm_p8",
-    "smt_it_hwtm_p8",
-    "smt_it_stm_t12",
-]
+available_models = list(models.transformer.encoder_configs.keys())
+# [
+#     "smt_it_joint_p8",
+#     "smt_it_stm_p8",
+#     "smt_it_hwtm_p8",
+#     "smt_it_stm_t12",
+# ]
 
 # dir(datasets)
+# TODO: rename to datamodules
 available_datasets = [
     'Drop0AlignMSI_S2',
     'Drop0Raw_S2',
@@ -110,8 +113,28 @@ class FusionCallbacks(pl.callbacks.Callback):
         # import watch
         # impl = kwarray.ArrayAPI.coerce('torch')
         # images = impl.numpy(batch['images'])
-        import xdev
-        xdev.embed()
+        stage = 'train'
+        if batch_idx < 100:
+            trainer.state.stage
+            import numpy as np
+
+            datamodule = trainer.datamodule
+            # dataset = datamodule.torch_datasets[stage]
+            canvas = datamodule.draw_batch(batch)
+            canvas = np.nan_to_num(canvas)
+
+            dpath = ub.ensuredir((trainer.log_dir, 'monitor', stage))
+
+            from os.path import join
+            fpath = join(dpath, f'_viz_{trainer.current_epoch}_{batch_idx}.jpg')
+            import kwimage
+            kwimage.imwrite(fpath, canvas)
+
+            # batch['images'].shape
+            # outputs['distances'].shape
+
+            # import xdev
+            # xdev.embed()
 
     def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
         pass
@@ -291,10 +314,19 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         ... }
         >>> modules = make_lightning_modules(args=None, cmdline=cmdline, **kwargs)
     """
+    args = make_fit_config(args=args, cmdline=cmdline, **kwargs)
     print("{train_name}\n====================".format(**args.__dict__))
 
     method_class = getattr(methods, args.method)
     dataset_class = getattr(datasets, args.dataset)
+
+    # init dataset from args
+    # TODO: compute and cache mean / std if it is not provided. Pass this to
+    # the model so it can whiten the inputs.
+    dataset_var_dict = utils.filter_args(args.__dict__, dataset_class.__init__)
+    # dataset_var_dict["preprocessing_step"] = model.preprocessing_step
+    datamodule = dataset_class(**dataset_var_dict)
+    datamodule.setup("fit")
 
     # init method from args
     method_var_dict = args.__dict__
@@ -307,13 +339,6 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     method_var_dict = utils.filter_args(method_var_dict, method_class.__init__)
     # Note: Changed name from method to model
     model = method_class(**method_var_dict)
-
-    # init dataset from args
-
-    dataset_var_dict = utils.filter_args(args.__dict__, dataset_class.__init__)
-    # dataset_var_dict["preprocessing_step"] = model.preprocessing_step
-    datamodule = dataset_class(**dataset_var_dict)
-    datamodule.setup("fit")
 
     # init trainer from args
     trainer = pl.Trainer.from_argparse_args(args, callbacks=[
