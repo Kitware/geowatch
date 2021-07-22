@@ -7,6 +7,7 @@ import torch
 import einops
 from kwcoco import channel_spec
 import itertools as it
+import ubelt as ub
 
 
 class AddPositionalEncoding(nn.Module):
@@ -42,7 +43,6 @@ def coco_channel_profiles(coco_dset, max_checks=float('inf')):
         >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
         >>> candidates = coco_channel_profiles(coco_dset)
     """
-    import ubelt as ub
     candidates = ub.oset()
     for check_idx, img in enumerate(coco_dset.index.imgs.values()):
 
@@ -220,6 +220,107 @@ class VideoDataset(data.Dataset):
         }
 
         return example
+
+    def cached_input_stats(self):
+        """
+        Compute the normalization stats, and caches them
+
+        TODO:
+            - [ ] Does this dataset have access to the workdir?
+            - [ ] Cacher needs to depend on config of this dataset
+        """
+        # Get stats on the dataset (todo: nice way to disable augmentation temporarilly for this)
+        depends = ub.odict([
+            ('hashid', self.sampler.dset._build_hashid()),
+            ('channels', self.channels.__json__()),
+            ('sample_shape', self.sample_shape),
+        ])
+        workdir = None
+        cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends + 'v8')
+        input_stats = cacher.tryload()
+        if input_stats is None:
+            cacher.save(input_stats)
+
+    def compute_input_stats(self, num=None, num_workers=0, batch_size=2):
+        """
+        Args:
+            num (int | None): number of input items to compute stats for
+
+        Example:
+            >>> from watch.tasks.fusion.datasets.common import *  # NOQA
+            >>> import ndsampler
+            >>> import kwcoco
+            >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
+            >>> coco_dset.ensure_category('background')
+            >>> sampler = ndsampler.CocoSampler(coco_dset)
+            >>> sample_shape = (2, 128, 128)
+            >>> self = VideoDataset(sampler, sample_shape=sample_shape, channels=None)
+
+        Example:
+            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+            >>> # Run the following tests on real watch data if DVC is available
+            >>> from watch.tasks.fusion.datasets.common import *  # NOQA
+            >>> import os
+            >>> from os.path import join
+            >>> import ndsampler
+            >>> import kwcoco
+            >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
+            >>> dvc_dpath = os.environ.get('DVC_DPATH', _default)
+            >>> coco_fpath = join(dvc_dpath, 'drop1_S2_aligned_c1/data.kwcoco.json')
+            >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+            >>> sampler = ndsampler.CocoSampler(coco_dset)
+            >>> sample_shape = (2, 128, 128)
+            >>> self = VideoDataset(sampler, sample_shape=sample_shape, channels=None)
+            >>> self.compute_input_stats()
+        """
+        # Use parallel workers to load data faster
+        # from netharn.data.data_containers import container_collate
+        # from functools import partial
+        # collate_fn = partial(container_collate, num_devices=1)
+
+        num = None
+        num = num if isinstance(num, int) and num is not True else 1000
+        stats_idxs = kwarray.shuffle(np.arange(len(self)), rng=0)[0:min(num, len(self))]
+        stats_subset = torch.utils.data.Subset(self, stats_idxs)
+
+        # TODO: disable augmentation if we are doing that
+
+        loader = torch.utils.data.DataLoader(
+            stats_subset,
+            # collate_fn=collate_fn,
+            num_workers=num_workers, shuffle=True, batch_size=batch_size)
+
+        # Track moving average of each fused channel stream
+        channel_stats = {key: kwarray.RunningStats()
+                         for key in self.channels.keys()}
+
+        for batch in ub.ProgIter(loader, desc='estimate mean/std'):
+            # Current single image case:
+            assert len(channel_stats) == 1, 'update me in the future'
+            key = ub.peek(channel_stats.keys())
+            part = batch['images'].numpy()
+            channel_stats[key].update(part)
+
+            # Future multimodal case:
+            # if 0:
+            #     for key, val in batch['inputs'].items():
+            #         try:
+            #             for batch_part in val.data:
+            #                 for part in batch_part.numpy():
+            #                     channel_stats[key].update(part)
+            #         except ValueError:  # final batch broadcast error
+            #             pass
+
+        input_stats = {}
+        for key, running in channel_stats.items():
+            perchan_stats = running.summarize(axis=(0, 1, 3, 4))
+            input_stats[key] = {
+                'std': perchan_stats['mean'].round(3),
+                'mean': perchan_stats['std'].round(3),
+            }
+
+        return input_stats
+        # _dset.disable_augmenter = False  # hack
 
     def draw_item(self, item):
         import watch
