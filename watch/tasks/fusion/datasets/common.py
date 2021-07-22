@@ -101,8 +101,16 @@ class VideoDataset(data.Dataset):
         >>> kwplot.show_if_requested()
     """
     # TODO: add torchvision.transforms or albumentations
-    def __init__(self, sampler, sample_shape, channels=None, mode="fit",
-                 window_overlap=0, transform=None, occlusion_class_id=1):
+    def __init__(
+        self,
+        sampler,
+        sample_shape,
+        channels=None,
+        mode="fit",
+        window_overlap=0,
+        transform=None,
+        occlusion_class_id=1,
+    ):
 
         if channels is None:
             # Hack to use all channels in the first image.
