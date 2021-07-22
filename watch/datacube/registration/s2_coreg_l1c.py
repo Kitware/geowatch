@@ -319,7 +319,7 @@ def s2_coregister(granuledirs, output_folder, baseline_scene):
                 # now transforming files
                 # TODO: this is easy to parallize
                 for b in S2_BANDS:  #['B01', 'B04', 'B11']:
-                    fname_band = x.replace(base_band, b)
+                    fname_band = os.path.basename(x.replace(base_band, b))
                     pfname_band = os.path.join(path_data, fname_band)
 
                     # First, checking spatial resolution based on the band
