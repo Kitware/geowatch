@@ -240,12 +240,17 @@ class Trainer(object):
             
             output1, features1 = self.model(image1)  ## [B,22,150,150]
             output2, features2 = self.model(image2)
-            # negative_output1, negative_features1 = self.model(negative_image1)
+            negative_output1, negative_features1 = self.model(negative_image1)
             # negative_output2, negative_features2 = self.model(negative_image2)
 
             # features1_flat = torch.flatten(features1, start_dim=2, end_dim=3)
+            # print(features1.shape)
+            cropped_features1 = torch.stack([transforms.functional.crop(output1, *params) for params in params_list],dim=1)
+            cropped_features2 = torch.stack([transforms.functional.crop(output2, *params) for params in params_list],dim=1)
+            cropped_negative_features1 = torch.stack([transforms.functional.crop(negative_output1, *params) for params in params_list],dim=1)
             
-            # cropped_bs, cropped_ps, cropped_c, cropped_h, cropped_w = cropped_features1.shape
+            # print(cropped_features1.shape)
+            cropped_bs, cropped_ps, cropped_c, cropped_h, cropped_w = cropped_features1.shape
             
             cropped_features1 = cropped_features1.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w) #[bs*ps, c*h*w]
             cropped_features2 = cropped_features2.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w)
