@@ -8,6 +8,13 @@ from torchvision import transforms
 from watch.tasks.fusion.methods.common import ChangeDetectorBase, SemanticSegmentationBase
 from watch.tasks.fusion.models import transformer
 from watch.tasks.fusion import utils
+import ubelt as ub
+
+try:
+    import xdev
+    profile = xdev.profile
+except Exception:
+    profile = ub.identity
 
 
 class MultimodalTransformerDotProdCD(ChangeDetectorBase):
@@ -21,10 +28,8 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
         >>> loader = datamodule.train_dataloader()
         >>> batch = next(iter(loader))
         >>> self = MultimodalTransformerDotProdCD(model_name='smt_it_joint_p8')
-        >>> images = batch['images'].float()
+        >>> images = batch[0]['modes']['r|g|b'][None, :].float()
         >>> distance = self(images)
-
-        # nh.util.number_of_parameters(self)
     """
 
     def __init__(self,
@@ -32,51 +37,43 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
                  dropout=0.0,
                  learning_rate=1e-3,
                  weight_decay=0.,
+                 input_stats=None,
                  pos_weight=1.,
                  window_size=8):
         super().__init__(
             learning_rate=learning_rate,
             weight_decay=weight_decay,
+            input_stats=input_stats,
             pos_weight=pos_weight,
         )
         self.save_hyperparameters()
+
         encoder_config = transformer.encoder_configs[model_name]
+
+        # TODO: pre-compute what the "token" feature dimension is.
         encoder = transformer.FusionEncoder(**encoder_config, dropout=dropout)
         self.encoder = encoder
 
-    @property
-    def preprocessing_step(self):
-        # DEPRECATE
-        preproc_tfms = transforms.Compose([
-            Rearrange("t c (h hs) (w ws) -> t c h w (ws hs)",
-                      hs=self.hparams.window_size,
-                      ws=self.hparams.window_size),
-            utils.SinePositionalEncoding(4, 0, sine_pairs=4),
-            utils.SinePositionalEncoding(4, 1, sine_pairs=4),
-            utils.SinePositionalEncoding(4, 2, sine_pairs=4),
-            utils.SinePositionalEncoding(4, 3, sine_pairs=4),
+        self.rearange = Rearrange("b t c (h hs) (w ws) -> b t c h w (ws hs)",
+                                  hs=self.hparams.window_size,
+                                  ws=self.hparams.window_size)
+        encode_t = utils.SinePositionalEncoding(5, 1, sine_pairs=4)
+        encode_m = utils.SinePositionalEncoding(5, 2, sine_pairs=4)
+        encode_h = utils.SinePositionalEncoding(5, 3, sine_pairs=4)
+        encode_w = utils.SinePositionalEncoding(5, 4, sine_pairs=4)
+        self.add_encoding = transforms.Compose([
+            encode_t, encode_m, encode_h, encode_w,
         ])
-        return preproc_tfms
 
-    def batch_preprocessing_step(self, images):
-        """
-        Add positional encoding to the batch
-        """
-        batch_preproc_tfms = transforms.Compose([
-            Rearrange("b t c (h hs) (w ws) -> b t c h w (ws hs)",
-                      hs=self.hparams.window_size,
-                      ws=self.hparams.window_size),
-            utils.SinePositionalEncoding(5, 1, sine_pairs=4),
-            utils.SinePositionalEncoding(5, 2, sine_pairs=4),
-            utils.SinePositionalEncoding(5, 3, sine_pairs=4),
-            utils.SinePositionalEncoding(5, 4, sine_pairs=4),
-        ])
-        return batch_preproc_tfms(images)
-
-    # @pl.core.decorators.auto_move_data
+    @profile
     def forward(self, images):
-        preproced = self.batch_preprocessing_step(images)
-        feats = self.encoder(preproced)
+        # Break images up into patches
+        patch_tokens = self.rearange(images)
+        # Add positional encodings for time, mode, and space.
+        patch_tokens = self.add_encoding(patch_tokens)
+
+        # preproced = self.batch_preprocessing_step(images)
+        feats = self.encoder(patch_tokens)
 
         # similarity between neighboring timesteps
         feats = nn.functional.normalize(feats, dim=-1)
@@ -108,7 +105,7 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
         >>> loader = datamodule.train_dataloader()
         >>> batch = next(iter(loader))
         >>> self = MultimodalTransformerDirectCD(model_name='smt_it_joint_p8')
-        >>> images = batch['images'].float()
+        >>> images = batch[0]['modes']['r|g|b'][None, :].float()
         >>> similarity = self(images)
 
         # nh.util.number_of_parameters(self)
@@ -120,11 +117,13 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
                  learning_rate=1e-3,
                  weight_decay=0.,
                  pos_weight=1.,
+                 input_stats=None,
                  window_size=8):
         super().__init__(
             learning_rate=learning_rate,
             weight_decay=weight_decay,
             pos_weight=pos_weight,
+            input_stats=input_stats,
         )
         self.save_hyperparameters()
 
@@ -133,34 +132,26 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
         self.encoder = encoder
         self.binary_clf = nn.LazyLinear(1)
 
-    @property
-    def preprocessing_step(self):
-        # DEPRECATE
-        return transforms.Compose([
-            Rearrange("t c (h hs) (w ws) -> t c h w (ws hs)",
-                      hs=self.hparams.window_size,
-                      ws=self.hparams.window_size),
-            utils.SinePositionalEncoding(4, 0, sine_pairs=4),
-            utils.SinePositionalEncoding(4, 1, sine_pairs=4),
-            utils.SinePositionalEncoding(4, 2, sine_pairs=4),
-            utils.SinePositionalEncoding(4, 3, sine_pairs=4),
+        self.rearange = Rearrange("b t c (h hs) (w ws) -> b t c h w (ws hs)",
+                                  hs=self.hparams.window_size,
+                                  ws=self.hparams.window_size)
+        encode_t = utils.SinePositionalEncoding(5, 1, sine_pairs=4)
+        encode_m = utils.SinePositionalEncoding(5, 2, sine_pairs=4)
+        encode_h = utils.SinePositionalEncoding(5, 3, sine_pairs=4)
+        encode_w = utils.SinePositionalEncoding(5, 4, sine_pairs=4)
+        self.add_encoding = transforms.Compose([
+            encode_t, encode_m, encode_h, encode_w,
         ])
 
-    def batch_preprocessing_step(self, images):
-        return transforms.Compose([
-            Rearrange("b t c (h hs) (w ws) -> b t c h w (ws hs)",
-                      hs=self.hparams.window_size,
-                      ws=self.hparams.window_size),
-            utils.SinePositionalEncoding(5, 1, sine_pairs=4),
-            utils.SinePositionalEncoding(5, 2, sine_pairs=4),
-            utils.SinePositionalEncoding(5, 3, sine_pairs=4),
-            utils.SinePositionalEncoding(5, 4, sine_pairs=4),
-        ])(images)
-
-    # @pl.core.decorators.auto_move_data
     def forward(self, images):
-        preproced = self.batch_preprocessing_step(images)
-        fused_feats = self.encoder(preproced)[:, 1:, ..., 0]
+
+        # Break images up into patches
+        patch_tokens = self.rearange(images)
+        # Add positional encodings for time, mode, and space.
+        patch_tokens = self.add_encoding(patch_tokens)
+
+        # Why is only one feature taken here?
+        fused_feats = self.encoder(patch_tokens)[:, 1:, ..., 0]
         similarity = self.binary_clf(fused_feats)
         similarity = einops.reduce(similarity, "b t c h w -> b t h w", "mean")
         return similarity

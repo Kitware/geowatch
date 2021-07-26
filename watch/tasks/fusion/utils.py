@@ -5,12 +5,13 @@ import numpy as np
 import math
 from torch import package
 
-millnames = ['',' K',' M',' B',' T']
+millnames = ['', ' K', ' M', ' B', ' T']
+
 
 def millify(n):
     n = float(n)
-    millidx = max(0,min(len(millnames)-1,
-                        int(math.floor(0 if n == 0 else math.log10(abs(n))/3))))
+    millidx = max(0, min(len(millnames) - 1,
+                         int(math.floor(0 if n == 0 else math.log10(abs(n)) / 3))))
 
     return '{:.2f}{}'.format(n / 10**(3 * millidx), millnames[millidx])
 
@@ -80,7 +81,7 @@ class DimensionDropout(nn.Module):
         shape = x.shape
         dim_size = shape[self.dim]
 
-        index = [slice(0,None)] * len(shape)
+        index = [slice(0, None)] * len(shape)
         index[self.dim] = torch.randperm(dim_size)[:self.n_keep]
 
         return x[index]
@@ -114,7 +115,14 @@ class AddPositionalEncoding(nn.Module):
 
 class SinePositionalEncoding(nn.Module):
     """
-    SinePositionalEncoding(4, 0, sine_pairs=4)
+    Example:
+        >>> from watch.tasks.fusion.utils import *  # NOQA
+        >>> dest_dim = 3
+        >>> dim_to_encode = 2
+        >>> sine_pairs = 4
+        >>> self = SinePositionalEncoding(dest_dim, dim_to_encode, sine_pairs=sine_pairs)
+        >>> x = torch.rand(3, 5, 7, 11, 13)
+        >>> y = self(x)
     """
     def __init__(self, dest_dim, dim_to_encode, sine_pairs=2):
         super().__init__()
@@ -124,7 +132,6 @@ class SinePositionalEncoding(nn.Module):
         assert self.dest_dim != self.dim_to_encode
 
     def forward(self, x):
-
         expanded_shape = list(x.shape)
         expanded_shape[self.dest_dim] = -1
 
@@ -132,14 +139,19 @@ class SinePositionalEncoding(nn.Module):
         expand_dims[self.dim_to_encode] = slice(0, None)
         expand_dims[self.dest_dim] = slice(0, None)
 
-        scale = lambda d: 1 / 10000 ** (d)
+        def scale(d):
+            return 1 / 10000 ** (d)
 
-        encoding = torch.stack([
-            torch.sin(torch.arange(x.shape[self.dim_to_encode]) * scale(idx / (2 * self.sine_pairs)))
-            if idx % 2 == 0
-            else torch.cos(torch.arange(x.shape[self.dim_to_encode]) * scale(idx / (2 * self.sine_pairs)))
-            for idx in range(2 * self.sine_pairs)
-        ], dim=1)
+        parts = []
+        for idx in range(2 * self.sine_pairs):
+            theta = torch.arange(x.shape[self.dim_to_encode]) * scale(idx / (2 * self.sine_pairs))
+            if idx % 2 == 0:
+                part = torch.sin(theta)
+            else:
+                part = torch.cos(theta)
+            parts.append(part)
+
+        encoding = torch.stack(parts, dim=1)
 
         encoding = encoding[expand_dims].expand(expanded_shape)
 

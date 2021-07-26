@@ -17,6 +17,12 @@ from torch.utils import data
 from torchvision import transforms
 from watch.tasks.fusion import utils
 
+try:
+    import xdev
+    profile = xdev.profile
+except Exception:
+    profile = ub.identity
+
 
 class WatchDataModule(pl.LightningDataModule):
     """
@@ -83,6 +89,7 @@ class WatchDataModule(pl.LightningDataModule):
         >>>     num_workers=0,
         >>>     time_steps=time_steps,
         >>>     chip_size=chip_size,
+        >>>     normalize_inputs=True,
         >>> )
         >>> self.setup("fit")
         >>> dl = self.train_dataloader()
@@ -109,6 +116,7 @@ class WatchDataModule(pl.LightningDataModule):
         num_workers=4,
         preprocessing_step=None,
         tfms_channel_subset=None,
+        normalize_inputs=False,
     ):
         super().__init__()
         self.train_kwcoco = train_dataset
@@ -123,6 +131,8 @@ class WatchDataModule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.preprocessing_step = preprocessing_step
+        self.normalize_inputs = normalize_inputs
+        self.input_stats = None
 
         # TODO: there is no need for tfms_channel_subset,
         # Remove that parameter and just send ``channels`` in as the requested
@@ -225,6 +235,23 @@ class WatchDataModule(pl.LightningDataModule):
             self.torch_datasets['train'] = train_dataset
             ub.inject_method(self, lambda self: self._make_dataloader('train', shuffle=True), 'train_dataloader')
 
+            if self.normalize_inputs:
+                if isinstance(self.normalize_inputs, str):
+                    if self.normalize_inputs == 'some-special-key':
+                        # TODO: hard code any special input normalization you
+                        # want here
+                        pass
+                    else:
+                        raise KeyError(self.normalize_inputs)
+                else:
+                    if isinstance(self.normalize_inputs, int):
+                        num = self.normalize_inputs
+                    else:
+                        num = None
+                    self.input_stats = train_dataset.cached_input_stats(
+                        num=num, num_workers=self.num_workers,
+                        batch_size=self.batch_size)
+
             if self.vali_kwcoco is not None:
                 # Explicit validation dataset should be prefered
                 vali_data = self.vali_kwcoco
@@ -305,6 +332,14 @@ class WatchDataModule(pl.LightningDataModule):
         parser.add_argument("--transform_key", default="none", type=str)
         parser.add_argument("--tfms_scale", default=2000., type=float)
         parser.add_argument("--tfms_window_size", default=8, type=int)
+
+        parser.add_argument(
+            "--normalize_inputs", default=True, help=ub.paragraph(
+                '''
+                if True, computes the mean/std for this dataset on each mode
+                so this can be passed to the model.
+                '''))
+
         return parent_parser
 
 
@@ -415,7 +450,7 @@ class WatchVideoDataset(data.Dataset):
             candidates = coco_channel_profiles(sampler.dset, 3)
             chan_list = candidates[0]
             channels = '|'.join(chan_list)
-        channels = channel_spec.ChannelSpec.coerce(channels)
+        channels = channel_spec.ChannelSpec.coerce(channels).normalize()
 
         if transform is not None:
             raise Exception('I do not like injecting the transforms')
@@ -426,7 +461,7 @@ class WatchVideoDataset(data.Dataset):
 
         sample_grid = list(it.chain(
             full_sample_grid["positives"],
-            full_sample_grid["negatives"],
+            # full_sample_grid["negatives"],
         ))
 
         self.sample_grid = sample_grid
@@ -441,6 +476,7 @@ class WatchVideoDataset(data.Dataset):
     def __len__(self):
         return len(self.sample_grid)
 
+    @profile
     def __getitem__(self, index):
         """
         Example:
@@ -468,7 +504,7 @@ class WatchVideoDataset(data.Dataset):
             tr["channels"] = self.channels
 
         tr['as_xarray'] = False
-        tr['use_experimental_loader'] = True
+        tr['use_experimental_loader'] = 1
         # collect sample
         sample = self.sampler.load_sample(tr)
 
@@ -560,7 +596,7 @@ class WatchVideoDataset(data.Dataset):
 
         return item
 
-    def cached_input_stats(self):
+    def cached_input_stats(self, num=None, num_workers=0, batch_size=2):
         """
         Compute the normalization stats, and caches them
 
@@ -570,15 +606,22 @@ class WatchVideoDataset(data.Dataset):
         """
         # Get stats on the dataset (todo: nice way to disable augmentation temporarilly for this)
         depends = ub.odict([
+            ('num', num),
             ('hashid', self.sampler.dset._build_hashid()),
             ('channels', self.channels.__json__()),
-            ('sample_shape', self.sample_shape),
+            # ('sample_shape', self.sample_shape),
+            ('depends_version', 1),
         ])
+        print('depends = {!r}'.format(depends))
         workdir = None
-        cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends + 'v8')
+        cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends)
+        print('cacher = {!r}'.format(cacher))
         input_stats = cacher.tryload()
         if input_stats is None:
+            input_stats = self.compute_input_stats(
+                num, num_workers=num_workers, batch_size=batch_size)
             cacher.save(input_stats)
+        return input_stats
 
     def compute_input_stats(self, num=None, num_workers=0, batch_size=2):
         """
@@ -594,6 +637,18 @@ class WatchVideoDataset(data.Dataset):
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (2, 128, 128)
             >>> self = WatchVideoDataset(sampler, sample_shape=sample_shape, channels=None)
+            >>> self.compute_input_stats()
+
+        Example:
+            >>> from watch.tasks.fusion.datasets.watch_data import *  # NOQA
+            >>> import ndsampler
+            >>> import kwcoco
+            >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes8')
+            >>> coco_dset.ensure_category('background')
+            >>> sampler = ndsampler.CocoSampler(coco_dset)
+            >>> sample_shape = (2, 128, 128)
+            >>> self = WatchVideoDataset(sampler, sample_shape=sample_shape, channels=None)
+            >>> self.compute_input_stats()
 
         Example:
             >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -642,6 +697,7 @@ class WatchVideoDataset(data.Dataset):
         # _dset.disable_augmenter = False  # hack
         return input_stats
 
+    @profile
     def draw_item(self, item, binprobs=None):
         """
         Example:
@@ -657,7 +713,12 @@ class WatchVideoDataset(data.Dataset):
             >>> index = len(self) // 4
             >>> item = self[index]
             >>> # Calculate the probability of change for each frame
-            >>> binprobs = np.random.rand(*self.sample_shape)
+            >>> #binprobs = np.random.rand(*self.sample_shape)
+            >>> binprobs = np.stack([
+            >>>     kwimage.Heatmap.random(
+            >>>         dims=sample_shape[1:3], classes=1).data['class_probs'][0]
+            >>>     for _ in range(sample_shape[0] - 1)
+            >>> ])
             >>> canvas = self.draw_item(item, binprobs)
             >>> # xdoctest: +REQUIRES(--show)
             >>> import kwplot
@@ -677,55 +738,92 @@ class WatchVideoDataset(data.Dataset):
 
         frame_ims = mode_data.data.cpu().numpy()
         frame_masks = item['labels'].data.cpu().numpy()
+        frame_changes = item['changes'].data.cpu().numpy()
+
         frame_ims = watch.utils.util_norm.normalize_intensity(frame_ims, axis=1)
         frame_list = []
-        for frame_idx, (im_chw, mask) in enumerate(zip(frame_ims, frame_masks)):
-            chan_list = []
+
+        # TODO: parametarize, limit drawing to only show a subset of the
+        # channels.
+        limit_channels = 2
+
+        for frame_idx, im_chw in enumerate(frame_ims):
+            mask = frame_masks[frame_idx]
+
+            if frame_idx == 0:
+                changes = np.zeros_like(frame_changes[0])
+            else:
+                changes = frame_changes[frame_idx - 1]
+
+            vertical_stack = []
+            if binprobs is not None:
+                # Make a probability heatmap we can either display
+                # independently or overlay on a rendered channel
+                if frame_idx == 0:
+                    # Hack, the first frame never recieved a change prediction
+                    # but I'm not sure if this genralizes well. Might need to
+                    # revisit if there is  more natural formulationm
+                    pred_mask = kwimage.make_heatmask(np.zeros_like(binprobs[0]))
+                else:
+                    pred_mask = kwimage.make_heatmask(binprobs[frame_idx - 1])
+                # TODO: we might want to overlay the prediction on one or all
+                # of the channels
+                pred_part = kwimage.imresize(pred_mask, min_dim=min_dim).clip(0, 1)
+                pred_text = f'pred t={frame_idx}'
+                pred_part = kwimage.draw_text_on_image(
+                    pred_part, pred_text, (1, 1), valign='top', color='blue',
+                    border=3)
+
             for chan_idx, chan in enumerate(im_chw):
+                if limit_channels and chan_idx  >= limit_channels:
+                    break
                 chan_name = chan_names[chan_idx]
 
                 signal = kwimage.atleast_3channels(chan)
+                signal_text = f't={frame_idx}, c={chan_idx}:{chan_name}'
 
                 # cidxs = mask
 
-                true_heatmap = kwimage.Heatmap(class_idx=mask, classes=classes)
-                # true_part = heatmap.draw_on(true_part, with_alpha=0.5)
-                # Hack: -1 is given the last color by colorize, it would
-                # be better if there was a non-negative background class index
-                class_overlay = true_heatmap.colorize('class_idx')
-                class_overlay[..., 3] = 0.5
-                class_overlay[mask == -1, 3] = 0
-                text = 't={}, c={}:{}'.format(frame_idx, chan_idx, chan_name)
+                layers = []
+                if chan_idx % 2 == 1:
+                    # Draw class label on odd frames
+                    true_heatmap = kwimage.Heatmap(class_idx=mask, classes=classes)
+                    # true_part = heatmap.draw_on(true_part, with_alpha=0.5)
+                    # Hack: -1 is given the last color by colorize, it would
+                    # be better if there was a non-negative background class index
+                    class_overlay = true_heatmap.colorize('class_idx')
+                    class_overlay[..., 3] = 0.5
+                    class_overlay[mask == -1, 3] = 0
+                    layers.append(class_overlay)
+                    text = signal_text + '\n' + 'class'
 
-                true_part = kwimage.overlay_alpha_layers([class_overlay, signal])
+                if chan_idx % 2 == 0:
+                    # Draw change label on even frames
+                    change_overlay = kwimage.make_heatmask(changes)
+                    layers.append(change_overlay)
+                    text = signal_text + '\n' + 'change'
+
+                layers.append(signal)
+
+                true_part = kwimage.overlay_alpha_layers(layers)
                 true_part = true_part[..., 0:3]
+
+                # Draw change label
+                true_part = kwimage.Mask(changes, format='c_mask').draw_on(true_part, color='green')
+
                 true_part = kwimage.imresize(true_part, min_dim=min_dim).clip(0, 1)
                 true_part = kwimage.draw_text_on_image(
-                    true_part, text, (1, 1), valign='top', color='limegreen')
+                    true_part, text, (1, 1), valign='top', color='limegreen',
+                    border=3)
 
-                if binprobs is not None:
-                    # TODO: we could make this visualization better
-                    if frame_idx == 0:
-                        #
-                        pred_part = np.zeros_like(true_part)
-                    else:
-                        # Hack, output is assumed to only be for subsequent
-                        # frames it would be better if we had some sort of
-                        # standardized output encoding.
-                        pred_mask = kwimage.make_heatmask(binprobs[frame_idx - 1])
-                        pred_part = kwimage.overlay_alpha_layers([pred_mask, signal])
-                        pred_part = pred_part[..., 0:3]
-                        pred_part = kwimage.imresize(pred_part, min_dim=min_dim).clip(0, 1)
-                    pred_part = kwimage.draw_text_on_image(
-                        pred_part, 'pred ' + text, (1, 1), valign='top', color='blue')
-                    part = kwimage.stack_images([true_part, pred_part], axis=1)
-                else:
-                    part = true_part
+                vertical_stack.append(true_part)
 
-                chan_list.append(part)
-            frame_canvas = kwimage.stack_images(chan_list)
+            if binprobs is not None:
+                vertical_stack.append(pred_part)
+
+            frame_canvas = kwimage.stack_images(vertical_stack)
             frame_list.append(frame_canvas)
-        canvas = kwimage.stack_images(frame_list, axis=1)
+        canvas = kwimage.stack_images(frame_list, axis=1, overlap=-5)
         canvas = canvas[..., 0:3]  # drop alpha
         canvas = kwimage.ensure_uint255(canvas)  # convert to uint8
         return canvas

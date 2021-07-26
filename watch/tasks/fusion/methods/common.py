@@ -6,6 +6,7 @@ import torch_optimizer as optim
 from torch.optim import lr_scheduler
 import numpy as np
 import ubelt as ub
+import netharn as nh
 
 try:
     import xdev
@@ -19,9 +20,16 @@ class ChangeDetectorBase(pl.LightningModule):
     def __init__(self,
                  learning_rate=1e-3,
                  weight_decay=0.,
+                 input_stats=None,
                  pos_weight=1.):
         super().__init__()
         self.save_hyperparameters()
+
+        self.input_norms = None
+        if input_stats is not None:
+            self.input_norms = torch.nn.ModuleDict()
+            for key, stats in input_stats.items():
+                self.input_norms[key] = nh.layers.InputNorm(**stats)
 
         # criterion and metrics
         self.criterion = nn.BCEWithLogitsLoss(
@@ -36,6 +44,7 @@ class ChangeDetectorBase(pl.LightningModule):
     def preprocessing_step(self):
         raise NotImplementedError
 
+    @profile
     def forward_step(self, batch, with_loss=False, stage='unspecified'):
         """
         Generic forward step used for test / train / validation
@@ -47,13 +56,15 @@ class ChangeDetectorBase(pl.LightningModule):
             >>> datamodule = datasets.WatchDataModule(
             >>>     train_dataset='special:vidshapes8',
             >>>     num_workers=0, chip_size=128,
+            >>>     normalize_inputs=True,
             >>> )
             >>> datamodule.setup('fit')
             >>> loader = datamodule.train_dataloader()
             >>> batch = next(iter(loader))
 
             >>> # Choose subclass to test this with (does not cover all cases)
-            >>> self = methods.MultimodalTransformerDotProdCD(model_name='smt_it_joint_p8')
+            >>> self = methods.MultimodalTransformerDotProdCD(
+            >>>     model_name='smt_it_joint_p8', input_stats=datamodule.input_stats)
             >>> outputs = self.training_step(batch)
             >>> canvas = datamodule.draw_batch(batch, outputs=outputs)
             >>> # xdoctest: +REQUIRES(--show)
@@ -69,23 +80,31 @@ class ChangeDetectorBase(pl.LightningModule):
         for item in batch:
             assert len(item['modes']) == 1
             mode_key, mode_val = ub.peek(item['modes'].items())
-            images = mode_val[None, ...].float()
-            _, _, _, H, W = images.shape
 
-            distances = self(images)
-            distances = nn.functional.interpolate(
-                distances,
+            mode_val = mode_val.float()
+            T, C, H, W = mode_val.shape
+
+            if self.input_norms is not None:
+                mode_norm = self.input_norms[mode_key]
+                mode_val = mode_norm(mode_val)
+
+            # Because we are not collating we need to add a batch dimension
+            images = mode_val[None, ...]
+
+            logits = self(images)
+            logits = nn.functional.interpolate(
+                logits,
                 [H, W],
                 mode="bilinear")
 
             if with_loss:
                 changes = item['changes'][None, ...]
 
-                change_prob = distances.sigmoid()[0]
+                change_prob = logits.sigmoid()[0]
                 binary_predictions.append(change_prob)
 
                 # compute criterion
-                loss = self.criterion(distances, changes.float())
+                loss = self.criterion(logits, changes.float())
                 total_loss = total_loss + loss
 
         if with_loss:
