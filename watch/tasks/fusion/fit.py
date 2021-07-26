@@ -10,7 +10,8 @@ Notes:
     Automated dynamics / plugins?
 
 CommandLine:
-    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.fit __doc__:0 -- --profile
+    CUDA_VISIBLE_DEVICES=1 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.fit __doc__:0 -- --profile
+    CUDA_VISIBLE_DEVICES=1 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.fit __doc__:0
 
 Example:
     >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -33,7 +34,7 @@ Example:
     >>> kwargs = {
     ...     'train_dataset': coco_fpath,
     ...     'dataset': 'WatchDataModule',
-    ...     'method': 'MultimodalTransformerDotProdCD',
+    ...     'method': 'MultimodalTransformerDirectCD',
     ...     'channels': 'blue|green|red|nir',
     ...     #'channels': None,
     ...     'time_steps': 4,
