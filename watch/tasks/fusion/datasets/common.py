@@ -153,8 +153,12 @@ class VideoDataset(data.Dataset):
             tr["channels"] = self.channels
 
         tr['as_xarray'] = False
+        tr['use_experimental_loader'] = True
         # collect sample
         sample = self.sampler.load_sample(tr)
+
+        # channel_keys = list(z.values())[0].values.tolist()
+
         # channel_keys = sample['im'].coords['c'].values.tolist()
 
         # Access the sampled image and annotation data
@@ -223,6 +227,21 @@ class VideoDataset(data.Dataset):
 
         # if self.mode == "predict":
         #     return frame_ims
+
+        """
+        import torch
+        item1 = {
+            'chan1': torch.rand(101, 102, 4),
+        }
+
+        item2 = {
+            'chan2': torch.rand(103, 104, 5),
+        }
+        torch.utils.data.dataloader.default_collate([item1, item2])
+
+        nh.data.collate.padded_collate([item1, item2])
+        nh.data.collate.list_collate([item1, item2])
+        """
 
         example = {
             # "channel_keys": channel_keys,
