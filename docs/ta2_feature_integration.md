@@ -201,3 +201,17 @@ https://gitlab.kitware.com/smart/smart_watch_dvc/-/tree/master/drop1_S2_aligned_
 and 
 
 https://gitlab.kitware.com/smart/smart_watch_dvc/-/tree/master/drop1-S2-L8-LS-aligned-c1
+
+
+NOTES:
+
+When you write your raster features to disk it will be important to write them
+as a cloud optimized geotiff. This can be done with kwimage:
+
+```python
+    # image_path: will be the file you are writing your auxiliary data to
+    # image_data: is a H x W x C array where C is the number of channels
+    # space=None tells imwrite that you are not saving RGB, so it wont complain about multiple channels
+    # using backend='gdal' will write the data as a tiled GeoTiff
+    kwimage.imwrite(image_path, image_data, space=None, backend='gdal')
+```
