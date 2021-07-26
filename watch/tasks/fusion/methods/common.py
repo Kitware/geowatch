@@ -36,16 +36,17 @@ class ChangeDetectorBase(pl.LightningModule):
     def preprocessing_step(self):
         raise NotImplementedError
 
-    @profile
-    def training_step(self, batch, batch_idx=None):
+    def forward_step(self, batch, with_loss=False, stage='unspecified'):
         """
+        Generic forward step used for test / train / validation
+
         Example:
             >>> from watch.tasks.fusion.methods.common import *  # NOQA
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datasets
             >>> datamodule = datasets.WatchDataModule(
             >>>     train_dataset='special:vidshapes8',
-            >>>     num_workers=0,
+            >>>     num_workers=0, chip_size=128,
             >>> )
             >>> datamodule.setup('fit')
             >>> loader = datamodule.train_dataloader()
@@ -54,80 +55,65 @@ class ChangeDetectorBase(pl.LightningModule):
             >>> # Choose subclass to test this with (does not cover all cases)
             >>> self = methods.MultimodalTransformerDotProdCD(model_name='smt_it_joint_p8')
             >>> outputs = self.training_step(batch)
-
-            # outputs['distances']
-            canvas = datamodule.draw_batch(batch, outputs=outputs)
+            >>> canvas = datamodule.draw_batch(batch, outputs=outputs)
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas)
+            >>> kwplot.show_if_requested()
         """
-        images, labels = batch["images"].float(), batch["labels"]
-        changes = labels[:, 1:] != labels[:, :-1]
+        outputs = {}
+        outputs['binary_predictions'] = binary_predictions = []
 
-        # compute predicted and target change masks
-        _, _, H, W = changes.shape
-        distances = self(images)
-        distances = nn.functional.interpolate(
-            distances,
-            [H, W],
-            mode="bilinear")
+        total_loss = 0
+        for item in batch:
+            assert len(item['modes']) == 1
+            mode_key, mode_val = ub.peek(item['modes'].items())
+            images = mode_val[None, ...].float()
+            _, _, _, H, W = images.shape
 
-        # compute metrics
-        for key, metric in self.metrics.items():
-            val = metric(torch.sigmoid(distances), changes)
-            self.log(key, val, prog_bar=True)
+            distances = self(images)
+            distances = nn.functional.interpolate(
+                distances,
+                [H, W],
+                mode="bilinear")
 
-        # compute criterion
-        loss = self.criterion(distances, changes.float())
+            if with_loss:
+                changes = item['changes'][None, ...]
 
-        outputs = {
-            'loss': loss,
-            'distances': distances,
-        }
+                change_prob = distances.sigmoid()[0]
+                binary_predictions.append(change_prob)
+
+                # compute criterion
+                loss = self.criterion(distances, changes.float())
+                total_loss = total_loss + loss
+
+        if with_loss:
+            all_pred = torch.stack(binary_predictions)
+            all_true = torch.stack([item['changes'] for item in batch])
+            # compute metrics
+            item_metrics = {}
+            for key, metric in self.metrics.items():
+                val = metric(all_pred, all_true)
+                item_metrics[f'{stage}_{key}'] = val
+
+            outputs['loss'] = total_loss
+        return outputs
+
+    @profile
+    def training_step(self, batch, batch_idx=None):
+        outputs = self.forward_step(batch, with_loss=True, stage='train')
         return outputs
 
     @profile
     def validation_step(self, batch, batch_idx=None):
-        images, labels = batch["images"].float(), batch["labels"]
-        changes = labels[:, 1:] != labels[:, :-1]
-
-        # compute predicted and target change masks
-        _, _, H, W = changes.shape
-        distances = self(images)
-        distances = nn.functional.interpolate(
-            distances,
-            [H, W],
-            mode="bilinear")
-
-        # compute metrics
-        for key, metric in self.metrics.items():
-            val = metric(torch.sigmoid(distances), changes)
-            self.log("val_" + key, val, prog_bar=True)
-
-        # compute loss
-        loss = self.criterion(distances, changes.float())
-        self.log("val_loss", loss, prog_bar=True)
-        return loss
+        outputs = self.forward_step(batch, with_loss=True, stage='val')
+        return outputs
 
     @profile
     def test_step(self, batch, batch_idx=None):
-        images, labels = batch["images"].float(), batch["labels"]
-        changes = labels[:, 1:] != labels[:, :-1]
-
-        # compute predicted and target change masks
-        _, _, H, W = changes.shape
-        distances = self(images)
-        distances = nn.functional.interpolate(
-            distances,
-            [H, W],
-            mode="bilinear")
-
-        # compute metrics
-        for key, metric in self.metrics.items():
-            val = metric(torch.sigmoid(distances), changes)
-            self.log("test_" + key, val, prog_bar=True)
-
-        # compute loss
-        loss = self.criterion(distances, changes.float())
-        self.log("test_loss", loss, prog_bar=True)
-        return loss
+        outputs = self.forward_step(batch, with_loss=True, stage='test')
+        return outputs
 
     def configure_optimizers(self):
         optimizer = optim.RAdam(

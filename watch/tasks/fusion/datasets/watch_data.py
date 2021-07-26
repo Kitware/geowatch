@@ -25,7 +25,7 @@ class WatchDataModule(pl.LightningDataModule):
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> # Run the following tests on real watch data if DVC is available
-        >>> from watch.tasks.fusion.datasets.kwcoco_video import *  # NOQA
+        >>> from watch.tasks.fusion.datasets.watch_data import *  # NOQA
         >>> from os.path import join
         >>> import os
         >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
@@ -64,7 +64,7 @@ class WatchDataModule(pl.LightningDataModule):
 
     Example:
         >>> # Run the data module on coco demo datasets for the CI
-        >>> from watch.tasks.fusion.datasets.kwcoco_video import *  # NOQA
+        >>> from watch.tasks.fusion.datasets.watch_data import *  # NOQA
         >>> import kwcoco
         >>> train_dataset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
         >>> test_dataset = kwcoco.CocoDataset.demo('vidshapes1-multispectral', num_frames=5)
@@ -155,8 +155,7 @@ class WatchDataModule(pl.LightningDataModule):
         Helper method to draw a batch of data.
 
         Example:
-            >>> from watch.tasks.fusion.datasets.kwcoco_video import *  # NOQA
-            >>> from watch.tasks.fusion.datasets.kwcoco_video import _decollate_batch
+            >>> from watch.tasks.fusion.datasets.watch_data import *  # NOQA
             >>> from watch.tasks.fusion import datasets
             >>> self = datasets.WatchDataModule(
             >>>     train_dataset='special:vidshapes8-multispectral', num_workers=0)
@@ -167,7 +166,7 @@ class WatchDataModule(pl.LightningDataModule):
             >>> # Visualize
             >>> B = len(batch)
             >>> T, C, H, W = ub.peek(item['modes'].values()).shape
-            >>> outputs = {'distances': torch.rand(B, T - 1, H, W)}
+            >>> outputs = {'binary_predictions': [torch.rand(T - 1, H, W) for _ in range(B)]}
             >>> stage = 'train'
             >>> canvas = self.draw_batch(batch, stage=stage, outputs=outputs)
             >>> # xdoctest: +REQUIRES(--show)
@@ -185,7 +184,6 @@ class WatchDataModule(pl.LightningDataModule):
         # assume collation is disabled
         batch_items = batch
 
-        # batch_items = _decollate_batch(batch)
         canvas_list = []
         for item_idx, item in zip(range(max_items), batch_items):
             # HACK: I'm not sure how general accepting outputs is
@@ -196,9 +194,8 @@ class WatchDataModule(pl.LightningDataModule):
             # - [ ] per-frame semenatic segmentation
             binprobs = None
             if outputs is not None:
-                if 'distances' in outputs:
-                    logits = outputs['distances'][item_idx]
-                    binprobs = logits.sigmoid().data.cpu().numpy()
+                if 'binary_predictions' in outputs:
+                    binprobs = outputs['binary_predictions'][item_idx].data.cpu().numpy()
 
             part = dataset.draw_item(item, binprobs=binprobs)
             canvas_list.append(part)
@@ -293,7 +290,7 @@ class WatchDataModule(pl.LightningDataModule):
 
     @staticmethod
     def add_data_specific_args(parent_parser):
-        parser = parent_parser.add_argument_group("kwcoco_video")
+        parser = parent_parser.add_argument_group("watch_data")
         parser.add_argument("--train_dataset", default=None, type=pathlib.Path)
         # parser.add_argument("--vali_dataset", default=None, type=pathlib.Path)
         parser.add_argument("--test_dataset", default=None, type=pathlib.Path)
@@ -309,29 +306,6 @@ class WatchDataModule(pl.LightningDataModule):
         parser.add_argument("--tfms_scale", default=2000., type=float)
         parser.add_argument("--tfms_window_size", default=8, type=int)
         return parent_parser
-
-
-def _decollate_batch(batch):
-    """
-    Breakup a collated batch of BatchContainers back into ItemContainers
-    """
-    import ubelt as ub
-    from kwcoco.util.util_json import IndexableWalker
-    import torch
-    from netharn.data.data_containers import ItemContainer
-    from netharn.data.data_containers import BatchContainer
-    walker = IndexableWalker(batch)
-    decollated_dict = ub.AutoDict()
-    decollated_walker = IndexableWalker(decollated_dict)
-    for path, batch_val in walker:
-        if isinstance(batch_val, BatchContainer):
-            for bx, item_val in enumerate(ub.flatten(batch_val.data)):
-                decollated_walker[[bx] + path] = ItemContainer(item_val)
-        elif isinstance(batch_val, torch.Tensor):
-            for bx, item_val in enumerate(batch_val):
-                decollated_walker[[bx] + path] = item_val
-    decollated = list(decollated_dict.to_dict().values())
-    return decollated
 
 
 class AddPositionalEncoding(nn.Module):
@@ -363,7 +337,7 @@ class AddPositionalEncoding(nn.Module):
 def coco_channel_profiles(coco_dset, max_checks=float('inf')):
     """
     Example:
-        >>> from watch.tasks.fusion.datasets.kwcoco_video import *  # NOQA
+        >>> from watch.tasks.fusion.datasets.watch_data import *  # NOQA
         >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
         >>> candidates = coco_channel_profiles(coco_dset)
     """
@@ -388,7 +362,7 @@ def coco_channel_profiles(coco_dset, max_checks=float('inf')):
 class WatchVideoDataset(data.Dataset):
     """
     Example:
-        >>> from watch.tasks.fusion.datasets.kwcoco_video import *  # NOQA
+        >>> from watch.tasks.fusion.datasets.watch_data import *  # NOQA
         >>> import ndsampler
         >>> import kwcoco
         >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
@@ -407,7 +381,7 @@ class WatchVideoDataset(data.Dataset):
         >>> kwplot.show_if_requested()
 
     Example:
-        >>> from watch.tasks.fusion.datasets.kwcoco_video import *  # NOQA
+        >>> from watch.tasks.fusion.datasets.watch_data import *  # NOQA
         >>> import ndsampler
         >>> import kwcoco
         >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
@@ -468,6 +442,25 @@ class WatchVideoDataset(data.Dataset):
         return len(self.sample_grid)
 
     def __getitem__(self, index):
+        """
+        Example:
+            >>> from watch.tasks.fusion.datasets.watch_data import *  # NOQA
+            >>> import ndsampler
+            >>> import kwcoco
+            >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
+            >>> coco_dset.ensure_category('background')
+            >>> sampler = ndsampler.CocoSampler(coco_dset)
+            >>> channels = 'B10|B8a|B1|B8'
+            >>> sample_shape = (5, 530, 610)
+            >>> self = WatchVideoDataset(sampler, sample_shape=sample_shape, channels=channels)
+            >>> item = self[0]
+            >>> canvas = self.draw_item(item)
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas)
+            >>> kwplot.show_if_requested()
+        """
 
         # get positive sample definition
         tr = self.sample_grid[index]
@@ -485,9 +478,6 @@ class WatchVideoDataset(data.Dataset):
         # Access the sampled image and annotation data
         raw_frame_list = sample['im']
         raw_det_list = sample['annots']['frame_dets']
-
-        # TODO: convert annotations into a change detection task suitable for
-        # the network.
 
         # Break data down on a per-frame basis so we can apply image-based
         # augmentations.
@@ -543,7 +533,7 @@ class WatchVideoDataset(data.Dataset):
         frame_ims[np.isnan(frame_ims)] = -1.
 
         # convert to torch
-        frame_ims = torch.from_numpy(frame_ims.astype("float"))
+        frame_ims = torch.from_numpy(frame_ims.astype("float")).float()
         frame_masks = torch.from_numpy(frame_masks)
         frame_ignores = torch.from_numpy(frame_ignores)
 
@@ -552,6 +542,11 @@ class WatchVideoDataset(data.Dataset):
 
         # if self.mode == "predict":
         #     return frame_ims
+        # images, labels = batch["images"].float(), batch["labels"]
+
+        # convert annotations into a change detection task suitable for the
+        # network.
+        changes = frame_masks[1:] != frame_masks[:-1]
 
         item = {
             # TODO: breakup modes into different items
@@ -559,6 +554,7 @@ class WatchVideoDataset(data.Dataset):
                 mode_code: frame_ims,
             },
             "labels": frame_masks,
+            "changes": changes,
             "ignore": frame_ignores,
         }
 
@@ -590,7 +586,7 @@ class WatchVideoDataset(data.Dataset):
             num (int | None): number of input items to compute stats for
 
         Example:
-            >>> from watch.tasks.fusion.datasets.kwcoco_video import *  # NOQA
+            >>> from watch.tasks.fusion.datasets.watch_data import *  # NOQA
             >>> import ndsampler
             >>> import kwcoco
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
@@ -602,7 +598,7 @@ class WatchVideoDataset(data.Dataset):
         Example:
             >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
             >>> # Run the following tests on real watch data if DVC is available
-            >>> from watch.tasks.fusion.datasets.kwcoco_video import *  # NOQA
+            >>> from watch.tasks.fusion.datasets.watch_data import *  # NOQA
             >>> import os
             >>> from os.path import join
             >>> import ndsampler
@@ -649,7 +645,7 @@ class WatchVideoDataset(data.Dataset):
     def draw_item(self, item, binprobs=None):
         """
         Example:
-            >>> from watch.tasks.fusion.datasets.kwcoco_video import *  # NOQA
+            >>> from watch.tasks.fusion.datasets.watch_data import *  # NOQA
             >>> import ndsampler
             >>> import kwcoco
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
@@ -738,7 +734,7 @@ class WatchVideoDataset(data.Dataset):
                     pin_memory=False):
         """
         Example:
-            >>> from watch.tasks.fusion.datasets.kwcoco_video import *  # NOQA
+            >>> from watch.tasks.fusion.datasets.watch_data import *  # NOQA
             >>> import ndsampler
             >>> import kwcoco
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
