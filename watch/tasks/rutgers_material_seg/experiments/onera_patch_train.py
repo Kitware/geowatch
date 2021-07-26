@@ -24,6 +24,7 @@ from scipy import ndimage
 from torch import nn
 from tqdm import tqdm
 from torchvision import transforms
+import torchvision.transforms.functional as FT
 import watch.tasks.rutgers_material_seg.utils.utils as utils
 import watch.tasks.rutgers_material_seg.utils.eval_utils as eval_utils
 import watch.tasks.rutgers_material_seg.utils.visualization as visualization
@@ -41,6 +42,7 @@ torch.backends.cudnn.deterministic = True
 torch.set_printoptions(precision=6, sci_mode=False)
 np.set_printoptions(precision=3, suppress=True)
 
+mean_std = ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 
 class Trainer(object):
     def __init__(self, model: object, train_loader: torch.utils.data.DataLoader, 
@@ -168,20 +170,23 @@ class Trainer(object):
             mask2 = mask[:,1,:,:]
             
             class_to_show = max(0,torch.unique(mask)[-1]-1)
-            images = images.to(device)
+            # images = images.to(device)
             image1 = image1.to(device)
             image2 = image2.to(device)
             # negative_images = negative_images.to(device)
             negative_image1 = negative_image1.to(device)
             # negative_image2 = negative_image2.to(device)
             # mask = mask.to(device)
-            
+
             image1 = utils.stad_image(image1)
             image2 = utils.stad_image(image2)
-            negative_image1 = utils.stad_image(negative_image1)
+            # image1 = utils.bandwise_norm(image1)
+            # image2 = utils.bandwise_norm(image2)
+            # image1 = FT.normalize(image1, *mean_std)
+            # image2 = FT.normalize(image2, *mean_std)
+            # negative_image1 = utils.stad_image(negative_image1)
             # negative_image2 = utils.stad_image(negative_image2)
             image_diff = image1-image2
-            
             image_change_magnitude = torch.sqrt(image_diff*image_diff)
             image_change_magnitude = torch.mean(image_change_magnitude, dim=1, keepdims=False)
 
@@ -197,9 +202,7 @@ class Trainer(object):
             condition_dilated = condition + condition.roll(1,1) + condition.roll(1,2) + condition.roll(-1,1) + condition.roll(-1,2)
             condition_dilated = condition_dilated + condition_dilated.roll(1,1) + condition_dilated.roll(1,2) + condition_dilated.roll(-1,1) + condition_dilated.roll(-1,2)
             condition_dilated = condition_dilated + condition_dilated.roll(1,1) + condition_dilated.roll(1,2) + condition_dilated.roll(-1,1) + condition_dilated.roll(-1,2)
-
             
-            half_crop_size = self.crop_size[0]//2
             
             start = time.time()
             patched_change_magnitude_binary = torch.stack([transforms.functional.crop(image_change_magnitude_binary, *params) for params in self.all_crops_params],dim=1)
@@ -209,38 +212,20 @@ class Trainer(object):
             crops_indices = (patched_change_magnitude_binary==1).any(dim=2).nonzero()
             params_list = np.delete(self.all_crops_params_np, crops_indices[:,1].tolist(), axis=0)
             crop_collection_time = time.time() - start
-            # for patch_number in range(number_of_patches):
-            #     params = random_crop.get_params(images, output_size=self.crop_size)
-            #     cm_binary_crop = transforms.functional.crop(image_change_magnitude_binary, *params)
-            #     while (1 in torch.unique(cm_binary_crop)) or (torch.unique(cm_binary_crop).shape[0]==0) or (params in params_list):# and (torch.all(edges_sum>edge_threshold)):
-            #         params = list(params)
-            #         params[0] = random.randint(self.crop_size[0],image_change_magnitude_binary.shape[2]-self.crop_size[0])
-            #         params[1] = random.randint(self.crop_size[0],image_change_magnitude_binary.shape[2]-self.crop_size[0])
-            #         params = tuple(params)
-            #         cm_binary_crop = transforms.functional.crop(image_change_magnitude_binary, *params)
-                    
-            #     params_list.append(params)
-            # print(len(params_list))
-            # print(image_change_magnitude_binary.shape)
-            start = time.time()
-            cropped_images = torch.stack([transforms.functional.crop(images, *params) for params in params_list],dim=1) # torch.Size([B, number_of_patches, c, t, window_size, window_size])
-            # cropped_negative_image1 = torch.stack([transforms.functional.crop(negative_image1, *params) for params in params_list],dim=1)
-            # params_mutually_explusive = [i for i in all_crops_params if i not in params_list]
-            patched_images = torch.stack([transforms.functional.crop(images, *params) for params in self.all_crops_params],dim=1)
-            # print(patched_images.shape)
-            # cropped_images = transforms.functional.crop(images, *params)
-            # cropped_negative_image1 = transforms.functional.crop(negative_image1, *params)
-            cropped_image1 = cropped_images[:,:,:,0,:,:]
-            cropped_image2 = cropped_images[:,:,:,1,:,:]
-            
-            patched_image1 = patched_images[:,:,:,0,:,:]
-            # patched_image2 = patched_images[:,:,:,1,:,:]
 
+            start = time.time()
+            # if batch_index==31:
+            # print(torch.unique(image_change_magnitude_binary, return_counts=True))
+            # cropped_negative_image1 = torch.stack([transforms.functional.crop(negative_image1, *params) for params in params_list],dim=1)
+            # print(params_list.shape)
+            patched_image1 = torch.stack([transforms.functional.crop(image1, *params) for params in self.all_crops_params],dim=1)
+            cropped_image1 = torch.stack([transforms.functional.crop(image1, *params) for params in params_list],dim=1)
+            cropped_image2 = torch.stack([transforms.functional.crop(image2, *params) for params in params_list],dim=1)
+
+            
             # cropped_image1 = utils.stad_image(cropped_image1, patches=True)
             # cropped_image2 = utils.stad_image(cropped_image2, patches=True)
             # cropped_negative_image1 = utils.stad_image(cropped_negative_image1, patches=True)
-            
-            # print(cropped_image1.shape)
 
             # image1_flat = torch.flatten(image1, start_dim=2, end_dim=3)
             # image2_flat = torch.flatten(image2, start_dim=2, end_dim=3)
@@ -252,40 +237,23 @@ class Trainer(object):
             
             patched_image1_flat = torch.flatten(patched_image1, start_dim=2, end_dim=4)
             # patched_image2_flat = torch.flatten(patched_image2, start_dim=2, end_dim=4)
-            # print(patched_image1_flat.shape)
-            # print(cropped_image1_flat.shape)
             
             output1, features1 = self.model(image1)  ## [B,22,150,150]
             output2, features2 = self.model(image2)
             # negative_output1, negative_features1 = self.model(negative_image1)
             # negative_output2, negative_features2 = self.model(negative_image2)
-            
-            # stacked_for_cropping = torch.cat([output1.unsqueeze(1), output2.unsqueeze(1)], dim=1)
 
             # features1_flat = torch.flatten(features1, start_dim=2, end_dim=3)
             
-            # cropped_features = torch.stack([transforms.functional.crop(stacked_for_cropping, *params) for params in params_list],dim=1)
-            # cropped_negative_features1 = torch.stack([transforms.functional.crop(negative_output1, *params) for params in params_list],dim=1)
-            
-            # print(cropped_features.shape)
-            
-            # cropped_features1 = cropped_features[:,:,0,:,:,:]#.squeeze(0)
-            # cropped_features2 = cropped_features[:,:,1,:,:,:]#.squeeze(0)
-            
             # cropped_bs, cropped_ps, cropped_c, cropped_h, cropped_w = cropped_features1.shape
             
-            # cropped_features1 = cropped_features1.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w) #[bs*ps, c*h*w]
-            # cropped_features2 = cropped_features2.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w)
-            # cropped_negative_features1 = cropped_negative_features1.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w)
-            
-
-            # print(cropped_features1.shape)
+            cropped_features1 = cropped_features1.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w) #[bs*ps, c*h*w]
+            cropped_features2 = cropped_features2.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w)
+            cropped_negative_features1 = cropped_negative_features1.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w)
             
             # cropped_features1_flat = torch.flatten(cropped_features1, start_dim=2, end_dim=3)
             # cropped_features2_flat = torch.flatten(cropped_features2, start_dim=2, end_dim=3)
             # negative_cropped_features1_flat = torch.flatten(cropped_negative_features1, start_dim=2, end_dim=3)
-            
-            # print(cropped_features1_flat.shape)
             
             # texton_h, texton_w = cropped_h, cropped_w
             texton_h, texton_w = h, w
@@ -297,21 +265,18 @@ class Trainer(object):
             # dictionary = torch.zeros((bs, h, w)).to(device).long()
             # dictionary2 = torch.zeros((bs, h, w)).to(device).long()
             # dictionary_distribution = torch.zeros((bs, self.k)).to(device)#.long()
-            # centroids = torch.zeros((bs, self.k, c)).to(device)
+            centroids = torch.zeros((bs, cropped_image1_flat.shape[2], self.k)).to(device)
             # centroid_distances = torch.zeros((bs, self.k, self.k)).to(device)
             # residuals1 = torch.zeros((bs, self.k, texton_h*texton_w)).to(device)
             # residuals2 = torch.zeros((bs, self.k, texton_h*texton_w)).to(device)
             # negative_residuals = torch.zeros((bs, self.k, texton_h*texton_w)).to(device)
             # residuals_distances = torch.zeros((bs, image1_flat.shape[2], image1_flat.shape[2])).to(device)
-            # print(cropped_image1_flat.shape)
-            # print(len(params_mutually_explusive))
-            # print(len(params_list))
-            # print(condition.shape)
             run_network_time = time.time() - start
             
             start = time.time()
             for b in range(bs):
                 b_input1_flat = cropped_image1_flat[b,:,:]
+                # print(b_input1_flat.shape)
                 # b_input2_flat = cropped_image2_flat[b,:,:]
                 # b_input1_flat = image1_flat[b,:,:]
                 # b_input1_flat = features1_flat[b,:,:]
@@ -320,6 +285,8 @@ class Trainer(object):
                 # b_test_full_image2 = patched_image2_flat[b,:,:]
                 
                 b_dictionary1 = self.kmeans.fit_predict(b_input1_flat)#.to(device)
+                b_centroids1 = self.kmeans.centroids.T
+                # print(b_centroids1.shape)
                 # for index, params in enumerate(params_list):
                 #     dictionary1[b,params[0]-1:params[0]+1,params[1]-1:params[1]+1] = b_dictionary1[index]
                 b_dictionary1_test = self.kmeans.predict(b_test_full_image1)
@@ -353,7 +320,7 @@ class Trainer(object):
                 
                 # residuals_distances[b,:,:] = b_residual_distances
                 # residuals1[b,:,:] = b_residual1
-                # centroids[b,:,:] = b_centroids.T
+                centroids[b,:,:] = b_centroids1
                 # centroid_distances[b,:,:] = b_centroid_distances
                 # dictionary1[b,:] = b_dictionary1#.view(texton_h, texton_w).long()
                 # dictionary1[b,:] = b_dictionary1#.view(texton_h, texton_w).long()
@@ -386,10 +353,10 @@ class Trainer(object):
             
             loss = loss1 + loss2
 
-            # loss += 30*F.triplet_margin_loss(cropped_features1,#.unsqueeze(0), 
-            #                                 cropped_features2,#.unsqueeze(0), 
-            #                                 cropped_negative_features1
-            #                                 )
+            loss += 30*F.triplet_margin_loss(cropped_features1,#.unsqueeze(0), 
+                                            cropped_features2,#.unsqueeze(0), 
+                                            cropped_negative_features1
+                                            )
 
             
             # loss += loss3
@@ -401,8 +368,9 @@ class Trainer(object):
 
             backprop_time = time.time() - start
             
-            pbar.set_description(f"crop_collection: {crop_collection_time:0.3f}, run_network: {run_network_time:0.3f}, clustering: {clustering_time:0.3f}, backprob: {backprop_time:0.3f}")
             
+            
+            start = time.time()
             masks1 = F.softmax(output1, dim=1)
             masks2 = F.softmax(output2, dim=1)
             # masks1 = F.softmax(features1, dim=1)
@@ -474,8 +442,8 @@ class Trainer(object):
                         # dictionary_show = dictionary1.cpu().detach()[batch_index_to_show,:,:].numpy()
                         dictionary_show = dictionary1.cpu().detach()[batch_index_to_show,:,:].numpy()
                         dictionary2_show = dictionary1_post_assignment.cpu().detach()[batch_index_to_show,:,:].numpy()
-                        # print(vca_pseudomask_crop_show.shape)
-
+                        
+                        
                         fp_tp_fn_prediction_mask = gt_mask_show1 + (2*change_detection_show)
                         
                         logits_show1[logits_show1==-1]=0
@@ -514,7 +482,58 @@ class Trainer(object):
                         
                         ax10.imshow(cropped_image2_show)
                         
-                        ax11.imshow(dictionary_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
+                        
+                        
+                        if config['visualization']['log_scatters']:
+                            from sklearn.manifold import TSNE
+                            from sklearn.cluster import KMeans
+                            
+                            tsne_model = TSNE(n_components=2, verbose=False, random_state=0)
+                            clustering_model = KMeans(n_clusters=self.k)
+                            clustering_model_raw = KMeans(n_clusters=self.k)
+                            
+                            scatter_fig = plt.figure(figsize=(config['visualization']['fig_size'],config['visualization']['fig_size']))
+                            scax1 = scatter_fig.add_subplot(1,2,1)
+                            scax2 = scatter_fig.add_subplot(1,2,2)
+                            centroids_show = centroids[batch_index_to_show,:,:].T
+                            clustering_visualization = tsne_model.fit_transform(centroids_show.detach().cpu()) #[k, 507] -> [k, 2]
+                            
+                            cropped_image1_flat_clustering = tsne_model.fit_transform(cropped_image1_flat[batch_index_to_show,:,:].detach().cpu()) #[num_pixels, 507] -> [num_pixels, 2]
+                            reduced_features_clusters = clustering_model.fit(cropped_image1_flat_clustering)
+                            centroids_reduced_features_show = clustering_model.cluster_centers_
+                            y_kmeans = clustering_model.labels_
+                            
+                            # scax1.scatter(cropped_image1_flat_clustering[:,0],cropped_image1_flat_clustering[:,1],
+                            #             c=raw_y_kmeans,
+                            #             s=25.5,
+                            #             cmap='tab20',
+                            #             marker='.',
+                            #             linewidths=1.0
+                            #             )
+                            # scax1.scatter(clustering_visualization[:,0],clustering_visualization[:,1],
+                            #             c='black',
+                            #             s=250.5,
+                            #             alpha=0.7,
+                            #             edgecolors='gray'
+                            #             )
+                            ax11.scatter(cropped_image1_flat_clustering[:,0],cropped_image1_flat_clustering[:,1],
+                                        c=y_kmeans,
+                                        s=25.5,
+                                        cmap='tab20',
+                                        marker='.',
+                                        linewidths=1.0
+                                        )
+                            ax11.scatter(centroids_reduced_features_show[:,0],centroids_reduced_features_show[:,1],
+                                        c='black',
+                                        s=250.5,
+                                        alpha=0.7,
+                                        edgecolors='gray'
+                                        )
+                            # ax11.set_title("Clusters of raw features")
+                            ax11.set_title("Clusters of Reduced Features (2D)")
+                            # cometml_experiemnt.log_figure(figure_name=f"Training, Scatter Plot",figure=scatter_fig)
+                        else:
+                            ax11.imshow(dictionary_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
                         ax12.imshow(dictionary2_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
                         
@@ -540,13 +559,13 @@ class Trainer(object):
                             ax8.set_title(f"Pseudo-Mask for Change", fontsize=config['visualization']['font_size'])
                             ax9.set_title(f"Cropped Input Image 1, location: {str(params_list[0])}", fontsize=config['visualization']['font_size'])
                             ax10.set_title(f"Cropped Input Image 2, location: {str(params_list[0])}", fontsize=config['visualization']['font_size'])
-                            ax11.set_title(f"Visual Words", fontsize=config['visualization']['font_size'])
+                            ax11.set_title(f"Clusters (Reduced with TSNE to 2D)", fontsize=config['visualization']['font_size'])
                             ax12.set_title(f"Patch-wise Visual Words", fontsize=config['visualization']['font_size'])
                             figure.suptitle(f"Epoch: {epoch+1}\nGT labels for classification: {classes_in_gt}, \nunique in change predictions: {np.unique(change_detection_show)}\nunique in predictions1: {np.unique(logits_show1)}", fontsize=config['visualization']['font_size'])
                             
-                        figure.tight_layout()
                         # cometml_experiemnt.log_figure(figure_name=f"Training, image name: {image_name}, epoch: {epoch}, classes in gt: {classes_in_gt}, classifier predictions: {labels_predicted_indices}",figure=figure)
                         cometml_experiemnt.log_figure(figure_name=f"Training, image name: {image_name}",figure=figure)
+                        # figure.tight_layout()
 
                         if config['visualization']['train_imshow']:
                             plt.show()
@@ -558,6 +577,10 @@ class Trainer(object):
                         plt.close(figure)
                         gc.collect()
             
+            logging_time = time.time() - start
+            
+            pbar.set_description(f"(timing, secs) crop_collection: {crop_collection_time:0.3f}, run_network: {run_network_time:0.3f}, clustering: {clustering_time:0.3f}, backprob: {backprop_time:0.3f}, log: {logging_time:0.3f}")
+
         mean_iou, precision, recall = eval_utils.compute_jaccard(preds, targets, num_classes=2)
         
         mean_iou = np.array(mean_iou)
@@ -730,7 +753,7 @@ class Trainer(object):
                                 ax4.set_title(f"Input Image 2", fontsize=config['visualization']['font_size'])
                                 ax5.set_title(f"Prediction overlaid 2", fontsize=config['visualization']['font_size'])
                                 ax6.set_title(f"Change Detection Prediction", fontsize=config['visualization']['font_size'])
-                                figure.suptitle(f"GT labels for classification: {classes_in_gt}, \nunique in change predictions: {np.unique(change_detection_show)}\nunique in predictions1: {np.unique(logits_show1)}", fontsize=config['visualization']['font_size'])
+                                figure.suptitle(f"Epoch: {epoch+1}\nGT labels for classification: {classes_in_gt}, \nunique in change predictions: {np.unique(change_detection_show)}\nunique in predictions1: {np.unique(logits_show1)}", fontsize=config['visualization']['font_size'])
                             
                             figure.tight_layout()
                             if (config['visualization']['save_individual_plots'] and save_individual_plots_specific):
@@ -884,7 +907,7 @@ if __name__== "__main__":
     sampler = ndsampler.CocoSampler(dset)
 
     # # print(sampler)
-    number_of_timestamps, h, w = 2, 400, 400
+    number_of_timestamps, h, w = 2, 128, 128
     window_dims = (number_of_timestamps, h, w) #[t,h,w]
     input_dims = (h, w)
 

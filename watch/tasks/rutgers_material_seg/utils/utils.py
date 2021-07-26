@@ -12,6 +12,25 @@ import json
 from parse import parse
 import random
 
+
+def bandwise_norm(image, channel_first=True):
+    
+    if channel_first:
+        bs, cs, h, w = image.shape
+        for b in range(bs):
+            for c in range(cs):
+                single_channel = image[b,c,:,:]
+                max_value = single_channel.max()
+                min_value = single_channel.min()
+                single_channel_normalized = (single_channel-min_value)/(max_value-min_value)
+                image[b,c,:,:] = single_channel_normalized
+    else:
+        bs, h, w, cs = image.shape
+        raise NotImplementedError
+
+    return image
+    
+
 def otsu(image, num=400, get_bcm=False):
     c, h, w = image.shape
     image = image.view(1,-1)

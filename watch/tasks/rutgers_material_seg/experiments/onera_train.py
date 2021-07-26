@@ -75,6 +75,8 @@ class Trainer(object):
         self.k = config['data']['num_classes']
         self.kmeans = KMeans(n_clusters=self.k, mode='euclidean', verbose=0, minibatch=None)
         self.max_label = self.k
+        self.all_crops_params = [tuple([i,j,config['data']['window_size'], config['data']['window_size']]) for i in range(config['data']['window_size'],h-config['data']['window_size']) for j in range(config['data']['window_size'],w-config['data']['window_size'])]
+        self.all_crops_params_np = np.array(self.all_crops_params)
         
         if test_loader is not None:
             self.test_loader = test_loader
@@ -196,49 +198,27 @@ class Trainer(object):
             
             image_change_magnitude_binary = torch.zeros_like(image_change_magnitude)#.long()
             image_change_magnitude_binary[condition]=1
+            condition_dilated = condition + condition.roll(1,1) + condition.roll(1,2) + condition.roll(-1,1) + condition.roll(-1,2)
+            condition_dilated = condition_dilated + condition_dilated.roll(1,1) + condition_dilated.roll(1,2) + condition_dilated.roll(-1,1) + condition_dilated.roll(-1,2)
+            condition_dilated = condition_dilated + condition_dilated.roll(1,1) + condition_dilated.roll(1,2) + condition_dilated.roll(-1,1) + condition_dilated.roll(-1,2)
             
-            half_crop_size = self.crop_size[0]//2
-            # with torch.no_grad():                                                           
-            #     cannyfilter = CannyFilter()
-            #     edges = cannyfilter(image1.clone().detach().cpu())[5]
-            #     edges_sum = edges[:, :, params[0]-half_crop_size:params[0]+half_crop_size,
-                                                            # params[1]-half_crop_size:params[1]+half_crop_size].sum(2).sum(2)
-            # if (1 in cm_binary_crop) or (torch.unique(cm_binary_crop).shape[0]==0):
-            number_of_patches = 10000
-            params_list = []
-            all_crops_params = [tuple([i,j,config['data']['window_size'], config['data']['window_size']]) for i in range(h-config['data']['window_size']) for j in range(w-config['data']['window_size'])]
+            start = time.time()
+            patched_change_magnitude_binary = torch.stack([transforms.functional.crop(image_change_magnitude_binary, *params) for params in self.all_crops_params],dim=1)
+            patched_change_magnitude_binary = patched_change_magnitude_binary.view(patched_change_magnitude_binary.shape[0],
+                                                                                   patched_change_magnitude_binary.shape[1],
+                                                                                   -1)
+            crops_indices = (patched_change_magnitude_binary==1).any(dim=2).nonzero()
+            params_list = np.delete(self.all_crops_params_np, crops_indices[:,1].tolist(), axis=0)
+            crop_collection_time = time.time() - start
             
-            for patch_number in range(number_of_patches):
-                params = random_crop.get_params(images, output_size=self.crop_size)
-                cm_binary_crop = image_change_magnitude_binary[:, params[0]-half_crop_size:params[0]+half_crop_size,
-                                                            params[1]-half_crop_size:params[1]+half_crop_size]
-                while (1 in torch.unique(cm_binary_crop)) or (torch.unique(cm_binary_crop).shape[0]==0) or (params in params_list):# and (torch.all(edges_sum>edge_threshold)):
-                    params = list(params)
-                    params[0] = random.randint(self.crop_size[0]+5,image_change_magnitude_binary.shape[2]-self.crop_size[0]-5)
-                    params[1] = random.randint(self.crop_size[0]+5,image_change_magnitude_binary.shape[2]-self.crop_size[0]-5)
-                    params = tuple(params)
-                    cm_binary_crop = image_change_magnitude_binary[:, params[0]-half_crop_size:params[0]+half_crop_size,
-                                                                   params[1]-half_crop_size:params[1]+half_crop_size]
-                params_list.append(params)
-            
-            cropped_images = torch.stack([transforms.functional.crop(images, *params) for params in params_list],dim=1) # torch.Size([B, number_of_patches, c, t, window_size, window_size])
+            patched_image1 = torch.stack([transforms.functional.crop(image1, *params) for params in self.all_crops_params],dim=1)
+            cropped_image1 = torch.stack([transforms.functional.crop(image1, *params) for params in params_list],dim=1)
+            cropped_image2 = torch.stack([transforms.functional.crop(image2, *params) for params in params_list],dim=1)
             cropped_negative_image1 = torch.stack([transforms.functional.crop(negative_image1, *params) for params in params_list],dim=1)
-
-            # patched_images = torch.stack([transforms.functional.crop(images, *params) for params in all_crops_params],dim=1)
-            # print(patched_images.shape)
-            # cropped_images = transforms.functional.crop(images, *params)
-            # cropped_negative_image1 = transforms.functional.crop(negative_image1, *params)
-            cropped_image1 = cropped_images[:,:,:,0,:,:]
-            cropped_image2 = cropped_images[:,:,:,1,:,:]
-            
-            patched_image1 = patched_images[:,:,:,0,:,:]
-            patched_image2 = patched_images[:,:,:,1,:,:]
 
             # cropped_image1 = utils.stad_image(cropped_image1, patches=True)
             # cropped_image2 = utils.stad_image(cropped_image2, patches=True)
             # cropped_negative_image1 = utils.stad_image(cropped_negative_image1, patches=True)
-            
-            # print(cropped_image1.shape)
 
             image1_flat = torch.flatten(image1, start_dim=2, end_dim=3)
             image2_flat = torch.flatten(image2, start_dim=2, end_dim=3)
@@ -257,28 +237,14 @@ class Trainer(object):
             output2, features2 = self.model(image2)
             negative_output1, negative_features1 = self.model(negative_image1)
             # negative_output2, negative_features2 = self.model(negative_image2)
-            
-            # print(features1.shape)
-            
-            stacked_for_cropping = torch.cat([output1.unsqueeze(1), output2.unsqueeze(1)], dim=1)
-            stacked_for_loss = torch.cat([output1.unsqueeze(1), output2.unsqueeze(1)], dim=2)
 
+            cropped_features1 = cropped_features1.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w) #[bs*ps, c*h*w]
+            cropped_features2 = cropped_features2.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w)
+            cropped_negative_features1 = cropped_negative_features1.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w)
+            
             features1_flat = torch.flatten(features1, start_dim=2, end_dim=3)
             
-            # cropped_features = transforms.functional.crop(stacked_for_cropping, *params)
-            # cropped_negative_features1 = transforms.functional.crop(negative_output1, *params)
-            
-            cropped_features = torch.stack([transforms.functional.crop(stacked_for_cropping, *params) for params in params_list],dim=1)
-            cropped_negative_features1 = torch.stack([transforms.functional.crop(negative_output1, *params) for params in params_list],dim=1)
-            
-            
-            # cropped_negative_features2 = transforms.functional.crop(negative_output2, *params)
-            
-            
-            cropped_features1 = cropped_features[:,:,0,:,:,:]#.squeeze(0)
-            cropped_features2 = cropped_features[:,:,1,:,:,:]#.squeeze(0)
-            
-            cropped_bs, cropped_ps, cropped_c, cropped_h, cropped_w = cropped_features1.shape
+            # cropped_bs, cropped_ps, cropped_c, cropped_h, cropped_w = cropped_features1.shape
             
             print(cropped_features1.shape)
             # cropped_features1 = torch.einsum('bs,ps,c,h,w->(bs,ps),c,h,w',cropped_features1)
