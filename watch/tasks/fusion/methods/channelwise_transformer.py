@@ -150,7 +150,6 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
         # Add positional encodings for time, mode, and space.
         patch_tokens = self.add_encoding(patch_tokens)
 
-        # Why is only one feature taken here?
         fused_feats = self.encoder(patch_tokens)[:, 1:]
         similarity = self.binary_clf(fused_feats)[..., 0]
         similarity = einops.reduce(similarity, "b t c h w -> b t h w", "mean")

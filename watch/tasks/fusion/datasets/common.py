@@ -228,21 +228,6 @@ class VideoDataset(data.Dataset):
         # if self.mode == "predict":
         #     return frame_ims
 
-        """
-        import torch
-        item1 = {
-            'chan1': torch.rand(101, 102, 4),
-        }
-
-        item2 = {
-            'chan2': torch.rand(103, 104, 5),
-        }
-        torch.utils.data.dataloader.default_collate([item1, item2])
-
-        nh.data.collate.padded_collate([item1, item2])
-        nh.data.collate.list_collate([item1, item2])
-        """
-
         example = {
             # "channel_keys": channel_keys,
             "images": frame_ims,
@@ -331,16 +316,6 @@ class VideoDataset(data.Dataset):
             key = ub.peek(channel_stats.keys())
             part = batch['images'].numpy()
             channel_stats[key].update(part)
-
-            # Future multimodal case:
-            # if 0:
-            #     for key, val in batch['inputs'].items():
-            #         try:
-            #             for batch_part in val.data:
-            #                 for part in batch_part.numpy():
-            #                     channel_stats[key].update(part)
-            #         except ValueError:  # final batch broadcast error
-            #             pass
 
         input_stats = {}
         for key, running in channel_stats.items():
