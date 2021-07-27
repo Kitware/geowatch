@@ -10,6 +10,7 @@ import pytorch_lightning as pl
 import torch
 import ubelt as ub
 
+import cv2
 from functools import partial  # NOQA
 from kwcoco import channel_spec
 from torch import nn
@@ -210,6 +211,14 @@ class WatchDataModule(pl.LightningDataModule):
             part = dataset.draw_item(item, binprobs=binprobs)
             canvas_list.append(part)
         canvas = kwimage.stack_images_grid(canvas_list, axis=1, overlap=-12)
+
+        with_legend = True
+        if with_legend:
+            import kwplot
+            label_to_color = {node: data['color'] for node, data in dataset.classes.graph.nodes.items()}
+            legend_img = kwplot.make_legend_img(label_to_color)
+            canvas = kwimage.stack_images([canvas, legend_img], axis=1)
+
         return canvas
 
     def setup(self, stage):
@@ -459,22 +468,62 @@ class WatchVideoDataset(data.Dataset):
             "video_detection", sample_shape,
             window_overlap=window_overlap)
 
+        n_pos = len(full_sample_grid["positives"])
+        n_neg = len(full_sample_grid["negatives"])
+
+        # TODO: parametarize ratio of positives to negatives
+        neg_to_pos_ratio = 2
+        max_neg = (neg_to_pos_ratio * n_pos)
+        if n_neg > max_neg:
+            print('chose max_neg = {!r}'.format(max_neg))
+            neg_idxs = kwarray.shuffle(np.arange(n_neg), rng=47789403)[0:max_neg]
+            chosen_negs = list(ub.take(full_sample_grid["negatives"], neg_idxs))
+        else:
+            chosen_negs = full_sample_grid["negatives"]
+
         sample_grid = list(it.chain(
             full_sample_grid["positives"],
-            # full_sample_grid["negatives"],
+            chosen_negs,
         ))
 
         self.sample_grid = sample_grid
         self.transform = transform
         self.window_overlap = window_overlap
         self.sampler = sampler
+        self.classes = self.sampler.classes
+
+        category_tree_ensure_color(self.classes)
+
         self.sample_shape = sample_shape
         self.channels = channels
         self.mode = mode
-        # self.num_channels = len(channels)
+
+        self.ignore_classnames = {
+            'clouds', 'ignore'
+        }
+
+        self.augment = False
+        self.disable_augmenter = False
 
     def __len__(self):
         return len(self.sample_grid)
+
+    # def _make_augmenter():
+    #     # TODO: how to make this work with kwimage polygons?
+    #     import albumentations as A
+
+    #     tf = A.HorizontalFlip(p=0.5)
+
+    #     # Declare an augmentation pipeline
+    #     transform = A.Compose([
+    #         # A.RandomCrop(width=256, height=256),
+    #         A.HorizontalFlip(p=0.5),
+    #         # A.RandomBrightnessContrast(p=0.2),
+    #     ], keypoint_params=A.KeypointParams(format='xy'))
+
+    #     transform(image=np.random.rand(10, 10), keypoints=[[2, 2]])
+    #     transform(image=np.random.rand(10, 10), keypoints=[[2, 2]])
+    #     transform( keypoints=[[2, 2]])
 
     @profile
     def __getitem__(self, index):
@@ -496,6 +545,29 @@ class WatchVideoDataset(data.Dataset):
             >>> kwplot.autompl()
             >>> kwplot.imshow(canvas)
             >>> kwplot.show_if_requested()
+
+        Example:
+            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+            >>> # Run the following tests on real watch data if DVC is available
+            >>> from watch.tasks.fusion.datasets.watch_data import *  # NOQA
+            >>> import os
+            >>> from os.path import join
+            >>> import ndsampler
+            >>> import kwcoco
+            >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
+            >>> dvc_dpath = os.environ.get('DVC_DPATH', _default)
+            >>> coco_fpath = join(dvc_dpath, 'drop1_S2_aligned_c1/data.kwcoco.json')
+            >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+            >>> sampler = ndsampler.CocoSampler(coco_dset)
+            >>> sample_shape = (2, 128, 128)
+            >>> self = WatchVideoDataset(sampler, sample_shape=sample_shape, channels=None)
+            >>> item = self[0]
+            >>> canvas = self.draw_item(item)
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas)
+            >>> kwplot.show_if_requested()
         """
 
         # get positive sample definition
@@ -509,24 +581,41 @@ class WatchVideoDataset(data.Dataset):
         sample = self.sampler.load_sample(tr)
 
         channel_keys = sample['tr']['_coords']['c'].values.tolist()
-        mode_code = '|'.join(channel_keys)
+        mode_key = '|'.join(channel_keys)
 
         # Access the sampled image and annotation data
         raw_frame_list = sample['im']
         raw_det_list = sample['annots']['frame_dets']
+        raw_gids = sample['tr']['gids']
 
         # Break data down on a per-frame basis so we can apply image-based
         # augmentations.
-        frame_ims = []
-        frame_masks = []
-        for frame, dets in zip(raw_frame_list, raw_det_list):
-            frame = np.asarray(frame, dtype=np.float32)
-            input_dsize = self.sample_shape[-2:][::-1]
+        frame_items = []
 
-            input_dsize = [
-                real if (nominal is None) else nominal
-                for nominal, real in zip(input_dsize, frame.shape[:2][::-1])
-            ]
+        input_dsize = self.sample_shape[-2:][::-1]
+        # hack for augmentation
+        # TODO: make a nice "augmenter" pipeline
+        do_flip = False
+        if not self.disable_augmenter and self.mode == 'fit':
+            def make_hflipper(width):
+                def hflip(pt):
+                    new = np.hstack([width - pt[:, 0:1], pt[:, 1:2]])
+                    return new
+                return hflip
+            flipper = make_hflipper(input_dsize[0])
+            do_flip = np.random.rand() > 0.5
+
+        kernel = np.ones((5, 5), np.uint8)
+        prev_frame_cids = None
+
+        for frame, dets, gid in zip(raw_frame_list, raw_det_list, raw_gids):
+            img = self.sampler.dset.imgs[gid]
+
+            frame = np.asarray(frame, dtype=np.float32)
+
+            if do_flip:
+                frame = np.fliplr(frame)
+                dets = dets.warp(flipper)
 
             # Resize the sampled window to the target space for the network
             frame, info = kwimage.imresize(frame, dsize=input_dsize,
@@ -537,63 +626,65 @@ class WatchVideoDataset(data.Dataset):
             dets = dets.scale(info['scale'])
             dets = dets.translate(info['offset'])
 
-            frame_mask = np.full(frame.shape[:2], dtype=np.int32, fill_value=-1)
+            # allocate class masks
+            frame_cids = np.full(frame.shape[:2], dtype=np.int32, fill_value=-1)
+            frame_ignore = np.full(frame.shape[:2], dtype=np.uint8, fill_value=0)
+
+            # Rasterize frame targets
             ann_polys = dets.data['segmentations'].to_polygon_list()
             ann_aids = dets.data['aids']
             ann_cids = dets.data['cids']
-
+            # Note: it is important to respect class indexes, ids, and name
+            # mappings
+            # TODO: layer ordering? Multiclass prediction?
             for poly, aid, cid in zip(ann_polys, ann_aids, ann_cids):
-                cidx = self.sampler.classes.id_to_idx[cid]
-                poly.fill(frame_mask, value=cidx)
+                cidx = self.classes.id_to_idx[cid]
+                catname = self.classes.id_to_node[cid]
+                if catname in self.ignore_classnames:
+                    frame_ignore.fill(frame_cids, value=1)
+                else:
+                    poly.fill(frame_cids, value=cidx)
 
             # ensure channel dim is not squeezed
-            frame = kwarray.atleast_nd(frame, 3)
+            frame_hwc = kwarray.atleast_nd(frame, 3)
+            # catch nans
+            frame_hwc[np.isnan(frame_hwc)] = -1.
+            # rearrange image axes for pytorch
+            frame_chw = einops.rearrange(frame_hwc, 'h w c -> c h w')
 
-            frame_masks.append(frame_mask)
-            frame_ims.append(frame)
+            # convert annotations into a change detection task suitable for
+            # the network.
+            if prev_frame_cids is None:
+                frame_change = None
+            else:
+                frame_change = (frame_cids != prev_frame_cids).astype(np.uint8)
+                # Clean up the change target
+                frame_change = cv2.morphologyEx(frame_change, cv2.MORPH_OPEN, kernel)
+                frame_change = torch.from_numpy(frame_change)
 
-        # stack along temporal axis
-        frame_ims = np.stack(frame_ims, axis=0)
+            # convert to torch
+            frame_item = {
+                'gid': gid,
+                'date_captured': img.get('date_captured', ''),
+                'modes': {
+                    mode_key: torch.from_numpy(frame_chw),
+                },
+                'change': frame_change,
+                'labels': torch.from_numpy(frame_cids),
+                'ignore': torch.from_numpy(frame_ignore),
+            }
+            prev_frame_cids = frame_cids
+            frame_items.append(frame_item)
 
-        # DO NOT ADD 1, THE CLASS INDEXES SHOULD BE RESPECTED
-        # frame_masks = np.stack(frame_masks, axis=0) + 1
-        frame_masks = np.stack(frame_masks, axis=0)
-
-        frame_ignores = np.zeros_like(frame_masks)
-        # frame_ignores = (frame_masks == self.occlusion_class_id)
-
-        # rearrange image axes for pytorch
-        frame_ims = einops.rearrange(frame_ims, "t h w c -> t c h w")
-
-        # catch nans
-        frame_ims[np.isnan(frame_ims)] = -1.
-
-        # convert to torch
-        frame_ims = torch.from_numpy(frame_ims.astype("float")).float()
-        frame_masks = torch.from_numpy(frame_masks)
-        frame_ignores = torch.from_numpy(frame_ignores)
-
-        # if self.transform:
-        #     frame_ims = self.transform(frame_ims)
-
-        # if self.mode == "predict":
-        #     return frame_ims
-        # images, labels = batch["images"].float(), batch["labels"]
-
-        # convert annotations into a change detection task suitable for the
-        # network.
-        changes = frame_masks[1:] != frame_masks[:-1]
+        vidid = sample['tr']['vidid']
+        video = self.sampler.dset.index.videos[vidid]
 
         item = {
             # TODO: breakup modes into different items
-            "modes": {
-                mode_code: frame_ims,
-            },
-            "labels": frame_masks,
-            "changes": changes,
-            "ignore": frame_ignores,
+            "frames": frame_items,
+            "video_id": sample['tr']['vidid'],
+            "video_name": video['name'],
         }
-
         return item
 
     def cached_input_stats(self, num=None, num_workers=0, batch_size=2):
@@ -610,12 +701,10 @@ class WatchVideoDataset(data.Dataset):
             ('hashid', self.sampler.dset._build_hashid()),
             ('channels', self.channels.__json__()),
             # ('sample_shape', self.sample_shape),
-            ('depends_version', 1),
+            ('depends_version', 2),
         ])
-        print('depends = {!r}'.format(depends))
         workdir = None
         cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends)
-        print('cacher = {!r}'.format(cacher))
         input_stats = cacher.tryload()
         if input_stats is None:
             input_stats = self.compute_input_stats(
@@ -672,7 +761,8 @@ class WatchVideoDataset(data.Dataset):
         stats_idxs = kwarray.shuffle(np.arange(len(self)), rng=0)[0:min(num, len(self))]
         stats_subset = torch.utils.data.Subset(self, stats_idxs)
 
-        # TODO: disable augmentation if we are doing that
+        # Hack: disable augmentation if we are doing that
+        self.disable_augmenter = True
         loader = torch.utils.data.DataLoader(
             stats_subset,
             collate_fn=ub.identity, num_workers=num_workers, shuffle=True,
@@ -684,17 +774,18 @@ class WatchVideoDataset(data.Dataset):
 
         for batch_items in ub.ProgIter(loader, desc='estimate mean/std'):
             for item in batch_items:
-                for mode_code, mode_val in item['modes'].items():
-                    channel_stats[mode_code].update(mode_val.numpy())
+                for frame_item in item['frames']:
+                    for mode_code, mode_val in frame_item['modes'].items():
+                        channel_stats[mode_code].update(mode_val.numpy())
 
         input_stats = {}
         for key, running in channel_stats.items():
-            perchan_stats = running.summarize(axis=(0, 2, 3))
+            perchan_stats = running.summarize(axis=(1, 2))
             input_stats[key] = {
-                'std': perchan_stats['mean'].round(3),
+                'std': perchan_stats['mean'].round(3),  # only take 3 sigfigs
                 'mean': perchan_stats['std'].round(3),
             }
-        # _dset.disable_augmenter = False  # hack
+        self.disable_augmenter = False
         return input_stats
 
     @profile
@@ -717,8 +808,10 @@ class WatchVideoDataset(data.Dataset):
             >>> binprobs = np.stack([
             >>>     kwimage.Heatmap.random(
             >>>         dims=sample_shape[1:3], classes=1).data['class_probs'][0]
-            >>>     for _ in range(sample_shape[0] - 1)
+            >>>     for _ in range(sample_shape[0])
             >>> ])
+            >>> binprobs = binprobs[1:]  # first frame does not have change
+            >>> #binprobs[0][:] = 0  # first change prob should be all zeros
             >>> canvas = self.draw_item(item, binprobs)
             >>> # xdoctest: +REQUIRES(--show)
             >>> import kwplot
@@ -726,66 +819,70 @@ class WatchVideoDataset(data.Dataset):
             >>> kwplot.imshow(canvas)
             >>> kwplot.show_if_requested()
         """
-        import watch
-        # import kwcoco
-        min_dim = 296
-        # chan_names = kwcoco.channel_spec.FusedChannelSpec.coerce(self.channels).as_list()
+        # TODO: parametarize
+        max_dim = 296       # shape of each item when drawing
+        limit_channels = 3  # limit drawing to only show a subset of the channels.
+
         classes = self.sampler.classes
-
-        # hack just use one of the modes
-        mode_code, mode_data = ub.peek(item['modes'].items())
-        chan_names = mode_code.split('|')
-
-        frame_ims = mode_data.data.cpu().numpy()
-        frame_masks = item['labels'].data.cpu().numpy()
-        frame_changes = item['changes'].data.cpu().numpy()
-
-        frame_ims = watch.utils.util_norm.normalize_intensity(frame_ims, axis=1)
         frame_list = []
+        for frame_idx, frame_item in enumerate(item['frames']):
 
-        # TODO: parametarize, limit drawing to only show a subset of the
-        # channels.
-        limit_channels = 2
-
-        for frame_idx, im_chw in enumerate(frame_ims):
-            mask = frame_masks[frame_idx]
-
-            if frame_idx == 0:
-                changes = np.zeros_like(frame_changes[0])
+            date_captured = frame_item.get('date_captured', '')
+            mask = frame_item['labels'].data.cpu().numpy()
+            changes = frame_item['change']
+            if changes is None:
+                changes = np.zeros_like(mask)
             else:
-                changes = frame_changes[frame_idx - 1]
+                changes = changes.data.cpu().numpy()
+
+            # hack just use one of the modes
+            mode_code, mode_data = ub.peek(frame_item['modes'].items())
+            chan_names = mode_code.split('|')
+            frame_chw = mode_data.data.cpu().numpy()
 
             vertical_stack = []
-            if binprobs is not None:
-                # Make a probability heatmap we can either display
-                # independently or overlay on a rendered channel
-                if frame_idx == 0:
-                    # Hack, the first frame never recieved a change prediction
-                    # but I'm not sure if this genralizes well. Might need to
-                    # revisit if there is  more natural formulationm
-                    pred_mask = kwimage.make_heatmask(np.zeros_like(binprobs[0]))
-                else:
-                    pred_mask = kwimage.make_heatmask(binprobs[frame_idx - 1])
-                # TODO: we might want to overlay the prediction on one or all
-                # of the channels
-                pred_part = kwimage.imresize(pred_mask, min_dim=min_dim).clip(0, 1)
-                pred_text = f'pred t={frame_idx}'
-                pred_part = kwimage.draw_text_on_image(
-                    pred_part, pred_text, (1, 1), valign='top', color='blue',
-                    border=3)
 
-            for chan_idx, chan in enumerate(im_chw):
+            # frame_text = f't={frame_idx} - {date_captured}\n{mode_code}'
+            # frame_header = kwimage.draw_text_on_image(
+            #     {'width': max_dim}, frame_text, org=(max_dim // 2, 5), valign='top',
+            #     halign='center', color='purple')
+
+            gid = frame_item['gid']
+
+            frame_header1 = kwimage.draw_text_on_image(
+                {'width': max_dim}, f't={frame_idx} gid={gid}', org=(max_dim // 2, 1), valign='top',
+                halign='center', color='salmon')
+            vertical_stack.append(frame_header1)
+
+            if date_captured:
+                frame_header1 = kwimage.draw_text_on_image(
+                    None, f'{date_captured}', org=(1, 1),
+                    valign='top', halign='left', color='salmon')
+                frame_header1 = cv2.copyMakeBorder(frame_header1, 3, 3, 3, 3, cv2.BORDER_CONSTANT)
+                frame_header1 = kwimage.imresize(frame_header1, dsize=(max_dim, None))
+                vertical_stack.append(frame_header1)
+
+            if 0:
+                frame_header2 = kwimage.draw_text_on_image(
+                    None, f'{mode_code}', org=(1, 1),
+                    valign='top', halign='left', color='salmon')
+                frame_header2 = cv2.copyMakeBorder(frame_header2, 3, 3, 3, 3, cv2.BORDER_CONSTANT)
+                frame_header2 = kwimage.imresize(frame_header2, dsize=(max_dim, None))
+                vertical_stack.append(frame_header2)
+
+            signal = None
+            for chan_idx, chan in enumerate(frame_chw):
                 if limit_channels and chan_idx  >= limit_channels:
                     break
                 chan_name = chan_names[chan_idx]
 
-                signal = kwimage.atleast_3channels(chan)
-                signal_text = f't={frame_idx}, c={chan_idx}:{chan_name}'
+                # TODO: normalize across time?
+                chan = kwimage.normalize_intensity(chan)
+                signal = kwimage.atleast_3channels(chan).copy()
+                signal_text = f'c={chan_idx}:{chan_name}'
 
-                # cidxs = mask
-
-                layers = []
-                if chan_idx % 2 == 1:
+                true_layers = []
+                if chan_idx == 0:
                     # Draw class label on odd frames
                     true_heatmap = kwimage.Heatmap(class_idx=mask, classes=classes)
                     # true_part = heatmap.draw_on(true_part, with_alpha=0.5)
@@ -794,38 +891,72 @@ class WatchVideoDataset(data.Dataset):
                     class_overlay = true_heatmap.colorize('class_idx')
                     class_overlay[..., 3] = 0.5
                     class_overlay[mask == -1, 3] = 0
-                    layers.append(class_overlay)
+                    true_layers.append(class_overlay)
                     text = signal_text + '\n' + 'class'
-
-                if chan_idx % 2 == 0:
+                elif chan_idx == 1:
                     # Draw change label on even frames
                     change_overlay = kwimage.make_heatmask(changes)
-                    layers.append(change_overlay)
+                    true_layers.append(change_overlay)
                     text = signal_text + '\n' + 'change'
+                else:
+                    text = signal_text
 
-                layers.append(signal)
-
-                true_part = kwimage.overlay_alpha_layers(layers)
+                true_layers.append(signal)
+                true_part = kwimage.overlay_alpha_layers(true_layers)
                 true_part = true_part[..., 0:3]
 
                 # Draw change label
-                true_part = kwimage.Mask(changes, format='c_mask').draw_on(true_part, color='green')
+                true_part = kwimage.Mask(changes, format='c_mask').draw_on(true_part, color='lime')
 
-                true_part = kwimage.imresize(true_part, min_dim=min_dim).clip(0, 1)
+                true_part = kwimage.imresize(true_part, max_dim=max_dim).clip(0, 1)
                 true_part = kwimage.draw_text_on_image(
                     true_part, text, (1, 1), valign='top', color='limegreen',
                     border=3)
-
                 vertical_stack.append(true_part)
 
             if binprobs is not None:
+                # Make a probability heatmap we can either display
+                # independently or overlay on a rendered channel
+                if frame_idx == 0:
+                    # BIG RED X
+                    pred_mask = kwimage.draw_text_on_image(
+                        {'width': max_dim, 'height': max_dim},
+                        'X', org=(max_dim // 2, max_dim // 2),
+                        valign='center', halign='center', fontScale=10,
+                        color='red')
+                    pred_part = pred_mask
+                else:
+                    pred_mask = kwimage.make_heatmask(binprobs[frame_idx - 1])
+                    assert signal is not None, 'no channels to draw on'
+                    pred_layers = [pred_mask, signal]
+                    pred_part = kwimage.overlay_alpha_layers(pred_layers)
+
+                    # TODO: we might want to overlay the prediction on one or all
+                    # of the channels
+                    pred_part = kwimage.imresize(pred_part, max_dim=max_dim).clip(0, 1)
+                    pred_text = f'change pred t={frame_idx}'
+                    pred_part = kwimage.draw_text_on_image(
+                        pred_part, pred_text, (1, 1), valign='top',
+                        color='dodgerblue', border=3)
+
                 vertical_stack.append(pred_part)
 
-            frame_canvas = kwimage.stack_images(vertical_stack)
+            vertical_stack = [kwimage.ensure_uint255(p) for p in vertical_stack]
+            frame_canvas = kwimage.stack_images(vertical_stack, overlap=-3)
             frame_list.append(frame_canvas)
+
         canvas = kwimage.stack_images(frame_list, axis=1, overlap=-5)
         canvas = canvas[..., 0:3]  # drop alpha
         canvas = kwimage.ensure_uint255(canvas)  # convert to uint8
+
+        width = canvas.shape[1]
+
+        vid_text = f'video: {item["video_id"]} - {item["video_name"]}'
+        vid_header = kwimage.draw_text_on_image(
+            {'width': width}, vid_text, org=(width // 2, 3), valign='top',
+            halign='center', color='pink')
+
+        canvas = kwimage.stack_images([vid_header, canvas], axis=0, overlap=-3)
         return canvas
 
     def make_loader(self, batch_size=1, num_workers=0, shuffle=False,
@@ -846,3 +977,25 @@ class WatchVideoDataset(data.Dataset):
             self, batch_size=batch_size, num_workers=num_workers,
             shuffle=shuffle, pin_memory=pin_memory, collate_fn=ub.identity)
         return loader
+
+
+def category_tree_ensure_color(classes):
+    """
+    Ensures that each category in a CategoryTree has a color
+
+    TODO:
+        - [ ] Add to CategoryTree
+
+    Example:
+        >>> import kwcoco
+        >>> classes = kwcoco.CategoryTree.demo()
+        >>> assert not any('color' in data for data in classes.graph.nodes.values())
+        >>> category_tree_ensure_color(classes)
+        >>> assert all('color' in data for data in classes.graph.nodes.values())
+    """
+    backup_colors = iter(kwimage.Color.distinct(len(classes)))
+    for node in classes.graph.nodes:
+        color = classes.graph.nodes[node].get('color', None)
+        if color is None:
+            color = next(backup_colors)
+            classes.graph.nodes[node]['color'] = kwimage.Color(color).as01()

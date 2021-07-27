@@ -28,7 +28,7 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
         >>> loader = datamodule.train_dataloader()
         >>> batch = next(iter(loader))
         >>> self = MultimodalTransformerDotProdCD(model_name='smt_it_joint_p8')
-        >>> images = batch[0]['modes']['r|g|b'][None, :].float()
+        >>> images = batch[0]['frames'][0]['modes']['r|g|b'][None, :].float()
         >>> distance = self(images)
     """
 
@@ -39,6 +39,7 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
                  weight_decay=0.,
                  input_stats=None,
                  pos_weight=1.,
+                 attention_impl='exact',
                  window_size=8):
         super().__init__(
             learning_rate=learning_rate,
@@ -51,10 +52,13 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
         encoder_config = transformer.encoder_configs[model_name]
 
         # TODO: pre-compute what the "token" feature dimension is.
-        encoder = transformer.FusionEncoder(**encoder_config, dropout=dropout)
+        encoder = transformer.FusionEncoder(
+            **encoder_config,
+            attention_impl=attention_impl,
+            dropout=dropout)
         self.encoder = encoder
 
-        self.rearange = Rearrange("b t c (h hs) (w ws) -> b t c h w (ws hs)",
+        self.tokenize = Rearrange("b t c (h hs) (w ws) -> b t c h w (ws hs)",
                                   hs=self.hparams.window_size,
                                   ws=self.hparams.window_size)
         encode_t = utils.SinePositionalEncoding(5, 1, sine_pairs=4)
@@ -68,7 +72,7 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
     @profile
     def forward(self, images):
         # Break images up into patches
-        patch_tokens = self.rearange(images)
+        patch_tokens = self.tokenize(images)
         # Add positional encodings for time, mode, and space.
         patch_tokens = self.add_encoding(patch_tokens)
 
@@ -91,6 +95,14 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
         parser.add_argument("--dropout", default=0.1, type=float)
         # parser.add_argument("--input_scale", default=2000.0, type=float)
         parser.add_argument("--window_size", default=8, type=int)
+        parser.add_argument(
+            "--attention_impl", default='exact', type=str, help=ub.paragraph(
+                '''
+                Implementation for attention computation.
+                Can be:
+                'exact' - the original O(n^2) method.
+                'performer' - a linear approximation.
+                '''))
         return parent_parser
 
 
@@ -105,7 +117,7 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
         >>> loader = datamodule.train_dataloader()
         >>> batch = next(iter(loader))
         >>> self = MultimodalTransformerDirectCD(model_name='smt_it_joint_p8')
-        >>> images = batch[0]['modes']['r|g|b'][None, :].float()
+        >>> images = batch[0]['frames'][0]['modes']['r|g|b'][None, :].float()
         >>> similarity = self(images)
 
         # nh.util.number_of_parameters(self)
@@ -118,6 +130,7 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
                  weight_decay=0.,
                  pos_weight=1.,
                  input_stats=None,
+                 attention_impl='exact',
                  window_size=8):
         super().__init__(
             learning_rate=learning_rate,
@@ -128,11 +141,15 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
         self.save_hyperparameters()
 
         encoder_config = transformer.encoder_configs[model_name]
-        encoder = transformer.FusionEncoder(**encoder_config, dropout=dropout)
+        encoder = transformer.FusionEncoder(
+            **encoder_config,
+            attention_impl=attention_impl,
+            dropout=dropout,
+        )
         self.encoder = encoder
         self.binary_clf = nn.LazyLinear(1)
 
-        self.rearange = Rearrange("b t c (h hs) (w ws) -> b t c h w (ws hs)",
+        self.tokenize = Rearrange("b t c (h hs) (w ws) -> b t c h w (ws hs)",
                                   hs=self.hparams.window_size,
                                   ws=self.hparams.window_size)
         encode_t = utils.SinePositionalEncoding(5, 1, sine_pairs=4)
@@ -146,12 +163,14 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
     def forward(self, images):
 
         # Break images up into patches
-        patch_tokens = self.rearange(images)
+        patch_tokens = self.tokenize(images)
         # Add positional encodings for time, mode, and space.
         patch_tokens = self.add_encoding(patch_tokens)
 
+        # TODO: maybe make the encoder return a sequence of 1 less?
+        # Rather than just ignoring the first output?
         fused_feats = self.encoder(patch_tokens)[:, 1:]
-        similarity = self.binary_clf(fused_feats)[..., 0]
+        similarity = self.binary_clf(fused_feats)[..., 0]  # only one prediction
         similarity = einops.reduce(similarity, "b t c h w -> b t h w", "mean")
         return similarity
 
@@ -163,6 +182,14 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
         parser.add_argument("--dropout", default=0.1, type=float)
         # parser.add_argument("--input_scale", default=2000.0, type=float)
         parser.add_argument("--window_size", default=8, type=int)
+        parser.add_argument(
+            "--attention_impl", default='exact', type=str, help=ub.paragraph(
+                '''
+                Implementation for attention computation.
+                Can be:
+                'exact' - the original O(n^2) method.
+                'performer' - a linear approximation.
+                '''))
         return parent_parser
 
 

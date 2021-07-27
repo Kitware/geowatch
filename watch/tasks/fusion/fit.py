@@ -20,10 +20,11 @@ Example:
     >>> import os
     >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
     >>> dvc_dpath = os.environ.get('DVC_DPATH', _default)
-    >>> coco_fpath = join(dvc_dpath, 'drop1_S2_aligned_c1/data.kwcoco.json')
+    >>> train_fpath = join(dvc_dpath, 'drop1_S2_aligned_c1/train_data.kwcoco.json')
+    >>> vali_fpath = join(dvc_dpath, 'drop1_S2_aligned_c1/vali_data.kwcoco.json')
 
     >>> import kwcoco
-    >>> dset = kwcoco.CocoDataset(coco_fpath)
+    >>> dset = kwcoco.CocoDataset(train_fpath)
     >>> available_channel_profiles = {
     >>>     frozenset(aux.get('channels', None) for aux in img.get('auxiliary', []))
     >>>      for img in dset.index.imgs.values()}
@@ -32,18 +33,22 @@ Example:
     >>> args = None
     >>> cmdline = False
     >>> kwargs = {
-    ...     'train_dataset': coco_fpath,
+    ...     'train_dataset': train_fpath,
+    ...     'vali_dataset': vali_fpath,
     ...     'dataset': 'WatchDataModule',
     ...     'method': 'MultimodalTransformerDirectCD',
+    ...     #'channels': 'coastal|blue|green|red|nir|swir16|swir22',
     ...     'channels': 'blue|green|red|nir',
     ...     #'channels': None,
-    ...     'time_steps': 4,
+    ...     'time_steps': 8,
+    ...     #'chip_size': 128,
     ...     'chip_size': 224,
-    ...     'batch_size': 2,
+    ...     'batch_size': 1,
+    ...     'accumulate_grad_batches': 8,
     ...     'model_name': 'smt_it_stm_p8',
-    ...     'num_workers': 24,
-    ...     'accumulate_grad_batches': 16,
-    ...     'attention_implementation': 'performer',
+    ...     'num_workers': 12,
+    ...     'attention_impl': 'exact',
+    ...     #'attention_impl': 'performer',  # note: exact seems to be faster and less memory at this scale
     ...     'gradient_clip_val': 0.5,
     ...     'gradient_clip_algorithm': 'value',
     ...     'gpus': 1,
@@ -155,7 +160,7 @@ class DrawBatchCallback(pl.callbacks.Callback):
         stage = trainer.state.stage.lower()
         epoch = trainer.current_epoch
         dump_dpath = ub.ensuredir((trainer.log_dir, 'monitor', stage, 'batch'))
-        dump_fname = f'pred_epoch{epoch:08d}_bx{batch_idx:04d}.png'
+        dump_fname = f'pred_epoch{epoch:08d}_bx{batch_idx:04d}.jpg'
         fpath = join(dump_dpath, dump_fname)
         kwimage.imwrite(fpath, canvas)
 
@@ -419,8 +424,7 @@ def fit_model(args=None, cmdline=False, **kwargs):
     # result = model(batch["images"][[0], ...].float())
     import torch
     with torch.set_grad_enabled(False):
-        model(ub.peek(batch[0]['modes'].values())[None, :])
-        # result = model(batch["images"][[0], ...].float())
+        model.forward_step(batch)
 
     # if requested, tune model
     trainer.tune(model, dataset)

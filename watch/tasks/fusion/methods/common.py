@@ -74,48 +74,62 @@ class ChangeDetectorBase(pl.LightningModule):
             >>> kwplot.show_if_requested()
         """
         outputs = {}
-        outputs['binary_predictions'] = binary_predictions = []
 
-        total_loss = 0
+        item_losses = []
+        item_true_changes = []
+        item_pred_changes = []
         for item in batch:
-            assert len(item['modes']) == 1
-            mode_key, mode_val = ub.peek(item['modes'].items())
 
-            mode_val = mode_val.float()
-            T, C, H, W = mode_val.shape
+            # For now, just reconstruct the stacked input, but
+            # in the future, the encoder will need to take care of
+            # the heterogeneous inputs
 
-            if self.input_norms is not None:
-                mode_norm = self.input_norms[mode_key]
-                mode_val = mode_norm(mode_val)
+            frame_ims = []
+            for frame in item['frames']:
+                assert len(frame['modes']) == 1, 'only handle one mode for now'
+                mode_key, mode_val = ub.peek(frame['modes'].items())
+                mode_val = mode_val.float()
+                if self.input_norms is not None:
+                    mode_norm = self.input_norms[mode_key]
+                    mode_val = mode_norm(mode_val)
+                    frame_ims.append(mode_val)
 
             # Because we are not collating we need to add a batch dimension
-            images = mode_val[None, ...]
+            images = torch.stack(frame_ims)[None, ...]
+
+            B, T, C, H, W = images.shape
 
             logits = self(images)
+
+            # TODO: it may be faster to compute loss at the downsampled
+            # resolution.
             logits = nn.functional.interpolate(
-                logits,
-                [H, W],
-                mode="bilinear")
+                logits, [H, W], mode="bilinear")
+
+            change_prob = logits.sigmoid()[0]
+            item_pred_changes.append(change_prob)
 
             if with_loss:
-                changes = item['changes'][None, ...]
-
-                change_prob = logits.sigmoid()[0]
-                binary_predictions.append(change_prob)
+                changes = torch.stack([
+                    frame['change'] for frame in item['frames'][1:]
+                ])[None, ...]
+                item_true_changes.append(changes)
 
                 # compute criterion
                 loss = self.criterion(logits, changes.float())
-                total_loss = total_loss + loss
+                item_losses.append(loss)
+
+        outputs['binary_predictions'] = item_pred_changes
 
         if with_loss:
-            all_pred = torch.stack(binary_predictions)
-            all_true = torch.stack([item['changes'] for item in batch])
+            total_loss = sum(item_losses)
+            all_pred = torch.stack(item_pred_changes)
+            all_true = torch.cat(item_true_changes, dim=0)
             # compute metrics
             item_metrics = {}
             for key, metric in self.metrics.items():
                 val = metric(all_pred, all_true)
                 item_metrics[f'{stage}_{key}'] = val
-
             outputs['loss'] = total_loss
         return outputs
 

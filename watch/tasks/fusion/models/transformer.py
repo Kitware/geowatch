@@ -17,24 +17,46 @@ class ResidualLayer(nn.Module):
         return x + self.module(x)
 
 
-class KthOutput(nn.Module):
-    def __init__(self, module: nn.Module, k: int):
-        super().__init__()
-        self.module = module
-        self.k = k
-
-    def forward(self, x):
-        return self.module(x)[self.k]
-
-
 class MultiheadSelfAttention(nn.MultiheadAttention):
     def forward(self, x):
-        return super().forward(x, x, x)
+        # attention returns a tuple of output and weights, so just take the
+        # output
+        attn_out, attn_weights = super().forward(x, x, x)
+        return attn_out
 
 
-def new_attention_layer(embedding_size, n_heads, attention_impl='exact', **kwargs):
+try:
+    from performer_pytorch import FastAttention
+    class FastMultiheadSelfAttention(FastAttention):
+        def __init__(self, embed_dim, num_heads):
+            self.embed_dim = embed_dim
+            self.num_heads = num_heads
+            assert embed_dim % num_heads == 0
+            dim_heads = embed_dim // num_heads
+            import math
+            # nb_features = int(dim_heads * math.log(dim_heads))
+            nb_features = int(dim_heads * 2)
+            super().__init__(
+                dim_heads, nb_features=nb_features, ortho_scaling=0,
+                causal=False, generalized_attention=False, kernel_fn=nn.ReLU(),
+                no_projection=False)
+
+        def forward(self, x):
+            # import xdev
+            # xdev.embed()
+            # make compatible with nn.MultiheadAttention
+            q = einops.rearrange(x, 's b (h e) -> b h s e', e=self.dim_heads)
+            a = super().forward(q, q, q)
+            out = einops.rearrange(a, 'b h s e -> s b (h e)', e=self.dim_heads)
+            return out
+except ImportError:
+    pass
+
+
+def new_attention_layer(embedding_size, n_heads, attention_impl='exact'):
     """
     Example:
+        >>> from watch.tasks.fusion.models.transformer import *  # NOQA
         >>> import torch
         >>> batch_size = 1
         >>> embedding_size = 4
@@ -49,23 +71,38 @@ def new_attention_layer(embedding_size, n_heads, attention_impl='exact', **kwarg
         >>> layer2 = new_attention_layer(embedding_size, n_heads, 'performer')
         >>> outputs2 = layer2(inputs)
         >>> assert outputs2.shape == input_shape
+
+    Ignore:
+        D = 9  # embedding dimension
+        H = 3   # number of heads
+        B = 5   # batch size
+        S = 7   # sequence length
+        x = torch.rand(S, B, D)
+        MultiheadSelfAttention(D, H)(x).shape
+
+        FastMultiheadSelfAttention(D, H)(x)
+
+
+        from performer_pytorch import FastAttention
+        q = einops.rearrange(x, 's b (h e) -> b h s e', h=H)
+        FastAttention(dim_heads=D // H, nb_features=None)(q, q, q).shape
     """
     if attention_impl == 'exact':
-        attention = MultiheadSelfAttention(embedding_size, n_heads, **kwargs)
+        attention = MultiheadSelfAttention(embedding_size, n_heads)
     elif attention_impl == 'performer':
-        from performer_pytorch import SelfAttention
-        attention = SelfAttention(
-            dim=embedding_size,
-            heads=n_heads,
-            causal=False,
-        )
+        import performer_pytorch  # NOQA
+        # from performer_pytorch import SelfAttention
+        # from performer_pytorch import FastAttention
+        # from performer_pytorch import SelfAttention
+        # attention = SelfAttention(dim=embedding_size, heads=n_heads)
+        attention = FastMultiheadSelfAttention(embedding_size, n_heads)
     else:
         raise KeyError(attention_impl)
 
     layer = ResidualLayer(
         nn.Sequential(
             nn.LayerNorm(embedding_size),
-            KthOutput(attention, k=0),
+            attention,
         ))
     return layer
 
