@@ -248,23 +248,26 @@ class Trainer(object):
             cropped_features1 = torch.stack([transforms.functional.crop(output1, *params) for params in params_list],dim=1)
             cropped_features2 = torch.stack([transforms.functional.crop(output2, *params) for params in params_list],dim=1)
             cropped_negative_features1 = torch.stack([transforms.functional.crop(negative_output1, *params) for params in params_list],dim=1)
-            
-            # print(cropped_features1.shape)
+
+
             cropped_bs, cropped_ps, cropped_c, cropped_h, cropped_w = cropped_features1.shape
-            
-            cropped_features1 = cropped_features1.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w) #[bs*ps, c*h*w]
-            cropped_features2 = cropped_features2.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w)
+            patch_max=6000
+            cropped_features1 = F.normalize(cropped_features1.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w),dim=1) #[bs*ps, c*h*w]
+            cropped_features2 = F.normalize(cropped_features2.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w),dim=1)
             cropped_negative_features1 = cropped_negative_features1.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w)
+            features = torch.cat([cropped_features1.unsqueeze(1), cropped_features2.unsqueeze(1)], dim=1)[:patch_max,:,:]
             
+            # print(features.shape)
             # cropped_features1_flat = torch.flatten(cropped_features1, start_dim=2, end_dim=3)
             # cropped_features2_flat = torch.flatten(cropped_features2, start_dim=2, end_dim=3)
             # negative_cropped_features1_flat = torch.flatten(cropped_negative_features1, start_dim=2, end_dim=3)
             
             # texton_h, texton_w = cropped_h, cropped_w
             texton_h, texton_w = h, w
+            max_patch_dictionary_length = cropped_ps if cropped_ps<patch_max else patch_max
             dictionary1_post_assignment = torch.zeros((bs, texton_h, texton_w)).to(device).long()
             dictionary2_post_assignment = torch.zeros((bs, texton_h, texton_w))#.to(device).long()
-            dictionary1 = torch.zeros((bs, texton_h, texton_w)).to(device).long()
+            dictionary1 = torch.zeros((bs, max_patch_dictionary_length)).to(device).long()
             # dictionary1 = torch.zeros((bs, number_of_patches)).to(device).long()
             # dictionary2 = torch.zeros((bs, cropped_h, cropped_w)).to(device).long()
             # dictionary = torch.zeros((bs, h, w)).to(device).long()
@@ -290,6 +293,7 @@ class Trainer(object):
                 # b_test_full_image2 = patched_image2_flat[b,:,:]
                 
                 b_dictionary1 = self.kmeans.fit_predict(b_input1_flat)#.to(device)
+                dictionary1[b,:] = b_dictionary1[:patch_max]
                 b_centroids1 = self.kmeans.centroids.T
                 # print(b_centroids1.shape)
                 # for index, params in enumerate(params_list):
@@ -346,24 +350,24 @@ class Trainer(object):
             
             start = time.time()
             
-            loss1 = 5*F.cross_entropy(output1, 
-                                      dictionary1_post_assignment,
-                                      ignore_index=0,
-                                      reduction="mean")
+            # loss1 = 5*F.cross_entropy(output1, 
+            #                           dictionary1_post_assignment,
+            #                           ignore_index=0,
+            #                           reduction="mean")
             
-            loss2 = 5*F.cross_entropy(output2, 
-                                      dictionary1_post_assignment,
-                                      ignore_index=0,                                      
-                                      reduction="mean")
+            # loss2 = 5*F.cross_entropy(output2, 
+            #                           dictionary1_post_assignment,
+            #                           ignore_index=0,                                      
+            #                           reduction="mean")
             
-            loss = loss1 + loss2
-
-            loss += 30*F.triplet_margin_loss(cropped_features1,#.unsqueeze(0), 
-                                            cropped_features2,#.unsqueeze(0), 
-                                            cropped_negative_features1
-                                            )
-
+            # loss = loss1 + loss2
             
+            # loss += 5*F.triplet_margin_loss(cropped_features1,#.unsqueeze(0), 
+            #                                 cropped_features2,#.unsqueeze(0), 
+            #                                 cropped_negative_features1
+            #                                 )
+            loss = self.contrastive_loss(features, labels=dictionary1)
+            # print(loss3)
             # loss += loss3
 
             self.optimizer.zero_grad()
@@ -445,7 +449,7 @@ class Trainer(object):
                         vca_pseudomask_show = image_change_magnitude_binary.cpu().detach()[batch_index_to_show,:,:].numpy()
                         # vca_pseudomask_crop_show = cm_binary_crop.cpu().detach()[batch_index_to_show,:,:].numpy()
                         # dictionary_show = dictionary1.cpu().detach()[batch_index_to_show,:,:].numpy()
-                        dictionary_show = dictionary1.cpu().detach()[batch_index_to_show,:,:].numpy()
+                        dictionary_show = dictionary2_post_assignment.cpu().detach()[batch_index_to_show,:,:].numpy()
                         dictionary2_show = dictionary1_post_assignment.cpu().detach()[batch_index_to_show,:,:].numpy()
                         
                         
