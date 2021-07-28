@@ -46,54 +46,62 @@ def predict(ann, vid_id, coco_dset, phase):
     construction phase wrt the phase in ann. Return that new phase plus the date
     of the annotation in which that phase was found.
     """
-    img_id = ann['image_id']
-    min_overlap = .5
-    annots = coco_dset.index.anns
-
-    # Find all images that come after this one
-    video_gids = coco_dset.index.vidid_to_gids[vid_id]
-    img_index = video_gids.index(img_id)
-    future_gids = video_gids[img_index:]
-    cand_aids = []
-    for frame_gid in future_gids:
-        cand_aids.extend(coco_dset.index.gid_to_aids[frame_gid])
-
-    union_poly_ann = kwimage.MultiPolygon.from_geojson(ann['segmentation_geos']).to_shapely()
-    for cand_aid in cand_aids:
-        ann_obs = annots[cand_aid]
-        cat = coco_dset.index.cats[ann_obs['category_id']]
-        predict_phase = category_dict.get(cat['name'], cat['name'])
-        if phase != predict_phase:
-            union_poly_obs = kwimage.MultiPolygon.from_geojson(ann_obs['segmentation_geos']).to_shapely()
-            overlap = union_poly_obs.intersection(union_poly_ann).area / union_poly_ann.area
-            if overlap > min_overlap:
-                obs_img = coco_dset.index.imgs[ann_obs['image_id']]
-                date = dateutil.parser.parse(obs_img['date_captured']).date()
-                prediction = {
-                    'predicted_phase': predict_phase,
-                    'predicted_phase_start_date': date.isoformat(),
-                }
-                return prediction
+    # Default prediction if one cannot be found
     prediction = {
         'predicted_phase': None,
         'predicted_phase_start_date': None,
     }
+    if phase != 'Post Construction':
+        img_id = ann['image_id']
+        min_overlap = .5
+
+        # Find all images that come after this one
+        video_gids = coco_dset.index.vidid_to_gids[vid_id]
+        img_index = video_gids.index(img_id)
+        future_gids = video_gids[img_index:]
+        cand_aids = []
+        for frame_gid in future_gids:
+            cand_aids.extend(coco_dset.index.gid_to_aids[frame_gid])
+
+        union_poly_ann = kwimage.MultiPolygon.from_geojson(
+            ann['segmentation_geos']).to_shapely()
+        for cand_aid in cand_aids:
+            ann_obs = coco_dset.index.anns[cand_aid]
+            cat = coco_dset.index.cats[ann_obs['category_id']]
+            predict_phase = category_dict.get(cat['name'], cat['name'])
+            if phase != predict_phase:
+                union_poly_obs = kwimage.MultiPolygon.from_geojson(
+                    ann_obs['segmentation_geos']).to_shapely()
+                overlap = (union_poly_obs.intersection(union_poly_ann).area /
+                           union_poly_ann.area)
+                if overlap > min_overlap:
+                    obs_img = coco_dset.index.imgs[ann_obs['image_id']]
+                    date = dateutil.parser.parse(obs_img['date_captured']).date()
+                    # We found a valid prediction
+                    prediction = {
+                        'predicted_phase': predict_phase,
+                        'predicted_phase_start_date': date.isoformat(),
+                    }
+                    break
     return prediction
 
 
 def boundary(sseg_geos, img_path):
-    geoinfo = watch.gis.geotiff.geotiff_crs_info(img_path)
-    img_bounds_wgs84 = kwimage.Polygon(exterior=geoinfo['wgs84_corners'])
-    if geoinfo['wgs84_crs_info']['axis_mapping'] != 'OAMS_TRADITIONAL_GIS_ORDER':
+    info = watch.gis.geotiff.geotiff_crs_info(img_path)
+    img_bounds_wgs84 = kwimage.Polygon(exterior=info['wgs84_corners'])
+    if info['wgs84_crs_info']['axis_mapping'] != 'OAMS_TRADITIONAL_GIS_ORDER':
         # If this is in traditional (lon/lat), convert to authority lat/long
         img_bounds_wgs84 = img_bounds_wgs84.swap_axes()
     img_wgs84 = img_bounds_wgs84.to_shapely()
     # Geojson is always supposed to be lon/lat, so swap to lat/lon to compare
     # with authority wgs84
-    ann_wgs84 = kwimage.MultiPolygon.from_geojson(sseg_geos).swap_axes().to_shapely()
-    lst = [img_wgs84.intersection(s).area / img_wgs84.area for s in ann_wgs84.geoms]
+    ann_lonlat = kwimage.MultiPolygon.from_geojson(sseg_geos)
+    ann_wgs84 = ann_lonlat.swap_axes().to_shapely()
+    lst = [img_wgs84.intersection(s).area / img_wgs84.area
+           for s in ann_wgs84.geoms]
     bool_lst = [str(area > .9) for area in lst]
-    return ','.join(bool_lst)
+    is_site_boundary = ','.join(bool_lst)
+    return is_site_boundary
 
 
 def convert_kwcoco_to_iarpa(coco_dset, region_id):
@@ -152,13 +160,9 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id):
         # FIXME: what happens when the category nmames dont work?
         properties['current_phase'] = category_dict.get(cat['name'], cat['name'])
 
-        if properties['current_phase'] == 'Post Construction':
-            properties['predicted_phase'] = None
-            properties['predicted_phase_start_date'] = None
-        else:
-            prediction = predict(ann, img['video_id'], coco_dset,
-                                 properties['current_phase'])
-            properties.update(prediction)
+        prediction = predict(ann, img['video_id'], coco_dset,
+                             properties['current_phase'])
+        properties.update(prediction)
 
         properties['sensor_name'] = sensor_dict[img['sensor_coarse']]
 

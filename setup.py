@@ -93,7 +93,10 @@ setup(
     long_description=README,
     include_package_data=True,
     package_data={
-        'watch.rc': ['site-model.schema.json'],
+        'watch.rc': [
+            'site-model.schema.json'
+            'region-model.schema.json'
+        ],
     },
     name='watch',
     packages=find_packages(include=['watch', 'watch.*']),
