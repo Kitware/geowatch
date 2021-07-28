@@ -54,19 +54,26 @@ def predict(annot, vid_id, dset, phase):
     potential_obs = []
     for frame in video:
         potential_obs.extend(mapping[frame])
+
+    union_poly_ann = shape(annot['segmentation_geos'])
     for obs in potential_obs:
         ann_obs = annots[obs]
         union_poly_obs = shape(ann_obs['segmentation_geos'])
-        union_poly_ann = shape(annot['segmentation_geos'])
-        overlap = union_poly_obs.intersection(
-            union_poly_ann).area / union_poly_ann.area
+        overlap = union_poly_obs.intersection(union_poly_ann).area / union_poly_ann.area
         cat = dset.index.cats[ann_obs['category_id']]
         if overlap > min_overlap and phase != category_dict[cat['supercategory']]:
             obs_img = dset.index.imgs[ann_obs['image_id']]
             date = dateutil.parser.parse(obs_img['date_captured']).date()
-            return (category_dict[cat['supercategory']],
-                    date.isoformat().replace('-', '/'))
-    return (None, None)
+            prediction = {
+                'predicted_phase': category_dict[cat['supercategory']],
+                'predicted_phase_date': date.isoformat().replace('-', '/'),
+            }
+            return prediction
+    prediction = {
+        'predicted_phase': None,
+        'predicted_phase_date': None,
+    }
+    return prediction
 
 
 def boundary(ann, img_path):
@@ -115,12 +122,9 @@ def convert(in_file, out_dir, region_id):
             feature['properties']['predicted_phase'] = None
             feature['properties']['predicted_phase_date'] = None
         else:
-            feature['properties']['predicted_phase'], \
-                feature['properties']['predicted_phase_date'] = \
-                predict(annot,
-                        img['video_id'],
-                        dataset,
-                        feature['properties']['current_phase'])
+            prediction = predict(annot, img['video_id'], dataset,
+                                 feature['properties']['current_phase'])
+            feature['properties'].update(prediction)
 
         feature['properties']['sensor_name'] = sensor_dict[img['sensor_coarse']]
         '''
