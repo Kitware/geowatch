@@ -896,6 +896,7 @@ class WatchVideoDataset(data.Dataset):
                 elif chan_idx == 1:
                     # Draw change label on even frames
                     change_overlay = kwimage.make_heatmask(changes)
+                    # print('change_overlay = {!r}'.format(change_overlay))
                     true_layers.append(change_overlay)
                     text = signal_text + '\n' + 'true change'
                 else:
@@ -906,7 +907,9 @@ class WatchVideoDataset(data.Dataset):
                 true_part = true_part[..., 0:3]
 
                 # Draw change label
-                true_part = kwimage.Mask(changes, format='c_mask').draw_on(true_part, color='lime')
+                if chan_idx == 1:
+                    # HACK: fixme put me in above conditional
+                    true_part = kwimage.Mask(changes, format='c_mask').draw_on(true_part, color='lime')
 
                 true_part = kwimage.imresize(true_part, max_dim=max_dim).clip(0, 1)
                 true_part = kwimage.draw_text_on_image(

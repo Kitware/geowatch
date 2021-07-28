@@ -52,7 +52,7 @@ Example:
     ...     #'channels': None,
     ...     'time_steps': 8,
     ...     #'chip_size': 128,
-    ...     'chip_size': 224,
+    ...     'chip_size': 192,
     ...     #'chip_size': 256,
     ...     'batch_size': 1,
     ...     'accumulate_grad_batches': 12,
