@@ -45,16 +45,17 @@ Example:
     ...     'train_dataset': train_fpath,
     ...     'vali_dataset': vali_fpath,
     ...     'dataset': 'WatchDataModule',
-    ...     'method': 'MultimodalTransformerDirectCD',
-    ...     #'channels': 'coastal|blue|green|red|nir|swir16|swir22',
-    ...     'channels': 'blue|green|red|nir',
+    ...     #'method': 'MultimodalTransformerDirectCD',
+    ...     'method': 'MultimodalTransformerDotProdCD',
+    ...     'channels': 'coastal|blue|green|red|nir|swir16|swir22',
+    ...     #'channels': 'blue|green|red|nir',
     ...     #'channels': None,
     ...     'time_steps': 8,
     ...     #'chip_size': 128,
-    ...     #'chip_size': 224,
-    ...     'chip_size': 256,
+    ...     'chip_size': 224,
+    ...     #'chip_size': 256,
     ...     'batch_size': 1,
-    ...     'accumulate_grad_batches': 8,
+    ...     'accumulate_grad_batches': 12,
     ...     'model_name': 'smt_it_stm_p8',
     ...     'num_workers': 12,
     ...     'attention_impl': 'exact',
@@ -140,7 +141,7 @@ class DrawBatchCallback(pl.callbacks.Callback):
     References:
         https://pytorch-lightning.readthedocs.io/en/latest/extensions/callbacks.html
     """
-    def __init__(self, num_draw=4, draw_interval=1):
+    def __init__(self, num_draw=2, draw_interval=10):
         super().__init__()
         self.num_draw = num_draw
         self.draw_interval = draw_interval
@@ -169,8 +170,13 @@ class DrawBatchCallback(pl.callbacks.Callback):
 
         stage = trainer.state.stage.lower()
         epoch = trainer.current_epoch
+
+        canvas = kwimage.draw_text_on_image(
+            canvas, f'{stage}_epoch{epoch:08d}_bx{batch_idx:04d}', org=(1, 1),
+            valign='top')
+
         dump_dpath = ub.ensuredir((trainer.log_dir, 'monitor', stage, 'batch'))
-        dump_fname = f'pred_epoch{epoch:08d}_bx{batch_idx:04d}.jpg'
+        dump_fname = f'pred_{stage}_epoch{epoch:08d}_bx{batch_idx:04d}.jpg'
         fpath = join(dump_dpath, dump_fname)
         kwimage.imwrite(fpath, canvas)
 
