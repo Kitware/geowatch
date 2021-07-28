@@ -1,0 +1,178 @@
+{
+  "$id": "region-model.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "features": {
+      "items": {
+        "properties": {
+          "geometry": {
+            "oneOf": [
+              {
+                "properties": {
+                  "coordinates": {
+                    "items": {
+                      "items": {
+                        "items": {
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 2,
+                          "type": "array"
+                        },
+                        "minItems": 4,
+                        "type": "array"
+                      },
+                      "type": "array"
+                    },
+                    "type": "array"
+                  },
+                  "type": {
+                    "const": "MultiPolygon",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "coordinates"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "coordinates": {
+                    "items": {
+                      "items": {
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 2,
+                        "type": "array"
+                      },
+                      "minItems": 4,
+                      "type": "array"
+                    },
+                    "type": "array"
+                  },
+                  "type": {
+                    "const": "Polygon",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "coordinates"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "properties": {
+            "oneOf": [
+              {
+                "properties": {
+                  "end_date": {
+                    "format": "date",
+                    "type": "string"
+                  },
+                  "mgrs": {
+                    "pattern": "^([0-9]{1,2}[A-Z])([A-Z]{2})*([0-9]{2}){0,5}$",
+                    "type": "string"
+                  },
+                  "region_model_id": {
+                    "type": "string"
+                  },
+                  "start_date": {
+                    "format": "date",
+                    "type": "string"
+                  },
+                  "type": {
+                    "const": "region"
+                  },
+                  "version": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "region_model_id",
+                  "type",
+                  "version",
+                  "mgrs",
+                  "start_date",
+                  "end_date"
+                ],
+                "title": "region-properties",
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "end_date": {
+                    "format": "date",
+                    "type": "string"
+                  },
+                  "predicted_end_date": {
+                    "format": "date",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "score": {
+                    "max": 1,
+                    "min": 0,
+                    "type": "number"
+                  },
+                  "site_id": {
+                    "status": "annotated",
+                    "type": "string"
+                  },
+                  "start_date": {
+                    "format": "date",
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "const": "site"
+                  }
+                },
+                "required": [
+                  "site_id",
+                  "type",
+                  "status",
+                  "start_date",
+                  "end_date",
+                  "score",
+                  "predicted_end_date"
+                ],
+                "title": "site-properties",
+                "type": "object"
+              }
+            ]
+          },
+          "type": {
+            "const": "Feature",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "geometry",
+          "properties"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "type": {
+      "const": "FeatureCollection",
+      "type": "string"
+    }
+  },
+  "required": [
+    "type",
+    "features"
+  ],
+  "title": "Region Model object",
+  "type": "object"
+}

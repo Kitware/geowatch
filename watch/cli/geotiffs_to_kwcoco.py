@@ -250,7 +250,7 @@ def find_geotiffs(geotiff_dpath, workers=0):
         elif dname.startswith('S2'):
             s2_dpath = dpath
             # FIXME: undefined name
-            job = jobs.submit(ingest_sentinal2_directory, s2_dpath)
+            job = jobs.submit(ingest_sentinel2_directory, s2_dpath)
             job.dpath = dpath
         else:
             msg = ('unknown dpath = {!r}'.format(dpath))

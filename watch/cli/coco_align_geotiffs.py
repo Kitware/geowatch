@@ -1257,7 +1257,7 @@ def find_roi_regions(dset):
         for p in rois
     ])
     try:
-        sh_rois = list(sh_rois_)
+        sh_rois = list(sh_rois_.geoms)
     except Exception:
         sh_rois = [sh_rois_]
 

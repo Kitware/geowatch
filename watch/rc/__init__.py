@@ -1,16 +1,6 @@
+__dev__ = """
+mkinit ~/code/watch/watch/rc/__init__.py --lazy -w
 """
-The SMART WATCH module
-"""
-
-
-__devnotes__ = """
-
-# Command to autogenerate lazy imports for this file
-mkinit -m watch --lazy --noattr
-mkinit -m watch --lazy --noattr -w
-"""
-
-__version__ = '0.1.0'
 
 
 def lazy_import(module_name, submodules, submod_attrs):
@@ -54,23 +44,17 @@ def lazy_import(module_name, submodules, submod_attrs):
 __getattr__ = lazy_import(
     __name__,
     submodules={
-        'cli',
-        'datacube',
-        'datasets',
-        'demo',
-        'gis',
-        'rc',
-        'sequencing',
-        'tasks',
-        'utils',
-        'validation',
+        'registry',
     },
-    submod_attrs={},
+    submod_attrs={
+        'registry': [
+            'load_site_model_schema',
+        ],
+    },
 )
 
 
 def __dir__():
     return __all__
 
-__all__ = ['cli', 'datacube', 'datasets', 'demo', 'gis', 'rc', 'sequencing',
-           'tasks', 'utils', 'validation']
+__all__ = ['load_site_model_schema', 'registry']

@@ -1,0 +1,158 @@
+{
+  "$id": "region-model.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "features": {
+      "items": {
+        "properties": {
+          "geometry": {
+            "oneOf": [
+              {
+                "properties": {
+                  "coordinates": {
+                    "items": {
+                      "items": {
+                        "items": {
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 2,
+                          "type": "array"
+                        },
+                        "minItems": 4,
+                        "type": "array"
+                      },
+                      "type": "array"
+                    },
+                    "type": "array"
+                  },
+                  "type": {
+                    "const": "MultiPolygon",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "coordinates"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "coordinates": {
+                    "items": {
+                      "items": {
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 2,
+                        "type": "array"
+                      },
+                      "minItems": 4,
+                      "type": "array"
+                    },
+                    "type": "array"
+                  },
+                  "type": {
+                    "const": "Polygon",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "coordinates"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "properties": {
+            "properties": {
+              "current_phase": {
+                "type": "string"
+              },
+              "is_occluded": {
+                "pattern": "((True|False),* *)+",
+                "type": "string"
+              },
+              "is_site_boundary": {
+                "pattern": "((True|False),* *)+",
+                "type": "string"
+              },
+              "observation_date": {
+                "format": "date",
+                "type": "string"
+              },
+              "predicted_phase": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "predicted_phase_start_date": {
+                "format": "date",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "score": {
+                "oneOf": [
+                  {
+                    "max": 1,
+                    "min": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+                
+              },
+              "sensor_name": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "score",
+              "predicted_phase",
+              "predicted_phase_start_date",
+              "is_occluded",
+              "is_site_boundary",
+              "current_phase",
+              "sensor_name",
+              "source",
+              "observation_date"
+            ],
+            "title": "site-properties",
+            "type": "object"
+          },
+          "type": {
+            "const": "Feature",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "geometry",
+          "properties"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "type": {
+      "const": "FeatureCollection",
+      "type": "string"
+    }
+  },
+  "required": [
+    "type",
+    "features"
+  ],
+  "title": "Site Model object",
+  "type": "object"
+}
