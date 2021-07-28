@@ -13,15 +13,6 @@ mkinit -m watch --lazy --noattr -w
 __version__ = '0.1.0'
 
 
-def _hello_world():
-    """
-    Demonstrate how to write a doctest for any function in this library.
-
-    Example:
-        >>> ans = _hello_world()
-        >>> assert ans == 42
-    """
-
 def lazy_import(module_name, submodules, submod_attrs):
     import importlib
     import os
