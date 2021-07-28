@@ -53,12 +53,17 @@ def grab_sentinel2_product(index=0, overwrite=False):
         os.path.isdir(os.path.join(scene_dpath, os.path.basename(url)))
         and not os.listdir(os.path.join(scene_dpath, os.path.basename(url))))
 
-    # Download the scene
-    assert fels.get_sentinel2_image(url,
-                                    scene_dpath,
-                                    #overwrite=was_failed_download,
-                                    overwrite=True, # makes this really slow
-                                    reject_old=True)
+    if not was_failed_download:
+        # This is really slow even if the data is cached with default fels
+        # This PR: https://github.com/vascobnunes/fetchLandsatSentinelFromGoogleCloud/pull/58
+        # can help speed it up, but it is not accepted yet
+
+        # Download the scene
+        assert fels.get_sentinel2_image(url,
+                                        scene_dpath,
+                                        #overwrite=was_failed_download,
+                                        overwrite=True,  # makes this really slow
+                                        reject_old=True)
 
     # Build a rgdc object to return the scene
     root = os.path.join(scene_dpath, url.split('/')[-1])
