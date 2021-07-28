@@ -35,7 +35,7 @@ def shape(geometry, lst=False):
         'type': geometry['type']
     }
     polygon = shp.geometry.shape(geo_dict).buffer(0)
-    return shp.ops.cascaded_union(polygon)
+    return shp.ops.unary_union(polygon)
 
 
 def predict(annot, vid_id, dset, phase):
