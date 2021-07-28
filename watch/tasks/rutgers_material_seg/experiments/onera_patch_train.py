@@ -913,22 +913,16 @@ if __name__== "__main__":
     experiment.log_parameters(config['evaluation'])
     experiment.log_parameters(config['visualization'])
     
-    # print(config['data']['image_size'])
     coco_fpath = ub.expandpath(config['data'][config['location']]['coco_json'])
     dset = kwcoco.CocoDataset(coco_fpath)
     sampler = ndsampler.CocoSampler(dset)
 
-    # # print(sampler)
-    number_of_timestamps, h, w = 2, 128, 128
-    window_dims = (number_of_timestamps, h, w) #[t,h,w]
-    input_dims = (h, w)
+    window_dims = (config['data']['time_steps'], config['data']['image_size'], config['data']['image_size']) #[t,h,w]
+    input_dims = (config['data']['image_size'], config['data']['image_size'])
 
-    # channels = 'B01|B02|B03|B04|B05|B06|B07|B08|B09|B10|B11|B12|B8A'
     channels = config['data']['channels']
     num_channels = len(channels.split('|'))
     config['training']['num_channels'] = num_channels
-    # channels = 'red|green|blue'
-    # channels = 'gray'
     dataset = SequenceDataset(sampler, window_dims, input_dims, channels)
     print(dataset.__len__())
     train_dataloader = dataset.make_loader(batch_size=config['training']['batch_size'])
@@ -941,8 +935,7 @@ if __name__== "__main__":
                         weight_std=config['training']['weight_std'],
                         beta=config['training']['beta'],
                         num_channels=config['training']['num_channels'],
-                        out_dim=config['training']['out_features_dim'],
-                        hw=h*w)
+                        out_dim=config['training']['out_features_dim'])
     
     # model = SupConResNet(name=config['training']['backbone'])
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)

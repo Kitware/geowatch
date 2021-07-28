@@ -105,6 +105,7 @@ class Evaluator(object):
                 
                 #TODO:
                     # Add auxiliary channel save
+                
                 # masks1 = F.softmax(output1, dim=1)#.detach()
                 # masks2 = F.softmax(output2, dim=1)#.detach()
                 # # masks1 = F.softmax(features1, dim=1)
@@ -136,12 +137,9 @@ class Evaluator(object):
         return
 
 if __name__== "__main__":
-    
-    # from watch.tasks.rutgers_material_seg.configs import main
-    # project_root = "/home/native/projects/watch/watch/tasks/rutgers_material_seg/"
+
     main_config_path = f"./configs/main.yaml"
-    
-    
+
     initial_config = utils.load_yaml_as_dict(main_config_path)
     experiment_config_path = f"./configs/{initial_config['dataset']}.yaml"
     
@@ -158,19 +156,19 @@ if __name__== "__main__":
     torch.set_default_dtype(torch.float32)
     
     device_ids = list(range(torch.cuda.device_count()))
-    config['device_ids'] = device_ids
     gpu_devices = ','.join([str(id) for id in device_ids])
     os.environ["CUDA_VISIBLE_DEVICES"] = gpu_devices
     device = torch.device('cuda')
+
+    config['device_ids'] = device_ids
     config['devices_used'] = gpu_devices
     
     coco_fpath = ub.expandpath(config['data'][config['location']]['coco_json'])
     dset = kwcoco.CocoDataset(coco_fpath)
     sampler = ndsampler.CocoSampler(dset)
 
-    number_of_timestamps, h, w = 2, 128, 128
-    window_dims = (number_of_timestamps, h, w) #[t,h,w]
-    input_dims = (h, w)
+    window_dims = (config['data']['time_steps'], config['data']['image_size'], config['data']['image_size']) #[t,h,w]
+    input_dims = (config['data']['image_size'], config['data']['image_size'])
 
     channels = config['data']['channels']
     num_channels = len(channels.split('|'))
@@ -189,7 +187,6 @@ if __name__== "__main__":
                         num_channels=config['training']['num_channels'],
                         out_dim=config['training']['out_features_dim'])
     
-    # model = SupConResNet(name=config['training']['backbone'])
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print("model has {} trainable parameters".format(num_params))
     model = nn.DataParallel(model)

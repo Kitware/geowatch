@@ -103,7 +103,7 @@ class ShallowSeg(nn.Module):
     def __init__(self, num_channels=3, num_classes=3,
                  bilinear=True, pretrained=False,
                  beta=False, weight_std=False,
-                 num_groups=32, out_dim=128, hw=128):
+                 num_groups=32, out_dim=128):
         super(ShallowSeg, self).__init__()
         self.num_channels = num_channels
         self.num_classes = num_classes
