@@ -1,44 +1,39 @@
+"""
+TODO:
+    - [ ] Add or point to documentation about the IARPA format in this file
+"""
 import geojson
 import json
 import os
 import sys
 import argparse
 import kwcoco
-import shapely as shp
-import shapely.ops
-import shapely.geometry
 import dateutil.parser
-from osgeo import gdal, osr
-from watch.gis import spatial_reference
-
-category_dict = {'construction': 'Active Construction',
-                 'pre-construction': 'Site Preparation',
-                 'finalized': 'Post Construction',
-                 'obscured': 'Unknown'}
-
-sensor_dict = {'WV': 'WorldView',
-               'S2': 'Sentinel-2',
-               'LE': 'Landsat',
-               'LC': 'Landsat'}
+import watch
+import kwimage
+from os.path import join
+from collections import defaultdict
 
 
-def shape(geometry, lst=False):
-    if geometry['type'] == 'Polygon':
-        coords = [geometry['coordinates']]
-    else:
-        coords = geometry['coordinates']
-    if lst:
-        return [shp.geometry.shape({'coordinates': [c], 'type':geometry['type']}).buffer(0)
-                for c in coords]
-    geo_dict = {
-        'coordinates': coords,
-        'type': geometry['type']
-    }
-    polygon = shp.geometry.shape(geo_dict).buffer(0)
-    return shp.ops.unary_union(polygon)
+# TODO: if we are hardcoding names we should have some constants file
+# to keep things sane.w:
+category_dict = {
+    'construction': 'Active Construction',
+    'pre-construction': 'Site Preparation',
+    'finalized': 'Post Construction',
+    'obscured': 'Unknown'
+}
+
+sensor_dict = {
+    'WV': 'WorldView',
+    'S2': 'Sentinel-2',
+    'LE': 'Landsat',
+    'LC': 'Landsat',
+    'L8': 'Landsat',
+}
 
 
-def predict(ann, vid_id, dset, phase):
+def predict(ann, vid_id, coco_dset, phase):
     """
     Look forward in time and find the closest video frame that has a different
     construction phase wrt the phase in ann. Return that new phase plus the date
@@ -46,26 +41,28 @@ def predict(ann, vid_id, dset, phase):
     """
     img_id = ann['image_id']
     min_overlap = .5
-    mapping = dset.index.gid_to_aids
-    annots = dset.index.anns
-    video = dset.index.vidid_to_gids[vid_id]
-    img_index = video.index(img_id)
-    video = video[img_index:]
-    potential_obs = []
-    for frame in video:
-        potential_obs.extend(mapping[frame])
+    annots = coco_dset.index.anns
 
-    union_poly_ann = shape(ann['segmentation_geos'])
-    for obs in potential_obs:
-        ann_obs = annots[obs]
-        union_poly_obs = shape(ann_obs['segmentation_geos'])
+    # Find all images that come after this one
+    video_gids = coco_dset.index.vidid_to_gids[vid_id]
+    img_index = video_gids.index(img_id)
+    future_gids = video_gids[img_index:]
+    cand_aids = []
+    for frame_gid in future_gids:
+        cand_aids.extend(coco_dset.index.gid_to_aids[frame_gid])
+
+    union_poly_ann = kwimage.MultiPolygon.from_geojson(ann['segmentation_geos']).to_shapely()
+    for cand_aid in cand_aids:
+        ann_obs = annots[cand_aid]
+        union_poly_obs = kwimage.MultiPolygon.from_geojson(ann_obs['segmentation_geos']).to_shapely()
         overlap = union_poly_obs.intersection(union_poly_ann).area / union_poly_ann.area
-        cat = dset.index.cats[ann_obs['category_id']]
-        if overlap > min_overlap and phase != category_dict[cat['supercategory']]:
-            obs_img = dset.index.imgs[ann_obs['image_id']]
+        cat = coco_dset.index.cats[ann_obs['category_id']]
+        predict_phase = category_dict.get(cat['name'], cat['name'])
+        if overlap > min_overlap and phase != predict_phase:
+            obs_img = coco_dset.index.imgs[ann_obs['image_id']]
             date = dateutil.parser.parse(obs_img['date_captured']).date()
             prediction = {
-                'predicted_phase': category_dict[cat['supercategory']],
+                'predicted_phase': predict_phase,
                 'predicted_phase_date': date.isoformat().replace('-', '/'),
             }
             return prediction
@@ -77,40 +74,41 @@ def predict(ann, vid_id, dset, phase):
 
 
 def boundary(sseg_geos, img_path):
-    src = gdal.Open(img_path, gdal.GA_ReadOnly)
-    ulx, xres, xskew, uly, yskew, yres = src.GetGeoTransform()
-    lrx = ulx + (src.RasterXSize * xres)
-    lry = uly + (src.RasterYSize * yres)
-    if not spatial_reference.check_latlons(ulx, uly):
-        source = osr.SpatialReference()
-        source.ImportFromWkt(src.GetProjection())
-        target = osr.SpatialReference()
-        target.ImportFromEPSG(4326)
-        transform = osr.CoordinateTransformation(source, target)
-        ulx, uly, x = transform.TransformPoint(ulx, uly)
-        lrx, lry, x = transform.TransformPoint(lrx, lry)
-    shape_list = shape(sseg_geos, lst=True)
-    site_geo = {
-        'type': 'Polygon',
-        'coordinates': [[uly, ulx], [uly, lrx], [lry, lrx], [lry, ulx], [uly, ulx]]
-    }
-    site_shape = shape(site_geo)
-    lst = [site_shape.intersection(s).area /
-           site_shape.area for s in shape_list]
+    geoinfo = watch.gis.geotiff.geotiff_crs_info(img_path)
+    img_bounds_wgs84 = kwimage.Polygon(exterior=geoinfo['wgs84_corners'])
+    if geoinfo['wgs84_crs_info']['axis_mapping'] != 'OAMS_TRADITIONAL_GIS_ORDER':
+        # If this is in traditional (lon/lat), convert to authority lat/long
+        img_bounds_wgs84 = img_bounds_wgs84.swap_axes()
+    img_wgs84 = img_bounds_wgs84.to_shapely()
+    # Geojson is always supposed to be lon/lat, so swap to lat/lon to compare
+    # with authority wgs84
+    ann_wgs84 = kwimage.MultiPolygon.from_geojson(sseg_geos).swap_axes().to_shapely()
+    lst = [img_wgs84.intersection(s).area / img_wgs84.area for s in ann_wgs84.geoms]
     bool_lst = [str(area > .9) for area in lst]
     return ','.join(bool_lst)
 
 
-def convert_kwcoco_to_iarpa(coco_dset, out_dir, region_id):
+def convert_kwcoco_to_iarpa(coco_dset):
     """
     Convert a kwcoco coco_dset to the IARPA JSON format
 
+    Args:
+        coco_dset (kwcoco.CocoDataset):
+            a coco dataset, but requires images are geotiffs as well as certain
+            special fields.
+
+    Returns:
+        dict: sites
+            json-style data in IARPA site format
+
     Example:
-        >>> import sys, ubelt
         >>> from watch.cli.kwcoco_to_geojson import *  # NOQA
-        >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
+        >>> from watch.demo import smart_kwcoco_demodata
+        >>> coco_dset = smart_kwcoco_demodata.demo_smart_aligned_kwcoco()
+        >>> sites = convert_kwcoco_to_iarpa(coco_dset)
+        >>> print('sites = {}'.format(ub.repr2(sites, nl=6)))
     """
-    sites = {}
+    sites = defaultdict(list)
     for ann in coco_dset.index.anns.values():
         img = coco_dset.index.imgs[ann['image_id']]
         cat = coco_dset.index.cats[ann['category_id']]
@@ -120,38 +118,53 @@ def convert_kwcoco_to_iarpa(coco_dset, out_dir, region_id):
         date = dateutil.parser.parse(img['date_captured']).date()
 
         feature = geojson.Feature(geometry=sseg_geos)
-        feature['properties']['source'] = img['parent_file_name']
-        feature['properties']['observation_date'] = date.isoformat().replace('-', '/')
+        properties = feature['properties']
+        properties['source'] = img['parent_file_name']
+        properties['observation_date'] = date.isoformat().replace('-', '/')
         # Is this default supposed to be a string?
-        feature['properties']['score'] = ann.get('score', '1.0')
-        feature['properties']['current_phase'] = category_dict[cat['supercategory']]
+        properties['score'] = ann.get('score', '1.0')
 
-        if feature['properties']['current_phase'] == 'Post Construction':
-            feature['properties']['predicted_phase'] = None
-            feature['properties']['predicted_phase_date'] = None
+        # This was supercategory, is that supposed to be name instead?
+        # FIXME: what happens when the category nmames dont work?
+        properties['current_phase'] = category_dict.get(cat['name'], cat['name'])
+
+        if properties['current_phase'] == 'Post Construction':
+            properties['predicted_phase'] = None
+            properties['predicted_phase_date'] = None
         else:
             prediction = predict(ann, img['video_id'], coco_dset,
-                                 feature['properties']['current_phase'])
-            feature['properties'].update(prediction)
+                                 properties['current_phase'])
+            properties.update(prediction)
 
-        feature['properties']['sensor_name'] = sensor_dict[img['sensor_coarse']]
+        properties['sensor_name'] = sensor_dict[img['sensor_coarse']]
         '''
-        feature['properties']['is_occluded']
+        properties['is_occluded']
         depends on cloud masking output?
         '''
-        feature['properties']['is_site_boundary'] = boundary(sseg_geos, img['file_name'])
-        tag = img.get('site_tag', img['parent_file_name'].split('/')[0])
-        if sites.get(tag):
-            sites[tag].append(feature)
+
+        # Handle the case if an image consists of one main image or multiple
+        # auxiliary images
+        if img.get('file_name', None) is not None:
+            img_path = join(coco_dset.bundle_dpath, img['file_name'])
         else:
-            sites[tag] = [feature]
+            # Use the first auxiliary image
+            # (todo: might want to choose determine the image "canvas" coordinates?)
+            img_path = join(coco_dset.bundle_dpath, img['auxiliary'][0]['file_name'])
 
+        properties['is_site_boundary'] = boundary(sseg_geos, img_path)
+
+        # This seems fragile? Needs docs.
+        site_name = None
+        if img.get('site_tag', None):
+            site_name = img['site_tag']
+        elif img.get('parent_file_name', None):
+            site_name = img.get('parent_file_name').split('/')[0]
+        elif img.get('name', None):
+            site_name = img.get('name')
+        else:
+            raise Exception('cannot determine site_name')
+        sites[site_name].append(feature)
     return sites
-
-    for site in sites:
-        collection = geojson.FeatureCollection(sites[site][1:], id=region_id)
-        with open(os.path.join(out_dir, site + '.json'), 'w') as f:
-            json.dump(collection, f, indent=2)
 
 
 def main(args):
@@ -165,8 +178,17 @@ def main(args):
         help="ID for region that site belongs to")
     args = parser.parse_args(args)
 
+    # Read the kwcoco file
     coco_dset = kwcoco.CocoDataset(args.in_file)
-    convert_kwcoco_to_iarpa(coco_dset, args.out_dir, args.region_id)
+
+    # Convert kwcoco to sites
+    sites = convert_kwcoco_to_iarpa(coco_dset)
+
+    # Write site to disk
+    for site in sites:
+        collection = geojson.FeatureCollection(sites[site][1:], id=args.region_id)
+        with open(os.path.join(args.out_dir, site + '.json'), 'w') as f:
+            json.dump(collection, f, indent=2)
     return 0
 
 
