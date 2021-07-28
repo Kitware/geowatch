@@ -1,6 +1,10 @@
 """
-TODO:
-    - [ ] Add or point to documentation about the IARPA format in this file
+For documentation about the IARPA json format see [1]_.
+For documentation about the KWCOCO json format see [2]_.
+
+References:
+    .. [1] https://infrastructure.smartgitlab.com/docs/pages/api_documentation.html#site-model
+    .. [2] https://gitlab.kitware.com/computer-vision/kwcoco
 """
 import geojson
 import json
@@ -108,6 +112,11 @@ def convert_kwcoco_to_iarpa(coco_dset):
         >>> coco_dset = smart_kwcoco_demodata.demo_smart_aligned_kwcoco()
         >>> sites = convert_kwcoco_to_iarpa(coco_dset)
         >>> print('sites = {}'.format(ub.repr2(sites, nl=6)))
+        >>> import jsonschema
+        >>> import watch
+        >>> SITE_SCHEMA = watch.rc.load_site_model_schema()
+        >>> result = jsonschema.validate(sites, schema=SITE_SCHEMA)
+
     """
     sites = defaultdict(list)
     for ann in coco_dset.index.anns.values():

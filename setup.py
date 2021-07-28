@@ -92,6 +92,9 @@ setup(
     long_description_content_type='text/x-rst',
     long_description=README,
     include_package_data=True,
+    package_data={
+        'watch.rc': ['site-model.schema.json'],
+    },
     name='watch',
     packages=find_packages(include=['watch', 'watch.*']),
     url='https://gitlab.kitware.com/smart/watch.git',
