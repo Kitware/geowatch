@@ -42,10 +42,9 @@ np.set_printoptions(precision=3, suppress=True)
 mean_std = ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 
 class Evaluator(object):
-    def __init__(self, model: object, train_loader: torch.utils.data.DataLoader, 
-                 val_loader: torch.utils.data.DataLoader, epochs: int, 
+    def __init__(self, model: object, 
+                 eval_loader: torch.utils.data.DataLoader, 
                  optimizer: object, scheduler: object, 
-                 test_loader: torch.utils.data.DataLoader =None, 
                  test_with_full_supervision: int =0) -> None:
         """Evaluator class
 
@@ -62,47 +61,22 @@ class Evaluator(object):
 
         self.model = model
         self.use_crf = config['evaluation']['use_crf']
-        self.train_loader = train_loader
-        self.val_loader = val_loader
-        self.epochs = epochs
+        self.eval_loader = eval_loader
         self.optimizer = optimizer
         self.scheduler = scheduler
-        self.max_label = self.k
-        self.all_crops_params = [tuple([i,j,config['data']['window_size'], config['data']['window_size']]) for i in range(config['data']['window_size'],h-config['data']['window_size']) for j in range(config['data']['window_size'],w-config['data']['window_size'])]
-        self.all_crops_params_np = np.array(self.all_crops_params)
-
-        if test_loader is not None:
-            self.test_loader = test_loader
-            self.test_with_full_supervision = test_with_full_supervision
-        
-        self.crop_size=(config['data']['window_size'], config['data']['window_size'])
+        self.max_label = config['data']['num_classes']
             
-    def eval(self, epoch: int, cometml_experiemnt: object, save_individual_plots_specific: bool = False) -> tuple:
-        """validating single epoch
+    def eval(self) -> tuple:
+        """evaluate a single epoch
 
         Args:
-            epoch (int): current epoch
-            cometml_experiemnt (object): logging experiment
 
         Returns:
-            tuple: (validation loss, mIoU)
+            None
         """
-        total_loss = 0
-        preds, stacked_preds, targets  = [], [], []
-        accuracies = 0
-        running_ap = 0.0
-        batch_index_to_show = config['visualization']['batch_index_to_show']
-        if self.test_with_full_supervision == 1:
-            loader = self.test_loader
-        else:
-            loader = self.val_loader
-        loader_size = len(loader)
-        if config['visualization']['val_visualization_divisor'] > loader_size:
-            config['visualization']['val_visualization_divisor'] = loader_size
-        iter_visualization = loader_size // config['visualization']['val_visualization_divisor']
         self.model.eval()
         with torch.no_grad():
-            pbar = tqdm(enumerate(loader), total=len(loader))
+            pbar = tqdm(enumerate(self.eval_loader), total=len(self.eval_loader))
             for batch_index,batch in pbar:
                 outputs = batch
                 images, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0]
@@ -129,19 +103,18 @@ class Evaluator(object):
                 output1, features1 = self.model(image1)  ## [B,22,150,150]
                 output2, features2 = self.model(image2)
                 
-                masks1 = F.softmax(output1, dim=1)#.detach()
-                masks2 = F.softmax(output2, dim=1)#.detach()
-                # masks1 = F.softmax(features1, dim=1)
-                # masks2 = F.softmax(features2, dim=1)
-                # masks1 = self.high_confidence_filter(masks1, cutoff_top=config['high_confidence_threshold']['val_cutoff'])
-                # masks2 = self.high_confidence_filter(masks2, cutoff_top=config['high_confidence_threshold']['val_cutoff'])
-                pred1 = masks1.max(1)[1].cpu().detach()#.numpy()
-                pred2 = masks2.max(1)[1].cpu().detach()#.numpy()
-                change_detection_prediction = (pred1!=pred2).type(torch.uint8)
+                #TODO:
+                    # Add auxiliary channel save
+                # masks1 = F.softmax(output1, dim=1)#.detach()
+                # masks2 = F.softmax(output2, dim=1)#.detach()
+                # # masks1 = F.softmax(features1, dim=1)
+                # # masks2 = F.softmax(features2, dim=1)
+                # # masks1 = self.high_confidence_filter(masks1, cutoff_top=config['high_confidence_threshold']['val_cutoff'])
+                # # masks2 = self.high_confidence_filter(masks2, cutoff_top=config['high_confidence_threshold']['val_cutoff'])
+                # pred1 = masks1.max(1)[1].cpu().detach()#.numpy()
+                # pred2 = masks2.max(1)[1].cpu().detach()#.numpy()
+                # change_detection_prediction = (pred1!=pred2).type(torch.uint8)
                 
-                preds.append(change_detection_prediction)
-                mask1[mask1==-1]=0
-                targets.append(mask1.cpu())#.numpy())
         
         return total_loss/loader.__len__(), overall_miou
     
@@ -157,18 +130,20 @@ class Evaluator(object):
         """
         
         if config['procedures']['validate']:
-            val_loss, val_mean_iou = self.validate(epoch)
+            val_loss, val_mean_iou = self.eval()
         self.scheduler.step()
             
         return
 
 if __name__== "__main__":
-
-    project_root = "/home/native/projects/watch/watch/tasks/rutgers_material_seg/"
-    main_config_path = f"{project_root}/configs/main.yaml"
     
-    initial_config = utils.load_yaml_as_dict(main_config_path)"
-    experiment_config_path = f"{project_root}/configs/{initial_config['dataset']}.yaml"
+    # from watch.tasks.rutgers_material_seg.configs import main
+    # project_root = "/home/native/projects/watch/watch/tasks/rutgers_material_seg/"
+    main_config_path = f"./configs/main.yaml"
+    
+    
+    initial_config = utils.load_yaml_as_dict(main_config_path)
+    experiment_config_path = f"./configs/{initial_config['dataset']}.yaml"
     
     experiment_config = utils.config_parser(experiment_config_path,experiment_type="training")
     config = {**initial_config, **experiment_config}
@@ -202,7 +177,7 @@ if __name__== "__main__":
     config['training']['num_channels'] = num_channels
     dataset = SequenceDataset(sampler, window_dims, input_dims, channels)
     print(dataset.__len__())
-    train_dataloader = dataset.make_loader(batch_size=config['training']['batch_size'])
+    eval_dataloader = dataset.make_loader(batch_size=config['training']['batch_size'])
     
     model = build_model(model_name = config['training']['model_name'],
                         backbone=config['training']['backbone'],
@@ -231,7 +206,7 @@ if __name__== "__main__":
                           momentum=config['training']['momentum'], 
                           weight_decay=config['training']['weight_decay'])
     
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer,len(train_dataloader),
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer,len(eval_dataloader),
                                                      eta_min = config['training']['learning_rate'])
 
     if config['training']['resume'] != False:
@@ -239,20 +214,16 @@ if __name__== "__main__":
         if os.path.isfile(config['training']['resume']):
             checkpoint = torch.load(config['training']['resume'])
             model.load_state_dict(checkpoint['model'], strict=False)
-            start_epoch = checkpoint['epoch']
             optimizer.load_state_dict(checkpoint['optimizer'])
             scheduler.load_state_dict(checkpoint['scheduler'])
         else:
             print("no checkpoint found at {}".format(config['training']['resume']))
             exit()
         
-    trainer = Trainer(model,
-                      train_dataloader,
-                      train_dataloader,
-                      config['training']['epochs'],
+    evaler = Evaluator(model,
+                      eval_dataloader,
                       optimizer,
                       scheduler,
-                      test_loader=train_dataloader,
                       test_with_full_supervision=config['training']['test_with_full_supervision']
                       )
-    trainer.forward()
+    evaler.forward()
