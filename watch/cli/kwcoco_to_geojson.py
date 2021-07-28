@@ -1,6 +1,9 @@
 """
-For documentation about the IARPA json format see [1]_.
-For documentation about the KWCOCO json format see [2]_.
+For documentation about the IARPA json format see [1]_. A formal json-schema
+can be found in ``watch/rc/site-model.schema.json``.
+
+For documentation about the KWCOCO json format see [2]_. A formal json-schema
+can be found in ``kwcoco.coco_schema``
 
 References:
     .. [1] https://infrastructure.smartgitlab.com/docs/pages/api_documentation.html#site-model
@@ -68,12 +71,12 @@ def predict(ann, vid_id, coco_dset, phase):
                 date = dateutil.parser.parse(obs_img['date_captured']).date()
                 prediction = {
                     'predicted_phase': predict_phase,
-                    'predicted_phase_date': date.isoformat().replace('-', '/'),
+                    'predicted_phase_start_date': date.isoformat(),
                 }
                 return prediction
     prediction = {
         'predicted_phase': None,
-        'predicted_phase_date': None,
+        'predicted_phase_start_date': None,
     }
     return prediction
 
@@ -93,7 +96,7 @@ def boundary(sseg_geos, img_path):
     return ','.join(bool_lst)
 
 
-def convert_kwcoco_to_iarpa(coco_dset):
+def convert_kwcoco_to_iarpa(coco_dset, region_id):
     """
     Convert a kwcoco coco_dset to the IARPA JSON format
 
@@ -104,21 +107,23 @@ def convert_kwcoco_to_iarpa(coco_dset):
 
     Returns:
         dict: sites
-            json-style data in IARPA site format
+            dictionary of json-style data in IARPA site format
 
     Example:
         >>> from watch.cli.kwcoco_to_geojson import *  # NOQA
         >>> from watch.demo import smart_kwcoco_demodata
         >>> coco_dset = smart_kwcoco_demodata.demo_smart_aligned_kwcoco()
-        >>> sites = convert_kwcoco_to_iarpa(coco_dset)
-        >>> print('sites = {}'.format(ub.repr2(sites, nl=6)))
+        >>> region_id = 'dummy_region'
+        >>> sites = convert_kwcoco_to_iarpa(coco_dset, region_id)
+        >>> print('sites = {}'.format(ub.repr2(sites, nl=7, sort=0)))
         >>> import jsonschema
         >>> import watch
         >>> SITE_SCHEMA = watch.rc.load_site_model_schema()
-        >>> result = jsonschema.validate(sites, schema=SITE_SCHEMA)
+        >>> for site_name, collection in sites.items():
+        >>>     jsonschema.validate(collection, schema=SITE_SCHEMA)
 
     """
-    sites = defaultdict(list)
+    site_features = defaultdict(list)
     for ann in coco_dset.index.anns.values():
         img = coco_dset.index.imgs[ann['image_id']]
         cat = coco_dset.index.cats[ann['category_id']]
@@ -127,26 +132,39 @@ def convert_kwcoco_to_iarpa(coco_dset):
         sseg_geos = ann['segmentation_geos']
         date = dateutil.parser.parse(img['date_captured']).date()
 
+        source = None
+        # FIXME: seems fragile?
+        if img.get('parent_file_name', None):
+            source = img.get('parent_file_name').split('/')[0]
+        elif img.get('name', None):
+            source = img.get('name')
+        else:
+            raise Exception('cannot determine source')
+
         feature = geojson.Feature(geometry=sseg_geos)
         properties = feature['properties']
-        properties['source'] = img['parent_file_name']
-        properties['observation_date'] = date.isoformat().replace('-', '/')
+        properties['source'] = source
+        properties['observation_date'] = date.isoformat()
         # Is this default supposed to be a string?
-        properties['score'] = ann.get('score', '1.0')
+        properties['score'] = ann.get('score', 1.0)
 
         # This was supercategory, is that supposed to be name instead?
         # FIXME: what happens when the category nmames dont work?
         properties['current_phase'] = category_dict.get(cat['name'], cat['name'])
 
         if properties['current_phase'] == 'Post Construction':
-            properties['predicted_phase'] = None
-            properties['predicted_phase_date'] = None
+            properties['predicted_phase'] = 'unknown'
+            properties['predicted_phase_start_date'] = 'unknown'
         else:
             prediction = predict(ann, img['video_id'], coco_dset,
                                  properties['current_phase'])
             properties.update(prediction)
 
         properties['sensor_name'] = sensor_dict[img['sensor_coarse']]
+
+        # HACK IN IS_OCCLUDED
+        num_polys = len(kwimage.MultiPolygon.from_geojson(sseg_geos).data)
+        properties['is_occluded'] = ','.join(['False'] * num_polys)
         '''
         properties['is_occluded']
         depends on cloud masking output?
@@ -167,13 +185,16 @@ def convert_kwcoco_to_iarpa(coco_dset):
         site_name = None
         if img.get('site_tag', None):
             site_name = img['site_tag']
-        elif img.get('parent_file_name', None):
-            site_name = img.get('parent_file_name').split('/')[0]
-        elif img.get('name', None):
-            site_name = img.get('name')
+        elif source is not None:
+            site_name = source
         else:
             raise Exception('cannot determine site_name')
-        sites[site_name].append(feature)
+
+        site_features[site_name].append(feature)
+
+    sites = {}
+    for site_name, features in site_features.items():
+        sites[site_name] = geojson.FeatureCollection(features, id=region_id)
     return sites
 
 
@@ -192,11 +213,10 @@ def main(args):
     coco_dset = kwcoco.CocoDataset(args.in_file)
 
     # Convert kwcoco to sites
-    sites = convert_kwcoco_to_iarpa(coco_dset)
+    sites = convert_kwcoco_to_iarpa(coco_dset, args.region_id)
 
     # Write site to disk
-    for site in sites:
-        collection = geojson.FeatureCollection(sites[site][1:], id=args.region_id)
+    for site, collection in sites.items():
         with open(os.path.join(args.out_dir, site + '.json'), 'w') as f:
             json.dump(collection, f, indent=2)
     return 0
