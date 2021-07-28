@@ -54,18 +54,19 @@ def predict(ann, vid_id, coco_dset, phase):
     union_poly_ann = kwimage.MultiPolygon.from_geojson(ann['segmentation_geos']).to_shapely()
     for cand_aid in cand_aids:
         ann_obs = annots[cand_aid]
-        union_poly_obs = kwimage.MultiPolygon.from_geojson(ann_obs['segmentation_geos']).to_shapely()
-        overlap = union_poly_obs.intersection(union_poly_ann).area / union_poly_ann.area
         cat = coco_dset.index.cats[ann_obs['category_id']]
         predict_phase = category_dict.get(cat['name'], cat['name'])
-        if overlap > min_overlap and phase != predict_phase:
-            obs_img = coco_dset.index.imgs[ann_obs['image_id']]
-            date = dateutil.parser.parse(obs_img['date_captured']).date()
-            prediction = {
-                'predicted_phase': predict_phase,
-                'predicted_phase_date': date.isoformat().replace('-', '/'),
-            }
-            return prediction
+        if phase != predict_phase:
+            union_poly_obs = kwimage.MultiPolygon.from_geojson(ann_obs['segmentation_geos']).to_shapely()
+            overlap = union_poly_obs.intersection(union_poly_ann).area / union_poly_ann.area
+            if overlap > min_overlap:
+                obs_img = coco_dset.index.imgs[ann_obs['image_id']]
+                date = dateutil.parser.parse(obs_img['date_captured']).date()
+                prediction = {
+                    'predicted_phase': predict_phase,
+                    'predicted_phase_date': date.isoformat().replace('-', '/'),
+                }
+                return prediction
     prediction = {
         'predicted_phase': None,
         'predicted_phase_date': None,
