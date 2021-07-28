@@ -7,8 +7,8 @@ dependencies:
   - python == 3.8
   - pip >= 21.0.1
   - pip:
-    - -r file:requirements/production.txt
-    - -r file:requirements/development.txt
+    - -r requirements/production.txt
+    - -r requirements/development.txt
 
     # Brings in opencv-python, which conflicts with opencv-python-headless
     - imgaug >= 0.4.0
