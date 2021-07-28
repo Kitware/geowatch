@@ -892,12 +892,12 @@ class WatchVideoDataset(data.Dataset):
                     class_overlay[..., 3] = 0.5
                     class_overlay[mask == -1, 3] = 0
                     true_layers.append(class_overlay)
-                    text = signal_text + '\n' + 'class'
+                    text = signal_text + '\n' + 'true class'
                 elif chan_idx == 1:
                     # Draw change label on even frames
                     change_overlay = kwimage.make_heatmask(changes)
                     true_layers.append(change_overlay)
-                    text = signal_text + '\n' + 'change'
+                    text = signal_text + '\n' + 'true change'
                 else:
                     text = signal_text
 
@@ -934,7 +934,7 @@ class WatchVideoDataset(data.Dataset):
                     # TODO: we might want to overlay the prediction on one or all
                     # of the channels
                     pred_part = kwimage.imresize(pred_part, max_dim=max_dim).clip(0, 1)
-                    pred_text = f'change pred t={frame_idx}'
+                    pred_text = f'pred change t={frame_idx}'
                     pred_part = kwimage.draw_text_on_image(
                         pred_part, pred_text, (1, 1), valign='top',
                         color='dodgerblue', border=3)
