@@ -89,6 +89,7 @@ class Main(Algorithm):
             feature['assets']['data']['href'] = asset_outpath
 
             item = pystac.Item.from_dict(feature)
+            item.set_collection(None)  # Clear the collection if present
             item.set_self_href(os.path.join(params['output_dir'],
                                             feature['id'],
                                             feature['id']+'.json'))

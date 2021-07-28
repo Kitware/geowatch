@@ -22,6 +22,11 @@ def main():
     parser.add_argument("--dry_run",
                         action='store_true',
                         help="Don't actually upload, just echo AWS commands")
+    parser.add_argument("-o", "--outdir",
+                        type=str,
+                        required=False,
+                        help="Output directory for STAC catalog with s3 "
+                             "egress hrefs")
 
     stac_egress(**vars(parser.parse_args()))
 
@@ -30,7 +35,8 @@ def main():
 
 def stac_egress(stac_catalog,
                 s3_bucket,
-                dry_run=False):
+                dry_run=False,
+                outdir=None):
     if isinstance(stac_catalog, str):
         catalog = pystac.read_file(href=stac_catalog).full_copy()
     else:
@@ -41,9 +47,14 @@ def stac_egress(stac_catalog,
     catalog.normalize_hrefs(s3_bucket)
 
     # Working directory
-    working_dir = ub.ensure_app_cache_dir('watch/tools/stac_egress_working')
-    ub.delete(working_dir)  # remove the dir and contents if it exists
-    ub.ensuredir(working_dir)  # create the empty directory.
+    if outdir is None:
+        working_dir = ub.ensure_app_cache_dir(
+            'watch/tools/stac_egress_working')
+        ub.delete(working_dir)  # remove the dir and contents if it exists
+        ub.ensuredir(working_dir)  # create the empty directory.
+    else:
+        working_dir = outdir
+        os.makedirs(working_dir, exist_ok=True)
 
     def _item_map(stac_item):
         item_outdir = os.path.join(s3_bucket, stac_item.id)
@@ -113,7 +124,9 @@ def stac_egress(stac_catalog,
     # TODO: Manually check return code / output
     subprocess.run(command, check=True)
 
-    ub.delete(working_dir)  # remove the dir and contents if it exists
+    if outdir is None:
+        # remove the temporary working dir and contents if it exists
+        ub.delete(working_dir)
 
     return output_catalog
 

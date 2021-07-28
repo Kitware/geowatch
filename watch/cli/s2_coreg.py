@@ -36,9 +36,9 @@ def main():
 
 def run_s2_coreg_l1c(stac_catalog, outdir):
     if isinstance(stac_catalog, str):
-        catalog = pystac.read_file(href=stac_catalog)
+        catalog = pystac.read_file(href=stac_catalog).full_copy()
     else:
-        catalog = stac_catalog
+        catalog = stac_catalog.full_copy()
 
     s2_l1c_items = {}
     for item in catalog.get_all_items():
@@ -58,12 +58,17 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
     s2_l1c_item_dirs = set(s2_l1c_items.keys())
 
     os.makedirs(outdir, exist_ok=True)
-    scenes, baseline_scenes = s2_coregister_all_tiles(
-        list(s2_l1c_item_dirs),
-        outdir)
+
+    if len(s2_l1c_item_dirs) > 0:
+        scenes, baseline_scenes = s2_coregister_all_tiles(
+            list(s2_l1c_item_dirs),
+            outdir)
+    else:
+        scenes, baseline_scenes = {}, {}
 
     catalog_outpath = os.path.abspath(os.path.join(outdir, 'catalog.json'))
     catalog.set_self_href(catalog_outpath)
+    catalog.set_root(catalog)
 
     original_item_ids = set()
     baseline_images = set(baseline_scenes.values())
