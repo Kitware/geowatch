@@ -180,6 +180,8 @@ class Trainer(object):
 
             image1 = utils.stad_image(image1)
             image2 = utils.stad_image(image2)
+            # image1 = F.normalize(utils.stad_image(image1), dim=1)
+            # image2 = F.normalize(utils.stad_image(image2), dim=1)
             # image1 = utils.bandwise_norm(image1)
             # image2 = utils.bandwise_norm(image2)
             # image1 = FT.normalize(image1, *mean_std)
@@ -190,7 +192,7 @@ class Trainer(object):
             image_change_magnitude = torch.sqrt(image_diff*image_diff)
             image_change_magnitude = torch.mean(image_change_magnitude, dim=1, keepdims=False)
 
-            max_ratio_coef, otsu_coef, edge_threshold = 0.1, 0.9, 15 #best: 0.81, 1.0
+            max_ratio_coef, otsu_coef, edge_threshold = 0.15, 0.9, 15 #best: 0.81, 1.0
             try:
                 otsu_threshold = otsu_coef*otsu(image_change_magnitude.cpu().detach().numpy(), nbins=256)
                 condition = ((image_change_magnitude>max_ratio_coef*image_change_magnitude.max()) & (image_change_magnitude>otsu_threshold))
@@ -231,11 +233,11 @@ class Trainer(object):
             # image2_flat = torch.flatten(image2, start_dim=2, end_dim=3)
             # negative_image1_flat = torch.flatten(negative_image1, start_dim=2, end_dim=3)
             
-            cropped_image1_flat = torch.flatten(cropped_image1, start_dim=2, end_dim=4)
+            cropped_image1_flat = F.normalize(torch.flatten(cropped_image1, start_dim=2, end_dim=4),dim=1)
             # cropped_image2_flat = torch.flatten(cropped_image2, start_dim=2, end_dim=4)
             # cropped_negative_image1_flat = torch.flatten(cropped_negative_image1, start_dim=2, end_dim=4)
             
-            patched_image1_flat = torch.flatten(patched_image1, start_dim=2, end_dim=4)
+            patched_image1_flat = F.normalize(torch.flatten(patched_image1, start_dim=2, end_dim=4),dim=1)
             # patched_image2_flat = torch.flatten(patched_image2, start_dim=2, end_dim=4)
             
             output1, features1 = self.model(image1)  ## [B,22,150,150]
@@ -244,7 +246,7 @@ class Trainer(object):
             # negative_output2, negative_features2 = self.model(negative_image2)
 
             # features1_flat = torch.flatten(features1, start_dim=2, end_dim=3)
-            # print(features1.shape)
+            
             cropped_features1 = torch.stack([transforms.functional.crop(output1, *params) for params in params_list],dim=1)
             cropped_features2 = torch.stack([transforms.functional.crop(output2, *params) for params in params_list],dim=1)
             cropped_negative_features1 = torch.stack([transforms.functional.crop(negative_output1, *params) for params in params_list],dim=1)
@@ -256,11 +258,6 @@ class Trainer(object):
             cropped_features2 = F.normalize(cropped_features2.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w),dim=1)
             cropped_negative_features1 = cropped_negative_features1.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w)
             features = torch.cat([cropped_features1.unsqueeze(1), cropped_features2.unsqueeze(1)], dim=1)[:patch_max,:,:]
-            
-            # print(features.shape)
-            # cropped_features1_flat = torch.flatten(cropped_features1, start_dim=2, end_dim=3)
-            # cropped_features2_flat = torch.flatten(cropped_features2, start_dim=2, end_dim=3)
-            # negative_cropped_features1_flat = torch.flatten(cropped_negative_features1, start_dim=2, end_dim=3)
             
             # texton_h, texton_w = cropped_h, cropped_w
             texton_h, texton_w = h, w
@@ -393,13 +390,16 @@ class Trainer(object):
             
             total_loss += loss.item()
             mask1[mask1==-1]=0
-            preds.append(change_detection_prediction.cpu())
+            # preds.append(change_detection_prediction.cpu())
+            preds.append(image_change_magnitude_binary.cpu())
             targets.append(mask1.cpu())#.numpy())
+            
             
             if config['visualization']['train_visualizer'] :
                 if (epoch) % config['visualization']['visualize_training_every'] == 0:
                     if (batch_index % iter_visualization) == 0:
-                        figure = plt.figure(figsize=(config['visualization']['fig_size'],config['visualization']['fig_size']))
+                        figure = plt.figure(figsize=(config['visualization']['fig_size'], config['visualization']['fig_size']), 
+                                            dpi=config['visualization']['dpi'])
                         ax1 = figure.add_subplot(3,4,1)
                         ax2 = figure.add_subplot(3,4,2)
                         ax3 = figure.add_subplot(3,4,3)
@@ -442,8 +442,7 @@ class Trainer(object):
                         logits_show2 = masks2.max(1)[1].cpu().detach().numpy()[batch_index_to_show,:,:]
                         change_detection_prediction_show = change_detection_prediction.numpy()[batch_index_to_show,:,:]
                         change_detection_show = change_detection_prediction_show
-                        gt_mask_show1 = mask.cpu().detach()[batch_index_to_show,0,:,:].numpy().squeeze()
-                        gt_mask_show2 = mask.cpu().detach()[batch_index_to_show,1,:,:].numpy().squeeze()
+                        gt_mask_show1 = mask1.cpu().detach()[batch_index_to_show,:,:].numpy().squeeze()
                         output1_sample1 = masks1[batch_index_to_show,class_to_show,:,:].cpu().detach().numpy().squeeze()
 
                         vca_pseudomask_show = image_change_magnitude_binary.cpu().detach()[batch_index_to_show,:,:].numpy()
@@ -458,7 +457,6 @@ class Trainer(object):
                         logits_show1[logits_show1==-1]=0
                         logits_show2[logits_show2==-1]=0
                         gt_mask_show_no_bg1 = np.ma.masked_where(gt_mask_show1==0,gt_mask_show1)
-                        gt_mask_show_no_bg2 = np.ma.masked_where(gt_mask_show2==0,gt_mask_show2)
                         # logits_show_no_bg = np.ma.masked_where(logits_show==0,logits_show)
 
                         classes_in_gt = np.unique(gt_mask_show1)
@@ -483,7 +481,6 @@ class Trainer(object):
                         ax7.imshow(image_show2)
                         # ax6.imshow(change_detection_prediction_show, cmap=self.cmap, vmin=0, vmax=self.max_label)#, alpha=alphas_final_gt)
                         ax7.imshow(change_detection_show, cmap=self.cmap, vmin=0, vmax=self.max_label)#, alpha=alphas_final_gt)
-                        # ax6.imshow(fp_tp_fn_prediction_mask, cmap='tab20c', vmin=0, vmax=6)#, alpha=alphas_final_gt)
 
                         ax8.imshow(vca_pseudomask_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
                         
@@ -491,8 +488,7 @@ class Trainer(object):
                         
                         ax10.imshow(cropped_image2_show)
                         
-                        
-                        
+
                         if config['visualization']['log_scatters']:
                             from sklearn.manifold import TSNE
                             from sklearn.cluster import KMeans
@@ -542,8 +538,9 @@ class Trainer(object):
                             ax11.set_title("Clusters of Reduced Features (2D)")
                             # cometml_experiemnt.log_figure(figure_name=f"Training, Scatter Plot",figure=scatter_fig)
                         else:
-                            ax11.imshow(dictionary_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
-
+                            # ax11.imshow(dictionary_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
+                            ax11.imshow(fp_tp_fn_prediction_mask, cmap=self.cmap, vmin=0, vmax=self.max_label)#, alpha=alphas_final_gt)
+                            ax11.set_title(f"TP, FP, TN, FN Map", fontsize=config['visualization']['font_size'])
                         ax12.imshow(dictionary2_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
                         
 
@@ -567,8 +564,8 @@ class Trainer(object):
                             ax7.set_title(f"Change Detection Prediction", fontsize=config['visualization']['font_size'])
                             ax8.set_title(f"Pseudo-Mask for Change", fontsize=config['visualization']['font_size'])
                             ax9.set_title(f"Cropped Input Image 1, location: {str(params_list[0])}", fontsize=config['visualization']['font_size'])
-                            ax10.set_title(f"Cropped Input Image 2, location: {str(params_list[0])}", fontsize=config['visualization']['font_size'])
-                            ax11.set_title(f"Clusters (Reduced with TSNE to 2D)", fontsize=config['visualization']['font_size'])
+                            ax10.set_title(f"Cropped Image 2", fontsize=config['visualization']['font_size'])
+                            
                             ax12.set_title(f"Patch-wise Visual Words", fontsize=config['visualization']['font_size'])
                             figure.suptitle(f"Epoch: {epoch+1}\nGT labels for classification: {classes_in_gt}, \nunique in change predictions: {np.unique(change_detection_show)}\nunique in predictions1: {np.unique(logits_show1)}", fontsize=config['visualization']['font_size'])
                             
@@ -603,10 +600,10 @@ class Trainer(object):
         mean_f1_score = classwise_f1_score.mean()
         
         # overall_miou = sum(mean_iou)/len(mean_iou)
-        # print(f"Training class-wise mIoU value: \n{np.array(mean_iou)} \noverall mIoU: {overall_miou}")
-        # print(f"Training class-wise Precision value: \n{np.array(precision)} \noverall Precision: {mean_precision}")
-        # print(f"Training class-wise Recall value: \n{np.array(recall)} \noverall Recall: {mean_recall}")
-        # print(f"Training overall F1 Score: {f1_score}")
+        # print(f"Training class-wise mIoU value: \n{mean_iou} \noverall mIoU: {overall_miou}")
+        # print(f"Training class-wise Precision value: \n{precision} \noverall Precision: {mean_precision}")
+        # print(f"Training class-wise Recall value: \n{recall} \noverall Recall: {mean_recall}")
+        # print(f"Training overall F1 Score: {mean_f1_score}")
         
         cometml_experiemnt.log_metric("Training Loss", total_loss, epoch=epoch+1)
         cometml_experiemnt.log_metric("Segmentation Loss", total_loss_seg, epoch=epoch+1)
@@ -693,12 +690,15 @@ class Trainer(object):
                     if (epoch)%config['visualization']['visualize_val_every'] == 0:
                         if (batch_index % iter_visualization) == 0:
                             figure = plt.figure(figsize=(config['visualization']['fig_size'],config['visualization']['fig_size']))
-                            ax1 = figure.add_subplot(2,3,1)
-                            ax2 = figure.add_subplot(2,3,2)
-                            ax3 = figure.add_subplot(2,3,3)
-                            ax4 = figure.add_subplot(2,3,4)
-                            ax5 = figure.add_subplot(2,3,5)
-                            ax6 = figure.add_subplot(2,3,6)
+                            ax1 = figure.add_subplot(3,3,1)
+                            ax2 = figure.add_subplot(3,3,2)
+                            ax3 = figure.add_subplot(3,3,3)
+                            ax4 = figure.add_subplot(3,3,4)
+                            ax5 = figure.add_subplot(3,3,5)
+                            ax6 = figure.add_subplot(3,3,6)
+                            ax7 = figure.add_subplot(3,3,7)
+                            ax8 = figure.add_subplot(3,3,8)
+                            ax9 = figure.add_subplot(3,3,9)
                             
                             cmap_gradients = plt.cm.get_cmap('jet')
 
@@ -716,8 +716,8 @@ class Trainer(object):
                             logits_show2 = masks2.max(1)[1].cpu().detach().numpy()[batch_index_to_show,:,:]
                             change_detection_prediction_show = change_detection_prediction.numpy()[batch_index_to_show,:,:]
                             change_detection_show = change_detection_prediction_show
-                            gt_mask_show1 = mask.cpu().detach()[batch_index_to_show,0,:,:].numpy().squeeze()
-                            gt_mask_show2 = mask.cpu().detach()[batch_index_to_show,1,:,:].numpy().squeeze()
+                            gt_mask_show1 = mask1.cpu().detach()[batch_index_to_show,:,:].numpy().squeeze()
+                            # gt_mask_show2 = mask2.cpu().detach()[batch_index_to_show,:,:].numpy().squeeze()
                             
                             
                             fp_tp_fn_prediction_mask = gt_mask_show1 + (2*change_detection_show)
@@ -725,7 +725,7 @@ class Trainer(object):
                             logits_show1[logits_show1==-1]=0
                             logits_show2[logits_show2==-1]=0
                             gt_mask_show_no_bg1 = np.ma.masked_where(gt_mask_show1==0,gt_mask_show1)
-                            gt_mask_show_no_bg2 = np.ma.masked_where(gt_mask_show2==0,gt_mask_show2)
+                            # gt_mask_show_no_bg2 = np.ma.masked_where(gt_mask_show2==0,gt_mask_show2)
                             # logits_show_no_bg = np.ma.masked_where(logits_show==0,logits_show)
 
                             classes_in_gt = np.unique(gt_mask_show1)
@@ -745,7 +745,8 @@ class Trainer(object):
                             ax6.imshow(image_show2)
                             # ax6.imshow(change_detection_prediction_show, cmap=self.cmap, vmin=0, vmax=self.max_label)#, alpha=alphas_final_gt)
                             ax6.imshow(change_detection_show, cmap=self.cmap, vmin=0, vmax=self.max_label)#, alpha=alphas_final_gt)
-                            # ax6.imshow(fp_tp_fn_prediction_mask, cmap=self.cmap, vmin=0, vmax=self.max_label)#, alpha=alphas_final_gt)
+                            
+                            ax7.imshow(fp_tp_fn_prediction_mask, cmap=self.cmap, vmin=0, vmax=self.max_label)#, alpha=alphas_final_gt)
 
 
                             ax1.axis('off')
@@ -765,6 +766,8 @@ class Trainer(object):
                                 figure.suptitle(f"Epoch: {epoch+1}\nGT labels for classification: {classes_in_gt}, \nunique in change predictions: {np.unique(change_detection_show)}\nunique in predictions1: {np.unique(logits_show1)}", fontsize=config['visualization']['font_size'])
                             
                             figure.tight_layout()
+                            if config['visualization']['val_imshow']:
+                                plt.show()
                             if (config['visualization']['save_individual_plots'] and save_individual_plots_specific):
 
                                 plots_path_save = f"{config['visualization']['save_individual_plots_path']}{config['dataset']}/"

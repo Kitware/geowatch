@@ -16,11 +16,12 @@ visualization:
   titles: True
   train_imshow: False
   log_scatters: False
-  val_imshow: False
+  val_imshow: True
   fg_alpha: 0.6
   bg_alpha: 0.5
   font_size: 10
   fig_size: 15
+  dpi: 300
 
 cometml:
   api_key: 9GTK1r9PK4NzMAoLsnC6XxI7p
