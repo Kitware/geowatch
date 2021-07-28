@@ -153,8 +153,8 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id):
         properties['current_phase'] = category_dict.get(cat['name'], cat['name'])
 
         if properties['current_phase'] == 'Post Construction':
-            properties['predicted_phase'] = 'unknown'
-            properties['predicted_phase_start_date'] = 'unknown'
+            properties['predicted_phase'] = None
+            properties['predicted_phase_start_date'] = None
         else:
             prediction = predict(ann, img['video_id'], coco_dset,
                                  properties['current_phase'])
