@@ -2,16 +2,25 @@
 Notes:
     There are parts of netharn that could be ported to lightning
 
-    The logging stuff.
+    The logging stuff
+        - [ ] loss curves (odd they aren't in tensorboard)
+
     The auto directory structure
-    The checkpoint managment
+        - [ ] save multiple checkpoints
+        - [ ] delete them intelligently
+
+    The run managment
+        - [ ] The netharn/cli/manage_runs.py
+
     The auto-deploy files
+        - [ ] Use Torch 1.9 Packages instead of Torch-Liberator
 
     Automated dynamics / plugins?
 
 CommandLine:
     CUDA_VISIBLE_DEVICES=1 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.fit __doc__:0 -- --profile
     CUDA_VISIBLE_DEVICES=1 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.fit __doc__:0
+    CUDA_VISIBLE_DEVICES=0 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.fit __doc__:0
 
 Example:
     >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -42,7 +51,8 @@ Example:
     ...     #'channels': None,
     ...     'time_steps': 8,
     ...     #'chip_size': 128,
-    ...     'chip_size': 224,
+    ...     #'chip_size': 224,
+    ...     'chip_size': 256,
     ...     'batch_size': 1,
     ...     'accumulate_grad_batches': 8,
     ...     'model_name': 'smt_it_stm_p8',

@@ -89,10 +89,11 @@ class ChangeDetectorBase(pl.LightningModule):
                 assert len(frame['modes']) == 1, 'only handle one mode for now'
                 mode_key, mode_val = ub.peek(frame['modes'].items())
                 mode_val = mode_val.float()
+                # self.input_norms = None
                 if self.input_norms is not None:
                     mode_norm = self.input_norms[mode_key]
                     mode_val = mode_norm(mode_val)
-                    frame_ims.append(mode_val)
+                frame_ims.append(mode_val)
 
             # Because we are not collating we need to add a batch dimension
             images = torch.stack(frame_ims)[None, ...]

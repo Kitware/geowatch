@@ -1,4 +1,4 @@
--r requirements/developement.txt
+-r requirements/development.txt
 -r requirements/production.txt
 
 # -r requirements/problematic.txt
