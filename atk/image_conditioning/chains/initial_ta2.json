@@ -25,6 +25,17 @@
                     "occurrence": "first"
                 }
             }
+        },
+        {
+            "algorithm": "kitware/kwcoco_to_geojson",
+            "parameters": {
+                "kwcoco_path": {
+                    "source": "chain_ledger",
+                    "source_algorithm": "kitware/random_detections",
+                    "key": "kwcoco_output_path",
+                    "occurrence": "first"
+                }
+            }
         }
     ]
 }
