@@ -262,8 +262,10 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id):
         else:
             raise Exception('cannot determine source')
 
-        # Processing one geo segmentation feature at a time
-        # TODO: Confirm that this is necessary / desired
+        # Consider that sseg_geos could one (dict) or more (list)
+        if isinstance(sseg_geos, dict):
+            sseg_geos = [sseg_geos]
+
         for sseg_geo in sseg_geos:
             feature = geojson.Feature(geometry=sseg_geo)
             properties = feature['properties']
