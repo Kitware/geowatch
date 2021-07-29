@@ -292,7 +292,10 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id):
                 properties.update(prediction)
             else:
                 print("* Warning * No 'video_id' found for image; won't be "
-                      "able to predict phase changes")
+                      "able to properly predict phase changes")
+                properties.update({
+                    'predicted_phase': properties['current_phase'],
+                    'predicted_phase_start_date': properties['observation_date']})
 
             properties['sensor_name'] = sensor_dict[img['sensor_coarse']]
 
