@@ -17,7 +17,7 @@
           131,
           43
         ],
-        "dry_run": 1,
+        "dry_run": 0,
         "max_results": 2,
         "output_dir": "/tmp/stac_ingress"
       }
