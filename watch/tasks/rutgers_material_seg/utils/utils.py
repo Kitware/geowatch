@@ -441,8 +441,6 @@ def load_config_as_dict(path_to_config):
 def config_parser(path_to_config, experiment_type):
     if experiment_type.lower() == "training":
         config = yaml.safe_load(open(path_to_config))
-        config['data']['height'], config['data']['width'] = parse('{}x{}', config['data']['image_size'])
-        config['data']['height'], config['data']['width'] = int(config['data']['height']), int(config['data']['width'])
         return config
 
     elif experiment_type.lower() == "testing":

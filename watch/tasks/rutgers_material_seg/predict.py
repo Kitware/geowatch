@@ -26,13 +26,9 @@ from tqdm import tqdm
 from torchvision import transforms
 import torchvision.transforms.functional as FT
 import watch.tasks.rutgers_material_seg.utils.utils as utils
-import watch.tasks.rutgers_material_seg.utils.eval_utils as eval_utils
-import watch.tasks.rutgers_material_seg.utils.visualization as visualization
 from watch.tasks.rutgers_material_seg.models import build_model
 from watch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import SequenceDataset
 from watch.tasks.rutgers_material_seg.datasets import build_dataset
-from fast_pytorch_kmeans import KMeans
-from skimage.filters import threshold_otsu as otsu
 import time
 torch.backends.cudnn.enabled = False
 torch.backends.cudnn.deterministic = True
@@ -44,19 +40,16 @@ mean_std = ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 class Evaluator(object):
     def __init__(self, model: object, 
                  eval_loader: torch.utils.data.DataLoader, 
-                 optimizer: object, scheduler: object, 
-                 test_with_full_supervision: int =0) -> None:
+                 optimizer: object, 
+                 scheduler: object,
+                 coco_dataset: object) -> None:
         """Evaluator class
 
         Args:
             model (object): trained or untrained model
-            train_loader (torch.utils.data.DataLader): loader with training data
-            val_loader (torch.utils.data.DataLader): loader with validation data
-            epochs (int): number of epochs
+            eval_loader (torch.utils.data.DataLader): loader with evaluation data
             optimizer (object): optimizer to train with
             scheduler (object): scheduler to train with
-            test_loader (torch.utils.data.DataLader, optional): loader with testing data. Defaults to None.
-            test_with_full_supervision (int, optional): should full supervision be used. Defaults to 0.
         """
 
         self.model = model
@@ -65,6 +58,7 @@ class Evaluator(object):
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.max_label = config['data']['num_classes']
+        self.coco_dataset = coco_dataset
             
     def eval(self) -> tuple:
         """evaluate a single epoch
@@ -80,8 +74,10 @@ class Evaluator(object):
             for batch_index,batch in pbar:
                 outputs = batch
                 images, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0]
-                original_width, original_height = outputs['tr'].data[0][batch_index_to_show]['space_dims']
-                image_name = str(outputs['tr'].data[0][batch_index_to_show]['gids'][0])
+                original_width, original_height = outputs['tr'].data[0][0]['space_dims']
+                gids = outputs['tr'].data[0][0]['gids']
+                
+                print(gids)
                 
                 mask = torch.stack(mask)
                 mask = mask.long().squeeze(1)
@@ -103,8 +99,28 @@ class Evaluator(object):
                 output1, features1 = self.model(image1)  ## [B,22,150,150]
                 output2, features2 = self.model(image2)
                 
-                #TODO:
-                    # Add auxiliary channel save
+                
+                if log_features:
+                    
+                    kwimage.imwrite(save_path1, output1, backend='gdal')
+                    kwimage.imwrite(save_path2, output1, backend='gdal')
+                    for gid in gids:
+                        aux_height, aux_width = data.shape[0:2]
+                        img = dset.index.imgs[gid]
+                        warp_aux_to_img = kwimage.Affine.scale(
+                            (img['width'] / aux_width, img['height'] / aux_height))
+                        
+                        aux = {
+                                'file_name': fname,
+                                'height': aux_height,
+                                'width': aux_width,
+                                'channels': config['data']['num_classes'],
+                                'warp_aux_to_img': warp_aux_to_img.concise(),
+                            }
+                        
+                        auxiliary = img.setdefault('auxiliary', [])
+                        auxiliary.append(aux)
+                        self.coco_dataset._invalidate_hashid()
                 
                 # masks1 = F.softmax(output1, dim=1)#.detach()
                 # masks2 = F.softmax(output2, dim=1)#.detach()
@@ -117,7 +133,10 @@ class Evaluator(object):
                 # change_detection_prediction = (pred1!=pred2).type(torch.uint8)
                 
         
-        return total_loss/loader.__len__(), overall_miou
+        # export predictions to a new kwcoco file
+        
+        
+        return 
     
     def forward(self) -> tuple:
         """forward pass for all epochs
@@ -221,6 +240,6 @@ if __name__== "__main__":
                       eval_dataloader,
                       optimizer,
                       scheduler,
-                      test_with_full_supervision=config['training']['test_with_full_supervision']
+                      dset
                       )
     evaler.forward()

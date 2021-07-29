@@ -4,9 +4,11 @@ location: local
 data:
   type: semantic_seg
   name: iarpa
-  image_size: 300x300
-  num_classes: 1
-  weights: [1,1]
+  num_classes: 15
+  window_size: 7
+  image_size: 128
+  time_steps: 2
+  weights: []
   channels: red|green|blue|nir|swir16|swir22
   local:
     model_save_dir: /home/native/projects/data/smart_watch/models/

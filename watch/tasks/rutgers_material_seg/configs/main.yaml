@@ -21,7 +21,7 @@ visualization:
   bg_alpha: 0.5
   font_size: 10
   fig_size: 15
-  dpi: 100
+  dpi: 200
 
 cometml:
   api_key: 9GTK1r9PK4NzMAoLsnC6XxI7p

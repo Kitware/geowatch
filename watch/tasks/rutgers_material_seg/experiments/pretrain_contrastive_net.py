@@ -151,7 +151,6 @@ class Trainer(object):
         for batch_index, batch in pbar:
             # if batch_index < 75:
             #     continue
-            random_crop = transforms.RandomCrop(self.crop_size)
             outputs = batch
             images, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0]
             negative_images = outputs['inputs']['negative_im'].data[0]

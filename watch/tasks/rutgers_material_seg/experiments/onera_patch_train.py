@@ -77,7 +77,7 @@ class Trainer(object):
         self.k = config['data']['num_classes']
         self.kmeans = KMeans(n_clusters=self.k, mode='euclidean', verbose=0, minibatch=None)
         self.max_label = self.k
-        self.all_crops_params = [tuple([i,j,config['data']['window_size'], config['data']['window_size']]) for i in range(config['data']['window_size'],h-config['data']['window_size']) for j in range(config['data']['window_size'],w-config['data']['window_size'])]
+        self.all_crops_params = [tuple([i,j,config['data']['window_size'], config['data']['window_size']]) for i in range(config['data']['window_size'],config['data']['image_size']-config['data']['window_size']) for j in range(config['data']['window_size'],config['data']['image_size']-config['data']['window_size'])]
         self.all_crops_params_np = np.array(self.all_crops_params)
         # print(self.all_crops_params_np)
         if test_loader is not None:
@@ -381,11 +381,15 @@ class Trainer(object):
             masks2 = F.softmax(output2, dim=1)
             # masks1 = F.softmax(features1, dim=1)
             # masks2 = F.softmax(features2, dim=1)
-            # masks1 = self.high_confidence_filter(masks1, cutoff_top=config['high_confidence_threshold']['train_cutoff'])
-            # masks2 = self.high_confidence_filter(masks2, cutoff_top=config['high_confidence_threshold']['train_cutoff'])
+            masks1 = self.high_confidence_filter(masks1, cutoff_top=config['high_confidence_threshold']['train_cutoff'])
+            masks2 = self.high_confidence_filter(masks2, cutoff_top=config['high_confidence_threshold']['train_cutoff'])
             pred1 = masks1.max(1)[1].cpu().detach()#.numpy()
             pred2 = masks2.max(1)[1].cpu().detach()#.numpy()
             change_detection_prediction = (pred1!=pred2).type(torch.uint8)
+            
+            # from cc_torch import connected_components_labeling
+            # change_detection_prediction = connected_components_labeling(change_detection_prediction)
+            
             # change_detection_prediction = (dictionary1_post_assignment.cpu().detach()!=dictionary2_post_assignment.cpu().detach()).type(torch.uint8)
             
             total_loss += loss.item()
@@ -676,8 +680,8 @@ class Trainer(object):
                 masks2 = F.softmax(output2, dim=1)#.detach()
                 # masks1 = F.softmax(features1, dim=1)
                 # masks2 = F.softmax(features2, dim=1)
-                # masks1 = self.high_confidence_filter(masks1, cutoff_top=config['high_confidence_threshold']['val_cutoff'])
-                # masks2 = self.high_confidence_filter(masks2, cutoff_top=config['high_confidence_threshold']['val_cutoff'])
+                masks1 = self.high_confidence_filter(masks1, cutoff_top=config['high_confidence_threshold']['val_cutoff'])
+                masks2 = self.high_confidence_filter(masks2, cutoff_top=config['high_confidence_threshold']['val_cutoff'])
                 pred1 = masks1.max(1)[1].cpu().detach()#.numpy()
                 pred2 = masks2.max(1)[1].cpu().detach()#.numpy()
                 change_detection_prediction = (pred1!=pred2).type(torch.uint8)
@@ -731,11 +735,12 @@ class Trainer(object):
                             classes_in_gt = np.unique(gt_mask_show1)
                             ax1.imshow(image_show1)
 
-                            ax2.imshow(image_show1)
-                            ax2.imshow(gt_mask_show1, cmap=self.cmap, vmin=0, vmax=self.max_label)#, alpha=alphas_final_gt)
 
+                            ax2.imshow(image_show1)
+                            ax2.imshow(logits_show1, cmap=self.cmap, vmin=0, vmax=self.max_label)#, alpha=alphas_final_gt)
+                            
                             ax3.imshow(image_show1)
-                            ax3.imshow(logits_show1, cmap=self.cmap, vmin=0, vmax=self.max_label)#, alpha=alphas_final_gt)
+                            ax3.imshow(gt_mask_show1, cmap=self.cmap, vmin=0, vmax=self.max_label)#, alpha=alphas_final_gt)
                             
                             ax4.imshow(image_show2)
                             

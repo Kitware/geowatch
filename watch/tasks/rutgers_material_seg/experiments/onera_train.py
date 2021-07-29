@@ -170,18 +170,15 @@ class Trainer(object):
             mask2 = mask[:,1,:,:]
             
             class_to_show = max(0,torch.unique(mask)[-1]-1)
-            images = images.to(device)
             image1 = image1.to(device)
             image2 = image2.to(device)
-            negative_images = negative_images.to(device)
             negative_image1 = negative_image1.to(device)
             negative_image2 = negative_image2.to(device)
-            mask = mask.to(device)
             
             image1 = utils.stad_image(image1)
             image2 = utils.stad_image(image2)
-            negative_image1 = utils.stad_image(negative_image1)
-            negative_image2 = utils.stad_image(negative_image2)
+            # negative_image1 = utils.stad_image(negative_image1)
+            # negative_image2 = utils.stad_image(negative_image2)
             image_diff = image1-image2
 
             # image_change_magnitude = torch.sum(((image_diff*image_diff)) ** 2, 1).sqrt()
@@ -189,7 +186,7 @@ class Trainer(object):
             image_change_magnitude = torch.sqrt(image_diff*image_diff)
             image_change_magnitude = torch.mean(image_change_magnitude, dim=1, keepdims=False)
 
-            max_ratio_coef, otsu_coef, edge_threshold = 0.25, 0.95, 15 #best: 0.81, 1.0
+            max_ratio_coef, otsu_coef, edge_threshold = 0.15, 0.95, 15 #best: 0.81, 1.0
             try:
                 otsu_threshold = otsu_coef*otsu(image_change_magnitude.cpu().detach().numpy(), nbins=256)
                 condition = ((image_change_magnitude>max_ratio_coef*image_change_magnitude.max()) & (image_change_magnitude>otsu_threshold))
@@ -246,15 +243,11 @@ class Trainer(object):
             
             # cropped_bs, cropped_ps, cropped_c, cropped_h, cropped_w = cropped_features1.shape
             
-            print(cropped_features1.shape)
             # cropped_features1 = torch.einsum('bs,ps,c,h,w->(bs,ps),c,h,w',cropped_features1)
             # cropped_features1 = torch.stack([cropped_features1[b,:,:,:] for b in range(bs)],dim=0)
             # cropped_features1 = cropped_features1.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w)
             # cropped_features2 = cropped_features2.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w)
             # cropped_negative_features1 = cropped_negative_features1.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w)
-            
-
-            print(cropped_features1.shape)
             
             cropped_features1_flat = torch.flatten(cropped_features1, start_dim=2, end_dim=3)
             cropped_features2_flat = torch.flatten(cropped_features2, start_dim=2, end_dim=3)
@@ -347,8 +340,7 @@ class Trainer(object):
             # negative_residuals = negative_residuals.view(bs, self.k, texton_h*texton_w)
             # cropped_dictionary = transforms.functional.crop(dictionary1, *params)
             # dictionary = dictionary.view(texton_h*texton_w).unsqueeze(0)
-            print(cropped_features1.shape)
-            print(dictionary1.shape)
+
             dictionary1 = dictionary1.view(-1)
             
             # loss1 = 5*F.l1_loss(cropped_features1, 
@@ -406,12 +398,9 @@ class Trainer(object):
             # masks2 = self.high_confidence_filter(masks2, cutoff_top=config['high_confidence_threshold']['train_cutoff'])
             pred1 = masks1.max(1)[1].cpu().detach()#.numpy()
             pred2 = masks2.max(1)[1].cpu().detach()#.numpy()
-            # change_detection_prediction = (pred1!=pred2).type(torch.uint8)
-            change_detection_prediction = (dictionary1_post_assignment.cpu().detach()!=dictionary2_post_assignment.cpu().detach()).type(torch.uint8)
+            change_detection_prediction = (pred1!=pred2).type(torch.uint8)
+            # change_detection_prediction = (dictionary1_post_assignment.cpu().detach()!=dictionary2_post_assignment.cpu().detach()).type(torch.uint8)
 
-            masks_stacked = F.softmax(stacked_for_loss.squeeze(1), dim=1)#.detach()
-            pred_stacked = masks_stacked.max(1)[1].cpu().detach()#.numpy()
-            pred_stacked[pred_stacked!=1] = 0
             
             total_loss += loss.item()
             mask1[mask1==-1]=0
@@ -421,7 +410,8 @@ class Trainer(object):
             if config['visualization']['train_visualizer'] :
                 if (epoch) % config['visualization']['visualize_training_every'] == 0:
                     if (batch_index % iter_visualization) == 0:
-                        figure = plt.figure(figsize=(config['visualization']['fig_size'],config['visualization']['fig_size']))
+                        figure = plt.figure(figsize=(config['visualization']['fig_size'], config['visualization']['fig_size']), 
+                                            dpi=config['visualization']['dpi'])
                         ax1 = figure.add_subplot(3,4,1)
                         ax2 = figure.add_subplot(3,4,2)
                         ax3 = figure.add_subplot(3,4,3)
@@ -463,26 +453,22 @@ class Trainer(object):
                         logits_show1 = masks1.max(1)[1].cpu().detach().numpy()[batch_index_to_show,:,:]
                         logits_show2 = masks2.max(1)[1].cpu().detach().numpy()[batch_index_to_show,:,:]
                         change_detection_prediction_show = change_detection_prediction.numpy()[batch_index_to_show,:,:]
-                        stacked_change_detection_prediction_show = pred_stacked.numpy()[batch_index_to_show,:,:]
                         change_detection_show = change_detection_prediction_show
-                        # change_detection_show = stacked_change_detection_prediction_show
-                        gt_mask_show1 = mask.cpu().detach()[batch_index_to_show,0,:,:].numpy().squeeze()
-                        gt_mask_show2 = mask.cpu().detach()[batch_index_to_show,1,:,:].numpy().squeeze()
+                        gt_mask_show1 = mask1.cpu().detach()[batch_index_to_show,:,:].numpy().squeeze()
                         output1_sample1 = masks1[batch_index_to_show,class_to_show,:,:].cpu().detach().numpy().squeeze()
 
                         vca_pseudomask_show = image_change_magnitude_binary.cpu().detach()[batch_index_to_show,:,:].numpy()
-                        vca_pseudomask_crop_show = cm_binary_crop.cpu().detach()[batch_index_to_show,:,:].numpy()
+                        # vca_pseudomask_crop_show = cm_binary_crop.cpu().detach()[batch_index_to_show,:,:].numpy()
                         # dictionary_show = dictionary1.cpu().detach()[batch_index_to_show,:,:].numpy()
-                        dictionary_show = dictionary1_post_assignment.cpu().detach()[batch_index_to_show,:,:].numpy()
-                        dictionary2_show = dictionary2_post_assignment.cpu().detach()[batch_index_to_show,:,:].numpy()
-                        # print(vca_pseudomask_crop_show.shape)
-
+                        dictionary_show = dictionary2_post_assignment.cpu().detach()[batch_index_to_show,:,:].numpy()
+                        dictionary2_show = dictionary1_post_assignment.cpu().detach()[batch_index_to_show,:,:].numpy()
+                        
+                        
                         fp_tp_fn_prediction_mask = gt_mask_show1 + (2*change_detection_show)
                         
                         logits_show1[logits_show1==-1]=0
                         logits_show2[logits_show2==-1]=0
                         gt_mask_show_no_bg1 = np.ma.masked_where(gt_mask_show1==0,gt_mask_show1)
-                        gt_mask_show_no_bg2 = np.ma.masked_where(gt_mask_show2==0,gt_mask_show2)
                         # logits_show_no_bg = np.ma.masked_where(logits_show==0,logits_show)
 
                         classes_in_gt = np.unique(gt_mask_show1)
@@ -507,7 +493,6 @@ class Trainer(object):
                         ax7.imshow(image_show2)
                         # ax6.imshow(change_detection_prediction_show, cmap=self.cmap, vmin=0, vmax=self.max_label)#, alpha=alphas_final_gt)
                         ax7.imshow(change_detection_show, cmap=self.cmap, vmin=0, vmax=self.max_label)#, alpha=alphas_final_gt)
-                        # ax6.imshow(fp_tp_fn_prediction_mask, cmap='tab20c', vmin=0, vmax=6)#, alpha=alphas_final_gt)
 
                         ax8.imshow(vca_pseudomask_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
                         
@@ -515,11 +500,10 @@ class Trainer(object):
                         
                         ax10.imshow(cropped_image2_show)
                         
-                        ax11.imshow(dictionary_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
+                        ax11.imshow(fp_tp_fn_prediction_mask, cmap=self.cmap, vmin=0, vmax=self.max_label)#, alpha=alphas_final_gt)
 
                         ax12.imshow(dictionary2_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
                         
-
                         ax1.axis('off')
                         ax2.axis('off')
                         ax3.axis('off')
@@ -539,15 +523,15 @@ class Trainer(object):
                             ax6.set_title(f"Prediction overlaid 2", fontsize=config['visualization']['font_size'])
                             ax7.set_title(f"Change Detection Prediction", fontsize=config['visualization']['font_size'])
                             ax8.set_title(f"Pseudo-Mask for Change", fontsize=config['visualization']['font_size'])
-                            ax9.set_title(f"Cropped Input Image 1, location: {str(params)}", fontsize=config['visualization']['font_size'])
-                            ax10.set_title(f"Cropped Input Image 2, location: {str(params)}", fontsize=config['visualization']['font_size'])
-                            ax11.set_title(f"Visual Words", fontsize=config['visualization']['font_size'])
+                            ax9.set_title(f"Cropped Input Image 1, location: {str(params_list[0])}", fontsize=config['visualization']['font_size'])
+                            ax10.set_title(f"Cropped Image 2", fontsize=config['visualization']['font_size'])
+                            ax11.set_title(f"TP, FP, TN, FN Map", fontsize=config['visualization']['font_size'])
                             ax12.set_title(f"Patch-wise Visual Words", fontsize=config['visualization']['font_size'])
                             figure.suptitle(f"Epoch: {epoch+1}\nGT labels for classification: {classes_in_gt}, \nunique in change predictions: {np.unique(change_detection_show)}\nunique in predictions1: {np.unique(logits_show1)}", fontsize=config['visualization']['font_size'])
                             
-                        figure.tight_layout()
                         # cometml_experiemnt.log_figure(figure_name=f"Training, image name: {image_name}, epoch: {epoch}, classes in gt: {classes_in_gt}, classifier predictions: {labels_predicted_indices}",figure=figure)
                         cometml_experiemnt.log_figure(figure_name=f"Training, image name: {image_name}",figure=figure)
+                        # figure.tight_layout()
 
                         if config['visualization']['train_imshow']:
                             plt.show()
@@ -921,10 +905,8 @@ if __name__== "__main__":
     dset = kwcoco.CocoDataset(coco_fpath)
     sampler = ndsampler.CocoSampler(dset)
 
-    # # print(sampler)
-    number_of_timestamps, h, w = 2, 400, 400
-    window_dims = (number_of_timestamps, h, w) #[t,h,w]
-    input_dims = (h, w)
+    window_dims = (config['data']['time_steps'], config['data']['image_size'], config['data']['image_size']) #[t,h,w]
+    input_dims = (config['data']['image_size'], config['data']['image_size'])
 
     # channels = 'B01|B02|B03|B04|B05|B06|B07|B08|B09|B10|B11|B12|B8A'
     channels = config['data']['channels']
@@ -944,8 +926,7 @@ if __name__== "__main__":
                         weight_std=config['training']['weight_std'],
                         beta=config['training']['beta'],
                         num_channels=config['training']['num_channels'],
-                        out_dim=config['training']['out_features_dim'],
-                        hw=h*w)
+                        out_dim=config['training']['out_features_dim'])
     
     # model = SupConResNet(name=config['training']['backbone'])
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
