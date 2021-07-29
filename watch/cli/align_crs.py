@@ -64,6 +64,7 @@ def align_crs(stac_catalog, outdir, aoi_bounds):
 
     catalog_outpath = os.path.abspath(os.path.join(outdir, 'catalog.json'))
     catalog.set_self_href(catalog_outpath)
+    catalog.set_root(catalog)
 
     if isinstance(aoi_bounds, str):
         aoi_bounds = json.loads(aoi_bounds)
@@ -75,7 +76,11 @@ def align_crs(stac_catalog, outdir, aoi_bounds):
         new_id = uuid4().hex
         processed_assets = {}
         for asset_name, asset in original_item.assets.items():
-            if 'data' not in asset.roles:
+            # 'worldview-nitf' from T&E STAC doesn't include roles,
+            # but asset_name is "data"
+            if((asset.roles is None
+                or 'data' not in asset.roles)
+               and asset_name != 'data'):
                 print("Asset '{}' for item '{}' is not data, skipping "
                       "conversion".format(asset_name, original_item.id))
                 continue

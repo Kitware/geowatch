@@ -4,7 +4,23 @@
     "homepage": "",
     "license": "Other",
     "name": "kitware/stac_egress",
-    "optional_parameters": [],
+    "optional_parameters": [
+        {
+            "custom_validation": "",
+            "data_type": "string",
+            "default_value": "",
+            "description": "If provided, the output STAC Catalog with hrefs updated based on the destination s3_bucket will also be written out to this directory.",
+            "display_name": "Output Directory",
+            "field_type": "text",
+            "help_text": "",
+            "max_value": "",
+            "min_value": "",
+            "name": "output_dir",
+            "parameter_choices": "",
+            "required": false,
+            "sort_order": 3
+        }
+    ],
     "outputs": [
         {
             "data_type": "string",

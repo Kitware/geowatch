@@ -1,0 +1,52 @@
+{
+  "chain_name": "july_delivery_ta1",
+  "algorithms": [
+    {
+      "name": "kitware/stac_ingress",
+      "parameters": {
+        "stac_api_url": "https://api.smart-stac.com/",
+        "stac_api_key": "$STAC_API_KEY",
+        "date_range": [
+          "2019-01-01",
+          "2020-01-01"
+        ],
+        "collections": "worldview-nitf",
+        "aoi_bounds": [
+          124,
+          37,
+          131,
+          43
+        ],
+        "dry_run": 0,
+        "max_results": 2,
+        "output_dir": "/tmp/stac_ingress"
+      }
+    },
+    {
+      "name": "UMD/coregistration",
+      "parameters": {
+        "output_dir": "/tmp/umd_coregistration_working"
+      }
+    },
+    {
+      "name": "kitware/align_crs",
+      "parameters": {
+        "aoi_bounds": [
+          124,
+          37,
+          131,
+          43
+        ],
+        "output_dir": "/tmp/align_crs_working"
+      }
+    },
+    {
+      "name": "kitware/stac_egress",
+      "parameters": {
+        "s3_bucket": "s3://kitware-smart-watch-data/runs/july_delivery_ta1_chain",
+        "output_dir": "/tmp/stac_egress",
+        "dry_run": 1
+      }
+    }
+  ]
+}
