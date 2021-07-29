@@ -79,6 +79,15 @@ def predict_on_dataset(cmdline=False, **kwargs):
         import kwimage
         import kwarray
 
+        # Ensure that we have at least one category for generating
+        # random output
+        if len(input_dset.index.cats) == 0:
+            input_dset.add_category(id=1, name="Active Construction")
+            output_dset.add_category(id=1, name="Active Construction")
+
+        # Do somethin to load data
+        sampler = ndsampler.CocoSampler(input_dset)
+
         rng = kwarray.ensure_rng(None)
         for gid, img in sampler.dset.imgs.items():
             rando_dets = kwimage.Detections.random(

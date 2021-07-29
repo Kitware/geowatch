@@ -98,8 +98,8 @@ class Main(Algorithm):
 
         catalog.save(catalog_type=pystac.CatalogType.ABSOLUTE_PUBLISHED)
 
-        if params['kwcoco']:
-            convert(params['kwcoco'], 
+        if 'kwcoco' in params:
+            convert(params['kwcoco'],
                     os.path.join(params['output_dir'], 'catalog.json'),
                     params['ignore_dem'])
 

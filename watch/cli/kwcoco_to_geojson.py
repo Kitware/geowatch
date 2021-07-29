@@ -229,8 +229,32 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id):
         cat = coco_dset.index.cats[ann['category_id']]
         catname = cat['name']
 
+        # Handle the case if an image consists of one main image or multiple
+        # auxiliary images
+        if img.get('file_name', None) is not None:
+            img_path = join(coco_dset.bundle_dpath, img['file_name'])
+        else:
+            # Use the first auxiliary image
+            # (todo: might want to choose determine the image "canvas" coordinates?)
+            img_path = join(coco_dset.bundle_dpath, img['auxiliary'][0]['file_name'])
+
         # Non-standard COCO fields, needed by watch
+        if 'segmentation_geos' not in ann:
+            gid = img['id']
+            info = watch.gis.geotiff.geotiff_crs_info(img_path)
+            # Note that each segmentation annotation here will get
+            # written out as a separate GeoJSON feature.
+            # TODO: Confirm that this is the desired behavior
+            # (especially with respect to the evaluation metrics)
+            pxl_anns = coco_dset.annots(gid=gid).detections.data['segmentations']
+            wld_anns = pxl_anns.warp(info['pxl_to_wld'])
+            wgs_anns = wld_anns.warp(info['wld_to_wgs84'])
+            geojson_anns = [poly.swap_axes().to_geojson() for poly in wgs_anns]
+
+            ann['segmentation_geos'] = geojson_anns
+
         sseg_geos = ann['segmentation_geos']
+
         date = dateutil.parser.parse(img['date_captured']).date()
 
         source = None
@@ -242,52 +266,59 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id):
         else:
             raise Exception('cannot determine source')
 
-        feature = geojson.Feature(geometry=sseg_geos)
-        properties = feature['properties']
+        # Consider that sseg_geos could one (dict) or more (list)
+        if isinstance(sseg_geos, dict):
+            sseg_geos = [sseg_geos]
 
-        properties['source'] = source
-        properties['observation_date'] = date.isoformat()
-        # Is this default supposed to be a string?
-        properties['score'] = ann.get('score', 1.0)
+        for sseg_geo in sseg_geos:
+            feature = geojson.Feature(geometry=sseg_geo)
+            properties = feature['properties']
 
-        # This was supercategory, is that supposed to be name instead?
-        # FIXME: what happens when the category nmames dont work?
-        properties['current_phase'] = category_dict.get(catname, catname)
+            properties['source'] = source
+            properties['observation_date'] = date.isoformat()
+            # Is this default supposed to be a string?
+            properties['score'] = ann.get('score', 1.0)
 
-        prediction = predict(ann, img['video_id'], coco_dset,
-                             properties['current_phase'])
-        properties.update(prediction)
+            # This was supercategory, is that supposed to be name instead?
+            # FIXME: what happens when the category nmames dont work?
+            properties['current_phase'] = category_dict.get(catname, catname)
 
-        properties['sensor_name'] = sensor_dict[img['sensor_coarse']]
+            # If there's no video associated with
+            # this image, take annotations as they are
+            # TODO: Ensure that this is the desired behavior in this case
+            if 'video_id' in img:
+                prediction = predict(ann, img['video_id'], coco_dset,
+                                     properties['current_phase'])
+                properties.update(prediction)
+            else:
+                print("* Warning * No 'video_id' found for image; won't be "
+                      "able to properly predict phase changes")
+                properties.update({
+                    'predicted_phase': properties['current_phase'],
+                    'predicted_phase_start_date': properties['observation_date']})
 
-        # HACK IN IS_OCCLUDED
-        num_polys = len(kwimage.MultiPolygon.from_geojson(sseg_geos).data)
-        properties['is_occluded'] = ','.join(['False'] * num_polys)
-        '''
-        properties['is_occluded']
-        depends on cloud masking output?
-        '''
+            properties['sensor_name'] = sensor_dict[img['sensor_coarse']]
 
-        # Handle the case if an image consists of one main image or multiple
-        # auxiliary images
-        if img.get('file_name', None) is not None:
-            img_path = join(coco_dset.bundle_dpath, img['file_name'])
-        else:
-            # Use the first auxiliary image
-            # (todo: might want to choose determine the image "canvas" coordinates?)
-            img_path = join(coco_dset.bundle_dpath, img['auxiliary'][0]['file_name'])
-        properties['is_site_boundary'] = boundary(sseg_geos, img_path)
+            # HACK IN IS_OCCLUDED
+            num_polys = len(kwimage.MultiPolygon.from_geojson(sseg_geo).data)
+            properties['is_occluded'] = ','.join(['False'] * num_polys)
+            '''
+            properties['is_occluded']
+            depends on cloud masking output?
+            '''
 
-        # This seems fragile? Needs docs.
-        site_name = None
-        if img.get('site_tag', None):
-            site_name = img['site_tag']
-        elif source is not None:
-            site_name = source
-        else:
-            raise Exception('cannot determine site_name')
+            properties['is_site_boundary'] = boundary(sseg_geo, img_path)
 
-        site_features[site_name].append(feature)
+            # This seems fragile? Needs docs.
+            site_name = None
+            if img.get('site_tag', None):
+                site_name = img['site_tag']
+            elif source is not None:
+                site_name = source
+            else:
+                raise Exception('cannot determine site_name')
+
+            site_features[site_name].append(feature)
 
     sites = {}
     for site_name, features in site_features.items():
@@ -313,6 +344,7 @@ def main(args):
     sites = convert_kwcoco_to_iarpa(coco_dset, args.region_id)
 
     # Write site to disk
+    os.makedirs(args.out_dir, exist_ok=True)
     for site, collection in sites.items():
         with open(os.path.join(args.out_dir, site + '.json'), 'w') as f:
             json.dump(collection, f, indent=2)

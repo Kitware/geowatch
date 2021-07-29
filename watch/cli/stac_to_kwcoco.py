@@ -3,7 +3,7 @@ import sys
 import kwcoco
 import json
 import argparse
-from pystac import Catalog
+import pystac
 from osgeo import gdal
 import ubelt as ub
 from watch.gis import geotiff
@@ -42,7 +42,14 @@ def hack_resolve_sensor_candidate(dset):
 
 def convert(out_file, cat, ignore_dem=True):
     dset = kwcoco.CocoDataset()
-    catalog = Catalog.from_file(cat)
+
+    if isinstance(cat, str):
+        catalog = pystac.read_file(href=cat)
+    if isinstance(cat, dict):
+        catalog = pystac.Catalog.from_dict(cat)
+    else:
+        catalog = cat
+
     index = 0
     for item in catalog.get_items():
         meta = item.to_dict()
@@ -60,10 +67,10 @@ def convert(out_file, cat, ignore_dem=True):
             img['warp_pxl_to_wld'] = img['warp_pxl_to_wld'].__json__()
         info = geotiff.geotiff_metadata(images[0])
         date = dateutil.parser.parse(date).date()
-        img['date_captured'] = date.isoformat().replace('-', '/')
+        img['date_captured'] = date.isoformat()
         img['sensor_candidates'] = info['sensor_candidates']
         dset.add_image(**img)
-            
+
     hack_resolve_sensor_candidate(dset)
     dataset = json.dumps(dset.dataset, indent=2)
     with open(out_file, 'w') as f:
@@ -74,8 +81,8 @@ def main(args):
     parser = argparse.ArgumentParser(description="Convert STAC catalog to KWCOCO")
     parser.add_argument("--out_file", help="Output KWCOCO")
     parser.add_argument("--catalog", help="Catalog to convert")
-    parser.add_argument('--ignore_dem', 
-                        help='If set, don\'t use the digital elevation map',
+    parser.add_argument('--ignore_dem',
+                        help="If set, don't use the digital elevation map",
                         default=False)
     args = parser.parse_args(args)
     convert(args.out_file, args.catalog, args.ignore_dem)
