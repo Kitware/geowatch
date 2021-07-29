@@ -242,6 +242,10 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id):
         if 'segmentation_geos' not in ann:
             gid = img['id']
             info = watch.gis.geotiff.geotiff_crs_info(img_path)
+            # Note that each segmentation annotation here will get
+            # written out as a separate GeoJSON feature.
+            # TODO: Confirm that this is the desired behavior
+            # (especially with respect to the evaluation metrics)
             pxl_anns = coco_dset.annots(gid=gid).detections.data['segmentations']
             wld_anns = pxl_anns.warp(info['pxl_to_wld'])
             wgs_anns = wld_anns.warp(info['wld_to_wgs84'])
@@ -286,6 +290,9 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id):
                 prediction = predict(ann, img['video_id'], coco_dset,
                                      properties['current_phase'])
                 properties.update(prediction)
+            else:
+                print("* Warning * No 'video_id' found for image; won't be "
+                      "able to predict phase changes")
 
             properties['sensor_name'] = sensor_dict[img['sensor_coarse']]
 

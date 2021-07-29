@@ -67,7 +67,7 @@ def convert(out_file, cat, ignore_dem=True):
             img['warp_pxl_to_wld'] = img['warp_pxl_to_wld'].__json__()
         info = geotiff.geotiff_metadata(images[0])
         date = dateutil.parser.parse(date).date()
-        img['date_captured'] = date.isoformat().replace('-', '/')
+        img['date_captured'] = date.isoformat()
         img['sensor_candidates'] = info['sensor_candidates']
         dset.add_image(**img)
 
@@ -82,7 +82,7 @@ def main(args):
     parser.add_argument("--out_file", help="Output KWCOCO")
     parser.add_argument("--catalog", help="Catalog to convert")
     parser.add_argument('--ignore_dem',
-                        help='If set, don\'t use the digital elevation map',
+                        help="If set, don't use the digital elevation map",
                         default=False)
     args = parser.parse_args(args)
     convert(args.out_file, args.catalog, args.ignore_dem)
