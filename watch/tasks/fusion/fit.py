@@ -17,10 +17,44 @@ Notes:
 
     Automated dynamics / plugins?
 
+
+TODO:
+    - [ ] Rename --dataset argument to --datamodule
+
+    - [ ] Rename WatchDataModule to ChangeDataModule
+
+    - [ ] Add Data Modules:
+        - [ ] SegmentationDataModule
+        - [ ] ClassificationDataModule
+        - [ ] DetectionDataModule
+        - [ ] <Problem>DataModule
+
+    - [ ] How do do DistributedDataParallel
+        - [ ] On one machine
+        - [ ] On multiple machines
+
 CommandLine:
     CUDA_VISIBLE_DEVICES=1 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.fit __doc__:0 -- --profile
     CUDA_VISIBLE_DEVICES=1 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.fit __doc__:0
     CUDA_VISIBLE_DEVICES=0 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.fit __doc__:0
+
+
+    # Takes ~18GB on a 3090
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+    DVC_SUBPATH=$DVC_DPATH/drop1_S2_aligned_c1
+    CUDA_VISIBLE_DEVICES=0 \
+    python -m watch.tasks.fusion.fit \
+        --train_dataset=$DVC_SUBPATH/train_data.kwcoco.json \
+        --vali_dataset=$DVC_SUBPATH/vali_data.kwcoco.json \
+        --time_steps=8 \
+        --channels="coastal|blue|green|red|nir|swir16|swir22" \
+        --chip_size=192 \
+        --method="MultimodalTransformerDotProdCD" \
+        --model_name=smt_it_stm_p8 \
+        --batch_size=2 \
+        --accumulate_grad_batches=8 \
+        --num_workers=12 \
+        --gpus=1
 
 Example:
     >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -255,6 +289,7 @@ def make_fit_config(args=None, cmdline=False, **kwargs):
 
     # Setup common fields and modal switches
     modal_parser = parser.add_argument_group("Modal")
+
     modal_parser.add_argument(
         '--dataset', choices=available_datasets, default='WatchDataModule',
         help=ub.paragraph(
