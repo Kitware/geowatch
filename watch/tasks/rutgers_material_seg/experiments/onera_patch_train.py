@@ -97,7 +97,7 @@ class Trainer(object):
                                                            fg_alpha=config['visualization']['fg_alpha'])
         
     def high_confidence_filter(self, features: torch.Tensor, cutoff_top: float =0.75, 
-                               cutoff_low: float =0.2, eps: float =1e-8) -> torch.Tensor:
+                               cutoff_low: float =0.0, eps: float =1e-8) -> torch.Tensor:
         """Select high confidence regions to select as predictions
 
         Args:
@@ -118,7 +118,7 @@ class Trainer(object):
         # features_max[:, c-1:] *= 0.8
         # features_max[:, :c-1] *= cutoff_top
         features_max *= cutoff_top
-
+        print(features_max.shape)
         # features_max *= cutoff_top
 
         # if the top score is too low, ignore it
@@ -233,11 +233,11 @@ class Trainer(object):
             # image2_flat = torch.flatten(image2, start_dim=2, end_dim=3)
             # negative_image1_flat = torch.flatten(negative_image1, start_dim=2, end_dim=3)
             
-            cropped_image1_flat = F.normalize(torch.flatten(cropped_image1, start_dim=2, end_dim=4),dim=1)
+            cropped_image1_flat = F.normalize(torch.flatten(cropped_image1, start_dim=2, end_dim=4),dim=1,p=3)
             # cropped_image2_flat = torch.flatten(cropped_image2, start_dim=2, end_dim=4)
             # cropped_negative_image1_flat = torch.flatten(cropped_negative_image1, start_dim=2, end_dim=4)
             
-            patched_image1_flat = F.normalize(torch.flatten(patched_image1, start_dim=2, end_dim=4),dim=1)
+            patched_image1_flat = F.normalize(torch.flatten(patched_image1, start_dim=2, end_dim=4),dim=1,p=3)
             # patched_image2_flat = torch.flatten(patched_image2, start_dim=2, end_dim=4)
             
             output1, features1 = self.model(image1)  ## [B,22,150,150]
@@ -254,8 +254,8 @@ class Trainer(object):
 
             cropped_bs, cropped_ps, cropped_c, cropped_h, cropped_w = cropped_features1.shape
             patch_max=6000
-            cropped_features1 = F.normalize(cropped_features1.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w),dim=1) #[bs*ps, c*h*w]
-            cropped_features2 = F.normalize(cropped_features2.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w),dim=1)
+            cropped_features1 = F.normalize(cropped_features1.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w),dim=1,p=1) #[bs*ps, c*h*w]
+            cropped_features2 = F.normalize(cropped_features2.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w),dim=1,p=1)
             cropped_negative_features1 = cropped_negative_features1.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w)
             features = torch.cat([cropped_features1.unsqueeze(1), cropped_features2.unsqueeze(1)], dim=1)[:patch_max,:,:]
             
@@ -287,7 +287,6 @@ class Trainer(object):
                 # b_input1_flat = features1_flat[b,:,:]
                 # b_negative_input1_flat = negative_cropped_features1_flat[b,:,:]
                 b_test_full_image1 = patched_image1_flat[b,:,:]
-                # b_test_full_image2 = patched_image2_flat[b,:,:]
                 
                 b_dictionary1 = self.kmeans.fit_predict(b_input1_flat)#.to(device)
                 dictionary1[b,:] = b_dictionary1[:patch_max]
@@ -302,7 +301,6 @@ class Trainer(object):
                                          pad=((h-root_shape)//2, (w-root_shape+1)//2, (h-root_shape)//2, (w-root_shape+1)//2), 
                                          mode='constant', value=0)
                 
-                # print(b_dictionary1_test.shape)
                 # dictionary2_test = self.kmeans.predict(b_test_full_image2)
                 # dictionary2_test = dictionary2_test.view((root_shape,root_shape))
                 # dictionary2_test = F.pad(dictionary2_test,
@@ -340,32 +338,27 @@ class Trainer(object):
             
             # dictionary1 = dictionary1.view(-1)
             
-            # print(cropped_features1.shape) # set of high confidence "no change" patches features
-            # print(dictionary1_post_assignment.shape) # set of labels for patches from visual words of structure
-            # print(torch.unique(dictionary1))
             clustering_time = time.time() - start
             
             start = time.time()
             
-            # loss1 = 5*F.cross_entropy(output1, 
-            #                           dictionary1_post_assignment,
-            #                           ignore_index=0,
-            #                           reduction="mean")
+            loss1 = 5*F.cross_entropy(output1, 
+                                      dictionary1_post_assignment,
+                                      ignore_index=0,
+                                      reduction="mean")
             
-            # loss2 = 5*F.cross_entropy(output2, 
-            #                           dictionary1_post_assignment,
-            #                           ignore_index=0,                                      
-            #                           reduction="mean")
+            loss2 = 5*F.cross_entropy(output2, 
+                                      dictionary1_post_assignment,
+                                      ignore_index=0,                                      
+                                      reduction="mean")
             
-            # loss = loss1 + loss2
+            loss = loss1 + loss2
             
             # loss += 5*F.triplet_margin_loss(cropped_features1,#.unsqueeze(0), 
             #                                 cropped_features2,#.unsqueeze(0), 
             #                                 cropped_negative_features1
             #                                 )
-            loss = self.contrastive_loss(features, labels=dictionary1)
-            # print(loss3)
-            # loss += loss3
+            loss += 5*self.contrastive_loss(features, labels=dictionary1)
 
             self.optimizer.zero_grad()
             loss.backward()

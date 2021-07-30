@@ -48,8 +48,8 @@ training:
   test_with_full_supervision: 1
 
 high_confidence_threshold:
-  train_cutoff: 0.2
-  val_cutoff: 0.2
+  train_cutoff: 0.001
+  val_cutoff: 0.001
 
 evaluation:
   use_crf: False

@@ -42,7 +42,8 @@ class Evaluator(object):
                  eval_loader: torch.utils.data.DataLoader, 
                  optimizer: object, 
                  scheduler: object,
-                 coco_dataset: object) -> None:
+                 coco_dataset: object,
+                 log_features=True) -> None:
         """Evaluator class
 
         Args:
@@ -59,8 +60,9 @@ class Evaluator(object):
         self.scheduler = scheduler
         self.max_label = config['data']['num_classes']
         self.coco_dataset = coco_dataset
+        self.log_features = log_features
             
-    def eval(self) -> tuple:
+    def eval(self, save_root="/media/native/data/data/smart_watch_dvc/drop0_rutgers_features") -> tuple:
         """evaluate a single epoch
 
         Args:
@@ -75,9 +77,9 @@ class Evaluator(object):
                 outputs = batch
                 images, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0]
                 original_width, original_height = outputs['tr'].data[0][0]['space_dims']
-                gids = outputs['tr'].data[0][0]['gids']
                 
-                print(gids)
+                
+                print(outputs['tr'].data[0])
                 
                 mask = torch.stack(mask)
                 mask = mask.long().squeeze(1)
@@ -99,28 +101,31 @@ class Evaluator(object):
                 output1, features1 = self.model(image1)  ## [B,22,150,150]
                 output2, features2 = self.model(image2)
                 
-                
-                if log_features:
-                    
-                    kwimage.imwrite(save_path1, output1, backend='gdal')
-                    kwimage.imwrite(save_path2, output1, backend='gdal')
-                    for gid in gids:
-                        aux_height, aux_width = data.shape[0:2]
-                        img = dset.index.imgs[gid]
-                        warp_aux_to_img = kwimage.Affine.scale(
-                            (img['width'] / aux_width, img['height'] / aux_height))
-                        
-                        aux = {
-                                'file_name': fname,
-                                'height': aux_height,
-                                'width': aux_width,
-                                'channels': config['data']['num_classes'],
-                                'warp_aux_to_img': warp_aux_to_img.concise(),
-                            }
-                        
-                        auxiliary = img.setdefault('auxiliary', [])
-                        auxiliary.append(aux)
-                        self.coco_dataset._invalidate_hashid()
+                bs, c, h, w = output1.shape
+                output1_to_save = output1.permute(0,2,3,1).cpu().detach().numpy()
+                output2_to_save = output2.permute(0,2,3,1).cpu().detach().numpy()
+                if self.log_features:
+                    for b in range(bs):
+                        gids = outputs['tr'].data[0][b]['gids']
+                        for gid, output in zip(gids,[output1_to_save[b,:,:,:],output2_to_save[b,:,:,:]]):
+                            save_path = f"{save_root}/{gid}.tiff"
+                            kwimage.imwrite(save_path, output, backend='gdal', space=None)
+                            aux_height, aux_width = output.shape[0:2]
+                            img = dset.index.imgs[gid]
+                            warp_aux_to_img = kwimage.Affine.scale(
+                                (img['width'] / aux_width, img['height'] / aux_height))
+                            
+                            aux = {
+                                    'file_name': save_path,
+                                    'height': aux_height,
+                                    'width': aux_width,
+                                    'channels': config['data']['num_classes'],
+                                    'warp_aux_to_img': warp_aux_to_img.concise(),
+                                }
+                            
+                            auxiliary = img.setdefault('auxiliary', [])
+                            auxiliary.append(aux)
+                            self.coco_dataset._invalidate_hashid()
                 
                 # masks1 = F.softmax(output1, dim=1)#.detach()
                 # masks2 = F.softmax(output2, dim=1)#.detach()
