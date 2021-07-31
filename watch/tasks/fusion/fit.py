@@ -54,7 +54,41 @@ CommandLine:
         --batch_size=2 \
         --accumulate_grad_batches=8 \
         --num_workers=12 \
-        --gpus=1
+        --gpus=1 2>/dev/null
+
+    # Takes ~21GB on a 3090
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+    DVC_SUBPATH=$DVC_DPATH/drop1_S2_aligned_c1
+    CUDA_VISIBLE_DEVICES=0 \
+    python -m watch.tasks.fusion.fit \
+        --train_dataset=$DVC_SUBPATH/train_data.kwcoco.json \
+        --vali_dataset=$DVC_SUBPATH/vali_data.kwcoco.json \
+        --time_steps=7 \
+        --channels="coastal|blue|green|red|nir|swir16|swir22" \
+        --chip_size=224 \
+        --method="MultimodalTransformerDotProdCD" \
+        --model_name=smt_it_stm_small \
+        --batch_size=4 \
+        --accumulate_grad_batches=8 \
+        --num_workers=12 \
+        --gpus=1 2>/dev/null
+
+    # Can run on a 1080ti
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+    DVC_SUBPATH=$DVC_DPATH/drop1_S2_aligned_c1
+    CUDA_VISIBLE_DEVICES=0 \
+    GLOG_minloglevel=2 python -m watch.tasks.fusion.fit \
+        --train_dataset=$DVC_SUBPATH/train_data.kwcoco.json \
+        --vali_dataset=$DVC_SUBPATH/vali_data.kwcoco.json \
+        --time_steps=7 \
+        --channels="coastal|blue|green|red|nir|swir16|swir22" \
+        --chip_size=192 \
+        --method="MultimodalTransformerDotProdCD" \
+        --model_name=smt_it_stm_p8 \
+        --batch_size=1 \
+        --accumulate_grad_batches=8 \
+        --num_workers=12 \
+        --gpus=1 2>/dev/null
 
 Example:
     >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -466,11 +500,14 @@ def fit_model(args=None, cmdline=False, **kwargs):
     datamodule = modules['datamodule']
     model = modules['model']
 
+    print(model)
+
     # prime the model, incase it has a lazy layer
     batch = next(iter(datamodule.train_dataloader()))
 
     # batch_shapes = ub.map_vals(lambda x: x.shape, batch)
     # print('batch_shapes = {}'.format(ub.repr2(batch_shapes, nl=1)))
+
 
     # result = model(batch["images"][[0], ...].float())
     import torch
