@@ -58,7 +58,7 @@ CommandLine:
     2>/dev/null
 
 
-    # Takes ~21GB on a 3090
+    # Takes ~14GB on a 3090
     DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
     DVC_SUBPATH=$DVC_DPATH/drop1_S2_aligned_c1
     CUDA_VISIBLE_DEVICES=0 \
