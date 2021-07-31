@@ -1,9 +1,4 @@
 """
-This file demonstrates how to write a new CLI script using scriptconfig
-
-First copy this template to the file name of your choice in this folder and
-manually register the name of the file in `watch.cli.__main__.py`. Then
-fill in the content of the file.
 """
 import re
 import ubelt as ub
@@ -14,7 +9,7 @@ import geojson
 
 class MergeRegionModelConfig(scfg.Config):
     """
-    Extract bounds of geojson tiffs (in a kwcoco file) into a regions file
+    Combine the specific features from multiple region files into a single one.
     """
     default = {
         'src': scfg.Value([], help='paths to input geojson region files', nargs='+', position=1),
