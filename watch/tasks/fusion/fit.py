@@ -54,7 +54,9 @@ CommandLine:
         --batch_size=2 \
         --accumulate_grad_batches=8 \
         --num_workers=12 \
-        --gpus=1 2>/dev/null
+        --gpus=1
+    2>/dev/null
+
 
     # Takes ~21GB on a 3090
     DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
@@ -65,13 +67,17 @@ CommandLine:
         --vali_dataset=$DVC_SUBPATH/vali_data.kwcoco.json \
         --time_steps=7 \
         --channels="coastal|blue|green|red|nir|swir16|swir22" \
-        --chip_size=224 \
+        --chip_size=192 \
+        --chip_overlap=0.66 \
+        --time_overlap=0.3 \
         --method="MultimodalTransformerDotProdCD" \
         --model_name=smt_it_stm_small \
         --batch_size=4 \
-        --accumulate_grad_batches=8 \
+        --accumulate_grad_batches=4 \
         --num_workers=12 \
-        --gpus=1 2>/dev/null
+        --gpus=1
+
+    2>/dev/null
 
     # Can run on a 1080ti
     DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc

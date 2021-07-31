@@ -108,7 +108,7 @@ class ChangeDetectorBase(pl.LightningModule):
                 logits, [H, W], mode="bilinear")
 
             change_prob = logits.sigmoid()[0]
-            item_pred_changes.append(change_prob)
+            item_pred_changes.append(change_prob.detach())
 
             if with_loss:
                 changes = torch.stack([
