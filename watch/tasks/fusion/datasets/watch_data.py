@@ -222,6 +222,7 @@ class WatchDataModule(pl.LightningDataModule):
         return canvas
 
     def setup(self, stage):
+        print('Setup DataModule: stage = {!r}'.format(stage))
         if stage == "fit" or stage is None:
             train_data = self.train_kwcoco
             if isinstance(train_data, pathlib.Path):
@@ -314,6 +315,8 @@ class WatchDataModule(pl.LightningDataModule):
 
             ub.inject_method(self, lambda self: self._make_dataloader('train', shuffle=True), 'test_dataloader')
 
+        print('self.torch_datasets = {}'.format(ub.repr2(self.torch_datasets, nl=1)))
+
     def _make_dataloader(self, stage, shuffle=False):
         return data.DataLoader(
             self.torch_datasets[stage],
@@ -328,7 +331,7 @@ class WatchDataModule(pl.LightningDataModule):
     def add_data_specific_args(parent_parser):
         parser = parent_parser.add_argument_group("watch_data")
         parser.add_argument("--train_dataset", default=None, type=pathlib.Path)
-        # parser.add_argument("--vali_dataset", default=None, type=pathlib.Path)
+        parser.add_argument("--vali_dataset", default=None, type=pathlib.Path)
         parser.add_argument("--test_dataset", default=None, type=pathlib.Path)
         parser.add_argument("--time_steps", default=2, type=int)
         parser.add_argument("--chip_size", default=128, type=int)

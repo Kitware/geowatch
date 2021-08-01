@@ -89,7 +89,7 @@ CommandLine:
         --time_steps=7 \
         --channels="coastal|blue|green|red|nir|swir16|swir22" \
         --chip_size=192 \
-        --method="MultimodalTransformerDotProdCD" \
+        --method="MultimodalTransformerDirectCD" \
         --model_name=smt_it_stm_p8 \
         --batch_size=1 \
         --accumulate_grad_batches=8 \
@@ -475,6 +475,10 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     model = method_class(**method_var_dict)
 
     # init trainer from args
+
+    # TODO:
+    # - [ ] Save multiple checkpoints based on metrics
+    # https://github.com/PyTorchLightning/pytorch-lightning/issues/2908
     trainer = pl.Trainer.from_argparse_args(args, callbacks=[
         DrawBatchCallback()
     ])
@@ -506,14 +510,13 @@ def fit_model(args=None, cmdline=False, **kwargs):
     datamodule = modules['datamodule']
     model = modules['model']
 
-    print(model)
+    print(ub.repr2(utils.model_json(model, max_depth=3), nl=-1, sort=0))
 
     # prime the model, incase it has a lazy layer
     batch = next(iter(datamodule.train_dataloader()))
 
     # batch_shapes = ub.map_vals(lambda x: x.shape, batch)
     # print('batch_shapes = {}'.format(ub.repr2(batch_shapes, nl=1)))
-
 
     # result = model(batch["images"][[0], ...].float())
     import torch
@@ -590,8 +593,11 @@ def main(args=None, **kwargs):
             --chip_size=96 \
             --workdir=$HOME/work/watch/fit
     """
-    args = make_fit_config(args=args, cmdline=True, **kwargs)
-    fit_model(args=args, **kwargs)
+    import logging
+    # configure logging at the root level of lightning
+    logging.getLogger("pytorch_lightning").setLevel(logging.DEBUG)
+
+    fit_model(args=args, cmdline=True, **kwargs)
 
 
 if __name__ == "__main__":

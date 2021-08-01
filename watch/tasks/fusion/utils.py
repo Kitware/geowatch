@@ -251,3 +251,29 @@ def confusion_image(pred, target):
     np.putmask(canvas, (target==1) & (pred==0), 2) # false-neg
     np.putmask(canvas, (target==0) & (pred==1), 3) # false-pos
     return canvas
+
+
+def model_json(model, max_depth=float('inf'), depth=0):
+    """
+    import torchvision
+    model = torchvision.models.resnet50()
+    info = model_json(model, max_depth=1)
+    print(ub.repr2(info, sort=0, nl=-1))
+    """
+    info = {
+        'type': model._get_name(),
+    }
+    params = model.extra_repr()
+    if params:
+        info['params'] = params
+
+    if model._modules:
+        if depth >= max_depth:
+            info['children'] = ...
+        else:
+            children = {
+                key: model_json(child, max_depth, depth=depth + 1)
+                for key, child in model._modules.items()
+            }
+            info['children'] = children
+    return info
