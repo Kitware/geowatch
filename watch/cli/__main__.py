@@ -15,6 +15,7 @@ def main(cmdline=True, **kw):
         'geotiffs_to_kwcoco',
         'hello_world',
         'watch_coco_stats',
+        'merge_region_models',
     ]
     module_lut = {}
     for name in modnames:
@@ -75,7 +76,7 @@ def main(cmdline=True, **kw):
     # TODO: need to make a nicer pattern for new CLI integration, but this
     # works for now
     kw = ns.__dict__
-    print('ns = {!r}'.format(ns))
+    # print('ns = {!r}'.format(ns))
 
     if kw.pop('version'):
         import watch
