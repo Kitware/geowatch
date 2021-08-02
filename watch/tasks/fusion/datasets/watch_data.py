@@ -98,9 +98,9 @@ class WatchDataModule(pl.LightningDataModule):
         >>> expect_shape = (batch_size, time_steps, len(chan_spec), chip_size, chip_size)
         >>> assert len(batch) == batch_size
         >>> for item in batch:
-        ...     for mode_key, mode_val in item['modes'].items():
-        ...         assert mode_val.shape[0] == time_steps
-        ...         assert mode_val.shape[2:4] == (chip_size, chip_size)
+        ...     assert len(item['frames']) == time_steps
+        ...     for mode_key, mode_val in item['frames'][0]['modes'].items():
+        ...         assert mode_val.shape[1:3] == (chip_size, chip_size)
     """
     def __init__(
         self,
@@ -176,7 +176,8 @@ class WatchDataModule(pl.LightningDataModule):
             >>> item = batch[0]
             >>> # Visualize
             >>> B = len(batch)
-            >>> T, C, H, W = ub.peek(item['modes'].values()).shape
+            >>> C, H, W = ub.peek(item['frames'][0]['modes'].values()).shape
+            >>> T = len(item['frames'])
             >>> outputs = {'binary_predictions': [torch.rand(T - 1, H, W) for _ in range(B)]}
             >>> stage = 'train'
             >>> canvas = self.draw_batch(batch, stage=stage, outputs=outputs)
@@ -214,9 +215,11 @@ class WatchDataModule(pl.LightningDataModule):
 
         with_legend = True
         if with_legend:
-            import kwplot
-            label_to_color = {node: data['color'] for node, data in dataset.classes.graph.nodes.items()}
-            legend_img = kwplot.make_legend_img(label_to_color)
+            label_to_color = {
+                node: data['color']
+                for node, data in dataset.classes.graph.nodes.items()}
+            label_to_color = ub.sorted_keys(label_to_color)
+            legend_img = _memo_legend(label_to_color)
             canvas = kwimage.stack_images([canvas, legend_img], axis=1)
 
         return canvas
@@ -1011,6 +1014,13 @@ class WatchVideoDataset(data.Dataset):
             self, batch_size=batch_size, num_workers=num_workers,
             shuffle=shuffle, pin_memory=pin_memory, collate_fn=ub.identity)
         return loader
+
+
+@ub.memoize
+def _memo_legend(label_to_color):
+    import kwplot
+    legend_img = kwplot.make_legend_img(label_to_color)
+    return legend_img
 
 
 def category_tree_ensure_color(classes):

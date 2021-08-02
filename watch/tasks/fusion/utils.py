@@ -33,7 +33,7 @@ def create_package(model, package_path, module_name="watch_tasks_fusion", model_
         >>> from watch.tasks.fusion import methods
         >>> model = methods.MultimodalTransformerDirectCD("smt_it_stm_p8")
         >>> # We have to run an input through the module because it is lazy
-        >>> inputs = torch.rand(1, 2, 13, 16, 16, 96)
+        >>> inputs = torch.rand(1, 2, 13, 128, 128)
         >>> model(inputs)
 
         >>> # Save the model

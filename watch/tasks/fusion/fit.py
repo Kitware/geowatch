@@ -494,12 +494,14 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
 def fit_model(args=None, cmdline=False, **kwargs):
     """
     Example:
+        >>> # xdoctest: +REQUIRES(--gpu)
         >>> from watch.tasks.fusion.fit import *  # NOQA
         >>> args = None
         >>> cmdline = False
         >>> kwargs = {
         ...     'train_dataset': 'special:vidshapes8-multispectral',
         ...     'dataset': 'WatchDataModule',
+        ...     'gpus': 1,
         ... }
         >>> args = make_fit_config(args=None, cmdline=cmdline, **kwargs)
         >>> print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
@@ -524,7 +526,7 @@ def fit_model(args=None, cmdline=False, **kwargs):
         model.forward_step(batch)
 
     # if requested, tune model
-    trainer.tune(model, dataset)
+    trainer.tune(model, datamodule)
 
     # fit the model
     trainer.fit(model, datamodule)
