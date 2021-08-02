@@ -532,7 +532,8 @@ def fit_model(args=None, cmdline=False, **kwargs):
     trainer.fit(model, datamodule)
 
     # save model to package
-    utils.create_package(model, args.default_root_dir / "package.pt")
+    utils.create_package(
+        model, pathlib.Path(trainer.default_root_dir) / "package.pt")
 
     # save learning relevant training options
     learning_config = ub.dict_diff(args.__dict__, learning_irrelevant)
