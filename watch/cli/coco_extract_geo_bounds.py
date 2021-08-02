@@ -57,7 +57,7 @@ def main(**kwargs):
         print(f'Writing to dst_fpath={dst_fpath}')
         with open(dst_fpath, 'w') as file:
             json.dump(geojson, file, indent=' ' * 4)
-
+    return dst_fpath
     # json.dumps(regions)
     # print('regions = {}'.format(ub.repr2(regions, nl=2)))
 
@@ -112,7 +112,7 @@ def find_spacetime_cluster_regions(dset, mode='annots', breakup_times=False):
 
                 # What CRS should we be doing this in? Is WGS84 OK?
                 # Should we switch to UTM?
-                img_rois_ = ops.cascaded_union(sh_annot_polys_)
+                img_rois_ = ops.unary_union(sh_annot_polys_)
                 try:
                     img_rois = list(img_rois_)
                 except Exception:
@@ -151,13 +151,13 @@ def find_spacetime_cluster_regions(dset, mode='annots', breakup_times=False):
         times = [graph.nodes[idx]['time'] for idx in cc]
         min_time = min(times)
         max_time = max(times)
-        combo_rois_ = ops.cascaded_union(rois)
+        combo_rois_ = ops.unary_union(rois)
         try:
             combo_rois = list(combo_rois_)
         except Exception:
             combo_rois = [combo_rois_]
         # hack to ensure convexity
-        combo_rois_ = ops.cascaded_union([roi.convex_hull for roi in combo_rois])
+        combo_rois_ = ops.unary_union([roi.convex_hull for roi in combo_rois])
         try:
             combo_rois = list(combo_rois_)
         except Exception:
