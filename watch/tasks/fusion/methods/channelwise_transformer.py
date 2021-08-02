@@ -28,8 +28,9 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
         >>> loader = datamodule.train_dataloader()
         >>> batch = next(iter(loader))
         >>> self = MultimodalTransformerDotProdCD(model_name='smt_it_joint_p8')
-        >>> images = batch[0]['frames'][0]['modes']['r|g|b'][None, :].float()
-        >>> distance = self(images)
+        >>> frames = batch[0]['frames']
+        >>> images = torch.cat([frame['modes']['r|g|b'][None, :].float() for frame in frames], dim=0)
+        >>> distance = self(images[None, :])[0]
     """
 
     def __init__(self,
@@ -117,10 +118,9 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
         >>> loader = datamodule.train_dataloader()
         >>> batch = next(iter(loader))
         >>> self = MultimodalTransformerDirectCD(model_name='smt_it_joint_p8')
-        >>> images = batch[0]['frames'][0]['modes']['r|g|b'][None, :].float()
-        >>> similarity = self(images)
-
-        # nh.util.number_of_parameters(self)
+        >>> frames = batch[0]['frames']
+        >>> images = torch.cat([frame['modes']['r|g|b'][None, :].float() for frame in frames], dim=0)
+        >>> distance = self(images[None, :])[0]
     """
 
     def __init__(self,
