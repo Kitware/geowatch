@@ -17,8 +17,7 @@ fname_template = "{location}/{bands}-{frame_no}.tif"
 def main(args):
 
     # init method from checkpoint
-    method_class = getattr(methods, args.method)
-    method = method_class.load_from_checkpoint(args.checkpoint_path)
+    method = utils.load_model_from_package(args.checkpoint_path)
     method.eval()
     method.freeze()
 
@@ -204,7 +203,6 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("dataset")
-    parser.add_argument("method")
     parser.add_argument("tag")
     parser.add_argument("checkpoint_path", type=pathlib.Path)
     parser.add_argument("results_dir", type=pathlib.Path)

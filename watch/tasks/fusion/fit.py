@@ -50,6 +50,24 @@ available_datasets = [
     # 'project_data'
 ]
 
+# TODO: is there a better way to mark these?
+learning_irrelevant = {
+    'workdir',
+    'num_workers',
+    'gpus',
+    'limit_val_batches',
+    'limit_test_batches',
+    'limit_predict_batches',
+    'val_check_interval',
+    'flush_logs_every_n_steps',
+    'reload_dataloaders_every_epoch',
+    'progress_bar_refresh_rate'
+    'log_every_n_steps',
+    'log_gpu_memory',
+    'logger',
+    'checkpoint_callback',
+}
+
 
 def make_fit_config(args=None, cmdline=False, **kwargs):
     """
@@ -188,25 +206,6 @@ def make_fit_config(args=None, cmdline=False, **kwargs):
             file.write(file_contents)
         sys.exit(0)
 
-    # TODO: is there a better way to mark these?
-    learning_irrelevant = {
-        'workdir',
-        'num_workers',
-        'model_name',
-        'gpus',
-        'limit_train_batches',
-        'limit_val_batches',
-        'limit_test_batches',
-        'limit_predict_batches',
-        'val_check_interval',
-        'flush_logs_every_n_steps',
-        'reload_dataloaders_every_epoch',
-        'progress_bar_refresh_rate'
-        'log_every_n_steps',
-        'log_gpu_memory',
-        'logger',
-        'checkpoint_callback',
-    }
     learning_config = ub.dict_diff(args.__dict__, learning_irrelevant)
 
     # Construct a netharn-like training directory based on relevant hyperparams
@@ -219,14 +218,13 @@ def make_fit_config(args=None, cmdline=False, **kwargs):
     # similar to how scriptconfig works
     return args
 
-def fit_model(args=None, cmdline=False, **kwargs):
+def fit_model(args=None, **kwargs):
     """
     Example:
         from watch.tasks.fusion.fit import *  # NOQA
         kwargs = dict(train_dataset='vidshapes8-multispectral')
         fit(, )
     """
-    args = make_fit_config(args=None, cmdline=cmdline, **kwargs)
     print("{train_name}\n====================".format(**args.__dict__))
 
     method_class = getattr(methods, args.method)
@@ -256,9 +254,19 @@ def fit_model(args=None, cmdline=False, **kwargs):
     # prime the model, incase it has a lazy layer
     batch = next(iter(dataset.train_dataloader()))
     result = model(batch["images"][[0], ...].float())
+    
+    # if requested, tune model
+    trainer.tune(model, dataset)
 
     # fit the model
     trainer.fit(model, dataset)
+    
+    # save model to package
+    utils.create_package(model, args.default_root_dir / "package.pt")
+    
+    # save learning relevant training options
+    learning_config = ub.dict_diff(args.__dict__, learning_irrelevant)
+    
 
 
 def main(args=None, **kwargs):
@@ -317,7 +325,8 @@ def main(args=None, **kwargs):
             --chip_size=96 \
             --workdir=$HOME/work/watch/fit
     """
-    fit_model(args=args, cmdline=True, **kwargs)
+    args = make_fit_config(args=args, cmdline=True, **kwargs)
+    fit_model(args=args, **kwargs)
 
 
 if __name__ == "__main__":
