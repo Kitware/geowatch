@@ -81,9 +81,9 @@ CommandLine:
 
     # Can run on a 1080ti
     DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-    DVC_SUBPATH=$DVC_DPATH/drop1_S2_aligned_c1
-    CUDA_VISIBLE_DEVICES=0 \
-    GLOG_minloglevel=2 python -m watch.tasks.fusion.fit \
+    DVC_SUBPATH=$DVC_DPATH/drop1-S2-L8-LS-aligned-v2
+    CUDA_VISIBLE_DEVICES=1 \
+    python -m watch.tasks.fusion.fit \
         --train_dataset=$DVC_SUBPATH/train_data.kwcoco.json \
         --vali_dataset=$DVC_SUBPATH/vali_data.kwcoco.json \
         --time_steps=7 \
@@ -215,7 +215,7 @@ class DrawBatchCallback(pl.callbacks.Callback):
     References:
         https://pytorch-lightning.readthedocs.io/en/latest/extensions/callbacks.html
     """
-    def __init__(self, num_draw=2, draw_interval=10):
+    def __init__(self, num_draw=4, draw_interval=10):
         super().__init__()
         self.num_draw = num_draw
         self.draw_interval = draw_interval

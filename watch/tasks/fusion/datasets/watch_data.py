@@ -559,12 +559,13 @@ class WatchVideoDataset(data.Dataset):
             >>> import kwcoco
             >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
             >>> dvc_dpath = os.environ.get('DVC_DPATH', _default)
-            >>> coco_fpath = join(dvc_dpath, 'drop1_S2_aligned_c1/data.kwcoco.json')
+            >>> #coco_fpath = join(dvc_dpath, 'drop1_S2_aligned_c1/data.kwcoco.json')
+            >>> coco_fpath = join(dvc_dpath, 'drop1-S2-L8-LS-aligned-v2/train_data.kwcoco.json')
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
-            >>> sample_shape = (2, 128, 128)
+            >>> sample_shape = (7, 128, 128)
             >>> self = WatchVideoDataset(sampler, sample_shape=sample_shape, channels=None)
-            >>> item = self[0]
+            >>> item = self[4]
             >>> canvas = self.draw_item(item)
             >>> # xdoctest: +REQUIRES(--show)
             >>> import kwplot
@@ -669,6 +670,7 @@ class WatchVideoDataset(data.Dataset):
             frame_item = {
                 'gid': gid,
                 'date_captured': img.get('date_captured', ''),
+                'sensor_coarse': img.get('sensor_coarse', ''),
                 'modes': {
                     mode_key: torch.from_numpy(frame_chw),
                 },
@@ -830,7 +832,6 @@ class WatchVideoDataset(data.Dataset):
         frame_list = []
         for frame_idx, frame_item in enumerate(item['frames']):
 
-            date_captured = frame_item.get('date_captured', '')
             mask = frame_item['labels'].data.cpu().numpy()
             changes = frame_item['change']
             if changes is None:
@@ -852,26 +853,41 @@ class WatchVideoDataset(data.Dataset):
 
             gid = frame_item['gid']
 
-            frame_header1 = kwimage.draw_text_on_image(
-                {'width': max_dim}, f't={frame_idx} gid={gid}', org=(max_dim // 2, 1), valign='top',
-                halign='center', color='salmon')
-            vertical_stack.append(frame_header1)
+            def header_text(text, shrink=False):
+                """
+                If shrink is true, shrinks the text to fit, otherwise text is
+                placed in the center at a constant size, but is not guarenteed
+                to fit.
+                """
+                if shrink:
+                    header = kwimage.draw_text_on_image(
+                        None, text, org=(1, 1),
+                        valign='top', halign='left', color='salmon')
+                    header = cv2.copyMakeBorder(header, 3, 3, 3, 3,
+                                                cv2.BORDER_CONSTANT)
+                    header = kwimage.imresize(header, dsize=(max_dim, None))
+                else:
+                    header = kwimage.draw_text_on_image(
+                        {'width': max_dim}, text, org=(max_dim // 2, 1),
+                        valign='top', halign='center', color='salmon')
+                return header
 
+            header_part = header_text(f't={frame_idx} gid={gid}', shrink=False)
+            vertical_stack.append(header_part)
+
+            sensor_coarse = frame_item.get('sensor_coarse', '')
+            if sensor_coarse:
+                header_part = header_text(f'{sensor_coarse}', shrink=False)
+                vertical_stack.append(header_part)
+
+            date_captured = frame_item.get('date_captured', '')
             if date_captured:
-                frame_header1 = kwimage.draw_text_on_image(
-                    None, f'{date_captured}', org=(1, 1),
-                    valign='top', halign='left', color='salmon')
-                frame_header1 = cv2.copyMakeBorder(frame_header1, 3, 3, 3, 3, cv2.BORDER_CONSTANT)
-                frame_header1 = kwimage.imresize(frame_header1, dsize=(max_dim, None))
-                vertical_stack.append(frame_header1)
+                header_part = header_text(f'{date_captured}', shrink=True)
+                vertical_stack.append(header_part)
 
             if 0:
-                frame_header2 = kwimage.draw_text_on_image(
-                    None, f'{mode_code}', org=(1, 1),
-                    valign='top', halign='left', color='salmon')
-                frame_header2 = cv2.copyMakeBorder(frame_header2, 3, 3, 3, 3, cv2.BORDER_CONSTANT)
-                frame_header2 = kwimage.imresize(frame_header2, dsize=(max_dim, None))
-                vertical_stack.append(frame_header2)
+                header_part = header_text(f'{mode_code}', shrink=True)
+                vertical_stack.append(header_part)
 
             signal = None
             for chan_idx, chan in enumerate(frame_chw):
@@ -895,29 +911,41 @@ class WatchVideoDataset(data.Dataset):
                     class_overlay[..., 3] = 0.5
                     class_overlay[mask == -1, 3] = 0
                     true_layers.append(class_overlay)
-                    text = signal_text + '\n' + 'true class'
+                    label_text = 'true class'
                 elif chan_idx == 1:
                     # Draw change label on even frames
-                    change_overlay = kwimage.make_heatmask(changes)
+                    change_overlay = np.zeros(changes.shape[0:2] + (4,), dtype=np.float32)
+                    change_overlay = kwimage.Mask(changes, format='c_mask').draw_on(change_overlay, color='lime')
+                    change_overlay = kwimage.ensure_alpha_channel(change_overlay)
+                    change_overlay[..., 3] = (changes > 0).astype(np.float32) * 0.5
+                    # change_overlay = kwimage.make_heatmask(changes)
                     # print('change_overlay = {!r}'.format(change_overlay))
                     true_layers.append(change_overlay)
-                    text = signal_text + '\n' + 'true change'
+                    label_text = 'true change'
                 else:
-                    text = signal_text
+                    label_text = None
 
                 true_layers.append(signal)
                 true_part = kwimage.overlay_alpha_layers(true_layers)
                 true_part = true_part[..., 0:3]
 
                 # Draw change label
-                if chan_idx == 1:
-                    # HACK: fixme put me in above conditional
-                    true_part = kwimage.Mask(changes, format='c_mask').draw_on(true_part, color='lime')
+                # if chan_idx == 1:
+                #     # HACK: fixme put me in above conditional
+                #     true_part = kwimage.Mask(changes, format='c_mask').draw_on(true_part, color='lime')
 
                 true_part = kwimage.imresize(true_part, max_dim=max_dim).clip(0, 1)
                 true_part = kwimage.draw_text_on_image(
-                    true_part, text, (1, 1), valign='top', color='limegreen',
-                    border=3)
+                    true_part, signal_text, (1, 1), valign='top',
+                    color='white', border=3)
+
+                if label_text:
+                    # TODO: make draw_text_on_image able to return the
+                    # geometry of what it drew and use that.
+                    signal_bottom_y = 31  # hack: hardcoded
+                    true_part = kwimage.draw_text_on_image(
+                        true_part, label_text, (1, signal_bottom_y + 1),
+                        valign='top', color='lime', border=3)
                 vertical_stack.append(true_part)
 
             if binprobs is not None:
