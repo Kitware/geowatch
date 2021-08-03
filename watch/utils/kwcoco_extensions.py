@@ -107,12 +107,15 @@ def coco_populate_geo_video_stats(dset, vidid, target_gsd='max-resolution'):
             # Choose any one of the auxiliary images, we chose the biggest
             # arbitrarilly
             # TODO: auxiliary
+            # import pdb
+            # pdb.set_trace()
             aux_width = [aux['width'] for aux in img['auxiliary']]
             aux_height = [aux['height'] for aux in img['auxiliary']]
             aux_idx = (np.array(aux_width) * np.array(aux_height)).argmax()
             aux_chosen = img['auxiliary'][aux_idx]
             aux_to_wld = Affine.coerce(aux_chosen.get('warp_to_wld', None))
             aux_to_img = Affine.coerce(aux_chosen['warp_aux_to_img'])
+            # aux_to_img = Affine.coerce(aux_chosen.get('warp_aux_to_img', None))
             img_to_aux = aux_to_img.inv()
             img_to_wld = aux_to_wld @ img_to_aux
             approx_meter_gsd = aux_chosen['approx_meter_gsd']

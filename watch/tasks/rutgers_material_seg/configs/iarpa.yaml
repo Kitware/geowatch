@@ -1,0 +1,60 @@
+# Ours
+# location: server
+location: local
+data:
+  type: semantic_seg
+  name: iarpa
+  num_classes: 15
+  window_size: 7
+  image_size: 128
+  time_steps: 2
+  weights: []
+  channels: red|green|blue|nir|swir16|swir22
+  local:
+    model_save_dir: /home/native/projects/data/smart_watch/models/
+    train_dir: /media/native/data/data/smart_watch_dvc/drop0_aligned_msi/
+    test_dir: /media/native/data/data/smart_watch_dvc/drop0_aligned_msi/
+    coco_json: /home/native/core534_data/datasets/smart_watch_dvc/drop0_aligned_msi_cf6/train.kwcoco.json
+    val_dir:
+  server:
+    model_save_dir: /data4/peri/smart_watch/models/
+    train_dir: /data4/peri/datasets/smart_watch/processed/drop0_aligned_v2.1/
+    test_dir: /data4/peri/datasets/smart_watch/processed/drop0_aligned_v2.1/
+    val_dir: /data4/peri/datasets/smart_watch/processed/drop0_aligned_v2.1/
+    coco_json:  /data4/datasets/smart_watch/processed/drop0_aligned_v2.1/material_labels.kwcoco.json
+
+training:
+  backbone: 
+  model_name: shallow_seg
+  gn_n_groups: 32
+  num_channels: 6
+  out_features_dim: 16
+  weight_std: True
+  beta: False
+  pretrained: False
+  distributed: False
+  learning_rate: 0.001 # best: 0.00007
+  # resume: /home/native/projects/data/smart_watch/models/experiments_iarpa/tasks_experiments_2021-06-30-17:49/experiments_epoch_11_loss_15182018.848935883_valmIoU_0.4333376202246598_time_2021-06-30-17:57:50.pth
+  resume: False
+  train_val_test_split: [0.95, 0.02, 0.03]
+  epochs: 200
+  start_epoch: 0
+  batch_size: 1
+  drop_last_batch: True
+  momentum: 0.9
+  weight_decay: 0.0001
+  num_workers: 4
+  test_with_full_supervision: 1
+
+high_confidence_threshold:
+  train_cutoff: 0.0
+  val_cutoff: 0.0
+
+evaluation:
+  use_crf: False
+  crf_t: 1
+  crf_scale_factor: 1
+
+procedures:
+  train:  True
+  validate: True

@@ -1,0 +1,28 @@
+dataset: onera
+use_cuda: True
+seed: 128
+
+visualization:
+  batch_index_to_show: 0
+  train_visualizer: True
+  val_visualizer: True
+  visualize_training_every: 2
+  visualize_val_every: 2
+  train_visualization_divisor: 40
+  val_visualization_divisor: 114
+  save_individual_plots: False
+  save_individual_plots_train: False
+  save_individual_plots_path: /home/native/projects/data/smart_watch/visualization/research_deep_dive_presentation_3/
+  titles: True
+  train_imshow: False
+  log_scatters: False
+  val_imshow: False
+  fg_alpha: 0.6
+  bg_alpha: 0.5
+  font_size: 10
+  fig_size: 15
+  dpi: 200
+
+cometml:
+  api_key: 9GTK1r9PK4NzMAoLsnC6XxI7p
+  workspace: periakiva

@@ -1,0 +1,54 @@
+# Ours
+# location: server
+location: local
+data:
+  type: semantic_seg
+  name: deepglobe
+  image_size: 300x300
+  num_classes: 6
+  weights: []
+  local:
+    model_save_dir: /home/native/projects/data/watch_material_seg/models/
+    train_dir: /media/native/data/data/DeepGlobe/crops/
+    test_dir: /media/native/data/data/DeepGlobe/crops/
+    val_dir: /media/native/data/data/DeepGlobe/crops/
+  server:
+    model_save_dir: /data4/peri/watch_material_seg/models/
+    train_dir: /data4/datasets/DeepGlobe/crops/
+    test_dir: /data4/datasets/DeepGlobe/crops/
+    val_dir: /data4/datasets/DeepGlobe/crops/
+
+training:
+  backbone: resnet18
+  model_name: deeplabWS
+  gn_n_groups: 32
+  num_channels: 3
+  weight_std: True
+  beta: False
+  pretrained: False
+  distributed: False
+  learning_rate: 0.0001 # best: 0.00007
+  resume: /home/native/projects/data/watch_material_seg/models/experiments_deepglobe/tasks_experiments_2021-06-28-12:23/experiments_epoch_48_loss_0.5978398986210951_valmIoU_0.007405213546007872_time_2021-06-29-09:28:38.pth
+  # resume: False
+  train_val_test_split: [0.95, 0.02, 0.03]
+  epochs: 200
+  batch_size: 2
+  drop_last_batch: True
+  momentum: 0.9
+  weight_decay: 0.0001
+  num_workers: 1
+  test_with_full_supervision: 1
+  train_classification_for: 0
+
+pseudo_masks:
+  train_cutoff: 0.75
+  val_cutoff: 0.55
+
+evaluation:
+  use_crf: False
+  crf_t: 1
+  crf_scale_factor: 1
+
+procedures:
+  train: True
+  validate: True
