@@ -22,13 +22,18 @@ The following table provides links to relevant resources for the SMART WATCH pro
 Getting Started
 ---------------
 
-Install Conda
-~~~~~~~~~~~~~
+Install Python
+~~~~~~~~~~~~~~
 
-Conda3 is required to set up the environment using Python 3. Follow the
-instructions below to install miniconda3 for Linux. For Windows 10
-users, the Windows Subsystem for Linux (WSL) allows you to run Linux
-within Windows.
+Python 3.8+ is required for watch. Python versions can be managed with either
+conda or pyenv. Working with conda is more beginner friendly, but pyenv has
+less commercial restrictions.
+
+To install pyenv, see the `pyenv installation instructions <docs/pyenv_alternative.rst>`_.
+
+To install Miniconda3, follow the instructions below for Linux. For Windows 10
+users, the Windows Subsystem for Linux (WSL) allows you to run Linux within
+Windows.
 
 .. code:: bash
 
@@ -39,29 +44,32 @@ within Windows.
     # To update to a newer version see:
     # https://docs.conda.io/en/latest/miniconda_hashes.html for updating
     CONDA_INSTALL_SCRIPT=Miniconda3-py38_4.9.2-Linux-x86_64.sh
-    CONDA_EXPECTED_SHA256=1314b90489f154602fd794accfc90446111514a5a72fe1f71ab83e07de9504a7
     curl https://repo.anaconda.com/miniconda/$CONDA_INSTALL_SCRIPT > $CONDA_INSTALL_SCRIPT
-    CONDA_GOT_SHA256=$(sha256sum $CONDA_INSTALL_SCRIPT | cut -d' ' -f1)
+
     # For security, it is important to verify the hash
-    if [[ "$CONDA_GOT_SHA256" != "$CONDA_EXPECTED_SHA256_HASH" ]]; then
+    CONDA_EXPECTED_SHA256=1314b90489f154602fd794accfc90446111514a5a72fe1f71ab83e07de9504a7
+    echo "${CONDA_EXPECTED_SHA256}  ${CONDA_INSTALL_SCRIPT}" > conda_expected_hash.sha256 
+    if ! sha256sum --status -c conda_expected_hash.sha256; then
         echo "Downloaded file does not match hash! DO NOT CONTINUE!"
-        exit 1;
+    else
+        echo "Hash verified, continue with install"
+        chmod +x $CONDA_INSTALL_SCRIPT 
+        # Install miniconda to user local directory
+        _CONDA_ROOT=$HOME/.local/conda
+        sh $CONDA_INSTALL_SCRIPT -b -p $_CONDA_ROOT
+        # Activate the basic conda environment
+        source $_CONDA_ROOT/etc/profile.d/conda.sh
+        # Update the base 
+        conda update --name base conda --yes 
     fi
-    chmod +x $CONDA_INSTALL_SCRIPT 
 
-    # Install miniconda to user local directory
-    _CONDA_ROOT=$HOME/.local/conda
-    sh $CONDA_INSTALL_SCRIPT -b -p $_CONDA_ROOT
-    # Activate the basic conda environment
-    source $_CONDA_ROOT/etc/profile.d/conda.sh
-    # Update the base and create a virtual environment named py38
-    conda update --name base conda --yes 
+NOTE: If using conda, do NOT use ``conda install`` to install Python packages. 
 
 
-Create WATCH Conda environment
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Create WATCH environment with Conda
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The instructions below can be used to create the WATCH Conda
+If using conda, the instructions below can be used to create the WATCH Conda
 environment.
 
 .. code:: bash
@@ -93,10 +101,33 @@ To update the watch environment when new packages have been added, run:
    conda activate watch
    conda env update -f deployment/conda/conda_env.yml
 
-Installation
-~~~~~~~~~~~~
 
-The WATCH Python module can then be installed with ``pip`` via the following
+Create WATCH environment with Pip
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+First create and activate a new virtual environment (note this could be done
+with conda as well).
+
+If using `pyenv installation instructions <docs/pyenv_alternative.rst>`_, then
+a virtual environment can be created with the standard ``venv`` module.
+Assuming you have installed Python 3.8.5 with pyenv the following will create a
+virtual environment.
+
+.. code:: bash
+
+    CHOSEN_PYTHON_VERSION=3.8.5
+    # Set your shell to use this pyenv shim
+    pyenv shell $CHOSEN_PYTHON_VERSION
+
+    # Create the virtual environment
+    python -m venv $(pyenv prefix)/envs/pyenv-watch
+
+    # Activate the virtual environment
+    source $(pyenv prefix)/envs/pyenv-watch/bin/activate
+
+
+Once you are in a virtual environment (managed by either conda or pyenv), the
+WATCH Python module can then be installed with ``pip`` via the following
 command, where ``/path/to/watch-repo`` is the absolute path to the directory
 containing this README.md file.
 
@@ -117,15 +148,13 @@ This is more commonly done as
    pip install -e .
 
 This installation process is also scripted in the top-level
-``run_developer_setup.sh`` script.
+``run_developer_setup.sh`` script and takes care of issues that can arise with
+opencv-python.
 
 After the ``watch`` module has been installed to your python environment, it
-can be imported from anywhere regardless of the current working directory.
+can be imported from anywhere regardless of the current working directory as
+long as the virtual environment was installed in is active.
 
-
-NOTE: The ``conda_env.yml`` was written such that all dependencies are
-installed via pip. This allows for alternatives to conda such as 
-`pyenv <docs/pyenv_alternative.rst>`_ to be used.
 
 Docker Image
 ~~~~~~~~~~~~
@@ -144,7 +173,7 @@ To build the Docker image:
 Running the Algorithm Toolkit (ATK) example project
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Ensure that you have already setup the WATCH Conda enviornment.
+Ensure that you have already setup the WATCH environment.
 
 Then enter the following commands in your terminal to run the ATK
 example project:
@@ -223,7 +252,7 @@ How to contribute
 
 We follow a `merge requests <https://docs.gitlab.com/ee/user/project/merge_requests/>`_ workflow.
 
-Here is a complete, minimal example of how to add code to this repository, assuming you have followed the instructions above. You should be inside this repo's directory tree on your local machine and have the WATCH Conda environment active.
+Here is a complete, minimal example of how to add code to this repository, assuming you have followed the instructions above. You should be inside this repo's directory tree on your local machine and have the WATCH environment active.
 
 .. code:: bash
 

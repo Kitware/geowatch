@@ -215,3 +215,64 @@ as a cloud optimized geotiff. This can be done with kwimage:
     # using backend='gdal' will write the data as a tiled GeoTiff
     kwimage.imwrite(image_path, image_data, space=None, backend='gdal')
 ```
+
+
+
+----
+
+Notes for slides
+
+Input KWCOCO File:
+
+
+```
+{
+"videos": [
+    {"name": "TheRegionName", "width": 300, "height": 400},
+ ...],
+"images": [
+    { 
+        "name": "TheImageName",
+        "width": 600,
+        "height": 800,
+        "video_id": 1,
+        "date_captured": "2018-10-16T16:02:29",
+        "warp_img_to_vid": {"scale": 0.5},
+        "auxiliary": [
+            {
+                "file_name": "B1.tif", 
+                "warp_aux_to_img": {"scale": 2.0}, 
+                "width": 300, "height": 400
+                "channels": "coastal", "num_bands": 1,
+            },
+            { 
+                "file_name": "B2.tif", 
+                "warp_aux_to_img": {"scale": 1.0},
+                "channels": "blue", "num_bands": 1,
+            },
+            ...
+        ],
+    }, ...  ]
+}
+```
+
+
+Output KWCOCO File, Simply append to the "auxiliary list" in each appropriate
+image dictionary.
+
+```
+...
+"auxiliary": [
+    {"file_name": "B1.tif", ...},
+    {"file_name": "B2.tif", ...},
+    { 
+        "file_name": "YOUR_FEATURE_PATH.tif", 
+        "warp_aux_to_img": {"scale": 4.0},
+        "width": 75, "height": 100,
+        "channels": "your_channel_code", 
+        "num_bands": 32,
+        ...
+    },
+    ...
+]
+```
