@@ -126,6 +126,13 @@ class RPCTransform(object):
         assert axis_mapping == 'OAMS_TRADITIONAL_GIS_ORDER', (
             'we dont handle lat/lon yet, TODO')
 
+    # TODO
+    # def __json__():
+    #     pass
+
+    # def coerce():
+    #     pass
+
     @classmethod
     def demo(cls, **kw):
         """

@@ -23,9 +23,12 @@ class TransformerChangeDetector(pl.LightningModule):
                  fc_dim=1024,
                  learning_rate=1e-3,
                  weight_decay=0.,
+                 input_stats=None,
                  pos_weight=1.):
         super().__init__()
         self.save_hyperparameters()
+
+        self.input_stats = input_stats
 
         layers = [
             # nn.Transformer* expect inputs shaped (sequence, batch, feature)
@@ -60,7 +63,7 @@ class TransformerChangeDetector(pl.LightningModule):
             "f1": metrics.F1(),
         })
 
-    @pl.core.decorators.auto_move_data
+    # @pl.core.decorators.auto_move_data
     def forward(self, images):
         """
         Example:
@@ -70,6 +73,7 @@ class TransformerChangeDetector(pl.LightningModule):
             >>> distance = self(images)
         """
         B, T, C, H, W = images.shape
+        print('images.shape = {!r}'.format(images.shape))
         feats = self.model(images)
         feats = einops.rearrange(feats,
                                  "(t h w) b f -> b t f h w",

@@ -59,13 +59,14 @@ except Exception:
 
 try:
     REQUIREMENTS = parse_requirements(fpath='requirements.txt')
-    EXTRAS_REQUIRE = {
+    EXTRAS_REQUIRES = {
         'problematic': parse_requirements('requirements/problematic.txt'),
         'optional': parse_requirements('requirements/optional.txt'),
     }
-except Exception:
+except Exception as ex:
+    print('ex = {!r}'.format(ex))
     REQUIREMENTS = []
-    EXTRAS_REQUIRE = {}
+    EXTRAS_REQUIRES = {}
 
 setup(
     author="WATCH developers",
@@ -88,7 +89,7 @@ setup(
         ],
     },
     install_requires=REQUIREMENTS,
-    extras_require=EXTRAS_REQUIRE,
+    extras_require=EXTRAS_REQUIRES,
     long_description_content_type='text/x-rst',
     long_description=README,
     include_package_data=True,

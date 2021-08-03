@@ -5,7 +5,7 @@ import rasterio
 from tempenv import TemporaryEnvironment
 
 
-def normalize_intensity(imdata, return_info=False, nodata=None):
+def normalize_intensity(imdata, return_info=False, nodata=None, axis=None):
     """
     Normalize data intensities, with an emphasis on visualization.
 
@@ -46,6 +46,18 @@ def normalize_intensity(imdata, return_info=False, nodata=None):
         >>> kwplot.imshow(imdata, pnum=(1, 2, 1), fnum=1)
         >>> kwplot.imshow(normed, pnum=(1, 2, 2), fnum=1)
     """
+    if axis is not None:
+        # Hack, normalize each channel individually
+        assert not return_info
+        reorg = imdata.swapaxes(0, axis)
+        parts = []
+        for item in reorg:
+            part = normalize_intensity(item, nodata=nodata, axis=None)
+            parts.append(part[None, :])
+        recomb = np.concatenate(parts, axis=0)
+        final = recomb.swapaxes(0, axis)
+        return final
+
     import kwimage
 
     info = {}

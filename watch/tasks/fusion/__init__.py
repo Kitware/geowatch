@@ -2,6 +2,9 @@
 mkinit -m watch.tasks.fusion --lazy --noattrs -w
 """
 
+# Hack to supress pytorch-lightning warning
+import setuptools  # NOQA
+
 
 from watch.tasks.fusion import datasets
 from watch.tasks.fusion import evaluate

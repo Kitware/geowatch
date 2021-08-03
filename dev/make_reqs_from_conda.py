@@ -1,90 +1,6 @@
 import ubelt as ub
 
 
-__notes__ = """
-
-# These requirements were pulled down at one time, need to verify
-# if current logic is missing them or if they are not needed
-
-  # List of other sub-deps not explicitly listed, but that will get
-  # pulled down. Should these be added to the requirment spec
-  Jinja2 >= 3.0.0
-  MarkupSafe >= 2.0.0
-  PyWavelets >= 1.1.1
-  WTForms >= 2.3.3
-  absl_py >= 0.12.0
-  astunparse >= 1.6.3
-  atomicwrites >= 1.4.0
-  attrs >= 21.2.0
-  bezier >= 2021.2.12
-  cachetools >= 4.2.2
-  chardet >= 4.0.0
-  click >= 7.1.2
-  click_plugins >= 1.1.1
-  cligj >= 0.7.1
-  configparser >= 5.0.2
-  cycler >= 0.10.0
-  decorator >= 4.4.2
-  diskcache >= 5.2.1
-  distro >= 1.5.0
-  fasteners >= 0.16
-  fiona >= 1.8.19
-  flask >= 2.0.0
-  flask_cors >= 3.0.10
-  flask_wtf >= 0.14.3
-  geomet >= 0.3.0
-  girder_client >= 3.1.4
-  google_auth >= 1.30.0
-  google_auth_oauthlib >= 0.4.4
-  grpcio >= 1.37.1
-  idna >= 2.10
-  imageio >= 2.9.0
-  inflect >= 5.3.0
-  iniconfig >= 1.1.1
-  itsdangerous >= 2.0.0
-  joblib >= 1.0.1
-  jsonschema >= 3.2.0
-  kiwisolver >= 1.3.1
-  liberator >= 0.0.1
-  markdown >= 3.3.4
-  munch >= 2.5.0
-  oauthlib >= 3.1.0
-  ordered_set >= 4.0.2
-  packaging >= 20.9
-  pluggy >= 0.13.1
-  py >= 1.10.0
-  pyasn1 >= 0.4.8
-  pyasn1_modules >= 0.2.8
-  pyflakes >= 2.3.1
-  pyparsing >= 2.4.7
-  pyqtree >= 1.0.0
-  pyrsistent >= 0.17.3
-  pystac_client >= 0.1.1
-  python_dateutil >= 2.8.1
-  python_dotenv >= 0.17.1
-  pytorch-ranger >= 0.1.1
-  pytz >= 2021.1
-  requests_oauthlib >= 1.3.0
-  requests_toolbelt >= 0.9.1
-  rsa >= 4.7.2
-  six >= 1.16.0
-  snuggs >= 1.4.7
-  tabulate >= 0.8.9
-  tensorboard_data_server >= 0.6.1
-  tensorboard_plugin_wit >= 1.8.0
-  threadpoolctl >= 2.1.0
-  torchvision >= 0.9.1
-  tqdm >= 4.60.0
-  typing >= extensions >= 3.10.0.0
-  uritools >= 3.0.2
-  urllib3 >= 1.26.4
-  werkzeug >= 2.0.0
-  sortedcontainers >= 2.3.0
-  toml >= 0.10.2
-  pyyaml >= 5.4.1
-"""
-
-
 def parse_requirement_file(fpath):
     # import requirements
     # with open('requirements.txt', 'r') as fd:
@@ -107,8 +23,8 @@ def parse_conda_reqs(fpath, blocklist=set()):
     for dep in data['dependencies']:
         if isinstance(dep, dict) and 'pip' in dep:
             for line in dep['pip']:
-                if line.startswith('-r file:'):
-                    req_file = line.split('file:')[-1]
+                if line.startswith('-r '):
+                    req_file = line.split(' ')[-1].replace('file:', '')
                     found.extend(parse_requirement_file(req_file))
                 elif line.startswith('--'):
                     context.append(line)
@@ -271,6 +187,41 @@ def main():
     with open('requirements/autogen/all-explicit.txt', 'w') as file:
         file.write(new_text)
     print(new_text)
+
+
+def compare_strict_versions():
+    """
+    Test what installed versions are different from the strict versions
+    """
+    from distutils.version import LooseVersion
+    fpath = 'conda_env.yml'
+    blocklist = {
+        'netharn',
+        'imgaug',
+    }
+    defined_req_lines = parse_conda_reqs(fpath, blocklist=blocklist)
+
+    defined_versions = {}
+    for line in defined_req_lines:
+        if '>=' in line:
+            name, ver = line.split('>=')
+            name = name.strip().replace('-', '_')
+            defined_versions[name] = LooseVersion(ver.strip().split(' ')[0])
+
+    import pipdeptree
+    pkgs = pipdeptree.get_installed_distributions()
+
+    have_versions = {}
+    for pkg in pkgs:
+        name = pkg.project_name.replace('-', '_')
+        have_versions[name] = LooseVersion(pkg.version)
+
+    common = set(have_versions) & set(defined_versions)
+    for key in common:
+        have_v = have_versions[key]
+        def_v = defined_versions[key]
+        if have_v != def_v:
+            print(f'Diff: {key:<30}, have={str(have_v):<10} != defined={str(def_v):<10}')
 
 
 if __name__ == '__main__':

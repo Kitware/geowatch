@@ -6,7 +6,7 @@ from torch.optim import lr_scheduler
 import einops
 import torchmetrics as metrics
 
-from ..models import unet_blur
+from watch.tasks.fusion.models import unet_blur
 
 
 class VotingModel(pl.LightningModule):
@@ -25,7 +25,7 @@ class VotingModel(pl.LightningModule):
             "f1": metrics.F1(),
         })
 
-    @pl.core.decorators.auto_move_data
+    # @pl.core.decorators.auto_move_data
     def forward(self, x):
         B = x.shape[0]
         x = einops.rearrange(x, "b t c h w -> (b t) c h w")
@@ -86,7 +86,7 @@ class VotingModel(pl.LightningModule):
                 lr=self.hparams.learning_rate,
                 weight_decay=self.hparams.weight_decay,
                 betas=(0.9, 0.99),
-            )
+        )
         scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.trainer.max_epochs)
         return [optimizer], [scheduler]
 
@@ -123,10 +123,10 @@ class End2EndVotingModel(pl.LightningModule):
             "f1": metrics.F1(),
         })
 
-    @pl.core.decorators.auto_move_data
+    # @pl.core.decorators.auto_move_data
     def forward(self, images):
         B = images.shape[0]
-        T = images.shape[1] # how many time steps?
+        T = images.shape[1]  # how many time steps?
 
         feats_per_channel_set = {
             key: nn.functional.normalize(
@@ -223,7 +223,7 @@ class End2EndVotingModel(pl.LightningModule):
                 lr=self.hparams.learning_rate,
                 weight_decay=self.hparams.weight_decay,
                 betas=(0.9, 0.99),
-            )
+        )
         scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.trainer.max_epochs)
         return [optimizer], [scheduler]
 

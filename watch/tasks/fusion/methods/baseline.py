@@ -1,11 +1,11 @@
 import torch
 from torch import nn
-import pytorch_lightning as pl
+# import pytorch_lightning as pl
 from torchvision import transforms
 
-from .common import ChangeDetectorBase
-from ..models import unet_blur
-from .. import utils
+from watch.tasks.fusion.methods.common import ChangeDetectorBase
+from watch.tasks.fusion.models import unet_blur
+from watch.tasks.fusion import utils
 
 
 class UNetChangeDetector(ChangeDetectorBase):
@@ -13,15 +13,14 @@ class UNetChangeDetector(ChangeDetectorBase):
                  feature_dim=64,
                  learning_rate=1e-3,
                  weight_decay=1e-5,
-                 pos_weight=1.,
-                ):
+                 pos_weight=1.):
         super().__init__(
             learning_rate=learning_rate,
             weight_decay=weight_decay,
             pos_weight=pos_weight,
         )
         self.save_hyperparameters()
-        
+
         # simple feature extraction model
         self.model = nn.Sequential(
             nn.LazyConv2d(64, 1),
@@ -34,7 +33,7 @@ class UNetChangeDetector(ChangeDetectorBase):
             utils.Lambda(lambda x: x),
         ])
 
-    @pl.core.decorators.auto_move_data
+    # @pl.core.decorators.auto_move_data
     def forward(self, images):
         T = images.shape[1]  # how many time steps?
 
@@ -42,7 +41,7 @@ class UNetChangeDetector(ChangeDetectorBase):
         feats = torch.stack([
                 self.model(images[:, t])
                 for t in range(T)
-            ], dim=1)
+        ], dim=1)
         feats = nn.functional.normalize(feats, dim=2)
 
         # similarity between neighboring timesteps
@@ -55,5 +54,5 @@ class UNetChangeDetector(ChangeDetectorBase):
     def add_model_specific_args(parent_parser):
         parser = super(UNetChangeDetector, UNetChangeDetector).add_model_specific_args(parent_parser)
         parser.add_argument("--feature_dim", default=64, type=int)
-#         parser.add_argument("--input_scale", default=2000.0, type=float)
+        # parser.add_argument("--input_scale", default=2000.0, type=float)
         return parent_parser

@@ -5,12 +5,13 @@ import numpy as np
 import math
 from torch import package
 
-millnames = ['',' K',' M',' B',' T']
+millnames = ['', ' K', ' M', ' B', ' T']
+
 
 def millify(n):
     n = float(n)
-    millidx = max(0,min(len(millnames)-1,
-                        int(math.floor(0 if n == 0 else math.log10(abs(n))/3))))
+    millidx = max(0, min(len(millnames) - 1,
+                         int(math.floor(0 if n == 0 else math.log10(abs(n)) / 3))))
 
     return '{:.2f}{}'.format(n / 10**(3 * millidx), millnames[millidx])
 
@@ -32,7 +33,7 @@ def create_package(model, package_path, module_name="watch_tasks_fusion", model_
         >>> from watch.tasks.fusion import methods
         >>> model = methods.MultimodalTransformerDirectCD("smt_it_stm_p8")
         >>> # We have to run an input through the module because it is lazy
-        >>> inputs = torch.rand(1, 2, 13, 16, 16, 96)
+        >>> inputs = torch.rand(1, 2, 13, 128, 128)
         >>> model(inputs)
 
         >>> # Save the model
@@ -80,7 +81,7 @@ class DimensionDropout(nn.Module):
         shape = x.shape
         dim_size = shape[self.dim]
 
-        index = [slice(0,None)] * len(shape)
+        index = [slice(0, None)] * len(shape)
         index[self.dim] = torch.randperm(dim_size)[:self.n_keep]
 
         return x[index]
@@ -113,6 +114,16 @@ class AddPositionalEncoding(nn.Module):
 
 
 class SinePositionalEncoding(nn.Module):
+    """
+    Example:
+        >>> from watch.tasks.fusion.utils import *  # NOQA
+        >>> dest_dim = 3
+        >>> dim_to_encode = 2
+        >>> sine_pairs = 4
+        >>> self = SinePositionalEncoding(dest_dim, dim_to_encode, sine_pairs=sine_pairs)
+        >>> x = torch.rand(3, 5, 7, 11, 13)
+        >>> y = self(x)
+    """
     def __init__(self, dest_dim, dim_to_encode, sine_pairs=2):
         super().__init__()
         self.dest_dim = dest_dim
@@ -121,7 +132,6 @@ class SinePositionalEncoding(nn.Module):
         assert self.dest_dim != self.dim_to_encode
 
     def forward(self, x):
-
         expanded_shape = list(x.shape)
         expanded_shape[self.dest_dim] = -1
 
@@ -129,14 +139,19 @@ class SinePositionalEncoding(nn.Module):
         expand_dims[self.dim_to_encode] = slice(0, None)
         expand_dims[self.dest_dim] = slice(0, None)
 
-        scale = lambda d: 1 / 10000 ** (d)
+        def scale(d):
+            return 1 / 10000 ** (d)
 
-        encoding = torch.stack([
-            torch.sin(torch.arange(x.shape[self.dim_to_encode]) * scale(idx / (2 * self.sine_pairs)))
-            if idx % 2 == 0
-            else torch.cos(torch.arange(x.shape[self.dim_to_encode]) * scale(idx / (2 * self.sine_pairs)))
-            for idx in range(2 * self.sine_pairs)
-        ], dim=1)
+        parts = []
+        for idx in range(2 * self.sine_pairs):
+            theta = torch.arange(x.shape[self.dim_to_encode]) * scale(idx / (2 * self.sine_pairs))
+            if idx % 2 == 0:
+                part = torch.sin(theta)
+            else:
+                part = torch.cos(theta)
+            parts.append(part)
+
+        encoding = torch.stack(parts, dim=1)
 
         encoding = encoding[expand_dims].expand(expanded_shape)
 
@@ -236,3 +251,29 @@ def confusion_image(pred, target):
     np.putmask(canvas, (target==1) & (pred==0), 2) # false-neg
     np.putmask(canvas, (target==0) & (pred==1), 3) # false-pos
     return canvas
+
+
+def model_json(model, max_depth=float('inf'), depth=0):
+    """
+    import torchvision
+    model = torchvision.models.resnet50()
+    info = model_json(model, max_depth=1)
+    print(ub.repr2(info, sort=0, nl=-1))
+    """
+    info = {
+        'type': model._get_name(),
+    }
+    params = model.extra_repr()
+    if params:
+        info['params'] = params
+
+    if model._modules:
+        if depth >= max_depth:
+            info['children'] = ...
+        else:
+            children = {
+                key: model_json(child, max_depth, depth=depth + 1)
+                for key, child in model._modules.items()
+            }
+            info['children'] = children
+    return info

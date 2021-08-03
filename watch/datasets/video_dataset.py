@@ -361,6 +361,9 @@ def decollate_batch(batch):
         if isinstance(batch_val, BatchContainer):
             for bx, item_val in enumerate(ub.flatten(batch_val.data)):
                 decollated_walker[[bx] + path] = ItemContainer(item_val)
+        elif isinstance(batch_val, torch.Tensor):
+            for bx, item_val in enumerate(batch_val):
+                decollated_walker[[bx] + path] = item_val
     decollated = list(decollated_dict.to_dict().values())
     return decollated
 

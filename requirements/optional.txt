@@ -1,7 +1,6 @@
 # Installing LR-Dict 
 #- lru-dict >= 1.1.7  # breaks on CI, optional for ndsampler
 
-
 PyQt5 >= 5.15
 
 ipython
@@ -10,3 +9,10 @@ flake8
 autopep8
 fire
 mkinit
+
+timerit
+pint
+
+performer_pytorch >= 3.10.0.0
+torch-optimizer >= 0.0.1a9 ;python_version>='3.6'
+Pygments >= 2.2.0

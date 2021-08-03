@@ -32,12 +32,12 @@ networkx >= 2.5.1
 einops >= 0.3.0
 
 # Imaging
-kwimage >= 0.7.8
-kwcoco >= 0.2.7
+kwimage >= 0.7.10
+kwcoco >= 0.2.8
 Pillow >= 8.0.1
 albumentations >= 1.0.0
 scikit_image >= 0.18.1
-ndsampler >= 0.6.3
+ndsampler >= 0.6.4
 tifffile >= 2021.4.8
 
 # Plotting

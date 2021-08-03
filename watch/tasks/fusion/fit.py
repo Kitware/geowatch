@@ -2,18 +2,151 @@
 Notes:
     There are parts of netharn that could be ported to lightning
 
-    The logging stuff.
+    The logging stuff
+        - [ ] loss curves (odd they aren't in tensorboard)
+
     The auto directory structure
-    The checkpoint managment
+        - [ ] save multiple checkpoints
+        - [ ] delete them intelligently
+
+    The run managment
+        - [ ] The netharn/cli/manage_runs.py
+
     The auto-deploy files
+        - [ ] Use Torch 1.9 Packages instead of Torch-Liberator
 
     Automated dynamics / plugins?
+
+
+TODO:
+    - [ ] Rename --dataset argument to --datamodule
+
+    - [ ] Rename WatchDataModule to ChangeDataModule
+
+    - [ ] Add Data Modules:
+        - [ ] SegmentationDataModule
+        - [ ] ClassificationDataModule
+        - [ ] DetectionDataModule
+        - [ ] <Problem>DataModule
+
+    - [ ] How do do DistributedDataParallel
+        - [ ] On one machine
+        - [ ] On multiple machines
+
+CommandLine:
+    CUDA_VISIBLE_DEVICES=1 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.fit __doc__:0 -- --profile
+    CUDA_VISIBLE_DEVICES=1 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.fit __doc__:0
+    CUDA_VISIBLE_DEVICES=0 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.fit __doc__:0
+
+
+    # Takes ~18GB on a 3090
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+    DVC_SUBPATH=$DVC_DPATH/drop1_S2_aligned_c1
+    CUDA_VISIBLE_DEVICES=0 \
+    python -m watch.tasks.fusion.fit \
+        --train_dataset=$DVC_SUBPATH/train_data.kwcoco.json \
+        --vali_dataset=$DVC_SUBPATH/vali_data.kwcoco.json \
+        --time_steps=8 \
+        --channels="coastal|blue|green|red|nir|swir16|swir22" \
+        --chip_size=192 \
+        --method="MultimodalTransformerDotProdCD" \
+        --model_name=smt_it_stm_p8 \
+        --batch_size=2 \
+        --accumulate_grad_batches=8 \
+        --num_workers=12 \
+        --gpus=1
+    2>/dev/null
+
+
+    # Takes ~14GB on a 3090
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+    DVC_SUBPATH=$DVC_DPATH/drop1_S2_aligned_c1
+    CUDA_VISIBLE_DEVICES=0 \
+    python -m watch.tasks.fusion.fit \
+        --train_dataset=$DVC_SUBPATH/train_data.kwcoco.json \
+        --vali_dataset=$DVC_SUBPATH/vali_data.kwcoco.json \
+        --time_steps=7 \
+        --channels="coastal|blue|green|red|nir|swir16|swir22" \
+        --chip_size=192 \
+        --chip_overlap=0.66 \
+        --time_overlap=0.3 \
+        --method="MultimodalTransformerDotProdCD" \
+        --model_name=smt_it_stm_small \
+        --batch_size=4 \
+        --accumulate_grad_batches=4 \
+        --num_workers=12 \
+        --gpus=1
+
+    2>/dev/null
+
+    # Can run on a 1080ti
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+    DVC_SUBPATH=$DVC_DPATH/drop1-S2-L8-LS-aligned-v2
+    CUDA_VISIBLE_DEVICES=1 \
+    python -m watch.tasks.fusion.fit \
+        --train_dataset=$DVC_SUBPATH/train_data.kwcoco.json \
+        --vali_dataset=$DVC_SUBPATH/vali_data.kwcoco.json \
+        --time_steps=7 \
+        --channels="coastal|blue|green|red|nir|swir16|swir22" \
+        --chip_size=192 \
+        --method="MultimodalTransformerDirectCD" \
+        --model_name=smt_it_stm_p8 \
+        --batch_size=1 \
+        --accumulate_grad_batches=8 \
+        --num_workers=12 \
+        --gpus=1 2>/dev/null
+
+Example:
+    >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+    >>> from watch.tasks.fusion.fit import *  # NOQA
+    >>> from os.path import join
+    >>> import os
+    >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
+    >>> dvc_dpath = os.environ.get('DVC_DPATH', _default)
+    >>> train_fpath = join(dvc_dpath, 'drop1_S2_aligned_c1/train_data.kwcoco.json')
+    >>> vali_fpath = join(dvc_dpath, 'drop1_S2_aligned_c1/vali_data.kwcoco.json')
+
+    >>> import kwcoco
+    >>> dset = kwcoco.CocoDataset(train_fpath)
+    >>> available_channel_profiles = {
+    >>>     frozenset(aux.get('channels', None) for aux in img.get('auxiliary', []))
+    >>>      for img in dset.index.imgs.values()}
+    >>> print('available_channel_profiles = {!r}'.format(available_channel_profiles))
+
+    >>> args = None
+    >>> cmdline = False
+    >>> kwargs = {
+    ...     'train_dataset': train_fpath,
+    ...     'vali_dataset': vali_fpath,
+    ...     'dataset': 'WatchDataModule',
+    ...     #'method': 'MultimodalTransformerDirectCD',
+    ...     'method': 'MultimodalTransformerDotProdCD',
+    ...     'channels': 'coastal|blue|green|red|nir|swir16|swir22',
+    ...     #'channels': 'blue|green|red|nir',
+    ...     #'channels': None,
+    ...     'time_steps': 8,
+    ...     #'chip_size': 128,
+    ...     'chip_size': 192,
+    ...     #'chip_size': 256,
+    ...     'batch_size': 1,
+    ...     'accumulate_grad_batches': 12,
+    ...     'model_name': 'smt_it_stm_p8',
+    ...     'num_workers': 12,
+    ...     'attention_impl': 'exact',
+    ...     #'attention_impl': 'performer',  # note: exact seems to be faster and less memory at this scale
+    ...     'gradient_clip_val': 0.5,
+    ...     'gradient_clip_algorithm': 'value',
+    ...     'gpus': 1,
+    ... }
+    >>> #modules = make_lightning_modules(args=None, cmdline=cmdline, **kwargs)
+    >>> fit_model(args=args, cmdline=cmdline, **kwargs)
 """
 
 import pytorch_lightning as pl
 
 from watch.tasks.fusion import datasets
 from watch.tasks.fusion import methods
+from watch.tasks.fusion import models
 from watch.tasks.fusion import utils
 
 # import scriptconfig as scfg
@@ -21,6 +154,11 @@ import ubelt as ub
 import sys
 import pathlib
 
+try:
+    import xdev
+    profile = xdev.profile
+except Exception:
+    profile = ub.identity
 
 # available_methods = dir(methods)
 available_methods = [
@@ -33,21 +171,17 @@ available_methods = [
     'VotingModel',
 ]
 
-available_models = [
-    "smt_it_joint_p8",
-    "smt_it_stm_p8",
-    "smt_it_hwtm_p8",
-]
+# Model names define the transformer encoder used by the method
+available_models = list(models.transformer.encoder_configs.keys())
 
 # dir(datasets)
+# TODO: rename to datamodules
 available_datasets = [
-    'Drop0AlignMSI_S2',
-    'Drop0Raw_S2',
+    # 'Drop0AlignMSI_S2',
+    # 'Drop0Raw_S2',
+    # 'OneraCD_2018',
+
     'WatchDataModule',
-    'OneraCD_2018',
-    # # 'common',
-    # 'onera_2018',
-    # 'project_data'
 ]
 
 # TODO: is there a better way to mark these?
@@ -67,6 +201,84 @@ learning_irrelevant = {
     'logger',
     'checkpoint_callback',
 }
+
+
+class DrawBatchCallback(pl.callbacks.Callback):
+    """
+    These are callbacks used to monitor the training
+
+    Args:
+        num_draw (int): number of batches to draw at the start of each epoch
+        draw_interval (int): if nothing has been drawn in this many minutes,
+            draw something.
+
+    References:
+        https://pytorch-lightning.readthedocs.io/en/latest/extensions/callbacks.html
+    """
+    def __init__(self, num_draw=4, draw_interval=10):
+        super().__init__()
+        self.num_draw = num_draw
+        self.draw_interval = draw_interval
+        self.draw_timer = None
+
+    def setup(self, trainer, pl_module, stage):
+        self.draw_timer = ub.Timer().tic()
+
+    @profile
+    def draw_batch(self, trainer, outputs, batch, batch_idx):
+        import numpy as np
+        import kwimage
+        from os.path import join
+
+        datamodule = trainer.datamodule
+        canvas = datamodule.draw_batch(batch, outputs=outputs)
+
+        # dataset = datamodule.torch_datasets[stage]
+        # images = batch['images']
+        # if 0:
+        #     import kwplot
+        #     kwplot.autompl()
+        #     kwplot.imshow(canvas)
+
+        canvas = np.nan_to_num(canvas)
+
+        stage = trainer.state.stage.lower()
+        epoch = trainer.current_epoch
+
+        canvas = kwimage.draw_text_on_image(
+            canvas, f'{stage}_epoch{epoch:08d}_bx{batch_idx:04d}', org=(1, 1),
+            valign='top')
+
+        dump_dpath = ub.ensuredir((trainer.log_dir, 'monitor', stage, 'batch'))
+        dump_fname = f'pred_{stage}_epoch{epoch:08d}_bx{batch_idx:04d}.jpg'
+        fpath = join(dump_dpath, dump_fname)
+        kwimage.imwrite(fpath, canvas)
+
+    def draw_if_ready(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
+        do_draw = batch_idx < self.num_draw
+        if self.draw_interval > 0:
+            do_draw |= self.draw_timer.toc() > 60 * self.draw_interval
+        if do_draw:
+            self.draw_batch(trainer, outputs, batch, batch_idx)
+            self.draw_timer.tic()
+
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
+        self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx, dataloader_idx)
+
+    def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
+        self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx, dataloader_idx)
+
+    def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
+        self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx, dataloader_idx)
+
+    # def on_init_start(self, trainer):
+    #     pass
+
+    # def on_init_end(self, trainer):
+    #     print('trainer is init now')
+
+    # def on_train_end(self, trainer, pl_module):
+    #     print('do something when training ends')
 
 
 def make_fit_config(args=None, cmdline=False, **kwargs):
@@ -117,6 +329,7 @@ def make_fit_config(args=None, cmdline=False, **kwargs):
 
     # Setup common fields and modal switches
     modal_parser = parser.add_argument_group("Modal")
+
     modal_parser.add_argument(
         '--dataset', choices=available_datasets, default='WatchDataModule',
         help=ub.paragraph(
@@ -218,55 +431,112 @@ def make_fit_config(args=None, cmdline=False, **kwargs):
     # similar to how scriptconfig works
     return args
 
-def fit_model(args=None, **kwargs):
+
+def make_lightning_modules(args=None, cmdline=False, **kwargs):
     """
     Example:
-        from watch.tasks.fusion.fit import *  # NOQA
-        kwargs = dict(train_dataset='vidshapes8-multispectral')
-        fit(, )
+        >>> from watch.tasks.fusion.fit import *  # NOQA
+        >>> args = None
+        >>> cmdline = False
+        >>> kwargs = {
+        ...     'train_dataset': 'special:vidshapes8-multispectral',
+        ...     'dataset': 'WatchDataModule',
+        ... }
+        >>> modules = make_lightning_modules(args=None, cmdline=cmdline, **kwargs)
     """
+    args = make_fit_config(args=args, cmdline=cmdline, **kwargs)
     print("{train_name}\n====================".format(**args.__dict__))
 
     method_class = getattr(methods, args.method)
     dataset_class = getattr(datasets, args.dataset)
 
+    # init dataset from args
+    # TODO: compute and cache mean / std if it is not provided. Pass this to
+    # the model so it can whiten the inputs.
+    dataset_var_dict = utils.filter_args(args.__dict__, dataset_class.__init__)
+    # dataset_var_dict["preprocessing_step"] = model.preprocessing_step
+    datamodule = dataset_class(**dataset_var_dict)
+    datamodule.setup("fit")
+
     # init method from args
     method_var_dict = args.__dict__
 
-    # TODO: need a better way to indicate that a method needs parameters from a dataset, and maybe the reverse too
+    # TODO: need a better way to indicate that a method needs parameters from a
+    # dataset, and maybe the reverse too
     if hasattr(dataset_class, "bce_weight"):
         method_var_dict["pos_weight"] = getattr(dataset_class, "bce_weight")
 
     method_var_dict = utils.filter_args(method_var_dict, method_class.__init__)
+
+    if hasattr(datamodule, "input_stats"):
+        print('datamodule.input_stats = {}'.format(ub.repr2(datamodule.input_stats, nl=2)))
+        method_var_dict["input_stats"] = datamodule.input_stats
     # Note: Changed name from method to model
     model = method_class(**method_var_dict)
 
-    # init dataset from args
-
-    dataset_var_dict = utils.filter_args(args.__dict__, dataset_class.__init__)
-    dataset_var_dict["preprocessing_step"] = model.preprocessing_step
-    dataset = dataset_class(**dataset_var_dict)
-    dataset.setup("fit")
-
     # init trainer from args
-    trainer = pl.Trainer.from_argparse_args(args)
+
+    # TODO:
+    # - [ ] Save multiple checkpoints based on metrics
+    # https://github.com/PyTorchLightning/pytorch-lightning/issues/2908
+    trainer = pl.Trainer.from_argparse_args(args, callbacks=[
+        DrawBatchCallback()
+    ])
+
+    modules = {
+        'datamodule': datamodule,
+        'model': model,
+        'trainer': trainer,
+    }
+    return modules
+
+
+def fit_model(args=None, cmdline=False, **kwargs):
+    """
+    Example:
+        >>> # xdoctest: +REQUIRES(--gpu)
+        >>> from watch.tasks.fusion.fit import *  # NOQA
+        >>> args = None
+        >>> cmdline = False
+        >>> kwargs = {
+        ...     'train_dataset': 'special:vidshapes8-multispectral',
+        ...     'dataset': 'WatchDataModule',
+        ...     'gpus': 1,
+        ... }
+        >>> args = make_fit_config(args=None, cmdline=cmdline, **kwargs)
+        >>> print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
+        >>> fit_model(**kwargs)
+    """
+    modules = make_lightning_modules(args=args, cmdline=cmdline, **kwargs)
+    trainer = modules['trainer']
+    datamodule = modules['datamodule']
+    model = modules['model']
+
+    print(ub.repr2(utils.model_json(model, max_depth=3), nl=-1, sort=0))
 
     # prime the model, incase it has a lazy layer
-    batch = next(iter(dataset.train_dataloader()))
-    result = model(batch["images"][[0], ...].float())
-    
+    batch = next(iter(datamodule.train_dataloader()))
+
+    # batch_shapes = ub.map_vals(lambda x: x.shape, batch)
+    # print('batch_shapes = {}'.format(ub.repr2(batch_shapes, nl=1)))
+
+    # result = model(batch["images"][[0], ...].float())
+    import torch
+    with torch.set_grad_enabled(False):
+        model.forward_step(batch)
+
     # if requested, tune model
-    trainer.tune(model, dataset)
+    trainer.tune(model, datamodule)
 
     # fit the model
-    trainer.fit(model, dataset)
-    
+    trainer.fit(model, datamodule)
+
     # save model to package
-    utils.create_package(model, args.default_root_dir / "package.pt")
-    
+    utils.create_package(
+        model, pathlib.Path(trainer.default_root_dir) / "package.pt")
+
     # save learning relevant training options
     learning_config = ub.dict_diff(args.__dict__, learning_irrelevant)
-    
 
 
 def main(args=None, **kwargs):
@@ -289,6 +559,7 @@ def main(args=None, **kwargs):
         python -m watch.tasks.fusion.fit \
             --model_name=smt_it_stm_p8 \
             --method=MultimodalTransformerDotProdCD \
+            --dataset=WatchDataModule \
             --train_dataset=vidshapes8-multispectral \
             --batch_size=4 \
             --num_workers=4 \
@@ -325,8 +596,11 @@ def main(args=None, **kwargs):
             --chip_size=96 \
             --workdir=$HOME/work/watch/fit
     """
-    args = make_fit_config(args=args, cmdline=True, **kwargs)
-    fit_model(args=args, **kwargs)
+    import logging
+    # configure logging at the root level of lightning
+    logging.getLogger("pytorch_lightning").setLevel(logging.DEBUG)
+
+    fit_model(args=args, cmdline=True, **kwargs)
 
 
 if __name__ == "__main__":
