@@ -1,4 +1,4 @@
-dataset: iarpa
+dataset: onera
 use_cuda: True
 seed: 128
 

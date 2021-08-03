@@ -118,16 +118,14 @@ class Trainer(object):
         # features_max[:, c-1:] *= 0.8
         # features_max[:, :c-1] *= cutoff_top
         features_max *= cutoff_top
-        print(features_max.shape)
         # features_max *= cutoff_top
 
         # if the top score is too low, ignore it
         lowest = torch.Tensor([cutoff_low]).type_as(features_max)
         features_max = features_max.max(lowest)
-
-        filtered_features = (features > features_max).type_as(features)
-        filtered_features = filtered_features.view(bs,c,h,w)
         
+        filtered_features = (features > features_max).type_as(features)
+        filtered_features = filtered_features.view(bs,c,h,w)*features.view(bs,c,h,w)
         return filtered_features
     
     def train(self, epoch: int, cometml_experiemnt: object) -> float:
@@ -254,9 +252,11 @@ class Trainer(object):
 
             cropped_bs, cropped_ps, cropped_c, cropped_h, cropped_w = cropped_features1.shape
             patch_max=6000
-            cropped_features1 = F.normalize(cropped_features1.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w),dim=1,p=1) #[bs*ps, c*h*w]
-            cropped_features2 = F.normalize(cropped_features2.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w),dim=1,p=1)
+            cropped_features1 = cropped_features1.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w) #[bs*ps, c*h*w]
+            cropped_features2 = cropped_features2.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w)
             cropped_negative_features1 = cropped_negative_features1.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w)
+            # cropped_features1 = F.normalize(cropped_features1,dim=1,p=1) #[bs*ps, c*h*w]
+            # cropped_features2 = F.normalize(cropped_features2,dim=1,p=1)
             features = torch.cat([cropped_features1.unsqueeze(1), cropped_features2.unsqueeze(1)], dim=1)[:patch_max,:,:]
             
             # texton_h, texton_w = cropped_h, cropped_w
@@ -329,7 +329,7 @@ class Trainer(object):
                 # dictionary1[b,:] = b_dictionary1#.view(texton_h, texton_w).long()
                 # dictionary1[b,:] = b_dictionary1#.view(texton_h, texton_w).long()
                 # dictionary_distribution[b, b_dictionary_clusters] = b_dictionary1_distribution
-                
+
             
             # residuals1 = residuals1.view(bs, self.k, texton_h*texton_w)
             # residuals2 = residuals2.view(bs, self.k, texton_h*texton_w)
@@ -342,23 +342,24 @@ class Trainer(object):
             
             start = time.time()
             
-            loss1 = 5*F.cross_entropy(output1, 
-                                      dictionary1_post_assignment,
-                                      ignore_index=0,
-                                      reduction="mean")
+            # loss1 = 5*F.cross_entropy(output1, 
+            #                           dictionary1_post_assignment,
+            #                           ignore_index=0,
+            #                           reduction="mean")
             
-            loss2 = 5*F.cross_entropy(output2, 
-                                      dictionary1_post_assignment,
-                                      ignore_index=0,                                      
-                                      reduction="mean")
+            # loss2 = 5*F.cross_entropy(output2, 
+            #                           dictionary1_post_assignment,
+            #                           ignore_index=0,                                      
+            #                           reduction="mean")
             
-            loss = loss1 + loss2
+            # loss = loss1 + loss2
             
-            # loss += 5*F.triplet_margin_loss(cropped_features1,#.unsqueeze(0), 
-            #                                 cropped_features2,#.unsqueeze(0), 
-            #                                 cropped_negative_features1
-            #                                 )
-            loss += 5*self.contrastive_loss(features, labels=dictionary1)
+            loss = 5*F.triplet_margin_loss(cropped_features1,#.unsqueeze(0), 
+                                            cropped_features2,#.unsqueeze(0), 
+                                            cropped_negative_features1
+                                            )
+            # loss += 5*self.contrastive_loss(features, labels=dictionary1)
+            # loss = 5*self.contrastive_loss(features)
 
             self.optimizer.zero_grad()
             loss.backward()
@@ -374,8 +375,12 @@ class Trainer(object):
             masks2 = F.softmax(output2, dim=1)
             # masks1 = F.softmax(features1, dim=1)
             # masks2 = F.softmax(features2, dim=1)
-            masks1 = self.high_confidence_filter(masks1, cutoff_top=config['high_confidence_threshold']['train_cutoff'])
-            masks2 = self.high_confidence_filter(masks2, cutoff_top=config['high_confidence_threshold']['train_cutoff'])
+            masks1 = self.high_confidence_filter(masks1, 
+                                                 cutoff_top=config['high_confidence_threshold']['train_cutoff'],
+                                                 cutoff_low=config['high_confidence_threshold']['train_low_cutoff'])
+            masks2 = self.high_confidence_filter(masks2, 
+                                                 cutoff_top=config['high_confidence_threshold']['train_cutoff'],
+                                                 cutoff_low=config['high_confidence_threshold']['train_low_cutoff'])
             pred1 = masks1.max(1)[1].cpu().detach()#.numpy()
             pred2 = masks2.max(1)[1].cpu().detach()#.numpy()
             change_detection_prediction = (pred1!=pred2).type(torch.uint8)
@@ -673,8 +678,12 @@ class Trainer(object):
                 masks2 = F.softmax(output2, dim=1)#.detach()
                 # masks1 = F.softmax(features1, dim=1)
                 # masks2 = F.softmax(features2, dim=1)
-                masks1 = self.high_confidence_filter(masks1, cutoff_top=config['high_confidence_threshold']['val_cutoff'])
-                masks2 = self.high_confidence_filter(masks2, cutoff_top=config['high_confidence_threshold']['val_cutoff'])
+                masks1 = self.high_confidence_filter(masks1, 
+                                                     cutoff_top=config['high_confidence_threshold']['val_cutoff'],
+                                                     cutoff_low=config['high_confidence_threshold']['val_low_cutoff'])
+                masks2 = self.high_confidence_filter(masks2, 
+                                                     cutoff_top=config['high_confidence_threshold']['val_cutoff'],
+                                                     cutoff_low=config['high_confidence_threshold']['val_low_cutoff'])
                 pred1 = masks1.max(1)[1].cpu().detach()#.numpy()
                 pred2 = masks2.max(1)[1].cpu().detach()#.numpy()
                 change_detection_prediction = (pred1!=pred2).type(torch.uint8)
@@ -833,8 +842,8 @@ class Trainer(object):
         """
         train_losses, val_losses = [], []
         mean_ious_val,mean_ious_val_list,count_metrics_list = [], [], []
-        best_val_loss, train_loss = np.infty, np.infty
-        best_val_mean_iou = 0
+        best_val_loss, best_train_loss, train_loss = np.infty, np.infty, np.infty
+        best_val_mean_iou, val_mean_iou = 0, 0
         
         model_save_dir = config['data'][config['location']]['model_save_dir']+f"{current_path[-1]}_{config['dataset']}/{cometml_experiment.project_name}_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}/"
         utils.create_dir_if_doesnt_exist(model_save_dir)
@@ -847,9 +856,13 @@ class Trainer(object):
                     val_loss, val_mean_iou = self.validate(epoch,cometml_experiment)
             self.scheduler.step()
 
-            if val_mean_iou > best_val_mean_iou:
-                # best_train_loss = train_loss
-                best_val_mean_iou = val_mean_iou
+            if ((val_mean_iou > best_val_mean_iou) and config['procedures']['validate']) or (config['procedures']['train'] and (train_loss < best_train_loss)):
+
+                if (config['procedures']['train'] and (train_loss < best_train_loss)):
+                    best_train_loss = train_loss
+                if ((val_mean_iou > best_val_mean_iou) and config['procedures']['validate']):
+                    best_val_mean_iou = val_mean_iou
+                    
                 model_save_name = f"{current_path[-1]}_epoch_{epoch}_loss_{train_loss}_valmIoU_{val_mean_iou}_time_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M:%S')}.pth"
                 
                 if config['procedures']['train']:
@@ -969,10 +982,10 @@ if __name__== "__main__":
             #     model.load_state_dict(model_dict)
             #     print("There was model mismatch. Matching elements in the pretrained model were loaded.")
             model.load_state_dict(checkpoint['model'], strict=False)
-            
             start_epoch = checkpoint['epoch']
             optimizer.load_state_dict(checkpoint['optimizer'])
             scheduler.load_state_dict(checkpoint['scheduler'])
+            print(f"loadded model succeffuly from: {config['training']['resume']}")
         else:
             print("no checkpoint found at {}".format(config['training']['resume']))
             exit()

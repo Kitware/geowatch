@@ -29,6 +29,7 @@ import watch.tasks.rutgers_material_seg.utils.utils as utils
 from watch.tasks.rutgers_material_seg.models import build_model
 from watch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import SequenceDataset
 from watch.tasks.rutgers_material_seg.datasets import build_dataset
+from kwarray.util_slider import *
 import time
 torch.backends.cudnn.enabled = False
 torch.backends.cudnn.deterministic = True
@@ -61,7 +62,11 @@ class Evaluator(object):
         self.max_label = config['data']['num_classes']
         self.coco_dataset = coco_dataset
         self.log_features = log_features
-            
+    
+    def diff(self, li1, li2):
+        # return list(set(li1) - set(li2)) + list(set(li2) - set(li1))
+        return list(set(li2) - set(li1))
+    
     def eval(self, save_root="/media/native/data/data/smart_watch_dvc/drop0_rutgers_features") -> tuple:
         """evaluate a single epoch
 
@@ -70,6 +75,9 @@ class Evaluator(object):
         Returns:
             None
         """
+        stitcher_dict = {}
+        current_gids = []
+        previous_gids = []
         self.model.eval()
         with torch.no_grad():
             pbar = tqdm(enumerate(self.eval_loader), total=len(self.eval_loader))
@@ -78,8 +86,7 @@ class Evaluator(object):
                 images, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0]
                 original_width, original_height = outputs['tr'].data[0][0]['space_dims']
                 
-                
-                print(outputs['tr'].data[0])
+                # print(outputs['tr'].data[0])
                 
                 mask = torch.stack(mask)
                 mask = mask.long().squeeze(1)
@@ -105,28 +112,45 @@ class Evaluator(object):
                 output1_to_save = output1.permute(0,2,3,1).cpu().detach().numpy()
                 output2_to_save = output2.permute(0,2,3,1).cpu().detach().numpy()
                 if self.log_features:
+                    
                     for b in range(bs):
-                        gids = outputs['tr'].data[0][b]['gids']
-                        for gid, output in zip(gids,[output1_to_save[b,:,:,:],output2_to_save[b,:,:,:]]):
-                            save_path = f"{save_root}/{gid}.tiff"
-                            kwimage.imwrite(save_path, output, backend='gdal', space=None)
-                            aux_height, aux_width = output.shape[0:2]
-                            img = dset.index.imgs[gid]
-                            warp_aux_to_img = kwimage.Affine.scale(
-                                (img['width'] / aux_width, img['height'] / aux_height))
+                        if len(current_gids)==0:
+                            current_gids = outputs['tr'].data[0][b]['gids']
+                        else:
+                            previous_gids = current_gids
+                            current_gids = outputs['tr'].data[0][b]['gids']
+                            mutually_exclusive = self.diff(current_gids, previous_gids)
+                            for gid in mutually_exclusive:
+                                
+                                recon = stitcher_dict[gid].finalize()
+                                stitcher_dict.pop(gid)
+                                
+                                save_path = f"{save_root}/{gid}.tiff"
+                                kwimage.imwrite(save_path, recon, backend='gdal', space=None)
+                                
+                                aux_height, aux_width = recon.shape[0:2]
+                                img = self.coco_dataset.index.imgs[gid]
+                                warp_aux_to_img = kwimage.Affine.scale(
+                                    (img['width'] / aux_width, img['height'] / aux_height))
+                                
+                                aux = {
+                                        'file_name': save_path,
+                                        'height': aux_height,
+                                        'width': aux_width,
+                                        'channels': config['data']['num_classes'],
+                                        'warp_aux_to_img': warp_aux_to_img.concise(),
+                                    }
+                                
+                                auxiliary = img.setdefault('auxiliary', [])
+                                auxiliary.append(aux)
+                                self.coco_dataset._invalidate_hashid()
+                        
+                        for gid, output in zip(current_gids,[output1_to_save[b,:,:,:],output2_to_save[b,:,:,:]]):
                             
-                            aux = {
-                                    'file_name': save_path,
-                                    'height': aux_height,
-                                    'width': aux_width,
-                                    'channels': config['data']['num_classes'],
-                                    'warp_aux_to_img': warp_aux_to_img.concise(),
-                                }
-                            
-                            auxiliary = img.setdefault('auxiliary', [])
-                            auxiliary.append(aux)
-                            self.coco_dataset._invalidate_hashid()
-                
+                            if gid not in stitcher_dict.keys():
+                                stitcher_dict[gid] = Stitcher((*outputs['tr'].data[0][b]['space_dims'],config['data']['num_classes']))
+                            slice = outputs['tr'].data[0][b]['space_slice']
+                            stitcher_dict[gid].add(slice, output)
                 # masks1 = F.softmax(output1, dim=1)#.detach()
                 # masks2 = F.softmax(output2, dim=1)#.detach()
                 # # masks1 = F.softmax(features1, dim=1)
@@ -139,7 +163,8 @@ class Evaluator(object):
                 
         
         # export predictions to a new kwcoco file
-        
+        dataset_save_path = f"{save_root}/rutgers_features.kwcoco.json"
+        self.coco_dataset.dump(dataset_save_path, newlines=True)
         
         return 
     
@@ -155,9 +180,7 @@ class Evaluator(object):
         """
         
         if config['procedures']['validate']:
-            val_loss, val_mean_iou = self.eval()
-        self.scheduler.step()
-            
+            self.eval()
         return
 
 if __name__== "__main__":

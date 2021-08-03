@@ -74,6 +74,7 @@ class Trainer(object):
         self.k = config['data']['num_classes']
         self.kmeans = KMeans(n_clusters=self.k, mode='euclidean', verbose=0, minibatch=None)
         self.max_label = self.k
+        self.all_crops_params = [tuple([i,j,config['data']['window_size'], config['data']['window_size']]) for i in range(config['data']['window_size'],config['data']['image_size']-config['data']['window_size']) for j in range(config['data']['window_size'],config['data']['image_size']-config['data']['window_size'])]
         
         if test_loader is not None:
             self.test_loader = test_loader
@@ -173,15 +174,34 @@ class Trainer(object):
             
             image1 = utils.stad_image(image1)
             image2 = self.train_second_transform(image1)
+            
             negative_image1 = utils.stad_image(negative_image1)
             
+            # patched_image1 = torch.stack([transforms.functional.crop(image1, *params) for params in self.all_crops_params],dim=1)
+            # patched_image2 = torch.stack([transforms.functional.crop(image1, *params) for params in self.all_crops_params],dim=1)
+            # patched_negative_image1 = torch.stack([transforms.functional.crop(negative_image1, *params) for params in self.all_crops_params],dim=1)
+            
+            # bs, ps, c, h, w = patched_image1.shape
+            # patched_image1 = patched_image1.view(bs*ps,c,h,w)
+            # patched_image2 = patched_image2.view(bs*ps,c,h,w)
+            # patched_negative_image1 = patched_negative_image1.view(bs*ps,c,h,w)
+            
             output1, features1 = self.model(image1)  ## [B,22,150,150]
-            output2, features2 = self.model(image2)  ## [B,22,150,150]
+            output2, features2 = self.model(image1)  ## [B,22,150,150]
             negative_output1, negative_features1 = self.model(negative_image1)  ## [B,22,150,150]
 
-            loss = 30*F.triplet_margin_loss(features1,#.unsqueeze(0), 
-                                            features2,#.unsqueeze(0), 
-                                            negative_features1
+            patched_output1 = torch.stack([transforms.functional.crop(output1, *params) for params in self.all_crops_params],dim=1)
+            patched_output2 = torch.stack([transforms.functional.crop(output2, *params) for params in self.all_crops_params],dim=1)
+            patched_negative_output1 = torch.stack([transforms.functional.crop(negative_output1, *params) for params in self.all_crops_params],dim=1)
+            
+            bs, ps, c, h, w = patched_output1.shape
+            patched_output1 = patched_output1.view(bs*ps,c,h,w)
+            patched_output2 = patched_output2.view(bs*ps,c,h,w)
+            patched_negative_output1 = patched_negative_output1.view(bs*ps,c,h,w)
+            
+            loss = 30*F.triplet_margin_loss(patched_output1,#.unsqueeze(0), 
+                                            patched_output2,#.unsqueeze(0), 
+                                            patched_negative_output1
                                             )
             
             self.optimizer.zero_grad()
@@ -721,8 +741,7 @@ if __name__== "__main__":
                         weight_std=config['training']['weight_std'],
                         beta=config['training']['beta'],
                         num_channels=config['training']['num_channels'],
-                        out_dim=config['training']['out_features_dim'],
-                        hw=h*w)
+                        out_dim=config['training']['out_features_dim'])
     
     # model = SupConResNet(name=config['training']['backbone'])
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)

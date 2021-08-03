@@ -127,7 +127,7 @@ class ShallowSeg(nn.Module):
         self.features_outc = OutConv(feats[0], out_dim)
 
     def forward(self, x):
-        b, c, h, w = x.shape
+        # b, c, h, w = x.shape
         # print(x.shape)
         x1 = self.inc(x)
         x2 = self.down1(x1)
