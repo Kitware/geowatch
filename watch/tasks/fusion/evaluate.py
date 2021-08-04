@@ -126,7 +126,7 @@ def make_confusion_plots(result_kwcoco_path, figure_root):
             H = len(images)
             W = len(images[0]["auxiliary"])
 
-            fig, axs = plt.subplots(H, W, figsize=(3 *W, 4 *H), squeeze=False)
+            fig, axs = plt.subplots(H, W, figsize=(3 * W, 4 * H), squeeze=False)
             if len(axs.shape) == 1: 
                 axs = axs[None]
 
