@@ -136,14 +136,14 @@ def custom_lint(dpath: str, mode=False):
         })
 
     autofix = sorted(autofix)
+
+    select = None
     ignore = sorted(ignore)
-    select = autofix
+    # select = autofix
 
     if VERBOSE > 1:
         print('mode = {!r}'.format(mode))
-    if mode == 'diff':
-        return exec_autopep8(dpaths, autofix)
-    elif mode == 'apply':
+    if mode in {'diff', 'apply'}:
         return exec_autopep8(dpaths, autofix)
     elif mode == 'lint':
         max_line_length = 79
