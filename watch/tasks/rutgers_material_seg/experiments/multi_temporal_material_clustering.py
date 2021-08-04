@@ -43,7 +43,7 @@ for batch_index, batch in enumerate(loader):
     mask_data = torch.stack(mask_data)
 
     image_show = np.array(image_data).transpose(0, 2, 3, 4, 1)#/50000 # visualize 0 indexed in batch
-    image_show = image_show /image_show.max()
+    image_show = image_show / image_show.max()
     print(f"image min: {image_show.min()}, image max: {image_show.max()}")
     # print(image_show.shape)
     # image_show = image_show[0,0,:,:,:]
@@ -51,7 +51,7 @@ for batch_index, batch in enumerate(loader):
     # plt.show()
     # mask_show = np.array(mask_data) # [b,t,h,w]
 
-    image_data = image_data.view(b, c *t, h *w)
+    image_data = image_data.view(b, c * t, h * w)
     # print(image_data.shape)
     image_data = torch.transpose(image_data,1,2)
     # print(image_data.shape)

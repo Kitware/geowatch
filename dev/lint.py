@@ -30,13 +30,32 @@ def exec_autopep8(dpaths, autofix, mode='diff'):
         args_list += ['--in-place']
     else:
         raise AssertionError(mode)
-    info = ub.cmd(['autopep8'] + args_list + dpaths, verbose=VERBOSE, check=False)
+
+    if mode == 'diff':
+        args = ['autopep8'] + args_list + dpaths
+        print('command = {!r}'.format(' '.join(args)))
+        info = ub.cmd(args, verbose=0, check=False)
+        text = info['out']
+        if not ub.util_colors.NO_COLOR:
+            import pygments
+            import pygments.lexers
+            import pygments.formatters
+            import pygments.formatters.terminal
+            formater = pygments.formatters.terminal.TerminalFormatter(bg='dark')
+            kwargs = {}
+            lexer = pygments.lexers.get_lexer_by_name('diff', **kwargs)
+            new_text = pygments.highlight(text, lexer, formater)
+            print(new_text)
+        else:
+            print(text)
+    else:
+        info = ub.cmd(['autopep8'] + args_list + dpaths, verbose=VERBOSE, check=False)
     if info['ret'] not in {0, 1}:
         raise Exception(ub.repr2(ub.dict_diff(info, ['out'])))
     return info['ret']
 
 
-def custom_lint(dpath: str, mode=False, index=False):
+def custom_lint(dpath: str, mode=False, index=False, interact=None):
     """
     Runs our custom "watch" linting rules on a specific directory and
     optionally "fixes" them.
@@ -157,6 +176,11 @@ def custom_lint(dpath: str, mode=False, index=False):
         if VERBOSE > 1:
             print('autofix = {!r}'.format(autofix))
         ret = exec_autopep8(dpaths, autofix, mode=mode)
+        if interact:
+            ans = input('accept?')
+            if ans.lower().startswith('y'):
+                mode = 'apply'
+                ret = exec_autopep8(dpaths, autofix, mode=mode)
     elif mode == 'show':
         select = autofix
         if VERBOSE > 1:
@@ -202,9 +226,18 @@ if __name__ == '__main__':
         python ~/code/watch/dev/lint.py [watch,atk]
 
         # WORKFLOW
-        python ~/code/watch/dev/lint.py watch --index=2 --mode=show
-        python ~/code/watch/dev/lint.py watch --index=2 --mode=diff | colordiff
-        python ~/code/watch/dev/lint.py watch --index=2 --mode=apply
+        DPATH=watch/tasks/rutgers_material_change_detection/utils
+        python ~/code/watch/dev/lint.py $DPATH --mode=diff --interact --index=5
+        python ~/code/watch/dev/lint.py $DPATH --mode=diff --interact
+
+        python ~/code/watch/dev/lint.py watch/tasks/rutgers_material_change_detection --mode=diff --interact
+        python ~/code/watch/dev/lint.py watch/tasks/rutgers_material_seg/configs --mode=diff --interact
+        python ~/code/watch/dev/lint.py watch/tasks/rutgers_material_seg/datasets --mode=diff --interact
+        python ~/code/watch/dev/lint.py watch/tasks/rutgers_material_seg/experiments --mode=diff --interact
+        python ~/code/watch/dev/lint.py watch/tasks/rutgers_material_seg/models --mode=diff --interact
+        python ~/code/watch/dev/lint.py watch/tasks/rutgers_material_seg/scripts --mode=diff --interact
+        python ~/code/watch/dev/lint.py watch/tasks/rutgers_material_seg/utils --mode=diff --interact
+        python ~/code/watch/dev/lint.py watch/tasks/rutgers_material_seg/*.py --mode=diff --interact
     """
     import fire
     import sys

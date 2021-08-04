@@ -46,14 +46,14 @@ for batch in loader:
     mask_data = batch['label']['class_masks'].data[0] #len(mask_data) = b
     mask_data = torch.stack(mask_data)#.numpy()
 
-    image_show = np.array(image_data).transpose(0, 2, 3, 4, 1) /500 # visualize 0 indexed in batch
+    image_show = np.array(image_data).transpose(0, 2, 3, 4, 1) / 500 # visualize 0 indexed in batch
     # plt.imshow(image_show)
     # plt.show()
     # image_show = image_show[0,]
     # mask_show = np.array(mask_data) # [b,t,h,w]
 
-    image_data = image_data.view(b, c *t, h *w)
-    mask_data = mask_data.view(b, t, h *w).squeeze(0)
+    image_data = image_data.view(b, c * t, h * w)
+    mask_data = mask_data.view(b, t, h * w).squeeze(0)
     image_data = torch.transpose(image_data,1,2)
     image_data = torch.flatten(image_data,start_dim=0, end_dim=1)
 
@@ -133,7 +133,6 @@ for batch in loader:
     # ax9 = figure.add_subplot(2,5,9)
     # # ax10 = figure.add_subplot(2,5,10)
 
-
     # ax1.imshow(image_show[0,0,:,:,:])
     # ax2.imshow(image_show[0,1,:,:,:])
     # ax3.imshow(image_show[0,2,:,:,:])
@@ -154,12 +153,12 @@ for batch in loader:
         image_show = image_show[0]
         figure = plt.figure(figsize=(10,10))
         axes = {}
-        for i in range(1,2 *t +1):
+        for i in range(1,2 * t + 1):
             axes[i] = figure.add_subplot(2,t,i)
         for key in axes.keys():
             if key <= t:
-                axes[key].imshow(image_show[key -1,:,:,:])
+                axes[key].imshow(image_show[key - 1,:,:,:])
             else:
-                axes[key].imshow(mask_show[key -t -1,:,:],vmin=-1, vmax=7)
+                axes[key].imshow(mask_show[key - t - 1,:,:],vmin=-1, vmax=7)
         figure.tight_layout()
         plt.show()

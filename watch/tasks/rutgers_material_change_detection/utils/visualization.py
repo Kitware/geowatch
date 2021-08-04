@@ -30,7 +30,6 @@ def rand_cmap(nlabels, type='bright', first_color_black=True, last_color_black=F
     import colorsys
     import numpy as np
 
-
     if type not in ('bright', 'soft'):
         print ('Please choose "bright" or "soft" for type')
         return

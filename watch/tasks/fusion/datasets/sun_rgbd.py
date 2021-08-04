@@ -96,7 +96,6 @@ class SUN_RGBD(pl.LightningDataModule):
                     A.HorizontalFlip(),
                 ], additional_targets={"depth": "mask"})
             
-
             train_val_ds = SUN_RGBD_Dataset(
                 pathlib.Path(self.data_root), 
                 split="train",

@@ -70,7 +70,7 @@ class Window(QMainWindow):
         self.class_label_to_index = {"Nothing":0, "Concrete":1, "Vegetation":2, "Soil":3, "Water":4}
         if len(resume) > 1:
             self.material_dset = kwcoco.CocoDataset(resume)
-            self.image_counter = int(len(list(self.material_dset.index.imgs.keys())) /self.timesteps) + 1
+            self.image_counter = int(len(list(self.material_dset.index.imgs.keys())) / self.timesteps) + 1
         else:
             self.material_dset = kwcoco.CocoDataset()
             for key, value in self.class_label_to_index.items():
@@ -80,7 +80,7 @@ class Window(QMainWindow):
         self.width, self.height = self.dataset[self.image_counter]['tr'].data['space_dims']
 
         self.scale_factor = 1
-        self.scaled_height, self.scaled_width = int(self.height *self.scale_factor), int(self.width *self.scale_factor)
+        self.scaled_height, self.scaled_width = int(self.height * self.scale_factor), int(self.width * self.scale_factor)
         self.current_mask = np.zeros((self.width, self.height)).astype(np.uint8)
         self.separable_current_mask = np.zeros((len(list(self.class_label_to_index.keys())), self.width, self.height)).astype(np.uint8)
         self.widget = QWidget()
@@ -96,13 +96,13 @@ class Window(QMainWindow):
         self.label_prediction = QLabel(self.widget)
         self.prediction = QPixmap(self.qPred)
         self.label_prediction.setPixmap(self.prediction)
-        self.label_prediction.setGeometry(self.width +20 +120,128,self.height, self.width)
+        self.label_prediction.setGeometry(self.width + 20 + 120,128,self.height, self.width)
         self.label_prediction.mousePressEvent = self.getMaskPixel
         
         self.label_mask = QLabel(self.widget)
         self.mask = QPixmap(self.qMask)
         self.label_mask.setPixmap(self.mask)
-        self.label_mask.setGeometry(3 *self.width +20,128, self.height, self.width)
+        self.label_mask.setGeometry(3 * self.width + 20,128, self.height, self.width)
         
         self.output_textbox = QTextBrowser(self.widget)
         self.output_textbox.setGeometry(QtCore.QRect(20, self.height + 256 + 128 + 50, 100, 100))
@@ -160,7 +160,7 @@ class Window(QMainWindow):
 
         self.label_mask_title = QLabel(self.widget)
         self.label_mask_title.setText("Intermediate Mask")
-        self.label_mask_title.move(2 *self.width +256,100)
+        self.label_mask_title.move(2 * self.width + 256,100)
         
         self.label_img_title = QLabel(self.widget)
         self.label_img_title.setText(f"Image {self.image_counter}")
@@ -168,7 +168,7 @@ class Window(QMainWindow):
         
         self.label_prediction_title = QLabel(self.widget)
         self.label_prediction_title.setText("Clustering Prediction")
-        self.label_prediction_title.move(self.width +256,100)
+        self.label_prediction_title.move(self.width + 256,100)
         
         self.remove_cluster_title = QLabel(self.widget)
         self.remove_cluster_title.setText("Write cluster to remove from the mask")
@@ -197,8 +197,8 @@ class Window(QMainWindow):
         image_show = np.array(image_data[:,self.t_selection,:,:]).transpose(1, 2, 0).copy() # visualize 0 indexe
         image_min = np.min(image_show)
         image_max = np.max(image_show)
-        self.image_show = (image_show - image_min) /(image_max - image_min)
-        self.qimage = qimage2ndarray.array2qimage(self.image_show *255)#.scaled(self.height, self.width)
+        self.image_show = (image_show - image_min) / (image_max - image_min)
+        self.qimage = qimage2ndarray.array2qimage(self.image_show * 255)#.scaled(self.height, self.width)
         self.qImg = QPixmap(self.qimage)#.scaled(256,256)
         
         self.image = QPixmap(self.qImg).scaled(self.scaled_height, self.scaled_width)
@@ -209,7 +209,7 @@ class Window(QMainWindow):
         """enlarge size of displayed image and clusters
         """
         self.scale_factor += 0.25
-        self.scaled_height, self.scaled_width = int(self.scale_factor *self.height), int(self.scale_factor *self.width)
+        self.scaled_height, self.scaled_width = int(self.scale_factor * self.height), int(self.scale_factor * self.width)
         
         self.image = QPixmap(self.qImg).scaled(self.scaled_height, self.scaled_width)
         self.label_img.setPixmap(self.image)
@@ -217,17 +217,17 @@ class Window(QMainWindow):
         
         self.prediction = QPixmap(self.qPred).scaled(self.scaled_height, self.scaled_width)
         self.label_prediction.setPixmap(self.prediction)
-        self.label_prediction.setGeometry(self.scaled_width +20 +70 *(1 +self.scale_factor),128,self.scaled_height, self.scaled_width)
+        self.label_prediction.setGeometry(self.scaled_width + 20 + 70 * (1 + self.scale_factor),128,self.scaled_height, self.scaled_width)
         
         # self.mask = QPixmap(self.qMask).scaled(self.scaled_height, self.scaled_width)
         # self.label_mask.setPixmap(self.mask)
-        self.label_mask.setGeometry(3 *self.scaled_width,128, self.scaled_height, self.scaled_width)
+        self.label_mask.setGeometry(3 * self.scaled_width,128, self.scaled_height, self.scaled_width)
     
     def decrease_images_size(self):
         """reduce size of displayed image and clusters
         """
         self.scale_factor -= 0.25
-        self.scaled_height, self.scaled_width = int(self.scale_factor *self.height), int(self.scale_factor *self.width)
+        self.scaled_height, self.scaled_width = int(self.scale_factor * self.height), int(self.scale_factor * self.width)
         
         self.image = QPixmap(self.qImg).scaled(self.scaled_height, self.scaled_width)
         self.label_img.setPixmap(self.image)
@@ -235,11 +235,11 @@ class Window(QMainWindow):
         
         self.prediction = QPixmap(self.qPred).scaled(self.scaled_height, self.scaled_width)
         self.label_prediction.setPixmap(self.prediction)
-        self.label_prediction.setGeometry(self.scaled_width +20 +50 *(1 +self.scale_factor),128,self.scaled_height, self.scaled_width)
+        self.label_prediction.setGeometry(self.scaled_width + 20 + 50 * (1 + self.scale_factor),128,self.scaled_height, self.scaled_width)
         
         # self.mask = QPixmap(self.qMask).scaled(self.scaled_height, self.scaled_width)
         # self.label_mask.setPixmap(self.mask)
-        self.label_mask.setGeometry(3 *self.scaled_width,128, self.scaled_height, self.scaled_width)
+        self.label_mask.setGeometry(3 * self.scaled_width,128, self.scaled_height, self.scaled_width)
     
     def keyPressEvent(self, event):
         """allow change class to label with key press
@@ -319,15 +319,15 @@ class Window(QMainWindow):
                 self.seen_labels.remove(num)
     
     def getImagePixel(self, event):
-        x = int(event.pos().x() //self.scale_factor)
-        y = int(event.pos().y() //self.scale_factor)
+        x = int(event.pos().x() // self.scale_factor)
+        y = int(event.pos().y() // self.scale_factor)
         self.value = self.prediction_show[y,x]
         xs, ys = np.where(self.prediction_show == self.value)
         
         self.current_mask[xs,ys] = self.class_label_to_index[self.class_label_with]
         self.separable_current_mask[self.class_label_to_index[self.class_label_with],xs,ys] = 1 ## need to account for removed pixels!
         
-        non_label_indices = np.array(list(set(list(self.class_label_to_index.values())) -set([self.class_label_to_index[self.class_label_with]])))
+        non_label_indices = np.array(list(set(list(self.class_label_to_index.values())) - set([self.class_label_to_index[self.class_label_with]])))
         for label_index in non_label_indices:
             self.separable_current_mask[label_index,xs,ys] = 0
         
@@ -338,14 +338,14 @@ class Window(QMainWindow):
         self.output_textbox_name.append(str(self.class_label_with))
             
     def getMaskPixel(self, event):
-        x = int(event.pos().x() //self.scale_factor)
-        y = int(event.pos().y() //self.scale_factor)
+        x = int(event.pos().x() // self.scale_factor)
+        y = int(event.pos().y() // self.scale_factor)
         self.value = self.prediction_show[y,x]
         xs, ys = np.where(self.prediction_show == self.value)
         
         self.current_mask[xs,ys] = self.class_label_to_index[self.class_label_with]
         self.separable_current_mask[self.class_label_to_index[self.class_label_with],xs,ys] = 1
-        non_label_indices = np.array(list(set(list(self.class_label_to_index.values())) -set([self.class_label_to_index[self.class_label_with]])))
+        non_label_indices = np.array(list(set(list(self.class_label_to_index.values())) - set([self.class_label_to_index[self.class_label_with]])))
         for label_index in non_label_indices:
             self.separable_current_mask[label_index,xs,ys] = 0
         
@@ -356,7 +356,7 @@ class Window(QMainWindow):
         self.output_textbox_name.append(str(self.class_label_with))
     
     def update_mask(self):
-        self.current_mask_cmap = (self.current_mask *20).astype(np.uint8)
+        self.current_mask_cmap = (self.current_mask * 20).astype(np.uint8)
         self.current_mask_cmap = cv2.applyColorMap(self.current_mask_cmap, cmapy.cmap('viridis'))     
         self.qmask = qimage2ndarray.array2qimage(self.current_mask_cmap).scaled(self.height, self.width)
         self.mask = QPixmap(self.qmask)#.scaled(256,256)
@@ -389,11 +389,11 @@ class Window(QMainWindow):
         
         self.prediction = QPixmap(self.qPred)
         self.label_prediction.setPixmap(self.prediction)
-        self.label_prediction.setGeometry(self.width +20 +50,128,self.height, self.width)
+        self.label_prediction.setGeometry(self.width + 20 + 50,128,self.height, self.width)
         
         self.mask = QPixmap(self.qMask)
         self.label_mask.setPixmap(self.mask)
-        self.label_mask.setGeometry(2 *self.width +128,128, self.height, self.width)
+        self.label_mask.setGeometry(2 * self.width + 128,128, self.height, self.width)
     
     def update_image(self):
         plt.close()
@@ -421,11 +421,11 @@ class Window(QMainWindow):
         
         self.prediction = QPixmap(self.qPred)
         self.label_prediction.setPixmap(self.prediction)
-        self.label_prediction.setGeometry(self.width +20 +50,128,self.height, self.width)
+        self.label_prediction.setGeometry(self.width + 20 + 50,128,self.height, self.width)
         
         self.mask = QPixmap(self.qMask)
         self.label_mask.setPixmap(self.mask)
-        self.label_mask.setGeometry(2 *self.width +128,128, self.height, self.width)
+        self.label_mask.setGeometry(2 * self.width + 128,128, self.height, self.width)
         
     def load_images(self, index):
         kmeans = KMeans(n_clusters=self.k, random_state=0)
@@ -448,14 +448,14 @@ class Window(QMainWindow):
         image_show = np.array(image_data[:3,1,:,:]).transpose(1, 2, 0).copy() # visualize 0 indexe
         image_min = np.min(image_show)
         image_max = np.max(image_show)
-        self.image_show = (image_show - image_min) /(image_max - image_min)
+        self.image_show = (image_show - image_min) / (image_max - image_min)
 
         # print(f"image min:{self.image_show.min()} max: {self.image_show.max()}")
         # print(f"image counts: {np.unique(image_data, return_counts=True)}")
         # plt.imshow(self.image_show)
         # plt.show()
 
-        image_data = image_data.contiguous().view(c,t, h *w)
+        image_data = image_data.contiguous().view(c,t, h * w)
         image_data = torch.transpose(image_data,0,2)
         image_data = torch.flatten(image_data,start_dim=1, end_dim=2)
         print(f"after image_data shape:{image_data.shape}")
@@ -485,7 +485,7 @@ class Window(QMainWindow):
         # self.fig.show()
 
         # print(f"height: {self.height}, width: {self.width}")
-        self.qimage = qimage2ndarray.array2qimage(self.image_show *255)#.scaled(self.height, self.width)
+        self.qimage = qimage2ndarray.array2qimage(self.image_show * 255)#.scaled(self.height, self.width)
         self.qprediction = qimage2ndarray.array2qimage(self.prediction_show_cmap)#.scaled(self.height, self.width)
         self.qmask = qimage2ndarray.array2qimage(self.current_mask)#.scaled(self.height, self.width)
 

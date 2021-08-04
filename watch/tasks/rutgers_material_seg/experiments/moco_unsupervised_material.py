@@ -329,7 +329,6 @@ def main_worker(gpu, ngpus_per_node, args):
     # else:
     #     train_sampler = None
 
-    
     # train_loader = train_dataset.make_loader(batch_size=args.batch_size, 
     #                                          pin_memory=True, 
     #                                          drop_last=True
@@ -376,7 +375,6 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
     model.train()
     total_loss = 0
     end = time.time()
-    
     
     for i, batch in enumerate(train_loader):
         # measure data loading time
@@ -435,7 +433,6 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
         
         # cometml_experiment.log_metric("Training Accuracy", acc1, epoch=epoch+1)
         
-
         # if i % args.print_freq == 0:
         #     print(f"accuracy: {acc1}")
         #     progress.display(i)

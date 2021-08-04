@@ -44,7 +44,6 @@ class DeepGlobeDataset(object):
                                 255: 6, # 255, barren land, mountain, rock, dessert
                             }
 
-
     def __getitem__(self, idx):
         
         mask_path = self.masks_paths[idx]
@@ -54,7 +53,7 @@ class DeepGlobeDataset(object):
         img = Image.open(img_path).convert("RGB")
         mask = Image.open(mask_path)#.convert("L"))
 
-        new_mask = FT.to_tensor(mask) *255
+        new_mask = FT.to_tensor(mask) * 255
 
         new_image = self.transforms(img)
         outputs = {}

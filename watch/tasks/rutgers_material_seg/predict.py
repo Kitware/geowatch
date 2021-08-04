@@ -161,7 +161,6 @@ class Evaluator(object):
                 # pred2 = masks2.max(1)[1].cpu().detach()#.numpy()
                 # change_detection_prediction = (pred1!=pred2).type(torch.uint8)
                 
-        
         # export predictions to a new kwcoco file
         dataset_save_path = f"{save_root}/rutgers_features.kwcoco.json"
         self.coco_dataset.dump(dataset_save_path, newlines=True)

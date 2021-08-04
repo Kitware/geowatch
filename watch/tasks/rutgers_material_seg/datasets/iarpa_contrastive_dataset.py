@@ -43,7 +43,7 @@ class SequenceDataset(torch.utils.data.Dataset):
 
         tr = self.sample_grid['positives'][index]
         
-        negative_index = random.randint(0,self.__len__() -2)
+        negative_index = random.randint(0,self.__len__() - 2)
         # print(index)
         # print(negative_index)
         tr_negative = self.sample_grid['positives'][negative_index]
@@ -162,7 +162,6 @@ class SequenceDataset(torch.utils.data.Dataset):
         negative_frame_data = np.concatenate([f[None, ...] for f in negative_frame_ims], axis=0)
         negative_class_masks = np.concatenate([m[None, ...] for m in negative_frame_masks], axis=0)
         
-
         cthw_im = frame_data.transpose(3, 0, 1, 2)
         negative_cthw_im = negative_frame_data.transpose(3, 0, 1, 2)
 

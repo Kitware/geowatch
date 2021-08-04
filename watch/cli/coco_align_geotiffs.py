@@ -1351,7 +1351,7 @@ def visualize_rois(dset, kw_all_box_rois):
     cov_poly_gdf = gpd.GeoDataFrame({'cov_rois': sh_coverage_rois_trad},
                                     geometry='cov_rois', crs=cov_poly_crs)
 
-    sh_all_box_rois = [p.to_shapely()for p in  kw_all_box_rois]
+    sh_all_box_rois = [p.to_shapely()for p in kw_all_box_rois]
     sh_all_box_rois_trad = [flip_xy(p) for p in sh_all_box_rois]
     kw_all_box_rois_trad = list(map(kwimage.Polygon.from_shapely, sh_all_box_rois_trad))
     roi_poly_crs = 'epsg:4326'

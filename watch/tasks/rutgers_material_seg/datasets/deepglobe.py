@@ -99,16 +99,14 @@ class DeepGlobeDataset(object):
         # plt.imshow(mask)
         # plt.show()
         
-        
-        
         new_mask = FT.to_tensor(mask) * 255
-        total_pixels = new_mask.shape[2] *new_mask.shape[1]
+        total_pixels = new_mask.shape[2] * new_mask.shape[1]
         label_inds, label_counts = torch.unique(new_mask, return_counts=True)
         label_inds = label_inds.long()
-        distribution = label_counts /total_pixels
+        distribution = label_counts / total_pixels
         
         for label_ind, label_count in zip(label_inds, label_counts):
-            labels[0, label_ind] = label_count /total_pixels
+            labels[0, label_ind] = label_count / total_pixels
         
         distances = distance.cdist(self.possible_combinations, labels, 'cityblock')
         label = np.argmin(distances).item()

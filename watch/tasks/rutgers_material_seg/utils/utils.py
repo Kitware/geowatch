@@ -22,7 +22,7 @@ def bandwise_norm(image, channel_first=True):
                 single_channel = image[b,c,:,:]
                 max_value = single_channel.max()
                 min_value = single_channel.min()
-                single_channel_normalized = (single_channel -min_value) /(max_value -min_value)
+                single_channel_normalized = (single_channel - min_value) / (max_value - min_value)
                 image[b,c,:,:] = single_channel_normalized
     else:
         bs, h, w, cs = image.shape
@@ -37,8 +37,8 @@ def otsu(image, num=400, get_bcm=False):
     # print(image.shape)
     max_value = image.max()
     min_value = image.min()
-    total_num = h *w
-    step_value = (max_value -min_value) /num
+    total_num = h * w
+    step_value = (max_value - min_value) / num
     value = min_value + step_value
     best_inter_class_var = 0
     while value <= max_value:
@@ -67,19 +67,19 @@ def stad_image(image, channel_first=True, get_params=False, patches=False):
     if channel_first:
         if patches:
             bs, ps, c, h, w = image.shape
-            image = image.reshape(bs,ps,c,h *w)  # (bs, ps, c, h*w)
+            image = image.reshape(bs,ps,c,h * w)  # (bs, ps, c, h*w)
             mean = image.mean(dim=3, keepdims=True) # (bs, ps, c, 1)
             center = image - mean # (bs, ps, c, h*w)
             var = torch.var(center, dim=3, keepdims=True) # (bs, ps, c, h*w])
         else:
             bs, c, h, w = image.shape
-            image = image.reshape(bs,c,h *w)  # (bs, c, h*w)
+            image = image.reshape(bs,c,h * w)  # (bs, c, h*w)
             mean = image.mean(dim=2, keepdims=True) # (bs, c, 1)
             center = image - mean # (bs, c, h*w)
             var = torch.var(center, dim=2, keepdims=True) # (bs, c, h*w])
         # var = torch.sum(torch.pow(center,2), axis=2, keepdims=True) / (h * w) # (bs, c, 1)
         std = torch.sqrt(var)
-        nm_image = center /std # (bs, c, h*w)
+        nm_image = center / std # (bs, c, h*w)
         if patches:
             nm_image = nm_image.view(bs, ps, c, h, w)
         else:

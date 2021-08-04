@@ -16,7 +16,6 @@ class VSNet(nn.Module):
         self.model = nn.Sequential(*self.layers)
         # self.model = nn.Linear(3,1)
 
-
     def forward(self,image):
         out = self.model(image)
         return out
