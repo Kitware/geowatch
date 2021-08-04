@@ -77,7 +77,7 @@ class Trainer(object):
         self.k = config['data']['num_classes']
         self.kmeans = KMeans(n_clusters=self.k, mode='euclidean', verbose=0, minibatch=None)
         self.max_label = self.k
-        self.all_crops_params = [tuple([i,j,config['data']['window_size'], config['data']['window_size']]) for i in range(config['data']['window_size'],config['data']['image_size']-config['data']['window_size']) for j in range(config['data']['window_size'],config['data']['image_size']-config['data']['window_size'])]
+        self.all_crops_params = [tuple([i,j,config['data']['window_size'], config['data']['window_size']]) for i in range(config['data']['window_size'],config['data']['image_size'] -config['data']['window_size']) for j in range(config['data']['window_size'],config['data']['image_size'] -config['data']['window_size'])]
         self.all_crops_params_np = np.array(self.all_crops_params)
         # print(self.all_crops_params_np)
         if test_loader is not None:
@@ -89,7 +89,7 @@ class Trainer(object):
                                                         transforms.ColorJitter(0.4, 0.4, 0.4, 0.1),
                                                         transforms.RandomGrayscale(p=0.2),
                                                         ])
-        self.crop_size=(config['data']['window_size'], config['data']['window_size'])
+        self.crop_size = (config['data']['window_size'], config['data']['window_size'])
         
         self.cmap = visualization.n_distinguishable_colors(nlabels=self.max_label,
                                                            first_color_black=True, last_color_black=True, 
@@ -125,7 +125,7 @@ class Trainer(object):
         features_max = features_max.max(lowest)
         
         filtered_features = (features > features_max).type_as(features)
-        filtered_features = filtered_features.view(bs,c,h,w)*features.view(bs,c,h,w)
+        filtered_features = filtered_features.view(bs,c,h,w) *features.view(bs,c,h,w)
         return filtered_features
     
     def train(self, epoch: int, cometml_experiemnt: object) -> float:
@@ -167,7 +167,7 @@ class Trainer(object):
             mask1 = mask[:,0,:,:]
             mask2 = mask[:,1,:,:]
             
-            class_to_show = max(0,torch.unique(mask)[-1]-1)
+            class_to_show = max(0,torch.unique(mask)[-1] -1)
             # images = images.to(device)
             image1 = image1.to(device)
             image2 = image2.to(device)
@@ -186,19 +186,19 @@ class Trainer(object):
             # image2 = FT.normalize(image2, *mean_std)
             # negative_image1 = utils.stad_image(negative_image1)
             # negative_image2 = utils.stad_image(negative_image2)
-            image_diff = image1-image2
-            image_change_magnitude = torch.sqrt(image_diff*image_diff)
+            image_diff = image1 -image2
+            image_change_magnitude = torch.sqrt(image_diff *image_diff)
             image_change_magnitude = torch.mean(image_change_magnitude, dim=1, keepdims=False)
 
             max_ratio_coef, otsu_coef, edge_threshold = 0.15, 0.9, 15 #best: 0.81, 1.0
             try:
-                otsu_threshold = otsu_coef*otsu(image_change_magnitude.cpu().detach().numpy(), nbins=256)
-                condition = ((image_change_magnitude>max_ratio_coef*image_change_magnitude.max()) & (image_change_magnitude>otsu_threshold))
+                otsu_threshold = otsu_coef *otsu(image_change_magnitude.cpu().detach().numpy(), nbins=256)
+                condition = ((image_change_magnitude > max_ratio_coef *image_change_magnitude.max()) & (image_change_magnitude > otsu_threshold))
             except:
                 continue
             
             image_change_magnitude_binary = torch.zeros_like(image_change_magnitude)#.long()
-            image_change_magnitude_binary[condition]=1
+            image_change_magnitude_binary[condition] = 1
             condition_dilated = condition + condition.roll(1,1) + condition.roll(1,2) + condition.roll(-1,1) + condition.roll(-1,2)
             condition_dilated = condition_dilated + condition_dilated.roll(1,1) + condition_dilated.roll(1,2) + condition_dilated.roll(-1,1) + condition_dilated.roll(-1,2)
             condition_dilated = condition_dilated + condition_dilated.roll(1,1) + condition_dilated.roll(1,2) + condition_dilated.roll(-1,1) + condition_dilated.roll(-1,2)
@@ -209,7 +209,7 @@ class Trainer(object):
             patched_change_magnitude_binary = patched_change_magnitude_binary.view(patched_change_magnitude_binary.shape[0],
                                                                                    patched_change_magnitude_binary.shape[1],
                                                                                    -1)
-            crops_indices = (patched_change_magnitude_binary==1).any(dim=2).nonzero()
+            crops_indices = (patched_change_magnitude_binary == 1).any(dim=2).nonzero()
             params_list = np.delete(self.all_crops_params_np, crops_indices[:,1].tolist(), axis=0)
             crop_collection_time = time.time() - start
 
@@ -251,17 +251,17 @@ class Trainer(object):
 
 
             cropped_bs, cropped_ps, cropped_c, cropped_h, cropped_w = cropped_features1.shape
-            patch_max=6000
-            cropped_features1 = cropped_features1.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w) #[bs*ps, c*h*w]
-            cropped_features2 = cropped_features2.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w)
-            cropped_negative_features1 = cropped_negative_features1.view(cropped_bs*cropped_ps, cropped_c*cropped_h*cropped_w)
+            patch_max = 6000
+            cropped_features1 = cropped_features1.view(cropped_bs *cropped_ps, cropped_c *cropped_h *cropped_w) #[bs*ps, c*h*w]
+            cropped_features2 = cropped_features2.view(cropped_bs *cropped_ps, cropped_c *cropped_h *cropped_w)
+            cropped_negative_features1 = cropped_negative_features1.view(cropped_bs *cropped_ps, cropped_c *cropped_h *cropped_w)
             # cropped_features1 = F.normalize(cropped_features1,dim=1,p=1) #[bs*ps, c*h*w]
             # cropped_features2 = F.normalize(cropped_features2,dim=1,p=1)
             features = torch.cat([cropped_features1.unsqueeze(1), cropped_features2.unsqueeze(1)], dim=1)[:patch_max,:,:]
             
             # texton_h, texton_w = cropped_h, cropped_w
             texton_h, texton_w = h, w
-            max_patch_dictionary_length = cropped_ps if cropped_ps<patch_max else patch_max
+            max_patch_dictionary_length = cropped_ps if cropped_ps < patch_max else patch_max
             dictionary1_post_assignment = torch.zeros((bs, texton_h, texton_w)).to(device).long()
             dictionary2_post_assignment = torch.zeros((bs, texton_h, texton_w))#.to(device).long()
             dictionary1 = torch.zeros((bs, max_patch_dictionary_length)).to(device).long()
@@ -298,7 +298,7 @@ class Trainer(object):
                 root_shape = int(math.sqrt(b_dictionary1_test.shape[0]))
                 b_dictionary1_test = b_dictionary1_test.view((root_shape,root_shape))
                 b_dictionary1_test = F.pad(b_dictionary1_test,
-                                         pad=((h-root_shape)//2, (w-root_shape+1)//2, (h-root_shape)//2, (w-root_shape+1)//2), 
+                                         pad=((h -root_shape) //2, (w -root_shape +1) //2, (h -root_shape) //2, (w -root_shape +1) //2), 
                                          mode='constant', value=0)
                 
                 # dictionary2_test = self.kmeans.predict(b_test_full_image2)
@@ -354,7 +354,7 @@ class Trainer(object):
             
             # loss = loss1 + loss2
             
-            loss = 5*F.triplet_margin_loss(cropped_features1,#.unsqueeze(0), 
+            loss = 5 *F.triplet_margin_loss(cropped_features1,#.unsqueeze(0), 
                                             cropped_features2,#.unsqueeze(0), 
                                             cropped_negative_features1
                                             )
@@ -383,7 +383,7 @@ class Trainer(object):
                                                  cutoff_low=config['high_confidence_threshold']['train_low_cutoff'])
             pred1 = masks1.max(1)[1].cpu().detach()#.numpy()
             pred2 = masks2.max(1)[1].cpu().detach()#.numpy()
-            change_detection_prediction = (pred1!=pred2).type(torch.uint8)
+            change_detection_prediction = (pred1 != pred2).type(torch.uint8)
             
             # from cc_torch import connected_components_labeling
             # change_detection_prediction = connected_components_labeling(change_detection_prediction)
@@ -391,7 +391,7 @@ class Trainer(object):
             # change_detection_prediction = (dictionary1_post_assignment.cpu().detach()!=dictionary2_post_assignment.cpu().detach()).type(torch.uint8)
             
             total_loss += loss.item()
-            mask1[mask1==-1]=0
+            mask1[mask1 == -1] = 0
             # preds.append(change_detection_prediction.cpu())
             preds.append(image_change_magnitude_binary.cpu())
             targets.append(mask1.cpu())#.numpy())
@@ -432,11 +432,11 @@ class Trainer(object):
                         cropped_image2_show = np.transpose(cropped_image2.cpu().detach().numpy()[batch_index_to_show,0,:,:,:],(1,2,0))[:,:,:3]
                         cropped_image2_show = np.flip(cropped_image2_show, axis=2)
                         
-                        image_show1 = (image_show1 - image_show1.min())/(image_show1.max() - image_show1.min())
-                        image_show2 = (image_show2 - image_show2.min())/(image_show2.max() - image_show2.min())
-                        negative_image1_show = (negative_image1_show - negative_image1_show.min())/(negative_image1_show.max() - negative_image1_show.min())
-                        cropped_image1_show = (cropped_image1_show - cropped_image1_show.min())/(cropped_image1_show.max() - cropped_image1_show.min())
-                        cropped_image2_show = (cropped_image2_show - cropped_image2_show.min())/(cropped_image2_show.max() - cropped_image2_show.min())
+                        image_show1 = (image_show1 - image_show1.min()) /(image_show1.max() - image_show1.min())
+                        image_show2 = (image_show2 - image_show2.min()) /(image_show2.max() - image_show2.min())
+                        negative_image1_show = (negative_image1_show - negative_image1_show.min()) /(negative_image1_show.max() - negative_image1_show.min())
+                        cropped_image1_show = (cropped_image1_show - cropped_image1_show.min()) /(cropped_image1_show.max() - cropped_image1_show.min())
+                        cropped_image2_show = (cropped_image2_show - cropped_image2_show.min()) /(cropped_image2_show.max() - cropped_image2_show.min())
 
                         # print(f"min: {image_show.min()}, max: {image_show.max()}")
                         # image_show = np.transpose(outputs['visuals']['image'][batch_index_to_show,:,:,:].numpy(),(1,2,0))
@@ -454,11 +454,11 @@ class Trainer(object):
                         dictionary2_show = dictionary1_post_assignment.cpu().detach()[batch_index_to_show,:,:].numpy()
                         
                         
-                        fp_tp_fn_prediction_mask = gt_mask_show1 + (2*change_detection_show)
+                        fp_tp_fn_prediction_mask = gt_mask_show1 + (2 *change_detection_show)
                         
-                        logits_show1[logits_show1==-1]=0
-                        logits_show2[logits_show2==-1]=0
-                        gt_mask_show_no_bg1 = np.ma.masked_where(gt_mask_show1==0,gt_mask_show1)
+                        logits_show1[logits_show1 == -1] = 0
+                        logits_show2[logits_show2 == -1] = 0
+                        gt_mask_show_no_bg1 = np.ma.masked_where(gt_mask_show1 == 0,gt_mask_show1)
                         # logits_show_no_bg = np.ma.masked_where(logits_show==0,logits_show)
 
                         classes_in_gt = np.unique(gt_mask_show1)
@@ -598,7 +598,7 @@ class Trainer(object):
         mean_precision = precision.mean()
         mean_recall = recall.mean()
         overall_miou = mean_iou.mean()
-        classwise_f1_score = 2*(precision*recall)/(precision+recall)
+        classwise_f1_score = 2 *(precision *recall) /(precision +recall)
         mean_f1_score = classwise_f1_score.mean()
         
         # overall_miou = sum(mean_iou)/len(mean_iou)
@@ -607,18 +607,18 @@ class Trainer(object):
         # print(f"Training class-wise Recall value: \n{recall} \noverall Recall: {mean_recall}")
         # print(f"Training overall F1 Score: {mean_f1_score}")
         
-        cometml_experiemnt.log_metric("Training Loss", total_loss, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Segmentation Loss", total_loss_seg, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Training mIoU", overall_miou, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Training mean_f1_score", mean_f1_score, epoch=epoch+1)
+        cometml_experiemnt.log_metric("Training Loss", total_loss, epoch=epoch +1)
+        cometml_experiemnt.log_metric("Segmentation Loss", total_loss_seg, epoch=epoch +1)
+        cometml_experiemnt.log_metric("Training mIoU", overall_miou, epoch=epoch +1)
+        cometml_experiemnt.log_metric("Training mean_f1_score", mean_f1_score, epoch=epoch +1)
 
-        cometml_experiemnt.log_metrics({f"Training Recall class {str(x)}":recall[x] for x in range(len(recall))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"Training Precision class {str(x)}":precision[x] for x in range(len(precision))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"Training F1_score class {str(x)}":classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"Training Recall class {str(x)}":recall[x] for x in range(len(recall))}, epoch=epoch +1)
+        cometml_experiemnt.log_metrics({f"Training Precision class {str(x)}":precision[x] for x in range(len(precision))}, epoch=epoch +1)
+        cometml_experiemnt.log_metrics({f"Training F1_score class {str(x)}":classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch +1)
         
-        print("Training Epoch {0:2d} average loss: {1:1.2f}".format(epoch+1, total_loss/self.train_loader.__len__()))
+        print("Training Epoch {0:2d} average loss: {1:1.2f}".format(epoch +1, total_loss /self.train_loader.__len__()))
 
-        return total_loss/self.train_loader.__len__()
+        return total_loss /self.train_loader.__len__()
             
     def validate(self, epoch: int, cometml_experiemnt: object, save_individual_plots_specific: bool = False) -> tuple:
         """validating single epoch
@@ -686,10 +686,10 @@ class Trainer(object):
                                                      cutoff_low=config['high_confidence_threshold']['val_low_cutoff'])
                 pred1 = masks1.max(1)[1].cpu().detach()#.numpy()
                 pred2 = masks2.max(1)[1].cpu().detach()#.numpy()
-                change_detection_prediction = (pred1!=pred2).type(torch.uint8)
+                change_detection_prediction = (pred1 != pred2).type(torch.uint8)
                 
                 preds.append(change_detection_prediction)
-                mask1[mask1==-1]=0
+                mask1[mask1 == -1] = 0
                 targets.append(mask1.cpu())#.numpy())
 
                 if config['visualization']['val_visualizer'] or (config['visualization']['save_individual_plots'] and save_individual_plots_specific):
@@ -714,8 +714,8 @@ class Trainer(object):
                             image_show2 = np.transpose(image2.cpu().detach().numpy()[batch_index_to_show,:,:,:],(1,2,0))[:,:,:3]
                             image_show2 = np.flip(image_show2, axis=2)
                             
-                            image_show1 = (image_show1 - image_show1.min())/(image_show1.max() - image_show1.min())
-                            image_show2 = (image_show2 - image_show2.min())/(image_show2.max() - image_show2.min())
+                            image_show1 = (image_show1 - image_show1.min()) /(image_show1.max() - image_show1.min())
+                            image_show2 = (image_show2 - image_show2.min()) /(image_show2.max() - image_show2.min())
                             # print(f"min: {image_show.min()}, max: {image_show.max()}")
                             # image_show = np.transpose(outputs['visuals']['image'][batch_index_to_show,:,:,:].numpy(),(1,2,0))
                             logits_show1 = masks1.max(1)[1].cpu().detach().numpy()[batch_index_to_show,:,:]
@@ -726,11 +726,11 @@ class Trainer(object):
                             # gt_mask_show2 = mask2.cpu().detach()[batch_index_to_show,:,:].numpy().squeeze()
                             
                             
-                            fp_tp_fn_prediction_mask = gt_mask_show1 + (2*change_detection_show)
+                            fp_tp_fn_prediction_mask = gt_mask_show1 + (2 *change_detection_show)
                             
-                            logits_show1[logits_show1==-1]=0
-                            logits_show2[logits_show2==-1]=0
-                            gt_mask_show_no_bg1 = np.ma.masked_where(gt_mask_show1==0,gt_mask_show1)
+                            logits_show1[logits_show1 == -1] = 0
+                            logits_show2[logits_show2 == -1] = 0
+                            gt_mask_show_no_bg1 = np.ma.masked_where(gt_mask_show1 == 0,gt_mask_show1)
                             # gt_mask_show_no_bg2 = np.ma.masked_where(gt_mask_show2==0,gt_mask_show2)
                             # logits_show_no_bg = np.ma.masked_where(logits_show==0,logits_show)
 
@@ -811,24 +811,24 @@ class Trainer(object):
         mean_precision = precision.mean()
         mean_recall = recall.mean()
         overall_miou = mean_iou.mean()
-        classwise_f1_score = 2*(precision*recall)/(precision+recall)
+        classwise_f1_score = 2 *(precision *recall) /(precision +recall)
         mean_f1_score = classwise_f1_score.mean()
         
         
         # print("Validation Epoch {0:2d} average loss: {1:1.2f}".format(epoch+1, total_loss/loader.__len__()))
-        cometml_experiemnt.log_metric("Validation mIoU", overall_miou, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation precision", mean_precision, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation recall", mean_recall, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation mean f1_score", mean_f1_score, epoch=epoch+1)
+        cometml_experiemnt.log_metric("Validation mIoU", overall_miou, epoch=epoch +1)
+        cometml_experiemnt.log_metric("Validation precision", mean_precision, epoch=epoch +1)
+        cometml_experiemnt.log_metric("Validation recall", mean_recall, epoch=epoch +1)
+        cometml_experiemnt.log_metric("Validation mean f1_score", mean_f1_score, epoch=epoch +1)
         print({f"Recall class {str(x)}":recall[x] for x in range(len(recall))})
         print({f"Precision class {str(x)}":precision[x] for x in range(len(precision))})
-        cometml_experiemnt.log_metrics({f"Recall class {str(x)}":recall[x] for x in range(len(recall))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"Precision class {str(x)}":precision[x] for x in range(len(precision))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"F1_score class {str(x)}":classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"Recall class {str(x)}":recall[x] for x in range(len(recall))}, epoch=epoch +1)
+        cometml_experiemnt.log_metrics({f"Precision class {str(x)}":precision[x] for x in range(len(precision))}, epoch=epoch +1)
+        cometml_experiemnt.log_metrics({f"F1_score class {str(x)}":classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch +1)
         
-        cometml_experiemnt.log_metric("Validation Average Loss",total_loss/loader.__len__(),epoch=epoch+1)
+        cometml_experiemnt.log_metric("Validation Average Loss",total_loss /loader.__len__(),epoch=epoch +1)
         
-        return total_loss/loader.__len__(), overall_miou
+        return total_loss /loader.__len__(), overall_miou
     
     def forward(self, cometml_experiment: object, world_size: int =8) -> tuple:
         """forward pass for all epochs
@@ -845,7 +845,7 @@ class Trainer(object):
         best_val_loss, best_train_loss, train_loss = np.infty, np.infty, np.infty
         best_val_mean_iou, val_mean_iou = 0, 0
         
-        model_save_dir = config['data'][config['location']]['model_save_dir']+f"{current_path[-1]}_{config['dataset']}/{cometml_experiment.project_name}_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}/"
+        model_save_dir = config['data'][config['location']]['model_save_dir'] +f"{current_path[-1]}_{config['dataset']}/{cometml_experiment.project_name}_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}/"
         utils.create_dir_if_doesnt_exist(model_save_dir)
         for epoch in range(0,self.epochs):
             if config['procedures']['train']:
@@ -866,7 +866,7 @@ class Trainer(object):
                 model_save_name = f"{current_path[-1]}_epoch_{epoch}_loss_{train_loss}_valmIoU_{val_mean_iou}_time_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M:%S')}.pth"
                 
                 if config['procedures']['train']:
-                    with open(model_save_dir+"config.yaml",'w') as file:
+                    with open(model_save_dir +"config.yaml",'w') as file:
                         yaml.dump(config, file)
                 
                     torch.save({'epoch': epoch, 
@@ -874,13 +874,13 @@ class Trainer(object):
                                 'optimizer': self.optimizer.state_dict(),
                                 'scheduler': self.scheduler.state_dict(),
                                 'loss':train_loss},
-                                model_save_dir+model_save_name)
+                                model_save_dir +model_save_name)
                 if config['visualization']['save_individual_plots']:
                     _, _ = self.validate(epoch, cometml_experiment, save_individual_plots_specific=True)
             
         return train_losses, val_losses, mean_ious_val
 
-if __name__== "__main__":
+if __name__ == "__main__":
 
     project_root = "/home/native/projects/watch/watch/tasks/rutgers_material_seg/"
     # main_config_path = f"{os.getcwd()}/configs/main.yaml"

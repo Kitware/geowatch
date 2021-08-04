@@ -126,7 +126,7 @@ def make_confusion_plots(result_kwcoco_path, figure_root):
             H = len(images)
             W = len(images[0]["auxiliary"])
 
-            fig, axs = plt.subplots(H, W, figsize=(3*W, 4*H), squeeze=False)
+            fig, axs = plt.subplots(H, W, figsize=(3 *W, 4 *H), squeeze=False)
             if len(axs.shape) == 1: 
                 axs = axs[None]
 
@@ -149,7 +149,7 @@ def make_confusion_plots(result_kwcoco_path, figure_root):
 
                 plot_frames(frames, target, row, cmap, thresh=0.)
 
-            patches =[
+            patches = [
                 mpatches.Patch(color=cmap.colors[idx], label=name) 
                 for idx, name in enumerate(["TN", "TP", "FN", "FP"])
             ]

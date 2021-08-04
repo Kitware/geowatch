@@ -50,7 +50,7 @@ class Clusterer(object):
         self.optimizer = optimizer
         self.scheduler = scheduler
 
-        self.cmap = visualization.rand_cmap(nlabels=config['data']['num_classes']+1, type='bright',
+        self.cmap = visualization.rand_cmap(nlabels=config['data']['num_classes'] +1, type='bright',
                                             first_color_black=True, last_color_black=True,
                                             bg_alpha=config['visualization']['bg_alpha'],
                                             fg_alpha=config['visualization']['fg_alpha'])
@@ -72,11 +72,11 @@ class Clusterer(object):
                     output.cpu().detach()
                     outputs[sub_batch,:,timestep,:,:] = output
 
-            image_show = np.array(image_data).transpose(0, 2, 3, 4, 1)/500 # visualize 0 indexed in batch
+            image_show = np.array(image_data).transpose(0, 2, 3, 4, 1) /500 # visualize 0 indexed in batch
             # mask_show = np.array(mask_data) # [b,t,h,w]
 
             b, c, t, h, w = outputs.shape
-            image_data = outputs.view(b, c*t, h*w).detach()
+            image_data = outputs.view(b, c *t, h *w).detach()
             image_data = torch.transpose(image_data,1,2)
             image_data = torch.flatten(image_data,start_dim=0, end_dim=1)
 
@@ -88,7 +88,7 @@ class Clusterer(object):
             cluster_labels = self.clustering_model.labels_
             y_kmeans = self.clustering_model_tsne.labels_
             prediction = cluster_labels.reshape(h,w)
-            prediction_no_bg = np.ma.masked_where(prediction==0,prediction)
+            prediction_no_bg = np.ma.masked_where(prediction == 0,prediction)
             # print(f"image_data: {image_data.shape}, mask: {mask_data.shape}")
             # print(f"image min: {image_show.min()}, image max: {image_show.max()}")
             plt.scatter(out_feat_embed[:,0], out_feat_embed[:,1], c=y_kmeans, marker='.', cmap='tab20c')
@@ -113,17 +113,17 @@ class Clusterer(object):
                 image_show = image_show[0]
                 figure = plt.figure(figsize=(10,10))
                 axes = {}
-                for i in range(1,2*t+1):
+                for i in range(1,2 *t +1):
                     axes[i] = figure.add_subplot(2,t,i)
                 for key in axes.keys():
                     if key <= t:
-                        axes[key].imshow(image_show[key-1,:,:,:])
+                        axes[key].imshow(image_show[key -1,:,:,:])
                     else:
-                        axes[key].imshow(mask_show[key-t-1,:,:],vmin=-1, vmax=7)
+                        axes[key].imshow(mask_show[key -t -1,:,:],vmin=-1, vmax=7)
                 figure.tight_layout()
                 plt.show()
 
-if __name__== "__main__":
+if __name__ == "__main__":
 
     project_root = "/home/native/projects/watch/watch/tasks/rutgers_material_seg/"
     # main_config_path = f"{os.getcwd()}/configs/main.yaml"
@@ -182,7 +182,7 @@ if __name__== "__main__":
     model = build_model(model_name = config['training']['model_name'],
                         backbone=config['training']['backbone'],
                         pretrained=config['training']['pretrained'],
-                        num_classes=config['data']['num_classes']+1,
+                        num_classes=config['data']['num_classes'] +1,
                         num_groups=config['training']['gn_n_groups'],
                         weight_std=config['training']['weight_std'],
                         beta=config['training']['beta'])
@@ -190,7 +190,7 @@ if __name__== "__main__":
     model = build_model(model_name = config['training']['model_name'],
                         backbone=config['training']['backbone'],
                         pretrained=config['training']['pretrained'],
-                        num_classes=config['data']['num_classes']+1,
+                        num_classes=config['data']['num_classes'] +1,
                         num_groups=config['training']['gn_n_groups'],
                         weight_std=config['training']['weight_std'],
                         beta=config['training']['beta'])

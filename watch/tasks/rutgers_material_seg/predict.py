@@ -114,7 +114,7 @@ class Evaluator(object):
                 if self.log_features:
                     
                     for b in range(bs):
-                        if len(current_gids)==0:
+                        if len(current_gids) == 0:
                             current_gids = outputs['tr'].data[0][b]['gids']
                         else:
                             previous_gids = current_gids
@@ -183,7 +183,7 @@ class Evaluator(object):
             self.eval()
         return
 
-if __name__== "__main__":
+if __name__ == "__main__":
 
     main_config_path = f"./configs/main.yaml"
 

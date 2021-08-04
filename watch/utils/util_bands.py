@@ -77,6 +77,7 @@ def dicts_contain(d_list, dsub_list):
         return all(ds[0][k] == ds[1][k] for k in ds[1])
     return all(map(contains, zip(d_list, dsub_list)))
 
+
 '''
 This band info is taken from the sentinelhub AWS catalog.
 It will need to be updated to match RGD's when that is STAC-compliant.

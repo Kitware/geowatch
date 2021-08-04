@@ -13,7 +13,7 @@ from sklearn.manifold import TSNE
 from metric_learn import NCA, LMNN, MMC_Supervised, LSML_Supervised
 from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
 
-visualize_images=False
+visualize_images = False
 coco_fpath = ub.expandpath('/home/native/core534_data/datasets/smart_watch/processed/drop0_aligned_v2/material_labels.kwcoco.json')
 dset = kwcoco.CocoDataset(coco_fpath)
 
@@ -46,14 +46,14 @@ for batch in loader:
     mask_data = batch['label']['class_masks'].data[0] #len(mask_data) = b
     mask_data = torch.stack(mask_data)#.numpy()
 
-    image_show = np.array(image_data).transpose(0, 2, 3, 4, 1)/500 # visualize 0 indexed in batch
+    image_show = np.array(image_data).transpose(0, 2, 3, 4, 1) /500 # visualize 0 indexed in batch
     # plt.imshow(image_show)
     # plt.show()
     # image_show = image_show[0,]
     # mask_show = np.array(mask_data) # [b,t,h,w]
 
-    image_data = image_data.view(b, c*t, h*w)
-    mask_data = mask_data.view(b, t, h*w).squeeze(0)
+    image_data = image_data.view(b, c *t, h *w)
+    mask_data = mask_data.view(b, t, h *w).squeeze(0)
     image_data = torch.transpose(image_data,1,2)
     image_data = torch.flatten(image_data,start_dim=0, end_dim=1)
 
@@ -65,11 +65,11 @@ for batch in loader:
     print(mask_data.shape)
     print(image_data.shape)
 
-    non_bg_indices = np.where(mask_data>0)[0]
-    concrete_indices = np.where(mask_data==1)[0][:n_points]
-    veg_indices = np.where(mask_data==2)[0][:n_points]
-    soil_indices = np.where(mask_data==3)[0][:n_points]
-    water_indices = np.where(mask_data==4)[0][:n_points]
+    non_bg_indices = np.where(mask_data > 0)[0]
+    concrete_indices = np.where(mask_data == 1)[0][:n_points]
+    veg_indices = np.where(mask_data == 2)[0][:n_points]
+    soil_indices = np.where(mask_data == 3)[0][:n_points]
+    water_indices = np.where(mask_data == 4)[0][:n_points]
     material_indices = np.concatenate((concrete_indices, veg_indices, soil_indices, water_indices),axis=0)
 
     # print(f"concrete: {concrete_indices.shape}, veg: {veg_indices.shape}, soil: {soil_indices.shape}, water: {water_indices.shape}")
@@ -154,12 +154,12 @@ for batch in loader:
         image_show = image_show[0]
         figure = plt.figure(figsize=(10,10))
         axes = {}
-        for i in range(1,2*t+1):
+        for i in range(1,2 *t +1):
             axes[i] = figure.add_subplot(2,t,i)
         for key in axes.keys():
             if key <= t:
-                axes[key].imshow(image_show[key-1,:,:,:])
+                axes[key].imshow(image_show[key -1,:,:,:])
             else:
-                axes[key].imshow(mask_show[key-t-1,:,:],vmin=-1, vmax=7)
+                axes[key].imshow(mask_show[key -t -1,:,:],vmin=-1, vmax=7)
         figure.tight_layout()
         plt.show()

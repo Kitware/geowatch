@@ -78,7 +78,7 @@ class Trainer(object):
                                                         transforms.ColorJitter(0.4, 0.4, 0.4, 0.1),
                                                         transforms.RandomGrayscale(p=0.2),
                                                         ])
-        self.crop_size=(11,11)
+        self.crop_size = (11,11)
         
         self.cmap = visualization.n_distinguishable_colors(nlabels=self.max_label,
                                                            first_color_black=True, last_color_black=True, 
@@ -152,13 +152,13 @@ class Trainer(object):
             bs, c, t, h, w = images.shape
             image1 = images[:,:,0,:,:]
             image2 = images[:,:,1,:,:]
-            image_differences = torch.sqrt((image1 - image2)*(image1 - image2))
-            image1 = (image1 - image1.min())/(image1.max() - image1.min())
-            image2 = (image2 - image2.min())/(image2.max() - image2.min())
-            image_differences = (image_differences - image_differences.min())/(image_differences.max() - image_differences.min())
+            image_differences = torch.sqrt((image1 - image2) *(image1 - image2))
+            image1 = (image1 - image1.min()) /(image1.max() - image1.min())
+            image2 = (image2 - image2.min()) /(image2.max() - image2.min())
+            image_differences = (image_differences - image_differences.min()) /(image_differences.max() - image_differences.min())
             image_differences = image_differences.numpy().squeeze()
             image_differences = np.mean(image_differences, axis=0, keepdims=True)
-            image_differences_binary = (image_differences>0.2).astype(int)
+            image_differences_binary = (image_differences > 0.2).astype(int)
             image_differences = np.transpose(image_differences,(1,2,0))
             image_differences_binary = np.transpose(image_differences_binary,(1,2,0))
             image1_imshow = np.transpose(image1.squeeze(),(1,2,0))
@@ -231,32 +231,32 @@ class Trainer(object):
                 # masks = self.high_confidence_filter(masks, cutoff_top=config['high_confidence_threshold']['val_cutoff'])
                 pred1 = masks1.max(1)[1].cpu().detach()#.numpy()
                 pred2 = masks2.max(1)[1].cpu().detach()#.numpy()
-                change_detection_prediction = (pred1!=pred2).type(torch.uint8)
+                change_detection_prediction = (pred1 != pred2).type(torch.uint8)
                 
                 preds.append(change_detection_prediction)
-                mask1[mask1==-1]=0
+                mask1[mask1 == -1] = 0
                 targets.append(mask1.cpu())#.numpy())
 
         mean_iou, precision, recall = eval_utils.compute_jaccard(preds, targets, num_classes=2)
-        mean_precision = sum(precision)/len(precision)
-        mean_recall = sum(recall)/len(recall)
-        f1_score = 2*(mean_precision*mean_recall)/(mean_precision+mean_recall)
-        overall_miou = sum(mean_iou)/len(mean_iou)
+        mean_precision = sum(precision) /len(precision)
+        mean_recall = sum(recall) /len(recall)
+        f1_score = 2 *(mean_precision *mean_recall) /(mean_precision +mean_recall)
+        overall_miou = sum(mean_iou) /len(mean_iou)
         if self.use_crf:
             crf_mean_iou, crf_precision, crf_recall = eval_utils.compute_jaccard(crf_preds, targets, num_classes=config['data']['num_classes'])
-            crf_overall_miou = sum(crf_mean_iou)/len(crf_mean_iou)
+            crf_overall_miou = sum(crf_mean_iou) /len(crf_mean_iou)
             print(f"Validation class-wise +CRF mIoU value: \n{np.array(crf_mean_iou)} \noverall mIoU: {crf_overall_miou}")
-            cometml_experiemnt.log_metric("Validation +CRF mIoU", crf_overall_miou, epoch=epoch+1)
+            cometml_experiemnt.log_metric("Validation +CRF mIoU", crf_overall_miou, epoch=epoch +1)
             
         print(f"Validation class-wise mIoU value: \n{np.array(mean_iou)} \noverall mIoU: {overall_miou}")
-        print("Validation Epoch {0:2d} average loss: {1:1.2f}".format(epoch+1, total_loss/loader.__len__()))
-        cometml_experiemnt.log_metric("Validation mIoU", overall_miou, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation precision", mean_precision, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation recall", mean_recall, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation f1_score", f1_score, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation Average Loss",total_loss/loader.__len__(),epoch=epoch+1)
+        print("Validation Epoch {0:2d} average loss: {1:1.2f}".format(epoch +1, total_loss /loader.__len__()))
+        cometml_experiemnt.log_metric("Validation mIoU", overall_miou, epoch=epoch +1)
+        cometml_experiemnt.log_metric("Validation precision", mean_precision, epoch=epoch +1)
+        cometml_experiemnt.log_metric("Validation recall", mean_recall, epoch=epoch +1)
+        cometml_experiemnt.log_metric("Validation f1_score", f1_score, epoch=epoch +1)
+        cometml_experiemnt.log_metric("Validation Average Loss",total_loss /loader.__len__(),epoch=epoch +1)
         
-        return total_loss/loader.__len__(), overall_miou
+        return total_loss /loader.__len__(), overall_miou
     
     def forward(self, cometml_experiment: object, world_size: int =8) -> tuple:
         """forward pass for all epochs
@@ -273,7 +273,7 @@ class Trainer(object):
         best_val_loss, train_loss = np.infty, np.infty
         best_val_mean_iou = 0
         
-        model_save_dir = config['data'][config['location']]['model_save_dir']+f"{current_path[-1]}_{config['dataset']}/{cometml_experiment.project_name}_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}/"
+        model_save_dir = config['data'][config['location']]['model_save_dir'] +f"{current_path[-1]}_{config['dataset']}/{cometml_experiment.project_name}_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}/"
         utils.create_dir_if_doesnt_exist(model_save_dir)
         for epoch in range(0,self.epochs):
             if config['procedures']['train']:
@@ -290,7 +290,7 @@ class Trainer(object):
                 model_save_name = f"{current_path[-1]}_epoch_{epoch}_loss_{train_loss}_valmIoU_{val_mean_iou}_time_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M:%S')}.pth"
                 
                 if config['procedures']['train']:
-                    with open(model_save_dir+"config.yaml",'w') as file:
+                    with open(model_save_dir +"config.yaml",'w') as file:
                         yaml.dump(config, file)
                 
                     torch.save({'epoch': epoch, 
@@ -298,12 +298,12 @@ class Trainer(object):
                                 'optimizer': self.optimizer.state_dict(),
                                 'scheduler': self.scheduler.state_dict(),
                                 'loss':train_loss},
-                                model_save_dir+model_save_name)
+                                model_save_dir +model_save_name)
                 _, _ = self.validate(epoch, cometml_experiment, save_individual_plots_specific=True)
             
         return train_losses, val_losses, mean_ious_val
 
-if __name__== "__main__":
+if __name__ == "__main__":
 
     project_root = "/home/native/projects/watch/watch/tasks/rutgers_material_seg/"
     # main_config_path = f"{os.getcwd()}/configs/main.yaml"

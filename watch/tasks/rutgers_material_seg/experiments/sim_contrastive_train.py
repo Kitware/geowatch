@@ -49,8 +49,8 @@ mask_mapping = {0: "unknown",    # 0, unknown
 
 possible_combinations = [list(i) for i in itertools.product([0, 1], repeat=len(mask_mapping.keys()))]
 for index, item in enumerate(possible_combinations):
-    num_labels = len(np.argwhere(np.array(item)==1))
-    if num_labels==0:
+    num_labels = len(np.argwhere(np.array(item) == 1))
+    if num_labels == 0:
         continue
     possible_combinations[index] = np.divide(possible_combinations[index], num_labels)
 
@@ -61,9 +61,9 @@ verbose_labels = {}
 for index, item in enumerate(possible_combinations):
     verbose_label = ""
     for label_index, label in enumerate(item):
-        if label!=0:
+        if label != 0:
             verbose_label += f"{mask_mapping[label_index]}: {label}, "
-    verbose_labels[index]=verbose_label
+    verbose_labels[index] = verbose_label
 
 def accuracy(output, target, topk=(1,)):
     """Computes the accuracy over the k top predictions for the specified values of k"""
@@ -204,7 +204,7 @@ class Trainer(object):
             # labels = torch.Tensor([1 for x in range(bs)])
             # print(images.shape)
             
-            class_to_show = max(0,torch.unique(mask)[-1]-1)
+            class_to_show = max(0,torch.unique(mask)[-1] -1)
             images = images.to(device)
             mask = mask.to(device)
             
@@ -213,7 +213,7 @@ class Trainer(object):
             
             
             # print(output1.shape)
-            f1, f2 = torch.split(output1, [bs//2, bs//2], dim=0)
+            f1, f2 = torch.split(output1, [bs //2, bs //2], dim=0)
             features = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
             # print(labels.shape)
             # print(features.shape)
@@ -236,7 +236,7 @@ class Trainer(object):
             # print(f"dist_labels: {dist_labels}")
             # print(f"distances: {distances}")
             # print(f"diagonal: {diagonal}")
-            cometml_experiemnt.log_metric("Training Mean Distance to GT", batch_mean_distance_to_gt, epoch=epoch+1)
+            cometml_experiemnt.log_metric("Training Mean Distance to GT", batch_mean_distance_to_gt, epoch=epoch +1)
             
             self.optimizer.zero_grad()
             loss.backward()
@@ -274,7 +274,7 @@ class Trainer(object):
                         cmap_gradients = plt.cm.get_cmap('jet') 
                         image_show = np.transpose(images.cpu().detach().numpy()[batch_index_to_show,:,:,:],(1,2,0))[:,:,:3]
                         
-                        image_show = (image_show - image_show.min())/(image_show.max() - image_show.min())
+                        image_show = (image_show - image_show.min()) /(image_show.max() - image_show.min())
                         # print(f"min: {image_show.min()}, max: {image_show.max()}")
                         # image_show = np.transpose(outputs['visuals']['image'][batch_index_to_show,:,:,:].numpy(),(1,2,0))
                         # logits_show = masks.max(1)[1].cpu().detach().numpy()[batch_index_to_show,:,:]
@@ -287,7 +287,7 @@ class Trainer(object):
                         # output1_sample = output1_sample[:original_width, :original_height]
                         
                         # logits_show[logits_show==-1]=0
-                        gt_mask_show_no_bg = np.ma.masked_where(gt_mask_show==0,gt_mask_show)
+                        gt_mask_show_no_bg = np.ma.masked_where(gt_mask_show == 0,gt_mask_show)
                         # logits_show_no_bg = np.ma.masked_where(logits_show==0,logits_show)
 
                         # classes_in_gt = np.unique(gt_mask_show)
@@ -332,14 +332,14 @@ class Trainer(object):
         # print(f"Training class-wise mIoU value: \n{np.array(mean_iou)} \noverall mIoU: {overall_miou}")
         # print(accuracies)
         mean_acc = torch.mean(torch.stack(accuracies))
-        cometml_experiemnt.log_metric("Training Loss", total_loss, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Segmentation Loss", total_loss_seg, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Accuracy", mean_acc, epoch=epoch+1)
+        cometml_experiemnt.log_metric("Training Loss", total_loss, epoch=epoch +1)
+        cometml_experiemnt.log_metric("Segmentation Loss", total_loss_seg, epoch=epoch +1)
+        cometml_experiemnt.log_metric("Accuracy", mean_acc, epoch=epoch +1)
         # cometml_experiemnt.log_metric("Training mIoU", overall_miou, epoch=epoch+1)
 
-        print("Training Epoch {0:2d} average loss: {1:1.2f}".format(epoch+1, total_loss/self.train_loader.__len__()))
+        print("Training Epoch {0:2d} average loss: {1:1.2f}".format(epoch +1, total_loss /self.train_loader.__len__()))
 
-        return total_loss/self.train_loader.__len__()
+        return total_loss /self.train_loader.__len__()
             
     def validate(self, epoch: int, cometml_experiemnt: object) -> tuple:
         """validating single epoch
@@ -404,7 +404,7 @@ class Trainer(object):
                 diagonal = np.diagonal(distances)
                 batch_mean_distance_to_gt = np.mean(diagonal)
 
-                cometml_experiemnt.log_metric("Validation Mean Distance to GT", batch_mean_distance_to_gt, epoch=epoch+1)
+                cometml_experiemnt.log_metric("Validation Mean Distance to GT", batch_mean_distance_to_gt, epoch=epoch +1)
                 
                 masks = F.softmax(output, dim=1) ## (B, 22, 300, 300)
                 # masks = F.interpolate(masks, size=mask.size()[-2:], mode="bilinear", align_corners=True)
@@ -437,7 +437,7 @@ class Trainer(object):
                             # transformed_image_show = np.transpose(utils.denorm(image1).cpu().detach().numpy()[0,:,:,:],(1,2,0))
                             # image_show = np.transpose(outputs['visuals']['image'][0,:,:,:].numpy(),(1,2,0))
                             image_show = np.transpose(image1.cpu().detach().numpy()[batch_index_to_show,:,:,:],(1,2,0))[:,:,:3]
-                            image_show = (image_show - image_show.min())/(image_show.max() - image_show.min())
+                            image_show = (image_show - image_show.min()) /(image_show.max() - image_show.min())
                             gt_mask_show = mask.cpu().numpy()[batch_index_to_show,:,:].squeeze()
                             # gt_mask_show[gt_mask_show==self.max_label] = 0
                             # image_name = outputs['visuals']['image_name'][batch_index_to_show]
@@ -449,7 +449,7 @@ class Trainer(object):
                             # logits_show = logits_show[:original_width, :original_height]
                             # gt_mask_show = gt_mask_show[:original_width, :original_height]
                             
-                            gt_mask_show_no_bg = np.ma.masked_where(gt_mask_show==0,gt_mask_show)
+                            gt_mask_show_no_bg = np.ma.masked_where(gt_mask_show == 0,gt_mask_show)
                             # logits_show_no_bg = np.ma.masked_where(logits_show==0,logits_show)
                             # pseudo_gt_show_no_bg = np.ma.masked_where(pseudo_gt_show==0,pseudo_gt_show)
                             
@@ -510,12 +510,12 @@ class Trainer(object):
             
         mean_acc = torch.mean(torch.stack(accuracies))
         # print(f"Validation class-wise mIoU value: \n{np.array(mean_iou)} \noverall mIoU: {overall_miou}")
-        print("Validation Epoch {0:2d} average loss: {1:1.2f}".format(epoch+1, total_loss/loader.__len__()))
+        print("Validation Epoch {0:2d} average loss: {1:1.2f}".format(epoch +1, total_loss /loader.__len__()))
         # cometml_experiemnt.log_metric("Validation mIoU", overall_miou, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation Average Loss",total_loss/loader.__len__(),epoch=epoch+1)
-        cometml_experiemnt.log_metric("Accuracy", mean_acc, epoch=epoch+1)
+        cometml_experiemnt.log_metric("Validation Average Loss",total_loss /loader.__len__(),epoch=epoch +1)
+        cometml_experiemnt.log_metric("Accuracy", mean_acc, epoch=epoch +1)
         
-        return total_loss/loader.__len__(), mean_acc
+        return total_loss /loader.__len__(), mean_acc
     
     def forward(self, cometml_experiment: object, world_size: int =8) -> tuple:
         """forward pass for all epochs
@@ -532,7 +532,7 @@ class Trainer(object):
         best_val_loss, train_loss = np.infty, np.infty
         best_val_mean_iou = 0
         
-        model_save_dir = config['data'][config['location']]['model_save_dir']+f"{current_path[-1]}_{config['dataset']}/{cometml_experiment.project_name}_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}/"
+        model_save_dir = config['data'][config['location']]['model_save_dir'] +f"{current_path[-1]}_{config['dataset']}/{cometml_experiment.project_name}_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}/"
         utils.create_dir_if_doesnt_exist(model_save_dir)
         for epoch in range(0,self.epochs):
             if config['procedures']['train']:
@@ -549,7 +549,7 @@ class Trainer(object):
                 model_save_name = f"{current_path[-1]}_epoch_{epoch}_loss_{train_loss}_valmIoU_{val_mean_iou}_time_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M:%S')}.pth"
                 
                 if config['procedures']['train']:
-                    with open(model_save_dir+"config.yaml",'w') as file:
+                    with open(model_save_dir +"config.yaml",'w') as file:
                         yaml.dump(config, file)
                 
                     torch.save({'epoch': epoch, 
@@ -557,11 +557,11 @@ class Trainer(object):
                                 'optimizer': self.optimizer.state_dict(),
                                 'scheduler': self.scheduler.state_dict(),
                                 'loss':train_loss},
-                                model_save_dir+model_save_name)
+                                model_save_dir +model_save_name)
             
         return train_losses, val_losses, mean_ious_val
 
-if __name__== "__main__":
+if __name__ == "__main__":
 
     project_root = "/home/native/projects/watch/watch/tasks/rutgers_material_seg/"
     # main_config_path = f"{os.getcwd()}/configs/main.yaml"

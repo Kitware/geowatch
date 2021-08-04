@@ -13,7 +13,7 @@ def get_gaussian_kernel(k=3, mu=0, sigma=1, normalize=True):
 
     # compute the 2 dimension gaussian
     gaussian_2D = np.exp(-(distance - mu) ** 2 / (2 * sigma ** 2))
-    gaussian_2D = gaussian_2D / (2 * np.pi *sigma **2)
+    gaussian_2D = gaussian_2D / (2 * np.pi * sigma ** 2)
 
     # normalize part (mathematically)
     if normalize:
@@ -133,10 +133,10 @@ class CannyFilter(nn.Module):
         # gaussian
 
         for c in range(C):
-            blurred[:, c:c+1] = self.gaussian_filter(img[:, c:c+1])
+            blurred[:, c:c +1] = self.gaussian_filter(img[:, c:c +1])
 
-            grad_x = grad_x + self.sobel_filter_x(blurred[:, c:c+1])
-            grad_y = grad_y + self.sobel_filter_y(blurred[:, c:c+1])
+            grad_x = grad_x + self.sobel_filter_x(blurred[:, c:c +1])
+            grad_y = grad_y + self.sobel_filter_y(blurred[:, c:c +1])
 
         # thick edges
 

@@ -72,7 +72,7 @@ class Trainer(object):
             self.test_loader = test_loader
             self.test_with_full_supervision = test_with_full_supervision
 
-        self.cmap = visualization.rand_cmap(nlabels=self.max_label+1, type='bright',
+        self.cmap = visualization.rand_cmap(nlabels=self.max_label +1, type='bright',
                                             first_color_black=True, last_color_black=True,
                                             bg_alpha=config['visualization']['bg_alpha'],
                                             fg_alpha=config['visualization']['fg_alpha'])
@@ -140,7 +140,7 @@ class Trainer(object):
             bs, c, t, h, w = image1.shape
             image1 = image1.squeeze(2)
 
-            class_to_show = max(0,torch.unique(mask)[-1]-1)
+            class_to_show = max(0,torch.unique(mask)[-1] -1)
             image1 = image1.to(device)
             mask = mask.to(device)
             # image_raw = utils.denorm(image1.clone().detach())
@@ -153,7 +153,7 @@ class Trainer(object):
 
             # bs, c, h, w = output1.size()
 
-            loss = 30*F.cross_entropy(output1,
+            loss = 30 *F.cross_entropy(output1,
                                       mask,
                                       ignore_index=-1,
                                       reduction="mean")
@@ -190,7 +190,7 @@ class Trainer(object):
                         transformed_image_show = np.transpose(utils.denorm(image1).cpu().detach().numpy()[batch_index_to_show,:,:,:],(1,2,0))
                         image_show = np.transpose(image1.cpu().detach().numpy()[batch_index_to_show,:,:,:],(1,2,0))
 
-                        image_show = (image_show - image_show.min())/(image_show.max() - image_show.min())
+                        image_show = (image_show - image_show.min()) /(image_show.max() - image_show.min())
                         # print(f"min: {image_show.min()}, max: {image_show.max()}")
                         # image_show = np.transpose(outputs['visuals']['image'][batch_index_to_show,:,:,:].numpy(),(1,2,0))
                         logits_show = masks.max(1)[1].cpu().detach().numpy()[batch_index_to_show,:,:]
@@ -202,9 +202,9 @@ class Trainer(object):
                         gt_mask_show = gt_mask_show[:original_width, :original_height]
                         output1_sample = output1_sample[:original_width, :original_height]
 
-                        logits_show[logits_show==-1]=0
-                        gt_mask_show_no_bg = np.ma.masked_where(gt_mask_show==0,gt_mask_show)
-                        logits_show_no_bg = np.ma.masked_where(logits_show==0,logits_show)
+                        logits_show[logits_show == -1] = 0
+                        gt_mask_show_no_bg = np.ma.masked_where(gt_mask_show == 0,gt_mask_show)
+                        logits_show_no_bg = np.ma.masked_where(logits_show == 0,logits_show)
 
                         classes_in_gt = np.unique(gt_mask_show)
                         ax1.imshow(image_show)
@@ -267,13 +267,13 @@ class Trainer(object):
         # mean_iou, precision, recall = eval_utils.compute_jaccard(preds, targets, num_classes=config['data']['num_classes'])
         # overall_miou = sum(mean_iou)/len(mean_iou)
 
-        cometml_experiemnt.log_metric("Training Loss", total_loss, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Segmentation Loss", total_loss_seg, epoch=epoch+1)
+        cometml_experiemnt.log_metric("Training Loss", total_loss, epoch=epoch +1)
+        cometml_experiemnt.log_metric("Segmentation Loss", total_loss_seg, epoch=epoch +1)
         # cometml_experiemnt.log_metric("Training mIoU", overall_miou, epoch=epoch+1)
 
-        print("Training Epoch {0:2d} average loss: {1:1.2f}".format(epoch+1, total_loss/self.train_loader.__len__()))
+        print("Training Epoch {0:2d} average loss: {1:1.2f}".format(epoch +1, total_loss /self.train_loader.__len__()))
 
-        return total_loss/self.train_loader.__len__()
+        return total_loss /self.train_loader.__len__()
 
     def validate(self, epoch: int, cometml_experiemnt: object) -> tuple:
         """validating single epoch
@@ -366,8 +366,8 @@ class Trainer(object):
                             logits_show = logits_show[:original_width, :original_height]
                             gt_mask_show = gt_mask_show[:original_width, :original_height]
 
-                            gt_mask_show_no_bg = np.ma.masked_where(gt_mask_show==0,gt_mask_show)
-                            logits_show_no_bg = np.ma.masked_where(logits_show==0,logits_show)
+                            gt_mask_show_no_bg = np.ma.masked_where(gt_mask_show == 0,gt_mask_show)
+                            logits_show_no_bg = np.ma.masked_where(logits_show == 0,logits_show)
                             # pseudo_gt_show_no_bg = np.ma.masked_where(pseudo_gt_show==0,pseudo_gt_show)
 
                             ax1.imshow(image_show)
@@ -380,7 +380,7 @@ class Trainer(object):
 
                             if self.use_crf:
                                 crf_pred_show = crf_pred[0,:,:].squeeze()
-                                crf_pred_show_no_bg = np.ma.masked_where(crf_pred_show==0,crf_pred_show)
+                                crf_pred_show_no_bg = np.ma.masked_where(crf_pred_show == 0,crf_pred_show)
                                 crf_prob_show = crf_probs[0,class_to_show,:,:].squeeze()
                                 ax4.imshow(transformed_image_show)
                                 ax4.imshow(crf_pred_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
@@ -417,19 +417,19 @@ class Trainer(object):
                             gc.collect()
 
         mean_iou, precision, recall = eval_utils.compute_jaccard(preds, targets, num_classes=config['data']['num_classes'])
-        overall_miou = sum(mean_iou)/len(mean_iou)
+        overall_miou = sum(mean_iou) /len(mean_iou)
         if self.use_crf:
             crf_mean_iou, crf_precision, crf_recall = eval_utils.compute_jaccard(crf_preds, targets, num_classes=config['data']['num_classes'])
-            crf_overall_miou = sum(crf_mean_iou)/len(crf_mean_iou)
+            crf_overall_miou = sum(crf_mean_iou) /len(crf_mean_iou)
             print(f"Validation class-wise +CRF mIoU value: \n{np.array(crf_mean_iou)} \noverall mIoU: {crf_overall_miou}")
-            cometml_experiemnt.log_metric("Validation +CRF mIoU", crf_overall_miou, epoch=epoch+1)
+            cometml_experiemnt.log_metric("Validation +CRF mIoU", crf_overall_miou, epoch=epoch +1)
 
         print(f"Validation class-wise mIoU value: \n{np.array(mean_iou)} \noverall mIoU: {overall_miou}")
-        print("Validation Epoch {0:2d} average loss: {1:1.2f}".format(epoch+1, total_loss/loader.__len__()))
-        cometml_experiemnt.log_metric("Validation mIoU", overall_miou, epoch=epoch+1)
-        cometml_experiemnt.log_metric("Validation Average Loss",total_loss/loader.__len__(),epoch=epoch+1)
+        print("Validation Epoch {0:2d} average loss: {1:1.2f}".format(epoch +1, total_loss /loader.__len__()))
+        cometml_experiemnt.log_metric("Validation mIoU", overall_miou, epoch=epoch +1)
+        cometml_experiemnt.log_metric("Validation Average Loss",total_loss /loader.__len__(),epoch=epoch +1)
 
-        return total_loss/loader.__len__(), overall_miou
+        return total_loss /loader.__len__(), overall_miou
 
     def forward(self, cometml_experiment: object, world_size: int =8) -> tuple:
         """forward pass for all epochs
@@ -446,7 +446,7 @@ class Trainer(object):
         best_val_loss, train_loss = np.infty, np.infty
         best_val_mean_iou = 0
 
-        model_save_dir = config['data'][config['location']]['model_save_dir']+f"{current_path[-1]}_{config['dataset']}/{cometml_experiment.project_name}_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}/"
+        model_save_dir = config['data'][config['location']]['model_save_dir'] +f"{current_path[-1]}_{config['dataset']}/{cometml_experiment.project_name}_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}/"
         utils.create_dir_if_doesnt_exist(model_save_dir)
         for epoch in range(0,self.epochs):
             if config['procedures']['train']:
@@ -463,7 +463,7 @@ class Trainer(object):
                 model_save_name = f"{current_path[-1]}_epoch_{epoch}_loss_{train_loss}_valmIoU_{val_mean_iou}_time_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M:%S')}.pth"
 
                 if config['procedures']['train']:
-                    with open(model_save_dir+"config.yaml",'w') as file:
+                    with open(model_save_dir +"config.yaml",'w') as file:
                         yaml.dump(config, file)
 
                     torch.save({'epoch': epoch,
@@ -471,7 +471,7 @@ class Trainer(object):
                                 'optimizer': self.optimizer.state_dict(),
                                 'scheduler': self.scheduler.state_dict(),
                                 'loss':train_loss},
-                                model_save_dir+model_save_name)
+                                model_save_dir +model_save_name)
 
         return train_losses, val_losses, mean_ious_val
 

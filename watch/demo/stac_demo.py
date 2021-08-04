@@ -132,5 +132,5 @@ def demo():
             json.dump(item2, f)
     return cat_path
 
-if __name__=='__main__':
+if __name__ == '__main__':
     print(demo())

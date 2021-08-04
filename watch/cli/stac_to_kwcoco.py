@@ -57,10 +57,10 @@ def convert(out_file, cat, ignore_dem=True):
         images = []
         name = item.id
         for asset in item.get_assets():
-            if asset!='data' and 'data' not in item.assets[asset].roles:
+            if asset != 'data' and 'data' not in item.assets[asset].roles:
                 continue
             images.append(item.assets[asset].get_absolute_href())
-        if len(images)>1:
+        if len(images) > 1:
             img = gtk.make_coco_img_from_auxiliary_geotiffs(images, name)
         else:
             img = gtk.make_coco_img_from_geotiff(images[0], name)

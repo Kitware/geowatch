@@ -54,7 +54,7 @@ class DeepGlobeDataset(object):
         img = Image.open(img_path).convert("RGB")
         mask = Image.open(mask_path)#.convert("L"))
 
-        new_mask = FT.to_tensor(mask)*255
+        new_mask = FT.to_tensor(mask) *255
 
         new_image = self.transforms(img)
         outputs = {}

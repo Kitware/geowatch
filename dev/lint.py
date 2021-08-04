@@ -22,6 +22,7 @@ def exec_flake8(dpaths, select=None, ignore=None, max_line_length=79):
 def exec_autopep8(dpaths, autofix, mode='diff'):
     if VERBOSE > 1:
         print('autofix = {!r}'.format(autofix))
+
     args_list = ['--select', ','.join(autofix), '--recursive']
     if mode == 'diff':
         args_list += ['--diff']
@@ -35,7 +36,7 @@ def exec_autopep8(dpaths, autofix, mode='diff'):
     return info['ret']
 
 
-def custom_lint(dpath: str, mode=False):
+def custom_lint(dpath: str, mode=False, index=False):
     """
     Runs our custom "watch" linting rules on a specific directory and
     optionally "fixes" them.
@@ -49,6 +50,9 @@ def custom_lint(dpath: str, mode=False):
                 * "show": display linting results
                 * "diff": show the autopep8 diff that would autofix some errors
                 * "apply": apply the autopep8 diff that would autofix some errors
+
+        index(int, default=None):
+            if given only does one error at a time for autopep8
 
     Ignore:
         dpath = ub.expandpath('~/code/watch/watch')
@@ -94,7 +98,7 @@ def custom_lint(dpath: str, mode=False):
 
     modifiers = {
         'whitespace': 1,
-        'newlines': 0,
+        'newlines': 1,
         'warnings': 1,
     }
     autofix = {}
@@ -107,10 +111,10 @@ def custom_lint(dpath: str, mode=False):
 
             # 'E231': 'Add missing whitespace.',
 
-            'E241': 'Fix extraneous whitespace around keywords.',
+            # 'E241': 'Fix extraneous whitespace around keywords.',
             # 'E242': 'Remove extraneous whitespace around operator.',
             # 'E251': 'Remove whitespace around parameter "=" sign.',
-            'E252': 'Missing whitespace around parameter equals.',
+            # 'E252': 'Missing whitespace around parameter equals.',
 
             # 'E26 ': 'Fix spacing after comment hash for inline comments.',
             # 'E265': 'Fix spacing after comment hash for block comments.',
@@ -120,10 +124,10 @@ def custom_lint(dpath: str, mode=False):
         })
     if modifiers['newlines']:
         autofix.update({
-            'E301': 'Add missing blank line.',
-            'E302': 'Add missing 2 blank lines.',
+            # 'E301': 'Add missing blank line.',
+            # 'E302': 'Add missing 2 blank lines.',
             'E303': 'Remove extra blank lines.',
-            'E304': 'Remove blank line following function decorator.',
+            # 'E304': 'Remove blank line following function decorator.',
             'E305': 'Expected 2 blank lines after end of function or class.',
             'E306': 'Expected 1 blank line before a nested definition.',
         })
@@ -136,20 +140,40 @@ def custom_lint(dpath: str, mode=False):
         })
 
     autofix = sorted(autofix)
+    if index is not None:
+        try:
+            index = int(index)
+        except ValueError:
+            pass
+        else:
+            autofix = autofix[index: index + 1]
 
     select = None
     ignore = sorted(ignore)
-    # select = autofix
 
     if VERBOSE > 1:
         print('mode = {!r}'.format(mode))
     if mode in {'diff', 'apply'}:
-        return exec_autopep8(dpaths, autofix, mode=mode)
+        if VERBOSE > 1:
+            print('autofix = {!r}'.format(autofix))
+        ret = exec_autopep8(dpaths, autofix, mode=mode)
+    elif mode == 'show':
+        select = autofix
+        if VERBOSE > 1:
+            print('select = {!r}'.format(select))
+        ret = exec_flake8(dpaths, select, None, 300)
     elif mode == 'lint':
         max_line_length = 79
-        return exec_flake8(dpaths, select, ignore, max_line_length)
+        if VERBOSE > 1:
+            print('ignore = {!r}'.format(ignore))
+        ret = exec_flake8(dpaths, select, ignore, max_line_length)
     else:
         raise KeyError(mode)
+
+    if index:
+        print('autofix = {!r}'.format(autofix))
+
+    return ret
 
 
 if __name__ == '__main__':
@@ -159,11 +183,28 @@ if __name__ == '__main__':
 
         cd $HOME/code/watch
 
-        python ~/code/watch/dev/lint.py watch/utils --mode=lint
-        python ~/code/watch/dev/lint.py watch/utils --mode=diff
-        python ~/code/watch/dev/lint.py watch/utils --mode=apply
+        # List ALL the errors
+        python ~/code/watch/dev/lint.py watch --mode=lint
+
+        # List the fixable errors
+        python ~/code/watch/dev/lint.py watch --mode=show
+
+        # Show the diff that fixes the fixable errors
+        python ~/code/watch/dev/lint.py watch --mode=diff | colordiff
+
+        # Apply the fixable diffs
+        python ~/code/watch/dev/lint.py watch --mode=apply
+
+        # First one should show nothing, but second might still show stuff
+        python ~/code/watch/dev/lint.py watch --mode=show
+        python ~/code/watch/dev/lint.py watch --mode=lint
 
         python ~/code/watch/dev/lint.py [watch,atk]
+
+        # WORKFLOW
+        python ~/code/watch/dev/lint.py watch --index=2 --mode=show
+        python ~/code/watch/dev/lint.py watch --index=2 --mode=diff | colordiff
+        python ~/code/watch/dev/lint.py watch --index=2 --mode=apply
     """
     import fire
     import sys

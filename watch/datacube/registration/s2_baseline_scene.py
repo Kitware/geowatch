@@ -145,8 +145,8 @@ def find_baseline_scene(xmls, return_paths=False):
 
         norm_value_proc_ver = df['proc_ver'].max()
         # print(norm_value_proc_ver)
-        df['score'] = 0.25*df['coverage'] + 0.25*(1-df['cloud']) + \
-                     0.25*(1-df['sun_zenith_angle']/90.) + 0.25*( df['proc_ver']/norm_value_proc_ver)
+        df['score'] = 0.25 *df['coverage'] + 0.25 *(1 -df['cloud']) + \
+                     0.25 *(1 -df['sun_zenith_angle'] /90.) + 0.25 *( df['proc_ver'] /norm_value_proc_ver)
 
     print(df)
     mgrs_tile_list = pd.unique(df['mgrs_tile_id'].values)

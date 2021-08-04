@@ -22,16 +22,16 @@ def get_ap_score(y_true, y_scores):
 
 def val_mae(pred_counts,gt_counts):
     n = len(gt_counts)
-    true_count = np.ones(n)*(-1)
-    pred_count = np.ones(n)*(-1)
+    true_count = np.ones(n) *(-1)
+    pred_count = np.ones(n) *(-1)
 
     for index in range(n):
         true_count[index] = gt_counts[index]
         pred_count[index] = pred_counts[index]
         # mae = (np.abs(true_count[:index+1] - pred_count[:index+1])).mean()
     score_dict = {}
-    assert not np.any(true_count==(-1))
-    assert not np.any(pred_count==(-1))
+    assert not np.any(true_count == (-1))
+    assert not np.any(pred_count == (-1))
     score_dict["MAE"] = (np.abs(true_count - pred_count)).mean()
     print(f"score_dict: {score_dict}")
     return score_dict
@@ -43,16 +43,16 @@ def mae(pred_counts,gt_counts):
     n = len(gt_counts)
     absolute_e_list = [abs(b_i - a_i) for a_i, b_i in zip(pred_counts, gt_counts)]
     sum_e_list = sum(absolute_e_list)
-    mae = sum_e_list/n
+    mae = sum_e_list /n
     return mae
 
 def rmse(pred_counts,gt_counts):
     assert len(pred_counts) == len(gt_counts)
     n = len(gt_counts)
 
-    absolute_e_list = [abs(b_i - a_i)*abs(b_i-a_i) for a_i, b_i in zip(pred_counts, gt_counts)]
+    absolute_e_list = [abs(b_i - a_i) *abs(b_i -a_i) for a_i, b_i in zip(pred_counts, gt_counts)]
     sum_e_list = sum(absolute_e_list)
-    sum_e_list = sum_e_list/n
+    sum_e_list = sum_e_list /n
     rmse = math.sqrt(sum_e_list)
     return rmse
 
@@ -61,10 +61,10 @@ def mape(pred_counts,gt_counts):
     assert len(pred_counts) == len(gt_counts)
     n = len(gt_counts)
 
-    absolute_e_list = [abs(b_i - a_i)/b_i for a_i, b_i in zip(pred_counts, gt_counts)]
+    absolute_e_list = [abs(b_i - a_i) /b_i for a_i, b_i in zip(pred_counts, gt_counts)]
     sum_e_list = sum(absolute_e_list)
-    sum_e_list = sum_e_list/n
-    mape = 100*sum_e_list
+    sum_e_list = sum_e_list /n
+    mape = 100 *sum_e_list
     return mape
 
 
@@ -392,9 +392,9 @@ def compute_jaccard(preds_masks_all, targets_masks_all, num_classes=21):
             fps[label] += np.maximum(0., diff).float().sum().item()
             fns[label] += np.maximum(0., -diff).float().sum().item()
 
-    jaccards = [None]*num_classes
-    precision = [None]*num_classes
-    recall   = [None]*num_classes
+    jaccards = [None] *num_classes
+    precision = [None] *num_classes
+    recall   = [None] *num_classes
     for i in range(num_classes):
         tp = tps[i]
         fn = fns[i]

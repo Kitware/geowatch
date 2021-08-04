@@ -12,7 +12,7 @@ from sklearn.cluster import KMeans
 from sklearn.manifold import TSNE
 from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
 
-visualize_images=False
+visualize_images = False
 coco_fpath = ub.expandpath('/media/native/data/data/smart_watch_dvc/drop0_aligned_msi/material_labels.kwcoco.json')
 dset = kwcoco.CocoDataset(coco_fpath)
 
@@ -43,7 +43,7 @@ for batch_index, batch in enumerate(loader):
     mask_data = torch.stack(mask_data)
 
     image_show = np.array(image_data).transpose(0, 2, 3, 4, 1)#/50000 # visualize 0 indexed in batch
-    image_show = image_show/image_show.max()
+    image_show = image_show /image_show.max()
     print(f"image min: {image_show.min()}, image max: {image_show.max()}")
     # print(image_show.shape)
     # image_show = image_show[0,0,:,:,:]
@@ -51,7 +51,7 @@ for batch_index, batch in enumerate(loader):
     # plt.show()
     # mask_show = np.array(mask_data) # [b,t,h,w]
 
-    image_data = image_data.view(b, c*t, h*w)
+    image_data = image_data.view(b, c *t, h *w)
     # print(image_data.shape)
     image_data = torch.transpose(image_data,1,2)
     # print(image_data.shape)
@@ -71,7 +71,7 @@ for batch_index, batch in enumerate(loader):
     # print(cluster_centers)
     # print(cluster_labels)
     prediction = cluster_labels.reshape(h,w)
-    prediction_no_bg = np.ma.masked_where(prediction==0,prediction)
+    prediction_no_bg = np.ma.masked_where(prediction == 0,prediction)
     # print(f"image_data: {image_data.shape}, mask: {mask_data.shape}")
     # print(f"image min: {image_show.min()}, image max: {image_show.max()}")
     plt.scatter(out_feat_embed[:,0], out_feat_embed[:,1], c=y_kmeans_tse, marker='.', cmap='tab20c')

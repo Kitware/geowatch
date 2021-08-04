@@ -78,8 +78,8 @@ class DeepGlobeDataset(object):
         self.possible_combinations = [list(i) for i in itertools.product([0, 1], repeat=len(self.mask_mapping.keys()))]
         # possible_combinations = map(lambda x: x/len(self.mask_mapping.keys()), possible_combinations)
         for index, item in enumerate(self.possible_combinations):
-            num_labels = len(np.argwhere(np.array(item)==1))
-            if num_labels==0:
+            num_labels = len(np.argwhere(np.array(item) == 1))
+            if num_labels == 0:
                 continue
             self.possible_combinations[index] = np.divide(self.possible_combinations[index], num_labels)
         
@@ -102,13 +102,13 @@ class DeepGlobeDataset(object):
         
         
         new_mask = FT.to_tensor(mask) * 255
-        total_pixels = new_mask.shape[2]*new_mask.shape[1]
+        total_pixels = new_mask.shape[2] *new_mask.shape[1]
         label_inds, label_counts = torch.unique(new_mask, return_counts=True)
         label_inds = label_inds.long()
-        distribution = label_counts/total_pixels
+        distribution = label_counts /total_pixels
         
         for label_ind, label_count in zip(label_inds, label_counts):
-            labels[0, label_ind] = label_count/total_pixels
+            labels[0, label_ind] = label_count /total_pixels
         
         distances = distance.cdist(self.possible_combinations, labels, 'cityblock')
         label = np.argmin(distances).item()

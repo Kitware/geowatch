@@ -79,7 +79,7 @@ def normalize_image(image: np.array) -> np.array:
     image_min = np.min(image)
     image_max = np.max(image)
     # print(f"image min: {image_min}, image_max: {image_max}")
-    return (image - image_min)/(image_max - image_min + 0.00000000001)
+    return (image - image_min) /(image_max - image_min + 0.00000000001)
 
 def normalize_image_255(image: np.array) -> np.array:
     """normalizes image between 0-255
@@ -97,7 +97,7 @@ def normalize_image_255(image: np.array) -> np.array:
     image_min = np.min(image)
     image_max = np.max(image)
     # print(f"image min: {image_min}, image_max: {image_max}")
-    return (image - image_min)/(255-image_min + 0.00000000001)
+    return (image - image_min) /(255 -image_min + 0.00000000001)
 
 def normalize_dm(image: np.array, confidence_score: float=0) -> np.array:
     """normalize distance map
@@ -117,7 +117,7 @@ def normalize_dm(image: np.array, confidence_score: float=0) -> np.array:
     image_min = np.min(image)
     image_max = np.max(image)
     # print(f"image min: {image_min}, image_max: {image_max}")
-    normalized = (image - image_min)/(image_max-image_min+0.00000000001)
+    normalized = (image - image_min) /(image_max -image_min +0.00000000001)
     normalized += confidence_score
     return normalized
 
@@ -128,28 +128,28 @@ def max_norm(p, version='torch', e=1e-5):
 			p = F.relu(p)
 			max_v = torch.max(p.view(C,-1),dim=-1)[0].view(C,1,1)
 			min_v = torch.min(p.view(C,-1),dim=-1)[0].view(C,1,1)
-			p = F.relu(p-min_v-e)/(max_v-min_v+e)
+			p = F.relu(p -min_v -e) /(max_v -min_v +e)
 		elif p.dim() == 4:
 			N, C, H, W = p.size()
 			p = F.relu(p)
 			max_v = torch.max(p.view(N,C,-1),dim=-1)[0].view(N,C,1,1)
 			min_v = torch.min(p.view(N,C,-1),dim=-1)[0].view(N,C,1,1)
-			p = F.relu(p-min_v-e)/(max_v-min_v+e)
+			p = F.relu(p -min_v -e) /(max_v -min_v +e)
 	elif version is 'numpy' or version is 'np':
 		if p.ndim == 3:
 			C, H, W = p.shape
-			p[p<0] = 0
+			p[p < 0] = 0
 			max_v = np.max(p,(1,2),keepdims=True)
 			min_v = np.min(p,(1,2),keepdims=True)
-			p[p<min_v+e] = 0
-			p = (p-min_v-e)/(max_v+e)
+			p[p < min_v +e] = 0
+			p = (p -min_v -e) /(max_v +e)
 		elif p.ndim == 4:
 			N, C, H, W = p.shape
-			p[p<0] = 0
+			p[p < 0] = 0
 			max_v = np.max(p,(2,3),keepdims=True)
 			min_v = np.min(p,(2,3),keepdims=True)
-			p[p<min_v+e] = 0
-			p = (p-min_v-e)/(max_v+e)
+			p[p < min_v +e] = 0
+			p = (p -min_v -e) /(max_v +e)
 	return p
 
 def batch_crf_inference(img: torch.Tensor, probs: torch.Tensor, t:int =1, scale_factor: int=1, labels:int=21) -> torch.Tensor:
@@ -220,8 +220,8 @@ def crf_inference(img: np.array, probs: np.array, t:int =10, scale_factor:int =1
     unary = np.ascontiguousarray(unary)
     
     d.setUnaryEnergy(unary)
-    d.addPairwiseGaussian(sxy=3/scale_factor, compat=3)
-    d.addPairwiseBilateral(sxy=80/scale_factor, srgb=13, rgbim=np.copy(img), compat=10)
+    d.addPairwiseGaussian(sxy=3 /scale_factor, compat=3)
+    d.addPairwiseBilateral(sxy=80 /scale_factor, srgb=13, rgbim=np.copy(img), compat=10)
     Q = d.inference(t)
 
     return np.array(Q).reshape((n_labels, h, w))
@@ -256,7 +256,7 @@ def mat_to_csv(mat_path: str, save_to: str) -> None:
     import scipy.io
     import pandas as pd
     mat = scipy.io.loadmat(mat_path)
-    mat = {k:v for k,v in mat.items() if k[0]!='_'}
+    mat = {k:v for k,v in mat.items() if k[0] != '_'}
     data = pd.DataFrame({k:pd.Series(v[0]) for k,v in mat.items()})
     data.to_csv(save_to)
 
@@ -295,13 +295,13 @@ def dictionary_contents(path: str, types: list, recursive: bool =False) -> list:
     """
     files = []
     if recursive:
-        path = path+"/**/*"
+        path = path +"/**/*"
     for type in types:
         if recursive:
-            for x in glob(path+type,recursive=True):
+            for x in glob(path +type,recursive=True):
                 files.append(os.path.join(path,x))
         else:
-            for x in glob(path+type):
+            for x in glob(path +type):
                 files.append(os.path.join(path,x))
     return files
 
@@ -342,13 +342,13 @@ def load_pickle(path: str) -> object:
 def load_config_as_dict(path_to_config):
     with open(path_to_config,'r') as stream:
         try:
-            config=yaml.safe_load(stream)
+            config = yaml.safe_load(stream)
         except yaml.YAMLError as exc:
             print(exc)
     return config
 
 def config_parser(path_to_config, experiment_type):
-    if experiment_type.lower()=="training":
+    if experiment_type.lower() == "training":
         config = yaml.safe_load(open(path_to_config))
         config['data']['height'], config['data']['width'] = parse('{}x{}',config['data']['image_size'])
         config['data']['height'], config['data']['width'] = int(config['data']['height']),int(config['data']['width'])

@@ -43,7 +43,7 @@ class SequenceDataset(torch.utils.data.Dataset):
 
         tr = self.sample_grid['positives'][index]
         
-        negative_index = random.randint(0,self.__len__()-2)
+        negative_index = random.randint(0,self.__len__() -2)
         # print(index)
         # print(negative_index)
         tr_negative = self.sample_grid['positives'][negative_index]

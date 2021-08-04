@@ -125,8 +125,8 @@ mask_mapping = {0: "unknown",    # 0, unknown
 
 possible_combinations = [list(i) for i in itertools.product([0, 1], repeat=len(mask_mapping.keys()))]
 for index, item in enumerate(possible_combinations):
-    num_labels = len(np.argwhere(np.array(item)==1))
-    if num_labels==0:
+    num_labels = len(np.argwhere(np.array(item) == 1))
+    if num_labels == 0:
         continue
     possible_combinations[index] = np.divide(possible_combinations[index], num_labels)
 
@@ -137,9 +137,9 @@ verbose_labels = {}
 for index, item in enumerate(possible_combinations):
     verbose_label = ""
     for label_index, label in enumerate(item):
-        if label!=0:
+        if label != 0:
             verbose_label += f"{mask_mapping[label_index]}: {label}, "
-    verbose_labels[index]=verbose_label
+    verbose_labels[index] = verbose_label
 
 # print(verbose_labels)
     
