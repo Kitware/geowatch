@@ -31,6 +31,7 @@ def sentinel2_grid():
         >>> # Demo how to convert each polygon into its UTM zone
         >>> import kwimage
         >>> from watch.gis import spatial_reference
+        >>> import pyproj
         >>> utm_codes = []
         >>> # Only take some of the tiles for test speed
         >>> s2_tiles = s2_tiles.iloc[0:100]
