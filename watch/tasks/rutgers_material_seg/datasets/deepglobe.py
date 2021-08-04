@@ -1,5 +1,4 @@
 from PIL import Image
-import material_seg.utils.utils as utils
 import torchvision.transforms.functional as FT
 import torch
 import numpy as np
@@ -9,7 +8,10 @@ import random
 # torch.backends.cudnn.enabled = True
 # torch.backends.cudnn.deterministic = True
 import itertools
-torch.set_printoptions(precision=6, sci_mode=False)
+from watch.tasks.rutgers_material_seg.utils import utils
+
+# if 1:
+#     torch.set_printoptions(precision=6, sci_mode=False)
 
 IMG_EXTENSIONS = ['*.png', '*.jpeg', '*.jpg', '*.npy']
 

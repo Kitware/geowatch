@@ -209,13 +209,13 @@ def decollate_batch(batch):
     return decollated
 
 
-def __notes__():
-    """
-        >>> #
-        >>> for img in dset.imgs.values():
-        >>>     chan = img.get('channels', None)
-        >>>     print('img_chan = {!r}'.format(chan))
-        >>>     for aux in img.get('auxiliary', []):
-        >>>         chan = aux.get('channels', None)
-        >>>         print('aux_chan = {!r}'.format(chan))
-    """
+# def __notes__():
+#     """
+#         >>> #
+#         >>> for img in dset.imgs.values():
+#         >>>     chan = img.get('channels', None)
+#         >>>     print('img_chan = {!r}'.format(chan))
+#         >>>     for aux in img.get('auxiliary', []):
+#         >>>         chan = aux.get('channels', None)
+#         >>>         print('aux_chan = {!r}'.format(chan))
+#     """
