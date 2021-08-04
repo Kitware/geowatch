@@ -140,7 +140,7 @@ class CannyFilter(nn.Module):
         grad_x, grad_y = grad_x / C, grad_y / C
         grad_magnitude = (grad_x ** 2 + grad_y ** 2) ** 0.5
         grad_orientation = torch.atan(grad_y / grad_x)
-        grad_orientation = grad_orientation * (360 / np.pi) + 180 # convert to degree
+        grad_orientation = grad_orientation * (360 / np.pi) + 180  # convert to degree
         grad_orientation = torch.round(grad_orientation / 45) * 45  # keep a split by 45
 
         # thin edges

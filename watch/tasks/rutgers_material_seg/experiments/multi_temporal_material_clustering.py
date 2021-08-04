@@ -20,7 +20,7 @@ sampler = ndsampler.CocoSampler(dset)
 
 # # print(sampler)
 number_of_timestamps, h, w = 5, 128, 128
-window_dims = (number_of_timestamps, h, w) #[t,h,w]
+window_dims = (number_of_timestamps, h, w)  # [t,h,w]
 input_dims = (h, w)
 
 # # channels = 'r|g|b|gray|wv1'
@@ -36,13 +36,13 @@ kmeans_tsne = KMeans(n_clusters=k, random_state=0)
 
 for batch_index, batch in enumerate(loader):
     # pdb.set_trace()
-    image_data = batch['inputs']['im'].data[0] # [b,c,t,h,w]
+    image_data = batch['inputs']['im'].data[0]  # [b,c,t,h,w]
     print(f"image_data min: {image_data.min()}, image_data max: {image_data.max()}")
     b, c, t, h, w = image_data.shape
-    mask_data = batch['label']['class_masks'].data[0] #len(mask_data) = b
+    mask_data = batch['label']['class_masks'].data[0]  # len(mask_data) = b
     mask_data = torch.stack(mask_data)
 
-    image_show = np.array(image_data).transpose(0, 2, 3, 4, 1)#/50000 # visualize 0 indexed in batch
+    image_show = np.array(image_data).transpose(0, 2, 3, 4, 1)  # /50000 # visualize 0 indexed in batch
     image_show = image_show / image_show.max()
     print(f"image min: {image_show.min()}, image max: {image_show.max()}")
     # print(image_show.shape)
@@ -53,9 +53,9 @@ for batch_index, batch in enumerate(loader):
 
     image_data = image_data.view(b, c * t, h * w)
     # print(image_data.shape)
-    image_data = torch.transpose(image_data,1,2)
+    image_data = torch.transpose(image_data, 1, 2)
     # print(image_data.shape)
-    image_data = torch.flatten(image_data,start_dim=0, end_dim=1)
+    image_data = torch.flatten(image_data, start_dim=0, end_dim=1)
     # print(image_data.shape)
     # image_data = torch.transpose(image_data,0,1)
     # print(image_data.shape)
@@ -70,28 +70,28 @@ for batch_index, batch in enumerate(loader):
     y_kmeans_tse = kmeans_tsne.predict(out_feat_embed)
     # print(cluster_centers)
     # print(cluster_labels)
-    prediction = cluster_labels.reshape(h,w)
-    prediction_no_bg = np.ma.masked_where(prediction == 0,prediction)
+    prediction = cluster_labels.reshape(h, w)
+    prediction_no_bg = np.ma.masked_where(prediction == 0, prediction)
     # print(f"image_data: {image_data.shape}, mask: {mask_data.shape}")
     # print(f"image min: {image_show.min()}, image max: {image_show.max()}")
-    plt.scatter(out_feat_embed[:,0], out_feat_embed[:,1], c=y_kmeans_tse, marker='.', cmap='tab20c')
+    plt.scatter(out_feat_embed[:, 0], out_feat_embed[:, 1], c=y_kmeans_tse, marker='.', cmap='tab20c')
     plt.scatter(kmeans_tsne.cluster_centers_[:, 0], kmeans_tsne.cluster_centers_[:, 1], c='black', s=200, alpha=0.5);
     plt.show()
 
-    figure = plt.figure(figsize=(15,15))
-    ax1 = figure.add_subplot(1,5,1)
-    ax2 = figure.add_subplot(1,5,2)
-    ax3 = figure.add_subplot(1,5,3)
-    ax4 = figure.add_subplot(1,5,4)
-    ax5 = figure.add_subplot(1,5,5)
+    figure = plt.figure(figsize=(15, 15))
+    ax1 = figure.add_subplot(1, 5, 1)
+    ax2 = figure.add_subplot(1, 5, 2)
+    ax3 = figure.add_subplot(1, 5, 3)
+    ax4 = figure.add_subplot(1, 5, 4)
+    ax5 = figure.add_subplot(1, 5, 5)
     # ax6 = figure.add_subplot(2,4,2)
     # ax7 = figure.add_subplot(2,4,1)
     # ax8 = figure.add_subplot(2,4,2)
 
-    ax1.imshow(image_show[0,0,:,:,:3])
-    ax2.imshow(image_show[0,1,:,:,:3])
-    ax3.imshow(image_show[0,2,:,:,:3])
-    ax4.imshow(image_show[0,3,:,:,:3])
+    ax1.imshow(image_show[0, 0, :, :, :3])
+    ax2.imshow(image_show[0, 1, :, :, :3])
+    ax3.imshow(image_show[0, 2, :, :, :3])
+    ax4.imshow(image_show[0, 3, :, :, :3])
     # ax1.imshow(image_show[0,0,:,:,:])
     ax5.imshow(prediction, vmin=0, vmax=k, cmap='Set1', interpolation='nearest')
     # ax3.imshow(image_show[0,0,:,:,:])

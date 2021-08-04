@@ -101,7 +101,7 @@ class SequenceDataset(torch.utils.data.Dataset):
             # ax1.imshow(frame[:,:,:3])
             # ax2.imshow(frame_mask)
             # plt.show()
-            
+
             frame_masks.append(frame_mask)
             frame_ims.append(frame)
 

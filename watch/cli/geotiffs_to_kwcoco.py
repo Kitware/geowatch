@@ -64,6 +64,7 @@ def filter_band_files(fpaths, band_list, with_tci=True):
         band_names.add('TCI')
     # use endswith() instead of in
     # to avoid false positives, eg from a tile code in the filename
+
     def is_band_file(path):
         return any(splitext(basename(path))[0].endswith(b) for b in band_names)
     return list(filter(is_band_file, fpaths))

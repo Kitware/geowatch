@@ -56,7 +56,7 @@ def get_gcp_for_registration(master_ds,
         print("Slave and master image have different size")
         return res
     geo_slave = slave_ds.GetGeoTransform()
-    #print(geo_slave)
+    # print(geo_slave)
     total_start_time = time.time()
     if (pfname_out != ''):
         f_out = open(pfname_out, 'w')
@@ -90,7 +90,7 @@ def get_gcp_for_registration(master_ds,
             #print( "Window (%s,%s) processed in %.5f sec" % (i,j,end_time-start_time))
             #          #print("\tDetected pixel offset (y, x) and error: (%.3f, %.3f) %.5f" %(offset_pixels[0], offset_pixels[1], error))
             #          #print "\tDetected pixel offset (y, x) and (error, CCmax_norm): (%.3f, %.3f) (%.5f, %.5f)" %(offset_pixels[0], offset_pixels[1], error, 1-error)
-            #this is the center of window in slave coordinates
+            # this is the center of window in slave coordinates
             X_geo_slave = geo_slave[0] + geo_slave[1] * j
             Y_geo_slave = geo_slave[3] + geo_slave[5] * i
             # adjusting due to offset
@@ -261,7 +261,7 @@ def s2_coregister(granuledirs, output_folder, baseline_scene):
                 s2_slave_array,
                 w_size=64,
                 w_step=64)  # production mode
-            #res_coregistration = get_gcp_for_registration(s2_master_ds, s2_slave_ds, s2_master_array, s2_slave_array, w_size=64, w_step=512) # debug mode
+            # res_coregistration = get_gcp_for_registration(s2_master_ds, s2_slave_ds, s2_master_array, s2_slave_array, w_size=64, w_step=512) # debug mode
 
             if (len(res_coregistration) > 0):
                 fname_log = fname_slave[:-4] + '_coreg.log'
@@ -306,7 +306,7 @@ def s2_coregister(granuledirs, output_folder, baseline_scene):
                             % (array[0], array[1], array[4], array[5],
                                array[6], error_threshold))
                     else:
-                        #print "Point (%s,%s) with error %.5f did not pass threshold %.5f" % (array[0],array[1],array[4], error_threshold)
+                        # print "Point (%s,%s) with error %.5f did not pass threshold %.5f" % (array[0],array[1],array[4], error_threshold)
                         f_log.write(
                             "Point (%s,%s) with error %.5f and shift (%.5f, %.5f) NOT PASSED threshold %.5f\n"
                             % (array[0], array[1], array[4], array[5],
@@ -318,7 +318,7 @@ def s2_coregister(granuledirs, output_folder, baseline_scene):
 
                 # now transforming files
                 # TODO: this is easy to parallize
-                for b in S2_BANDS:  #['B01', 'B04', 'B11']:
+                for b in S2_BANDS:  # ['B01', 'B04', 'B11']:
                     fname_band = os.path.basename(x.replace(base_band, b))
                     pfname_band = os.path.join(path_data, fname_band)
 

@@ -19,7 +19,7 @@ def main(args):
         sample_shape=(2, args.chip_size, args.chip_size),
         channels="<all>",
     )
-    #full_train_dataset.compute_stats(10)
+    # full_train_dataset.compute_stats(10)
 
     # split into train/valid
     num_examples = len(full_train_dataset)

@@ -379,8 +379,8 @@ def fit_affine_matrix(xy1_man, xy2_man):
         x2 = x2_mn[ix]
         y1 = y1_mn[ix]
         y2 = y2_mn[ix]
-        Mx6[ix * 2]     = (x1, y1,  0,  0,  1,  0)
-        Mx6[ix * 2 + 1] = ( 0,  0, x1, y1,  0,  1)
+        Mx6[ix * 2]     = (x1, y1, 0, 0, 1, 0)
+        Mx6[ix * 2 + 1] = ( 0, 0, x1, y1, 0, 1)
         b[ix * 2] = x2
         b[ix * 2 + 1] = y2
 
@@ -410,7 +410,7 @@ def fit_affine_matrix(xy1_man, xy2_man):
     A = np.array([
         [a[0], a[1], a[4]],
         [a[2], a[3], a[5]],
-        [   0,    0,    1],
+        [   0, 0, 1],
     ])
     return A
 

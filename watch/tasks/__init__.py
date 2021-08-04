@@ -56,5 +56,6 @@ __getattr__ = lazy_import(
 def __dir__():
     return __all__
 
+
 __all__ = ['fusion', 'invariants', 'landcover', 'materials', 'reflectance',
            'semantics', 'template', 'uky_temporal_prediction']

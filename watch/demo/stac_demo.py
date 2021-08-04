@@ -116,7 +116,7 @@ def demo():
                 "href": gpath,
                 "type": "application/vnd.nitf",
                 "roles": ["data"]
-            }, 
+            },
             "testimg2": {
                 "href": gpath,
                 "type": "application/vnd.nitf",
@@ -131,6 +131,7 @@ def demo():
         with open(os.path.join(dpath, "testitem2.json"), 'w') as f:
             json.dump(item2, f)
     return cat_path
+
 
 if __name__ == '__main__':
     print(demo())

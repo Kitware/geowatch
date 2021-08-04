@@ -59,4 +59,5 @@ __getattr__ = lazy_import(
 def __dir__():
     return __all__
 
+
 __all__ = ['digital_globe', 'elevation', 'geotiff', 'spatial_reference']

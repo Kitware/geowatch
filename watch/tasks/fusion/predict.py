@@ -88,23 +88,23 @@ def main(args):
             )
         space_time_slice = (time_slice,) + meta["space_slice"]
 
-        #print(
+        # print(
         #    space_time_slice,
         #    result_canvases[meta["vidid"]][space_time_slice].shape,
         #    preds.shape,
-        #)
+        # )
 
         result_canvases[meta["vidid"]][space_time_slice] += preds
         result_counts[meta["vidid"]][space_time_slice] += 1
         target_canvases[meta["vidid"]][space_time_slice] = changes
 
-    #print({
+    # print({
     #    key: {
     #        idx: np.unique(layer, return_counts=True)
     #        for idx, layer in enumerate(canvas)
     #        }
     #    for key, canvas in target_canvases.items()
-    #})
+    # })
 
     results = {
         key: canvas / result_counts[key]

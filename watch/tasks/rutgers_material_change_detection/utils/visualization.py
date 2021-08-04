@@ -1,7 +1,7 @@
 import sys
 import os
 current_path = os.getcwd().split("/")
-import matplotlib; 
+import matplotlib;
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
@@ -47,14 +47,14 @@ def rand_cmap(nlabels, type='bright', first_color_black=True, last_color_black=F
             randHSVcolors = [(np.random.uniform(low=0.0, high=1),
                             np.random.uniform(low=0.4, high=1),
                             np.random.uniform(low=0.9, high=1)) for i in range(nlabels)]
-        
+
         # Convert HSV list to RGB
         randRGBcolors = []
         for HSVcolor in randHSVcolors:
-            randRGBcolors.append((*colorsys.hsv_to_rgb(HSVcolor[0], HSVcolor[1], HSVcolor[2]),fg_alpha))
+            randRGBcolors.append((*colorsys.hsv_to_rgb(HSVcolor[0], HSVcolor[1], HSVcolor[2]), fg_alpha))
         # randRGBcolors[17] = (*matplotlib.colors.to_rgb('magenta'),fg_alpha)
         if first_color_black:
-            randRGBcolors[0] = (0,0,0, bg_alpha)
+            randRGBcolors[0] = (0, 0, 0, bg_alpha)
 
         if last_color_black:
             randRGBcolors[-1] = (0, 0, 0, bg_alpha)
@@ -89,4 +89,3 @@ def rand_cmap(nlabels, type='bright', first_color_black=True, last_color_black=F
                                    boundaries=bounds, format='%1i', orientation=u'horizontal')
 
     return random_colormap
-    

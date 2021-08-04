@@ -48,6 +48,7 @@ def main(data_dir):
         for item in val_building_masks:
             file.write('%s\n' % item)
 
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()

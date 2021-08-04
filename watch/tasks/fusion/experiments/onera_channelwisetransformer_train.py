@@ -1,10 +1,10 @@
 model_names = [
-    #"smt_it_stm_n12",
-    #"smt_it_hwtm_n12",
-    #"smt_it_stm_t12",
-    #"smt_it_hwtm_t12",
+    # "smt_it_stm_n12",
+    # "smt_it_hwtm_n12",
+    # "smt_it_stm_t12",
+    # "smt_it_hwtm_t12",
     "smt_it_stm_s12",
-    #"smt_it_hwtm_s12",
+    # "smt_it_hwtm_s12",
 ]
 
 methods = [
@@ -33,9 +33,9 @@ def main():
     import itertools as it
     from types import SimpleNamespace
     from . import fit
-    
+
     for method, model_name in it.product(methods, model_names):
-    
+
         defaults = dict(
             dataset="OneraCD_2018",
             method=method,

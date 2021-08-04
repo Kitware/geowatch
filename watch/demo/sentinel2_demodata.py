@@ -61,7 +61,7 @@ def grab_sentinel2_product(index=0, overwrite=False):
         # Download the scene
         assert fels.get_sentinel2_image(url,
                                         scene_dpath,
-                                        #overwrite=was_failed_download,
+                                        # overwrite=was_failed_download,
                                         overwrite=True,  # makes this really slow
                                         reject_old=True)
 

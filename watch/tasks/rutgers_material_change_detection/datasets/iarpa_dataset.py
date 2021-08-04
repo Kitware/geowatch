@@ -39,7 +39,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         return len(self.sample_grid['positives'])
 
     def __getitem__(self, index):
-        
+
         tr = self.sample_grid['positives'][index]
 
         if self.channels:

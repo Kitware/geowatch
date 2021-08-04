@@ -56,4 +56,5 @@ __getattr__ = lazy_import(
 def __dir__():
     return __all__
 
+
 __all__ = ['fit', 'predict']

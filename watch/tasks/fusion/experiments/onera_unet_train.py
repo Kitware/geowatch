@@ -67,5 +67,6 @@ def main():
         args.default_root_dir = pathlib.Path(config['workdir']) / key
         fit.main(args)
 
+
 if __name__ == "__main__":
     main()

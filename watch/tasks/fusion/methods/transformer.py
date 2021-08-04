@@ -48,7 +48,7 @@ class TransformerChangeDetector(pl.LightningModule):
         ] + [
             Rearrange("s b f -> b s f"),
             nn.Linear(embedding_size, embedding_size),
-            #nn.Dropout(dropout),
+            # nn.Dropout(dropout),
             nn.GELU(),
             nn.Linear(embedding_size, embedding_size),
             Rearrange("b s f -> s b f"),

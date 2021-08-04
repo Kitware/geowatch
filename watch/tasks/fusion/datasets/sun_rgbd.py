@@ -11,56 +11,56 @@ from torchvision import transforms
 from .. import utils
 
 class SUN_RGBD_Dataset(data.Dataset):
-    def __init__(self, 
-                 data_root, 
-                 split="train", 
-                 augment_step=None, 
+    def __init__(self,
+                 data_root,
+                 split="train",
+                 augment_step=None,
                  transform_step=None,
                 ):
         self.data_root = data_root
         self.split = split
         self.augment_step = augment_step
         self.transform_step = transform_step
-        
+
         if split == "train":
             self.size = 5285
         elif split == "test":
             self.size = 5050
         else:
             raise "Unknown split"
-            
+
     def __len__(self):
         return self.size
-    
+
     def __getitem__(self, idx):
-        idx += 1 # dataset is one indexed, blergh
-        
+        idx += 1  # dataset is one indexed, blergh
+
         image = np.array(Image.open(self.data_root / self.split / f"images/img-{idx:06d}.jpg"))
         depth = np.array(Image.open(self.data_root / self.split / f"depth/depth-{idx:06d}.png"))
         labels = np.array(Image.open(self.data_root / self.split / f"labels/img13labels-{idx:06d}.png")).astype("int")
-        
+
         if self.augment_step:
             augmented = self.augment_step(image=image, depth=depth, mask=labels)
             image = augmented["image"]
             depth = augmented["depth"]
             labels = augmented["mask"]
-        
-        inputs = np.concatenate([image, depth[...,None]], axis=-1)
-        
+
+        inputs = np.concatenate([image, depth[..., None]], axis=-1)
+
         if self.transform_step:
             inputs = self.transform_step(inputs)
-            
+
         labels -= 1
         labels[labels == -1] = -100
-            
+
         return {
             "images": inputs,
             "labels": labels,
         }
-    
+
 class SUN_RGBD(pl.LightningDataModule):
     def __init__(
-        self, 
+        self,
         data_root,
         valid_pct=0.1,
         batch_size=4,
@@ -69,7 +69,7 @@ class SUN_RGBD(pl.LightningDataModule):
         tfms_train_channel_size=1000,
     ):
         super().__init__()
-        
+
         self.data_root = data_root
         self.valid_pct = valid_pct
         self.batch_size = batch_size
@@ -84,9 +84,9 @@ class SUN_RGBD(pl.LightningDataModule):
         self.test_tfms = transforms.Compose([
             self.preprocessing_step,
         ])
-        
+
     def setup(self, stage):
-        
+
         if stage == "fit" or stage is None:
             aug = A.Compose([
                 #     A.RandomCrop(256, 256),
@@ -95,9 +95,9 @@ class SUN_RGBD(pl.LightningDataModule):
                     A.ColorJitter(),
                     A.HorizontalFlip(),
                 ], additional_targets={"depth": "mask"})
-            
+
             train_val_ds = SUN_RGBD_Dataset(
-                pathlib.Path(self.data_root), 
+                pathlib.Path(self.data_root),
                 split="train",
                 augment_step=aug,
                 transform_step=self.train_tfms,
@@ -111,11 +111,11 @@ class SUN_RGBD(pl.LightningDataModule):
                 train_val_ds,
                 [num_train, num_valid],
             )
-        
+
         if stage == "test" or stage is None:
-            
+
             self.test_dataset = SUN_RGBD_Dataset(
-                pathlib.Path(self.data_root), 
+                pathlib.Path(self.data_root),
                 split="test",
                 transform_step=self.test_tfms,
             )

@@ -36,7 +36,7 @@ class TemplateFitConfig(scfg.Config):
     }
 
 
-#### A Netharn implementation of the training logic is optional.
+# A Netharn implementation of the training logic is optional.
 import netharn as nh  # NOQA
 
 

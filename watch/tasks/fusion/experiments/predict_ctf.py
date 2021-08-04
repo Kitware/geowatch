@@ -34,8 +34,8 @@ dataset_channel_sets = {
 }
 
 dataset_keys = [
-    "onera", 
-    #"drop0_s2",
+    "onera",
+    # "drop0_s2",
 ]
 
 for dataset_name in dataset_keys:

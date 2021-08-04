@@ -14,26 +14,26 @@ import random
 
 
 def bandwise_norm(image, channel_first=True):
-    
+
     if channel_first:
         bs, cs, h, w = image.shape
         for b in range(bs):
             for c in range(cs):
-                single_channel = image[b,c,:,:]
+                single_channel = image[b, c, :, :]
                 max_value = single_channel.max()
                 min_value = single_channel.min()
                 single_channel_normalized = (single_channel - min_value) / (max_value - min_value)
-                image[b,c,:,:] = single_channel_normalized
+                image[b, c, :, :] = single_channel_normalized
     else:
         bs, h, w, cs = image.shape
         raise NotImplementedError
 
     return image
-    
+
 
 def otsu(image, num=400, get_bcm=False):
     c, h, w = image.shape
-    image = image.view(1,-1)
+    image = image.view(1, -1)
     # print(image.shape)
     max_value = image.max()
     min_value = image.min()
@@ -61,35 +61,35 @@ def otsu(image, num=400, get_bcm=False):
         value += step_value
     print(f"best: {best_threshold} max value: {max_value}")
     return best_threshold
-    
+
 
 def stad_image(image, channel_first=True, get_params=False, patches=False):
     if channel_first:
         if patches:
             bs, ps, c, h, w = image.shape
-            image = image.reshape(bs,ps,c,h * w)  # (bs, ps, c, h*w)
-            mean = image.mean(dim=3, keepdims=True) # (bs, ps, c, 1)
-            center = image - mean # (bs, ps, c, h*w)
-            var = torch.var(center, dim=3, keepdims=True) # (bs, ps, c, h*w])
+            image = image.reshape(bs, ps, c, h * w)  # (bs, ps, c, h*w)
+            mean = image.mean(dim=3, keepdims=True)  # (bs, ps, c, 1)
+            center = image - mean  # (bs, ps, c, h*w)
+            var = torch.var(center, dim=3, keepdims=True)  # (bs, ps, c, h*w])
         else:
             bs, c, h, w = image.shape
-            image = image.reshape(bs,c,h * w)  # (bs, c, h*w)
-            mean = image.mean(dim=2, keepdims=True) # (bs, c, 1)
-            center = image - mean # (bs, c, h*w)
-            var = torch.var(center, dim=2, keepdims=True) # (bs, c, h*w])
+            image = image.reshape(bs, c, h * w)  # (bs, c, h*w)
+            mean = image.mean(dim=2, keepdims=True)  # (bs, c, 1)
+            center = image - mean  # (bs, c, h*w)
+            var = torch.var(center, dim=2, keepdims=True)  # (bs, c, h*w])
         # var = torch.sum(torch.pow(center,2), axis=2, keepdims=True) / (h * w) # (bs, c, 1)
         std = torch.sqrt(var)
-        nm_image = center / std # (bs, c, h*w)
+        nm_image = center / std  # (bs, c, h*w)
         if patches:
             nm_image = nm_image.view(bs, ps, c, h, w)
         else:
             nm_image = nm_image.view(bs, c, h, w)
-    
+
     if get_params:
         return nm_image, mean, std
     else:
         return nm_image
-    
+
 
 def denorm(image: torch.Tensor, mean: list = [0.485, 0.456, 0.406], std: list = [0.229, 0.224, 0.225]) -> torch.Tensor:
     """denorm shifted image

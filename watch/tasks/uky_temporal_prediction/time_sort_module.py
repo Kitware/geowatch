@@ -36,7 +36,7 @@ class time_sort(pl.LightningModule):
     def head(self, in_channels):
         return nn.Sequential(
             #nn.Conv2d(in_channels, in_channels // 2, 7, bias=False, padding=3),
-            #nn.ReLU(),
+            # nn.ReLU(),
             #nn.BatchNorm2d(in_channels // 2),
             nn.Conv2d(in_channels, 1, 1, bias=False, padding=0),
         )

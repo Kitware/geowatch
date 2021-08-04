@@ -108,5 +108,6 @@ def main():
     valid_path = args.orig_kwcoco_path.parent / ("valid_" + args.orig_kwcoco_path.name)
     valid_ds.dump(str(valid_path.expanduser()))
 
+
 if __name__ == '__main__':
     main()

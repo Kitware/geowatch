@@ -17,10 +17,10 @@ def get_ap_score(y_true, y_scores):
     Returns:
         sum of batch average precision
     """
-    scores = average_precision_score(y_true = y_true, y_score = y_scores, average='samples')
+    scores = average_precision_score(y_true=y_true, y_score=y_scores, average='samples')
     return scores
 
-def val_mae(pred_counts,gt_counts):
+def val_mae(pred_counts, gt_counts):
     n = len(gt_counts)
     true_count = np.ones(n) * (-1)
     pred_count = np.ones(n) * (-1)
@@ -37,7 +37,7 @@ def val_mae(pred_counts,gt_counts):
     return score_dict
 
 
-def mae(pred_counts,gt_counts):
+def mae(pred_counts, gt_counts):
     assert len(pred_counts) == len(gt_counts)
     n = len(gt_counts)
     absolute_e_list = [abs(b_i - a_i) for a_i, b_i in zip(pred_counts, gt_counts)]
@@ -45,7 +45,7 @@ def mae(pred_counts,gt_counts):
     mae = sum_e_list / n
     return mae
 
-def rmse(pred_counts,gt_counts):
+def rmse(pred_counts, gt_counts):
     assert len(pred_counts) == len(gt_counts)
     n = len(gt_counts)
 
@@ -56,7 +56,7 @@ def rmse(pred_counts,gt_counts):
     return rmse
 
 
-def mape(pred_counts,gt_counts):
+def mape(pred_counts, gt_counts):
     assert len(pred_counts) == len(gt_counts)
     n = len(gt_counts)
 

@@ -56,7 +56,7 @@ def stad_img(img, channel_first=True, get_para=False):
         return nm_img, mean, std
     else:
         return nm_img
-    
+
 
 def CVA(img_X, img_Y, stad=False):
     # CVA has not affinity transformation consistency, so it is necessary to normalize multi-temporal images to
@@ -94,4 +94,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

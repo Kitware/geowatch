@@ -88,5 +88,6 @@ def main(args):
     convert(args.out_file, args.catalog, args.ignore_dem)
     return 0
 
+
 if __name__ == '__main__':
     sys.exit(main(sys.argv[1:]))

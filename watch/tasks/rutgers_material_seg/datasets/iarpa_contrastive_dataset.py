@@ -42,12 +42,12 @@ class SequenceDataset(torch.utils.data.Dataset):
     def __getitem__(self, index):
 
         tr = self.sample_grid['positives'][index]
-        
-        negative_index = random.randint(0,self.__len__() - 2)
+
+        negative_index = random.randint(0, self.__len__() - 2)
         # print(index)
         # print(negative_index)
         tr_negative = self.sample_grid['positives'][negative_index]
-        
+
         # tr = self.sample_grid['negatives'][index]
         # print(tr)
         # print(tr_negative)
@@ -62,7 +62,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         # print(f"frame min: {frame.min()}, frame max: {frame.max()}")
         sample = sampler.load_sample(tr, with_annots="segmentation")
         negative_sample = sampler.load_sample(tr_negative, with_annots="segmentation")
-        
+
         # print(sample.keys())
         # print(sample['annots'].keys())
         # print(sample['annots']['rel_ssegs'])
@@ -112,13 +112,13 @@ class SequenceDataset(torch.utils.data.Dataset):
             # ax1.imshow(frame[:,:,:3])
             # ax2.imshow(frame_mask)
             # plt.show()
-            
+
             frame_masks.append(frame_mask)
             frame_ims.append(frame)
 
         negative_raw_frame_list = negative_sample['im']
         negative_raw_det_list = negative_sample['annots']['frame_dets']
-        
+
         negative_frame_ims = []
         negative_frame_masks = []
         for negative_raw_frame, negative_raw_dets in zip(negative_raw_frame_list, negative_raw_det_list):
@@ -144,14 +144,14 @@ class SequenceDataset(torch.utils.data.Dataset):
 
             # ensure channel dim is not squeezed
             frame = kwarray.atleast_nd(frame, 3)
-            
+
             # fig = plt.figure()
             # ax1 = fig.add_subplot(1,2,1)
             # ax2 = fig.add_subplot(1,2,2)
             # ax1.imshow(frame[:,:,:3])
             # ax2.imshow(frame_mask)
             # plt.show()
-            
+
             negative_frame_ims.append(frame)
             negative_frame_masks.append(frame_mask)
 
@@ -161,7 +161,7 @@ class SequenceDataset(torch.utils.data.Dataset):
 
         negative_frame_data = np.concatenate([f[None, ...] for f in negative_frame_ims], axis=0)
         negative_class_masks = np.concatenate([m[None, ...] for m in negative_frame_masks], axis=0)
-        
+
         cthw_im = frame_data.transpose(3, 0, 1, 2)
         negative_cthw_im = negative_frame_data.transpose(3, 0, 1, 2)
 

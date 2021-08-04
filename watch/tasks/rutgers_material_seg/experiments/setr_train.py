@@ -42,8 +42,8 @@ class Trainer(object):
     def __init__(self, model: object, train_loader: torch.utils.data.DataLoader,
                  val_loader: torch.utils.data.DataLoader, epochs: int,
                  optimizer: object, scheduler: object,
-                 test_loader: torch.utils.data.DataLoader =None,
-                 test_with_full_supervision: int =0) -> None:
+                 test_loader: torch.utils.data.DataLoader = None,
+                 test_with_full_supervision: int = 0) -> None:
         """trainer class
 
         Args:
@@ -77,8 +77,8 @@ class Trainer(object):
                                             bg_alpha=config['visualization']['bg_alpha'],
                                             fg_alpha=config['visualization']['fg_alpha'])
 
-    def high_confidence_filter(self, features: torch.Tensor, cutoff_top: float =0.75,
-                               cutoff_low: float =0.2, eps: float =1e-8) -> torch.Tensor:
+    def high_confidence_filter(self, features: torch.Tensor, cutoff_top: float = 0.75,
+                               cutoff_low: float = 0.2, eps: float = 1e-8) -> torch.Tensor:
         """Select high confidence regions to select as predictions
 
         Args:
@@ -90,8 +90,8 @@ class Trainer(object):
         Returns:
             torch.Tensor: pseudo mask generated
         """
-        bs,c,h,w = features.size()
-        features = features.view(bs,c,-1)
+        bs, c, h, w = features.size()
+        features = features.view(bs, c, -1)
 
         # for each class extract the max confidence
         features_max, _ = features.max(-1, keepdim=True)
@@ -102,7 +102,7 @@ class Trainer(object):
         features_max = features_max.max(lowest)
 
         filtered_features = (features > features_max).type_as(features)
-        filtered_features = filtered_features.view(bs,c,h,w)
+        filtered_features = filtered_features.view(bs, c, h, w)
 
         return filtered_features
 
@@ -140,14 +140,14 @@ class Trainer(object):
             bs, c, t, h, w = image1.shape
             image1 = image1.squeeze(2)
 
-            class_to_show = max(0,torch.unique(mask)[-1] - 1)
+            class_to_show = max(0, torch.unique(mask)[-1] - 1)
             image1 = image1.to(device)
             mask = mask.to(device)
             # image_raw = utils.denorm(image1.clone().detach())
             # image_name = outputs['visuals']['image_name'][batch_index_to_show]
 
             # print(image1.shape)
-            output1 = self.model(image1) # torch.Size([B, C+1, H, W])
+            output1 = self.model(image1)  # torch.Size([B, C+1, H, W])
             output1_interpolated = F.interpolate(output1, size=mask.size()[-2:],
                                                  mode="bilinear", align_corners=True)
 
@@ -163,57 +163,57 @@ class Trainer(object):
             self.optimizer.step()
             total_loss_seg += loss.item()
 
-            masks = F.softmax(output1, dim=1)#.detach()
+            masks = F.softmax(output1, dim=1)  # .detach()
             masks = F.interpolate(masks, size=mask.size()[-2:], mode="bilinear", align_corners=True)
             masks = self.high_confidence_filter(masks)
-            pred = masks.max(1)[1].cpu().detach()#.numpy()
+            pred = masks.max(1)[1].cpu().detach()  # .numpy()
             total_loss += loss.item()
 
             if config['visualization']['train_visualizer'] :
                 if (epoch) % config['visualization']['visualize_training_every'] == 0:
                     if (batch_index % iter_visualization) == 0:
-                        figure = plt.figure(figsize=(config['visualization']['fig_size'],config['visualization']['fig_size']))
-                        ax1 = figure.add_subplot(4,3,1)
-                        ax2 = figure.add_subplot(4,3,2)
-                        ax3 = figure.add_subplot(4,3,3)
-                        ax4 = figure.add_subplot(4,3,4)
-                        ax5 = figure.add_subplot(4,3,5)
-                        ax6 = figure.add_subplot(4,3,6)
-                        ax7 = figure.add_subplot(4,3,7)
-                        ax8 = figure.add_subplot(4,3,8)
-                        ax9 = figure.add_subplot(4,3,9)
-                        ax10 = figure.add_subplot(4,3,10)
-                        ax11 = figure.add_subplot(4,3,11)
-                        ax12 = figure.add_subplot(4,3,12)
+                        figure = plt.figure(figsize=(config['visualization']['fig_size'], config['visualization']['fig_size']))
+                        ax1 = figure.add_subplot(4, 3, 1)
+                        ax2 = figure.add_subplot(4, 3, 2)
+                        ax3 = figure.add_subplot(4, 3, 3)
+                        ax4 = figure.add_subplot(4, 3, 4)
+                        ax5 = figure.add_subplot(4, 3, 5)
+                        ax6 = figure.add_subplot(4, 3, 6)
+                        ax7 = figure.add_subplot(4, 3, 7)
+                        ax8 = figure.add_subplot(4, 3, 8)
+                        ax9 = figure.add_subplot(4, 3, 9)
+                        ax10 = figure.add_subplot(4, 3, 10)
+                        ax11 = figure.add_subplot(4, 3, 11)
+                        ax12 = figure.add_subplot(4, 3, 12)
 
                         cmap_gradients = plt.cm.get_cmap('jet')
-                        transformed_image_show = np.transpose(utils.denorm(image1).cpu().detach().numpy()[batch_index_to_show,:,:,:],(1,2,0))
-                        image_show = np.transpose(image1.cpu().detach().numpy()[batch_index_to_show,:,:,:],(1,2,0))
+                        transformed_image_show = np.transpose(utils.denorm(image1).cpu().detach().numpy()[batch_index_to_show, :, :, :], (1, 2, 0))
+                        image_show = np.transpose(image1.cpu().detach().numpy()[batch_index_to_show, :, :, :], (1, 2, 0))
 
                         image_show = (image_show - image_show.min()) / (image_show.max() - image_show.min())
                         # print(f"min: {image_show.min()}, max: {image_show.max()}")
                         # image_show = np.transpose(outputs['visuals']['image'][batch_index_to_show,:,:,:].numpy(),(1,2,0))
-                        logits_show = masks.max(1)[1].cpu().detach().numpy()[batch_index_to_show,:,:]
-                        gt_mask_show = mask.cpu().detach()[batch_index_to_show,:,:].numpy().squeeze()
-                        output1_sample = masks[batch_index_to_show,class_to_show,:,:].cpu().detach().numpy().squeeze()
+                        logits_show = masks.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
+                        gt_mask_show = mask.cpu().detach()[batch_index_to_show, :, :].numpy().squeeze()
+                        output1_sample = masks[batch_index_to_show, class_to_show, :, :].cpu().detach().numpy().squeeze()
                         # gt_mask_show[gt_mask_show==-1] = 0
-                        image_show = image_show[:original_width, :original_height,:]
+                        image_show = image_show[:original_width, :original_height, :]
                         logits_show = logits_show[:original_width, :original_height]
                         gt_mask_show = gt_mask_show[:original_width, :original_height]
                         output1_sample = output1_sample[:original_width, :original_height]
 
                         logits_show[logits_show == -1] = 0
-                        gt_mask_show_no_bg = np.ma.masked_where(gt_mask_show == 0,gt_mask_show)
-                        logits_show_no_bg = np.ma.masked_where(logits_show == 0,logits_show)
+                        gt_mask_show_no_bg = np.ma.masked_where(gt_mask_show == 0, gt_mask_show)
+                        logits_show_no_bg = np.ma.masked_where(logits_show == 0, logits_show)
 
                         classes_in_gt = np.unique(gt_mask_show)
                         ax1.imshow(image_show)
 
                         ax3.imshow(image_show)
-                        ax3.imshow(gt_mask_show_no_bg, cmap=self.cmap, vmin=0, vmax=self.max_label)#, alpha=alphas_final_gt)
+                        ax3.imshow(gt_mask_show_no_bg, cmap=self.cmap, vmin=0, vmax=self.max_label)  # , alpha=alphas_final_gt)
 
                         ax4.imshow(image_show)
-                        ax4.imshow(logits_show, cmap=self.cmap, vmin=0, vmax=self.max_label)#, alpha=alphas_final_gt)
+                        ax4.imshow(logits_show, cmap=self.cmap, vmin=0, vmax=self.max_label)  # , alpha=alphas_final_gt)
 
                         ax5.imshow(output1_sample, cmap=cmap_gradients)
 
@@ -246,7 +246,7 @@ class Trainer(object):
                             figure.suptitle(f"GT labels for classification: {classes_in_gt}, \nunique in predictions: {np.unique(logits_show)}", fontsize=config['visualization']['font_size'])
 
                         # cometml_experiemnt.log_figure(figure_name=f"Training, image name: {image_name}, epoch: {epoch}, classes in gt: {classes_in_gt}, classifier predictions: {labels_predicted_indices}",figure=figure)
-                        cometml_experiemnt.log_figure(figure_name=f"Training, image name: {image_name}",figure=figure)
+                        cometml_experiemnt.log_figure(figure_name=f"Training, image name: {image_name}", figure=figure)
 
                         if config['visualization']['train_imshow']:
                             plt.show()
@@ -261,7 +261,7 @@ class Trainer(object):
             # total_loss_cls += loss_cls.item()
             # total_loss += loss_cls.item()
 
-        ### define new distance map confidence score nomalization
+        # define new distance map confidence score nomalization
 
         # mean_iou, precision, recall = eval_utils.compute_jaccard(preds, targets, num_classes=config['data']['num_classes'])
         # overall_miou = sum(mean_iou)/len(mean_iou)
@@ -299,7 +299,7 @@ class Trainer(object):
         self.model.eval()
         with torch.no_grad():
             pbar = tqdm(enumerate(loader), total=len(loader))
-            for batch_index,batch in pbar:
+            for batch_index, batch in pbar:
                 outputs = batch
                 image1, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0]
                 original_width, original_height = outputs['tr'].data[0][batch_index_to_show]['space_dims']
@@ -312,12 +312,12 @@ class Trainer(object):
                 bs, c, t, h, w = image1.shape
                 image1 = image1.squeeze(2)
 
-                output = self.model(image1)  ## [B,22,150,150]
+                output = self.model(image1)  # [B,22,150,150]
 
-                masks = F.softmax(output, dim=1) ## (B, 22, 300, 300)
+                masks = F.softmax(output, dim=1)  # (B, 22, 300, 300)
                 masks = F.interpolate(masks, size=mask.size()[-2:], mode="bilinear", align_corners=True)
                 masks = self.high_confidence_filter(masks)
-                pred = masks.max(1)[1].cpu().detach()#.numpy()
+                pred = masks.max(1)[1].cpu().detach()  # .numpy()
                 # pred[pred==self.max_label] = 0
                 # print(f"pred before: {pred.shape}")
                 # print(f"mask before: {mask.shape}")
@@ -326,7 +326,7 @@ class Trainer(object):
                 # print(f"pred after: {pred.shape}")
                 # print(f"mask after: {mask.shape}")
                 preds.append(pred)
-                targets.append(mask.cpu())#.numpy())
+                targets.append(mask.cpu())  # .numpy())
 
                 if self.use_crf:
                     crf_probs = utils.batch_crf_inference(image_raw.detach().cpu(),
@@ -342,30 +342,30 @@ class Trainer(object):
                 if config['visualization']['val_visualizer']:
                     if (epoch) % config['visualization']['visualize_val_every'] == 0:
                         if (batch_index % iter_visualization) == 0:
-                            figure = plt.figure(figsize=(30,30))
-                            ax1 = figure.add_subplot(2,3,1)
-                            ax2 = figure.add_subplot(2,3,2)
-                            ax3 = figure.add_subplot(2,3,3)
-                            ax4 = figure.add_subplot(2,3,4)
-                            ax5 = figure.add_subplot(2,3,5)
-                            ax6 = figure.add_subplot(2,3,6)
+                            figure = plt.figure(figsize=(30, 30))
+                            ax1 = figure.add_subplot(2, 3, 1)
+                            ax2 = figure.add_subplot(2, 3, 2)
+                            ax3 = figure.add_subplot(2, 3, 3)
+                            ax4 = figure.add_subplot(2, 3, 4)
+                            ax5 = figure.add_subplot(2, 3, 5)
+                            ax6 = figure.add_subplot(2, 3, 6)
 
                             cmap_gradients = plt.cm.get_cmap('jet')
-                            transformed_image_show = np.transpose(utils.denorm(image1).cpu().detach().numpy()[0,:,:,:],(1,2,0))
-                            image_show = np.transpose(outputs['visuals']['image'][0,:,:,:].numpy(),(1,2,0))
-                            gt_mask_show = mask.cpu().numpy()[0,:,:].squeeze()
+                            transformed_image_show = np.transpose(utils.denorm(image1).cpu().detach().numpy()[0, :, :, :], (1, 2, 0))
+                            image_show = np.transpose(outputs['visuals']['image'][0, :, :, :].numpy(), (1, 2, 0))
+                            gt_mask_show = mask.cpu().numpy()[0, :, :].squeeze()
                             # gt_mask_show[gt_mask_show==self.max_label] = 0
                             image_name = outputs['visuals']['image_name'][batch_index_to_show]
-                            logits_show = pred[0,:,:]
+                            logits_show = pred[0, :, :]
                             classes_predicted = np.unique(logits_show)
                             classes_in_gt = np.unique(gt_mask_show)
 
-                            image_show = image_show[:original_width, :original_height,:]
+                            image_show = image_show[:original_width, :original_height, :]
                             logits_show = logits_show[:original_width, :original_height]
                             gt_mask_show = gt_mask_show[:original_width, :original_height]
 
-                            gt_mask_show_no_bg = np.ma.masked_where(gt_mask_show == 0,gt_mask_show)
-                            logits_show_no_bg = np.ma.masked_where(logits_show == 0,logits_show)
+                            gt_mask_show_no_bg = np.ma.masked_where(gt_mask_show == 0, gt_mask_show)
+                            logits_show_no_bg = np.ma.masked_where(logits_show == 0, logits_show)
                             # pseudo_gt_show_no_bg = np.ma.masked_where(pseudo_gt_show==0,pseudo_gt_show)
 
                             ax1.imshow(image_show)
@@ -376,9 +376,9 @@ class Trainer(object):
                             ax3.imshow(logits_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
                             if self.use_crf:
-                                crf_pred_show = crf_pred[0,:,:].squeeze()
-                                crf_pred_show_no_bg = np.ma.masked_where(crf_pred_show == 0,crf_pred_show)
-                                crf_prob_show = crf_probs[0,class_to_show,:,:].squeeze()
+                                crf_pred_show = crf_pred[0, :, :].squeeze()
+                                crf_pred_show_no_bg = np.ma.masked_where(crf_pred_show == 0, crf_pred_show)
+                                crf_prob_show = crf_probs[0, class_to_show, :, :].squeeze()
                                 ax4.imshow(transformed_image_show)
                                 ax4.imshow(crf_pred_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
@@ -395,9 +395,9 @@ class Trainer(object):
 
                             if config['visualization']['train_imshow']:
                                 plt.show()
-                            cometml_experiemnt.log_figure(figure_name=f"Validation, Image name: {image_name}",figure=figure)
+                            cometml_experiemnt.log_figure(figure_name=f"Validation, Image name: {image_name}", figure=figure)
                             if config['visualization']['titles']:
-                                figure.suptitle(f"GT labels for classification: {classes_in_gt}, classes predicted: {classes_predicted}") #\nP
+                                figure.suptitle(f"GT labels for classification: {classes_in_gt}, classes predicted: {classes_predicted}")  # \nP
                                 ax1.set_title(f"Input Image", fontsize=config['visualization']['font_size'])
                                 ax2.set_title(f"GT Mask", fontsize=config['visualization']['font_size'])
                                 ax3.set_title(f"Prediction", fontsize=config['visualization']['font_size'])
@@ -424,11 +424,11 @@ class Trainer(object):
         print(f"Validation class-wise mIoU value: \n{np.array(mean_iou)} \noverall mIoU: {overall_miou}")
         print("Validation Epoch {0:2d} average loss: {1:1.2f}".format(epoch + 1, total_loss / loader.__len__()))
         cometml_experiemnt.log_metric("Validation mIoU", overall_miou, epoch=epoch + 1)
-        cometml_experiemnt.log_metric("Validation Average Loss",total_loss / loader.__len__(),epoch=epoch + 1)
+        cometml_experiemnt.log_metric("Validation Average Loss", total_loss / loader.__len__(), epoch=epoch + 1)
 
         return total_loss / loader.__len__(), overall_miou
 
-    def forward(self, cometml_experiment: object, world_size: int =8) -> tuple:
+    def forward(self, cometml_experiment: object, world_size: int = 8) -> tuple:
         """forward pass for all epochs
 
         Args:
@@ -439,19 +439,19 @@ class Trainer(object):
             tuple: (train losses, validation losses, mIoU)
         """
         train_losses, val_losses = [], []
-        mean_ious_val,mean_ious_val_list,count_metrics_list = [], [], []
+        mean_ious_val, mean_ious_val_list, count_metrics_list = [], [], []
         best_val_loss, train_loss = np.infty, np.infty
         best_val_mean_iou = 0
 
         model_save_dir = config['data'][config['location']]['model_save_dir'] + f"{current_path[-1]}_{config['dataset']}/{cometml_experiment.project_name}_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}/"
         utils.create_dir_if_doesnt_exist(model_save_dir)
-        for epoch in range(0,self.epochs):
+        for epoch in range(0, self.epochs):
             if config['procedures']['train']:
                 with cometml_experiment.train():
-                    train_loss = self.train(epoch,cometml_experiment)
+                    train_loss = self.train(epoch, cometml_experiment)
             if config['procedures']['validate']:
                 with cometml_experiment.validate():
-                    val_loss, val_mean_iou = self.validate(epoch,cometml_experiment)
+                    val_loss, val_mean_iou = self.validate(epoch, cometml_experiment)
             self.scheduler.step()
 
             if val_mean_iou > best_val_mean_iou:
@@ -460,14 +460,14 @@ class Trainer(object):
                 model_save_name = f"{current_path[-1]}_epoch_{epoch}_loss_{train_loss}_valmIoU_{val_mean_iou}_time_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M:%S')}.pth"
 
                 if config['procedures']['train']:
-                    with open(model_save_dir + "config.yaml",'w') as file:
+                    with open(model_save_dir + "config.yaml", 'w') as file:
                         yaml.dump(config, file)
 
                     torch.save({'epoch': epoch,
                                 'model': self.model.state_dict(),
                                 'optimizer': self.optimizer.state_dict(),
                                 'scheduler': self.scheduler.state_dict(),
-                                'loss':train_loss},
+                                'loss': train_loss},
                                 model_save_dir + model_save_name)
 
         return train_losses, val_losses, mean_ious_val
@@ -483,11 +483,11 @@ if __name__ == "__main__":
     experiment_config_path = f"{project_root}/configs/{initial_config['dataset']}.yaml"
     # config_path = utils.dictionary_contents(os.getcwd()+"/",types=["*.yaml"])[0]
 
-    experiment_config = utils.config_parser(experiment_config_path,experiment_type="training")
+    experiment_config = utils.config_parser(experiment_config_path, experiment_type="training")
     config = {**initial_config, **experiment_config}
     config['start_time'] = datetime.datetime.today().strftime('%Y-%m-%d-%H:%M:%S')
 
-    project_name = f"{current_path[-3]}_{current_path[-1]}"#_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}"
+    project_name = f"{current_path[-3]}_{current_path[-1]}"  # _{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}"
     experiment_name = f"attention_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M:%S')}"
     experiment = comet_ml.Experiment(api_key=config['cometml']['api_key'],
                                      project_name=project_name,
@@ -522,7 +522,7 @@ if __name__ == "__main__":
 
     # # print(sampler)
     number_of_timestamps, h, w = 1, 512, 512
-    window_dims = (number_of_timestamps, h, w) #[t,h,w]
+    window_dims = (number_of_timestamps, h, w)  # [t,h,w]
     input_dims = (h, w)
 
     # # channels = 'r|g|b|gray|wv1'
@@ -564,8 +564,8 @@ if __name__ == "__main__":
                           momentum=config['training']['momentum'],
                           weight_decay=config['training']['weight_decay'])
 
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer,len(train_dataloader),
-                                                     eta_min = config['training']['learning_rate'])
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, len(train_dataloader),
+                                                     eta_min=config['training']['learning_rate'])
 
     if config['training']['resume'] != False:
 

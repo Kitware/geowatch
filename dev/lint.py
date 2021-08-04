@@ -128,16 +128,16 @@ def custom_lint(dpath: str, mode=False, index=False, interact=None):
             'E227': 'Fix missing whitespace around bitwise/shift operator.',
             'E228': 'Fix missing whitespace around modulo operator.',
 
-            # 'E231': 'Add missing whitespace.',
+            'E231': 'Add missing whitespace.',
 
-            # 'E241': 'Fix extraneous whitespace around keywords.',
-            # 'E242': 'Remove extraneous whitespace around operator.',
-            # 'E251': 'Remove whitespace around parameter "=" sign.',
-            # 'E252': 'Missing whitespace around parameter equals.',
+            'E241': 'Fix extraneous whitespace around keywords.',
+            'E242': 'Remove extraneous whitespace around operator.',
+            'E251': 'Remove whitespace around parameter "=" sign.',
+            'E252': 'Missing whitespace around parameter equals.',
 
-            # 'E26 ': 'Fix spacing after comment hash for inline comments.',
-            # 'E265': 'Fix spacing after comment hash for block comments.',
-            # 'E266': 'Fix too many leading # for block comments.',
+            'E26 ': 'Fix spacing after comment hash for inline comments.',
+            'E265': 'Fix spacing after comment hash for block comments.',
+            'E266': 'Fix too many leading # for block comments.',
 
             'E27' : 'Fix extraneous whitespace around keywords.',
         })
@@ -177,7 +177,7 @@ def custom_lint(dpath: str, mode=False, index=False, interact=None):
             print('autofix = {!r}'.format(autofix))
         ret = exec_autopep8(dpaths, autofix, mode=mode)
         if interact:
-            ans = input('accept?')
+            ans = input('Accept? (y/yes or no) \n')
             if ans.lower().startswith('y'):
                 mode = 'apply'
                 ret = exec_autopep8(dpaths, autofix, mode=mode)
@@ -226,9 +226,10 @@ if __name__ == '__main__':
         python ~/code/watch/dev/lint.py [watch,atk]
 
         # WORKFLOW
-        DPATH=watch/tasks/rutgers_material_change_detection/utils
-        python ~/code/watch/dev/lint.py $DPATH --mode=diff --interact --index=5
-        python ~/code/watch/dev/lint.py $DPATH --mode=diff --interact
+        python ~/code/watch/dev/lint.py watch atk --mode=diff --interact
+
+        python ~/code/watch/dev/lint.py watch --mode=diff --interact
+        python ~/code/watch/dev/lint.py atk --mode=diff --interact
 
         python ~/code/watch/dev/lint.py watch/tasks/rutgers_material_change_detection --mode=diff --interact
         python ~/code/watch/dev/lint.py watch/tasks/rutgers_material_seg/configs --mode=diff --interact
@@ -238,6 +239,11 @@ if __name__ == '__main__':
         python ~/code/watch/dev/lint.py watch/tasks/rutgers_material_seg/scripts --mode=diff --interact
         python ~/code/watch/dev/lint.py watch/tasks/rutgers_material_seg/utils --mode=diff --interact
         python ~/code/watch/dev/lint.py watch/tasks/rutgers_material_seg/*.py --mode=diff --interact
+        python ~/code/watch/dev/lint.py watch/tasks/rutgers_material_seg/ --mode=diff --interact
+        python ~/code/watch/dev/lint.py watch/tasks/ --mode=diff --interact
+        python ~/code/watch/dev/lint.py watch/ --mode=diff --interact
+
+        python ~/code/watch/dev/lint.py atk --mode=diff --interact
     """
     import fire
     import sys

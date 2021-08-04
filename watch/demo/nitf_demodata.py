@@ -223,6 +223,7 @@ def grab_nitf_fpath(key=None, safe=True):
                 print('RESTORED SSL CONTEXT')
     return fpath
 
+
 grab_nitf_fpath.keys = _FNAME_TO_INFO.keys
 
 
@@ -316,4 +317,3 @@ def _check_properties():
     print('_TEST_IMAGES = {}'.format(ub.repr2(_TEST_IMAGES, nl=1, sort=False)))
 
     # i_3001a.ntf
-

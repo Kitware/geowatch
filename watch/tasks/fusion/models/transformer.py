@@ -203,6 +203,7 @@ def num_groups_hueristic(num_features):
     # The hueristically "ideal" number of groups and number of channels per group
     ideal_num_groups = num_features ** (0.5)
     ideal_channels_per_group = num_features ** (0.5)
+
     def hueristic_loss(num_groups):
         channels_per_group = num_features // num_groups
         loss = (
@@ -596,6 +597,8 @@ def _build_global_configs():
             encoder_configs[code] = ub.dict_union(
                 size_value, _sm_value, dict(axes=axes_value))
     return encoder_configs
+
+
 encoder_configs = _build_global_configs()
 
 # print('encoder_configs = {}'.format(ub.repr2(list(encoder_configs.keys(), nl=1)))

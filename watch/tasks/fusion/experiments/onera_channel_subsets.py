@@ -1,17 +1,17 @@
 import pathlib
 
 model_names = [
-    #"smt_it_stm_n12",
-    #"smt_it_hwtm_n12",
+    # "smt_it_stm_n12",
+    # "smt_it_hwtm_n12",
     "smt_it_stm_t12",
-    #"smt_it_hwtm_t12",
-    #"smt_it_stm_s12",
-    #"smt_it_hwtm_s12",
+    # "smt_it_hwtm_t12",
+    # "smt_it_stm_s12",
+    # "smt_it_hwtm_s12",
 ]
 
 methods = [
     "MultimodalTransformerDotProdCD",
-    #"MultimodalTransformerDirectCD",
+    # "MultimodalTransformerDirectCD",
 ]
 
 datasets = {
@@ -75,11 +75,11 @@ def main():
     """
     import itertools as it
     from watch.tasks.fusion import fit, predict, evaluate
-    
+
     for method, model_name, (channel_key, channel_sets) in it.product(methods, model_names, dataset_channel_sets.items()):
 
         workdir = f"_onera_channel_subsets/{method}/{model_name}/{channel_key}"
-    
+
         defaults = dict(
             dataset="OneraCD_2018",
             method=method,
