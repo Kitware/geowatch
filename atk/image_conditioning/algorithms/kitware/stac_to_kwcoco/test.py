@@ -20,7 +20,7 @@ class MainTestCase(AlgorithmTestCase):
             self.alg.run()
 
             # Add tests and assertions below
-            self.assertTrue(kwcoco_outpath==self.cl.get_from_metadata('output_path'))
+            self.assertTrue(kwcoco_outpath == self.cl.get_from_metadata('output_path'))
             dataset = json.loads(self.cl.get_from_metadata('dataset'))
             catalog = pystac.Catalog.from_file(stac_catalog)
             items = []
@@ -28,7 +28,7 @@ class MainTestCase(AlgorithmTestCase):
             for item in catalog.get_items():
                 items.append(item.id)
                 for asset in item.get_assets():
-                    if asset!='data' and 'data' not in item.assets[asset].roles:
+                    if asset != 'data' and 'data' not in item.assets[asset].roles:
                         continue
                     images.append(item.assets[asset].get_absolute_href())
             for item in dataset['images']:
