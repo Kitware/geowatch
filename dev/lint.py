@@ -66,7 +66,8 @@ def custom_lint(dpath: str, mode=False, index=None, interact=None):
 
         mode (bool, default="lint"):
             Options and effects are:
-                * "show": display linting results
+                * "lint": display all linting results
+                * "show": display autofixable linting results (sort of works)
                 * "diff": show the autopep8 diff that would autofix some errors
                 * "apply": apply the autopep8 diff that would autofix some errors
 
