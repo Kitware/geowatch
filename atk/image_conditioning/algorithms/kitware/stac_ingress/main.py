@@ -92,7 +92,7 @@ class Main(Algorithm):
             item.set_collection(None)  # Clear the collection if present
             item.set_self_href(os.path.join(params['output_dir'],
                                             feature['id'],
-                                            feature['id']+'.json'))
+                                            feature['id'] + '.json'))
             catalog.add_item(item)
 
         catalog.save(catalog_type=pystac.CatalogType.ABSOLUTE_PUBLISHED)

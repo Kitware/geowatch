@@ -36,7 +36,7 @@ class MainTestCase(AlgorithmTestCase):
             for item in stac_catalog.get_items():
                 self.assertTrue(item.get_self_href().startswith(output_dir))
                 if not dry_run:
-                   self.assertTrue(os.path.isfile(item.get_self_href()))
+                    self.assertTrue(os.path.isfile(item.get_self_href()))
                 for asset in item.get_assets():
                     self.assertTrue(item.assets[asset].get_absolute_href().startswith(output_dir))
                     if not dry_run:

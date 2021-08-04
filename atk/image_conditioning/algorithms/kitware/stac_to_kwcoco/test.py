@@ -6,6 +6,7 @@ import json
 from watch.demo import stac_demo
 import tempfile
 
+
 class MainTestCase(AlgorithmTestCase):
 
     def runTest(self):
@@ -13,8 +14,8 @@ class MainTestCase(AlgorithmTestCase):
         stac_catalog = stac_demo.demo()
         with tempfile.NamedTemporaryFile() as outpath:
             kwcoco_outpath = outpath.name
-            self.params = {'kwcoco':kwcoco_outpath,
-                           'catalog':stac_catalog}
+            self.params = {'kwcoco': kwcoco_outpath,
+                           'catalog': stac_catalog}
 
             self.alg = Main(cl=self.cl, params=self.params)
             self.alg.run()
