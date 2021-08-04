@@ -8,51 +8,57 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 class CrossEntropyLabelSmooth(nn.Module):
-	"""Cross entropy loss with label smoothing regularizer.
+    """Cross entropy loss with label smoothing regularizer.
 
-	Reference:
-	Szegedy et al. Rethinking the Inception Architecture for Computer Vision. CVPR 2016.
-	Equation: y = (1 - epsilon) * y + epsilon / K.
+    Reference:
+    Szegedy et al. Rethinking the Inception Architecture for Computer Vision. CVPR 2016.
+    Equation: y = (1 - epsilon) * y + epsilon / K.
 
-	Args:
-		num_classes (int): number of classes.
-		epsilon (float): weight.
-	"""
+    Args:
+        num_classes (int): number of classes.
+        epsilon (float): weight.
+    """
 
-	def __init__(self, num_classes, epsilon=0.1):
-		super(CrossEntropyLabelSmooth, self).__init__()
-		self.num_classes = num_classes
-		self.epsilon = epsilon
-		self.logsoftmax = nn.LogSoftmax(dim=1).cuda()
+    def __init__(self, num_classes, epsilon=0.1):
+        super(CrossEntropyLabelSmooth, self).__init__()
+        self.num_classes = num_classes
+        self.epsilon = epsilon
+        self.logsoftmax = nn.LogSoftmax(dim=1).cuda()
 
-	def forward(self, inputs, targets):
-		"""
-		Args:
-			inputs: prediction matrix (before softmax) with shape (batch_size, num_classes)
-			targets: ground truth labels with shape (num_classes)
-		"""
-		log_probs = self.logsoftmax(inputs)
-		targets = torch.zeros_like(log_probs).scatter_(1, targets.unsqueeze(1), 1)
-		targets = (1 - self.epsilon) * targets + self.epsilon / self.num_classes
-		loss = (- targets * log_probs).mean(0).sum()
-		return loss
+    def forward(self, inputs, targets):
+        """
+        Args:
+            inputs: prediction matrix (before softmax) with shape (batch_size, num_classes)
+            targets: ground truth labels with shape (num_classes)
+        """
+        log_probs = self.logsoftmax(inputs)
+        targets = torch.zeros_like(log_probs).scatter_(1, targets.unsqueeze(1), 1)
+        targets = (1 - self.epsilon) * targets + self.epsilon / self.num_classes
+        loss = (- targets * log_probs).mean(0).sum()
+        return loss
+
 
 class SoftEntropy(nn.Module):
-	def __init__(self):
-		super(SoftEntropy, self).__init__()
-		self.logsoftmax = nn.LogSoftmax(dim=1)
+    def __init__(self):
+        super(SoftEntropy, self).__init__()
+        self.logsoftmax = nn.LogSoftmax(dim=1)
 
-	def forward(self, inputs, targets):
-		log_probs = self.logsoftmax(inputs)
-		loss = (- F.softmax(targets, dim=1).detach() * log_probs).mean(0).sum()
-		return loss
+    def forward(self, inputs, targets):
+        log_probs = self.logsoftmax(inputs)
+        loss = (- F.softmax(targets, dim=1).detach() * log_probs).mean(0).sum()
+        return loss
+
 
 class QuadrupletLoss(torch.nn.Module):
     """
     Quadruplet loss function.
-    Builds on the Triplet Loss and takes 4 data input: one anchor, one positive and two negative examples. The negative examples needs not to be matching the anchor, the positive and each other.
+    Builds on the Triplet Loss and takes 4 data input: one anchor, one positive
+    and two negative examples. The negative examples needs not to be matching
+    the anchor, the positive and each other.
     """
+
     def __init__(self, margin1=2.0, margin2=1.0):
         super(QuadrupletLoss, self).__init__()
         self.margin1 = margin1
@@ -70,6 +76,7 @@ class QuadrupletLoss(torch.nn.Module):
 
         return quadruplet_loss.mean()
 
+
 def simCLR_loss(features, temperature=0.07, device='cuda'):
     batch_size, n_views = features.shape[0], features.shape[1]
     labels = torch.cat([torch.arange(batch_size) for i in range(n_views)], dim=0)
@@ -77,7 +84,7 @@ def simCLR_loss(features, temperature=0.07, device='cuda'):
     labels = labels.to(device)
     # print(labels)
     if len(features.shape) > 3:
-            features = features.contiguous().view(features.shape[0], features.shape[1], -1)
+        features = features.contiguous().view(features.shape[0], features.shape[1], -1)
     features = torch.cat(torch.unbind(features, dim=1), dim=0)
     features = F.normalize(features, dim=1)
 
@@ -104,9 +111,11 @@ def simCLR_loss(features, temperature=0.07, device='cuda'):
     logits = logits / temperature
     return logits, labels
 
+
 class SupConLoss(nn.Module):
     """Supervised Contrastive Learning: https://arxiv.org/pdf/2004.11362.pdf.
     It also supports the unsupervised contrastive loss in SimCLR"""
+
     def __init__(self, temperature=0.07, contrast_mode='all',
                  base_temperature=0.07):
         super(SupConLoss, self).__init__()

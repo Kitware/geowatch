@@ -1,4 +1,5 @@
-import kwcoco, kwimage
+import kwcoco
+import kwimage
 import ndsampler
 import sklearn.metrics as skm
 from collections import defaultdict as ddict
@@ -115,7 +116,7 @@ def make_confusion_plots(result_kwcoco_path, figure_root):
     for video in tqdm.tqdm(results.dataset["videos"]):
         for model_name in tqdm.tqdm(models):
 
-        #     if video["name"] not in test_cities: continue
+            # if video["name"] not in test_cities: continue
 
             images = [
                 image
@@ -141,8 +142,8 @@ def make_confusion_plots(result_kwcoco_path, figure_root):
 
                 for ann_id in results.gid_to_aids[image["id"]]:
                     seg = kwimage.Segmentation.coerce(
-                            results.anns[ann_id]["segmentation"]
-                        ).to_multi_polygon()
+                        results.anns[ann_id]["segmentation"]
+                    ).to_multi_polygon()
                     seg.fill(target, value=1)
 
                 target = target.astype("int")
@@ -164,6 +165,7 @@ def make_confusion_plots(result_kwcoco_path, figure_root):
             figure_path = figure_root / video['name']
             figure_path.mkdir(parents=True, exist_ok=True)
             fig.savefig(figure_path / (model_name + ".png"))
+
 
 def main(args):
     make_confusion_plots(args.result_kwcoco_path, args.figure_root)

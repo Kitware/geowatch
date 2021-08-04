@@ -32,7 +32,7 @@ for ckpt_dir in pathlib.Path("_trained_models").glob("MultimodalTransformer*"):
             tag=f"{run_name}_{channel_key}",
             checkpoint_path=ckpt_path,
             results_dir=pathlib.Path("_results") / "Drop0AlignMSI_S2",
-            results_path=pathlib.Path("_results") / f"Drop0AlignMSI_S2_results.kwcoco.json",
+            results_path=pathlib.Path("_results") / "Drop0AlignMSI_S2_results.kwcoco.json",
             test_kwcoco_path=pathlib.Path("~/Projects/smart_watch_dvc/drop0_aligned_context5/combo_data.kwcoco.json").expanduser(),
             tfms_channel_subset=channel_subset,
             # common args

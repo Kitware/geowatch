@@ -1,6 +1,7 @@
 import torch.nn as nn
-import torch
-from torch.nn import functional as F
+# import torch
+# from torch.nn import functional as F
+
 
 class VSNet(nn.Module):
     def __init__(self, num_channels=3, num_classes=3,

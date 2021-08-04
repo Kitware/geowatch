@@ -2,7 +2,7 @@ import kwarray
 import kwimage
 import numpy as np
 import torch
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 # from kwcoco.channel_spec import ChannelSpec  # NOQA
 from functools import partial
 from netharn.data.batch_samplers import PatchedBatchSampler
@@ -12,6 +12,7 @@ from netharn.data.data_containers import container_collate
 from netharn.data.batch_samplers import PatchedRandomSampler
 from netharn.data.batch_samplers import SubsetSampler
 import random
+
 
 class SequenceDataset(torch.utils.data.Dataset):
     def __init__(self, sampler, window_dims, input_dims=None, channels=None,
@@ -160,7 +161,9 @@ class SequenceDataset(torch.utils.data.Dataset):
         class_masks = np.concatenate([m[None, ...] for m in frame_masks], axis=0)
 
         negative_frame_data = np.concatenate([f[None, ...] for f in negative_frame_ims], axis=0)
-        negative_class_masks = np.concatenate([m[None, ...] for m in negative_frame_masks], axis=0)
+
+        # UNUSED? FIXME?
+        negative_class_masks = np.concatenate([m[None, ...] for m in negative_frame_masks], axis=0)  # NOQA
 
         cthw_im = frame_data.transpose(3, 0, 1, 2)
         negative_cthw_im = negative_frame_data.transpose(3, 0, 1, 2)

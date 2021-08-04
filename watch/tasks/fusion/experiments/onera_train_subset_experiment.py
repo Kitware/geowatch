@@ -1,3 +1,4 @@
+# flake8: noqa
 method_bases = {
     "mmvit-DotProdCD-stm-s12": dict(
         method="MultimodalTransformerDotProdCD",

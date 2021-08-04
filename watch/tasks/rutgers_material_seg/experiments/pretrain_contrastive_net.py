@@ -1,3 +1,5 @@
+# flake8: noqa
+
 import sys
 import os
 current_path = os.getcwd().split("/")

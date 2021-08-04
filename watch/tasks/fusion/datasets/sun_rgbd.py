@@ -10,13 +10,13 @@ from torchvision import transforms
 
 from .. import utils
 
+
 class SUN_RGBD_Dataset(data.Dataset):
     def __init__(self,
                  data_root,
                  split="train",
                  augment_step=None,
-                 transform_step=None,
-                ):
+                 transform_step=None):
         self.data_root = data_root
         self.split = split
         self.augment_step = augment_step
@@ -58,6 +58,7 @@ class SUN_RGBD_Dataset(data.Dataset):
             "labels": labels,
         }
 
+
 class SUN_RGBD(pl.LightningDataModule):
     def __init__(
         self,
@@ -89,12 +90,12 @@ class SUN_RGBD(pl.LightningDataModule):
 
         if stage == "fit" or stage is None:
             aug = A.Compose([
-                #     A.RandomCrop(256, 256),
-                    A.RandomResizedCrop(128, 128),
-                    A.RandomToneCurve(),
-                    A.ColorJitter(),
-                    A.HorizontalFlip(),
-                ], additional_targets={"depth": "mask"})
+                # A.RandomCrop(256, 256),
+                A.RandomResizedCrop(128, 128),
+                A.RandomToneCurve(),
+                A.ColorJitter(),
+                A.HorizontalFlip(),
+            ], additional_targets={"depth": "mask"})
 
             train_val_ds = SUN_RGBD_Dataset(
                 pathlib.Path(self.data_root),

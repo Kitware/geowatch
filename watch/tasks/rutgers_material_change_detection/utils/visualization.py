@@ -1,19 +1,19 @@
-import sys
-import os
-current_path = os.getcwd().split("/")
-import matplotlib;
-import matplotlib.pyplot as plt
-import numpy as np
-from PIL import Image
-import matplotlib as mpl
-from scipy import ndimage
-from skimage.segmentation import find_boundaries
-from skimage import morphology
-from matplotlib import colors
-from random import shuffle
-import random
-np.random.seed(128)
-random.seed(128)
+# import sys
+# import os
+# current_path = os.getcwd().split("/")
+# import matplotlib;
+# import matplotlib.pyplot as plt
+# import matplotlib as mpl
+
+# import numpy as np
+# from PIL import Image
+# from scipy import ndimage
+# from skimage.segmentation import find_boundaries
+# from skimage import morphology
+# from random import shuffle
+# import random
+# np.random.seed(128)
+# random.seed(128)
 
 
 def rand_cmap(nlabels, type='bright', first_color_black=True, last_color_black=False, verbose=True, bg_alpha=0.75, fg_alpha=0.9, random_colors=False):
@@ -30,8 +30,8 @@ def rand_cmap(nlabels, type='bright', first_color_black=True, last_color_black=F
     import colorsys
     import numpy as np
 
-    if type not in ('bright', 'soft'):
-        print ('Please choose "bright" or "soft" for type')
+    if type not in {'bright', 'soft'}:
+        print('Please choose "bright" or "soft" for type')
         return
 
     if verbose:
@@ -41,12 +41,12 @@ def rand_cmap(nlabels, type='bright', first_color_black=True, last_color_black=F
     if type == 'bright':
         if random_colors:
             randHSVcolors = [(np.random.uniform(low=0.0, high=1),
-                            np.random.uniform(low=0.4, high=1),
-                            np.random.uniform(low=0.9, high=1)) for i in range(nlabels)]
+                              np.random.uniform(low=0.4, high=1),
+                              np.random.uniform(low=0.9, high=1)) for i in range(nlabels)]
         else:
             randHSVcolors = [(np.random.uniform(low=0.0, high=1),
-                            np.random.uniform(low=0.4, high=1),
-                            np.random.uniform(low=0.9, high=1)) for i in range(nlabels)]
+                              np.random.uniform(low=0.4, high=1),
+                              np.random.uniform(low=0.9, high=1)) for i in range(nlabels)]
 
         # Convert HSV list to RGB
         randRGBcolors = []
@@ -85,7 +85,7 @@ def rand_cmap(nlabels, type='bright', first_color_black=True, last_color_black=F
         bounds = np.linspace(0, nlabels, nlabels + 1)
         norm = colors.BoundaryNorm(bounds, nlabels)
 
-        cb = colorbar.ColorbarBase(ax, cmap=random_colormap, norm=norm, spacing='proportional', ticks=None,
+        cb = colorbar.ColorbarBase(ax, cmap=random_colormap, norm=norm, spacing='proportional', ticks=None,  # NOQA
                                    boundaries=bounds, format='%1i', orientation=u'horizontal')
 
     return random_colormap

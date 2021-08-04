@@ -1,3 +1,4 @@
+# flake8: noqa
 import sys
 import os
 current_path = os.getcwd().split("/")
@@ -43,6 +44,7 @@ torch.set_printoptions(precision=6, sci_mode=False)
 np.set_printoptions(precision=3, suppress=True)
 
 mean_std = ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+
 
 class Trainer(object):
     def __init__(self, model: object, train_loader: torch.utils.data.DataLoader,

@@ -13,7 +13,10 @@ torch.set_printoptions(precision=6, sci_mode=False)
 
 IMG_EXTENSIONS = ['*.png', '*.jpeg', '*.jpg', '*.npy']
 
+
+# FIXME: Hard coding mean/std is not a good idea
 mean_std = ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+
 
 class RandomCrop(object):
 
@@ -103,7 +106,7 @@ class DeepGlobeDataset(object):
         total_pixels = new_mask.shape[2] * new_mask.shape[1]
         label_inds, label_counts = torch.unique(new_mask, return_counts=True)
         label_inds = label_inds.long()
-        distribution = label_counts / total_pixels
+        distribution = label_counts / total_pixels  # NOQA
 
         for label_ind, label_count in zip(label_inds, label_counts):
             labels[0, label_ind] = label_count / total_pixels

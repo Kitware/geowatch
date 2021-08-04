@@ -32,7 +32,7 @@ for ckpt_dir in pathlib.Path("_trained_models").glob("MultimodalTransformer*"):
             tag=f"{run_name}_{channel_key}",
             checkpoint_path=ckpt_path,
             results_dir=pathlib.Path("_results") / "OneraCD_2018",
-            results_path=pathlib.Path("_results") / f"OneraCD_2018_results.kwcoco.json",
+            results_path=pathlib.Path("_results") / "OneraCD_2018_results.kwcoco.json",
             test_kwcoco_path=pathlib.Path("~/Projects/smart_watch_dvc/extern/onera_2018/onera_all.kwcoco.json").expanduser(),
             tfms_channel_subset=channel_subset,
             # common args

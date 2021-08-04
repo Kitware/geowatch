@@ -1,7 +1,4 @@
-import datetime
 import logging
-import os
-import sys
 
 
 def setup_logging(level=logging.DEBUG):

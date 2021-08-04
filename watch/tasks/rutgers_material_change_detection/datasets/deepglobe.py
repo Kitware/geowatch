@@ -1,20 +1,20 @@
-import os
-import numpy as np
-import torch
+# import os
+# import numpy as np
+# import torch
 from PIL import Image
-import torchvision
-import matplotlib.pyplot as plt
-import math
-from torch.utils.data.dataset import random_split
+# import torchvision
+# import matplotlib.pyplot as plt
+# import math
+# from torch.utils.data.dataset import random_split
 import material_seg.utils.utils as utils
-from torchvision import transforms
-import matplotlib.patches as patches
-import cv2
-import torch.nn.functional as F
+# from torchvision import transforms
+# import matplotlib.patches as patches
+# import cv2
+# import torch.nn.functional as F
 import torchvision.transforms.functional as FT
-import xml.etree.ElementTree as ET
-import collections
-import random
+# import xml.etree.ElementTree as ET
+# import collections
+# import random
 
 # torch.backends.cudnn.enabled = True
 # torch.backends.cudnn.deterministic = True
@@ -23,6 +23,7 @@ import random
 IMG_EXTENSIONS = ['*.png', '*.jpeg', '*.jpg', '*.npy']
 
 mean_std = ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+
 
 class DeepGlobeDataset(object):
     def __init__(self, root, transforms, split=False):

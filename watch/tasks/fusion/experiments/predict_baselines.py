@@ -62,5 +62,5 @@ for dataset_name in ["onera", "drop0_s2"]:
         )
         try:
             predict.main(args)
-        except:
+        except Exception:
             continue

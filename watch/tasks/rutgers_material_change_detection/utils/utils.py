@@ -1,11 +1,8 @@
-
 from glob import glob
-from PIL import Image
 import pickle as pkl
 import os
 import torch
 import numpy as np
-import argparse
 import sys
 import yaml
 import torch.nn.functional as F
@@ -13,12 +10,7 @@ import torchvision.transforms.functional as FT
 import json
 import PIL
 from parse import parse
-import collections
 import random
-from PIL import ImageOps
-import matplotlib.pyplot as plt
-# import pydensecrf.densecrf as dcrf
-# from pydensecrf.utils import unary_from_softmax
 
 
 def denorm(image: torch.Tensor, mean: list = [0.485, 0.456, 0.406], std: list = [0.229, 0.224, 0.225]) -> torch.Tensor:
@@ -53,6 +45,7 @@ def denorm(image: torch.Tensor, mean: list = [0.485, 0.456, 0.406], std: list = 
 
     return image
 
+
 def create_dir_if_doesnt_exist(dir_path: str) -> None:
     """creates directory in given path
 
@@ -64,6 +57,7 @@ def create_dir_if_doesnt_exist(dir_path: str) -> None:
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
     return
+
 
 def normalize_image(image: np.array) -> np.array:
     """normalize image between 0-1
@@ -81,6 +75,7 @@ def normalize_image(image: np.array) -> np.array:
     # print(f"image min: {image_min}, image_max: {image_max}")
     return (image - image_min) / (image_max - image_min + 0.00000000001)
 
+
 def normalize_image_255(image: np.array) -> np.array:
     """normalizes image between 0-255
 
@@ -95,9 +90,10 @@ def normalize_image_255(image: np.array) -> np.array:
         normalized image
     """
     image_min = np.min(image)
-    image_max = np.max(image)
+    # image_max = np.max(image)
     # print(f"image min: {image_min}, image_max: {image_max}")
     return (image - image_min) / (255 - image_min + 0.00000000001)
+
 
 def normalize_dm(image: np.array, confidence_score: float = 0) -> np.array:
     """normalize distance map
@@ -121,36 +117,38 @@ def normalize_dm(image: np.array, confidence_score: float = 0) -> np.array:
     normalized += confidence_score
     return normalized
 
+
 def max_norm(p, version='torch', e=1e-5):
-	if version is 'torch':
-		if p.dim() == 3:
-			C, H, W = p.size()
-			p = F.relu(p)
-			max_v = torch.max(p.view(C, -1), dim=-1)[0].view(C, 1, 1)
-			min_v = torch.min(p.view(C, -1), dim=-1)[0].view(C, 1, 1)
-			p = F.relu(p - min_v - e) / (max_v - min_v + e)
-		elif p.dim() == 4:
-			N, C, H, W = p.size()
-			p = F.relu(p)
-			max_v = torch.max(p.view(N, C, -1), dim=-1)[0].view(N, C, 1, 1)
-			min_v = torch.min(p.view(N, C, -1), dim=-1)[0].view(N, C, 1, 1)
-			p = F.relu(p - min_v - e) / (max_v - min_v + e)
-	elif version is 'numpy' or version is 'np':
-		if p.ndim == 3:
-			C, H, W = p.shape
-			p[p < 0] = 0
-			max_v = np.max(p, (1, 2), keepdims=True)
-			min_v = np.min(p, (1, 2), keepdims=True)
-			p[p < min_v + e] = 0
-			p = (p - min_v - e) / (max_v + e)
-		elif p.ndim == 4:
-			N, C, H, W = p.shape
-			p[p < 0] = 0
-			max_v = np.max(p, (2, 3), keepdims=True)
-			min_v = np.min(p, (2, 3), keepdims=True)
-			p[p < min_v + e] = 0
-			p = (p - min_v - e) / (max_v + e)
-	return p
+    if version == 'torch':
+        if p.dim() == 3:
+            C, H, W = p.size()
+            p = F.relu(p)
+            max_v = torch.max(p.view(C, -1), dim=-1)[0].view(C, 1, 1)
+            min_v = torch.min(p.view(C, -1), dim=-1)[0].view(C, 1, 1)
+            p = F.relu(p - min_v - e) / (max_v - min_v + e)
+        elif p.dim() == 4:
+            N, C, H, W = p.size()
+            p = F.relu(p)
+            max_v = torch.max(p.view(N, C, -1), dim=-1)[0].view(N, C, 1, 1)
+            min_v = torch.min(p.view(N, C, -1), dim=-1)[0].view(N, C, 1, 1)
+            p = F.relu(p - min_v - e) / (max_v - min_v + e)
+    elif version == 'numpy' or version == 'np':
+        if p.ndim == 3:
+            C, H, W = p.shape
+            p[p < 0] = 0
+            max_v = np.max(p, (1, 2), keepdims=True)
+            min_v = np.min(p, (1, 2), keepdims=True)
+            p[p < min_v + e] = 0
+            p = (p - min_v - e) / (max_v + e)
+        elif p.ndim == 4:
+            N, C, H, W = p.shape
+            p[p < 0] = 0
+            max_v = np.max(p, (2, 3), keepdims=True)
+            min_v = np.min(p, (2, 3), keepdims=True)
+            p[p < min_v + e] = 0
+            p = (p - min_v - e) / (max_v + e)
+    return p
+
 
 def batch_crf_inference(img: torch.Tensor, probs: torch.Tensor, t: int = 1, scale_factor: int = 1, labels: int = 21) -> torch.Tensor:
     """crf inference for a batch
@@ -174,7 +172,7 @@ def batch_crf_inference(img: torch.Tensor, probs: torch.Tensor, t: int = 1, scal
     bs, c, h, w = probs.shape
     image_npy = img.numpy()
     probs_npy = probs.numpy()
-    preds = torch.zeros((bs, 1, h, w))
+    # preds = torch.zeros((bs, 1, h, w))
     preds_probs = torch.zeros((bs, labels, h, w))
     for b in range(bs):
         b_image = image_npy[b, :, :, :]
@@ -192,6 +190,7 @@ def batch_crf_inference(img: torch.Tensor, probs: torch.Tensor, t: int = 1, scal
         # preds[b,:,:,:] = torch.from_numpy(b_pred)
     # return preds, preds_probs
     return preds_probs
+
 
 def crf_inference(img: np.array, probs: np.array, t: int = 10, scale_factor: int = 1, labels: int = 21) -> np.array:
     """crf prediction for single image
@@ -211,11 +210,11 @@ def crf_inference(img: np.array, probs: np.array, t: int = 10, scale_factor: int
     np.array
         single crf prediction
     """
-
+    import pydensecrf.densecrf as dcrf
+    from pydensecrf.utils import unary_from_softmax
     h, w = img.shape[:2]
     n_labels = labels
     d = dcrf.DenseCRF2D(w, h, n_labels)
-
     unary = unary_from_softmax(probs)
     unary = np.ascontiguousarray(unary)
 
@@ -243,6 +242,7 @@ def t2n(x: torch.Tensor) -> np.array:
     x = x.cpu().detach().numpy()
     return x
 
+
 def mat_to_csv(mat_path: str, save_to: str) -> None:
     """convert mat file to csv
 
@@ -260,6 +260,7 @@ def mat_to_csv(mat_path: str, save_to: str) -> None:
     data = pd.DataFrame({k: pd.Series(v[0]) for k, v in mat.items()})
     data.to_csv(save_to)
 
+
 def load_yaml_as_dict(yaml_path: str) -> dict:
     """load config file as dictionarry
 
@@ -275,6 +276,7 @@ def load_yaml_as_dict(yaml_path: str) -> dict:
     with open(yaml_path, 'r') as f:
         config_dict = yaml.load(f, Loader=yaml.FullLoader)
     return config_dict
+
 
 def dictionary_contents(path: str, types: list, recursive: bool = False) -> list:
     """extyract dictionary and subdictionary contents
@@ -305,6 +307,7 @@ def dictionary_contents(path: str, types: list, recursive: bool = False) -> list
                 files.append(os.path.join(path, x))
     return files
 
+
 def save_pickle(object: object, path: str, file_name: str) -> None:
     """save pickle to location
 
@@ -321,6 +324,7 @@ def save_pickle(object: object, path: str, file_name: str) -> None:
     with open(full_path, 'wb') as file:
         pkl.dump(object, file)
     return
+
 
 def load_pickle(path: str) -> object:
     """load pickle
@@ -339,6 +343,7 @@ def load_pickle(path: str) -> object:
         object = pkl.load(file)
     return object
 
+
 def load_config_as_dict(path_to_config):
     with open(path_to_config, 'r') as stream:
         try:
@@ -346,6 +351,7 @@ def load_config_as_dict(path_to_config):
         except yaml.YAMLError as exc:
             print(exc)
     return config
+
 
 def config_parser(path_to_config, experiment_type):
     if experiment_type.lower() == "training":
@@ -358,10 +364,12 @@ def config_parser(path_to_config, experiment_type):
         print("incomplete parser for testing")
         sys.exit()
 
+
 def load_json_as_dict(path_to_json):
     with open(path_to_json) as json_file:
         data = json.load(json_file)
     return data
+
 
 def random_horizonal_flip(image: PIL.Image, mask: PIL.Image, points: object = False) -> tuple:
     """random horizontal flip of both image and mask
@@ -389,6 +397,7 @@ def random_horizonal_flip(image: PIL.Image, mask: PIL.Image, points: object = Fa
     if isinstance(points, PIL.Image.Image):
         return image, mask, points
     return image, mask
+
 
 def random_vertical_flip(image: PIL.Image, mask: PIL.Image, points: object = False) -> tuple:
     """random vertical flip of both image and mask

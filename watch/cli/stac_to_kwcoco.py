@@ -1,15 +1,13 @@
-import os
 import sys
 import kwcoco
 import json
 import argparse
 import pystac
-from osgeo import gdal
 import ubelt as ub
 from watch.gis import geotiff
 import watch.cli.geotiffs_to_kwcoco as gtk
-import datetime
 import dateutil.parser
+
 
 def hack_resolve_sensor_candidate(dset):
     """
@@ -40,6 +38,7 @@ def hack_resolve_sensor_candidate(dset):
         assert len(coarsend) == 1
         img['sensor_coarse'] = ub.peek(coarsend)
 
+
 def convert(out_file, cat, ignore_dem=True):
     dset = kwcoco.CocoDataset()
 
@@ -50,7 +49,7 @@ def convert(out_file, cat, ignore_dem=True):
     else:
         catalog = cat
 
-    index = 0
+    # index = 0
     for item in catalog.get_items():
         meta = item.to_dict()
         date = meta['properties']['datetime']
@@ -76,6 +75,7 @@ def convert(out_file, cat, ignore_dem=True):
     with open(out_file, 'w') as f:
         f.write(dataset)
     return dataset
+
 
 def main(args):
     parser = argparse.ArgumentParser(description="Convert STAC catalog to KWCOCO")

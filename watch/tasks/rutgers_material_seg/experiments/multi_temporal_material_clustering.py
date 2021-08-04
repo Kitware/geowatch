@@ -2,12 +2,9 @@
 import kwcoco
 import ndsampler
 import ubelt as ub
-import watch
 import numpy as np
 import matplotlib.pyplot as plt
-from tqdm import tqdm
 import torch
-import pdb
 from sklearn.cluster import KMeans
 from sklearn.manifold import TSNE
 from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
@@ -75,7 +72,7 @@ for batch_index, batch in enumerate(loader):
     # print(f"image_data: {image_data.shape}, mask: {mask_data.shape}")
     # print(f"image min: {image_show.min()}, image max: {image_show.max()}")
     plt.scatter(out_feat_embed[:, 0], out_feat_embed[:, 1], c=y_kmeans_tse, marker='.', cmap='tab20c')
-    plt.scatter(kmeans_tsne.cluster_centers_[:, 0], kmeans_tsne.cluster_centers_[:, 1], c='black', s=200, alpha=0.5);
+    plt.scatter(kmeans_tsne.cluster_centers_[:, 0], kmeans_tsne.cluster_centers_[:, 1], c='black', s=200, alpha=0.5)
     plt.show()
 
     figure = plt.figure(figsize=(15, 15))

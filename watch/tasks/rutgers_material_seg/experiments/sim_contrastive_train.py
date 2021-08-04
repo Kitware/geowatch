@@ -1,43 +1,48 @@
-import sys
+# import sys
 import os
-current_path = os.getcwd().split("/")
-
-import matplotlib
+# import matplotlib
 import gc
-import cv2
+# import cv2
 import comet_ml
 import torch
 import datetime
-import warnings
+# import warnings
 import yaml
 import random
-import kwcoco
-import kwimage
-import ndsampler
+# import kwcoco
+# import kwimage
+# import ndsampler
 import matplotlib.pyplot as plt
 import numpy as np
-import ubelt as ub
+# import ubelt as ub
 import torch.optim as optim
 import torch.nn.functional as F
-from scipy import ndimage
+# from scipy import ndimage
 from torch import nn
 from tqdm import tqdm
 import itertools
-from statistics import mean
+# from statistics import mean
 from scipy.spatial import distance
 from torchvision import transforms
 import watch.tasks.rutgers_material_seg.utils.utils as utils
-import watch.tasks.rutgers_material_seg.utils.eval_utils as eval_utils
+# import watch.tasks.rutgers_material_seg.utils.eval_utils as eval_utils
 import watch.tasks.rutgers_material_seg.utils.visualization as visualization
 from watch.tasks.rutgers_material_seg.models.losses import SupConLoss
-from watch.tasks.rutgers_material_seg.models import build_model
-from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
+# from watch.tasks.rutgers_material_seg.models import build_model
+# from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
 from watch.tasks.rutgers_material_seg.datasets import build_dataset
 from watch.tasks.rutgers_material_seg.models.supcon import SupConResNet
-torch.backends.cudnn.enabled = False
-torch.backends.cudnn.deterministic = True
-torch.set_printoptions(precision=6, sci_mode=False)
-np.set_printoptions(precision=3, suppress=True)
+
+
+if 1:
+    # TODO: NO GLOBAL OPTIONS: USE A MAIN FUNCTION
+    torch.backends.cudnn.enabled = False
+    torch.backends.cudnn.deterministic = True
+    torch.set_printoptions(precision=6, sci_mode=False)
+    np.set_printoptions(precision=3, suppress=True)
+
+
+current_path = os.getcwd().split("/")
 
 mask_mapping = {0: "unknown",    # 0, unknown
                 1: "urban" ,  # 179, urban land
@@ -65,6 +70,7 @@ for index, item in enumerate(possible_combinations):
             verbose_label += f"{mask_mapping[label_index]}: {label}, "
     verbose_labels[index] = verbose_label
 
+
 def accuracy(output, target, topk=(1,)):
     """Computes the accuracy over the k top predictions for the specified values of k"""
     with torch.no_grad():
@@ -80,6 +86,7 @@ def accuracy(output, target, topk=(1,)):
             correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
             res.append(correct_k.mul_(100.0 / batch_size))
         return res, pred[0]
+
 
 class Trainer(object):
     def __init__(self, model: object, train_loader: torch.utils.data.DataLoader,
@@ -172,8 +179,8 @@ class Trainer(object):
         """
         total_loss = 0
         total_loss_seg = 0
-        preds, targets = [], []
-        accuracies, distances_to_gt_dist = [], []
+        preds, targets = [], []  # NOQA
+        accuracies, distances_to_gt_dist = [], []  # NOQA
         self.model.train()
         print(f"starting epoch {epoch}")
         loader_size = len(self.train_loader)
@@ -183,7 +190,8 @@ class Trainer(object):
         for batch_index, batch in pbar:
             # if batch_index < 75:
             #     continue
-            outputs = batch
+            # outputs = batch
+
             # image1, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0]
             # image_name = outputs['tr'].data[0][batch_index_to_show]['gids']
             # original_width, original_height = outputs['tr'].data[0][batch_index_to_show]['space_dims']
@@ -204,7 +212,7 @@ class Trainer(object):
             # labels = torch.Tensor([1 for x in range(bs)])
             # print(images.shape)
 
-            class_to_show = max(0, torch.unique(mask)[-1] - 1)
+            # class_to_show = max(0, torch.unique(mask)[-1] - 1)
             images = images.to(device)
             mask = mask.to(device)
 
@@ -245,7 +253,7 @@ class Trainer(object):
             masks = F.softmax(output1, dim=1)  # .detach()
             # masks = F.interpolate(masks, size=mask.size()[-2:], mode="bilinear", align_corners=True)
             # masks = self.high_confidence_filter(masks, cutoff_top=config['high_confidence_threshold']['train_cutoff'])
-            pred = masks.max(1)[1].cpu().detach()  # .numpy()
+            pred = masks.max(1)[1].cpu().detach()  # .numpy()  # NOQA
 
             total_loss += loss.item()
             # preds.append(pred)
@@ -270,7 +278,7 @@ class Trainer(object):
                         # ax11 = figure.add_subplot(4,3,11)
                         # ax12 = figure.add_subplot(4,3,12)
 
-                        cmap_gradients = plt.cm.get_cmap('jet')
+                        # cmap_gradients = plt.cm.get_cmap('jet')
                         image_show = np.transpose(images.cpu().detach().numpy()[batch_index_to_show, :, :, :], (1, 2, 0))[:, :, :3]
 
                         image_show = (image_show - image_show.min()) / (image_show.max() - image_show.min())
@@ -299,8 +307,8 @@ class Trainer(object):
                         ax2.axis('off')
 
                         if config['visualization']['titles']:
-                            ax1.set_title(f"Input Image", fontsize=config['visualization']['font_size'])
-                            ax2.set_title(f"GT Mask overlaid", fontsize=config['visualization']['font_size'])
+                            ax1.set_title("Input Image", fontsize=config['visualization']['font_size'])
+                            ax2.set_title("GT Mask overlaid", fontsize=config['visualization']['font_size'])
                             # ax4.set_title(f"Prediction overlaid", fontsize=config['visualization']['font_size'])
                             # # ax5.set_title(f"output1_sample for class: {class_to_show} min: {output1_sample.min():0.2f}, max: {output1_sample.max():0.2f}", fontsize=config['visualization']['font_size'])
                             # ax10.set_title(f"GT Mask", fontsize=config['visualization']['font_size'])
@@ -308,7 +316,7 @@ class Trainer(object):
                             figure.suptitle(f"Pred: {verbose_preds[batch_index_to_show]}\nGT label: {batch_verboe_labels[batch_index_to_show]}", fontsize=config['visualization']['font_size'])
 
                         # cometml_experiemnt.log_figure(figure_name=f"Training, image name: {image_name}, epoch: {epoch}, classes in gt: {classes_in_gt}, classifier predictions: {labels_predicted_indices}",figure=figure)
-                        cometml_experiemnt.log_figure(figure_name=f"Training, image name", figure=figure)
+                        cometml_experiemnt.log_figure(figure_name="Training, image name", figure=figure)
 
                         if config['visualization']['train_imshow']:
                             plt.show()
@@ -351,9 +359,9 @@ class Trainer(object):
         """
         print("validating")
         total_loss = 0
-        preds, crf_preds, targets  = [], [], []
+        preds, crf_preds, targets  = [], [], []  # NOQA
         accuracies = 0
-        running_ap = 0.0
+        # running_ap = 0.0
         accuracies = []
         batch_index_to_show = config['visualization']['batch_index_to_show']
         if self.test_with_full_supervision == 1:
@@ -366,7 +374,7 @@ class Trainer(object):
         with torch.no_grad():
             pbar = tqdm(enumerate(loader), total=len(loader))
             for batch_index, batch in pbar:
-                outputs = batch
+                outputs = batch  # NOQA
                 # image1, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0]
                 # original_width, original_height = outputs['tr'].data[0][batch_index_to_show]['space_dims']
                 # mask = torch.stack(mask)
@@ -380,7 +388,6 @@ class Trainer(object):
                 image1 = image1.to(device)
                 mask = mask.to(device)
                 labels = labels.to(device)
-                # image_raw = utils.denorm(image1.clone().detach())
                 bs, c, h, w = image1.shape
                 image1 = image1.squeeze(2)
 
@@ -407,9 +414,10 @@ class Trainer(object):
                 masks = F.softmax(output, dim=1)  # (B, 22, 300, 300)
                 # masks = F.interpolate(masks, size=mask.size()[-2:], mode="bilinear", align_corners=True)
                 # masks = self.high_confidence_filter(masks, cutoff_top=config['high_confidence_threshold']['val_cutoff'])
-                pred = masks.max(1)[1].cpu().detach()  # .numpy()
+                pred = masks.max(1)[1].cpu().detach()  # .numpy()  # NOQA
 
                 if self.use_crf:
+                    image_raw = utils.denorm(image1.clone().detach())
                     crf_probs = utils.batch_crf_inference(image_raw.detach().cpu(),
                                                           masks.detach().cpu(),
                                                           t=config['evaluation']['crf_t'],
@@ -431,7 +439,7 @@ class Trainer(object):
                             # ax5 = figure.add_subplot(2,3,5)
                             # ax6 = figure.add_subplot(2,3,6)
 
-                            cmap_gradients = plt.cm.get_cmap('jet')
+                            # cmap_gradients = plt.cm.get_cmap('jet')
                             # transformed_image_show = np.transpose(utils.denorm(image1).cpu().detach().numpy()[0,:,:,:],(1,2,0))
                             # image_show = np.transpose(outputs['visuals']['image'][0,:,:,:].numpy(),(1,2,0))
                             image_show = np.transpose(image1.cpu().detach().numpy()[batch_index_to_show, :, :, :], (1, 2, 0))[:, :, :3]
@@ -447,7 +455,7 @@ class Trainer(object):
                             # logits_show = logits_show[:original_width, :original_height]
                             # gt_mask_show = gt_mask_show[:original_width, :original_height]
 
-                            gt_mask_show_no_bg = np.ma.masked_where(gt_mask_show == 0, gt_mask_show)
+                            # gt_mask_show_no_bg = np.ma.masked_where(gt_mask_show == 0, gt_mask_show)
                             # logits_show_no_bg = np.ma.masked_where(logits_show==0,logits_show)
                             # pseudo_gt_show_no_bg = np.ma.masked_where(pseudo_gt_show==0,pseudo_gt_show)
 
@@ -481,15 +489,15 @@ class Trainer(object):
                                 plt.show()
                             if config['visualization']['titles']:
                                 figure.suptitle(f"Pred: {verbose_preds[batch_index_to_show]}\nGT label: {batch_verboe_labels[batch_index_to_show]}")  # \nP
-                                ax1.set_title(f"Input Image", fontsize=config['visualization']['font_size'])
-                                ax2.set_title(f"GT Mask", fontsize=config['visualization']['font_size'])
+                                ax1.set_title("Input Image", fontsize=config['visualization']['font_size'])
+                                ax2.set_title("GT Mask", fontsize=config['visualization']['font_size'])
                                 # ax3.set_title(f"Prediction", fontsize=config['visualization']['font_size'])
                                 # ax6.set_title(f"Prediction", fontsize=config['visualization']['font_size'])
                                 # ax5.set_title(f"GT Mask", fontsize=config['visualization']['font_size'])
                                 # if self.use_crf:
                                 #     ax4.set_title(f"+CRF Prediction", fontsize=config['visualization']['font_size'])
 
-                            cometml_experiemnt.log_figure(figure_name=f"Validation, Image name:", figure=figure)
+                            cometml_experiemnt.log_figure(figure_name="Validation, Image name:", figure=figure)
                             figure.clear()
                             plt.cla()
                             plt.clf()
@@ -525,8 +533,8 @@ class Trainer(object):
             tuple: (train losses, validation losses, mIoU)
         """
         train_losses, val_losses = [], []
-        mean_ious_val, mean_ious_val_list, count_metrics_list = [], [], []
-        best_val_loss, train_loss = np.infty, np.infty
+        mean_ious_val, mean_ious_val_list, count_metrics_list = [], [], []  # NOQA
+        best_val_loss, train_loss = np.infty, np.infty  # NOQA
         best_val_mean_iou = 0
 
         model_save_dir = config['data'][config['location']]['model_save_dir'] + f"{current_path[-1]}_{config['dataset']}/{cometml_experiment.project_name}_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}/"
@@ -559,8 +567,13 @@ class Trainer(object):
         return train_losses, val_losses, mean_ious_val
 
 
-if __name__ == "__main__":
+config = None  # FIXME dont use globals!
+device = None
 
+
+def main():
+    global config
+    global device
     project_root = "/home/native/projects/watch/watch/tasks/rutgers_material_seg/"
     # main_config_path = f"{os.getcwd()}/configs/main.yaml"
     main_config_path = f"{project_root}/configs/main.yaml"
@@ -631,7 +644,7 @@ if __name__ == "__main__":
                                      batch_size=config['training']['batch_size'],
                                      num_workers=1,
                                      split="train",
-                                    #  transforms=transformers,
+                                     #  transforms=transformers,
                                      image_size="300x300",
                                      )
 
@@ -665,11 +678,11 @@ if __name__ == "__main__":
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, len(train_dataloader),
                                                      eta_min=config['training']['learning_rate'])
 
-    if config['training']['resume'] != False:
+    if not config['training']['resume']:
 
         if os.path.isfile(config['training']['resume']):
             checkpoint = torch.load(config['training']['resume'])
-            start_epoch = checkpoint['epoch']
+            start_epoch = checkpoint['epoch']  # NOQA
             model.load_state_dict(checkpoint['model'])
             optimizer.load_state_dict(checkpoint['optimizer'])
             scheduler.load_state_dict(checkpoint['scheduler'])
@@ -688,3 +701,7 @@ if __name__ == "__main__":
                       test_with_full_supervision=config['training']['test_with_full_supervision']
                       )
     train_losses, val_losses, mean_ious_val = trainer.forward(experiment)
+
+
+if __name__ == "__main__":
+    main()

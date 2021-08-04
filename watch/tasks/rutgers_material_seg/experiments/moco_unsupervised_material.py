@@ -1,6 +1,6 @@
 #!/usr/bin/env python
+## flake8: noqa
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
-import comet_ml
 import argparse
 import builtins
 import math
@@ -8,12 +8,8 @@ import os
 import random
 import shutil
 import time
-import ubelt as ub
+# import ubelt as ub
 import warnings
-import kwcoco
-import kwimage
-import ndsampler
-import datetime
 import torch
 import torch.nn as nn
 import torch.nn.parallel
@@ -24,20 +20,20 @@ import torch.multiprocessing as mp
 import torch.utils.data
 import torch.utils.data.distributed
 import torchvision.transforms as transforms
-import torchvision.datasets as datasets
+# import torchvision.datasets as datasets
 import torchvision.models as models
 import itertools
 import numpy as np
 
 # import moco.loader
-import watch.tasks.rutgers_material_seg.utils.utils as utils
-from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
+# import watch.tasks.rutgers_material_seg.utils.utils as utils
+# from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
 from watch.tasks.rutgers_material_seg.datasets import build_dataset
 import watch.tasks.rutgers_material_seg.models.moco as moco
 
 model_names = sorted(name for name in models.__dict__
-    if name.islower() and not name.startswith("__")
-    and callable(models.__dict__[name]))
+                     if name.islower() and not name.startswith("__")
+                     and callable(models.__dict__[name]))
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 # parser.add_argument('data', metavar='DIR',
@@ -160,6 +156,7 @@ for index, item in enumerate(possible_combinations):
 #                                     workspace=config['cometml']['workspace'],
 #                                     display_summary_level=0)
 # cometml_experiment.set_name(experiment_name)
+
 
 def main():
     args = parser.parse_args()
@@ -300,7 +297,7 @@ def main_worker(gpu, ngpus_per_node, args):
         ]
     else:
         # MoCo v1's aug: the same as InstDisc https://arxiv.org/abs/1805.01978
-        augmentation = [
+        augmentation = [  # NOQA
             # transforms.RandomResizedCrop(224, scale=(0.2, 1.)),
             transforms.RandomGrayscale(p=0.2),
             transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
@@ -335,12 +332,11 @@ def main_worker(gpu, ngpus_per_node, args):
     #                                          )
 
     train_loader = build_dataset(dataset_name="deepglobe",
-                                     root="/media/native/data/data/DeepGlobe/crops/",
-                                     batch_size=args.batch_size,
-                                     num_workers=1,
-                                     split="train",
-                                     image_size="300x300",
-                                     )
+                                 root="/media/native/data/data/DeepGlobe/crops/",
+                                 batch_size=args.batch_size,
+                                 num_workers=1,
+                                 split="train",
+                                 image_size="300x300")
 
     for epoch in range(args.start_epoch, args.epochs):
         # if args.distributed:
@@ -365,7 +361,7 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
     data_time = AverageMeter('Data', '6.3')
     losses = AverageMeter('Loss', '.4')
     top1 = AverageMeter('Acc@1', '6.2')
-    top5 = AverageMeter('Acc@5', '6.2')
+    top5 = AverageMeter('Acc@5', '6.2')  # NOQA
     # progress = ProgressMeter(
     #     len(train_loader),
     #     [batch_time, data_time, losses, top1, top5],
@@ -448,6 +444,7 @@ def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
+
     def __init__(self, name, fmt=':f'):
         self.name = name
         self.fmt = fmt

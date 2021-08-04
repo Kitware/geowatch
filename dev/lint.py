@@ -55,7 +55,7 @@ def exec_autopep8(dpaths, autofix, mode='diff'):
     return info['ret']
 
 
-def custom_lint(dpath: str, mode=False, index=False, interact=None):
+def custom_lint(dpath: str, mode=False, index=None, interact=None):
     """
     Runs our custom "watch" linting rules on a specific directory and
     optionally "fixes" them.
@@ -143,10 +143,10 @@ def custom_lint(dpath: str, mode=False, index=False, interact=None):
         })
     if modifiers['newlines']:
         autofix.update({
-            # 'E301': 'Add missing blank line.',
-            # 'E302': 'Add missing 2 blank lines.',
+            'E301': 'Add missing blank line.',
+            'E302': 'Add missing 2 blank lines.',
             'E303': 'Remove extra blank lines.',
-            # 'E304': 'Remove blank line following function decorator.',
+            'E304': 'Remove blank line following function decorator.',
             'E305': 'Expected 2 blank lines after end of function or class.',
             'E306': 'Expected 1 blank line before a nested definition.',
         })
@@ -159,7 +159,8 @@ def custom_lint(dpath: str, mode=False, index=False, interact=None):
         })
 
     autofix = sorted(autofix)
-    if index is not None:
+    if index is not None and index is not False:
+        print('index = {!r}'.format(index))
         try:
             index = int(index)
         except ValueError:
@@ -244,6 +245,8 @@ if __name__ == '__main__':
         python ~/code/watch/dev/lint.py watch/ --mode=diff --interact
 
         python ~/code/watch/dev/lint.py atk --mode=diff --interact
+
+        python ~/code/watch/dev/lint.py ~/code/watch/watch/tasks/rutgers_material_change_detection/utils/utils.py --mode=diff
     """
     import fire
     import sys

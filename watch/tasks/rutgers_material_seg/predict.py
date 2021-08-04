@@ -1,42 +1,47 @@
 import os
-import sys
-current_path = os.getcwd().split("/")
-
-import matplotlib
-import gc
-import cv2
-import comet_ml
+# import sys
+# import matplotlib
+# import gc
+# import cv2
+# import comet_ml
 import torch
 import datetime
-import warnings
-import yaml
-import math
+# import warnings
+# import yaml
+# import math
 import random
 import kwcoco
 import kwimage
 import ndsampler
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import numpy as np
 import ubelt as ub
 import torch.optim as optim
-import torch.nn.functional as F
-from scipy import ndimage
+# import torch.nn.functional as F
+# from scipy import ndimage
 from torch import nn
 from tqdm import tqdm
-from torchvision import transforms
-import torchvision.transforms.functional as FT
+# from torchvision import transforms
+# import torchvision.transforms.functional as FT
 import watch.tasks.rutgers_material_seg.utils.utils as utils
 from watch.tasks.rutgers_material_seg.models import build_model
 from watch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import SequenceDataset
-from watch.tasks.rutgers_material_seg.datasets import build_dataset
-from kwarray.util_slider import *
-import time
+import kwarray
+# from watch.tasks.rutgers_material_seg.datasets import build_dataset
+# from kwarray.util_slider import *
+# import time
 torch.backends.cudnn.enabled = False
 torch.backends.cudnn.deterministic = True
 torch.set_printoptions(precision=6, sci_mode=False)
 np.set_printoptions(precision=3, suppress=True)
 
+current_path = os.getcwd().split("/")
+
 mean_std = ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+
+device = None
+config = None
+
 
 class Evaluator(object):
     def __init__(self, model: object,
@@ -94,8 +99,8 @@ class Evaluator(object):
                 bs, c, t, h, w = images.shape
                 image1 = images[:, :, 0, :, :]
                 image2 = images[:, :, 1, :, :]
-                mask1 = mask[:, 0, :, :]
-                mask2 = mask[:, 1, :, :]
+                mask1 = mask[:, 0, :, :]  # NOQA
+                mask2 = mask[:, 1, :, :]  # NOQA
 
                 images = images.to(device)
                 image1 = image1.to(device)
@@ -134,12 +139,12 @@ class Evaluator(object):
                                     (img['width'] / aux_width, img['height'] / aux_height))
 
                                 aux = {
-                                        'file_name': save_path,
-                                        'height': aux_height,
-                                        'width': aux_width,
-                                        'channels': config['data']['num_classes'],
-                                        'warp_aux_to_img': warp_aux_to_img.concise(),
-                                    }
+                                    'file_name': save_path,
+                                    'height': aux_height,
+                                    'width': aux_width,
+                                    'channels': config['data']['num_classes'],
+                                    'warp_aux_to_img': warp_aux_to_img.concise(),
+                                }
 
                                 auxiliary = img.setdefault('auxiliary', [])
                                 auxiliary.append(aux)
@@ -148,7 +153,8 @@ class Evaluator(object):
                         for gid, output in zip(current_gids, [output1_to_save[b, :, :, :], output2_to_save[b, :, :, :]]):
 
                             if gid not in stitcher_dict.keys():
-                                stitcher_dict[gid] = Stitcher((*outputs['tr'].data[0][b]['space_dims'], config['data']['num_classes']))
+                                stitcher_dict[gid] = kwarray.Stitcher(
+                                    (*outputs['tr'].data[0][b]['space_dims'], config['data']['num_classes']))
                             slice = outputs['tr'].data[0][b]['space_slice']
                             stitcher_dict[gid].add(slice, output)
                 # masks1 = F.softmax(output1, dim=1)#.detach()
@@ -183,9 +189,11 @@ class Evaluator(object):
         return
 
 
-if __name__ == "__main__":
-
-    main_config_path = f"./configs/main.yaml"
+def main():
+    # FIXME: no globals!
+    global device
+    global config
+    main_config_path = "./configs/main.yaml"
 
     initial_config = utils.load_yaml_as_dict(main_config_path)
     experiment_config_path = f"./configs/{initial_config['dataset']}.yaml"
@@ -194,7 +202,7 @@ if __name__ == "__main__":
     config = {**initial_config, **experiment_config}
     config['start_time'] = datetime.datetime.today().strftime('%Y-%m-%d-%H:%M:%S')
 
-    project_name = f"{current_path[-3]}_{current_path[-1]}_{config['dataset']}"  # _{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}"
+    # project_name = f"{current_path[-3]}_{current_path[-1]}_{config['dataset']}"  # _{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}"
 
     torch.manual_seed(config['seed'])
     torch.cuda.manual_seed(config['seed'])
@@ -253,8 +261,7 @@ if __name__ == "__main__":
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, len(eval_dataloader),
                                                      eta_min=config['training']['learning_rate'])
 
-    if config['training']['resume'] != False:
-
+    if not config['training']['resume']:
         if os.path.isfile(config['training']['resume']):
             checkpoint = torch.load(config['training']['resume'])
             model.load_state_dict(checkpoint['model'], strict=False)
@@ -264,10 +271,14 @@ if __name__ == "__main__":
             print("no checkpoint found at {}".format(config['training']['resume']))
             exit()
 
-    evaler = Evaluator(model,
-                      eval_dataloader,
-                      optimizer,
-                      scheduler,
-                      dset
-                      )
+    evaler = Evaluator(
+        model,
+        eval_dataloader,
+        optimizer,
+        scheduler,
+        dset
+    )
     evaler.forward()
+
+if __name__ == "__main__":
+    main()

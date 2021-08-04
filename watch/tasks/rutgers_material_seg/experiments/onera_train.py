@@ -1,26 +1,25 @@
-import sys
+# flake8: noqa
+# import sys
 import os
-current_path = os.getcwd().split("/")
-
-import matplotlib
+# import matplotlib
 import gc
-import cv2
+# import cv2
 import comet_ml
 import torch
 import datetime
-import warnings
-import yaml
-import math
+# import warnings
+# import yaml
+# import math
 import random
 import kwcoco
-import kwimage
+# import kwimage
 import ndsampler
 import matplotlib.pyplot as plt
 import numpy as np
 import ubelt as ub
 import torch.optim as optim
 import torch.nn.functional as F
-from scipy import ndimage
+# from scipy import ndimage
 from torch import nn
 from tqdm import tqdm
 from torchvision import transforms
@@ -29,17 +28,21 @@ import watch.tasks.rutgers_material_seg.utils.eval_utils as eval_utils
 import watch.tasks.rutgers_material_seg.utils.visualization as visualization
 from watch.tasks.rutgers_material_seg.models import build_model
 from watch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import SequenceDataset
-from watch.tasks.rutgers_material_seg.datasets import build_dataset
-from watch.tasks.rutgers_material_seg.models.supcon import SupConResNet
-from watch.tasks.rutgers_material_seg.models.losses import SupConLoss, simCLR_loss, QuadrupletLoss
+# from watch.tasks.rutgers_material_seg.datasets import build_dataset
+# from watch.tasks.rutgers_material_seg.models.supcon import SupConResNet
+from watch.tasks.rutgers_material_seg.models.losses import SupConLoss, QuadrupletLoss
 from fast_pytorch_kmeans import KMeans
 from skimage.filters import threshold_otsu as otsu
-from watch.tasks.rutgers_material_seg.models.canny_edge import CannyFilter
+# from watch.tasks.rutgers_material_seg.models.canny_edge import CannyFilter
 
-torch.backends.cudnn.enabled = False
-torch.backends.cudnn.deterministic = True
-torch.set_printoptions(precision=6, sci_mode=False)
-np.set_printoptions(precision=3, suppress=True)
+current_path = os.getcwd().split("/")
+
+
+if 1:
+    torch.backends.cudnn.enabled = False
+    torch.backends.cudnn.deterministic = True
+    torch.set_printoptions(precision=6, sci_mode=False)
+    np.set_printoptions(precision=3, suppress=True)
 
 
 class Trainer(object):
@@ -75,7 +78,11 @@ class Trainer(object):
         self.k = config['data']['num_classes']
         self.kmeans = KMeans(n_clusters=self.k, mode='euclidean', verbose=0, minibatch=None)
         self.max_label = self.k
-        self.all_crops_params = [tuple([i, j, config['data']['window_size'], config['data']['window_size']]) for i in range(config['data']['window_size'], h - config['data']['window_size']) for j in range(config['data']['window_size'], w - config['data']['window_size'])]
+        self.all_crops_params = [
+            tuple([i, j, config['data']['window_size'], config['data']['window_size']])
+            for i in range(config['data']['window_size'], h - config['data']['window_size'])
+            for j in range(config['data']['window_size'], w - config['data']['window_size'])
+        ]
         self.all_crops_params_np = np.array(self.all_crops_params)
 
         if test_loader is not None:

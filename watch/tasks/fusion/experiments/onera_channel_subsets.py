@@ -74,7 +74,7 @@ def main():
             --workdir=$HOME/work/watch/fit/runs
     """
     import itertools as it
-    from watch.tasks.fusion import fit, predict, evaluate
+    from watch.tasks.fusion import fit, predict, evaluate  # NOQA
 
     for method, model_name, (channel_key, channel_sets) in it.product(methods, model_names, dataset_channel_sets.items()):
 

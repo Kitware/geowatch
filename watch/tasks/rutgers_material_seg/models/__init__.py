@@ -4,10 +4,11 @@ from watch.tasks.rutgers_material_seg.models.shallow_seg import ShallowSeg
 from watch.tasks.rutgers_material_seg.models.linear_classifier import VSNet
 
 models = {
-            'deeplabWS': deeplabWS,
-            'shallow_seg': ShallowSeg,
-            'vsnet': VSNet
-            }
+    'deeplabWS': deeplabWS,
+    'shallow_seg': ShallowSeg,
+    'vsnet': VSNet
+}
+
 
 def build_model(model_name: str = "deeplabWS", backbone: str = "resnet101", **kwargs) -> object:
     """Model building module
@@ -21,7 +22,7 @@ def build_model(model_name: str = "deeplabWS", backbone: str = "resnet101", **kw
 
     Returns
     -------
-    model 
+    model
         model object
     """
     if backbone:

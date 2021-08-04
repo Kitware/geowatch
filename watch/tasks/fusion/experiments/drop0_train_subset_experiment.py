@@ -65,9 +65,8 @@ def main():
         defaults = dict(
             dataset="Drop0AlignMSI_S2",
             channels=channel_subset,
-
             # trainer params
-            workdir="_subset_experiment/trained_models"
+            workdir="_subset_experiment/trained_models",
             terminate_on_nan=True,
         )
         config = {**defaults, **method_base}
@@ -77,7 +76,7 @@ def main():
 
         print("predicting...")
         predict_args = SimpleNamespace(
-            tag=f"Drop0AlignMSI_{channel_key}_{method_key}"
+            tag=f"Drop0AlignMSI_{channel_key}_{method_key}",
             dataset="Drop0AlignMSI_S2",
             channels=channel_subset,
             checkpoint_path=args.default_root_dir / "package.pt",

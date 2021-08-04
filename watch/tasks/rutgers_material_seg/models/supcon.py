@@ -150,6 +150,7 @@ model_dict = {
 
 class LinearBatchNorm(nn.Module):
     """Implements BatchNorm1d by BatchNorm2d, for SyncBN purpose"""
+
     def __init__(self, dim, affine=True):
         super(LinearBatchNorm, self).__init__()
         self.dim = dim
@@ -164,6 +165,7 @@ class LinearBatchNorm(nn.Module):
 
 class SupConResNet(nn.Module):
     """backbone + projection head"""
+
     def __init__(self, name='resnet50', head='mlp', feat_dim=128):
         super(SupConResNet, self).__init__()
         model_fun, dim_in = model_dict[name]
@@ -188,6 +190,7 @@ class SupConResNet(nn.Module):
 
 class SupCEResNet(nn.Module):
     """encoder + classifier"""
+
     def __init__(self, name='resnet50', num_classes=10):
         super(SupCEResNet, self).__init__()
         model_fun, dim_in = model_dict[name]
@@ -200,6 +203,7 @@ class SupCEResNet(nn.Module):
 
 class LinearClassifier(nn.Module):
     """Linear classifier"""
+
     def __init__(self, name='resnet50', num_classes=10):
         super(LinearClassifier, self).__init__()
         _, feat_dim = model_dict[name]

@@ -1,3 +1,4 @@
+# flake8: noqa
 import pathlib
 import scriptconfig as scfg
 import ubelt as ub

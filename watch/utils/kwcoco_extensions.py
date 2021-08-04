@@ -424,7 +424,7 @@ def _sensor_channel_hueristic(sensor_coarse, num_bands):
     that is, one sensor's 'red' is roughly similar to another's but not corrected to match.
     Bands without a common_name will have a sensor-unique prefix appended to prevent this behavior.
     """
-    from watch.utils.util_bands import WORLDVIEW2_PAN, WORLDVIEW2_MS4, WORLDVIEW2_MS8, SENTINEL2, LANDSAT8, LANDSAT7
+    from watch.utils.util_bands import WORLDVIEW2_PAN, WORLDVIEW2_MS4, WORLDVIEW2_MS8, SENTINEL2, LANDSAT8, LANDSAT7  # NOQA
 
     def code(bands, prefix):
         names = []

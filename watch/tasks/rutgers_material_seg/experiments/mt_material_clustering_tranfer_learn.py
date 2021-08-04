@@ -1,3 +1,4 @@
+# flake8: noqa
 # from material_seg.datasets import build_dataset
 import os
 import sys

@@ -2,7 +2,7 @@ import kwarray
 import kwimage
 import numpy as np
 import torch
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 # from kwcoco.channel_spec import ChannelSpec  # NOQA
 from functools import partial
 from netharn.data.batch_samplers import PatchedBatchSampler

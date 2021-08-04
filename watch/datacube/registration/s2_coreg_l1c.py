@@ -82,11 +82,11 @@ def get_gcp_for_registration(master_ds,
                                                         0., 0.)
                 res.append(s)
                 continue
-            start_time = time.time()
+            # start_time = time.time()
             # offset_pixels, error, diffphase = register_translation(master_array_window, slave_array_window, 100)
             offset_pixels, error, diffphase = phase_cross_correlation(
                 master_array_window, slave_array_window, upsample_factor=100)
-            end_time = time.time()
+            # end_time = time.time()
             #print( "Window (%s,%s) processed in %.5f sec" % (i,j,end_time-start_time))
             #          #print("\tDetected pixel offset (y, x) and error: (%.3f, %.3f) %.5f" %(offset_pixels[0], offset_pixels[1], error))
             #          #print "\tDetected pixel offset (y, x) and (error, CCmax_norm): (%.3f, %.3f) (%.5f, %.5f)" %(offset_pixels[0], offset_pixels[1], error, 1-error)
@@ -122,7 +122,8 @@ def ensure_baseline_scene(baseline_scene):
         if 'granuledir' in df:
             return df['granuledir']
 
-        input_folder = os.path.commonpath(xmls)
+        raise NotImplementedError
+        input_folder = os.path.commonpath(xmls)  # NOQA  # FIXME?
         candidates = glob.glob(
             os.path.join(input_folder, '*.SAFE', 'GRANULE', df['granule_id']))
         return candidates[0]
@@ -284,7 +285,7 @@ def s2_coregister(granuledirs, output_folder, baseline_scene):
                              ]  # pixel,line,X,Y,error,shift_x,shift_y
                     if ((array[4] < error_threshold) & (not np.isnan(array[4]))
                             & (abs(array[5]) < max_shift_threshold) &
-                        (abs(array[6]) < max_shift_threshold)):
+                              (abs(array[6]) < max_shift_threshold)):
                         # For 10 m we select origianl values since B04 is 10 m
                         output_str_10 = "-gcp %s %s %.5f %.5f %.f " % (
                             array[0], array[1], array[2], array[3], elev)
@@ -327,7 +328,7 @@ def s2_coregister(granuledirs, output_folder, baseline_scene):
                     x_res = 10
                     y_res = 10
                     if ((b == 'B05') | (b == 'B06') | (b == 'B07') |
-                        (b == 'B8A') | (b == 'B11') | (b == 'B12')):
+                        (b == 'B8A') | (b == 'B11') | (b == 'B12')):  # NOQA
                         fname_gcp = fname_gcp_20
                         x_res = 20
                         y_res = 20

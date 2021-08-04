@@ -5,7 +5,8 @@ Tools to work with geotiff metadata.
 import numpy as np
 import ubelt as ub
 from watch.gis import spatial_reference as watch_crs
-from watch.utils.util_bands import SENTINEL2, LANDSAT7, LANDSAT8
+# from watch.utils.util_bands import LANDSAT7
+from watch.utils.util_bands import SENTINEL2, LANDSAT8
 import parse
 from os.path import basename, isfile
 from dateutil.parser import isoparse
@@ -930,9 +931,9 @@ def parse_landsat_product_id(product_id):
         }
 
         # use util_bands for this
-        l7_channel_alias = {
-            band['name']: band['common_name'] for band in LANDSAT7 if 'common_name' in band
-        }
+        # l7_channel_alias = {
+        #     band['name']: band['common_name'] for band in LANDSAT7 if 'common_name' in band
+        # }
         l8_channel_alias = {
             band['name']: band['common_name'] for band in LANDSAT8 if 'common_name' in band
         }

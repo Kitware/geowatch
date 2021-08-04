@@ -1,21 +1,20 @@
-import sys
+# import sys
 import os
-current_path = os.getcwd().split("/")
 
-import matplotlib
-import gc
-import cv2
+# import matplotlib
+# import gc
+# import cv2
 import comet_ml
 import torch
-from scipy import ndimage
+# from scipy import ndimage
 import torch.optim as optim
 from torch import nn
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 import datetime
 import torch.nn.functional as F
-import warnings
+# import warnings
 import yaml
 import random
 
@@ -24,10 +23,14 @@ import watch.tasks.rutgers_material_seg.utils.visualization as visualization
 from watch.tasks.rutgers_material_seg.models import build_model
 from watch.tasks.rutgers_material_seg.datasets import build_dataset
 import watch.tasks.rutgers_material_seg.utils.eval_utils as eval_utils
-torch.backends.cudnn.enabled = False
-torch.backends.cudnn.deterministic = True
-torch.set_printoptions(precision=6, sci_mode=False)
-np.set_printoptions(precision=3, suppress=True)
+
+current_path = os.getcwd().split("/")
+
+if 1:
+    torch.backends.cudnn.enabled = False
+    torch.backends.cudnn.deterministic = True
+    torch.set_printoptions(precision=6, sci_mode=False)
+    np.set_printoptions(precision=3, suppress=True)
 
 
 class Trainer(object):
@@ -61,6 +64,8 @@ class Trainer(object):
 
         if test_loader is not None:
             self.test_loader = test_loader
+            raise NotImplementedError
+            test_with_full_supervision = None
             self.test_with_full_supervision = test_with_full_supervision
 
         self.cmap = visualization.rand_cmap(nlabels=config['data']['num_classes'] + 1, type='bright',
@@ -79,11 +84,11 @@ class Trainer(object):
             float: training loss of that epoch
         """
         total_loss, total_loss_seg = 0, 0
-        preds, targets = [], []
+        preds, targets = [], []  # NOQA
         self.model.train()
         print(f"starting epoch {epoch}")
         loader_size = len(self.train_loader)
-        iter_visualization = loader_size // config['visualization']['train_visualization_divisor']
+        iter_visualization = loader_size // config['visualization']['train_visualization_divisor']  # NOQA
         pbar = tqdm(enumerate(self.train_loader), total=len(self.train_loader))
         batch_index_to_show = config['visualization']['batch_index_to_show']
         for batch_index, batch in pbar:
@@ -92,13 +97,13 @@ class Trainer(object):
 
             mask = mask.long().squeeze(1)
 
-            class_to_show = max(0, torch.unique(mask)[-1] - 1)
+            class_to_show = max(0, torch.unique(mask)[-1] - 1)  # NOQA
             image1 = image1.to(device)
             mask = mask.to(device)
-            image_raw = utils.denorm(image1.clone().detach())
-            image_name = outputs['visuals']['image_name'][batch_index_to_show]
+            image_raw = utils.denorm(image1.clone().detach())  # NOQA
+            image_name = outputs['visuals']['image_name'][batch_index_to_show]  # NOQA
 
-            batch_size = image1.shape[0]
+            batch_size = image1.shape[0]  # NOQA
             output1 = self.model(image1)  # torch.Size([B, C+1, H, W])
             output1_interpolated = F.interpolate(output1, size=mask.size()[-2:],
                                                  mode="bilinear", align_corners=True)
@@ -116,7 +121,7 @@ class Trainer(object):
             total_loss_seg += loss.item()
 
             masks = F.interpolate(masks, size=mask.size()[-2:], mode="bilinear", align_corners=True)
-            pred = masks.max(1)[1].cpu().detach()  # .numpy()
+            pred = masks.max(1)[1].cpu().detach()  # .numpy()  # NOQA
             total_loss += loss.item()
 
         cometml_experiemnt.log_metric("Training Loss", total_loss, epoch=epoch + 1)
@@ -140,10 +145,10 @@ class Trainer(object):
         print("validating")
         total_loss = 0
         preds, crf_preds, targets  = [], [], []
-        batch_index_to_show = config['visualization']['batch_index_to_show']
+        batch_index_to_show = config['visualization']['batch_index_to_show']  # NOQA
         loader = self.val_loader
         loader_size = len(loader)
-        iter_visualization = loader_size // config['visualization']['val_visualization_divisor']
+        iter_visualization = loader_size // config['visualization']['val_visualization_divisor']  # NOQA
         self.model.eval()
         with torch.no_grad():
             pbar = tqdm(enumerate(loader), total=len(loader))
@@ -154,14 +159,14 @@ class Trainer(object):
 
                 image1 = image1.to(device)
                 image_raw = utils.denorm(image1.clone().detach())
-                mask = points_mask1.squeeze(1).to(device)
+                mask = points_mask1.squeeze(1).to(device)  # NOQA
 
                 output = self.model(image1)  # [B,22,150,150]
 
                 masks = F.softmax(output, dim=1)  # (B, 22, 300, 300)
 
                 masks = self.run_pamr(image_raw, masks.detach())
-                masks = F.interpolate(masks, size=points_mask1.size()[-2:], mode="bilinear", align_corners=True)
+                masks = F.interpolate(masks, size=points_mask1.size()[-2:], mode="bilinear", align_corners=True)  # NOQA
 
                 if self.use_crf:
                     crf_probs = utils.batch_crf_inference(image_raw.detach().cpu(),
@@ -208,8 +213,8 @@ class Trainer(object):
             tuple: (train losses, validation losses, mIoU)
         """
         train_losses, val_losses = [], []
-        mean_ious_val, mean_ious_val_list, count_metrics_list = [], [], []
-        best_val_loss, best_train_loss, train_loss = np.infty, np.infty, np.infty
+        mean_ious_val, mean_ious_val_list, count_metrics_list = [], [], []  # NOQA
+        best_val_loss, best_train_loss, train_loss = np.infty, np.infty, np.infty  # NOQA
         best_val_mean_iou = 0
         model_save_dir = config['data'][config['location']]['model_save_dir'] + f"{current_path[-1]}_{config['dataset']}/{cometml_experiment.project_name}_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}/"
         utils.create_dir_if_doesnt_exist(model_save_dir)
@@ -332,7 +337,7 @@ if __name__ == "__main__":
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, len(train_dataloader),
                                                      eta_min=config['training']['learning_rate'])
 
-    if config['training']['resume'] != False:
+    if not config['training']['resume']:
 
         if os.path.isfile(config['training']['resume']):
             checkpoint = torch.load(config['training']['resume'])

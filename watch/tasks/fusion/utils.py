@@ -124,6 +124,7 @@ class SinePositionalEncoding(nn.Module):
         >>> x = torch.rand(3, 5, 7, 11, 13)
         >>> y = self(x)
     """
+
     def __init__(self, dest_dim, dim_to_encode, sine_pairs=2):
         super().__init__()
         self.dest_dim = dest_dim

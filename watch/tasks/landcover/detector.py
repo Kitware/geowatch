@@ -1,7 +1,6 @@
 import logging
 from pathlib import Path
 
-import affine
 import numpy as np
 import rasterio
 import rasterio.features
@@ -116,7 +115,7 @@ def predict_image(img, model):
     pred = pred.squeeze().detach().cpu().numpy()
     pred = pred.astype(img.dtype)
 
-    pred = np.where(mask == True, pred, PRED_NODATA)
+    pred = np.where(mask == True, pred, PRED_NODATA)  # NOQA
 
     return pred
 

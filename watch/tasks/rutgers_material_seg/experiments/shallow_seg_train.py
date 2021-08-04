@@ -1,25 +1,18 @@
-import sys
+# flake8: noqa
 import os
-current_path = os.getcwd().split("/")
-
-import matplotlib
 import gc
-import cv2
 import comet_ml
 import torch
 import datetime
-import warnings
 import yaml
 import random
 import kwcoco
-import kwimage
 import ndsampler
 import matplotlib.pyplot as plt
 import numpy as np
 import ubelt as ub
 import torch.optim as optim
 import torch.nn.functional as F
-from scipy import ndimage
 from torch import nn
 from tqdm import tqdm
 
@@ -28,11 +21,14 @@ import watch.tasks.rutgers_material_seg.utils.eval_utils as eval_utils
 import watch.tasks.rutgers_material_seg.utils.visualization as visualization
 from watch.tasks.rutgers_material_seg.models import build_model
 from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
-from watch.tasks.rutgers_material_seg.datasets import build_dataset
-torch.backends.cudnn.enabled = False
-torch.backends.cudnn.deterministic = True
-torch.set_printoptions(precision=6, sci_mode=False)
-np.set_printoptions(precision=3, suppress=True)
+
+current_path = os.getcwd().split("/")
+
+if 1:
+    torch.backends.cudnn.enabled = False
+    torch.backends.cudnn.deterministic = True
+    torch.set_printoptions(precision=6, sci_mode=False)
+    np.set_printoptions(precision=3, suppress=True)
 
 
 class Trainer(object):

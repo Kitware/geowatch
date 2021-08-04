@@ -77,5 +77,5 @@ for dataset_name in dataset_keys:
             )
             try:
                 predict.main(args)
-            except:
+            except Exception:
                 continue

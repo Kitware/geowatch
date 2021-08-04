@@ -18,6 +18,7 @@ class ElevationDatabase(object):
     latitude and longitude.
 
     """
+
     def __init__(self):
         pass
 
@@ -49,8 +50,10 @@ class ConstantElevationDatabase(ElevationDatabase):
     """
     Fallback compatibility API when no elevation information is available
     """
+
     def __init__(self, const):
         self.const = const
+
     def query(self, lats, lons):
         lats_, lons_, was_iterable = ensure_iterable_latlons(lats, lons)
         if was_iterable:
@@ -92,6 +95,7 @@ class OpenElevationDatabase(ElevationDatabase):
         >>> print('elevation = {!r}'.format(elevation))
         elevation = 449
     """
+
     def query(self, lat, lon, **kwargs):
         # We could vectorize this, but if is very slow, and we probably should
         # always use gtop30 instead.

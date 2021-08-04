@@ -1,17 +1,18 @@
-    """This method uses K-Means clusters as region proposals, 
-        which this tool allows you to label. Note that this tool:
-            - Does not have "free brush" tool. It can only label clusters.
-            - The processing time of each region proposal depends on the 
-                number of clusters, timesteps, and channels. It may take
-                up to 2 minutes with some configurations.
-    """
+"""
+This method uses K-Means clusters as region proposals,
+which this tool allows you to label. Note that this tool:
+    - Does not have "free brush" tool. It can only label clusters.
+    - The processing time of each region proposal depends on the
+    number of clusters, timesteps, and channels. It may take
+    up to 2 minutes with some configurations.
+"""
 
 import sys
-from PyQt5.QtGui import QPixmap, QImage
-from PyQt5.QtWidgets import (QApplication, QWidget, QPushButton, QSizePolicy,
-                             QDoubleSpinBox, QLabel, QCheckBox, QMainWindow,
-                             QGridLayout, QComboBox, QTextBrowser, QLineEdit, QInputDialog)
-from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QPixmap, QImage  # NOQA
+from PyQt5.QtWidgets import (QApplication, QWidget, QPushButton, QSizePolicy,   # NOQA
+                             QDoubleSpinBox, QLabel, QCheckBox, QMainWindow,     # NOQA
+                             QGridLayout, QComboBox, QTextBrowser, QLineEdit, QInputDialog)    # NOQA
+from PyQt5.QtCore import Qt  # NOQA
 from PyQt5 import QtCore
 import cv2
 import numpy as np
@@ -19,23 +20,22 @@ import matplotlib.pyplot as plt
 import ubelt as ub
 import kwcoco
 import ndsampler
-import watch
-import numpy as np
-from watch.utils.util_norm import *
-import matplotlib.pyplot as plt
-from tqdm import tqdm
+# import numpy as np
+# import watch
+# from watch.utils.util_norm import *
+# import matplotlib.pyplot as plt
+# from tqdm import tqdm
 import torch
-import pdb
+# import pdb
 from sklearn.cluster import KMeans
-from skimage.transform import resize
-from sklearn.manifold import TSNE
-import scipy
-from PIL import Image
-from PIL.ImageQt import ImageQt
+# from skimage.transform import resize
+# from sklearn.manifold import TSNE
+# import scipy
+# from PIL import Image
+# from PIL.ImageQt import ImageQt
 import qimage2ndarray
 import cmapy
-import kwcoco
-import random
+# import random
 import kwimage
 from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
 
@@ -281,7 +281,7 @@ class Window(QMainWindow):
                 # binary_segmentation = kwimage.Segmentation.coerce(binary_polygon)#.to_coco(style="new")
                 for gid in gids:
                     image_dict =  self.dset.index.imgs[gid]
-                    im_space_height, im_space_width = image_dict['height'], image_dict['width']
+                    im_space_height, im_space_width = image_dict['height'], image_dict['width']  # NOQA
                     img_to_vid_transform = image_dict['warp_img_to_vid']['matrix']
                     img_to_vid_transform_npy = np.array(img_to_vid_transform)
                     img_to_vid_transform_inv_npy = np.linalg.inv(img_to_vid_transform_npy)
@@ -294,8 +294,8 @@ class Window(QMainWindow):
                                                       category_id=i,
                                                       bbox=ub.peek(mask.bounding_box().to_coco()),
                                                       segmentation=mask.to_coco(style="new")
-                                                    #   bbox=ub.peek(binary_polygon.bounding_box().to_coco()),
-                                                    #   segmentation=binary_polygon.to_coco(style="new")
+                                                      # bbox=ub.peek(binary_polygon.bounding_box().to_coco()),
+                                                      # segmentation=binary_polygon.to_coco(style="new")
                                                       )
 
         self.material_dset.validate()
@@ -434,7 +434,7 @@ class Window(QMainWindow):
         gids = self.dataset[self.image_counter]['tr'].data['gids']
         for gid in gids:
             image_dict =  self.dset.index.imgs[gid]
-            img_to_vid_transform = image_dict['warp_img_to_vid']['matrix']
+            img_to_vid_transform = image_dict['warp_img_to_vid']['matrix']  # NOQA
             video_dict = self.dset.index.videos[image_dict['video_id']]
             if gid not in self.material_dset.index.imgs.keys():
                 self.material_dset.add_image(**image_dict)
@@ -525,7 +525,7 @@ if __name__ == "__main__":
             # print(bands_available)
             if not all(elem in bands_available for elem in expected_channels):
                 gids_to_remove.append(gid)
-        except:
+        except Exception:
             gids_to_remove.append(gid)
             continue
 

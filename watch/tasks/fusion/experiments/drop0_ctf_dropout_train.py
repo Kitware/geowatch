@@ -1,7 +1,7 @@
+# flake8: noqa
 import pathlib
 import itertools as it
 from . import fit
-from .datasets import onera_2018
 
 model_names = [
     "smt_it_t_t12",
@@ -54,5 +54,5 @@ if __name__ == "__main__":
         args.default_root_dir = f"_trained_models/drop0/ctf_drop{args.tfms_train_channel_size}/{method}-{model_name}"
         try:
             fit.main(args)
-        except:
+        except Exception:
             continue

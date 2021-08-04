@@ -118,6 +118,7 @@ class RPCTransform(object):
         >>> print('pxl_pts = {}'.format(ub.repr2(pxl_pts, nl=1, precision=2)))
         pxl_pts = np.array([[17576.2 , 10690.73]]...)
     """
+
     def __init__(self, rpcs, elevation='gtop30',
                  axis_mapping='OAMS_TRADITIONAL_GIS_ORDER'):
         self.rpcs = rpcs

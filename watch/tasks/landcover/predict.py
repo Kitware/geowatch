@@ -80,7 +80,7 @@ def predict(dataset, deployed, output):
         except KeyboardInterrupt:
             log.info('interrupted')
             break
-        except Exception as e:
+        except Exception:
             log.exception('Unable to load {}'.format(filename))
 
     output_dset.dump(str(output), indent=2)

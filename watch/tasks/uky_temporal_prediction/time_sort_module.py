@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 from argparse import Namespace
 import pytorch_lightning as pl
-import os
 
 from .models import UNet, UNet_blur
 from .drop0_datasets import drop0_pairs

@@ -8,14 +8,14 @@ def group_tiles(query, timediff_sec=300):
     that can be merged are grouped together
 
     TODO when RGDC STAC endpoint is available, calculate overlap with AOI here
-  
+
     Args:
         query: output of rgdc.search
         timediff_sec: max allowed time between adjacent scenes.
             Should nominally be 23 seconds for Landsat 7 and 8. Some buffer is included.
             TODO what is it for Sentinel?
     Example:
-        >>> # xdoctest: +SKIP   
+        >>> # xdoctest: +SKIP
         >>> from rgd_client import Rgdc
         >>> client = Rgdc('username', 'password')
         >>> query = (client.search(**kwargs, instrumentation='ETM') +

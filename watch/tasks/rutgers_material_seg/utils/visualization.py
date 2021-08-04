@@ -134,7 +134,7 @@ def rand_cmap(nlabels, type='bright', first_color_black=True, last_color_black=F
         bounds = np.linspace(0, nlabels, nlabels + 1)
         norm = colors.BoundaryNorm(bounds, nlabels)
 
-        cb = colorbar.ColorbarBase(ax, cmap=random_colormap, norm=norm,
+        cb = colorbar.ColorbarBase(ax, cmap=random_colormap, norm=norm,  # NOQA
                                    spacing='proportional', ticks=None,
                                    boundaries=bounds, format='%1i',
                                    orientation=u'horizontal')

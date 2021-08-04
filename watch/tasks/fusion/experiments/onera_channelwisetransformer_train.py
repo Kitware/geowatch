@@ -31,7 +31,7 @@ def main():
             --workdir=$HOME/work/watch/fit/runs
     """
     import itertools as it
-    from types import SimpleNamespace
+    # from types import SimpleNamespace
     from . import fit
 
     for method, model_name in it.product(methods, model_names):

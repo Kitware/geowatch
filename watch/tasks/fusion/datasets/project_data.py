@@ -8,7 +8,7 @@ import pathlib
 from watch.tasks.fusion.datasets import common
 from watch.tasks.fusion import utils
 from einops.layers.torch import Rearrange
-import numpy as np
+# import numpy as np
 import torch
 
 
@@ -27,37 +27,37 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
     """
 
     # TODO: all of the below values are derived from onera data, and not project data
-#     un-filtered
-#     mean =[
-#             1618.045472603135, #B01
-#             1422.4117861742477, #B02
-#             1359.4422181552754, #B03
-#             1414.6326650140888, #B04
-#             1558.066015014933, #B05
-#             1986.5720639874007, #B06
-#             2211.05960321667, #B07
-#             2119.168043369016, #B08
-#             711.6691026661, #B09
-#             15.798994821955343, #B10
-#             2134.1261592656733, #B11
-#             1584.3473492925966, #B12
-#             2345.39250148559, #B8A
-#         ]
-#     std = [
-#             318.0413600546062, #B01
-#             456.1716680330628, #B02
-#             590.073089436455, #B03
-#             849.3395398520843, #B04
-#             808.8434944245414, #B05
-#             810.2980239328889, #B06
-#             888.134386002103, #B07
-#             901.4549041572369, #B08
-#             369.83128311537274, #B09
-#             9.292564246350967, #B10
-#             1114.8360249854718, #B11
-#             983.4251876271745, #B12
-#             950.995883516169, #B8A
-#         ]
+    #     un-filtered
+    #     mean =[
+    #             1618.045472603135, #B01
+    #             1422.4117861742477, #B02
+    #             1359.4422181552754, #B03
+    #             1414.6326650140888, #B04
+    #             1558.066015014933, #B05
+    #             1986.5720639874007, #B06
+    #             2211.05960321667, #B07
+    #             2119.168043369016, #B08
+    #             711.6691026661, #B09
+    #             15.798994821955343, #B10
+    #             2134.1261592656733, #B11
+    #             1584.3473492925966, #B12
+    #             2345.39250148559, #B8A
+    #         ]
+    #     std = [
+    #             318.0413600546062, #B01
+    #             456.1716680330628, #B02
+    #             590.073089436455, #B03
+    #             849.3395398520843, #B04
+    #             808.8434944245414, #B05
+    #             810.2980239328889, #B06
+    #             888.134386002103, #B07
+    #             901.4549041572369, #B08
+    #             369.83128311537274, #B09
+    #             9.292564246350967, #B10
+    #             1114.8360249854718, #B11
+    #             983.4251876271745, #B12
+    #             950.995883516169, #B8A
+    #         ]
     mean = torch.tensor([
             1562.0766579032488,  # B01
             1338.2290704889197,  # B02
@@ -72,7 +72,7 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
             1960.5317996244119,  # B11
             1412.116801289823,  # B12
             2343.9090645496567,  # B8A
-        ])
+    ])
     std = torch.tensor([
             239.70035979139226,  # B01
             325.0655318620384,  # B02
@@ -87,7 +87,7 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
             896.0873314714964,  # B11
             752.2534022942613,  # B12
             777.9910284369854,  # B8A
-        ])
+    ])
     bce_weight = 30
 
     def __init__(
@@ -172,28 +172,28 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
             video_id = video["id"]
 
             video["width"] = max([
-                    image["width"]
-                    for image in project_ds.dataset["images"]
-                    if image["video_id"] == video["id"]
-                ])
+                image["width"]
+                for image in project_ds.dataset["images"]
+                if image["video_id"] == video["id"]
+            ])
             video["height"] = max([
-                    image["height"]
-                    for image in project_ds.dataset["images"]
-                    if image["video_id"] == video["id"]
-                ])
+                image["height"]
+                for image in project_ds.dataset["images"]
+                if image["video_id"] == video["id"]
+            ])
             video["num_frames"] = len([
-                    image
-                    for image in project_ds.dataset["images"]
-                    if image["video_id"] == video["id"]
-                ])
+                image
+                for image in project_ds.dataset["images"]
+                if image["video_id"] == video["id"]
+            ])
             video["available_channels"] = list(set(it.chain.from_iterable([
-                    [
-                        band["channels"]
-                        for band in image["auxiliary"]
-                    ]
-                    for image in project_ds.dataset["images"]
-                    if image["video_id"] == video_id
-                ])))
+                [
+                    band["channels"]
+                    for band in image["auxiliary"]
+                ]
+                for image in project_ds.dataset["images"]
+                if image["video_id"] == video_id
+            ])))
             video["warp_wld_to_vid"] = {
                 'type': 'affine',
                 'matrix': [
@@ -401,28 +401,28 @@ class Drop0Raw_S2(pl.LightningDataModule):
                 frame["frame_index"] = idx + 1
 
             video["width"] = max([
-                    image["width"]
-                    for image in project_ds.dataset["images"]
-                    if image["site_tag"] == video_name
-                ])
+                image["width"]
+                for image in project_ds.dataset["images"]
+                if image["site_tag"] == video_name
+            ])
             video["height"] = max([
-                    image["height"]
-                    for image in project_ds.dataset["images"]
-                    if image["site_tag"] == video_name
-                ])
+                image["height"]
+                for image in project_ds.dataset["images"]
+                if image["site_tag"] == video_name
+            ])
             video["num_frames"] = len([
-                    image
-                    for image in project_ds.dataset["images"]
-                    if image["site_tag"] == video_name
-                ])
+                image
+                for image in project_ds.dataset["images"]
+                if image["site_tag"] == video_name
+            ])
             video["available_channels"] = list(set(it.chain.from_iterable([
-                    [
-                        band["channels"]
-                        for band in image["auxiliary"]
-                    ]
-                    for image in project_ds.dataset["images"]
-                    if image["site_tag"] == video_name
-                ])))
+                [
+                    band["channels"]
+                    for band in image["auxiliary"]
+                ]
+                for image in project_ds.dataset["images"]
+                if image["site_tag"] == video_name
+            ])))
             video["warp_wld_to_vid"] = {
                 'type': 'affine',
                 'matrix': [

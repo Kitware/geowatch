@@ -297,7 +297,7 @@ def _check_properties():
             print('----')
             fname = row['key']
             fpath = grab_nitf_fpath(fname, safe=True)
-            out = ub.cmd('gdalinfo {}'.format(fpath), verbose=3)
+            out = ub.cmd('gdalinfo {}'.format(fpath), verbose=3)  # NOQA
 
             # if 'rpc' in out['out'].lower():
             #     break

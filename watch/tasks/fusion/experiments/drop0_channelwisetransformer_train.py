@@ -1,7 +1,6 @@
 import pathlib
 import itertools as it
 from . import fit
-from .datasets import onera_2018
 
 model_names = [
     "smt_it_t_t12",

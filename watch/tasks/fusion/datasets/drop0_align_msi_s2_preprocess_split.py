@@ -53,28 +53,28 @@ def main():
         video_id = video["id"]
 
         video["width"] = max([
-                image["width"]
-                for image in project_ds.dataset["images"]
-                if image["video_id"] == video["id"]
-            ])
+            image["width"]
+            for image in project_ds.dataset["images"]
+            if image["video_id"] == video["id"]
+        ])
         video["height"] = max([
-                image["height"]
-                for image in project_ds.dataset["images"]
-                if image["video_id"] == video["id"]
-            ])
+            image["height"]
+            for image in project_ds.dataset["images"]
+            if image["video_id"] == video["id"]
+        ])
         video["num_frames"] = len([
-                image
-                for image in project_ds.dataset["images"]
-                if image["video_id"] == video["id"]
-            ])
+            image
+            for image in project_ds.dataset["images"]
+            if image["video_id"] == video["id"]
+        ])
         video["available_channels"] = list(set(it.chain.from_iterable([
-                [
-                    band["channels"]
-                    for band in image["auxiliary"]
-                ]
-                for image in project_ds.dataset["images"]
-                if image["video_id"] == video_id
-            ])))
+            [
+                band["channels"]
+                for band in image["auxiliary"]
+            ]
+            for image in project_ds.dataset["images"]
+            if image["video_id"] == video_id
+        ])))
         video["warp_wld_to_vid"] = {
             'type': 'affine',
             'matrix': [
@@ -89,9 +89,9 @@ def main():
     project_ds.validate()
 
     print("Available names:", [
-            video["name"]
-            for video in project_ds.dataset["videos"]
-        ])
+        video["name"]
+        for video in project_ds.dataset["videos"]
+    ])
 
     train_ds = project_ds.copy()
     valid_ds = project_ds.copy()

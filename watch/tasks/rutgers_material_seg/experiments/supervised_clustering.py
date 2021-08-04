@@ -2,12 +2,12 @@
 import kwcoco
 import ndsampler
 import ubelt as ub
-import watch
+# import watch
 import numpy as np
 import matplotlib.pyplot as plt
-from tqdm import tqdm
+# from tqdm import tqdm
 import torch
-import pdb
+# import pdb
 from sklearn.cluster import KMeans
 from sklearn.manifold import TSNE
 from metric_learn import NCA, LMNN, MMC_Supervised, LSML_Supervised
@@ -149,6 +149,8 @@ for batch in loader:
     plt.show()
 
     if visualize_images:
+        raise NotImplementedError
+        mask_show = None
         mask_show = mask_show[0]  # [b,t,h,w]
         image_show = image_show[0]
         figure = plt.figure(figsize=(10, 10))

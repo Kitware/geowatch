@@ -3,13 +3,13 @@ from torch import nn
 import torch
 import re
 import math
-from sklearn.metrics import average_precision_score, accuracy_score
+from sklearn.metrics import average_precision_score
 
 
 def get_ap_score(y_true, y_scores):
     """
     Get average precision score between 2 1-d numpy arrays
-    
+
     Args:
         y_true: batch of true labels
         y_scores: batch of confidence scores
@@ -19,6 +19,7 @@ def get_ap_score(y_true, y_scores):
     """
     scores = average_precision_score(y_true=y_true, y_score=y_scores, average='samples')
     return scores
+
 
 def val_mae(pred_counts, gt_counts):
     n = len(gt_counts)
@@ -44,6 +45,7 @@ def mae(pred_counts, gt_counts):
     sum_e_list = sum(absolute_e_list)
     mae = sum_e_list / n
     return mae
+
 
 def rmse(pred_counts, gt_counts):
     assert len(pred_counts) == len(gt_counts)
@@ -82,6 +84,7 @@ def _threshold(x, threshold=None):
     else:
         return x
 
+
 def iou_npy(pr, gt, eps=1e-7, threshold=None, ignore_channels=None):
     """Calculate Intersection over Union between ground truth and prediction
     Args:
@@ -98,6 +101,7 @@ def iou_npy(pr, gt, eps=1e-7, threshold=None, ignore_channels=None):
     union = np.sum(gt) + np.sum(pr) - intersection + eps
     print(union)
     return (intersection + eps) / union
+
 
 def iou(pr, gt, eps=1e-7, threshold=None, ignore_channels=None):
     """Calculate Intersection over Union between ground truth and prediction
@@ -119,6 +123,7 @@ def iou(pr, gt, eps=1e-7, threshold=None, ignore_channels=None):
 
 
 jaccard = iou
+
 
 def f_score(pr, gt, beta=1, eps=1e-7, threshold=None, ignore_channels=None):
     """Calculate F-score between ground truth and prediction
@@ -206,6 +211,7 @@ def recall(pr, gt, eps=1e-7, threshold=None, ignore_channels=None):
 
     return score
 
+
 class BaseObject(nn.Module):
 
     def __init__(self, name=None):
@@ -221,14 +227,16 @@ class BaseObject(nn.Module):
         else:
             return self._name
 
+
 class Activation(nn.Module):
     def __init__(self, activation):
         super().__init__()
-        if activation == None or activation == 'identity':
+        if activation is None or activation == 'identity':
             self.activation = nn.Identity()
         elif activation == 'sigmoid':
             self.activation = torch.sigmoid
         elif activation == 'softmax2d':
+            import functools
             self.activation = functools.partial(torch.softmax, dim=1)
         elif callable(activation):
             self.activation = activation
@@ -237,6 +245,7 @@ class Activation(nn.Module):
 
     def forward(self, x):
         return self.activation(x)
+
 
 def _fast_hist(label_pred, label_true, num_classes):
     mask = (label_true >= 0) & (label_true < num_classes)
@@ -263,8 +272,10 @@ def calc_mAP(predictions, gts, num_classes=2):
     fwavacc = (freq[freq > 0] * iu[freq > 0]).sum()
     return acc, acc_cls, mean_iu, fwavacc
 
+
 class Metric(BaseObject):
     pass
+
 
 class IoU(Metric):
     __name__ = 'iou_score'
@@ -361,12 +372,13 @@ class Precision(Metric):
             ignore_channels=self.ignore_channels,
         )
 
+
 def compute_jaccard(preds_masks_all, targets_masks_all, num_classes=21):
 
     tps = np.zeros((num_classes, ))
     fps = np.zeros((num_classes, ))
     fns = np.zeros((num_classes, ))
-    counts = np.zeros((num_classes, ))
+    # counts = np.zeros((num_classes, ))
 
     for mask_pred, mask_gt in zip(preds_masks_all, targets_masks_all):
         # print(mask_pred.shape)
