@@ -1,56 +1,132 @@
+# import pycodestyle
+import ubelt as ub
 
-def custom_lint(dpath: str):
+VERBOSE = 3
+
+
+def exec_flake8(dpaths, ignore, max_line_length=79):
+    print('ignore = {!r}'.format(ignore))
+    args_list = ['--max-line-length', f'{max_line_length:d}', '--ignore=' + ','.join(ignore)]
+    info = ub.cmd(['flake8'] + args_list + dpaths, verbose=VERBOSE, check=False)
+    if info['ret'] not in {0, 1}:
+        raise Exception(ub.repr2(ub.dict_diff(info, ['out'])))
+    return info['ret']
+
+
+def exec_autopep8(dpaths, autofix):
+    print('autofix = {!r}'.format(autofix))
+    args_list = ['--select', autofix, '--recursive']
+    info = ub.cmd(['autopep8'] + args_list + dpaths, verbose=VERBOSE, check=False)
+    if info['ret'] not in {0, 1}:
+        raise Exception(ub.repr2(ub.dict_diff(info, ['out'])))
+    return info['ret']
+
+
+def custom_lint(dpath: str, fix=False):
     """
-    Runs our custom "watch" linting rules on a specific directory.
+    Runs our custom "watch" linting rules on a specific directory and
+    optionally "fixes" them.
 
     Args:
-        dpath (str|list): the path or paths to lint
-    """
-    import ubelt as ub
-    flake8_errors = [
-        'E123',  # closing braket indentation
-        'E126',  # continuation line hanging-indent
-        'E127',  # continuation line over-indented for visual indent
-        'E201',  # whitespace after '('
-        'E202',  # whitespace before ']'
-        'E203',  # whitespace before ', '
-        'E221',  # multiple spaces before operator  (TODO: I wish I could make an exception for the equals operator. Is there a way to do this?)
-        'E222',  # multiple spaces after operator
-        'E241',  # multiple spaces after ,
-        'E265',  # block comment should start with "# "
-        'E271',  # multiple spaces after keyword
-        'E272',  # multiple spaces before keyword
-        'E301',  # expected 1 blank line, found 0
-        'E305',  # expected 1 blank line after class / func
-        'E306',  # expected 1 blank line before func
-        #'E402',  # module import not at top
-        'E501',  # line length > 79
-        'W602',  # Old reraise syntax
-        'E266',  # too many leading '#' for block comment
-        'N801',  # function name should be lowercase [N806]
-        'N802',  # function name should be lowercase [N806]
-        'N803',  # argument should be lowercase [N806]
-        'N805',  # first argument of a method should be named 'self'
-        'N806',  # variable in function should be lowercase [N806]
-        'N811',  # constant name imported as non constant
-        'N813',  # camel case
-        'W503',  # line break before binary operator
-        'W504',  # line break after binary operator
+        dpath (str|list):
+            the path or paths to lint
 
-        'I201',  # Newline between Third party import groups
-        'I100',  # Wrong import order
-    ]
-    flake8_args_list = [
-        '--max-line-length', '79',
-        '--ignore=' + ','.join(flake8_errors)
-    ]
-    flake8_exe = 'flake8'
-    if isinstance(dpath, str):
-        dpaths = [dpath]
+        fix (bool, default=False):
+            if True, will run autopep8 to fix some of these issues.
+
+    Ignore:
+        dpath = ub.expandpath('~/code/watch/watch')
+    """
+    dpaths = [d] if isinstance(d := dpath, str) else d
+    ignore = {
+        'E123': 'closing braket indentation',
+        'E126': 'continuation line hanging-indent',
+        'E127': 'continuation line over-indented for visual indent',
+        'E201': 'whitespace after "("',
+        'E202': 'whitespace before "]"',
+        'E203': 'whitespace before ", "',
+        'E221': 'multiple spaces before operator  (TODO: I wish I could make an exception for the equals operator. Is there a way to do this?)',
+        'E222': 'multiple spaces after operator',
+        'E241': 'multiple spaces after ,',
+        'E265': 'block comment should start with "# "',
+        'E271': 'multiple spaces after keyword',
+        'E272': 'multiple spaces before keyword',
+        'E301': 'expected 1 blank line, found 0',
+        'E305': 'expected 1 blank line after class / func',
+        'E306': 'expected 1 blank line before func',
+        #'E402': 'module import not at top',
+        'E501': 'line length > 79',
+        'W602': 'Old reraise syntax',
+        'E266': 'too many leading # for block comment',
+        'N801': 'function name should be lowercase [N806]',
+        'N802': 'function name should be lowercase [N806]',
+        'N803': 'argument should be lowercase [N806]',
+        'N805': 'first argument of a method should be named "self"',
+        'N806': 'variable in function should be lowercase [N806]',
+        'N811': 'constant name imported as non constant',
+        'N813': 'camel case',
+        'W503': 'line break before binary operator',
+        'W504': 'line break after binary operator',
+
+        'I201': 'Newline between Third party import groups',
+        'I100': 'Wrong import order',
+
+        'E26 ': 'Fix spacing after comment hash for inline comments.',
+        # 'E265': 'Fix spacing after comment hash for block comments.',
+        # 'E266': 'Fix too many leading # for block comments.',
+    }
+
+    modifiers = {
+        'whitespace': 1,
+        'newlines': 0,
+        'warnings': 1,
+    }
+    autofix = {}
+    if modifiers['whitespace']:
+        autofix.update({
+            'E225': 'Fix missing whitespace around operator.',
+            'E226': 'Fix missing whitespace around arithmetic operator.',
+            'E227': 'Fix missing whitespace around bitwise/shift operator.',
+            'E228': 'Fix missing whitespace around modulo operator.',
+
+            # 'E231': 'Add missing whitespace.',
+
+            'E241': 'Fix extraneous whitespace around keywords.',
+            'E242': 'Remove extraneous whitespace around operator.',
+            'E251': 'Remove whitespace around parameter "=" sign.',
+            'E252': 'Missing whitespace around parameter equals.',
+
+            # 'E26 ': 'Fix spacing after comment hash for inline comments.',
+            # 'E265': 'Fix spacing after comment hash for block comments.',
+            # 'E266': 'Fix too many leading # for block comments.',
+
+            'E27' : 'Fix extraneous whitespace around keywords.',
+        })
+    if modifiers['newlines']:
+        autofix.update({
+            'E301': 'Add missing blank line.',
+            'E302': 'Add missing 2 blank lines.',
+            'E303': 'Remove extra blank lines.',
+            'E304': 'Remove blank line following function decorator.',
+            'E305': 'Expected 2 blank lines after end of function or class.',
+            'E306': 'Expected 1 blank line before a nested definition.',
+        })
+    if modifiers['warnings']:
+        autofix.update({
+            'W291': 'Remove trailing whitespace.',
+            'W292': 'Add a single newline at the end of the file.',
+            'W293': 'Remove trailing whitespace on blank line.',
+            'W391': 'Remove trailing blank lines.',
+        })
+
+    print('fix = {!r}'.format(fix))
+    if fix:
+        autofix = sorted(autofix)
+        return exec_autopep8(dpaths, autofix)
     else:
-        dpaths = dpath
-    info = ub.cmd([flake8_exe] + flake8_args_list + dpaths, verbose=1)
-    return info['ret']
+        max_line_length = 79
+        ignore = sorted(ignore)
+        return exec_flake8(dpaths, ignore, max_line_length)
 
 
 if __name__ == '__main__':
