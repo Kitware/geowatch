@@ -76,7 +76,8 @@ def custom_lint(dpath: str, mode=False, index=None, interact=None):
     Ignore:
         dpath = ub.expandpath('~/code/watch/watch')
     """
-    dpaths = [d] if isinstance(d := dpath, str) else d
+    d = dpath  # no walrus on the CI :(=
+    dpaths = [d] if isinstance(d, str) else d
     ignore = {
         'E123': 'closing braket indentation',
         'E126': 'continuation line hanging-indent',
