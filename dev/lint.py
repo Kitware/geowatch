@@ -108,8 +108,8 @@ def custom_lint(dpath: str, mode=False):
             # 'E231': 'Add missing whitespace.',
 
             'E241': 'Fix extraneous whitespace around keywords.',
-            'E242': 'Remove extraneous whitespace around operator.',
-            'E251': 'Remove whitespace around parameter "=" sign.',
+            # 'E242': 'Remove extraneous whitespace around operator.',
+            # 'E251': 'Remove whitespace around parameter "=" sign.',
             'E252': 'Missing whitespace around parameter equals.',
 
             # 'E26 ': 'Fix spacing after comment hash for inline comments.',
