@@ -159,9 +159,9 @@ if __name__ == '__main__':
 
         cd $HOME/code/watch
 
-        python ~/code/watch/dev/lint.py watch --mode=lint
-        python ~/code/watch/dev/lint.py watch --mode=diff
-        python ~/code/watch/dev/lint.py watch --mode=apply
+        python ~/code/watch/dev/lint.py watch/utils --mode=lint
+        python ~/code/watch/dev/lint.py watch/utils --mode=diff
+        python ~/code/watch/dev/lint.py watch/utils --mode=apply
 
         python ~/code/watch/dev/lint.py [watch,atk]
     """
