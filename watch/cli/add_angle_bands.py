@@ -6,6 +6,7 @@ from contextlib import contextmanager
 import tempfile
 import subprocess
 import glob
+from s2angs.cli import generate_anglebands
 
 import pystac
 
@@ -14,7 +15,8 @@ L7_RE = re.compile(r'^L[COTEM]07')
 L8_RE = re.compile(r'^L[COTEM]08')
 S2_RE = re.compile(r'^S2[AB]')
 
-LANDSAT_ANGLES_FILE_RE = re.compile(r'ANG.txt$', re.IGNORECASE)
+LANDSAT_ANGLES_FILE_RE = re.compile(r'ANG\.txt$', re.IGNORECASE)
+S2_MTD_TL_FILE_RE = re.compile(r'MTD_TL\.xml$', re.IGNORECASE)
 
 
 def main():
@@ -117,6 +119,28 @@ def add_angles_l8(stac_item, item_outdir):
 
 
 def add_angles_s2(stac_item, item_outdir):
+    mtd_tl_xml_file = None
+    for asset_name, asset in stac_item.assets.items():
+        if re.search(S2_MTD_TL_FILE_RE, asset.href):
+            mtd_tl_xml_file = asset.href
+            break
+
+    angle_file_paths = generate_anglebands(mtd_tl_xml_file, item_outdir)
+
+    for angle_file_path in angle_file_paths:
+        angle_file_basename, _ =\
+            os.path.splitext(os.path.basename(angle_file_path))
+
+        m = re.search(r'(solar|sensor)_(azimuth|zenith)', angle_file_path)
+        if m is not None:
+            stac_item.assets[m.group(0)] = pystac.Asset.from_dict(
+                {'href': angle_file_path,
+                 'title': os.path.join(stac_item.id, angle_file_basename),
+                 'roles': ['metadata']})
+        else:
+            print("* Warning: unexpected filename pattern for generated S2 "
+                  "angle band files")
+
     return stac_item
 
 
