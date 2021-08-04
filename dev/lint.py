@@ -4,25 +4,38 @@ import ubelt as ub
 VERBOSE = 3
 
 
-def exec_flake8(dpaths, ignore, max_line_length=79):
-    print('ignore = {!r}'.format(ignore))
-    args_list = ['--max-line-length', f'{max_line_length:d}', '--ignore=' + ','.join(ignore)]
+def exec_flake8(dpaths, select=None, ignore=None, max_line_length=79):
+    if VERBOSE > 1:
+        print('ignore = {!r}'.format(ignore))
+    args_list = ['--max-line-length', f'{max_line_length:d}']
+    if select is not None:
+        args_list += ['--select=' + ','.join(select)]
+    if ignore is not None:
+        args_list += ['--ignore=' + ','.join(ignore)]
+    args_list += ['--statistics']
     info = ub.cmd(['flake8'] + args_list + dpaths, verbose=VERBOSE, check=False)
     if info['ret'] not in {0, 1}:
         raise Exception(ub.repr2(ub.dict_diff(info, ['out'])))
     return info['ret']
 
 
-def exec_autopep8(dpaths, autofix):
-    print('autofix = {!r}'.format(autofix))
-    args_list = ['--select', autofix, '--recursive']
+def exec_autopep8(dpaths, autofix, mode='diff'):
+    if VERBOSE > 1:
+        print('autofix = {!r}'.format(autofix))
+    args_list = ['--select', ','.join(autofix), '--recursive']
+    if mode == 'diff':
+        args_list += ['--diff']
+    elif mode == 'apply':
+        args_list += ['--in-place']
+    else:
+        raise AssertionError(mode)
     info = ub.cmd(['autopep8'] + args_list + dpaths, verbose=VERBOSE, check=False)
     if info['ret'] not in {0, 1}:
         raise Exception(ub.repr2(ub.dict_diff(info, ['out'])))
     return info['ret']
 
 
-def custom_lint(dpath: str, fix=False):
+def custom_lint(dpath: str, mode=False):
     """
     Runs our custom "watch" linting rules on a specific directory and
     optionally "fixes" them.
@@ -31,8 +44,11 @@ def custom_lint(dpath: str, fix=False):
         dpath (str|list):
             the path or paths to lint
 
-        fix (bool, default=False):
-            if True, will run autopep8 to fix some of these issues.
+        mode (bool, default="lint"):
+            Options and effects are:
+                * "show": display linting results
+                * "diff": show the autopep8 diff that would autofix some errors
+                * "apply": apply the autopep8 diff that would autofix some errors
 
     Ignore:
         dpath = ub.expandpath('~/code/watch/watch')
@@ -119,14 +135,21 @@ def custom_lint(dpath: str, fix=False):
             'W391': 'Remove trailing blank lines.',
         })
 
-    print('fix = {!r}'.format(fix))
-    if fix:
-        autofix = sorted(autofix)
+    autofix = sorted(autofix)
+    ignore = sorted(ignore)
+    select = autofix
+
+    if VERBOSE > 1:
+        print('mode = {!r}'.format(mode))
+    if mode == 'diff':
         return exec_autopep8(dpaths, autofix)
-    else:
+    elif mode == 'apply':
+        return exec_autopep8(dpaths, autofix)
+    elif mode == 'lint':
         max_line_length = 79
-        ignore = sorted(ignore)
-        return exec_flake8(dpaths, ignore, max_line_length)
+        return exec_flake8(dpaths, select, ignore, max_line_length)
+    else:
+        raise KeyError(mode)
 
 
 if __name__ == '__main__':
@@ -135,7 +158,11 @@ if __name__ == '__main__':
         python ~/code/watch/dev/lint.py --help
 
         cd $HOME/code/watch
-        python ~/code/watch/dev/lint.py watch
+
+        python ~/code/watch/dev/lint.py watch --mode=lint
+        python ~/code/watch/dev/lint.py watch --mode=diff
+        python ~/code/watch/dev/lint.py watch --mode=apply
+
         python ~/code/watch/dev/lint.py [watch,atk]
     """
     import fire
