@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import torch
 import pathlib
 import ubelt as ub
 from os.path import join
@@ -57,7 +58,7 @@ def predict(cmdline=False, **kwargs):
         >>> from watch.tasks.fusion.predict import *  # NOQA
         >>> args = None
         >>> cmdline = False
-        >>> gpus = 0
+        >>> gpus = None
         >>> test_dpath = ub.ensure_app_cache_dir('watch/test/fusion/')
         >>> import kwcoco
         >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes4-multispectral', num_frames=5, gsize=(128, 128))
@@ -87,7 +88,7 @@ def predict(cmdline=False, **kwargs):
         >>>     'dataset': 'WatchDataModule',
         >>>     'batch_size': 1,
         >>>     'num_workers': 0,
-        >>>     'use_gpu': gpus > 0,
+        >>>     'use_gpu': gpus is not None,
         >>> }
         >>> result_dataset = predict(**kwargs)
         >>> dset = result_dataset
@@ -150,7 +151,8 @@ def predict(cmdline=False, **kwargs):
     # (modifies the bundle_dpath)
     result_dataset.fpath = str(args.results_dir / 'pred.kwcoco.json')
 
-    device = 0 if args.use_gpu else 'cpu'
+    device = torch.device(0) if args.use_gpu else 'cpu'
+    print('Predict on device = {!r}'.format(device))
     method = method.to(device)
 
     stitch_manager = CocoStitchingManager(
