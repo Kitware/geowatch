@@ -1,6 +1,5 @@
 from algorithm_toolkit import AlgorithmTestCase
-
-from .main import Main
+# from .main import Main
 
 
 class MainTestCase(AlgorithmTestCase):

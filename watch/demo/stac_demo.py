@@ -1,11 +1,8 @@
 import os
-import sys
-import pystac
-from pystac_client import Client
-import subprocess
 import ubelt as ub
 from watch.demo import sentinel2_demodata
 import json
+
 
 def demo():
     data = sentinel2_demodata.grab_sentinel2_product(0)
@@ -20,30 +17,30 @@ def demo():
         "stac_version": "1.0.0-beta.2",
         "description": "demo catalog",
         "links": [
-        {
-            "rel": "root",
-            "href": cat_path,
-            "type": "application/json"
-        },
-        {
-            "rel": "self",
-            "href": cat_path,
-            "type": "application/json"
-        },
-        {
-            "rel": "item",
-            "href": os.path.join(dpath, "testitem1.json"),
-            "type": "application/json"
-        },
-        {
-            "rel": "item",
-            "href": os.path.join(dpath, "testitem2.json"),
-            "type": "application/json"
-        }
+            {
+                "rel": "root",
+                "href": cat_path,
+                "type": "application/json"
+            },
+            {
+                "rel": "self",
+                "href": cat_path,
+                "type": "application/json"
+            },
+            {
+                "rel": "item",
+                "href": os.path.join(dpath, "testitem1.json"),
+                "type": "application/json"
+            },
+            {
+                "rel": "item",
+                "href": os.path.join(dpath, "testitem2.json"),
+                "type": "application/json"
+            }
         ]
     }
-    if not os.path.exists(cat_path) or \
-        not ub.hash_file(cat_path).startswith(expected_cat_sha512):
+    if (not os.path.exists(cat_path) or
+            not ub.hash_file(cat_path).startswith(expected_cat_sha512)):
         with open(cat_path, 'w') as f:
             json.dump(catalog, f)
     path1 = os.path.join(dpath, "testitem1.json")
@@ -56,21 +53,21 @@ def demo():
         },
         "geometry": {},
         "links": [
-        {
-            "rel": "root",
-            "href": cat_path,
-            "type": "application/json"
-        },
-        {
-            "rel": "parent",
-            "href": cat_path,
-            "type": "application/json"
-        },
-        {
-            "rel": "self",
-            "href": path1,
-            "type": "application/json"
-        }
+            {
+                "rel": "root",
+                "href": cat_path,
+                "type": "application/json"
+            },
+            {
+                "rel": "parent",
+                "href": cat_path,
+                "type": "application/json"
+            },
+            {
+                "rel": "self",
+                "href": path1,
+                "type": "application/json"
+            }
         ],
         "assets": {
             "data": {
@@ -81,8 +78,8 @@ def demo():
         "bbox": [],
         "stac_extensions": []
     }
-    if not os.path.exists(path1) or not \
-        ub.hash_file(path1).startswith(expected_item1_sha512):
+    if (not os.path.exists(path1) or
+            not ub.hash_file(path1).startswith(expected_item1_sha512)):
         with open(os.path.join(dpath, "testitem1.json"), 'w') as f:
             json.dump(item1, f)
     path2 = os.path.join(dpath, "testitem2.json")
@@ -95,28 +92,28 @@ def demo():
         },
         "geometry": {},
         "links": [
-        {
-            "rel": "root",
-            "href": cat_path,
-            "type": "application/json"
-        },
-        {
-            "rel": "parent",
-            "href": cat_path,
-            "type": "application/json"
-        },
-        {
-            "rel": "self",
-            "href": path2,
-            "type": "application/json"
-        }
+            {
+                "rel": "root",
+                "href": cat_path,
+                "type": "application/json"
+            },
+            {
+                "rel": "parent",
+                "href": cat_path,
+                "type": "application/json"
+            },
+            {
+                "rel": "self",
+                "href": path2,
+                "type": "application/json"
+            }
         ],
         "assets": {
             "testimg1": {
                 "href": gpath,
                 "type": "application/vnd.nitf",
                 "roles": ["data"]
-            }, 
+            },
             "testimg2": {
                 "href": gpath,
                 "type": "application/vnd.nitf",
@@ -126,11 +123,12 @@ def demo():
         "bbox": [],
         "stac_extensions": []
     }
-    if not os.path.exists(path2) or not \
-        ub.hash_file(path2).startswith(expected_item2_sha512):
+    if (not os.path.exists(path2) or
+            not ub.hash_file(path2).startswith(expected_item2_sha512)):
         with open(os.path.join(dpath, "testitem2.json"), 'w') as f:
             json.dump(item2, f)
     return cat_path
 
-if __name__=='__main__':
+
+if __name__ == '__main__':
     print(demo())

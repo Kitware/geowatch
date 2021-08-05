@@ -74,6 +74,7 @@ __getattr__ = lazy_import(
 def __dir__():
     return __all__
 
+
 __all__ = ['DEFAULT_KEY', 'dummy_demodata', 'dummy_rpc_geotiff_fpath',
            'grab_landsat_product', 'grab_nitf_fpath', 'landsat_demodata',
            'nitf_demodata']

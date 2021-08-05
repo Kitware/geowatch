@@ -56,7 +56,7 @@ def get_gcp_for_registration(master_ds,
         print("Slave and master image have different size")
         return res
     geo_slave = slave_ds.GetGeoTransform()
-    #print(geo_slave)
+    # print(geo_slave)
     total_start_time = time.time()
     if (pfname_out != ''):
         f_out = open(pfname_out, 'w')
@@ -82,15 +82,15 @@ def get_gcp_for_registration(master_ds,
                                                         0., 0.)
                 res.append(s)
                 continue
-            start_time = time.time()
+            # start_time = time.time()
             # offset_pixels, error, diffphase = register_translation(master_array_window, slave_array_window, 100)
             offset_pixels, error, diffphase = phase_cross_correlation(
                 master_array_window, slave_array_window, upsample_factor=100)
-            end_time = time.time()
+            # end_time = time.time()
             #print( "Window (%s,%s) processed in %.5f sec" % (i,j,end_time-start_time))
             #          #print("\tDetected pixel offset (y, x) and error: (%.3f, %.3f) %.5f" %(offset_pixels[0], offset_pixels[1], error))
             #          #print "\tDetected pixel offset (y, x) and (error, CCmax_norm): (%.3f, %.3f) (%.5f, %.5f)" %(offset_pixels[0], offset_pixels[1], error, 1-error)
-            #this is the center of window in slave coordinates
+            # this is the center of window in slave coordinates
             X_geo_slave = geo_slave[0] + geo_slave[1] * j
             Y_geo_slave = geo_slave[3] + geo_slave[5] * i
             # adjusting due to offset
@@ -122,7 +122,8 @@ def ensure_baseline_scene(baseline_scene):
         if 'granuledir' in df:
             return df['granuledir']
 
-        input_folder = os.path.commonpath(xmls)
+        raise NotImplementedError
+        input_folder = os.path.commonpath(xmls)  # NOQA  # FIXME?
         candidates = glob.glob(
             os.path.join(input_folder, '*.SAFE', 'GRANULE', df['granule_id']))
         return candidates[0]
@@ -261,7 +262,7 @@ def s2_coregister(granuledirs, output_folder, baseline_scene):
                 s2_slave_array,
                 w_size=64,
                 w_step=64)  # production mode
-            #res_coregistration = get_gcp_for_registration(s2_master_ds, s2_slave_ds, s2_master_array, s2_slave_array, w_size=64, w_step=512) # debug mode
+            # res_coregistration = get_gcp_for_registration(s2_master_ds, s2_slave_ds, s2_master_array, s2_slave_array, w_size=64, w_step=512) # debug mode
 
             if (len(res_coregistration) > 0):
                 fname_log = fname_slave[:-4] + '_coreg.log'
@@ -284,7 +285,7 @@ def s2_coregister(granuledirs, output_folder, baseline_scene):
                              ]  # pixel,line,X,Y,error,shift_x,shift_y
                     if ((array[4] < error_threshold) & (not np.isnan(array[4]))
                             & (abs(array[5]) < max_shift_threshold) &
-                        (abs(array[6]) < max_shift_threshold)):
+                              (abs(array[6]) < max_shift_threshold)):
                         # For 10 m we select origianl values since B04 is 10 m
                         output_str_10 = "-gcp %s %s %.5f %.5f %.f " % (
                             array[0], array[1], array[2], array[3], elev)
@@ -306,7 +307,7 @@ def s2_coregister(granuledirs, output_folder, baseline_scene):
                             % (array[0], array[1], array[4], array[5],
                                array[6], error_threshold))
                     else:
-                        #print "Point (%s,%s) with error %.5f did not pass threshold %.5f" % (array[0],array[1],array[4], error_threshold)
+                        # print "Point (%s,%s) with error %.5f did not pass threshold %.5f" % (array[0],array[1],array[4], error_threshold)
                         f_log.write(
                             "Point (%s,%s) with error %.5f and shift (%.5f, %.5f) NOT PASSED threshold %.5f\n"
                             % (array[0], array[1], array[4], array[5],
@@ -318,7 +319,7 @@ def s2_coregister(granuledirs, output_folder, baseline_scene):
 
                 # now transforming files
                 # TODO: this is easy to parallize
-                for b in S2_BANDS:  #['B01', 'B04', 'B11']:
+                for b in S2_BANDS:  # ['B01', 'B04', 'B11']:
                     fname_band = os.path.basename(x.replace(base_band, b))
                     pfname_band = os.path.join(path_data, fname_band)
 
@@ -327,7 +328,7 @@ def s2_coregister(granuledirs, output_folder, baseline_scene):
                     x_res = 10
                     y_res = 10
                     if ((b == 'B05') | (b == 'B06') | (b == 'B07') |
-                        (b == 'B8A') | (b == 'B11') | (b == 'B12')):
+                        (b == 'B8A') | (b == 'B11') | (b == 'B12')):  # NOQA
                         fname_gcp = fname_gcp_20
                         x_res = 20
                         y_res = 20

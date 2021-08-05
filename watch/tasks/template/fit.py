@@ -36,7 +36,7 @@ class TemplateFitConfig(scfg.Config):
     }
 
 
-#### A Netharn implementation of the training logic is optional.
+# A Netharn implementation of the training logic is optional.
 import netharn as nh  # NOQA
 
 
@@ -94,6 +94,7 @@ class TemplateDataset(torch.utils.data.Dataset):
         >>> index = len(self) // 2
         >>> item = self[index]
     """
+
     def __init__(self, coco_dset, input_dims, window_dims):
         self.coco_dset = coco_dset
         self.input_dims = input_dims

@@ -102,6 +102,7 @@ class WatchDataModule(pl.LightningDataModule):
         ...     for mode_key, mode_val in item['frames'][0]['modes'].items():
         ...         assert mode_val.shape[1:3] == (chip_size, chip_size)
     """
+
     def __init__(
         self,
         train_dataset=None,
@@ -449,6 +450,7 @@ class WatchVideoDataset(data.Dataset):
         >>> kwplot.show_if_requested()
     """
     # TODO: add torchvision.transforms or albumentations
+
     def __init__(
         self,
         sampler,

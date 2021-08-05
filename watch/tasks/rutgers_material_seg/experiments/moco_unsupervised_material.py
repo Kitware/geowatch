@@ -1,6 +1,6 @@
 #!/usr/bin/env python
+## flake8: noqa
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
-import comet_ml
 import argparse
 import builtins
 import math
@@ -8,12 +8,8 @@ import os
 import random
 import shutil
 import time
-import ubelt as ub
+# import ubelt as ub
 import warnings
-import kwcoco
-import kwimage
-import ndsampler
-import datetime
 import torch
 import torch.nn as nn
 import torch.nn.parallel
@@ -24,20 +20,20 @@ import torch.multiprocessing as mp
 import torch.utils.data
 import torch.utils.data.distributed
 import torchvision.transforms as transforms
-import torchvision.datasets as datasets
+# import torchvision.datasets as datasets
 import torchvision.models as models
 import itertools
 import numpy as np
 
 # import moco.loader
-import watch.tasks.rutgers_material_seg.utils.utils as utils
-from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
+# import watch.tasks.rutgers_material_seg.utils.utils as utils
+# from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import SequenceDataset
 from watch.tasks.rutgers_material_seg.datasets import build_dataset
 import watch.tasks.rutgers_material_seg.models.moco as moco
 
 model_names = sorted(name for name in models.__dict__
-    if name.islower() and not name.startswith("__")
-    and callable(models.__dict__[name]))
+                     if name.islower() and not name.startswith("__")
+                     and callable(models.__dict__[name]))
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 # parser.add_argument('data', metavar='DIR',
@@ -125,8 +121,8 @@ mask_mapping = {0: "unknown",    # 0, unknown
 
 possible_combinations = [list(i) for i in itertools.product([0, 1], repeat=len(mask_mapping.keys()))]
 for index, item in enumerate(possible_combinations):
-    num_labels = len(np.argwhere(np.array(item)==1))
-    if num_labels==0:
+    num_labels = len(np.argwhere(np.array(item) == 1))
+    if num_labels == 0:
         continue
     possible_combinations[index] = np.divide(possible_combinations[index], num_labels)
 
@@ -137,12 +133,12 @@ verbose_labels = {}
 for index, item in enumerate(possible_combinations):
     verbose_label = ""
     for label_index, label in enumerate(item):
-        if label!=0:
+        if label != 0:
             verbose_label += f"{mask_mapping[label_index]}: {label}, "
-    verbose_labels[index]=verbose_label
+    verbose_labels[index] = verbose_label
 
 # print(verbose_labels)
-    
+
 # project_root = "/home/native/projects/watch/watch/tasks/rutgers_material_seg/"
 # main_config_path = f"{project_root}/configs/main.yaml"
 
@@ -160,6 +156,7 @@ for index, item in enumerate(possible_combinations):
 #                                     workspace=config['cometml']['workspace'],
 #                                     display_summary_level=0)
 # cometml_experiment.set_name(experiment_name)
+
 
 def main():
     args = parser.parse_args()
@@ -300,7 +297,7 @@ def main_worker(gpu, ngpus_per_node, args):
         ]
     else:
         # MoCo v1's aug: the same as InstDisc https://arxiv.org/abs/1805.01978
-        augmentation = [
+        augmentation = [  # NOQA
             # transforms.RandomResizedCrop(224, scale=(0.2, 1.)),
             transforms.RandomGrayscale(p=0.2),
             transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
@@ -312,7 +309,7 @@ def main_worker(gpu, ngpus_per_node, args):
     # train_dataset = datasets.ImageFolder(
         # traindir,
         # moco.loader.TwoCropsTransform(transforms.Compose(augmentation)))
-    
+
     # coco_json = "/media/native/data/data/smart_watch_dvc/drop0_aligned_msi/material_labels2.kwcoco.json"
     # coco_fpath = ub.expandpath(coco_json)
     # dset = kwcoco.CocoDataset(coco_fpath)
@@ -323,25 +320,23 @@ def main_worker(gpu, ngpus_per_node, args):
     # # channels = 'red|green|blue|nir|swir16|swir22|cirrus'
     # channels = 'red|green|blue'
     # train_dataset = SequenceDataset(sampler, window_dims, input_dims, channels)
-    
+
     # if args.distributed:
     #     train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
     # else:
     #     train_sampler = None
 
-    
-    # train_loader = train_dataset.make_loader(batch_size=args.batch_size, 
-    #                                          pin_memory=True, 
+    # train_loader = train_dataset.make_loader(batch_size=args.batch_size,
+    #                                          pin_memory=True,
     #                                          drop_last=True
     #                                          )
-    
+
     train_loader = build_dataset(dataset_name="deepglobe",
-                                     root="/media/native/data/data/DeepGlobe/crops/", 
-                                     batch_size=args.batch_size,
-                                     num_workers=1,
-                                     split="train",
-                                     image_size="300x300",
-                                     )
+                                 root="/media/native/data/data/DeepGlobe/crops/",
+                                 batch_size=args.batch_size,
+                                 num_workers=1,
+                                 split="train",
+                                 image_size="300x300")
 
     for epoch in range(args.start_epoch, args.epochs):
         # if args.distributed:
@@ -366,7 +361,7 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
     data_time = AverageMeter('Data', '6.3')
     losses = AverageMeter('Loss', '.4')
     top1 = AverageMeter('Acc@1', '6.2')
-    top5 = AverageMeter('Acc@5', '6.2')
+    top5 = AverageMeter('Acc@5', '6.2')  # NOQA
     # progress = ProgressMeter(
     #     len(train_loader),
     #     [batch_time, data_time, losses, top1, top5],
@@ -376,15 +371,14 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
     model.train()
     total_loss = 0
     end = time.time()
-    
-    
+
     for i, batch in enumerate(train_loader):
         # measure data loading time
         outputs = batch
         # image1, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0]
         # mask = torch.stack(mask)
         # mask[mask==-1]=0
-        
+
         image1 = outputs['inputs']['image']
         mask = batch['inputs']['mask']
         labels = batch['inputs']['labels']
@@ -432,14 +426,13 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
         end = time.time()
 
         total_loss += loss.item()
-        
+
         # cometml_experiment.log_metric("Training Accuracy", acc1, epoch=epoch+1)
-        
 
         # if i % args.print_freq == 0:
         #     print(f"accuracy: {acc1}")
         #     progress.display(i)
-        
+
     # cometml_experiment.log_metric("Training Loss", total_loss, epoch=epoch+1)
 
 
@@ -451,10 +444,11 @@ def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
+
     def __init__(self, name, fmt=':f'):
         self.name = name
         self.fmt = fmt
-        
+
         self.reset()
 
     def reset(self):

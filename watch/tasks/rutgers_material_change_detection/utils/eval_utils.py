@@ -3,13 +3,13 @@ from torch import nn
 import torch
 import re
 import math
-from sklearn.metrics import average_precision_score, accuracy_score
+from sklearn.metrics import average_precision_score
 
 
 def get_ap_score(y_true, y_scores):
     """
     Get average precision score between 2 1-d numpy arrays
-    
+
     Args:
         y_true: batch of true labels
         y_scores: batch of confidence scores
@@ -17,56 +17,56 @@ def get_ap_score(y_true, y_scores):
     Returns:
         sum of batch average precision
     """
-    scores = average_precision_score(y_true = y_true, y_score = y_scores, average='samples')
+    scores = average_precision_score(y_true=y_true, y_score=y_scores, average='samples')
     return scores
 
-def val_mae(pred_counts,gt_counts):
+
+def val_mae(pred_counts, gt_counts):
     n = len(gt_counts)
-    true_count = np.ones(n)*(-1)
-    pred_count = np.ones(n)*(-1)
+    true_count = np.ones(n) * (-1)
+    pred_count = np.ones(n) * (-1)
 
     for index in range(n):
         true_count[index] = gt_counts[index]
         pred_count[index] = pred_counts[index]
         # mae = (np.abs(true_count[:index+1] - pred_count[:index+1])).mean()
     score_dict = {}
-    assert not np.any(true_count==(-1))
-    assert not np.any(pred_count==(-1))
+    assert not np.any(true_count == (-1))
+    assert not np.any(pred_count == (-1))
     score_dict["MAE"] = (np.abs(true_count - pred_count)).mean()
     print(f"score_dict: {score_dict}")
     return score_dict
 
 
-
-def mae(pred_counts,gt_counts):
+def mae(pred_counts, gt_counts):
     assert len(pred_counts) == len(gt_counts)
     n = len(gt_counts)
     absolute_e_list = [abs(b_i - a_i) for a_i, b_i in zip(pred_counts, gt_counts)]
     sum_e_list = sum(absolute_e_list)
-    mae = sum_e_list/n
+    mae = sum_e_list / n
     return mae
 
-def rmse(pred_counts,gt_counts):
+
+def rmse(pred_counts, gt_counts):
     assert len(pred_counts) == len(gt_counts)
     n = len(gt_counts)
 
-    absolute_e_list = [abs(b_i - a_i)*abs(b_i-a_i) for a_i, b_i in zip(pred_counts, gt_counts)]
+    absolute_e_list = [abs(b_i - a_i) * abs(b_i - a_i) for a_i, b_i in zip(pred_counts, gt_counts)]
     sum_e_list = sum(absolute_e_list)
-    sum_e_list = sum_e_list/n
+    sum_e_list = sum_e_list / n
     rmse = math.sqrt(sum_e_list)
     return rmse
 
 
-def mape(pred_counts,gt_counts):
+def mape(pred_counts, gt_counts):
     assert len(pred_counts) == len(gt_counts)
     n = len(gt_counts)
 
-    absolute_e_list = [abs(b_i - a_i)/b_i for a_i, b_i in zip(pred_counts, gt_counts)]
+    absolute_e_list = [abs(b_i - a_i) / b_i for a_i, b_i in zip(pred_counts, gt_counts)]
     sum_e_list = sum(absolute_e_list)
-    sum_e_list = sum_e_list/n
-    mape = 100*sum_e_list
+    sum_e_list = sum_e_list / n
+    mape = 100 * sum_e_list
     return mape
-
 
 
 def _take_channels(*xs, ignore_channels=None):
@@ -84,6 +84,7 @@ def _threshold(x, threshold=None):
     else:
         return x
 
+
 def iou_npy(pr, gt, eps=1e-7, threshold=None, ignore_channels=None):
     """Calculate Intersection over Union between ground truth and prediction
     Args:
@@ -100,6 +101,7 @@ def iou_npy(pr, gt, eps=1e-7, threshold=None, ignore_channels=None):
     union = np.sum(gt) + np.sum(pr) - intersection + eps
     print(union)
     return (intersection + eps) / union
+
 
 def iou(pr, gt, eps=1e-7, threshold=None, ignore_channels=None):
     """Calculate Intersection over Union between ground truth and prediction
@@ -119,7 +121,9 @@ def iou(pr, gt, eps=1e-7, threshold=None, ignore_channels=None):
     union = torch.sum(gt) + torch.sum(pr) - intersection + eps
     return (intersection + eps) / union
 
+
 jaccard = iou
+
 
 def f_score(pr, gt, beta=1, eps=1e-7, threshold=None, ignore_channels=None):
     """Calculate F-score between ground truth and prediction
@@ -207,6 +211,7 @@ def recall(pr, gt, eps=1e-7, threshold=None, ignore_channels=None):
 
     return score
 
+
 class BaseObject(nn.Module):
 
     def __init__(self, name=None):
@@ -222,14 +227,16 @@ class BaseObject(nn.Module):
         else:
             return self._name
 
+
 class Activation(nn.Module):
     def __init__(self, activation):
         super().__init__()
-        if activation == None or activation == 'identity':
+        if activation is None or activation == 'identity':
             self.activation = nn.Identity()
         elif activation == 'sigmoid':
             self.activation = torch.sigmoid
         elif activation == 'softmax2d':
+            import functools
             self.activation = functools.partial(torch.softmax, dim=1)
         elif callable(activation):
             self.activation = activation
@@ -238,6 +245,7 @@ class Activation(nn.Module):
 
     def forward(self, x):
         return self.activation(x)
+
 
 def _fast_hist(label_pred, label_true, num_classes):
     mask = (label_true >= 0) & (label_true < num_classes)
@@ -264,8 +272,10 @@ def calc_mAP(predictions, gts, num_classes=2):
     fwavacc = (freq[freq > 0] * iu[freq > 0]).sum()
     return acc, acc_cls, mean_iu, fwavacc
 
+
 class Metric(BaseObject):
     pass
+
 
 class IoU(Metric):
     __name__ = 'iou_score'
@@ -362,12 +372,13 @@ class Precision(Metric):
             ignore_channels=self.ignore_channels,
         )
 
+
 def compute_jaccard(preds_masks_all, targets_masks_all, num_classes=21):
 
     tps = np.zeros((num_classes, ))
     fps = np.zeros((num_classes, ))
     fns = np.zeros((num_classes, ))
-    counts = np.zeros((num_classes, ))
+    # counts = np.zeros((num_classes, ))
 
     for mask_pred, mask_gt in zip(preds_masks_all, targets_masks_all):
         # print(mask_pred.shape)
@@ -392,9 +403,9 @@ def compute_jaccard(preds_masks_all, targets_masks_all, num_classes=21):
             fps[label] += np.maximum(0., diff).float().sum().item()
             fns[label] += np.maximum(0., -diff).float().sum().item()
 
-    jaccards = [None]*num_classes
-    precision = [None]*num_classes
-    recall   = [None]*num_classes
+    jaccards = [None] * num_classes
+    precision = [None] * num_classes
+    recall   = [None] * num_classes
     for i in range(num_classes):
         tp = tps[i]
         fn = fns[i]

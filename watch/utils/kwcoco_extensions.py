@@ -379,8 +379,8 @@ def fit_affine_matrix(xy1_man, xy2_man):
         x2 = x2_mn[ix]
         y1 = y1_mn[ix]
         y2 = y2_mn[ix]
-        Mx6[ix * 2]     = (x1, y1,  0,  0,  1,  0)
-        Mx6[ix * 2 + 1] = ( 0,  0, x1, y1,  0,  1)
+        Mx6[ix * 2]     = (x1, y1, 0, 0, 1, 0)
+        Mx6[ix * 2 + 1] = ( 0, 0, x1, y1, 0, 1)
         b[ix * 2] = x2
         b[ix * 2 + 1] = y2
 
@@ -410,7 +410,7 @@ def fit_affine_matrix(xy1_man, xy2_man):
     A = np.array([
         [a[0], a[1], a[4]],
         [a[2], a[3], a[5]],
-        [   0,    0,    1],
+        [   0, 0, 1],
     ])
     return A
 
@@ -424,7 +424,7 @@ def _sensor_channel_hueristic(sensor_coarse, num_bands):
     that is, one sensor's 'red' is roughly similar to another's but not corrected to match.
     Bands without a common_name will have a sensor-unique prefix appended to prevent this behavior.
     """
-    from watch.utils.util_bands import WORLDVIEW2_PAN, WORLDVIEW2_MS4, WORLDVIEW2_MS8, SENTINEL2, LANDSAT8, LANDSAT7
+    from watch.utils.util_bands import WORLDVIEW2_PAN, WORLDVIEW2_MS4, WORLDVIEW2_MS8, SENTINEL2, LANDSAT8, LANDSAT7  # NOQA
 
     def code(bands, prefix):
         names = []

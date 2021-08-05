@@ -124,6 +124,7 @@ class SinePositionalEncoding(nn.Module):
         >>> x = torch.rand(3, 5, 7, 11, 13)
         >>> y = self(x)
     """
+
     def __init__(self, dest_dim, dim_to_encode, sine_pairs=2):
         super().__init__()
         self.dest_dim = dest_dim
@@ -246,10 +247,10 @@ def add_auxiliary(dset, gid, fname, channels, aux_height, aux_width, warp_aux_to
 
 def confusion_image(pred, target):
     canvas = np.zeros_like(pred)
-    np.putmask(canvas, (target==0) & (pred==0), 0) # true-neg
-    np.putmask(canvas, (target==1) & (pred==1), 1) # true-pos
-    np.putmask(canvas, (target==1) & (pred==0), 2) # false-neg
-    np.putmask(canvas, (target==0) & (pred==1), 3) # false-pos
+    np.putmask(canvas, (target == 0) & (pred == 0), 0)  # true-neg
+    np.putmask(canvas, (target == 1) & (pred == 1), 1)  # true-pos
+    np.putmask(canvas, (target == 1) & (pred == 0), 2)  # false-neg
+    np.putmask(canvas, (target == 0) & (pred == 1), 3)  # false-pos
     return canvas
 
 

@@ -8,7 +8,7 @@ import kwimage
 from torch import nn
 
 from watch.tasks.fusion import datasets
-from watch.tasks.fusion import methods
+from watch.tasks.fusion import methods  # NOQA
 from watch.tasks.fusion import utils
 
 fname_template = "{location}/{bands}-{frame_no}.tif"
@@ -52,19 +52,19 @@ def main(args):
     result_canvases = {
         video["id"]: np.full([
                 video["num_frames"] - 1, video["height"], video["width"],
-            ], -2.0)
+            ], -2.0)  # NOQA
         for video in test_dataset.sampler.dset.dataset["videos"]
     }
     result_counts = {
         video["id"]: np.full([
                 video["num_frames"] - 1, video["height"], video["width"],
-            ], 0)
+            ], 0)  # NOQA
         for video in test_dataset.sampler.dset.dataset["videos"]
     }
     target_canvases = {
         video["id"]: np.full([
                 video["num_frames"] - 1, video["height"], video["width"],
-            ], -2)
+            ], -2)  # NOQA
         for video in test_dataset.sampler.dset.dataset["videos"]
     }
 
@@ -82,29 +82,29 @@ def main(args):
         preds = preds.cpu().numpy()
 
         time_slice = slice(
-                meta["time_slice"].start,
-                meta["time_slice"].stop - 1,
-                meta["time_slice"].step,
-            )
+            meta["time_slice"].start,
+            meta["time_slice"].stop - 1,
+            meta["time_slice"].step,
+        )
         space_time_slice = (time_slice,) + meta["space_slice"]
 
-        #print(
+        # print(
         #    space_time_slice,
         #    result_canvases[meta["vidid"]][space_time_slice].shape,
         #    preds.shape,
-        #)
+        # )
 
         result_canvases[meta["vidid"]][space_time_slice] += preds
         result_counts[meta["vidid"]][space_time_slice] += 1
         target_canvases[meta["vidid"]][space_time_slice] = changes
 
-    #print({
+    # print({
     #    key: {
     #        idx: np.unique(layer, return_counts=True)
     #        for idx, layer in enumerate(canvas)
     #        }
     #    for key, canvas in target_canvases.items()
-    #})
+    # })
 
     results = {
         key: canvas / result_counts[key]

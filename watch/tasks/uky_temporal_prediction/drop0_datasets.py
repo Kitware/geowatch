@@ -94,6 +94,7 @@ class drop0_aligned_change(torch.utils.data.Dataset):
         >>> idx = 0
         >>> item = self[idx]
     """
+
     def __init__(self, coco_dset,
                  sensor='S2',
                  panchromatic=True,

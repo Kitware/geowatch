@@ -39,7 +39,7 @@ class space7_sort(pl.LightningModule):
     def head(self, in_channels):
         return nn.Sequential(
             #nn.Conv2d(in_channels, in_channels // 2, 7, bias=False, padding=3),
-            #nn.ReLU(),
+            # nn.ReLU(),
             #nn.BatchNorm2d(in_channels // 2),
             nn.Conv2d(in_channels, 1, 1, bias=False, padding=0),
         )
@@ -139,6 +139,7 @@ def main(args):
 
     trainer = pl.Trainer.from_argparse_args(args, logger=logger, callbacks=[checkpoint_callback, lr_logger])
     trainer.fit(model)
+
 
 if __name__ == '__main__':
     parser = ArgumentParser()

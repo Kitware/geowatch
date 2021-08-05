@@ -2,7 +2,7 @@ import kwarray
 import kwimage
 import numpy as np
 import torch
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 # from kwcoco.channel_spec import ChannelSpec  # NOQA
 from functools import partial
 from netharn.data.batch_samplers import PatchedBatchSampler
@@ -12,6 +12,7 @@ from netharn.data.data_containers import container_collate
 from netharn.data.batch_samplers import PatchedRandomSampler
 from netharn.data.batch_samplers import SubsetSampler
 import random
+
 
 class SequenceDataset(torch.utils.data.Dataset):
     def __init__(self, sampler, window_dims, input_dims=None, channels=None,
@@ -42,12 +43,12 @@ class SequenceDataset(torch.utils.data.Dataset):
     def __getitem__(self, index):
 
         tr = self.sample_grid['positives'][index]
-        
-        negative_index = random.randint(0,self.__len__()-2)
+
+        negative_index = random.randint(0, self.__len__() - 2)
         # print(index)
         # print(negative_index)
         tr_negative = self.sample_grid['positives'][negative_index]
-        
+
         # tr = self.sample_grid['negatives'][index]
         # print(tr)
         # print(tr_negative)
@@ -62,7 +63,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         # print(f"frame min: {frame.min()}, frame max: {frame.max()}")
         sample = sampler.load_sample(tr, with_annots="segmentation")
         negative_sample = sampler.load_sample(tr_negative, with_annots="segmentation")
-        
+
         # print(sample.keys())
         # print(sample['annots'].keys())
         # print(sample['annots']['rel_ssegs'])
@@ -112,13 +113,13 @@ class SequenceDataset(torch.utils.data.Dataset):
             # ax1.imshow(frame[:,:,:3])
             # ax2.imshow(frame_mask)
             # plt.show()
-            
+
             frame_masks.append(frame_mask)
             frame_ims.append(frame)
 
         negative_raw_frame_list = negative_sample['im']
         negative_raw_det_list = negative_sample['annots']['frame_dets']
-        
+
         negative_frame_ims = []
         negative_frame_masks = []
         for negative_raw_frame, negative_raw_dets in zip(negative_raw_frame_list, negative_raw_det_list):
@@ -144,14 +145,14 @@ class SequenceDataset(torch.utils.data.Dataset):
 
             # ensure channel dim is not squeezed
             frame = kwarray.atleast_nd(frame, 3)
-            
+
             # fig = plt.figure()
             # ax1 = fig.add_subplot(1,2,1)
             # ax2 = fig.add_subplot(1,2,2)
             # ax1.imshow(frame[:,:,:3])
             # ax2.imshow(frame_mask)
             # plt.show()
-            
+
             negative_frame_ims.append(frame)
             negative_frame_masks.append(frame_mask)
 
@@ -160,8 +161,9 @@ class SequenceDataset(torch.utils.data.Dataset):
         class_masks = np.concatenate([m[None, ...] for m in frame_masks], axis=0)
 
         negative_frame_data = np.concatenate([f[None, ...] for f in negative_frame_ims], axis=0)
-        negative_class_masks = np.concatenate([m[None, ...] for m in negative_frame_masks], axis=0)
-        
+
+        # UNUSED? FIXME?
+        negative_class_masks = np.concatenate([m[None, ...] for m in negative_frame_masks], axis=0)  # NOQA
 
         cthw_im = frame_data.transpose(3, 0, 1, 2)
         negative_cthw_im = negative_frame_data.transpose(3, 0, 1, 2)
@@ -266,13 +268,13 @@ def decollate_batch(batch):
     return decollated
 
 
-def __notes__():
-    """
-        >>> #
-        >>> for img in dset.imgs.values():
-        >>>     chan = img.get('channels', None)
-        >>>     print('img_chan = {!r}'.format(chan))
-        >>>     for aux in img.get('auxiliary', []):
-        >>>         chan = aux.get('channels', None)
-        >>>         print('aux_chan = {!r}'.format(chan))
-    """
+# def __notes__():
+#     """
+#         >>> #
+#         >>> for img in dset.imgs.values():
+#         >>>     chan = img.get('channels', None)
+#         >>>     print('img_chan = {!r}'.format(chan))
+#         >>>     for aux in img.get('auxiliary', []):
+#         >>>         chan = aux.get('channels', None)
+#         >>>         print('aux_chan = {!r}'.format(chan))
+#     """

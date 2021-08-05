@@ -217,7 +217,7 @@ class outconv(nn.Module):
         return x
 
 
-## U-Net
+# U-Net
 class UNet(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(UNet, self).__init__()
@@ -249,7 +249,7 @@ class UNet(nn.Module):
         return x
 
 
-## HalfU-Net
+# HalfU-Net
 class HalfUNet(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(HalfUNet, self).__init__()
@@ -281,7 +281,7 @@ class HalfUNet(nn.Module):
         return x
 
 
-## U-Net
+# U-Net
 class UNetEncoder(nn.Module):
     def __init__(self, in_channels):
         super(UNetEncoder, self).__init__()
@@ -302,7 +302,7 @@ class UNetEncoder(nn.Module):
         return x1, x2, x3, x4, x5
 
 
-## U-Net
+# U-Net
 class UNetDecoder(nn.Module):
     def __init__(self, out_channels):
         super(UNetDecoder, self).__init__()

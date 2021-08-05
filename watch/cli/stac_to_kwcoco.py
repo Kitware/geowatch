@@ -1,15 +1,13 @@
-import os
 import sys
 import kwcoco
 import json
 import argparse
 import pystac
-from osgeo import gdal
 import ubelt as ub
 from watch.gis import geotiff
 import watch.cli.geotiffs_to_kwcoco as gtk
-import datetime
 import dateutil.parser
+
 
 def hack_resolve_sensor_candidate(dset):
     """
@@ -40,6 +38,7 @@ def hack_resolve_sensor_candidate(dset):
         assert len(coarsend) == 1
         img['sensor_coarse'] = ub.peek(coarsend)
 
+
 def convert(out_file, cat, ignore_dem=True):
     dset = kwcoco.CocoDataset()
 
@@ -50,17 +49,17 @@ def convert(out_file, cat, ignore_dem=True):
     else:
         catalog = cat
 
-    index = 0
+    # index = 0
     for item in catalog.get_items():
         meta = item.to_dict()
         date = meta['properties']['datetime']
         images = []
         name = item.id
         for asset in item.get_assets():
-            if asset!='data' and 'data' not in item.assets[asset].roles:
+            if asset != 'data' and 'data' not in item.assets[asset].roles:
                 continue
             images.append(item.assets[asset].get_absolute_href())
-        if len(images)>1:
+        if len(images) > 1:
             img = gtk.make_coco_img_from_auxiliary_geotiffs(images, name)
         else:
             img = gtk.make_coco_img_from_geotiff(images[0], name)
@@ -77,6 +76,7 @@ def convert(out_file, cat, ignore_dem=True):
         f.write(dataset)
     return dataset
 
+
 def main(args):
     parser = argparse.ArgumentParser(description="Convert STAC catalog to KWCOCO")
     parser.add_argument("--out_file", help="Output KWCOCO")
@@ -87,6 +87,7 @@ def main(args):
     args = parser.parse_args(args)
     convert(args.out_file, args.catalog, args.ignore_dem)
     return 0
+
 
 if __name__ == '__main__':
     sys.exit(main(sys.argv[1:]))

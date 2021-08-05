@@ -107,6 +107,7 @@ class SimpleVideoDataset(torch.utils.data.Dataset):
         >>>     xdev.InteractiveIter.draw()
 
     """
+
     def __init__(self, sampler, window_dims, input_dims=None, channels=None,
                  rng=None):
         super().__init__()

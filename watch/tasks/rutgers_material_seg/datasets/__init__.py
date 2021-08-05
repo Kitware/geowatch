@@ -35,9 +35,9 @@ def build_dataset(dataset_name: str, root: str, batch_size: int,
     DataLoader
         torch loader
     """
-    height, width = int(kwargs["image_size"].split("x")[0]), int(kwargs["image_size"].split("x")[1])
+    height, width = int(kwargs["image_size"].split("x")[0]), int(kwargs["image_size"].split("x")[1])  # NOQA
     transformer = transforms.Compose([
-                                    # transforms.Resize((height, width)),
+                                      # transforms.Resize((height, width)),
                                       # transforms.ColorJitter(),
                                       transforms.ToTensor(),
                                       transforms.Normalize(*mean_std)])

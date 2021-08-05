@@ -57,7 +57,7 @@ class Main(Algorithm):
             item = pystac.Item.from_dict(stac_item)
             item.set_self_href(os.path.join(params['output_dir'],
                                             stac_item['id'],
-                                            stac_item['id']+'.json'))
+                                            stac_item['id'] + '.json'))
 
             # TODO: Refactor these filtering steps out to separate ATK
             # algorithms
@@ -76,14 +76,14 @@ class Main(Algorithm):
                 polys = shp.geometry.shape(stac_item['geometry']).buffer(0)
                 union_poly = shp.ops.cascaded_union(polys)
                 aoi_poly = shp.geometry.shape(geojson_bbox)
-                overlap =\
-                    union_poly.intersection(aoi_poly).area / aoi_poly.area
+                overlap = (
+                    union_poly.intersection(aoi_poly).area / aoi_poly.area)
 
                 if overlap < params['min_aoi_overlap']:
                     continue
 
             if not params['dry_run']:
-                paths = client.download_raster(search_result,
+                paths = client.download_raster(search_result,  # NOQA
                                                params['output_dir'],
                                                nest_with_name=True,
                                                keep_existing=True)

@@ -186,7 +186,7 @@ run_linter:
         - pip install flake8 ubelt fire
 
     script:
-        - python dev/lint.py [atk,watch]
+        - python dev/lint.py [atk,watch] --mode=lint
 
     # We should eventually enforce linting
     allow_failure: true

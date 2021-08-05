@@ -67,7 +67,7 @@ import math
 
 
 class GlobalMercator(object):
-    """
+    r"""
     TMS Global Mercator Profile
     ---------------------------
 
@@ -295,7 +295,7 @@ class GlobalMercator(object):
 
 
 class GlobalGeodetic(object):
-    """
+    r"""
     TMS Global Geodetic Profile
     ---------------------------
 
@@ -368,7 +368,7 @@ class GlobalGeodetic(object):
 
 
 if __name__ == "__main__":
-    import sys, os
+    import sys
 
     def Usage(s=""):
         # print "Usage: globalmaptiles.py [-profile 'mercator'|'geodetic']"

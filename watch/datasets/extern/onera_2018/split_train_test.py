@@ -17,7 +17,7 @@ def split_onera_all(all_src, train_split_src, test_split_src):
     train_split, test_split, other_split = [], [], []
 
     for image_id, image in onera_all.imgs.items():
-        image_location = image["name"].split("-")[0] # image["name"] = "{location}-{frame number}"
+        image_location = image["name"].split("-")[0]  # image["name"] = "{location}-{frame number}"
 
         if image_location in train_locations:
             train_split.append(image_id)

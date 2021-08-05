@@ -58,5 +58,6 @@ __getattr__ = lazy_import(
 def __dir__():
     return __all__
 
+
 __all__ = ['kwcoco_extensions', 'util_bands', 'util_girder', 'util_norm',
            'util_raster', 'util_rgdc']

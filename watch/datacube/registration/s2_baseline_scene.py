@@ -1,4 +1,6 @@
-import os, sys, glob
+import os
+import sys
+import glob
 import xml.etree.ElementTree as ET
 from osgeo import gdal
 import numpy as np
@@ -37,16 +39,16 @@ def find_baseline_scene(xmls, return_paths=False):
         >>> # xdoctest: +REQUIRES(--network)
         >>> from watch.datacube.registration.s2_baseline_scene import *
         >>> from watch.demo.sentinel2_demodata import grab_sentinel2_product
-        >>> 
+        >>> #
         >>> safedirs = [str(grab_sentinel2_product(i).path) for i in range(3)]
         >>> baseline = find_baseline_scene([safedir_to_xml(s) for s in safedirs])
-        >>> 
+        >>> #
         >>> mgrs_tile = ''.join(safedirs[0].split(os.path.sep)[-4:-1])
         >>> # not essential, could change with demodata
         >>> assert mgrs_tile == '52SDG'
         >>> # the tile matches
         >>> assert baseline.keys() == {mgrs_tile}
-        >>> 
+        >>> #
         >>> df = baseline[mgrs_tile]
         >>> assert df.shape == (1,8)
         >>> # since it only has 1 row, let it act like a dict
@@ -55,11 +57,11 @@ def find_baseline_scene(xmls, return_paths=False):
         >>> df['mgrs_tile_id'] == mgrs_tile
         >>> # the granuledir exists in the chosen safedir
         >>> assert safedirs[1] in df['granuledir']
-        >>> 
+        >>> #
         >>> # alternate use:
         >>> baseline = find_baseline_scene([safedir_to_xml(s) for s in safedirs], return_paths=True)
         >>> assert baseline[mgrs_tile].startswith(os.path.abspath(safedirs[1]))
-        >>> 
+        >>> #
         >>> df.pop('granuledir')  # not portable for testing
         >>> assert df.to_dict() == {
         >>>     'granule_id': 'L1C_T52SDG_A017589_20181104T022402',
@@ -145,8 +147,8 @@ def find_baseline_scene(xmls, return_paths=False):
 
         norm_value_proc_ver = df['proc_ver'].max()
         # print(norm_value_proc_ver)
-        df['score'] = 0.25*df['coverage'] + 0.25*(1-df['cloud']) + \
-                     0.25*(1-df['sun_zenith_angle']/90.) + 0.25*( df['proc_ver']/norm_value_proc_ver)
+        df['score'] = 0.25 * df['coverage'] + 0.25 * (1 - df['cloud']) + \
+                     0.25 * (1 - df['sun_zenith_angle'] / 90.) + 0.25 * ( df['proc_ver'] / norm_value_proc_ver)
 
     print(df)
     mgrs_tile_list = pd.unique(df['mgrs_tile_id'].values)

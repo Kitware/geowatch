@@ -1118,7 +1118,7 @@ def single_geotiff_metadata(bundle_dpath, img, serializable=False):
 
     HACK_METADATA = 0
     if HACK_METADATA:
-        ### HACK: See if we can construct the keys from the metadata
+        # HACK: See if we can construct the keys from the metadata
         # in the coco file instead of reading the geotiff
         hack_keys = {
             'utm_corners',
@@ -1130,6 +1130,7 @@ def single_geotiff_metadata(bundle_dpath, img, serializable=False):
         if len(have_hacks) == len(hack_keys):
             print('have hacks: {}'.format(img['sensor_coarse']))
             from osgeo import osr
+
             def _make_osgeo_crs(crs_info):
                 from osgeo import osr
                 axis_mapping_int = getattr(osr, crs_info['axis_mapping'])
@@ -1351,7 +1352,7 @@ def visualize_rois(dset, kw_all_box_rois):
     cov_poly_gdf = gpd.GeoDataFrame({'cov_rois': sh_coverage_rois_trad},
                                     geometry='cov_rois', crs=cov_poly_crs)
 
-    sh_all_box_rois = [p.to_shapely()for p in  kw_all_box_rois]
+    sh_all_box_rois = [p.to_shapely()for p in kw_all_box_rois]
     sh_all_box_rois_trad = [flip_xy(p) for p in sh_all_box_rois]
     kw_all_box_rois_trad = list(map(kwimage.Polygon.from_shapely, sh_all_box_rois_trad))
     roi_poly_crs = 'epsg:4326'

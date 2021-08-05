@@ -1,7 +1,6 @@
 import pathlib
 import itertools as it
 from . import fit
-from .datasets import onera_2018
 
 model_names = [
     "smt_it_t_t12",
@@ -39,14 +38,14 @@ if __name__ == "__main__":
 
         # trainer params
         gpus=1,
-        #accelerator="ddp",
+        # accelerator="ddp",
         precision=16,
         max_epochs=400,
         gradient_clip_val=1.0,
         accumulate_grad_batches=4,
         terminate_on_nan=True,
     )
-    
+
     for method, model_name in it.product(methods, model_names):
         print(f"{method} / {model_name}\n====================")
         args.method = method

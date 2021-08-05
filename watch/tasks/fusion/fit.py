@@ -215,6 +215,7 @@ class DrawBatchCallback(pl.callbacks.Callback):
     References:
         https://pytorch-lightning.readthedocs.io/en/latest/extensions/callbacks.html
     """
+
     def __init__(self, num_draw=4, draw_interval=10):
         super().__init__()
         self.num_draw = num_draw
@@ -536,7 +537,7 @@ def fit_model(args=None, cmdline=False, **kwargs):
         model, pathlib.Path(trainer.default_root_dir) / "package.pt")
 
     # save learning relevant training options
-    learning_config = ub.dict_diff(args.__dict__, learning_irrelevant)
+    # learning_config = ub.dict_diff(args.__dict__, learning_irrelevant)
 
 
 def main(args=None, **kwargs):

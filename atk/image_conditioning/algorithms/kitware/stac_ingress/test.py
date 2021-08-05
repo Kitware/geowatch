@@ -29,14 +29,14 @@ class MainTestCase(AlgorithmTestCase):
 
             stac_catalog = pystac.Catalog.from_dict(self.cl.get_from_metadata('stac_catalog'))
 
-            self.assertTrue(output_dir==self.cl.get_from_metadata('output_dir'))
+            self.assertTrue(output_dir == self.cl.get_from_metadata('output_dir'))
             self.assertTrue(stac_catalog.get_self_href().startswith(output_dir))
             if not dry_run:
                 self.assertTrue(os.path.isfile(stac_catalog.get_self_href()))
             for item in stac_catalog.get_items():
                 self.assertTrue(item.get_self_href().startswith(output_dir))
                 if not dry_run:
-                   self.assertTrue(os.path.isfile(item.get_self_href()))
+                    self.assertTrue(os.path.isfile(item.get_self_href()))
                 for asset in item.get_assets():
                     self.assertTrue(item.assets[asset].get_absolute_href().startswith(output_dir))
                     if not dry_run:

@@ -162,6 +162,7 @@ class SETRModel(nn.Module):
         self.decoder_2d = Decoder2D(in_channels=config.hidden_size,
                                     out_channels=config.out_channels,
                                     features=decode_features)
+
     def forward(self, x):
         _, final_x = self.encoder_2d(x)
         x = self.decoder_2d(final_x)

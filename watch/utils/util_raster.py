@@ -23,7 +23,7 @@ from watch.gis.spatial_reference import utm_epsg_from_latlon
 class ResampledRaster(ExitStack):
     '''
     Context manager to rescale a raster on the fly using rasterio
-    
+
     This changes the number of pixels in the raster while maintaining its geographic bounds, that is, it changes the raster's GSD.
 
     Args:
@@ -38,29 +38,29 @@ class ResampledRaster(ExitStack):
         >>> from watch.utils.util_raster import *
         >>> from watch.demo.landsat_demodata import grab_landsat_product
         >>> path = grab_landsat_product()['bands'][0]
-        >>> 
+        >>> #
         >>> current_gsd_meters = 60
         >>> desired_gsd_meters = 10
         >>> scale = current_gsd_meters / desired_gsd_meters
-        >>> 
+        >>> #
         >>> with rasterio.open(path) as f:
         >>>     old_profile = f.profile
-        >>> 
+        >>> #
         >>> # can instantiate this class in a with-block
         >>> with ResampledRaster(path, scale=scale, read=False) as f:
         >>>     pass
-        >>> 
+        >>> #
         >>> # or have it stick around and change the resampling on the fly
         >>> resampled = ResampledRaster(path, scale=scale, read=False)
-        >>> 
+        >>> #
         >>> # the computation only happens when you invoke 'with'
         >>> with resampled as new_profile:
         >>>     assert new_profile['width'] == int(old_profile['width'] * scale)
         >>>     assert new_profile['crs'] == old_profile['crs']
-        >>> 
+        >>> #
         >>> resampled.scale = scale / 2
         >>> resampled.read = True
-        >>> 
+        >>> #
         >>> with resampled as new:
         >>>     assert new.profile['width'] == int(old_profile['width'] * scale / 2)
         >>>     assert new.profile['crs'] == old_profile['crs']
@@ -134,12 +134,12 @@ class GdalOpen:
         >>> from watch.utils.util_raster import *
         >>> from watch.demo.landsat_demodata import grab_landsat_product
         >>> path = grab_landsat_product()['bands'][0]
-        >>> 
+        >>> #
         >>> # standard use:
         >>> dataset = gdal.Open(path)
         >>> print(dataset.GetDescription())  # do stuff
         >>> del dataset  # or 'dataset = None'
-        >>> 
+        >>> #
         >>> # equivalent:
         >>> with GdalOpen(path) as dataset:
         >>>     print(dataset.GetDescription())  # do stuff
@@ -150,7 +150,7 @@ class GdalOpen:
     def __enter__(self):
         self.f = gdal.Open(self.path)
         return self.f
-    
+
     def __exit__(self, *exc):
         # gdal.GDALClose(f)  # not implemented in this version of gdal?
         del self.f  # this is ugly, but it works...
@@ -168,7 +168,7 @@ def reroot_vrt(old_path, new_path, keep_old=True):
         >>> from watch.utils.util_raster import *
         >>> from watch.demo.landsat_demodata import grab_landsat_product
         >>> bands = grab_landsat_product()['bands']
-        >>> 
+        >>> #
         >>> # VRT must be created in the imgs' subtree
         >>> tmp_path = os.path.join(os.path.dirname(bands[0]), 'all_bands.vrt')
         >>> # (consider using the wrapper util_raster.make_vrt instead of this)
@@ -191,7 +191,7 @@ def reroot_vrt(old_path, new_path, keep_old=True):
             if not os.path.isabs(elem.text):
                 raise ValueError(f'''VRT file:
                     {old_path}
-                cannot be rerooted because it contains path: 
+                cannot be rerooted because it contains path:
                     {elem.text}
                 relative to an unknown location [the original calling location].
                 To produce a rerootable VRT, call gdal.BuildVRT() with out_path relative to in_paths.'''
@@ -199,7 +199,7 @@ def reroot_vrt(old_path, new_path, keep_old=True):
             if not os.path.isfile(elem.text):
                 raise ValueError(f'''VRT file:
                     {old_path}
-                references an nonexistent path: 
+                references an nonexistent path:
                     {elem.text}''')
 
     with open(new_path, 'wb') as f:
@@ -232,7 +232,7 @@ def make_vrt(in_paths, out_path, mode, relative_to_path=None, **kwargs):
         >>> from watch.utils.util_raster import *
         >>> from watch.demo.landsat_demodata import grab_landsat_product
         >>> bands = grab_landsat_product()['bands']
-        >>> 
+        >>> #
         >>> # stack bands from a scene
         >>> make_vrt(sorted(bands), './bands1.vrt', mode='stacked', relative_to_path=os.getcwd())
         >>> # pretend this is a different scene
@@ -241,7 +241,7 @@ def make_vrt(in_paths, out_path, mode, relative_to_path=None, **kwargs):
         >>> make_vrt(['./bands1.vrt', './bands2.vrt'], 'full_scene.vrt', mode='mosaicked', relative_to_path=os.getcwd())
         >>> with GdalOpen('full_scene.vrt') as f:
         >>>     print(f.GetDescription())
-        >>> 
+        >>> #
         >>> # clean up
         >>> os.remove('./bands1.vrt')
         >>> os.remove('./bands2.vrt')
@@ -256,7 +256,7 @@ def make_vrt(in_paths, out_path, mode, relative_to_path=None, **kwargs):
         kwargs['separate'] = True
     elif mode == 'mosaicked':
         kwargs['separate'] = False
-        kwargs['srcNodata']= 0 # this ensures nodata doesn't overwrite data
+        kwargs['srcNodata'] = 0  # this ensures nodata doesn't overwrite data
     else:
         raise ValueError(f'mode: {mode} should be "stacked" or "mosaicked"')
 
@@ -330,12 +330,12 @@ def scenes_to_vrt(scenes, vrt_root, relative_to_path):
         >>> from watch.utils.util_raster import *
         >>> from watch.demo.landsat_demodata import grab_landsat_product
         >>> bands = grab_landsat_product()['bands']
-        >>> 
+        >>> #
         >>> # pretend there are more scenes here
         >>> out_path = scenes_to_vrt([sorted(bands)] , vrt_root='.', relative_to_path=os.getcwd())
         >>> with GdalOpen(out_path) as f:
         >>>     print(f.GetDescription())
-        >>> 
+        >>> #
         >>> # clean up
         >>> os.remove(out_path)
     '''
@@ -399,7 +399,7 @@ def reproject_crop(in_path, aoi, code=None, out_path=None, vrt_root=None):
         >>> from watch.utils.util_raster import *
         >>> from watch.demo.landsat_demodata import grab_landsat_product
         >>> band1 = grab_landsat_product()['bands'][0]
-        >>> 
+        >>> #
         >>> # pick the AOI from the drop0 KR site
         >>> # (this doesn't actually intersect the demodata)
         >>> top, left = (128.6643, 37.6601)
@@ -410,9 +410,9 @@ def reproject_crop(in_path, aoi, code=None, out_path=None, vrt_root=None):
         >>>     "coordinates": [[[top, left], [top, right], [bottom, right],
         >>>                      [bottom, left], [top, left]]]
         >>> }
-        >>> 
+        >>> #
         >>> out_path = reproject_crop(band1, geojson_bbox)
-        >>> 
+        >>> #
         >>> # clean up
         >>> os.remove(out_path)
     '''

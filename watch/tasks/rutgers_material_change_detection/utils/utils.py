@@ -1,11 +1,8 @@
-
 from glob import glob
-from PIL import Image
 import pickle as pkl
 import os
 import torch
 import numpy as np
-import argparse
 import sys
 import yaml
 import torch.nn.functional as F
@@ -13,12 +10,7 @@ import torchvision.transforms.functional as FT
 import json
 import PIL
 from parse import parse
-import collections
 import random
-from PIL import ImageOps
-import matplotlib.pyplot as plt
-# import pydensecrf.densecrf as dcrf
-# from pydensecrf.utils import unary_from_softmax
 
 
 def denorm(image: torch.Tensor, mean: list = [0.485, 0.456, 0.406], std: list = [0.229, 0.224, 0.225]) -> torch.Tensor:
@@ -48,10 +40,11 @@ def denorm(image: torch.Tensor, mean: list = [0.485, 0.456, 0.406], std: list = 
         # batch mode
         assert image.size(1) == 3, "Expected RGB image [3xHxW]"
 
-        for t, m, s in zip((0,1,2), mean, std):
+        for t, m, s in zip((0, 1, 2), mean, std):
             image[:, t, :, :].mul_(s).add_(m)
 
     return image
+
 
 def create_dir_if_doesnt_exist(dir_path: str) -> None:
     """creates directory in given path
@@ -64,6 +57,7 @@ def create_dir_if_doesnt_exist(dir_path: str) -> None:
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
     return
+
 
 def normalize_image(image: np.array) -> np.array:
     """normalize image between 0-1
@@ -79,7 +73,8 @@ def normalize_image(image: np.array) -> np.array:
     image_min = np.min(image)
     image_max = np.max(image)
     # print(f"image min: {image_min}, image_max: {image_max}")
-    return (image - image_min)/(image_max - image_min + 0.00000000001)
+    return (image - image_min) / (image_max - image_min + 0.00000000001)
+
 
 def normalize_image_255(image: np.array) -> np.array:
     """normalizes image between 0-255
@@ -95,11 +90,12 @@ def normalize_image_255(image: np.array) -> np.array:
         normalized image
     """
     image_min = np.min(image)
-    image_max = np.max(image)
+    # image_max = np.max(image)
     # print(f"image min: {image_min}, image_max: {image_max}")
-    return (image - image_min)/(255-image_min + 0.00000000001)
+    return (image - image_min) / (255 - image_min + 0.00000000001)
 
-def normalize_dm(image: np.array, confidence_score: float=0) -> np.array:
+
+def normalize_dm(image: np.array, confidence_score: float = 0) -> np.array:
     """normalize distance map
 
     Parameters
@@ -117,42 +113,44 @@ def normalize_dm(image: np.array, confidence_score: float=0) -> np.array:
     image_min = np.min(image)
     image_max = np.max(image)
     # print(f"image min: {image_min}, image_max: {image_max}")
-    normalized = (image - image_min)/(image_max-image_min+0.00000000001)
+    normalized = (image - image_min) / (image_max - image_min + 0.00000000001)
     normalized += confidence_score
     return normalized
 
-def max_norm(p, version='torch', e=1e-5):
-	if version is 'torch':
-		if p.dim() == 3:
-			C, H, W = p.size()
-			p = F.relu(p)
-			max_v = torch.max(p.view(C,-1),dim=-1)[0].view(C,1,1)
-			min_v = torch.min(p.view(C,-1),dim=-1)[0].view(C,1,1)
-			p = F.relu(p-min_v-e)/(max_v-min_v+e)
-		elif p.dim() == 4:
-			N, C, H, W = p.size()
-			p = F.relu(p)
-			max_v = torch.max(p.view(N,C,-1),dim=-1)[0].view(N,C,1,1)
-			min_v = torch.min(p.view(N,C,-1),dim=-1)[0].view(N,C,1,1)
-			p = F.relu(p-min_v-e)/(max_v-min_v+e)
-	elif version is 'numpy' or version is 'np':
-		if p.ndim == 3:
-			C, H, W = p.shape
-			p[p<0] = 0
-			max_v = np.max(p,(1,2),keepdims=True)
-			min_v = np.min(p,(1,2),keepdims=True)
-			p[p<min_v+e] = 0
-			p = (p-min_v-e)/(max_v+e)
-		elif p.ndim == 4:
-			N, C, H, W = p.shape
-			p[p<0] = 0
-			max_v = np.max(p,(2,3),keepdims=True)
-			min_v = np.min(p,(2,3),keepdims=True)
-			p[p<min_v+e] = 0
-			p = (p-min_v-e)/(max_v+e)
-	return p
 
-def batch_crf_inference(img: torch.Tensor, probs: torch.Tensor, t:int =1, scale_factor: int=1, labels:int=21) -> torch.Tensor:
+def max_norm(p, version='torch', e=1e-5):
+    if version == 'torch':
+        if p.dim() == 3:
+            C, H, W = p.size()
+            p = F.relu(p)
+            max_v = torch.max(p.view(C, -1), dim=-1)[0].view(C, 1, 1)
+            min_v = torch.min(p.view(C, -1), dim=-1)[0].view(C, 1, 1)
+            p = F.relu(p - min_v - e) / (max_v - min_v + e)
+        elif p.dim() == 4:
+            N, C, H, W = p.size()
+            p = F.relu(p)
+            max_v = torch.max(p.view(N, C, -1), dim=-1)[0].view(N, C, 1, 1)
+            min_v = torch.min(p.view(N, C, -1), dim=-1)[0].view(N, C, 1, 1)
+            p = F.relu(p - min_v - e) / (max_v - min_v + e)
+    elif version == 'numpy' or version == 'np':
+        if p.ndim == 3:
+            C, H, W = p.shape
+            p[p < 0] = 0
+            max_v = np.max(p, (1, 2), keepdims=True)
+            min_v = np.min(p, (1, 2), keepdims=True)
+            p[p < min_v + e] = 0
+            p = (p - min_v - e) / (max_v + e)
+        elif p.ndim == 4:
+            N, C, H, W = p.shape
+            p[p < 0] = 0
+            max_v = np.max(p, (2, 3), keepdims=True)
+            min_v = np.min(p, (2, 3), keepdims=True)
+            p[p < min_v + e] = 0
+            p = (p - min_v - e) / (max_v + e)
+    return p
+
+
+def batch_crf_inference(img: torch.Tensor, probs: torch.Tensor, t: int = 1, scale_factor: int = 1, labels: int = 21) -> torch.Tensor:
     """crf inference for a batch
 
     Parameters
@@ -174,18 +172,18 @@ def batch_crf_inference(img: torch.Tensor, probs: torch.Tensor, t:int =1, scale_
     bs, c, h, w = probs.shape
     image_npy = img.numpy()
     probs_npy = probs.numpy()
-    preds = torch.zeros((bs,1,h,w))
-    preds_probs = torch.zeros((bs,labels,h,w))
+    # preds = torch.zeros((bs, 1, h, w))
+    preds_probs = torch.zeros((bs, labels, h, w))
     for b in range(bs):
-        b_image = image_npy[b,:,:,:]
-        b_probs = probs_npy[b,:,:,:]
-        b_image = np.ascontiguousarray(np.transpose(b_image, (1,2,0)))
+        b_image = image_npy[b, :, :, :]
+        b_probs = probs_npy[b, :, :, :]
+        b_image = np.ascontiguousarray(np.transpose(b_image, (1, 2, 0)))
         b_image *= 255
         b_image[b_image > 255] = 255
         b_image[b_image < 0] = 0
         b_image = b_image.astype(np.uint8)
         b_pred = crf_inference(b_image, b_probs, t=t, scale_factor=scale_factor, labels=labels)
-        preds_probs[b,:,:,:] = torch.from_numpy(b_pred)
+        preds_probs[b, :, :, :] = torch.from_numpy(b_pred)
         # print(f"pred min: {b_pred.min()} max: {b_pred.max()}")
         # b_pred = b_pred.max(1)[1]
         # print(b_pred.shape)
@@ -193,7 +191,8 @@ def batch_crf_inference(img: torch.Tensor, probs: torch.Tensor, t:int =1, scale_
     # return preds, preds_probs
     return preds_probs
 
-def crf_inference(img: np.array, probs: np.array, t:int =10, scale_factor:int =1, labels:int =21) -> np.array:
+
+def crf_inference(img: np.array, probs: np.array, t: int = 10, scale_factor: int = 1, labels: int = 21) -> np.array:
     """crf prediction for single image
 
     Parameters
@@ -211,17 +210,17 @@ def crf_inference(img: np.array, probs: np.array, t:int =10, scale_factor:int =1
     np.array
         single crf prediction
     """
-    
+    import pydensecrf.densecrf as dcrf
+    from pydensecrf.utils import unary_from_softmax
     h, w = img.shape[:2]
     n_labels = labels
     d = dcrf.DenseCRF2D(w, h, n_labels)
-
     unary = unary_from_softmax(probs)
     unary = np.ascontiguousarray(unary)
-    
+
     d.setUnaryEnergy(unary)
-    d.addPairwiseGaussian(sxy=3/scale_factor, compat=3)
-    d.addPairwiseBilateral(sxy=80/scale_factor, srgb=13, rgbim=np.copy(img), compat=10)
+    d.addPairwiseGaussian(sxy=3 / scale_factor, compat=3)
+    d.addPairwiseBilateral(sxy=80 / scale_factor, srgb=13, rgbim=np.copy(img), compat=10)
     Q = d.inference(t)
 
     return np.array(Q).reshape((n_labels, h, w))
@@ -243,6 +242,7 @@ def t2n(x: torch.Tensor) -> np.array:
     x = x.cpu().detach().numpy()
     return x
 
+
 def mat_to_csv(mat_path: str, save_to: str) -> None:
     """convert mat file to csv
 
@@ -256,9 +256,10 @@ def mat_to_csv(mat_path: str, save_to: str) -> None:
     import scipy.io
     import pandas as pd
     mat = scipy.io.loadmat(mat_path)
-    mat = {k:v for k,v in mat.items() if k[0]!='_'}
-    data = pd.DataFrame({k:pd.Series(v[0]) for k,v in mat.items()})
+    mat = {k: v for k, v in mat.items() if k[0] != '_'}
+    data = pd.DataFrame({k: pd.Series(v[0]) for k, v in mat.items()})
     data.to_csv(save_to)
+
 
 def load_yaml_as_dict(yaml_path: str) -> dict:
     """load config file as dictionarry
@@ -276,7 +277,8 @@ def load_yaml_as_dict(yaml_path: str) -> dict:
         config_dict = yaml.load(f, Loader=yaml.FullLoader)
     return config_dict
 
-def dictionary_contents(path: str, types: list, recursive: bool =False) -> list:
+
+def dictionary_contents(path: str, types: list, recursive: bool = False) -> list:
     """extyract dictionary and subdictionary contents
 
     Parameters
@@ -295,15 +297,16 @@ def dictionary_contents(path: str, types: list, recursive: bool =False) -> list:
     """
     files = []
     if recursive:
-        path = path+"/**/*"
+        path = path + "/**/*"
     for type in types:
         if recursive:
-            for x in glob(path+type,recursive=True):
-                files.append(os.path.join(path,x))
+            for x in glob(path + type, recursive=True):
+                files.append(os.path.join(path, x))
         else:
-            for x in glob(path+type):
-                files.append(os.path.join(path,x))
+            for x in glob(path + type):
+                files.append(os.path.join(path, x))
     return files
+
 
 def save_pickle(object: object, path: str, file_name: str) -> None:
     """save pickle to location
@@ -318,9 +321,10 @@ def save_pickle(object: object, path: str, file_name: str) -> None:
         name of file to be saved
     """
     full_path  = path + file_name + ".pkl"
-    with open(full_path,'wb') as file:
-        pkl.dump(object,file)
+    with open(full_path, 'wb') as file:
+        pkl.dump(object, file)
     return
+
 
 def load_pickle(path: str) -> object:
     """load pickle
@@ -335,35 +339,39 @@ def load_pickle(path: str) -> object:
     object
         object loaded
     """
-    with open(path,'rb') as file:
+    with open(path, 'rb') as file:
         object = pkl.load(file)
     return object
 
+
 def load_config_as_dict(path_to_config):
-    with open(path_to_config,'r') as stream:
+    with open(path_to_config, 'r') as stream:
         try:
-            config=yaml.safe_load(stream)
+            config = yaml.safe_load(stream)
         except yaml.YAMLError as exc:
             print(exc)
     return config
 
+
 def config_parser(path_to_config, experiment_type):
-    if experiment_type.lower()=="training":
+    if experiment_type.lower() == "training":
         config = yaml.safe_load(open(path_to_config))
-        config['data']['height'], config['data']['width'] = parse('{}x{}',config['data']['image_size'])
-        config['data']['height'], config['data']['width'] = int(config['data']['height']),int(config['data']['width'])
+        config['data']['height'], config['data']['width'] = parse('{}x{}', config['data']['image_size'])
+        config['data']['height'], config['data']['width'] = int(config['data']['height']), int(config['data']['width'])
         return config
-        
+
     elif experiment_type.lower() == "testing":
         print("incomplete parser for testing")
         sys.exit()
+
 
 def load_json_as_dict(path_to_json):
     with open(path_to_json) as json_file:
         data = json.load(json_file)
     return data
 
-def random_horizonal_flip(image: PIL.Image, mask: PIL.Image, points: object =False) -> tuple:
+
+def random_horizonal_flip(image: PIL.Image, mask: PIL.Image, points: object = False) -> tuple:
     """random horizontal flip of both image and mask
 
     Parameters
@@ -390,7 +398,8 @@ def random_horizonal_flip(image: PIL.Image, mask: PIL.Image, points: object =Fal
         return image, mask, points
     return image, mask
 
-def random_vertical_flip(image: PIL.Image, mask: PIL.Image, points: object =False) -> tuple:
+
+def random_vertical_flip(image: PIL.Image, mask: PIL.Image, points: object = False) -> tuple:
     """random vertical flip of both image and mask
 
     Parameters
@@ -416,4 +425,3 @@ def random_vertical_flip(image: PIL.Image, mask: PIL.Image, points: object =Fals
     if isinstance(points, PIL.Image.Image):
         return image, mask, points
     return image, mask
-

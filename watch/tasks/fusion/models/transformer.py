@@ -50,6 +50,7 @@ class ResidualSequential(nn.Sequential):
     """
     A Sequential layer with a residual operation at the end
     """
+
     def __init__(self, *args):
         super().__init__(*args)
 
@@ -104,6 +105,7 @@ class MultiheadSelfAttention(ub.NiceRepr, torch.nn.MultiheadAttention):
 try:
     from performer_pytorch import FastAttention
     import math
+
     class FastMultiheadSelfAttention(FastAttention):
         """
         This seems like a good idea, but either I'm using it wrong or the
@@ -121,6 +123,7 @@ try:
             q = einops.rearrange(x, 's b (h e) -> b h s e', h=H)
             FastAttention(dim_heads=D // H, nb_features=None)(q, q, q).shape
         """
+
         def __init__(self, embed_dim, num_heads):
             self.embed_dim = embed_dim
             self.num_heads = num_heads
@@ -203,6 +206,7 @@ def num_groups_hueristic(num_features):
     # The hueristically "ideal" number of groups and number of channels per group
     ideal_num_groups = num_features ** (0.5)
     ideal_channels_per_group = num_features ** (0.5)
+
     def hueristic_loss(num_groups):
         channels_per_group = num_features // num_groups
         loss = (
@@ -367,6 +371,7 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
         >>> outputs = self(x)
         >>> assert tuple(outputs.shape) == (2, 3, 13, 4, 4, 1024)
     """
+
     def __init__(
         self,
         axes,
@@ -494,6 +499,7 @@ class FusionEncoder(nn.Module):
         >>> output = model(inputs)
         >>> assert output.shape == (2, 3, 5, 2, 2, 256)
     """
+
     def __init__(self, axes,
                  default_shape=["batch", "sequence", "feature"],
                  feature_axis="feature",
@@ -596,6 +602,8 @@ def _build_global_configs():
             encoder_configs[code] = ub.dict_union(
                 size_value, _sm_value, dict(axes=axes_value))
     return encoder_configs
+
+
 encoder_configs = _build_global_configs()
 
 # print('encoder_configs = {}'.format(ub.repr2(list(encoder_configs.keys(), nl=1)))

@@ -1,3 +1,4 @@
+# flake8: noqa
 method_bases = {
     "mmvit-DotProdCD-stm-s12": dict(
         method="MultimodalTransformerDotProdCD",
@@ -58,20 +59,20 @@ def main():
     import itertools as it
     from typing import SimpleNamespace
     from watch.tasks.fusion import fit, predict, evaluate
-    
+
     for (method_key, method_base), (channel_key, channel_subset) in it.product(method_bases.items(), channel_sets.items()):
-    
+
         print("training...")
         defaults = dict(
             dataset="OneraCD_2018",
             channels=channel_subset,
-            
+
             # trainer params
             workdir="_subset_experiment/trained_models"
             terminate_on_nan=True,
         )
         config = {**defaults, **method_base}
-        
+
         args = fit.make_fit_config(cmdline=True, **config)
         fit.fit_model(args=args)
 
@@ -86,7 +87,7 @@ def main():
             use_gpu=True,
         )
         predict.main(predict_args)
-    
+
     print("evaluating...")
     evaluate_args = SimpleNamespace(
         result_kwcoco_path="_subset_experiment/results/OneraCD_results.kwcoco.json",
@@ -94,6 +95,7 @@ def main():
         figure_root="_subset_experiment/figures/OneraCD",
     )
     evaluate.main(evaluate_args)
+
 
 if __name__ == "__main__":
     main()

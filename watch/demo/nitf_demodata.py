@@ -223,6 +223,7 @@ def grab_nitf_fpath(key=None, safe=True):
                 print('RESTORED SSL CONTEXT')
     return fpath
 
+
 grab_nitf_fpath.keys = _FNAME_TO_INFO.keys
 
 
@@ -296,7 +297,7 @@ def _check_properties():
             print('----')
             fname = row['key']
             fpath = grab_nitf_fpath(fname, safe=True)
-            out = ub.cmd('gdalinfo {}'.format(fpath), verbose=3)
+            out = ub.cmd('gdalinfo {}'.format(fpath), verbose=3)  # NOQA
 
             # if 'rpc' in out['out'].lower():
             #     break
@@ -316,4 +317,3 @@ def _check_properties():
     print('_TEST_IMAGES = {}'.format(ub.repr2(_TEST_IMAGES, nl=1, sort=False)))
 
     # i_3001a.ntf
-

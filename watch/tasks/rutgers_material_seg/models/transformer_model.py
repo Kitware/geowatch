@@ -316,7 +316,7 @@ class TransModel2d(nn.Module):
             embedding_output,
             output_all_encoded_layers=output_all_encoded_layers,
         )
-        sequence_output = encoder_layers[-1]
+        sequence_output = encoder_layers[-1]  # NOQA
 
         if not output_all_encoded_layers:
             # 如果不用输出所有encoder层
@@ -347,7 +347,7 @@ class TransModel3d(nn.Module):
             embedding_output,
             output_all_encoded_layers=output_all_encoded_layers,
         )
-        sequence_output = encoder_layers[-1]
+        sequence_output = encoder_layers[-1]  # NOQA
 
         if not output_all_encoded_layers:
             # 如果不用输出所有encoder层

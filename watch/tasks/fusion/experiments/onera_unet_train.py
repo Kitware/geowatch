@@ -1,3 +1,4 @@
+# flake8: noqa
 import pathlib
 import scriptconfig as scfg
 import ubelt as ub
@@ -66,6 +67,7 @@ def main():
         args.channels = channels
         args.default_root_dir = pathlib.Path(config['workdir']) / key
         fit.main(args)
+
 
 if __name__ == "__main__":
     main()

@@ -70,6 +70,7 @@ class VideoDataset(data.Dataset):
         >>> kwplot.show_if_requested()
     """
     # TODO: add torchvision.transforms or albumentations
+
     def __init__(
         self,
         sampler,

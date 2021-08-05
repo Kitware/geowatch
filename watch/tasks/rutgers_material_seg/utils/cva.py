@@ -56,7 +56,7 @@ def stad_img(img, channel_first=True, get_para=False):
         return nm_img, mean, std
     else:
         return nm_img
-    
+
 
 def CVA(img_X, img_Y, stad=False):
     # CVA has not affinity transformation consistency, so it is necessary to normalize multi-temporal images to
@@ -70,6 +70,10 @@ def CVA(img_X, img_Y, stad=False):
 
 
 def main():
+    from osgeo import gdal
+    import time
+    import imageio
+
     data_set_X = gdal.Open('../../../Dataset/Landsat/Taizhou/2000TM')  # data set X
     data_set_Y = gdal.Open('../../../Dataset/Landsat/Taizhou/2003TM')  # data set Y
 
@@ -84,6 +88,9 @@ def main():
     L2_norm = CVA(img_X, img_Y)
 
     bcm = np.ones((img_height, img_width))
+
+    raise NotImplementedError
+    otsu = None
     thre = otsu(L2_norm.reshape(1, -1))
     bcm[L2_norm > thre] = 255
     bcm = np.reshape(bcm, (img_height, img_width))
@@ -94,4 +101,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

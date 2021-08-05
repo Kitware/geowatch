@@ -2,7 +2,7 @@ import kwarray
 import kwimage
 import numpy as np
 import torch
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 # from kwcoco.channel_spec import ChannelSpec  # NOQA
 from functools import partial
 from netharn.data.batch_samplers import PatchedBatchSampler
@@ -101,7 +101,7 @@ class SequenceDataset(torch.utils.data.Dataset):
             # ax1.imshow(frame[:,:,:3])
             # ax2.imshow(frame_mask)
             # plt.show()
-            
+
             frame_masks.append(frame_mask)
             frame_ims.append(frame)
 
@@ -209,13 +209,13 @@ def decollate_batch(batch):
     return decollated
 
 
-def __notes__():
-    """
-        >>> #
-        >>> for img in dset.imgs.values():
-        >>>     chan = img.get('channels', None)
-        >>>     print('img_chan = {!r}'.format(chan))
-        >>>     for aux in img.get('auxiliary', []):
-        >>>         chan = aux.get('channels', None)
-        >>>         print('aux_chan = {!r}'.format(chan))
-    """
+# def __notes__():
+#     """
+#         >>> #
+#         >>> for img in dset.imgs.values():
+#         >>>     chan = img.get('channels', None)
+#         >>>     print('img_chan = {!r}'.format(chan))
+#         >>>     for aux in img.get('auxiliary', []):
+#         >>>         chan = aux.get('channels', None)
+#         >>>         print('aux_chan = {!r}'.format(chan))
+#     """

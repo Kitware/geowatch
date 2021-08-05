@@ -22,5 +22,6 @@ def main():
         args.model_checkpoint_path = model_checkpoint_path
         predict.main(args)
 
+
 if __name__ == "__main__":
     main()

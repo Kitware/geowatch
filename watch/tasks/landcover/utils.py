@@ -1,7 +1,4 @@
-import datetime
 import logging
-import os
-import sys
 
 
 def setup_logging(level=logging.DEBUG):
@@ -12,4 +9,3 @@ def setup_logging(level=logging.DEBUG):
     )
     logging.getLogger('matplotlib').setLevel(logging.WARNING)
     logging.getLogger('rasterio').setLevel(logging.INFO)
-
