@@ -55,7 +55,7 @@ def exec_autopep8(dpaths, autofix, mode='diff'):
     return info['ret']
 
 
-def custom_lint(dpath: str, mode=False, index=None, interact=None):
+def custom_lint(dpath : str = '.', mode : str = 'lint', index=None, interact=None):
     """
     Runs our custom "watch" linting rules on a specific directory and
     optionally "fixes" them.

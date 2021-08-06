@@ -7,6 +7,11 @@ CommandLine:
     ./run_developer_setup.sh
 '
 
+
+if [[ "$VIRTUAL_ENV" == "" ]]; then
+    echo "NOT INSIDE OF A VIRTUALENV. This script may not run correctly"
+fi 
+
 #pip install -r requirements/no-deps.txt
 
 # Install the watch module in development mode
@@ -17,6 +22,8 @@ pip install imgaug>=0.4.0
 pip install netharn>=0.5.16
 pip install GDAL>=3.3.1 --find-links https://girder.github.io/large_image_wheels
 
+pip install dvc[all]
+
 # Fix opencv issues
 pip freeze | grep "opencv-python=="
 HAS_OPENCV_RETCODE="$?"
@@ -26,12 +33,12 @@ HAS_OPENCV_HEADLESS_RETCODE="$?"
 # VAR == 0 means we have it
 if [[ "$HAS_OPENCV_HEADLESS_RETCODE" == "0" ]]; then
     if [[ "$HAS_OPENCV_RETCODE" == "0" ]]; then
-        pip uninstall opencv-python opencv-python-headless
+        pip uninstall opencv-python opencv-python-headless -y
         pip install opencv-python-headless
     fi
 else
     if [[ "$HAS_OPENCV_RETCODE" == "0" ]]; then
-        pip uninstall opencv-python
+        pip uninstall opencv-python -y
     fi
     pip install opencv-python-headless
 fi

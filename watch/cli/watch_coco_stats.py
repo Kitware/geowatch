@@ -30,6 +30,16 @@ class WatchCocoStats(scfg.Config):
 
 
 def coco_watch_stats(dset):
+    """
+    Args:
+        dset (kwcoco.CocoDataset)
+
+    Example:
+        >>> from watch.cli.watch_coco_stats import *  # NOQA
+        >>> from watch.demo import smart_kwcoco_demodata
+        >>> dset = smart_kwcoco_demodata.demo_smart_aligned_kwcoco()
+        >>> coco_watch_stats(dset)
+    """
     print('Per-video stats summary')
     for vidid, gids in dset.index.vidid_to_gids.items():
         avail_sensors = dset.images(gids).lookup('sensor_coarse', None)
