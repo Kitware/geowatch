@@ -1,10 +1,17 @@
 
 prep_dvc_data(){
+
+    # Setup environ
     DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+    #DVC_REMOTE=aws
     DVC_REMOTE=horologic
-    mkdir -p $DVC_DPATH/$USER/training
+
+    # Grab data for training
+    mkdir -p $DVC_DPATH/training/$HOSTNAME/$USER
     cd $DVC_DPATH
     dvc pull -r $DVC_REMOTE --recursive extern/onera_2018
+
+    dvc pull -r aws --recursive extern/onera_2018
 }
 
 # TRAINING COMMANDS
@@ -15,8 +22,8 @@ CUDA_VISIBLE_DEVICES=$AUTO_DEVICE \
 python -m watch.tasks.fusion.fit \
     --train_dataset=$DVC_DPATH/extern/onera_2018/onera_train.kwcoco.json \
     --vali_dataset=$DVC_DPATH/extern/onera_2018/onera_test.kwcoco.json \
-    --workdir=$DVC_DPATH/$USER/training \
-    --method=MultimodalTransformerDotProdCD \
+    --workdir=$DVC_DPATH/training/$HOSTNAME/$USER \
+    --method=MultimodalTransformerDirectCD \
     --model_name=smt_it_stm_s12 \
     --window_size=8 \
     --learning_rate=1e-3 \
@@ -25,9 +32,10 @@ python -m watch.tasks.fusion.fit \
     --terminate_on_nan=True \
     --time_steps=2 \
     --chip_size=128 \
-    --batch_size=1 \
+    --batch_size=4 \
+    --gpus=1 \
     --accumulate_grad_batches=8 \
-    --num_workers=12 \
+    --num_workers=12 --profile
 
 
 # NOTES: at 15/901 and 59/901

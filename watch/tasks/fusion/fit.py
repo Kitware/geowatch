@@ -18,6 +18,10 @@ Notes:
     Automated dynamics / plugins?
 
 
+Experiments:
+    experiments/crall/onera_experiments.sh
+
+
 TODO:
     - [ ] Rename --dataset argument to --datamodule
 
@@ -283,6 +287,7 @@ class DrawBatchCallback(pl.callbacks.Callback):
     #     print('do something when training ends')
 
 
+@profile
 def make_fit_config(args=None, cmdline=False, **kwargs):
     """
     Args:
@@ -327,6 +332,12 @@ def make_fit_config(args=None, cmdline=False, **kwargs):
     config_parser.add_argument('--dumps', action='store_true', help=ub.paragraph(
         '''
         If specified, dump this config stdout and exit.
+        '''))
+
+    config_parser.add_argument('--profile', action='store_true', help=ub.paragraph(
+        '''
+        Fit does nothing with this flag. This just allows for `@xdev.profile`
+        profiling.
         '''))
 
     # Setup common fields and modal switches
@@ -434,6 +445,7 @@ def make_fit_config(args=None, cmdline=False, **kwargs):
     return args
 
 
+@profile
 def make_lightning_modules(args=None, cmdline=False, **kwargs):
     """
     Example:
@@ -493,6 +505,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     return modules
 
 
+@profile
 def fit_model(args=None, cmdline=False, **kwargs):
     """
     Example:
@@ -557,6 +570,7 @@ def fit_model(args=None, cmdline=False, **kwargs):
     # learning_config = ub.dict_diff(args.__dict__, learning_irrelevant)
 
 
+@profile
 def main(args=None, **kwargs):
     """
 
