@@ -11,6 +11,13 @@ def main():
 
 
 def hello_world():
+    """
+    Notice the doctest. It is run in our CI!
+
+    Example:
+        >>> from watch.cli.hello_world import *  # NOQA
+        >>> hello_world()
+    """
     print("hello world!")
 
 
