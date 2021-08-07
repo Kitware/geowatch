@@ -105,7 +105,7 @@ class ChangeDetectorBase(pl.LightningModule):
             # TODO: it may be faster to compute loss at the downsampled
             # resolution.
             logits = nn.functional.interpolate(
-                logits, [H, W], mode="bilinear")
+                logits, [H, W], mode="bilinear", align_corners=True)
 
             change_prob = logits.sigmoid()[0]
             item_pred_changes.append(change_prob.detach())

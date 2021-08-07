@@ -27,15 +27,18 @@ TODO:
 
     - [ ] Rename WatchDataModule to ChangeDataModule
 
+    - [ ] Need to figure out how to connect configargparse with ray.tune
+
+    - [ ] Distributed Training:
+        - [ ] How do do DistributedDataParallel
+        - [ ] On one machine
+        - [ ] On multiple machines
+
     - [ ] Add Data Modules:
         - [ ] SegmentationDataModule
         - [ ] ClassificationDataModule
         - [ ] DetectionDataModule
         - [ ] <Problem>DataModule
-
-    - [ ] How do do DistributedDataParallel
-        - [ ] On one machine
-        - [ ] On multiple machines
 
 CommandLine:
     CUDA_VISIBLE_DEVICES=1 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.fit __doc__:0 -- --profile
@@ -143,7 +146,40 @@ Example:
     ...     'gpus': 1,
     ... }
     >>> #modules = make_lightning_modules(args=None, cmdline=cmdline, **kwargs)
-    >>> fit_model(args=args, cmdline=cmdline, **kwargs)
+    >>> fit_model(cmdline=cmdline, **kwargs)
+
+
+Example:
+    >>> # [WIP] Demo for end-to-end fit-predict-test pipeline
+    >>> from watch.tasks.fusion.fit import *  # NOQA
+    >>> from os.path import join
+    >>> import os
+    >>> import kwcoco
+    >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes128-multispectral', num_frames=5, gsize=(128, 128))
+    >>> vali_dset = kwcoco.CocoDataset.demo('special:vidshapes4-multispectral', num_frames=10, gsize=(128, 128), num_tracks=3)
+    >>> available_channel_profiles = {
+    >>>     frozenset(aux.get('channels', None) for aux in img.get('auxiliary', []))
+    >>>      for img in train_dset.index.imgs.values()}
+    >>> print('available_channel_profiles = {!r}'.format(available_channel_profiles))
+    >>> kwargs = {
+    ...     'train_dataset': train_dset.fpath,
+    ...     'vali_dataset': vali_dset.fpath,
+    ...     'dataset': 'WatchDataModule',
+    ...     'method': 'MultimodalTransformerDirectCD',
+    ...     'channels': 'B11|B1|B10|B8a',
+    ...     'time_steps': 4,
+    ...     'chip_size': 96,
+    ...     'batch_size': 2,
+    ...     'accumulate_grad_batches': 4,
+    ...     'model_name': 'smt_it_stm_p8',
+    ...     'num_workers': 2,
+    ...     'gradient_clip_val': 0.5,
+    ...     'gradient_clip_algorithm': 'value',
+    ...     'gpus': 1,
+    ... }
+    >>> cmdline = False
+    >>> #modules = make_lightning_modules(args=None, cmdline=cmdline, **kwargs)
+    >>> fit_model(cmdline=cmdline, **kwargs)
 
 """
 
@@ -288,7 +324,7 @@ class DrawBatchCallback(pl.callbacks.Callback):
 
 
 @profile
-def make_fit_config(args=None, cmdline=False, **kwargs):
+def make_fit_config(cmdline=False, **kwargs):
     """
     Args:
         args : namespace that overrides defaults
@@ -297,10 +333,10 @@ def make_fit_config(args=None, cmdline=False, **kwargs):
 
     Example:
         >>> from watch.tasks.fusion.fit import *  # NOQA
-        >>> args = None
         >>> cmdline = False
         >>> kwargs = {}
-        >>> args = make_fit_config(args=args, cmdline=cmdline, **kwargs)
+        >>> args = make_fit_config(cmdline=cmdline, **kwargs)
+        >>> print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1, sort=0)))
     """
     import argparse
     import configargparse
@@ -352,7 +388,7 @@ def make_fit_config(args=None, cmdline=False, **kwargs):
             '''))
 
     modal_parser.add_argument(
-        '--method', default='MultimodalTransformerDotProdCD',
+        '--method', default='MultimodalTransformerDirectCD',
         choices=available_methods, help=ub.paragraph(
             '''
             Modal parameter indicating the family of model to train.
@@ -368,17 +404,43 @@ def make_fit_config(args=None, cmdline=False, **kwargs):
     print(kwargs)
     print(modal)
 
+    # I strongly recommend that ~/data is a symlink to a drive with more
+    # storage space.
+    default_workdir = './_trained_models'
+
+    # Write to a sensible default location
+    ENABLE_SMART_DEFAULT_WORKDIR = 1
+    if ENABLE_SMART_DEFAULT_WORKDIR:
+        dvc_repos_dpath = pathlib.Path('~/data/dvc-repos/').expanduser()
+        if dvc_repos_dpath.exists():
+            smart_dvc_dpath = dvc_repos_dpath / 'smart_watch_dvc'
+            if smart_dvc_dpath.exists():
+                import platform
+                import getpass
+                user_info = {
+                    'user': getpass.getuser(),
+                    'hostname': platform.node(),
+                }
+                default_workdir = (smart_dvc_dpath / 'experiments' /
+                                   user_info['user'] / user_info['hostname'])
+                default_workdir.mkdir(exist_ok=True)
+
     common_parser = parser.add_argument_group("Common")
     common_parser.add_argument(
-        '--workdir', default='./_trained_models',
+        '--workdir', default=default_workdir,
         help=ub.paragraph(
             '''
             Directory where training data can be written.
-            Overrides default_root_dir,
+            Overrides default_root_dir.
             ''')
     )
 
-    print(modal)
+    # import netharn as nh
+    # xpu = nh.XPU.coerce('auto')
+    # auto_device = xpu.device.index
+
+    import netharn as nh
+    has_gpu = nh.XPU.coerce('auto').device.type == 'cpu'
 
     # Get subcomponents
     method_class = getattr(methods, modal.method)
@@ -390,25 +452,28 @@ def make_fit_config(args=None, cmdline=False, **kwargs):
     method_class.add_model_specific_args(method_parser)
     pl.Trainer.add_argparse_args(parser)
 
-    # Remove parameters that we will fill in with special logic
-    # Apparently this is hard to do, argparse is such a mess.
-
-    # to_remove = ['default_root_dir']
-    # dest_to_actions = ub.group_items(parser._actions, lambda x: x.dest)
-    # for rmkey in to_remove:
-    #     for action in dest_to_actions[rmkey]:
-    #         parser._remove_action(action)
-    #         for optstr in action.option_strings:
-    #             parser._option_string_actions.pop(optstr)
-    # for grp in parser._action_groups:
-    #     dest_to_actions = ub.group_items(grp._actions, lambda x: x.dest)
-    #     for rmkey in to_remove:
-    #         for action in dest_to_actions[rmkey]:
-    #             print('action = {!r}'.format(action))
-    #             grp._actions.remove(action)
+    # Hard code custom default settings for lightning to enable certain tricks
+    # by default
+    parser.set_defaults(**{
+        'default_root_dir': None,  # we override the default based on workdir
+        'gradient_clip_val': 0.5,
+        'gradient_clip_algorithm': 'value',
+        'train_dataset': 'special:vidshapes8-multispectral',
+        'vali_dataset': None,
+        'test_dataset': None,
+        'num_workers': 4,
+        'gpus': 1 if has_gpu else None,
+        'auto_select_gpus': True,
+    })
 
     # override modal-specific defaults with user settings
     parser.set_defaults(**kwargs)
+
+    if isinstance(cmdline, list):
+        args = cmdline
+    else:
+        # setting args to [] disable command line parsting
+        args = None if cmdline else []
 
     args, _ = parser.parse_known_args(args=args)
 
@@ -437,7 +502,9 @@ def make_fit_config(args=None, cmdline=False, **kwargs):
     # Construct a netharn-like training directory based on relevant hyperparams
     args.train_hashid = ub.hash_data(ub.map_vals(str, learning_config))[0:16]
     args.train_name = "{method}-{train_hashid}".format(**args.__dict__)
-    args.default_root_dir = pathlib.Path(args.workdir) / args.train_name
+
+    if args.default_root_dir is None:
+        args.default_root_dir = pathlib.Path(args.workdir) / args.train_name
 
     # TODO:
     # Add dump and --dumps commands to write the config to a file
@@ -459,7 +526,10 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         >>> modules = make_lightning_modules(args=None, cmdline=cmdline, **kwargs)
     """
     args = make_fit_config(args=args, cmdline=cmdline, **kwargs)
-    print("{train_name}\n====================".format(**args.__dict__))
+
+    args_dict = args.__dict__
+    print("{train_name}\n====================".format(**args_dict))
+    print('args_dict = {}'.format(ub.repr2(args_dict, nl=1, sort=0)))
 
     method_class = getattr(methods, args.method)
     dataset_class = getattr(datasets, args.dataset)
@@ -483,7 +553,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     method_var_dict = utils.filter_args(method_var_dict, method_class.__init__)
 
     if hasattr(datamodule, "input_stats"):
-        print('datamodule.input_stats = {}'.format(ub.repr2(datamodule.input_stats, nl=2)))
+        print('datamodule.input_stats = {}'.format(ub.repr2(datamodule.input_stats, nl=2, sort=0)))
         method_var_dict["input_stats"] = datamodule.input_stats
     # Note: Changed name from method to model
     model = method_class(**method_var_dict)
@@ -528,7 +598,7 @@ def fit_model(args=None, cmdline=False, **kwargs):
         >>> #print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
         >>> fit_model(**kwargs)
     """
-    modules = make_lightning_modules(args=args, cmdline=cmdline, **kwargs)
+    modules = make_lightning_modules(cmdline=cmdline, **kwargs)
     trainer = modules['trainer']
     datamodule = modules['datamodule']
     model = modules['model']
@@ -575,7 +645,7 @@ def fit_model(args=None, cmdline=False, **kwargs):
 
 
 @profile
-def main(args=None, **kwargs):
+def main(**kwargs):
     """
 
     CommandLine:
@@ -588,6 +658,9 @@ def main(args=None, **kwargs):
         python -m watch.tasks.fusion.fit --help
 
         python -m watch.tasks.fusion.fit --dumps
+
+        # Running without any args should train a demo model
+        python -m watch.tasks.fusion.fit
 
         # Invoke the training script
 
@@ -636,8 +709,11 @@ def main(args=None, **kwargs):
     # configure logging at the root level of lightning
     logging.getLogger("pytorch_lightning").setLevel(logging.DEBUG)
 
-    fit_model(args=args, cmdline=True, **kwargs)
+    fit_model(cmdline=True, **kwargs)
 
 
 if __name__ == "__main__":
+    # import xdev
+    # xdev.make_warnings_print_tracebacks()
+
     main()
