@@ -50,6 +50,7 @@ def add_angle_bands(stac_catalog, outdir):
         # This assumes we're not changing the stac_item ID in any of
         # the mapping functions
         item_outdir = os.path.join(outdir, stac_item.id)
+        os.makedirs(item_outdir, exist_ok=True)
 
         if re.search(L7_RE, stac_item.id):
             return add_angles_l7(stac_item, item_outdir)
@@ -115,6 +116,38 @@ def add_angles_l7(stac_item, item_outdir):
 
 
 def add_angles_l8(stac_item, item_outdir):
+    angles_file = None
+    for asset_name, asset in stac_item.assets.items():
+        if re.search(LANDSAT_ANGLES_FILE_RE, asset.href):
+            angles_file = asset.href
+            break
+
+    if angles_file is None:
+        return stac_item
+
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        with change_working_dir(tmpdirname):
+            # Command line arguments for `l8_angles`:
+            # l8_angles <*_ANG.txt> <AngleType> <SubsampleFactor> -f
+            # <FillPixelValue> -b <BandList>
+            subprocess.run(['l8_angles', angles_file, 'BOTH', '1'], check=True)
+
+        for angle_file in glob.glob(os.path.join(tmpdirname, "*.img")):
+            angle_file_basename, _ = os.path.splitext(
+                os.path.basename(angle_file))
+
+            # Convert to COG (original format is HDR)
+            angle_file_outpath = os.path.join(
+                item_outdir, "{}.tif".format(angle_file_basename))
+            subprocess.run(['gdalwarp', '-of', 'COG',
+                            angle_file,
+                            angle_file_outpath])
+
+            stac_item.assets[angle_file_basename] = pystac.Asset.from_dict(
+                {'href': angle_file_outpath,
+                 'title': os.path.join(stac_item.id, angle_file_basename),
+                 'roles': ['metadata']})
+
     return stac_item
 
 
