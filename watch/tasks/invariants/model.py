@@ -8,6 +8,7 @@ from torchmetrics.classification.accuracy import Accuracy
 from .iarpa_dataset import kwcoco_dataset
 from .unet_blur import UNetEncoder, UNetDecoder
 
+
 class pretext(pl.LightningModule):
     TASK_NAMES = [
         'sort',
@@ -18,26 +19,26 @@ class pretext(pl.LightningModule):
     def __init__(self, hparams):
         super().__init__()
 
-        if type(hparams)==dict:
+        if type(hparams) == dict:
             hparams = Namespace(**hparams)
-        
+
         self.save_hyperparameters(hparams)
 
         self.trainset = kwcoco_dataset(hparams.train_dataset, hparams.sensor, hparams.bands, hparams.patch_size)
-        if hparams.vali_dataset != None:
+        if hparams.vali_dataset is not None:
             self.valset = kwcoco_dataset(hparams.vali_dataset, hparams.sensor, hparams.bands, hparams.patch_size)
 
         num_channels = self.trainset.num_channels()
 
-        ### determine which tasks to run
+        # determine which tasks to run
         self.task_indices = []
-        ### no tasks specified
+        # no tasks specified
         if len(self.hparams.tasks) < 1:
             raise ValueError(f'tasks must be specified. Options are {", ".join(pretext.TASK_NAMES)}, or all')
-        ### perform all tasks
+        # perform all tasks
         elif len(self.hparams.tasks) == 1 and self.hparams.tasks[0].lower() == 'all':
             self.task_indices = [i for i in range(len(pretext.TASK_NAMES))]
-        ### run a subset of tasks
+        # run a subset of tasks
         else:
             for task in self.hparams.tasks:
                 if task.lower() in pretext.TASK_NAMES:
@@ -47,57 +48,57 @@ class pretext(pl.LightningModule):
         if pretext.TASK_NAMES.index('augment') in self.task_indices and pretext.TASK_NAMES.index('overlap') not in self.task_indices:
             self.task_indices.append(pretext.TASK_NAMES.index('overlap'))
 
-        ### shared model body
-        self.encoder = UNetEncoder(in_channels = num_channels)
-        self.decoder = UNetDecoder(out_channels = self.hparams.feature_dim_shared)
-        
-        ### task specific necks
+        # shared model body
+        self.encoder = UNetEncoder(in_channels=num_channels)
+        self.decoder = UNetDecoder(out_channels=self.hparams.feature_dim_shared)
+
+        # task specific necks
         self.necks = [
-            self.task_neck(self.hparams.feature_dim_shared, self.hparams.feature_dim_each_task), # sort task
-            self.task_neck(self.hparams.feature_dim_shared, self.hparams.feature_dim_each_task), # augment task
-            self.task_neck(self.hparams.feature_dim_shared, self.hparams.feature_dim_each_task), # overlap task
+            self.task_neck(self.hparams.feature_dim_shared, self.hparams.feature_dim_each_task),  # sort task
+            self.task_neck(self.hparams.feature_dim_shared, self.hparams.feature_dim_each_task),  # augment task
+            self.task_neck(self.hparams.feature_dim_shared, self.hparams.feature_dim_each_task),  # overlap task
         ]
         self.necks = nn.ModuleList([ self.necks[i] for i in self.task_indices ])
 
-        ### task specific heads
+        # task specific heads
         self.heads = [
-            self.pixel_classification_head(2*self.hparams.feature_dim_each_task), # sort task
+            self.pixel_classification_head(2 * self.hparams.feature_dim_each_task),  # sort task
             self.image_classification_head( self.hparams.feature_dim_each_task),  # augment task
             self.image_classification_head( self.hparams.feature_dim_each_task),  # overlap task
         ]
         self.heads = nn.ModuleList([ self.heads[i] for i in self.task_indices ])
 
-        ### task specific criterion
+        # task specific criterion
         self.criteria = [
-            nn.BCEWithLogitsLoss(), # sort task
-            nn.TripletMarginLoss(), # augment task
-            nn.TripletMarginLoss(), # overlap task
+            nn.BCEWithLogitsLoss(),  # sort task
+            nn.TripletMarginLoss(),  # augment task
+            nn.TripletMarginLoss(),  # overlap task
         ]
         self.criteria = [ self.criteria[i] for i in self.task_indices ]
 
-        ### task specific metrics
+        # task specific metrics
         self.sort_accuracy = Accuracy()
-            
+
     def forward(self, image):
-        ### pass through shared model body
+        # pass through shared model body
         encoded = self.encoder(image)
         decoded = self.decoder(encoded)
         return decoded
 
     def shared_step(self, batch):
-        ### get features of each image from shared model body
+        # get features of each image from shared model body
         image1_features = self(batch['image1'])
         image2_features = self(batch['image2'])
         offset_image1_features = self(batch['offset_image1'])
         augmented_image1_features = self(batch['augmented_image1'])
-        ### get time sort labels
+        # get time sort labels
         time_sort_labels = batch['time_sort_label']
         time_sort_labels = time_sort_labels.unsqueeze(1).unsqueeze(1).repeat(1, self.hparams.patch_size, self.hparams.patch_size).unsqueeze(1)
 
         losses = []
         output = {}
-        
-        ### Time Sort task
+
+        # Time Sort task
         if 0 in self.task_indices:
             module_list_idx = self.task_indices.index(0)
             # forward pass through neck
@@ -112,8 +113,8 @@ class pretext(pl.LightningModule):
             losses.append(loss_time)
             output['time_accuracy'] = time_accuracy
             output['loss_time_sort'] = loss_time.detach()
-        
-        ### Overlap task
+
+        # Overlap task
         if 2 in self.task_indices:
             module_list_idx = self.task_indices.index(2)
             # forward pass through neck
@@ -131,7 +132,7 @@ class pretext(pl.LightningModule):
             if 2 in self.task_indices:
                 output['loss_offset'] = loss_offset.detach()
 
-        ### Augment task
+        # Augment task
         if 1 in self.task_indices:
             module_list_idx = self.task_indices.index(1)
             # image1 forward pass through neck
@@ -145,7 +146,7 @@ class pretext(pl.LightningModule):
 
             losses.append(loss_augment)
             output['loss_augmented'] = loss_augment.detach()
-        
+
         # add up loss
         loss = torch.sum(torch.stack(losses))
         output['loss'] = loss
@@ -162,7 +163,7 @@ class pretext(pl.LightningModule):
         output = {"val_" + key: val for key, val in output.items()}
         self.log_dict(output)
         return output
-    
+
     def predict(self, batch):
         self.eval()
         feats = {}
@@ -173,19 +174,13 @@ class pretext(pl.LightningModule):
         return feats
 
     def train_dataloader(self):
-        return DataLoader(self.trainset, 
-                batch_size = self.hparams.batch_size,
-                num_workers = self.hparams.workers
-                )
+        return DataLoader(self.trainset, batch_size=self.hparams.batch_size, num_workers=self.hparams.workers )
 
     def val_dataloader(self):
-        if self.hparams.vali_dataset != None:
-            return DataLoader(self.valset, 
-                    batch_size = self.hparams.batch_size,
-                    num_workers = self.hparams.workers
-                    )
+        if self.hparams.vali_dataset is not None:
+            return DataLoader(self.valset, batch_size=self.hparams.batch_size, num_workers=self.hparams.workers )
 
-    def configure_optimizers(self):       
+    def configure_optimizers(self):
         opt = torch.optim.AdamW(
             self.parameters(),
             lr=self.hparams.learning_rate)
@@ -199,7 +194,7 @@ class pretext(pl.LightningModule):
     def task_neck(self, in_chan, out_chan):
         kernel_size = 1
         stride = 1
-        padding = int((kernel_size-1)/2)
+        padding = int((kernel_size - 1) / 2)
         return nn.Sequential(
             nn.Conv2d(in_chan, in_chan, kernel_size, stride, padding),
             nn.BatchNorm2d(in_chan),
@@ -212,17 +207,17 @@ class pretext(pl.LightningModule):
     def pixel_classification_head(self, in_chan):
         kernel_size = 1
         stride = 1
-        padding = int((kernel_size-1)/2)
+        padding = int((kernel_size - 1) / 2)
         return nn.Sequential(
                             nn.Conv2d(in_chan, in_chan, kernel_size, stride, padding),
                             nn.BatchNorm2d(in_chan),
                             nn.ReLU(inplace=True),
                             nn.Conv2d(in_chan, 1, 1, bias=False, padding=0),
                             )
-    
+
     def image_classification_head(self, in_chan):
         return nn.Sequential(
-                             nn.AdaptiveAvgPool2d(output_size=(1,1)),
-                             nn.Flatten(1,-1),
+                             nn.AdaptiveAvgPool2d(output_size=(1, 1)),
+                             nn.Flatten(1, -1),
                              nn.Linear(in_chan, 2),
                             )

@@ -23,60 +23,64 @@ import torch.nn.functional as F
 import torch.nn.parallel
 import numpy as np
 
+
 class BlurPool(nn.Module):
     def __init__(self, channels, pad_type='reflect', filt_size=4, stride=2, pad_off=0):
         super(BlurPool, self).__init__()
         self.filt_size = filt_size
         self.pad_off = pad_off
-        self.pad_sizes = [int(1.*(filt_size-1)/2), int(np.ceil(1.*(filt_size-1)/2)), int(1.*(filt_size-1)/2), int(np.ceil(1.*(filt_size-1)/2))]
-        self.pad_sizes = [pad_size+pad_off for pad_size in self.pad_sizes]
+        self.pad_sizes = [int(1. * (filt_size - 1) / 2), int(np.ceil(1. * (filt_size - 1) / 2)), int(1. * (filt_size - 1) / 2), int(np.ceil(1. * (filt_size - 1) / 2))]
+        self.pad_sizes = [pad_size + pad_off for pad_size in self.pad_sizes]
         self.stride = stride
-        self.off = int((self.stride-1)/2.)
+        self.off = int((self.stride - 1) / 2.)
         self.channels = channels
 
-        if(self.filt_size==1):
-            a = np.array([1.,])
-        elif(self.filt_size==2):
+        if(self.filt_size == 1):
+            a = np.array([1., ])
+        elif(self.filt_size == 2):
             a = np.array([1., 1.])
-        elif(self.filt_size==3):
+        elif(self.filt_size == 3):
             a = np.array([1., 2., 1.])
-        elif(self.filt_size==4):    
+        elif(self.filt_size == 4):
             a = np.array([1., 3., 3., 1.])
-        elif(self.filt_size==5):    
+        elif(self.filt_size == 5):
             a = np.array([1., 4., 6., 4., 1.])
-        elif(self.filt_size==6):    
+        elif(self.filt_size == 6):
             a = np.array([1., 5., 10., 10., 5., 1.])
-        elif(self.filt_size==7):    
+        elif(self.filt_size == 7):
             a = np.array([1., 6., 15., 20., 15., 6., 1.])
 
-        filt = torch.Tensor(a[:,None]*a[None,:])
-        filt = filt/torch.sum(filt)
-        self.register_buffer('filt', filt[None,None,:,:].repeat((self.channels,1,1,1)))
+        filt = torch.Tensor(a[:, None] * a[None, :])
+        filt = filt / torch.sum(filt)
+        self.register_buffer('filt', filt[None, None, :, :].repeat((self.channels, 1, 1, 1)))
 
         self.pad = get_pad_layer(pad_type)(self.pad_sizes)
 
     def forward(self, inp):
-        if(self.filt_size==1):
-            if(self.pad_off==0):
-                return inp[:,:,::self.stride,::self.stride]    
+        if(self.filt_size == 1):
+            if(self.pad_off == 0):
+                return inp[:, :, ::self.stride, ::self.stride]
             else:
-                return self.pad(inp)[:,:,::self.stride,::self.stride]
+                return self.pad(inp)[:, :, ::self.stride, ::self.stride]
         else:
             return F.conv2d(self.pad(inp), self.filt, stride=self.stride, groups=inp.shape[1])
 
+
 def get_pad_layer(pad_type):
-    if(pad_type in ['refl','reflect']):
+    if(pad_type in ['refl', 'reflect']):
         PadLayer = nn.ReflectionPad2d
-    elif(pad_type in ['repl','replicate']):
+    elif(pad_type in ['repl', 'replicate']):
         PadLayer = nn.ReplicationPad2d
-    elif(pad_type=='zero'):
+    elif(pad_type == 'zero'):
         PadLayer = nn.ZeroPad2d
     else:
-        print('Pad type [%s] not recognized'%pad_type)
+        print('Pad type [%s] not recognized' % pad_type)
     return PadLayer
+
 
 def count_trainable_parameters(model):  # to count trainable parameters
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
 
 class double_conv(nn.Module):
     def __init__(self, in_ch, out_ch):
@@ -94,6 +98,7 @@ class double_conv(nn.Module):
         x = self.conv(x)
         return x
 
+
 class inconv(nn.Module):
     def __init__(self, in_ch, out_ch):
         super(inconv, self).__init__()
@@ -102,6 +107,7 @@ class inconv(nn.Module):
     def forward(self, x):
         x = self.conv(x)
         return x
+
 
 class down(nn.Module):
     def __init__(self, in_ch, out_ch):
@@ -115,6 +121,7 @@ class down(nn.Module):
     def forward(self, x):
         x = self.mpconv(x)
         return x
+
 
 class up(nn.Module):
     def __init__(self, in_ch, out_ch):
@@ -137,6 +144,7 @@ class up(nn.Module):
         x = self.conv(x)
         return x
 
+
 class outconv(nn.Module):
     def __init__(self, in_ch, out_ch):
         super(outconv, self).__init__()
@@ -145,8 +153,10 @@ class outconv(nn.Module):
     def forward(self, x):
         x = self.conv(x)
         return x
-      
-## U-Net
+
+# U-Net
+
+
 class UNet_blur(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(UNet_blur, self).__init__()
@@ -156,9 +166,11 @@ class UNet_blur(nn.Module):
     def forward(self, x):
         x1, x2, x3, x4, x5 = self.encoder(x)
         x = self.decoder((x1, x2, x3, x4, x5))
-        return x      
+        return x
 
-## U-Net Encoder
+# U-Net Encoder
+
+
 class UNetEncoder(nn.Module):
     def __init__(self, in_channels):
         super(UNetEncoder, self).__init__()
@@ -176,7 +188,9 @@ class UNetEncoder(nn.Module):
         x5 = self.down4(x4)
         return x1, x2, x3, x4, x5
 
-## U-Net Decoder
+# U-Net Decoder
+
+
 class UNetDecoder(nn.Module):
     def __init__(self, out_channels):
         super(UNetDecoder, self).__init__()
