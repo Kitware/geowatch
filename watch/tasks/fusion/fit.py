@@ -423,15 +423,14 @@ def make_fit_config(cmdline=False, **kwargs):
                 }
                 default_workdir = (smart_dvc_dpath / 'experiments' /
                                    user_info['user'] / user_info['hostname'])
-                default_workdir.mkdir(exist_ok=True)
 
     common_parser = parser.add_argument_group("Common")
     common_parser.add_argument(
-        '--workdir', default=default_workdir,
+        '--workdir', default=str(default_workdir),
         help=ub.paragraph(
             '''
             Directory where training data can be written.
-            Overrides default_root_dir.
+            This will override the default_root_dir.
             ''')
     )
 
@@ -531,6 +530,8 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     print("{train_name}\n====================".format(**args_dict))
     print('args_dict = {}'.format(ub.repr2(args_dict, nl=1, sort=0)))
 
+    pathlib.Path(args.workdir).mkdir(exist_ok=True, parents=True)
+
     method_class = getattr(methods, args.method)
     dataset_class = getattr(datasets, args.dataset)
 
@@ -564,7 +565,10 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         DrawBatchCallback(),
         pl.callbacks.LearningRateMonitor(logging_interval='epoch'),
         pl.callbacks.LearningRateMonitor(logging_interval='step'),
+
         pl.callbacks.ModelCheckpoint(monitor='loss', mode='min', save_top_k=1),
+
+        pl.callbacks.GPUStatsMonitor(),
     ]
     if args.vali_dataset is not None:
         callbacks += [

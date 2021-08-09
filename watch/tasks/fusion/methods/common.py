@@ -131,6 +131,16 @@ class ChangeDetectorBase(pl.LightningModule):
             for key, metric in self.metrics.items():
                 val = metric(all_pred, all_true)
                 item_metrics[f'{stage}_{key}'] = val
+
+            for key, val in item_metrics.items():
+                self.log(key, val, prog_bar=True)
+
+            if stage == 'train':
+                # I think they just want "loss" not train
+                self.log('loss', total_loss, prog_bar=True)
+            else:
+                self.log(f'{stage}_loss', total_loss, prog_bar=True)
+
             outputs['loss'] = total_loss
         return outputs
 
