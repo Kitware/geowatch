@@ -155,7 +155,7 @@ Example:
     >>> from os.path import join
     >>> import os
     >>> import kwcoco
-    >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes128-multispectral', num_frames=5, gsize=(128, 128))
+    >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes8-multispectral', num_frames=5, gsize=(128, 128))
     >>> vali_dset = kwcoco.CocoDataset.demo('special:vidshapes4-multispectral', num_frames=10, gsize=(128, 128), num_tracks=3)
     >>> available_channel_profiles = {
     >>>     frozenset(aux.get('channels', None) for aux in img.get('auxiliary', []))
