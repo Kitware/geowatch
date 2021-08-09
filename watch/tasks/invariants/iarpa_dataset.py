@@ -81,6 +81,19 @@ class kwcoco_dataset(torch.utils.data.Dataset):
     def __len__(self,):
         return len(self.dset_ids)
     
+    def get_img(self, idx, device=None):
+        image_id = self.dset_ids[idx]
+        image_info = self.dset.index.imgs[image_id]
+        image = self.dset.delayed_load(image_id, channels = self.channels).finalize().astype(np.float32)
+        image = torch.tensor(image)
+        if device:
+            image = image.to(device)
+        ### normalize
+        if image.std() != 0.0:
+            image = (image - image.mean())/image.std()
+        image = image.permute(2,0,1).unsqueeze(0)
+        return image_id, image_info, image
+
     def __getitem__(self, idx):
         ### get image1 id and the video it is associated with
         img1_id = self.dset_ids[idx]

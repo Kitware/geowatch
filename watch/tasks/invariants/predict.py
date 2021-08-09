@@ -7,15 +7,9 @@ This is a Template for writing training logic.
 import torch
 from argparse import ArgumentParser, RawTextHelpFormatter
 import os
-from datetime import date
 
 import torch
-import kwcoco
 import kwimage
-import random
-import itertools as it
-import tifffile
-import numpy as np
 from tqdm import tqdm
 #local imports
 from .model import pretext
@@ -26,20 +20,8 @@ def main(args):
     model = pretext.load_from_checkpoint(args.ckpt_path)
     model.eval().to(args.device)
     print('Initiating dataset')
-    dset = kwcoco.CocoDataset.coerce(args.input_kwcoco)
+    dataset = kwcoco_dataset(args.input_kwcoco, args.sensor, args.bands)
     
-    if 'all' in args.bands:
-        if args.sensor == 'S2':
-            args.bands = ['coastal', 'blue', 'green', 'red', 'B05', 'B06', 'B07', 'nir', 'B09', 'cirrus', 'swir16', 'swir22', 'B8A']
-        elif args.sensor == 'L8' or args.sensor == 'LS':
-            args.bands = ['coastal', 'lwir11', 'lwir12', 'blue', 'green', 'red', 'nir', 'swir16', 'swir22', 'pan', 'cirrus']
-    
-    images = dset.images()
-    images = images.compress([x == args.sensor for x in images.lookup('sensor_coarse')])
-            
-    dset_ids = images.gids
-    
-
     if len(args.tasks) == 1 and args.tasks[0].lower() == 'all':
         feature_types = model.TASK_NAMES
         feature_types.append('shared')
@@ -53,16 +35,10 @@ def main(args):
     else:
         root, _ = os.path.split(args.input_kwcoco) 
     
-    for img_id in tqdm(dset_ids):
+    for idx in tqdm(range(len(dataset))):
+        image_id, image_info, image  = dataset.get_img(idx, args.device)
         
-        image = dset.index.imgs[img_id]
-        
-        img1 = dset.delayed_load(img_id, channels = args.bands) 
-        img1 = img1.finalize().astype('float32')
-        img1 = (img1 - img1.mean())/img1.std()
-        img1 = torch.tensor(img1).permute(2,0,1)
-        
-        aux_base = image['auxiliary'][0]
+        aux_base = image_info['auxiliary'][0]
         path, file_name = os.path.split(aux_base['file_name'])
         
         if args.data_save_folder:
@@ -73,17 +49,16 @@ def main(args):
         if not os.path.exists(save_path):
             os.makedirs(save_path, exist_ok=True)
         
-        features = model.predict(img1.unsqueeze(0).to(args.device))
+        features = model.predict(image)
         
         for key in feature_types:
-            
             feat = features[key].squeeze()
             feat = feat.permute(1,2,0).detach().cpu().numpy()
             last_us_idx = file_name.rfind('_')
             name = file_name[:last_us_idx] + '_invariants_' + key + '.tif'
-            tifffile.imsave(os.path.join(save_path, name), feat)
+            kwimage.imwrite(os.path.join(save_path, name), feat, space=None, backend='gdal')
             
-            warp_img_to_vid = kwimage.Affine.coerce(image.get('warp_img_to_vid', None))
+            warp_img_to_vid = kwimage.Affine.coerce(image_info.get('warp_img_to_vid', None))
             warp_aux_to_img = warp_img_to_vid.inv()
             
             info = {}
@@ -94,29 +69,24 @@ def main(args):
             info['channels'] = '|'.join(['inv_' + key + f'{i}' for i in range(1, feat.shape[2]+1)])
             info['warp_aux_to_img'] = kwimage.Affine.coerce(warp_aux_to_img).concise()
             
-#             for tmp in dset.index.imgs[img_id]['auxiliary']:
-#                 print(tmp['file_name'])
-#             1/0
-            
-            dset.index.imgs[img_id]['auxiliary'].append(info)
+            dataset.dset.index.imgs[image_id]['auxiliary'].append(info)
     
     if not args.output_kwcoco:
-        args.output_kwcoco = args.input_kwcoco
+        args.output_kwcoco = os.path.join(root, 'uky_invariants.kwcoco.json')
 
-    dset.fpath = args.output_kwcoco
-    print('Write to dset.fpath = {!r}'.format(dset.fpath))
-    dset.dump(dset.fpath, newlines=True)
+    dataset.dset.fpath = args.output_kwcoco
+    print('Write to dset.fpath = {!r}'.format(dataset.dset.fpath))
+    dataset.dset.dump(dataset.dset.fpath, newlines=True)
     
     print('Done')
 
 if __name__ == '__main__':
     """
     CommandLine:
-        python -m watch.tasks.template.fit --help
+        python -m watch.tasks.template.predict --help
 
-        python -m watch.tasks.template.fit \
-            --train_dataset=special:vidshapes32-multispectral \
-            --vali_dataset=special:vidshapes16-multispectral
+        python -m watch.tasks.template.predict \
+            --input_kwcoco=path/to/data.kwcoco.json
     """
     parser = ArgumentParser(description='', formatter_class=RawTextHelpFormatter)
     parser.add_argument('--device', type=str, default='cuda')
@@ -131,7 +101,7 @@ if __name__ == '__main__':
     ####output flags
     parser.add_argument('--data_save_folder', help='Path to store generated feature tifs, data will end up within a folder named \'uky_invariants\'. If not specified, data is saved in the folder uky_invariants within the overall data folder.', type=str)
     parser.add_argument('--input_kwcoco', type=str, help='Path to kwcoco dataset with images to generate feature for', required=True)
-    parser.add_argument('--output_kwcoco', type=str, help='Path to write an outut kwcoco file. Output file will be a copy of input_kwcoco with addition feature fields generated by predict.py. If None, output_kwcoco will update input kwcoco.', default='')
+    parser.add_argument('--output_kwcoco', type=str, help='Path to write an output kwcoco file. Output file will be a copy of input_kwcoco with addition feature fields generated by predict.py. If None, output_kwcoco will update input kwcoco.', default='')
     parser.add_argument('--tasks', nargs='+', help=f'specify which tasks to choose from ({", ".join(pretext.TASK_NAMES)}, shared, or all.\nEx: --tasks {pretext.TASK_NAMES[0]} {pretext.TASK_NAMES[1]}', default=['all'])
     
     parser.set_defaults(
