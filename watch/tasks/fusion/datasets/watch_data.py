@@ -121,6 +121,7 @@ class WatchDataModule(pl.LightningDataModule):
         normalize_inputs=False,
     ):
         super().__init__()
+        self.save_hyperparameters()
         self.train_kwcoco = train_dataset
         self.vali_kwcoco = vali_dataset
         self.test_kwcoco = test_dataset
@@ -307,17 +308,18 @@ class WatchDataModule(pl.LightningDataModule):
             if isinstance(test_data, pathlib.Path):
                 test_data = str(test_data.expanduser())
             test_coco_dset = kwcoco.CocoDataset.coerce(test_data)
-            self.coco_datasets['train'] = test_coco_dset
+            self.coco_datasets['test'] = test_coco_dset
             test_coco_sampler = ndsampler.CocoSampler(test_coco_dset)
             self.torch_datasets['test'] = WatchVideoDataset(
                 test_coco_sampler,
                 sample_shape=(self.time_steps, self.chip_size, self.chip_size),
                 window_overlap=(self.time_overlap, self.chip_overlap, self.chip_overlap),
                 channels=self.channels,
+                mode='test',
                 # transform=self.test_tfms,
             )
 
-            ub.inject_method(self, lambda self: self._make_dataloader('train', shuffle=True), 'test_dataloader')
+            ub.inject_method(self, lambda self: self._make_dataloader('test', shuffle=False), 'test_dataloader')
 
         print('self.torch_datasets = {}'.format(ub.repr2(self.torch_datasets, nl=1)))
 
@@ -472,27 +474,33 @@ class WatchVideoDataset(data.Dataset):
         if transform is not None:
             raise Exception('I do not like injecting the transforms')
 
-        full_sample_grid = sampler.new_sample_grid(
-            "video_detection", sample_shape,
-            window_overlap=window_overlap)
-
-        n_pos = len(full_sample_grid["positives"])
-        n_neg = len(full_sample_grid["negatives"])
-
-        # TODO: parametarize ratio of positives to negatives
-        neg_to_pos_ratio = 2
-        max_neg = (neg_to_pos_ratio * n_pos)
-        if n_neg > max_neg:
-            print('chose max_neg = {!r}'.format(max_neg))
-            neg_idxs = kwarray.shuffle(np.arange(n_neg), rng=47789403)[0:max_neg]
-            chosen_negs = list(ub.take(full_sample_grid["negatives"], neg_idxs))
+        if mode == 'test':
+            # In test mode we have to sample everything
+            sample_grid = simple_video_sample_grid(
+                sampler.dset, window_dims=sample_shape,
+                window_overlap=window_overlap)
         else:
-            chosen_negs = full_sample_grid["negatives"]
+            full_sample_grid = sampler.new_sample_grid(
+                "video_detection", sample_shape,
+                window_overlap=window_overlap)
 
-        sample_grid = list(it.chain(
-            full_sample_grid["positives"],
-            chosen_negs,
-        ))
+            n_pos = len(full_sample_grid["positives"])
+            n_neg = len(full_sample_grid["negatives"])
+
+            # TODO: parametarize ratio of positives to negatives
+            neg_to_pos_ratio = 2
+            max_neg = (neg_to_pos_ratio * n_pos)
+            if n_neg > max_neg:
+                print('chose max_neg = {!r}'.format(max_neg))
+                neg_idxs = kwarray.shuffle(np.arange(n_neg), rng=47789403)[0:max_neg]
+                chosen_negs = list(ub.take(full_sample_grid["negatives"], neg_idxs))
+            else:
+                chosen_negs = full_sample_grid["negatives"]
+
+            sample_grid = list(it.chain(
+                full_sample_grid["positives"],
+                chosen_negs,
+            ))
 
         self.sample_grid = sample_grid
         self.transform = transform
@@ -694,6 +702,7 @@ class WatchVideoDataset(data.Dataset):
             "frames": frame_items,
             "video_id": sample['tr']['vidid'],
             "video_name": video['name'],
+            "tr": sample['tr'],  # pass all of the metadata
         }
         return item
 
@@ -1045,3 +1054,46 @@ def category_tree_ensure_color(classes):
         if color is None:
             color = next(backup_colors)
             classes.graph.nodes[node]['color'] = kwimage.Color(color).as01()
+
+
+def simple_video_sample_grid(dset, window_dims=None, window_overlap=0.0):
+    import kwarray
+    keepbound = True
+
+    # Create a sliding window object for each specific image (because they may
+    # have different sizes, technically we could memoize this)
+    vidid_to_slider = {}
+    for vidid, video in dset.index.videos.items():
+        gids = dset.index.vidid_to_gids[vidid]
+        num_frames = len(gids)
+        full_dims = [num_frames, video['height'], video['width']]
+        window_dims_ = full_dims if window_dims == 'full' else window_dims
+        slider = kwarray.SlidingWindow(full_dims, window_dims_,
+                                       overlap=window_overlap,
+                                       keepbound=keepbound,
+                                       allow_overshoot=True)
+
+        vidid_to_slider[vidid] = slider
+
+    sample_grid = []
+    for vidid, slider in vidid_to_slider.items():
+        regions = list(slider)
+        gids = dset.index.vidid_to_gids[vidid]
+        box_gids = []
+        for region in regions:
+            t_sl, y_sl, x_sl = region
+            region_gids = gids[t_sl]
+            box_gids.append(region_gids)
+
+        for region, region_gids in zip(regions, box_gids):
+            space_slice = region[1:3]
+            time_slice = region[0]
+
+            tr = {
+                'vidid': vidid,
+                'time_slice': time_slice,
+                'space_slice': space_slice,
+                'gids': region_gids,
+            }
+            sample_grid.append(tr)
+    return sample_grid

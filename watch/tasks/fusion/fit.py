@@ -140,6 +140,7 @@ Example:
     ... }
     >>> #modules = make_lightning_modules(args=None, cmdline=cmdline, **kwargs)
     >>> fit_model(args=args, cmdline=cmdline, **kwargs)
+
 """
 
 import pytorch_lightning as pl
@@ -503,9 +504,13 @@ def fit_model(args=None, cmdline=False, **kwargs):
         ...     'train_dataset': 'special:vidshapes8-multispectral',
         ...     'dataset': 'WatchDataModule',
         ...     'gpus': 1,
+        ...     'max_epochs': 1,
+        ...     'max_steps': 1,
+        ...     'learning_rate': 1e-5,
+        ...     'num_workers': 0,
         ... }
-        >>> args = make_fit_config(args=None, cmdline=cmdline, **kwargs)
-        >>> print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
+        >>> #args = make_fit_config(args=None, cmdline=cmdline, **kwargs)
+        >>> #print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
         >>> fit_model(**kwargs)
     """
     modules = make_lightning_modules(args=args, cmdline=cmdline, **kwargs)
@@ -526,15 +531,27 @@ def fit_model(args=None, cmdline=False, **kwargs):
     with torch.set_grad_enabled(False):
         model.forward_step(batch)
 
-    # if requested, tune model
+    # if requested, tune model with lightning default tuners
     trainer.tune(model, datamodule)
 
     # fit the model
     trainer.fit(model, datamodule)
 
+    # TODO: Package the best epoch based on validation metrics
+    package_fpath = pathlib.Path(trainer.default_root_dir) / "package.pt"
+
+    # Record the dataset hparams this was trained with.
+    model.datamodule_hparams = model.trainer.datamodule.hparams
+    # Unload non-picklable parts from the data module
+    # Get rid of problematic pickel variables
+    # (is this desirable?)
+    model.trainer = None
+    model.train_dataloader = None
+
     # save model to package
-    utils.create_package(
-        model, pathlib.Path(trainer.default_root_dir) / "package.pt")
+    utils.create_package(model, package_fpath)
+
+    return package_fpath
 
     # save learning relevant training options
     # learning_config = ub.dict_diff(args.__dict__, learning_irrelevant)
