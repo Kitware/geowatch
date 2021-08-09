@@ -241,6 +241,8 @@ learning_irrelevant = {
     'log_gpu_memory',
     'logger',
     'checkpoint_callback',
+    'move_metrics_to_cpu',
+    'distributed_backend',
 }
 
 
@@ -455,14 +457,31 @@ def make_fit_config(cmdline=False, **kwargs):
     # by default
     parser.set_defaults(**{
         'default_root_dir': None,  # we override the default based on workdir
+
+        # Trick Defaults
         'gradient_clip_val': 0.5,
         'gradient_clip_algorithm': 'value',
+
+        # Device defaults
+        'auto_select_gpus': True,
+        'gpus': 1 if has_gpu else None,
+
+        # Data defaults
         'train_dataset': 'special:vidshapes8-multispectral',
         'vali_dataset': None,
         'test_dataset': None,
+
         'num_workers': 4,
-        'gpus': 1 if has_gpu else None,
-        'auto_select_gpus': True,
+
+        'accumulate_grad_batches': 1,
+
+        'max_epochs': None,
+        'max_steps': None,
+        'max_time': None,
+
+        'check_val_every_n_epoch': 1,
+
+        'log_every_n_steps': 50,
     })
 
     # override modal-specific defaults with user settings
@@ -561,8 +580,11 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
 
     # init trainer from args
 
+    from watch.tasks.fusion.lightning_extensions.tensorboard_plotter import TensorboardPlotter
+
     callbacks = [
         DrawBatchCallback(),
+        TensorboardPlotter(),  # draw tensorboard
         pl.callbacks.LearningRateMonitor(logging_interval='epoch'),
         pl.callbacks.LearningRateMonitor(logging_interval='step'),
 
@@ -576,10 +598,18 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
                 monitor='val_loss', mode='min', save_top_k=4),
         ]
 
+    # TODO: explititly initialize the tensorboard logger
+    # logger = [
+    #     pl.loggers.TensorBoardLogger(
+    #         save_dir=args.default_root_dir, version=self.trainer.slurm_job_id, name="lightning_logs"
+    #     )
+    # ]
+
     # TODO:
     # - [ ] Save multiple checkpoints based on metrics
     # https://github.com/PyTorchLightning/pytorch-lightning/issues/2908
     trainer = pl.Trainer.from_argparse_args(args, callbacks=callbacks)
+    print('trainer.logger.log_dir = {!r}'.format(trainer.logger.log_dir))
 
     modules = {
         'datamodule': datamodule,

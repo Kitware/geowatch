@@ -38,7 +38,7 @@ python -m watch.tasks.fusion.fit \
     --terminate_on_nan=True \
     --time_steps=2 \
     --chip_size=128 \
-    --batch_size=4 \
+    --batch_size=2 \
     --gpus=1 \
     --accumulate_grad_batches=8 \
     --num_workers=12 --profile
