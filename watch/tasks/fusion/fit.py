@@ -515,8 +515,10 @@ def fit_model(args=None, cmdline=False, **kwargs):
         >>> cmdline = False
         >>> kwargs = {
         ...     'train_dataset': 'special:vidshapes8-multispectral',
+        ...     'vali_dataset': 'special:vidshapes2-multispectral',
+        ...     'test_dataset': 'special:vidshapes1-multispectral',
         ...     'dataset': 'WatchDataModule',
-        ...     'gpus': 1,
+        ...     'gpus': None,
         ...     'max_epochs': 1,
         ...     'max_steps': 1,
         ...     'learning_rate': 1e-5,
@@ -560,6 +562,8 @@ def fit_model(args=None, cmdline=False, **kwargs):
     # (is this desirable?)
     model.trainer = None
     model.train_dataloader = None
+    model.val_dataloader = None
+    model.test_dataloader = None
 
     # save model to package
     utils.create_package(model, package_fpath)
