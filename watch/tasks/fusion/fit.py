@@ -585,10 +585,10 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     callbacks = [
         DrawBatchCallback(),
         TensorboardPlotter(),  # draw tensorboard
-        pl.callbacks.LearningRateMonitor(logging_interval='epoch'),
-        pl.callbacks.LearningRateMonitor(logging_interval='step'),
+        pl.callbacks.LearningRateMonitor(logging_interval='epoch', log_momentum=True),
+        pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
 
-        pl.callbacks.ModelCheckpoint(monitor='loss', mode='min', save_top_k=1),
+        pl.callbacks.ModelCheckpoint(monitor='train_loss', mode='min', save_top_k=1),
 
         pl.callbacks.GPUStatsMonitor(),
     ]

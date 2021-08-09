@@ -298,7 +298,7 @@ class WatchDataModule(pl.LightningDataModule):
                     # transform=self.vali_tfms,
                 )
                 self.torch_datasets['vali'] = vali_dataset
-                ub.inject_method(self, lambda self: self._make_dataloader('vali', shuffle=True), 'val_dataloader')
+                ub.inject_method(self, lambda self: self._make_dataloader('vali', shuffle=False), 'val_dataloader')
             else:
                 if 0:
                     # TODO:
