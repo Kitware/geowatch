@@ -560,12 +560,22 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
 
     # init trainer from args
 
+    callbacks = [
+        DrawBatchCallback(),
+        pl.callbacks.LearningRateMonitor(logging_interval='epoch'),
+        pl.callbacks.LearningRateMonitor(logging_interval='step'),
+        pl.callbacks.ModelCheckpoint(monitor='loss', mode='min', save_top_k=1),
+    ]
+    if args.vali_dataset is not None:
+        callbacks += [
+            pl.callbacks.ModelCheckpoint(
+                monitor='val_loss', mode='min', save_top_k=4),
+        ]
+
     # TODO:
     # - [ ] Save multiple checkpoints based on metrics
     # https://github.com/PyTorchLightning/pytorch-lightning/issues/2908
-    trainer = pl.Trainer.from_argparse_args(args, callbacks=[
-        DrawBatchCallback()
-    ])
+    trainer = pl.Trainer.from_argparse_args(args, callbacks=callbacks)
 
     modules = {
         'datamodule': datamodule,
@@ -583,16 +593,18 @@ def fit_model(args=None, cmdline=False, **kwargs):
         >>> from watch.tasks.fusion.fit import *  # NOQA
         >>> args = None
         >>> cmdline = False
+        >>> workdir = ub.ensure_app_cache_dir('watch', 'tests', 'fusion', 'fit')
         >>> kwargs = {
         ...     'train_dataset': 'special:vidshapes8-multispectral',
         ...     'vali_dataset': 'special:vidshapes2-multispectral',
         ...     'test_dataset': 'special:vidshapes1-multispectral',
         ...     'dataset': 'WatchDataModule',
-        ...     'gpus': None,
-        ...     'max_epochs': 1,
-        ...     'max_steps': 1,
+        ...     'workdir': workdir,
+        ...     'gpus': 1,
+        ...     'max_epochs': 3,
+        ...     #'max_steps': 1,
         ...     'learning_rate': 1e-5,
-        ...     'num_workers': 0,
+        ...     'num_workers': 1,
         ... }
         >>> #args = make_fit_config(args=None, cmdline=cmdline, **kwargs)
         >>> #print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
