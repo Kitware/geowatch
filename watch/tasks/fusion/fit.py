@@ -589,8 +589,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
 
         pl.callbacks.ModelCheckpoint(monitor='train_loss', mode='min', save_top_k=1),
-
-        pl.callbacks.GPUStatsMonitor(),
+        # pl.callbacks.GPUStatsMonitor(),
     ]
     if args.vali_dataset is not None:
         callbacks += [

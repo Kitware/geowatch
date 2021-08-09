@@ -41,7 +41,7 @@ python -m watch.tasks.fusion.fit \
     --batch_size=2 \
     --gpus=1 \
     --accumulate_grad_batches=8 \
-    --num_workers=12 --profile
+    --num_workers=12
 
 
 # 1080ti
@@ -73,7 +73,6 @@ AUTO_DEVICE=$(python -c "import netharn; print(netharn.XPU.coerce('auto').device
 echo "AUTO_DEVICE = $AUTO_DEVICE"
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 CUDA_VISIBLE_DEVICES=$AUTO_DEVICE \
-CUDA_VISIBLE_DEVICES=1 \
 python -m watch.tasks.fusion.fit \
     --train_dataset=$DVC_DPATH/extern/onera_2018/onera_train.kwcoco.json \
     --vali_dataset=$DVC_DPATH/extern/onera_2018/onera_test.kwcoco.json \
@@ -90,4 +89,4 @@ python -m watch.tasks.fusion.fit \
     --batch_size=2 \
     --gpus=1 \
     --accumulate_grad_batches=8 \
-    --num_workers=8 
+    --num_workers=6 
