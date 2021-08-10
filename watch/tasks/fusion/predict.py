@@ -34,7 +34,7 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.add_argument("--tag", default='change_prob')
     parser.add_argument("--package_fpath", type=pathlib.Path)
     parser.add_argument("--use_gpu", action="store_true")
-    parser.add_argument("--thresh", default=0.01)
+    parser.add_argument("--thresh", type=float, default=0.01)
 
     parser.set_defaults(**kwargs)
     # parse the datamodule and method strings
@@ -115,6 +115,7 @@ def predict(cmdline=False, **kwargs):
         >>>         warnings.warn('should be predictions elsewhere')
     """
     args = make_predict_config(cmdline=cmdline, **kwargs)
+    print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=2)))
 
     # init method from checkpoint
     method = utils.load_model_from_package(args.package_fpath)
@@ -166,11 +167,30 @@ def predict(cmdline=False, **kwargs):
         result_dataset,
         chan_code=args.tag,
         stiching_space='video',
-        device='numpy',
-        thresh=0.05
+        device='numpy',  # could be torch on-device stitching
+        thresh=args.thresh,
     )
 
-    for batch in ub.ProgIter(test_dataloader, desc='predicting', verbose=1):
+    prog = ub.ProgIter(test_dataloader, desc='predicting', verbose=1)
+    # nanns = 0
+
+    result_infos = []
+
+    def finalize_ready(gid):
+        info = stitch_manager.finalize_image(gid)
+        stats = running_stats.summarize(axis=None)
+        stats = ub.dict_isect(stats, {'mean', 'max', 'min', 'std', 'n'})
+        # extra = ub.repr2(stats, precision=6, nl=0)
+        prog.ensure_newline()
+        # prog.set_extra(extra)
+        print('stats = {}'.format(ub.repr2(stats, nl=0, precision=4)))
+        print('pred gid={} info = {}'.format(gid, ub.repr2(info, nl=0, precision=2)))
+        result_infos.append(info)
+
+    import kwarray
+    running_stats = kwarray.RunningStats()
+
+    for batch in prog:
         # Move data onto the prediction device
         for item in batch:
             for frame in item['frames']:
@@ -200,19 +220,25 @@ def predict(cmdline=False, **kwargs):
 
             # Update the stitcher with this windowed prediction
             for gid, probs in zip(in_gids[1:], bin_probs):
+                running_stats.update(probs)
                 stitch_manager.accumulate_image(gid, space_slice, probs)
 
             # Free up space for any images that have been completed
             for gid in stitch_manager.ready_image_ids():
-                stitch_manager.finalize_image(gid)
+                finalize_ready(gid)
 
     # Prediction is completed, finalize all remaining images.
     for gid in stitch_manager.managed_image_ids():
-        stitch_manager.finalize_image(gid)
+        finalize_ready(gid)
+
+    # prog.set_extra('found {}'.format(nanns))
+    # print('Predicted total nanns = {!r}'.format(nanns))
 
     # validate and save results
     print(result_dataset.validate())
+    print('dump result_dataset.fpath = {!r}'.format(result_dataset.fpath))
     result_dataset.dump(result_dataset.fpath)
+    print('return result_dataset.fpath = {!r}'.format(result_dataset.fpath))
     return result_dataset
 
 
@@ -364,6 +390,9 @@ class CocoStitchingManager(object):
         # Get spatial relationship between the image and the video
         vid_to_img = kwimage.Affine.coerce(img['warp_img_to_vid']).inv()
 
+        num_pred_anns = 0
+        total_prob = 0
+
         if self.SAVE_PROBS:
             # This currently exists as an example to demonstrate how a
             # prediction script can write a pre-fusion TA-2 feature to disk and
@@ -383,6 +412,7 @@ class CocoStitchingManager(object):
                 'warp_aux_to_img': vid_to_img.inv().concise(),
             })
             # Save the prediction to disk
+            total_prob += new_feature.sum()
             kwimage.imwrite(
                 str(new_fpath), new_feature, space=None, backend='gdal',
                 compress='LZW')
@@ -399,6 +429,7 @@ class CocoStitchingManager(object):
             change_pred = change_probs > self.thresh
             # Convert to polygons
             vid_polys = kwimage.Mask(change_pred, 'c_mask').to_multi_polygon()
+            num_pred_anns = len(vid_polys)
             for vid_poly in vid_polys:
                 # Compute a score for the polygon
                 # TODO: This is very inefficient, should fix this
@@ -407,10 +438,16 @@ class CocoStitchingManager(object):
 
                 # Transform the video polygon into image space
                 img_poly = vid_poly.warp(vid_to_img)
+                bbox = list(img_poly.bounding_box().to_coco())[0]
                 # Add the polygon as an annotation on the image
                 self.result_dataset.add_annotation(
                     image_id=gid, category_id=change_cid,
-                    segmentation=img_poly, score=score)
+                    bbox=bbox, segmentation=img_poly, score=score)
+
+        return {
+            'num_pred_anns': num_pred_anns,
+            'total_prob': total_prob,
+        }
 
 
 def main(cmdline=True, **kwargs):
