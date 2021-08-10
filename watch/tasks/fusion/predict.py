@@ -26,14 +26,13 @@ def make_predict_config(cmdline=False, **kwargs):
         description='Prediction script for the fusion task',
         formatter_class=RawDescriptionDefaultsHelpFormatter,
     )
-    parser.add_argument("--dataset", dest='datamodule', default='WatchDataModule', help='alias for datamodule')
     parser.add_argument("--datamodule", default='WatchDataModule')
-    parser.add_argument("--pred_dataset", dest='pred_dataset')
+    parser.add_argument("--pred_dataset", default=None, dest='pred_dataset')
+
+    parser.add_argument("--pred_dpath", dest='pred_dpath', type=pathlib.Path, help='path to dump results')
 
     parser.add_argument("--tag", default='change_prob')
     parser.add_argument("--package_fpath", type=pathlib.Path)
-    parser.add_argument("--results_dir", type=pathlib.Path, help='path to dump results')
-    parser.add_argument("--results_dpath", dest='results_dir', type=pathlib.Path, help='path to dump results')
     parser.add_argument("--use_gpu", action="store_true")
 
     parser.set_defaults(**kwargs)
@@ -68,7 +67,6 @@ def predict(cmdline=False, **kwargs):
         >>> import kwcoco
         >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes4-multispectral', num_frames=5, gsize=(128, 128))
         >>> test_dset = kwcoco.CocoDataset.demo('special:vidshapes2-multispectral', num_frames=5, gsize=(128, 128))
-        >>> #
         >>> fit_kwargs = kwargs = {
         ...     'train_dataset': test_dset.fpath,
         ...     'datamodule': 'WatchDataModule',
@@ -88,7 +86,7 @@ def predict(cmdline=False, **kwargs):
         >>> ub.ensuredir(results_path)
         >>> predict_kwargs = kwargs = {
         >>>     'package_fpath': package_fpath,
-        >>>     'results_dir': results_path,
+        >>>     'pred_dpath': results_path,
         >>>     'test_dataset': test_dset.fpath,
         >>>     'datamodule': 'WatchDataModule',
         >>>     'batch_size': 1,
@@ -145,7 +143,7 @@ def predict(cmdline=False, **kwargs):
 
     T, H, W = test_torch_dataset.sample_shape
 
-    # Create the results dataset as a copy of the test dataset
+    # Create the results dataset as a copy of the test CocoDataset
     result_dataset = test_coco_dataset.copy()
     # Remove all annotations in the results copy
     result_dataset.clear_annotations()
@@ -154,7 +152,10 @@ def predict(cmdline=False, **kwargs):
     result_dataset.ensure_category("change")
     # Set the filepath for the prediction coco file
     # (modifies the bundle_dpath)
-    result_dataset.fpath = str(args.results_dir / 'pred.kwcoco.json')
+    if args.pred_dataset is None:
+        result_dataset.fpath = str(args.pred_dpath / 'pred.kwcoco.json')
+    else:
+        result_dataset.fpath = str(args.pred_dataset)
 
     device = torch.device(0) if args.use_gpu else 'cpu'
     print('Predict on device = {!r}'.format(device))
@@ -216,7 +217,7 @@ def predict(cmdline=False, **kwargs):
 
 class CocoStitchingManager(object):
     """
-    Manage stitching for multiple images / videos in a coco dataset.
+    Manage stitching for multiple images / videos in a CocoDataset.
 
     This is done in a memory-efficient way where after all sub-regions in an
     image or video have been completed, it is finalized, written to the kwcoco
@@ -346,7 +347,7 @@ class CocoStitchingManager(object):
     def finalize_image(self, gid):
         """
         Finalizes the stitcher for this image, deletes it, and adds
-        its hard and/or soft predictions to the kwcoco dataset.
+        its hard and/or soft predictions to the CocoDataset.
 
         Args:
             gid (int): the image-id to finalize

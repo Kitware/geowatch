@@ -216,10 +216,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--true_dataset", type=pathlib.Path, help='path to the groundtruth dataset')
     parser.add_argument("--pred_dataset", type=pathlib.Path, help='path to the predicted dataset')
-    parser.add_argument("--output_dpath", type=pathlib.Path, help='path to dump results')
+    parser.add_argument("--eval_dpath", type=pathlib.Path, help='path to dump results')
     args = parser.parse_args()
 
-    make_confusion_plots(args.result_kwcoco_path, args.figure_root)
+    make_confusion_plots(args.eval_dpath, args.figure_root)
     compute_metrics(args.result_kwcoco_path, args.metrics_path)
 
 
