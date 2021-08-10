@@ -493,7 +493,6 @@ def make_fit_config(cmdline=False, **kwargs):
     if args.gpus == 'None':
         args.gpus = None
 
-
     # Do scriptconfig like dump logic
     dump_fpath = args.dump
     do_dumps = args.dumps

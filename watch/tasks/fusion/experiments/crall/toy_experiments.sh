@@ -4,7 +4,7 @@ This demonstrates a end-to-end pipeline on toydata
 
 DATA_DPATH=$HOME/data/work/toy_change
 mkdir -p $DATA_DPATH
-#cd $DATA_DPATH
+cd $DATA_DPATH
 
 # Generate toy datasets
 kwcoco toydata vidshapes8-multispectral --bundle_dpath $DATA_DPATH/vidshapes_train
@@ -32,11 +32,10 @@ python -m watch.tasks.fusion.fit \
     --time_steps=2 \
     --chip_size=128 \
     --batch_size=1 \
-    --max_epochs=1 \
-    --max_steps=1 \
-    --auto_select_gpus=False \
-    --gpus=None \
-    --accumulate_grad_batches=8 \
+    --max_epochs=3 \
+    --max_steps=100 \
+    --gpus=1 \
+    --accumulate_grad_batches=4 \
     --num_workers=2
 
 python -m watch.tasks.fusion.predict \
