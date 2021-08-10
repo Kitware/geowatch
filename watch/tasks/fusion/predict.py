@@ -28,7 +28,7 @@ def make_predict_config(cmdline=False, **kwargs):
     )
     parser.add_argument("--dataset", default='WatchDataModule')
     parser.add_argument("--tag", default='change_prob')
-    parser.add_argument("--checkpoint_path", type=pathlib.Path)
+    parser.add_argument("--package_fpath", type=pathlib.Path)
     parser.add_argument("--results_dir", type=pathlib.Path, help='path to dump results')
     parser.add_argument("--use_gpu", action="store_true")
 
@@ -42,6 +42,7 @@ def make_predict_config(cmdline=False, **kwargs):
     # add the appropriate args to the parse
     # for dataset, method, and trainer
     parser = dataset_class.add_data_specific_args(parser)
+    parser.set_defaults(**{'batch_size': 1})
 
     # parse and pass to main
     parser.set_defaults(**kwargs)
@@ -82,7 +83,7 @@ def predict(cmdline=False, **kwargs):
         >>> ub.delete(results_path)
         >>> ub.ensuredir(results_path)
         >>> predict_kwargs = kwargs = {
-        >>>     'checkpoint_path': package_fpath,
+        >>>     'package_fpath': package_fpath,
         >>>     'results_dir': results_path,
         >>>     'test_dataset': test_dset.fpath,
         >>>     'dataset': 'WatchDataModule',
@@ -113,7 +114,7 @@ def predict(cmdline=False, **kwargs):
     args = make_predict_config(cmdline=cmdline, **kwargs)
 
     # init method from checkpoint
-    method = utils.load_model_from_package(args.checkpoint_path)
+    method = utils.load_model_from_package(args.package_fpath)
     method.eval()
     method.freeze()
 

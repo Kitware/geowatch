@@ -3,17 +3,17 @@ Notes:
     There are parts of netharn that could be ported to lightning
 
     The logging stuff
-        - [ ] loss curves (odd they aren't in tensorboard)
+        - [x] loss curves (odd they aren't in tensorboard)
 
     The auto directory structure
-        - [ ] save multiple checkpoints
+        - [x] save multiple checkpoints
         - [ ] delete them intelligently
 
     The run managment
         - [ ] The netharn/cli/manage_runs.py
 
     The auto-deploy files
-        - [ ] Use Torch 1.9 Packages instead of Torch-Liberator
+        - [x] Use Torch 1.9 Packages instead of Torch-Liberator
 
     Automated dynamics / plugins?
 
@@ -277,13 +277,6 @@ class DrawBatchCallback(pl.callbacks.Callback):
         datamodule = trainer.datamodule
         canvas = datamodule.draw_batch(batch, outputs=outputs)
 
-        # dataset = datamodule.torch_datasets[stage]
-        # images = batch['images']
-        # if 0:
-        #     import kwplot
-        #     kwplot.autompl()
-        #     kwplot.imshow(canvas)
-
         canvas = np.nan_to_num(canvas)
 
         stage = trainer.state.stage.lower()
@@ -314,15 +307,6 @@ class DrawBatchCallback(pl.callbacks.Callback):
 
     def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
         self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx, dataloader_idx)
-
-    # def on_init_start(self, trainer):
-    #     pass
-
-    # def on_init_end(self, trainer):
-    #     print('trainer is init now')
-
-    # def on_train_end(self, trainer, pl_module):
-    #     print('do something when training ends')
 
 
 @profile
@@ -378,6 +362,18 @@ def make_fit_config(cmdline=False, **kwargs):
         profiling.
         '''))
 
+    config_parser.add_argument('--package_fpath', default=None, help=ub.paragraph(
+        '''
+        Specifies a path where a torch packaged model will be written (or
+        symlinked) to.
+        '''))
+
+    # config_parser.add_argument('--name', default=None, help=ub.paragraph(
+    #     '''
+    #     TODO: allow for the user to specify a name, and do netharn-like
+    #     fit/runs and fit/name directories?
+    #     '''))
+
     # Setup common fields and modal switches
     modal_parser = parser.add_argument_group("Modal")
 
@@ -410,9 +406,9 @@ def make_fit_config(cmdline=False, **kwargs):
     # storage space.
     default_workdir = './_trained_models'
 
-    # Write to a sensible default location
     ENABLE_SMART_DEFAULT_WORKDIR = 1
     if ENABLE_SMART_DEFAULT_WORKDIR:
+        # Write to a sensible default location instead of CWD
         dvc_repos_dpath = pathlib.Path('~/data/dvc-repos/').expanduser()
         if dvc_repos_dpath.exists():
             smart_dvc_dpath = dvc_repos_dpath / 'smart_watch_dvc'
@@ -440,8 +436,8 @@ def make_fit_config(cmdline=False, **kwargs):
     # xpu = nh.XPU.coerce('auto')
     # auto_device = xpu.device.index
 
-    import netharn as nh
-    has_gpu = nh.XPU.coerce('auto').device.type == 'cpu'
+    # import netharn as nh
+    # has_gpu = nh.XPU.coerce('auto').device.type == 'cpu'
 
     # Get subcomponents
     method_class = getattr(methods, modal.method)
@@ -464,7 +460,7 @@ def make_fit_config(cmdline=False, **kwargs):
 
         # Device defaults
         'auto_select_gpus': True,
-        'gpus': 1 if has_gpu else None,
+        # 'gpus': 1 if has_gpu else None,
 
         # Data defaults
         'train_dataset': 'special:vidshapes8-multispectral',
@@ -494,6 +490,9 @@ def make_fit_config(cmdline=False, **kwargs):
         args = None if cmdline else []
 
     args, _ = parser.parse_known_args(args=args)
+    if args.gpus == 'None':
+        args.gpus = None
+
 
     # Do scriptconfig like dump logic
     dump_fpath = args.dump
@@ -614,6 +613,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         'datamodule': datamodule,
         'model': model,
         'trainer': trainer,
+        'args': args,
     }
     return modules
 
@@ -644,6 +644,7 @@ def fit_model(args=None, cmdline=False, **kwargs):
         >>> fit_model(**kwargs)
     """
     modules = make_lightning_modules(cmdline=cmdline, **kwargs)
+    args = modules['args']
     trainer = modules['trainer']
     datamodule = modules['datamodule']
     model = modules['model']
@@ -665,7 +666,9 @@ def fit_model(args=None, cmdline=False, **kwargs):
     trainer.tune(model, datamodule)
 
     # fit the model
+    print('Fit starting')
     trainer.fit(model, datamodule)
+    print('Fit finished')
 
     # TODO: Package the best epoch based on validation metrics
     package_fpath = pathlib.Path(trainer.default_root_dir) / "package.pt"
@@ -681,7 +684,13 @@ def fit_model(args=None, cmdline=False, **kwargs):
     model.test_dataloader = None
 
     # save model to package
+    # TODO: save the best model
+    print('Package model: package_fpath = {!r}'.format(package_fpath))
     utils.create_package(model, package_fpath)
+
+    if args.package_fpath is not None:
+        ub.symlink(package_fpath, args.package_fpath, overwrite=True, verbose=3)
+        print('args.package_fpath = {!r}'.format(args.package_fpath))
 
     return package_fpath
 
