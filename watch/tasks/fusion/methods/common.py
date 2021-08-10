@@ -7,6 +7,7 @@ from torch.optim import lr_scheduler
 import numpy as np
 import ubelt as ub
 import netharn as nh
+import einops
 
 try:
     import xdev
@@ -322,12 +323,20 @@ class SemanticSegmentationBase(pl.LightningModule):
 
     def __init__(self,
                  learning_rate=1e-3,
-                 weight_decay=0.):
+                 weight_decay=0.,
+                 input_stats=None,
+                ):
         super().__init__()
         self.save_hyperparameters()
 
+        self.input_norms = None
+        if input_stats is not None:
+            self.input_norms = torch.nn.ModuleDict()
+            for key, stats in input_stats.items():
+                self.input_norms[key] = nh.layers.InputNorm(**stats)
+
         # criterion and metrics
-        self.criterion = nn.CrossEntropyLoss(ignore_index=-100)
+        self.criterion = nn.CrossEntropyLoss(ignore_index=-1)
         self.metrics = nn.ModuleDict({
             # "acc": metrics.Accuracy(ignore_index=-100),
         })
@@ -336,62 +345,115 @@ class SemanticSegmentationBase(pl.LightningModule):
     def preprocessing_step(self):
         raise NotImplementedError
 
+    @profile
+    def forward_step(self, batch, with_loss=False, stage='unspecified'):
+        """
+        Generic forward step used for test / train / validation
+
+        Example:
+            >>> from watch.tasks.fusion.methods.common import *  # NOQA
+            >>> from watch.tasks.fusion import methods
+            >>> from watch.tasks.fusion import datasets
+            >>> datamodule = datasets.WatchDataModule(
+            >>>     train_dataset='special:vidshapes8',
+            >>>     num_workers=0, chip_size=128,
+            >>>     normalize_inputs=True,
+            >>> )
+            >>> datamodule.setup('fit')
+            >>> loader = datamodule.train_dataloader()
+            >>> batch = next(iter(loader))
+
+            >>> # Choose subclass to test this with (does not cover all cases)
+            >>> self = methods.MultimodalTransformerSegmentation(
+            >>>     model_name='smt_it_joint_p8', input_stats=datamodule.input_stats)
+            >>> outputs = self.training_step(batch)
+            >>> canvas = datamodule.draw_batch(batch, outputs=outputs)
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas)
+            >>> kwplot.show_if_requested()
+        """
+        outputs = {}
+
+        item_losses = []
+        item_true_labels = []
+        item_pred_labels = []
+        for item in batch:
+
+            # For now, just reconstruct the stacked input, but
+            # in the future, the encoder will need to take care of
+            # the heterogeneous inputs
+
+            frame_ims = []
+            for frame in item['frames']:
+                assert len(frame['modes']) == 1, 'only handle one mode for now'
+                mode_key, mode_val = ub.peek(frame['modes'].items())
+                mode_val = mode_val.float()
+                # self.input_norms = None
+                if self.input_norms is not None:
+                    mode_norm = self.input_norms[mode_key]
+                    mode_val = mode_norm(mode_val)
+                frame_ims.append(mode_val)
+
+            # Because we are not collating we need to add a batch dimension
+            images = torch.stack(frame_ims)[None, ...]
+
+            B, T, C, H, W = images.shape
+
+            logits = self(images)
+
+            # TODO: it may be faster to compute loss at the downsampled
+            # resolution.
+            # The input dimensions are interpreted in the form: mini-batch x channels x [optional depth] x [optional height] x width.
+            logits = einops.rearrange(logits, "b t h w f -> (b t) f h w")
+            logits = nn.functional.interpolate(
+                logits, [H, W], mode="bilinear")
+            logits = einops.rearrange(logits, "(b t) f h w -> b t h w f",
+                                      b=B, t=T)
+
+            label_prob = torch.softmax(logits, dim=-1)[0]
+            item_pred_labels.append(label_prob.detach())
+
+            if with_loss:
+                labels = torch.stack([
+                    frame['labels'] for frame in item['frames']
+                ])[None, ...]
+                item_true_labels.append(labels)
+
+                # compute criterion
+                logits = einops.rearrange(logits, "b t h w f -> b f t h w")
+                loss = self.criterion(logits, labels.long())
+                item_losses.append(loss)
+
+        outputs['label_predictions'] = item_pred_labels
+
+        if with_loss:
+            total_loss = sum(item_losses)
+            all_pred = torch.stack(item_pred_labels)
+            all_true = torch.cat(item_true_labels, dim=0)
+            # compute metrics
+            item_metrics = {}
+            for key, metric in self.metrics.items():
+                val = metric(all_pred, all_true)
+                item_metrics[f'{stage}_{key}'] = val
+            outputs['loss'] = total_loss
+        return outputs
+
+    @profile
     def training_step(self, batch, batch_idx=None):
-        images, labels = batch["images"], batch["labels"]
-        if isinstance(labels, np.ndarray):
-            labels = torch.from_numpy(labels)
+        outputs = self.forward_step(batch, with_loss=True, stage='train')
+        return outputs
 
-        # compute predicted and target change masks
-        logits = self(images)
-
-        # compute metrics
-        for key, metric in self.metrics.items():
-            self.log(key,
-                     metric(torch.softmax(logits, dim=1), labels),
-                     prog_bar=True)
-
-        # compute criterion
-        loss = self.criterion(logits, labels.long())
-        return loss
-
+    @profile
     def validation_step(self, batch, batch_idx=None):
-        images, labels = batch["images"], batch["labels"]
+        outputs = self.forward_step(batch, with_loss=True, stage='val')
+        return outputs
 
-        if isinstance(labels, np.ndarray):
-            labels = torch.from_numpy(labels)
-
-        # compute predicted and target change masks
-        logits = self(images)
-
-        # compute metrics
-        for key, metric in self.metrics.items():
-            self.log("val_" + key,
-                     metric(torch.softmax(logits, dim=1), labels),
-                     prog_bar=True)
-
-        # compute loss
-        loss = self.criterion(logits, labels.long())
-        self.log("val_loss", loss, prog_bar=True)
-        return loss
-
+    @profile
     def test_step(self, batch, batch_idx=None):
-        images, labels = batch["images"], batch["labels"]
-        if isinstance(labels, np.ndarray):
-            labels = torch.from_numpy(labels)
-
-        # compute predicted and target change masks
-        logits = self(images)
-
-        # compute metrics
-        for key, metric in self.metrics.items():
-            self.log("test_" + key,
-                     metric(torch.softmax(logits, dim=1), labels),
-                     prog_bar=True)
-
-        # compute loss
-        loss = self.criterion(logits, labels.long())
-        self.log("test_loss", loss, prog_bar=True)
-        return loss
+        outputs = self.forward_step(batch, with_loss=True, stage='test')
+        return outputs
 
     def configure_optimizers(self):
         optimizer = optim.RAdam(
