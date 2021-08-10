@@ -5,7 +5,7 @@ import pytorch_lightning as pl
 from torchvision import transforms
 from torch.utils import data
 import pathlib
-from watch.tasks.fusion.datasets import common
+from watch.tasks.fusion.datamodules import common
 from watch.tasks.fusion import utils
 from einops.layers.torch import Rearrange
 # import numpy as np
@@ -16,7 +16,7 @@ class Drop0AlignMSI_S2(pl.LightningDataModule):
     """
     Ignore:
         >>> # Test requires having the drop0 data
-        >>> from watch.tasks.fusion.datasets.project_data import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.project_data import *  # NOQA
         >>> dvc_dpath = pathlib.Path('~/data/dvc-repos/smart_watch_dvc/').expanduser()
         >>> coco_fpath = dvc_dpath / 'drop0_aligned_msi/data.kwcoco.json'
         >>> self = Drop0AlignMSI_S2(coco_fpath)

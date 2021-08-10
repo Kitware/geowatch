@@ -6,7 +6,7 @@ from os.path import join
 from os.path import relpath
 import kwimage
 import kwarray
-from watch.tasks.fusion import datasets
+from watch.tasks.fusion import datamodules
 from watch.tasks.fusion import utils
 
 
@@ -26,22 +26,26 @@ def make_predict_config(cmdline=False, **kwargs):
         description='Prediction script for the fusion task',
         formatter_class=RawDescriptionDefaultsHelpFormatter,
     )
-    parser.add_argument("--dataset", default='WatchDataModule')
+    parser.add_argument("--dataset", dest='datamodule', default='WatchDataModule', help='alias for datamodule')
+    parser.add_argument("--datamodule", default='WatchDataModule')
+    parser.add_argument("--pred_dataset", dest='pred_dataset')
+
     parser.add_argument("--tag", default='change_prob')
     parser.add_argument("--package_fpath", type=pathlib.Path)
     parser.add_argument("--results_dir", type=pathlib.Path, help='path to dump results')
+    parser.add_argument("--results_dpath", dest='results_dir', type=pathlib.Path, help='path to dump results')
     parser.add_argument("--use_gpu", action="store_true")
 
     parser.set_defaults(**kwargs)
-    # parse the dataset and method strings
+    # parse the datamodule and method strings
     temp_args, _ = parser.parse_known_args(None if cmdline else [])
 
-    # get the dataset and method classes
-    dataset_class = getattr(datasets, temp_args.dataset)
+    # get the datamodule and method classes
+    datamodule_class = getattr(datamodules, temp_args.datamodule)
 
     # add the appropriate args to the parse
     # for dataset, method, and trainer
-    parser = dataset_class.add_data_specific_args(parser)
+    parser = datamodule_class.add_data_specific_args(parser)
     parser.set_defaults(**{'batch_size': 1})
 
     # parse and pass to main
@@ -67,7 +71,7 @@ def predict(cmdline=False, **kwargs):
         >>> #
         >>> fit_kwargs = kwargs = {
         ...     'train_dataset': test_dset.fpath,
-        ...     'dataset': 'WatchDataModule',
+        ...     'datamodule': 'WatchDataModule',
         ...     'workdir': ub.ensuredir((test_dpath, 'train')),
         ...     'max_epochs': 1,
         ...     'time_steps': 3,
@@ -86,7 +90,7 @@ def predict(cmdline=False, **kwargs):
         >>>     'package_fpath': package_fpath,
         >>>     'results_dir': results_path,
         >>>     'test_dataset': test_dset.fpath,
-        >>>     'dataset': 'WatchDataModule',
+        >>>     'datamodule': 'WatchDataModule',
         >>>     'batch_size': 1,
         >>>     'num_workers': 0,
         >>>     'use_gpu': gpus is not None,
@@ -118,28 +122,28 @@ def predict(cmdline=False, **kwargs):
     method.eval()
     method.freeze()
 
-    # init dataset from args
-    dataset_class = getattr(datasets, args.dataset)
-    dataset_var_dict = utils.filter_args(
+    # init datamodule from args
+    datamodule_class = getattr(datamodules, args.datamodule)
+    datamodule_vars = utils.filter_args(
         vars(args),
-        dataset_class.__init__,
+        datamodule_class.__init__,
     )
 
     # TODO: default to this, but allow the user to overwrite
-    dataset_var_dict['chip_size'] = method.datamodule_hparams['chip_size']
-    dataset_var_dict['time_steps'] = method.datamodule_hparams['time_steps']
+    datamodule_vars['chip_size'] = method.datamodule_hparams['chip_size']
+    datamodule_vars['time_steps'] = method.datamodule_hparams['time_steps']
 
-    # dataset_var_dict["preprocessing_step"] = method.preprocessing_step
-    dataset = dataset_class(
-        **dataset_var_dict
+    # datamodule_vars["preprocessing_step"] = method.preprocessing_step
+    datamodule = datamodule_class(
+        **datamodule_vars
     )
-    dataset.setup("test")
+    datamodule.setup("test")
 
-    test_coco_dataset = dataset.coco_datasets['test']
-    test_dataset = dataset.torch_datasets['test']
-    test_dataloader = dataset.test_dataloader()
+    test_coco_dataset = datamodule.coco_datasets['test']
+    test_torch_dataset = datamodule.torch_datasets['test']
+    test_dataloader = datamodule.test_dataloader()
 
-    T, H, W = test_dataset.sample_shape
+    T, H, W = test_torch_dataset.sample_shape
 
     # Create the results dataset as a copy of the test dataset
     result_dataset = test_coco_dataset.copy()

@@ -23,7 +23,7 @@ Experiments:
 
 
 TODO:
-    - [ ] Rename --dataset argument to --datamodule
+    - [X] Rename --dataset argument to --datamodule
 
     - [ ] Rename WatchDataModule to ChangeDataModule
 
@@ -125,7 +125,7 @@ Example:
     >>> kwargs = {
     ...     'train_dataset': train_fpath,
     ...     'vali_dataset': vali_fpath,
-    ...     'dataset': 'WatchDataModule',
+    ...     'datamodule': 'WatchDataModule',
     ...     #'method': 'MultimodalTransformerDirectCD',
     ...     'method': 'MultimodalTransformerDotProdCD',
     ...     'channels': 'coastal|blue|green|red|nir|swir16|swir22',
@@ -164,7 +164,7 @@ Example:
     >>> kwargs = {
     ...     'train_dataset': train_dset.fpath,
     ...     'vali_dataset': vali_dset.fpath,
-    ...     'dataset': 'WatchDataModule',
+    ...     'datamodule': 'WatchDataModule',
     ...     'method': 'MultimodalTransformerDirectCD',
     ...     'channels': 'B11|B1|B10|B8a',
     ...     'time_steps': 4,
@@ -378,11 +378,15 @@ def make_fit_config(cmdline=False, **kwargs):
     modal_parser = parser.add_argument_group("Modal")
 
     modal_parser.add_argument(
-        '--dataset', choices=available_datasets, default='WatchDataModule',
+        '--dataset', choices=available_datasets, dest='datamodule', default='WatchDataModule',
+        help='Alias for --datamodule deprecate')
+
+    modal_parser.add_argument(
+        '--datamodule', choices=available_datasets, default='WatchDataModule',
         help=ub.paragraph(
             '''
-            Modal parameter indicating the family of dataset to train on.
-            See the watch.tasks.fusion.datasets submodule for details
+            Modal parameter indicating the family of datamodule to train on.
+            See the watch.tasks.fusion.datamodules submodule for details
             '''))
 
     modal_parser.add_argument(
@@ -441,10 +445,10 @@ def make_fit_config(cmdline=False, **kwargs):
 
     # Get subcomponents
     method_class = getattr(methods, modal.method)
-    dataset_class = getattr(datasets, modal.dataset)
+    datamodule_class = getattr(datasets, modal.datamodule)
 
     # Extend the parser based on the chosen dataset / method modes
-    dataset_class.add_data_specific_args(parser)
+    datamodule_class.add_data_specific_args(parser)
     method_parser = parser.add_argument_group("Method")
     method_class.add_model_specific_args(method_parser)
     pl.Trainer.add_argparse_args(parser)
@@ -537,7 +541,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         >>> cmdline = False
         >>> kwargs = {
         ...     'train_dataset': 'special:vidshapes8-multispectral',
-        ...     'dataset': 'WatchDataModule',
+        ...     'datamodule': 'WatchDataModule',
         ... }
         >>> modules = make_lightning_modules(args=None, cmdline=cmdline, **kwargs)
     """
@@ -550,23 +554,23 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     pathlib.Path(args.workdir).mkdir(exist_ok=True, parents=True)
 
     method_class = getattr(methods, args.method)
-    dataset_class = getattr(datasets, args.dataset)
+    datamodule_class = getattr(datasets, args.datamodule)
 
-    # init dataset from args
+    # init datamodule from args
     # TODO: compute and cache mean / std if it is not provided. Pass this to
     # the model so it can whiten the inputs.
-    dataset_var_dict = utils.filter_args(args.__dict__, dataset_class.__init__)
+    dataset_var_dict = utils.filter_args(args.__dict__, datamodule_class.__init__)
     # dataset_var_dict["preprocessing_step"] = model.preprocessing_step
-    datamodule = dataset_class(**dataset_var_dict)
+    datamodule = datamodule_class(**dataset_var_dict)
     datamodule.setup("fit")
 
     # init method from args
     method_var_dict = args.__dict__
 
     # TODO: need a better way to indicate that a method needs parameters from a
-    # dataset, and maybe the reverse too
-    if hasattr(dataset_class, "bce_weight"):
-        method_var_dict["pos_weight"] = getattr(dataset_class, "bce_weight")
+    # datamodule, and maybe the reverse too
+    if hasattr(datamodule_class, "bce_weight"):
+        method_var_dict["pos_weight"] = getattr(datamodule_class, "bce_weight")
 
     method_var_dict = utils.filter_args(method_var_dict, method_class.__init__)
 
@@ -630,7 +634,7 @@ def fit_model(args=None, cmdline=False, **kwargs):
         ...     'train_dataset': 'special:vidshapes8-multispectral',
         ...     'vali_dataset': 'special:vidshapes2-multispectral',
         ...     'test_dataset': 'special:vidshapes1-multispectral',
-        ...     'dataset': 'WatchDataModule',
+        ...     'datamodule': 'WatchDataModule',
         ...     'workdir': workdir,
         ...     'gpus': 1,
         ...     'max_epochs': 3,
@@ -721,7 +725,7 @@ def main(**kwargs):
         python -m watch.tasks.fusion.fit \
             --model_name=smt_it_stm_p8 \
             --method=MultimodalTransformerDotProdCD \
-            --dataset=WatchDataModule \
+            --datamodule=WatchDataModule \
             --train_dataset=vidshapes8-multispectral \
             --batch_size=4 \
             --num_workers=4 \

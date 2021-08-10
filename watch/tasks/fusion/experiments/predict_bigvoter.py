@@ -6,7 +6,7 @@ import tifffile
 import tqdm
 
 from watch.tasks.fusion.methods import voting
-from watch.tasks.fusion.datasets import onera_2018
+from watch.tasks.fusion.datamodules import onera_2018
 
 fname_template = "{location}/{bands}-{frame_no}.tif"
 
