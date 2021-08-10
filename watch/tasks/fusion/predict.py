@@ -34,6 +34,7 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.add_argument("--tag", default='change_prob')
     parser.add_argument("--package_fpath", type=pathlib.Path)
     parser.add_argument("--use_gpu", action="store_true")
+    parser.add_argument("--thresh", default=0.01)
 
     parser.set_defaults(**kwargs)
     # parse the datamodule and method strings
