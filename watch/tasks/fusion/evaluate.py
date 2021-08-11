@@ -1,12 +1,9 @@
 import kwcoco
 import kwimage
 import sklearn.metrics as skm
-from collections import defaultdict as ddict
-import tqdm
 import pandas as pd
 import numpy as np
 import pathlib
-import tifffile
 from watch.tasks.fusion import utils
 import ubelt as ub
 
@@ -42,10 +39,10 @@ def binary_confusion_measures(tn, fp, fn, tp):
         warnings.filterwarnings('ignore', message='invalid .* true_divide')
         warnings.filterwarnings('ignore', message='invalid value')
 
-        p = fn + tp  # number of real positives
-        n = fp + tn  # number of real negatives
+        real_pos = fn + tp  # number of real positives
+        real_neg = fp + tn  # number of real negatives
 
-        total = p + n
+        total = real_pos + real_neg
 
         pred_pos = (fp + tp)  # number of predicted positives
         pred_neg = (fn + tn)  # number of predicted negatives
@@ -55,9 +52,9 @@ def binary_confusion_measures(tn, fp, fn, tp):
         # Error / Success Rates
         # https://en.wikipedia.org/wiki/Confusion_matrix
         # (Ensure denominator parts are non-zero)
-        p_denom = p.copy()
+        p_denom = real_pos.copy()
         p_denom[p_denom == 0] = 1
-        n_denom = n.copy()
+        n_denom = real_neg.copy()
         n_denom[n_denom == 0] = 1
         tpr = tp / p_denom  # recall
         tnr = tn / n_denom  # specificity
@@ -79,12 +76,6 @@ def binary_confusion_measures(tn, fp, fn, tp):
 
         # Summary statistics
         # https://en.wikipedia.org/wiki/Matthews_correlation_coefficient
-        # note: the raw formula is not numerically stable
-        # mcc_numer = (tp * tn) - (fp * fn)
-        # mcc_denom = np.sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
-        # mcc = mcc_numer / mcc_denom
-
-        # Use the easier formula instead
         fdr  = 1 - ppv  # false discovery rate
         fmr  = 1 - npv  # false ommision rate (for)
         mcc = np.sqrt(ppv * tpr * tnr * npv) - np.sqrt(fdr * fnr * fpr * fmr)
@@ -108,9 +99,11 @@ def binary_confusion_measures(tn, fp, fn, tp):
         info['fn'] = fn
         info['fp'] = fp
 
-        info['p'] = p  # number of real positives
-        info['n'] = n  # number of real negatives
-        info['total'] = total
+        info['real_pos'] = real_pos  # number of real positives
+        info['real_neg'] = real_neg  # number of real negatives
+        info['pred_pos'] = pred_pos  # number of predicted positives
+        info['pred_neg'] = pred_neg  # number of predicted negatives
+        info['total'] = total  # total cases
 
         info['tpr'] = tpr  # sensitivity, recall, hit rate, pd, or true positive rate (TPR)
         info['tnr'] = tnr  # specificity, selectivity or true negative rate (TNR)
@@ -305,9 +298,11 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, plot_dpath):
     plot_fname = f'{vidname_part}-{frame_part}-{gid_part}.png'
     plot_canvas = kwimage.stack_images(parts, axis=1, overlap=-10)
 
-    plot_canvas = kwimage.stack_images([plot_canvas, legend_img], axis=1, overlap=-10)
+    plot_canvas = kwimage.stack_images(
+        [plot_canvas, legend_img], axis=1, overlap=-10)
 
-    header = header_text(plot_fname, max_dim=plot_canvas.shape[1], shrink=False)
+    header = header_text(plot_fname, max_dim=plot_canvas.shape[1],
+                         shrink=False)
     plot_canvas = kwimage.stack_images([header, plot_canvas], axis=0)
 
     plot_dpath = pathlib.Path(str(plot_dpath))
@@ -400,11 +395,19 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None):
     df = pd.DataFrame(rows)
     print(df)
 
+    summary = binary_confusion_measures(
+        df.tn.sum(), df.fp.sum(), df.fn.sum(), df.tp.sum())
+    summary = ub.map_vals(lambda x: x.item(), summary)
+    print('summary = {}'.format(ub.repr2(summary, nl=1, precision=4, align=':',
+                                         sort=0)))
+
     if eval_dpath is not None:
         eval_dpath = pathlib.Path(eval_dpath)
         eval_dpath.mkdir(exist_ok=True, parents=True)
         metrics_fpath = eval_dpath / 'metrics.json'
-        df.to_csv(str(metrics_fpath), index=False)
+        df.to_json(str(metrics_fpath))
+
+    print('eval_dpath = {!r}'.format(eval_dpath))
     return df
 
 

@@ -38,16 +38,16 @@ python -m watch.tasks.fusion.predict \
     --test_dataset=$DATA_DPATH/vidshapes_test/data.kwcoco.json \
     --package_fpath=deployed.pt \
     --thresh=0.0605 --gpus 1 \
-    --pred_dataset=$DATA_DPATH/vidshapes_test_pred/pred.kwcoco.json  # [**pred_hyperparams]
+    --pred_dataset=$DATA_DPATH/vidshapes_test/pred/pred.kwcoco.json  # [**pred_hyperparams]
 
-# jq .images[0] $DATA_DPATH/vidshapes_test_pred/pred.kwcoco.json 
-kwcoco show $DATA_DPATH/vidshapes_test_pred/pred.kwcoco.json --gid 1 --channels B1
+# jq .images[0] $DATA_DPATH/vidshapes_test/pred/pred.kwcoco.json 
+kwcoco show $DATA_DPATH/vidshapes_test/pred/pred.kwcoco.json --gid 1 --channels B1
 
 DATA_DPATH=$HOME/data/work/toy_change
 python -m watch.tasks.fusion.evaluate \
     --true_dataset=$DATA_DPATH/vidshapes_test/data.kwcoco.json \
-    --pred_dataset=$DATA_DPATH/vidshapes_test_pred/pred.kwcoco.json \
-    --eval_dpath=$DATA_DPATH/vidshapes_test/eval  # [**eval_hyperparams]
+    --pred_dataset=$DATA_DPATH/vidshapes_test/pred/pred.kwcoco.json \
+    --eval_dpath=$DATA_DPATH/vidshapes_test/pred/eval  # [**eval_hyperparams]
 
 
 # tree $DATA_DPATH --filelimit 5 -L 2

@@ -436,7 +436,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     # init trainer from args
 
     from watch.tasks.fusion.lightning_extensions.tensorboard_plotter import TensorboardPlotter
-    from watch.tasks.fusion.lightning_extension.draw_batch import DrawBatchCallback
+    from watch.tasks.fusion.lightning_extensions.draw_batch import DrawBatchCallback
 
     callbacks = [
         DrawBatchCallback(num_draw=4, draw_interval='10m'),
