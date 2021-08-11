@@ -325,6 +325,7 @@ class SemanticSegmentationBase(pl.LightningModule):
                  learning_rate=1e-3,
                  weight_decay=0.,
                  input_stats=None,
+                 do_collate=False,
                 ):
         super().__init__()
         self.save_hyperparameters()
@@ -441,18 +442,76 @@ class SemanticSegmentationBase(pl.LightningModule):
         return outputs
 
     @profile
+    def collated_forward_step(self, batch, with_loss=False, stage='unspecified'):
+        outputs = {}
+
+        mode_key = ub.peek(batch[0]["frames"][0]["modes"].keys())
+        if self.input_norms is not None:
+            mode_norm = self.input_norms[mode_key]
+
+        frame_ims = torch.stack([
+            torch.stack([
+                mode_norm(ub.peek(frame['modes'].values()).float())
+                for frame in item["frames"]
+            ], dim=0)
+            for item in batch
+        ], dim=0)
+
+        B, T, C, H, W = frame_ims.shape
+
+        logits = self(frame_ims)
+
+        logits = einops.rearrange(
+            logits, "b t h w f -> (b t) f h w")
+        logits = nn.functional.interpolate(
+            logits, [H, W], mode="bilinear")
+        logits = einops.rearrange(
+            logits, "(b t) f h w -> b t h w f", b=B, t=T)
+
+        item_pred_labels = logits.argmax(dim=-1).detach()
+        outputs['label_predictions'] = item_pred_labels
+
+        if with_loss:
+            item_true_labels = torch.stack([
+                torch.stack([
+                    frame['labels']
+                    for frame in item["frames"]
+                ], dim=0)
+                for item in batch
+            ], dim=0)
+
+            logits = einops.rearrange(logits, "b t h w f -> b f t h w")
+            loss = self.criterion(logits, item_true_labels.long())
+
+            item_metrics = {}
+            for key, metric in self.metrics.items():
+                val = metric(item_pred_labels, item_true_labels)
+                item_metrics[f'{stage}_{key}'] = val
+            outputs['loss'] = loss 
+        return outputs
+
+    @profile
     def training_step(self, batch, batch_idx=None):
-        outputs = self.forward_step(batch, with_loss=True, stage='train')
+        if self.hparams.do_collate:
+            outputs = self.collated_forward_step(batch, with_loss=True, stage='train')
+        else:
+            outputs = self.forward_step(batch, with_loss=True, stage='train')
         return outputs
 
     @profile
     def validation_step(self, batch, batch_idx=None):
-        outputs = self.forward_step(batch, with_loss=True, stage='val')
+        if self.hparams.do_collate:
+            outputs = self.collated_forward_step(batch, with_loss=True, stage='val')
+        else:
+            outputs = self.forward_step(batch, with_loss=True, stage='val')
         return outputs
 
     @profile
     def test_step(self, batch, batch_idx=None):
-        outputs = self.forward_step(batch, with_loss=True, stage='test')
+        if self.hparams.do_collate:
+            outputs = self.collated_forward_step(batch, with_loss=True, stage='test')
+        else:
+            outputs = self.forward_step(batch, with_loss=True, stage='test')
         return outputs
 
     def configure_optimizers(self):
@@ -470,4 +529,5 @@ class SemanticSegmentationBase(pl.LightningModule):
         parser = parent_parser.add_argument_group("SemanticSegmentation")
         parser.add_argument("--learning_rate", default=1e-3, type=float)
         parser.add_argument("--weight_decay", default=0., type=float)
+        parser.add_argument("--do_collate", action="store_true")
         return parent_parser

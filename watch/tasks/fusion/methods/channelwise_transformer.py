@@ -223,11 +223,14 @@ class MultimodalTransformerSegmentation(SemanticSegmentationBase):
                  weight_decay=0.,
                  input_stats=None,
                  attention_impl='exact',
-                 window_size=8):
+                 window_size=8,
+                 do_collate=False,
+                ):
         super().__init__(
             learning_rate=learning_rate,
             weight_decay=weight_decay,
             input_stats=input_stats,
+            do_collate=do_collate,
         )
         self.save_hyperparameters()
 
@@ -265,7 +268,7 @@ class MultimodalTransformerSegmentation(SemanticSegmentationBase):
 
     @staticmethod
     def add_model_specific_args(parent_parser):
-        parser = super(MultimodalTransformerDirectCD, MultimodalTransformerDirectCD).add_model_specific_args(parent_parser)
+        parser = super(MultimodalTransformerSegmentation, MultimodalTransformerSegmentation).add_model_specific_args(parent_parser)
 
         parser.add_argument("--model_name", default='smt_it_stm_p8', type=str)
         parser.add_argument("--n_classes", required=True, type=int)
