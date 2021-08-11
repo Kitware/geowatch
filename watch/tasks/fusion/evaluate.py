@@ -10,39 +10,24 @@ import tifffile
 from watch.tasks.fusion import utils
 import ubelt as ub
 
-metrics = {
-    "tpr": lambda tn, fp, fn, tp:  # sensitivity / recall / pd
-        tp / (tp + fn),
-    "tnr": lambda tn, fp, fn, tp: # specificity / selectivity
-        tn / (tn + fp),
-    "ppv": lambda tn, fp, fn, tp: # precision
-        tp / (tp + fp),
-    "acc": lambda tn, fp, fn, tp:
-        (tp + tn) / (tp + tn + fp + fn),
-    "f1": lambda tn, fp, fn, tp:
-        (2 * tp) / ((2 * tp) + fp + fn),
-    "mcc": lambda tn, fp, fn, tp:  # matthews correlation
-        ((tp * tn) - (fp * fn)) / np.sqrt((tp + fp) * (fp + fn) * (tn + fp) * (tn + fn)),
-    "total": lambda tn, fp, fn, tp:
-        tn + fp + fn + tp,
-    "tn": lambda tn, fp, fn, tp:
-        tn,
-    "fp": lambda tn, fp, fn, tp:
-        fp,
-    "fn": lambda tn, fp, fn, tp:
-        fn,
-    "tp": lambda tn, fp, fn, tp:
-        tp,
-}
 
-
-def binary_metrics(tn, fp, fn, tp):
+def binary_confusion_measures(tn, fp, fn, tp):
     """
+    Metrics derived from a binary confusion matrix
 
     Example:
         >>> from watch.tasks.fusion.evaluate import *  # NOQA
-        >>> tn, fp, fn, tp = np.random.randint(0, 5, (4, 10))
-        >>> measures = binary_metrics(tn, fp, fn, tp)
+        >>> import kwarray
+        >>> rng = kwarray.ensure_rng(4732890)
+        >>> confusion_mats = np.vstack([
+        >>>     # Corner cases
+        >>>     np.array([list(map(int, '{:04b}'.format(x)))
+        >>>               for x in range(16)]),
+        >>>     # Random cases
+        >>>     rng.randint(0, 5, (16, 4)),
+        >>> ])
+        >>> tn, fp, fn, tp = confusion_mats.T
+        >>> measures = binary_confusion_measures(tn, fp, fn, tp)
         >>> df = pd.DataFrame(measures)
         >>> print(df)
     """
@@ -57,15 +42,42 @@ def binary_metrics(tn, fp, fn, tp):
         warnings.filterwarnings('ignore', message='invalid .* true_divide')
         warnings.filterwarnings('ignore', message='invalid value')
 
-        pred_pos = (tp + fp)  # number of predicted positives
-        ppv = tp / pred_pos  # precision
-        ppv[np.isnan(ppv)] = 0
+        p = fn + tp  # number of real positives
+        n = fp + tn  # number of real negatives
 
-        # can set tpr_denom denominator to one
-        tpr_denom = (tp + fn)  #
-        tpr_denom[~(tpr_denom > 0)] = 1
-        tpr = tp / tpr_denom  # recall
+        total = p + n
 
+        pred_pos = (fp + tp)  # number of predicted positives
+        pred_neg = (fn + tn)  # number of predicted negatives
+
+        pred_correct = tp + tn  # number of correct predictions
+
+        # Error / Success Rates
+        # https://en.wikipedia.org/wiki/Confusion_matrix
+        # (Ensure denominator parts are non-zero)
+        p_denom = p.copy()
+        p_denom[p_denom == 0] = 1
+        n_denom = n.copy()
+        n_denom[n_denom == 0] = 1
+        tpr = tp / p_denom  # recall
+        tnr = tn / n_denom  # specificity
+        fpr = fp / n_denom  # fall-out
+        fnr = fn / p_denom  # miss-rate
+
+        # predictive values
+        pnv_denom = pred_neg.copy()
+        pnv_denom[pnv_denom == 0] = 1
+        ppv_denom = pred_pos.copy()
+        ppv_denom[ppv_denom == 0] = 1
+        ppv = tp / ppv_denom  # precision
+        npv = tn / pnv_denom  # precision, but for negatives
+
+        # Adjusted predictive values
+        # https://www.researchgate.net/publication/228529307_Evaluation_From_Precision_Recall_and_F-Factor_to_ROC_Informedness_Markedness_Correlation
+        bm = tpr + tnr - 1  # (bookmaker) informedness
+        mk = ppv + npv - 1  # markedness
+
+        # Summary statistics
         # https://en.wikipedia.org/wiki/Matthews_correlation_coefficient
         mcc_numer = (tp * tn) - (fp * fn)
         mcc_denom = np.sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
@@ -80,35 +92,36 @@ def binary_metrics(tn, fp, fn, tp):
         f1_denom[f1_denom == 0] = 1
         f1 = f1_numer / f1_denom
 
-        tnr_denom = (tn + fp)
-        tnr_denom[tnr_denom == 0] = 1
-        tnr = tn / tnr_denom
-
-        pnv_denom = (tn + fn)
-        pnv_denom[pnv_denom == 0] = 1
-        npv = tn / pnv_denom
+        total_denom = total.copy()
+        total_denom[total_denom == 0] = 1
+        acc = pred_correct / total_denom
 
         info = {}
+
         info['tn'] = tn
         info['tp'] = tp
         info['fn'] = fn
         info['fp'] = fp
-        info['total'] = tn + tp + fn + fp
 
-        info['tpr'] = tpr  # sensitivity, recall, hit rate, or true positive rate (TPR) pd
+        info['p'] = p  # number of real positives
+        info['n'] = n  # number of real negatives
+        info['total'] = total
+
+        info['tpr'] = tpr  # sensitivity, recall, hit rate, pd, or true positive rate (TPR)
         info['tnr'] = tnr  # specificity, selectivity or true negative rate (TNR)
+        info['fnr'] = fnr  # miss rate or false negative rate (FNR)
+        info['fpr'] = fpr  # false-alarm-rate, far, fall-out or false positive rate (FPR)
 
         info['ppv'] = ppv  # precision, positive predictive value (PNR)
         info['npv'] = npv  # negative predictive value (NPV)
 
-        info['bm'] = tpr + tnr - 1  # informedness
-        info['mk'] = ppv + npv - 1  # markedness
+        info['bm'] = bm  # (bookmaker) informedness
+        info['mk'] = mk  # markedness
 
         info['f1'] = f1
         info['g1'] = g1
         info['mcc'] = mcc
-
-        info['acc'] = (tp + tn) / (tp + tn + fp + fn)
+        info['acc'] = acc
 
     return info
 
@@ -171,7 +184,7 @@ def compute_simple_segmentation_metrics(true_coco, pred_coco):
         video1 = true_coco.index.videos[vidid1]
 
         tn, fp, fn, tp = matrix.ravel()
-        row = binary_metrics(tn, fp, fn, tp)
+        row = binary_confusion_measures(tn, fp, fn, tp)
         row = ub.map_vals(lambda x: x.item(), row)
         row["gid1"] = gid1
         row["gid2"] = gid2
