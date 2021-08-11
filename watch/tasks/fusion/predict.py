@@ -33,7 +33,7 @@ def make_predict_config(cmdline=False, **kwargs):
 
     parser.add_argument("--tag", default='change_prob')
     parser.add_argument("--package_fpath", type=pathlib.Path)
-    parser.add_argument("--use_gpu", action="store_true")
+    parser.add_argument("--gpus", default=None, help="todo: hook up to lightning")
     parser.add_argument("--thresh", type=float, default=0.01)
 
     parser.set_defaults(**kwargs)
@@ -92,7 +92,7 @@ def predict(cmdline=False, **kwargs):
         >>>     'datamodule': 'WatchDataModule',
         >>>     'batch_size': 1,
         >>>     'num_workers': 0,
-        >>>     'use_gpu': gpus is not None,
+        >>>     'gpus': gpus,
         >>> }
         >>> result_dataset = predict(**kwargs)
         >>> dset = result_dataset
@@ -159,7 +159,17 @@ def predict(cmdline=False, **kwargs):
     else:
         result_dataset.fpath = str(args.pred_dataset)
 
-    device = torch.device(0) if args.use_gpu else 'cpu'
+    # todo: use lightning device magic
+    try:
+        if int(args.gpus) == 0:
+            device = torch.device('cpu')
+        elif int(args.gpus) == 1:
+            device = torch.device(0)
+        else:
+            raise ValueError('only 1 gpu for now')
+    except Exception:
+        device = torch.device('cpu')
+
     print('Predict on device = {!r}'.format(device))
     method = method.to(device)
 

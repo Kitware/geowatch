@@ -185,7 +185,7 @@ Example:
 
 import pytorch_lightning as pl
 
-from watch.tasks.fusion import datasets
+from watch.tasks.fusion import datamodules
 from watch.tasks.fusion import methods
 from watch.tasks.fusion import models
 from watch.tasks.fusion import utils
@@ -215,7 +215,7 @@ available_methods = [
 # Model names define the transformer encoder used by the method
 available_models = list(models.transformer.encoder_configs.keys())
 
-# dir(datasets)
+# dir(datamodules)
 # TODO: rename to datamodules
 available_datasets = [
     # 'Drop0AlignMSI_S2',
@@ -445,7 +445,7 @@ def make_fit_config(cmdline=False, **kwargs):
 
     # Get subcomponents
     method_class = getattr(methods, modal.method)
-    datamodule_class = getattr(datasets, modal.datamodule)
+    datamodule_class = getattr(datamodules, modal.datamodule)
 
     # Extend the parser based on the chosen dataset / method modes
     datamodule_class.add_data_specific_args(parser)
@@ -554,14 +554,14 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     pathlib.Path(args.workdir).mkdir(exist_ok=True, parents=True)
 
     method_class = getattr(methods, args.method)
-    datamodule_class = getattr(datasets, args.datamodule)
+    datamodule_class = getattr(datamodules, args.datamodule)
 
     # init datamodule from args
     # TODO: compute and cache mean / std if it is not provided. Pass this to
     # the model so it can whiten the inputs.
-    dataset_var_dict = utils.filter_args(args.__dict__, datamodule_class.__init__)
-    # dataset_var_dict["preprocessing_step"] = model.preprocessing_step
-    datamodule = datamodule_class(**dataset_var_dict)
+    datamodule_vars = utils.filter_args(args.__dict__, datamodule_class.__init__)
+    # datamodule_vars["preprocessing_step"] = model.preprocessing_step
+    datamodule = datamodule_class(**datamodule_vars)
     datamodule.setup("fit")
 
     # init method from args

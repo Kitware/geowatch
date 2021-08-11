@@ -37,10 +37,11 @@ DATA_DPATH=$HOME/data/work/toy_change
 python -m watch.tasks.fusion.predict \
     --test_dataset=$DATA_DPATH/vidshapes_test/data.kwcoco.json \
     --package_fpath=deployed.pt \
-    --thresh=0.021 \
+    --thresh=0.0605 --gpus 1 \
     --pred_dataset=$DATA_DPATH/vidshapes_test_pred/pred.kwcoco.json  # [**pred_hyperparams]
 
-kwcoco show $DATA_DPATH/vidshapes_test_pred/pred.kwcoco.json --gid 2 --channels B1
+# jq .images[0] $DATA_DPATH/vidshapes_test_pred/pred.kwcoco.json 
+kwcoco show $DATA_DPATH/vidshapes_test_pred/pred.kwcoco.json --gid 1 --channels B1
 
 DATA_DPATH=$HOME/data/work/toy_change
 python -m watch.tasks.fusion.evaluate \
