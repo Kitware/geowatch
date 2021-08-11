@@ -46,7 +46,7 @@ kwcoco show $DATA_DPATH/vidshapes_test_pred/pred.kwcoco.json --gid 1 --channels 
 DATA_DPATH=$HOME/data/work/toy_change
 python -m watch.tasks.fusion.evaluate \
     --true_dataset=$DATA_DPATH/vidshapes_test/data.kwcoco.json \
-    --pred_dataset=$DATA_DPATH/vidshapes_test/pred/pred.kwcoco.json \
+    --pred_dataset=$DATA_DPATH/vidshapes_test_pred/pred.kwcoco.json \
     --eval_dpath=$DATA_DPATH/vidshapes_test/eval  # [**eval_hyperparams]
 
 

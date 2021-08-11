@@ -8,18 +8,21 @@ import numpy as np
 import pathlib
 import tifffile
 from watch.tasks.fusion import utils
+import ubelt as ub
 
 metrics = {
-    "sensitivity": lambda tn, fp, fn, tp:
+    "tpr": lambda tn, fp, fn, tp:  # sensitivity / recall / pd
         tp / (tp + fn),
-    "specificity": lambda tn, fp, fn, tp:
+    "tnr": lambda tn, fp, fn, tp: # specificity / selectivity
         tn / (tn + fp),
-    "precision": lambda tn, fp, fn, tp:
+    "ppv": lambda tn, fp, fn, tp: # precision
         tp / (tp + fp),
-    "accuracy": lambda tn, fp, fn, tp:
+    "acc": lambda tn, fp, fn, tp:
         (tp + tn) / (tp + tn + fp + fn),
     "f1": lambda tn, fp, fn, tp:
         (2 * tp) / ((2 * tp) + fp + fn),
+    "mcc": lambda tn, fp, fn, tp:  # matthews correlation
+        ((tp * tn) - (fp * fn)) / np.sqrt((tp + fp) * (fp + fn) * (tn + fp) * (tn + fn)),
     "total": lambda tn, fp, fn, tp:
         tn + fp + fn + tp,
     "tn": lambda tn, fp, fn, tp:
@@ -31,6 +34,83 @@ metrics = {
     "tp": lambda tn, fp, fn, tp:
         tp,
 }
+
+
+def binary_metrics(tn, fp, fn, tp):
+    """
+
+    Example:
+        >>> from watch.tasks.fusion.evaluate import *  # NOQA
+        >>> tn, fp, fn, tp = np.random.randint(0, 5, (4, 10))
+        >>> measures = binary_metrics(tn, fp, fn, tp)
+        >>> df = pd.DataFrame(measures)
+        >>> print(df)
+    """
+    tn = np.atleast_1d(tn)
+    fp = np.atleast_1d(fp)
+    fn = np.atleast_1d(fn)
+    tp = np.atleast_1d(tp)
+
+    import warnings
+    with warnings.catch_warnings():
+        # It is very possible that we will divide by zero in this func
+        warnings.filterwarnings('ignore', message='invalid .* true_divide')
+        warnings.filterwarnings('ignore', message='invalid value')
+
+        pred_pos = (tp + fp)  # number of predicted positives
+        ppv = tp / pred_pos  # precision
+        ppv[np.isnan(ppv)] = 0
+
+        # can set tpr_denom denominator to one
+        tpr_denom = (tp + fn)  #
+        tpr_denom[~(tpr_denom > 0)] = 1
+        tpr = tp / tpr_denom  # recall
+
+        # https://en.wikipedia.org/wiki/Matthews_correlation_coefficient
+        mcc_numer = (tp * tn) - (fp * fn)
+        mcc_denom = np.sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
+        mcc_denom[np.isnan(mcc_denom) | (mcc_denom == 0)] = 1
+        mcc = mcc_numer / mcc_denom
+
+        # https://erotemic.wordpress.com/2019/10/23/closed-form-of-the-mcc-when-tn-inf/
+        g1 = np.sqrt(ppv * tpr)
+
+        f1_numer = (2 * ppv * tpr)
+        f1_denom = (ppv + tpr)
+        f1_denom[f1_denom == 0] = 1
+        f1 = f1_numer / f1_denom
+
+        tnr_denom = (tn + fp)
+        tnr_denom[tnr_denom == 0] = 1
+        tnr = tn / tnr_denom
+
+        pnv_denom = (tn + fn)
+        pnv_denom[pnv_denom == 0] = 1
+        npv = tn / pnv_denom
+
+        info = {}
+        info['tn'] = tn
+        info['tp'] = tp
+        info['fn'] = fn
+        info['fp'] = fp
+        info['total'] = tn + tp + fn + fp
+
+        info['tpr'] = tpr  # sensitivity, recall, hit rate, or true positive rate (TPR) pd
+        info['tnr'] = tnr  # specificity, selectivity or true negative rate (TNR)
+
+        info['ppv'] = ppv  # precision, positive predictive value (PNR)
+        info['npv'] = npv  # negative predictive value (NPV)
+
+        info['bm'] = tpr + tnr - 1  # informedness
+        info['mk'] = ppv + npv - 1  # markedness
+
+        info['f1'] = f1
+        info['g1'] = g1
+        info['mcc'] = mcc
+
+        info['acc'] = (tp + tn) / (tp + tn + fp + fn)
+
+    return info
 
 
 def associate_images(true_coco, pred_coco):
@@ -89,10 +169,10 @@ def compute_simple_segmentation_metrics(true_coco, pred_coco):
     for (gid1, gid2), matrix in confusion_matrices.items():
         vidid1 = true_coco.imgs[gid1]['video_id']
         video1 = true_coco.index.videos[vidid1]
-        row = {
-            metric: metric_fn(*matrix.ravel())
-            for metric, metric_fn in metrics.items()
-        }
+
+        tn, fp, fn, tp = matrix.ravel()
+        row = binary_metrics(tn, fp, fn, tp)
+        row = ub.map_vals(lambda x: x.item(), row)
         row["gid1"] = gid1
         row["gid2"] = gid2
         row["video"] = video1['name']
@@ -187,7 +267,7 @@ def make_confusion_plots(true_coco, pred_coco, figure_root):
                 fig.savefig(figure_path / (model_name + ".png"))
 
 
-def evaluate_segmentations(true_dataset, pred_dataset):
+def evaluate_segmentations(true_dataset, pred_dataset, eval_dpath=None):
     """
 
     Example:
@@ -207,20 +287,27 @@ def evaluate_segmentations(true_dataset, pred_dataset):
     true_coco = kwcoco.CocoDataset.coerce(true_dataset)
     pred_coco = kwcoco.CocoDataset.coerce(pred_dataset)
 
-    df = compute_metrics(true_coco, pred_coco)
-    df.to_csv(metrics_path, index=False)
+    df = compute_simple_segmentation_metrics(true_coco, pred_coco)
+    print(df)
+
+    if eval_dpath is not None:
+        eval_dpath = pathlib.Path(eval_dpath)
+        eval_dpath.mkdir(exist_ok=True, parents=True)
+        metrics_fpath = eval_dpath / 'metrics.json'
+        df.to_csv(str(metrics_fpath), index=False)
+    # make_confusion_plots(args.eval_dpath, args.figure_root)
+    # compute_metrics(args.result_kwcoco_path, args.metrics_path)
 
 
 def main():
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--true_dataset", type=pathlib.Path, help='path to the groundtruth dataset')
-    parser.add_argument("--pred_dataset", type=pathlib.Path, help='path to the predicted dataset')
-    parser.add_argument("--eval_dpath", type=pathlib.Path, help='path to dump results')
+    parser.add_argument("--true_dataset", help='path to the groundtruth dataset')
+    parser.add_argument("--pred_dataset", help='path to the predicted dataset')
+    parser.add_argument("--eval_dpath", help='path to dump results')
     args = parser.parse_args()
 
-    make_confusion_plots(args.eval_dpath, args.figure_root)
-    compute_metrics(args.result_kwcoco_path, args.metrics_path)
+    evaluate_segmentations(args.true_dataset, args.pred_dataset, args.eval_dpath)
 
 
 if __name__ == "__main__":
