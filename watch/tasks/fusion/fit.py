@@ -1,107 +1,23 @@
+# -*- coding: utf-8 -*-
 """
-Notes:
-    There are parts of netharn that could be ported to lightning
-
-    The logging stuff
-        - [x] loss curves (odd they aren't in tensorboard)
-
-    The auto directory structure
-        - [x] save multiple checkpoints
-        - [ ] delete them intelligently
-
-    The run managment
-        - [ ] The netharn/cli/manage_runs.py
-
-    The auto-deploy files
-        - [x] Use Torch 1.9 Packages instead of Torch-Liberator
-
-    Automated dynamics / plugins?
+Trains a fusion machine learning model on target dataset.
 
 
-Experiments:
+SeeAlso:
+    README.md
+    fit.py
+    predict.py
+    evaluate.py
     experiments/crall/onera_experiments.sh
+    experiments/crall/drop1_experiments.sh
+    experiments/crall/toy_experiments.sh
 
-
-TODO:
-    - [X] Rename --dataset argument to --datamodule
-
-    - [ ] Rename WatchDataModule to ChangeDataModule
-
-    - [ ] Need to figure out how to connect configargparse with ray.tune
-
-    - [ ] Distributed Training:
-        - [ ] How do do DistributedDataParallel
-        - [ ] On one machine
-        - [ ] On multiple machines
-
-    - [ ] Add Data Modules:
-        - [ ] SegmentationDataModule
-        - [ ] ClassificationDataModule
-        - [ ] DetectionDataModule
-        - [ ] <Problem>DataModule
 
 CommandLine:
     CUDA_VISIBLE_DEVICES=1 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.fit __doc__:0 -- --profile
     CUDA_VISIBLE_DEVICES=1 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.fit __doc__:0
     CUDA_VISIBLE_DEVICES=0 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.fit __doc__:0
 
-
-    # Takes ~18GB on a 3090
-    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-    DVC_SUBPATH=$DVC_DPATH/drop1_S2_aligned_c1
-    CUDA_VISIBLE_DEVICES=0 \
-    python -m watch.tasks.fusion.fit \
-        --train_dataset=$DVC_SUBPATH/train_data.kwcoco.json \
-        --vali_dataset=$DVC_SUBPATH/vali_data.kwcoco.json \
-        --time_steps=8 \
-        --channels="coastal|blue|green|red|nir|swir16|swir22" \
-        --chip_size=192 \
-        --method="MultimodalTransformerDotProdCD" \
-        --model_name=smt_it_stm_p8 \
-        --batch_size=2 \
-        --accumulate_grad_batches=8 \
-        --num_workers=12 \
-        --gpus=1
-    2>/dev/null
-
-
-    # Takes ~14GB on a 3090
-    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-    DVC_SUBPATH=$DVC_DPATH/drop1_S2_aligned_c1
-    CUDA_VISIBLE_DEVICES=0 \
-    python -m watch.tasks.fusion.fit \
-        --train_dataset=$DVC_SUBPATH/train_data.kwcoco.json \
-        --vali_dataset=$DVC_SUBPATH/vali_data.kwcoco.json \
-        --time_steps=7 \
-        --channels="coastal|blue|green|red|nir|swir16|swir22" \
-        --chip_size=192 \
-        --chip_overlap=0.66 \
-        --time_overlap=0.3 \
-        --method="MultimodalTransformerDotProdCD" \
-        --model_name=smt_it_stm_small \
-        --batch_size=4 \
-        --accumulate_grad_batches=4 \
-        --num_workers=12 \
-        --gpus=1
-
-    2>/dev/null
-
-    # Can run on a 1080ti
-    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-    DVC_SUBPATH=$DVC_DPATH/drop1-S2-L8-LS-aligned-v2
-    CUDA_VISIBLE_DEVICES=1 \
-    python -m watch.tasks.fusion.fit \
-        --train_dataset=$DVC_SUBPATH/train_data.kwcoco.json \
-        --vali_dataset=$DVC_SUBPATH/vali_data.kwcoco.json \
-        --time_steps=7 \
-        --channels="coastal|blue|green|red|nir|swir16|swir22" \
-        --chip_size=192 \
-        --method="MultimodalTransformerDirectCD" \
-        --model_name=smt_it_stm_p8 \
-        --batch_size=1 \
-        --accumulate_grad_batches=8 \
-        --num_workers=12 \
-        --gpus=1 2>/dev/null
 
 Example:
     >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -244,69 +160,6 @@ learning_irrelevant = {
     'move_metrics_to_cpu',
     'distributed_backend',
 }
-
-
-class DrawBatchCallback(pl.callbacks.Callback):
-    """
-    These are callbacks used to monitor the training
-
-    Args:
-        num_draw (int): number of batches to draw at the start of each epoch
-        draw_interval (int): if nothing has been drawn in this many minutes,
-            draw something.
-
-    References:
-        https://pytorch-lightning.readthedocs.io/en/latest/extensions/callbacks.html
-    """
-
-    def __init__(self, num_draw=4, draw_interval=10):
-        super().__init__()
-        self.num_draw = num_draw
-        self.draw_interval = draw_interval
-        self.draw_timer = None
-
-    def setup(self, trainer, pl_module, stage):
-        self.draw_timer = ub.Timer().tic()
-
-    @profile
-    def draw_batch(self, trainer, outputs, batch, batch_idx):
-        import numpy as np
-        import kwimage
-        from os.path import join
-
-        datamodule = trainer.datamodule
-        canvas = datamodule.draw_batch(batch, outputs=outputs)
-
-        canvas = np.nan_to_num(canvas)
-
-        stage = trainer.state.stage.lower()
-        epoch = trainer.current_epoch
-
-        canvas = kwimage.draw_text_on_image(
-            canvas, f'{stage}_epoch{epoch:08d}_bx{batch_idx:04d}', org=(1, 1),
-            valign='top')
-
-        dump_dpath = ub.ensuredir((trainer.log_dir, 'monitor', stage, 'batch'))
-        dump_fname = f'pred_{stage}_epoch{epoch:08d}_bx{batch_idx:04d}.jpg'
-        fpath = join(dump_dpath, dump_fname)
-        kwimage.imwrite(fpath, canvas)
-
-    def draw_if_ready(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
-        do_draw = batch_idx < self.num_draw
-        if self.draw_interval > 0:
-            do_draw |= self.draw_timer.toc() > 60 * self.draw_interval
-        if do_draw:
-            self.draw_batch(trainer, outputs, batch, batch_idx)
-            self.draw_timer.tic()
-
-    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
-        self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx, dataloader_idx)
-
-    def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
-        self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx, dataloader_idx)
-
-    def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
-        self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx, dataloader_idx)
 
 
 @profile
@@ -583,9 +436,10 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     # init trainer from args
 
     from watch.tasks.fusion.lightning_extensions.tensorboard_plotter import TensorboardPlotter
+    from watch.tasks.fusion.lightning_extension.draw_batch import DrawBatchCallback
 
     callbacks = [
-        DrawBatchCallback(),
+        DrawBatchCallback(num_draw=4, draw_interval='10m'),
         TensorboardPlotter(),  # draw tensorboard
         pl.callbacks.LearningRateMonitor(logging_interval='epoch', log_momentum=True),
         pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),

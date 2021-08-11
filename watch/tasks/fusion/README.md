@@ -63,3 +63,40 @@ python -m watch.tasks.fusion.fit --help
 python -m watch.tasks.fusion.predict --help
 python -m watch.tasks.fusion.evaluate --help
 ```
+
+
+### Notes
+
+There are parts of netharn that could be ported to lightning
+
+The logging stuff
+    - [x] loss curves (odd they aren't in tensorboard)
+
+The auto directory structure
+    - [x] save multiple checkpoints
+    - [ ] delete them intelligently
+
+The run management
+    - [ ] The netharn/cli/manage_runs.py
+
+The auto-deploy files
+    - [x] Use Torch 1.9 Packages instead of Torch-Liberator
+
+Automated dynamics / plugins?
+
+- [X] Rename --dataset argument to --datamodule
+
+- [ ] Rename WatchDataModule to ChangeDataModule
+
+- [ ] Need to figure out how to connect configargparse with ray.tune
+
+- [ ] Distributed Training:
+    - [ ] How do do DistributedDataParallel
+    - [ ] On one machine
+    - [ ] On multiple machines
+
+- [ ] Add Data Modules:
+    - [ ] SegmentationDataModule
+    - [ ] ClassificationDataModule
+    - [ ] DetectionDataModule
+    - [ ] <Problem>DataModule
