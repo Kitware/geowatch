@@ -24,7 +24,7 @@ def binary_confusion_measures(tn, fp, fn, tp):
         >>>     np.array([list(map(int, '{:04b}'.format(x)))
         >>>               for x in range(16)]),
         >>>     # Random cases
-        >>>     rng.randint(0, 5, (16, 4)),
+        >>>     rng.randint(0, 100000, (32, 4)),
         >>> ])
         >>> tn, fp, fn, tp = confusion_mats.T
         >>> measures = binary_confusion_measures(tn, fp, fn, tp)
@@ -79,10 +79,15 @@ def binary_confusion_measures(tn, fp, fn, tp):
 
         # Summary statistics
         # https://en.wikipedia.org/wiki/Matthews_correlation_coefficient
-        mcc_numer = (tp * tn) - (fp * fn)
-        mcc_denom = np.sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
-        mcc_denom[np.isnan(mcc_denom) | (mcc_denom == 0)] = 1
-        mcc = mcc_numer / mcc_denom
+        # note: the raw formula is not numerically stable
+        # mcc_numer = (tp * tn) - (fp * fn)
+        # mcc_denom = np.sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
+        # mcc = mcc_numer / mcc_denom
+
+        # Use the easier formula instead
+        fdr  = 1 - ppv  # false discovery rate
+        fmr  = 1 - npv  # false ommision rate (for)
+        mcc = np.sqrt(ppv * tpr * tnr * npv) - np.sqrt(fdr * fnr * fpr * fmr)
 
         # https://erotemic.wordpress.com/2019/10/23/closed-form-of-the-mcc-when-tn-inf/
         g1 = np.sqrt(ppv * tpr)
@@ -167,7 +172,7 @@ def compute_simple_segmentation_metrics(true_coco, pred_coco):
         pred_canvas = np.zeros(shape, dtype=np.uint8)
         pred_dets = pred_coco.annots(gid=gid2).detections
         for pred_sseg in pred_dets.data['segmentations']:
-            pred_canvas = true_sseg.fill(pred_canvas, value=1)
+            pred_canvas = pred_sseg.fill(pred_canvas, value=1)
 
         # TODO: need to consider the fact that these annotations are
         # multi-class, and have scores, we may want to evaluate the raw
@@ -175,15 +180,17 @@ def compute_simple_segmentation_metrics(true_coco, pred_coco):
         # We also need to hook into the real IAPRA metrics.
 
         # FIXME: for now this is just binary change
-        mat = skm.confusion_matrix(true_canvas.ravel(), pred_canvas.ravel())
+        y_true = true_canvas.ravel()
+        y_pred = pred_canvas.ravel()
+        mat = skm.confusion_matrix(y_true, y_pred, labels=np.array([0, 1]))
         confusion_matrices[(gid1, gid2)] = mat
 
     rows = []
-    for (gid1, gid2), matrix in confusion_matrices.items():
+    for (gid1, gid2), mat in confusion_matrices.items():
         vidid1 = true_coco.imgs[gid1]['video_id']
         video1 = true_coco.index.videos[vidid1]
 
-        tn, fp, fn, tp = matrix.ravel()
+        tn, fp, fn, tp = mat.ravel()
         row = binary_confusion_measures(tn, fp, fn, tp)
         row = ub.map_vals(lambda x: x.item(), row)
         row["gid1"] = gid1
@@ -284,6 +291,7 @@ def evaluate_segmentations(true_dataset, pred_dataset, eval_dpath=None):
     """
 
     Example:
+        >>> from watch.tasks.fusion.evaluate import *  # NOQA
         >>> from kwcoco.coco_evaluator import CocoEvaluator
         >>> from kwcoco.demo.perterb import perterb_coco
         >>> import kwcoco
@@ -295,6 +303,7 @@ def evaluate_segmentations(true_dataset, pred_dataset, eval_dpath=None):
         >>>     'with_probs': True,
         >>> }
         >>> pred_dataset = perterb_coco(true_dataset, **kwargs)
+        >>> evaluate_segmentations(true_dataset, pred_dataset)
     """
     import kwcoco
     true_coco = kwcoco.CocoDataset.coerce(true_dataset)
