@@ -53,13 +53,20 @@ def add_angle_bands(stac_catalog, outdir):
         os.makedirs(item_outdir, exist_ok=True)
 
         if re.search(L7_RE, stac_item.id):
-            return add_angles_l7(stac_item, item_outdir)
+            output_stac_item = add_angles_l7(stac_item, item_outdir)
         elif re.search(L8_RE, stac_item.id):
-            return add_angles_l8(stac_item, item_outdir)
+            output_stac_item = add_angles_l8(stac_item, item_outdir)
         elif re.search(S2_RE, stac_item.id):
-            return add_angles_s2(stac_item, item_outdir)
+            output_stac_item = add_angles_s2(stac_item, item_outdir)
         else:
-            return stac_item
+            output_stac_item = stac_item
+
+        # Roughly keeping track of what WATCH processes have been
+        # run on this particular item
+        output_stac_item.properties.setdefault(
+            'watch:process_history', []).append('add_angle_bands')
+
+        return output_stac_item
 
     catalog.normalize_hrefs(outdir)
     output_catalog = catalog.map_items(_item_map)
