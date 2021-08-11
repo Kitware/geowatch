@@ -63,40 +63,6 @@ Example:
     ... }
     >>> #modules = make_lightning_modules(args=None, cmdline=cmdline, **kwargs)
     >>> fit_model(cmdline=cmdline, **kwargs)
-
-
-Example:
-    >>> # [WIP] Demo for end-to-end fit-predict-test pipeline
-    >>> from watch.tasks.fusion.fit import *  # NOQA
-    >>> from os.path import join
-    >>> import os
-    >>> import kwcoco
-    >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes8-multispectral', num_frames=5, gsize=(128, 128))
-    >>> vali_dset = kwcoco.CocoDataset.demo('special:vidshapes4-multispectral', num_frames=10, gsize=(128, 128), num_tracks=3)
-    >>> available_channel_profiles = {
-    >>>     frozenset(aux.get('channels', None) for aux in img.get('auxiliary', []))
-    >>>      for img in train_dset.index.imgs.values()}
-    >>> print('available_channel_profiles = {!r}'.format(available_channel_profiles))
-    >>> kwargs = {
-    ...     'train_dataset': train_dset.fpath,
-    ...     'vali_dataset': vali_dset.fpath,
-    ...     'datamodule': 'WatchDataModule',
-    ...     'method': 'MultimodalTransformerDirectCD',
-    ...     'channels': 'B11|B1|B10|B8a',
-    ...     'time_steps': 4,
-    ...     'chip_size': 96,
-    ...     'batch_size': 2,
-    ...     'accumulate_grad_batches': 4,
-    ...     'model_name': 'smt_it_stm_p8',
-    ...     'num_workers': 2,
-    ...     'gradient_clip_val': 0.5,
-    ...     'gradient_clip_algorithm': 'value',
-    ...     'gpus': 1,
-    ... }
-    >>> cmdline = False
-    >>> #modules = make_lightning_modules(args=None, cmdline=cmdline, **kwargs)
-    >>> fit_model(cmdline=cmdline, **kwargs)
-
 """
 
 import pytorch_lightning as pl
@@ -505,6 +471,24 @@ def fit_model(args=None, cmdline=False, **kwargs):
     trainer = modules['trainer']
     datamodule = modules['datamodule']
     model = modules['model']
+
+    if 0:
+        # HACK Package
+        # TODO: need a way of creating a package from an intermediate checkpoint
+        checkpoint_fpath = '/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/training/yardrat/jon.crall/MultimodalTransformerDirectCD-21150fb65110ebd1/lightning_logs/version_3/checkpoints/epoch=236-step=9242.ckpt'
+        import torch
+        state = torch.load(checkpoint_fpath)
+        model.load_state_dict(state['state_dict'])
+        import os
+        package_fpath = pathlib.Path(os.path.dirname(os.path.dirname(checkpoint_fpath))) / 'package.pt'
+        model.datamodule_hparams = datamodule.hparams
+        model.trainer = None
+        model.train_dataloader = None
+        model.val_dataloader = None
+        model.test_dataloader = None
+        print('Package model: package_fpath = {!r}'.format(package_fpath))
+        utils.create_package(model, package_fpath)
+        return
 
     print(ub.repr2(utils.model_json(model, max_depth=3), nl=-1, sort=0))
 

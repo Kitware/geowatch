@@ -349,7 +349,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None):
         >>> pred_coco = perterb_coco(true_coco, **kwargs)
         >>> eval_dpath = ub.ensure_app_cache_dir('watch/tests/fusion_eval')
         >>> print('eval_dpath = {!r}'.format(eval_dpath))
-        >>> evaluate_segmentations(true_coco, pred_dataset, eval_dpath)
+        >>> evaluate_segmentations(true_coco, pred_coco, eval_dpath)
     """
     video_matches, image_matches = associate_images(true_coco, pred_coco)
     rows = []

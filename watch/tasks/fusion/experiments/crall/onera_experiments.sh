@@ -44,6 +44,10 @@ python -m watch.tasks.fusion.fit \
     --num_workers=12
 
 
+/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/training/yardrat/jon.crall/MultimodalTransformerDirectCD-21150fb65110ebd1/lightning_logs/version_3/checkpoints/epoch=236-step=9242.ckpt
+
+
+
 # 1080ti
 # TRAINING COMMANDS
 AUTO_DEVICE=$(python -c "import netharn; print(netharn.XPU.coerce('auto').device.index)")
@@ -67,6 +71,19 @@ python -m watch.tasks.fusion.fit \
     --gpus=1 \
     --accumulate_grad_batches=8 \
     --num_workers=8 
+
+
+python -m watch.tasks.fusion.predict \
+    --test_dataset=$DVC_DPATH/extern/onera_2018/onera_test.kwcoco.json \
+    --gpus 1 \
+    --package_fpath=/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/training/yardrat/jon.crall/MultimodalTransformerDirectCD-21150fb65110ebd1/lightning_logs/version_3/package.pt \
+    --pred_dataset=/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/training/yardrat/jon.crall/MultimodalTransformerDirectCD-21150fb65110ebd1/lightning_logs/version_3/pred/pred.kwcoco.json  # [**pred_hyperparams]
+
+
+python -m watch.tasks.fusion.evaluate \
+    --true_dataset=$DVC_DPATH/extern/onera_2018/onera_test.kwcoco.json \
+    --pred_dataset=/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/training/yardrat/jon.crall/MultimodalTransformerDirectCD-21150fb65110ebd1/lightning_logs/version_3/pred/pred.kwcoco.jsson \
+    --eval_dpath=/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/training/yardrat/jon.crall/MultimodalTransformerDirectCD-21150fb65110ebd1/lightning_logs/version_3/pred/eval  
 
 
 AUTO_DEVICE=$(python -c "import netharn; print(netharn.XPU.coerce('auto').device.index)")
