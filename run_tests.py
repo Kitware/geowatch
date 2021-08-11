@@ -18,6 +18,9 @@ if __name__ == '__main__':
         '--cov-report', 'term',
         '--cov=' + package_name,
     ]
+
+    # This is a hueristic to choose the default directories to test,
+    # it is not perfect. In general, it is better to pass this explicitly.
     if not sys.argv[1:]:
         pytest_args += ['watch', 'tests', 'scripts']
 
