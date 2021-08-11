@@ -5,6 +5,17 @@
             "parameter_source": "user"
         },
         {
+            "algorithm": "kitware/add_angle_bands",
+            "parameters": {
+                "stac_catalog": {
+                    "source": "chain_ledger",
+                    "source_algorithm": "kitware/rgd_ingress",
+                    "key": "stac_catalog",
+                    "occurrence": "first"
+                }
+            }
+        },
+        {
             "algorithm": "UMD/coregistration",
             "parameters": {
                 "stac_catalog": {

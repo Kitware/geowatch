@@ -73,6 +73,8 @@ def add_angle_bands(stac_catalog, outdir):
 
     output_catalog.save(catalog_type=pystac.CatalogType.ABSOLUTE_PUBLISHED)
 
+    return output_catalog
+
 
 @contextmanager
 def change_working_dir(destination_dir, create=True):
