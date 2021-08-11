@@ -128,14 +128,17 @@ class ChangeDetectorBase(pl.LightningModule):
             all_true = torch.cat(item_true_changes, dim=0)
             # compute metrics
             item_metrics = {}
-            for key, metric in self.metrics.items():
-                val = metric(all_pred, all_true)
-                item_metrics[f'{stage}_{key}'] = val
 
-            for key, val in item_metrics.items():
-                self.log(key, val, prog_bar=True)
+            if self.trainer is not None:
+                # Dont log unless a trainer is attached
+                for key, metric in self.metrics.items():
+                    val = metric(all_pred, all_true)
+                    item_metrics[f'{stage}_{key}'] = val
 
-            self.log(f'{stage}_loss', total_loss, prog_bar=True)
+                for key, val in item_metrics.items():
+                    self.log(key, val, prog_bar=True)
+
+                self.log(f'{stage}_loss', total_loss, prog_bar=True)
 
             # if stage == 'train':
             #     # I think train does not want "loss" to have a prefix
