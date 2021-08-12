@@ -6,7 +6,7 @@ if __name__ == '__main__':
     cd ~/code/watch
     python run_tests.py watch tests scripts
 
-    python run_tests.py watch/tasks/fusion --cov watch.tasks.fusion
+    python run_tests.py watch/tasks/fusion --cov watch.tasks.fusion --customdirs watch/tasks/fusion/fit.py
     """
     import pytest
     import sys
@@ -19,9 +19,9 @@ if __name__ == '__main__':
         '--cov=' + package_name,
     ]
 
-    # This is a hueristic to choose the default directories to test,
-    # it is not perfect. In general, it is better to pass this explicitly.
-    if not sys.argv[1:]:
+    # if not sys.argv[1:]:
+    if not ub.argflag('--customdirs'):
+        # Default to these subdirs unless --custom-subdirs is specified
         pytest_args += ['watch', 'tests', 'scripts']
 
     pytest_args = pytest_args + sys.argv[1:]
