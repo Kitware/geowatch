@@ -7,9 +7,9 @@ mkdir -p $DATA_DPATH
 cd $DATA_DPATH
 
 # Generate toy datasets
-kwcoco toydata vidshapes8-frames5-multispectral --bundle_dpath $DATA_DPATH/vidshapes_train
-kwcoco toydata vidshapes4-frames5-multispectral --bundle_dpath $DATA_DPATH/vidshapes_vali
-kwcoco toydata vidshapes2-frames6-multispectral --bundle_dpath $DATA_DPATH/vidshapes_test
+kwcoco toydata vidshapes8-frames5-multispectral --bundle_dpath $DATA_DPATH/vidshapes_msi_train
+kwcoco toydata vidshapes4-frames5-multispectral --bundle_dpath $DATA_DPATH/vidshapes_msi_vali
+kwcoco toydata vidshapes2-frames6-multispectral --bundle_dpath $DATA_DPATH/vidshapes_msi_test
 
 
 # TRAINING COMMANDS
@@ -18,15 +18,15 @@ echo "AUTO_DEVICE = $AUTO_DEVICE"
 #CUDA_VISIBLE_DEVICES=$AUTO_DEVICE \
 
 DATA_DPATH=$HOME/data/work/toy_change
-python -m watch watch_coco_stats $DATA_DPATH/vidshapes_train
+python -m watch watch_coco_stats $DATA_DPATH/vidshapes_msi_train
 
 DATA_DPATH=$HOME/data/work/toy_change
 python -m watch.tasks.fusion.fit \
-    --train_dataset=$DATA_DPATH/vidshapes_train/data.kwcoco.json \
-    --vali_dataset=$DATA_DPATH/vidshapes_vali/data.kwcoco.json \
-    --test_dataset=$DATA_DPATH/vidshapes_test/data.kwcoco.json \
+    --train_dataset=$DATA_DPATH/vidshapes_msi_train/data.kwcoco.json \
+    --vali_dataset=$DATA_DPATH/vidshapes_msi_vali/data.kwcoco.json \
+    --test_dataset=$DATA_DPATH/vidshapes_msi_test/data.kwcoco.json \
     --workdir=$DATA_DPATH/fit/ \
-    --package_fpath=$DATA_DPATH/toy_model.pt \
+    --package_fpath=$DATA_DPATH/toy_msi_model.pt \
     --channels="B8|B1|B11|B8a" \
     --method=MultimodalTransformerDirectCD \
     --model_name=smt_it_stm_s12 \
@@ -41,14 +41,15 @@ python -m watch.tasks.fusion.fit \
     --max_steps=100 \
     --gpus=1 \
     --accumulate_grad_batches=4 \
-    --num_workers=2 2>/dev/null
+    --num_workers=2 
+    2>/dev/null
 
 python -m watch.tasks.fusion.predict \
     --package_fpath=$DATA_DPATH/toy_model.pt \
-    --test_dataset=$DATA_DPATH/vidshapes_test/data.kwcoco.json \
-    --pred_dataset=$DATA_DPATH/vidshapes_test_pred/pred.kwcoco.json
+    --test_dataset=$DATA_DPATH/vidshapes_msi_test/data.kwcoco.json \
+    --pred_dataset=$DATA_DPATH/vidshapes_msi_test_pred/pred.kwcoco.json
 
 python -m watch.tasks.fusion.evaluate \
-    --true_dataset=$DATA_DPATH/vidshapes_test/data.kwcoco.json \
-    --pred_dataset=$DATA_DPATH/vidshapes_test_pred/pred.kwcoco.json \
-    --eval_dpath=$DATA_DPATH/vidshapes_test_pred_eval  # [**eval_hyperparams]
+    --true_dataset=$DATA_DPATH/vidshapes_msi_test/data.kwcoco.json \
+    --pred_dataset=$DATA_DPATH/vidshapes_msi_test_pred/pred.kwcoco.json \
+    --eval_dpath=$DATA_DPATH/vidshapes_msi_test_pred_eval  # [**eval_hyperparams]

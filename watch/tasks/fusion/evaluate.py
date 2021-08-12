@@ -78,6 +78,7 @@ def binary_confusion_measures(tn, fp, fn, tp):
         # https://en.wikipedia.org/wiki/Matthews_correlation_coefficient
         fdr  = 1 - ppv  # false discovery rate
         fmr  = 1 - npv  # false ommision rate (for)
+        # Note: when there are no true negatives, this goes to zero
         mcc = np.sqrt(ppv * tpr * tnr * npv) - np.sqrt(fdr * fnr * fpr * fmr)
 
         # https://erotemic.wordpress.com/2019/10/23/closed-form-of-the-mcc-when-tn-inf/

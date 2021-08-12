@@ -417,7 +417,6 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 
     callbacks = [
-        # EarlyStopping(monitor='vali_loss', patience=args.patience, verbose=True),
         DrawBatchCallback(num_draw=args.num_draw, draw_interval=args.draw_interval),
         TensorboardPlotter(),  # draw tensorboard
         pl.callbacks.LearningRateMonitor(logging_interval='epoch', log_momentum=True),
@@ -428,6 +427,9 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     ]
     if args.vali_dataset is not None:
         callbacks += [
+            EarlyStopping(
+                monitor='val_loss', mode='min', patience=args.patience,
+                verbose=True),
             pl.callbacks.ModelCheckpoint(
                 monitor='val_loss', mode='min', save_top_k=4),
         ]
