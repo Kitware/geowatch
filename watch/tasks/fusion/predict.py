@@ -415,9 +415,9 @@ class CocoStitchingManager(object):
             # Save probabilities (or feature maps) as a new auxiliary image
             bundle_dpath = self.result_dataset.bundle_dpath
             new_feature = kwarray.atleast_nd(change_probs, 3)
-            new_fname = img['name'] + f'_{self.chan_code}.tiff'
+            new_fname = img.get('name', str(img['id'])) + f'_{self.chan_code}.tiff'  # FIXME
             new_fpath = join(self.prob_dpath, new_fname)
-            img['auxiliary'].append({
+            img.get('auxiliary', []).append({
                 'file_name': relpath(new_fpath, bundle_dpath),
                 'channels': self.chan_code,
                 'height': new_feature.shape[0],
@@ -429,7 +429,8 @@ class CocoStitchingManager(object):
             total_prob += new_feature.sum()
             kwimage.imwrite(
                 str(new_fpath), new_feature, space=None, backend='gdal',
-                compress='LZW')
+                compress='LZW'
+            )
 
         if self.SAVE_PREDS:
             # This is the final step where we convert soft-probabilities to

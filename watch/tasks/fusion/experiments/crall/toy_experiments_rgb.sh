@@ -7,9 +7,9 @@ mkdir -p $DATA_DPATH
 cd $DATA_DPATH
 
 # Generate toy datasets
-kwcoco toydata vidshapes8-frames5-multispectral --bundle_dpath $DATA_DPATH/vidshapes_train
-kwcoco toydata vidshapes4-frames5-multispectral --bundle_dpath $DATA_DPATH/vidshapes_vali
-kwcoco toydata vidshapes2-frames6-multispectral --bundle_dpath $DATA_DPATH/vidshapes_test
+kwcoco toydata vidshapes8-frames5 --bundle_dpath $DATA_DPATH/vidshapes_train
+kwcoco toydata vidshapes4-frames5 --bundle_dpath $DATA_DPATH/vidshapes_vali
+kwcoco toydata vidshapes2-frames6 --bundle_dpath $DATA_DPATH/vidshapes_test
 
 
 # TRAINING COMMANDS
@@ -26,8 +26,8 @@ python -m watch.tasks.fusion.fit \
     --vali_dataset=$DATA_DPATH/vidshapes_vali/data.kwcoco.json \
     --test_dataset=$DATA_DPATH/vidshapes_test/data.kwcoco.json \
     --workdir=$DATA_DPATH/fit/ \
-    --package_fpath=$DATA_DPATH/toy_model.pt \
-    --channels="B8|B1|B11|B8a" \
+    --package_fpath=$DATA_DPATH/toy_deployed_model.pt \
+    --channels="r|b" \
     --method=MultimodalTransformerDirectCD \
     --model_name=smt_it_stm_s12 \
     --window_size=8 \
@@ -41,14 +41,16 @@ python -m watch.tasks.fusion.fit \
     --max_steps=100 \
     --gpus=1 \
     --accumulate_grad_batches=4 \
-    --num_workers=2 2>/dev/null
+    --num_workers=2 
+    2>/dev/null
 
 python -m watch.tasks.fusion.predict \
-    --package_fpath=$DATA_DPATH/toy_model.pt \
+    --package_fpath=$DATA_DPATH/toy_deployed_model.pt \
     --test_dataset=$DATA_DPATH/vidshapes_test/data.kwcoco.json \
-    --pred_dataset=$DATA_DPATH/vidshapes_test_pred/pred.kwcoco.json
+    --pred_dataset=$DATA_DPATH/vidshapes_test_pred/pred.kwcoco.json --gpus=1
 
 python -m watch.tasks.fusion.evaluate \
     --true_dataset=$DATA_DPATH/vidshapes_test/data.kwcoco.json \
     --pred_dataset=$DATA_DPATH/vidshapes_test_pred/pred.kwcoco.json \
     --eval_dpath=$DATA_DPATH/vidshapes_test_pred_eval  # [**eval_hyperparams]
+

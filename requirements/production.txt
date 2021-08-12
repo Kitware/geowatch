@@ -61,5 +61,5 @@ geojson >= 2.5.0
 scikit_learn >= 0.24.2
 torch >= 1.9.0
 torchvision >= 0.10.0
-torch_liberator >= 0.1.0
+# torch_liberator >= 0.1.0  # using torch.package instead
 pytorch_lightning >= 1.4.1

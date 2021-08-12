@@ -187,6 +187,17 @@ def make_fit_config(cmdline=False, **kwargs):
         symlinked) to.
         '''))
 
+    callback_parser = parser.add_argument_group("Callbacks")
+
+    callback_parser.add_argument('--patience', default=10, type=int, help=ub.paragraph(
+        '''Number of epochs with no improvement before early stopping'''))
+
+    callback_parser.add_argument('--draw_interval', default='10m', help=ub.paragraph(
+        '''Time to wait before dumping a new visualization'''))
+
+    callback_parser.add_argument('--num_draw', default=4, type=int, help=ub.paragraph(
+        '''Number of items to draw at the start of each epoch'''))
+
     # config_parser.add_argument('--name', default=None, help=ub.paragraph(
     #     '''
     #     TODO: allow for the user to specify a name, and do netharn-like
@@ -403,9 +414,11 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
 
     from watch.tasks.fusion.lightning_extensions.tensorboard_plotter import TensorboardPlotter
     from watch.tasks.fusion.lightning_extensions.draw_batch import DrawBatchCallback
+    from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 
     callbacks = [
-        DrawBatchCallback(num_draw=4, draw_interval='10m'),
+        # EarlyStopping(monitor='vali_loss', patience=args.patience, verbose=True),
+        DrawBatchCallback(num_draw=args.num_draw, draw_interval=args.draw_interval),
         TensorboardPlotter(),  # draw tensorboard
         pl.callbacks.LearningRateMonitor(logging_interval='epoch', log_momentum=True),
         pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
