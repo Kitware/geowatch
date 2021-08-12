@@ -122,6 +122,9 @@ def predict(cmdline=False, **kwargs):
     method.eval()
     method.freeze()
 
+    # TODO: perhaps we should enforce that that packaged model
+    # knows how to construct the appropriate test dataset?
+
     # init datamodule from args
     datamodule_class = getattr(datamodules, args.datamodule)
     datamodule_vars = utils.filter_args(
@@ -132,6 +135,7 @@ def predict(cmdline=False, **kwargs):
     # TODO: default to this, but allow the user to overwrite
     datamodule_vars['chip_size'] = method.datamodule_hparams['chip_size']
     datamodule_vars['time_steps'] = method.datamodule_hparams['time_steps']
+    datamodule_vars['channels'] = method.datamodule_hparams['channels']
 
     # datamodule_vars["preprocessing_step"] = method.preprocessing_step
     datamodule = datamodule_class(
@@ -198,7 +202,7 @@ def predict(cmdline=False, **kwargs):
         result_infos.append(info)
 
     import kwarray
-    running_stats = kwarray.RunningStats()
+    running_stats = kwarray.RunningStats()  # for inspecting probability
 
     for batch in prog:
         # Move data onto the prediction device

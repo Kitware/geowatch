@@ -13,8 +13,7 @@ python -m watch.tasks.fusion.fit \
     --batch_size=2 \
     --accumulate_grad_batches=8 \
     --num_workers=12 \
-    --gpus=1
-2>/dev/null
+    --gpus=1 2>/dev/null
 
 
 # Takes ~14GB on a 3090
