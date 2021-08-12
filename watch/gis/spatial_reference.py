@@ -55,8 +55,8 @@ def check_latlons(lat, lon):
     """
     Quick check to see if latitudes and longitudes are valid.
 
-    Longitude is always between -180 and 180 (degrees east)
-    Latitude is always between -90 and 90 (degrees north)
+    Longitude (x) is always between -180 and 180 (degrees east)
+    Latitude (y) is always between -90 and 90 (degrees north)
 
     Example:
         >>> from watch.gis.spatial_reference import *  # NOQA
