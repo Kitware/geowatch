@@ -1431,12 +1431,9 @@ def visualize_rois(dset, kw_all_box_rois):
 
         bb = kw_zoom_roi.bounding_box()
 
-        min_x, min_y, max_x, max_y = bb.to_ltrb().data[0]
-        padx = (max_x - min_x) * 0.5
-        pady = (max_y - min_y) * 0.5
-
-        ax.set_xlim(min_x - padx, max_x + padx)
-        ax.set_ylim(min_y - pady, max_y + pady)
+        min_x, min_y, max_x, max_y = bb.scale(1.5, about='center').to_ltrb().data[0]
+        ax.set_xlim(min_x, max_x)
+        ax.set_ylim(min_y, max_y)
 
 
 def _fix_geojson_poly(geo):
