@@ -63,6 +63,10 @@ class DrawBatchCallback(pl.callbacks.Callback):
     def draw_batch(self, trainer, outputs, batch, batch_idx):
 
         datamodule = trainer.datamodule
+        if datamodule is None:
+            # must have datamodule to draw batches
+            return
+
         canvas = datamodule.draw_batch(batch, outputs=outputs)
 
         canvas = np.nan_to_num(canvas)
