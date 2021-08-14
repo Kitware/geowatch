@@ -56,65 +56,7 @@ class LightningToyNet2d(pl.LightningModule):
 
 class KitwareCallbacks(pl.callbacks.Callback):
     """
-    Available:
-        on_configure_sharded_model(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-        on_before_accelerator_backend_setup(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-        on_init_start(self, trainer: "pl.Trainer") -> None:
-        on_init_end(self, trainer: "pl.Trainer") -> None:
-        on_fit_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-        on_fit_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-        on_sanity_check_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-        on_sanity_check_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-
-        on_train_batch_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", batch: Any, batch_idx: int, dataloader_idx: int) -> None:
-        on_train_batch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", outputs: STEP_OUTPUT, batch: Any, batch_idx: int, dataloader_idx: int,) -> None:
-        on_train_epoch_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-        on_train_epoch_end( self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", unused: Optional = None) -> None:
-
-        on_validation_epoch_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-        on_validation_epoch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-        on_test_epoch_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-
-        on_test_epoch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-        on_predict_epoch_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-        on_predict_epoch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", outputs: List[Any]) -> None:
-
-        on_epoch_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-        on_epoch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-
-        on_batch_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-        on_validation_batch_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", batch: Any, batch_idx: int, dataloader_idx: int) -> None:
-        on_validation_batch_end( self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", outputs: Optional[STEP_OUTPUT], batch: Any, batch_idx: int, dataloader_idx: int,) -> None:
-        on_test_batch_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", batch: Any, batch_idx: int, dataloader_idx: int) -> None:
-        on_test_batch_end( self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", outputs: Optional[STEP_OUTPUT], batch: Any, batch_idx: int, dataloader_idx: int,) -> None:
-        on_predict_batch_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", batch: Any, batch_idx: int, dataloader_idx: int) -> None:
-        on_predict_batchend(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", outputs: Any, batch: Any, batch_idx: int, dataloader_idx: int,) -> None:
-        on_batch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-
-        on_train_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-        on_train_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-
-        on_before_backward(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", loss: torch.Tensor) -> None:
-        on_after_backward(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-        on_before_optimizer_step(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", optimizer: Optimizer, opt_idx: int) -> None:
-        on_before_zero_grad(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", optimizer: Optimizer) -> None:
-
-        on_pretrain_routine_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-        on_pretrain_routine_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-        on_validation_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-        on_validation_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-        on_test_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-        on_test_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-
-        on_predict_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-        on_predict_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-        on_keyboard_interrupt(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-
-        on_save_checkpoint(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", checkpoint: Dict[str, Any]) -> dict:
-        on_load_checkpoint(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", callback_state: Dict[str, Any]) -> None:
-
-        setup(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", stage: Optional[str] = None) -> None:
-        teardown(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", stage: Optional[str] = None) -> None:
+    Extra steps we want to take
     """
     def setup(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", stage: Optional[str] = None) -> None:
         print('setup kitware callbacks')
@@ -129,11 +71,17 @@ class KitwareCallbacks(pl.callbacks.Callback):
     def on_init_end(self, trainer: "pl.Trainer") -> None:
         print('on_init_start')
 
-    def on_train_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-        print('on_train_start')
+    def on_fit_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+        print('on_fit_start')
 
-    def on_train_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-        print('on_train_end')
+    def on_fit_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+        print('on_fit_end')
+
+    # def on_train_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+    #     print('on_train_start')
+
+    # def on_train_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+    #     print('on_train_end')
 
     def on_load_checkpoint(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", callback_state: Dict[str, Any]) -> None:
         print('on_load_checkpoint')
@@ -159,7 +107,7 @@ def kitware_trainer(*args, **kwargs):
         >>> default_root_dir = ub.ensure_app_cache_dir('lightning_ext/test/kwtrainer')
         >>> ub.delete(default_root_dir)
         >>> model = LightningToyNet2d(num_train=55)
-        >>> trainer = kitware_trainer(default_root_dir=default_root_dir)
+        >>> trainer = kitware_trainer(default_root_dir=default_root_dir, max_epochs=10)
         >>> print('trainer.train_dpath = {!r}'.format(trainer.train_dpath))
         >>> print('trainer.log_dir = {!r}'.format(trainer.log_dir))
         >>> trainer.fit(model)
