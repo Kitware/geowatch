@@ -14,8 +14,10 @@ try:
 except Exception:
     profile = ub.identity
 
+__all__ = ['BatchPlotter']
 
-class DrawBatchCallback(pl.callbacks.Callback):
+
+class BatchPlotter(pl.callbacks.Callback):
     """
     These are callbacks used to monitor the training.
 

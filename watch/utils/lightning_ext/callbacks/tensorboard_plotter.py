@@ -9,16 +9,19 @@ import pandas as pd
 import pytorch_lightning as pl
 
 
+__all__ = ['TensorboardPlotter']
+
+
 class TensorboardPlotter(pl.callbacks.Callback):
     """
     Asynchronously dumps PNGs to disk visualize tensorboard scalars.
 
     CommandLine:
-        xdoctest -m watch.tasks.fusion.lightning_extensions.tensorboard_plotter TensorboardPlotter
+        xdoctest -m watch.utils.lightning_ext.tensorboard_plotter TensorboardPlotter
 
     Example:
         >>> #
-        >>> from watch.tasks.fusion.lightning_extensions import demo
+        >>> from watch.utils.lightning_ext import demo
         >>> self = demo.LightningToyNet2d(num_train=55)
         >>> default_root_dir = ub.ensure_app_cache_dir('lightning_ext/tests/TensorboardPlotter')
         >>> #

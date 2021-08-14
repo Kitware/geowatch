@@ -225,6 +225,9 @@ def make_fit_config(cmdline=False, **kwargs):
             '''
             Modal parameter indicating the family of model to train.
             See the watch.tasks.fusion.methods submodule for details
+
+            # TODO: change name to model?
+            # Change existing "model" to "arch"?
             ''')
     )
 
@@ -411,13 +414,12 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     model = method_class(**method_var_dict)
 
     # init trainer from args
-
-    from watch.tasks.fusion.lightning_extensions.tensorboard_plotter import TensorboardPlotter
-    from watch.tasks.fusion.lightning_extensions.draw_batch import DrawBatchCallback
-    from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+    from watch.utils.lightning_ext.callbacks import TensorboardPlotter
+    from watch.utils.lightning_ext.callbacks import BatchPlotter
+    from pytorch_lightning.callbacks import EarlyStopping
 
     callbacks = [
-        DrawBatchCallback(num_draw=args.num_draw, draw_interval=args.draw_interval),
+        BatchPlotter(num_draw=args.num_draw, draw_interval=args.draw_interval),
         TensorboardPlotter(),  # draw tensorboard
         pl.callbacks.LearningRateMonitor(logging_interval='epoch', log_momentum=True),
         pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
