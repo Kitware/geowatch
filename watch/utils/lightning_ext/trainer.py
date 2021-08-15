@@ -66,7 +66,7 @@ class KitwareCallbacks(pl.callbacks.Callback):
 def kitware_trainer(*args, **kwargs):
     """
     Example:
-        >>> from watch.utils.lightning_ext.demo import *  # NOQA
+        >>> from watch.utils.lightning_ext.trainer import *  # NOQA
         >>> import ubelt as ub
         >>> default_root_dir = ub.ensure_app_cache_dir('lightning_ext/test/kwtrainer')
         >>> ub.delete(default_root_dir)
@@ -77,22 +77,18 @@ def kitware_trainer(*args, **kwargs):
         >>> trainer.fit(model)
         >>> train_dpath = trainer.logger.log_dir
         >>> print('trainer.log_dir = {!r}'.format(trainer.log_dir))
+
+    Ignore:
+        kwargs = {}
+        args = tuple()
     """
-
-    # It seems we have to override the init, not sure
-    resume_from_checkpoint = kwargs.get('resume_from_checkpoint', 'auto')
-    train_dpath = kwargs.get('default_root_dir', None)
-    assert train_dpath is not None, 'must specify'
-
-    if resume_from_checkpoint == 'auto':
-        resume_from_checkpoint = find_most_recent_checkpoint(train_dpath)
-        kwargs['resume_from_checkpoint'] = resume_from_checkpoint
-
     callbacks = kwargs.get('callbacks', 'auto')
     if callbacks == 'auto':
         print('callbacks = {!r}'.format(callbacks))
         from watch.utils.lightning_ext.callbacks import TensorboardPlotter
         from watch.utils.lightning_ext.callbacks import BatchPlotter
+        from watch.utils.lightning_ext.callbacks import AutoResumer
+        from watch.utils.lightning_ext.callbacks import StateLogger
         from pytorch_lightning.callbacks import EarlyStopping
         # callbacks = []
         # callbacks += [TensorboardPlotter()]
@@ -100,6 +96,8 @@ def kitware_trainer(*args, **kwargs):
 
         callbacks = [
             KitwareCallbacks(),
+            AutoResumer(),
+            StateLogger(),
             BatchPlotter(
                 num_draw=kwargs.get('num_draw', 4),
                 draw_interval=kwargs.get('draw_interval', '10m'),
@@ -132,23 +130,4 @@ def kitware_trainer(*args, **kwargs):
     # ]
 
     trainer = pl.Trainer(*args, **kwargs)
-    trainer.train_dpath = train_dpath
     return trainer
-
-
-def ensurepath(path_like):
-    import pathlib
-    if isinstance(path_like, pathlib.Path):
-        return path_like
-    else:
-        return pathlib.Path(path_like)
-
-
-def find_most_recent_checkpoint(train_dpath):
-    train_dpath = ensurepath(train_dpath)
-    candidates = list(train_dpath.glob('*/*/checkpoints/*.ckpt'))
-    if len(candidates):
-        chosen = sorted(candidates)[-1]
-    else:
-        chosen = None
-    return chosen
