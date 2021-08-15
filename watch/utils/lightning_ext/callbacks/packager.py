@@ -1,5 +1,5 @@
 import pytorch_lightning as pl
-from typing import Dict, Any
+# from typing import Dict, Any
 import ubelt as ub
 from os.path import join
 
@@ -78,9 +78,9 @@ class Packager(pl.callbacks.Callback):
 
     def _save_package(self, model, package_fpath):
         if hasattr(model, 'save_package'):
-            model.save_pacakge(package_fpath)
+            model.save_package(package_fpath)
         else:
-            print('model has no save_pacakge method required by Packager')
+            print('model has no save_package method required by Packager')
             default_save_package(model, package_fpath)
         print('save package_fpath = {!r}'.format(package_fpath))
 

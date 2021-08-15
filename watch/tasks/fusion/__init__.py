@@ -10,11 +10,10 @@ from watch.tasks.fusion import evaluate
 from watch.tasks.fusion import fit
 from watch.tasks.fusion import fit_bigvoter
 from watch.tasks.fusion import fit_voter
-from watch.tasks.fusion import lightning_extensions
 from watch.tasks.fusion import methods
 from watch.tasks.fusion import models
 from watch.tasks.fusion import predict
 from watch.tasks.fusion import utils
 
 __all__ = ['datamodules', 'evaluate', 'fit', 'fit_bigvoter', 'fit_voter',
-           'lightning_extensions', 'methods', 'models', 'predict', 'utils']
+           'methods', 'models', 'predict', 'utils']
