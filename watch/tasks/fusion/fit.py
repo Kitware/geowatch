@@ -416,9 +416,15 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     # init trainer from args
     from watch.utils.lightning_ext.callbacks import TensorboardPlotter
     from watch.utils.lightning_ext.callbacks import BatchPlotter
+    from watch.utils.lightning_ext.callbacks import AutoResumer
+    from watch.utils.lightning_ext.callbacks import StateLogger
+    from watch.utils.lightning_ext.callbacks import Packager
     from pytorch_lightning.callbacks import EarlyStopping
 
     callbacks = [
+        AutoResumer(),
+        StateLogger(),
+        Packager(package_fpath=args.package_fpath),
         BatchPlotter(num_draw=args.num_draw, draw_interval=args.draw_interval),
         TensorboardPlotter(),  # draw tensorboard
         pl.callbacks.LearningRateMonitor(logging_interval='epoch', log_momentum=True),
@@ -529,26 +535,26 @@ def fit_model(args=None, cmdline=False, **kwargs):
     print('Fit finished')
 
     # TODO: Package the best epoch based on validation metrics
-    package_fpath = pathlib.Path(trainer.default_root_dir) / "package.pt"
+    # package_fpath = pathlib.Path(trainer.default_root_dir) / "package.pt"
 
     # Record the dataset hparams this was trained with.
-    model.datamodule_hparams = model.trainer.datamodule.hparams
+    # model.datamodule_hparams = model.trainer.datamodule.hparams
     # Unload non-picklable parts from the data module
     # Get rid of problematic pickel variables
     # (is this desirable?)
-    model.trainer = None
-    model.train_dataloader = None
-    model.val_dataloader = None
-    model.test_dataloader = None
+    # model.trainer = None
+    # model.train_dataloader = None
+    # model.val_dataloader = None
+    # model.test_dataloader = None
 
-    # save model to package
-    # TODO: save the best model
-    print('Package model: package_fpath = {!r}'.format(package_fpath))
-    utils.create_package(model, package_fpath)
+    # # save model to package
+    # # TODO: save the best model
+    # print('Package model: package_fpath = {!r}'.format(package_fpath))
+    # model.save_package(package_fpath)
 
-    if args.package_fpath is not None:
-        ub.symlink(package_fpath, args.package_fpath, overwrite=True, verbose=3)
-        print('args.package_fpath = {!r}'.format(args.package_fpath))
+    # if args.package_fpath is not None:
+    #     ub.symlink(package_fpath, args.package_fpath, overwrite=True, verbose=3)
+    #     print('args.package_fpath = {!r}'.format(args.package_fpath))
 
     return package_fpath
 

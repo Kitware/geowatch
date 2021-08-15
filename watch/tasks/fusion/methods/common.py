@@ -162,6 +162,110 @@ class ChangeDetectorBase(pl.LightningModule):
         outputs = self.forward_step(batch, with_loss=True, stage='test')
         return outputs
 
+    @classmethod
+    def load_package(cls, package_path, verbose=1):
+        import torch.package
+        #
+        # TODO: is there any way to introspect what these variables could be?
+        model_name = "model.pkl"
+        module_name = 'watch_tasks_fusion'
+        imp = torch.package.PackageImporter(package_path)
+        self = imp.load_pickle(module_name, model_name)
+        return self
+
+    def save_package(self, package_path, verbose=1):
+        """
+
+        Example:
+            >>> # Test without datamodule
+            >>> import ubelt as ub
+            >>> from os.path import join
+            >>> from watch.tasks.fusion.methods.common import *  # NOQA
+            >>> dpath = ub.ensure_app_cache_dir('watch/tests/package')
+            >>> package_path = join(dpath, 'my_package.pt')
+
+            >>> # Use one of our fusion models in a test
+            >>> from watch.tasks.fusion import methods
+            >>> from watch.tasks.fusion import datamodules
+            >>> model = methods.MultimodalTransformerDirectCD("smt_it_stm_p8")
+            >>> # We have to run an input through the module because it is lazy
+            >>> inputs = torch.rand(1, 2, 13, 128, 128)
+            >>> model(inputs)
+
+            >>> # Save the model
+            >>> model.save_package(package_path)
+
+            >>> # Test that the package can be reloaded
+            >>> recon = methods.MultimodalTransformerDirectCD.load_package(package_path)
+            >>> # Check consistency and data is actually different
+            >>> recon_state = recon.state_dict()
+            >>> model_state = model.state_dict()
+            >>> assert recon is not model
+            >>> assert set(recon_state) == set(recon_state)
+            >>> for key in recon_state.keys():
+            >>>     assert (model_state[key] == recon_state[key]).all()
+            >>>     assert model_state[key] is not recon_state[key]
+
+        Example:
+            >>> # Test with datamodule
+            >>> import ubelt as ub
+            >>> from os.path import join
+            >>> from watch.tasks.fusion.methods.common import *  # NOQA
+            >>> dpath = ub.ensure_app_cache_dir('watch/tests/package')
+            >>> package_path = join(dpath, 'my_package.pt')
+
+            >>> # Use one of our fusion models in a test
+            >>> from watch.tasks.fusion import methods
+            >>> from watch.tasks.fusion import datamodules
+            >>> self = methods.MultimodalTransformerDirectCD("smt_it_stm_p8")
+            >>> # We have to run an input through the module because it is lazy
+            >>> inputs = torch.rand(1, 2, 13, 128, 128)
+            >>> self(inputs)
+
+            >>> datamodule = datamodules.watch_data.WatchDataModule(
+            >>>     'special:vidshapes8-multispectral', chip_size=32,
+            >>>     batch_size=1, time_steps=2, num_workers=0)
+            >>> datamodule.setup('fit')
+            >>> trainer = pl.Trainer(max_steps=1)
+            >>> trainer.fit(model=self, datamodule=datamodule)
+
+            >>> # Save the self
+            >>> self.save_package(package_path)
+
+            >>> # Test that the package can be reloaded
+            >>> recon = methods.MultimodalTransformerDirectCD.load_package(package_path)
+
+            >>> # Check consistency and data is actually different
+            >>> recon_state = recon.state_dict()
+            >>> model_state = self.state_dict()
+            >>> assert recon is not self
+            >>> assert set(recon_state) == set(recon_state)
+            >>> for key in recon_state.keys():
+            >>>     assert (model_state[key] == recon_state[key]).all()
+            >>>     assert model_state[key] is not recon_state[key]
+        """
+        import copy
+        import torch.package
+
+        # shallow copy of self, to apply attribute hacks to
+        model = copy.copy(self)
+        if model.trainer is not None:
+            datamodule = model.trainer.datamodule
+            if datamodule is not None:
+                model.datamodule_hparams = datamodule.hparams
+        model.trainer = None
+        model.train_dataloader = None
+        model.val_dataloader = None
+        model.test_dataloader = None
+
+        model_name = "model.pkl"
+        module_name = 'watch_tasks_fusion'
+        with torch.package.PackageExporter(package_path, verbose=verbose) as exp:
+            # TODO: this is not a problem yet, but some package types (mainly binaries) will need to be excluded and added as mocks
+            exp.extern("**", exclude=["watch.tasks.fusion.**"])
+            exp.intern("watch.tasks.fusion.**")
+            exp.save_pickle(module_name, model_name, model)
+
     def configure_optimizers(self):
         optimizer = optim.RAdam(
                 self.parameters(),
