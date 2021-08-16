@@ -167,9 +167,23 @@ class ChangeDetectorBase(pl.LightningModule):
         import torch.package
         #
         # TODO: is there any way to introspect what these variables could be?
+
         model_name = "model.pkl"
         module_name = 'watch_tasks_fusion'
+
         imp = torch.package.PackageImporter(package_path)
+
+        # Assume this standardized header information exists that tells us the
+        # name of the resource corresponding to the model
+        package_header = imp.load_pickle(
+            'kitware_package_header', 'kitware_package_header.pkl')
+        model_name = package_header['model_name']
+        module_name = package_header['module_name']
+
+        # pkg_root = imp.file_structure()
+        # print(pkg_root)
+        # pkg_data = pkg_root.children['.data']
+
         self = imp.load_pickle(module_name, model_name)
         return self
 
@@ -261,9 +275,23 @@ class ChangeDetectorBase(pl.LightningModule):
         model_name = "model.pkl"
         module_name = 'watch_tasks_fusion'
         with torch.package.PackageExporter(package_path, verbose=verbose) as exp:
-            # TODO: this is not a problem yet, but some package types (mainly binaries) will need to be excluded and added as mocks
+            # TODO: this is not a problem yet, but some package types (mainly
+            # binaries) will need to be excluded and added as mocks
             exp.extern("**", exclude=["watch.tasks.fusion.**"])
             exp.intern("watch.tasks.fusion.**")
+
+            # Attempt to standardize some form of package metadata that can
+            # allow for model importing with fewer hard-coding requirements
+            package_header = {
+                'version': '0.0.1',
+                'model_name': model_name,
+                'module_name': module_name,
+            }
+            exp.save_pickle(
+                'kitware_package_header', 'kitware_package_header.pkl',
+                package_header
+            )
+
             exp.save_pickle(module_name, model_name, model)
 
     def configure_optimizers(self):

@@ -66,6 +66,7 @@ Example:
 """
 
 import pytorch_lightning as pl
+from watch.utils import lightning_ext as pl_ext
 
 from watch.tasks.fusion import datamodules
 from watch.tasks.fusion import methods
@@ -408,25 +409,22 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     method_var_dict = utils.filter_args(method_var_dict, method_class.__init__)
 
     if hasattr(datamodule, "input_stats"):
-        print('datamodule.input_stats = {}'.format(ub.repr2(datamodule.input_stats, nl=2, sort=0)))
+        print('datamodule.input_stats = {}'.format(
+            ub.repr2(datamodule.input_stats, nl=2, sort=0)))
         method_var_dict["input_stats"] = datamodule.input_stats
     # Note: Changed name from method to model
     model = method_class(**method_var_dict)
 
     # init trainer from args
-    from watch.utils.lightning_ext.callbacks import TensorboardPlotter
-    from watch.utils.lightning_ext.callbacks import BatchPlotter
-    from watch.utils.lightning_ext.callbacks import AutoResumer
-    from watch.utils.lightning_ext.callbacks import StateLogger
-    from watch.utils.lightning_ext.callbacks import Packager
-    from pytorch_lightning.callbacks import EarlyStopping
-
     callbacks = [
-        AutoResumer(),
-        StateLogger(),
-        Packager(package_fpath=args.package_fpath),
-        BatchPlotter(num_draw=args.num_draw, draw_interval=args.draw_interval),
-        TensorboardPlotter(),  # draw tensorboard
+        pl_ext.callbacks.AutoResumer(),
+        pl_ext.callbacks.StateLogger(),
+        pl_ext.callbacks.Packager(package_fpath=args.package_fpath),
+        pl_ext.callbacks.BatchPlotter(
+            num_draw=args.num_draw,
+            draw_interval=args.draw_interval
+        ),
+        pl_ext.callbacks.TensorboardPlotter(),
         pl.callbacks.LearningRateMonitor(logging_interval='epoch', log_momentum=True),
         pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
 
@@ -435,14 +433,14 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     ]
     if args.vali_dataset is not None:
         callbacks += [
-            EarlyStopping(
+            pl.callbacks.EarlyStopping(
                 monitor='val_loss', mode='min', patience=args.patience,
                 verbose=True),
             pl.callbacks.ModelCheckpoint(
                 monitor='val_loss', mode='min', save_top_k=4),
         ]
 
-    # TODO: explititly initialize the tensorboard logger
+    # TODO: explititly initialize the tensorboard logger?
     # logger = [
     #     pl.loggers.TensorBoardLogger(
     #         save_dir=args.default_root_dir, version=self.trainer.slurm_job_id, name="lightning_logs"
@@ -490,7 +488,7 @@ def fit_model(args=None, cmdline=False, **kwargs):
         >>> fit_model(**kwargs)
     """
     modules = make_lightning_modules(cmdline=cmdline, **kwargs)
-    args = modules['args']
+    # args = modules['args']
     trainer = modules['trainer']
     datamodule = modules['datamodule']
     model = modules['model']
@@ -534,32 +532,14 @@ def fit_model(args=None, cmdline=False, **kwargs):
     trainer.fit(model, datamodule)
     print('Fit finished')
 
-    # TODO: Package the best epoch based on validation metrics
-    # package_fpath = pathlib.Path(trainer.default_root_dir) / "package.pt"
+    # Hack: what is the best way to get at this info?
+    package_fpath = trainer.package_fpath
 
-    # Record the dataset hparams this was trained with.
-    # model.datamodule_hparams = model.trainer.datamodule.hparams
-    # Unload non-picklable parts from the data module
-    # Get rid of problematic pickel variables
-    # (is this desirable?)
-    # model.trainer = None
-    # model.train_dataloader = None
-    # model.val_dataloader = None
-    # model.test_dataloader = None
-
-    # # save model to package
-    # # TODO: save the best model
-    # print('Package model: package_fpath = {!r}'.format(package_fpath))
-    # model.save_package(package_fpath)
-
-    # if args.package_fpath is not None:
-    #     ub.symlink(package_fpath, args.package_fpath, overwrite=True, verbose=3)
-    #     print('args.package_fpath = {!r}'.format(args.package_fpath))
+    # TODO:
+    # Run prediction code here
+    # Run evaluation code here
 
     return package_fpath
-
-    # save learning relevant training options
-    # learning_config = ub.dict_diff(args.__dict__, learning_irrelevant)
 
 
 @profile

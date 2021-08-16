@@ -43,6 +43,19 @@ python -m watch.tasks.fusion.fit \
     --accumulate_grad_batches=8 \
     --num_workers=12
 
+python -m watch.tasks.fusion.predict \
+    --test_dataset=$DVC_DPATH/extern/onera_2018/onera_test.kwcoco.json \
+    --gpus 1 \
+    --package_fpath=/home/joncrall/data/dvc-repos/smart_watch_dvc/training/toothbrush/joncrall/MultimodalTransformerDirectCD-bd29d1074f926b3a/lightning_logs/version_6/packages/package_epoch16_step663.pt \
+    --pred_dataset=/home/joncrall/data/dvc-repos/smart_watch_dvc/training/toothbrush/joncrall/MultimodalTransformerDirectCD-bd29d1074f926b3a/lightning_logs/version_6/packages/pred/pred.kwcoco.json  # [**pred_hyperparams]
+
+
+python -m watch.tasks.fusion.evaluate \
+    --true_dataset=$DVC_DPATH/extern/onera_2018/onera_test.kwcoco.json \
+    --pred_dataset=/home/joncrall/data/dvc-repos/smart_watch_dvc/training/toothbrush/joncrall/MultimodalTransformerDirectCD-bd29d1074f926b3a/lightning_logs/version_6/packages/pred/pred.kwcoco.json  \
+    --eval_dpath=/home/joncrall/data/dvc-repos/smart_watch_dvc/training/toothbrush/joncrall/MultimodalTransformerDirectCD-bd29d1074f926b3a/lightning_logs/version_6/packages/pred/eval  
+
+
 
 /home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/training/yardrat/jon.crall/MultimodalTransformerDirectCD-21150fb65110ebd1/lightning_logs/version_3/checkpoints/epoch=236-step=9242.ckpt
 
@@ -57,13 +70,14 @@ CUDA_VISIBLE_DEVICES=$AUTO_DEVICE \
 python -m watch.tasks.fusion.fit \
     --train_dataset=$DVC_DPATH/extern/onera_2018/onera_train.kwcoco.json \
     --vali_dataset=$DVC_DPATH/extern/onera_2018/onera_test.kwcoco.json \
-    --workdir=$DVC_DPATH/training/$HOSTNAME/$USER \
+    --default_root_dir=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/DirectCD_smt_it_stm_s12_v1 \
+    --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/DirectCD_smt_it_stm_s12_v1/package.pt \
     --method=MultimodalTransformerDirectCD \
     --model_name=smt_it_stm_s12 \
     --window_size=8 \
     --learning_rate=1e-3 \
     --weight_decay=1e-4 \
-    --dropout=0.1 \
+    --dropout=0.12 \
     --terminate_on_nan=True \
     --time_steps=2 \
     --chip_size=128 \
@@ -82,7 +96,7 @@ python -m watch.tasks.fusion.predict \
 
 python -m watch.tasks.fusion.evaluate \
     --true_dataset=$DVC_DPATH/extern/onera_2018/onera_test.kwcoco.json \
-    --pred_dataset=/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/training/yardrat/jon.crall/MultimodalTransformerDirectCD-21150fb65110ebd1/lightning_logs/version_3/pred/pred.kwcoco.jsson \
+    --pred_dataset=/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/training/yardrat/jon.crall/MultimodalTransformerDirectCD-21150fb65110ebd1/lightning_logs/version_3/pred/pred.kwcoco.json \
     --eval_dpath=/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/training/yardrat/jon.crall/MultimodalTransformerDirectCD-21150fb65110ebd1/lightning_logs/version_3/pred/eval  
 
 

@@ -39,6 +39,9 @@ class Packager(pl.callbacks.Callback):
         if self.package_fpath == 'auto':
             self.package_fpath = join(trainer.default_root_dir, 'final_package.pt')
 
+        # Hack this in. TODO: what is the best way to expose this?
+        trainer.package_fpath = self.package_fpath
+
     def on_fit_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
         if True:
             print('Training is starting, checking that the model can be packaged')
