@@ -31,49 +31,50 @@ import numpy as np
 
 def get_canvas_concat_channels(red_fname, annotations, dataset):
     # returns a canvas with RGB image and overlaid annotation
-    
+
     # Takes in name of the red channel file, reads R, G, and B files, normalizes every channel, and concatenates
     # all 3 channels to make an RGB image
     r_img = kwimage.normalize_intensity(kwimage.imread(red_fname))
 
-    g_name = red_fname[:-7]+'green.tif'
+    g_name = red_fname[:-7] + 'green.tif'
     g_img = kwimage.normalize_intensity(kwimage.imread(g_name))
 
-    b_name =red_fname[:-7]+'blue.tif'
+    b_name = red_fname[:-7] + 'blue.tif'
     b_img = kwimage.normalize_intensity(kwimage.imread(b_name))
-    
-    canvas = np.concatenate((r_img[:,:,np.newaxis], g_img[:,:,np.newaxis], b_img[:,:,np.newaxis]), axis=-1)
+
+    canvas = np.concatenate((r_img[:, :, np.newaxis], g_img[:, :, np.newaxis], b_img[:, :, np.newaxis]), axis=-1)
     canvas = kwimage.ensure_float01(canvas)
 
     dets = kwimage.Detections.from_coco_annots(annotations, dset=dataset)
     ann_canvas = dets.draw_on(canvas)
-    
+
     return ann_canvas
+
 
 def save_visualizations(canvases, canvases_fixed, fname):
     # save visualizations of original and propagated labels
-    
-    plt.figure(figsize=(30,8))
+
+    plt.figure(figsize=(30, 8))
     n_images = len(canvases)
     for i, c in enumerate(canvases):
-        plt.subplot(2, n_images, i+1)
+        plt.subplot(2, n_images, i + 1)
         plt.imshow(c)
-        if i==3:
+        if i == 3:
             plt.title('Original')
         plt.axis('off')
 
-        plt.subplot(2, n_images, n_images + i+1)
+        plt.subplot(2, n_images, n_images + i + 1)
         plt.imshow(canvases_fixed[i])
-        if i==3:
+        if i == 3:
             plt.title('Propagated')
         plt.axis('off')
 
     plt.tight_layout()
     plt.savefig(fname, bbox_inches='tight')
     plt.close()
-    
 
-def main(**args):
+
+def main(args):
     """
     Main function for propagate_labels.
 
@@ -84,30 +85,29 @@ def main(**args):
 
     """
     # Settings
-    
+
     # which categories we want to propagate
     # These are category IDs: 1:'No Activity', 2:'Site Preparation', 3:'Active Construction', 4:'Post Construction'}, 5:'Unknown'}
     categories_to_propagate = [2, 3]
-    
-    # number of visualizations of every sequence 
+
+    # number of visualizations of every sequence
     n_image_viz = 7
-    
-    # we save the ending frames of every video sequence if this is set to True 
+
+    # we save the ending frames of every video sequence if this is set to True
     viz_end = True
-    
-    
+
     # read arguments
     parser = argparse.ArgumentParser(
         description="Forward propagate labels")
-    parser.add_argument("--data_dir", default= 'drop1-S2-aligned-c1', 
+    parser.add_argument("--data_dir", default='drop1-S2-aligned-c1',
     help="drop1 directory name, defualt is drop1-S2-aligned-c1. The kwcoco file from this directory will be read")
     parser.add_argument("--out_dir", default='propagation_output', help="Output directory where visualizations and processed kwcoco files will be saved")
     args = parser.parse_args(args)
-    
+
     # create the output dir
     if not os.path.exists(args.out_dir):
         os.mkdir(args.out_dir)
-    
+
     # Read input file
     _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
     dvc_dpath = os.environ.get('DVC_DPATH', _default)
@@ -116,15 +116,14 @@ def main(**args):
     print('total video:', full_ds.n_videos)
     print('total images:', full_ds.n_images)
     print('total annotations:', full_ds.n_annots)
-    
-    
+
     for vid_id, video in full_ds.index.videos.items():
         image_ids = full_ds.index.vidid_to_gids[vid_id]
 
         # a list of all the seen track IDs
-        seen_track_ids = []   
+        seen_track_ids = []
         # a doctionary of latest annotation IDs, indexed by the track IDs
-        latest_ann_ids = {}   
+        latest_ann_ids = {}
 
         # canvases for visualizations
         canvases = []
@@ -177,13 +176,14 @@ def main(**args):
 
         # save visualization
         location_string = '_end' if viz_end else '_start'
-        fname = join(args.out_dir, 'video_'+str(vid_id)+location_string+'.jpg')
+        fname = join(args.out_dir, 'video_' + str(vid_id) + location_string + '.jpg')
         save_visualizations(canvases, canvases_fixed, fname)
-    
+
     # ToDO: write the code to add annotation objects
     # ToDo: save the new kwcoco data to disk
-    
+
     return 0
+
 
 if __name__ == '__main__':
     """

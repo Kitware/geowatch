@@ -16,7 +16,6 @@ def main(cmdline=True, **kw):
         'hello_world',
         'watch_coco_stats',
         'merge_region_models',
-        'propagate_labels',
     ]
     module_lut = {}
     for name in modnames:

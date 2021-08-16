@@ -8,6 +8,7 @@ coverage >= 5.4
 jsonschema >= 3.2.0
 fire
 flake8
+autopep8
 
 
 # Machine learning

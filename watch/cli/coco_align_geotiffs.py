@@ -78,6 +78,7 @@ import shapely
 from shapely import ops
 from os.path import join, exists
 
+
 class CocoAlignGeotiffConfig(scfg.Config):
     """
     Create a dataset of aligned temporal sequences around objects of interest
@@ -226,9 +227,6 @@ def main(**kw):
 
     output_bundle_dpath = dst_dpath
 
-    from pympler.tracker import SummaryTracker
-    tracker = SummaryTracker()
-
     if regions == 'annots':
         pass
     elif exists(regions):
@@ -236,8 +234,6 @@ def main(**kw):
         print('region_df = {!r}'.format(region_df))
     else:
         raise KeyError(regions)
-
-    tracker.print_diff()
 
     # Load the dataset and extract geotiff metadata from each image.
     dset = kwcoco.CocoDataset.coerce(src_fpath)
@@ -271,13 +267,10 @@ def main(**kw):
     new_dset.dataset['info'] = [
         process_info,
     ]
-    
     tracker.print_diff()
     to_extract = cube.query_image_overlaps2(region_df)
 
-    tracker.print_diff()
     for image_overlaps in ub.ProgIter(to_extract, desc='extract ROI videos', verbose=3):
-        tracker.print_diff()
         video_name = image_overlaps['video_name']
         print('video_name = {!r}'.format(video_name))
 
@@ -621,8 +614,6 @@ class SimpleDataCube(object):
             >>> cube, region_df = SimpleDataCube.demo(with_region=True)
             >>> to_extract = cube.query_image_overlaps2(region_df)
         """
-        import gc
-        gc.collect()
         # New maybe faster and safer way of finding overlaps?
         ridx_to_gidsx = geopandas_pairwise_overlaps(region_df, cube.img_geos_df)
         print('ridx_to_gidsx = {}'.format(ub.repr2(ridx_to_gidsx, nl=1)))
@@ -694,13 +685,12 @@ class SimpleDataCube(object):
                         'properties': region_props,
                     }
                     to_extract.append(image_overlaps)
-        gc.collect()
         return to_extract
 
     def extract_overlaps(cube, image_overlaps, extract_dpath,
                          rpc_align_method='orthorectify', new_dset=None,
                          write_subsets=True, visualize=True, max_workers=0,
-                         aux_workers=0, overwrite=False):
+                         aux_workers=0):
         """
         Given a region of interest, extract an aligned temporal sequence
         of data to a specified directory.
@@ -768,11 +758,6 @@ class SimpleDataCube(object):
         if new_dset is None:
             new_dset = kwcoco.CocoDataset()
         new_vidid = new_dset.add_video(**new_video)
-
-        if exists(join(sub_bundle_dpath, 'subdata.kwcoco.json')) and not overwrite:
-            print('ROI found on disk; adding')
-            sub_dset = kwcoco.CocoDataset(join(sub_bundle_dpath, 'subdata.kwcoco.json'))
-            return new_dset.union(sub_dset)
 
         for cat in dset.cats.values():
             new_dset.ensure_category(**cat)
@@ -898,13 +883,8 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
     objs.extend(auxiliary)
 
     is_rpcs = [obj['geotiff_metadata']['is_rpc'] for obj in objs]
-    if not ub.allsame(is_rpcs):
-        # TODO fix this, probably WV from smart-stac and smart-imagery mixed?
-        print(objs)
-        print(is_rpcs)
-        is_rpc = False
-    else:
-        is_rpc = ub.peek(is_rpcs)
+    assert ub.allsame(is_rpcs)
+    is_rpc = ub.peek(is_rpcs)
 
     if is_rpc and rpc_align_method != 'affine_warp':
         align_method = rpc_align_method
@@ -924,11 +904,7 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
     Prog = ub.ProgIter
     # import tqdm
     # Prog = tqdm.tqdm
-<<<<<<< HEAD
-    executor = ub.Executor(mode='serial', max_workers=aux_workers)
-=======
-    executor = Executor(mode='thread', max_workers=aux_workers)
->>>>>>> 50ff19a... lint
+    executor = ub.Executor(mode='thread', max_workers=aux_workers)
     for obj in ub.ProgIter(objs, desc='submit warp auxiliaries', verbose=0):
         job = executor.submit(
             _aligncrop, obj, bundle_dpath, name, sensor_coarse,
@@ -1093,6 +1069,14 @@ def _write_ann_visualizations(new_dset, new_img, new_anns, sub_bundle_dpath):
 
     for chan in components:
         spec = chan.channels.spec
+        canvas = chan.finalize()
+
+        # canvas = kwimage.imread(dst_gpath)
+        canvas = normalize_intensity(canvas)
+        if len(canvas.shape) > 2 and canvas.shape[2] > 4:
+            # hack for wv
+            canvas = canvas[..., 0]
+        canvas = kwimage.ensure_float01(canvas)
 
         view_img_dpath = ub.ensuredir(
             (sub_bundle_dpath, sensor_coarse,
@@ -1103,23 +1087,12 @@ def _write_ann_visualizations(new_dset, new_img, new_anns, sub_bundle_dpath):
              '_view_ann_' + align_method))
 
         view_img_fpath = ub.augpath(name, dpath=view_img_dpath) + '_' + str(spec) + '.view_img.jpg'
+        kwimage.imwrite(view_img_fpath, kwimage.ensure_uint255(canvas))
+
+        dets = kwimage.Detections.from_coco_annots(new_anns, dset=new_dset)
         view_ann_fpath = ub.augpath(name, dpath=view_ann_dpath) + '_' + str(spec) + '.view_ann.jpg'
-
-        if not exists(view_img_fpath) and not exists(view_ann_fpath):
-            canvas = chan.finalize()
-
-            # canvas = kwimage.imread(dst_gpath)
-            canvas = normalize_intensity(canvas)
-            if len(canvas.shape) > 2 and canvas.shape[2] > 4:
-                # hack for wv
-                canvas = canvas[..., 0]
-            canvas = kwimage.ensure_float01(canvas)
-
-            kwimage.imwrite(view_img_fpath, kwimage.ensure_uint255(canvas))
-
-            dets = kwimage.Detections.from_coco_annots(new_anns, dset=new_dset)
-            ann_canvas = dets.draw_on(canvas)
-            kwimage.imwrite(view_ann_fpath, kwimage.ensure_uint255(ann_canvas))
+        ann_canvas = dets.draw_on(canvas)
+        kwimage.imwrite(view_ann_fpath, kwimage.ensure_uint255(ann_canvas))
 
 
 def update_coco_geotiff_metadata(dset, serializable=True, max_workers=0):
@@ -1555,12 +1528,9 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
 
         if hasattr(dems, 'find_reference_fpath'):
             dem_fpath, dem_info = dems.find_reference_fpath(latmin, lonmin)
-            print('DEM YES')
             template = ub.paragraph(
                 '''
                 gdalwarp
-                --config GDAL_CACHEMAX 500 -wm 500
-                --debug off 
                 -te {xmin} {ymin} {xmax} {ymax}
                 -te_srs epsg:4326
                 -t_srs epsg:4326
@@ -1574,12 +1544,9 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
                 ''')
         else:
             dem_fpath = None
-            print('DEM NO')
             template = ub.paragraph(
                 '''
                 gdalwarp
-                --config GDAL_CACHEMAX 500 -wm 500
-                --debug off 
                 -te {xmin} {ymin} {xmax} {ymax}
                 -te_srs epsg:4326
                 -t_srs epsg:4326
@@ -1599,12 +1566,10 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
             dem_fpath=dem_fpath,
             SRC=src_gpath, DST=dst_gpath,
         )
+        cmd_info = ub.cmd(command, verbose=0)  # NOQA
     elif align_method == 'affine_warp':
-        print('AFF')
         template = (
             'gdalwarp '
-            '--config GDAL_CACHEMAX 500 -wm 500 '
-            '--debug off '
             '-te {xmin} {ymin} {xmax} {ymax} '
             '-te_srs epsg:4326 '
             '-overwrite '
@@ -1619,14 +1584,10 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
             xmax=lonmax,
             SRC=src_gpath, DST=dst_gpath,
         )
+        cmd_info = ub.cmd(command, verbose=0)  # NOQA
     else:
         raise KeyError(align_method)
 
-    if not exists(dst_gpath):
-        print(command)
-        cmd_info = ub.cmd(command, verbose=1)  # NOQA
-
-    print(f'DONE {dst_gpath}')
     return dst
 
 
