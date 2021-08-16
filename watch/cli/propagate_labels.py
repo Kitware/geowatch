@@ -73,7 +73,7 @@ def save_visualizations(canvases, canvases_fixed, fname):
     plt.close()
     
 
-def main(args):
+def main(**args):
     """
     Main function for propagate_labels.
 
