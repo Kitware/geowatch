@@ -17,7 +17,12 @@ class MergeRegionModelConfig(scfg.Config):
         'match_type': scfg.Value('region', help=ub.paragraph(
             '''
             regex that filters results to only contain features where
-            properties.type that match.
+            properties.type match.
+            ''')),
+        'match_subtype': scfg.Value('site', help=ub.paragraph(
+            '''
+            regex that filters results to include subregion features as
+            metadata inside regions, where properties.type match.
             ''')),
     }
     epilog = r"""
@@ -60,7 +65,7 @@ def main(cmdline=False, **kwargs):
     json_paths = config['src']
     output_fpath = config['dst']
 
-    combo = combine_region_models(json_paths, config['match_type'])
+    combo = combine_region_models(json_paths, config['match_type'], config['match_subtype'])
 
     if output_fpath is None:
         print(geojson.dumps(combo, indent='    '))
@@ -79,16 +84,37 @@ def combine_region_models(json_paths, match_type=None):
     else:
         match_re = re.compile(match_type)
 
+    if match_subtype is None:
+        match_subre = None
+    else:
+        match_subre = re.compile(match_subtype)
+
     # Collect features with the "region" type
     all_region_features = []
     for json_fpath in json_paths:
+        # Inside each file, there should be one "region" and several "site"s
+        # Save the sites inside the region
         with open(json_fpath, 'r') as file:
             data = json.load(file)
         assert data['type'] == 'FeatureCollection'
         collection = geojson.FeatureCollection(**data)
+        region_features = []
+        site_features = []
         for feat in collection['features']:
             if match_re is None or match_re.match(feat['properties']['type']):
-                all_region_features.append(feat)
+                region_features.append(feat)
+            if match_subre is not None and match_subre.match(feat['properties']['type']):
+                site_features.append(feat)
+        # Check if we have the expected no. of regions/sites
+        if len(region_features) == 1:
+            region_feature = region_features[0]
+            region['properties']['sites'] = site_features
+            all_region_features.append(region_feature)
+        else:
+            if len(site_features) > 0:
+                print('WARNING: discarding sites belonging to ambiguous region')
+            all_region_features.extend(region_features)
+        
 
     combo = geojson.FeatureCollection(features=all_region_features)
     return combo
