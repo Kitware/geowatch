@@ -92,8 +92,8 @@ def main(args):
     # number of visualizations of every sequence 
     n_image_viz = 7
     
-    # we save the starting frames of every video sequence if this is set to True 
-    viz_end = False
+    # we save the ending frames of every video sequence if this is set to True 
+    viz_end = True
     
     
     # read arguments
@@ -104,7 +104,6 @@ def main(args):
     parser.add_argument("--out_dir", default='propagation_output', help="Output directory where visualizations and processed kwcoco files will be saved")
     args = parser.parse_args(args)
     
-    #print('input file', args.in_file, ' out_dir', args.out_dir)
     # create the output dir
     if not os.path.exists(args.out_dir):
         os.mkdir(args.out_dir)
@@ -154,30 +153,25 @@ def main(args):
             # add any track IDs to the list of seen track ids
             new_track_ids = [i for i in this_track_ids if i not in seen_track_ids]
             if new_track_ids:
-                print('found new track IDs', new_track_ids)
+                seen_track_ids.extend(new_track_ids)
 
             this_image_fixed_anns = this_image_anns.copy()  # if there is anything missing, we are going to fix now
 
             # was there any seen track ID that was not in this image?
             missing_track_ids = [i for i in seen_track_ids if i not in this_track_ids]
             if missing_track_ids:
-                print('this image is missing these track IDs', missing_track_ids)
-                print('last annotation ID of the missing ones are:')
 
                 for missing in missing_track_ids:
-                    print('track ID:', missing, ' last annotation:', latest_ann_ids[missing])
-
                     if full_ds.anns[latest_ann_ids[missing]]['category_id'] in categories_to_propagate :
                         # check if the annotation belongs to the list of categories that we want to propagate
                         this_image_fixed_anns.append( full_ds.anns[latest_ann_ids[missing]] )
                         print('adding category:', full_ds.anns[latest_ann_ids[missing]]['category_id'])
 
             # Get "n_image_viz" number of canvases for visualization with original annotations
-
             store_starting_frame = viz_end and ((video['num_frames'] - j) <=  n_image_viz)
             store_ending_frame = (not viz_end) and (j < n_image_viz)
             if store_starting_frame or store_ending_frame:
-                 image_full_fname = join(dvc_dpath, 'drop1-S2-aligned-c1', r_fnames[0])
+                 image_full_fname = join(dvc_dpath, args.data_dir, r_fnames[0])
                  canvases.append(get_canvas_concat_channels(image_full_fname, annotations=this_image_anns, dataset=full_ds))
                  canvases_fixed.append(get_canvas_concat_channels(image_full_fname, annotations=this_image_fixed_anns, dataset=full_ds))
 
