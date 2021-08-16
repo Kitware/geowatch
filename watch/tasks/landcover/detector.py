@@ -49,8 +49,8 @@ cmap8 = np.array([[0, 0, 0],  # 0  noInformation
                   [200, 0, 255],  # 13 Forest, Deciduous, Evergreen
                   [100, 21, 255],  # 14 Wetland, Permanent/Herbaceous
                   [255, 0, 0],  # 15 Roads
-                  ]
-                 )  # River Line Feature (rivers) (blue)
+                  ],
+                 np.uint8)
 cmap = cmap8 / 255.
 
 # The nodata value in the output from the model
@@ -58,10 +58,13 @@ PRED_NODATA = -1
 
 
 def run(model, img, metadata):
+    if np.all(img == 0):
+        log.warning('skipping all black image: gid:{}'.format(metadata['id']))
+        return None
+
     img = preprocess(img)
     pred = predict_image(img, model)
-    features = get_features(pred)
-    return features
+    return pred
 
 
 def preprocess(img):
@@ -90,10 +93,6 @@ def pad(fn):
 
 @pad
 def predict_image(img, model):
-    """
-    the actual size of the image passsed to predict_chip is chip_size + 2*overlap
-    """
-
     dtype = np.int8
 
     mask = get_nodata_mask(img)
@@ -113,7 +112,7 @@ def predict_image(img, model):
 
     # convert tensor to numpy array
     pred = pred.squeeze().detach().cpu().numpy()
-    pred = pred.astype(img.dtype)
+    pred = pred.astype(dtype)
 
     pred = np.where(mask == True, pred, PRED_NODATA)  # NOQA
 
@@ -150,11 +149,10 @@ def get_nodata_mask(img, nodata=0):
     return mask
 
 
-def get_features(img, tolerance_pixels=1.0):
+def get_features(img):
     """
     Generate features from image
 
-    smoothing tolerance is roughly in pixels, None for no smoothing
     """
 
     img = img.astype(np.int16)
