@@ -35,8 +35,8 @@ class ChangeDetectorBase(pl.LightningModule):
         self.criterion = nn.BCEWithLogitsLoss(
                 pos_weight=torch.ones(1) * pos_weight)
         self.metrics = nn.ModuleDict({
-            "acc": metrics.Accuracy(),
-            "iou": metrics.IoU(2),
+            # "acc": metrics.Accuracy(),
+            # "iou": metrics.IoU(2),
             "f1": metrics.F1(),
         })
 

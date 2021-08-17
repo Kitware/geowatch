@@ -43,7 +43,7 @@ class Packager(pl.callbacks.Callback):
         trainer.package_fpath = self.package_fpath
 
     def on_fit_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
-        if True:
+        if False:
             print('Training is starting, checking that the model can be packaged')
             # self._save_package(trainer.model)
             package_dpath = ub.ensuredir((trainer.log_dir, 'packages'))

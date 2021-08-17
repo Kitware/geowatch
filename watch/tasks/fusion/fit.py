@@ -190,7 +190,7 @@ def make_fit_config(cmdline=False, **kwargs):
 
     callback_parser = parser.add_argument_group("Callbacks")
 
-    callback_parser.add_argument('--patience', default=10, type=int, help=ub.paragraph(
+    callback_parser.add_argument('--patience', default=100, type=int, help=ub.paragraph(
         '''Number of epochs with no improvement before early stopping'''))
 
     callback_parser.add_argument('--draw_interval', default='10m', help=ub.paragraph(
@@ -481,6 +481,7 @@ def fit_model(args=None, cmdline=False, **kwargs):
         ...     'max_epochs': 3,
         ...     #'max_steps': 1,
         ...     'learning_rate': 1e-5,
+        ...     'auto_lr_find': True,
         ...     'num_workers': 1,
         ... }
         >>> #args = make_fit_config(args=None, cmdline=cmdline, **kwargs)
@@ -492,40 +493,41 @@ def fit_model(args=None, cmdline=False, **kwargs):
     trainer = modules['trainer']
     datamodule = modules['datamodule']
     model = modules['model']
-
-    if 0:
-        # HACK Package
-        # TODO: need a way of creating a package from an intermediate checkpoint
-        checkpoint_fpath = '/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/training/yardrat/jon.crall/MultimodalTransformerDirectCD-21150fb65110ebd1/lightning_logs/version_3/checkpoints/epoch=236-step=9242.ckpt'
-        import torch
-        state = torch.load(checkpoint_fpath)
-        model.load_state_dict(state['state_dict'])
-        import os
-        package_fpath = pathlib.Path(os.path.dirname(os.path.dirname(checkpoint_fpath))) / 'package.pt'
-        model.datamodule_hparams = datamodule.hparams
-        model.trainer = None
-        model.train_dataloader = None
-        model.val_dataloader = None
-        model.test_dataloader = None
-        print('Package model: package_fpath = {!r}'.format(package_fpath))
-        utils.create_package(model, package_fpath)
-        return
-
-    print(ub.repr2(utils.model_json(model, max_depth=3), nl=-1, sort=0))
-
+    print(ub.repr2(utils.model_json(model, max_depth=1), nl=-1, sort=0))
     # prime the model, incase it has a lazy layer
     batch = next(iter(datamodule.train_dataloader()))
-
     # batch_shapes = ub.map_vals(lambda x: x.shape, batch)
     # print('batch_shapes = {}'.format(ub.repr2(batch_shapes, nl=1)))
-
     # result = model(batch["images"][[0], ...].float())
     import torch
     with torch.set_grad_enabled(False):
         model.forward_step(batch)
 
     # if requested, tune model with lightning default tuners
-    trainer.tune(model, datamodule)
+    tune_result = trainer.tune(model, datamodule)
+    print('tune_result = {!r}'.format(tune_result))
+    if tune_result:
+        finder = tune_result['lr_find']
+        print('finder.lr_max = {!r}'.format(finder.lr_max))
+        print('finder.lr_min = {!r}'.format(finder.lr_min))
+        suggestion_lr = finder.suggestion()
+        print('suggestion_lr = {!r}'.format(suggestion_lr))
+
+        if 0:
+            import kwplot
+            kwplot.autompl()
+            finder.plot()
+            kwplot.show_if_requested()
+
+    print('tune_result = {}'.format(ub.repr2(tune_result, nl=1)))
+
+    # # Run learning rate finder
+    # lr_finder = trainer.tuner.lr_find(model)
+    # # Results can be found in
+    # lr_finder.results
+    # # Plot with
+    # fig = lr_finder.plot(suggest=True)
+    # fig.show()
 
     # fit the model
     print('Fit starting')
@@ -538,6 +540,24 @@ def fit_model(args=None, cmdline=False, **kwargs):
     # TODO:
     # Run prediction code here
     # Run evaluation code here
+
+    # if 0:
+    #     # HACK Package
+    #     # TODO: need a way of creating a package from an intermediate checkpoint
+    #     checkpoint_fpath = '/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/training/yardrat/jon.crall/MultimodalTransformerDirectCD-21150fb65110ebd1/lightning_logs/version_3/checkpoints/epoch=236-step=9242.ckpt'
+    #     import torch
+    #     state = torch.load(checkpoint_fpath)
+    #     model.load_state_dict(state['state_dict'])
+    #     import os
+    #     package_fpath = pathlib.Path(os.path.dirname(os.path.dirname(checkpoint_fpath))) / 'package.pt'
+    #     model.datamodule_hparams = datamodule.hparams
+    #     model.trainer = None
+    #     model.train_dataloader = None
+    #     model.val_dataloader = None
+    #     model.test_dataloader = None
+    #     print('Package model: package_fpath = {!r}'.format(package_fpath))
+    #     utils.create_package(model, package_fpath)
+    #     return
 
     return package_fpath
 
