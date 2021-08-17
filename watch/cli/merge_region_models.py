@@ -89,18 +89,6 @@ def combine_region_models(json_paths, match_type=None):
         for feat in collection['features']:
             if match_re is None or match_re.match(feat['properties']['type']):
                 all_region_features.append(feat)
-                region_features.append(feat)
-            if match_subre is not None and match_subre.match(feat['properties']['type']):
-                site_features.append(feat)
-        # Check if we have the expected no. of regions/sites
-        if len(region_features) == 1:
-            region_feature = region_features[0]
-            region['properties']['sites'] = site_features
-            all_region_features.append(region_feature)
-        else:
-            if len(site_features) > 0:
-                print('WARNING: discarding sites belonging to ambiguous region')
-            all_region_features.extend(region_features)
 
     combo = geojson.FeatureCollection(features=all_region_features)
     return combo
