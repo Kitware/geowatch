@@ -113,6 +113,48 @@ def sentinel2_grid():
 
 
 def s2_grid_tiles_for_geometry(geometry):
+    """
+    Takes in a GeoJSON geometry and returns MGRS tile names that
+    intersect it, ordered by intersection area (descending)
+
+    Returns:
+        List of strings:
+            List of MGRS tile names
+
+    Example:
+        >>> from watch.gis.sensors.sentinel2 import *  # NOQA
+        >>> from shapely.geometry import shape
+        >>> geometry = shape({
+        >>>  "type": "Polygon",
+        >>>  "coordinates": [
+        >>>     [
+        >>>       [
+        >>>         126.84333152242021,
+        >>>         38.51998197874137
+        >>>       ],
+        >>>       [
+        >>>         129.5107776938883,
+        >>>         38.53873352863998
+        >>>       ],
+        >>>       [
+        >>>         129.49645974534624,
+        >>>         36.40500129696213
+        >>>       ],
+        >>>       [
+        >>>         126.90373488362242,
+        >>>         36.38763332541521
+        >>>       ],
+        >>>       [
+        >>>         126.84333152242021,
+        >>>         38.51998197874137
+        >>>       ]
+        >>>     ]
+        >>>   ]
+        >>>  })
+        >>> assert(s2_grid_tiles_for_geometry(geometry) ==
+        >>>        ['52SDG', '52SCG', '52SDH', '52SDF', '52SCH', '52SCF', '52SEG', '52SEH', '52SEF'])
+    """
+
     s2_tiles = sentinel2_grid()
 
     # TODO: Convert geometries to UTM for more appropriate 'area'
