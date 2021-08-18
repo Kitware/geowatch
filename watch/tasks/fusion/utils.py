@@ -16,46 +16,46 @@ def millify(n):
     return '{:.2f}{}'.format(n / 10**(3 * millidx), millnames[millidx])
 
 
-def create_package(model, package_path, module_name="watch_tasks_fusion", model_name="model.pkl", verbose=False):
-    """
-    DEPRECATE IN FAVOR OF A MODEL METHOD?
-
-    CommandLine:
-        xdoctest watch.tasks.fusion.utils create_package
-
-    Example:
-        >>> import ubelt as ub
-        >>> from os.path import join
-        >>> from watch.tasks.fusion.utils import *  # NOQA
-        >>> dpath = ub.ensure_app_cache_dir('watch/tests/package')
-        >>> package_path = join(dpath, 'my_package.pt')
-
-        >>> # Use one of our fusion models in a test
-        >>> from watch.tasks.fusion import methods
-        >>> model = methods.MultimodalTransformerDirectCD("smt_it_stm_p8")
-        >>> # We have to run an input through the module because it is lazy
-        >>> inputs = torch.rand(1, 2, 13, 128, 128)
-        >>> model(inputs)
-
-        >>> # Save the model
-        >>> create_package(model, package_path)
-
-        >>> # Test that the package can be reloaded
-        >>> recon = load_model_from_package(package_path)
-        >>> # Check consistency and data is actually different
-        >>> recon_state = recon.state_dict()
-        >>> model_state = model.state_dict()
-        >>> assert recon is not model
-        >>> assert set(recon_state) == set(recon_state)
-        >>> for key in recon_state.keys():
-        >>>     assert (model_state[key] == recon_state[key]).all()
-        >>>     assert model_state[key] is not recon_state[key]
-    """
-    with package.PackageExporter(package_path, verbose=verbose) as exp:
-        # TODO: this is not a problem yet, but some package types (mainly binaries) will need to be excluded and added as mocks
-        exp.extern("**", exclude=["watch.tasks.fusion.**"])
-        exp.intern("watch.tasks.fusion.**")
-        exp.save_pickle(module_name, model_name, model)
+# def create_package(model, package_path, module_name="watch_tasks_fusion", model_name="model.pkl", verbose=False):
+#     """
+#     DEPRECATE IN FAVOR OF A MODEL METHOD?
+#
+#     CommandLine:
+#         xdoctest watch.tasks.fusion.utils create_package
+#
+#     Example:
+#         >>> import ubelt as ub
+#         >>> from os.path import join
+#         >>> from watch.tasks.fusion.utils import *  # NOQA
+#         >>> dpath = ub.ensure_app_cache_dir('watch/tests/package')
+#         >>> package_path = join(dpath, 'my_package.pt')
+#
+#         >>> # Use one of our fusion models in a test
+#         >>> from watch.tasks.fusion import methods
+#         >>> model = methods.MultimodalTransformerDirectCD("smt_it_stm_p8")
+#         >>> # We have to run an input through the module because it is lazy
+#         >>> inputs = torch.rand(1, 2, 13, 128, 128)
+#         >>> model(inputs)
+#
+#         >>> # Save the model
+#         >>> create_package(model, package_path)
+#
+#         >>> # Test that the package can be reloaded
+#         >>> recon = load_model_from_package(package_path)
+#         >>> # Check consistency and data is actually different
+#         >>> recon_state = recon.state_dict()
+#         >>> model_state = model.state_dict()
+#         >>> assert recon is not model
+#         >>> assert set(recon_state) == set(recon_state)
+#         >>> for key in recon_state.keys():
+#         >>>     assert (model_state[key] == recon_state[key]).all()
+#         >>>     assert model_state[key] is not recon_state[key]
+#     """
+#     with package.PackageExporter(package_path, verbose=verbose) as exp:
+#         # TODO: this is not a problem yet, but some package types (mainly binaries) will need to be excluded and added as mocks
+#         exp.extern("**", exclude=["watch.tasks.fusion.**"])
+#         exp.intern("watch.tasks.fusion.**")
+#         exp.save_pickle(module_name, model_name, model)
 
 
 def load_model_from_package(package_path, module_name="watch_tasks_fusion", model_name="model.pkl"):
