@@ -331,10 +331,17 @@ def make_fit_config(cmdline=False, **kwargs):
     if args.gpus == 'None':
         args.gpus = None
 
+    if args.normalize_inputs == 'True':
+        args.normalize_inputs = True
+    if args.normalize_inputs == 'False':
+        args.normalize_inputs = False
+
+    print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
+
     # Do scriptconfig like dump logic
     dump_fpath = args.dump
     do_dumps = args.dumps
-    # Remove special arguments
+
     del args.dump
     del args.dumps
     del args.config
@@ -438,6 +445,8 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
                 verbose=True),
             pl.callbacks.ModelCheckpoint(
                 monitor='val_loss', mode='min', save_top_k=4),
+            pl.callbacks.ModelCheckpoint(
+                monitor='val_f1', mode='max', save_top_k=4),
         ]
 
     # TODO: explititly initialize the tensorboard logger?

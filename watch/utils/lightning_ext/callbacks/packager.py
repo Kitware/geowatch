@@ -57,6 +57,9 @@ class Packager(pl.callbacks.Callback):
         # self._save_package(trainer.model)
         package_dpath = ub.ensuredir((trainer.log_dir, 'packages'))
         package_fpath = join(package_dpath, 'package_epoch{}_step{}.pt'.format(trainer.current_epoch, trainer.global_step))
+
+        # TODO: how do we properly package all of the candidate checkpoints?
+
         self._save_package(pl_module, package_fpath)
         # Symlink to "BEST" package at the end.
         # TODO: write some script such that any checkpoint can be packaged.
@@ -73,14 +76,18 @@ class Packager(pl.callbacks.Callback):
     #     self._save_package(pl_module, package_fpath)
 
     def on_keyboard_interrupt(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+        """
+        Saving a package on keyboard interrupt is useful for manual early
+        stopping.
+        """
         print('Attempting to package model before exiting')
-        self._save_package(trainer.model)
         package_dpath = ub.ensuredir((trainer.log_dir, 'packages-interrupt'))
         package_fpath = join(package_dpath, 'package_epoch{}_step{}.pt'.format(trainer.current_epoch, trainer.global_step))
         self._save_package(pl_module, package_fpath)
 
     def _save_package(self, model, package_fpath):
         if hasattr(model, 'save_package'):
+            print('calling model.save_package')
             model.save_package(package_fpath)
         else:
             print('model has no save_package method required by Packager')
