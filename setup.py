@@ -58,8 +58,12 @@ except Exception:
     README = ''
 
 try:
-    REQUIREMENTS = parse_requirements(fpath='requirements.txt')
+    REQUIREMENTS = (
+        parse_requirements('requirements/production.txt')
+    )
     EXTRAS_REQUIRES = {
+        'all': parse_requirements('requirements.txt'),
+        'development': parse_requirements('requirements/development.txt'),
         'problematic': parse_requirements('requirements/problematic.txt'),
         'optional': parse_requirements('requirements/optional.txt'),
     }

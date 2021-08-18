@@ -104,7 +104,7 @@ stages:
         - pip install -e .
 
     script:
-        - ./run_tests.py --network
+        - ./run_tests.py --network watch tests scripts
 
     after_script:
         - du -sh .cache/*
@@ -143,7 +143,7 @@ stages:
         - conda activate ".cache/conda/envs/strict-watch-env"
         - pip install -e .
     script:
-        - ./run_tests.py --network
+        - ./run_tests.py --network watch tests scripts
 
     after_script:
         - du -sh .cache/*
@@ -230,7 +230,7 @@ build_docker_strict:
     docker
   script:
     - docker build --build-arg BUILD_STRICT=1 -t $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG .
-    - docker run --rm $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG /bin/bash -c "source /opt/conda/etc/profile.d/conda.sh && conda activate watch && cd /watch && python run_tests.py"
+    - docker run --rm $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG /bin/bash -c "source /opt/conda/etc/profile.d/conda.sh && conda activate watch && cd /watch && python run_tests.py watch tests scripts"
   image:
     docker:19.03.12
   variables:
@@ -246,7 +246,7 @@ build_docker_and_upload_strict:
     docker
   script:
     - docker build --build-arg BUILD_STRICT=1 -t $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG .
-    - docker run --rm $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG /bin/bash -c "source /opt/conda/etc/profile.d/conda.sh && conda activate watch && cd /watch && python run_tests.py"
+    - docker run --rm $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG /bin/bash -c "source /opt/conda/etc/profile.d/conda.sh && conda activate watch && cd /watch && python run_tests.py watch tests scripts"
     # Pushing container only if merging into default branch (i.e. "master")
     - echo "docker push $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG"
     - docker push $CI_REGISTRY_IMAGE/watch:$IMAGE_TAG
@@ -291,7 +291,7 @@ build_docker_and_upload_strict:
             ls -al
             conda activate "./strict-watch-env"
 
-            ./run_tests.py
+            ./run_tests.py watch tests scripts
 
             # Pushing miniconda3 env to smart gitlab
             ~/code/ci-docker/miniconda3.dockerfile

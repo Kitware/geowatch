@@ -6,7 +6,7 @@ from os.path import join
 from os.path import relpath
 import kwimage
 import kwarray
-from watch.tasks.fusion import datasets
+from watch.tasks.fusion import datamodules
 from watch.tasks.fusion import utils
 
 
@@ -26,22 +26,27 @@ def make_predict_config(cmdline=False, **kwargs):
         description='Prediction script for the fusion task',
         formatter_class=RawDescriptionDefaultsHelpFormatter,
     )
-    parser.add_argument("--dataset", default='WatchDataModule')
+    parser.add_argument("--datamodule", default='WatchDataModule')
+    parser.add_argument("--pred_dataset", default=None, dest='pred_dataset')
+
+    parser.add_argument("--pred_dpath", dest='pred_dpath', type=pathlib.Path, help='path to dump results')
+
     parser.add_argument("--tag", default='change_prob')
-    parser.add_argument("--checkpoint_path", type=pathlib.Path)
-    parser.add_argument("--results_dir", type=pathlib.Path, help='path to dump results')
-    parser.add_argument("--use_gpu", action="store_true")
+    parser.add_argument("--package_fpath", type=pathlib.Path)
+    parser.add_argument("--gpus", default=None, help="todo: hook up to lightning")
+    parser.add_argument("--thresh", type=float, default=0.01)
 
     parser.set_defaults(**kwargs)
-    # parse the dataset and method strings
+    # parse the datamodule and method strings
     temp_args, _ = parser.parse_known_args(None if cmdline else [])
 
-    # get the dataset and method classes
-    dataset_class = getattr(datasets, temp_args.dataset)
+    # get the datamodule and method classes
+    datamodule_class = getattr(datamodules, temp_args.datamodule)
 
     # add the appropriate args to the parse
     # for dataset, method, and trainer
-    parser = dataset_class.add_data_specific_args(parser)
+    parser = datamodule_class.add_data_specific_args(parser)
+    parser.set_defaults(**{'batch_size': 1})
 
     # parse and pass to main
     parser.set_defaults(**kwargs)
@@ -60,14 +65,18 @@ def predict(cmdline=False, **kwargs):
         >>> cmdline = False
         >>> gpus = None
         >>> test_dpath = ub.ensure_app_cache_dir('watch/test/fusion/')
+        >>> results_path = ub.ensuredir((test_dpath, 'predict'))
+        >>> ub.delete(results_path)
+        >>> ub.ensuredir(results_path)
+        >>> package_fpath = join(test_dpath, 'my_test_package.pt')
         >>> import kwcoco
         >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes4-multispectral', num_frames=5, gsize=(128, 128))
         >>> test_dset = kwcoco.CocoDataset.demo('special:vidshapes2-multispectral', num_frames=5, gsize=(128, 128))
-        >>> #
         >>> fit_kwargs = kwargs = {
         ...     'train_dataset': test_dset.fpath,
-        ...     'dataset': 'WatchDataModule',
+        ...     'datamodule': 'WatchDataModule',
         ...     'workdir': ub.ensuredir((test_dpath, 'train')),
+        ...     'package_fpath': package_fpath,
         ...     'max_epochs': 1,
         ...     'time_steps': 3,
         ...     'chip_size': 64,
@@ -78,17 +87,14 @@ def predict(cmdline=False, **kwargs):
         ... }
         >>> package_fpath = fit_model(**fit_kwargs)
         >>> # Predict via that model
-        >>> results_path = ub.ensuredir((test_dpath, 'predict'))
-        >>> ub.delete(results_path)
-        >>> ub.ensuredir(results_path)
         >>> predict_kwargs = kwargs = {
-        >>>     'checkpoint_path': package_fpath,
-        >>>     'results_dir': results_path,
+        >>>     'package_fpath': package_fpath,
+        >>>     'pred_dpath': results_path,
         >>>     'test_dataset': test_dset.fpath,
-        >>>     'dataset': 'WatchDataModule',
+        >>>     'datamodule': 'WatchDataModule',
         >>>     'batch_size': 1,
         >>>     'num_workers': 0,
-        >>>     'use_gpu': gpus is not None,
+        >>>     'gpus': gpus,
         >>> }
         >>> result_dataset = predict(**kwargs)
         >>> dset = result_dataset
@@ -111,36 +117,41 @@ def predict(cmdline=False, **kwargs):
         >>>         warnings.warn('should be predictions elsewhere')
     """
     args = make_predict_config(cmdline=cmdline, **kwargs)
+    print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=2)))
 
     # init method from checkpoint
-    method = utils.load_model_from_package(args.checkpoint_path)
+    method = utils.load_model_from_package(args.package_fpath)
     method.eval()
     method.freeze()
 
-    # init dataset from args
-    dataset_class = getattr(datasets, args.dataset)
-    dataset_var_dict = utils.filter_args(
+    # TODO: perhaps we should enforce that that packaged model
+    # knows how to construct the appropriate test dataset?
+
+    # init datamodule from args
+    datamodule_class = getattr(datamodules, args.datamodule)
+    datamodule_vars = utils.filter_args(
         vars(args),
-        dataset_class.__init__,
+        datamodule_class.__init__,
     )
 
     # TODO: default to this, but allow the user to overwrite
-    dataset_var_dict['chip_size'] = method.datamodule_hparams['chip_size']
-    dataset_var_dict['time_steps'] = method.datamodule_hparams['time_steps']
+    datamodule_vars['chip_size'] = method.datamodule_hparams['chip_size']
+    datamodule_vars['time_steps'] = method.datamodule_hparams['time_steps']
+    datamodule_vars['channels'] = method.datamodule_hparams['channels']
 
-    # dataset_var_dict["preprocessing_step"] = method.preprocessing_step
-    dataset = dataset_class(
-        **dataset_var_dict
+    # datamodule_vars["preprocessing_step"] = method.preprocessing_step
+    datamodule = datamodule_class(
+        **datamodule_vars
     )
-    dataset.setup("test")
+    datamodule.setup("test")
 
-    test_coco_dataset = dataset.coco_datasets['test']
-    test_dataset = dataset.torch_datasets['test']
-    test_dataloader = dataset.test_dataloader()
+    test_coco_dataset = datamodule.coco_datasets['test']
+    test_torch_dataset = datamodule.torch_datasets['test']
+    test_dataloader = datamodule.test_dataloader()
 
-    T, H, W = test_dataset.sample_shape
+    T, H, W = test_torch_dataset.sample_shape
 
-    # Create the results dataset as a copy of the test dataset
+    # Create the results dataset as a copy of the test CocoDataset
     result_dataset = test_coco_dataset.copy()
     # Remove all annotations in the results copy
     result_dataset.clear_annotations()
@@ -149,9 +160,22 @@ def predict(cmdline=False, **kwargs):
     result_dataset.ensure_category("change")
     # Set the filepath for the prediction coco file
     # (modifies the bundle_dpath)
-    result_dataset.fpath = str(args.results_dir / 'pred.kwcoco.json')
+    if args.pred_dataset is None:
+        result_dataset.fpath = str(args.pred_dpath / 'pred.kwcoco.json')
+    else:
+        result_dataset.fpath = str(args.pred_dataset)
 
-    device = torch.device(0) if args.use_gpu else 'cpu'
+    # todo: use lightning device magic
+    try:
+        if int(args.gpus) == 0:
+            device = torch.device('cpu')
+        elif int(args.gpus) == 1:
+            device = torch.device(0)
+        else:
+            raise ValueError('only 1 gpu for now')
+    except Exception:
+        device = torch.device('cpu')
+
     print('Predict on device = {!r}'.format(device))
     method = method.to(device)
 
@@ -159,11 +183,30 @@ def predict(cmdline=False, **kwargs):
         result_dataset,
         chan_code=args.tag,
         stiching_space='video',
-        device='numpy',
-        thresh=0.05
+        device='numpy',  # could be torch on-device stitching
+        thresh=args.thresh,
     )
 
-    for batch in ub.ProgIter(test_dataloader, desc='predicting', verbose=1):
+    prog = ub.ProgIter(test_dataloader, desc='predicting', verbose=1)
+    # nanns = 0
+
+    result_infos = []
+
+    def finalize_ready(gid):
+        info = stitch_manager.finalize_image(gid)
+        stats = running_stats.summarize(axis=None)
+        stats = ub.dict_isect(stats, {'mean', 'max', 'min', 'std', 'n'})
+        # extra = ub.repr2(stats, precision=6, nl=0)
+        prog.ensure_newline()
+        # prog.set_extra(extra)
+        print('stats = {}'.format(ub.repr2(stats, nl=0, precision=4)))
+        print('pred gid={} info = {}'.format(gid, ub.repr2(info, nl=0, precision=2)))
+        result_infos.append(info)
+
+    import kwarray
+    running_stats = kwarray.RunningStats()  # for inspecting probability
+
+    for batch in prog:
         # Move data onto the prediction device
         for item in batch:
             for frame in item['frames']:
@@ -193,25 +236,31 @@ def predict(cmdline=False, **kwargs):
 
             # Update the stitcher with this windowed prediction
             for gid, probs in zip(in_gids[1:], bin_probs):
+                running_stats.update(probs)
                 stitch_manager.accumulate_image(gid, space_slice, probs)
 
             # Free up space for any images that have been completed
             for gid in stitch_manager.ready_image_ids():
-                stitch_manager.finalize_image(gid)
+                finalize_ready(gid)
 
     # Prediction is completed, finalize all remaining images.
     for gid in stitch_manager.managed_image_ids():
-        stitch_manager.finalize_image(gid)
+        finalize_ready(gid)
+
+    # prog.set_extra('found {}'.format(nanns))
+    # print('Predicted total nanns = {!r}'.format(nanns))
 
     # validate and save results
     print(result_dataset.validate())
+    print('dump result_dataset.fpath = {!r}'.format(result_dataset.fpath))
     result_dataset.dump(result_dataset.fpath)
+    print('return result_dataset.fpath = {!r}'.format(result_dataset.fpath))
     return result_dataset
 
 
 class CocoStitchingManager(object):
     """
-    Manage stitching for multiple images / videos in a coco dataset.
+    Manage stitching for multiple images / videos in a CocoDataset.
 
     This is done in a memory-efficient way where after all sub-regions in an
     image or video have been completed, it is finalized, written to the kwcoco
@@ -341,7 +390,7 @@ class CocoStitchingManager(object):
     def finalize_image(self, gid):
         """
         Finalizes the stitcher for this image, deletes it, and adds
-        its hard and/or soft predictions to the kwcoco dataset.
+        its hard and/or soft predictions to the CocoDataset.
 
         Args:
             gid (int): the image-id to finalize
@@ -357,6 +406,9 @@ class CocoStitchingManager(object):
         # Get spatial relationship between the image and the video
         vid_to_img = kwimage.Affine.coerce(img['warp_img_to_vid']).inv()
 
+        num_pred_anns = 0
+        total_prob = 0
+
         if self.SAVE_PROBS:
             # This currently exists as an example to demonstrate how a
             # prediction script can write a pre-fusion TA-2 feature to disk and
@@ -365,9 +417,9 @@ class CocoStitchingManager(object):
             # Save probabilities (or feature maps) as a new auxiliary image
             bundle_dpath = self.result_dataset.bundle_dpath
             new_feature = kwarray.atleast_nd(change_probs, 3)
-            new_fname = img['name'] + f'_{self.chan_code}.tiff'
+            new_fname = img.get('name', str(img['id'])) + f'_{self.chan_code}.tiff'  # FIXME
             new_fpath = join(self.prob_dpath, new_fname)
-            img['auxiliary'].append({
+            img.get('auxiliary', []).append({
                 'file_name': relpath(new_fpath, bundle_dpath),
                 'channels': self.chan_code,
                 'height': new_feature.shape[0],
@@ -376,9 +428,11 @@ class CocoStitchingManager(object):
                 'warp_aux_to_img': vid_to_img.inv().concise(),
             })
             # Save the prediction to disk
+            total_prob += new_feature.sum()
             kwimage.imwrite(
                 str(new_fpath), new_feature, space=None, backend='gdal',
-                compress='LZW')
+                compress='LZW'
+            )
 
         if self.SAVE_PREDS:
             # This is the final step where we convert soft-probabilities to
@@ -392,6 +446,7 @@ class CocoStitchingManager(object):
             change_pred = change_probs > self.thresh
             # Convert to polygons
             vid_polys = kwimage.Mask(change_pred, 'c_mask').to_multi_polygon()
+            num_pred_anns = len(vid_polys)
             for vid_poly in vid_polys:
                 # Compute a score for the polygon
                 # TODO: This is very inefficient, should fix this
@@ -400,10 +455,16 @@ class CocoStitchingManager(object):
 
                 # Transform the video polygon into image space
                 img_poly = vid_poly.warp(vid_to_img)
+                bbox = list(img_poly.bounding_box().to_coco())[0]
                 # Add the polygon as an annotation on the image
                 self.result_dataset.add_annotation(
                     image_id=gid, category_id=change_cid,
-                    segmentation=img_poly, score=score)
+                    bbox=bbox, segmentation=img_poly, score=score)
+
+        return {
+            'num_pred_anns': num_pred_anns,
+            'total_prob': total_prob,
+        }
 
 
 def main(cmdline=True, **kwargs):

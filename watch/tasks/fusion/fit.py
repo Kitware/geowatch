@@ -1,100 +1,23 @@
+# -*- coding: utf-8 -*-
 """
-Notes:
-    There are parts of netharn that could be ported to lightning
-
-    The logging stuff
-        - [ ] loss curves (odd they aren't in tensorboard)
-
-    The auto directory structure
-        - [ ] save multiple checkpoints
-        - [ ] delete them intelligently
-
-    The run managment
-        - [ ] The netharn/cli/manage_runs.py
-
-    The auto-deploy files
-        - [ ] Use Torch 1.9 Packages instead of Torch-Liberator
-
-    Automated dynamics / plugins?
+Trains a fusion machine learning model on target dataset.
 
 
-TODO:
-    - [ ] Rename --dataset argument to --datamodule
+SeeAlso:
+    README.md
+    fit.py
+    predict.py
+    evaluate.py
+    experiments/crall/onera_experiments.sh
+    experiments/crall/drop1_experiments.sh
+    experiments/crall/toy_experiments.sh
 
-    - [ ] Rename WatchDataModule to ChangeDataModule
-
-    - [ ] Add Data Modules:
-        - [ ] SegmentationDataModule
-        - [ ] ClassificationDataModule
-        - [ ] DetectionDataModule
-        - [ ] <Problem>DataModule
-
-    - [ ] How do do DistributedDataParallel
-        - [ ] On one machine
-        - [ ] On multiple machines
 
 CommandLine:
     CUDA_VISIBLE_DEVICES=1 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.fit __doc__:0 -- --profile
     CUDA_VISIBLE_DEVICES=1 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.fit __doc__:0
     CUDA_VISIBLE_DEVICES=0 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.fit __doc__:0
 
-
-    # Takes ~18GB on a 3090
-    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-    DVC_SUBPATH=$DVC_DPATH/drop1_S2_aligned_c1
-    CUDA_VISIBLE_DEVICES=0 \
-    python -m watch.tasks.fusion.fit \
-        --train_dataset=$DVC_SUBPATH/train_data.kwcoco.json \
-        --vali_dataset=$DVC_SUBPATH/vali_data.kwcoco.json \
-        --time_steps=8 \
-        --channels="coastal|blue|green|red|nir|swir16|swir22" \
-        --chip_size=192 \
-        --method="MultimodalTransformerDotProdCD" \
-        --model_name=smt_it_stm_p8 \
-        --batch_size=2 \
-        --accumulate_grad_batches=8 \
-        --num_workers=12 \
-        --gpus=1
-    2>/dev/null
-
-
-    # Takes ~14GB on a 3090
-    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-    DVC_SUBPATH=$DVC_DPATH/drop1_S2_aligned_c1
-    CUDA_VISIBLE_DEVICES=0 \
-    python -m watch.tasks.fusion.fit \
-        --train_dataset=$DVC_SUBPATH/train_data.kwcoco.json \
-        --vali_dataset=$DVC_SUBPATH/vali_data.kwcoco.json \
-        --time_steps=7 \
-        --channels="coastal|blue|green|red|nir|swir16|swir22" \
-        --chip_size=192 \
-        --chip_overlap=0.66 \
-        --time_overlap=0.3 \
-        --method="MultimodalTransformerDotProdCD" \
-        --model_name=smt_it_stm_small \
-        --batch_size=4 \
-        --accumulate_grad_batches=4 \
-        --num_workers=12 \
-        --gpus=1
-
-    2>/dev/null
-
-    # Can run on a 1080ti
-    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-    DVC_SUBPATH=$DVC_DPATH/drop1-S2-L8-LS-aligned-v2
-    CUDA_VISIBLE_DEVICES=1 \
-    python -m watch.tasks.fusion.fit \
-        --train_dataset=$DVC_SUBPATH/train_data.kwcoco.json \
-        --vali_dataset=$DVC_SUBPATH/vali_data.kwcoco.json \
-        --time_steps=7 \
-        --channels="coastal|blue|green|red|nir|swir16|swir22" \
-        --chip_size=192 \
-        --method="MultimodalTransformerDirectCD" \
-        --model_name=smt_it_stm_p8 \
-        --batch_size=1 \
-        --accumulate_grad_batches=8 \
-        --num_workers=12 \
-        --gpus=1 2>/dev/null
 
 Example:
     >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -118,7 +41,7 @@ Example:
     >>> kwargs = {
     ...     'train_dataset': train_fpath,
     ...     'vali_dataset': vali_fpath,
-    ...     'dataset': 'WatchDataModule',
+    ...     'datamodule': 'WatchDataModule',
     ...     #'method': 'MultimodalTransformerDirectCD',
     ...     'method': 'MultimodalTransformerDotProdCD',
     ...     'channels': 'coastal|blue|green|red|nir|swir16|swir22',
@@ -139,13 +62,13 @@ Example:
     ...     'gpus': 1,
     ... }
     >>> #modules = make_lightning_modules(args=None, cmdline=cmdline, **kwargs)
-    >>> fit_model(args=args, cmdline=cmdline, **kwargs)
-
+    >>> fit_model(cmdline=cmdline, **kwargs)
 """
 
 import pytorch_lightning as pl
+from watch.utils import lightning_ext as pl_ext
 
-from watch.tasks.fusion import datasets
+from watch.tasks.fusion import datamodules
 from watch.tasks.fusion import methods
 from watch.tasks.fusion import models
 from watch.tasks.fusion import utils
@@ -175,7 +98,7 @@ available_methods = [
 # Model names define the transformer encoder used by the method
 available_models = list(models.transformer.encoder_configs.keys())
 
-# dir(datasets)
+# dir(datamodules)
 # TODO: rename to datamodules
 available_datasets = [
     # 'Drop0AlignMSI_S2',
@@ -201,89 +124,13 @@ learning_irrelevant = {
     'log_gpu_memory',
     'logger',
     'checkpoint_callback',
+    'move_metrics_to_cpu',
+    'distributed_backend',
 }
 
 
-class DrawBatchCallback(pl.callbacks.Callback):
-    """
-    These are callbacks used to monitor the training
-
-    Args:
-        num_draw (int): number of batches to draw at the start of each epoch
-        draw_interval (int): if nothing has been drawn in this many minutes,
-            draw something.
-
-    References:
-        https://pytorch-lightning.readthedocs.io/en/latest/extensions/callbacks.html
-    """
-
-    def __init__(self, num_draw=4, draw_interval=10):
-        super().__init__()
-        self.num_draw = num_draw
-        self.draw_interval = draw_interval
-        self.draw_timer = None
-
-    def setup(self, trainer, pl_module, stage):
-        self.draw_timer = ub.Timer().tic()
-
-    @profile
-    def draw_batch(self, trainer, outputs, batch, batch_idx):
-        import numpy as np
-        import kwimage
-        from os.path import join
-
-        datamodule = trainer.datamodule
-        canvas = datamodule.draw_batch(batch, outputs=outputs)
-
-        # dataset = datamodule.torch_datasets[stage]
-        # images = batch['images']
-        # if 0:
-        #     import kwplot
-        #     kwplot.autompl()
-        #     kwplot.imshow(canvas)
-
-        canvas = np.nan_to_num(canvas)
-
-        stage = trainer.state.stage.lower()
-        epoch = trainer.current_epoch
-
-        canvas = kwimage.draw_text_on_image(
-            canvas, f'{stage}_epoch{epoch:08d}_bx{batch_idx:04d}', org=(1, 1),
-            valign='top')
-
-        dump_dpath = ub.ensuredir((trainer.log_dir, 'monitor', stage, 'batch'))
-        dump_fname = f'pred_{stage}_epoch{epoch:08d}_bx{batch_idx:04d}.jpg'
-        fpath = join(dump_dpath, dump_fname)
-        kwimage.imwrite(fpath, canvas)
-
-    def draw_if_ready(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
-        do_draw = batch_idx < self.num_draw
-        if self.draw_interval > 0:
-            do_draw |= self.draw_timer.toc() > 60 * self.draw_interval
-        if do_draw:
-            self.draw_batch(trainer, outputs, batch, batch_idx)
-            self.draw_timer.tic()
-
-    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
-        self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx, dataloader_idx)
-
-    def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
-        self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx, dataloader_idx)
-
-    def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
-        self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx, dataloader_idx)
-
-    # def on_init_start(self, trainer):
-    #     pass
-
-    # def on_init_end(self, trainer):
-    #     print('trainer is init now')
-
-    # def on_train_end(self, trainer, pl_module):
-    #     print('do something when training ends')
-
-
-def make_fit_config(args=None, cmdline=False, **kwargs):
+@profile
+def make_fit_config(cmdline=False, **kwargs):
     """
     Args:
         args : namespace that overrides defaults
@@ -292,10 +139,10 @@ def make_fit_config(args=None, cmdline=False, **kwargs):
 
     Example:
         >>> from watch.tasks.fusion.fit import *  # NOQA
-        >>> args = None
         >>> cmdline = False
         >>> kwargs = {}
-        >>> args = make_fit_config(args=args, cmdline=cmdline, **kwargs)
+        >>> args = make_fit_config(cmdline=cmdline, **kwargs)
+        >>> print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1, sort=0)))
     """
     import argparse
     import configargparse
@@ -329,23 +176,59 @@ def make_fit_config(args=None, cmdline=False, **kwargs):
         If specified, dump this config stdout and exit.
         '''))
 
+    config_parser.add_argument('--profile', action='store_true', help=ub.paragraph(
+        '''
+        Fit does nothing with this flag. This just allows for `@xdev.profile`
+        profiling.
+        '''))
+
+    config_parser.add_argument('--package_fpath', default=None, help=ub.paragraph(
+        '''
+        Specifies a path where a torch packaged model will be written (or
+        symlinked) to.
+        '''))
+
+    callback_parser = parser.add_argument_group("Callbacks")
+
+    callback_parser.add_argument('--patience', default=100, type=int, help=ub.paragraph(
+        '''Number of epochs with no improvement before early stopping'''))
+
+    callback_parser.add_argument('--draw_interval', default='10m', help=ub.paragraph(
+        '''Time to wait before dumping a new visualization'''))
+
+    callback_parser.add_argument('--num_draw', default=4, type=int, help=ub.paragraph(
+        '''Number of items to draw at the start of each epoch'''))
+
+    # config_parser.add_argument('--name', default=None, help=ub.paragraph(
+    #     '''
+    #     TODO: allow for the user to specify a name, and do netharn-like
+    #     fit/runs and fit/name directories?
+    #     '''))
+
     # Setup common fields and modal switches
     modal_parser = parser.add_argument_group("Modal")
 
     modal_parser.add_argument(
-        '--dataset', choices=available_datasets, default='WatchDataModule',
+        '--dataset', choices=available_datasets, dest='datamodule', default='WatchDataModule',
+        help='Alias for --datamodule deprecate')
+
+    modal_parser.add_argument(
+        '--datamodule', choices=available_datasets, default='WatchDataModule',
         help=ub.paragraph(
             '''
-            Modal parameter indicating the family of dataset to train on.
-            See the watch.tasks.fusion.datasets submodule for details
+            Modal parameter indicating the family of datamodule to train on.
+            See the watch.tasks.fusion.datamodules submodule for details
             '''))
 
     modal_parser.add_argument(
-        '--method', default='MultimodalTransformerDotProdCD',
+        '--method', default='MultimodalTransformerDirectCD',
         choices=available_methods, help=ub.paragraph(
             '''
             Modal parameter indicating the family of model to train.
             See the watch.tasks.fusion.methods submodule for details
+
+            # TODO: change name to model?
+            # Change existing "model" to "arch"?
             ''')
     )
 
@@ -357,54 +240,108 @@ def make_fit_config(args=None, cmdline=False, **kwargs):
     print(kwargs)
     print(modal)
 
+    # I strongly recommend that ~/data is a symlink to a drive with more
+    # storage space.
+    default_workdir = './_trained_models'
+
+    ENABLE_SMART_DEFAULT_WORKDIR = 1
+    if ENABLE_SMART_DEFAULT_WORKDIR:
+        # Write to a sensible default location instead of CWD
+        dvc_repos_dpath = pathlib.Path('~/data/dvc-repos/').expanduser()
+        if dvc_repos_dpath.exists():
+            smart_dvc_dpath = dvc_repos_dpath / 'smart_watch_dvc'
+            if smart_dvc_dpath.exists():
+                import platform
+                import getpass
+                user_info = {
+                    'user': getpass.getuser(),
+                    'hostname': platform.node(),
+                }
+                default_workdir = (smart_dvc_dpath / 'experiments' /
+                                   user_info['user'] / user_info['hostname'])
+
     common_parser = parser.add_argument_group("Common")
     common_parser.add_argument(
-        '--workdir', default='./_trained_models',
+        '--workdir', default=str(default_workdir),
         help=ub.paragraph(
             '''
             Directory where training data can be written.
-            Overrides default_root_dir,
+            This will override the default_root_dir.
             ''')
     )
 
-    print(modal)
+    # import netharn as nh
+    # xpu = nh.XPU.coerce('auto')
+    # auto_device = xpu.device.index
+
+    # import netharn as nh
+    # has_gpu = nh.XPU.coerce('auto').device.type == 'cpu'
 
     # Get subcomponents
     method_class = getattr(methods, modal.method)
-    dataset_class = getattr(datasets, modal.dataset)
+    datamodule_class = getattr(datamodules, modal.datamodule)
 
     # Extend the parser based on the chosen dataset / method modes
-    dataset_class.add_data_specific_args(parser)
+    datamodule_class.add_data_specific_args(parser)
     method_parser = parser.add_argument_group("Method")
     method_class.add_model_specific_args(method_parser)
     pl.Trainer.add_argparse_args(parser)
 
-    # Remove parameters that we will fill in with special logic
-    # Apparently this is hard to do, argparse is such a mess.
+    # Hard code custom default settings for lightning to enable certain tricks
+    # by default
+    parser.set_defaults(**{
+        'default_root_dir': None,  # we override the default based on workdir
 
-    # to_remove = ['default_root_dir']
-    # dest_to_actions = ub.group_items(parser._actions, lambda x: x.dest)
-    # for rmkey in to_remove:
-    #     for action in dest_to_actions[rmkey]:
-    #         parser._remove_action(action)
-    #         for optstr in action.option_strings:
-    #             parser._option_string_actions.pop(optstr)
-    # for grp in parser._action_groups:
-    #     dest_to_actions = ub.group_items(grp._actions, lambda x: x.dest)
-    #     for rmkey in to_remove:
-    #         for action in dest_to_actions[rmkey]:
-    #             print('action = {!r}'.format(action))
-    #             grp._actions.remove(action)
+        # Trick Defaults
+        'gradient_clip_val': 0.5,
+        'gradient_clip_algorithm': 'value',
+
+        # Device defaults
+        'auto_select_gpus': True,
+        # 'gpus': 1 if has_gpu else None,
+
+        # Data defaults
+        'train_dataset': 'special:vidshapes8-multispectral',
+        'vali_dataset': None,
+        'test_dataset': None,
+
+        'num_workers': 4,
+
+        'accumulate_grad_batches': 1,
+
+        'max_epochs': None,
+        'max_steps': None,
+        'max_time': None,
+
+        'check_val_every_n_epoch': 1,
+
+        'log_every_n_steps': 50,
+    })
 
     # override modal-specific defaults with user settings
     parser.set_defaults(**kwargs)
 
+    if isinstance(cmdline, list):
+        args = cmdline
+    else:
+        # setting args to [] disable command line parsting
+        args = None if cmdline else []
+
     args, _ = parser.parse_known_args(args=args)
+    if args.gpus == 'None':
+        args.gpus = None
+
+    if args.normalize_inputs == 'True':
+        args.normalize_inputs = True
+    if args.normalize_inputs == 'False':
+        args.normalize_inputs = False
+
+    print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
 
     # Do scriptconfig like dump logic
     dump_fpath = args.dump
     do_dumps = args.dumps
-    # Remove special arguments
+
     del args.dump
     del args.dumps
     del args.config
@@ -426,7 +363,9 @@ def make_fit_config(args=None, cmdline=False, **kwargs):
     # Construct a netharn-like training directory based on relevant hyperparams
     args.train_hashid = ub.hash_data(ub.map_vals(str, learning_config))[0:16]
     args.train_name = "{method}-{train_hashid}".format(**args.__dict__)
-    args.default_root_dir = pathlib.Path(args.workdir) / args.train_name
+
+    if args.default_root_dir is None:
+        args.default_root_dir = pathlib.Path(args.workdir) / args.train_name
 
     # TODO:
     # Add dump and --dumps commands to write the config to a file
@@ -434,6 +373,7 @@ def make_fit_config(args=None, cmdline=False, **kwargs):
     return args
 
 
+@profile
 def make_lightning_modules(args=None, cmdline=False, **kwargs):
     """
     Example:
@@ -442,57 +382,96 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         >>> cmdline = False
         >>> kwargs = {
         ...     'train_dataset': 'special:vidshapes8-multispectral',
-        ...     'dataset': 'WatchDataModule',
+        ...     'datamodule': 'WatchDataModule',
         ... }
         >>> modules = make_lightning_modules(args=None, cmdline=cmdline, **kwargs)
     """
     args = make_fit_config(args=args, cmdline=cmdline, **kwargs)
-    print("{train_name}\n====================".format(**args.__dict__))
+
+    args_dict = args.__dict__
+    print("{train_name}\n====================".format(**args_dict))
+    print('args_dict = {}'.format(ub.repr2(args_dict, nl=1, sort=0)))
+
+    pathlib.Path(args.workdir).mkdir(exist_ok=True, parents=True)
 
     method_class = getattr(methods, args.method)
-    dataset_class = getattr(datasets, args.dataset)
+    datamodule_class = getattr(datamodules, args.datamodule)
 
-    # init dataset from args
+    # init datamodule from args
     # TODO: compute and cache mean / std if it is not provided. Pass this to
     # the model so it can whiten the inputs.
-    dataset_var_dict = utils.filter_args(args.__dict__, dataset_class.__init__)
-    # dataset_var_dict["preprocessing_step"] = model.preprocessing_step
-    datamodule = dataset_class(**dataset_var_dict)
+    datamodule_vars = utils.filter_args(args.__dict__, datamodule_class.__init__)
+    # datamodule_vars["preprocessing_step"] = model.preprocessing_step
+    datamodule = datamodule_class(**datamodule_vars)
     datamodule.setup("fit")
 
     # init method from args
     method_var_dict = args.__dict__
 
     # TODO: need a better way to indicate that a method needs parameters from a
-    # dataset, and maybe the reverse too
-    if hasattr(dataset_class, "bce_weight"):
-        method_var_dict["pos_weight"] = getattr(dataset_class, "bce_weight")
+    # datamodule, and maybe the reverse too
+    if hasattr(datamodule_class, "bce_weight"):
+        method_var_dict["pos_weight"] = getattr(datamodule_class, "bce_weight")
 
     method_var_dict = utils.filter_args(method_var_dict, method_class.__init__)
 
     if hasattr(datamodule, "input_stats"):
-        print('datamodule.input_stats = {}'.format(ub.repr2(datamodule.input_stats, nl=2)))
+        print('datamodule.input_stats = {}'.format(
+            ub.repr2(datamodule.input_stats, nl=2, sort=0)))
         method_var_dict["input_stats"] = datamodule.input_stats
     # Note: Changed name from method to model
     model = method_class(**method_var_dict)
 
     # init trainer from args
+    callbacks = [
+        pl_ext.callbacks.AutoResumer(),
+        pl_ext.callbacks.StateLogger(),
+        pl_ext.callbacks.Packager(package_fpath=args.package_fpath),
+        pl_ext.callbacks.BatchPlotter(
+            num_draw=args.num_draw,
+            draw_interval=args.draw_interval
+        ),
+        pl_ext.callbacks.TensorboardPlotter(),
+        pl.callbacks.LearningRateMonitor(logging_interval='epoch', log_momentum=True),
+        pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
+
+        pl.callbacks.ModelCheckpoint(monitor='train_loss', mode='min', save_top_k=1),
+        # pl.callbacks.GPUStatsMonitor(),
+    ]
+    if args.vali_dataset is not None:
+        callbacks += [
+            pl.callbacks.EarlyStopping(
+                monitor='val_loss', mode='min', patience=args.patience,
+                verbose=True),
+            pl.callbacks.ModelCheckpoint(
+                monitor='val_loss', mode='min', save_top_k=4),
+            pl.callbacks.ModelCheckpoint(
+                monitor='val_f1', mode='max', save_top_k=4),
+        ]
+
+    # TODO: explititly initialize the tensorboard logger?
+    # logger = [
+    #     pl.loggers.TensorBoardLogger(
+    #         save_dir=args.default_root_dir, version=self.trainer.slurm_job_id, name="lightning_logs"
+    #     )
+    # ]
 
     # TODO:
     # - [ ] Save multiple checkpoints based on metrics
     # https://github.com/PyTorchLightning/pytorch-lightning/issues/2908
-    trainer = pl.Trainer.from_argparse_args(args, callbacks=[
-        DrawBatchCallback()
-    ])
+    trainer = pl.Trainer.from_argparse_args(args, callbacks=callbacks)
+    print('trainer.logger.log_dir = {!r}'.format(trainer.logger.log_dir))
 
     modules = {
         'datamodule': datamodule,
         'model': model,
         'trainer': trainer,
+        'args': args,
     }
     return modules
 
 
+@profile
 def fit_model(args=None, cmdline=False, **kwargs):
     """
     Example:
@@ -500,64 +479,100 @@ def fit_model(args=None, cmdline=False, **kwargs):
         >>> from watch.tasks.fusion.fit import *  # NOQA
         >>> args = None
         >>> cmdline = False
+        >>> workdir = ub.ensure_app_cache_dir('watch', 'tests', 'fusion', 'fit')
         >>> kwargs = {
         ...     'train_dataset': 'special:vidshapes8-multispectral',
-        ...     'dataset': 'WatchDataModule',
+        ...     'vali_dataset': 'special:vidshapes2-multispectral',
+        ...     'test_dataset': 'special:vidshapes1-multispectral',
+        ...     'datamodule': 'WatchDataModule',
+        ...     'workdir': workdir,
         ...     'gpus': 1,
-        ...     'max_epochs': 1,
-        ...     'max_steps': 1,
+        ...     'max_epochs': 3,
+        ...     #'max_steps': 1,
         ...     'learning_rate': 1e-5,
-        ...     'num_workers': 0,
+        ...     'auto_lr_find': True,
+        ...     'num_workers': 1,
         ... }
         >>> #args = make_fit_config(args=None, cmdline=cmdline, **kwargs)
         >>> #print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
         >>> fit_model(**kwargs)
     """
-    modules = make_lightning_modules(args=args, cmdline=cmdline, **kwargs)
+    modules = make_lightning_modules(cmdline=cmdline, **kwargs)
+    # args = modules['args']
     trainer = modules['trainer']
     datamodule = modules['datamodule']
     model = modules['model']
-
-    print(ub.repr2(utils.model_json(model, max_depth=3), nl=-1, sort=0))
-
+    print(ub.repr2(utils.model_json(model, max_depth=1), nl=-1, sort=0))
     # prime the model, incase it has a lazy layer
     batch = next(iter(datamodule.train_dataloader()))
-
     # batch_shapes = ub.map_vals(lambda x: x.shape, batch)
     # print('batch_shapes = {}'.format(ub.repr2(batch_shapes, nl=1)))
-
     # result = model(batch["images"][[0], ...].float())
     import torch
     with torch.set_grad_enabled(False):
         model.forward_step(batch)
 
     # if requested, tune model with lightning default tuners
-    trainer.tune(model, datamodule)
+    tune_result = trainer.tune(model, datamodule)
+    print('tune_result = {!r}'.format(tune_result))
+    if tune_result:
+        finder = tune_result['lr_find']
+        print('finder.lr_max = {!r}'.format(finder.lr_max))
+        print('finder.lr_min = {!r}'.format(finder.lr_min))
+        suggestion_lr = finder.suggestion()
+        print('suggestion_lr = {!r}'.format(suggestion_lr))
+
+        if 0:
+            import kwplot
+            kwplot.autompl()
+            finder.plot()
+            kwplot.show_if_requested()
+
+    print('tune_result = {}'.format(ub.repr2(tune_result, nl=1)))
+
+    # # Run learning rate finder
+    # lr_finder = trainer.tuner.lr_find(model)
+    # # Results can be found in
+    # lr_finder.results
+    # # Plot with
+    # fig = lr_finder.plot(suggest=True)
+    # fig.show()
 
     # fit the model
+    print('Fit starting')
     trainer.fit(model, datamodule)
+    print('Fit finished')
 
-    # TODO: Package the best epoch based on validation metrics
-    package_fpath = pathlib.Path(trainer.default_root_dir) / "package.pt"
+    # Hack: what is the best way to get at this info?
+    package_fpath = trainer.package_fpath
 
-    # Record the dataset hparams this was trained with.
-    model.datamodule_hparams = model.trainer.datamodule.hparams
-    # Unload non-picklable parts from the data module
-    # Get rid of problematic pickel variables
-    # (is this desirable?)
-    model.trainer = None
-    model.train_dataloader = None
+    # TODO:
+    # Run prediction code here
+    # Run evaluation code here
 
-    # save model to package
-    utils.create_package(model, package_fpath)
+    # if 0:
+    #     # HACK Package
+    #     # TODO: need a way of creating a package from an intermediate checkpoint
+    #     checkpoint_fpath = '/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/training/yardrat/jon.crall/MultimodalTransformerDirectCD-21150fb65110ebd1/lightning_logs/version_3/checkpoints/epoch=236-step=9242.ckpt'
+    #     import torch
+    #     state = torch.load(checkpoint_fpath)
+    #     model.load_state_dict(state['state_dict'])
+    #     import os
+    #     package_fpath = pathlib.Path(os.path.dirname(os.path.dirname(checkpoint_fpath))) / 'package.pt'
+    #     model.datamodule_hparams = datamodule.hparams
+    #     model.trainer = None
+    #     model.train_dataloader = None
+    #     model.val_dataloader = None
+    #     model.test_dataloader = None
+    #     print('Package model: package_fpath = {!r}'.format(package_fpath))
+    #     utils.create_package(model, package_fpath)
+    #     return
 
     return package_fpath
 
-    # save learning relevant training options
-    # learning_config = ub.dict_diff(args.__dict__, learning_irrelevant)
 
-
-def main(args=None, **kwargs):
+@profile
+def main(**kwargs):
     """
 
     CommandLine:
@@ -571,13 +586,16 @@ def main(args=None, **kwargs):
 
         python -m watch.tasks.fusion.fit --dumps
 
+        # Running without any args should train a demo model
+        python -m watch.tasks.fusion.fit
+
         # Invoke the training script
 
         # This task required 5.12GB on a 3090
         python -m watch.tasks.fusion.fit \
             --model_name=smt_it_stm_p8 \
             --method=MultimodalTransformerDotProdCD \
-            --dataset=WatchDataModule \
+            --datamodule=WatchDataModule \
             --train_dataset=vidshapes8-multispectral \
             --batch_size=4 \
             --num_workers=4 \
@@ -618,8 +636,11 @@ def main(args=None, **kwargs):
     # configure logging at the root level of lightning
     logging.getLogger("pytorch_lightning").setLevel(logging.DEBUG)
 
-    fit_model(args=args, cmdline=True, **kwargs)
+    fit_model(cmdline=True, **kwargs)
 
 
 if __name__ == "__main__":
+    # import xdev
+    # xdev.make_warnings_print_tracebacks()
+
     main()

@@ -27,12 +27,12 @@ except Exception:
 
 class WatchDataModule(pl.LightningDataModule):
     """
-    Prepare the kwcoco dataset as torch video datasets
+    Prepare the kwcoco dataset as torch video datamodules
 
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> # Run the following tests on real watch data if DVC is available
-        >>> from watch.tasks.fusion.datasets.watch_data import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.watch_data import *  # NOQA
         >>> from os.path import join
         >>> import os
         >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
@@ -70,8 +70,8 @@ class WatchDataModule(pl.LightningDataModule):
         >>> kwplot.show_if_requested()
 
     Example:
-        >>> # Run the data module on coco demo datasets for the CI
-        >>> from watch.tasks.fusion.datasets.watch_data import *  # NOQA
+        >>> # Run the data module on coco demo datamodules for the CI
+        >>> from watch.tasks.fusion.datamodules.watch_data import *  # NOQA
         >>> import kwcoco
         >>> train_dataset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
         >>> test_dataset = kwcoco.CocoDataset.demo('vidshapes1-multispectral', num_frames=5)
@@ -119,8 +119,10 @@ class WatchDataModule(pl.LightningDataModule):
         preprocessing_step=None,
         tfms_channel_subset=None,
         normalize_inputs=False,
+        verbose=1,
     ):
         super().__init__()
+        self.verbose = verbose
         self.save_hyperparameters()
         self.train_kwcoco = train_dataset
         self.vali_kwcoco = vali_dataset
@@ -136,6 +138,15 @@ class WatchDataModule(pl.LightningDataModule):
         self.preprocessing_step = preprocessing_step
         self.normalize_inputs = normalize_inputs
         self.input_stats = None
+
+        if self.verbose:
+            print('Init WatchDataModule')
+            print('self.train_kwcoco = {!r}'.format(self.train_kwcoco))
+            print('self.vali_kwcoco = {!r}'.format(self.vali_kwcoco))
+            print('self.test_kwcoco = {!r}'.format(self.test_kwcoco))
+            print('self.time_steps = {!r}'.format(self.time_steps))
+            print('self.chip_size = {!r}'.format(self.chip_size))
+            print('self.channels = {!r}'.format(self.channels))
 
         # TODO: there is no need for tfms_channel_subset,
         # Remove that parameter and just send ``channels`` in as the requested
@@ -155,7 +166,6 @@ class WatchDataModule(pl.LightningDataModule):
 
             self.train_tfms = self.preprocessing_step
             self.test_tfms = transforms.Compose([
-                self.preprocessing_step,
                 utils.Lambda(lambda x: x[:, tfms_channel_subset]),
             ])
 
@@ -168,9 +178,9 @@ class WatchDataModule(pl.LightningDataModule):
         Helper method to draw a batch of data.
 
         Example:
-            >>> from watch.tasks.fusion.datasets.watch_data import *  # NOQA
-            >>> from watch.tasks.fusion import datasets
-            >>> self = datasets.WatchDataModule(
+            >>> from watch.tasks.fusion.datamodules.watch_data import *  # NOQA
+            >>> from watch.tasks.fusion import datamodules
+            >>> self = datamodules.WatchDataModule(
             >>>     train_dataset='special:vidshapes8-multispectral', num_workers=0)
             >>> self.setup('fit')
             >>> loader = self.train_dataloader()
@@ -227,11 +237,15 @@ class WatchDataModule(pl.LightningDataModule):
         return canvas
 
     def setup(self, stage):
-        print('Setup DataModule: stage = {!r}'.format(stage))
+        if self.verbose:
+            print('Setup DataModule: stage = {!r}'.format(stage))
         if stage == "fit" or stage is None:
             train_data = self.train_kwcoco
             if isinstance(train_data, pathlib.Path):
                 train_data = str(train_data.expanduser())
+
+            if self.verbose:
+                print('Build train kwcoco dataset')
             train_coco_dset = kwcoco.CocoDataset.coerce(train_data)
             self.coco_datasets['train'] = train_coco_dset
 
@@ -272,6 +286,8 @@ class WatchDataModule(pl.LightningDataModule):
                 vali_data = self.vali_kwcoco
                 if isinstance(vali_data, pathlib.Path):
                     vali_data = str(vali_data.expanduser())
+                if self.verbose:
+                    print('Build validation kwcoco dataset')
                 kwcoco_ds = kwcoco.CocoDataset.coerce(vali_data)
                 vali_coco_sampler = ndsampler.CocoSampler(kwcoco_ds)
                 vali_dataset = WatchVideoDataset(
@@ -282,7 +298,7 @@ class WatchDataModule(pl.LightningDataModule):
                     # transform=self.vali_tfms,
                 )
                 self.torch_datasets['vali'] = vali_dataset
-                ub.inject_method(self, lambda self: self._make_dataloader('vali', shuffle=True), 'val_dataloader')
+                ub.inject_method(self, lambda self: self._make_dataloader('vali', shuffle=False), 'val_dataloader')
             else:
                 if 0:
                     # TODO:
@@ -307,6 +323,8 @@ class WatchDataModule(pl.LightningDataModule):
             test_data = self.test_kwcoco
             if isinstance(test_data, pathlib.Path):
                 test_data = str(test_data.expanduser())
+            if self.verbose:
+                print('Build test kwcoco dataset')
             test_coco_dset = kwcoco.CocoDataset.coerce(test_data)
             self.coco_datasets['test'] = test_coco_dset
             test_coco_sampler = ndsampler.CocoSampler(test_coco_dset)
@@ -390,7 +408,7 @@ class AddPositionalEncoding(nn.Module):
 def coco_channel_profiles(coco_dset, max_checks=float('inf')):
     """
     Example:
-        >>> from watch.tasks.fusion.datasets.watch_data import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.watch_data import *  # NOQA
         >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
         >>> candidates = coco_channel_profiles(coco_dset)
     """
@@ -415,7 +433,7 @@ def coco_channel_profiles(coco_dset, max_checks=float('inf')):
 class WatchVideoDataset(data.Dataset):
     """
     Example:
-        >>> from watch.tasks.fusion.datasets.watch_data import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.watch_data import *  # NOQA
         >>> import ndsampler
         >>> import kwcoco
         >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
@@ -434,7 +452,7 @@ class WatchVideoDataset(data.Dataset):
         >>> kwplot.show_if_requested()
 
     Example:
-        >>> from watch.tasks.fusion.datasets.watch_data import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.watch_data import *  # NOQA
         >>> import ndsampler
         >>> import kwcoco
         >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
@@ -545,7 +563,7 @@ class WatchVideoDataset(data.Dataset):
     def __getitem__(self, index):
         """
         Example:
-            >>> from watch.tasks.fusion.datasets.watch_data import *  # NOQA
+            >>> from watch.tasks.fusion.datamodules.watch_data import *  # NOQA
             >>> import ndsampler
             >>> import kwcoco
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
@@ -565,7 +583,7 @@ class WatchVideoDataset(data.Dataset):
         Example:
             >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
             >>> # Run the following tests on real watch data if DVC is available
-            >>> from watch.tasks.fusion.datasets.watch_data import *  # NOQA
+            >>> from watch.tasks.fusion.datamodules.watch_data import *  # NOQA
             >>> import os
             >>> from os.path import join
             >>> import ndsampler
@@ -622,7 +640,6 @@ class WatchVideoDataset(data.Dataset):
             flipper = make_hflipper(input_dsize[0])
             do_flip = np.random.rand() > 0.5
 
-        kernel = np.ones((5, 5), np.uint8)
         prev_frame_cids = None
 
         for frame, dets, gid in zip(raw_frame_list, raw_det_list, raw_gids):
@@ -676,7 +693,7 @@ class WatchVideoDataset(data.Dataset):
             else:
                 frame_change = (frame_cids != prev_frame_cids).astype(np.uint8)
                 # Clean up the change target
-                frame_change = cv2.morphologyEx(frame_change, cv2.MORPH_OPEN, kernel)
+                frame_change = morphology(frame_change, 'open', kernel=3)
                 frame_change = torch.from_numpy(frame_change)
 
             # convert to torch
@@ -720,7 +737,7 @@ class WatchVideoDataset(data.Dataset):
             ('hashid', self.sampler.dset._build_hashid()),
             ('channels', self.channels.__json__()),
             # ('sample_shape', self.sample_shape),
-            ('depends_version', 2),
+            ('depends_version', 3),  # bump if `compute_input_stats` changes
         ])
         workdir = None
         cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends)
@@ -737,7 +754,7 @@ class WatchVideoDataset(data.Dataset):
             num (int | None): number of input items to compute stats for
 
         Example:
-            >>> from watch.tasks.fusion.datasets.watch_data import *  # NOQA
+            >>> from watch.tasks.fusion.datamodules.watch_data import *  # NOQA
             >>> import ndsampler
             >>> import kwcoco
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
@@ -748,7 +765,7 @@ class WatchVideoDataset(data.Dataset):
             >>> self.compute_input_stats()
 
         Example:
-            >>> from watch.tasks.fusion.datasets.watch_data import *  # NOQA
+            >>> from watch.tasks.fusion.datamodules.watch_data import *  # NOQA
             >>> import ndsampler
             >>> import kwcoco
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes8')
@@ -761,7 +778,7 @@ class WatchVideoDataset(data.Dataset):
         Example:
             >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
             >>> # Run the following tests on real watch data if DVC is available
-            >>> from watch.tasks.fusion.datasets.watch_data import *  # NOQA
+            >>> from watch.tasks.fusion.datamodules.watch_data import *  # NOQA
             >>> import os
             >>> from os.path import join
             >>> import ndsampler
@@ -801,8 +818,8 @@ class WatchVideoDataset(data.Dataset):
         for key, running in channel_stats.items():
             perchan_stats = running.summarize(axis=(1, 2))
             input_stats[key] = {
-                'std': perchan_stats['mean'].round(3),  # only take 3 sigfigs
-                'mean': perchan_stats['std'].round(3),
+                'mean': perchan_stats['mean'].round(3),  # only take 3 sigfigs
+                'std': perchan_stats['std'].round(3),
             }
         self.disable_augmenter = False
         return input_stats
@@ -811,7 +828,7 @@ class WatchVideoDataset(data.Dataset):
     def draw_item(self, item, binprobs=None):
         """
         Example:
-            >>> from watch.tasks.fusion.datasets.watch_data import *  # NOQA
+            >>> from watch.tasks.fusion.datamodules.watch_data import *  # NOQA
             >>> import ndsampler
             >>> import kwcoco
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
@@ -1011,7 +1028,7 @@ class WatchVideoDataset(data.Dataset):
                     pin_memory=False):
         """
         Example:
-            >>> from watch.tasks.fusion.datasets.watch_data import *  # NOQA
+            >>> from watch.tasks.fusion.datamodules.watch_data import *  # NOQA
             >>> import ndsampler
             >>> import kwcoco
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
@@ -1025,6 +1042,44 @@ class WatchVideoDataset(data.Dataset):
             self, batch_size=batch_size, num_workers=num_workers,
             shuffle=shuffle, pin_memory=pin_memory, collate_fn=ub.identity)
         return loader
+
+
+# TODO: LRU cache?
+@ub.memoize
+def _morph_kernel_core(h, w):
+    return np.ones((h, w), np.uint8)
+
+
+def _morph_kernel(size):
+    if isinstance(size, int):
+        h = size
+        w = size
+    else:
+        raise NotImplementedError
+    return _morph_kernel_core(h, w)
+
+
+def morphology(data, mode, kernel=5):
+    """
+    Executes a morphological operation.
+
+    Args:
+        input (ndarray): data
+        mode (str) : morphology mode.  currently only open
+
+    Example:
+        >>> data = (np.random.rand(32, 32) > 0.5).astype(np.uint8)
+        >>> mode = 'open'
+        >>> kernel = 5
+        >>> morphology(data, mode, kernel=5)
+
+    """
+    kernel = _morph_kernel(kernel)
+    if mode == 'open':
+        new = cv2.morphologyEx(data, cv2.MORPH_OPEN, kernel)
+    else:
+        raise NotImplementedError
+    return new
 
 
 @ub.memoize

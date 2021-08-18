@@ -2,7 +2,7 @@
 
 mkinit -m watch.tasks.fusion --noattrs -w
 mkinit -m watch.tasks.fusion.models -w --noattrs
-mkinit -m watch.tasks.fusion.datasets -w --nomods
+mkinit -m watch.tasks.fusion.datamodules -w --nomods
 
 mkinit -m watch.tasks.fusion.methods -w
 

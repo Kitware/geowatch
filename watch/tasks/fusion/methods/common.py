@@ -35,8 +35,8 @@ class ChangeDetectorBase(pl.LightningModule):
         self.criterion = nn.BCEWithLogitsLoss(
                 pos_weight=torch.ones(1) * pos_weight)
         self.metrics = nn.ModuleDict({
-            "acc": metrics.Accuracy(),
-            "iou": metrics.IoU(2),
+            # "acc": metrics.Accuracy(),
+            # "iou": metrics.IoU(2),
             "f1": metrics.F1(),
         })
 
@@ -52,8 +52,8 @@ class ChangeDetectorBase(pl.LightningModule):
         Example:
             >>> from watch.tasks.fusion.methods.common import *  # NOQA
             >>> from watch.tasks.fusion import methods
-            >>> from watch.tasks.fusion import datasets
-            >>> datamodule = datasets.WatchDataModule(
+            >>> from watch.tasks.fusion import datamodules
+            >>> datamodule = datamodules.WatchDataModule(
             >>>     train_dataset='special:vidshapes8',
             >>>     num_workers=0, chip_size=128,
             >>>     normalize_inputs=True,
@@ -105,7 +105,7 @@ class ChangeDetectorBase(pl.LightningModule):
             # TODO: it may be faster to compute loss at the downsampled
             # resolution.
             logits = nn.functional.interpolate(
-                logits, [H, W], mode="bilinear")
+                logits, [H, W], mode="bilinear", align_corners=True)
 
             change_prob = logits.sigmoid()[0]
             item_pred_changes.append(change_prob.detach())
@@ -128,9 +128,22 @@ class ChangeDetectorBase(pl.LightningModule):
             all_true = torch.cat(item_true_changes, dim=0)
             # compute metrics
             item_metrics = {}
-            for key, metric in self.metrics.items():
-                val = metric(all_pred, all_true)
-                item_metrics[f'{stage}_{key}'] = val
+
+            if self.trainer is not None:
+                # Dont log unless a trainer is attached
+                for key, metric in self.metrics.items():
+                    val = metric(all_pred, all_true)
+                    item_metrics[f'{stage}_{key}'] = val
+
+                for key, val in item_metrics.items():
+                    self.log(key, val, prog_bar=True)
+
+                self.log(f'{stage}_loss', total_loss, prog_bar=True)
+
+            # if stage == 'train':
+            #     # I think train does not want "loss" to have a prefix
+            #     self.log('loss', total_loss, prog_bar=True)
+
             outputs['loss'] = total_loss
         return outputs
 
@@ -148,6 +161,143 @@ class ChangeDetectorBase(pl.LightningModule):
     def test_step(self, batch, batch_idx=None):
         outputs = self.forward_step(batch, with_loss=True, stage='test')
         return outputs
+
+    @classmethod
+    def load_package(cls, package_path, verbose=1):
+        """
+        TODO:
+            - [ ] We should be able to load the model without having access
+                  to this class. What is the right way to do that?
+        """
+        import torch.package
+        #
+        # TODO: is there any way to introspect what these variables could be?
+
+        model_name = "model.pkl"
+        module_name = 'watch_tasks_fusion'
+
+        imp = torch.package.PackageImporter(package_path)
+
+        # Assume this standardized header information exists that tells us the
+        # name of the resource corresponding to the model
+        package_header = imp.load_pickle(
+            'kitware_package_header', 'kitware_package_header.pkl')
+        model_name = package_header['model_name']
+        module_name = package_header['module_name']
+
+        # pkg_root = imp.file_structure()
+        # print(pkg_root)
+        # pkg_data = pkg_root.children['.data']
+
+        self = imp.load_pickle(module_name, model_name)
+        return self
+
+    def save_package(self, package_path, verbose=1):
+        """
+
+        Example:
+            >>> # Test without datamodule
+            >>> import ubelt as ub
+            >>> from os.path import join
+            >>> from watch.tasks.fusion.methods.common import *  # NOQA
+            >>> dpath = ub.ensure_app_cache_dir('watch/tests/package')
+            >>> package_path = join(dpath, 'my_package.pt')
+
+            >>> # Use one of our fusion models in a test
+            >>> from watch.tasks.fusion import methods
+            >>> from watch.tasks.fusion import datamodules
+            >>> model = methods.MultimodalTransformerDirectCD("smt_it_stm_p8")
+            >>> # We have to run an input through the module because it is lazy
+            >>> inputs = torch.rand(1, 2, 13, 128, 128)
+            >>> model(inputs)
+
+            >>> # Save the model
+            >>> model.save_package(package_path)
+
+            >>> # Test that the package can be reloaded
+            >>> recon = methods.MultimodalTransformerDirectCD.load_package(package_path)
+            >>> # Check consistency and data is actually different
+            >>> recon_state = recon.state_dict()
+            >>> model_state = model.state_dict()
+            >>> assert recon is not model
+            >>> assert set(recon_state) == set(recon_state)
+            >>> for key in recon_state.keys():
+            >>>     assert (model_state[key] == recon_state[key]).all()
+            >>>     assert model_state[key] is not recon_state[key]
+
+        Example:
+            >>> # Test with datamodule
+            >>> import ubelt as ub
+            >>> from os.path import join
+            >>> from watch.tasks.fusion.methods.common import *  # NOQA
+            >>> dpath = ub.ensure_app_cache_dir('watch/tests/package')
+            >>> package_path = join(dpath, 'my_package.pt')
+
+            >>> # Use one of our fusion models in a test
+            >>> from watch.tasks.fusion import methods
+            >>> from watch.tasks.fusion import datamodules
+            >>> self = methods.MultimodalTransformerDirectCD("smt_it_stm_p8")
+            >>> # We have to run an input through the module because it is lazy
+            >>> inputs = torch.rand(1, 2, 13, 128, 128)
+            >>> self(inputs)
+
+            >>> datamodule = datamodules.watch_data.WatchDataModule(
+            >>>     'special:vidshapes8-multispectral', chip_size=32,
+            >>>     batch_size=1, time_steps=2, num_workers=0)
+            >>> datamodule.setup('fit')
+            >>> trainer = pl.Trainer(max_steps=1)
+            >>> trainer.fit(model=self, datamodule=datamodule)
+
+            >>> # Save the self
+            >>> self.save_package(package_path)
+
+            >>> # Test that the package can be reloaded
+            >>> recon = methods.MultimodalTransformerDirectCD.load_package(package_path)
+
+            >>> # Check consistency and data is actually different
+            >>> recon_state = recon.state_dict()
+            >>> model_state = self.state_dict()
+            >>> assert recon is not self
+            >>> assert set(recon_state) == set(recon_state)
+            >>> for key in recon_state.keys():
+            >>>     assert (model_state[key] == recon_state[key]).all()
+            >>>     assert model_state[key] is not recon_state[key]
+        """
+        import copy
+        import torch.package
+
+        # shallow copy of self, to apply attribute hacks to
+        model = copy.copy(self)
+        if model.trainer is not None:
+            datamodule = model.trainer.datamodule
+            if datamodule is not None:
+                model.datamodule_hparams = datamodule.hparams
+        model.trainer = None
+        model.train_dataloader = None
+        model.val_dataloader = None
+        model.test_dataloader = None
+
+        model_name = "model.pkl"
+        module_name = 'watch_tasks_fusion'
+        with torch.package.PackageExporter(package_path, verbose=verbose) as exp:
+            # TODO: this is not a problem yet, but some package types (mainly
+            # binaries) will need to be excluded and added as mocks
+            exp.extern("**", exclude=["watch.tasks.fusion.**"])
+            exp.intern("watch.tasks.fusion.**")
+
+            # Attempt to standardize some form of package metadata that can
+            # allow for model importing with fewer hard-coding requirements
+            package_header = {
+                'version': '0.0.1',
+                'model_name': model_name,
+                'module_name': module_name,
+            }
+            exp.save_pickle(
+                'kitware_package_header', 'kitware_package_header.pkl',
+                package_header
+            )
+
+            exp.save_pickle(module_name, model_name, model)
 
     def configure_optimizers(self):
         optimizer = optim.RAdam(

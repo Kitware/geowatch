@@ -5,7 +5,7 @@ from torch.utils import data
 import pytorch_lightning as pl
 
 from .methods import voting
-from .datasets import onera_2018
+from .datamodules import onera_2018
 from . import utils
 
 

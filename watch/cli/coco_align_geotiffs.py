@@ -377,17 +377,61 @@ def read_geojson(file, default_axis_mapping='OAMS_TRADITIONAL_GIS_ORDER'):
 
 def geopandas_pairwise_overlaps(gdf1, gdf2, predicate='intersects'):
     """
+    Find pairwise relationships between each geometries
+
     Args:
         gdf1 (GeoDataFrame): query geo data
         gdf2 (GeoDataFrame): database geo data (builds spatial index)
+        predicate (str, default='intersects'): a DE-9IM [1] predicate.
+           (e.g. if intersection finds intersections between geometries)
+
+    References:
+        ..[1] https://en.wikipedia.org/wiki/DE-9IM
 
     Returns:
         dict: mapping from indexes in gdf1 to overlapping indexes in gdf2
+
+    Example:
+        >>> from watch.cli.coco_align_geotiffs import *  # NOQA
+        >>> import geopandas as gpd
+        >>> gpd.GeoDataFrame()
+        >>> gdf1 = gpd.read_file(
+        >>>     gpd.datasets.get_path('naturalearth_lowres')
+        >>> )
+        >>> gdf2 = gpd.read_file(
+        >>>     gpd.datasets.get_path('naturalearth_cities')
+        >>> )
+        >>> mapping = geopandas_pairwise_overlaps(gdf1, gdf2)
+
+    Benchmark:
+        import timerit
+        ti = timerit.Timerit(10, bestof=3, verbose=2)
+        for timer in ti.reset('with sindex O(N * log(M))'):
+            with timer:
+                fast_mapping = geopandas_pairwise_overlaps(gdf1, gdf2)
+        for timer in ti.reset('without sindex O(N * M)'):
+            with timer:
+                from collections import defaultdict
+                slow_mapping = defaultdict(list)
+                for idx1, geom1 in enumerate(gdf1.geometry):
+                    slow_mapping[idx1] = []
+                    for idx2, geom2 in enumerate(gdf2.geometry):
+                        if geom1.intersects(geom2):
+                            slow_mapping[idx1].append(idx2)
+        # check they are the same
+        assert set(slow_mapping) == set(fast_mapping)
+        for idx1 in slow_mapping:
+            slow_idx2s = slow_mapping[idx1]
+            fast_idx2s = fast_mapping[idx1]
+            assert sorted(fast_idx2s) == sorted(slow_idx2s)
     """
+    # Construct the spatial index (requires pygeos and/or rtree)
     sindex2 = gdf2.sindex
+    # For each query polygon, lookup intersecting polygons in the spatial index
     idx1_to_idxs2 = {}
     for idx1, row1 in gdf1.iterrows():
         idxs2 = sindex2.query(row1.geometry, predicate=predicate)
+        # Record result indexes that "match" given the geometric predicate
         idx1_to_idxs2[idx1] = idxs2
     return idx1_to_idxs2
 
@@ -1387,12 +1431,9 @@ def visualize_rois(dset, kw_all_box_rois):
 
         bb = kw_zoom_roi.bounding_box()
 
-        min_x, min_y, max_x, max_y = bb.to_ltrb().data[0]
-        padx = (max_x - min_x) * 0.5
-        pady = (max_y - min_y) * 0.5
-
-        ax.set_xlim(min_x - padx, max_x + padx)
-        ax.set_ylim(min_y - pady, max_y + pady)
+        min_x, min_y, max_x, max_y = bb.scale(1.5, about='center').to_ltrb().data[0]
+        ax.set_xlim(min_x, max_x)
+        ax.set_ylim(min_y, max_y)
 
 
 def _fix_geojson_poly(geo):
