@@ -356,7 +356,7 @@ def make_fit_config(cmdline=False, **kwargs):
         file_contents = parser._config_file_parser.serialize(config_items)
 
         parent_dpath = pathlib.Path(dump_fpath).parent
-        parent_dpath.mkdir(exists_ok=True, parents=True)
+        parent_dpath.mkdir(exist_ok=True, parents=True)
 
         with open(dump_fpath, 'w') as file:
             file.write(file_contents)
