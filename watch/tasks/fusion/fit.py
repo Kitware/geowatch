@@ -354,8 +354,13 @@ def make_fit_config(cmdline=False, **kwargs):
     if dump_fpath is not None:
         config_items = parser.get_items_for_config_file_output(parser._source_to_settings, args)
         file_contents = parser._config_file_parser.serialize(config_items)
+
+        parent_dpath = pathlib.Path(dump_fpath).parent
+        parent_dpath.mkdir(exists_ok=True, parents=True)
+
         with open(dump_fpath, 'w') as file:
             file.write(file_contents)
+        print('wrote config to {!r}'.format(file_contents))
         sys.exit(0)
 
     learning_config = ub.dict_diff(args.__dict__, learning_irrelevant)
