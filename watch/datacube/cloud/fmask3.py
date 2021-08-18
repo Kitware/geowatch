@@ -9,7 +9,7 @@ def _save_cloudmask(scenedir, out_fpath, driver, sensor, args):
 
     with TemporaryDirectory() as d:
 
-        args += ['-o', out_fpath, '-e', d]
+        args = args + ['-o', out_fpath, '-e', d]
         if sensor == 'S2':
             if os.path.isdir(os.path.join(scenedir, 'IMG_DATA')):
                 args += ['--granuledir', scenedir]
@@ -20,7 +20,7 @@ def _save_cloudmask(scenedir, out_fpath, driver, sensor, args):
             # and 30m GSD for LS (fixed).
             # assume that unless someone knows what they're doing, they want 30m for both
             if '--pixsize' not in args:
-                args += ['--pixsize', '30']
+                args += ['--pixsize', '20']
 
             # os.system instead of subprocess.run to inherit the current conda env
             os.system(f'RIOS_DFLT_DRIVER={driver} fmask_sentinel2Stacked.py ' +
@@ -28,6 +28,7 @@ def _save_cloudmask(scenedir, out_fpath, driver, sensor, args):
 
         elif sensor == 'LS':
             args += ['--scenedir', scenedir]
+
             os.system(
                 f'RIOS_DFLT_DRIVER={driver} fmask_usgsLandsatStacked.py ' +
                 shlex.join(args))
@@ -99,19 +100,19 @@ def cloudmask(in_dpath,
         >>> from watch.datacube.cloud.fmask3 import *
         >>> from watch.utils.util_raster import GdalOpen
         >>> from watch.demo.landsat_demodata import grab_landsat_product
-        >>> 
+        >>>
         >>> root = os.path.commonpath(grab_landsat_product()['bands'])
-        >>> 
+        >>>
         >>> data = cloudmask(root, sensor='LS')
         >>> assert data.dtype == np.uint8
         >>> assert set(np.unique(data)).issubset({0, 1, 2, 3, 4, 5})
-        >>> 
+        >>>
         >>> out_path = cloudmask(root, 'cloudmask.tif', sensor='LS')
         >>> assert out_path == 'cloudmask.tif'
         >>> with GdalOpen(out_path) as f:
         >>>     assert f.GetDriver().ShortName == 'GTiff'
         >>>     assert np.all(f.ReadAsArray() == data)
-        >>> 
+        >>>
         >>> # clean up
         >>> os.remove('cloudmask.tif')
         >>> os.remove('cloudmask.tif.aux.xml')
