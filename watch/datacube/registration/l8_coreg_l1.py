@@ -113,7 +113,7 @@ def get_gcp_for_registration(master_ds,
     return res
 
 
-def l8_coregister(mgrs_tile, input_folder, output_folder, s2_folder):
+def l8_coregister(mgrs_tile, input_folder, output_folder, baseline_scene):
     error_threshold = 0.5  # treshold for peak magnitude of phase correlation is used for initial rejection of bad matches
     max_shift_threshold = 3
     elev = 0.
@@ -124,33 +124,18 @@ def l8_coregister(mgrs_tile, input_folder, output_folder, s2_folder):
     if not (os.path.isdir(output_folder)):
         os.makedirs(output_folder)
 
-    #getting a primary baseline scene from s2_folder
-    fname_ref_scene = f'{mgrs_tile}.baseline.scene.csv'
-    if not (os.path.isfile(os.path.join(s2_folder, fname_ref_scene))):
-        print('[ERROR]: file %s with baseline scene not found' %
-              (os.path.join(s2_folder, fname_ref_scene)))
-        sys.exit(1)
-    df = pd.read_csv(os.path.join(s2_folder, fname_ref_scene))
-    if len(df) == 0:
-        print('[ERROR]: file %s is empty' % (fname_ref_scene))
-        sys.exit(1)
-    ref_scene_granule_id = df['granule_id'].values[0]
+    def get_s2_band(granuledir):
+        bands = glob.glob(
+            os.path.join(granuledir, 'IMG_DATA', f'*_{s2_base_band}.jp2'))
+        assert len(bands) == 1
+        return bands[0]
 
-    pfname_list = glob.glob(os.path.join(s2_folder, f'*{mgrs_tile}*.SAFE',
-                                         'GRANULE', ref_scene_granule_id,
-                                         'IMG_DATA', f'*_{s2_base_band}.jp2'),
-                            recursive=True)
+    pfname_master = get_s2_band(baseline_scene)
 
-    if len(pfname_list) == 0:
-        print('[ERROR]: baseline scene not found in %s' % (s2_folder))
-        sys.exit(1)
-    pfname_master = pfname_list[0]
     print(f'Primary scene found {pfname_master}')
 
     # Harveting all Landsat scenes
-    pfname_list = glob.glob(os.path.join(input_folder, 'LC*',
-                                         f'*_{l8_base_band}.TIF'),
-                            recursive=True)
+    pfname_list = glob.glob(os.path.join(input_folder, f'LC*_{l8_base_band}.TIF'))
 
     # Creating a dictionary of scenes
     # key is scene id

@@ -1,4 +1,7 @@
 import ubelt as ub
+import pyproj
+
+from watch.gis import spatial_reference
 
 
 def sentinel2_grid():
@@ -107,3 +110,16 @@ def sentinel2_grid():
     fpath = items['shp']['fpath']
     s2_tiles = gpd.read_file(fpath)
     return s2_tiles
+
+
+def s2_grid_tiles_for_geometry(geometry):
+    s2_tiles = sentinel2_grid()
+
+    # TODO: Convert geometries to UTM for more appropriate 'area'
+    # computation
+
+    s2_tiles['intersection_area'] =\
+        s2_tiles.geometry.intersection(geometry).area
+
+    return s2_tiles[s2_tiles['intersection_area'] > 0].sort_values(
+        'intersection_area', ascending=False)['Name'].tolist()
