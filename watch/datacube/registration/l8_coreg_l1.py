@@ -10,6 +10,7 @@ import os, shutil
 import glob
 import time
 import sys
+import itertools
 import numpy as np
 import pandas as pd
 # from skimage.feature import register_translation
@@ -22,6 +23,7 @@ S2_BANDS.append('B8A')
 L8_BANDS = ['B%01d' % (x) for x in np.arange(1, 12)]
 L8_BANDS_EXTRA_COL1 = ['BQA']
 L8_BANDS_EXTRA_COL2 = ['QA_PIXEL', 'QA_RADSAT', 'SAA', 'SZA', 'VAA', 'VZA']
+L8_ANCILLARY_RASTERS = ['cloudmask']
 
 
 def print_usage():
@@ -419,9 +421,18 @@ def l8_coregister(mgrs_tile, input_folder, output_folder, baseline_scene):
                 else:
                     extra_bands = []
 
-                for b in extra_bands:
-                    fname_band = f'{scene_id}_{b}.TIF'
-                    pfname_band = os.path.join(path_data, fname_band)
+                for b in itertools.chain(extra_bands,
+                                         L8_ANCILLARY_RASTERS):
+                    if b in extra_bands:
+                        fname_band = f'{scene_id}_{b}.TIF'
+                        pfname_band = os.path.join(path_data, fname_band)
+                    elif b in L8_ANCILLARY_RASTERS:
+                        pfname_band = os.path.join(
+                            path_data, "{}.tif".format(b))
+                    else:
+                        raise NotImplementedError(
+                            "Unsure how to build path to band "
+                            "file '{}'".format(b))
 
                     # convert band to tmp file into MGRS gridding scheme
                     x_res = 30
@@ -430,7 +441,7 @@ def l8_coregister(mgrs_tile, input_folder, output_folder, baseline_scene):
                     resampling_method = 'cubic'
                     nodata = 0
 
-                    if ('QA' in b):
+                    if ('QA' in b) or ('cloudmask' in b):
                         resampling_method = 'near'
                         nodata = 'None'
 
