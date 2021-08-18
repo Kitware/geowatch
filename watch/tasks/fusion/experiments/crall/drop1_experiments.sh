@@ -19,16 +19,13 @@ python -m watch.cli.coco_add_watch_fields \
     --target_gsd 10
 
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc 
-
-mkdir -p /home/joncrall/data/dvc-repos/smart_watch_dvc/training/toothbrush/joncrall/Drop1_S2_L8_GSD10/configs/
-
+mkdir -p $DVC_DPATH/training/$HOSTNAME/$USER/Drop1_S2_L8_GSD10/configs
 python -m watch.tasks.fusion.fit \
-    --method=MultimodalTransformerDirectCD \
-    --time_steps=8 \
     --channels="coastal|blue|green|red|nir|swir16|swir22" \
-    --method="MultimodalTransformerDotProdCD" \
-    --chip_size=128 \
+    --method="MultimodalTransformerDirectCD" \
     --model_name=smt_it_stm_p8 \
+    --time_steps=8 \
+    --chip_size=128 \
     --batch_size=2 \
     --accumulate_grad_batches=8 \
     --num_workers=4 \
@@ -39,32 +36,26 @@ python -m watch.tasks.fusion.fit \
     --window_size=8 \
     --train_dataset=$DVC_DPATH/drop1-S2-L8-aligned-c1/train_gsd10_data.kwcoco.json \
     --vali_dataset=$DVC_DPATH/drop1-S2-L8-aligned-c1/vali_gsd10_data.kwcoco.json \
-    --default_root_dir=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1_S2_L8_GSD10/runs/DirectCD_smt_it_stm_s12_v2 \
-       --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1_S2_L8_GSD10/runs/DirectCD_smt_it_stm_s12_v2/final_package.pt \
-                --dump=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1_S2_L8_GSD10/configs/Direct_smt_it_stm_p8.yml 
+    --default_root_dir=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1_S2_L8_GSD10/runs/DirectCD_smt_it_stm_s12_v3 \
+       --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1_S2_L8_GSD10/runs/DirectCD_smt_it_stm_s12_v3/final_package.pt \
+                --dump=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1_S2_L8_GSD10/configs/DirectCD_smt_it_stm_s12_v3.yml 
 
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 CUDA_VISIBLE_DEVICES=1 \
 python -m watch.tasks.fusion.fit \
-              --config=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1_S2_L8_GSD10/configs/Direct_smt_it_stm_p8.yml \
-    --default_root_dir=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1_S2_L8_GSD10/DirectCD_smt_it_stm_s12_v2 \
-       --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1_S2_L8_GSD10/DirectCD_smt_it_stm_s12_v2/final_package.pt 
-
+              --config=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1_S2_L8_GSD10/configs/DirectCD_smt_it_stm_s12_v3.yml \
+    --default_root_dir=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1_S2_L8_GSD10/DirectCD_smt_it_stm_s12_v3 \
+       --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1_S2_L8_GSD10/DirectCD_smt_it_stm_s12_v3/final_package.pt 
 
 python -m watch.tasks.fusion.predict 
         --test_dataset=$DVC_DPATH/drop1-S2-L8-aligned-c1/vali_data.kwcoco.json \
-       --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1/DirectCD_smt_it_stm_s12_v2/final_package.pt \
-              --config=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1/configs/Direct_smt_it_stm_p8.yml \
-    --default_root_dir=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1/DirectCD_smt_it_stm_s12_v2 
+       --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1/DirectCD_smt_it_stm_s12_v3/final_package.pt \
+        --pred_dataset=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1/DirectCD_smt_it_stm_s12_v3/pred.kwcoco.json
 
 python -m watch.tasks.fusion.evaluate 
-        --test_dataset=$DVC_DPATH/drop1-S2-L8-aligned-c1/vali_data.kwcoco.json \
-       --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1/DirectCD_smt_it_stm_s12_v2/final_package.pt \
-              --config=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1/configs/Direct_smt_it_stm_p8.yml \
-    --default_root_dir=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1/DirectCD_smt_it_stm_s12_v2 
-
-
-
+        --true_dataset=$DVC_DPATH/drop1-S2-L8-aligned-c1/vali_data.kwcoco.json \
+        --pred_dataset=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1/DirectCD_smt_it_stm_s12_v3/pred.kwcoco.json
+          --eval_dpath=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1/DirectCD_smt_it_stm_s12_v3/eval
 
 
 # TODO Create configs for the base set of experiments 

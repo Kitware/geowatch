@@ -18,6 +18,7 @@ def millify(n):
 
 def create_package(model, package_path, module_name="watch_tasks_fusion", model_name="model.pkl", verbose=False):
     """
+    DEPRECATE IN FAVOR OF A MODEL METHOD?
 
     CommandLine:
         xdoctest watch.tasks.fusion.utils create_package
@@ -58,7 +59,27 @@ def create_package(model, package_path, module_name="watch_tasks_fusion", model_
 
 
 def load_model_from_package(package_path, module_name="watch_tasks_fusion", model_name="model.pkl"):
+    """
+    DEPRECATE IN FAVOR OF A MODEL METHOD?
+
+    Notes:
+        * I don't like that we need to know module_name and model_name a-priori
+          given a path to a package, I just want to be able to construct
+          the model instance.
+    """
+    # imp = package.PackageImporter(package_path)
+    import pathlib
+    if not isinstance(package_path, (str, pathlib.Path)):
+        raise TypeError(type(package_path))
+
     imp = package.PackageImporter(package_path)
+    # Assume this standardized header information exists that tells us the
+    # name of the resource corresponding to the model
+    package_header = imp.load_pickle(
+        'kitware_package_header', 'kitware_package_header.pkl')
+    model_name = package_header['model_name']
+    module_name = package_header['module_name']
+
     return imp.load_pickle(module_name, model_name)
 
 

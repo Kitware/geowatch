@@ -1,7 +1,12 @@
+# -*- coding: utf-8 -*-
+"""
+Packager callback to interface with torch.package
+"""
 import pytorch_lightning as pl
-# from typing import Dict, Any
 import ubelt as ub
+import copy
 from os.path import join
+from typing import Dict, Any
 
 
 class Packager(pl.callbacks.Callback):
@@ -10,7 +15,26 @@ class Packager(pl.callbacks.Callback):
     key phases of the training loop.
 
     The lightning module must have a "save_package" method that can be called
-    with a filepath
+    with a filepath.
+
+
+    TODO:
+        - [ ] Package the "best" checkpoints according to the monitor
+
+        - [ ] Package arbitrary checkpoints:
+            - [ ] Package model topology without any weights
+            - [ ] Copy checkpoint weights into a package to get a package with
+                  that "weight state".
+
+        - [ ] Initializer should be able to point at a package and use
+            torch-liberator partial load to transfer the weights.
+
+        - [ ] Replace print statements with logging statements
+
+        - [ ] Create a trainer-level logger instance (similar to netharn)
+
+    References:
+        https://discuss.pytorch.org/t/packaging-pytorch-topology-first-and-checkpoints-later/129478/2
 
     Example:
         >>> from watch.utils.lightning_ext.callbacks.packager import *  # NOQA
@@ -30,73 +54,97 @@ class Packager(pl.callbacks.Callback):
     """
 
     def __init__(self, package_fpath='auto'):
-        # self.package_on_interrupt = True
+        self.package_on_interrupt = True
         self.package_fpath = package_fpath
+        self.package_verbose = 0
 
     def on_init_end(self, trainer: "pl.Trainer") -> None:
+        """
+        Finalize initialization step.
+        Resolve the paths where files will be written.
+        """
         # Rectify paths if we need to
         print('on_init_start')
         if self.package_fpath == 'auto':
             self.package_fpath = join(trainer.default_root_dir, 'final_package.pt')
+            print('setting auto self.package_fpath = {!r}'.format(self.package_fpath))
 
         # Hack this in. TODO: what is the best way to expose this?
         trainer.package_fpath = self.package_fpath
+        print('will save trainer.package_fpath = {!r}'.format(trainer.package_fpath))
 
     def on_fit_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+        """
+        TODO:
+            - [ ] Write out the uninitialized topology
+        """
         if False:
             print('Training is starting, checking that the model can be packaged')
-            # self._save_package(trainer.model)
             package_dpath = ub.ensuredir((trainer.log_dir, 'packages'))
-            package_fpath = join(package_dpath, '_test_package_epoch{}_step{}.pt'.format(trainer.current_epoch, trainer.global_step))
+            package_fpath = join(package_dpath,
+                                 '_test_package_epoch{}_step{}.pt'.format(
+                                     trainer.current_epoch,
+                                     trainer.global_step))
             self._save_package(pl_module, package_fpath)
 
     def on_fit_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+        """
+        Create the final package (or a list of candidate packages) for
+        evaluation and deployment.
+
+        TODO:
+            - [ ] how do we properly package all of the candidate checkpoints?
+            - [ ] Symlink to "BEST" package at the end.
+            - [ ] write some script such that any checkpoint can be packaged.
+        """
         print('Training is complete, packaging model')
-        # package_fpath = join()
-        # join(package_fpath,
-        # self._save_package(trainer.model)
-        package_dpath = ub.ensuredir((trainer.log_dir, 'packages'))
-        package_fpath = join(package_dpath, 'package_epoch{}_step{}.pt'.format(trainer.current_epoch, trainer.global_step))
-
-        # TODO: how do we properly package all of the candidate checkpoints?
-
+        package_fpath = self._make_package_fpath(trainer)
         self._save_package(pl_module, package_fpath)
-        # Symlink to "BEST" package at the end.
-        # TODO: write some script such that any checkpoint can be packaged.
         final_package_fpath = self.package_fpath
-        if final_package_fpath is not None:
-            final_package_fpath = join(trainer.default_root_dir, 'final_package.pt')
-            ub.symlink(package_fpath, final_package_fpath, overwrite=True, verbose=3)
-            print('final_package_fpath = {!r}'.format(final_package_fpath))
+        ub.symlink(package_fpath, final_package_fpath, overwrite=True, verbose=3)
+        print('final_package_fpath = {!r}'.format(final_package_fpath))
 
-    # def on_save_checkpoint(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", checkpoint: Dict[str, Any]) -> dict:
-    #     print('on_save_checkpoint - checkpoint.keys() = {}'.format(ub.repr2(checkpoint.keys(), nl=1)))
-    #     package_dpath = ub.ensuredir((trainer.log_dir, 'packages'))
-    #     package_fpath = join(package_dpath, 'package_epoch{}_step{}.pt'.format(trainer.current_epoch, trainer.global_step))
-    #     self._save_package(pl_module, package_fpath)
+    def on_save_checkpoint(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", checkpoint: Dict[str, Any]) -> dict:
+        """
+        TODO:
+            - [ ] Do we create a package for every checkpoint?
+        """
+        # package_fpath = self._make_package_fpath(trainer)
+        # self._save_package(pl_module, package_fpath)
 
     def on_keyboard_interrupt(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
         """
         Saving a package on keyboard interrupt is useful for manual early
         stopping.
+
+        TODO:
+            - [X] Package current model state
+            - [ ] Package "best" model state
         """
-        print('Attempting to package model before exiting')
-        package_dpath = ub.ensuredir((trainer.log_dir, 'packages-interrupt'))
-        package_fpath = join(package_dpath, 'package_epoch{}_step{}.pt'.format(trainer.current_epoch, trainer.global_step))
-        self._save_package(pl_module, package_fpath)
+        if self.package_on_interrupt:
+            print('Attempting to package model before exiting')
+            package_fpath = self._make_package_fpath(
+                trainer, dname='package-interupt')
+            self._save_package(pl_module, package_fpath)
+
+    def _make_package_fpath(self, trainer, dname='packages'):
+        package_dpath = ub.ensuredir((trainer.log_dir, dname))
+        package_fpath = join(package_dpath,
+                             'package_epoch{}_step{}.pt'.format(
+                                 trainer.current_epoch, trainer.global_step))
+        return package_fpath
 
     def _save_package(self, model, package_fpath):
         if hasattr(model, 'save_package'):
             print('calling model.save_package')
-            model.save_package(package_fpath)
+            model.save_package(package_fpath, verbose=self.package_verbose)
         else:
             print('model has no save_package method required by Packager')
-            default_save_package(model, package_fpath)
+            default_save_package(model, package_fpath, verbose=self.package_verbose)
         print('save package_fpath = {!r}'.format(package_fpath))
 
 
 def default_save_package(model, package_path, verbose=1):
-    import copy
     import torch.package
     # shallow copy of self, to apply attribute hacks to
     model = copy.copy(model)

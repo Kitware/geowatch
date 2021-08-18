@@ -164,6 +164,11 @@ class ChangeDetectorBase(pl.LightningModule):
 
     @classmethod
     def load_package(cls, package_path, verbose=1):
+        """
+        TODO:
+            - [ ] We should be able to load the model without having access
+                  to this class. What is the right way to do that?
+        """
         import torch.package
         #
         # TODO: is there any way to introspect what these variables could be?

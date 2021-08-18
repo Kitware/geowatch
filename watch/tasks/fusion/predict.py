@@ -65,6 +65,10 @@ def predict(cmdline=False, **kwargs):
         >>> cmdline = False
         >>> gpus = None
         >>> test_dpath = ub.ensure_app_cache_dir('watch/test/fusion/')
+        >>> results_path = ub.ensuredir((test_dpath, 'predict'))
+        >>> ub.delete(results_path)
+        >>> ub.ensuredir(results_path)
+        >>> package_fpath = join(test_dpath, 'my_test_package.pt')
         >>> import kwcoco
         >>> train_dset = kwcoco.CocoDataset.demo('special:vidshapes4-multispectral', num_frames=5, gsize=(128, 128))
         >>> test_dset = kwcoco.CocoDataset.demo('special:vidshapes2-multispectral', num_frames=5, gsize=(128, 128))
@@ -72,6 +76,7 @@ def predict(cmdline=False, **kwargs):
         ...     'train_dataset': test_dset.fpath,
         ...     'datamodule': 'WatchDataModule',
         ...     'workdir': ub.ensuredir((test_dpath, 'train')),
+        ...     'package_fpath': package_fpath,
         ...     'max_epochs': 1,
         ...     'time_steps': 3,
         ...     'chip_size': 64,
@@ -82,9 +87,6 @@ def predict(cmdline=False, **kwargs):
         ... }
         >>> package_fpath = fit_model(**fit_kwargs)
         >>> # Predict via that model
-        >>> results_path = ub.ensuredir((test_dpath, 'predict'))
-        >>> ub.delete(results_path)
-        >>> ub.ensuredir(results_path)
         >>> predict_kwargs = kwargs = {
         >>>     'package_fpath': package_fpath,
         >>>     'pred_dpath': results_path,
