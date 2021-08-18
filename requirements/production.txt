@@ -41,6 +41,8 @@ python_dateutil>=2.8.1
 pytimeparse>=1.1.8
 progiter>=0.1.3
 fire>=0.4.0
+git+https://git@github.com/ubarsc/python-fmask.git#egg=python-fmask
+git+https://git@github.com/ubarsc/rios.git
 
 # Imaging
 distinctipy>=1.1.5
