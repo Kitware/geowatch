@@ -360,7 +360,7 @@ def make_fit_config(cmdline=False, **kwargs):
 
         with open(dump_fpath, 'w') as file:
             file.write(file_contents)
-        print('wrote config to {!r}'.format(file_contents))
+        print('wrote config to {!r}'.format(dump_fpath))
         sys.exit(0)
 
     learning_config = ub.dict_diff(args.__dict__, learning_irrelevant)

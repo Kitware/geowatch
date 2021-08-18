@@ -102,13 +102,12 @@ python -m watch.tasks.fusion.fit \
 
 #####  TEAMFEATS V1  #####
 
-DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc 
-mkdir -p $DVC_DPATH/training/$HOSTNAME/$USER/Drop1_TeamFeats_V1/configs
 
 CHANNEL_SPEC="inv_sort1|inv_sort2|inv_sort3|inv_sort4|inv_sort5|inv_sort6|inv_sort7|inv_sort8|B05|B07|swir16|B09|nir|coastal|B06|inv_overlap1|inv_overlap2|inv_overlap3|inv_overlap4|inv_overlap5|inv_overlap6|inv_overlap7|inv_overlap8|inv_shared1|inv_shared2|inv_shared3|inv_shared4|inv_shared5|inv_shared6|inv_shared7|inv_shared8|inv_shared9|inv_shared10|inv_shared11|inv_shared12|inv_shared13|inv_shared14|inv_shared15|inv_shared16|inv_shared17|inv_shared18|inv_shared19|inv_shared20|inv_shared21|inv_shared22|inv_shared23|inv_shared24|inv_shared25|inv_shared26|inv_shared27|inv_shared28|inv_shared29|inv_shared30|inv_shared31|inv_shared32|inv_shared33|inv_shared34|inv_shared35|inv_shared36|inv_shared37|inv_shared38|inv_shared39|inv_shared40|inv_shared41|inv_shared42|inv_shared43|inv_shared44|inv_shared45|inv_shared46|inv_shared47|inv_shared48|inv_shared49|inv_shared50|inv_shared51|inv_shared52|inv_shared53|inv_shared54|inv_shared55|inv_shared56|inv_shared57|inv_shared58|inv_shared59|inv_shared60|inv_shared61|inv_shared62|inv_shared63|inv_shared64|blue|inv_augment1|inv_augment2|inv_augment3|inv_augment4|inv_augment5|inv_augment6|inv_augment7|inv_augment8|red|cirrus|swir22|B8A|green|r|g|b"
 
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc 
 python -m watch.tasks.fusion.fit \
-    --channels=$CHANNEL_SPEC \
+    --channels="$CHANNEL_SPEC" \
     --method="MultimodalTransformerDirectCD" \
     --model_name=smt_it_stm_p8 \
     --time_steps=8 \
@@ -121,8 +120,8 @@ python -m watch.tasks.fusion.fit \
     --weight_decay=1e-4 \
     --dropout=0.1 \
     --window_size=8 \
-    --train_dataset=$DVC_DPATH/drop1-S2-L8-aligned-c1/train_gsd10_data.kwcoco.json \
-    --vali_dataset=$DVC_DPATH/drop1-S2-L8-aligned-c1/vali_gsd10_data.kwcoco.json \
+    --train_dataset=$DVC_DPATH/drop1-S2-aligned-c1-old/train_data_teamfeats.kwcoco.json \
+    --vali_dataset=$DVC_DPATH/drop1-S2-aligned-c1-old/vali_data_teamfeats.kwcoco.json \
     --default_root_dir=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1_TeamFeats_V1/runs/DirectCD_smt_it_stm_s12_v3 \
        --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1_TeamFeats_V1/runs/DirectCD_smt_it_stm_s12_v3/final_package.pt \
                 --dump=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1_TeamFeats_V1/configs/DirectCD_smt_it_stm_s12_v3.yml 
