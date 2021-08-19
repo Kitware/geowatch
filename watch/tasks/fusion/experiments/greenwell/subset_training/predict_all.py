@@ -43,7 +43,7 @@ for model_root in model_roots:
     print("predicting...")
     predict_args = dict(
         tag=f"{dataset}_{channel_key}_{method_key}",
-        dataset="WatchDataModule",
+        dataset="KWCocoDataModule",
         test_dataset=test_dataset,
         channels=channel_subset,
         checkpoint_path=model_path,

@@ -41,7 +41,7 @@ Example:
     >>> kwargs = {
     ...     'train_dataset': train_fpath,
     ...     'vali_dataset': vali_fpath,
-    ...     'datamodule': 'WatchDataModule',
+    ...     'datamodule': 'KWCocoDataModule',
     ...     #'method': 'MultimodalTransformerDirectCD',
     ...     'method': 'MultimodalTransformerDotProdCD',
     ...     'channels': 'coastal|blue|green|red|nir|swir16|swir22',
@@ -105,7 +105,7 @@ available_datasets = [
     # 'Drop0Raw_S2',
     # 'OneraCD_2018',
 
-    'WatchDataModule',
+    'KWCocoDataModule',
 ]
 
 # TODO: is there a better way to mark these?
@@ -209,11 +209,11 @@ def make_fit_config(cmdline=False, **kwargs):
     modal_parser = parser.add_argument_group("Modal")
 
     modal_parser.add_argument(
-        '--dataset', choices=available_datasets, dest='datamodule', default='WatchDataModule',
+        '--dataset', choices=available_datasets, dest='datamodule', default='KWCocoDataModule',
         help='Alias for --datamodule deprecate')
 
     modal_parser.add_argument(
-        '--datamodule', choices=available_datasets, default='WatchDataModule',
+        '--datamodule', choices=available_datasets, default='KWCocoDataModule',
         help=ub.paragraph(
             '''
             Modal parameter indicating the family of datamodule to train on.
@@ -387,7 +387,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         >>> cmdline = False
         >>> kwargs = {
         ...     'train_dataset': 'special:vidshapes8-multispectral',
-        ...     'datamodule': 'WatchDataModule',
+        ...     'datamodule': 'KWCocoDataModule',
         ... }
         >>> modules = make_lightning_modules(args=None, cmdline=cmdline, **kwargs)
     """
@@ -489,7 +489,7 @@ def fit_model(args=None, cmdline=False, **kwargs):
         ...     'train_dataset': 'special:vidshapes8-multispectral',
         ...     'vali_dataset': 'special:vidshapes2-multispectral',
         ...     'test_dataset': 'special:vidshapes1-multispectral',
-        ...     'datamodule': 'WatchDataModule',
+        ...     'datamodule': 'KWCocoDataModule',
         ...     'workdir': workdir,
         ...     'gpus': 1,
         ...     'max_epochs': 3,
@@ -605,7 +605,7 @@ def main(**kwargs):
         python -m watch.tasks.fusion.fit \
             --model_name=smt_it_stm_p8 \
             --method=MultimodalTransformerDotProdCD \
-            --datamodule=WatchDataModule \
+            --datamodule=KWCocoDataModule \
             --train_dataset=vidshapes8-multispectral \
             --batch_size=4 \
             --num_workers=4 \

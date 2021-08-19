@@ -22,7 +22,7 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
     Example:
         >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
         >>> from watch.tasks.fusion import datamodules
-        >>> datamodule = datamodules.WatchDataModule(
+        >>> datamodule = datamodules.KWCocoDataModule(
         >>>     train_dataset='special:vidshapes8', num_workers=0)
         >>> datamodule.setup('fit')
         >>> loader = datamodule.train_dataloader()
@@ -112,7 +112,7 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
     Example:
         >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
         >>> from watch.tasks.fusion import datamodules
-        >>> datamodule = datamodules.WatchDataModule(
+        >>> datamodule = datamodules.KWCocoDataModule(
         >>>     train_dataset='special:vidshapes8', num_workers=0)
         >>> datamodule.setup('fit')
         >>> loader = datamodule.train_dataloader()
@@ -199,7 +199,7 @@ class MultimodalTransformerSegmentation(SemanticSegmentationBase):
         >>> # xdoctest: +SKIP
         >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
         >>> from watch.tasks.fusion import datamodules
-        >>> datamodule = datamodules.WatchDataModule(
+        >>> datamodule = datamodules.KWCocoDataModule(
         >>>     train_dataset='special:vidshapes8', num_workers=0)
         >>> datamodule.setup('fit')
         >>> loader = datamodule.train_dataloader()

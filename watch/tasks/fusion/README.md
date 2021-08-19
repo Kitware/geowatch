@@ -86,7 +86,7 @@ Automated dynamics / plugins?
 
 - [X] Rename --dataset argument to --datamodule
 
-- [ ] Rename WatchDataModule to ChangeDataModule
+- [ ] Rename KWCocoDataModule to ChangeDataModule
 
 - [ ] Need to figure out how to connect configargparse with ray.tune
 

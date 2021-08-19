@@ -25,7 +25,7 @@ except Exception:
     profile = ub.identity
 
 
-class WatchDataModule(pl.LightningDataModule):
+class KWCocoDataModule(pl.LightningDataModule):
     """
     Prepare the kwcoco dataset as torch video datamodules
 
@@ -49,7 +49,7 @@ class WatchDataModule(pl.LightningDataModule):
         >>> batch_size = 2
         >>> time_steps = 3
         >>> chip_size = 330
-        >>> self = WatchDataModule(
+        >>> self = KWCocoDataModule(
         >>>     train_dataset=train_dataset,
         >>>     test_dataset=test_dataset,
         >>>     batch_size=batch_size,
@@ -82,7 +82,7 @@ class WatchDataModule(pl.LightningDataModule):
         >>> time_steps = 3
         >>> chip_size = 128
         >>> channels = channels
-        >>> self = WatchDataModule(
+        >>> self = KWCocoDataModule(
         >>>     train_dataset=train_dataset,
         >>>     test_dataset=test_dataset,
         >>>     batch_size=batch_size,
@@ -140,7 +140,7 @@ class WatchDataModule(pl.LightningDataModule):
         self.input_stats = None
 
         if self.verbose:
-            print('Init WatchDataModule')
+            print('Init KWCocoDataModule')
             print('self.train_kwcoco = {!r}'.format(self.train_kwcoco))
             print('self.vali_kwcoco = {!r}'.format(self.vali_kwcoco))
             print('self.test_kwcoco = {!r}'.format(self.test_kwcoco))
@@ -180,7 +180,7 @@ class WatchDataModule(pl.LightningDataModule):
         Example:
             >>> from watch.tasks.fusion.datamodules.watch_data import *  # NOQA
             >>> from watch.tasks.fusion import datamodules
-            >>> self = datamodules.WatchDataModule(
+            >>> self = datamodules.KWCocoDataModule(
             >>>     train_dataset='special:vidshapes8-multispectral', num_workers=0)
             >>> self.setup('fit')
             >>> loader = self.train_dataloader()

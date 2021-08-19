@@ -36,7 +36,7 @@ def main():
 
         print("training...")
         defaults = dict(
-            dataset="WatchDataModule",
+            dataset="KWCocoDataModule",
             channels=channel_subset,
 
             # trainer params
@@ -50,7 +50,7 @@ def main():
         print("predicting...")
         predict_args = dict(
             tag=f"OneraCD_{channel_key}_{method_key}",
-            dataset="WatchDataModule",
+            dataset="KWCocoDataModule",
             channels=channel_subset,
             checkpoint_path=package_fpath,
             results_dir="_subset_experiment/results",

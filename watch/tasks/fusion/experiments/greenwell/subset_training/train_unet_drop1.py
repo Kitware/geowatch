@@ -46,7 +46,7 @@ def main():
 
         print("training...")
         defaults = dict(
-            dataset="WatchDataModule",
+            dataset="KWCocoDataModule",
             channels=channel_subset,
 
             # trainer params
