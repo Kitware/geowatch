@@ -110,9 +110,9 @@ python -m watch.tasks.fusion.fit \
     --channels="$CHANNEL_SPEC" \
     --method="MultimodalTransformerDirectCD" \
     --model_name=smt_it_stm_p8 \
-    --time_steps=8 \
-    --chip_size=128 \
-    --batch_size=2 \
+    --time_steps=4 \
+    --chip_size=96 \
+    --batch_size=1 \
     --accumulate_grad_batches=8 \
     --num_workers=4 \
     --gpus=1  \
