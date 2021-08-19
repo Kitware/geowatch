@@ -191,8 +191,8 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
                 'performer' - a linear approximation.
                 '''))
         return parent_parser
-    
-    
+
+
 class MultimodalTransformerSegmentation(SemanticSegmentationBase):
     """
     Example:
@@ -224,8 +224,7 @@ class MultimodalTransformerSegmentation(SemanticSegmentationBase):
                  input_stats=None,
                  attention_impl='exact',
                  window_size=8,
-                 do_collate=False,
-                ):
+                 do_collate=False):
         super().__init__(
             learning_rate=learning_rate,
             weight_decay=weight_decay,

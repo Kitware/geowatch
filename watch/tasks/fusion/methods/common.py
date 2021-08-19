@@ -4,7 +4,6 @@ import pytorch_lightning as pl
 import torchmetrics as metrics
 import torch_optimizer as optim
 from torch.optim import lr_scheduler
-import numpy as np
 import ubelt as ub
 import netharn as nh
 import einops
@@ -325,8 +324,7 @@ class SemanticSegmentationBase(pl.LightningModule):
                  learning_rate=1e-3,
                  weight_decay=0.,
                  input_stats=None,
-                 do_collate=False,
-                ):
+                 do_collate=False):
         super().__init__()
         self.save_hyperparameters()
 
@@ -366,6 +364,7 @@ class SemanticSegmentationBase(pl.LightningModule):
 
             >>> # Choose subclass to test this with (does not cover all cases)
             >>> self = methods.MultimodalTransformerSegmentation(
+            >>>     n_classes=1000,
             >>>     model_name='smt_it_joint_p8', input_stats=datamodule.input_stats)
             >>> outputs = self.training_step(batch)
             >>> canvas = datamodule.draw_batch(batch, outputs=outputs)
@@ -487,7 +486,7 @@ class SemanticSegmentationBase(pl.LightningModule):
             for key, metric in self.metrics.items():
                 val = metric(item_pred_labels, item_true_labels)
                 item_metrics[f'{stage}_{key}'] = val
-            outputs['loss'] = loss 
+            outputs['loss'] = loss
         return outputs
 
     @profile
