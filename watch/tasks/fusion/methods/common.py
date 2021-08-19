@@ -352,8 +352,8 @@ class SemanticSegmentationBase(pl.LightningModule):
         Example:
             >>> from watch.tasks.fusion.methods.common import *  # NOQA
             >>> from watch.tasks.fusion import methods
-            >>> from watch.tasks.fusion import datasets
-            >>> datamodule = datasets.WatchDataModule(
+            >>> from watch.tasks.fusion import datamodules
+            >>> datamodule = datamodules.WatchDataModule(
             >>>     train_dataset='special:vidshapes8',
             >>>     num_workers=0, chip_size=128,
             >>>     normalize_inputs=True,
