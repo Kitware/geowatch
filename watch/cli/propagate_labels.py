@@ -28,6 +28,36 @@ from os.path import join
 import ubelt as ub
 import numpy as np
 
+def get_warp(gid1, gid2, dataset):
+    # Given a dataset and IDs of two images, the warp between these images is returned
+    img1 = dataset.index.imgs[gid1]
+    img2 = dataset.index.imgs[gid2]
+
+    # Get the transform from each image to the aligned "video-space"
+    video_from_img1 = kwimage.Affine.coerce(img1['warp_img_to_vid'])
+    video_from_img2 = kwimage.Affine.coerce(img2['warp_img_to_vid'])
+
+    # Build the transform that warps img1 -> video -> img2
+    img2_from_video = video_from_img2.inv()
+    img2_from_img1 = img2_from_video @ video_from_img1
+    
+    return img2_from_img1
+
+def get_warped_ann(previous_ann, warp, image_id):
+    # Returns a new annotation by applying a warp on an existing annotation
+    segmentation = kwimage.Segmentation.coerce(previous_ann['segmentation'])
+    
+    warped_seg = segmentation.warp(warp)
+    warped_bbox = list(warped_seg.bounding_box().to_coco(style='new'))[0]
+    
+    # Create a new annotation object
+    warped_ann = {'segmentation': warped_seg.to_coco(style='new')}
+    warped_ann['bbox'] = warped_bbox
+    warped_ann['category_id'] = previous_ann['category_id']
+    warped_ann['track_id'] = previous_ann['track_id']
+    warped_ann['image_id'] = image_id
+    
+    return warped_ann
 
 def get_canvas_concat_channels(annotations, dataset, img_id):
     canvas = dataset.delayed_load(img_id, channels='red|green|blue').finalize()
@@ -113,8 +143,12 @@ def main(args):
 
         # a set of all the seen track IDs
         seen_track_ids = set()
+        
         # a dictionary of latest annotation IDs, indexed by the track IDs
         latest_ann_ids = {}   
+        
+        # a dictionary of latest image IDs, this will be needed to apply affine transform on images
+        latest_img_ids = {}
 
         # canvases for visualizations
         canvases = []
@@ -137,6 +171,7 @@ def main(args):
                     this_track_ids.update({track_id})
 
                 latest_ann_ids[track_id] = aid
+                latest_img_ids[track_id] = img_id
 
             # add any track IDs to the list of seen track ids
             new_track_ids = this_track_ids - seen_track_ids
@@ -152,13 +187,24 @@ def main(args):
                 for missing in missing_track_ids:
                     if full_ds.anns[latest_ann_ids[missing]]['category_id'] in categories_to_propagate :
                         # check if the annotation belongs to the list of categories that we want to propagate
-                        this_image_fixed_anns.append( full_ds.anns[latest_ann_ids[missing]] )
+                        previous_annotation = full_ds.anns[latest_ann_ids[missing]]
+ 
+                        # get the warp from previous image to this image
+                        previous_image_id = latest_img_ids[missing]
+                        warp_previous_to_this_image = get_warp(previous_image_id, img_id, full_ds)
+
+                        # apply the warp
+                        warped_annotation = get_warped_ann(previous_annotation, warp_previous_to_this_image, img_id)
+
+                        this_image_fixed_anns.append(warped_annotation)
+                        
                         if args.verbose:
                             print('added annotation for image', img_id, 'track ID', missing)
 
             # Get "n_image_viz" number of canvases for visualization with original annotations
-            store_starting_frame = args.viz_end and ((video['num_frames'] - j) <=  n_image_viz)
-            store_ending_frame = (not args.viz_end) and (j < n_image_viz)
+            num_frames = len(full_ds.index.vidid_to_gids[vid_id])
+            store_ending_frame = args.viz_end and ((num_frames - j) <=  n_image_viz)
+            store_starting_frame = (not args.viz_end) and (j < n_image_viz)
             if store_starting_frame or store_ending_frame:
                  canvases.append(get_canvas_concat_channels(annotations=this_image_anns, dataset=full_ds, img_id=img_id))
                  canvases_fixed.append(get_canvas_concat_channels(annotations=this_image_fixed_anns, dataset=full_ds, img_id=img_id))
