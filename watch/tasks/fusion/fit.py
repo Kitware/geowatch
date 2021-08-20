@@ -168,13 +168,33 @@ def make_fit_config(cmdline=False, **kwargs):
         profiling.
         '''))
 
+    # Deployement and prediction stuffs
+    # TODO: what is the right way to handle running eval after fit?
+    # There may be multiple candidate models that need to be tested, so we
+    # can't just specify one package, one prediction dumping ground, and one
+    # evaluation dataset, maybe we specify the paths where the "best" ones are
+    # written?.
     config_parser.add_argument('--package_fpath', default=None, help=ub.paragraph(
         '''
         Specifies a path where a torch packaged model will be written (or
         symlinked) to.
         '''))
 
+    # config_parser.add_argument('--pred_dataset', default=None, help=ub.paragraph(
+    #     '''
+    #     If we have a test dataset, where prediction to write predictions
+    #     '''))
+
+    # config_parser.add_argument('--eval_dpath', default=None, help=ub.paragraph(
+    #     '''
+    #     If we have a test dataset, where where to write evaluations wrt
+    #     predictions
+    #     '''))
+
+    #
     callback_parser = parser.add_argument_group("Callbacks")
+
+    # TODO: callbacks might have arg parsers
 
     callback_parser.add_argument('--patience', default=100, type=int, help=ub.paragraph(
         '''Number of epochs with no improvement before early stopping'''))
@@ -331,16 +351,36 @@ def make_fit_config(cmdline=False, **kwargs):
     del args.dump
     del args.dumps
     del args.config
-    if do_dumps:
+
+    if do_dumps or dump_fpath is not None:
         config_items = parser.get_items_for_config_file_output(parser._source_to_settings, args)
-        file_contents = parser._config_file_parser.serialize(config_items)
+
+        from kwcoco.util import util_json
+        walker = util_json.IndexableWalker(config_items)
+        unserializable = list(util_json.find_json_unserializable(config_items))
+        for item in unserializable:
+            val = item['data']
+            if isinstance(val, pathlib.Path):
+                walker[item['loc']] = str(val)
+
+        if 0:
+            import json
+            file_contents = json.dumps(config_items)
+        if 0:
+            import yaml
+            import io
+            file = io.StringIO()
+            yaml.dump(config_items, file)
+            file.seek(0)
+            file_contents = file.read()
+        if 1:
+            file_contents = parser._config_file_parser.serialize(config_items)
+
+    if do_dumps:
         print(file_contents)
         sys.exit(0)
 
     if dump_fpath is not None:
-        config_items = parser.get_items_for_config_file_output(parser._source_to_settings, args)
-        file_contents = parser._config_file_parser.serialize(config_items)
-
         parent_dpath = pathlib.Path(dump_fpath).parent
         parent_dpath.mkdir(exist_ok=True, parents=True)
 
