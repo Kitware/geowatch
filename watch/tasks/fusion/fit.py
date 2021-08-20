@@ -19,6 +19,10 @@ CommandLine:
     CUDA_VISIBLE_DEVICES=0 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.fit __doc__:0
 
 
+    python -m watch.tasks.fusion.fit --help
+    python -m watch.tasks.fusion.fit --dump foo.yml
+
+
 Example:
     >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
     >>> from watch.tasks.fusion.fit import *  # NOQA
@@ -66,15 +70,9 @@ Example:
 """
 
 import pytorch_lightning as pl
-from watch.utils import lightning_ext as pl_ext
-
-from watch.tasks.fusion import datamodules
-from watch.tasks.fusion import methods
-from watch.tasks.fusion import utils
-
-# import scriptconfig as scfg
 import ubelt as ub
-import sys
+import platform
+import getpass
 import pathlib
 
 try:
@@ -87,10 +85,9 @@ available_methods = [
     'MultimodalTransformerDirectCD',
     'MultimodalTransformerDotProdCD',
     'MultimodalTransformerSegmentation',
-    'TransformerChangeDetector',
 ]
 
-available_datasets = [
+available_datamodules = [
     'KWCocoVideoDataModule',
 ]
 
@@ -130,37 +127,24 @@ def make_fit_config(cmdline=False, **kwargs):
         >>> args = make_fit_config(cmdline=cmdline, **kwargs)
         >>> print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1, sort=0)))
     """
-    import argparse
-    import configargparse
+    from watch.utils import configargparse_ext
+    from watch.tasks.fusion import datamodules
+    from watch.tasks.fusion import methods
 
-    class RawDescriptionDefaultsHelpFormatter(
-            argparse.RawDescriptionHelpFormatter,
-            argparse.ArgumentDefaultsHelpFormatter):
-        pass
-
-    parser = configargparse.ArgumentParser(
+    parser = configargparse_ext.ArgumentParser(
         add_config_file_help=False,
         description='Training script for the fused change/segmentation task',
-        formatter_class=RawDescriptionDefaultsHelpFormatter,
+        auto_env_var_prefix='WATCH_FUSION_FIT_',
+        add_env_var_help=True,
+        formatter_class='raw',
+        config_file_parser_class='yaml',
+        args_for_setting_config_path=['--config'],
+        args_for_writing_out_config_file=['--dump'],
     )
 
     # Setup scriptconfig-like special arguments to set a config via a file or
     # dump some config to stdout or disk
-    config_parser = parser.add_argument_group("Config")
-    config_parser.add('--config', is_config_file=True, help=ub.paragraph(
-        '''
-        A path to a config file path that will overwrite the defaults.
-        '''))
-
-    config_parser.add_argument('--dump', default=None, help=ub.paragraph(
-        '''
-        If specified, dump this config to this filepath on disk and exit.
-        '''))
-
-    config_parser.add_argument('--dumps', action='store_true', help=ub.paragraph(
-        '''
-        If specified, dump this config stdout and exit.
-        '''))
+    config_parser = parser.add_argument_group("Other")
 
     config_parser.add_argument('--profile', action='store_true', help=ub.paragraph(
         '''
@@ -215,11 +199,7 @@ def make_fit_config(cmdline=False, **kwargs):
     modal_parser = parser.add_argument_group("Modal")
 
     modal_parser.add_argument(
-        '--dataset', choices=available_datasets, dest='datamodule', default='KWCocoVideoDataModule',
-        help='Alias for --datamodule deprecate')
-
-    modal_parser.add_argument(
-        '--datamodule', choices=available_datasets, default='KWCocoVideoDataModule',
+        '--datamodule', choices=available_datamodules, default='KWCocoVideoDataModule',
         help=ub.paragraph(
             '''
             Modal parameter indicating the family of datamodule to train on.
@@ -241,10 +221,11 @@ def make_fit_config(cmdline=False, **kwargs):
     # override common defaults with user settings
     parser.set_defaults(**kwargs)
     # The specific parser will depend on the modal arguments
-    modal, _ = parser.parse_known_args(ignore_help_args=True)
+    modal, _ = parser.parse_known_args(ignore_help_args=True,
+                                       ignore_write_args=True)
 
-    print(kwargs)
-    print(modal)
+    # print(kwargs)
+    # print(modal)
 
     # I strongly recommend that ~/data is a symlink to a drive with more
     # storage space.
@@ -257,8 +238,6 @@ def make_fit_config(cmdline=False, **kwargs):
         if dvc_repos_dpath.exists():
             smart_dvc_dpath = dvc_repos_dpath / 'smart_watch_dvc'
             if smart_dvc_dpath.exists():
-                import platform
-                import getpass
                 user_info = {
                     'user': getpass.getuser(),
                     'hostname': platform.node(),
@@ -279,7 +258,6 @@ def make_fit_config(cmdline=False, **kwargs):
     # import netharn as nh
     # xpu = nh.XPU.coerce('auto')
     # auto_device = xpu.device.index
-
     # import netharn as nh
     # has_gpu = nh.XPU.coerce('auto').device.type == 'cpu'
 
@@ -342,53 +320,7 @@ def make_fit_config(cmdline=False, **kwargs):
     if args.normalize_inputs == 'False':
         args.normalize_inputs = False
 
-    print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
-
-    # Do scriptconfig like dump logic
-    dump_fpath = args.dump
-    do_dumps = args.dumps
-
-    del args.dump
-    del args.dumps
-    del args.config
-
-    if do_dumps or dump_fpath is not None:
-        config_items = parser.get_items_for_config_file_output(parser._source_to_settings, args)
-
-        from kwcoco.util import util_json
-        walker = util_json.IndexableWalker(config_items)
-        unserializable = list(util_json.find_json_unserializable(config_items))
-        for item in unserializable:
-            val = item['data']
-            if isinstance(val, pathlib.Path):
-                walker[item['loc']] = str(val)
-
-        if 0:
-            import json
-            file_contents = json.dumps(config_items)
-        if 0:
-            import yaml
-            import io
-            file = io.StringIO()
-            yaml.dump(config_items, file)
-            file.seek(0)
-            file_contents = file.read()
-        if 1:
-            file_contents = parser._config_file_parser.serialize(config_items)
-
-    if do_dumps:
-        print(file_contents)
-        sys.exit(0)
-
-    if dump_fpath is not None:
-        parent_dpath = pathlib.Path(dump_fpath).parent
-        parent_dpath.mkdir(exist_ok=True, parents=True)
-
-        with open(dump_fpath, 'w') as file:
-            file.write(file_contents)
-        print('wrote config to {!r}'.format(dump_fpath))
-        sys.exit(0)
-
+    # print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
     learning_config = ub.dict_diff(args.__dict__, learning_irrelevant)
 
     # Construct a netharn-like training directory based on relevant hyperparams
@@ -397,10 +329,6 @@ def make_fit_config(cmdline=False, **kwargs):
 
     if args.default_root_dir is None:
         args.default_root_dir = pathlib.Path(args.workdir) / args.train_name
-
-    # TODO:
-    # Add dump and --dumps commands to write the config to a file
-    # similar to how scriptconfig works
     return args
 
 
@@ -417,6 +345,10 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         ... }
         >>> modules = make_lightning_modules(args=None, cmdline=cmdline, **kwargs)
     """
+    from watch.utils import lightning_ext as pl_ext
+    from watch.tasks.fusion import utils
+    from watch.tasks.fusion import datamodules
+    from watch.tasks.fusion import methods
     args = make_fit_config(args=args, cmdline=cmdline, **kwargs)
 
     args_dict = args.__dict__
@@ -528,6 +460,7 @@ def fit_model(args=None, cmdline=False, **kwargs):
         >>> #print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
         >>> fit_model(**kwargs)
     """
+    from watch.tasks.fusion import utils
     modules = make_lightning_modules(cmdline=cmdline, **kwargs)
     # args = modules['args']
     trainer = modules['trainer']
@@ -566,14 +499,6 @@ def fit_model(args=None, cmdline=False, **kwargs):
 
     print('tune_result = {}'.format(ub.repr2(tune_result, nl=1)))
 
-    # # Run learning rate finder
-    # lr_finder = trainer.tuner.lr_find(model)
-    # # Results can be found in
-    # lr_finder.results
-    # # Plot with
-    # fig = lr_finder.plot(suggest=True)
-    # fig.show()
-
     # fit the model
     print('Fit starting')
     trainer.fit(model, datamodule)
@@ -585,25 +510,6 @@ def fit_model(args=None, cmdline=False, **kwargs):
     # TODO:
     # Run prediction code here
     # Run evaluation code here
-
-    # if 0:
-    #     # HACK Package
-    #     # TODO: need a way of creating a package from an intermediate checkpoint
-    #     checkpoint_fpath = '/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/training/yardrat/jon.crall/MultimodalTransformerDirectCD-21150fb65110ebd1/lightning_logs/version_3/checkpoints/epoch=236-step=9242.ckpt'
-    #     import torch
-    #     state = torch.load(checkpoint_fpath)
-    #     model.load_state_dict(state['state_dict'])
-    #     import os
-    #     package_fpath = pathlib.Path(os.path.dirname(os.path.dirname(checkpoint_fpath))) / 'package.pt'
-    #     model.datamodule_hparams = datamodule.hparams
-    #     model.trainer = None
-    #     model.train_dataloader = None
-    #     model.val_dataloader = None
-    #     model.test_dataloader = None
-    #     print('Package model: package_fpath = {!r}'.format(package_fpath))
-    #     utils.create_package(model, package_fpath)
-    #     return
-
     return package_fpath
 
 
@@ -626,43 +532,12 @@ def main(**kwargs):
         python -m watch.tasks.fusion.fit
 
         # Invoke the training script
-
         # This task required 5.12GB on a 3090
         python -m watch.tasks.fusion.fit \
             --arch_name=smt_it_stm_p8 \
             --method=MultimodalTransformerDotProdCD \
             --datamodule=KWCocoVideoDataModule \
             --train_dataset=vidshapes8-multispectral \
-            --batch_size=4 \
-            --num_workers=4 \
-            --chip_size=96 \
-            --workdir=$HOME/work/watch/fit
-
-        # This task required 5.12GB on a 3090
-        python -m watch.tasks.fusion.fit \
-            --arch_name=smt_it_stm_p8 \
-            --method=MultimodalTransformerDotProdCD \
-            --train_dataset=$TRAIN_FPATH \
-            --batch_size=4 \
-            --num_workers=4 \
-            --chip_size=96 \
-            --workdir=$HOME/work/watch/fit
-
-        # This task required 17GB on a 3090
-        python -m watch.tasks.fusion.fit \
-            --arch_name=smt_it_stm_p8 \
-            --method=MultimodalTransformerDotProdCD \
-            --train_dataset=$TRAIN_FPATH \
-            --batch_size=16 \
-            --num_workers=4 \
-            --chip_size=128 \
-            --workdir=$HOME/work/watch/fit
-
-        # This task required 20GB on a 3090
-        python -m watch.tasks.fusion.onera_channelwisetransformer_train \
-            --arch_name=smt_it_joint_p8 \
-            --method=MultimodalTransformerDirectCD \
-            --train_dataset=$TRAIN_FPATH \
             --batch_size=4 \
             --num_workers=4 \
             --chip_size=96 \
@@ -678,5 +553,4 @@ def main(**kwargs):
 if __name__ == "__main__":
     # import xdev
     # xdev.make_warnings_print_tracebacks()
-
     main()

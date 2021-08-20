@@ -356,9 +356,9 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
     @staticmethod
     def add_data_specific_args(parent_parser):
         parser = parent_parser.add_argument_group("kwcoco_video_data")
-        parser.add_argument("--train_dataset", default=None, type=pathlib.Path)
-        parser.add_argument("--vali_dataset", default=None, type=pathlib.Path)
-        parser.add_argument("--test_dataset", default=None, type=pathlib.Path)
+        parser.add_argument("--train_dataset", default=None, help='path to the train kwcoco file')
+        parser.add_argument("--vali_dataset", default=None, help='path to the validation kwcoco file')
+        parser.add_argument("--test_dataset", default=None, help='path to the test kwcoco file')
         parser.add_argument("--time_steps", default=2, type=int)
         parser.add_argument("--chip_size", default=128, type=int)
         parser.add_argument("--time_overlap", default=0.0, type=float, help='fraction of time steps to overlap')
