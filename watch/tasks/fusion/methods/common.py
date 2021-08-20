@@ -203,7 +203,7 @@ class ChangeDetectorBase(pl.LightningModule):
             >>> dpath = ub.ensure_app_cache_dir('watch/tests/package')
             >>> package_path = join(dpath, 'my_package.pt')
 
-            >>> # Use one of our fusion models in a test
+            >>> # Use one of our fusion.architectures in a test
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datamodules
             >>> model = methods.MultimodalTransformerDirectCD("smt_it_stm_p8")
@@ -233,7 +233,7 @@ class ChangeDetectorBase(pl.LightningModule):
             >>> dpath = ub.ensure_app_cache_dir('watch/tests/package')
             >>> package_path = join(dpath, 'my_package.pt')
 
-            >>> # Use one of our fusion models in a test
+            >>> # Use one of our fusion.architectures in a test
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datamodules
             >>> self = methods.MultimodalTransformerDirectCD("smt_it_stm_p8")

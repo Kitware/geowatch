@@ -30,7 +30,7 @@ def millify(n):
 #         >>> dpath = ub.ensure_app_cache_dir('watch/tests/package')
 #         >>> package_path = join(dpath, 'my_package.pt')
 #
-#         >>> # Use one of our fusion models in a test
+#         >>> # Use one of our fusion.architectures in a test
 #         >>> from watch.tasks.fusion import methods
 #         >>> model = methods.MultimodalTransformerDirectCD("smt_it_stm_p8")
 #         >>> # We have to run an input through the module because it is lazy

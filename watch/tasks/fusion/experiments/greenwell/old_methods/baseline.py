@@ -4,7 +4,7 @@ from torch import nn
 from torchvision import transforms
 
 from watch.tasks.fusion.methods.common import ChangeDetectorBase
-from watch.tasks.fusion.models import unet_blur
+from watch.tasks.fusion.architectures import unet_blur
 from watch.tasks.fusion import utils
 
 

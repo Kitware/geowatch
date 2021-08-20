@@ -6,7 +6,7 @@ import einops
 from torchvision import transforms
 
 from watch.tasks.fusion.methods.common import ChangeDetectorBase, SemanticSegmentationBase
-from watch.tasks.fusion.models import transformer
+from watch.tasks.fusion.architectures import transformer
 from watch.tasks.fusion import utils
 import ubelt as ub
 
