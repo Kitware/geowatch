@@ -18,6 +18,8 @@ from torch.utils import data
 from torchvision import transforms
 from watch.tasks.fusion import utils
 
+# __all__ = ['KWCocoDataModule', 'WatchVideoDataset']
+
 try:
     import xdev
     profile = xdev.profile

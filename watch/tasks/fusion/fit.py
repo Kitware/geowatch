@@ -70,7 +70,6 @@ from watch.utils import lightning_ext as pl_ext
 
 from watch.tasks.fusion import datamodules
 from watch.tasks.fusion import methods
-from watch.tasks.fusion import models
 from watch.tasks.fusion import utils
 
 # import scriptconfig as scfg
@@ -84,27 +83,14 @@ try:
 except Exception:
     profile = ub.identity
 
-# available_methods = dir(methods)
 available_methods = [
-    'End2EndVotingModel',
     'MultimodalTransformerDirectCD',
     'MultimodalTransformerDotProdCD',
     'MultimodalTransformerSegmentation',
     'TransformerChangeDetector',
-    'UNetChangeDetector',
-    'VotingModel',
 ]
 
-# Model names define the transformer encoder used by the method
-available_models = list(models.transformer.encoder_configs.keys())
-
-# dir(datamodules)
-# TODO: rename to datamodules
 available_datasets = [
-    # 'Drop0AlignMSI_S2',
-    # 'Drop0Raw_S2',
-    # 'OneraCD_2018',
-
     'KWCocoDataModule',
 ]
 
