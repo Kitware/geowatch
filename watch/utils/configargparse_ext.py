@@ -2,6 +2,7 @@ import configargparse
 import argparse
 import sys
 import os
+import re
 from collections import OrderedDict
 
 from configargparse import (
@@ -102,10 +103,10 @@ class ArgumentParser(configargparse.ArgumentParser):
         if self._auto_env_var_prefix is not None:
             for a in self._actions:
                 config_file_keys = self.get_possible_config_keys(a)
-                if config_file_keys and not (a.env_var or a.is_positional_arg
-                    or a.is_config_file_arg or a.is_write_out_config_file_arg or
-                    isinstance(a, argparse._VersionAction) or
-                    isinstance(a, argparse._HelpAction)):
+                if (config_file_keys and not (a.env_var or a.is_positional_arg
+                                              or a.is_config_file_arg or a.is_write_out_config_file_arg or
+                                              isinstance(a, argparse._VersionAction) or
+                                              isinstance(a, argparse._HelpAction))):
                     stripped_config_file_key = config_file_keys[0].strip(
                         self.prefix_chars)
                     a.env_var = (self._auto_env_var_prefix +
@@ -115,8 +116,8 @@ class ArgumentParser(configargparse.ArgumentParser):
         env_var_args = []
         nargs = False
         actions_with_env_var_values = [a for a in self._actions
-            if not a.is_positional_arg and a.env_var and a.env_var in env_vars
-                and not already_on_command_line(args, a.option_strings, self.prefix_chars)]
+                                       if not a.is_positional_arg and a.env_var and a.env_var in env_vars
+                                       and not already_on_command_line(args, a.option_strings, self.prefix_chars)]
         for action in actions_with_env_var_values:
             key = action.env_var
             value = env_vars[key]
@@ -147,7 +148,7 @@ class ArgumentParser(configargparse.ArgumentParser):
 
         # prepare for reading config file(s)
         known_config_keys = {config_key: action for action in self._actions
-            for config_key in self.get_possible_config_keys(action)}
+                             for config_key in self.get_possible_config_keys(action)}
 
         # open the config file(s)
         config_streams = []
@@ -187,12 +188,11 @@ class ArgumentParser(configargparse.ArgumentParser):
                 if not discard_this_key:
                     config_args += self.convert_item_to_command_line_arg(
                         action, key, value)
-                    source_key = "%s|%s" %(_CONFIG_FILE_SOURCE_KEY, stream.name)
+                    source_key = "%s|%s" % (_CONFIG_FILE_SOURCE_KEY, stream.name)
                     if source_key not in self._source_to_settings:
                         self._source_to_settings[source_key] = OrderedDict()
                     self._source_to_settings[source_key][key] = (action, value)
-                    if (action and action.nargs or
-                        isinstance(action, argparse._AppendAction)):
+                    if (action and action.nargs or isinstance(action, argparse._AppendAction)):
                         nargs = True
 
             if nargs:
@@ -203,8 +203,7 @@ class ArgumentParser(configargparse.ArgumentParser):
         # save default settings for use by print_values()
         default_settings = OrderedDict()
         for action in self._actions:
-            cares_about_default_value = (not action.is_positional_arg or
-                action.nargs in [OPTIONAL, ZERO_OR_MORE])
+            cares_about_default_value = (not action.is_positional_arg or action.nargs in [OPTIONAL, ZERO_OR_MORE])
             if (already_on_command_line(args, action.option_strings, self.prefix_chars) or
                     not cares_about_default_value or
                     action.default is None or
