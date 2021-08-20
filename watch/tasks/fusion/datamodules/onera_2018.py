@@ -4,7 +4,7 @@ import pytorch_lightning as pl
 from torchvision import transforms
 from torch.utils import data
 import pathlib
-from watch.tasks.fusion.datasets import common
+from watch.tasks.fusion.datamodules import common
 from watch.tasks.fusion import utils
 import torch
 
@@ -14,11 +14,11 @@ class OneraCD_2018(pl.LightningDataModule):
     Example:
         >>> # xdoctest: +REQUIRES(--has-smart-dvc)
         >>> # requires that the dvc repo exists in a certain path
-        >>> from watch.tasks.fusion import datasets, methods
+        >>> from watch.tasks.fusion import datamodules, methods
         >>> import ubelt as ub
         >>> dvc_dpath = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
         >>> method = methods.MultimodalTransformerDirectCD("smt_it_stm_p8")
-        >>> data = datasets.OneraCD_2018(
+        >>> data = datamodules.OneraCD_2018(
         >>>     train_kwcoco_path=join(dvc_dpath, 'extern/onera_2018/onera_train.kwcoco.json'),
         >>>     preprocessing_step=method.preprocessing_step,
         >>>     batch_size=1,

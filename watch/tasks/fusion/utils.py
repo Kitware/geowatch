@@ -16,49 +16,70 @@ def millify(n):
     return '{:.2f}{}'.format(n / 10**(3 * millidx), millnames[millidx])
 
 
-def create_package(model, package_path, module_name="watch_tasks_fusion", model_name="model.pkl", verbose=False):
-    """
-
-    CommandLine:
-        xdoctest watch.tasks.fusion.utils create_package
-
-    Example:
-        >>> import ubelt as ub
-        >>> from os.path import join
-        >>> from watch.tasks.fusion.utils import *  # NOQA
-        >>> dpath = ub.ensure_app_cache_dir('watch/tests/package')
-        >>> package_path = join(dpath, 'my_package.pt')
-
-        >>> # Use one of our fusion models in a test
-        >>> from watch.tasks.fusion import methods
-        >>> model = methods.MultimodalTransformerDirectCD("smt_it_stm_p8")
-        >>> # We have to run an input through the module because it is lazy
-        >>> inputs = torch.rand(1, 2, 13, 128, 128)
-        >>> model(inputs)
-
-        >>> # Save the model
-        >>> create_package(model, package_path)
-
-        >>> # Test that the package can be reloaded
-        >>> recon = load_model_from_package(package_path)
-        >>> # Check consistency and data is actually different
-        >>> recon_state = recon.state_dict()
-        >>> model_state = model.state_dict()
-        >>> assert recon is not model
-        >>> assert set(recon_state) == set(recon_state)
-        >>> for key in recon_state.keys():
-        >>>     assert (model_state[key] == recon_state[key]).all()
-        >>>     assert model_state[key] is not recon_state[key]
-    """
-    with package.PackageExporter(package_path, verbose=verbose) as exp:
-        # TODO: this is not a problem yet, but some package types (mainly binaries) will need to be excluded and added as mocks
-        exp.extern("**", exclude=["watch.tasks.fusion.**"])
-        exp.intern("watch.tasks.fusion.**")
-        exp.save_pickle(module_name, model_name, model)
+# def create_package(model, package_path, module_name="watch_tasks_fusion", model_name="model.pkl", verbose=False):
+#     """
+#     DEPRECATE IN FAVOR OF A MODEL METHOD?
+#
+#     CommandLine:
+#         xdoctest watch.tasks.fusion.utils create_package
+#
+#     Example:
+#         >>> import ubelt as ub
+#         >>> from os.path import join
+#         >>> from watch.tasks.fusion.utils import *  # NOQA
+#         >>> dpath = ub.ensure_app_cache_dir('watch/tests/package')
+#         >>> package_path = join(dpath, 'my_package.pt')
+#
+#         >>> # Use one of our fusion models in a test
+#         >>> from watch.tasks.fusion import methods
+#         >>> model = methods.MultimodalTransformerDirectCD("smt_it_stm_p8")
+#         >>> # We have to run an input through the module because it is lazy
+#         >>> inputs = torch.rand(1, 2, 13, 128, 128)
+#         >>> model(inputs)
+#
+#         >>> # Save the model
+#         >>> create_package(model, package_path)
+#
+#         >>> # Test that the package can be reloaded
+#         >>> recon = load_model_from_package(package_path)
+#         >>> # Check consistency and data is actually different
+#         >>> recon_state = recon.state_dict()
+#         >>> model_state = model.state_dict()
+#         >>> assert recon is not model
+#         >>> assert set(recon_state) == set(recon_state)
+#         >>> for key in recon_state.keys():
+#         >>>     assert (model_state[key] == recon_state[key]).all()
+#         >>>     assert model_state[key] is not recon_state[key]
+#     """
+#     with package.PackageExporter(package_path, verbose=verbose) as exp:
+#         # TODO: this is not a problem yet, but some package types (mainly binaries) will need to be excluded and added as mocks
+#         exp.extern("**", exclude=["watch.tasks.fusion.**"])
+#         exp.intern("watch.tasks.fusion.**")
+#         exp.save_pickle(module_name, model_name, model)
 
 
 def load_model_from_package(package_path, module_name="watch_tasks_fusion", model_name="model.pkl"):
+    """
+    DEPRECATE IN FAVOR OF A MODEL METHOD?
+
+    Notes:
+        * I don't like that we need to know module_name and model_name a-priori
+          given a path to a package, I just want to be able to construct
+          the model instance.
+    """
+    # imp = package.PackageImporter(package_path)
+    import pathlib
+    if not isinstance(package_path, (str, pathlib.Path)):
+        raise TypeError(type(package_path))
+
     imp = package.PackageImporter(package_path)
+    # Assume this standardized header information exists that tells us the
+    # name of the resource corresponding to the model
+    package_header = imp.load_pickle(
+        'kitware_package_header', 'kitware_package_header.pkl')
+    model_name = package_header['model_name']
+    module_name = package_header['module_name']
+
     return imp.load_pickle(module_name, model_name)
 
 

@@ -37,7 +37,7 @@ class AddPositionalEncoding(nn.Module):
 class VideoDataset(data.Dataset):
     """
     Example:
-        >>> from watch.tasks.fusion.datasets.common import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.common import *  # NOQA
         >>> import ndsampler
         >>> import kwcoco
         >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')

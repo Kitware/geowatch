@@ -7,7 +7,7 @@ import tifffile
 import tqdm
 
 from watch.tasks.fusion.methods import voting
-from watch.tasks.fusion.datasets import onera_2018
+from watch.tasks.fusion.datamodules import onera_2018
 from watch.tasks.fusion import onera_experiment_train as onera_experiment
 from watch.tasks.fusion import utils
 

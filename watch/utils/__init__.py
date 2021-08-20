@@ -45,6 +45,7 @@ __getattr__ = lazy_import(
     __name__,
     submodules={
         'kwcoco_extensions',
+        'lightning_ext',
         'util_bands',
         'util_girder',
         'util_norm',
@@ -58,6 +59,5 @@ __getattr__ = lazy_import(
 def __dir__():
     return __all__
 
-
-__all__ = ['kwcoco_extensions', 'util_bands', 'util_girder', 'util_norm',
-           'util_raster', 'util_rgdc']
+__all__ = ['kwcoco_extensions', 'lightning_ext', 'util_bands', 'util_girder',
+           'util_norm', 'util_raster', 'util_rgdc']
