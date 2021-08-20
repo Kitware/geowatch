@@ -42,8 +42,8 @@ for dataset_name in dataset_keys:
     for ckpt_dir in pathlib.Path("_trained_models").glob("onera/ctf*/*/"):
         #dataset_name = ckpt_dir.parts[-3]
         ctf_dir = ckpt_dir.parts[-2]
-        method_model_name = ckpt_dir.parts[-1]
-        method, model_name = method_model_name.split("-")
+        method_arch_name = ckpt_dir.parts[-1]
+        method, arch_name = method_arch_name.split("-")
 
         dataset = datasets[dataset_name]
         test_kwcoco_path = dataset_kwcocos[dataset_name]
@@ -56,12 +56,12 @@ for dataset_name in dataset_keys:
 
         for channel_key, channel_subset in dataset_channel_sets[dataset_name].items():
 
-            print(f"{method_model_name}_{dataset}_{channel_key}\n=========================")
+            print(f"{method_arch_name}_{dataset}_{channel_key}\n=========================")
 
             args = SimpleNamespace(
                 dataset=dataset,
                 method=method,
-                tag=f"{ctf_dir}_{method_model_name}_{channel_key}",
+                tag=f"{ctf_dir}_{method_arch_name}_{channel_key}",
                 checkpoint_path=ckpt_path,
                 results_dir=pathlib.Path("_results") / dataset,
                 results_path=pathlib.Path("_results") / f"{dataset}_results.kwcoco.json",

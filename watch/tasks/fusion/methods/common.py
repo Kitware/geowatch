@@ -64,7 +64,7 @@ class ChangeDetectorBase(pl.LightningModule):
 
             >>> # Choose subclass to test this with (does not cover all cases)
             >>> self = methods.MultimodalTransformerDotProdCD(
-            >>>     model_name='smt_it_joint_p8', input_stats=datamodule.input_stats)
+            >>>     arch_name='smt_it_joint_p8', input_stats=datamodule.input_stats)
             >>> outputs = self.training_step(batch)
             >>> canvas = datamodule.draw_batch(batch, outputs=outputs)
             >>> # xdoctest: +REQUIRES(--show)
@@ -173,7 +173,7 @@ class ChangeDetectorBase(pl.LightningModule):
         #
         # TODO: is there any way to introspect what these variables could be?
 
-        model_name = "model.pkl"
+        arch_name = "model.pkl"
         module_name = 'watch_tasks_fusion'
 
         imp = torch.package.PackageImporter(package_path)
@@ -182,14 +182,14 @@ class ChangeDetectorBase(pl.LightningModule):
         # name of the resource corresponding to the model
         package_header = imp.load_pickle(
             'kitware_package_header', 'kitware_package_header.pkl')
-        model_name = package_header['model_name']
+        arch_name = package_header['arch_name']
         module_name = package_header['module_name']
 
         # pkg_root = imp.file_structure()
         # print(pkg_root)
         # pkg_data = pkg_root.children['.data']
 
-        self = imp.load_pickle(module_name, model_name)
+        self = imp.load_pickle(module_name, arch_name)
         return self
 
     def save_package(self, package_path, verbose=1):
@@ -277,7 +277,7 @@ class ChangeDetectorBase(pl.LightningModule):
         model.val_dataloader = None
         model.test_dataloader = None
 
-        model_name = "model.pkl"
+        arch_name = "model.pkl"
         module_name = 'watch_tasks_fusion'
         with torch.package.PackageExporter(package_path, verbose=verbose) as exp:
             # TODO: this is not a problem yet, but some package types (mainly
@@ -289,7 +289,7 @@ class ChangeDetectorBase(pl.LightningModule):
             # allow for model importing with fewer hard-coding requirements
             package_header = {
                 'version': '0.0.1',
-                'model_name': model_name,
+                'arch_name': arch_name,
                 'module_name': module_name,
             }
             exp.save_pickle(
@@ -297,7 +297,7 @@ class ChangeDetectorBase(pl.LightningModule):
                 package_header
             )
 
-            exp.save_pickle(module_name, model_name, model)
+            exp.save_pickle(module_name, arch_name, model)
 
     def configure_optimizers(self):
         optimizer = optim.RAdam(
@@ -365,7 +365,7 @@ class SemanticSegmentationBase(pl.LightningModule):
             >>> # Choose subclass to test this with (does not cover all cases)
             >>> self = methods.MultimodalTransformerSegmentation(
             >>>     n_classes=1000,
-            >>>     model_name='smt_it_joint_p8', input_stats=datamodule.input_stats)
+            >>>     arch_name='smt_it_joint_p8', input_stats=datamodule.input_stats)
             >>> outputs = self.training_step(batch)
             >>> canvas = datamodule.draw_batch(batch, outputs=outputs)
             >>> # xdoctest: +REQUIRES(--show)

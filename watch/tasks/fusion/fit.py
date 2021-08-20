@@ -53,7 +53,7 @@ Example:
     ...     #'chip_size': 256,
     ...     'batch_size': 1,
     ...     'accumulate_grad_batches': 12,
-    ...     'model_name': 'smt_it_stm_p8',
+    ...     'arch_name': 'smt_it_stm_p8',
     ...     'num_workers': 12,
     ...     'attention_impl': 'exact',
     ...     #'attention_impl': 'performer',  # note: exact seems to be faster and less memory at this scale
@@ -603,7 +603,7 @@ def main(**kwargs):
 
         # This task required 5.12GB on a 3090
         python -m watch.tasks.fusion.fit \
-            --model_name=smt_it_stm_p8 \
+            --arch_name=smt_it_stm_p8 \
             --method=MultimodalTransformerDotProdCD \
             --datamodule=KWCocoDataModule \
             --train_dataset=vidshapes8-multispectral \
@@ -614,7 +614,7 @@ def main(**kwargs):
 
         # This task required 5.12GB on a 3090
         python -m watch.tasks.fusion.fit \
-            --model_name=smt_it_stm_p8 \
+            --arch_name=smt_it_stm_p8 \
             --method=MultimodalTransformerDotProdCD \
             --train_dataset=$TRAIN_FPATH \
             --batch_size=4 \
@@ -624,7 +624,7 @@ def main(**kwargs):
 
         # This task required 17GB on a 3090
         python -m watch.tasks.fusion.fit \
-            --model_name=smt_it_stm_p8 \
+            --arch_name=smt_it_stm_p8 \
             --method=MultimodalTransformerDotProdCD \
             --train_dataset=$TRAIN_FPATH \
             --batch_size=16 \
@@ -634,7 +634,7 @@ def main(**kwargs):
 
         # This task required 20GB on a 3090
         python -m watch.tasks.fusion.onera_channelwisetransformer_train \
-            --model_name=smt_it_joint_p8 \
+            --arch_name=smt_it_joint_p8 \
             --method=MultimodalTransformerDirectCD \
             --train_dataset=$TRAIN_FPATH \
             --batch_size=4 \

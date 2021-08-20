@@ -27,14 +27,14 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
         >>> datamodule.setup('fit')
         >>> loader = datamodule.train_dataloader()
         >>> batch = next(iter(loader))
-        >>> self = MultimodalTransformerDotProdCD(model_name='smt_it_joint_p8')
+        >>> self = MultimodalTransformerDotProdCD(arch_name='smt_it_joint_p8')
         >>> frames = batch[0]['frames']
         >>> images = torch.cat([frame['modes']['r|g|b'][None, :].float() for frame in frames], dim=0)
         >>> distance = self(images[None, :])[0]
     """
 
     def __init__(self,
-                 model_name,
+                 arch_name,
                  dropout=0.0,
                  learning_rate=1e-3,
                  weight_decay=0.,
@@ -50,7 +50,7 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
         )
         self.save_hyperparameters()
 
-        encoder_config = transformer.encoder_configs[model_name]
+        encoder_config = transformer.encoder_configs[arch_name]
 
         # TODO: pre-compute what the "token" feature dimension is.
         encoder = transformer.FusionEncoder(
@@ -92,7 +92,7 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
     def add_model_specific_args(parent_parser):
         parser = super(MultimodalTransformerDotProdCD, MultimodalTransformerDotProdCD).add_model_specific_args(parent_parser)
 
-        parser.add_argument("--model_name", default='smt_it_joint_p8', type=str)
+        parser.add_argument("--arch_name", default='smt_it_joint_p8', type=str)
         parser.add_argument("--dropout", default=0.1, type=float)
         # parser.add_argument("--input_scale", default=2000.0, type=float)
         parser.add_argument("--window_size", default=8, type=int)
@@ -117,14 +117,14 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
         >>> datamodule.setup('fit')
         >>> loader = datamodule.train_dataloader()
         >>> batch = next(iter(loader))
-        >>> self = MultimodalTransformerDirectCD(model_name='smt_it_joint_p8')
+        >>> self = MultimodalTransformerDirectCD(arch_name='smt_it_joint_p8')
         >>> frames = batch[0]['frames']
         >>> images = torch.cat([frame['modes']['r|g|b'][None, :].float() for frame in frames], dim=0)
         >>> distance = self(images[None, :])[0]
     """
 
     def __init__(self,
-                 model_name,
+                 arch_name,
                  dropout=0.0,
                  learning_rate=1e-3,
                  weight_decay=0.,
@@ -140,7 +140,7 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
         )
         self.save_hyperparameters()
 
-        encoder_config = transformer.encoder_configs[model_name]
+        encoder_config = transformer.encoder_configs[arch_name]
         encoder = transformer.FusionEncoder(
             **encoder_config,
             attention_impl=attention_impl,
@@ -178,7 +178,7 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
     def add_model_specific_args(parent_parser):
         parser = super(MultimodalTransformerDirectCD, MultimodalTransformerDirectCD).add_model_specific_args(parent_parser)
 
-        parser.add_argument("--model_name", default='smt_it_stm_p8', type=str)
+        parser.add_argument("--arch_name", default='smt_it_stm_p8', type=str)
         parser.add_argument("--dropout", default=0.1, type=float)
         # parser.add_argument("--input_scale", default=2000.0, type=float)
         parser.add_argument("--window_size", default=8, type=int)
@@ -206,7 +206,7 @@ class MultimodalTransformerSegmentation(SemanticSegmentationBase):
         >>> batch = next(iter(loader))
         >>> classes = datamodule.coco_datasets['train'].object_categories()
         >>> n_classes = len(classes)
-        >>> self = MultimodalTransformerSegmentation(n_classes=n_classes, model_name='smt_it_joint_p8')
+        >>> self = MultimodalTransformerSegmentation(n_classes=n_classes, arch_name='smt_it_joint_p8')
         >>> images = batch['images'].float()
         >>> logits = self(images)
 
@@ -216,7 +216,7 @@ class MultimodalTransformerSegmentation(SemanticSegmentationBase):
     """
 
     def __init__(self,
-                 model_name,
+                 arch_name,
                  n_classes,
                  dropout=0.0,
                  learning_rate=1e-3,
@@ -233,7 +233,7 @@ class MultimodalTransformerSegmentation(SemanticSegmentationBase):
         )
         self.save_hyperparameters()
 
-        encoder_config = transformer.encoder_configs[model_name]
+        encoder_config = transformer.encoder_configs[arch_name]
         encoder = transformer.FusionEncoder(
             **encoder_config,
             attention_impl=attention_impl,
@@ -269,7 +269,7 @@ class MultimodalTransformerSegmentation(SemanticSegmentationBase):
     def add_model_specific_args(parent_parser):
         parser = super(MultimodalTransformerSegmentation, MultimodalTransformerSegmentation).add_model_specific_args(parent_parser)
 
-        parser.add_argument("--model_name", default='smt_it_stm_p8', type=str)
+        parser.add_argument("--arch_name", default='smt_it_stm_p8', type=str)
         parser.add_argument("--n_classes", required=True, type=int)
         parser.add_argument("--dropout", default=0.1, type=float)
         # parser.add_argument("--input_scale", default=2000.0, type=float)

@@ -29,7 +29,7 @@ python -m watch.tasks.fusion.fit \
     --package_fpath=$DATA_DPATH/toy_msi_model.pt \
     --channels="B8|B1|B11|B8a" \
     --method=MultimodalTransformerDirectCD \
-    --model_name=smt_it_stm_s12 \
+    --arch_name=smt_it_stm_s12 \
     --window_size=8 \
     --learning_rate=3e-4 \
     --weight_decay=1e-5 \

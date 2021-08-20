@@ -16,7 +16,7 @@ def millify(n):
     return '{:.2f}{}'.format(n / 10**(3 * millidx), millnames[millidx])
 
 
-# def create_package(model, package_path, module_name="watch_tasks_fusion", model_name="model.pkl", verbose=False):
+# def create_package(model, package_path, module_name="watch_tasks_fusion", arch_name="model.pkl", verbose=False):
 #     """
 #     DEPRECATE IN FAVOR OF A MODEL METHOD?
 #
@@ -55,15 +55,15 @@ def millify(n):
 #         # TODO: this is not a problem yet, but some package types (mainly binaries) will need to be excluded and added as mocks
 #         exp.extern("**", exclude=["watch.tasks.fusion.**"])
 #         exp.intern("watch.tasks.fusion.**")
-#         exp.save_pickle(module_name, model_name, model)
+#         exp.save_pickle(module_name, arch_name, model)
 
 
-def load_model_from_package(package_path, module_name="watch_tasks_fusion", model_name="model.pkl"):
+def load_model_from_package(package_path, module_name="watch_tasks_fusion", arch_name="model.pkl"):
     """
     DEPRECATE IN FAVOR OF A MODEL METHOD?
 
     Notes:
-        * I don't like that we need to know module_name and model_name a-priori
+        * I don't like that we need to know module_name and arch_name a-priori
           given a path to a package, I just want to be able to construct
           the model instance.
     """
@@ -77,10 +77,10 @@ def load_model_from_package(package_path, module_name="watch_tasks_fusion", mode
     # name of the resource corresponding to the model
     package_header = imp.load_pickle(
         'kitware_package_header', 'kitware_package_header.pkl')
-    model_name = package_header['model_name']
+    arch_name = package_header['arch_name']
     module_name = package_header['module_name']
 
-    return imp.load_pickle(module_name, model_name)
+    return imp.load_pickle(module_name, arch_name)
 
 
 class Lambda(nn.Module):

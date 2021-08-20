@@ -2,7 +2,7 @@
 method_bases = {
     "mmvit-DotProdCD-stm-s12": dict(
         method="MultimodalTransformerDotProdCD",
-        model_name="smt_it_stm_t12",
+        arch_name="smt_it_stm_t12",
 
         window_size=8,
         learning_rate=1e-3,

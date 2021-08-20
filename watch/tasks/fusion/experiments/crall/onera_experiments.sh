@@ -31,7 +31,7 @@ python -m watch.tasks.fusion.fit \
     --default_root_dir=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/DirectCD_smt_it_stm_s12_v2 \
     --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/DirectCD_smt_it_stm_s12_v2/final_package.pt \
     --method=MultimodalTransformerDirectCD \
-    --model_name=smt_it_stm_s12 \
+    --arch_name=smt_it_stm_s12 \
     --window_size=8 \
     --learning_rate=1e-3 \
     --weight_decay=1e-4 \
@@ -73,7 +73,7 @@ python -m watch.tasks.fusion.fit \
     --default_root_dir=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/DirectCD_smt_it_stm_s12_v1 \
     --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/DirectCD_smt_it_stm_s12_v1/final_package.pt \
     --method=MultimodalTransformerDirectCD \
-    --model_name=smt_it_stm_s12 \
+    --arch_name=smt_it_stm_s12 \
     --window_size=8 \
     --learning_rate=1e-3 \
     --weight_decay=1e-4 \
@@ -110,7 +110,7 @@ python -m watch.tasks.fusion.fit \
     --vali_dataset=$DVC_DPATH/extern/onera_2018/onera_test.kwcoco.json \
     --workdir=$DVC_DPATH/training/$HOSTNAME/$USER \
     --method=MultimodalTransformerDotProdCD \
-    --model_name=smt_it_stm_s12 \
+    --arch_name=smt_it_stm_s12 \
     --window_size=8 \
     --learning_rate=1e-3 \
     --weight_decay=1e-4 \
@@ -141,7 +141,7 @@ python -m watch.tasks.fusion.fit \
     --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/DotProd_smt_it_stm_s12_vnir_11GB_v3/deploy_Onera_DotProd_smt_it_stm_s12_vnir_v1.pt \
     --method=MultimodalTransformerDotProdCD \
     --channels="B05|B06|B07|B08|B8A" \
-    --model_name=smt_it_stm_s12 \
+    --arch_name=smt_it_stm_s12 \
     --window_size=8 \
     --patience=400 \
     --max_epochs=1000 \
@@ -164,7 +164,7 @@ python -m watch.tasks.fusion.fit \
     --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/DotProd_smt_it_stm_s12_vnir_11GB_v4/deploy_Onera_DotProd_smt_it_stm_s12_vnir_v1.pt \
     --method=MultimodalTransformerDotProdCD \
     --channels="B05|B06|B07|B08|B8A" \
-    --model_name=smt_it_stm_s12 \
+    --arch_name=smt_it_stm_s12 \
     --window_size=8 \
     --patience=400 \
     --max_epochs=1000 \
@@ -203,7 +203,7 @@ python -m watch.tasks.fusion.fit \
     --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/DotProd_smt_it_stm_s12_vnir_11GB_v6/deploy_Direct_smt_it_stm_s12_vnir_11GB_v5.pt \
     --method=MultimodalTransformerDirectCD \
     --channels="B05|B06|B07|B08|B8A" \
-    --model_name=smt_it_stm_s12 \
+    --arch_name=smt_it_stm_s12 \
     --window_size=8 \
     --patience=400 \
     --max_epochs=1000 \

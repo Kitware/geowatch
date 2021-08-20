@@ -2,7 +2,7 @@ import pathlib
 import itertools as it
 from . import fit
 
-model_names = [
+arch_names = [
     "sm_it_sm_t12",
     "sm_it_joint_t12",
     "sm_it_sm_s12",
@@ -43,9 +43,9 @@ if __name__ == "__main__":
         terminate_on_nan=True,
     )
 
-    for method, model_name in it.product(methods, model_names):
-        print(f"{method} / {model_name}\n====================")
+    for method, arch_name in it.product(methods, arch_names):
+        print(f"{method} / {arch_name}\n====================")
         args.method = method
-        args.model_name = model_name
-        args.default_root_dir = f"_trained_models/sun_rgbd/ctf_drop2/{method}-{model_name}"
+        args.arch_name = arch_name
+        args.default_root_dir = f"_trained_models/sun_rgbd/ctf_drop2/{method}-{arch_name}"
         fit.main(args)

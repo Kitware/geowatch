@@ -23,7 +23,7 @@ mkdir -p $DVC_DPATH/training/$HOSTNAME/$USER/Drop1_S2_L8_GSD10/configs
 python -m watch.tasks.fusion.fit \
     --channels="coastal|blue|green|red|nir|swir16|swir22" \
     --method="MultimodalTransformerDirectCD" \
-    --model_name=smt_it_stm_p8 \
+    --arch_name=smt_it_stm_p8 \
     --time_steps=8 \
     --chip_size=128 \
     --batch_size=2 \
@@ -73,7 +73,7 @@ python -m watch.tasks.fusion.fit \
     --chip_overlap=0.66 \
     --time_overlap=0.3 \
     --method="MultimodalTransformerDotProdCD" \
-    --model_name=smt_it_stm_small \
+    --arch_name=smt_it_stm_small \
     --batch_size=4 \
     --accumulate_grad_batches=4 \
     --num_workers=12 \
@@ -92,7 +92,7 @@ python -m watch.tasks.fusion.fit \
     --channels="coastal|blue|green|red|nir|swir16|swir22" \
     --chip_size=192 \
     --method="MultimodalTransformerDirectCD" \
-    --model_name=smt_it_stm_p8 \
+    --arch_name=smt_it_stm_p8 \
     --batch_size=1 \
     --accumulate_grad_batches=8 \
     --num_workers=12 \
@@ -109,7 +109,7 @@ DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 python -m watch.tasks.fusion.fit \
     --channels="$CHANNEL_SPEC" \
     --method="MultimodalTransformerDirectCD" \
-    --model_name=smt_it_stm_p8 \
+    --arch_name=smt_it_stm_p8 \
     --time_steps=4 \
     --chip_size=96 \
     --batch_size=1 \
