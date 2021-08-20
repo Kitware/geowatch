@@ -51,6 +51,10 @@ def main(args):
 
         features = model.predict(image)
 
+        # Predictions are saved in 'video space', so warp_aux_to_img is the inverse of warp_img_to_vid
+        warp_img_to_vid = kwimage.Affine.coerce(image_info.get('warp_img_to_vid', None))
+        warp_aux_to_img = warp_img_to_vid.inv().concise()
+
         for key in feature_types:
             feat = features[key].squeeze()
             feat = feat.permute(1, 2, 0).detach().cpu().numpy()
@@ -64,8 +68,7 @@ def main(args):
             info['width'] = feat.shape[1]
             info['num_bands'] = feat.shape[2]
             info['channels'] = '|'.join(['inv_' + key + f'{i}' for i in range(1, feat.shape[2] + 1)])
-            # Predictions are saved in "image space", so the transformation the identity. 
-            info['warp_aux_to_img'] = kwimage.Affine.eye().concise()
+            info['warp_aux_to_img'] = warp_aux_to_img
 
             dataset.dset.index.imgs[image_id]['auxiliary'].append(info)
 
