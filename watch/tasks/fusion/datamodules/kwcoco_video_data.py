@@ -18,7 +18,7 @@ from torch.utils import data
 from torchvision import transforms
 from watch.tasks.fusion import utils
 
-# __all__ = ['KWCocoDataModule', 'WatchVideoDataset']
+# __all__ = ['KWCocoVideoDataModule', 'KWCocoVideoDataset']
 
 try:
     import xdev
@@ -27,14 +27,14 @@ except Exception:
     profile = ub.identity
 
 
-class KWCocoDataModule(pl.LightningDataModule):
+class KWCocoVideoDataModule(pl.LightningDataModule):
     """
     Prepare the kwcoco dataset as torch video datamodules
 
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> # Run the following tests on real watch data if DVC is available
-        >>> from watch.tasks.fusion.datamodules.watch_data import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> from os.path import join
         >>> import os
         >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
@@ -51,7 +51,7 @@ class KWCocoDataModule(pl.LightningDataModule):
         >>> batch_size = 2
         >>> time_steps = 3
         >>> chip_size = 330
-        >>> self = KWCocoDataModule(
+        >>> self = KWCocoVideoDataModule(
         >>>     train_dataset=train_dataset,
         >>>     test_dataset=test_dataset,
         >>>     batch_size=batch_size,
@@ -73,7 +73,7 @@ class KWCocoDataModule(pl.LightningDataModule):
 
     Example:
         >>> # Run the data module on coco demo datamodules for the CI
-        >>> from watch.tasks.fusion.datamodules.watch_data import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> import kwcoco
         >>> train_dataset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
         >>> test_dataset = kwcoco.CocoDataset.demo('vidshapes1-multispectral', num_frames=5)
@@ -84,7 +84,7 @@ class KWCocoDataModule(pl.LightningDataModule):
         >>> time_steps = 3
         >>> chip_size = 128
         >>> channels = channels
-        >>> self = KWCocoDataModule(
+        >>> self = KWCocoVideoDataModule(
         >>>     train_dataset=train_dataset,
         >>>     test_dataset=test_dataset,
         >>>     batch_size=batch_size,
@@ -142,7 +142,7 @@ class KWCocoDataModule(pl.LightningDataModule):
         self.input_stats = None
 
         if self.verbose:
-            print('Init KWCocoDataModule')
+            print('Init KWCocoVideoDataModule')
             print('self.train_kwcoco = {!r}'.format(self.train_kwcoco))
             print('self.vali_kwcoco = {!r}'.format(self.vali_kwcoco))
             print('self.test_kwcoco = {!r}'.format(self.test_kwcoco))
@@ -180,9 +180,9 @@ class KWCocoDataModule(pl.LightningDataModule):
         Helper method to draw a batch of data.
 
         Example:
-            >>> from watch.tasks.fusion.datamodules.watch_data import *  # NOQA
+            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
             >>> from watch.tasks.fusion import datamodules
-            >>> self = datamodules.KWCocoDataModule(
+            >>> self = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset='special:vidshapes8-multispectral', num_workers=0)
             >>> self.setup('fit')
             >>> loader = self.train_dataloader()
@@ -252,7 +252,7 @@ class KWCocoDataModule(pl.LightningDataModule):
             self.coco_datasets['train'] = train_coco_dset
 
             coco_train_sampler = ndsampler.CocoSampler(train_coco_dset)
-            train_dataset = WatchVideoDataset(
+            train_dataset = KWCocoVideoDataset(
                 coco_train_sampler,
                 sample_shape=(self.time_steps, self.chip_size, self.chip_size),
                 window_overlap=(self.time_overlap, self.chip_overlap, self.chip_overlap),
@@ -292,7 +292,7 @@ class KWCocoDataModule(pl.LightningDataModule):
                     print('Build validation kwcoco dataset')
                 kwcoco_ds = kwcoco.CocoDataset.coerce(vali_data)
                 vali_coco_sampler = ndsampler.CocoSampler(kwcoco_ds)
-                vali_dataset = WatchVideoDataset(
+                vali_dataset = KWCocoVideoDataset(
                     vali_coco_sampler,
                     sample_shape=(self.time_steps, self.chip_size, self.chip_size),
                     window_overlap=(self.time_overlap, self.chip_overlap, self.chip_overlap),
@@ -330,7 +330,7 @@ class KWCocoDataModule(pl.LightningDataModule):
             test_coco_dset = kwcoco.CocoDataset.coerce(test_data)
             self.coco_datasets['test'] = test_coco_dset
             test_coco_sampler = ndsampler.CocoSampler(test_coco_dset)
-            self.torch_datasets['test'] = WatchVideoDataset(
+            self.torch_datasets['test'] = KWCocoVideoDataset(
                 test_coco_sampler,
                 sample_shape=(self.time_steps, self.chip_size, self.chip_size),
                 window_overlap=(self.time_overlap, self.chip_overlap, self.chip_overlap),
@@ -355,7 +355,7 @@ class KWCocoDataModule(pl.LightningDataModule):
 
     @staticmethod
     def add_data_specific_args(parent_parser):
-        parser = parent_parser.add_argument_group("watch_data")
+        parser = parent_parser.add_argument_group("kwcoco_video_data")
         parser.add_argument("--train_dataset", default=None, type=pathlib.Path)
         parser.add_argument("--vali_dataset", default=None, type=pathlib.Path)
         parser.add_argument("--test_dataset", default=None, type=pathlib.Path)
@@ -410,7 +410,7 @@ class AddPositionalEncoding(nn.Module):
 def coco_channel_profiles(coco_dset, max_checks=float('inf')):
     """
     Example:
-        >>> from watch.tasks.fusion.datamodules.watch_data import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
         >>> candidates = coco_channel_profiles(coco_dset)
     """
@@ -432,10 +432,10 @@ def coco_channel_profiles(coco_dset, max_checks=float('inf')):
     return candidates
 
 
-class WatchVideoDataset(data.Dataset):
+class KWCocoVideoDataset(data.Dataset):
     """
     Example:
-        >>> from watch.tasks.fusion.datamodules.watch_data import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> import ndsampler
         >>> import kwcoco
         >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
@@ -443,7 +443,7 @@ class WatchVideoDataset(data.Dataset):
         >>> sampler = ndsampler.CocoSampler(coco_dset)
         >>> channels = 'B10|B8a|B1|B8'
         >>> sample_shape = (3, 530, 610)
-        >>> self = WatchVideoDataset(sampler, sample_shape=sample_shape, channels=channels)
+        >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels)
         >>> index = len(self) // 4
         >>> item = self[index]
         >>> canvas = self.draw_item(item)
@@ -454,14 +454,14 @@ class WatchVideoDataset(data.Dataset):
         >>> kwplot.show_if_requested()
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.watch_data import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> import ndsampler
         >>> import kwcoco
         >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
         >>> coco_dset.ensure_category('background')
         >>> sampler = ndsampler.CocoSampler(coco_dset)
         >>> sample_shape = (2, 128, 128)
-        >>> self = WatchVideoDataset(sampler, sample_shape=sample_shape, channels=None)
+        >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=None)
         >>> index = 0
         >>> item = self[index]
         >>> canvas = self.draw_item(item)
@@ -565,7 +565,7 @@ class WatchVideoDataset(data.Dataset):
     def __getitem__(self, index):
         """
         Example:
-            >>> from watch.tasks.fusion.datamodules.watch_data import *  # NOQA
+            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
             >>> import ndsampler
             >>> import kwcoco
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
@@ -573,7 +573,7 @@ class WatchVideoDataset(data.Dataset):
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> channels = 'B10|B8a|B1|B8'
             >>> sample_shape = (5, 530, 610)
-            >>> self = WatchVideoDataset(sampler, sample_shape=sample_shape, channels=channels)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels)
             >>> item = self[0]
             >>> canvas = self.draw_item(item)
             >>> # xdoctest: +REQUIRES(--show)
@@ -585,7 +585,7 @@ class WatchVideoDataset(data.Dataset):
         Example:
             >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
             >>> # Run the following tests on real watch data if DVC is available
-            >>> from watch.tasks.fusion.datamodules.watch_data import *  # NOQA
+            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
             >>> import os
             >>> from os.path import join
             >>> import ndsampler
@@ -597,7 +597,7 @@ class WatchVideoDataset(data.Dataset):
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (7, 128, 128)
-            >>> self = WatchVideoDataset(sampler, sample_shape=sample_shape, channels=None)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=None)
             >>> item = self[4]
             >>> canvas = self.draw_item(item)
             >>> # xdoctest: +REQUIRES(--show)
@@ -756,31 +756,31 @@ class WatchVideoDataset(data.Dataset):
             num (int | None): number of input items to compute stats for
 
         Example:
-            >>> from watch.tasks.fusion.datamodules.watch_data import *  # NOQA
+            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
             >>> import ndsampler
             >>> import kwcoco
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
             >>> coco_dset.ensure_category('background')
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (2, 128, 128)
-            >>> self = WatchVideoDataset(sampler, sample_shape=sample_shape, channels=None)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=None)
             >>> self.compute_input_stats()
 
         Example:
-            >>> from watch.tasks.fusion.datamodules.watch_data import *  # NOQA
+            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
             >>> import ndsampler
             >>> import kwcoco
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes8')
             >>> coco_dset.ensure_category('background')
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (2, 128, 128)
-            >>> self = WatchVideoDataset(sampler, sample_shape=sample_shape, channels=None)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=None)
             >>> self.compute_input_stats()
 
         Example:
             >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
             >>> # Run the following tests on real watch data if DVC is available
-            >>> from watch.tasks.fusion.datamodules.watch_data import *  # NOQA
+            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
             >>> import os
             >>> from os.path import join
             >>> import ndsampler
@@ -791,7 +791,7 @@ class WatchVideoDataset(data.Dataset):
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (2, 128, 128)
-            >>> self = WatchVideoDataset(sampler, sample_shape=sample_shape, channels=None)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=None)
             >>> self.compute_input_stats()
         """
         num = None
@@ -830,7 +830,7 @@ class WatchVideoDataset(data.Dataset):
     def draw_item(self, item, binprobs=None):
         """
         Example:
-            >>> from watch.tasks.fusion.datamodules.watch_data import *  # NOQA
+            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
             >>> import ndsampler
             >>> import kwcoco
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
@@ -838,7 +838,7 @@ class WatchVideoDataset(data.Dataset):
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> channels = 'B10|B8a|B1|B8'
             >>> sample_shape = (5, 530, 610)
-            >>> self = WatchVideoDataset(sampler, sample_shape=sample_shape, channels=channels)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels)
             >>> index = len(self) // 4
             >>> item = self[index]
             >>> # Calculate the probability of change for each frame
@@ -1030,13 +1030,13 @@ class WatchVideoDataset(data.Dataset):
                     pin_memory=False):
         """
         Example:
-            >>> from watch.tasks.fusion.datamodules.watch_data import *  # NOQA
+            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
             >>> import ndsampler
             >>> import kwcoco
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
             >>> coco_dset.ensure_category('background')
             >>> sampler = ndsampler.CocoSampler(coco_dset)
-            >>> self = WatchVideoDataset(sampler, sample_shape=(3, 530, 610))
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=(3, 530, 610))
             >>> loader = self.make_loader(batch_size=2)
             >>> batch = next(iter(loader))
         """

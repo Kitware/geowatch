@@ -6,11 +6,11 @@ mkinit ~/code/watch/watch/tasks/fusion/datamodules/__init__.py --nomods -w
 """
 
 __submodules__ = [
-    'kwcoco_data',
+    'kwcoco_video_data',
 
 ]
-from watch.tasks.fusion.datamodules.kwcoco_data import (
-    KWCocoDataModule,
-    WatchVideoDataset,)
+from watch.tasks.fusion.datamodules.kwcoco_video_data import (
+    KWCocoVideoDataModule,
+    KWCocoVideoDataset,)
 
-__all__ = ['KWCocoDataModule', 'WatchVideoDataset']
+__all__ = ['KWCocoVideoDataModule', 'KWCocoVideoDataset']

@@ -53,7 +53,7 @@ class ChangeDetectorBase(pl.LightningModule):
             >>> from watch.tasks.fusion.methods.common import *  # NOQA
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datamodules
-            >>> datamodule = datamodules.KWCocoDataModule(
+            >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset='special:vidshapes8',
             >>>     num_workers=0, chip_size=128,
             >>>     normalize_inputs=True,
@@ -241,7 +241,7 @@ class ChangeDetectorBase(pl.LightningModule):
             >>> inputs = torch.rand(1, 2, 13, 128, 128)
             >>> self(inputs)
 
-            >>> datamodule = datamodules.watch_data.KWCocoDataModule(
+            >>> datamodule = datamodules.kwcoco_video_data.KWCocoVideoDataModule(
             >>>     'special:vidshapes8-multispectral', chip_size=32,
             >>>     batch_size=1, time_steps=2, num_workers=0)
             >>> datamodule.setup('fit')
@@ -353,7 +353,7 @@ class SemanticSegmentationBase(pl.LightningModule):
             >>> from watch.tasks.fusion.methods.common import *  # NOQA
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datamodules
-            >>> datamodule = datamodules.KWCocoDataModule(
+            >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset='special:vidshapes8',
             >>>     num_workers=0, chip_size=128,
             >>>     normalize_inputs=True,
