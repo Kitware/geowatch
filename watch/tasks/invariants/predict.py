@@ -64,6 +64,7 @@ def main(args):
             info['width'] = feat.shape[1]
             info['num_bands'] = feat.shape[2]
             info['channels'] = '|'.join(['inv_' + key + f'{i}' for i in range(1, feat.shape[2] + 1)])
+            # Predictions are saved in "image space", so the transformation the identity. 
             info['warp_aux_to_img'] = kwimage.Affine.eye().concise()
 
             dataset.dset.index.imgs[image_id]['auxiliary'].append(info)
