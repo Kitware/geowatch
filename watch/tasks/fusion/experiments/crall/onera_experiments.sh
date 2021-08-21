@@ -43,10 +43,28 @@ prep_validation_set(){
 
 
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc 
+TRAIN_FPATH=$DVC_DPATH/extern/onera_2018/onera_learn.kwcoco.json 
+VALI_FPATH=$DVC_DPATH/extern/onera_2018/onera_vali.kwcoco.json 
+TEST_FPATH=$DVC_DPATH/extern/onera_2018/onera_vali.kwcoco.json 
+
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+
+ARCH=smt_it_stm_l24
+CHANNELS="B05|B06|B07|B08|B8A"
+EXPERIMENT_NAME=DirectCD_${ARCH}_vnir_v2
+DATASET_CODE=Onera
+
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package.pt 
+PRED_FPATH=$DEFAULT_ROOT_DIR/pred/pred.kwcoco.json
+EVAL_DPATH=$DEFAULT_ROOT_DIR/pred/eval
+
+CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/$EXPERIMENT_NAME.yml 
+
 python -m watch.tasks.fusion.fit \
-    --channels="B05|B06|B07|B08|B8A" \
+    --channels=${CHANNELS} \
     --method="MultimodalTransformerDirectCD" \
-    --arch_name=smt_it_stm_p8 \
+    --arch_name=smt_it_stm_l24 \
     --time_steps=2 \
     --chip_size=128 \
     --batch_size=2 \
@@ -57,41 +75,26 @@ python -m watch.tasks.fusion.fit \
     --weight_decay=1e-4 \
     --dropout=0.1 \
     --window_size=8 \
-    --train_dataset=$DVC_DPATH/extern/onera_2018/onera_learn.kwcoco.json \
-     --vali_dataset=$DVC_DPATH/extern/onera_2018/onera_vali.kwcoco.json \
-     --test_dataset=$DVC_DPATH/extern/onera_2018/onera_test.kwcoco.json \
-    --default_root_dir=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/runs/DirectCD_smt_it_smt_p8_vnir_v1 \
-       --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/runs/DirectCD_smt_it_smt_p8_vnir_v1/final_package.pt \
-                --dump=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/configs/DirectCD_smt_it_smt_p8_vnir_v1.yml 
+    --dump=$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE/configs/$EXPERIMENT_NAME.yml 
 
-# pip install yq
-DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-
-# TODO: fix configparsefile
-#TRUE_DATASET=$(yq '.test_dataset' $DVC_DPATH/training/$HOSTNAME/$USER/Onera/configs/DirectCD_smt_it_smt_p8_vnir_v1.yml)
-#echo "TRUE_DATASET = $TRUE_DATASET"
-#TRUE_DATASET=$(yq '.test_dataset' $DVC_DPATH/training/$HOSTNAME/$USER/Onera/configs/DirectCD_smt_it_smt_p8_vnir_v1.yml)
-#echo "TRUE_DATASET = $TRUE_DATASET"
-
-CUDA_VISIBLE_DEVICES=1 \
 python -m watch.tasks.fusion.fit \
-           --config=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/configs/DirectCD_smt_it_smt_p8_vnir_v1.yml 
-    --train_dataset=$DVC_DPATH/extern/onera_2018/onera_learn.kwcoco.json \
-     --vali_dataset=$DVC_DPATH/extern/onera_2018/onera_vali.kwcoco.json \
-     --test_dataset=$DVC_DPATH/extern/onera_2018/onera_test.kwcoco.json \
-    --default_root_dir=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/runs/DirectCD_smt_it_smt_p8_vnir_v1 \
-       --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/runs/DirectCD_smt_it_smt_p8_vnir_v1/final_package.pt 
+           --config=$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE/configs/$EXPERIMENT_NAME.yml \
+    --default_root_dir=$DEFAULT_ROOT_DIR \
+       --package_fpath=$PACKAGE_FPATH \
+        --train_dataset=$TRAIN_FPATH \
+         --vali_dataset=$VALI_FPATH \
+         --test_dataset=$TEST_FPATH \
 
 ## TODO: these steps should be called after training
 python -m watch.tasks.fusion.predict \
-        --test_dataset=$DVC_DPATH/extern/onera_2018/onera_test.kwcoco.json \
-       --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/runs/DirectCD_smt_it_smt_p8_vnir_v1/final_package.pt \
-        --pred_dataset=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/runs/DirectCD_smt_it_smt_p8_vnir_v1/pred.kwcoco.json
+        --test_dataset=$TEST_FPATH \
+       --package_fpath=$PRED_FPATH \
+        --pred_dataset=$PRED_FPATH \
 
 python -m watch.tasks.fusion.evaluate \
-        --true_dataset=$DVC_DPATH/extern/onera_2018/onera_test.kwcoco.json \
-        --pred_dataset=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/runs/DirectCD_smt_it_smt_p8_vnir_v1/pred.kwcoco.json \
-          --eval_dpath=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/runs/DirectCD_smt_it_smt_p8_vnir_v1/eval
+        --true_dataset=$TEST_FPATH \
+        --pred_dataset=$PRED_FPATH \
+          --eval_dpath=$EVAL_DPATH
 
 
 
