@@ -227,12 +227,22 @@ python -m watch.tasks.fusion.evaluate
           --eval_dpath=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1_TeamFeats_V2/DirectCD_smt_it_stm_s12_v4/eval
 
 
+python -m watch.cli.coco_add_watch_fields \
+    --src $DVC_DPATH/drop1-S2-L8-aligned-old/data_gsd10_train.kwcoco.json \
+    --dst $DVC_DPATH/drop1-S2-L8-aligned-old/data_gsd10_train.kwcoco.json \
+    --target_gsd 10
+
+python -m watch.cli.coco_add_watch_fields \
+    --src $DVC_DPATH/drop1-S2-L8-aligned-old/data_gsd10_vali.kwcoco.json \
+    --dst $DVC_DPATH/drop1-S2-L8-aligned-old/data_gsd10_vali.kwcoco.json \
+    --target_gsd 10
+
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 python -m watch.tasks.fusion.fit \
     --method="MultimodalTransformerDirectCD" \
     --arch_name=smt_it_stm_p8 \
     --time_steps=4 \
-    --channels="inv_augment1|inv_augment2|inv_augment3|inv_augment4|inv_augment5|inv_augment6|inv_augment7|inv_augment8" \
+    --channels="green" \
     --chip_size=96 \
     --batch_size=1 \
     --accumulate_grad_batches=8 \
