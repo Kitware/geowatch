@@ -1,5 +1,8 @@
 __doc__="""
 This demonstrates an end-to-end pipeline on multispectral toydata
+
+This walks through the entire process of fit -> predict -> evaluate and the
+output if you run this should end with something like
 """
 
 # Generate toy datasets
