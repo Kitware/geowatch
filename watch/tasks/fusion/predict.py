@@ -26,7 +26,7 @@ def make_predict_config(cmdline=False, **kwargs):
         description='Prediction script for the fusion task',
         formatter_class=RawDescriptionDefaultsHelpFormatter,
     )
-    parser.add_argument("--datamodule", default='WatchDataModule')
+    parser.add_argument("--datamodule", default='KWCocoVideoDataModule')
     parser.add_argument("--pred_dataset", default=None, dest='pred_dataset')
 
     parser.add_argument("--pred_dpath", dest='pred_dpath', type=pathlib.Path, help='path to dump results')
@@ -74,7 +74,7 @@ def predict(cmdline=False, **kwargs):
         >>> test_dset = kwcoco.CocoDataset.demo('special:vidshapes2-multispectral', num_frames=5, gsize=(128, 128))
         >>> fit_kwargs = kwargs = {
         ...     'train_dataset': test_dset.fpath,
-        ...     'datamodule': 'WatchDataModule',
+        ...     'datamodule': 'KWCocoVideoDataModule',
         ...     'workdir': ub.ensuredir((test_dpath, 'train')),
         ...     'package_fpath': package_fpath,
         ...     'max_epochs': 1,
@@ -91,7 +91,7 @@ def predict(cmdline=False, **kwargs):
         >>>     'package_fpath': package_fpath,
         >>>     'pred_dpath': results_path,
         >>>     'test_dataset': test_dset.fpath,
-        >>>     'datamodule': 'WatchDataModule',
+        >>>     'datamodule': 'KWCocoVideoDataModule',
         >>>     'batch_size': 1,
         >>>     'num_workers': 0,
         >>>     'gpus': gpus,

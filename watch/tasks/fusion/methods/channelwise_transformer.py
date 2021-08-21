@@ -6,7 +6,7 @@ import einops
 from torchvision import transforms
 
 from watch.tasks.fusion.methods.common import ChangeDetectorBase, SemanticSegmentationBase
-from watch.tasks.fusion.models import transformer
+from watch.tasks.fusion.architectures import transformer
 from watch.tasks.fusion import utils
 import ubelt as ub
 
@@ -22,19 +22,19 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
     Example:
         >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
         >>> from watch.tasks.fusion import datamodules
-        >>> datamodule = datamodules.WatchDataModule(
+        >>> datamodule = datamodules.KWCocoVideoDataModule(
         >>>     train_dataset='special:vidshapes8', num_workers=0)
         >>> datamodule.setup('fit')
         >>> loader = datamodule.train_dataloader()
         >>> batch = next(iter(loader))
-        >>> self = MultimodalTransformerDotProdCD(model_name='smt_it_joint_p8')
+        >>> self = MultimodalTransformerDotProdCD(arch_name='smt_it_joint_p8')
         >>> frames = batch[0]['frames']
         >>> images = torch.cat([frame['modes']['r|g|b'][None, :].float() for frame in frames], dim=0)
         >>> distance = self(images[None, :])[0]
     """
 
     def __init__(self,
-                 model_name,
+                 arch_name,
                  dropout=0.0,
                  learning_rate=1e-3,
                  weight_decay=0.,
@@ -50,7 +50,7 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
         )
         self.save_hyperparameters()
 
-        encoder_config = transformer.encoder_configs[model_name]
+        encoder_config = transformer.encoder_configs[arch_name]
 
         # TODO: pre-compute what the "token" feature dimension is.
         encoder = transformer.FusionEncoder(
@@ -92,7 +92,7 @@ class MultimodalTransformerDotProdCD(ChangeDetectorBase):
     def add_model_specific_args(parent_parser):
         parser = super(MultimodalTransformerDotProdCD, MultimodalTransformerDotProdCD).add_model_specific_args(parent_parser)
 
-        parser.add_argument("--model_name", default='smt_it_joint_p8', type=str)
+        parser.add_argument("--arch_name", default='smt_it_joint_p8', type=str)
         parser.add_argument("--dropout", default=0.1, type=float)
         # parser.add_argument("--input_scale", default=2000.0, type=float)
         parser.add_argument("--window_size", default=8, type=int)
@@ -112,19 +112,19 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
     Example:
         >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
         >>> from watch.tasks.fusion import datamodules
-        >>> datamodule = datamodules.WatchDataModule(
+        >>> datamodule = datamodules.KWCocoVideoDataModule(
         >>>     train_dataset='special:vidshapes8', num_workers=0)
         >>> datamodule.setup('fit')
         >>> loader = datamodule.train_dataloader()
         >>> batch = next(iter(loader))
-        >>> self = MultimodalTransformerDirectCD(model_name='smt_it_joint_p8')
+        >>> self = MultimodalTransformerDirectCD(arch_name='smt_it_joint_p8')
         >>> frames = batch[0]['frames']
         >>> images = torch.cat([frame['modes']['r|g|b'][None, :].float() for frame in frames], dim=0)
         >>> distance = self(images[None, :])[0]
     """
 
     def __init__(self,
-                 model_name,
+                 arch_name,
                  dropout=0.0,
                  learning_rate=1e-3,
                  weight_decay=0.,
@@ -140,7 +140,7 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
         )
         self.save_hyperparameters()
 
-        encoder_config = transformer.encoder_configs[model_name]
+        encoder_config = transformer.encoder_configs[arch_name]
         encoder = transformer.FusionEncoder(
             **encoder_config,
             attention_impl=attention_impl,
@@ -177,8 +177,10 @@ class MultimodalTransformerDirectCD(ChangeDetectorBase):
     @staticmethod
     def add_model_specific_args(parent_parser):
         parser = super(MultimodalTransformerDirectCD, MultimodalTransformerDirectCD).add_model_specific_args(parent_parser)
-
-        parser.add_argument("--model_name", default='smt_it_stm_p8', type=str)
+        # Model names define the transformer encoder used by the method
+        available_encoders = list(transformer.encoder_configs.keys())
+        parser.add_argument("--arch_name", default='smt_it_stm_p8', type=str,
+                            choices=available_encoders)
         parser.add_argument("--dropout", default=0.1, type=float)
         # parser.add_argument("--input_scale", default=2000.0, type=float)
         parser.add_argument("--window_size", default=8, type=int)
@@ -199,14 +201,14 @@ class MultimodalTransformerSegmentation(SemanticSegmentationBase):
         >>> # xdoctest: +SKIP
         >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
         >>> from watch.tasks.fusion import datamodules
-        >>> datamodule = datamodules.WatchDataModule(
+        >>> datamodule = datamodules.KWCocoVideoDataModule(
         >>>     train_dataset='special:vidshapes8', num_workers=0)
         >>> datamodule.setup('fit')
         >>> loader = datamodule.train_dataloader()
         >>> batch = next(iter(loader))
         >>> classes = datamodule.coco_datasets['train'].object_categories()
         >>> n_classes = len(classes)
-        >>> self = MultimodalTransformerSegmentation(n_classes=n_classes, model_name='smt_it_joint_p8')
+        >>> self = MultimodalTransformerSegmentation(n_classes=n_classes, arch_name='smt_it_joint_p8')
         >>> images = batch['images'].float()
         >>> logits = self(images)
 
@@ -216,65 +218,70 @@ class MultimodalTransformerSegmentation(SemanticSegmentationBase):
     """
 
     def __init__(self,
+                 arch_name,
                  n_classes,
-                 model_name,
                  dropout=0.0,
                  learning_rate=1e-3,
                  weight_decay=0.,
-                 window_size=8):
+                 input_stats=None,
+                 attention_impl='exact',
+                 window_size=8,
+                 do_collate=False):
         super().__init__(
             learning_rate=learning_rate,
             weight_decay=weight_decay,
+            input_stats=input_stats,
+            do_collate=do_collate,
         )
         self.save_hyperparameters()
 
-        encoder_config = transformer.encoder_configs[model_name]
-        encoder = transformer.FusionEncoder(**encoder_config, dropout=dropout)
+        encoder_config = transformer.encoder_configs[arch_name]
+        encoder = transformer.FusionEncoder(
+            **encoder_config,
+            attention_impl=attention_impl,
+            dropout=dropout,
+        )
         self.encoder = encoder
         self.classifier = nn.LazyLinear(n_classes)
 
-    @property
-    def preprocessing_step(self):
-        return transforms.Compose([
-            utils.Lambda(lambda x: torch.from_numpy(x).float()),
-            Rearrange("(h hs) (w ws) c -> c h w (ws hs)",
-                      hs=self.hparams.window_size,
-                      ws=self.hparams.window_size),
-            utils.SinePositionalEncoding(3, 0, sine_pairs=4),
-            utils.SinePositionalEncoding(3, 1, sine_pairs=4),
-            utils.SinePositionalEncoding(3, 2, sine_pairs=4),
+        self.tokenize = Rearrange("b t c (h hs) (w ws) -> b t c h w (ws hs)",
+                                  hs=self.hparams.window_size,
+                                  ws=self.hparams.window_size)
+        encode_t = utils.SinePositionalEncoding(5, 1, sine_pairs=4)
+        encode_m = utils.SinePositionalEncoding(5, 2, sine_pairs=4)
+        encode_h = utils.SinePositionalEncoding(5, 3, sine_pairs=4)
+        encode_w = utils.SinePositionalEncoding(5, 4, sine_pairs=4)
+        self.add_encoding = transforms.Compose([
+            encode_t, encode_m, encode_h, encode_w,
         ])
 
-    def batch_preprocessing_step(self, images):
-        return transforms.Compose([
-            # utils.Lambda(lambda x: torch.from_numpy(x).float()),
-            Rearrange("b c (h hs) (w ws) -> b c h w (ws hs)",
-                      hs=self.hparams.window_size,
-                      ws=self.hparams.window_size),
-            utils.SinePositionalEncoding(4, 1, sine_pairs=4),
-            utils.SinePositionalEncoding(4, 2, sine_pairs=4),
-            utils.SinePositionalEncoding(4, 3, sine_pairs=4),
-        ])(images)
-
-    # @pl.core.decorators.auto_move_data
     def forward(self, images):
-        preproced = self.batch_preprocessing_step(images)
-        features = self.encoder(preproced)
-        logits = self.classifier(features).mean(dim=1)
-        logits = einops.rearrange(logits, "b h w c -> b c h w")
-        logits = nn.functional.interpolate(
-            logits,
-            scale_factor=[self.hparams.window_size, self.hparams.window_size],
-            mode="bilinear")
+
+        # Break images up into patches
+        patch_tokens = self.tokenize(images)
+        # Add positional encodings for time, mode, and space.
+        patch_tokens = self.add_encoding(patch_tokens)
+
+        fused_feats = self.encoder(patch_tokens)
+        logits = self.classifier(fused_feats)
+        logits = einops.reduce(logits, "b t c h w l -> b t h w l", "mean")
         return logits
 
     @staticmethod
     def add_model_specific_args(parent_parser):
         parser = super(MultimodalTransformerSegmentation, MultimodalTransformerSegmentation).add_model_specific_args(parent_parser)
 
-        parser.add_argument("--model_name", type=str)
-        parser.add_argument("--n_classes", type=int)
-        parser.add_argument("--dropout", default=0.0, type=float)
-        # parser.add_argument("--input_scale", default=255.0, type=float)
+        parser.add_argument("--arch_name", default='smt_it_stm_p8', type=str)
+        parser.add_argument("--n_classes", required=True, type=int)
+        parser.add_argument("--dropout", default=0.1, type=float)
+        # parser.add_argument("--input_scale", default=2000.0, type=float)
         parser.add_argument("--window_size", default=8, type=int)
+        parser.add_argument(
+            "--attention_impl", default='exact', type=str, help=ub.paragraph(
+                '''
+                Implementation for attention computation.
+                Can be:
+                'exact' - the original O(n^2) method.
+                'performer' - a linear approximation.
+                '''))
         return parent_parser

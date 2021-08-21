@@ -34,7 +34,7 @@ python_dateutil >= 2.8.1
 pytimeparse >= 1.1.8
 
 # Imaging
-kwimage >= 0.7.10
+kwimage >= 0.7.11
 kwcoco >= 0.2.9
 Pillow >= 8.0.1
 albumentations >= 1.0.0
@@ -54,7 +54,7 @@ rasterio >= 1.2.0
 utm >= 0.7.0
 rtree >= 0.9.7
 pygeos >= 0.10.1
-rgd-client >= 0.2.2
+rgd-client >= 0.2.2, != 0.2.3
 geojson >= 2.5.0
 
 # Machine learning

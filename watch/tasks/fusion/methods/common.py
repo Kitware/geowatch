@@ -4,9 +4,9 @@ import pytorch_lightning as pl
 import torchmetrics as metrics
 import torch_optimizer as optim
 from torch.optim import lr_scheduler
-import numpy as np
 import ubelt as ub
 import netharn as nh
+import einops
 
 try:
     import xdev
@@ -53,7 +53,7 @@ class ChangeDetectorBase(pl.LightningModule):
             >>> from watch.tasks.fusion.methods.common import *  # NOQA
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datamodules
-            >>> datamodule = datamodules.WatchDataModule(
+            >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset='special:vidshapes8',
             >>>     num_workers=0, chip_size=128,
             >>>     normalize_inputs=True,
@@ -64,7 +64,7 @@ class ChangeDetectorBase(pl.LightningModule):
 
             >>> # Choose subclass to test this with (does not cover all cases)
             >>> self = methods.MultimodalTransformerDotProdCD(
-            >>>     model_name='smt_it_joint_p8', input_stats=datamodule.input_stats)
+            >>>     arch_name='smt_it_joint_p8', input_stats=datamodule.input_stats)
             >>> outputs = self.training_step(batch)
             >>> canvas = datamodule.draw_batch(batch, outputs=outputs)
             >>> # xdoctest: +REQUIRES(--show)
@@ -173,7 +173,7 @@ class ChangeDetectorBase(pl.LightningModule):
         #
         # TODO: is there any way to introspect what these variables could be?
 
-        model_name = "model.pkl"
+        arch_name = "model.pkl"
         module_name = 'watch_tasks_fusion'
 
         imp = torch.package.PackageImporter(package_path)
@@ -182,14 +182,14 @@ class ChangeDetectorBase(pl.LightningModule):
         # name of the resource corresponding to the model
         package_header = imp.load_pickle(
             'kitware_package_header', 'kitware_package_header.pkl')
-        model_name = package_header['model_name']
+        arch_name = package_header['arch_name']
         module_name = package_header['module_name']
 
         # pkg_root = imp.file_structure()
         # print(pkg_root)
         # pkg_data = pkg_root.children['.data']
 
-        self = imp.load_pickle(module_name, model_name)
+        self = imp.load_pickle(module_name, arch_name)
         return self
 
     def save_package(self, package_path, verbose=1):
@@ -203,7 +203,7 @@ class ChangeDetectorBase(pl.LightningModule):
             >>> dpath = ub.ensure_app_cache_dir('watch/tests/package')
             >>> package_path = join(dpath, 'my_package.pt')
 
-            >>> # Use one of our fusion models in a test
+            >>> # Use one of our fusion.architectures in a test
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datamodules
             >>> model = methods.MultimodalTransformerDirectCD("smt_it_stm_p8")
@@ -233,7 +233,7 @@ class ChangeDetectorBase(pl.LightningModule):
             >>> dpath = ub.ensure_app_cache_dir('watch/tests/package')
             >>> package_path = join(dpath, 'my_package.pt')
 
-            >>> # Use one of our fusion models in a test
+            >>> # Use one of our fusion.architectures in a test
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datamodules
             >>> self = methods.MultimodalTransformerDirectCD("smt_it_stm_p8")
@@ -241,7 +241,7 @@ class ChangeDetectorBase(pl.LightningModule):
             >>> inputs = torch.rand(1, 2, 13, 128, 128)
             >>> self(inputs)
 
-            >>> datamodule = datamodules.watch_data.WatchDataModule(
+            >>> datamodule = datamodules.kwcoco_video_data.KWCocoVideoDataModule(
             >>>     'special:vidshapes8-multispectral', chip_size=32,
             >>>     batch_size=1, time_steps=2, num_workers=0)
             >>> datamodule.setup('fit')
@@ -277,7 +277,7 @@ class ChangeDetectorBase(pl.LightningModule):
         model.val_dataloader = None
         model.test_dataloader = None
 
-        model_name = "model.pkl"
+        arch_name = "model.pkl"
         module_name = 'watch_tasks_fusion'
         with torch.package.PackageExporter(package_path, verbose=verbose) as exp:
             # TODO: this is not a problem yet, but some package types (mainly
@@ -289,7 +289,7 @@ class ChangeDetectorBase(pl.LightningModule):
             # allow for model importing with fewer hard-coding requirements
             package_header = {
                 'version': '0.0.1',
-                'model_name': model_name,
+                'arch_name': arch_name,
                 'module_name': module_name,
             }
             exp.save_pickle(
@@ -297,7 +297,7 @@ class ChangeDetectorBase(pl.LightningModule):
                 package_header
             )
 
-            exp.save_pickle(module_name, model_name, model)
+            exp.save_pickle(module_name, arch_name, model)
 
     def configure_optimizers(self):
         optimizer = optim.RAdam(
@@ -322,12 +322,20 @@ class SemanticSegmentationBase(pl.LightningModule):
 
     def __init__(self,
                  learning_rate=1e-3,
-                 weight_decay=0.):
+                 weight_decay=0.,
+                 input_stats=None,
+                 do_collate=False):
         super().__init__()
         self.save_hyperparameters()
 
+        self.input_norms = None
+        if input_stats is not None:
+            self.input_norms = torch.nn.ModuleDict()
+            for key, stats in input_stats.items():
+                self.input_norms[key] = nh.layers.InputNorm(**stats)
+
         # criterion and metrics
-        self.criterion = nn.CrossEntropyLoss(ignore_index=-100)
+        self.criterion = nn.CrossEntropyLoss(ignore_index=-1)
         self.metrics = nn.ModuleDict({
             # "acc": metrics.Accuracy(ignore_index=-100),
         })
@@ -336,62 +344,174 @@ class SemanticSegmentationBase(pl.LightningModule):
     def preprocessing_step(self):
         raise NotImplementedError
 
+    @profile
+    def forward_step(self, batch, with_loss=False, stage='unspecified'):
+        """
+        Generic forward step used for test / train / validation
+
+        Example:
+            >>> from watch.tasks.fusion.methods.common import *  # NOQA
+            >>> from watch.tasks.fusion import methods
+            >>> from watch.tasks.fusion import datamodules
+            >>> datamodule = datamodules.KWCocoVideoDataModule(
+            >>>     train_dataset='special:vidshapes8',
+            >>>     num_workers=0, chip_size=128,
+            >>>     normalize_inputs=True,
+            >>> )
+            >>> datamodule.setup('fit')
+            >>> loader = datamodule.train_dataloader()
+            >>> batch = next(iter(loader))
+
+            >>> # Choose subclass to test this with (does not cover all cases)
+            >>> self = methods.MultimodalTransformerSegmentation(
+            >>>     n_classes=1000,
+            >>>     arch_name='smt_it_joint_p8', input_stats=datamodule.input_stats)
+            >>> outputs = self.training_step(batch)
+            >>> canvas = datamodule.draw_batch(batch, outputs=outputs)
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas)
+            >>> kwplot.show_if_requested()
+        """
+        outputs = {}
+
+        item_losses = []
+        item_true_labels = []
+        item_pred_labels = []
+        for item in batch:
+
+            # For now, just reconstruct the stacked input, but
+            # in the future, the encoder will need to take care of
+            # the heterogeneous inputs
+
+            frame_ims = []
+            for frame in item['frames']:
+                assert len(frame['modes']) == 1, 'only handle one mode for now'
+                mode_key, mode_val = ub.peek(frame['modes'].items())
+                mode_val = mode_val.float()
+                # self.input_norms = None
+                if self.input_norms is not None:
+                    mode_norm = self.input_norms[mode_key]
+                    mode_val = mode_norm(mode_val)
+                frame_ims.append(mode_val)
+
+            # Because we are not collating we need to add a batch dimension
+            images = torch.stack(frame_ims)[None, ...]
+
+            B, T, C, H, W = images.shape
+
+            logits = self(images)
+
+            # TODO: it may be faster to compute loss at the downsampled
+            # resolution.
+            # The input dimensions are interpreted in the form: mini-batch x channels x [optional depth] x [optional height] x width.
+            logits = einops.rearrange(logits, "b t h w f -> (b t) f h w")
+            logits = nn.functional.interpolate(
+                logits, [H, W], mode="bilinear")
+            logits = einops.rearrange(logits, "(b t) f h w -> b t h w f",
+                                      b=B, t=T)
+
+            label_prob = torch.softmax(logits, dim=-1)[0]
+            item_pred_labels.append(label_prob.detach())
+
+            if with_loss:
+                labels = torch.stack([
+                    frame['labels'] for frame in item['frames']
+                ])[None, ...]
+                item_true_labels.append(labels)
+
+                # compute criterion
+                logits = einops.rearrange(logits, "b t h w f -> b f t h w")
+                loss = self.criterion(logits, labels.long())
+                item_losses.append(loss)
+
+        outputs['label_predictions'] = item_pred_labels
+
+        if with_loss:
+            total_loss = sum(item_losses)
+            all_pred = torch.stack(item_pred_labels)
+            all_true = torch.cat(item_true_labels, dim=0)
+            # compute metrics
+            item_metrics = {}
+            for key, metric in self.metrics.items():
+                val = metric(all_pred, all_true)
+                item_metrics[f'{stage}_{key}'] = val
+            outputs['loss'] = total_loss
+        return outputs
+
+    @profile
+    def collated_forward_step(self, batch, with_loss=False, stage='unspecified'):
+        outputs = {}
+
+        mode_key = ub.peek(batch[0]["frames"][0]["modes"].keys())
+        if self.input_norms is not None:
+            mode_norm = self.input_norms[mode_key]
+
+        frame_ims = torch.stack([
+            torch.stack([
+                mode_norm(ub.peek(frame['modes'].values()).float())
+                for frame in item["frames"]
+            ], dim=0)
+            for item in batch
+        ], dim=0)
+
+        B, T, C, H, W = frame_ims.shape
+
+        logits = self(frame_ims)
+
+        logits = einops.rearrange(
+            logits, "b t h w f -> (b t) f h w")
+        logits = nn.functional.interpolate(
+            logits, [H, W], mode="bilinear")
+        logits = einops.rearrange(
+            logits, "(b t) f h w -> b t h w f", b=B, t=T)
+
+        item_pred_labels = logits.argmax(dim=-1).detach()
+        outputs['label_predictions'] = item_pred_labels
+
+        if with_loss:
+            item_true_labels = torch.stack([
+                torch.stack([
+                    frame['labels']
+                    for frame in item["frames"]
+                ], dim=0)
+                for item in batch
+            ], dim=0)
+
+            logits = einops.rearrange(logits, "b t h w f -> b f t h w")
+            loss = self.criterion(logits, item_true_labels.long())
+
+            item_metrics = {}
+            for key, metric in self.metrics.items():
+                val = metric(item_pred_labels, item_true_labels)
+                item_metrics[f'{stage}_{key}'] = val
+            outputs['loss'] = loss
+        return outputs
+
+    @profile
     def training_step(self, batch, batch_idx=None):
-        images, labels = batch["images"], batch["labels"]
-        if isinstance(labels, np.ndarray):
-            labels = torch.from_numpy(labels)
+        if self.hparams.do_collate:
+            outputs = self.collated_forward_step(batch, with_loss=True, stage='train')
+        else:
+            outputs = self.forward_step(batch, with_loss=True, stage='train')
+        return outputs
 
-        # compute predicted and target change masks
-        logits = self(images)
-
-        # compute metrics
-        for key, metric in self.metrics.items():
-            self.log(key,
-                     metric(torch.softmax(logits, dim=1), labels),
-                     prog_bar=True)
-
-        # compute criterion
-        loss = self.criterion(logits, labels.long())
-        return loss
-
+    @profile
     def validation_step(self, batch, batch_idx=None):
-        images, labels = batch["images"], batch["labels"]
+        if self.hparams.do_collate:
+            outputs = self.collated_forward_step(batch, with_loss=True, stage='val')
+        else:
+            outputs = self.forward_step(batch, with_loss=True, stage='val')
+        return outputs
 
-        if isinstance(labels, np.ndarray):
-            labels = torch.from_numpy(labels)
-
-        # compute predicted and target change masks
-        logits = self(images)
-
-        # compute metrics
-        for key, metric in self.metrics.items():
-            self.log("val_" + key,
-                     metric(torch.softmax(logits, dim=1), labels),
-                     prog_bar=True)
-
-        # compute loss
-        loss = self.criterion(logits, labels.long())
-        self.log("val_loss", loss, prog_bar=True)
-        return loss
-
+    @profile
     def test_step(self, batch, batch_idx=None):
-        images, labels = batch["images"], batch["labels"]
-        if isinstance(labels, np.ndarray):
-            labels = torch.from_numpy(labels)
-
-        # compute predicted and target change masks
-        logits = self(images)
-
-        # compute metrics
-        for key, metric in self.metrics.items():
-            self.log("test_" + key,
-                     metric(torch.softmax(logits, dim=1), labels),
-                     prog_bar=True)
-
-        # compute loss
-        loss = self.criterion(logits, labels.long())
-        self.log("test_loss", loss, prog_bar=True)
-        return loss
+        if self.hparams.do_collate:
+            outputs = self.collated_forward_step(batch, with_loss=True, stage='test')
+        else:
+            outputs = self.forward_step(batch, with_loss=True, stage='test')
+        return outputs
 
     def configure_optimizers(self):
         optimizer = optim.RAdam(
@@ -408,4 +528,5 @@ class SemanticSegmentationBase(pl.LightningModule):
         parser = parent_parser.add_argument_group("SemanticSegmentation")
         parser.add_argument("--learning_rate", default=1e-3, type=float)
         parser.add_argument("--weight_decay", default=0., type=float)
+        parser.add_argument("--do_collate", action="store_true")
         return parent_parser

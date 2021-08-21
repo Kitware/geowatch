@@ -20,6 +20,86 @@ prep_dvc_data(){
     dvc pull -r aws --recursive extern/onera_2018
 }
 
+prep_validation_set(){
+    # Split out a validation dataset from the training data
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+    kwcoco stats $DVC_DPATH/extern/onera_2018/onera_train.kwcoco.json
+
+    # Make a "validation" dataset
+    kwcoco subset --select_videos ".id <= 2" \
+        --src $DVC_DPATH/extern/onera_2018/onera_train.kwcoco.json \
+        --dst $DVC_DPATH/extern/onera_2018/onera_vali.kwcoco.json
+
+    # Make a "learn" dataset
+    kwcoco subset --select_videos ".id > 2" \
+        --src $DVC_DPATH/extern/onera_2018/onera_train.kwcoco.json \
+        --dst $DVC_DPATH/extern/onera_2018/onera_learn.kwcoco.json
+
+    # Verify the split looks good
+    kwcoco stats \
+        $DVC_DPATH/extern/onera_2018/onera_learn.kwcoco.json \
+        $DVC_DPATH/extern/onera_2018/onera_vali.kwcoco.json
+}
+
+
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc 
+python -m watch.tasks.fusion.fit \
+    --channels="B05|B06|B07|B08|B8A" \
+    --method="MultimodalTransformerDirectCD" \
+    --arch_name=smt_it_stm_p8 \
+    --time_steps=2 \
+    --chip_size=128 \
+    --batch_size=2 \
+    --accumulate_grad_batches=8 \
+    --num_workers=4 \
+    --gpus=1  \
+    --learning_rate=1e-3 \
+    --weight_decay=1e-4 \
+    --dropout=0.1 \
+    --window_size=8 \
+    --train_dataset=$DVC_DPATH/extern/onera_2018/onera_learn.kwcoco.json \
+     --vali_dataset=$DVC_DPATH/extern/onera_2018/onera_vali.kwcoco.json \
+     --test_dataset=$DVC_DPATH/extern/onera_2018/onera_test.kwcoco.json \
+    --default_root_dir=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/runs/DirectCD_smt_it_smt_p8_vnir_v1 \
+       --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/runs/DirectCD_smt_it_smt_p8_vnir_v1/final_package.pt \
+                --dump=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/configs/DirectCD_smt_it_smt_p8_vnir_v1.yml 
+
+# pip install yq
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+
+# TODO: fix configparsefile
+#TRUE_DATASET=$(yq '.test_dataset' $DVC_DPATH/training/$HOSTNAME/$USER/Onera/configs/DirectCD_smt_it_smt_p8_vnir_v1.yml)
+#echo "TRUE_DATASET = $TRUE_DATASET"
+#TRUE_DATASET=$(yq '.test_dataset' $DVC_DPATH/training/$HOSTNAME/$USER/Onera/configs/DirectCD_smt_it_smt_p8_vnir_v1.yml)
+#echo "TRUE_DATASET = $TRUE_DATASET"
+
+CUDA_VISIBLE_DEVICES=1 \
+python -m watch.tasks.fusion.fit \
+           --config=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/configs/DirectCD_smt_it_smt_p8_vnir_v1.yml 
+    --train_dataset=$DVC_DPATH/extern/onera_2018/onera_learn.kwcoco.json \
+     --vali_dataset=$DVC_DPATH/extern/onera_2018/onera_vali.kwcoco.json \
+     --test_dataset=$DVC_DPATH/extern/onera_2018/onera_test.kwcoco.json \
+    --default_root_dir=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/runs/DirectCD_smt_it_smt_p8_vnir_v1 \
+       --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/runs/DirectCD_smt_it_smt_p8_vnir_v1/final_package.pt 
+
+## TODO: these steps should be called after training
+python -m watch.tasks.fusion.predict \
+        --test_dataset=$DVC_DPATH/extern/onera_2018/onera_test.kwcoco.json \
+       --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/runs/DirectCD_smt_it_smt_p8_vnir_v1/final_package.pt \
+        --pred_dataset=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/runs/DirectCD_smt_it_smt_p8_vnir_v1/pred.kwcoco.json
+
+python -m watch.tasks.fusion.evaluate \
+        --true_dataset=$DVC_DPATH/extern/onera_2018/onera_test.kwcoco.json \
+        --pred_dataset=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/runs/DirectCD_smt_it_smt_p8_vnir_v1/pred.kwcoco.json \
+          --eval_dpath=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/runs/DirectCD_smt_it_smt_p8_vnir_v1/eval
+
+
+
+
+
+
+# OLDER:
+
 # TRAINING COMMANDS
 AUTO_DEVICE=$(python -c "import netharn; print(netharn.XPU.coerce('auto').device.index)")
 echo "AUTO_DEVICE = $AUTO_DEVICE"
@@ -31,7 +111,7 @@ python -m watch.tasks.fusion.fit \
     --default_root_dir=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/DirectCD_smt_it_stm_s12_v2 \
     --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/DirectCD_smt_it_stm_s12_v2/final_package.pt \
     --method=MultimodalTransformerDirectCD \
-    --model_name=smt_it_stm_s12 \
+    --arch_name=smt_it_stm_s12 \
     --window_size=8 \
     --learning_rate=1e-3 \
     --weight_decay=1e-4 \
@@ -58,7 +138,6 @@ python -m watch.tasks.fusion.evaluate \
     --eval_dpath=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/DirectCD_smt_it_stm_s12_v2/pred/eval
 
 
-/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/training/yardrat/jon.crall/MultimodalTransformerDirectCD-21150fb65110ebd1/lightning_logs/version_3/checkpoints/epoch=236-step=9242.ckpt
 
 
 # 1080ti
@@ -73,7 +152,7 @@ python -m watch.tasks.fusion.fit \
     --default_root_dir=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/DirectCD_smt_it_stm_s12_v1 \
     --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/DirectCD_smt_it_stm_s12_v1/final_package.pt \
     --method=MultimodalTransformerDirectCD \
-    --model_name=smt_it_stm_s12 \
+    --arch_name=smt_it_stm_s12 \
     --window_size=8 \
     --learning_rate=1e-3 \
     --weight_decay=1e-4 \
@@ -110,7 +189,7 @@ python -m watch.tasks.fusion.fit \
     --vali_dataset=$DVC_DPATH/extern/onera_2018/onera_test.kwcoco.json \
     --workdir=$DVC_DPATH/training/$HOSTNAME/$USER \
     --method=MultimodalTransformerDotProdCD \
-    --model_name=smt_it_stm_s12 \
+    --arch_name=smt_it_stm_s12 \
     --window_size=8 \
     --learning_rate=1e-3 \
     --weight_decay=1e-4 \
@@ -141,7 +220,7 @@ python -m watch.tasks.fusion.fit \
     --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/DotProd_smt_it_stm_s12_vnir_11GB_v3/deploy_Onera_DotProd_smt_it_stm_s12_vnir_v1.pt \
     --method=MultimodalTransformerDotProdCD \
     --channels="B05|B06|B07|B08|B8A" \
-    --model_name=smt_it_stm_s12 \
+    --arch_name=smt_it_stm_s12 \
     --window_size=8 \
     --patience=400 \
     --max_epochs=1000 \
@@ -164,7 +243,7 @@ python -m watch.tasks.fusion.fit \
     --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/DotProd_smt_it_stm_s12_vnir_11GB_v4/deploy_Onera_DotProd_smt_it_stm_s12_vnir_v1.pt \
     --method=MultimodalTransformerDotProdCD \
     --channels="B05|B06|B07|B08|B8A" \
-    --model_name=smt_it_stm_s12 \
+    --arch_name=smt_it_stm_s12 \
     --window_size=8 \
     --patience=400 \
     --max_epochs=1000 \
@@ -203,7 +282,7 @@ python -m watch.tasks.fusion.fit \
     --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/DotProd_smt_it_stm_s12_vnir_11GB_v6/deploy_Direct_smt_it_stm_s12_vnir_11GB_v5.pt \
     --method=MultimodalTransformerDirectCD \
     --channels="B05|B06|B07|B08|B8A" \
-    --model_name=smt_it_stm_s12 \
+    --arch_name=smt_it_stm_s12 \
     --window_size=8 \
     --patience=400 \
     --max_epochs=1000 \

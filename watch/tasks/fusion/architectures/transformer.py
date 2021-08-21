@@ -151,7 +151,7 @@ except ImportError:
 def new_attention_layer(embedding_size, n_heads, attention_impl='exact'):
     """
     Example:
-        >>> from watch.tasks.fusion.models.transformer import *  # NOQA
+        >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
         >>> import torch
         >>> batch_size = 1
         >>> embedding_size = 4
@@ -192,7 +192,7 @@ def num_groups_hueristic(num_features):
     Number of groups hueristic for GroupNorm:
 
     Example:
-        >>> from watch.tasks.fusion.models.transformer import *  # NOQA
+        >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
         >>> lut = {}
         >>> for num_features in range(2, 1024):
         >>>     num_groups = num_groups_hueristic(num_features)
@@ -315,7 +315,7 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
         in the area.
 
     Example:
-        >>> from watch.tasks.fusion.models.transformer import *  # NOQA
+        >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
         >>> import torch
         >>> image_size = 128
         >>> #
@@ -464,7 +464,7 @@ class FusionEncoder(nn.Module):
     encodings in a row
 
     Example:
-        >>> from watch.tasks.fusion.models.transformer import *  # NOQA
+        >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
         >>> import torch
         >>> in_features = 7
         >>> model = FusionEncoder(
