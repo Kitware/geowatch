@@ -229,6 +229,9 @@ class ArgumentParser(configargparse.ArgumentParser):
             output_file_paths = [getattr(namespace, a.dest, None) for a in self._actions
                                  if getattr(a, "is_write_out_config_file_arg", False)]
             output_file_paths = [a for a in output_file_paths if a is not None]
+            for a in output_file_paths:
+                import pathlib
+                pathlib.Path(a).parent.mkdir(exist_ok=True, parents=True)
             self.write_config_file(namespace, output_file_paths, exit_after=True)
         return namespace, unknown_args
 

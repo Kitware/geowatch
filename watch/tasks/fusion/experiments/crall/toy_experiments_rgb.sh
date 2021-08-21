@@ -2,34 +2,30 @@ __doc__="""
 This demonstrates a end-to-end pipeline on toydata
 """
 
+# Generate toy datasets
 DATA_DPATH=$HOME/data/work/toy_change
+TRAIN_FPATH=$DATA_DPATH/vidshapes_rgb_train/data.kwcoco.json
+VALI_FPATH=$DATA_DPATH/vidshapes_rgb_vali/data.kwcoco.json
+TEST_FPATH=$DATA_DPATH/vidshapes_rgb_test/data.kwcoco.json 
+
 mkdir -p $DATA_DPATH
 cd $DATA_DPATH
-
 # Generate toy datasets
-kwcoco toydata vidshapes8-frames5 --bundle_dpath $DATA_DPATH/vidshapes_train
-kwcoco toydata vidshapes4-frames5 --bundle_dpath $DATA_DPATH/vidshapes_vali
-kwcoco toydata vidshapes2-frames6 --bundle_dpath $DATA_DPATH/vidshapes_test
+kwcoco toydata vidshapes8-frames5 --bundle_dpath $DATA_DPATH/vidshapes_rgb_train
+kwcoco toydata vidshapes4-frames5 --bundle_dpath $DATA_DPATH/vidshapes_rgb_vali
+kwcoco toydata vidshapes2-frames6 --bundle_dpath $DATA_DPATH/vidshapes_rgb_test
 
 
-# TRAINING COMMANDS
-AUTO_DEVICE=$(python -c "import netharn; print(netharn.XPU.coerce('auto').device.index)")
-echo "AUTO_DEVICE = $AUTO_DEVICE"
-#CUDA_VISIBLE_DEVICES=$AUTO_DEVICE \
+# Print stats
+python -m watch watch_coco_stats $TRAIN_FPATH 
+python -m kwcoco stats $TRAIN_FPATH $VALI_FPATH $TEST_FPATH
 
-DATA_DPATH=$HOME/data/work/toy_change
-python -m watch watch_coco_stats $DATA_DPATH/vidshapes_train
-
-DATA_DPATH=$HOME/data/work/toy_change
+# Configure training hyperparameters
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc 
 python -m watch.tasks.fusion.fit \
-    --train_dataset=$DATA_DPATH/vidshapes_train/data.kwcoco.json \
-    --vali_dataset=$DATA_DPATH/vidshapes_vali/data.kwcoco.json \
-    --test_dataset=$DATA_DPATH/vidshapes_test/data.kwcoco.json \
-    --workdir=$DATA_DPATH/fit/ \
-    --package_fpath=$DATA_DPATH/toy_deployed_model.pt \
-    --channels="r|b" \
+    --channels="r|g|b" \
     --method=MultimodalTransformerDirectCD \
-    --arch_name=smt_it_stm_s12 \
+    --arch_name=smt_it_stm_p8 \
     --window_size=8 \
     --learning_rate=3e-4 \
     --weight_decay=1e-5 \
@@ -37,20 +33,32 @@ python -m watch.tasks.fusion.fit \
     --time_steps=2 \
     --chip_size=128 \
     --batch_size=1 \
-    --max_epochs=3 \
+    --max_epochs=2 \
     --max_steps=100 \
     --gpus=1 \
-    --accumulate_grad_batches=4 \
-    --num_workers=2 
-    2>/dev/null
+    --auto_select_gpus=True \
+    --accumulate_grad_batches=1 \
+    --dump=$DVC_DPATH/training/$HOSTNAME/$USER/ToyRGB/configs/DirectCD_smt_it_smt_p8_rgb_v1.yml 
 
+# Fit 
+python -m watch.tasks.fusion.fit \
+     --config=$DVC_DPATH/training/$HOSTNAME/$USER/ToyRGB/configs/DirectCD_smt_it_smt_p8_rgb_v1.yml \
+     --train_dataset=$TRAIN_FPATH \
+     --vali_dataset=$VALI_FPATH \
+     --test_dataset=$TEST_FPATH \
+    --default_root_dir=$DVC_DPATH/training/$HOSTNAME/$USER/ToyRGB/runs/DirectCD_smt_it_smt_p8_rgb_v1 \
+       --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/ToyRGB/runs/DirectCD_smt_it_smt_p8_rgb_v1/final_package.pt 
+
+
+# Predict 
 python -m watch.tasks.fusion.predict \
-    --package_fpath=$DATA_DPATH/toy_deployed_model.pt \
-    --test_dataset=$DATA_DPATH/vidshapes_test/data.kwcoco.json \
-    --pred_dataset=$DATA_DPATH/vidshapes_test_pred/pred.kwcoco.json --gpus=1
+    --test_dataset=$TEST_FPATH \
+    --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/ToyRGB/runs/DirectCD_smt_it_smt_p8_rgb_v1/final_package.pt  \
+    --pred_dataset=$DVC_DPATH/training/$HOSTNAME/$USER/ToyRGB/runs/DirectCD_smt_it_smt_p8_rgb_v1/pred/pred.kwcoco.json
 
+
+# Evaluate 
 python -m watch.tasks.fusion.evaluate \
-    --true_dataset=$DATA_DPATH/vidshapes_test/data.kwcoco.json \
-    --pred_dataset=$DATA_DPATH/vidshapes_test_pred/pred.kwcoco.json \
-    --eval_dpath=$DATA_DPATH/vidshapes_test_pred_eval  # [**eval_hyperparams]
-
+    --true_dataset=$TEST_FPATH \
+    --pred_dataset=$DVC_DPATH/training/$HOSTNAME/$USER/ToyRGB/runs/DirectCD_smt_it_smt_p8_rgb_v1/pred/pred.kwcoco.json
+      --eval_dpath=$DVC_DPATH/training/$HOSTNAME/$USER/ToyRGB/runs/DirectCD_smt_it_smt_p8_rgb_v1/pred/eval 
