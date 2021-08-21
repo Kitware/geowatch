@@ -15,17 +15,17 @@ def make_predict_config(cmdline=False, **kwargs):
     """
     Configuration for fusion prediction
     """
-    import argparse
-    import configargparse
-    class RawDescriptionDefaultsHelpFormatter(
-            argparse.RawDescriptionHelpFormatter,
-            argparse.ArgumentDefaultsHelpFormatter):
-        pass
+    from watch.utils import configargparse_ext
 
-    parser = configargparse.ArgumentParser(
+    parser = configargparse_ext.ArgumentParser(
         add_config_file_help=False,
         description='Prediction script for the fusion task',
-        formatter_class=RawDescriptionDefaultsHelpFormatter,
+        auto_env_var_prefix='WATCH_FUSION_PREDICT_',
+        add_env_var_help=True,
+        formatter_class='raw',
+        config_file_parser_class='yaml',
+        args_for_setting_config_path=['--config'],
+        args_for_writing_out_config_file=['--dump'],
     )
     parser.add_argument("--datamodule", default='KWCocoVideoDataModule')
     parser.add_argument("--pred_dataset", default=None, dest='pred_dataset')
@@ -37,15 +37,18 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.add_argument("--gpus", default=None, help="todo: hook up to lightning")
     parser.add_argument("--thresh", type=float, default=0.01)
 
+    from scriptconfig.smartcast import smartcast
+    # Not sure if smartcast will work here
+
     parser.add_argument(
-        "--write_preds", default=True, help=ub.paragraph(
+        "--write_preds", default=True, type=smartcast, help=ub.paragraph(
             '''
             If True, convert probability maps into raw "hard" predictions and
             write them as annotations to the prediction kwcoco file.
             '''))
 
     parser.add_argument(
-        "--write_probs", default=True, help=ub.paragraph(
+        "--write_probs", default=True, type=smartcast, help=ub.paragraph(
             '''
             If True, write raw "soft" probability maps into the kwcoco file as
             a new auxiliary channel.  The channel name is currently denoted by
@@ -54,7 +57,9 @@ def make_predict_config(cmdline=False, **kwargs):
 
     parser.set_defaults(**kwargs)
     # parse the datamodule and method strings
-    temp_args, _ = parser.parse_known_args(None if cmdline else [])
+    default_args = None if cmdline else []
+    temp_args, _ = parser.parse_known_args(
+        default_args, ignore_help_args=True, ignore_write_args=True)
 
     # get the datamodule and method classes
     datamodule_class = getattr(datamodules, temp_args.datamodule)
@@ -66,7 +71,7 @@ def make_predict_config(cmdline=False, **kwargs):
 
     # parse and pass to main
     parser.set_defaults(**kwargs)
-    args = parser.parse_args(None if cmdline else [])
+    args = parser.parse_known_args(default_args)
     assert args.batch_size == 1
     return args
 

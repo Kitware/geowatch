@@ -26,7 +26,7 @@ prep_validation_set(){
     kwcoco stats $DVC_DPATH/extern/onera_2018/onera_train.kwcoco.json
 
     # Make a "validation" dataset
-    kwcoco subset --select_videos ".id <= 2" \
+    kwcoco subset --select_videos ".id <= 1" \
         --src $DVC_DPATH/extern/onera_2018/onera_train.kwcoco.json \
         --dst $DVC_DPATH/extern/onera_2018/onera_vali.kwcoco.json
 
@@ -47,11 +47,13 @@ TRAIN_FPATH=$DVC_DPATH/extern/onera_2018/onera_learn.kwcoco.json
 VALI_FPATH=$DVC_DPATH/extern/onera_2018/onera_vali.kwcoco.json 
 TEST_FPATH=$DVC_DPATH/extern/onera_2018/onera_test.kwcoco.json 
 
+kwcoco stats $TRAIN_FPATH $VALI_FPATH $TEST_FPATH
+
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 
-ARCH=smt_it_stm_l24
+ARCH=smt_it_stm_s12
 CHANNELS="B05|B06|B07|B08|B8A"
-EXPERIMENT_NAME=DirectCD_${ARCH}_vnir_v3
+EXPERIMENT_NAME=DirectCD_${ARCH}_vnir_v4
 DATASET_CODE=Onera
 
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
@@ -64,33 +66,39 @@ CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/$EXPERIMENT_NAME.yml
 python -m watch.tasks.fusion.fit \
     --channels=${CHANNELS} \
     --method="MultimodalTransformerDirectCD" \
-    --arch_name=smt_it_stm_l24 \
+    --arch_name=$ARCH \
     --time_steps=2 \
     --chip_size=128 \
-    --batch_size=3 \
-    --accumulate_grad_batches=12 \
+    --batch_size=8 \
+    --accumulate_grad_batches=8 \
     --num_workers=6 \
     --gpus=1  \
     --learning_rate=3e-4 \
     --weight_decay=1e-4 \
     --dropout=0.1 \
     --window_size=8 \
-    --dump=$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE/configs/$EXPERIMENT_NAME.yml 
+    --dump=$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE/configs/train_$EXPERIMENT_NAME.yml 
+
+python -m watch.tasks.fusion.predict \
+    --gpus=1 \
+    --write_preds=True \
+    --write_probs=False \
+    --dump=$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE/configs/predict_$EXPERIMENT_NAME.yml 
 
 python -m watch.tasks.fusion.fit \
-           --config=$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE/configs/$EXPERIMENT_NAME.yml \
+           --config=$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE/configs/train_$EXPERIMENT_NAME.yml \
     --default_root_dir=$DEFAULT_ROOT_DIR \
        --package_fpath=$PACKAGE_FPATH \
         --train_dataset=$TRAIN_FPATH \
          --vali_dataset=$VALI_FPATH \
-         --test_dataset=$TEST_FPATH \
+         --test_dataset=$TEST_FPATH 
 
 ## TODO: these steps should be called after training
 python -m watch.tasks.fusion.predict \
-        --gpus=1 \
+        --config=$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE/configs/predict_$EXPERIMENT_NAME.yml \
         --test_dataset=$TEST_FPATH \
        --package_fpath=$PACKAGE_FPATH \
-        --pred_dataset=$PRED_FPATH \
+        --pred_dataset=$PRED_FPATH 
 
 python -m watch.tasks.fusion.evaluate \
         --true_dataset=$TEST_FPATH \
