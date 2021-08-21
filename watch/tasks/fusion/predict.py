@@ -8,6 +8,7 @@ import kwimage
 import kwarray
 from watch.tasks.fusion import datamodules
 from watch.tasks.fusion import utils
+from watch.utils import util_path
 
 
 def make_predict_config(cmdline=False, **kwargs):
@@ -35,6 +36,21 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.add_argument("--package_fpath", type=pathlib.Path)
     parser.add_argument("--gpus", default=None, help="todo: hook up to lightning")
     parser.add_argument("--thresh", type=float, default=0.01)
+
+    parser.add_argument(
+        "--write_preds", default=True, help=ub.paragraph(
+            '''
+            If True, convert probability maps into raw "hard" predictions and
+            write them as annotations to the prediction kwcoco file.
+            '''))
+
+    parser.add_argument(
+        "--write_probs", default=True, help=ub.paragraph(
+            '''
+            If True, write raw "soft" probability maps into the kwcoco file as
+            a new auxiliary channel.  The channel name is currently denoted by
+            the tag parameter, but this may change in the future.
+            '''))
 
     parser.set_defaults(**kwargs)
     # parse the datamodule and method strings
@@ -161,7 +177,8 @@ def predict(cmdline=False, **kwargs):
     # Set the filepath for the prediction coco file
     # (modifies the bundle_dpath)
     if args.pred_dataset is None:
-        result_dataset.fpath = str(args.pred_dpath / 'pred.kwcoco.json')
+        pred_dpath = util_path.coercepath(args.pred_dpath)
+        result_dataset.fpath = str(pred_dpath / 'pred.kwcoco.json')
     else:
         result_dataset.fpath = str(args.pred_dataset)
 
@@ -181,26 +198,38 @@ def predict(cmdline=False, **kwargs):
 
     stitch_manager = CocoStitchingManager(
         result_dataset,
-        chan_code=args.tag,
         stiching_space='video',
         device='numpy',  # could be torch on-device stitching
+        chan_code=args.tag,
         thresh=args.thresh,
+        write_probs=args.write_probs,
+        write_preds=args.write_preds,
     )
 
     prog = ub.ProgIter(test_dataloader, desc='predicting', verbose=1)
     # nanns = 0
 
     result_infos = []
+    total_info = {'n_anns': 0, 'n_imgs': 0, 'total_prob': 0}
 
     def finalize_ready(gid):
         info = stitch_manager.finalize_image(gid)
-        stats = running_stats.summarize(axis=None)
-        stats = ub.dict_isect(stats, {'mean', 'max', 'min', 'std', 'n'})
-        # extra = ub.repr2(stats, precision=6, nl=0)
-        prog.ensure_newline()
-        # prog.set_extra(extra)
-        print('stats = {}'.format(ub.repr2(stats, nl=0, precision=4)))
-        print('pred gid={} info = {}'.format(gid, ub.repr2(info, nl=0, precision=2)))
+        stats = running_stats.summarize(axis=None, keepdims=False)
+        total_info['n_anns'] += info['n_anns']
+        total_info['total_prob'] += info['total_prob']
+        total_info['n_imgs'] += 1
+
+        report_info = ub.dict_union(
+            ub.dict_isect(stats, {'mean', 'max', 'min', 'std'}),
+            ub.dict_isect(total_info, {'n_imgs', 'n_anns', 'total_prob'}),
+        )
+        # TODO: once compact=True is available in ub 0.9.6, the rest can be
+        # removed
+        report_info_str = ub.repr2(
+            report_info, precision=4, compact=True, with_dtype=False, nl=0, nobr=1,
+            sk=True, sv=True, kvsep='=', itemsep='')
+        prog.set_extra(' {} - '.format(report_info_str))
+        # prog.ensure_newline()
         result_infos.append(info)
 
     import kwarray
@@ -304,7 +333,8 @@ class CocoStitchingManager(object):
     """
 
     def __init__(self, result_dataset, chan_code=None, stiching_space='video',
-                 device='numpy', thresh=0.5):
+                 device='numpy', thresh=0.5, write_probs=True,
+                 write_preds=True):
         self.result_dataset = result_dataset
         self.device = device
         self.chan_code = chan_code
@@ -321,11 +351,11 @@ class CocoStitchingManager(object):
         self._last_vidid = None
         self._ready_gids = set()
 
-        # HACKS: SAVE_PREDS currently exists for debugging, and demoing
-        self.SAVE_PROBS = 1
-        self.SAVE_PREDS = 1
+        # TODO: writing predictions and probabilities needs robustness work
+        self.write_probs = write_probs
+        self.write_preds = write_preds
 
-        if self.SAVE_PROBS:
+        if self.write_probs:
             bundle_dpath = self.result_dataset.bundle_dpath
             prob_subdir = f'_assets/{self.chan_code}'
             self.prob_dpath = join(bundle_dpath, prob_subdir)
@@ -406,10 +436,10 @@ class CocoStitchingManager(object):
         # Get spatial relationship between the image and the video
         vid_to_img = kwimage.Affine.coerce(img['warp_img_to_vid']).inv()
 
-        num_pred_anns = 0
+        n_anns = 0
         total_prob = 0
 
-        if self.SAVE_PROBS:
+        if self.write_probs:
             # This currently exists as an example to demonstrate how a
             # prediction script can write a pre-fusion TA-2 feature to disk and
             # register it with the kwcoco file.
@@ -434,7 +464,7 @@ class CocoStitchingManager(object):
                 compress='LZW'
             )
 
-        if self.SAVE_PREDS:
+        if self.write_preds:
             # This is the final step where we convert soft-probabilities to
             # hard-polygons, we need to choose an good operating point here.
 
@@ -446,7 +476,7 @@ class CocoStitchingManager(object):
             change_pred = change_probs > self.thresh
             # Convert to polygons
             vid_polys = kwimage.Mask(change_pred, 'c_mask').to_multi_polygon()
-            num_pred_anns = len(vid_polys)
+            n_anns = len(vid_polys)
             for vid_poly in vid_polys:
                 # Compute a score for the polygon
                 # TODO: This is very inefficient, should fix this
@@ -462,7 +492,7 @@ class CocoStitchingManager(object):
                     bbox=bbox, segmentation=img_poly, score=score)
 
         return {
-            'num_pred_anns': num_pred_anns,
+            'n_anns': n_anns,
             'total_prob': total_prob,
         }
 

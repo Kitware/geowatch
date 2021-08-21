@@ -45,13 +45,13 @@ prep_validation_set(){
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc 
 TRAIN_FPATH=$DVC_DPATH/extern/onera_2018/onera_learn.kwcoco.json 
 VALI_FPATH=$DVC_DPATH/extern/onera_2018/onera_vali.kwcoco.json 
-TEST_FPATH=$DVC_DPATH/extern/onera_2018/onera_vali.kwcoco.json 
+TEST_FPATH=$DVC_DPATH/extern/onera_2018/onera_test.kwcoco.json 
 
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 
 ARCH=smt_it_stm_l24
 CHANNELS="B05|B06|B07|B08|B8A"
-EXPERIMENT_NAME=DirectCD_${ARCH}_vnir_v2
+EXPERIMENT_NAME=DirectCD_${ARCH}_vnir_v3
 DATASET_CODE=Onera
 
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
@@ -67,11 +67,11 @@ python -m watch.tasks.fusion.fit \
     --arch_name=smt_it_stm_l24 \
     --time_steps=2 \
     --chip_size=128 \
-    --batch_size=2 \
-    --accumulate_grad_batches=8 \
-    --num_workers=4 \
+    --batch_size=3 \
+    --accumulate_grad_batches=12 \
+    --num_workers=6 \
     --gpus=1  \
-    --learning_rate=1e-3 \
+    --learning_rate=3e-4 \
     --weight_decay=1e-4 \
     --dropout=0.1 \
     --window_size=8 \
@@ -87,8 +87,9 @@ python -m watch.tasks.fusion.fit \
 
 ## TODO: these steps should be called after training
 python -m watch.tasks.fusion.predict \
+        --gpus=1 \
         --test_dataset=$TEST_FPATH \
-       --package_fpath=$PRED_FPATH \
+       --package_fpath=$PACKAGE_FPATH \
         --pred_dataset=$PRED_FPATH \
 
 python -m watch.tasks.fusion.evaluate \

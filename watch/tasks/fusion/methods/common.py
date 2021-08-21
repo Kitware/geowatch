@@ -300,6 +300,32 @@ class ChangeDetectorBase(pl.LightningModule):
             exp.save_pickle(module_name, arch_name, model)
 
     def configure_optimizers(self):
+        """
+        TODO:
+            - [ ] Enable use of other optimization algorithms on the CLI
+            - [ ] Enable use of other scheduler algorithms on the CLI
+
+        References:
+            https://pytorch-optimizer.readthedocs.io/en/latest/index.html
+
+        Example:
+            >>> from watch.tasks.fusion.methods.common import *  # NOQA
+            >>> from watch.tasks.fusion import methods
+            >>> self = methods.MultimodalTransformerDirectCD("smt_it_stm_p8")
+            >>> self.trainer = pl.Trainer(max_epochs=400)
+            >>> [opt], [sched] = self.configure_optimizers()
+            >>> rows = []
+            >>> # Insepct what the LR curve will look like
+            >>> for _ in range(self.trainer.max_epochs):
+            ...     sched.last_epoch += 1
+            ...     lr = sched.get_lr()[0]
+            ...     rows.append({'lr': lr, 'last_epoch': sched.last_epoch})
+            >>> data = pd.DataFrame(rows)
+            >>> # xdoctest +REQUIRES(--show)
+            >>> import kwplot
+            >>> sns = kwplot.autosns()
+            >>> sns.lineplot(data=data, y='lr', x='last_epoch')
+        """
         optimizer = optim.RAdam(
                 self.parameters(),
                 lr=self.hparams.learning_rate,
