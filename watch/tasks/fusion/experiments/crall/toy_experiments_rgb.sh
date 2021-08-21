@@ -1,5 +1,5 @@
 __doc__="""
-This demonstrates a end-to-end pipeline on toydata
+This demonstrates an end-to-end pipeline on RGB toydata
 """
 
 # Generate toy datasets
@@ -11,7 +11,7 @@ TEST_FPATH=$DATA_DPATH/vidshapes_rgb_test/data.kwcoco.json
 mkdir -p $DATA_DPATH
 cd $DATA_DPATH
 # Generate toy datasets
-kwcoco toydata vidshapes8-frames5 --bundle_dpath $DATA_DPATH/vidshapes_rgb_train
+kwcoco toydata vidshapes1-frames5 --bundle_dpath $DATA_DPATH/vidshapes_rgb_train
 kwcoco toydata vidshapes4-frames5 --bundle_dpath $DATA_DPATH/vidshapes_rgb_vali
 kwcoco toydata vidshapes2-frames6 --bundle_dpath $DATA_DPATH/vidshapes_rgb_test
 
@@ -33,8 +33,7 @@ python -m watch.tasks.fusion.fit \
     --time_steps=2 \
     --chip_size=128 \
     --batch_size=1 \
-    --max_epochs=2 \
-    --max_steps=100 \
+    --max_epochs=1 \
     --gpus=1 \
     --auto_select_gpus=True \
     --accumulate_grad_batches=1 \
@@ -60,5 +59,5 @@ python -m watch.tasks.fusion.predict \
 # Evaluate 
 python -m watch.tasks.fusion.evaluate \
     --true_dataset=$TEST_FPATH \
-    --pred_dataset=$DVC_DPATH/training/$HOSTNAME/$USER/ToyRGB/runs/DirectCD_smt_it_smt_p8_rgb_v1/pred/pred.kwcoco.json
+    --pred_dataset=$DVC_DPATH/training/$HOSTNAME/$USER/ToyRGB/runs/DirectCD_smt_it_smt_p8_rgb_v1/pred/pred.kwcoco.json \
       --eval_dpath=$DVC_DPATH/training/$HOSTNAME/$USER/ToyRGB/runs/DirectCD_smt_it_smt_p8_rgb_v1/pred/eval 
