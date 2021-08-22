@@ -44,7 +44,7 @@ def get_warp(gid1, gid2, dataset):
     return img2_from_img1
 
 
-def get_warped_ann(previous_ann, warp, image_id):
+def get_warped_ann(previous_ann, warp, image_id, previous_image_id):
     # Returns a new annotation by applying a warp on an existing annotation
     segmentation = kwimage.Segmentation.coerce(previous_ann['segmentation'])
 
@@ -57,6 +57,7 @@ def get_warped_ann(previous_ann, warp, image_id):
     warped_ann['category_id'] = previous_ann['category_id']
     warped_ann['track_id'] = previous_ann['track_id']
     warped_ann['image_id'] = image_id
+    warped_ann['source_gid'] = previous_image_id
 
     return warped_ann
 
@@ -127,15 +128,32 @@ def main(args):
     print('total images:', full_ds.n_images)
     print('total annotations:', full_ds.n_annots)
 
+    # make a copy of the original kwcoco dataset
+    propagated_ds = full_ds.copy()
+
+    # preprocessing step: in the new dataset, add a new filed 'source_gid' to every *annotation*.
+    # original annotations: source_gid == gid
+    # when we propagate labels, we will add the image id of the original image from which we copied 
+    # the annotation. In the case of propagated labels, we will have source_gid != gid
+
+    for aid in propagated_ds.index.anns:
+        # load annotation
+        ann = propagated_ds.index.anns[aid]
+        image_id = ann['image_id']
+        ann['source_gid'] = image_id
+
     # which categories we want to propagate
     catnames_to_propagate = [
         'Site Preparation',
         'Active Construction', ]
     categories_to_propagate = [full_ds.index.name_to_cat[c]['id'] for c in catnames_to_propagate]
 
-    # number of visualizations of every sequence 
+    # number of visualizations of every sequence
     n_image_viz = 7
-    
+
+    # a list of newly geenrated annotation IDs, for debugging purposes
+    new_aids = []
+
     for vid_id, video in full_ds.index.videos.items():
         image_ids = full_ds.index.vidid_to_gids[vid_id]
 
@@ -192,8 +210,13 @@ def main(args):
                         warp_previous_to_this_image = get_warp(previous_image_id, img_id, full_ds)
 
                         # apply the warp
-                        warped_annotation = get_warped_ann(previous_annotation, warp_previous_to_this_image, img_id)
+                        warped_annotation = get_warped_ann(previous_annotation, warp_previous_to_this_image, img_id, previous_image_id)
 
+                        # add the propagated annotation in the new kwcoco dataset
+                        new_aid = propagated_ds.add_annotation(**warped_annotation)
+                        new_aids.append(new_aid)
+
+                        # append in the list for visualizations
                         this_image_fixed_anns.append(warped_annotation)
 
                         if args.verbose:
@@ -212,8 +235,34 @@ def main(args):
         fname = join(args.out_dir, 'video_' + str(vid_id) + location_string + '.jpg')
         save_visualizations(canvases, canvases_fixed, fname)
 
-    # ToDO: write the code to add annotation objects
-    # ToDo: save the new kwcoco data to disk
+    # save the propagated dataset
+    propagated_fname = join(args.out_dir, 'propagted_data.kwcoco.json')
+    propagated_ds.dump(propagated_fname)
+    
+    # print statistics about propagation
+    print('original annotations:', full_ds.n_annots, 'propagated annotations:', len(new_aids), 'total annotations:', propagated_ds.n_annots)
+
+    # Running a debugging check. This can be removed in future
+    verify_ds = kwcoco.CocoDataset(propagated_fname)
+    original_aids_n = 0
+    propagated_aids_n = 0
+    for aid in verify_ds.index.anns:
+        # load annotation
+        ann = verify_ds.index.anns[aid]
+        image_id = ann['image_id']
+        if image_id == ann['source_gid']:
+            original_aids_n += 1
+        else:
+            propagated_aids_n += 1
+            
+
+    print('verification of annotation types -- no. of original anns:', original_aids_n, ', no. of propagated anns:', propagated_aids_n)
+    
+    # ToDo
+    # [x] write the code to add annotation objects
+    # [x] save the new kwcoco data to disk
+    # [ ] use site dates (or any other mechanism) to make sure propagation is limited only to correct frames
+
     return 0
 
 if __name__ == '__main__':
