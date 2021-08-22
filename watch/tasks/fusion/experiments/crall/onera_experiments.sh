@@ -47,8 +47,6 @@ TRAIN_FPATH=$DVC_DPATH/extern/onera_2018/onera_learn.kwcoco.json
 VALI_FPATH=$DVC_DPATH/extern/onera_2018/onera_vali.kwcoco.json 
 TEST_FPATH=$DVC_DPATH/extern/onera_2018/onera_test.kwcoco.json 
 
-kwcoco stats $TRAIN_FPATH $VALI_FPATH $TEST_FPATH
-
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 
 ARCH=smt_it_stm_s12
@@ -61,8 +59,13 @@ PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package.pt
 PRED_FPATH=$DEFAULT_ROOT_DIR/pred/pred.kwcoco.json
 EVAL_DPATH=$DEFAULT_ROOT_DIR/pred/eval
 
-CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/$EXPERIMENT_NAME.yml 
+TRAIN_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/train_$EXPERIMENT_NAME.yml 
+PRED_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/predict_$EXPERIMENT_NAME.yml 
 
+
+kwcoco stats $TRAIN_FPATH $VALI_FPATH $TEST_FPATH
+
+# Write train and prediction configs
 python -m watch.tasks.fusion.fit \
     --channels=${CHANNELS} \
     --method="MultimodalTransformerDirectCD" \
@@ -72,21 +75,24 @@ python -m watch.tasks.fusion.fit \
     --batch_size=8 \
     --accumulate_grad_batches=8 \
     --num_workers=6 \
+    --max_epochs=400 \
+    --patience=400 \
     --gpus=1  \
     --learning_rate=3e-4 \
     --weight_decay=1e-4 \
     --dropout=0.1 \
     --window_size=8 \
-    --dump=$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE/configs/train_$EXPERIMENT_NAME.yml 
+    --dump=$TRAIN_CONFIG_FPATH 
 
 python -m watch.tasks.fusion.predict \
     --gpus=1 \
     --write_preds=True \
     --write_probs=False \
-    --dump=$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE/configs/predict_$EXPERIMENT_NAME.yml 
+    --dump=$PRED_CONFIG_FPATH
 
+# Execute train -> predict -> evaluate
 python -m watch.tasks.fusion.fit \
-           --config=$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE/configs/train_$EXPERIMENT_NAME.yml \
+           --config=$TRAIN_CONFIG_FPATH \
     --default_root_dir=$DEFAULT_ROOT_DIR \
        --package_fpath=$PACKAGE_FPATH \
         --train_dataset=$TRAIN_FPATH \
@@ -95,7 +101,7 @@ python -m watch.tasks.fusion.fit \
 
 ## TODO: these steps should be called after training
 python -m watch.tasks.fusion.predict \
-        --config=$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE/configs/predict_$EXPERIMENT_NAME.yml \
+        --config=$PRED_CONFIG_FPATH \
         --test_dataset=$TEST_FPATH \
        --package_fpath=$PACKAGE_FPATH \
         --pred_dataset=$PRED_FPATH 
