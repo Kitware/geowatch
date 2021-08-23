@@ -1,8 +1,5 @@
-import sys
-import argparse
-import kwcoco, kwimage
-import matplotlib.pyplot as plt
-import kwplot
+import kwcoco
+import kwimage
 import os
 from os.path import join
 import ubelt as ub
@@ -11,9 +8,12 @@ import scriptconfig as scfg
 
 class PropagateLabelsConfig(scfg.Config):
     """
-    This script reads the labels from the kwcoco file and performs the forward propagation of labels.
+    This script reads the labels from the kwcoco file and performs the forward
+    propagation of labels.
     The final goal of this script is to create a modified kwcoco file.
-    The problem with original labels is that in many cases, annotators labeled a site in the first few images with a label (say, Active Construction) and then this annotation was missing for the next few frames.
+    The problem with original labels is that in many cases, annotators labeled
+    a site in the first few images with a label (say, Active Construction) and
+    then this annotation was missing for the next few frames.
 
 
     Notes:
@@ -32,7 +32,7 @@ class PropagateLabelsConfig(scfg.Config):
     """
     default = {
         'data_dir': scfg.Value('drop1-S2-aligned', help='drop1 aligned directory name', position=1),
-        'out_dir': scfg.Value('propagation_output', help= "Output directory where visualizations and processed kwcoco files will be saved", position=2),
+        'out_dir': scfg.Value('propagation_output', help="Output directory where visualizations and processed kwcoco files will be saved", position=2),
         'viz_end': scfg.Value(False, help="if True, last few frames will be saved"),
         'verbose': scfg.Value(False, help="use this to print details")
     }
@@ -90,6 +90,8 @@ def get_canvas_concat_channels(annotations, dataset, img_id):
 
 def save_visualizations(canvases, canvases_fixed, fname):
     # save visualizations of original and propagated labels
+    import kwplot
+    plt = kwplot.autoplt()
 
     plt.figure(figsize=(30, 8))
     n_images = len(canvases)
@@ -110,11 +112,13 @@ def save_visualizations(canvases, canvases_fixed, fname):
     plt.savefig(fname, bbox_inches='tight')
     plt.close()
 
+
 def main(cmdline=False, **kwargs):
     """
     Main function for propagate_labels.
 
     Example:
+        >>> # xdoctest: +SKIP
         >>> from watch.cli.propagate_labels import *  # NOQA
         >>> dataset_directory = 'drop1-S2-aligned-c1'
         >>> python -m watch.demo.propagate_labels --data_dir=dataset_directory --out_dir='propagation_output'
@@ -140,7 +144,7 @@ def main(cmdline=False, **kwargs):
 
     # preprocessing step: in the new dataset, add a new filed 'source_gid' to every *annotation*.
     # original annotations: source_gid == gid
-    # when we propagate labels, we will add the image id of the original image from which we copied 
+    # when we propagate labels, we will add the image id of the original image from which we copied
     # the annotation. In the case of propagated labels, we will have source_gid != gid
 
     for aid in propagated_ds.index.anns:
@@ -211,7 +215,7 @@ def main(cmdline=False, **kwargs):
                     if full_ds.anns[latest_ann_ids[missing]]['category_id'] in categories_to_propagate :
                         # check if the annotation belongs to the list of categories that we want to propagate
                         previous_annotation = full_ds.anns[latest_ann_ids[missing]]
- 
+
                         # get the warp from previous image to this image
                         previous_image_id = latest_img_ids[missing]
                         warp_previous_to_this_image = get_warp(previous_image_id, img_id, full_ds)
@@ -245,7 +249,7 @@ def main(cmdline=False, **kwargs):
     # save the propagated dataset
     propagated_fname = join(args['out_dir'], 'propagted_data.kwcoco.json')
     propagated_ds.dump(propagated_fname)
-    
+
     # print statistics about propagation
     print('original annotations:', full_ds.n_annots, 'propagated annotations:', len(new_aids), 'total annotations:', propagated_ds.n_annots)
 
@@ -261,10 +265,9 @@ def main(cmdline=False, **kwargs):
             original_aids_n += 1
         else:
             propagated_aids_n += 1
-            
 
     print('verification of annotation types -- no. of original anns:', original_aids_n, ', no. of propagated anns:', propagated_aids_n)
-    
+
     # ToDo
     # [x] write the code to add annotation objects
     # [x] save the new kwcoco data to disk
