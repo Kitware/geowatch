@@ -79,7 +79,7 @@ class kwcoco_dataset(torch.utils.data.Dataset):
     def get_img(self, idx, device=None):
         image_id = self.dset_ids[idx]
         image_info = self.dset.index.imgs[image_id]
-        image = self.dset.delayed_load(image_id, channels=self.channels).finalize().astype(np.float32)
+        image = self.dset.delayed_load(image_id, channels=self.channels, space='video').finalize().astype(np.float32)
         image = torch.tensor(image)
         if device:
             image = image.to(device)
@@ -105,8 +105,8 @@ class kwcoco_dataset(torch.utils.data.Dataset):
         frame_index2 = self.dset.index.imgs[img2_id]['frame_index']
 
         # load images
-        img1 = self.dset.delayed_load(img1_id, channels=self.channels).finalize().astype(np.float32)
-        img2 = self.dset.delayed_load(img2_id, channels=self.channels).finalize().astype(np.float32)
+        img1 = self.dset.delayed_load(img1_id, channels=self.channels, space='video').finalize().astype(np.float32)
+        img2 = self.dset.delayed_load(img2_id, channels=self.channels, space='video').finalize().astype(np.float32)
 
         # normalize
         if img1.std() != 0.0:
