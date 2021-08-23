@@ -498,6 +498,25 @@ class FusionEncoder(nn.Module):
         >>> inputs = torch.rand(*input_shape)
         >>> output = model(inputs)
         >>> assert output.shape == (2, 3, 5, 2, 2, 256)
+
+    Ignore:
+        >>> # Get a sense of the arch size
+        >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
+        >>> rows = []
+        >>> for key, config in ub.ProgIter(list(encoder_configs.items())):
+        >>>     self = FusionEncoder(in_features=256, **config)
+        >>>     num_params = nh.util.number_of_parameters(self)
+        >>>     row = {'arch': key, 'num_params': num_params}
+        >>>     row.update(config)
+        >>>     print('row = {}'.format(ub.repr2(row, nl=0, sort=0)))
+        >>>     rows.append(row)
+        >>> import pandas as pd
+        >>> data = pd.DataFrame(rows).sort_values('num_params')
+        >>> print(data.to_string())
+
+        >>> # Look at only smt configs
+        >>> flags = data['axes'].apply(lambda x: x == [("height", "width"), ("time",), ("mode",)])
+        >>> print(data[flags].to_string())
     """
 
     def __init__(self, axes,

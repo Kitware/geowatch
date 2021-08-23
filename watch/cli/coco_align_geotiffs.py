@@ -782,10 +782,9 @@ class SimpleDataCube(object):
         # // aux_workers
 
         # parallelize over images
-        from kwcoco.util.util_futures import JobPool
         print('img_workers = {!r}'.format(img_workers))
         print('aux_workers = {!r}'.format(aux_workers))
-        pool = JobPool(mode='thread', max_workers=img_workers)
+        pool = ub.JobPool(mode='thread', max_workers=img_workers)
 
         for date in ub.ProgIter(dates, desc='submit extract jobs', verbose=1):
             gids = date_to_gids[date]
@@ -902,11 +901,10 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
 
     # Turn off internal threading because we refactored this to thread over all
     # iamges instead
-    from kwcoco.util.util_futures import Executor
     Prog = ub.ProgIter
     # import tqdm
     # Prog = tqdm.tqdm
-    executor = Executor(mode='serial', max_workers=aux_workers)
+    executor = ub.Executor(mode='serial', max_workers=aux_workers)
     for obj in ub.ProgIter(objs, desc='submit warp auxiliaries', verbose=0):
         job = executor.submit(
             _aligncrop, obj, bundle_dpath, name, sensor_coarse,
@@ -1107,8 +1105,7 @@ def update_coco_geotiff_metadata(dset, serializable=True, max_workers=0):
 
     bundle_dpath = dset.bundle_dpath
 
-    from kwcoco.util.util_futures import JobPool
-    pool = JobPool(mode='thread', max_workers=max_workers)
+    pool = ub.JobPool(mode='thread', max_workers=max_workers)
 
     img_iter = ub.ProgIter(dset.imgs.values(),
                            total=len(dset.imgs),

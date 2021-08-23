@@ -26,7 +26,7 @@ prep_validation_set(){
     kwcoco stats $DVC_DPATH/extern/onera_2018/onera_train.kwcoco.json
 
     # Make a "validation" dataset
-    kwcoco subset --select_videos ".id <= 2" \
+    kwcoco subset --select_videos ".id <= 1" \
         --src $DVC_DPATH/extern/onera_2018/onera_train.kwcoco.json \
         --dst $DVC_DPATH/extern/onera_2018/onera_vali.kwcoco.json
 
@@ -43,55 +43,74 @@ prep_validation_set(){
 
 
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc 
+TRAIN_FPATH=$DVC_DPATH/extern/onera_2018/onera_learn.kwcoco.json 
+VALI_FPATH=$DVC_DPATH/extern/onera_2018/onera_vali.kwcoco.json 
+TEST_FPATH=$DVC_DPATH/extern/onera_2018/onera_test.kwcoco.json 
+
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+
+ARCH=smt_it_stm_s12
+CHANNELS="B05|B06|B07|B08|B8A"
+EXPERIMENT_NAME=DirectCD_${ARCH}_vnir_v5
+DATASET_CODE=Onera
+
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package.pt 
+PRED_FPATH=$DEFAULT_ROOT_DIR/pred/pred.kwcoco.json
+EVAL_DPATH=$DEFAULT_ROOT_DIR/pred/eval
+
+TRAIN_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/train_$EXPERIMENT_NAME.yml 
+PRED_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/predict_$EXPERIMENT_NAME.yml 
+
+
+kwcoco stats $TRAIN_FPATH $VALI_FPATH $TEST_FPATH
+
+# Write train and prediction configs
 python -m watch.tasks.fusion.fit \
-    --channels="B05|B06|B07|B08|B8A" \
+    --channels=${CHANNELS} \
     --method="MultimodalTransformerDirectCD" \
-    --arch_name=smt_it_stm_p8 \
+    --arch_name=$ARCH \
     --time_steps=2 \
     --chip_size=128 \
-    --batch_size=2 \
-    --accumulate_grad_batches=8 \
-    --num_workers=4 \
+    --batch_size=8 \
+    --accumulate_grad_batches=2 \
+    --num_workers=6 \
+    --max_epochs=400 \
+    --patience=400 \
     --gpus=1  \
-    --learning_rate=1e-3 \
+    --learning_rate=1e-4 \
     --weight_decay=1e-4 \
     --dropout=0.1 \
     --window_size=8 \
-    --train_dataset=$DVC_DPATH/extern/onera_2018/onera_learn.kwcoco.json \
-     --vali_dataset=$DVC_DPATH/extern/onera_2018/onera_vali.kwcoco.json \
-     --test_dataset=$DVC_DPATH/extern/onera_2018/onera_test.kwcoco.json \
-    --default_root_dir=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/runs/DirectCD_smt_it_smt_p8_vnir_v1 \
-       --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/runs/DirectCD_smt_it_smt_p8_vnir_v1/final_package.pt \
-                --dump=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/configs/DirectCD_smt_it_smt_p8_vnir_v1.yml 
+    --dump=$TRAIN_CONFIG_FPATH 
 
-# pip install yq
-DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-
-# TODO: fix configparsefile
-#TRUE_DATASET=$(yq '.test_dataset' $DVC_DPATH/training/$HOSTNAME/$USER/Onera/configs/DirectCD_smt_it_smt_p8_vnir_v1.yml)
-#echo "TRUE_DATASET = $TRUE_DATASET"
-#TRUE_DATASET=$(yq '.test_dataset' $DVC_DPATH/training/$HOSTNAME/$USER/Onera/configs/DirectCD_smt_it_smt_p8_vnir_v1.yml)
-#echo "TRUE_DATASET = $TRUE_DATASET"
-
-CUDA_VISIBLE_DEVICES=1 \
-python -m watch.tasks.fusion.fit \
-           --config=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/configs/DirectCD_smt_it_smt_p8_vnir_v1.yml 
-    --train_dataset=$DVC_DPATH/extern/onera_2018/onera_learn.kwcoco.json \
-     --vali_dataset=$DVC_DPATH/extern/onera_2018/onera_vali.kwcoco.json \
-     --test_dataset=$DVC_DPATH/extern/onera_2018/onera_test.kwcoco.json \
-    --default_root_dir=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/runs/DirectCD_smt_it_smt_p8_vnir_v1 \
-       --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/runs/DirectCD_smt_it_smt_p8_vnir_v1/final_package.pt 
-
-## TODO: these steps should be called after training
 python -m watch.tasks.fusion.predict \
-        --test_dataset=$DVC_DPATH/extern/onera_2018/onera_test.kwcoco.json \
-       --package_fpath=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/runs/DirectCD_smt_it_smt_p8_vnir_v1/final_package.pt \
-        --pred_dataset=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/runs/DirectCD_smt_it_smt_p8_vnir_v1/pred.kwcoco.json
+    --gpus=1 \
+    --write_preds=True \
+    --write_probs=False \
+    --dump=$PRED_CONFIG_FPATH
 
+## TODO: predict and eval steps should be called after training.
+# But perhaps it should be a different invocation of the fit script?
+# So the simple route is still available?
+
+# Execute train -> predict -> evaluate
+python -m watch.tasks.fusion.fit \
+           --config=$TRAIN_CONFIG_FPATH \
+    --default_root_dir=$DEFAULT_ROOT_DIR \
+       --package_fpath=$PACKAGE_FPATH \
+        --train_dataset=$TRAIN_FPATH \
+         --vali_dataset=$VALI_FPATH \
+         --test_dataset=$TEST_FPATH && \
+python -m watch.tasks.fusion.predict \
+        --config=$PRED_CONFIG_FPATH \
+        --test_dataset=$TEST_FPATH \
+       --package_fpath=$PACKAGE_FPATH \
+        --pred_dataset=$PRED_FPATH && \
 python -m watch.tasks.fusion.evaluate \
-        --true_dataset=$DVC_DPATH/extern/onera_2018/onera_test.kwcoco.json \
-        --pred_dataset=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/runs/DirectCD_smt_it_smt_p8_vnir_v1/pred.kwcoco.json \
-          --eval_dpath=$DVC_DPATH/training/$HOSTNAME/$USER/Onera/runs/DirectCD_smt_it_smt_p8_vnir_v1/eval
+        --true_dataset=$TEST_FPATH \
+        --pred_dataset=$PRED_FPATH \
+          --eval_dpath=$EVAL_DPATH
 
 
 

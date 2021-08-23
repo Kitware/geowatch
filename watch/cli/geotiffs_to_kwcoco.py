@@ -3,7 +3,6 @@ Attempts to register directory of geotiffs into a kwcoco dataset
 """
 
 from dateutil.parser import isoparse
-from kwcoco.util import util_futures
 from kwimage.transform import Affine
 from os.path import join, basename, normpath, splitext
 import datetime
@@ -239,7 +238,7 @@ def find_geotiffs(geotiff_dpath, workers=0):
 
     print(f'Found candidate {len(dpath_list)} geotiff products')
 
-    jobs = util_futures.JobPool(mode='thread', max_workers=workers)
+    jobs = ub.JobPool(mode='thread', max_workers=workers)
 
     unknown_products = []
     for dpath in ub.ProgIter(dpath_list, desc='submit geotiffs jobs'):

@@ -197,10 +197,9 @@ def decollate_batch(batch):
     Breakup a collated batch of BatchContainers back into ItemContainers
     """
     import ubelt as ub
-    from kwcoco.util.util_json import IndexableWalker
-    walker = IndexableWalker(batch)
+    walker = ub.IndexableWalker(batch)
     decollated_dict = ub.AutoDict()
-    decollated_walker = IndexableWalker(decollated_dict)
+    decollated_walker = ub.IndexableWalker(decollated_dict)
     for path, batch_val in walker:
         if isinstance(batch_val, BatchContainer):
             for bx, item_val in enumerate(ub.flatten(batch_val.data)):

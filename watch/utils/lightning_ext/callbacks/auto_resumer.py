@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import pytorch_lightning as pl
-import pathlib
+from watch.utils import util_path
 
 __all__ = ['AutoResumer']
 
@@ -10,9 +10,11 @@ class AutoResumer(pl.callbacks.Callback):
     Auto-resumes from the most recent checkpoint
 
     Example:
-        >>> from watch.utils.lightning_ext.callbacks.auto_resumer import *  # NOQA
+        >>> from watch.utils.lightning_ext.callbacks.auto_resumer import AutoResumer
+        >>> from watch.utils import util_path
         >>> from watch.utils.lightning_ext.demo import LightningToyNet2d
         >>> from watch.utils.lightning_ext.callbacks import StateLogger
+        >>> import pytorch_lightning as pl
         >>> import ubelt as ub
         >>> default_root_dir = ub.get_app_cache_dir('lightning_ext/test/auto_resume')
         >>> ub.delete(default_root_dir)
@@ -20,30 +22,31 @@ class AutoResumer(pl.callbacks.Callback):
         >>> trainer = pl.Trainer(default_root_dir=default_root_dir, callbacks=[AutoResumer(), StateLogger()], max_epochs=5)
         >>> model = LightningToyNet2d()
         >>> trainer.fit(model)
-        >>> assert len(list((coercepath(trainer.logger.log_dir) / 'checkpoints').glob('*'))) > 0
+        >>> assert len(list((util_path.coercepath(trainer.logger.log_dir) / 'checkpoints').glob('*'))) > 0
         >>> # See contents written
-        >>> print(ub.repr2(list(tree(coercepath(default_root_dir))), sort=0))
+        >>> print(ub.repr2(list(util_path.tree(default_root_dir)), sort=0))
         >>> #
         >>> # Make a new trainer that should auto-resume
         >>> trainer = pl.Trainer(default_root_dir=default_root_dir, callbacks=[AutoResumer(), StateLogger()], max_epochs=5)
         >>> model = LightningToyNet2d()
         >>> trainer.fit(model)
-        >>> print(ub.repr2(list(tree(coercepath(default_root_dir))), sort=0))
+        >>> print(ub.repr2(list(util_path.tree(default_root_dir)), sort=0))
         >>> # max_epochs should prevent auto-resume from doing anything
-        >>> assert len(list((coercepath(trainer.logger.log_dir) / 'checkpoints').glob('*'))) == 0
+        >>> assert len(list((util_path.coercepath(trainer.logger.log_dir) / 'checkpoints').glob('*'))) == 0
         >>> #
         >>> # Increasing max epochs will let it train for longer
         >>> trainer = pl.Trainer(default_root_dir=default_root_dir, callbacks=[AutoResumer(), StateLogger()], max_epochs=6)
         >>> model = LightningToyNet2d()
         >>> trainer.fit(model)
-        >>> print(ub.repr2(list(tree(coercepath(default_root_dir))), sort=0))
+        >>> print(ub.repr2(list(util_path.tree(util_path.coercepath(default_root_dir))), sort=0))
         >>> # max_epochs should prevent auto-resume from doing anything
-        >>> assert len(list((coercepath(trainer.logger.log_dir) / 'checkpoints').glob('*'))) > 0
+        >>> assert len(list((util_path.coercepath(trainer.logger.log_dir) / 'checkpoints').glob('*'))) > 0
     """
 
     def __init__(self):
         """
-        TODO: Configure how to find which checkpoint to resume from
+        TODO:
+            - [ ] Configure how to find which checkpoint to resume from
         """
         pass
 
@@ -63,23 +66,9 @@ class AutoResumer(pl.callbacks.Callback):
                 trainer, resume_from_checkpoint)
 
     def recent_checkpoints(self, train_dpath):
-        train_dpath = coercepath(train_dpath)
+        """
+        Return a list of existing checkpoints in some Trainer root directory
+        """
+        train_dpath = util_path.coercepath(train_dpath)
         candidates = sorted(train_dpath.glob('*/*/checkpoints/*.ckpt'))
         return candidates
-
-
-def coercepath(path_like):
-    if isinstance(path_like, pathlib.Path):
-        return path_like
-    else:
-        return pathlib.Path(path_like)
-
-
-def tree(path):
-    import os
-    from os.path import join
-    for r, fs, ds in os.walk(path):
-        for f in fs:
-            yield join(r, f)
-        for d in ds:
-            yield join(r, d)

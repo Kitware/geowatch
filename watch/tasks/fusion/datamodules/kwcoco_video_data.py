@@ -245,8 +245,6 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             train_data = self.train_kwcoco
             if isinstance(train_data, pathlib.Path):
                 train_data = str(train_data.expanduser())
-            if not isinstance(train_data, str):
-                raise TypeError(train_data)
 
             if self.verbose:
                 print('Build train kwcoco dataset')
@@ -290,8 +288,6 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 vali_data = self.vali_kwcoco
                 if isinstance(vali_data, pathlib.Path):
                     vali_data = str(vali_data.expanduser())
-                if not isinstance(vali_data, str):
-                    raise TypeError(vali_data)
                 if self.verbose:
                     print('Build validation kwcoco dataset')
                 kwcoco_ds = kwcoco.CocoDataset.coerce(vali_data)
@@ -329,8 +325,6 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             test_data = self.test_kwcoco
             if isinstance(test_data, pathlib.Path):
                 test_data = str(test_data.expanduser())
-            if not isinstance(test_data, str):
-                raise TypeError(test_data)
             if self.verbose:
                 print('Build test kwcoco dataset')
             test_coco_dset = kwcoco.CocoDataset.coerce(test_data)
@@ -776,7 +770,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
             >>> import ndsampler
             >>> import kwcoco
-            >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes8')
+            >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2')
             >>> coco_dset.ensure_category('background')
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (2, 128, 128)

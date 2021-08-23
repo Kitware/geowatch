@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 """
 This is a Template for writing training logic.
+
+NOTE: This template has been deprecated in favor of a pytorch-lightning variant
 """
 import kwcoco
 import ndsampler
@@ -86,6 +88,7 @@ class TemplateDataset(torch.utils.data.Dataset):
     The ndsampler and kwcoco packages can help you write this.
 
     Example:
+        >>> # xdoctest: +SKIP
         >>> from watch.tasks.template.fit import *  # NOQA
         >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
         >>> input_dims = (128, 128)
@@ -158,6 +161,7 @@ def setup_datasets_and_training_harness(cmdline=False, **kwargs):
         see TemplateFitConfig
 
     Example:
+        >>> # xdoctest: +SKIP
         >>> from watch.tasks.template.fit import *  # NOQA
         >>> kwargs = {
         ...     'train_dataset': 'special:vidshapes32-multispectral',

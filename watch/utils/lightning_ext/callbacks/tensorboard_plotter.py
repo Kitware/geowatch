@@ -27,7 +27,7 @@ class TensorboardPlotter(pl.callbacks.Callback):
         >>> #
         >>> trainer = pl.Trainer(callbacks=[TensorboardPlotter()],
         >>>                      default_root_dir=default_root_dir,
-        >>>                      max_epochs=10)
+        >>>                      max_epochs=3)
         >>> trainer.fit(self)
         >>> train_dpath = trainer.logger.log_dir
         >>> print('trainer.logger.log_dir = {!r}'.format(train_dpath))
