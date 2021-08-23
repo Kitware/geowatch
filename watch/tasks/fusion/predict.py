@@ -150,7 +150,7 @@ def predict(cmdline=False, **kwargs):
 
     # init datamodule from args
     datamodule_class = getattr(datamodules, args.datamodule)
-    datamodule_vars = utils.filter_args(
+    datamodule_vars = ub.compatible(
         vars(args),
         datamodule_class.__init__,
     )

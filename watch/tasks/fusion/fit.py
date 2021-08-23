@@ -346,7 +346,6 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         >>> modules = make_lightning_modules(args=None, cmdline=cmdline, **kwargs)
     """
     from watch.utils import lightning_ext as pl_ext
-    from watch.tasks.fusion import utils
     from watch.tasks.fusion import datamodules
     from watch.tasks.fusion import methods
     args = make_fit_config(args=args, cmdline=cmdline, **kwargs)
@@ -363,7 +362,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     # init datamodule from args
     # TODO: compute and cache mean / std if it is not provided. Pass this to
     # the model so it can whiten the inputs.
-    datamodule_vars = utils.filter_args(args.__dict__, datamodule_class.__init__)
+    datamodule_vars = ub.compatible(args.__dict__, datamodule_class.__init__)
     # datamodule_vars["preprocessing_step"] = model.preprocessing_step
     datamodule = datamodule_class(**datamodule_vars)
     datamodule.setup("fit")
@@ -376,7 +375,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     if hasattr(datamodule_class, "bce_weight"):
         method_var_dict["pos_weight"] = getattr(datamodule_class, "bce_weight")
 
-    method_var_dict = utils.filter_args(method_var_dict, method_class.__init__)
+    method_var_dict = ub.compatible(method_var_dict, method_class.__init__)
 
     if hasattr(datamodule, "input_stats"):
         print('datamodule.input_stats = {}'.format(

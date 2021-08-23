@@ -181,13 +181,13 @@ class SinePositionalEncoding(nn.Module):
         return x
 
 
-def filter_args(args, func):
-    signature = inspect.signature(func)
-    return {
-        key: value
-        for key, value in args.items()
-        if key in signature.parameters.keys()
-    }
+# def filter_args(args, func):
+#     signature = inspect.signature(func)
+#     return {
+#         key: value
+#         for key, value in args.items()
+#         if key in signature.parameters.keys()
+#     }
 
 
 def add_auxiliary(dset, gid, fname, channels, aux_height, aux_width, warp_aux_to_img=None, extra_info=None):
