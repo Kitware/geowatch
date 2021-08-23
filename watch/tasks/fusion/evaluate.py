@@ -340,7 +340,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None):
         >>> from kwcoco.coco_evaluator import CocoEvaluator
         >>> from kwcoco.demo.perterb import perterb_coco
         >>> import kwcoco
-        >>> true_coco = kwcoco.CocoDataset.demo('vidshapes8')
+        >>> true_coco = kwcoco.CocoDataset.demo('vidshapes2')
         >>> kwargs = {
         >>>     'box_noise': 0.5,
         >>>     'n_fp': (0, 10),

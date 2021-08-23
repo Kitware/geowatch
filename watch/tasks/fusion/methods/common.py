@@ -323,9 +323,9 @@ class ChangeDetectorBase(pl.LightningModule):
             >>> import pandas as pd
             >>> data = pd.DataFrame(rows)
             >>> # xdoctest +REQUIRES(--show)
-            >>> import kwplot
-            >>> sns = kwplot.autosns()
-            >>> sns.lineplot(data=data, y='lr', x='last_epoch')
+            >>> # import kwplot
+            >>> # sns = kwplot.autosns()
+            >>> # sns.lineplot(data=data, y='lr', x='last_epoch')
         """
         optimizer = optim.RAdam(
                 self.parameters(),

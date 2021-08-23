@@ -307,7 +307,8 @@ class RPCTransform(object):
         Returns:
             pts_out (ndarray): An Nx2 array of lon/lat WGS84 coordinates
 
-        Ignore:
+        Example:
+            >>> # xdoctest: +SKIP
             >>> from watch.gis.spatial_reference import *  # NOQA
             >>> self = RPCTransform.demo(elevation='gtop30')
             >>> pts_in = pxl_pts = np.array([

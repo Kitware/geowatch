@@ -770,7 +770,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
             >>> import ndsampler
             >>> import kwcoco
-            >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes8')
+            >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2')
             >>> coco_dset.ensure_category('background')
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (2, 128, 128)
