@@ -1,4 +1,10 @@
 # -*- coding: utf-8 -*-
+"""
+Fusion prediction script.
+
+TODO:
+    - [ ] Prediction caching?
+"""
 import torch
 import pathlib
 import ubelt as ub
@@ -186,6 +192,9 @@ def predict(cmdline=False, **kwargs):
         result_dataset.fpath = str(pred_dpath / 'pred.kwcoco.json')
     else:
         result_dataset.fpath = str(args.pred_dataset)
+    result_fpath = util_path.coercepath(result_dataset.fpath)
+
+    result_fpath.parent.mkdir(parents=True, exist_ok=True)
 
     # todo: use lightning device magic
     try:
