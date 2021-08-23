@@ -904,7 +904,7 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
     Prog = ub.ProgIter
     # import tqdm
     # Prog = tqdm.tqdm
-    executor = ub.Executor(mode='serial', max_workers=aux_workers)
+    executor = ub.Executor(mode='thread', max_workers=aux_workers)
     for obj in ub.ProgIter(objs, desc='submit warp auxiliaries', verbose=0):
         job = executor.submit(
             _aligncrop, obj, bundle_dpath, name, sensor_coarse,
