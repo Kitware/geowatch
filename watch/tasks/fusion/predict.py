@@ -71,7 +71,7 @@ def make_predict_config(cmdline=False, **kwargs):
 
     # parse and pass to main
     parser.set_defaults(**kwargs)
-    args = parser.parse_known_args(default_args)
+    args, _ = parser.parse_known_args(default_args)
     assert args.batch_size == 1
     return args
 
