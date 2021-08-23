@@ -1,5 +1,4 @@
 from torch import nn
-import inspect
 import torch
 import numpy as np
 import math
@@ -14,48 +13,6 @@ def millify(n):
                          int(math.floor(0 if n == 0 else math.log10(abs(n)) / 3))))
 
     return '{:.2f}{}'.format(n / 10**(3 * millidx), millnames[millidx])
-
-
-# def create_package(model, package_path, module_name="watch_tasks_fusion", arch_name="model.pkl", verbose=False):
-#     """
-#     DEPRECATE IN FAVOR OF A MODEL METHOD?
-#
-#     CommandLine:
-#         xdoctest watch.tasks.fusion.utils create_package
-#
-#     Example:
-#         >>> import ubelt as ub
-#         >>> from os.path import join
-#         >>> from watch.tasks.fusion.utils import *  # NOQA
-#         >>> dpath = ub.ensure_app_cache_dir('watch/tests/package')
-#         >>> package_path = join(dpath, 'my_package.pt')
-#
-#         >>> # Use one of our fusion.architectures in a test
-#         >>> from watch.tasks.fusion import methods
-#         >>> model = methods.MultimodalTransformerDirectCD("smt_it_stm_p8")
-#         >>> # We have to run an input through the module because it is lazy
-#         >>> inputs = torch.rand(1, 2, 13, 128, 128)
-#         >>> model(inputs)
-#
-#         >>> # Save the model
-#         >>> create_package(model, package_path)
-#
-#         >>> # Test that the package can be reloaded
-#         >>> recon = load_model_from_package(package_path)
-#         >>> # Check consistency and data is actually different
-#         >>> recon_state = recon.state_dict()
-#         >>> model_state = model.state_dict()
-#         >>> assert recon is not model
-#         >>> assert set(recon_state) == set(recon_state)
-#         >>> for key in recon_state.keys():
-#         >>>     assert (model_state[key] == recon_state[key]).all()
-#         >>>     assert model_state[key] is not recon_state[key]
-#     """
-#     with package.PackageExporter(package_path, verbose=verbose) as exp:
-#         # TODO: this is not a problem yet, but some package types (mainly binaries) will need to be excluded and added as mocks
-#         exp.extern("**", exclude=["watch.tasks.fusion.**"])
-#         exp.intern("watch.tasks.fusion.**")
-#         exp.save_pickle(module_name, arch_name, model)
 
 
 def load_model_from_package(package_path, module_name="watch_tasks_fusion", arch_name="model.pkl"):
@@ -181,15 +138,6 @@ class SinePositionalEncoding(nn.Module):
         return x
 
 
-# def filter_args(args, func):
-#     signature = inspect.signature(func)
-#     return {
-#         key: value
-#         for key, value in args.items()
-#         if key in signature.parameters.keys()
-#     }
-
-
 def add_auxiliary(dset, gid, fname, channels, aux_height, aux_width, warp_aux_to_img=None, extra_info=None):
     """
     Snippet for adding an auxiliary image
@@ -221,23 +169,6 @@ def add_auxiliary(dset, gid, fname, channels, aux_height, aux_width, warp_aux_to
     # fpath = join(dset.bundle_dpath, fname)
     # aux_height, aux_width = data.shape[0:2]
     img = dset.index.imgs[gid]
-
-    def Affine_concise(aff):
-        """
-        TODO: add to kwimage.Affine
-        """
-        import numpy as np
-        params = aff.decompose()
-        params['type'] = 'affine'
-        if np.allclose(params['offset'], (0, 0)):
-            params.pop('offset')
-        if np.allclose(params['scale'], (1, 1)):
-            params.pop('scale')
-        if np.allclose(params['shear'], 0):
-            params.pop('shear')
-        if np.allclose(params['theta'], 0):
-            params.pop('theta')
-        return params
 
     if warp_aux_to_img is None:
         # Assume we can just scale up the auxiliary data to match the image
