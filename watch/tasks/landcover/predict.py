@@ -161,7 +161,7 @@ class DatasetPredict:
                     return self._try_load_channel(gid, chan)
                 except Exception as e:
                     ex = e
-            raise Exception('Unable to load any channels {}'.format(channels, str(e))) from ex
+            raise Exception('Unable to load any channels {}: {}'.format(channels, str(ex))) from ex
         else:
             return self.dset.load_image(gid, channels)
 
