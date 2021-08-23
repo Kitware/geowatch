@@ -1,23 +1,3 @@
-"""
-This script reads the labels from the kwcoco file and performs the forward propagation of labels.
-The final goal of this script is to create a modified kwcoco file.
-The problem with original labels is that in many cases, annotators labeled a site in the first few images with a label (say, Active Construction) and then this annotation was missing for the next few frames.
-
-
-Notes:
-
-    # Given a kwcoco file with original annotations, this script forward propagates those annotations
-    # and creates a new kwcoco file.
-    # Currently, we are looking at some issues with data and only visualizations are being geenrated.
-
-    python -m watch.cli.propagate_labels.py dataset_fname
-
-
-    TODO:
-        - [ ] Make sure the original annotations are correct. Currently annotations with very low overlap with images are showing up.
-        - [ ] Write the all labels, original and propagated annotations, in another kwcoco file.
-
-"""
 import sys
 import argparse
 import kwcoco, kwimage
@@ -26,6 +6,41 @@ import kwplot
 import os
 from os.path import join
 import ubelt as ub
+import scriptconfig as scfg
+
+
+class PropagateLabelsConfig(scfg.Config):
+    """
+    This script reads the labels from the kwcoco file and performs the forward propagation of labels.
+    The final goal of this script is to create a modified kwcoco file.
+    The problem with original labels is that in many cases, annotators labeled a site in the first few images with a label (say, Active Construction) and then this annotation was missing for the next few frames.
+
+
+    Notes:
+
+        # Given a kwcoco file with original annotations, this script forward propagates those annotations
+        # and creates a new kwcoco file.
+        # Currently, we are looking at some issues with data and only visualizations are being geenrated.
+
+        python -m watch.cli.propagate_labels.py dataset_fname
+
+
+        TODO:
+            - [ ] Make sure the original annotations are correct. Currently annotations with very low overlap with images are showing up.
+            - [ ] Write the all labels, original and propagated annotations, in another kwcoco file.
+
+    """
+    default = {
+        'data_dir': scfg.Value('drop1-S2-aligned', help='drop1 aligned directory name', position=1),
+        'out_dir': scfg.Value('propagation_output', help= "Output directory where visualizations and processed kwcoco files will be saved", position=2),
+        'viz_end': scfg.Value(False, help="if True, last few frames will be saved"),
+        'verbose': scfg.Value(False, help="use this to print details")
+    }
+
+    epilog = """
+    Example Usage:
+        watch-cli scriptconfig_cli_template --arg1=foobar
+    """
 
 
 def get_warp(gid1, gid2, dataset):
@@ -95,8 +110,7 @@ def save_visualizations(canvases, canvases_fixed, fname):
     plt.savefig(fname, bbox_inches='tight')
     plt.close()
 
-    
-def main(args):
+def main(cmdline=False, **kwargs):
     """
     Main function for propagate_labels.
 
@@ -106,23 +120,16 @@ def main(args):
         >>> python -m watch.demo.propagate_labels --data_dir=dataset_directory --out_dir='propagation_output'
 
     """
-    # read arguments
-    parser = argparse.ArgumentParser(
-        description="Forward propagate labels")
-    parser.add_argument("--data_dir", default='drop1-S2-aligned-c1', 
-                        help="drop1 directory name, defualt is drop1-S2-aligned-c1. The kwcoco file from this directory will be read")
-    parser.add_argument("--out_dir", default='propagation_output', help="Output directory where visualizations and processed kwcoco files will be saved")
-    parser.add_argument("--viz_end", default=False, action="store_true", help="if True, last few frames will be saved")
-    parser.add_argument("--verbose", default=False, action="store_true", help="use this to print details")
-    args = parser.parse_args(args)
+
+    args = PropagateLabelsConfig(default=kwargs, cmdline=cmdline)
 
     # create the output dir
-    os.makedirs(args.out_dir, exist_ok=True)
+    os.makedirs(args['out_dir'], exist_ok=True)
 
     # Read input file
     _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
     dvc_dpath = os.environ.get('DVC_DPATH', _default)
-    coco_fpath = join(dvc_dpath, args.data_dir, 'data.kwcoco.json')
+    coco_fpath = join(dvc_dpath, args['data_dir'], 'data.kwcoco.json')
     full_ds = kwcoco.CocoDataset(coco_fpath)
     print('total video:', full_ds.n_videos)
     print('total images:', full_ds.n_images)
@@ -219,24 +226,24 @@ def main(args):
                         # append in the list for visualizations
                         this_image_fixed_anns.append(warped_annotation)
 
-                        if args.verbose:
+                        if args['verbose']:
                             print('added annotation for image', img_id, 'track ID', missing)
 
             # Get "n_image_viz" number of canvases for visualization with original annotations
             num_frames = len(full_ds.index.vidid_to_gids[vid_id])
-            store_ending_frame = args.viz_end and ((num_frames - j) <=  n_image_viz)
-            store_starting_frame = (not args.viz_end) and (j < n_image_viz)
+            store_ending_frame = args['viz_end'] and ((num_frames - j) <=  n_image_viz)
+            store_starting_frame = (not args['viz_end']) and (j < n_image_viz)
             if store_starting_frame or store_ending_frame:
                 canvases.append(get_canvas_concat_channels(annotations=this_image_anns, dataset=full_ds, img_id=img_id))
                 canvases_fixed.append(get_canvas_concat_channels(annotations=this_image_fixed_anns, dataset=full_ds, img_id=img_id))
 
         # save visualization
-        location_string = '_end' if args.viz_end else '_start'
-        fname = join(args.out_dir, 'video_' + str(vid_id) + location_string + '.jpg')
+        location_string = '_end' if args['viz_end'] else '_start'
+        fname = join(args['out_dir'], 'video_' + str(vid_id) + location_string + '.jpg')
         save_visualizations(canvases, canvases_fixed, fname)
 
     # save the propagated dataset
-    propagated_fname = join(args.out_dir, 'propagted_data.kwcoco.json')
+    propagated_fname = join(args['out_dir'], 'propagted_data.kwcoco.json')
     propagated_ds.dump(propagated_fname)
     
     # print statistics about propagation
@@ -270,4 +277,4 @@ if __name__ == '__main__':
     CommandLine:
         python -m watch.cli.propagate_labels
     """
-    sys.exit(main(sys.argv[1:]))
+    main(cmdline=True)
