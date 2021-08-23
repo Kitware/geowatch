@@ -51,7 +51,7 @@ WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 
 ARCH=smt_it_stm_s12
 CHANNELS="B05|B06|B07|B08|B8A"
-EXPERIMENT_NAME=DirectCD_${ARCH}_vnir_v4
+EXPERIMENT_NAME=DirectCD_${ARCH}_vnir_v5
 DATASET_CODE=Onera
 
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
@@ -73,12 +73,12 @@ python -m watch.tasks.fusion.fit \
     --time_steps=2 \
     --chip_size=128 \
     --batch_size=8 \
-    --accumulate_grad_batches=8 \
+    --accumulate_grad_batches=2 \
     --num_workers=6 \
     --max_epochs=400 \
     --patience=400 \
     --gpus=1  \
-    --learning_rate=3e-4 \
+    --learning_rate=1e-4 \
     --weight_decay=1e-4 \
     --dropout=0.1 \
     --window_size=8 \
@@ -90,6 +90,10 @@ python -m watch.tasks.fusion.predict \
     --write_probs=False \
     --dump=$PRED_CONFIG_FPATH
 
+## TODO: predict and eval steps should be called after training.
+# But perhaps it should be a different invocation of the fit script?
+# So the simple route is still available?
+
 # Execute train -> predict -> evaluate
 python -m watch.tasks.fusion.fit \
            --config=$TRAIN_CONFIG_FPATH \
@@ -97,15 +101,12 @@ python -m watch.tasks.fusion.fit \
        --package_fpath=$PACKAGE_FPATH \
         --train_dataset=$TRAIN_FPATH \
          --vali_dataset=$VALI_FPATH \
-         --test_dataset=$TEST_FPATH 
-
-## TODO: these steps should be called after training
+         --test_dataset=$TEST_FPATH && \
 python -m watch.tasks.fusion.predict \
         --config=$PRED_CONFIG_FPATH \
         --test_dataset=$TEST_FPATH \
        --package_fpath=$PACKAGE_FPATH \
-        --pred_dataset=$PRED_FPATH 
-
+        --pred_dataset=$PRED_FPATH && \
 python -m watch.tasks.fusion.evaluate \
         --true_dataset=$TEST_FPATH \
         --pred_dataset=$PRED_FPATH \

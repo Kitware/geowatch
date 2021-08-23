@@ -45,6 +45,7 @@ def tree(path):
         str: path
 
     Example:
+        >>> import itertools as it
         >>> from watch.utils.util_path import *  # NOQA
         >>> import ubelt as ub
         >>> path = pathlib.Path('.')

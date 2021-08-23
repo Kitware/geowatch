@@ -22,25 +22,25 @@ class AutoResumer(pl.callbacks.Callback):
         >>> trainer = pl.Trainer(default_root_dir=default_root_dir, callbacks=[AutoResumer(), StateLogger()], max_epochs=5)
         >>> model = LightningToyNet2d()
         >>> trainer.fit(model)
-        >>> assert len(list((coercepath(trainer.logger.log_dir) / 'checkpoints').glob('*'))) > 0
+        >>> assert len(list((util_path.coercepath(trainer.logger.log_dir) / 'checkpoints').glob('*'))) > 0
         >>> # See contents written
-        >>> print(ub.repr2(list(util_path.tree(coercepath(default_root_dir))), sort=0))
+        >>> print(ub.repr2(list(util_path.tree(default_root_dir)), sort=0))
         >>> #
         >>> # Make a new trainer that should auto-resume
         >>> trainer = pl.Trainer(default_root_dir=default_root_dir, callbacks=[AutoResumer(), StateLogger()], max_epochs=5)
         >>> model = LightningToyNet2d()
         >>> trainer.fit(model)
-        >>> print(ub.repr2(list(util_path.tree(coercepath(default_root_dir))), sort=0))
+        >>> print(ub.repr2(list(util_path.tree(default_root_dir)), sort=0))
         >>> # max_epochs should prevent auto-resume from doing anything
-        >>> assert len(list((coercepath(trainer.logger.log_dir) / 'checkpoints').glob('*'))) == 0
+        >>> assert len(list((util_path.coercepath(trainer.logger.log_dir) / 'checkpoints').glob('*'))) == 0
         >>> #
         >>> # Increasing max epochs will let it train for longer
         >>> trainer = pl.Trainer(default_root_dir=default_root_dir, callbacks=[AutoResumer(), StateLogger()], max_epochs=6)
         >>> model = LightningToyNet2d()
         >>> trainer.fit(model)
-        >>> print(ub.repr2(list(util_path.tree(coercepath(default_root_dir))), sort=0))
+        >>> print(ub.repr2(list(util_path.tree(util_path.coercepath(default_root_dir))), sort=0))
         >>> # max_epochs should prevent auto-resume from doing anything
-        >>> assert len(list((coercepath(trainer.logger.log_dir) / 'checkpoints').glob('*'))) > 0
+        >>> assert len(list((util_path.coercepath(trainer.logger.log_dir) / 'checkpoints').glob('*'))) > 0
     """
 
     def __init__(self):

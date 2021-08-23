@@ -320,6 +320,7 @@ class ChangeDetectorBase(pl.LightningModule):
             ...     sched.last_epoch += 1
             ...     lr = sched.get_lr()[0]
             ...     rows.append({'lr': lr, 'last_epoch': sched.last_epoch})
+            >>> import pandas as pd
             >>> data = pd.DataFrame(rows)
             >>> # xdoctest +REQUIRES(--show)
             >>> import kwplot

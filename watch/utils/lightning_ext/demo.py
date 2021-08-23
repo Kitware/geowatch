@@ -69,6 +69,7 @@ def demo_trainer():
 
 
     Example:
+        >>> # xdoctest: +SKIP
         >>> from watch.utils.lightning_ext.demo import *  # NOQA
         >>> trainer = demo_trainer()
         >>> print('trainer.log_dir = {!r}'.format(trainer.log_dir))
