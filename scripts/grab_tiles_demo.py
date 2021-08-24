@@ -132,16 +132,18 @@ def try_rgdc(geojson_bbox, dt_min, dt_max, out_dpath=None, username=None,
     }
 
     results = {}
+    import xdev
+    xdev.embed()
 
     if with_s2:
-        results['s2'] = (client.search(**kwargs, instrumentation='S2A') +
-                         client.search(**kwargs, instrumentation='S2B'))
+        results['s2'] = (client.search(**kwargs, instrumentation='S2A')['results'] +
+                         client.search(**kwargs, instrumentation='S2B')['results'])
 
     if with_l7:
-        results['l7'] = client.search(**kwargs, instrumentation='ETM')
+        results['l7'] = client.search(**kwargs, instrumentation='ETM')['results']
 
     if with_l8:
-        results['l8'] = client.search(**kwargs, instrumentation='OLI_TIRS')
+        results['l8'] = client.search(**kwargs, instrumentation='OLI_TIRS')['results']
 
     result_len = ub.map_vals(len, results)
     print('result_len = {}'.format(ub.repr2(result_len, nl=1)))
