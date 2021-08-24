@@ -121,7 +121,8 @@ def main(cmdline=False, **kwargs):
         >>> # xdoctest: +SKIP
         >>> from watch.cli.propagate_labels import *  # NOQA
         >>> dataset_directory = 'drop1-S2-aligned-c1'
-        >>> python -m watch.demo.propagate_labels --data_dir=dataset_directory --out_dir='propagation_output'
+
+        python -m watch.demo.propagate_labels --data_dir=dataset_directory --out_dir='propagation_output'
 
     """
 
