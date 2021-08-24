@@ -17,7 +17,25 @@ from .iarpa_dataset import kwcoco_dataset
 
 def main(args):
     print('Loading checkpoint')
-    model = pretext.load_from_checkpoint(args.ckpt_path)
+
+    if True:
+        # Overload load_from_checkpoint
+        overrides = {
+            'train_dataset': None,
+            'vali_dataset': None,
+        }
+        cls = pretext
+        checkpoint = torch.load(args.ckpt_path)
+        # Hack for getting the input channels
+        overrides['num_channels'] = (
+            checkpoint['state_dict']['encoder.inc.conv.conv.0.weight'].shape[1]
+        )
+        checkpoint[cls.CHECKPOINT_HYPER_PARAMS_KEY].update(overrides)
+        model = cls._load_model_state(checkpoint, strict=True)
+    else:
+        model = pretext.load_from_checkpoint(
+            args.ckpt_path, train_dataset=None, vali_dataset=None)
+
     model.eval().to(args.device)
     print('Initiating dataset')
     dataset = kwcoco_dataset(args.input_kwcoco, args.sensor, args.bands)
