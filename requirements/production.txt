@@ -54,7 +54,7 @@ rasterio >= 1.2.0
 utm >= 0.7.0
 rtree >= 0.9.7
 pygeos >= 0.10.1
-rgd-client >= 0.2.2, != 0.2.3
+rgd-client >= 0.2.5, != 0.2.3
 geojson >= 2.5.0
 
 # Machine learning

@@ -24,11 +24,22 @@ class pretext(pl.LightningModule):
 
         self.save_hyperparameters(hparams)
 
-        self.trainset = kwcoco_dataset(hparams.train_dataset, hparams.sensor, hparams.bands, hparams.patch_size)
+        if hparams.train_dataset is not None:
+            self.trainset = kwcoco_dataset(hparams.train_dataset, hparams.sensor, hparams.bands, hparams.patch_size)
+        else:
+            self.trainset = None
+
         if hparams.vali_dataset is not None:
             self.valset = kwcoco_dataset(hparams.vali_dataset, hparams.sensor, hparams.bands, hparams.patch_size)
+        else:
+            self.valset = None
 
-        num_channels = self.trainset.num_channels()
+        print('hparams = {!r}'.format(hparams))
+        if hasattr(hparams, 'num_channels'):
+            # hack for loading without dataset state
+            num_channels = hparams.num_channels
+        else:
+            num_channels = self.trainset.num_channels()
 
         # determine which tasks to run
         self.task_indices = []
