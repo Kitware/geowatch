@@ -41,6 +41,10 @@ def main(cmdline=True, **kw):
                         help='show version number and exit')
     subparsers = parser.add_subparsers(help='specify a command to run')
 
+    cmd_alias = {
+        'watch_coco_stats': ['stats'],
+    }
+
     for cli_module in cli_modules:
 
         if hasattr(cli_module, '_SubConfig'):
@@ -59,12 +63,15 @@ def main(cmdline=True, **kw):
             raise AssertionError(f'No main function for {cli_module}')
 
         cmdname = cli_module.__name__.split('.')[-1]
+        parserkw = {}
+        if cmdname in cmd_alias:
+            parserkw['aliases']  = cmd_alias[cmdname]
 
         if cli_subconfig is not None:
             # TODO: make subparser.add_parser args consistent with what
             # scriptconfig generates when parser=None
             subconfig = cli_subconfig()
-            parserkw = subconfig._parserkw()
+            parserkw.update(subconfig._parserkw())
             parserkw['help'] = parserkw['description'].split('\n')[0]
             subparser = subparsers.add_parser(cmdname, **parserkw)
             subparser = subconfig.argparse(subparser)
