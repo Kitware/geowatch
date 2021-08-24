@@ -132,8 +132,6 @@ def try_rgdc(geojson_bbox, dt_min, dt_max, out_dpath=None, username=None,
     }
 
     results = {}
-    import xdev
-    xdev.embed()
 
     if with_s2:
         results['s2'] = (client.search(**kwargs, instrumentation='S2A')['results'] +
