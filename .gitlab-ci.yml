@@ -200,6 +200,7 @@ run_linter:
 
     image:
         gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
+    needs: []
 
 test_full_loose/conda-linux:
     <<:
@@ -209,6 +210,7 @@ test_full_loose/conda-linux:
         - <<: *if-merged-into-default
     image:
         gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
+    needs: []
 
 
 test_full_strict/conda-linux:
@@ -219,6 +221,7 @@ test_full_strict/conda-linux:
         - <<: *if-merged-into-default
     image:
         gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
+    needs: []
 
 
 build_docker_strict:
@@ -235,6 +238,7 @@ build_docker_strict:
     docker:19.03.12
   variables:
     IMAGE_TAG: latest
+  needs: []
 
 
 build_docker_and_upload_strict:
@@ -254,6 +258,7 @@ build_docker_and_upload_strict:
     docker:19.03.12
   variables:
     IMAGE_TAG: latest
+  needs: []
 
 
 .__local_docker_heredoc__:
