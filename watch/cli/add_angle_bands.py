@@ -57,7 +57,8 @@ def add_angle_bands(stac_catalog, outdir):
         elif re.search(L8_RE, stac_item.id):
             output_stac_item = add_angles_l8(stac_item, item_outdir)
         elif re.search(S2_RE, stac_item.id):
-            output_stac_item = add_angles_s2(stac_item, item_outdir)
+            output_stac_item = stac_item
+            # output_stac_item = add_angles_s2(stac_item, item_outdir)
         else:
             output_stac_item = stac_item
 
@@ -146,15 +147,35 @@ def add_angles_l8(stac_item, item_outdir):
                 os.path.basename(angle_file))
 
             # Convert to COG (original format is HDR)
-            angle_file_outpath = os.path.join(
-                item_outdir, "{}.tif".format(angle_file_basename))
-            subprocess.run(['gdalwarp', '-of', 'COG',
-                            angle_file,
-                            angle_file_outpath])
+            azimuth_angle_file_outpath = os.path.join(
+                item_outdir, "{}_azimuth.tif".format(angle_file_basename))
+
+            subprocess.run(['gdal_calc.py',
+                            '--calc="A"',
+                            '--outfile={}'.format(azimuth_angle_file_outpath),
+                            '-A', angle_file,
+                            '--A_band=1'])
 
             stac_item.assets[angle_file_basename] = pystac.Asset.from_dict(
-                {'href': angle_file_outpath,
-                 'title': os.path.join(stac_item.id, angle_file_basename),
+                {'href': azimuth_angle_file_outpath,
+                 'title': os.path.join(
+                     stac_item.id, "{}_azimuth".format(angle_file_basename)),
+                 'roles': ['metadata']})
+
+            # Convert to COG (original format is HDR)
+            zenith_angle_file_outpath = os.path.join(
+                item_outdir, "{}_zenith.tif".format(angle_file_basename))
+
+            subprocess.run(['gdal_calc.py',
+                            '--calc="A"',
+                            '--outfile={}'.format(zenith_angle_file_outpath),
+                            '-A', angle_file,
+                            '--A_band=2'])
+
+            stac_item.assets[angle_file_basename] = pystac.Asset.from_dict(
+                {'href': zenith_angle_file_outpath,
+                 'title': os.path.join(
+                     stac_item.id, "{}_zenith".format(angle_file_basename)),
                  'roles': ['metadata']})
 
     return stac_item
