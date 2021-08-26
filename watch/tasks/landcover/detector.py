@@ -33,6 +33,25 @@ feature_mapping = [
     'AP030'  # Road
 ]
 
+# outputs from the model
+channels = [
+    'rice_field',  # 0
+    'cropland',  # 1
+    'water',  # 2
+    'inland_water',  # 3
+    'river_or_stream',  # 4
+    'sebkha',  # 5
+    'snow_or_ice_field',  # 6
+    'bare_ground',  # 7
+    'sand_dune',  # 8
+    'built_up',  # 9
+    'grassland',  # 10
+    'brush',  # 11
+    'forest',  # 12
+    'wetland',  # 13
+    'road',  # 14
+]
+
 cmap8 = np.array([[0, 0, 0],  # 0  noInformation
                   [79, 235, 52],  # 1  Agriculture, Paddy
                   [235, 211, 52],  # 2  Agriculture, General
@@ -107,14 +126,15 @@ def predict_image(img, model):
 
     output = model(t_image)
 
-    # max after normalization-ish
-    pred = torch.argmax(torch.softmax(output, dim=1), dim=1)
+    pred = torch.softmax(output, dim=1)
 
     # convert tensor to numpy array
     pred = pred.squeeze().detach().cpu().numpy()
-    pred = pred.astype(dtype)
 
     pred = np.where(mask == True, pred, PRED_NODATA)  # NOQA
+
+    # reorder axes to (height, width, num_channels)
+    pred = np.moveaxis(pred, 0, -1)
 
     return pred
 

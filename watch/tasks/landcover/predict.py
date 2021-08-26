@@ -1,10 +1,10 @@
 import datetime
 import logging
+import warnings
 from pathlib import Path
 
 import click
 import kwcoco
-import warnings
 import kwimage
 import numpy as np
 from tqdm import tqdm
@@ -85,10 +85,10 @@ class DatasetPredict:
 
         info = {
             'file_name': str(pred_filename.relative_to(self.output_dir)),
-            'channels': 'landcover',
+            'channels': "|".join(detector.channels),
             'height': pred.shape[0],
             'width': pred.shape[1],
-            'num_bands': 1,
+            'num_bands': pred.shape[2],
             'warp_aux_to_img': {'scale': [img_info['width'] / pred.shape[1],
                                           img_info['height'] / pred.shape[0]],
                                 'type': 'affine'}
@@ -100,10 +100,17 @@ class DatasetPredict:
 
         with warnings.catch_warnings():
             warnings.simplefilter('ignore', UserWarning)
-            kwimage.imwrite(str(pred_filename), pred)
+            kwimage.imwrite(str(pred_filename),
+                            pred,
+                            backend='gdal',
+                            compress='deflate')
 
-        # colored image
-        kwimage.imwrite(str(pred_filename)[:-4] + '_color.tif', detector.cmap8[1:][pred])
+        # single band images
+        # for band in range(pred.shape[2]):
+        #     kwimage.imwrite(str(pred_filename)[:-4] + '_color_{}.tif'.format(band),
+        #                     pred[:, :, band],
+        #                     backend='gdal',
+        #                     compress='deflate')
 
     def load_L8(self, gid):
         """
