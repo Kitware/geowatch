@@ -5,7 +5,6 @@ import re
 from contextlib import contextmanager
 import tempfile
 import subprocess
-import glob
 from s2angs.cli import generate_anglebands
 
 import pystac
@@ -53,12 +52,13 @@ def add_angle_bands(stac_catalog, outdir):
         os.makedirs(item_outdir, exist_ok=True)
 
         if re.search(L7_RE, stac_item.id):
-            output_stac_item = add_angles_l7(stac_item, item_outdir)
+            output_stac_item = add_angles_landsat(
+                stac_item, item_outdir, 'L7')
         elif re.search(L8_RE, stac_item.id):
-            output_stac_item = add_angles_l8(stac_item, item_outdir)
+            output_stac_item = add_angles_landsat(
+                stac_item, item_outdir, 'L8')
         elif re.search(S2_RE, stac_item.id):
-            output_stac_item = stac_item
-            # output_stac_item = add_angles_s2(stac_item, item_outdir)
+            output_stac_item = add_angles_s2(stac_item, item_outdir)
         else:
             output_stac_item = stac_item
 
@@ -92,7 +92,18 @@ def change_working_dir(destination_dir, create=True):
         os.chdir(previous_wd)
 
 
-def add_angles_l7(stac_item, item_outdir):
+def add_angles_landsat(stac_item,
+                       item_outdir,
+                       landsat_version,
+                       selected_bands=['4']):
+
+    supported_landsat_versions = {'L8', 'L7'}
+    if landsat_version not in supported_landsat_versions:
+        raise NotImplementedError("landsat_version: '{}' not supported, "
+                                  "expecting one of: {}".format(
+                                      landsat_version,
+                                      ", ".join(supported_landsat_versions)))
+
     angles_file = None
     for asset_name, asset in stac_item.assets.items():
         if re.search(LANDSAT_ANGLES_FILE_RE, asset.href):
@@ -104,45 +115,27 @@ def add_angles_l7(stac_item, item_outdir):
 
     with tempfile.TemporaryDirectory() as tmpdirname:
         with change_working_dir(tmpdirname):
-            subprocess.run(['landsat_angles', angles_file], check=True)
+            if landsat_version == 'L8':
+                # Command line arguments for `l8_angles`:
+                # l8_angles <*_ANG.txt> <AngleType> <SubsampleFactor> -f
+                # <FillPixelValue> -b <BandList>
+                cmd = ['l8_angles', angles_file, 'BOTH', '1']
+                if selected_bands is not None:
+                    cmd.extend(['-b', ",".join(selected_bands)])
 
-        for angle_file in glob.glob(os.path.join(tmpdirname, "*.img")):
-            angle_file_basename, _ = os.path.splitext(
-                os.path.basename(angle_file))
+                subprocess.run(cmd,
+                               check=True)
 
-            # Convert to COG (original format is HDR)
-            angle_file_outpath = os.path.join(
-                item_outdir, "{}.tif".format(angle_file_basename))
-            subprocess.run(['gdalwarp', '-of', 'COG',
-                            angle_file,
-                            angle_file_outpath])
+            elif landsat_version == 'L7':
+                subprocess.run(['landsat_angles', angles_file], check=True)
 
-            stac_item.assets[angle_file_basename] = pystac.Asset.from_dict(
-                {'href': angle_file_outpath,
-                 'title': os.path.join(stac_item.id, angle_file_basename),
-                 'roles': ['metadata']})
+        for angle_file in os.listdir(tmpdirname):
+            if selected_bands is not None:
+                selected_bands_re = r'.*({}).img$'.format(
+                    '|'.join(("B{:0>2s}".format(b) for b in selected_bands)))
+                if not re.match(selected_bands_re, angle_file):
+                    continue
 
-    return stac_item
-
-
-def add_angles_l8(stac_item, item_outdir):
-    angles_file = None
-    for asset_name, asset in stac_item.assets.items():
-        if re.search(LANDSAT_ANGLES_FILE_RE, asset.href):
-            angles_file = asset.href
-            break
-
-    if angles_file is None:
-        return stac_item
-
-    with tempfile.TemporaryDirectory() as tmpdirname:
-        with change_working_dir(tmpdirname):
-            # Command line arguments for `l8_angles`:
-            # l8_angles <*_ANG.txt> <AngleType> <SubsampleFactor> -f
-            # <FillPixelValue> -b <BandList>
-            subprocess.run(['l8_angles', angles_file, 'BOTH', '1'], check=True)
-
-        for angle_file in glob.glob(os.path.join(tmpdirname, "*.img")):
             angle_file_basename, _ = os.path.splitext(
                 os.path.basename(angle_file))
 
@@ -153,7 +146,7 @@ def add_angles_l8(stac_item, item_outdir):
             subprocess.run(['gdal_calc.py',
                             '--calc="A"',
                             '--outfile={}'.format(azimuth_angle_file_outpath),
-                            '-A', angle_file,
+                            '-A', os.path.join(tmpdirname, angle_file),
                             '--A_band=1'])
 
             stac_item.assets[angle_file_basename] = pystac.Asset.from_dict(
@@ -169,7 +162,7 @@ def add_angles_l8(stac_item, item_outdir):
             subprocess.run(['gdal_calc.py',
                             '--calc="A"',
                             '--outfile={}'.format(zenith_angle_file_outpath),
-                            '-A', angle_file,
+                            '-A', os.path.join(tmpdirname, angle_file),
                             '--A_band=2'])
 
             stac_item.assets[angle_file_basename] = pystac.Asset.from_dict(
