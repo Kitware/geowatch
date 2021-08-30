@@ -33,6 +33,25 @@ feature_mapping = [
     'AP030'  # Road
 ]
 
+# outputs from the model
+channels = [
+    'rice_field',  # 0
+    'cropland',  # 1
+    'water',  # 2
+    'inland_water',  # 3
+    'river_or_stream',  # 4
+    'sebkha',  # 5
+    'snow_or_ice_field',  # 6
+    'bare_ground',  # 7
+    'sand_dune',  # 8
+    'built_up',  # 9
+    'grassland',  # 10
+    'brush',  # 11
+    'forest',  # 12
+    'wetland',  # 13
+    'road',  # 14
+]
+
 cmap8 = np.array([[0, 0, 0],  # 0  noInformation
                   [79, 235, 52],  # 1  Agriculture, Paddy
                   [235, 211, 52],  # 2  Agriculture, General
@@ -49,8 +68,8 @@ cmap8 = np.array([[0, 0, 0],  # 0  noInformation
                   [200, 0, 255],  # 13 Forest, Deciduous, Evergreen
                   [100, 21, 255],  # 14 Wetland, Permanent/Herbaceous
                   [255, 0, 0],  # 15 Roads
-                  ]
-                 )  # River Line Feature (rivers) (blue)
+                  ],
+                 np.uint8)
 cmap = cmap8 / 255.
 
 # The nodata value in the output from the model
@@ -58,10 +77,13 @@ PRED_NODATA = -1
 
 
 def run(model, img, metadata):
+    if np.all(img == 0):
+        log.warning('skipping all black image: gid:{}'.format(metadata['id']))
+        return None
+
     img = preprocess(img)
     pred = predict_image(img, model)
-    features = get_features(pred)
-    return features
+    return pred
 
 
 def preprocess(img):
@@ -90,10 +112,6 @@ def pad(fn):
 
 @pad
 def predict_image(img, model):
-    """
-    the actual size of the image passsed to predict_chip is chip_size + 2*overlap
-    """
-
     dtype = np.int8
 
     mask = get_nodata_mask(img)
@@ -108,14 +126,15 @@ def predict_image(img, model):
 
     output = model(t_image)
 
-    # max after normalization-ish
-    pred = torch.argmax(torch.softmax(output, dim=1), dim=1)
+    pred = torch.softmax(output, dim=1)
 
     # convert tensor to numpy array
     pred = pred.squeeze().detach().cpu().numpy()
-    pred = pred.astype(img.dtype)
 
     pred = np.where(mask == True, pred, PRED_NODATA)  # NOQA
+
+    # reorder axes to (height, width, num_channels)
+    pred = np.moveaxis(pred, 0, -1)
 
     return pred
 
@@ -150,11 +169,10 @@ def get_nodata_mask(img, nodata=0):
     return mask
 
 
-def get_features(img, tolerance_pixels=1.0):
+def get_features(img):
     """
     Generate features from image
 
-    smoothing tolerance is roughly in pixels, None for no smoothing
     """
 
     img = img.astype(np.int16)
