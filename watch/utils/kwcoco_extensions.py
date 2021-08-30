@@ -593,3 +593,43 @@ def _recompute_auxiliary_transforms(img):
         warp_aux_to_wld = kwimage.Affine.coerce(aux['warp_to_wld'])
         warp_aux_to_img = warp_wld_to_img @ warp_aux_to_wld
         aux['warp_aux_to_img'] = warp_aux_to_img.concise()
+
+
+def coco_channel_stats(dset):
+    """
+    Return information about what channels are available in the dataset
+
+    Example:
+        >>> from watch.utils import kwcoco_extensions
+        >>> import kwcoco
+        >>> import ubelt as ub
+        >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
+        >>> info = kwcoco_extensions.coco_channel_stats(dset)
+        >>> print(ub.repr2(info, nl=1))
+    """
+    channel_col = []
+    for gid, img in dset.index.imgs.items():
+        channels = []
+        fname = img.get('file_name', None)
+        if fname is not None:
+            channels.append(img.get('channels', 'img-unknown-chan'))
+
+        auxiliary = img.get('auxiliary', [])
+        for aux in auxiliary:
+            channels.append(aux.get('channels', 'aux-unknown-chan'))
+
+        channel_col.append('|'.join(channels))
+
+    chan_hist = ub.dict_hist(channel_col)
+
+    from kwcoco.channel_spec import FusedChannelSpec as FS
+    osets = [FS.coerce(c).as_oset() for c in chan_hist]
+    common_channels = FS(list(ub.oset.intersection(*osets)))
+    all_channels = FS(list(ub.oset.union(*osets)))
+
+    info = {
+        'chan_hist': chan_hist,
+        'common_channels': common_channels,
+        'all_channels': all_channels,
+    }
+    return info

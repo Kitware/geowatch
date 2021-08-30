@@ -33,6 +33,17 @@ class Packager(pl.callbacks.Callback):
 
         - [ ] Create a trainer-level logger instance (similar to netharn)
 
+        - [ ] what is the right way to handle running eval after fit?
+              There may be multiple candidate models that need to be tested, so
+              we can't just specify one package, one prediction dumping ground,
+              and one evaluation dataset, maybe we specify the paths where the
+              "best" ones are written?.
+
+    Args:
+        package_fpath (PathLike):
+            Specifies a path where a torch packaged model will be written (or
+            symlinked) to.
+
     References:
         https://discuss.pytorch.org/t/packaging-pytorch-topology-first-and-checkpoints-later/129478/2
 
@@ -57,6 +68,22 @@ class Packager(pl.callbacks.Callback):
         self.package_on_interrupt = True
         self.package_fpath = package_fpath
         self.package_verbose = 0
+
+    @classmethod
+    def add_argparse_args(cls, parent_parser):
+        """
+        Example:
+            >>> from watch.utils.lightning_ext.callbacks.packager import *  # NOQA
+            >>> from watch.utils.configargparse_ext import ArgumentParser
+            >>> cls = Packager
+            >>> parent_parser = ArgumentParser(formatter_class='defaults')
+            >>> cls.add_argparse_args(parent_parser)
+            >>> parent_parser.print_help()
+        """
+        from watch.utils.lightning_ext import argparse_ext
+        arg_infos = argparse_ext.parse_docstring_args(cls)
+        argparse_ext.add_arginfos_to_parser(parent_parser, arg_infos)
+        return parent_parser
 
     def on_init_end(self, trainer: "pl.Trainer") -> None:
         """

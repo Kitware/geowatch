@@ -72,7 +72,7 @@ def make_predict_config(cmdline=False, **kwargs):
 
     # add the appropriate args to the parse
     # for dataset, method, and trainer
-    parser = datamodule_class.add_data_specific_args(parser)
+    parser = datamodule_class.add_argparse_args(parser)
     parser.set_defaults(**{'batch_size': 1})
 
     # parse and pass to main
@@ -261,7 +261,11 @@ def predict(cmdline=False, **kwargs):
         outputs = method.forward_step(batch, with_loss=False)
 
         # TODO: we will eventually output more than "binary_predictions"
-        batch_bin_probs = outputs['binary_predictions']
+        if 'binary_predictions' in outputs:
+            batch_bin_probs = outputs['binary_predictions']
+
+        if 'change_probs' in outputs:
+            batch_bin_probs = outputs['change_probs']
 
         # For each item in the batch, process the results
         for bx, item in enumerate(batch):

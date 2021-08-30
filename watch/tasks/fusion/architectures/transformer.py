@@ -550,6 +550,9 @@ class FusionEncoder(nn.Module):
             for _ in range(n_layers)
         ]
 
+        self.in_features = in_features
+        self.out_features = embedding_size
+
         self.first = first
         self.layers = nn.Sequential(*_layers)
 

@@ -46,7 +46,7 @@ Example:
     ...     'train_dataset': train_fpath,
     ...     'vali_dataset': vali_fpath,
     ...     'datamodule': 'KWCocoVideoDataModule',
-    ...     #'method': 'MultimodalTransformerDirectCD',
+    ...     #'method': 'MultimodalTransformer',
     ...     'method': 'MultimodalTransformerDotProdCD',
     ...     'channels': 'coastal|blue|green|red|nir|swir16|swir22',
     ...     #'channels': 'blue|green|red|nir',
@@ -68,12 +68,13 @@ Example:
     >>> #modules = make_lightning_modules(args=None, cmdline=cmdline, **kwargs)
     >>> fit_model(cmdline=cmdline, **kwargs)
 """
-
 import pytorch_lightning as pl
 import ubelt as ub
 import platform
 import getpass
 import pathlib
+
+from watch.utils import lightning_ext as pl_ext
 
 try:
     import xdev
@@ -82,7 +83,7 @@ except Exception:
     profile = ub.identity
 
 available_methods = [
-    'MultimodalTransformerDirectCD',
+    'MultimodalTransformer',
     'MultimodalTransformerDotProdCD',
     'MultimodalTransformerSegmentation',
 ]
@@ -152,42 +153,14 @@ def make_fit_config(cmdline=False, **kwargs):
         profiling.
         '''))
 
-    # Deployement and prediction stuffs
-    # TODO: what is the right way to handle running eval after fit?
-    # There may be multiple candidate models that need to be tested, so we
-    # can't just specify one package, one prediction dumping ground, and one
-    # evaluation dataset, maybe we specify the paths where the "best" ones are
-    # written?.
-    config_parser.add_argument('--package_fpath', default=None, help=ub.paragraph(
-        '''
-        Specifies a path where a torch packaged model will be written (or
-        symlinked) to.
-        '''))
-
-    # config_parser.add_argument('--pred_dataset', default=None, help=ub.paragraph(
-    #     '''
-    #     If we have a test dataset, where prediction to write predictions
-    #     '''))
-
-    # config_parser.add_argument('--eval_dpath', default=None, help=ub.paragraph(
-    #     '''
-    #     If we have a test dataset, where where to write evaluations wrt
-    #     predictions
-    #     '''))
-
-    #
     callback_parser = parser.add_argument_group("Callbacks")
 
-    # TODO: callbacks might have arg parsers
+    # our extension callbacks have arg parsers
+    pl_ext.callbacks.BatchPlotter.add_argparse_args(callback_parser)
+    pl_ext.callbacks.Packager.add_argparse_args(callback_parser)
 
     callback_parser.add_argument('--patience', default=100, type=int, help=ub.paragraph(
         '''Number of epochs with no improvement before early stopping'''))
-
-    callback_parser.add_argument('--draw_interval', default='10m', help=ub.paragraph(
-        '''Time to wait before dumping a new visualization'''))
-
-    callback_parser.add_argument('--num_draw', default=4, type=int, help=ub.paragraph(
-        '''Number of items to draw at the start of each epoch'''))
 
     # config_parser.add_argument('--name', default=None, help=ub.paragraph(
     #     '''
@@ -207,14 +180,12 @@ def make_fit_config(cmdline=False, **kwargs):
             '''))
 
     modal_parser.add_argument(
-        '--method', default='MultimodalTransformerDirectCD',
+        '--method', default='MultimodalTransformer',
         choices=available_methods, help=ub.paragraph(
             '''
             Modal parameter indicating the family of model to train.
             See the watch.tasks.fusion.methods submodule for details
-
             # TODO: change name to model?
-            # Change existing "model" to "arch"?
             ''')
     )
 
@@ -223,9 +194,6 @@ def make_fit_config(cmdline=False, **kwargs):
     # The specific parser will depend on the modal arguments
     modal, _ = parser.parse_known_args(ignore_help_args=True,
                                        ignore_write_args=True)
-
-    # print(kwargs)
-    # print(modal)
 
     # I strongly recommend that ~/data is a symlink to a drive with more
     # storage space.
@@ -266,9 +234,9 @@ def make_fit_config(cmdline=False, **kwargs):
     datamodule_class = getattr(datamodules, modal.datamodule)
 
     # Extend the parser based on the chosen dataset / method modes
-    datamodule_class.add_data_specific_args(parser)
+    datamodule_class.add_argparse_args(parser)
     method_parser = parser.add_argument_group("Method")
-    method_class.add_model_specific_args(method_parser)
+    method_class.add_argparse_args(method_parser)
     pl.Trainer.add_argparse_args(parser)
 
     # Hard code custom default settings for lightning to enable certain tricks
@@ -345,7 +313,6 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         ... }
         >>> modules = make_lightning_modules(args=None, cmdline=cmdline, **kwargs)
     """
-    from watch.utils import lightning_ext as pl_ext
     from watch.tasks.fusion import datamodules
     from watch.tasks.fusion import methods
     args = make_fit_config(args=args, cmdline=cmdline, **kwargs)
@@ -381,12 +348,15 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         print('datamodule.input_stats = {}'.format(
             ub.repr2(datamodule.input_stats, nl=2, sort=0)))
         method_var_dict["input_stats"] = datamodule.input_stats
+        method_var_dict["input_channels"] = datamodule.channels
+
+    method_var_dict["classes"] = datamodule.classes
     # Note: Changed name from method to model
     model = method_class(**method_var_dict)
 
     # init trainer from args
     callbacks = [
-        pl_ext.callbacks.AutoResumer(),
+        # pl_ext.callbacks.AutoResumer(),
         pl_ext.callbacks.StateLogger(),
         pl_ext.callbacks.Packager(package_fpath=args.package_fpath),
         pl_ext.callbacks.BatchPlotter(
@@ -408,7 +378,11 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
             pl.callbacks.ModelCheckpoint(
                 monitor='val_loss', mode='min', save_top_k=4),
             pl.callbacks.ModelCheckpoint(
-                monitor='val_f1', mode='max', save_top_k=4),
+                monitor='val_change_f1', mode='max', save_top_k=4),
+            pl.callbacks.ModelCheckpoint(
+                monitor='val_class_f1_micro', mode='max', save_top_k=4),
+            pl.callbacks.ModelCheckpoint(
+                monitor='val_class_f1_macro', mode='max', save_top_k=4),
         ]
 
     # TODO: explititly initialize the tensorboard logger?

@@ -3,6 +3,9 @@ import torch
 import numpy as np
 import math
 from torch import package
+import ubelt as ub
+import kwimage
+import cv2
 
 millnames = ['', ' K', ' M', ' B', ' T']
 
@@ -63,32 +66,6 @@ class DimensionDropout(nn.Module):
         index[self.dim] = torch.randperm(dim_size)[:self.n_keep]
 
         return x[index]
-
-
-class AddPositionalEncoding(nn.Module):
-    def __init__(self, dest_dim, dims_to_encode):
-        super().__init__()
-        self.dest_dim = dest_dim
-        self.dims_to_encode = dims_to_encode
-        assert self.dest_dim not in self.dims_to_encode
-
-    def forward(self, x):
-
-        inds = [
-            slice(0, size) if (dim in self.dims_to_encode) else slice(0, 1)
-            for dim, size in enumerate(x.shape)
-        ]
-        inds[self.dest_dim] = self.dims_to_encode
-
-        encoding = torch.cat(torch.meshgrid([
-            torch.linspace(0, 1, x.shape[dim]) if (dim in self.dims_to_encode) else torch.tensor(-1.)
-            for dim in range(len(x.shape))
-        ]), dim=self.dest_dim)[inds]
-
-        expanded_shape = list(x.shape)
-        expanded_shape[self.dest_dim] = -1
-        x = torch.cat([x, encoding.expand(expanded_shape).type_as(x)], dim=self.dest_dim)
-        return x
 
 
 class SinePositionalEncoding(nn.Module):
@@ -230,3 +207,70 @@ def model_json(model, max_depth=float('inf'), depth=0):
             }
             info['children'] = children
     return info
+
+
+# TODO: LRU cache?
+@ub.memoize
+def _morph_kernel_core(h, w):
+    return np.ones((h, w), np.uint8)
+
+
+def _morph_kernel(size):
+    if isinstance(size, int):
+        h = size
+        w = size
+    else:
+        raise NotImplementedError
+    return _morph_kernel_core(h, w)
+
+
+def morphology(data, mode, kernel=5):
+    """
+    Executes a morphological operation.
+
+    Args:
+        input (ndarray): data
+        mode (str) : morphology mode.  currently only open
+
+    Example:
+        >>> data = (np.random.rand(32, 32) > 0.5).astype(np.uint8)
+        >>> mode = 'open'
+        >>> kernel = 5
+        >>> morphology(data, mode, kernel=5)
+
+    """
+    kernel = _morph_kernel(kernel)
+    if mode == 'open':
+        new = cv2.morphologyEx(data, cv2.MORPH_OPEN, kernel)
+    else:
+        raise NotImplementedError
+    return new
+
+
+@ub.memoize
+def _memo_legend(label_to_color):
+    import kwplot
+    legend_img = kwplot.make_legend_img(label_to_color)
+    return legend_img
+
+
+def category_tree_ensure_color(classes):
+    """
+    Ensures that each category in a CategoryTree has a color
+
+    TODO:
+        - [ ] Add to CategoryTree
+
+    Example:
+        >>> import kwcoco
+        >>> classes = kwcoco.CategoryTree.demo()
+        >>> assert not any('color' in data for data in classes.graph.nodes.values())
+        >>> category_tree_ensure_color(classes)
+        >>> assert all('color' in data for data in classes.graph.nodes.values())
+    """
+    backup_colors = iter(kwimage.Color.distinct(len(classes)))
+    for node in classes.graph.nodes:
+        color = classes.graph.nodes[node].get('color', None)
+        if color is None:
+            color = next(backup_colors)
+            classes.graph.nodes[node]['color'] = kwimage.Color(color).as01()

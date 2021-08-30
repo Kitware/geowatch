@@ -1,5 +1,6 @@
 import scriptconfig as scfg
 import ubelt as ub
+from watch.utils import kwcoco_extensions  # NOQA
 
 
 class WatchCocoStats(scfg.Config):
@@ -54,20 +55,8 @@ def coco_watch_stats(dset):
         print('video_info = {}'.format(ub.repr2(video_info, nl=-1, sort=False)))
 
     print('MSI channel stats')
-    channel_col = []
-    for gid, img in dset.index.imgs.items():
-        channels = []
-        fname = img.get('file_name', None)
-        if fname is not None:
-            channels.append(img.get('channels', 'img-unknown-chan'))
-
-        auxiliary = img.get('auxiliary', [])
-        for aux in auxiliary:
-            channels.append(aux.get('channels', 'aux-unknown-chan'))
-
-        channel_col.append(tuple(sorted(channels)))
-    chan_hist = ub.dict_hist(channel_col)
-    print('chan_hist = {}'.format(ub.repr2(chan_hist, nl=1)))
+    info = kwcoco_extensions.coco_channel_stats(dset)
+    print(ub.repr2(info, nl=4))
 
 
 _SubConfig = WatchCocoStats
