@@ -9,7 +9,7 @@ def poc():
     import math
     from torch import package
 
-    model = methods.MultimodalTransformerDirectCD("smt_it_stm_p8")
+    model = methods.MultimodalTransformer("smt_it_stm_p8")
 
     package_path = 'torch_package.zip'
     module_name = 'watch_tasks_fusion'

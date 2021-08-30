@@ -50,6 +50,22 @@ class AutoResumer(pl.callbacks.Callback):
         """
         pass
 
+    # @classmethod
+    # def add_argparse_args(cls, parent_parser):
+    #     """
+    #     Example:
+    #         >>> from watch.utils.lightning_ext.callbacks.auto_resumer import *  # NOQA
+    #         >>> from watch.utils.configargparse_ext import ArgumentParser
+    #         >>> cls = AutoResumer
+    #         >>> parent_parser = ArgumentParser(formatter_class='defaults')
+    #         >>> cls.add_argparse_args(parent_parser)
+    #         >>> parent_parser.print_help()
+    #     """
+    #     from watch.utils.lightning_ext import argparse_ext
+    #     arg_infos = argparse_ext.parse_docstring_args(cls)
+    #     argparse_ext.add_arginfos_to_parser(parent_parser, arg_infos)
+    #     return parent_parser
+
     def on_init_start(self, trainer: "pl.Trainer") -> None:
         train_dpath = trainer.default_root_dir
         prev_states = self.recent_checkpoints(train_dpath)

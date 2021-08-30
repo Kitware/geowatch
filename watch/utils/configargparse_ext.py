@@ -38,7 +38,8 @@ class ArgumentParser(configargparse.ArgumentParser):
 
         special_defaults = {
             'formatter_class': {
-                'raw': configargparse.DefaultsRawFormatter,
+                'raw': configargparse.ArgumentDefaultsRawHelpFormatter,
+                'defaults': configargparse.ArgumentDefaultsHelpFormatter,
             },
             'config_file_parser_class': {
                 'yaml': configargparse.YAMLConfigFileParser,

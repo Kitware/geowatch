@@ -28,7 +28,7 @@ class BatchPlotter(pl.callbacks.Callback):
         num_draw (int):
             number of batches to draw at the start of each epoch
 
-        draw_interval (datetime.timedelta | str | numbers.Number, default='10m'):
+        draw_interval (datetime.timedelta | str | numbers.Number):
             This is the amount of time to wait before drawing the next batch
             item within an epoch. Can be given as a timedelta, a string
             parsable by `pytimeparse` (e.g.  '1m') or a numeric number of
@@ -60,6 +60,23 @@ class BatchPlotter(pl.callbacks.Callback):
 
     def setup(self, trainer, pl_module, stage):
         self.draw_timer = ub.Timer().tic()
+
+    @classmethod
+    def add_argparse_args(cls, parent_parser):
+        """
+        Example:
+            >>> from watch.utils.lightning_ext.callbacks.batch_plotter import *  # NOQA
+            >>> from watch.utils.configargparse_ext import ArgumentParser
+            >>> cls = BatchPlotter
+            >>> parent_parser = ArgumentParser(formatter_class='defaults')
+            >>> cls.add_argparse_args(parent_parser)
+            >>> parent_parser.print_help()
+            >>> parent_parser.parse_known_args()
+        """
+        from watch.utils.lightning_ext import argparse_ext
+        arg_infos = argparse_ext.parse_docstring_args(cls)
+        argparse_ext.add_arginfos_to_parser(parent_parser, arg_infos)
+        return parent_parser
 
     @profile
     def draw_batch(self, trainer, outputs, batch, batch_idx):

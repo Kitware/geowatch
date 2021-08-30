@@ -27,7 +27,7 @@ python -m kwcoco stats $TRAIN_FPATH $VALI_FPATH $TEST_FPATH
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc 
 python -m watch.tasks.fusion.fit \
     --channels="r|g|b" \
-    --method=MultimodalTransformerDirectCD \
+    --method=MultimodalTransformer \
     --arch_name=smt_it_stm_p8 \
     --window_size=8 \
     --learning_rate=3e-4 \
