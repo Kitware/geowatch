@@ -796,14 +796,36 @@ class KWCocoVideoDataset(data.Dataset):
             >>> import kwcoco
             >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
             >>> dvc_dpath = os.environ.get('DVC_DPATH', _default)
-            >>> coco_fpath = join(dvc_dpath, 'drop1_S2_aligned_c1/data.kwcoco.json')
+            >>> coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/combo_data.kwcoco.json')
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (2, 128, 128)
             >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=None)
+            >>> item = self[0]
             >>> self.compute_input_stats()
+
+        Ignore:
+            _ = xdev.profile_now(self.__getitem__)(0)
+            _ = xdev.profile_now(self.compute_input_stats)(num=10, num_workers=4, batch_size=1)
+            tr = self.sample_grid[0]
+            tr['channels'] = self.channels
+            _ = xdev.profile_now(self.sampler.load_sample)(tr)
+            pad = None
+            padkw = {}
+            _ = xdev.profile_now(self.sampler._load_slice)(tr, pad, padkw)
+
+            import timerit
+            ti = timerit.Timerit(10, bestof=2, verbose=2)
+            for timer in ti.reset('time'):
+                with timer:
+                    tr['use_experimental_loader'] = 0
+                    (self.sampler._load_slice)(tr, pad, padkw)
+
+            for timer in ti.reset('time'):
+                with timer:
+                    tr['use_experimental_loader'] = 1
+                    (self.sampler._load_slice)(tr, pad, padkw)
         """
-        num = None
         num = num if isinstance(num, int) and num is not True else 1000
         stats_idxs = kwarray.shuffle(np.arange(len(self)), rng=0)[0:min(num, len(self))]
         stats_subset = torch.utils.data.Subset(self, stats_idxs)

@@ -140,6 +140,21 @@ predict_all_ta2_features(){
     python ~/code/watch/watch/cli/coco_combine_features.py \
         --src $BASE_COCO_FPATH $UKY_INVARIANTS_COCO_FPATH $RUTGERS_MATERIAL_COCO_FPATH $DZYNE_LANDCOVER_COCO_FPATH \
         --dst $COMBO_COCO_FPATH
+
+    # Ensure "Video Space" is 10 GSD
+    python -m watch.cli.coco_add_watch_fields \
+        --src $COMBO_COCO_FPATH \
+        --dst $COMBO_COCO_FPATH \
+        --target_gsd 10
+
+    # Split out train and validation data (TODO: add test when we can)
+    kwcoco subset --src $COMBO_COCO_FPATH \
+            --dst $COMBO_VALI_COCO_FPATH \
+            --select_videos '.name | startswith("KR_")'
+
+    kwcoco subset --src $COMBO_COCO_FPATH \
+            --dst $COMBO_TRAIN_COCO_FPATH \
+            --select_videos '.name | startswith("KR_") | not'
 }
 
 
@@ -159,22 +174,7 @@ spot_check(){
 
     python -m watch coco_show_auxiliary --src $COMBO_COCO_FPATH --channels2 matseg_4
 
-    # Ensure "Video Space" is 10 GSD
-    python -m watch.cli.coco_add_watch_fields \
-        --src $COMBO_COCO_FPATH \
-        --dst $COMBO_COCO_FPATH \
-        --target_gsd 10
-
     kwcoco validate $COMBO_COCO_FPATH
-
-    # Split out train and validation data (TODO: add test when we can)
-    kwcoco subset --src $COMBO_COCO_FPATH \
-            --dst $COMBO_VALI_COCO_FPATH \
-            --select_videos '.name | startswith("KR_")'
-
-    kwcoco subset --src $COMBO_COCO_FPATH \
-            --dst $COMBO_TRAIN_COCO_FPATH \
-            --select_videos '.name | startswith("KR_") | not'
 
     # Print stats
     kwcoco stats \
