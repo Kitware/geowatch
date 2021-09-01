@@ -88,6 +88,7 @@ def coco_populate_geo_video_stats(dset, vidid, target_gsd='max-resolution'):
         print('dset = {!r}'.format(dset))
 
         coco_fpath = ub.expandpath('~/data/dvc-repos/smart_watch_dvc/drop0_aligned/data.kwcoco.json')
+        coco_fpath = '/home/joncrall/data/dvc-repos/smart_watch_dvc/drop1-S2-L8-aligned/combo_data.kwcoco.json'
         dset = kwcoco.CocoDataset(coco_fpath)
         vidid = 1
 
@@ -102,35 +103,41 @@ def coco_populate_geo_video_stats(dset, vidid, target_gsd='max-resolution'):
 
     for gid in gids:
         img = dset.index.imgs[gid]
+        coco_img = CocoImage(img)
 
         if img.get('file_name', None) is None:
-            # Choose any one of the auxiliary images, we chose the biggest
-            # arbitrarilly
-            # TODO: auxiliary
-            # import pdb
-            # pdb.set_trace()
-            aux_width = [aux['width'] for aux in img['auxiliary']]
-            aux_height = [aux['height'] for aux in img['auxiliary']]
-            aux_idx = (np.array(aux_width) * np.array(aux_height)).argmax()
-            aux_chosen = img['auxiliary'][aux_idx]
-            aux_to_wld = Affine.coerce(aux_chosen.get('warp_to_wld', None))
-            aux_to_img = Affine.coerce(aux_chosen['warp_aux_to_img'])
-            # aux_to_img = Affine.coerce(aux_chosen.get('warp_aux_to_img', None))
-            img_to_aux = aux_to_img.inv()
-            img_to_wld = aux_to_wld @ img_to_aux
+            # Choose any one of the auxiliary images that has the required
+            # attribute
+            aux_chosen = coco_img.primary_asset(requires=[
+                'warp_to_wld', 'approx_meter_gsd'])
+            wld_from_aux = Affine.coerce(aux_chosen.get('warp_to_wld', None))
+            img_from_aux = Affine.coerce(aux_chosen['warp_aux_to_img'])
+            aux_from_img = img_from_aux.inv()
+            wld_from_img = wld_from_aux @ aux_from_img
             approx_meter_gsd = aux_chosen['approx_meter_gsd']
         else:
-            img_to_wld = Affine.coerce(img.get('warp_to_wld', None))
+            wld_from_img = Affine.coerce(img.get('warp_to_wld', None))
             approx_meter_gsd = img['approx_meter_gsd']
 
+        asset_channels = []
+        asset_gsds = []
+        for obj in coco_img.iter_asset_objs():
+            _gsd = obj.get('approx_meter_gsd')
+            if _gsd is not None:
+                _gsd = round(_gsd, 1)
+            asset_gsds.append(_gsd)
+            asset_channels.append(obj.get('channels', None))
+
         frame_infos[gid] = {
-            'img_to_wld': img_to_wld,
+            'img_to_wld': wld_from_img,
             # Note: division because gsd is inverted. This got me confused, but
             # I'm pretty sure this works.
             'target_gsd': target_gsd,
             'approx_meter_gsd': approx_meter_gsd,
             'width': img['width'],
             'height': img['height'],
+            'asset_channels': asset_channels,
+            'asset_gsds': asset_gsds,
         }
 
     sorted_gids = ub.argsort(frame_infos, key=lambda x: x['approx_meter_gsd'])
@@ -143,32 +150,29 @@ def coco_populate_geo_video_stats(dset, vidid, target_gsd='max-resolution'):
 
     # TODO: coerce datetime via kwcoco API
     import numbers
-
     if target_gsd == 'max-resolution':
-        gsd = min_gsd
+        target_gsd_ = min_gsd
     elif target_gsd == 'min-resolution':
-        gsd = max_gsd
+        target_gsd_ = max_gsd
     else:
-        gsd = target_gsd
+        target_gsd_ = target_gsd
         if not isinstance(target_gsd, numbers.Number):
             raise TypeError('target_gsd must be a code or number = {}'.format(type(target_gsd)))
-    gsd = float(gsd)
+    target_gsd_ = float(target_gsd_)
 
     for info in frame_infos.values():
-        info['target_gsd'] = gsd
-        info['to_target_scale_factor'] = info['approx_meter_gsd'] / gsd
+        info['target_gsd'] = target_gsd_
+        info['to_target_scale_factor'] = info['approx_meter_gsd'] / target_gsd_
 
     available_channels = set()
     available_gsds = set()
     for gid in gids:
         img = dset.index.imgs[gid]
-        for obj in ub.flatten([[img], img.get('auxiliary', [])]):
-            if obj.get('file_name', None) is not None:
-                available_channels.add(obj.get('channels', None))
-                _gsd = obj.get('approx_meter_gsd')
-                if _gsd is not None:
-                    _gsd = round(_gsd, 1)
-                available_gsds.add(_gsd)
+        for obj in coco_img.iter_asset_objs():
+            available_channels.add(obj.get('channels', None))
+            _gsd = obj.get('approx_meter_gsd')
+            if _gsd is not None:
+                available_gsds.add(round(_gsd, 1))
 
     # Align to frame closest to the target GSD
     base_gid, info = min(frame_infos.items(),
@@ -180,33 +184,22 @@ def coco_populate_geo_video_stats(dset, vidid, target_gsd='max-resolution'):
     wld_to_vid = Affine.scale(scale) @ info['img_to_wld'].inv()
     video['width'] = int(np.ceil(info['width'] * scale))
     video['height'] = int(np.ceil(info['height'] * scale))
-    video['target_gsd'] = gsd
 
     # Store metadata in the video
     video['num_frames'] = len(gids)
     video['warp_wld_to_vid'] = wld_to_vid.__json__()
+    video['target_gsd'] = target_gsd_
     video['min_gsd'] = min_gsd
     video['max_gsd'] = max_gsd
-    video['available_channels'] = sorted(available_channels)
-    video['available_gsds'] = sorted(available_gsds)
+
+    # Remove old cruft (can remove in future versions)
+    video.pop('available_channels', None)
 
     for gid in gids:
         img = dset.index.imgs[gid]
         img_to_wld = frame_infos[gid]['img_to_wld']
         img_to_vid = wld_to_vid @ img_to_wld
         img['warp_img_to_vid'] = img_to_vid.concise()
-
-        if 0:
-            for aux in img.get('auxiliary', []):
-                aux_to_vid = img_to_vid @ Affine.coerce(aux['warp_aux_to_img'])
-                aux['warp_aux_to_vid'] = aux_to_vid.concise()
-
-    if 0:
-        dset.imgs[min_gsd_gid]
-        dset.imgs[max_gsd_gid]
-        # inspect
-        print(ub.repr2(dset.images(gids).objs, nl=1))
-        print(ub.repr2(dset.videos([vidid]).objs, nl=1))
 
 
 def coco_populate_geo_img_heuristics(dset, gid, overwrite=False, **kw):
@@ -227,10 +220,19 @@ def coco_populate_geo_img_heuristics(dset, gid, overwrite=False, **kw):
     """
     bundle_dpath = dset.bundle_dpath
     img = dset.imgs[gid]
-    obj = img  # NOQA
-    _populate_canvas_obj(bundle_dpath, img, overwrite=overwrite)
-    for aux in img.get('auxiliary', []):
-        _populate_canvas_obj(bundle_dpath, aux, overwrite=overwrite)
+
+    asset_objs = list(CocoImage(img).iter_asset_objs())
+
+    # Note: for non-geotiffs we could use the transformation provided with them
+    # to determine their geo-properties.
+    asset_errors = []
+    for obj in asset_objs:
+        errors = _populate_canvas_obj(bundle_dpath, obj, overwrite=overwrite)
+        asset_errors.append(errors)
+
+    if all(asset_errors):
+        info = ub.dict_isect(img, {'name', 'file_name', 'id'})
+        warnings.warn(f'img {info} has issues introspecting')
 
 
 @profile
@@ -255,7 +257,7 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False):
         unexpected = overwrite - valid_overwrites
         if unexpected:
             raise ValueError(f'Got unexpected overwrites: {unexpected}')
-
+    errors = []
     # Can only do this for images with file names
     if fname is not None:
         fpath = join(bundle_dpath, fname)
@@ -296,16 +298,17 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False):
                 if with_wgs:
                     obj.update({
                         'wgs84_to_wld': info['wgs84_to_wld'],
-                        'wld_to_pxl': info['wld_to_pxl'],
+                        # 'wld_to_pxl': info['wld_to_pxl'],
                     })
 
                 approx_meter_gsd = info['approx_meter_gsd']
             except Exception:
-                warnings.warn('no crs info for img, assuming 1 gsd')
-                obj_to_wld = Affine.eye()
-                approx_meter_gsd = 1.0
-            obj['approx_meter_gsd'] = approx_meter_gsd
-            obj['warp_to_wld'] = Affine.coerce(obj_to_wld).__json__()
+                errors.append('no_crs_info')
+                # obj_to_wld = Affine.eye()
+                # approx_meter_gsd = 1.0
+            else:
+                obj['approx_meter_gsd'] = approx_meter_gsd
+                obj['warp_to_wld'] = Affine.coerce(obj_to_wld).__json__()
 
         if 'band' in overwrite or num_bands is None:
             num_bands = _introspect_num_bands(fpath)
@@ -325,6 +328,7 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False):
                     for obj={obj}
                     '''))
             obj['channels'] = channels
+        return errors
 
 
 def _make_coco_img_from_geotiff(tiff_fpath, name=None):
@@ -587,7 +591,8 @@ def _recompute_auxiliary_transforms(img):
     warp_wld_to_img = warp_img_to_wld.inv()
     img.update(ub.dict_isect(base, {
         'utm_corners', 'wld_crs_info', 'utm_crs_info',
-        'width', 'height', 'wgs84_to_wld', 'wld_to_pxl',
+        'width', 'height', 'wgs84_to_wld',
+        # 'wld_to_pxl',
     }))
     for aux in auxiliary:
         warp_aux_to_wld = kwimage.Affine.coerce(aux['warp_to_wld'])
@@ -610,14 +615,8 @@ def coco_channel_stats(dset):
     channel_col = []
     for gid, img in dset.index.imgs.items():
         channels = []
-        fname = img.get('file_name', None)
-        if fname is not None:
-            channels.append(img.get('channels', 'img-unknown-chan'))
-
-        auxiliary = img.get('auxiliary', [])
-        for aux in auxiliary:
-            channels.append(aux.get('channels', 'aux-unknown-chan'))
-
+        for obj in CocoImage(img).iter_asset_objs():
+            channels.append(obj.get('channels', 'unknown-chan'))
         channel_col.append('|'.join(channels))
 
     chan_hist = ub.dict_hist(channel_col)
@@ -633,3 +632,130 @@ def coco_channel_stats(dset):
         'all_channels': all_channels,
     }
     return info
+
+
+class CocoImage(ub.NiceRepr):
+    """
+    An object-oriented representation of a coco image.
+
+    It provides helper methods that are specific to a single image.
+
+    This operates directly on a single coco image dictionary, but it can
+    optionally be connected to a parent dataset, which allows it to use
+    CocoDataset methods to query about relationships and resolve pointers.
+
+    This is different than the Images class in coco_object1d, which is just a
+    vectorized interface to multiple objects.
+
+    TODO:
+        - [ ] This will eventually move to kwcoco itself
+
+    Example:
+        >>> from watch.utils.kwcoco_extensions import *  # NOQA
+        >>> import kwcoco
+        >>> dset1 = kwcoco.CocoDataset.demo('shapes8')
+        >>> dset2 = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
+
+        >>> self = CocoImage(dset1.imgs[1], dset1)
+        >>> print('self.channels = {}'.format(ub.repr2(self.channels, nl=1)))
+
+        >>> self = CocoImage(dset2.imgs[1], dset2)
+        >>> print('self.channels = {}'.format(ub.repr2(self.channels, nl=1)))
+        >>> self.primary_asset()
+    """
+
+    def __init__(self, img, dset=None):
+        self.img = img
+        self.dset = dset
+
+    def __nice__(self):
+        return 'wh={dsize}'.format(dsize=self.dsize)
+
+    def __getitem__(self, key):
+        return self.img[key]
+
+    def keys(self):
+        return self.img.keys()
+
+    def get(self, key, default=ub.NoParam):
+        """
+        Duck type some of the dict interface
+        """
+        if default is ub.NoParam:
+            return self.img.get(key)
+        else:
+            return self.img.get(key, default)
+
+    @property
+    def channels(self):
+        from kwcoco.channel_spec import FusedChannelSpec
+        from kwcoco.channel_spec import ChannelSpec
+        img_parts = []
+        for obj in self.iter_asset_objs():
+            obj_parts = obj.get('channels', None)
+            obj_chan = FusedChannelSpec.coerce(obj_parts).normalize()
+            img_parts.append(obj_chan.spec)
+        spec = ChannelSpec(','.join(img_parts))
+        return spec
+
+    @property
+    def dsize(self):
+        width = self.img.get('width', None)
+        height = self.img.get('height', None)
+        return width, height
+
+    def primary_asset(self, requires=[]):
+        """
+        Compute a "main" image asset.
+
+        Args:
+            requires (List[str]):
+                list of attribute that must be non-None to consider an object
+                as the primary one.
+
+        TODO:
+            - [ ] Add in primary heuristics
+        """
+        img = self.img
+        has_base_image = img.get('file_name', None) is not None
+        candidates = []
+
+        if has_base_image:
+            obj = img
+            if all(k in obj for k in requires):
+                # Return the base image if we can
+                return obj
+
+        # Choose "best" auxiliary image based on a hueristic.
+        eye = kwimage.Affine.eye().matrix
+        for obj in img.get('auxiliary', []):
+            # Take frobenius norm to get "distance" between transform and
+            # the identity. We want to find the auxiliary closest to the
+            # identity transform.
+            warp_aux_to_img = kwimage.Affine.coerce(obj.get('warp_aux_to_img', None))
+            fro_dist = np.linalg.norm(warp_aux_to_img.matrix - eye, ord='fro')
+
+            if all(k in obj for k in requires):
+                candidates.append({
+                    'area': obj['width'] * obj['height'],
+                    'fro_dist': fro_dist,
+                    'obj': obj,
+                })
+
+        idx = ub.argmin(
+            candidates, key=lambda val: (val['fro_dist'], -val['area'])
+        )
+        obj = candidates[idx]['obj']
+        return obj
+
+    def iter_asset_objs(self):
+        """
+        Iterate through base + auxiliary dicts that have file paths
+        """
+        img = self.img
+        has_base_image = img.get('file_name', None) is not None
+        if has_base_image:
+            obj = ub.dict_diff(img, {'auxiliary'})
+            yield obj
+        for obj in img.get('auxiliary', []):
+            yield obj

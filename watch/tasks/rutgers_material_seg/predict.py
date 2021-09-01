@@ -37,6 +37,7 @@ import watch.tasks.rutgers_material_seg.utils.utils as utils
 from watch.tasks.rutgers_material_seg.models import build_model
 from watch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import SequenceDataset
 
+
 # if 0:
 #     torch.backends.cudnn.enabled = False
 #     torch.backends.cudnn.deterministic = True
@@ -303,8 +304,13 @@ def main(cmdline=True, **kwargs):
         random.seed(config['seed'])
         torch.set_default_dtype(torch.float32)
 
-    # TODO: make args to set the gpu robust
-    device = torch.device('cpu' if args.gpus is None else int(args.gpus))
+    from watch.utils.lightning_ext import util_device
+    devices = util_device.coerce_devices(args.gpu)
+    if len(devices) > 1:
+        raise NotImplementedError('TODO: handle multiple devices')
+    device = devices[0]
+
+    # device = torch.device('cpu' if args.gpus is None else int(args.gpus))
     # device = 0
 
     # config['device_ids'] = device_ids

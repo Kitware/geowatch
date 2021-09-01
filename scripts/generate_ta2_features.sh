@@ -32,6 +32,8 @@ RUTGERS_MATERIAL_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/rutgers_material_seg.kwcoco.jso
 DZYNE_LANDCOVER_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/landcover.kwcoco.json
 
 COMBO_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_data.kwcoco.json
+COMBO_TRAIN_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_train_data.kwcoco.json
+COMBO_VALI_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_data.kwcoco.json
 
 
 echo  "
@@ -112,6 +114,12 @@ dzyne_prediction(){
 
 
 predict_all_ta2_features(){
+    __doc__="
+    Spot check auxiliary features alignment
+
+    Example:
+        source ~/code/watch/scripts/generate_ta2_features.sh
+    "
     # Run checks
     if [ ! -d "$KWCOCO_BUNDLE_DPATH" ]; then
         echo "MISSING DIRECTORY KWCOCO_BUNDLE_DPATH=$KWCOCO_BUNDLE_DPATH"
@@ -150,5 +158,27 @@ spot_check(){
     python -m watch coco_show_auxiliary --src $RUTGERS_MATERIAL_COCO_FPATH --channels2 matseg_4
 
     python -m watch coco_show_auxiliary --src $COMBO_COCO_FPATH --channels2 matseg_4
+
+    # Ensure "Video Space" is 10 GSD
+    python -m watch.cli.coco_add_watch_fields \
+        --src $COMBO_COCO_FPATH \
+        --dst $COMBO_COCO_FPATH \
+        --target_gsd 10
+
+    kwcoco validate $COMBO_COCO_FPATH
+
+    # Split out train and validation data (TODO: add test when we can)
+    kwcoco subset --src $COMBO_COCO_FPATH \
+            --dst $COMBO_VALI_COCO_FPATH \
+            --select_videos '.name | startswith("KR_")'
+
+    kwcoco subset --src $COMBO_COCO_FPATH \
+            --dst $COMBO_TRAIN_COCO_FPATH \
+            --select_videos '.name | startswith("KR_") | not'
+
+    # Print stats
+    kwcoco stats \
+        $COMBO_TRAIN_COCO_FPATH \
+        $COMBO_VALI_COCO_FPATH 
 
 }
