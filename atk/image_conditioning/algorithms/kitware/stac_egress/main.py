@@ -21,7 +21,8 @@ class Main(Algorithm):
             stac_catalog,
             params['s3_bucket'],
             dry_run,
-            outdir=params.get('output_dir'))
+            outdir=params.get('output_dir'),
+            aws_profile=params.get('aws_profile'))
 
         cl.add_to_metadata('stac_catalog', output_stac_catalog)
         cl.add_to_metadata('s3_bucket', params['s3_bucket'])
