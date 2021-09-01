@@ -72,6 +72,8 @@ def make_predict_config(cmdline=False, **kwargs):
 
     # add the appropriate args to the parse
     # for dataset, method, and trainer
+    # Note: Adds '--test_dataset' to argparse (
+    # may want to modify behavior to only expose non-training params)
     parser = datamodule_class.add_argparse_args(parser)
     parser.set_defaults(**{'batch_size': 1})
 
