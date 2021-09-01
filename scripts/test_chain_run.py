@@ -11,7 +11,7 @@ import requests
 
 http_chars = string.ascii_letters + string.digits
 all_chars = http_chars + '`~!@#$%*()-_=+[]{}|;:,./?'
-ENV_VAR_RE = re.compile(r'^\$(\w+)$')
+ENV_VAR_RE = re.compile(r'\$(\w+)')
 
 
 def create_random_string(n=20, http_safe=False):
@@ -53,11 +53,10 @@ def list_env_replace(list_):
         elif isinstance(item, list):
             out_list.append(list_env_replace(item))
         elif isinstance(item, str):
-            m = re.match(ENV_VAR_RE, item)
-            if m is not None:
-                out_list.append(os.environ.get(m.group(1), item))
-            else:
-                out_list.append(item)
+            out_list.append(
+                re.sub(ENV_VAR_RE,
+                       lambda m: os.environ.get(m.group(1), m.group(0)),
+                       item))
         else:
             out_list.append(item)
 
@@ -72,11 +71,10 @@ def dict_env_replace(dict_):
         elif isinstance(value, list):
             out_dict[key] = list_env_replace(value)
         elif isinstance(value, str):
-            m = re.match(ENV_VAR_RE, value)
-            if m is not None:
-                out_dict[key] = os.environ.get(m.group(1), value)
-            else:
-                out_dict[key] = value
+            out_dict[key] = re.sub(
+                ENV_VAR_RE,
+                lambda m: os.environ.get(m.group(1), m.group(0)),
+                value)
         else:
             out_dict[key] = value
 

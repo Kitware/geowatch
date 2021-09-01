@@ -19,13 +19,13 @@
         ],
         "dry_run": 0,
         "max_results": 2,
-        "output_dir": "/tmp/stac_ingress"
+        "output_dir": "$CI_PROJECT_DIR/stac_ingress"
       }
     },
     {
       "name": "UMD/coregistration",
       "parameters": {
-        "output_dir": "/tmp/umd_coregistration_working"
+        "output_dir": "$CI_PROJECT_DIR/umd_coregistration_working"
       }
     },
     {
@@ -37,14 +37,14 @@
           131,
           43
         ],
-        "output_dir": "/tmp/align_crs_working"
+        "output_dir": "$CI_PROJECT_DIR/align_crs_working"
       }
     },
     {
       "name": "kitware/stac_egress",
       "parameters": {
         "s3_bucket": "s3://kitware-smart-watch-data/runs/july_delivery_ta1_chain",
-        "output_dir": "/tmp/stac_egress",
+        "output_dir": "$CI_PROJECT_DIR/stac_egress",
         "dry_run": 1
       }
     }

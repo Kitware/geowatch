@@ -19,25 +19,25 @@
         ],
         "dry_run": 0,
         "max_results": 2,
-        "output_dir": "/tmp/stac_ingress"
+        "output_dir": "$CI_PROJECT_DIR/stac_ingress"
       }
     },
     {
       "name": "kitware/stac_to_kwcoco",
       "parameters": {
-        "kwcoco": "/tmp/kwcoco_out.json"
+        "kwcoco": "$CI_PROJECT_DIR/kwcoco_out.json"
       }
     },
     {
       "name": "kitware/random_detections",
       "parameters": {
-        "output_dir": "/tmp/random_detections"
+        "output_dir": "$CI_PROJECT_DIR/random_detections"
       }
     },
     {
       "name": "kitware/kwcoco_to_geojson",
       "parameters": {
-        "output_dir": "/tmp/kwcoco_to_geojson",
+        "output_dir": "$CI_PROJECT_DIR/kwcoco_to_geojson",
         "region_id": "1"
       }
     }
