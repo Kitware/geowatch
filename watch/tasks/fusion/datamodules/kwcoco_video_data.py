@@ -812,7 +812,16 @@ class KWCocoVideoDataset(data.Dataset):
             _ = xdev.profile_now(self.sampler.load_sample)(tr)
             pad = None
             padkw = {}
-            _ = xdev.profile_now(self.sampler._load_slice)(tr, pad, padkw)
+            tr['use_experimental_loader'] = 0
+            item1 = xdev.profile_now(self.sampler._load_slice)(tr, pad, padkw)
+            item1['im'].shape
+            item1['im'].sum()
+            print(item1['im'].mean(axis=(1, 2)))
+
+            tr['use_experimental_loader'] = 1
+            item2 = xdev.profile_now(self.sampler._load_slice)(tr, pad, padkw)
+            item2['im'].shape
+            print(item2['im'].mean(axis=(1, 2)))
 
             import timerit
             ti = timerit.Timerit(10, bestof=2, verbose=2)

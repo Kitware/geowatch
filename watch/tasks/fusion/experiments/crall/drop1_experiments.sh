@@ -71,7 +71,9 @@ python -m watch.tasks.fusion.fit \
        --package_fpath=$PACKAGE_FPATH \
         --train_dataset=$TRAIN_FPATH \
          --vali_dataset=$VALI_FPATH \
-         --test_dataset=$TEST_FPATH && \
+         --test_dataset=$TEST_FPATH \
+         --num_sanity_val_steps=1
+
 python -m watch.tasks.fusion.predict \
         --config=$PRED_CONFIG_FPATH \
         --test_dataset=$TEST_FPATH \
