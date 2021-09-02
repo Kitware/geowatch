@@ -433,8 +433,17 @@ def fit_model(args=None, cmdline=False, **kwargs):
         >>> #print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
         >>> fit_model(**kwargs)
     """
+    # cv2.setNumThreads(0)
+
     from watch.tasks.fusion import utils
     modules = make_lightning_modules(cmdline=cmdline, **kwargs)
+
+    import netharn as nh
+    nh.api.configure_hacks(
+        workers=modules['args'].num_workers,
+        sharing_strategy='default',
+    )
+
     # args = modules['args']
     trainer = modules['trainer']
     datamodule = modules['datamodule']
