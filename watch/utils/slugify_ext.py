@@ -143,21 +143,21 @@ def slugify(text, entities=True, decimal=True, hexadecimal=True, max_length=0, w
     :param replacements (iterable): list of replacement rules e.g. [['|', 'or'], ['%', 'percent']]
     :return (str):
 
-    Example:
-        >>> from watch.utils.slugify_ext import slugify  # NOQA
-        >>> import ubelt as ub
-        >>> text = ub.cmd('diceware -n 12')['out'].strip()
-        >>> print('text = {!r}'.format(text))
-        >>> slug = slugify(text, max_length=10, lowercase=0, trunc_loc=1.0)
-        >>> print('slug = {!r}'.format(slug))
-        >>> slug = slugify(text, max_length=10, lowercase=0, trunc_loc=0.8)
-        >>> print('slug = {!r}'.format(slug))
-        >>> slug = slugify(text, max_length=10, lowercase=0, trunc_loc=0.5)
-        >>> print('slug = {!r}'.format(slug))
-        >>> slug = slugify(text, max_length=10, lowercase=0, trunc_loc=0.2)
-        >>> print('slug = {!r}'.format(slug))
-        >>> slug = slugify(text, max_length=10, lowercase=0, trunc_loc=0.0)
-        >>> print('slug = {!r}'.format(slug))
+    # Example:
+    #     >>> from watch.utils.slugify_ext import slugify  # NOQA
+    #     >>> import ubelt as ub
+    #     >>> text = ub.cmd('diceware -n 12')['out'].strip()
+    #     >>> print('text = {!r}'.format(text))
+    #     >>> slug = slugify(text, max_length=10, lowercase=0, trunc_loc=1.0)
+    #     >>> print('slug = {!r}'.format(slug))
+    #     >>> slug = slugify(text, max_length=10, lowercase=0, trunc_loc=0.8)
+    #     >>> print('slug = {!r}'.format(slug))
+    #     >>> slug = slugify(text, max_length=10, lowercase=0, trunc_loc=0.5)
+    #     >>> print('slug = {!r}'.format(slug))
+    #     >>> slug = slugify(text, max_length=10, lowercase=0, trunc_loc=0.2)
+    #     >>> print('slug = {!r}'.format(slug))
+    #     >>> slug = slugify(text, max_length=10, lowercase=0, trunc_loc=0.0)
+    #     >>> print('slug = {!r}'.format(slug))
     """
 
     # user-specific replacements
