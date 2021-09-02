@@ -755,7 +755,7 @@ class KWCocoVideoDataset(data.Dataset):
             ('hashid', self.sampler.dset._build_hashid()),
             ('channels', self.channels.__json__()),
             # ('sample_shape', self.sample_shape),
-            ('depends_version', 3),  # bump if `compute_input_stats` changes
+            ('depends_version', 4),  # bump if `compute_input_stats` changes
         ])
         workdir = None
         cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends)
@@ -804,10 +804,11 @@ class KWCocoVideoDataset(data.Dataset):
             >>> coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/combo_data.kwcoco.json')
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
-            >>> sample_shape = (2, 128, 128)
+            >>> sample_shape = (3, 96, 96)
             >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=None)
             >>> item = self[0]
-            >>> self.compute_input_stats()
+            >>> #self.compute_input_stats(num=10)
+            >>> self.compute_input_stats(num=1000, num_workers=4, batch_size=1)
 
         Ignore:
             _ = xdev.profile_now(self.__getitem__)(0)
@@ -859,7 +860,13 @@ class KWCocoVideoDataset(data.Dataset):
             for item in batch_items:
                 for frame_item in item['frames']:
                     for mode_code, mode_val in frame_item['modes'].items():
-                        channel_stats[mode_code].update(mode_val.numpy())
+
+                        val = mode_val.numpy()
+                        flags = np.isfinite(val)
+                        if not np.all(flags):
+                            # Hack it:
+                            val[~flags] = 0
+                        channel_stats[mode_code].update(val)
 
         input_stats = {}
         for key, running in channel_stats.items():
