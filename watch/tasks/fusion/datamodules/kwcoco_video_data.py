@@ -866,7 +866,7 @@ class KWCocoVideoDataset(data.Dataset):
                         if not np.all(flags):
                             # Hack it:
                             val[~flags] = 0
-                        channel_stats[mode_code].update(val)
+                        channel_stats[mode_code].update(val.astype(np.float64))
 
         input_stats = {}
         for key, running in channel_stats.items():
