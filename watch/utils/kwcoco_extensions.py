@@ -13,6 +13,7 @@ import kwimage
 
 import numpy as np
 from os.path import join
+import numbers
 
 from kwimage.transform import Affine
 
@@ -41,6 +42,7 @@ def populate_watch_fields(dset, target_gsd=10.0, overwrite=False, default_gsd=No
             GSD'
 
     Ignore:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from watch.utils.kwcoco_extensions import *  # NOQA
         >>> import kwcoco
         >>> # root_dpath = ub.expandpath('~/data/dvc-repos/smart_watch_dvc/extern/onera_2018')
@@ -61,7 +63,7 @@ def populate_watch_fields(dset, target_gsd=10.0, overwrite=False, default_gsd=No
         >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
         >>> print('dset = {!r}'.format(dset))
         >>> target_gsd = 13.0
-        >>> populate_watch_fields(dset, target_gsd)
+        >>> populate_watch_fields(dset, target_gsd, default_gsd=1)
         >>> print('dset.index.imgs[1] = ' + ub.repr2(dset.index.imgs[1], nl=2))
         >>> print('dset.index.videos = {}'.format(ub.repr2(dset.index.videos, nl=1)))
 
@@ -69,7 +71,7 @@ def populate_watch_fields(dset, target_gsd=10.0, overwrite=False, default_gsd=No
         >>> dset = kwcoco.CocoDataset.demo('vidshapes8')
         >>> print('dset = {!r}'.format(dset))
         >>> target_gsd = 13.0
-        >>> populate_watch_fields(dset, target_gsd)
+        >>> populate_watch_fields(dset, target_gsd, default_gsd=1)
         >>> print('dset.index.imgs[1] = ' + ub.repr2(dset.index.imgs[1], nl=2))
         >>> print('dset.index.videos = {}'.format(ub.repr2(dset.index.videos, nl=1)))
     """
@@ -163,7 +165,6 @@ def coco_populate_geo_video_stats(dset, vidid, target_gsd='max-resolution'):
     min_gsd = min_example['approx_meter_gsd']
 
     # TODO: coerce datetime via kwcoco API
-    import numbers
     if target_gsd == 'max-resolution':
         target_gsd_ = min_gsd
     elif target_gsd == 'min-resolution':
@@ -320,10 +321,11 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
 
                 approx_meter_gsd = info['approx_meter_gsd']
             except Exception:
-                errors.append('no_crs_info')
                 if default_gsd is not None:
                     obj['approx_meter_gsd'] = default_gsd
                     obj['warp_to_wld'] = Affine.eye().__json__()
+                else:
+                    errors.append('no_crs_info')
             else:
                 obj['approx_meter_gsd'] = approx_meter_gsd
                 obj['warp_to_wld'] = Affine.coerce(obj_to_wld).__json__()
@@ -776,6 +778,7 @@ class CocoImage(ub.NiceRepr):
     def __nice__(self):
         """
         Example:
+            >>> import kwcoco
             >>> from watch.utils.kwcoco_extensions import *  # NOQA
             >>> with ub.CaptureStdout() as cap:
             ...     dset = kwcoco.CocoDataset.demo('shapes8')
@@ -920,7 +923,9 @@ class CocoImage(ub.NiceRepr):
         img = self.img
         has_base_image = img.get('file_name', None) is not None
         if has_base_image:
-            obj = ub.dict_diff(img, {'auxiliary'})
+            obj = img
+            # cant remove auxiliary otherwise inplace modification doesnt work
+            # obj = ub.dict_diff(img, {'auxiliary'})
             yield obj
         for obj in img.get('auxiliary', []):
             yield obj
