@@ -626,7 +626,7 @@ class KWCocoVideoDataset(data.Dataset):
         raw_frame_list = sample['im']
 
         # TODO: use this
-        nodata_mask = np.isnan(raw_frame_list)
+        nodata_mask = np.isnan(raw_frame_list)  # NOQA
         raw_frame_list = np.nan_to_num(raw_frame_list)
 
         raw_det_list = sample['annots']['frame_dets']

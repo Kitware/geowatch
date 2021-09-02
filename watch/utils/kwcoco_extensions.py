@@ -22,16 +22,23 @@ except Exception:
     profile = ub.identity
 
 
-def populate_watch_fields(dset, target_gsd=10.0, overwrite=False):
+def populate_watch_fields(dset, target_gsd=10.0, overwrite=False, default_gsd=None):
     """
     Aggregate populate function for fields useful to WATCH.
 
     Args:
         dset (Dataset): dataset to work with
+
         target_gsd (float): target gsd in meters
-        overwrite (bool | List[str]): if True or False overwrites everything or
-            nothing. Otherwise it can be a list of strings indicating what is
+
+        overwrite (bool | List[str]):
+            if True or False overwrites everything or nothing. Otherwise it can
+            be a list of strings indicating what is
             overwritten. Valid keys are warp, band, and channels.
+
+        default_gsd (None | float):
+            if specified, assumed any images without geo-metadata have this
+            GSD'
 
     Ignore:
         >>> from watch.utils.kwcoco_extensions import *  # NOQA
@@ -70,7 +77,8 @@ def populate_watch_fields(dset, target_gsd=10.0, overwrite=False):
     dset.conform(pycocotools_info=False)
 
     for gid in ub.ProgIter(dset.index.imgs.keys(), total=len(dset.index.imgs), desc='populate imgs'):
-        coco_populate_geo_img_heuristics(dset, gid, overwrite=overwrite)
+        coco_populate_geo_img_heuristics(dset, gid, overwrite=overwrite,
+                                         default_gsd=default_gsd)
 
     for vidid in ub.ProgIter(dset.index.videos.keys(), total=len(dset.index.videos), desc='populate videos'):
         coco_populate_geo_video_stats(dset, vidid, target_gsd=target_gsd)
@@ -110,6 +118,12 @@ def coco_populate_geo_video_stats(dset, vidid, target_gsd='max-resolution'):
             # attribute
             aux_chosen = coco_img.primary_asset(requires=[
                 'warp_to_wld', 'approx_meter_gsd'])
+            if aux_chosen is None:
+                raise Exception(
+                    'Image has no warp_to_wld and approx_meter gsd. '
+                    'The image may not have associated geo metadata.'
+                )
+
             wld_from_aux = Affine.coerce(aux_chosen.get('warp_to_wld', None))
             img_from_aux = Affine.coerce(aux_chosen['warp_aux_to_img'])
             aux_from_img = img_from_aux.inv()
@@ -202,7 +216,8 @@ def coco_populate_geo_video_stats(dset, vidid, target_gsd='max-resolution'):
         img['warp_img_to_vid'] = img_to_vid.concise()
 
 
-def coco_populate_geo_img_heuristics(dset, gid, overwrite=False, **kw):
+def coco_populate_geo_img_heuristics(dset, gid, overwrite=False,
+                                     default_gsd=None, **kw):
     """
     Note: this will not overwrite existing channel info unless specified
 
@@ -227,7 +242,8 @@ def coco_populate_geo_img_heuristics(dset, gid, overwrite=False, **kw):
     # to determine their geo-properties.
     asset_errors = []
     for obj in asset_objs:
-        errors = _populate_canvas_obj(bundle_dpath, obj, overwrite=overwrite)
+        errors = _populate_canvas_obj(bundle_dpath, obj, overwrite=overwrite,
+                                      default_gsd=default_gsd)
         asset_errors.append(errors)
 
     if all(asset_errors):
@@ -236,7 +252,8 @@ def coco_populate_geo_img_heuristics(dset, gid, overwrite=False, **kw):
 
 
 @profile
-def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False):
+def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
+                         default_gsd=None):
     """
     obj can be an img or aux
     """
@@ -298,14 +315,15 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False):
                 if with_wgs:
                     obj.update({
                         'wgs84_to_wld': info['wgs84_to_wld'],
-                        # 'wld_to_pxl': info['wld_to_pxl'],
+                        'wld_to_pxl': info['wld_to_pxl'],
                     })
 
                 approx_meter_gsd = info['approx_meter_gsd']
             except Exception:
                 errors.append('no_crs_info')
-                # obj_to_wld = Affine.eye()
-                # approx_meter_gsd = 1.0
+                if default_gsd is not None:
+                    obj['approx_meter_gsd'] = default_gsd
+                    obj['warp_to_wld'] = Affine.eye().__json__()
             else:
                 obj['approx_meter_gsd'] = approx_meter_gsd
                 obj['warp_to_wld'] = Affine.coerce(obj_to_wld).__json__()
@@ -592,7 +610,7 @@ def _recompute_auxiliary_transforms(img):
     img.update(ub.dict_isect(base, {
         'utm_corners', 'wld_crs_info', 'utm_crs_info',
         'width', 'height', 'wgs84_to_wld',
-        # 'wld_to_pxl',
+        'wld_to_pxl',
     }))
     for aux in auxiliary:
         warp_aux_to_wld = kwimage.Affine.coerce(aux['warp_to_wld'])
@@ -886,6 +904,9 @@ class CocoImage(ub.NiceRepr):
                     'obj': obj,
                 })
 
+        if len(candidates) == 0:
+            return None
+
         idx = ub.argmin(
             candidates, key=lambda val: (val['fro_dist'], -val['area'])
         )
@@ -929,7 +950,9 @@ class CocoImage(ub.NiceRepr):
             - [ ] TODO: add nans to bands that don't exist or throw an error
 
         Example:
+            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
             >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+            >>> import kwcoco
             >>> from os.path import join
             >>> import os
             >>> import pathlib

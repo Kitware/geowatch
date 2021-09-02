@@ -5,7 +5,7 @@ Fusion prediction script.
 TODO:
     - [ ] Prediction caching?
 """
-import torch
+import torch  # NOQA
 import pathlib
 import ubelt as ub
 from os.path import join
@@ -199,7 +199,7 @@ def predict(cmdline=False, **kwargs):
     result_fpath.parent.mkdir(parents=True, exist_ok=True)
 
     from watch.utils.lightning_ext import util_device
-    devices = util_device.coerce_devices(args.gpu)
+    devices = util_device.coerce_devices(args.gpus)
     if len(devices) > 1:
         raise NotImplementedError('TODO: handle multiple devices')
     device = devices[0]

@@ -144,8 +144,7 @@ def slugify(text, entities=True, decimal=True, hexadecimal=True, max_length=0, w
     :return (str):
 
     Example:
-        >>> from watch.utils.slugify_ext import *  # NOQA
-        >>> from watch.utils.slugify_ext import smart_truncate, slugify, re, unicodedata, types, sys, name2codepoint, name2codepoint, unidecode, unidecode
+        >>> from watch.utils.slugify_ext import slugify  # NOQA
         >>> import ubelt as ub
         >>> text = ub.cmd('diceware -n 12')['out'].strip()
         >>> print('text = {!r}'.format(text))
