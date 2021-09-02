@@ -5,18 +5,18 @@ https://pypi.org/project/python-slugify/1.2.2/
 """
 import re
 import unicodedata
-import types
+# import types
 import sys
 
-try:
-    from htmlentitydefs import name2codepoint
-    _unicode = unicode
-    _unicode_type = types.UnicodeType
-except ImportError:
-    from html.entities import name2codepoint
-    _unicode = str
-    _unicode_type = str
-    unichr = chr
+# try:
+#     from htmlentitydefs import name2codepoint
+#     _unicode = unicode  # NOQA
+#     _unicode_type = types.UnicodeType
+# except ImportError:
+from html.entities import name2codepoint
+_unicode = str
+_unicode_type = str
+unichr = chr
 
 try:
     import text_unidecode as unidecode
@@ -119,7 +119,7 @@ def smart_truncate(string, max_length=0, word_boundary=False, separator=' ', sav
     #             if save_order:
     #                 break
 
-    if not truncated: # pragma: no cover
+    if not truncated:  # pragma: no cover
         truncated = _trunc_op(string, max_length, trunc_loc)
     return truncated.strip(separator)
 

@@ -27,6 +27,7 @@ def coerce_devices(gpus, auto_select_gpus=False):
         List[torch.device]
 
     Example:
+        >>> from watch.utils.lightning_ext import util_device
         >>> util_device.coerce_devices('cpu')
         >>> util_device.coerce_devices(None)
         >>> # xdoctest: +SKIP
