@@ -305,7 +305,7 @@ def main(cmdline=True, **kwargs):
         torch.set_default_dtype(torch.float32)
 
     from watch.utils.lightning_ext import util_device
-    devices = util_device.coerce_devices(args.gpu)
+    devices = util_device.coerce_devices(args.gpus)
     if len(devices) > 1:
         raise NotImplementedError('TODO: handle multiple devices')
     device = devices[0]
