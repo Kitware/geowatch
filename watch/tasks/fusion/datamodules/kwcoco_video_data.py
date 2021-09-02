@@ -856,17 +856,31 @@ class KWCocoVideoDataset(data.Dataset):
         channel_stats = {key: kwarray.RunningStats()
                          for key in self.channels.keys()}
 
-        for batch_items in ub.ProgIter(loader, desc='estimate mean/std'):
+        timer = ub.Timer().tic()
+        timer.first = 1
+        prog = ub.ProgIter(loader, desc='estimate mean/std')
+        for batch_items in prog:
             for item in batch_items:
                 for frame_item in item['frames']:
                     for mode_code, mode_val in frame_item['modes'].items():
-
+                        running = channel_stats[mode_code]
                         val = mode_val.numpy()
                         flags = np.isfinite(val)
                         if not np.all(flags):
                             # Hack it:
                             val[~flags] = 0
-                        channel_stats[mode_code].update(val.astype(np.float64))
+                        running.update(val.astype(np.float64))
+
+            for key, running in channel_stats.items():
+                perchan_stats = running.summarize(axis=(1, 2))
+
+            if timer.first or timer.toc() > 30:
+                curr = ub.dict_isect(running.summarize(keepdims=False), {'mean', 'std', 'max', 'min'})
+                curr = ub.map_vals(float, curr)
+                text = ub.repr2(curr, compact=1, precision=1, nl=0)
+                prog.set_postfix_str(text)
+                timer.first = 0
+                timer.tic()
 
         input_stats = {}
         for key, running in channel_stats.items():
