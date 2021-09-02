@@ -442,16 +442,20 @@ def fit_model(args=None, cmdline=False, **kwargs):
     print(ub.repr2(utils.model_json(model, max_depth=1), nl=-1, sort=0))
 
     # prime the model, incase it has a lazy layer
-    print('Loading one batch for lazy init')
-    batch = next(iter(datamodule.train_dataloader()))
 
-    print('Process one batch for lazy init')
-    # batch_shapes = ub.map_vals(lambda x: x.shape, batch)
-    # print('batch_shapes = {}'.format(ub.repr2(batch_shapes, nl=1)))
-    # result = model(batch["images"][[0], ...].float())
-    import torch
-    with torch.set_grad_enabled(False):
-        model.forward_step(batch)
+    NEED_LAZY_INIT = 0
+
+    if NEED_LAZY_INIT:
+        print('Loading one batch for lazy init')
+        batch = next(iter(datamodule.train_dataloader()))
+
+        print('Process one batch for lazy init')
+        # batch_shapes = ub.map_vals(lambda x: x.shape, batch)
+        # print('batch_shapes = {}'.format(ub.repr2(batch_shapes, nl=1)))
+        # result = model(batch["images"][[0], ...].float())
+        import torch
+        with torch.set_grad_enabled(False):
+            model.forward_step(batch)
 
     print('Tune if requested')
     # if requested, tune model with lightning default tuners
