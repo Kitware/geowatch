@@ -801,7 +801,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> import kwcoco
             >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
             >>> dvc_dpath = os.environ.get('DVC_DPATH', _default)
-            >>> coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/combo_data.kwcoco.json')
+            >>> coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/combo_train_data.kwcoco.json')
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (3, 96, 96)
@@ -809,6 +809,8 @@ class KWCocoVideoDataset(data.Dataset):
             >>> item = self[0]
             >>> #self.compute_input_stats(num=10)
             >>> self.compute_input_stats(num=1000, num_workers=4, batch_size=1)
+
+            channels = 'blue|green|red|nir|inv_sort1|inv_sort2|inv_sort3|inv_sort4|inv_sort5|inv_sort6|inv_sort7|inv_sort8|inv_augment1|inv_augment2|inv_augment3|inv_augment4|inv_augment5|inv_augment6|inv_augment7|inv_augment8|inv_overlap1|inv_overlap2|inv_overlap3|inv_overlap4|inv_overlap5|inv_overlap6|inv_overlap7|inv_overlap8|inv_shared1|inv_shared2|inv_shared3|inv_shared4|inv_shared5|inv_shared6|inv_shared7|inv_shared8|matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7|matseg_8|matseg_9|matseg_10|matseg_11|matseg_12|matseg_13|matseg_14|matseg_15|matseg_16|matseg_17|matseg_18|matseg_19|rice_field|cropland|water|inland_water|river_or_stream|sebkha|snow_or_ice_field|bare_ground|sand_dune|built_up|grassland|brush|forest|wetland|road'
 
         Ignore:
             _ = xdev.profile_now(self.__getitem__)(0)
@@ -874,7 +876,7 @@ class KWCocoVideoDataset(data.Dataset):
             for key, running in channel_stats.items():
                 perchan_stats = running.summarize(axis=(1, 2))
 
-            if timer.first or timer.toc() > 30:
+            if timer.first or timer.toc() > 5:
                 curr = ub.dict_isect(running.summarize(keepdims=False), {'mean', 'std', 'max', 'min'})
                 curr = ub.map_vals(float, curr)
                 text = ub.repr2(curr, compact=1, precision=1, nl=0)
