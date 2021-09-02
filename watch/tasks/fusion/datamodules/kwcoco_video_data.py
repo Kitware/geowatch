@@ -602,7 +602,7 @@ class KWCocoVideoDataset(data.Dataset):
         tr['use_experimental_loader'] = 1
         # collect sample
         sampler = self.sampler
-        sample = sampler.load_sample(tr)
+        sample = sampler.load_sample(tr, padkw={'constant_values': np.nan})
 
         if 0:
             # debug
@@ -624,6 +624,11 @@ class KWCocoVideoDataset(data.Dataset):
 
         # Access the sampled image and annotation data
         raw_frame_list = sample['im']
+
+        # TODO: use this
+        nodata_mask = np.isnan(raw_frame_list)  # NOQA
+        raw_frame_list = np.nan_to_num(raw_frame_list)
+
         raw_det_list = sample['annots']['frame_dets']
         raw_gids = sample['tr']['gids']
 
@@ -750,7 +755,7 @@ class KWCocoVideoDataset(data.Dataset):
             ('hashid', self.sampler.dset._build_hashid()),
             ('channels', self.channels.__json__()),
             # ('sample_shape', self.sample_shape),
-            ('depends_version', 3),  # bump if `compute_input_stats` changes
+            ('depends_version', 4),  # bump if `compute_input_stats` changes
         ])
         workdir = None
         cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends)
@@ -796,14 +801,51 @@ class KWCocoVideoDataset(data.Dataset):
             >>> import kwcoco
             >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
             >>> dvc_dpath = os.environ.get('DVC_DPATH', _default)
-            >>> coco_fpath = join(dvc_dpath, 'drop1_S2_aligned_c1/data.kwcoco.json')
+            >>> coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/combo_train_data.kwcoco.json')
+            >>> coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/rutgers_material_seg.kwcoco.json')
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
-            >>> sample_shape = (2, 128, 128)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=None)
-            >>> self.compute_input_stats()
+            >>> sample_shape = (3, 96, 96)
+            >>> #channels = 'blue|green|red|nir|inv_sort1|inv_sort2|inv_sort3|inv_sort4|inv_sort5|inv_sort6|inv_sort7|inv_sort8|inv_augment1|inv_augment2|inv_augment3|inv_augment4|inv_augment5|inv_augment6|inv_augment7|inv_augment8|inv_overlap1|inv_overlap2|inv_overlap3|inv_overlap4|inv_overlap5|inv_overlap6|inv_overlap7|inv_overlap8|inv_shared1|inv_shared2|inv_shared3|inv_shared4|inv_shared5|inv_shared6|inv_shared7|inv_shared8|matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7|matseg_8|matseg_9|matseg_10|matseg_11|matseg_12|matseg_13|matseg_14|matseg_15|matseg_16|matseg_17|matseg_18|matseg_19|rice_field|cropland|water|inland_water|river_or_stream|sebkha|snow_or_ice_field|bare_ground|sand_dune|built_up|grassland|brush|forest|wetland|road'
+            >>> channels = 'rice_field|cropland|water|inland_water|river_or_stream|sebkha|snow_or_ice_field|bare_ground|sand_dune|built_up|grassland|brush|forest|wetland|road'
+            >>> channels = 'matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7|matseg_8|matseg_9|matseg_10|matseg_11|matseg_12|matseg_13|matseg_14|matseg_15|matseg_16|matseg_17|matseg_18|matseg_19'
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels)
+            >>> item = self[0]
+            >>> #self.compute_input_stats(num=10)
+            >>> self.compute_input_stats(num=1000, num_workers=4, batch_size=1)
+
+
+        Ignore:
+            _ = xdev.profile_now(self.__getitem__)(0)
+            _ = xdev.profile_now(self.compute_input_stats)(num=10, num_workers=4, batch_size=1)
+            tr = self.sample_grid[0]
+            tr['channels'] = self.channels
+            _ = xdev.profile_now(self.sampler.load_sample)(tr)
+            pad = None
+            padkw = {}
+            tr['use_experimental_loader'] = 0
+            item1 = xdev.profile_now(self.sampler._load_slice)(tr, pad, padkw)
+            item1['im'].shape
+            item1['im'].sum()
+            print(item1['im'].mean(axis=(1, 2)))
+
+            tr['use_experimental_loader'] = 1
+            item2 = xdev.profile_now(self.sampler._load_slice)(tr, pad, padkw)
+            item2['im'].shape
+            print(item2['im'].mean(axis=(1, 2)))
+
+            import timerit
+            ti = timerit.Timerit(10, bestof=2, verbose=2)
+            for timer in ti.reset('time'):
+                with timer:
+                    tr['use_experimental_loader'] = 0
+                    (self.sampler._load_slice)(tr, pad, padkw)
+
+            for timer in ti.reset('time'):
+                with timer:
+                    tr['use_experimental_loader'] = 1
+                    (self.sampler._load_slice)(tr, pad, padkw)
         """
-        num = None
         num = num if isinstance(num, int) and num is not True else 1000
         stats_idxs = kwarray.shuffle(np.arange(len(self)), rng=0)[0:min(num, len(self))]
         stats_subset = torch.utils.data.Subset(self, stats_idxs)
@@ -819,11 +861,31 @@ class KWCocoVideoDataset(data.Dataset):
         channel_stats = {key: kwarray.RunningStats()
                          for key in self.channels.keys()}
 
-        for batch_items in ub.ProgIter(loader, desc='estimate mean/std'):
+        timer = ub.Timer().tic()
+        timer.first = 1
+        prog = ub.ProgIter(loader, desc='estimate mean/std')
+        for batch_items in prog:
             for item in batch_items:
                 for frame_item in item['frames']:
                     for mode_code, mode_val in frame_item['modes'].items():
-                        channel_stats[mode_code].update(mode_val.numpy())
+                        running = channel_stats[mode_code]
+                        val = mode_val.numpy()
+                        flags = np.isfinite(val)
+                        if not np.all(flags):
+                            # Hack it:
+                            val[~flags] = 0
+                        running.update(val.astype(np.float64))
+
+            for key, running in channel_stats.items():
+                perchan_stats = running.summarize(axis=(1, 2))
+
+            if timer.first or timer.toc() > 5:
+                curr = ub.dict_isect(running.summarize(keepdims=False), {'mean', 'std', 'max', 'min'})
+                curr = ub.map_vals(float, curr)
+                text = ub.repr2(curr, compact=1, precision=1, nl=0)
+                prog.set_postfix_str(text)
+                timer.first = 0
+                timer.tic()
 
         input_stats = {}
         for key, running in channel_stats.items():

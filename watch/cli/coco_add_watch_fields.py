@@ -27,6 +27,8 @@ class AddWatchFieldsConfig(scfg.Config):
         'target_gsd': scfg.Value(10.0, help='compute transforms for a target gsd'),
 
         'overwrite': scfg.Value(False, help='if True overwrites introspectable fields'),
+
+        'default_gsd': scfg.Value(None, help='if specified, assumed any images without geo-metadata have this GSD')
     }
 
 
@@ -67,7 +69,7 @@ def main(**kwargs):
         >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
         >>> print('dset = {!r}'.format(dset))
         >>> target_gsd = 13.0
-        >>> populate_watch_fields(dset, target_gsd)
+        >>> populate_watch_fields(dset, target_gsd, default_gsd=1)
         >>> print('dset.index.imgs[1] = ' + ub.repr2(dset.index.imgs[1], nl=2))
         >>> print('dset.index.videos = {}'.format(ub.repr2(dset.index.videos, nl=1)))
 
@@ -89,13 +91,15 @@ def main(**kwargs):
     print('start populate')
     target_gsd = config['target_gsd']
     overwrite = config['overwrite']
-    populate_watch_fields(dset, target_gsd=target_gsd, overwrite=overwrite)
+    default_gsd = config['default_gsd']
+    populate_watch_fields(dset, target_gsd=target_gsd, overwrite=overwrite,
+                          default_gsd=default_gsd)
     print('dset.index.videos = {}'.format(ub.repr2(dset.index.videos, nl=2, precision=4)))
 
     for gid, img in dset.index.imgs.items():
         offset =  np.asarray(kwimage.Affine.coerce(img['warp_img_to_vid']))[:, 2]
         if np.any(np.abs(offset) > 100):
-            print('img = {}'.format(ub.repr2(img, nl=1)))
+            print('img = {}'.format(ub.repr2(img, nl=-1)))
             print('warning there is a large offset')
             print('offset = {!r}'.format(offset))
             print('{}, {}'.format(gid, img['warp_img_to_vid']))

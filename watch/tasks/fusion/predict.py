@@ -5,7 +5,7 @@ Fusion prediction script.
 TODO:
     - [ ] Prediction caching?
 """
-import torch
+import torch  # NOQA
 import pathlib
 import ubelt as ub
 from os.path import join
@@ -72,6 +72,8 @@ def make_predict_config(cmdline=False, **kwargs):
 
     # add the appropriate args to the parse
     # for dataset, method, and trainer
+    # Note: Adds '--test_dataset' to argparse (
+    # may want to modify behavior to only expose non-training params)
     parser = datamodule_class.add_argparse_args(parser)
     parser.set_defaults(**{'batch_size': 1})
 
@@ -196,16 +198,11 @@ def predict(cmdline=False, **kwargs):
 
     result_fpath.parent.mkdir(parents=True, exist_ok=True)
 
-    # todo: use lightning device magic
-    try:
-        if int(args.gpus) == 0:
-            device = torch.device('cpu')
-        elif int(args.gpus) == 1:
-            device = torch.device(0)
-        else:
-            raise ValueError('only 1 gpu for now')
-    except Exception:
-        device = torch.device('cpu')
+    from watch.utils.lightning_ext import util_device
+    devices = util_device.coerce_devices(args.gpus)
+    if len(devices) > 1:
+        raise NotImplementedError('TODO: handle multiple devices')
+    device = devices[0]
 
     print('Predict on device = {!r}'.format(device))
     method = method.to(device)

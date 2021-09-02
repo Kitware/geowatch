@@ -2,12 +2,10 @@ import kwarray
 import kwimage
 import numpy as np
 import torch
-# import matplotlib.pyplot as plt
-# from kwcoco.channel_spec import ChannelSpec  # NOQA
+import ubelt as ub
 from functools import partial
 from netharn.data.batch_samplers import PatchedBatchSampler
 from netharn.data.data_containers import ItemContainer
-from netharn.data.data_containers import BatchContainer
 from netharn.data.data_containers import container_collate
 from netharn.data.batch_samplers import PatchedRandomSampler
 from netharn.data.batch_samplers import SubsetSampler
@@ -15,8 +13,35 @@ import random
 
 
 class SequenceDataset(torch.utils.data.Dataset):
+    """
+    Example:
+        >>> from watch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import *  # NOQA
+        >>> import ndsampler
+        >>> sampler = ndsampler.CocoSampler.demo('vidshapes8')
+        >>> channels = 'r|g|b'
+        >>> window_dims = (2, 128, 128)
+        >>> self = SequenceDataset(sampler, window_dims=window_dims, training=False)
+        >>> import itertools as it
+        >>> index_iter = it.count()
+        >>> index = next(index_iter)
+        >>> item = self[index]
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> # xdoctest: +REQUIRES(module:kwplot)
+        >>> import kwplot
+        >>> import einops
+        >>> kwplot.autompl()
+        >>> frames = item['inputs']['im'].data
+        >>> frame_masks = item['label']['class_masks'].data
+        >>> frames_ = einops.rearrange(frames, 'c t h w -> t c h w').numpy()
+        >>> pnum_ = kwplot.PlotNums(nSubplots=len(frames_))
+        >>> for frame, mask in zip(frames_, frame_masks):
+        >>>     kwplot.imshow(frame, pnum=pnum_())
+        >>>     heatmap = kwimage.Heatmap(class_idx=mask, classes=self.sampler.classes)
+        >>>     heatmap.draw(with_alpha=0.3)
+
+    """
     def __init__(self, sampler, window_dims, input_dims=None, channels=None,
-                 rng=None):
+                 rng=None, training=True):
         super().__init__()
         if input_dims is None:
             input_dims = window_dims[-2:]
@@ -34,35 +59,47 @@ class SequenceDataset(torch.utils.data.Dataset):
         }
         # print(sample_grid_spec)
         self.sample_grid = sampler.new_sample_grid(**sample_grid_spec)
-        # print(len(self.sample_grid['positives']))
+        self.training = training
+
+        if self.training:
+            self.chosen_samples = self.sample_grid['positives']
+        else:
+            # In inference we need to load all positive and negative regions
+            self.chosen_samples = (
+                self.sample_grid['positives'] +
+                self.sample_grid['negatives']
+            )
+            # Reorganize samples so they iterate through images / videos in
+            # order
+            grouped = ub.group_items(
+                self.chosen_samples,
+                lambda x: tuple(
+                    [x['vidid']] + [gid for gid in x['gids']]
+                )
+            )
+            grouped = ub.sorted_keys(grouped)
+            self.chosen_samples = list(ub.flatten(grouped.values()))
 
     def __len__(self):
-        return len(self.sample_grid['positives'])
-        # return len(self.sample_grid['negatives'])
+        return len(self.chosen_samples)
 
     def __getitem__(self, index):
 
-        tr = self.sample_grid['positives'][index]
-
-        negative_index = random.randint(0, self.__len__() - 2)
-        # print(index)
-        # print(negative_index)
-        tr_negative = self.sample_grid['positives'][negative_index]
-
-        # tr = self.sample_grid['negatives'][index]
-        # print(tr)
-        # print(tr_negative)
-        if self.channels:
-            tr['channels'] = self.channels
-            tr_negative['channels'] = self.channels
-
         sampler = self.sampler
 
-        # import pdb
-        # pdb.set_trace()
-        # print(f"frame min: {frame.min()}, frame max: {frame.max()}")
+        tr = self.chosen_samples[index]
+        if self.channels:
+            tr['channels'] = self.channels
+
         sample = sampler.load_sample(tr, with_annots="segmentation")
-        negative_sample = sampler.load_sample(tr_negative, with_annots="segmentation")
+
+        if self.training:
+            # Only need to get a "negative" in training
+            negative_index = random.randint(0, self.__len__() - 2)
+            tr_negative = self.chosen_samples[negative_index]
+            if self.channels:
+                tr_negative['channels'] = self.channels
+            negative_sample = sampler.load_sample(tr_negative, with_annots="segmentation")
 
         # print(sample.keys())
         # print(sample['annots'].keys())
@@ -117,65 +154,64 @@ class SequenceDataset(torch.utils.data.Dataset):
             frame_masks.append(frame_mask)
             frame_ims.append(frame)
 
-        negative_raw_frame_list = negative_sample['im']
-        negative_raw_det_list = negative_sample['annots']['frame_dets']
-
-        negative_frame_ims = []
-        negative_frame_masks = []
-        for negative_raw_frame, negative_raw_dets in zip(negative_raw_frame_list, negative_raw_det_list):
-            frame = negative_raw_frame.astype(np.float32)
-            dets = negative_raw_dets
-            input_dsize = self.input_dims[-2:][::-1]
-            # Resize the sampled window to the target space for the network
-            frame, info = kwimage.imresize(frame, dsize=input_dsize,
-                                           interpolation='linear',
-                                           return_info=True)
-            # Remember to apply any transform to the dets as well
-            dets = dets.scale(info['scale'])
-            dets = dets.translate(info['offset'])
-            frame_mask = np.full(frame.shape[0:2], dtype=np.int32, fill_value=-1)
-            ann_polys = dets.data['segmentations'].to_polygon_list()
-
-            ann_aids = dets.data['aids']
-            ann_cids = dets.data['cids']
-
-            for poly, aid, cid in zip(ann_polys, ann_aids, ann_cids):
-                cidx = self.classes.id_to_idx[cid]
-                poly.fill(frame_mask, value=cidx)
-
-            # ensure channel dim is not squeezed
-            frame = kwarray.atleast_nd(frame, 3)
-
-            # fig = plt.figure()
-            # ax1 = fig.add_subplot(1,2,1)
-            # ax2 = fig.add_subplot(1,2,2)
-            # ax1.imshow(frame[:,:,:3])
-            # ax2.imshow(frame_mask)
-            # plt.show()
-
-            negative_frame_ims.append(frame)
-            negative_frame_masks.append(frame_mask)
-
         # Perpare data for torch
         frame_data = np.concatenate([f[None, ...] for f in frame_ims], axis=0)
         class_masks = np.concatenate([m[None, ...] for m in frame_masks], axis=0)
-
-        negative_frame_data = np.concatenate([f[None, ...] for f in negative_frame_ims], axis=0)
-
-        # UNUSED? FIXME?
-        negative_class_masks = np.concatenate([m[None, ...] for m in negative_frame_masks], axis=0)  # NOQA
-
         cthw_im = frame_data.transpose(3, 0, 1, 2)
-        negative_cthw_im = negative_frame_data.transpose(3, 0, 1, 2)
 
         inputs = {
             'im': ItemContainer(torch.from_numpy(cthw_im), stack=True),
-            'negative_im': ItemContainer(torch.from_numpy(negative_cthw_im), stack=True),
         }
+
         label = {
             'class_masks': ItemContainer(
                 torch.from_numpy(class_masks), stack=False, cpu_only=True),
         }
+
+        if self.training:
+            negative_raw_frame_list = negative_sample['im']
+            negative_raw_det_list = negative_sample['annots']['frame_dets']
+            negative_frame_ims = []
+            # negative_frame_masks = []
+            for negative_raw_frame, negative_raw_dets in zip(negative_raw_frame_list, negative_raw_det_list):
+                frame = negative_raw_frame.astype(np.float32)
+                # dets = negative_raw_dets
+                input_dsize = self.input_dims[-2:][::-1]
+                # Resize the sampled window to the target space for the network
+                frame, info = kwimage.imresize(frame, dsize=input_dsize,
+                                               interpolation='linear',
+                                               return_info=True)
+                # Remember to apply any transform to the dets as well
+                # dets = dets.scale(info['scale'])
+                # dets = dets.translate(info['offset'])
+                # frame_mask = np.full(frame.shape[0:2], dtype=np.int32, fill_value=-1)
+                # ann_polys = dets.data['segmentations'].to_polygon_list()
+                # ann_aids = dets.data['aids']
+                # ann_cids = dets.data['cids']
+                # for poly, aid, cid in zip(ann_polys, ann_aids, ann_cids):
+                #     cidx = self.classes.id_to_idx[cid]
+                #     poly.fill(frame_mask, value=cidx)
+
+                # ensure channel dim is not squeezed
+                frame = kwarray.atleast_nd(frame, 3)
+
+                # fig = plt.figure()
+                # ax1 = fig.add_subplot(1,2,1)
+                # ax2 = fig.add_subplot(1,2,2)
+                # ax1.imshow(frame[:,:,:3])
+                # ax2.imshow(frame_mask)
+                # plt.show()
+
+                negative_frame_ims.append(frame)
+                # negative_frame_masks.append(frame_mask)
+
+            # Prepare data for torch
+            negative_frame_data = np.concatenate([f[None, ...] for f in negative_frame_ims], axis=0)
+            negative_cthw_im = negative_frame_data.transpose(3, 0, 1, 2)
+            # UNUSED? FIXME?
+            # negative_class_masks = np.concatenate([m[None, ...] for m in negative_frame_masks], axis=0)  # NOQA
+
+            inputs['negative_im']: ItemContainer(torch.from_numpy(negative_cthw_im), stack=True)
 
         item = {
             'inputs': inputs,
@@ -187,18 +223,13 @@ class SequenceDataset(torch.utils.data.Dataset):
 
     def make_loader(self, batch_size=16, num_workers=0, shuffle=False,
                     pin_memory=True, drop_last=True, multiscale=False,
-                    balance=False, num_batches='auto', xpu=None):
+                    num_batches='auto', xpu=None):
         """
         Create a loader for this dataset with custom sampling logic and
         container collation.
         """
         if len(self) == 0:
             raise ValueError('must have some data')
-
-        if balance:
-            # Can use information in self.sample_grid to balance over
-            # categories.
-            raise NotImplementedError
 
         # The case where where replacement is not allowed
         if num_batches == 'auto':
@@ -249,31 +280,3 @@ def worker_init_fn(worker_id):
     if hasattr(self.sampler.dset, 'connect'):
         # Reconnect to the backend if we are using SQL
         self.sampler.dset.connect(readonly=True)
-
-
-def decollate_batch(batch):
-    """
-    Breakup a collated batch of BatchContainers back into ItemContainers
-    """
-    import ubelt as ub
-    walker = ub.IndexableWalker(batch)
-    decollated_dict = ub.AutoDict()
-    decollated_walker = ub.IndexableWalker(decollated_dict)
-    for path, batch_val in walker:
-        if isinstance(batch_val, BatchContainer):
-            for bx, item_val in enumerate(ub.flatten(batch_val.data)):
-                decollated_walker[[bx] + path] = ItemContainer(item_val)
-    decollated = list(decollated_dict.to_dict().values())
-    return decollated
-
-
-# def __notes__():
-#     """
-#         >>> #
-#         >>> for img in dset.imgs.values():
-#         >>>     chan = img.get('channels', None)
-#         >>>     print('img_chan = {!r}'.format(chan))
-#         >>>     for aux in img.get('auxiliary', []):
-#         >>>         chan = aux.get('channels', None)
-#         >>>         print('aux_chan = {!r}'.format(chan))
-#     """

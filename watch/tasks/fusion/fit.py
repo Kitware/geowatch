@@ -137,7 +137,7 @@ def make_fit_config(cmdline=False, **kwargs):
         description='Training script for the fused change/segmentation task',
         auto_env_var_prefix='WATCH_FUSION_FIT_',
         add_env_var_help=True,
-        formatter_class='raw',
+        formatter_class='defaults',
         config_file_parser_class='yaml',
         args_for_setting_config_path=['--config'],
         args_for_writing_out_config_file=['--dump'],
@@ -433,8 +433,17 @@ def fit_model(args=None, cmdline=False, **kwargs):
         >>> #print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
         >>> fit_model(**kwargs)
     """
+    # cv2.setNumThreads(0)
+
     from watch.tasks.fusion import utils
     modules = make_lightning_modules(cmdline=cmdline, **kwargs)
+
+    import netharn as nh
+    nh.api.configure_hacks(
+        workers=modules['args'].num_workers,
+        sharing_strategy='default',
+    )
+
     # args = modules['args']
     trainer = modules['trainer']
     datamodule = modules['datamodule']
@@ -442,16 +451,20 @@ def fit_model(args=None, cmdline=False, **kwargs):
     print(ub.repr2(utils.model_json(model, max_depth=1), nl=-1, sort=0))
 
     # prime the model, incase it has a lazy layer
-    print('Loading one batch for lazy init')
-    batch = next(iter(datamodule.train_dataloader()))
 
-    print('Process one batch for lazy init')
-    # batch_shapes = ub.map_vals(lambda x: x.shape, batch)
-    # print('batch_shapes = {}'.format(ub.repr2(batch_shapes, nl=1)))
-    # result = model(batch["images"][[0], ...].float())
-    import torch
-    with torch.set_grad_enabled(False):
-        model.forward_step(batch)
+    NEED_LAZY_INIT = 0
+
+    if NEED_LAZY_INIT:
+        print('Loading one batch for lazy init')
+        batch = next(iter(datamodule.train_dataloader()))
+
+        print('Process one batch for lazy init')
+        # batch_shapes = ub.map_vals(lambda x: x.shape, batch)
+        # print('batch_shapes = {}'.format(ub.repr2(batch_shapes, nl=1)))
+        # result = model(batch["images"][[0], ...].float())
+        import torch
+        with torch.set_grad_enabled(False):
+            model.forward_step(batch)
 
     print('Tune if requested')
     # if requested, tune model with lightning default tuners
