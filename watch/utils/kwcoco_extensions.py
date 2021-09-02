@@ -663,6 +663,92 @@ class CocoImage(ub.NiceRepr):
         >>> self = CocoImage(dset2.imgs[1], dset2)
         >>> print('self.channels = {}'.format(ub.repr2(self.channels, nl=1)))
         >>> self.primary_asset()
+
+
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> # Run the following tests on real watch data if DVC is available
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> import os
+        >>> import pathlib
+        >>> import kwcoco
+        >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
+        >>> dvc_dpath = pathlib.Path(os.environ.get('DVC_DPATH', _default))
+        >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/combo_data.kwcoco.json'
+        >>> #
+        >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+        >>> self = CocoImage(coco_dset.dataset['images'][0], coco_dset)
+        >>> print('self = {!r}'.format(self))
+        >>> stats = self.stats()
+        >>> print('stats = {}'.format(ub.repr2(stats, nl=1)))
+
+        >>> delayed = self.delay()
+        >>> print('delayed = {!r}'.format(delayed))
+
+        delayed.components[-1]
+        delayed.components[-2]
+
+        # delayed.matseg_11
+        delayed.take_channels('matseg_1')
+        big = delayed.take_channels("coastal|blue|green|red|nir|swir16|cirrus|inv_sort1|inv_sort2|inv_sort3|inv_sort4|inv_sort5|inv_sort6|inv_sort7|inv_sort8|inv_augment1|inv_augment2|inv_augment3|inv_augment4|inv_augment5|inv_augment6|inv_augment7|inv_augment8|inv_overlap1|inv_overlap2|inv_overlap3|inv_overlap4|inv_overlap5|inv_overlap6|inv_overlap7|inv_overlap8|inv_shared1|inv_shared2|inv_shared3|inv_shared4|inv_shared5|inv_shared6|inv_shared7|inv_shared8|inv_shared9|inv_shared10|inv_shared11|inv_shared12|inv_shared13|inv_shared14|inv_shared15|inv_shared16|inv_shared17|inv_shared18|inv_shared19|inv_shared20|inv_shared21|inv_shared22|inv_shared23|inv_shared24|inv_shared25|inv_shared26|inv_shared27|inv_shared28|inv_shared29|inv_shared30|inv_shared31|inv_shared32|inv_shared33|inv_shared34|inv_shared35|inv_shared36|inv_shared37|inv_shared38|inv_shared39|inv_shared40|inv_shared41|inv_shared42|inv_shared43|inv_shared44|inv_shared45|inv_shared46|inv_shared47|inv_shared48|inv_shared49|inv_shared50|inv_shared51|inv_shared52|inv_shared53|inv_shared54|inv_shared55|inv_shared56|inv_shared57|inv_shared58|inv_shared59|inv_shared60|inv_shared61|inv_shared62|inv_shared63|inv_shared64|matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7|matseg_8|matseg_9|matseg_10|matseg_11|matseg_12|matseg_13|matseg_14|matseg_15|matseg_16|matseg_17|matseg_18|matseg_19")
+
+        import ndsampler
+        sampler = ndsampler.CocoSampler(coco_dset)
+        sample_grid = sampler.new_sample_grid('video_detection', (3, 128, 128))
+
+        pos_grid = sample_grid['positives']
+
+        tr = pos_grid[len(pos_grid) // 2]
+        all_chan = '|'.join(ub.flatten(self.channels.parse().values()))
+        tr['channels'] = all_chan
+        tr['use_experimental_loader'] = 1
+        sample = sampler.load_sample(tr, padkw=dict(constant_values=np.nan))
+        sample['im'].shape
+
+        rng = kwarray.ensure_rng(132)
+        aff = kwimage.Affine.coerce(offset=rng.randint(-128, 128, size=2), rng=rng)
+        space_box = kwimage.Boxes.from_slice(tr['space_slice'])
+        space_box = space_box.warp(aff).quantize().astype(int)
+        tr_ = ub.dict_union(tr, {'space_slice': space_box.to_slices()[0]})
+        tr_['as_xarray'] = 1
+        sample = sampler.load_sample(tr_, padkw=dict(constant_values=np.nan))
+        im_xarray = sample['im']
+        chan_mean = im_xarray.mean(dim=['t', 'y', 'x'])
+        print(chan_mean.to_pandas().to_string())
+
+
+    import kwcoco
+    import kwarray
+    import ndsampler
+
+    # Seed random number generators
+    rng = kwarray.ensure_rng(132)
+
+    kwcoco.CocoDataset.demo('vidshapes8')
+
+    sampler = ndsampler.CocoSampler(coco_dset)
+    sample_grid = sampler.new_sample_grid('video_detection', (3, 128, 128))
+    tr = sample_grid['positives'][0]
+
+    tr_ = tr.copy()
+    aff = kwimage.Affine.coerce(offset=rng.randint(-128, 128, size=2))
+    space_box = kwimage.Boxes.from_slice(tr['space_slice']).warp(aff).quantize()
+    tr_['space_slice'] = space_box.astype(int).to_slices()[0]
+    print('tr_ = {}'.format(ub.repr2(tr_, nl=1)))
+
+
+    sample = sampler.load_sample(tr_, padkw=dict(constant_values=np.nan))
+    print(sample['im'].shape)
+
+    # Out of bounds demo (these slices DO NOT wrap around)
+    tr_['space_slice'] = (slice(-128, 0), slice(-128, 0))
+    sample = sampler.load_sample(tr_, padkw=dict(constant_values=np.nan))
+    sample['im'].shape
+
+    print(ub.repr2(sample['tr'], nl=1))
+
+
+
     """
 
     def __init__(self, img, dset=None):
@@ -683,8 +769,9 @@ class CocoImage(ub.NiceRepr):
             >>> print('self = {!r}'.format(self))
         """
         from watch.utils.slugify_ext import smart_truncate
-        stats = self.stats()
         from functools import partial
+        stats = self.stats()
+        stats = ub.map_vals(str, stats)
         stats = ub.map_vals(
             partial(smart_truncate, max_length=32, trunc_loc=0.5),
             stats)
@@ -719,7 +806,7 @@ class CocoImage(ub.NiceRepr):
         stats = {}
         for key, attrname in key_attrname:
             try:
-                stats[key] = str(getattr(self, attrname))
+                stats[key] = getattr(self, attrname)
             except Exception as ex:
                 stats[key] = repr(ex)
         return stats

@@ -602,7 +602,7 @@ class KWCocoVideoDataset(data.Dataset):
         tr['use_experimental_loader'] = 1
         # collect sample
         sampler = self.sampler
-        sample = sampler.load_sample(tr)
+        sample = sampler.load_sample(tr, padkw={'constant_values': np.nan})
 
         if 0:
             # debug
@@ -624,6 +624,11 @@ class KWCocoVideoDataset(data.Dataset):
 
         # Access the sampled image and annotation data
         raw_frame_list = sample['im']
+
+        # TODO: use this
+        nodata_mask = np.isnan(raw_frame_list)
+        raw_frame_list = np.nan_to_num(raw_frame_list)
+
         raw_det_list = sample['annots']['frame_dets']
         raw_gids = sample['tr']['gids']
 
