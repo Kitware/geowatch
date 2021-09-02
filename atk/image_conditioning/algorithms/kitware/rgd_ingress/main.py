@@ -40,10 +40,11 @@ class Main(Algorithm):
             'predicate': 'intersects',
             'acquired': (dt_min, dt_max)
         }
-        query_s2 = (client.search(**kwargs, instrumentation='S2A') +
-                    client.search(**kwargs, instrumentation='S2B'))
-        query_l7 = client.search(**kwargs, instrumentation='ETM')
-        query_l8 = client.search(**kwargs, instrumentation='OLI_TIRS')
+        query_s2 = (client.search(**kwargs, instrumentation='S2A')['results'] +
+                    client.search(**kwargs, instrumentation='S2B')['results'])
+        query_l7 = client.search(**kwargs, instrumentation='ETM')['results']
+        query_l8 = client.search(
+            **kwargs, instrumentation='OLI_TIRS')['results']
         if not params['dry_run']:
             os.makedirs(params['output_dir'], exist_ok=True)
         catalog = pystac.Catalog('RGD ingress catalog',

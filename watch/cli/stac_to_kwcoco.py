@@ -44,7 +44,7 @@ def convert(out_file, cat, ignore_dem=True):
 
     if isinstance(cat, str):
         catalog = pystac.read_file(href=cat)
-    if isinstance(cat, dict):
+    elif isinstance(cat, dict):
         catalog = pystac.Catalog.from_dict(cat)
     else:
         catalog = cat

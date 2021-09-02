@@ -27,6 +27,10 @@ def main():
                         required=False,
                         help="Output directory for STAC catalog with s3 "
                              "egress hrefs")
+    parser.add_argument("-p", "--aws_profile",
+                        type=str,
+                        required=False,
+                        help="AWS profile for AWS CLI commands")
 
     stac_egress(**vars(parser.parse_args()))
 
@@ -36,7 +40,8 @@ def main():
 def stac_egress(stac_catalog,
                 s3_bucket,
                 dry_run=False,
-                outdir=None):
+                outdir=None,
+                aws_profile=None):
     if isinstance(stac_catalog, str):
         catalog = pystac.read_file(href=stac_catalog).full_copy()
     else:
@@ -56,6 +61,15 @@ def stac_egress(stac_catalog,
         working_dir = outdir
         os.makedirs(working_dir, exist_ok=True)
 
+    if aws_profile is not None:
+        base_command =\
+          ['aws', 's3', '--profile', aws_profile, 'cp']
+    else:
+        base_command = ['aws', 's3', 'cp']
+
+    if dry_run:
+        base_command.append('--dryrun')
+
     def _item_map(stac_item):
         item_outdir = os.path.join(s3_bucket, stac_item.id)
         item_outpath = os.path.join(
@@ -65,11 +79,7 @@ def stac_egress(stac_catalog,
             asset_outpath = os.path.join(
                 item_outdir, os.path.basename(asset.href))
 
-            command = ['aws', 's3', '--profile', 'iarpa', 'cp']
-            if dry_run:
-                command.append('--dryrun')
-
-            command.extend([asset.href, asset_outpath])
+            command = base_command + [asset.href, asset_outpath]
 
             # TODO: Manually check return code / output
             subprocess.run(command, check=True)
@@ -93,11 +103,7 @@ def stac_egress(stac_catalog,
             include_self_link=True,
             dest_href=stac_item_tmp_path)
 
-        command = ['aws', 's3', '--profile', 'iarpa', 'cp']
-        if dry_run:
-            command.append('--dryrun')
-
-        command.extend([stac_item_tmp_path, item_outpath])
+        command = base_command + [stac_item_tmp_path, item_outpath]
 
         # TODO: Manually check return code / output
         subprocess.run(command, check=True)
@@ -115,11 +121,7 @@ def stac_egress(stac_catalog,
         include_self_link=True,
         dest_href=output_catalog_tmp_path)
 
-    command = ['aws', 's3', '--profile', 'iarpa', 'cp']
-    if dry_run:
-        command.append('--dryrun')
-
-    command.extend([output_catalog_tmp_path, output_catalog_path])
+    command = base_command + [output_catalog_tmp_path, output_catalog_path]
 
     # TODO: Manually check return code / output
     subprocess.run(command, check=True)

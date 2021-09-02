@@ -73,7 +73,12 @@ class Main(Algorithm):
             asset_outpath = os.path.join(
                 feature_output_dir, asset_basename)
 
-            command = ['aws', 's3', '--profile', 'iarpa', 'cp']
+            if 'aws_profile' in params:
+                command =\
+                    ['aws', 's3', '--profile', params['aws_profile'], 'cp']
+            else:
+                command = ['aws', 's3', 'cp']
+
             if params['dry_run'] == 1:
                 command.append('--dryrun')
             else:

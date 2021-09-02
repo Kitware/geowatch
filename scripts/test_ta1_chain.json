@@ -45,6 +45,7 @@
       "name": "kitware/stac_egress",
       "parameters": {
         "s3_bucket": "s3://kitware-smart-watch-data/runs/test_ta1_chain",
+        "aws_profile": "iarpa",
         "dry_run": 0
       }
     }
