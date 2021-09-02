@@ -182,3 +182,24 @@ spot_check(){
         $COMBO_VALI_COCO_FPATH 
 
 }
+
+
+split_demo(){
+    DVC_DPATH=${DVC_DPATH:-$HOME/data/dvc-repos/smart_watch_dvc}
+    KWCOCO_BUNDLE_DPATH=${KWCOCO_BUNDLE_DPATH:-$DVC_DPATH/drop1-S2-L8-aligned}
+    BASE_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json
+
+    TRAIN_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
+    VALI_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
+
+    # Split out train and validation data 
+    # (TODO: add test when we get enough data)
+    kwcoco subset --src $BASE_COCO_FPATH \
+            --dst $TRAIN_COCO_FPATH \
+            --select_videos '.name | startswith("KR_")'
+
+    kwcoco subset --src $COMBO_COCO_FPATH \
+            --dst $VALI_COCO_FPATH \
+            --select_videos '.name | startswith("KR_") | not'
+
+}
