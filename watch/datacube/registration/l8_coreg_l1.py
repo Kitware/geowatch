@@ -6,13 +6,12 @@ Created on Wed Mar 24 14:32:42 2021
 """
 
 from osgeo import gdal, osr
-import os, shutil
+import os
 import glob
 import time
 import sys
 import itertools
 import numpy as np
-import pandas as pd
 # from skimage.feature import register_translation
 from skimage.registration import phase_cross_correlation
 import scipy.ndimage
@@ -87,11 +86,11 @@ def get_gcp_for_registration(master_ds,
                                                         0., 0.)
                 res.append(s)
                 continue
-            start_time = time.time()
+            # start_time = time.time()
             # offset_pixels, error, diffphase = register_translation(master_array_window, slave_array_window, 100)
             offset_pixels, error, diffphase = phase_cross_correlation(
                 master_array_window, slave_array_window, upsample_factor=100)
-            end_time = time.time()
+            # end_time = time.time()
             #print( "Window (%s,%s) processed in %.5f sec" % (i,j,end_time-start_time))
             #          #print("\tDetected pixel offset (y, x) and error: (%.3f, %.3f) %.5f" %(offset_pixels[0], offset_pixels[1], error))
             #          #print "\tDetected pixel offset (y, x) and (error, CCmax_norm): (%.3f, %.3f) (%.5f, %.5f)" %(offset_pixels[0], offset_pixels[1], error, 1-error)
@@ -161,7 +160,6 @@ def l8_coregister(mgrs_tile, input_folder, output_folder, baseline_scene):
 
         for x in db.keys():  # x is scene id here
             print(x, db[x])
-            fname_base = os.path.basename(db[x])
             path_data = os.path.dirname(db[x])
             scene_id = x
             lc8_collection = scene_id.split('_')[5]
@@ -273,8 +271,8 @@ def l8_coregister(mgrs_tile, input_folder, output_folder, baseline_scene):
                     array = [float(x) for x in g.split(',')
                              ]  # pixel,line,X,Y,error,shift_x,shift_y
                     if ((array[4] < error_threshold) & (not np.isnan(array[4]))
-                            & (abs(array[5]) < max_shift_threshold) &
-                        (abs(array[6]) < max_shift_threshold)):
+                            & (abs(array[5]) < max_shift_threshold)
+                            & (abs(array[6]) < max_shift_threshold)):
                         # For 30 m we select origianl values since B4 is 30 m
                         output_str_30 = "-gcp %s %s %.5f %.5f %.f " % (
                             array[0] + padding_px, array[1] + padding_px,
@@ -311,8 +309,12 @@ def l8_coregister(mgrs_tile, input_folder, output_folder, baseline_scene):
                 with open(os.path.join(path_data, fname_meta)) as f_meta_in:
                     for line in f_meta_in:
                         line_update = line
-                        if (('FILE_NAME_BAND' in line) | ('FILE_NAME_QUALITY' in line) | ('METADATA_FILE_NAME' in line) |\
-                            ('FILE_NAME_METADATA_ODL' in line) | ('FILE_NAME_ANGLE_SENSOR' in line) | ('FILE_NAME_ANGLE_SOLAR' in line)):
+                        if(('FILE_NAME_BAND' in line)
+                           | ('FILE_NAME_QUALITY' in line)
+                           | ('METADATA_FILE_NAME' in line)
+                           | ('FILE_NAME_METADATA_ODL' in line)
+                           | ('FILE_NAME_ANGLE_SENSOR' in line)
+                           | ('FILE_NAME_ANGLE_SOLAR' in line)):
                             line_update = line.replace(f'{scene_id}',
                                                        f'{scene_id_mgrs}')
                         if ('CORNER_UL_PROJECTION_X_PRODUCT' in line):
@@ -339,14 +341,14 @@ def l8_coregister(mgrs_tile, input_folder, output_folder, baseline_scene):
                         if ('CORNER_LL_PROJECTION_Y_PRODUCT' in line):
                             tmp = line.split(' = ')
                             line_update = f'{tmp[0]} = {lr_y}\n'
-                        if (('PANCHROMATIC_LINES' in line) |
-                            ('PANCHROMATIC_SAMPLES' in line)):
+                        if(('PANCHROMATIC_LINES' in line)
+                           | ('PANCHROMATIC_SAMPLES' in line)):
                             tmp = line.split(' = ')
                             line_update = f'{tmp[0]} = {int(2*xsize/3.)}\n'
-                        if (('REFLECTIVE_LINES' in line) |
-                            ('REFLECTIVE_SAMPLES' in line) |
-                            ('THERMAL_LINES' in line) |
-                            ('THERMAL_SAMPLES' in line)):
+                        if(('REFLECTIVE_LINES' in line)
+                           | ('REFLECTIVE_SAMPLES' in line)
+                           | ('THERMAL_LINES' in line)
+                           | ('THERMAL_SAMPLES' in line)):
                             tmp = line.split(' = ')
                             line_update = f'{tmp[0]} = {int(xsize/3.)}\n'
                         if ('CORNER_UL_LON_PRODUCT' in line):
@@ -471,7 +473,6 @@ def l8_coregister(mgrs_tile, input_folder, output_folder, baseline_scene):
             else:
                 print('[ERROR]: cannot do co-registration: no GCP found')
             s2_master_ds = None
-            s2_slave_ds = None
 
     return
 

@@ -4,7 +4,6 @@ import argparse
 import re
 from uuid import uuid4
 import glob
-import json
 
 from shapely.geometry import shape
 import pystac
@@ -13,7 +12,7 @@ from watch.datacube.registration.s2_coreg_l1c import (
     s2_coregister_all_tiles)
 from watch.datacube.registration.l8_coreg_l1 import (
     l8_coregister)
-from watch.gis.sensors.sentinel2 import sentinel2_grid, s2_grid_tiles_for_geometry
+from watch.gis.sensors.sentinel2 import s2_grid_tiles_for_geometry
 
 
 # TODO: Fully specify or re-use something already in WATCH module?

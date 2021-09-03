@@ -1,7 +1,4 @@
 import ubelt as ub
-import pyproj
-
-from watch.gis import spatial_reference
 
 
 def sentinel2_grid():
