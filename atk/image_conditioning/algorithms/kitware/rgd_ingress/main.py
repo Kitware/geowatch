@@ -1,6 +1,7 @@
 import os
 import json
 from datetime import datetime
+import itertools
 
 from algorithm_toolkit import Algorithm, AlgorithmChain
 from rgd_client import Rgdc
@@ -9,6 +10,12 @@ import shapely as shp
 import shapely.ops
 import shapely.geometry
 from watch.cli.stac_to_kwcoco import convert
+
+AVAILABLE_INSTRUMENTATIONS = {'S2A',       # Sentinel2
+                              'S2B',       # Sentinel2
+                              'ETM',       # Landsat7
+                              'OLI_TIRS',  # Landsat8
+                              }
 
 
 class Main(Algorithm):
@@ -40,11 +47,30 @@ class Main(Algorithm):
             'predicate': 'intersects',
             'acquired': (dt_min, dt_max)
         }
-        query_s2 = (client.search(**kwargs, instrumentation='S2A')['results'] +
-                    client.search(**kwargs, instrumentation='S2B')['results'])
-        query_l7 = client.search(**kwargs, instrumentation='ETM')['results']
-        query_l8 = client.search(
-            **kwargs, instrumentation='OLI_TIRS')['results']
+
+        # Max results returned per instrumentation (as each
+        # instrumentation requires a separate API call)
+        if 'max_results' in params:
+            kwargs['limit'] = params['max_results']
+
+        if 'selected_instrumentations' in params:
+            selected_instrumentations = set(
+                params['selected_instrumentations'])
+            diff = (selected_instrumentations - AVAILABLE_INSTRUMENTATIONS)
+            if len(diff) > 0:
+                print("* Warning * Selected instrumentations [{}] not "
+                      "available".format(
+                          ", ".join('"{}"'.format(si) for si in diff)))
+
+            selected_instrumentations &= AVAILABLE_INSTRUMENTATIONS
+        else:
+            selected_instrumentations = AVAILABLE_INSTRUMENTATIONS
+
+        query_results = []
+        for instrumentation in selected_instrumentations:
+            query_results.append(client.search(
+                **kwargs, instrumentation=instrumentation)['results'])
+
         if not params['dry_run']:
             os.makedirs(params['output_dir'], exist_ok=True)
         catalog = pystac.Catalog('RGD ingress catalog',
@@ -52,7 +78,7 @@ class Main(Algorithm):
                                  href=os.path.join(params['output_dir'],
                                                    'catalog.json'))
         catalog.set_root(catalog)
-        for search_result in query_s2 + query_l7 + query_l8:
+        for search_result in itertools.chain(*query_results):
             stac_item = client.get_raster(search_result, stac=True)
             stac_item['id'] = search_result['subentry_name']
             item = pystac.Item.from_dict(stac_item)
