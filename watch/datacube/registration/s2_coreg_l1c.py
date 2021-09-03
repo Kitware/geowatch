@@ -19,6 +19,7 @@ from collections import defaultdict
 
 S2_BANDS = ['B%02d' % (x) for x in np.arange(1, 13)]
 S2_BANDS.append('B8A')
+S2_ANCILLARY_RASTERS = ['cloudmask']
 
 
 def print_usage():
@@ -206,13 +207,25 @@ def s2_coregister(granuledirs, output_folder, baseline_scene):
         if x == pfname_master:
             print('This is a master scene - just copy/translate to GTiff %s' %
                   (fname_base))
-            for b in S2_BANDS:
-                fname_band = fname_base.replace(base_band, b)
-                pfname_band = os.path.join(path_data, fname_band)
+            for b in itertools.chain(S2_BANDS,
+                                     S2_ANCILLARY_RASTERS):
+                fname_band = os.path.basename(x.replace(base_band, b))
+                if b in S2_BANDS:
+                    pfname_band = os.path.join(path_data, fname_band)
+                elif b in S2_ANCILLARY_RASTERS:
+                    pfname_band = os.path.join(
+                        path_data, "{}.tif".format(b))
+                else:
+                    raise NotImplementedError(
+                        "Unsure how to build path to band "
+                        "file '{}'".format(b))
+
                 fname_out = fname_band[:-4] + '.tif'
                 com = 'gdal_translate -of GTiff -co "COMPRESS=DEFLATE" %s %s' % (
                     pfname_band, os.path.join(path_out_data, fname_out))
+
                 os.system(com)
+
         else:
             print('Coregistration is performed!')
             # this is where GCP will be stored
@@ -319,27 +332,45 @@ def s2_coregister(granuledirs, output_folder, baseline_scene):
 
                 # now transforming files
                 # TODO: this is easy to parallize
-                for b in S2_BANDS:  # ['B01', 'B04', 'B11']:
-                    fname_band = os.path.basename(x.replace(base_band, b))
-                    pfname_band = os.path.join(path_data, fname_band)
+                for b in itertools.chain(S2_BANDS,  # ['B01', 'B04', 'B11']:
+                                         S2_ANCILLARY_RASTERS):  # ['cloudmask']
+                    if b in S2_BANDS:
+                        fname_band = os.path.basename(x.replace(base_band, b))
+                        pfname_band = os.path.join(path_data, fname_band)
+                    elif b in S2_ANCILLARY_RASTERS:
+                        pfname_band = os.path.join(
+                            path_data, "{}.tif".format(b))
+                    else:
+                        raise NotImplementedError(
+                            "Unsure how to build path to band "
+                            "file '{}'".format(b))
 
                     # First, checking spatial resolution based on the band
                     fname_gcp = fname_gcp_10  # deafault value
                     x_res = 10
                     y_res = 10
+                    resampling_method = 'cubic'
+                    nodata = 0
                     if ((b == 'B05') | (b == 'B06') | (b == 'B07') |
                         (b == 'B8A') | (b == 'B11') | (b == 'B12')):  # NOQA
                         fname_gcp = fname_gcp_20
                         x_res = 20
                         y_res = 20
-                    if ((b == 'B01') | (b == 'B09') | (b == 'B10')):
+                    elif ((b == 'B01') | (b == 'B09') | (b == 'B10')):
                         fname_gcp = fname_gcp_60
                         x_res = 60
                         y_res = 60
-                    com_gdal_translate_prefix = 'gdal_translate -of VRT --optfile %s -r cubic -a_srs "epsg:%s" -a_nodata 0' % (
-                        os.path.join(path_to_gcp, fname_gcp), utm_epsg)
-                    com_gdalwarp_prefix = 'gdalwarp -overwrite -of GTiff -order 3 -et 0.05 -r cubic -co "COMPRESS=DEFLATE" -tr %s %s -te %s %s %s %s -t_srs "epsg:%s" -srcnodata 0 -dstnodata 0' %\
-                                           (abs(x_res), abs(x_res), x_min, y_min, x_max, y_max, utm_epsg)
+                    elif (b == 'cloudmask'):
+                        fname_gcp = fname_gcp_20
+                        x_res = 20
+                        y_res = 20
+                        resampling_method = 'near'
+                        nodata = 'None'
+
+                    com_gdal_translate_prefix = 'gdal_translate -of VRT --optfile %s -r %s -a_srs "epsg:%s" -a_nodata %s' % (
+                        os.path.join(path_to_gcp, fname_gcp), resampling_method, utm_epsg, nodata)
+                    com_gdalwarp_prefix = 'gdalwarp -overwrite -of GTiff -order 3 -et 0.05 -r %s -co "COMPRESS=DEFLATE" -tr %s %s -te %s %s %s %s -t_srs "epsg:%s" -srcnodata %s -dstnodata %s' %\
+                                          (resampling_method, abs(x_res), abs(x_res), x_min, y_min, x_max, y_max, utm_epsg, nodata, nodata)
                     fname_vrt = '%s_%s.vrt' % (fname_base[:-8], b)
                     fname_out = '%s_%s.tif' % (fname_base[:-8], b)
                     os.system('%s %s %s' %

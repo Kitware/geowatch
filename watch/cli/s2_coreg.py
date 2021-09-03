@@ -5,16 +5,21 @@ import re
 from uuid import uuid4
 import glob
 
+from shapely.geometry import shape
 import pystac
 
 from watch.datacube.registration.s2_coreg_l1c import (
     s2_coregister_all_tiles)
+from watch.datacube.registration.l8_coreg_l1 import (
+    l8_coregister)
+from watch.gis.sensors.sentinel2 import s2_grid_tiles_for_geometry
 
 
 # TODO: Fully specify or re-use something already in WATCH module?
 S2_L1C_RE = re.compile(r'S2[AB]_MSIL1C_.*')
+L8_L1_RE = re.compile(r'^L[COTEM]08_L1(TP|GT|GS)_\d{3}\d{3}_\d{4}\d{2}\d{2}_\d{4}\d{2}\d{2}_\d{2}_(RT|T1|T2)')
 GRANULE_DIR_RE = re.compile(r'(.*)/GRANULE/(.*)')
-BAND_NAME_RE = re.compile(r'.*_(B\w+)\.(tiff?|vrt)', re.I)
+BAND_NAME_RE = re.compile(r'.*_(B[0-9A-Z]+|cloudmask)\.(tiff?|vrt)$', re.I)
 
 
 def main():
@@ -41,6 +46,7 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
         catalog = stac_catalog.full_copy()
 
     s2_l1c_items = {}
+    l8_l1_items = {}
     for item in catalog.get_all_items():
         if re.match(S2_L1C_RE, item.id):
             # Get base directory for assets
@@ -53,7 +59,19 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
             if item_base_dir is None:
                 raise RuntimeError("Couldn't determine STAC item basedir")
 
-            s2_l1c_items[item_base_dir] = item.id
+            s2_l1c_items[item_base_dir] = item
+        elif re.match(L8_L1_RE, item.id):
+            # Get base directory for assets
+            item_base_dir = None
+            for link in item.links:
+                if link.rel == 'self':
+                    item_base_dir = os.path.dirname(link.get_href())
+                    break
+
+            if item_base_dir is None:
+                raise RuntimeError("Couldn't determine STAC item basedir")
+
+            l8_l1_items[item_base_dir] = item
 
     s2_l1c_item_dirs = set(s2_l1c_items.keys())
 
@@ -66,11 +84,118 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
     else:
         scenes, baseline_scenes = {}, {}
 
+    l8_scenes = {}
+    for l8_l1_item_dir, l8_l1_item in l8_l1_items.items():
+        item_geometry = shape(l8_l1_item.geometry)
+        grid_tiles = s2_grid_tiles_for_geometry(item_geometry)
+
+        for grid_tile in set(grid_tiles).intersection(baseline_scenes.keys()):
+            l8_coregister(grid_tile,
+                          l8_l1_item_dir,
+                          outdir,
+                          baseline_scenes[grid_tile])
+
+            l8_scenes.setdefault(grid_tile, []).append(l8_l1_item_dir)
+
     catalog_outpath = os.path.abspath(os.path.join(outdir, 'catalog.json'))
     catalog.set_self_href(catalog_outpath)
     catalog.set_root(catalog)
 
+    # Tracking set of original STAC items to be removed
     original_item_ids = set()
+
+    for l8_scene, l8_scene_images in l8_scenes.items():
+        for l8_scene_image in l8_scene_images:
+            scene_image_item_id = l8_l1_items[l8_scene_image].id
+            original_item_ids.add(scene_image_item_id)
+            original_item = catalog.get_item(scene_image_item_id)
+
+            l8_scene_image_base = os.path.basename(l8_scene_image)
+
+            asset_path_basedir = os.path.join(
+                outdir, "T{}".format(l8_scene),
+                "{}_T{}".format(l8_scene_image_base, l8_scene))
+            asset_paths = glob.glob(
+                os.path.join(asset_path_basedir, "*.tif"))
+
+            processed_assets = {}
+            for asset_path in sorted(asset_paths):
+                band_name = re.match(BAND_NAME_RE, asset_path).group(1)
+
+                if band_name == 'cloudmask':
+                    roles = ['cloudmask']
+                else:
+                    roles = ['data']
+
+                # Is there some proper convention here for S2 asset names?
+                processed_assets["image-{}".format(band_name)] =\
+                    pystac.Asset.from_dict(
+                        {'href': os.path.abspath(asset_path),
+                         'title': os.path.join(l8_scene_image_base,
+                                               os.path.basename(asset_path)),
+                         'eo:bands': [{'name': band_name}],
+                         'roles': roles})
+
+            vrt_asset_paths = glob.glob(
+                os.path.join(asset_path_basedir, "*.vrt"))
+
+            for vrt_asset_path in sorted(vrt_asset_paths):
+                m = re.match(BAND_NAME_RE, vrt_asset_path)
+                if m is None:
+                    # Shouldn't match temporary VRT filesnames (e.g. *_tmp.vrt)
+                    continue
+
+                band_name = m.group(1)
+
+                # Is there some proper convention here for S2 asset names?
+                processed_assets["image-vrt-{}".format(band_name)] =\
+                    pystac.Asset.from_dict(
+                        {'href': os.path.abspath(vrt_asset_path),
+                         'title': os.path.join(
+                             l8_scene_image_base,
+                             os.path.basename(vrt_asset_path)),
+                         'eo:bands': [{'name': band_name}],
+                         'roles': ['metadata']})
+
+            # Generate a unique random name
+            new_id = uuid4().hex
+            processed_item_outpath = os.path.abspath(os.path.join(
+                outdir, new_id, "{}.json".format(new_id)))
+
+            # Building off of the original STAC item data (but
+            # replacing it's assets), which may or may not be the
+            # right thing to do here as some of the metadata may no
+            # longer be correct.
+            processed_item = original_item.clone()
+            processed_item.id = new_id
+            processed_item.assets = processed_assets
+
+            # Adding WATCH specific metadata to the STAC item
+            # properties; we could formalize this at some point by
+            # specifying a proper STAC extension, but I don't think
+            # this is necessary for now
+            processed_item.properties['watch:s2_coreg_l1c:is_baseline'] =\
+                False
+
+            # Roughly keeping track of what WATCH processes have been
+            # run on this particular item
+            processed_item.properties.setdefault(
+                'watch:process_history', []).append('s2_coreg_l1c')
+
+            # Adding a reference back to the previous unprocessed STAC
+            # item
+            processed_item.links.append(pystac.Link.from_dict(
+                {'rel': 'previous',
+                 'href': original_item.get_self_href(),
+                 'type': 'application/json'}))
+
+            processed_item.set_self_href(processed_item_outpath)
+            pystac.write_file(processed_item,
+                              include_self_link=True,
+                              dest_href=processed_item_outpath)
+
+            catalog.add_item(processed_item)
+
     baseline_images = set(baseline_scenes.values())
     for scene, scene_images in scenes.items():
         for scene_image in scene_images:
@@ -82,7 +207,7 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
             else:
                 raise RuntimeError("Unexpected scene output path returned")
 
-            scene_image_item_id = s2_l1c_items[scene_image_base_dir]
+            scene_image_item_id = s2_l1c_items[scene_image_base_dir].id
             original_item_ids.add(scene_image_item_id)
             original_item = catalog.get_item(scene_image_item_id)
 
@@ -95,6 +220,11 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
             for asset_path in sorted(asset_paths):
                 band_name = re.match(BAND_NAME_RE, asset_path).group(1)
 
+                if band_name == 'cloudmask':
+                    roles = ['cloudmask']
+                else:
+                    roles = ['data']
+
                 # Is there some proper convention here for S2 asset names?
                 processed_assets["image-{}".format(band_name)] =\
                     pystac.Asset.from_dict(
@@ -102,13 +232,18 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
                          'title': os.path.join(granule_id,
                                                os.path.basename(asset_path)),
                          'eo:bands': [{'name': band_name}],
-                         'roles': ['data']})
+                         'roles': roles})
 
             vrt_asset_paths = glob.glob(
                 os.path.join(asset_path_basedir, "*.vrt"))
 
             for vrt_asset_path in sorted(vrt_asset_paths):
-                band_name = re.match(BAND_NAME_RE, vrt_asset_path).group(1)
+                m = re.match(BAND_NAME_RE, vrt_asset_path)
+                if m is None:
+                    # Shouldn't match temporary VRT filesnames (e.g. *_tmp.vrt)
+                    continue
+
+                band_name = m.group(1)
 
                 # Is there some proper convention here for S2 asset names?
                 processed_assets["image-vrt-{}".format(band_name)] =\
