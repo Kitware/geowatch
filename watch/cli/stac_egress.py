@@ -62,8 +62,7 @@ def stac_egress(stac_catalog,
         os.makedirs(working_dir, exist_ok=True)
 
     if aws_profile is not None:
-        base_command =\
-          ['aws', 's3', '--profile', aws_profile, 'cp']
+        base_command = ['aws', 's3', '--profile', aws_profile, 'cp']
     else:
         base_command = ['aws', 's3', 'cp']
 
