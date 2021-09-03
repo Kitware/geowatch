@@ -17,6 +17,8 @@ max_cloud_cover|Maximum amount of cloud cover allowed before a STAC item is filt
 min_aoi_overlap|Minimum amount of overlap an image must have with the selected AOI to be kept|
 kwcoco|Path to location where KWCOCO file of RGD search results will be written.|
 ignore_dem|If set to 1, don't use the digital elevation map|
+selected_instrumentations|List of instrumentations (e.g. "S2A", "ETM") to query|
+max_results|Maximum number of search results to return per instrumentation|
 
 ## Outputs:
 Name|Description

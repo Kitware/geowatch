@@ -79,6 +79,36 @@
             "parameter_choices": "",
             "required": false,
             "sort_order": 9
+        },
+        {
+            "custom_validation": "",
+            "data_type": "array",
+            "default_value": "",
+            "description": "List of instrumentations (e.g. \"S2A\", \"ETM\") to query",
+            "display_name": "Selected Instrumentations",
+            "field_type": "text",
+            "help_text": "If this parameter is not provided, the default is to query all available instrumentations",
+            "max_value": "",
+            "min_value": "",
+            "name": "selected_instrumentations",
+            "parameter_choices": "",
+            "required": false,
+            "sort_order": 10
+        },
+        {
+            "custom_validation": "",
+            "data_type": "integer",
+            "default_value": null,
+            "description": "Maximum number of search results to return per instrumentation",
+            "display_name": "Maximum Results",
+            "field_type": "number",
+            "help_text": "Note that this is maximum number of results per instrumentation",
+            "max_value": null,
+            "min_value": null,
+            "name": "max_results",
+            "parameter_choices": "",
+            "required": false,
+            "sort_order": 11
         }
     ],
     "outputs": [
