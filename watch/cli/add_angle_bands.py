@@ -1,10 +1,12 @@
 import argparse
+import glob
 import os
 import sys
 import re
 from contextlib import contextmanager
 import tempfile
 import subprocess
+import shutil
 from s2angs.cli import generate_anglebands
 
 import pystac
@@ -14,7 +16,7 @@ L7_RE = re.compile(r'^L[COTEM]07')
 L8_RE = re.compile(r'^L[COTEM]08')
 S2_RE = re.compile(r'^S2[AB]')
 
-LANDSAT_ANGLES_FILE_RE = re.compile(r'ANG\.txt$', re.IGNORECASE)
+LANDSAT_ANGLES_FILE_RE = re.compile(r'^(.*_)ANG\.txt$', re.IGNORECASE)
 S2_MTD_TL_FILE_RE = re.compile(r'MTD_TL\.xml$', re.IGNORECASE)
 
 
@@ -51,6 +53,8 @@ def add_angle_bands(stac_catalog, outdir):
         item_outdir = os.path.join(outdir, stac_item.id)
         os.makedirs(item_outdir, exist_ok=True)
 
+        print("* Generating angle bands for item: '{}'".format(stac_item.id))
+
         if re.search(L7_RE, stac_item.id):
             output_stac_item = add_angles_landsat(
                 stac_item, item_outdir, 'L7')
@@ -60,6 +64,8 @@ def add_angle_bands(stac_catalog, outdir):
         elif re.search(S2_RE, stac_item.id):
             output_stac_item = add_angles_s2(stac_item, item_outdir)
         else:
+            print("** No angle band generation implemented for item, "
+                  "skipping!")
             output_stac_item = stac_item
 
         # Roughly keeping track of what WATCH processes have been
@@ -105,9 +111,12 @@ def add_angles_landsat(stac_item,
                                       ", ".join(supported_landsat_versions)))
 
     angles_file = None
+    angles_file_prefix = None
     for asset_name, asset in stac_item.assets.items():
-        if re.search(LANDSAT_ANGLES_FILE_RE, asset.href):
+        m = re.match(LANDSAT_ANGLES_FILE_RE, asset.href)
+        if m is not None:
             angles_file = asset.href
+            angles_file_prefix = m.group(1)
             break
 
     if angles_file is None:
@@ -136,12 +145,21 @@ def add_angles_landsat(stac_item,
                 if not re.match(selected_bands_re, angle_file):
                     continue
 
+            m = re.search(r'(solar|sensor)', angle_file)
+            if m is not None:
+                angle_type = m.group(1)
+            else:
+                print("* Warning * Unexpected file '{}' in angle files dir, "
+                      "skipping!".format(angle_file))
+                continue
+
             angle_file_basename, _ = os.path.splitext(
                 os.path.basename(angle_file))
 
             # Convert to COG (original format is HDR)
-            azimuth_angle_file_outpath = os.path.join(
-                item_outdir, "{}_azimuth.tif".format(angle_file_basename))
+            azimuth_angle_file_outpath = "{}S{}A4.tif".format(
+                angles_file_prefix,
+                'O' if angle_type == 'solar' else 'E')
 
             subprocess.run(['gdal_calc.py',
                             '--calc="A"',
@@ -149,15 +167,18 @@ def add_angles_landsat(stac_item,
                             '-A', os.path.join(tmpdirname, angle_file),
                             '--A_band=1'])
 
-            stac_item.assets[angle_file_basename] = pystac.Asset.from_dict(
-                {'href': azimuth_angle_file_outpath,
-                 'title': os.path.join(
-                     stac_item.id, "{}_azimuth".format(angle_file_basename)),
-                 'roles': ['metadata']})
+            stac_item.assets['{}_azimuth'.format(angle_type)] =\
+                pystac.Asset.from_dict(
+                    {'href': azimuth_angle_file_outpath,
+                     'title': os.path.join(
+                         stac_item.id, os.path.basename(
+                             azimuth_angle_file_outpath)),
+                     'roles': ['metadata']})
 
             # Convert to COG (original format is HDR)
-            zenith_angle_file_outpath = os.path.join(
-                item_outdir, "{}_zenith.tif".format(angle_file_basename))
+            zenith_angle_file_outpath = "{}S{}Z4.tif".format(
+                angles_file_prefix,
+                'O' if angle_type == 'solar' else 'E')
 
             subprocess.run(['gdal_calc.py',
                             '--calc="A"',
@@ -165,11 +186,13 @@ def add_angles_landsat(stac_item,
                             '-A', os.path.join(tmpdirname, angle_file),
                             '--A_band=2'])
 
-            stac_item.assets[angle_file_basename] = pystac.Asset.from_dict(
-                {'href': zenith_angle_file_outpath,
-                 'title': os.path.join(
-                     stac_item.id, "{}_zenith".format(angle_file_basename)),
-                 'roles': ['metadata']})
+            stac_item.assets['{}_zenith'.format(angle_type)] =\
+                pystac.Asset.from_dict(
+                    {'href': zenith_angle_file_outpath,
+                     'title': os.path.join(
+                         stac_item.id, os.path.basename(
+                             zenith_angle_file_outpath)),
+                     'roles': ['metadata']})
 
     return stac_item
 
@@ -181,21 +204,35 @@ def add_angles_s2(stac_item, item_outdir):
             mtd_tl_xml_file = asset.href
             break
 
-    angle_file_paths = generate_anglebands(mtd_tl_xml_file, item_outdir)
+    mtd_base_dir = os.path.dirname(mtd_tl_xml_file)
+    output_path_prefix = os.path.commonprefix(
+        glob.glob(os.path.join(mtd_base_dir, "IMG_DATA", "*.jp2")))
 
-    for angle_file_path in angle_file_paths:
-        angle_file_basename, _ =\
-            os.path.splitext(os.path.basename(angle_file_path))
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        angle_file_paths = generate_anglebands(mtd_tl_xml_file, tmpdirname)
 
-        m = re.search(r'(solar|sensor)_(azimuth|zenith)', angle_file_path)
-        if m is not None:
-            stac_item.assets[m.group(0)] = pystac.Asset.from_dict(
-                {'href': angle_file_path,
-                 'title': os.path.join(stac_item.id, angle_file_basename),
-                 'roles': ['metadata']})
-        else:
-            print("* Warning: unexpected filename pattern for generated S2 "
-                  "angle band files")
+        for angle_file_path in angle_file_paths:
+            m = re.search(r'(solar|sensor)_(azimuth|zenith)', angle_file_path)
+            if m is not None:
+                ss, az = m.groups()
+
+                output_path = "{}S{}{}4.tif".format(
+                    output_path_prefix,
+                    'O' if ss == 'solar' else 'E',
+                    'A' if az == 'azimuth' else 'Z')
+
+                angle_file_basename, _ = os.path.splitext(
+                    os.path.basename(output_path))
+
+                shutil.move(angle_file_path, output_path)
+
+                stac_item.assets[m.group(0)] = pystac.Asset.from_dict(
+                    {'href': output_path,
+                     'title': os.path.join(stac_item.id, angle_file_basename),
+                     'roles': ['metadata']})
+            else:
+                print("* Warning: unexpected filename pattern for generated "
+                      "S2 angle band files")
 
     return stac_item
 
