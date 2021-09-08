@@ -597,12 +597,22 @@ class KWCocoVideoDataset(data.Dataset):
             tr["channels"] = self.channels
 
         # TODO: perterb the spatial and time sample coordinates
-
+        do_shift = False
+        sampler = self.sampler
         tr['as_xarray'] = False
         tr['use_experimental_loader'] = 1
-        # collect sample
-        sampler = self.sampler
-        sample = sampler.load_sample(tr, padkw={'constant_values': np.nan})
+        if not self.disable_augmenter and self.mode == 'fit':
+            do_shift = np.random.rand() > 0.5
+        if not do_shift:
+            # collect sample
+            sample = sampler.load_sample(tr, padkw={'constant_values': np.nan})
+        else:
+            rng = kwarray.ensure_rng(132)
+            tr_ = tr.copy()
+            aff = kwimage.Affine.coerce(offset=rng.randint(-8, 8, size=2))
+            space_box = kwimage.Boxes.from_slice(tr['space_slice']).warp(aff).quantize()
+            tr_['space_slice'] = space_box.astype(int).to_slices()[0]
+            sample = sampler.load_sample(tr_, padkw=dict(constant_values=np.nan))
 
         if 0:
             # debug
@@ -643,6 +653,7 @@ class KWCocoVideoDataset(data.Dataset):
         # hack for augmentation
         # TODO: make a nice "augmenter" pipeline
         do_hflip = False
+        do_vflip = False
         if not self.disable_augmenter and self.mode == 'fit':
             def make_hflipper(width):
                 def hflip(pt):
