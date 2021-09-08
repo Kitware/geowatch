@@ -88,6 +88,18 @@ def main(**kwargs):
     print('read dataset')
     dset = kwcoco.CocoDataset(config['src'])
 
+    hard_coded_colors = {
+        'No Activity': 'tomato',
+        'Site Preparation': 'gold',
+        'Active Construction': 'lime',
+        'Post Construction': 'darkturquoise',
+        'Unknown': 'blueviolet',
+    }
+
+    for cat in dset.cats.values():
+        if cat['name'] in hard_coded_colors:
+            cat['color'] = hard_coded_colors[cat['name']]
+
     print('start populate')
     target_gsd = config['target_gsd']
     overwrite = config['overwrite']

@@ -309,9 +309,22 @@ def build_external_video(vid_id, full_ds, ext_ds):
 
 
 def get_canvas_concat_channels(annotations, dataset, img_id):
-    canvas = dataset.delayed_load(img_id, channels='red|green|blue').finalize()
+    import numpy as np
+    delayed = dataset.delayed_load(img_id)
+
+    have_parts = delayed.channels.spec.split('|')
+    if len({'r', 'g', 'b'} & set(have_parts)) == 3:
+        channels = 'r|g|b'
+    elif len({'red', 'green', 'blue'} & set(have_parts)) == 3:
+        channels = 'red|green|blue'
+    else:
+        channels = '|'.join(have_parts[0:3])
+
+    canvas = delayed.take_channels(channels).finalize()
+    # canvas = dataset.delayed_load(img_id, channels='red|green|blue').finalize()
     canvas = kwimage.normalize_intensity(canvas)
     canvas = kwimage.ensure_float01(canvas)
+    canvas = np.nan_to_num(canvas)
 
     # draw on annotations
     # hack because draw_on(color=list) is not supported
@@ -327,6 +340,11 @@ def get_canvas_concat_channels(annotations, dataset, img_id):
     ext_dets = kwimage.Detections.from_coco_annots(ext_dset_anns, dset=dataset)
     canvas = this_dets.draw_on(canvas, color='blue')
     canvas = ext_dets.draw_on(canvas, color='green')
+    # try:
+    #     # Requires some new changes to kwimage
+    #     canvas = this_dets.draw_on(canvas.copy(), color='classes')
+    # except Exception:
+    #     canvas = this_dets.draw_on(canvas, color='blue')
 
     # draw on site boundaries
     image = dataset.imgs[img_id]
@@ -364,6 +382,9 @@ def save_visualizations(canvas_chunk, fpath):
         if i == 3:
             ax2.set_title('Propagated')
         ax2.axis('off')
+
+    from os.path import basename
+    fig.suptitle(basename(fpath))
 
     fig.tight_layout()
     fig.savefig(fpath, bbox_inches='tight')

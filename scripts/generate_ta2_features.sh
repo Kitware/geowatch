@@ -155,8 +155,7 @@ predict_all_ta2_features(){
     # Propogate labels
     python -m watch.cli.propagate_labels \
             --src $COMBO_COCO_FPATH --dst $COMBO_PROPOGATED_COCO_FPATH \
-            --viz_dpath=False
-
+            --viz_dpath=$KWCOCO_BUNDLE_DPATH/_prop_viz
 
     LEFT_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_data_left.kwcoco.json
     RIGHT_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_data_right.kwcoco.json
@@ -192,6 +191,54 @@ viz_check(){
         --src $COMBO_COCO_FPATH --space=video --num_workers=6 \
         --viz_dpath $KWCOCO_BUNDLE_DPATH/_viz_preprop \
         --channels "red|green|blue,inv_sort1|inv_augment1|inv_shared1"
+
+    # Optional: visualize the combo data before and after propogation
+    python -m watch.cli.coco_visualize_videos \
+        --src $COMBO_PROPOGATED_COCO_FPATH --space=video --num_workers=6 \
+        --viz_dpath $KWCOCO_BUNDLE_DPATH/_viz_postprop \
+        --channels "red|green|blue,inv_sort1|inv_augment1|inv_shared1"
+
+    # Optional: visualize the combo data before and after propogation
+    python -m watch.cli.coco_visualize_videos \
+        --src $COMBO_PROPOGATED_COCO_FPATH --space=video --num_workers=6 \
+        --viz_dpath $KWCOCO_BUNDLE_DPATH/_viz_postprop \
+        --channels "red|green|blue"
+
+    items=$(jq -r '.videos[] | .name' $COMBO_PROPOGATED_COCO_FPATH)
+    for item in ${items[@]}; do
+        echo "item = $item"
+        python -m watch.cli.gifify  --frames_per_second .3 \
+            --input "$KWCOCO_BUNDLE_DPATH/_viz_preprop/$item/_anns/red|green|blue/" \
+            --output "$KWCOCO_BUNDLE_DPATH/_viz_preprop/${item}_rgb.gif"
+        python -m watch.cli.gifify  --frames_per_second .3 \
+            --input "$KWCOCO_BUNDLE_DPATH/_viz_preprop/$item/_anns/inv_sort1|inv_augment1|inv_shared1/" \
+            --output "$KWCOCO_BUNDLE_DPATH/_viz_preprop/${item}_invariants.gif"
+    done
+
+    items=$(jq -r '.videos[] | .name' $COMBO_PROPOGATED_COCO_FPATH)
+    for item in ${items[@]}; do
+        echo "item = $item"
+        python -m watch.cli.gifify --frames_per_second .3 \
+            --input "$KWCOCO_BUNDLE_DPATH/_viz_postprop/$item/_anns/red|green|blue/" \
+            --output "$KWCOCO_BUNDLE_DPATH/_viz_postprop/${item}_rgb.gif"
+        python -m watch.cli.gifify  --frames_per_second .3 \
+            --input "$KWCOCO_BUNDLE_DPATH/_viz_postprop/$item/_anns/inv_sort1|inv_augment1|inv_shared1/" \
+            --output "$KWCOCO_BUNDLE_DPATH/_viz_postprop/${item}_invariants.gif"
+    done
+    
+
+    python -m watch.cli.gifify \
+        --input "$KWCOCO_BUNDLE_DPATH/_viz_preprop/US_Jacksonville_R01/_anns/red|green|blue/" \
+        --output "$KWCOCO_BUNDLE_DPATH/_viz_preprop/US_Jacksonville_R01_rgb.gif"
+
+    python -m watch.cli.gifify \
+        --input "$KWCOCO_BUNDLE_DPATH/_viz_postprop/US_Jacksonville_R01/_anns/red|green|blue/" \
+        --output "$KWCOCO_BUNDLE_DPATH/_viz_postprop/US_Jacksonville_R01_rgb.gif"
+
+    python -m watch.cli.gifify \
+        --input "$KWCOCO_BUNDLE_DPATH/_viz_postprop/US_Jacksonville_R01/_anns/red|green|blue/" \
+        --output "$KWCOCO_BUNDLE_DPATH/_viz_postprop/US_Jacksonville_R01_rgb.gif"
+    
 
 }
 

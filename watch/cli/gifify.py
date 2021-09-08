@@ -24,7 +24,7 @@ def main():
     parser.add_argument('-d', '--delay', nargs=1, type=float, default=10, help='delay between frames')
     parser.add_argument('-o', '--output', default='out.gif', help='output file')
     parser.add_argument('--max_width', default=None, type=int, help='resize to max width')
-    parser.add_argument('--frames_per_second', default=10, type=int, help='number of frames per second')
+    parser.add_argument('--frames_per_second', default=10, type=float, help='number of frames per second')
     args, unknown = parser.parse_known_args()
     # print('unknown = {!r}'.format(unknown))
     # print('args = {!r}'.format(args))
