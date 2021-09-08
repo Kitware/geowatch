@@ -56,7 +56,7 @@ def main(cmdline=True, **kwargs):
 
     prog = ub.ProgIter(
         coco_dset.index.videos.items(), total=len(coco_dset.index.videos),
-        desc='viz videos')
+        desc='viz videos', newlines=True)
 
     pool = ub.JobPool(mode='thread', max_workers=config['num_workers'])
 
@@ -72,7 +72,7 @@ def main(cmdline=True, **kwargs):
             pool.submit(_write_ann_visualizations2,
                         coco_dset, img, anns, sub_bundle_dpath, space=space)
 
-        for job in pool.as_completed():
+        for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write vids'):
             job.result()
 
         pool.jobs.clear()

@@ -33,6 +33,9 @@ RUTGERS_MATERIAL_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/rutgers_material_seg.kwcoco.jso
 DZYNE_LANDCOVER_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/landcover.kwcoco.json
 
 COMBO_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_data.kwcoco.json
+
+COMBO_PROPOGATED_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_propogated_data.kwcoco.json
+
 COMBO_TRAIN_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_train_data.kwcoco.json
 COMBO_VALI_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_data.kwcoco.json
 
@@ -147,31 +150,44 @@ predict_all_ta2_features(){
         --src $COMBO_COCO_FPATH \
         --dst $COMBO_COCO_FPATH \
         --target_gsd 10
-
+    
     # Propogate labels
     python -m watch.cli.propagate_labels \
-            --src $COMBO_COCO_FPATH --dst $COMBO_COCO_FPATH \
+            --src $COMBO_COCO_FPATH --dst $COMBO_PROPOGATED_COCO_FPATH \
             --viz_dpath=False
+
 
     LEFT_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_data_left.kwcoco.json
     RIGHT_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_data_right.kwcoco.json
 
     python -m watch.cli.coco_spatial_crop \
-            --src $COMBO_COCO_FPATH --dst $LEFT_COCO_FPATH \
+            --src $COMBO_PROPOGATED_COCO_FPATH --dst $LEFT_COCO_FPATH \
             --suffix=_left
 
     python -m watch.cli.coco_spatial_crop \
-            --src $COMBO_COCO_FPATH --dst $RIGHT_COCO_FPATH \
+            --src $COMBO_PROPOGATED_COCO_FPATH --dst $RIGHT_COCO_FPATH \
             --suffix=_right
 
     # Split out train and validation data (TODO: add test when we can)
-    kwcoco subset --src $COMBO_COCO_FPATH \
+    kwcoco subset --src $COMBO_PROPOGATED_COCO_FPATH \
             --dst $COMBO_VALI_COCO_FPATH \
             --select_videos '.name | startswith("KR_")'
 
-    kwcoco subset --src $COMBO_COCO_FPATH \
+    kwcoco subset --src $COMBO_PROPOGATED_COCO_FPATH \
             --dst $COMBO_TRAIN_COCO_FPATH \
             --select_videos '.name | startswith("KR_") | not'
+}
+
+
+viz_check(){
+    echo "COMBO_COCO_FPATH = $COMBO_COCO_FPATH"
+    echo "KWCOCO_BUNDLE_DPATH = $KWCOCO_BUNDLE_DPATH"
+
+    # Optional: visualize the combo data before and after propogation
+    python -m watch.cli.coco_visualize_videos \
+        --src $COMBO_COCO_FPATH --space=video --num_workers=6 \
+        --viz_dpath $KWCOCO_BUNDLE_DPATH/_viz_preprop
+
 }
 
 
@@ -233,7 +249,6 @@ train_model(){
 
     ARCH=smt_it_stm_p8
 
-    #CHANNELS="blue|green|red|nir|inv_sort1|inv_sort2|inv_sort3|inv_sort4|inv_sort5|inv_sort6|inv_sort7|inv_sort8|inv_augment1|inv_augment2|inv_augment3|inv_augment4|inv_augment5|inv_augment6|inv_augment7|inv_augment8|inv_overlap1|inv_overlap2|inv_overlap3|inv_overlap4|inv_overlap5|inv_overlap6|inv_overlap7|inv_overlap8|inv_shared1|inv_shared2|inv_shared3|inv_shared4|inv_shared5|inv_shared6|inv_shared7|inv_shared8|matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7|matseg_8|matseg_9|matseg_10|matseg_11|matseg_12|matseg_13|matseg_14|matseg_15|matseg_16|matseg_17|matseg_18|matseg_19|rice_field|cropland|water|inland_water|river_or_stream|sebkha|snow_or_ice_field|bare_ground|sand_dune|built_up|grassland|brush|forest|wetland|road"
     CHANNELS="blue|green|red|nir|inv_sort1|inv_sort2|inv_sort3|inv_sort4|inv_sort5|inv_sort6|inv_sort7|inv_sort8|inv_augment1|inv_augment2|inv_augment3|inv_augment4|inv_augment5|inv_augment6|inv_augment7|inv_augment8|inv_overlap1|inv_overlap2|inv_overlap3|inv_overlap4|inv_overlap5|inv_overlap6|inv_overlap7|inv_overlap8|inv_shared1|inv_shared2|inv_shared3|inv_shared4|inv_shared5|inv_shared6|inv_shared7|inv_shared8|rice_field|cropland|water|inland_water|river_or_stream|sebkha|snow_or_ice_field|bare_ground|sand_dune|built_up|grassland|brush|forest|wetland|road"
 
     EXPERIMENT_NAME=DirectCD_${ARCH}_teamfeat_v012

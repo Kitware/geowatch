@@ -49,9 +49,10 @@ TEST_FPATH=$DVC_DPATH/extern/onera_2018/onera_test.kwcoco.json
 
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 
-ARCH=smt_it_stm_s12
+#ARCH=smt_it_stm_s12
+ARCH=smt_it_joint_p8
 CHANNELS="B05|B06|B07|B08|B8A"
-EXPERIMENT_NAME=DirectCD_${ARCH}_vnir_v5
+EXPERIMENT_NAME=DirectCD_${ARCH}_vnir_v6
 DATASET_CODE=Onera
 
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
@@ -71,9 +72,9 @@ python -m watch.tasks.fusion.fit \
     --method="MultimodalTransformer" \
     --arch_name=$ARCH \
     --time_steps=2 \
-    --chip_size=128 \
-    --batch_size=8 \
-    --accumulate_grad_batches=2 \
+    --chip_size=96 \
+    --batch_size=2 \
+    --accumulate_grad_batches=8 \
     --num_workers=6 \
     --max_epochs=400 \
     --patience=400 \
