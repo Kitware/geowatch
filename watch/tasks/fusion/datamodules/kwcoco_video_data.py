@@ -642,15 +642,23 @@ class KWCocoVideoDataset(data.Dataset):
         input_dsize = self.sample_shape[-2:][::-1]
         # hack for augmentation
         # TODO: make a nice "augmenter" pipeline
-        do_flip = False
+        do_hflip = False
         if not self.disable_augmenter and self.mode == 'fit':
             def make_hflipper(width):
                 def hflip(pt):
                     new = np.hstack([width - pt[:, 0:1], pt[:, 1:2]])
                     return new
                 return hflip
-            flipper = make_hflipper(input_dsize[0])
-            do_flip = np.random.rand() > 0.5
+            hflipper = make_hflipper(input_dsize[0])
+            do_hflip = np.random.rand() > 0.5
+
+            def make_vflipper(height):
+                def vflip(pt):
+                    new = np.hstack([pt[:, 0:1], height - pt[:, 1:2]])
+                    return new
+                return vflip
+            vflipper = make_vflipper(input_dsize[1])
+            do_vflip = np.random.rand() > 0.5
 
         prev_frame_cids = None
 
@@ -659,9 +667,13 @@ class KWCocoVideoDataset(data.Dataset):
 
             frame = np.asarray(frame, dtype=np.float32)
 
-            if do_flip:
+            if do_hflip:
                 frame = np.fliplr(frame)
-                dets = dets.warp(flipper)
+                dets = dets.warp(hflipper)
+
+            if do_vflip:
+                frame = np.flipud(frame)
+                dets = dets.warp(vflipper)
 
             # Resize the sampled window to the target space for the network
             frame, info = kwimage.imresize(frame, dsize=input_dsize,
