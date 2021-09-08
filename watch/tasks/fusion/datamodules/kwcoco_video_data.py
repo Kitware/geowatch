@@ -520,6 +520,7 @@ class KWCocoVideoDataset(data.Dataset):
             new_sample_grid = new_video_sample_grid(
                 sampler.dset, window_dims=sample_shape,
                 window_overlap=window_overlap,
+                keepbound=True,
             )
             self.length = len(new_sample_grid['targets'])
         else:
@@ -531,6 +532,7 @@ class KWCocoVideoDataset(data.Dataset):
                 sampler.dset, window_dims=sample_shape,
                 window_overlap=window_overlap,
                 negative_classes=negative_classes,
+                keepbound=False,
             )
 
             n_pos = len(new_sample_grid["positives_indexes"])
@@ -1393,7 +1395,8 @@ class KWCocoVideoDataset(data.Dataset):
 def new_video_sample_grid(dset, window_dims=None, window_overlap=0.0,
                           space_dims=None, time_dim=None,  # TODO
                           classes_of_interest=None, ignore_coverage_thresh=0.6,
-                          negative_classes={'ignore', 'background'}):
+                          negative_classes={'ignore', 'background'},
+                          keepbound=False):
     """
     PORTED FROM NDSAMPLER TO FIX A BIG
 
@@ -1406,7 +1409,7 @@ def new_video_sample_grid(dset, window_dims=None, window_overlap=0.0,
         >>> sample_grid = new_video_sample_grid(dset, window_dims)
         >>> print('sample_grid = {}'.format(ub.repr2(sample_grid, nl=2)))
         >>> # Now try to load a sample
-        >>> idx = sample_grid['positives_idxs'][0]
+        >>> idx = sample_grid['positives_indexes'][0]
         >>> tr = sample_grid['targets'][idx]
         >>> import ndsampler
         >>> sampler = ndsampler.CocoSampler(dset)
@@ -1421,7 +1424,6 @@ def new_video_sample_grid(dset, window_dims=None, window_overlap=0.0,
     """
     import kwarray
     from ndsampler import isect_indexer
-    keepbound = False
 
     if classes_of_interest:
         raise NotImplementedError
