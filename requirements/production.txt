@@ -57,7 +57,6 @@ rtree >= 0.9.7
 pygeos >= 0.10.1
 rgd-client >= 0.2.5, != 0.2.3
 geojson >= 2.5.0
-git+https://github.com/dmjoy/sentinel2_angle_bands.git@da85303#egg=s2angs
 
 # Machine learning
 scikit_learn >= 0.24.2
