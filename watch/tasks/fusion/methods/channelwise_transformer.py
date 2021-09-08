@@ -149,8 +149,13 @@ class MultimodalTransformer(pl.LightningModule):
         num_channels = sum(ub.map_vals(len, input_channels.normalize().parse()).values())
 
         # criterion and metrics
-        self.change_criterion = nn.BCEWithLogitsLoss(
-                pos_weight=torch.ones(1) * pos_weight)
+        import monai
+        # self.change_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
+        self.class_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
+        self.change_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
+
+        # self.change_criterion = nn.BCEWithLogitsLoss(
+        #         pos_weight=torch.ones(1) * pos_weight)
 
         # self.class_criterion = nn.CrossEntropyLoss()
         # self.class_criterion = nn.BCEWithLogitsLoss()
@@ -399,10 +404,11 @@ class MultimodalTransformer(pl.LightningModule):
 
             >>> loss_records = []
             >>> step = 0
-            >>> optim = torch.optim.AdamW(self.parameters(), lr=1e-3)
+            >>> optim = torch.optim.AdamW(self.parameters(), lr=1e-4)
             >>> import xdev
             >>> for _ in xdev.InteractiveIter(list(range(1000))):
-            >>>     for i in ub.ProgIter(range(10), desc='overfit'):
+            >>>     num_steps = 50
+            >>>     for i in ub.ProgIter(range(num_steps), desc='overfit'):
             >>>         optim.zero_grad()
             >>>         outputs = self.training_step(batch)
             >>>         outputs['item_losses']
@@ -424,6 +430,27 @@ class MultimodalTransformer(pl.LightningModule):
             >>> # TODO: start a server process that listens for new images
             >>> # as it gets new images, it starts playing through the animation
             >>> # looping as needed
+
+        Ignore:
+            # How to get data we need to step back into the dataloader
+            # to debug the batch
+            item = batch[0]
+
+            item['frames'][0]['class_idxs'].unique()
+            item['frames'][1]['class_idxs'].unique()
+            item['frames'][2]['class_idxs'].unique()
+
+            # print(item['frames'][0]['change'].unique())
+            print(item['frames'][1]['change'].unique())
+            print(item['frames'][2]['change'].unique())
+
+            tr = item['tr']
+            self = torch_dset
+            kwplot.imshow(self.draw_item(item), fnum=3)
+
+            kwplot.imshow(item['frames'][1]['change'].cpu().numpy(), fnum=4)
+
+
         """
         outputs = {}
 
@@ -493,14 +520,15 @@ class MultimodalTransformer(pl.LightningModule):
                 # print('change_logits.shape = {!r}'.format(change_logits.shape))
                 # print('true_changes.shape = {!r}'.format(true_changes.shape))
 
-                change_loss = self.change_criterion(change_logits, true_changes.float())
+                change_loss = self.change_criterion(change_logits, true_changes.float()).mean()
                 item_loss_parts['change'] = change_loss
 
                 true_ohe = kwarray.one_hot_embedding(true_class.long(), self.num_classes, dim=-1).float()
-                y = true_ohe
-                x = class_logits
-                # class_loss = torch.nn.functional.cross_entropy(x, y)
-                class_loss = torch.nn.functional.binary_cross_entropy_with_logits(x, y)
+                # y = true_ohe
+                # x = class_logits
+
+                class_loss = self.class_criterion(class_logits, true_ohe).mean()
+                # class_loss = torch.nn.functional.binary_cross_entropy_with_logits(class_logits, true_ohe)
                 item_loss_parts['class'] = class_loss
 
                 item_losses.append(item_loss_parts)
