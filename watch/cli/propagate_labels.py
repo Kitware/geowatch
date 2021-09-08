@@ -1,8 +1,8 @@
+# -*- coding: utf-8 -*-
 import kwcoco
 import kwimage
-import os
-from os.path import join
 import ubelt as ub
+import pathlib
 import scriptconfig as scfg
 
 
@@ -16,7 +16,7 @@ class PropagateLabelsConfig(scfg.Config):
     then this annotation was missing for the next few frames.
 
 
-    Notes:
+    Note:
 
         # Given a kwcoco file with original annotations, this script forward propagates those annotations
         # and creates a new kwcoco file.
@@ -24,17 +24,28 @@ class PropagateLabelsConfig(scfg.Config):
 
         python -m watch.cli.propagate_labels.py dataset_fname
 
-
-        TODO:
-            - [ ] Make sure the original annotations are correct. Currently annotations with very low overlap with images are showing up.
-            - [ ] Write the all labels, original and propagated annotations, in another kwcoco file.
+    TODO:
+        - [ ] Make sure the original annotations are correct. Currently annotations with very low overlap with images are showing up.
+        - [ ] Write the all labels, original and propagated annotations, in another kwcoco file.
 
     """
     default = {
-        'data_dir': scfg.Value('drop1-S2-aligned', help='drop1 aligned directory name', position=1),
-        'out_dir': scfg.Value('propagation_output', help="Output directory where visualizations and processed kwcoco files will be saved", position=2),
-        'viz_end': scfg.Value(False, help="if True, last few frames will be saved"),
-        'verbose': scfg.Value(False, help="use this to print details")
+        'src': scfg.Value(position=1, help=ub.paragraph(
+            '''
+            path to the kwcoco file to propogate labels in
+            ''')),
+
+        'dst': scfg.Value('propagted_data.kwcoco.json', help=ub.paragraph(
+            '''
+            Where the output coco file with propogated labels is saved
+            '''), position=2),
+
+        'viz_dpath': scfg.Value(None, help=ub.paragraph(
+            '''
+            if specified, visualizations will be written to this directory
+            ''')),
+
+        'verbose': scfg.Value(1, help="use this to print details")
     }
 
     epilog = """
@@ -88,28 +99,30 @@ def get_canvas_concat_channels(annotations, dataset, img_id):
     return ann_canvas
 
 
-def save_visualizations(canvases, canvases_fixed, fname):
+def save_visualizations(canvas_chunk, fpath):
     # save visualizations of original and propagated labels
     import kwplot
     plt = kwplot.autoplt()
 
     plt.figure(figsize=(30, 8))
-    n_images = len(canvases)
-    for i, c in enumerate(canvases):
+    n_images = len(canvas_chunk)
+    for i, info in enumerate(canvas_chunk):
+        before = info['before_canvas']
+        after = info['after_canvas']
         plt.subplot(2, n_images, i + 1)
-        plt.imshow(c)
+        plt.imshow(before)
         if i == 3:
             plt.title('Original')
         plt.axis('off')
 
         plt.subplot(2, n_images, n_images + i + 1)
-        plt.imshow(canvases_fixed[i])
+        plt.imshow(after)
         if i == 3:
             plt.title('Propagated')
         plt.axis('off')
 
     plt.tight_layout()
-    plt.savefig(fname, bbox_inches='tight')
+    plt.savefig(fpath, bbox_inches='tight')
     plt.close()
 
 
@@ -123,25 +136,27 @@ def main(cmdline=False, **kwargs):
         >>> dataset_directory = 'drop1-S2-aligned-c1'
 
         python -m watch.demo.propagate_labels --data_dir=dataset_directory --out_dir='propagation_output'
-
     """
-
-    args = PropagateLabelsConfig(default=kwargs, cmdline=cmdline)
-
-    # create the output dir
-    os.makedirs(args['out_dir'], exist_ok=True)
+    config = PropagateLabelsConfig(default=kwargs, cmdline=cmdline)
+    print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
     # Read input file
-    _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
-    dvc_dpath = os.environ.get('DVC_DPATH', _default)
-    coco_fpath = join(dvc_dpath, args['data_dir'], 'data.kwcoco.json')
-    full_ds = kwcoco.CocoDataset(coco_fpath)
-    print('total video:', full_ds.n_videos)
-    print('total images:', full_ds.n_images)
-    print('total annotations:', full_ds.n_annots)
+    full_ds = kwcoco.CocoDataset.coerce(config['src'])
+    print(ub.repr2(full_ds.basic_stats(), nl=1))
 
     # make a copy of the original kwcoco dataset
+    dst_fpath = pathlib.Path(config['dst'])
+    # Ensure the output directory exists
+    dst_fpath.parent.mkdir(exist_ok=True, parents=True)
     propagated_ds = full_ds.copy()
+    propagated_ds.fpath = config['dst']
+
+    viz_dpath = config['viz_dpath']
+    if viz_dpath not in {None, False}:
+        viz_dpath = pathlib.Path(viz_dpath)
+        viz_dpath.mkdir(exist_ok=True, parents=True)
+    else:
+        viz_dpath = None
 
     # preprocessing step: in the new dataset, add a new filed 'source_gid' to every *annotation*.
     # original annotations: source_gid == gid
@@ -155,18 +170,27 @@ def main(cmdline=False, **kwargs):
         ann['source_gid'] = image_id
 
     # which categories we want to propagate
+    # TODO: parameterize
     catnames_to_propagate = [
         'Site Preparation',
-        'Active Construction', ]
-    categories_to_propagate = [full_ds.index.name_to_cat[c]['id'] for c in catnames_to_propagate]
+        'Active Construction',
+        'Unknown',
+        # 'No Activity',
+        # 'Post Construction',
+    ]
+    cat_ids_to_propogate = [full_ds.index.name_to_cat[c]['id']
+                            for c in catnames_to_propagate]
 
     # number of visualizations of every sequence
     n_image_viz = 7
 
-    # a list of newly geenrated annotation IDs, for debugging purposes
+    # a list of newly generated annotation IDs, for debugging purposes
     new_aids = []
 
-    for vid_id, video in full_ds.index.videos.items():
+    prog = ub.ProgIter(
+        full_ds.index.videos.items(),
+        total=len(full_ds.index.videos), desc='process video')
+    for vid_id, video in prog:
         image_ids = full_ds.index.vidid_to_gids[vid_id]
 
         # a set of all the seen track IDs
@@ -179,11 +203,14 @@ def main(cmdline=False, **kwargs):
         latest_img_ids = {}
 
         # canvases for visualizations
-        canvases = []
-        canvases_fixed = []
+        canvas_infos = []
 
         # for all images in this video
         for j, img_id in enumerate(image_ids):
+            if 1:
+                prog.ensure_newline()
+                print('img_id = {!r}'.format(img_id))
+
             this_track_ids = set()
             this_image_anns = []
 
@@ -191,10 +218,13 @@ def main(cmdline=False, **kwargs):
 
             aids = full_ds.gid_to_aids[img_id]
 
+            # Update all current tracks to have their latest annotation state
             for aid in list(aids):
-                anns = full_ds.anns[aid]
-                this_image_anns.append(anns)
-                track_id = anns['track_id']
+                ann = full_ds.anns[aid]
+                if 1:
+                    print('ann = {}'.format(ub.repr2(ub.dict_diff(ann, {'segmentation', 'segmentation_geos', 'properties'}), nl=0)))
+                this_image_anns.append(ann)
+                track_id = ann['track_id']
                 if track_id not in this_track_ids:
                     this_track_ids.update({track_id})
 
@@ -213,9 +243,9 @@ def main(cmdline=False, **kwargs):
             if missing_track_ids:
 
                 for missing in missing_track_ids:
-                    if full_ds.anns[latest_ann_ids[missing]]['category_id'] in categories_to_propagate :
-                        # check if the annotation belongs to the list of categories that we want to propagate
-                        previous_annotation = full_ds.anns[latest_ann_ids[missing]]
+                    # check if the annotation belongs to the list of categories that we want to propagate
+                    previous_annotation = full_ds.anns[latest_ann_ids[missing]]
+                    if previous_annotation['category_id'] in cat_ids_to_propogate:
 
                         # get the warp from previous image to this image
                         previous_image_id = latest_img_ids[missing]
@@ -231,43 +261,48 @@ def main(cmdline=False, **kwargs):
                         # append in the list for visualizations
                         this_image_fixed_anns.append(warped_annotation)
 
-                        if args['verbose']:
+                        if config['verbose']:
+                            prog.ensure_newline()
                             print('added annotation for image', img_id, 'track ID', missing)
 
             # Get "n_image_viz" number of canvases for visualization with original annotations
             num_frames = len(full_ds.index.vidid_to_gids[vid_id])
-            store_ending_frame = args['viz_end'] and ((num_frames - j) <=  n_image_viz)
-            store_starting_frame = (not args['viz_end']) and (j < n_image_viz)
-            if store_starting_frame or store_ending_frame:
-                canvases.append(get_canvas_concat_channels(annotations=this_image_anns, dataset=full_ds, img_id=img_id))
-                canvases_fixed.append(get_canvas_concat_channels(annotations=this_image_fixed_anns, dataset=full_ds, img_id=img_id))
+
+            if viz_dpath is not None:
+                is_starting_frame = (j < n_image_viz)
+                is_ending_frame = (j >= (num_frames - n_image_viz))
+                if is_ending_frame or is_starting_frame:
+                    before_canvas = get_canvas_concat_channels(
+                        annotations=this_image_anns, dataset=full_ds,
+                        img_id=img_id)
+                    after_canvas = get_canvas_concat_channels(
+                        annotations=this_image_fixed_anns, dataset=full_ds,
+                        img_id=img_id)
+                    canvas_infos.append({
+                        'before_canvas': before_canvas,
+                        'after_canvas': after_canvas,
+                        'frame_num': j,
+                    })
 
         # save visualization
-        location_string = '_end' if args['viz_end'] else '_start'
-        fname = join(args['out_dir'], 'video_' + str(vid_id) + location_string + '.jpg')
-        save_visualizations(canvases, canvases_fixed, fname)
+        if viz_dpath is not None:
+            vid_name = video['name']
+            for canvas_chunk in ub.chunks(canvas_infos, n_image_viz):
+                min_frame = min([d['frame_num'] for d in canvas_chunk])
+                max_frame = max([d['frame_num'] for d in canvas_chunk])
+                fname = f'video_{vid_id:04d}_{vid_name}_frames_{min_frame}_to_{max_frame}.jpg'
+                fpath = viz_dpath / fname
+                save_visualizations(canvas_chunk, fpath)
 
     # save the propagated dataset
-    propagated_fname = join(args['out_dir'], 'propagted_data.kwcoco.json')
-    propagated_ds.dump(propagated_fname)
+    print('Save: propagated_ds.fpath = {!r}'.format(propagated_ds.fpath))
+    propagated_ds.dump(propagated_ds.fpath, newlines=True)
+
+    if viz_dpath:
+        print('saved visualizations to: {!r}'.format(viz_dpath))
 
     # print statistics about propagation
     print('original annotations:', full_ds.n_annots, 'propagated annotations:', len(new_aids), 'total annotations:', propagated_ds.n_annots)
-
-    # Running a debugging check. This can be removed in future
-    verify_ds = kwcoco.CocoDataset(propagated_fname)
-    original_aids_n = 0
-    propagated_aids_n = 0
-    for aid in verify_ds.index.anns:
-        # load annotation
-        ann = verify_ds.index.anns[aid]
-        image_id = ann['image_id']
-        if image_id == ann['source_gid']:
-            original_aids_n += 1
-        else:
-            propagated_aids_n += 1
-
-    print('verification of annotation types -- no. of original anns:', original_aids_n, ', no. of propagated anns:', propagated_aids_n)
 
     # ToDo
     # [x] write the code to add annotation objects
@@ -277,8 +312,38 @@ def main(cmdline=False, **kwargs):
     return 0
 
 if __name__ == '__main__':
-    """
+    r"""
     CommandLine:
-        python -m watch.cli.propagate_labels
+
+        # Command line used to test this script in development
+
+        DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+        BUNDLE_DPATH=$DVC_DPATH/drop1-S2-L8-aligned
+
+        INPUT_KWCOCO=$BUNDLE_DPATH/data.kwcoco.json
+        OUTPUT_KWCOCO=$BUNDLE_DPATH/propogated.kwcoco.json
+
+        python -m watch.cli.coco_visualize_videos \
+            --src $INPUT_KWCOCO --viz_dpath $BUNDLE_DPATH/viz_before \
+            --num_workers=6
+
+        python -m watch.cli.propagate_labels \
+                --src $INPUT_KWCOCO --dst $OUTPUT_KWCOCO \
+                --viz_dpath=$BUNDLE_DPATH/_propogate_viz
+
+        python -m watch.cli.coco_visualize_videos \
+            --src $OUTPUT_KWCOCO --viz_dpath $BUNDLE_DPATH/viz_after \
+            --num_workers=6
+
+
+        # DEBUG CASE
+        kwcoco subset --src $INPUT_KWCOCO --dst $INPUT_KWCOCO.small.json \
+            --select_videos '.name | startswith("BH_")'
+
+        python -m watch.cli.propagate_labels \
+                --src $INPUT_KWCOCO.small.json --dst $OUTPUT_KWCOCO.small.json \
+                --viz_dpath=$BUNDLE_DPATH/_propogate_viz_small
+
+
     """
     main(cmdline=True)
