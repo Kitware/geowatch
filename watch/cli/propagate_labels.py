@@ -4,6 +4,7 @@ import kwimage
 import ubelt as ub
 import pathlib
 import scriptconfig as scfg
+from watch.utils import util_raster
 
 
 class PropagateLabelsConfig(scfg.Config):
@@ -25,19 +26,22 @@ class PropagateLabelsConfig(scfg.Config):
         python -m watch.cli.propagate_labels.py dataset_fname
 
     TODO:
-        - [ ] Make sure the original annotations are correct. Currently annotations with very low overlap with images are showing up.
-        - [ ] Write the all labels, original and propagated annotations, in another kwcoco file.
+        - [ ] Make sure the original annotations are correct. Currently annotations with very low overlap with images are showing up. Could be fixed by relying on geo-coordinates instead?
+        - [ ] Crop propagated annotations to bounds or valid data mask of new image
+        - [ ] Pull in and merge annotations from an external kwcoco file
+        - [ ] Handle splitting and merging tracks (non-unique frame_index)
+        - [ ] Stop propagation at category change (could be taken care of by external kwcoco file)
 
     """
     default = {
         'src': scfg.Value(position=1, help=ub.paragraph(
             '''
-            path to the kwcoco file to propogate labels in
+            path to the kwcoco file to propagate labels in
             ''')),
 
         'dst': scfg.Value('propagted_data.kwcoco.json', help=ub.paragraph(
             '''
-            Where the output coco file with propogated labels is saved
+            Where the output coco file with propagated labels is saved
             '''), position=2),
 
         'viz_dpath': scfg.Value(None, help=ub.paragraph(
@@ -158,7 +162,7 @@ def main(cmdline=False, **kwargs):
     else:
         viz_dpath = None
 
-    # preprocessing step: in the new dataset, add a new filed 'source_gid' to every *annotation*.
+    # preprocessing step: in the new dataset, add a new field 'source_gid' to every *annotation*.
     # original annotations: source_gid == gid
     # when we propagate labels, we will add the image id of the original image from which we copied
     # the annotation. In the case of propagated labels, we will have source_gid != gid
@@ -178,7 +182,7 @@ def main(cmdline=False, **kwargs):
         # 'No Activity',
         # 'Post Construction',
     ]
-    cat_ids_to_propogate = [full_ds.index.name_to_cat[c]['id']
+    cat_ids_to_propagate = [full_ds.index.name_to_cat[c]['id']
                             for c in catnames_to_propagate]
 
     # number of visualizations of every sequence
@@ -193,8 +197,8 @@ def main(cmdline=False, **kwargs):
     for vid_id, video in prog:
         image_ids = full_ds.index.vidid_to_gids[vid_id]
 
-        # a set of all the seen track IDs
-        seen_track_ids = set()
+        # a set of all the track IDs in this video
+        track_ids = set(full_ds.subset(full_ds.index.vidid_to_gids[vid_id]).index.trackid_to_aids.keys())
 
         # a dictionary of latest annotation IDs, indexed by the track IDs
         latest_ann_ids = {}
@@ -214,38 +218,29 @@ def main(cmdline=False, **kwargs):
             this_track_ids = set()
             this_image_anns = []
 
-            this_image_fixed_anns = []
-
-            aids = full_ds.gid_to_aids[img_id]
-
             # Update all current tracks to have their latest annotation state
-            for aid in list(aids):
+            for aid in list(full_ds.gid_to_aids[img_id]):
                 ann = full_ds.anns[aid]
                 if 1:
                     print('ann = {}'.format(ub.repr2(ub.dict_diff(ann, {'segmentation', 'segmentation_geos', 'properties'}), nl=0)))
                 this_image_anns.append(ann)
                 track_id = ann['track_id']
-                if track_id not in this_track_ids:
-                    this_track_ids.update({track_id})
-
-                latest_ann_ids[track_id] = aid
+                this_track_ids.add(track_id)
+                
+                # handle non-unique track ids
+                if latest_img_ids.get(track_id) != img_id:
+                    latest_ann_ids[track_id] = {}
                 latest_img_ids[track_id] = img_id
-
-            # add any track IDs to the list of seen track ids
-            new_track_ids = this_track_ids - seen_track_ids
-            if new_track_ids:
-                seen_track_ids.update(new_track_ids)
+                latest_ann_ids[track_id].add(aid)
 
             this_image_fixed_anns = this_image_anns.copy()  # if there is anything missing, we are going to fix now
 
             # was there any seen track ID that was not in this image?
-            missing_track_ids = seen_track_ids - this_track_ids
-            if missing_track_ids:
-
-                for missing in missing_track_ids:
-                    # check if the annotation belongs to the list of categories that we want to propagate
-                    previous_annotation = full_ds.anns[latest_ann_ids[missing]]
-                    if previous_annotation['category_id'] in cat_ids_to_propogate:
+            for missing in track_ids - this_track_ids:
+                for aid in latest_ann_ids.get(missing, {}):
+                    previous_annotation = full_ds.anns[aid]
+                    # check if the annotation belongs to the list of cats we want to propagate
+                    if previous_annotation['category_id'] in cat_ids_to_propagate:
 
                         # get the warp from previous image to this image
                         previous_image_id = latest_img_ids[missing]
@@ -304,12 +299,7 @@ def main(cmdline=False, **kwargs):
     # print statistics about propagation
     print('original annotations:', full_ds.n_annots, 'propagated annotations:', len(new_aids), 'total annotations:', propagated_ds.n_annots)
 
-    # ToDo
-    # [x] write the code to add annotation objects
-    # [x] save the new kwcoco data to disk
-    # [ ] use site dates (or any other mechanism) to make sure propagation is limited only to correct frames
-
-    return 0
+    return propagated_ds
 
 if __name__ == '__main__':
     r"""
@@ -321,7 +311,7 @@ if __name__ == '__main__':
         BUNDLE_DPATH=$DVC_DPATH/drop1-S2-L8-aligned
 
         INPUT_KWCOCO=$BUNDLE_DPATH/data.kwcoco.json
-        OUTPUT_KWCOCO=$BUNDLE_DPATH/propogated.kwcoco.json
+        OUTPUT_KWCOCO=$BUNDLE_DPATH/propagated.kwcoco.json
 
         python -m watch.cli.coco_visualize_videos \
             --src $INPUT_KWCOCO --viz_dpath $BUNDLE_DPATH/viz_before \
@@ -329,7 +319,7 @@ if __name__ == '__main__':
 
         python -m watch.cli.propagate_labels \
                 --src $INPUT_KWCOCO --dst $OUTPUT_KWCOCO \
-                --viz_dpath=$BUNDLE_DPATH/_propogate_viz
+                --viz_dpath=$BUNDLE_DPATH/_propagate_viz
 
         python -m watch.cli.coco_visualize_videos \
             --src $OUTPUT_KWCOCO --viz_dpath $BUNDLE_DPATH/viz_after \
@@ -342,7 +332,7 @@ if __name__ == '__main__':
 
         python -m watch.cli.propagate_labels \
                 --src $INPUT_KWCOCO.small.json --dst $OUTPUT_KWCOCO.small.json \
-                --viz_dpath=$BUNDLE_DPATH/_propogate_viz_small
+                --viz_dpath=$BUNDLE_DPATH/_propagate_viz_small
 
 
     """
