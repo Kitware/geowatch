@@ -27,7 +27,7 @@ class CocoVisualizeConfig(scfg.Config):
 
         'space': scfg.Value('image', help='can be image or video space'),
 
-        'channels': scfg.Value(None, help='only viz these channels'),
+        'channels': scfg.Value(None, type=str, help='only viz these channels'),
     }
 
 
