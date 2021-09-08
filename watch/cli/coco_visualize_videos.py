@@ -103,6 +103,8 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset, img, anns,
     delayed = coco_dset.delayed_load(img['id'], space=space)
 
     if channels is not None:
+        if isinstance(channels, list):
+            channels = ','.join(channels) # hack
         channels = channel_spec.ChannelSpec.coerce(channels)
         chan_groups = channels.spec.split(',')
     else:
