@@ -207,10 +207,10 @@ viz_check(){
     items=$(jq -r '.videos[] | .name' $COMBO_PROPOGATED_COCO_FPATH)
     for item in ${items[@]}; do
         echo "item = $item"
-        python -m watch.cli.gifify  --frames_per_second .3 \
+        python -m watch.cli.gifify  --frames_per_second .7 \
             --input "$KWCOCO_BUNDLE_DPATH/_viz_preprop/$item/_anns/red|green|blue/" \
             --output "$KWCOCO_BUNDLE_DPATH/_viz_preprop/${item}_rgb.gif"
-        python -m watch.cli.gifify  --frames_per_second .3 \
+        python -m watch.cli.gifify  --frames_per_second .7 \
             --input "$KWCOCO_BUNDLE_DPATH/_viz_preprop/$item/_anns/inv_sort1|inv_augment1|inv_shared1/" \
             --output "$KWCOCO_BUNDLE_DPATH/_viz_preprop/${item}_invariants.gif"
     done
@@ -218,10 +218,10 @@ viz_check(){
     items=$(jq -r '.videos[] | .name' $COMBO_PROPOGATED_COCO_FPATH)
     for item in ${items[@]}; do
         echo "item = $item"
-        python -m watch.cli.gifify --frames_per_second .3 \
+        python -m watch.cli.gifify --frames_per_second .7 \
             --input "$KWCOCO_BUNDLE_DPATH/_viz_postprop/$item/_anns/red|green|blue/" \
             --output "$KWCOCO_BUNDLE_DPATH/_viz_postprop/${item}_rgb.gif"
-        python -m watch.cli.gifify  --frames_per_second .3 \
+        python -m watch.cli.gifify  --frames_per_second .7 \
             --input "$KWCOCO_BUNDLE_DPATH/_viz_postprop/$item/_anns/inv_sort1|inv_augment1|inv_shared1/" \
             --output "$KWCOCO_BUNDLE_DPATH/_viz_postprop/${item}_invariants.gif"
     done

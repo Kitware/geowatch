@@ -524,7 +524,7 @@ def main(cmdline=False, **kwargs):
     ]
 
     # number of visualizations of every sequence
-    n_image_viz = 7
+    frames_per_image = 7
 
     # a list of newly generated annotation IDs, for debugging purposes
     new_aids = []
@@ -643,13 +643,14 @@ def main(cmdline=False, **kwargs):
                             print('added annotation for image', img_id,
                                   'track ID', missing)
 
-            # Get "n_image_viz" number of canvases for visualization with original annotations
-            num_frames = len(full_ds.index.vidid_to_gids[vid_id])
+            # Get "frames_per_image" number of canvases for visualization with original annotations
+            # num_frames = len(full_ds.index.vidid_to_gids[vid_id])
 
             if viz_dpath is not None:
-                is_starting_frame = (j < n_image_viz)
-                is_ending_frame = (j >= (num_frames - n_image_viz))
-                if is_ending_frame or is_starting_frame:
+                # is_starting_frame = (j < frames_per_image)
+                # is_ending_frame = (j >= (num_frames - frames_per_image))
+                # if is_ending_frame or is_starting_frame:
+                if True:
                     before_canvas = get_canvas_concat_channels(
                         annotations=this_image_anns,
                         dataset=full_ds,
@@ -691,7 +692,7 @@ def main(cmdline=False, **kwargs):
         # save visualization
         if viz_dpath is not None:
             vid_name = full_ds.index.videos[vid_id]['name']
-            for canvas_chunk in ub.chunks(canvas_infos, n_image_viz):
+            for canvas_chunk in ub.chunks(canvas_infos, frames_per_image):
                 min_frame = min([d['frame_num'] for d in canvas_chunk])
                 max_frame = max([d['frame_num'] for d in canvas_chunk])
                 fname = f'video_{vid_id:04d}_{vid_name}_frames_{min_frame}_to_{max_frame}.jpg'
