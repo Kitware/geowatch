@@ -26,6 +26,8 @@ class CocoVisualizeConfig(scfg.Config):
         'num_workers': scfg.Value(0, help='number of parallel draw jobs'),
 
         'space': scfg.Value('image', help='can be image or video space'),
+
+        'channels': scfg.Value(None, help='only viz these channels'),
     }
 
 
@@ -42,6 +44,7 @@ def main(cmdline=True, **kwargs):
     import pathlib
     config = CocoVisualizeConfig(default=kwargs, cmdline=cmdline)
     space = config['space']
+    channels = config['channels']
     print('config = {}'.format(ub.repr2(dict(config), nl=2)))
 
     coco_dset = kwcoco.CocoDataset.coerce(config['src'])
@@ -70,7 +73,8 @@ def main(cmdline=True, **kwargs):
             anns = coco_dset.annots(gid=gid).objs
 
             pool.submit(_write_ann_visualizations2,
-                        coco_dset, img, anns, sub_bundle_dpath, space=space)
+                        coco_dset, img, anns, sub_bundle_dpath, space=space,
+                        channels=channels)
 
         for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write vids'):
             job.result()
@@ -82,12 +86,13 @@ _CLI = CocoVisualizeConfig
 
 
 def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset, img, anns,
-                               sub_bundle_dpath, space):
+                               sub_bundle_dpath, space, channels=None):
     """
     TODO:
         refactor because similar code is also used in coco_align_geotiffs
     """
     # See if we can look at what we made
+    from kwcoco import channel_spec
     from watch.utils.util_norm import normalize_intensity
     from watch.utils.kwcoco_extensions import CocoImage
 
@@ -96,6 +101,9 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset, img, anns,
     name = img.get('name', 'unknown')
 
     delayed = coco_dset.delayed_load(img['id'], space=space)
+
+    if channels is not None:
+        channels = channel_spec.ChannelSpec.coerce(channels)
 
     coco_img = CocoImage(img)
     chan_groups = coco_img.channels.spec.split(',')

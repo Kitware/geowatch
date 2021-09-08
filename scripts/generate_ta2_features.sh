@@ -64,6 +64,7 @@ DZYNE_LANDCOVER_COCO_FPATH  = $DZYNE_LANDCOVER_COCO_FPATH
 
 # Final output file
 COMBO_COCO_FPATH           = $COMBO_COCO_FPATH
+COMBO_PROPOGATED_COCO_FPATH = $COMBO_PROPOGATED_COCO_FPATH
 
 =====================================================
 "
@@ -180,13 +181,17 @@ predict_all_ta2_features(){
 
 
 viz_check(){
+    source ~/code/watch/scripts/generate_ta2_features.sh
     echo "COMBO_COCO_FPATH = $COMBO_COCO_FPATH"
     echo "KWCOCO_BUNDLE_DPATH = $KWCOCO_BUNDLE_DPATH"
+
+    python -m watch stats $COMBO_COCO_FPATH
 
     # Optional: visualize the combo data before and after propogation
     python -m watch.cli.coco_visualize_videos \
         --src $COMBO_COCO_FPATH --space=video --num_workers=6 \
-        --viz_dpath $KWCOCO_BUNDLE_DPATH/_viz_preprop
+        --viz_dpath $KWCOCO_BUNDLE_DPATH/_viz_preprop \
+        --channels "blue|green|red,inv_sort1|inv_augment1|inv_shared1"
 
 }
 
