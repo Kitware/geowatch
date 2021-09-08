@@ -53,6 +53,14 @@ def add_angle_bands(stac_catalog, outdir):
         item_outdir = os.path.join(outdir, stac_item.id)
         os.makedirs(item_outdir, exist_ok=True)
 
+        # Adding a reference back to the original STAC
+        # item if not already present
+        if len(stac_item.get_links('original')) == 0:
+            stac_item.links.append(pystac.Link.from_dict(
+                {'rel': 'original',
+                 'href': stac_item.get_self_href(),
+                 'type': 'application/json'}))
+
         print("* Generating angle bands for item: '{}'".format(stac_item.id))
 
         if re.search(L7_RE, stac_item.id):
@@ -68,6 +76,10 @@ def add_angle_bands(stac_catalog, outdir):
                   "skipping!")
             output_stac_item = stac_item
 
+        output_stac_item.set_self_href(os.path.join(
+            item_outdir,
+            "{}.json".format(output_stac_item.id)))
+
         # Roughly keeping track of what WATCH processes have been
         # run on this particular item
         output_stac_item.properties.setdefault(
@@ -75,9 +87,9 @@ def add_angle_bands(stac_catalog, outdir):
 
         return output_stac_item
 
-    catalog.normalize_hrefs(outdir)
     output_catalog = catalog.map_items(_item_map)
 
+    output_catalog.set_self_href(os.path.join(outdir, 'catalog.json'))
     output_catalog.save(catalog_type=pystac.CatalogType.ABSOLUTE_PUBLISHED)
 
     return output_catalog

@@ -19,6 +19,7 @@ from collections import defaultdict
 
 S2_BANDS = ['B%02d' % (x) for x in np.arange(1, 13)]
 S2_BANDS.append('B8A')
+S2_ANGLE_BANDS = ['SEA4', 'SEZ4', 'SOA4', 'SOZ4']
 S2_ANCILLARY_RASTERS = ['cloudmask']
 
 
@@ -208,10 +209,15 @@ def s2_coregister(granuledirs, output_folder, baseline_scene):
             print('This is a master scene - just copy/translate to GTiff %s' %
                   (fname_base))
             for b in itertools.chain(S2_BANDS,
+                                     S2_ANGLE_BANDS,
                                      S2_ANCILLARY_RASTERS):
                 fname_band = os.path.basename(x.replace(base_band, b))
-                if b in S2_BANDS:
+                if b in S2_BANDS or b:
                     pfname_band = os.path.join(path_data, fname_band)
+                elif b in S2_ANGLE_BANDS:
+                    pfname_band_base, _ = os.path.splitext(
+                        os.path.join(path_data, fname_band))
+                    pfname_band = "{}.tif".format(pfname_band_base)
                 elif b in S2_ANCILLARY_RASTERS:
                     pfname_band = os.path.join(
                         path_data, "{}.tif".format(b))
@@ -219,6 +225,12 @@ def s2_coregister(granuledirs, output_folder, baseline_scene):
                     raise NotImplementedError(
                         "Unsure how to build path to band "
                         "file '{}'".format(b))
+
+                if((b in S2_ANGLE_BANDS or b in S2_ANCILLARY_RASTERS)
+                   and not os.path.isfile(pfname_band)):
+                    print("* Warning * Missing optional S2 band file '{}'"
+                          ", skipping!".format(pfname_band))
+                    continue
 
                 fname_out = fname_band[:-4] + '.tif'
                 com = 'gdal_translate -of GTiff -co "COMPRESS=DEFLATE" %s %s' % (
@@ -333,10 +345,16 @@ def s2_coregister(granuledirs, output_folder, baseline_scene):
                 # now transforming files
                 # TODO: this is easy to parallize
                 for b in itertools.chain(S2_BANDS,  # ['B01', 'B04', 'B11']:
+                                         S2_ANGLE_BANDS,  # ['SEA4, 'SEZ4', 'SOZ4', 'SOA4']
                                          S2_ANCILLARY_RASTERS):  # ['cloudmask']
                     if b in S2_BANDS:
                         fname_band = os.path.basename(x.replace(base_band, b))
                         pfname_band = os.path.join(path_data, fname_band)
+                    elif b in S2_ANGLE_BANDS:
+                        fname_band_base, _ = os.path.splitext(
+                            os.path.basename(x.replace(base_band, b)))
+                        pfname_band = os.path.join(
+                            path_data, "{}.tif".format(fname_band_base))
                     elif b in S2_ANCILLARY_RASTERS:
                         pfname_band = os.path.join(
                             path_data, "{}.tif".format(b))
@@ -344,6 +362,12 @@ def s2_coregister(granuledirs, output_folder, baseline_scene):
                         raise NotImplementedError(
                             "Unsure how to build path to band "
                             "file '{}'".format(b))
+
+                    if((b in S2_ANGLE_BANDS or b in S2_ANCILLARY_RASTERS)
+                       and not os.path.isfile(pfname_band)):
+                        print("* Warning * Missing optional S2 band file '{}'"
+                              ", skipping!".format(pfname_band))
+                        continue
 
                     # First, checking spatial resolution based on the band
                     fname_gcp = fname_gcp_10  # deafault value
