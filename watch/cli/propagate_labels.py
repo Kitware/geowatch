@@ -695,7 +695,7 @@ def main(cmdline=False, **kwargs):
             for canvas_chunk in ub.chunks(canvas_infos, frames_per_image):
                 min_frame = min([d['frame_num'] for d in canvas_chunk])
                 max_frame = max([d['frame_num'] for d in canvas_chunk])
-                fname = f'video_{vid_id:04d}_{vid_name}_frames_{min_frame}_to_{max_frame}.jpg'
+                fname = f'video_{vid_id:04d}_{vid_name}_frames_{min_frame:03d}_to_{max_frame:03d}.jpg'
                 fpath = viz_dpath / fname
                 save_visualizations(canvas_chunk, fpath)
 
