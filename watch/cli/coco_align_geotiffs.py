@@ -1096,6 +1096,9 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
 def _write_ann_visualizations(new_dset, new_img, new_anns, sub_bundle_dpath):
     """
     Helper for :func:`SimpleDataCube.extract_overlaps`.
+
+    TODO:
+        refactor because this is also used in coco_visualize_videos
     """
     # See if we can look at what we made
     from watch.utils.util_norm import normalize_intensity

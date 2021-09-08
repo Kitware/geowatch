@@ -2,7 +2,7 @@
 
 # Testing
 pytest >= 6.2.1
-xdoctest >= 0.15.4 
+xdoctest >= 0.15.8
 pytest_cov >= 2.8.1
 coverage >= 5.4
 jsonschema >= 3.2.0

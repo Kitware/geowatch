@@ -18,6 +18,7 @@ DVC_DPATH=${DVC_DPATH:-$HOME/data/dvc-repos/smart_watch_dvc}
 KWCOCO_BUNDLE_DPATH=${KWCOCO_BUNDLE_DPATH:-$DVC_DPATH/drop1-S2-L8-aligned}
 
 BASE_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json
+#BASE_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/propogated.kwcoco.json
 
 UKY_S2_MODEL_FPATH=${UKY_L8_MODEL_FPATH:-$DVC_DPATH/models/uky_invariants/sort_augment_overlap/S2_drop1-S2-L8-aligned-old.0.ckpt}
 UKY_L8_MODEL_FPATH=${UKY_L8_MODEL_FPATH:-$DVC_DPATH/models/uky_invariants/sort_augment_overlap/L8_drop1-S2-L8-aligned-old.0.ckpt}
@@ -100,7 +101,7 @@ rutgers_prediction(){
         --default_config_key=iarpa \
         --pred_dataset=$RUTGERS_MATERIAL_COCO_FPATH \
         --num_workers=8 \
-        --batch_size=32 --gpus 1
+        --batch_size=32 --gpus "0"
 }
 
 
@@ -146,6 +147,22 @@ predict_all_ta2_features(){
         --src $COMBO_COCO_FPATH \
         --dst $COMBO_COCO_FPATH \
         --target_gsd 10
+
+    # Propogate labels
+    python -m watch.cli.propagate_labels \
+            --src $COMBO_COCO_FPATH --dst $COMBO_COCO_FPATH \
+            --viz_dpath=False
+
+    LEFT_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_data_left.kwcoco.json
+    RIGHT_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_data_right.kwcoco.json
+
+    python -m watch.cli.coco_spatial_crop \
+            --src $COMBO_COCO_FPATH --dst $LEFT_COCO_FPATH \
+            --suffix=_left
+
+    python -m watch.cli.coco_spatial_crop \
+            --src $COMBO_COCO_FPATH --dst $RIGHT_COCO_FPATH \
+            --suffix=_right
 
     # Split out train and validation data (TODO: add test when we can)
     kwcoco subset --src $COMBO_COCO_FPATH \
@@ -202,4 +219,85 @@ split_demo(){
             --dst $VALI_COCO_FPATH \
             --select_videos '.name | startswith("KR_") | not'
 
+}
+
+
+train_model(){
+    DVC_DPATH=${DVC_DPATH:-$HOME/data/dvc-repos/smart_watch_dvc}
+    KWCOCO_BUNDLE_DPATH=${KWCOCO_BUNDLE_DPATH:-$DVC_DPATH/drop1-S2-L8-aligned}
+    TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_data_right.kwcoco.json
+    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_data_left.kwcoco.json
+    TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_data_left.kwcoco.json
+
+    WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+
+    ARCH=smt_it_stm_p8
+
+    #CHANNELS="blue|green|red|nir|inv_sort1|inv_sort2|inv_sort3|inv_sort4|inv_sort5|inv_sort6|inv_sort7|inv_sort8|inv_augment1|inv_augment2|inv_augment3|inv_augment4|inv_augment5|inv_augment6|inv_augment7|inv_augment8|inv_overlap1|inv_overlap2|inv_overlap3|inv_overlap4|inv_overlap5|inv_overlap6|inv_overlap7|inv_overlap8|inv_shared1|inv_shared2|inv_shared3|inv_shared4|inv_shared5|inv_shared6|inv_shared7|inv_shared8|matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7|matseg_8|matseg_9|matseg_10|matseg_11|matseg_12|matseg_13|matseg_14|matseg_15|matseg_16|matseg_17|matseg_18|matseg_19|rice_field|cropland|water|inland_water|river_or_stream|sebkha|snow_or_ice_field|bare_ground|sand_dune|built_up|grassland|brush|forest|wetland|road"
+    CHANNELS="blue|green|red|nir|inv_sort1|inv_sort2|inv_sort3|inv_sort4|inv_sort5|inv_sort6|inv_sort7|inv_sort8|inv_augment1|inv_augment2|inv_augment3|inv_augment4|inv_augment5|inv_augment6|inv_augment7|inv_augment8|inv_overlap1|inv_overlap2|inv_overlap3|inv_overlap4|inv_overlap5|inv_overlap6|inv_overlap7|inv_overlap8|inv_shared1|inv_shared2|inv_shared3|inv_shared4|inv_shared5|inv_shared6|inv_shared7|inv_shared8|rice_field|cropland|water|inland_water|river_or_stream|sebkha|snow_or_ice_field|bare_ground|sand_dune|built_up|grassland|brush|forest|wetland|road"
+
+    EXPERIMENT_NAME=DirectCD_${ARCH}_teamfeat_v012
+    DATASET_CODE=Drop1_RightLeft_V1
+
+    DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+    PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package.pt 
+    PRED_FPATH=$DEFAULT_ROOT_DIR/pred/pred.kwcoco.json
+    EVAL_DPATH=$DEFAULT_ROOT_DIR/pred/eval
+
+    TRAIN_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/train_$EXPERIMENT_NAME.yml 
+    PRED_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/predict_$EXPERIMENT_NAME.yml 
+
+    python -m watch stats $TRAIN_FPATH
+
+    kwcoco stats $TRAIN_FPATH $VALI_FPATH $TEST_FPATH
+
+    # Write train and prediction configs
+    python -m watch.tasks.fusion.fit \
+        --channels=${CHANNELS} \
+        --method="MultimodalTransformer" \
+        --arch_name=$ARCH \
+        --time_steps=9 \
+        --chip_size=128 \
+        --batch_size=1 \
+        --accumulate_grad_batches=64 \
+        --num_workers=6 \
+        --max_epochs=400 \
+        --patience=400 \
+        --gpus=1  \
+        --learning_rate=1e-4 \
+        --weight_decay=1e-4 \
+        --dropout=0.1 \
+        --window_size=8 \
+        --dump=$TRAIN_CONFIG_FPATH 
+
+    python -m watch.tasks.fusion.predict \
+        --gpus=1 \
+        --write_preds=True \
+        --write_probs=False \
+        --dump=$PRED_CONFIG_FPATH
+
+    ## TODO: predict and eval steps should be called after training.
+    # But perhaps it should be a different invocation of the fit script?
+    # So the simple route is still available?
+
+    # Execute train -> predict -> evaluate
+    python -m watch.tasks.fusion.fit \
+               --config=$TRAIN_CONFIG_FPATH \
+        --default_root_dir=$DEFAULT_ROOT_DIR \
+           --package_fpath=$PACKAGE_FPATH \
+            --train_dataset=$TRAIN_FPATH \
+             --vali_dataset=$VALI_FPATH \
+             --test_dataset=$TEST_FPATH \
+             --num_sanity_val_steps=0
+
+    python -m watch.tasks.fusion.predict \
+            --config=$PRED_CONFIG_FPATH \
+            --test_dataset=$TEST_FPATH \
+           --package_fpath=$PACKAGE_FPATH \
+            --pred_dataset=$PRED_FPATH && \
+    python -m watch.tasks.fusion.evaluate \
+            --true_dataset=$TEST_FPATH \
+            --pred_dataset=$PRED_FPATH \
+              --eval_dpath=$EVAL_DPATH
+        
 }

@@ -270,6 +270,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                     sample_shape=(self.time_steps, self.chip_size, self.chip_size),
                     window_overlap=(self.time_overlap, self.chip_overlap, self.chip_overlap),
                     channels=self.requested_channels,
+                    mode='vali',
                     neg_to_pos_ratio=0,
                 )
                 self.torch_datasets['vali'] = vali_dataset
@@ -388,7 +389,7 @@ class KWCocoVideoDataset(data.Dataset):
         >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
         >>> sampler = ndsampler.CocoSampler(coco_dset)
         >>> channels = 'B10|B8a|B1|B8'
-        >>> sample_shape = (3, 530, 610)
+        >>> sample_shape = (3, 128, 128)
         >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels)
         >>> index = len(self) // 4
         >>> item = self[index]
@@ -398,6 +399,17 @@ class KWCocoVideoDataset(data.Dataset):
         >>> kwplot.autompl()
         >>> kwplot.imshow(canvas)
         >>> kwplot.show_if_requested()
+
+    Ignore:
+        import kwplot
+        kwplot.autompl()
+        import xdev
+        sample_indices = list(range(len(self)))
+        for index in xdev.InteractiveIter(sample_indices):
+            item = self[index]
+            canvas = self.draw_item(item)
+            kwplot.imshow(canvas)
+            xdev.InteractiveIter.draw()
 
     Example:
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
@@ -438,6 +450,39 @@ class KWCocoVideoDataset(data.Dataset):
         >>> kwplot.autompl()
         >>> kwplot.imshow(canvas)
         >>> kwplot.show_if_requested()
+
+    Ignore:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> # Debug issues seen in training
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> import os
+        >>> from os.path import join
+        >>> import ndsampler
+        >>> import kwcoco
+        >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
+        >>> dvc_dpath = os.environ.get('DVC_DPATH', _default)
+        >>> coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/combo_data_right.kwcoco.json')
+        >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+        >>> sampler = ndsampler.CocoSampler(coco_dset)
+        >>> sample_shape = (7, 128, 128)
+        >>> self = KWCocoVideoDataset(
+        >>>     sampler,
+        >>>     sample_shape=(5, 120, 120),
+        >>>     window_overlap=0,
+        >>>     channels="blue|green|red|nir|inv_sort1|inv_sort2|inv_sort3",
+        >>> )
+        >>> item = self[4]
+        >>> canvas = self.draw_item(item)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> import xdev
+        >>> sample_indices = list(range(len(self)))
+        >>> for index in xdev.InteractiveIter(sample_indices):
+        >>>     item = self[index]
+        >>>     canvas = self.draw_item(item)
+        >>>     kwplot.imshow(canvas)
+        >>>     xdev.InteractiveIter.draw()
     """
     # TODO: add torchvision.transforms or albumentations
 
@@ -472,40 +517,41 @@ class KWCocoVideoDataset(data.Dataset):
 
         if mode == 'test':
             # In test mode we have to sample everything
-            sample_grid = simple_video_sample_grid(
+            # sample_grid = simple_video_sample_grid(
+            #     sampler.dset, window_dims=sample_shape,
+            #     window_overlap=window_overlap)
+            new_sample_grid = new_video_sample_grid(
                 sampler.dset, window_dims=sample_shape,
-                window_overlap=window_overlap)
+                window_overlap=window_overlap,
+            )
         else:
             negative_classes = (
                 self._heuristic_ignore_classnames |
                 self._hueristic_background_classnames
             )
-            full_sample_grid = new_video_sample_grid(
+            new_sample_grid = new_video_sample_grid(
                 sampler.dset, window_dims=sample_shape,
                 window_overlap=window_overlap,
                 negative_classes=negative_classes,
             )
 
-            # BUGGED
-            # sampler.new_sample_grid(
-            #     "video_detection", sample_shape,
-            #     window_overlap=window_overlap)
-
-            n_pos = len(full_sample_grid["positives"])
-            n_neg = len(full_sample_grid["negatives"])
+            n_pos = len(new_sample_grid["positives_indexes"])
+            n_neg = len(new_sample_grid["negatives_indexes"])
 
             max_neg = int(max(1, (neg_to_pos_ratio * n_pos)))
             if n_neg > max_neg:
                 print('chose max_neg = {!r}'.format(max_neg))
                 neg_idxs = kwarray.shuffle(np.arange(n_neg), rng=47789403)[0:max_neg]
-                chosen_negs = list(ub.take(full_sample_grid["negatives"], neg_idxs))
+                chosen_neg_idxs = list(ub.take(new_sample_grid["negatives_indexes"], neg_idxs))
             else:
-                chosen_negs = full_sample_grid["negatives"]
+                chosen_neg_idxs = new_sample_grid["negatives_indexes"]
 
-            sample_grid = list(it.chain(
-                full_sample_grid["positives"],
-                chosen_negs,
+            chosen_indexes = list(it.chain(
+                new_sample_grid["positives_indexes"],
+                chosen_neg_idxs,
             ))
+
+            sample_grid = list(ub.take(new_sample_grid['targets'], chosen_indexes))
 
         self.sample_grid = sample_grid
         self.transform = transform
@@ -829,9 +875,8 @@ class KWCocoVideoDataset(data.Dataset):
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (3, 96, 96)
-            >>> #channels = 'blue|green|red|nir|inv_sort1|inv_sort2|inv_sort3|inv_sort4|inv_sort5|inv_sort6|inv_sort7|inv_sort8|inv_augment1|inv_augment2|inv_augment3|inv_augment4|inv_augment5|inv_augment6|inv_augment7|inv_augment8|inv_overlap1|inv_overlap2|inv_overlap3|inv_overlap4|inv_overlap5|inv_overlap6|inv_overlap7|inv_overlap8|inv_shared1|inv_shared2|inv_shared3|inv_shared4|inv_shared5|inv_shared6|inv_shared7|inv_shared8|matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7|matseg_8|matseg_9|matseg_10|matseg_11|matseg_12|matseg_13|matseg_14|matseg_15|matseg_16|matseg_17|matseg_18|matseg_19|rice_field|cropland|water|inland_water|river_or_stream|sebkha|snow_or_ice_field|bare_ground|sand_dune|built_up|grassland|brush|forest|wetland|road'
             >>> channels = 'rice_field|cropland|water|inland_water|river_or_stream|sebkha|snow_or_ice_field|bare_ground|sand_dune|built_up|grassland|brush|forest|wetland|road'
-            >>> channels = 'matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7|matseg_8|matseg_9|matseg_10|matseg_11|matseg_12|matseg_13|matseg_14|matseg_15|matseg_16|matseg_17|matseg_18|matseg_19'
+            >>> channels = 'matseg_0|matseg_1|matseg_2|matseg_3|matseg_4'
             >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels)
             >>> item = self[0]
             >>> #self.compute_input_stats(num=10)
@@ -839,6 +884,7 @@ class KWCocoVideoDataset(data.Dataset):
 
 
         Ignore:
+            # TODO: profile and optimize loading in ndsampler / kwcoco
             _ = xdev.profile_now(self.__getitem__)(0)
             _ = xdev.profile_now(self.compute_input_stats)(num=10, num_workers=4, batch_size=1)
             tr = self.sample_grid[0]
@@ -1323,7 +1369,8 @@ def new_video_sample_grid(dset, window_dims=None, window_overlap=0.0,
         >>> sample_grid = new_video_sample_grid(dset, window_dims)
         >>> print('sample_grid = {}'.format(ub.repr2(sample_grid, nl=2)))
         >>> # Now try to load a sample
-        >>> tr = sample_grid['positives'][0]
+        >>> idx = sample_grid['positives_idxs'][0]
+        >>> tr = sample_grid['targets'][idx]
         >>> import ndsampler
         >>> sampler = ndsampler.CocoSampler(dset)
         >>> tr_ = sampler._infer_target_attributes(tr)
@@ -1337,7 +1384,7 @@ def new_video_sample_grid(dset, window_dims=None, window_overlap=0.0,
     """
     import kwarray
     from ndsampler import isect_indexer
-    keepbound = True
+    keepbound = False
 
     if classes_of_interest:
         raise NotImplementedError
@@ -1366,6 +1413,7 @@ def new_video_sample_grid(dset, window_dims=None, window_overlap=0.0,
 
     positives = []
     negatives = []
+    targets = []
     for vidid, slider in vidid_to_slider.items():
         video_regions = list(slider)
         gids = dset.index.vidid_to_gids[vidid]
@@ -1397,15 +1445,18 @@ def new_video_sample_grid(dset, window_dims=None, window_overlap=0.0,
                 'gids': region_gids,
                 'aids': pos_aids,
             }
+            index = len(targets)
             if len(pos_aids):
-                positives.append(tr)
+                positives.append(index)
             else:
-                negatives.append(tr)
+                negatives.append(index)
+            targets.append(tr)
 
     print('Found {} positives'.format(len(positives)))
     print('Found {} negatives'.format(len(negatives)))
     sample_grid = {
-        'positives': positives,
-        'negatives': negatives,
+        'positives_indexes': positives,
+        'negatives_indexes': negatives,
+        'targets': targets,
     }
     return sample_grid
