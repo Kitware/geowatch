@@ -104,9 +104,10 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset, img, anns,
 
     if channels is not None:
         channels = channel_spec.ChannelSpec.coerce(channels)
-
-    coco_img = CocoImage(img)
-    chan_groups = coco_img.channels.spec.split(',')
+        chan_groups = channels.spec.split(',')
+    else:
+        coco_img = CocoImage(img)
+        chan_groups = coco_img.channels.spec.split(',')
 
     img_view_dpath = sub_bundle_dpath / '_imgs'
     ann_view_dpath = sub_bundle_dpath / '_anns'
