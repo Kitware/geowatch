@@ -191,7 +191,7 @@ viz_check(){
     python -m watch.cli.coco_visualize_videos \
         --src $COMBO_COCO_FPATH --space=video --num_workers=6 \
         --viz_dpath $KWCOCO_BUNDLE_DPATH/_viz_preprop \
-        --channels "blue|green|red,inv_sort1|inv_augment1|inv_shared1"
+        --channels "red|green|blue,inv_sort1|inv_augment1|inv_shared1"
 
 }
 

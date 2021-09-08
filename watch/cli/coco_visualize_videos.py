@@ -59,7 +59,7 @@ def main(cmdline=True, **kwargs):
 
     prog = ub.ProgIter(
         coco_dset.index.videos.items(), total=len(coco_dset.index.videos),
-        desc='viz videos', newlines=True)
+        desc='viz videos', verbose=3)
 
     pool = ub.JobPool(mode='thread', max_workers=config['num_workers'])
 
