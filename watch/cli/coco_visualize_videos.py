@@ -76,7 +76,7 @@ def main(cmdline=True, **kwargs):
                         coco_dset, img, anns, sub_bundle_dpath, space=space,
                         channels=channels)
 
-        for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write vids'):
+        for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):
             job.result()
 
         pool.jobs.clear()
