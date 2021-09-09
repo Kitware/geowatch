@@ -22,6 +22,11 @@ python -m kwcoco stats $TRAIN_FPATH $VALI_FPATH $TEST_FPATH
 python -m watch watch_coco_stats $TRAIN_FPATH 
 
 
+python -m watch.cli.coco_visualize_videos \
+    --src $DATA_DPATH/vidshapes_msi_train/data.kwcoco.json \
+    --viz_dpath=$DATA_DPATH/vidshapes_msi_train
+
+
 ARCH=smt_it_stm_p8
 CHANNELS="B8|B1|B11|B8a"
 EXPERIMENT_NAME=ToyFusion_${ARCH}_v001

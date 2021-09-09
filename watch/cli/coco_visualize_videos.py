@@ -160,7 +160,10 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset, img, anns,
         kwimage.imwrite(view_img_fpath, img_canvas)
 
         view_ann_fpath = ub.augpath(name, dpath=ann_chan_dpath) + '_' + suffix + '.view_ann.jpg'
-        ann_canvas = dets.draw_on(canvas, color='classes')
+        try:
+            ann_canvas = dets.draw_on(canvas, color='classes')
+        except Exception:
+            ann_canvas = dets.draw_on(canvas)
         ann_canvas = kwimage.ensure_uint255(ann_canvas)
 
         ann_canvas = util_kwimage.draw_header_text(ann_canvas, header_text)
