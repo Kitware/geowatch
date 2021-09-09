@@ -235,8 +235,8 @@ def make_fit_config(cmdline=False, **kwargs):
 
     # Extend the parser based on the chosen dataset / method modes
     datamodule_class.add_argparse_args(parser)
-    method_parser = parser.add_argument_group("Method")
-    method_class.add_argparse_args(method_parser)
+    # method_parser = parser.add_argument_group("Method")
+    method_class.add_argparse_args(parser)
     pl.Trainer.add_argparse_args(parser)
 
     # Hard code custom default settings for lightning to enable certain tricks
