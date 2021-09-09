@@ -95,6 +95,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset, img, anns,
     from kwcoco import channel_spec
     from watch.utils.util_norm import normalize_intensity
     from watch.utils.kwcoco_extensions import CocoImage
+    from watch.utils import util_kwimage
 
     sensor_coarse = img.get('sensor_coarse', 'unknown')
     align_method = img.get('align_method', 'unknown')
@@ -155,55 +156,15 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset, img, anns,
         header_text = '\n'.join(chan_header_info)
 
         img_canvas = kwimage.ensure_uint255(canvas)
-        img_canvas = draw_header_text(img_canvas, header_text)
+        img_canvas = util_kwimage.draw_header_text(img_canvas, header_text)
         kwimage.imwrite(view_img_fpath, img_canvas)
 
         view_ann_fpath = ub.augpath(name, dpath=ann_chan_dpath) + '_' + suffix + '.view_ann.jpg'
         ann_canvas = dets.draw_on(canvas, color='classes')
         ann_canvas = kwimage.ensure_uint255(ann_canvas)
 
-        ann_canvas = draw_header_text(ann_canvas, header_text)
+        ann_canvas = util_kwimage.draw_header_text(ann_canvas, header_text)
         kwimage.imwrite(view_ann_fpath, ann_canvas)
-
-
-def draw_header_text(image, text, fit=False, color='white'):
-    """
-    Places a black bar on top of an image and writes text in it
-
-    Example:
-        >>> from watch.cli.coco_visualize_videos import *  # NOQA
-        >>> import kwimage
-        >>> image = kwimage.grab_test_image()
-        >>> canvas1 = draw_header_text(image, 'a long header' * 5, fit=False)
-        >>> canvas2 = draw_header_text(image, 'a long header' * 5, fit=True)
-        >>> # xdoctest: +REQUIRES(--show)
-        >>> import kwplot
-        >>> kwplot.autompl()
-        >>> kwplot.imshow(canvas1, pnum=(1, 2, 1))
-        >>> kwplot.imshow(canvas2, pnum=(1, 2, 2))
-        >>> kwplot.show_if_requested()
-    """
-    import cv2
-    import kwimage
-    width = image.shape[1]
-    if fit:
-        # TODO: allow a shrink-to-fit only option
-        header = kwimage.draw_text_on_image(
-            None, text, org=(1, 1),
-            valign='top', halign='left', color=color)
-        header = cv2.copyMakeBorder(header, 3, 3, 3, 3,
-                                    cv2.BORDER_CONSTANT)
-        header = kwimage.imresize(header, dsize=(width, None))
-    else:
-        header = kwimage.draw_text_on_image(
-            {'width': width}, text, org=(width // 2, 1),
-            valign='top', halign='center', color=color)
-
-    header.shape
-    image.shape
-
-    stacked = kwimage.stack_images([header, image], axis=0, overlap=-1)
-    return stacked
 
 
 if __name__ == '__main__':
