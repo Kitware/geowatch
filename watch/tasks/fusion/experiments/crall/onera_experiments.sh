@@ -31,7 +31,7 @@ prep_validation_set(){
         --dst $DVC_DPATH/extern/onera_2018/onera_vali.kwcoco.json
 
     # Make a "learn" dataset
-    kwcoco subset --select_videos ".id > 2" \
+    kwcoco subset --select_videos ".id >= 2" \
         --src $DVC_DPATH/extern/onera_2018/onera_train.kwcoco.json \
         --dst $DVC_DPATH/extern/onera_2018/onera_learn.kwcoco.json
 
@@ -39,6 +39,9 @@ prep_validation_set(){
     kwcoco stats \
         $DVC_DPATH/extern/onera_2018/onera_learn.kwcoco.json \
         $DVC_DPATH/extern/onera_2018/onera_vali.kwcoco.json
+
+    python -m watch stats \
+        $DVC_DPATH/extern/onera_2018/onera_learn.kwcoco.json 
 }
 
 
@@ -51,8 +54,13 @@ WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 
 #ARCH=smt_it_stm_s12
 ARCH=smt_it_joint_p8
-CHANNELS="B05|B06|B07|B08|B8A"
-EXPERIMENT_NAME=DirectCD_${ARCH}_vnir_v6
+
+#CHANNELS="B05|B06|B07|B08|B8A"
+#EXPERIMENT_NAME=DirectCD_${ARCH}_vnir_v6
+
+# Set B8 early so it is visualized
+CHANNELS="B01|B05|B08|B11|B06|B07|B8A|B09|B10|B12|B02|B03|B04"
+EXPERIMENT_NAME=DirectCD_${ARCH}_allchan_v7
 DATASET_CODE=Onera
 
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
@@ -72,15 +80,17 @@ python -m watch.tasks.fusion.fit \
     --method="MultimodalTransformer" \
     --arch_name=$ARCH \
     --time_steps=2 \
-    --chip_size=120 \
+    --chip_size=96 \
     --batch_size=2 \
-    --accumulate_grad_batches=16 \
+    --accumulate_grad_batches=32 \
     --num_workers=6 \
-    --max_epochs=1000 \
-    --patience=1000 \
+    --max_epochs=2000 \
+    --chip_overlap=0.5 \
+    --neg_to_pos_ratio=2.0 \
+    --patience=2000 \
     --gpus=1  \
-    --learning_rate=1e-4 \
-    --weight_decay=1e-4 \
+    --learning_rate=1e-3 \
+    --weight_decay=1e-5 \
     --dropout=0.1 \
     --window_size=8 \
     --dump=$TRAIN_CONFIG_FPATH 
