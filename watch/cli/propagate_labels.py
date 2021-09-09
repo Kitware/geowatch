@@ -21,15 +21,12 @@ class PropagateLabelsConfig(scfg.Config):
 
         # Given a kwcoco file with original annotations, this script forward propagates those annotations
         # and creates a new kwcoco file.
-        # Currently, we are looking at some issues with data and only visualizations are being geenrated.
-
-        python -m watch.cli.propagate_labels.py dataset_fname
 
     TODO:
         - [ ] Make sure the original annotations are correct. Currently annotations with very low overlap with images are showing up. Could be fixed by relying on geo-coordinates instead?
-        - [ ] Crop propagated annotations to bounds or valid data mask of new image
+        - [x] Crop propagated annotations to bounds or valid data mask of new image
         - [ ] Pull in and merge annotations from an external kwcoco file
-        - [ ] Handle splitting and merging tracks (non-unique frame_index)
+        - [x] Handle splitting and merging tracks (non-unique frame_index)
         - [ ] Stop propagation at category change (could be taken care of by external kwcoco file)
 
     """
@@ -39,9 +36,9 @@ class PropagateLabelsConfig(scfg.Config):
             path to the kwcoco file to propagate labels in
             ''')),
 
-        'dst': scfg.Value('propagted_data.kwcoco.json', help=ub.paragraph(
+        'dst': scfg.Value('propagated_data.kwcoco.json', help=ub.paragraph(
             '''
-            Where the output coco file with propagated labels is saved
+            Where the output kwcoco file with propagated labels is saved
             '''), position=2),
 
         'viz_dpath': scfg.Value(None, help=ub.paragraph(
@@ -58,27 +55,75 @@ class PropagateLabelsConfig(scfg.Config):
     """
 
 
-def get_warp(gid1, gid2, dataset):
+def get_warp(gid1, gid2, dataset, use_geo=False):
     # Given a dataset and IDs of two images, the warp between these images is returned
     img1 = dataset.index.imgs[gid1]
     img2 = dataset.index.imgs[gid2]
+    
+    if use_geo:
+        # Use the geocoordinates as a base space to avoid propagating
+        # badly-aligned annotations
+        geo_to_img1 = kwimage.Affine.coerce(img1['warp_wld_to_pxl'])
+        geo_to_img2 = kwimage.Affine.coerce(img2['warp_wld_to_pxl'])
 
-    # Get the transform from each image to the aligned "video-space"
-    video_from_img1 = kwimage.Affine.coerce(img1['warp_img_to_vid'])
-    video_from_img2 = kwimage.Affine.coerce(img2['warp_img_to_vid'])
+        img2_from_img1 = geo_to_img2 @ geo_to_img1.inv()
+    
+    else:
+        # Get the transform from each image to the aligned "video-space"
+        video_from_img1 = kwimage.Affine.coerce(img1['warp_img_to_vid'])
+        video_from_img2 = kwimage.Affine.coerce(img2['warp_img_to_vid'])
 
-    # Build the transform that warps img1 -> video -> img2
-    img2_from_video = video_from_img2.inv()
-    img2_from_img1 = img2_from_video @ video_from_img1
+        # Build the transform that warps img1 -> video -> img2
+        img2_from_video = video_from_img2.inv()
+        img2_from_img1 = img2_from_video @ video_from_img1
 
     return img2_from_img1
 
 
-def get_warped_ann(previous_ann, warp, image_id, previous_image_id):
-    # Returns a new annotation by applying a warp on an existing annotation
+def get_warped_ann(previous_ann,
+                   warp,
+                   image_entry,
+                   previous_image_id,
+                   crop_to_valid=True):
+    '''
+    Returns new annotations by applying a warp and optional crop
+    
+    This should be vectorized across annotations, because util_raster.to_crop
+    supports this, since it assumes finding the valid mask of an image is 
+    expensive. But this is not a problem for the very small sizes we're
+    working with here:
+
+    >>> %timeit watch.utils.util_raster.mask(full_tile)
+    1.19 s ± 22.5 ms per loop (mean ± std. dev. of 7 runs, 1 loop each)
+    
+    >>> %timeit watch.utils.util_raster.mask(aligned_crop)
+    4.44 ms ± 87.4 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
+    '''
     segmentation = kwimage.Segmentation.coerce(previous_ann['segmentation'])
 
     warped_seg = segmentation.warp(warp)
+
+    if crop_to_valid:
+        # warp to an aux image's space to crop to its valid mask,
+        # then warp back to the base space
+
+        # assume each band has the same valid mask
+        # the 'aux_annotated_candidate' attr should be moved from ann to img,
+        # then it can be used here
+        # but note that it is a heuristic and not guaranteed correct
+        band = image_entry['auxiliary'][0]
+
+        warped_seg = warped_seg.warp(
+            kwimage.Affine.coerce(band['warp_aux_to_img']).inv())
+        warped_seg = kwimage.Segmentation.coerce(
+            kwimage.MultiPolygon(
+                util_raster.crop_to(list(
+                    warped_seg.to_multi_polygon().to_shapely()),
+                                    band['file_name'],
+                                    bounds_policy='valid')))
+        warped_seg = warped_seg.warp(
+            kwimage.Affine.coerce(band['warp_aux_to_img']))
+
     warped_bbox = list(warped_seg.bounding_box().to_coco(style='new'))[0]
 
     # Create a new annotation object
@@ -86,7 +131,7 @@ def get_warped_ann(previous_ann, warp, image_id, previous_image_id):
     warped_ann['bbox'] = warped_bbox
     warped_ann['category_id'] = previous_ann['category_id']
     warped_ann['track_id'] = previous_ann['track_id']
-    warped_ann['image_id'] = image_id
+    warped_ann['image_id'] = image_entry['id']
     warped_ann['source_gid'] = previous_image_id
 
     return warped_ann
@@ -229,7 +274,7 @@ def main(cmdline=False, **kwargs):
                 
                 # handle non-unique track ids
                 if latest_img_ids.get(track_id) != img_id:
-                    latest_ann_ids[track_id] = {}
+                    latest_ann_ids[track_id] = set()
                 latest_img_ids[track_id] = img_id
                 latest_ann_ids[track_id].add(aid)
 
@@ -243,11 +288,16 @@ def main(cmdline=False, **kwargs):
                     if previous_annotation['category_id'] in cat_ids_to_propagate:
 
                         # get the warp from previous image to this image
+                        # 
+                        # NOTE: use_geo must be used if crop_to_valid is used.
+                        # this is because segmentation_geo will remain correct,
+                        # but segmentation will NOT, when this propagated annot
+                        # is used as a source to re-propagate further.
                         previous_image_id = latest_img_ids[missing]
-                        warp_previous_to_this_image = get_warp(previous_image_id, img_id, full_ds)
+                        warp_previous_to_this_image = get_warp(previous_image_id, img_id, full_ds, use_geo=True)
 
                         # apply the warp
-                        warped_annotation = get_warped_ann(previous_annotation, warp_previous_to_this_image, img_id, previous_image_id)
+                        warped_annotation = get_warped_ann(previous_annotation, warp_previous_to_this_image, full_ds[img_id], previous_image_id, crop_to_valid=True)
 
                         # add the propagated annotation in the new kwcoco dataset
                         new_aid = propagated_ds.add_annotation(**warped_annotation)
@@ -300,6 +350,8 @@ def main(cmdline=False, **kwargs):
     print('original annotations:', full_ds.n_annots, 'propagated annotations:', len(new_aids), 'total annotations:', propagated_ds.n_annots)
 
     return propagated_ds
+
+_SubConfig = PropagateLabelsConfig
 
 if __name__ == '__main__':
     r"""
