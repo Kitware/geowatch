@@ -1,10 +1,14 @@
 # -*- coding: utf-8 -*-
+import shapely
+import shapely.ops
 import kwcoco
 import kwimage
 import ubelt as ub
 import pathlib
 import scriptconfig as scfg
 from watch.utils import util_raster
+
+# import xdev
 
 
 class PropagateLabelsConfig(scfg.Config):
@@ -63,8 +67,8 @@ def get_warp(gid1, gid2, dataset, use_geo=False):
     if use_geo:
         # Use the geocoordinates as a base space to avoid propagating
         # badly-aligned annotations
-        geo_to_img1 = kwimage.Affine.coerce(img1['warp_wld_to_pxl'])
-        geo_to_img2 = kwimage.Affine.coerce(img2['warp_wld_to_pxl'])
+        geo_to_img1 = kwimage.Affine.coerce(img1['wld_to_pxl'])
+        geo_to_img2 = kwimage.Affine.coerce(img2['wld_to_pxl'])
 
         img2_from_img1 = geo_to_img2 @ geo_to_img1.inv()
     
@@ -79,14 +83,15 @@ def get_warp(gid1, gid2, dataset, use_geo=False):
 
     return img2_from_img1
 
-
 def get_warped_ann(previous_ann,
                    warp,
                    image_entry,
                    previous_image_id,
                    crop_to_valid=True):
     '''
-    Returns new annotations by applying a warp and optional crop
+    Returns new annotation by applying a warp and optional crop
+
+    If the new annotation falls outside the new image, returns None instead.
     
     This should be vectorized across annotations, because util_raster.to_crop
     supports this, since it assumes finding the valid mask of an image is 
@@ -112,17 +117,26 @@ def get_warped_ann(previous_ann,
         # then it can be used here
         # but note that it is a heuristic and not guaranteed correct
         band = image_entry['auxiliary'][0]
+        warp_aux_to_img = kwimage.Affine.coerce(band['warp_aux_to_img'])
 
-        warped_seg = warped_seg.warp(
-            kwimage.Affine.coerce(band['warp_aux_to_img']).inv())
-        warped_seg = kwimage.Segmentation.coerce(
-            kwimage.MultiPolygon(
-                util_raster.crop_to(list(
-                    warped_seg.to_multi_polygon().to_shapely()),
-                                    band['file_name'],
-                                    bounds_policy='valid')))
-        warped_seg = warped_seg.warp(
-            kwimage.Affine.coerce(band['warp_aux_to_img']))
+        warped_seg = warped_seg.warp(warp_aux_to_img.inv())
+        assert len(warped_seg) == 1, previous_ann['id']
+        cropped = util_raster.crop_to(list(
+            warped_seg.to_multi_polygon().to_shapely()),
+                                      band['file_name'],
+                                      bounds_policy='valid')[0]
+        # we started with one polygon, but may have been split into more
+        # during cropping. Cast it to a MultiPolygon to be safe.
+        if cropped is None:
+            return None
+        elif isinstance(cropped, shapely.geometry.Polygon):
+            cropped = shapely.geometry.MultiPolygon([cropped])
+        else:
+            assert isinstance(cropped, shapely.geometry.MultiPolygon)
+
+        warped_seg = kwimage.Segmentation(
+            kwimage.MultiPolygon.from_shapely(cropped))
+        warped_seg = warped_seg.warp(warp_aux_to_img)
 
     warped_bbox = list(warped_seg.bounding_box().to_coco(style='new'))[0]
 
@@ -297,7 +311,12 @@ def main(cmdline=False, **kwargs):
                         warp_previous_to_this_image = get_warp(previous_image_id, img_id, full_ds, use_geo=True)
 
                         # apply the warp
-                        warped_annotation = get_warped_ann(previous_annotation, warp_previous_to_this_image, full_ds[img_id], previous_image_id, crop_to_valid=True)
+                        warped_annotation = get_warped_ann(previous_annotation, warp_previous_to_this_image, full_ds.imgs[img_id], previous_image_id, crop_to_valid=True)
+                        if warped_annotation is None:
+                            if config['verbose']:
+                                prog.ensure_newline()
+                                print('skipped OOB annotation for image', img_id, 'track ID', missing)
+                            continue
 
                         # add the propagated annotation in the new kwcoco dataset
                         new_aid = propagated_ds.add_annotation(**warped_annotation)
