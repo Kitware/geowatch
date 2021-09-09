@@ -242,6 +242,12 @@ def morphology(data, mode, kernel=5):
     kernel = _morph_kernel(kernel)
     if mode == 'open':
         new = cv2.morphologyEx(data, cv2.MORPH_OPEN, kernel)
+    elif mode == 'close':
+        new = cv2.morphologyEx(data, cv2.MORPH_CLOSE, kernel)
+    elif mode == 'dilate':
+        new = cv2.morphologyEx(data, cv2.MORPH_DILATE, kernel)
+    elif mode == 'erode':
+        new = cv2.morphologyEx(data, cv2.MORPH_ERODE, kernel)
     else:
         raise NotImplementedError
     return new
