@@ -72,12 +72,12 @@ python -m watch.tasks.fusion.fit \
     --method="MultimodalTransformer" \
     --arch_name=$ARCH \
     --time_steps=2 \
-    --chip_size=96 \
+    --chip_size=120 \
     --batch_size=2 \
-    --accumulate_grad_batches=8 \
+    --accumulate_grad_batches=16 \
     --num_workers=6 \
-    --max_epochs=400 \
-    --patience=400 \
+    --max_epochs=1000 \
+    --patience=1000 \
     --gpus=1  \
     --learning_rate=1e-4 \
     --weight_decay=1e-4 \
@@ -86,7 +86,7 @@ python -m watch.tasks.fusion.fit \
     --dump=$TRAIN_CONFIG_FPATH 
 
 python -m watch.tasks.fusion.predict \
-    --gpus=1 \
+    --gpus=0 \
     --write_preds=True \
     --write_probs=False \
     --dump=$PRED_CONFIG_FPATH
