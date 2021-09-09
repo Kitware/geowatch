@@ -53,42 +53,44 @@ def main(args):
     else:
         root, _ = os.path.split(args.input_kwcoco)
 
-    for idx in tqdm(range(len(dataset))):
-        image_id, image_info, image  = dataset.get_img(idx, args.device)
+    with torch.set_grad_enabled(False):
+        for idx in tqdm(range(len(dataset))):
+            image_id, image_info, image  = dataset.get_img(idx, args.device)
 
-        aux_base = image_info['auxiliary'][0]
-        path, file_name = os.path.split(aux_base['file_name'])
+            aux_base = image_info['auxiliary'][0]
+            path, file_name = os.path.split(aux_base['file_name'])
 
-        if args.data_save_folder is not None:
-            save_path = args.data_save_folder
-        else:
-            save_path = os.path.join(root, 'uky_invariants', path)
+            if args.data_save_folder is not None:
+                save_path = args.data_save_folder
+            else:
+                save_path = os.path.join(root, 'uky_invariants', path)
 
-        if not os.path.exists(save_path):
-            os.makedirs(save_path, exist_ok=True)
+            if not os.path.exists(save_path):
+                os.makedirs(save_path, exist_ok=True)
 
-        features = model.predict(image)
+            features = model.predict(image)
 
-        # Predictions are saved in 'video space', so warp_aux_to_img is the inverse of warp_img_to_vid
-        warp_img_to_vid = kwimage.Affine.coerce(image_info.get('warp_img_to_vid', None))
-        warp_aux_to_img = warp_img_to_vid.inv().concise()
+            # Predictions are saved in 'video space', so warp_aux_to_img is the inverse of warp_img_to_vid
+            warp_img_to_vid = kwimage.Affine.coerce(image_info.get('warp_img_to_vid', None))
+            warp_aux_to_img = warp_img_to_vid.inv().concise()
 
-        for key in feature_types:
-            feat = features[key].squeeze()
-            feat = feat.permute(1, 2, 0).detach().cpu().numpy()
-            last_us_idx = file_name.rfind('_')
-            name = file_name[:last_us_idx] + '_invariants_' + key + '.tif'
-            kwimage.imwrite(os.path.join(save_path, name), feat, space=None, backend='gdal')
+            for key in feature_types:
+                feat = features[key].squeeze()
+                feat = feat.permute(1, 2, 0).detach().cpu().numpy()
+                last_us_idx = file_name.rfind('_')
+                name = file_name[:last_us_idx] + '_invariants_' + key + '.tif'
+                kwimage.imwrite(os.path.join(save_path, name), feat, space=None,
+                                backend='gdal', compress='DEFLATE')
 
-            info = {}
-            info['file_name'] = os.path.join('uky_invariants', path, name)
-            info['height'] = feat.shape[0]
-            info['width'] = feat.shape[1]
-            info['num_bands'] = feat.shape[2]
-            info['channels'] = '|'.join(['inv_' + key + f'{i}' for i in range(1, feat.shape[2] + 1)])
-            info['warp_aux_to_img'] = warp_aux_to_img
+                info = {}
+                info['file_name'] = os.path.join('uky_invariants', path, name)
+                info['height'] = feat.shape[0]
+                info['width'] = feat.shape[1]
+                info['num_bands'] = feat.shape[2]
+                info['channels'] = '|'.join(['inv_' + key + f'{i}' for i in range(1, feat.shape[2] + 1)])
+                info['warp_aux_to_img'] = warp_aux_to_img
 
-            dataset.dset.index.imgs[image_id]['auxiliary'].append(info)
+                dataset.dset.index.imgs[image_id]['auxiliary'].append(info)
 
     if args.output_kwcoco is None:
         args.output_kwcoco = os.path.join(root, 'uky_invariants.kwcoco.json')
