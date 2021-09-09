@@ -19,8 +19,13 @@
         ],
         "min_aoi_overlap": 0.25,
         "dry_run": 0,
-        "kwcoco": "/tmp/rgd_ingress_working/kwcoco",
         "ignore_dem": 1
+      }
+    },
+    {
+      "name": "kitware/add_angle_bands",
+      "parameters": {
+        "output_dir": "/tmp/add_angle_bands_working"
       }
     },
     {

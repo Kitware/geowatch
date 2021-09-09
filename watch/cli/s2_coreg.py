@@ -19,7 +19,7 @@ from watch.gis.sensors.sentinel2 import s2_grid_tiles_for_geometry
 S2_L1C_RE = re.compile(r'S2[AB]_MSIL1C_.*')
 L8_L1_RE = re.compile(r'^L[COTEM]08_L1(TP|GT|GS)_\d{3}\d{3}_\d{4}\d{2}\d{2}_\d{4}\d{2}\d{2}_\d{2}_(RT|T1|T2)')
 GRANULE_DIR_RE = re.compile(r'(.*)/GRANULE/(.*)')
-BAND_NAME_RE = re.compile(r'.*_(B[0-9A-Z]+|cloudmask)\.(tiff?|vrt)$', re.I)
+BAND_NAME_RE = re.compile(r'.*_(B[0-9A-Z]+|S[EO][AZ][0-9]?|cloudmask)\.(tiff?|vrt)$', re.I)
 
 
 def main():
@@ -52,7 +52,7 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
             # Get base directory for assets
             item_base_dir = None
             for link in item.links:
-                if link.rel == 'self':
+                if link.rel == 'original':
                     item_base_dir = os.path.dirname(link.get_href())
                     break
 
@@ -64,7 +64,7 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
             # Get base directory for assets
             item_base_dir = None
             for link in item.links:
-                if link.rel == 'self':
+                if link.rel == 'original':
                     item_base_dir = os.path.dirname(link.get_href())
                     break
 

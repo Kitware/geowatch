@@ -39,6 +39,22 @@ RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-${CONDA_VERSION}
     find /opt/conda/ -follow -type f -name '*.js.map' -delete && \
     /opt/conda/bin/conda clean -afy
 
+RUN mkdir -p /opt/bin
+
+ARG L8_ANGLES_GEN_SHA256=20a8eae551cd48b4ce15ad7ce0991a45c7c1b7f15ac8baa7a3a9ec3aadda5c31
+RUN wget --quiet https://landsat.usgs.gov/sites/default/files/documents/L8_ANGLES_2_7_0.tgz -O L8_ANGLES.tgz && \
+    echo "${L8_ANGLES_GEN_SHA256}  L8_ANGLES.tgz" > L8_ANGLES.checksum && \
+    if ! shasum -a 256 --status -c L8_ANGLES.checksum; then exit 1; fi && \
+    tar xzf L8_ANGLES.tgz && \
+    cd l8_angles && make && cp l8_angles /opt/bin/
+
+ARG LANDSAT_ANGLES_SHA256=1b1c146b3305ba91570fdd05ab7059d382f67ba8f19952d3ea21d60efb5c6da7
+RUN wget --quiet http://landsat.usgs.gov/sites/default/files/documents/LANDSAT_ANGLES_15_3_0.tgz -O LANDSAT_ANGLES.tgz && \
+    echo "${LANDSAT_ANGLES_SHA256}  LANDSAT_ANGLES.tgz" > LANDSAT_ANGLES.checksum && \
+    if ! shasum -a 256 --status -c LANDSAT_ANGLES.checksum; then exit 1; fi && \
+    tar xzf LANDSAT_ANGLES.tgz && \
+    cd landsat_angles && make && cp landsat_angles /opt/bin/
+
 SHELL ["/bin/bash", "--login", "-c"]
 
 RUN echo $(pwd)
