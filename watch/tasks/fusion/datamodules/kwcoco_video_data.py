@@ -1,5 +1,4 @@
 import einops
-import itertools as it
 import kwarray
 import kwcoco
 import kwimage
@@ -14,6 +13,7 @@ from kwcoco import channel_spec
 from torch.utils import data
 from watch.tasks.fusion import utils
 from watch.utils import kwcoco_extensions
+from watch.utils import util_iter
 
 # __all__ = ['KWCocoVideoDataModule', 'KWCocoVideoDataset']
 
@@ -541,47 +541,11 @@ class KWCocoVideoDataset(data.Dataset):
             max_neg = min(int(max(1, (neg_to_pos_ratio * n_pos))), n_neg)
             if n_neg > max_neg:
                 print('restrict to max_neg = {!r}'.format(max_neg))
-            #     print('chose max_neg = {!r}'.format(max_neg))
-            #     neg_idxs = kwarray.shuffle(np.arange(n_neg), rng=47789403)[0:max_neg]
-            #     chosen_neg_idxs = list(ub.take(new_sample_grid["negatives_indexes"], neg_idxs))
-            # else:
-            #     chosen_neg_idxs = new_sample_grid["negatives_indexes"]
-
-            # ubelt.chunks does not handle this case (yet)
-            # TODO: fixup ubelt.chunks to handle the remainder case
-            def _consume(iterable, n):
-                return [next(iterable) for _ in range(n)]
-
-            def _fixed_chunks(items, num_chunks):
-                """
-                items = list(range(11))
-                num_chunks = 4
-                """
-                if num_chunks == 0:
-                    return
-                num_items = len(items)
-                # Basic chunksize
-                chunksize = num_items // num_chunks
-                # How should the remainder be distributed?
-                # Evenly at the start or at the end?
-                remainder = num_items % num_chunks
-
-                # Decrease the remain counter as we distribute the remainders
-                _remain_counter = remainder
-
-                iterable = iter(items)
-                for idx in range(num_chunks):
-                    if _remain_counter > 0:
-                        _remain_counter -= 1
-                        chunk = _consume(iterable, chunksize + 1)
-                    else:
-                        chunk = _consume(iterable, chunksize)
-                    yield chunk
 
             # We have too many negatives, so we are going to "group" negatives
             # and when we select one we will really just randomly select from
             # within the pool
-            negative_pool = list(_fixed_chunks(new_sample_grid["negatives_indexes"], num_chunks=max_neg))
+            negative_pool = list(util_iter.chunks(new_sample_grid["negatives_indexes"], nchunks=max_neg))
             self.negative_pool = negative_pool
             neg_pool_chunksizes = set(map(len, self.negative_pool))
 
@@ -736,24 +700,6 @@ class KWCocoVideoDataset(data.Dataset):
             tr_['space_slice'] = space_box.astype(int).to_slices()[0]
             sample = sampler.load_sample(tr_, padkw=dict(constant_values=np.nan))
 
-        if 0:
-            # debug
-            dset = sampler.dset
-            vid_box = kwimage.Boxes.from_slice(tr['space_slice'])
-            for gid in tr['gids']:
-                warp_img_to_vid = kwimage.Affine.coerce(
-                    dset.index.imgs[gid].get('warp_img_to_vid', None))
-                img_box = vid_box.warp(warp_img_to_vid.inv())
-                aids = sampler.regions._isect_index.overlapping_aids(gid, img_box)
-                qtree = sampler.regions._isect_index.qtrees[gid]
-                for aid in aids:
-                    annot_box = kwimage.Boxes(qtree.aid_to_tlbr[aid][None, :], 'tlbr')
-                    annot_box.warp(warp_img_to_vid.inv())
-                    img_box.iooas(annot_box)
-
-                    raise Exception
-                print('aids = {!r}'.format(aids))
-
         # Access the sampled image and annotation data
         raw_frame_list = sample['im']
 
@@ -820,10 +766,16 @@ class KWCocoVideoDataset(data.Dataset):
             # allocate class masks
             bg_idx = self.bg_idx
 
-            frame_cidxs = np.full(frame.shape[:2], dtype=np.int32,
+            space_shape = frame.shape[:2]
+
+            frame_cidxs = np.full(space_shape, dtype=np.int32,
                                   fill_value=bg_idx)
 
-            frame_ignore = np.full(frame.shape[:2], dtype=np.uint8,
+            ohe_shape = (len(self.classes),) + space_shape
+            frame_class_ohe = np.full(ohe_shape, dtype=np.uint8,
+                                      fill_value=0)
+
+            frame_ignore = np.full(space_shape, dtype=np.uint8,
                                    fill_value=0)
 
             # Rasterize frame targets
@@ -836,10 +788,17 @@ class KWCocoVideoDataset(data.Dataset):
             for poly, aid, cid in zip(ann_polys, ann_aids, ann_cids):
                 cidx = self.classes.id_to_idx[cid]
                 catname = self.classes.id_to_node[cid]
-                if catname in self.ignore_classes:
+                if catname in self.background_classes:
+                    pass
+                elif catname in self.ignore_classes:
                     poly.fill(frame_ignore, value=1)
                 else:
-                    poly.fill(frame_cidxs, value=cidx)
+                    poly.fill(frame_class_ohe[cidx], value=1)
+
+            # Dilate the truth map
+            for cidx, class_map in enumerate(frame_class_ohe):
+                class_map = utils.morphology(class_map, 'dilate', kernel=5)
+                frame_cidxs[class_map > 0] = cidx
 
             # ensure channel dim is not squeezed
             frame_hwc = kwarray.atleast_nd(frame, 3)
@@ -1108,13 +1067,14 @@ class KWCocoVideoDataset(data.Dataset):
         # otherwise it is a cool feature.
         default_combinable_channels = [
             ub.oset(['red', 'green', 'blue']),
-            ub.oset(['r', 'g', 'b'])
+            ub.oset(['r', 'g', 'b']),
+            ub.oset(['B04', 'B03', 'B02']),  # for onera
         ]
         combinable_channels = default_combinable_channels
         if combinable_extra is not None:
             combinable_channels += list(map(ub.oset, combinable_extra))
 
-        def make_frame_infos():
+        def prepare_frames():
             frame_metas = []
             for frame_idx, frame_item in enumerate(item['frames']):
 
@@ -1203,7 +1163,7 @@ class KWCocoVideoDataset(data.Dataset):
 
             return frame_metas
 
-        frame_metas = make_frame_infos()
+        frame_metas = prepare_frames()
 
         horizontal_stack = []
         for frame_meta in frame_metas:

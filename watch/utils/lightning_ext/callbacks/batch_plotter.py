@@ -80,6 +80,7 @@ class BatchPlotter(pl.callbacks.Callback):
 
     @profile
     def draw_batch(self, trainer, outputs, batch, batch_idx):
+        from watch.utils import util_kwimage
 
         datamodule = trainer.datamodule
         if datamodule is None:
@@ -93,9 +94,12 @@ class BatchPlotter(pl.callbacks.Callback):
         stage = trainer.state.stage.lower()
         epoch = trainer.current_epoch
 
-        canvas = kwimage.draw_text_on_image(
-            canvas, f'{stage}_epoch{epoch:08d}_bx{batch_idx:04d}', org=(1, 1),
-            valign='top')
+        # canvas = kwimage.draw_text_on_image(
+        canvas = util_kwimage.draw_header_text(
+            canvas, f'{stage}_epoch{epoch:08d}_bx{batch_idx:04d}',
+            # org=(1, 1),
+            # valign='top'
+        )
 
         dump_dpath = ub.ensuredir((trainer.log_dir, 'monitor', stage, 'batch'))
         dump_fname = f'pred_{stage}_epoch{epoch:08d}_bx{batch_idx:04d}.jpg'
