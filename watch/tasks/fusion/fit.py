@@ -374,7 +374,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         callbacks += [
             pl.callbacks.EarlyStopping(
                 monitor='val_loss', mode='min', patience=args.patience,
-                verbose=True),
+                verbose=True, strict=False),
             pl.callbacks.ModelCheckpoint(
                 monitor='val_loss', mode='min', save_top_k=4),
             pl.callbacks.ModelCheckpoint(
