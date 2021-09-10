@@ -12,9 +12,9 @@ VALI_FPATH=$DATA_DPATH/vidshapes_msi_vali/data.kwcoco.json
 TEST_FPATH=$DATA_DPATH/vidshapes_msi_test/data.kwcoco.json 
 
 mkdir -p $DATA_DPATH
-kwcoco toydata vidshapes8-frames5-multispectral --bundle_dpath $DATA_DPATH/vidshapes_msi_train
-kwcoco toydata vidshapes4-frames5-multispectral --bundle_dpath $DATA_DPATH/vidshapes_msi_vali
-kwcoco toydata vidshapes2-frames6-multispectral --bundle_dpath $DATA_DPATH/vidshapes_msi_test
+kwcoco toydata vidshapes8-frames5-speed0.2-multispectral --bundle_dpath $DATA_DPATH/vidshapes_msi_train
+kwcoco toydata vidshapes4-frames5-speed0.2-multispectral --bundle_dpath $DATA_DPATH/vidshapes_msi_vali
+kwcoco toydata vidshapes2-frames6-speed0.2-multispectral --bundle_dpath $DATA_DPATH/vidshapes_msi_test
 
 
 # Print stats
@@ -24,24 +24,41 @@ python -m watch watch_coco_stats $TRAIN_FPATH
 
 python -m watch.cli.coco_visualize_videos \
     --src $DATA_DPATH/vidshapes_msi_train/data.kwcoco.json \
-    --viz_dpath=$DATA_DPATH/vidshapes_msi_train
+    --channels="B1|B8|B11,B1" \
+    --viz_dpath=$DATA_DPATH/vidshapes_msi_train/_viz
+
+items=$(jq -r '.videos[] | .name' $DATA_DPATH/vidshapes_msi_train/data.kwcoco.json)
+for item in ${items[@]}; do
+    echo "item = $item"
+    python -m watch.cli.gifify --frames_per_second 1.0 \
+        --inputs "$DATA_DPATH/vidshapes_msi_train/_viz/${item}/_anns/B1" \
+        --output "$DATA_DPATH/vidshapes_msi_train/_viz/${item}_ann.gif"
+
+    python -m watch.cli.gifify --frames_per_second 1.0 \
+        --inputs "$DATA_DPATH/vidshapes_msi_train/_viz/${item}/_imgs/B1|B8|B11" \
+        --output "$DATA_DPATH/vidshapes_msi_train/_viz/${item}_img.gif"
+done
+
+
 
 
 ARCH=smt_it_stm_p8
+
 CHANNELS="B8|B1|B11|B8a"
+
 EXPERIMENT_NAME=ToyFusion_${ARCH}_v001
 DATASET_NAME=ToyDataMSI
 
-# Specify the expected input / output files
 WORKDIR=$DATA_DPATH/training/$HOSTNAME/$USER
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_NAME/runs/$EXPERIMENT_NAME
+
+# Specify the expected input / output files
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package.pt 
 PRED_FPATH=$DEFAULT_ROOT_DIR/pred/pred.kwcoco.json
 EVAL_DPATH=$DEFAULT_ROOT_DIR/pred/eval
 
 TRAIN_CONFIG_FPATH=$WORKDIR/$DATASET_NAME/configs/train_$EXPERIMENT_NAME.yml 
 PRED_CONFIG_FPATH=$WORKDIR/$DATASET_NAME/configs/predict_$EXPERIMENT_NAME.yml 
-
 
 # Configure training hyperparameters
 python -m watch.tasks.fusion.fit \
@@ -52,7 +69,7 @@ python -m watch.tasks.fusion.fit \
     --learning_rate=3e-4 \
     --weight_decay=1e-5 \
     --dropout=0.1 \
-    --time_steps=2 \
+    --time_steps=4 \
     --chip_size=128 \
     --batch_size=1 \
     --max_epochs=2 \
@@ -60,7 +77,6 @@ python -m watch.tasks.fusion.fit \
     --gpus=1 \
     --accumulate_grad_batches=1 \
     --dump=$TRAIN_CONFIG_FPATH
-
 
 # Configure prediction hyperparams
 python -m watch.tasks.fusion.predict \

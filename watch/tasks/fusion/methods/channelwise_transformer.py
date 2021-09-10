@@ -358,10 +358,13 @@ class MultimodalTransformer(pl.LightningModule):
 
         Example:
             >>> # xdoctest: +SKIP
-            >>> # Demo Overfit:
+            >>> # ============
+            >>> # DEMO OVERFIT:
+            >>> # ============
             >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datamodules
+            >>> from watch.utils.slugify_ext import smart_truncate
             >>> import kwcoco
             >>> import os
             >>> import kwplot
@@ -369,14 +372,14 @@ class MultimodalTransformer(pl.LightningModule):
             >>> if 1:
             >>>     _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
             >>>     dvc_dpath = os.environ.get('DVC_DPATH', _default)
-            >>>     coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/data.kwcoco.json')
+            >>>     coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/combo_propogated_data.kwcoco.json')
             >>> else:
-            >>>     coco_fpath = 'special:vidshapes8-multispectral'
+            >>>     coco_fpath = 'special:vidshapes8-frames9-speed0.5-multispectral'
             >>> coco_dset = kwcoco.CocoDataset.coerce(coco_fpath)
             >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset=coco_dset,
-            >>>     #channels='blue|green|red|nir|coastal|swir22',
-            >>>     chip_size=96, batch_size=1, time_steps=3,
+            >>>     channels='blue|green|red',
+            >>>     chip_size=128, batch_size=1, time_steps=4,
             >>>     normalize_inputs=True, neg_to_pos_ratio=0, num_workers=0,
             >>> )
             >>> datamodule.setup('fit')
@@ -385,29 +388,43 @@ class MultimodalTransformer(pl.LightningModule):
 
             >>> # Choose subclass to test this with (does not cover all cases)
             >>> self = methods.MultimodalTransformer(
-            >>>     arch_name='smt_it_joint_p8',
-            >>>     attention_impl='performer',
+            >>>     #arch_name='smt_it_joint_p8',
+            >>>     arch_name='smt_it_stm_p8',
+            >>>     attention_impl='exact',
             >>>     input_stats=datamodule.input_stats,
             >>>     classes=datamodule.classes, input_channels=datamodule.channels)
+            >>> device = 0
+            >>> self = self.to(device)
 
             >>> # Run one visualization
             >>> batch = next(iter(loader))
-            >>> device = 0
-            >>> self = self.to(device)
             >>> walker = ub.IndexableWalker(batch)
             >>> for path, val in walker:
             >>>     if isinstance(val, torch.Tensor):
             >>>         walker[path] = val.to(device)
             >>> outputs = self.training_step(batch)
-            >>> canvas = datamodule.draw_batch(batch, outputs=outputs)
+            >>> canvas = datamodule.draw_batch(batch, outputs=outputs, max_channels=1, overlay_on_image=0)
             >>> kwplot.imshow(canvas)
 
             >>> loss_records = []
+            >>> loss_records = [g[0] for g in ub.group_items(loss_records, lambda x: x['step']).values()]
             >>> step = 0
-            >>> optim = torch.optim.AdamW(self.parameters(), lr=1e-4)
+            >>> frame_idx = 0
+            >>> dpath = ub.ensuredir('_overfit_viz09')
+            >>> #optim = torch.optim.SGD(self.parameters(), lr=1e-4)
+            >>> #optim = torch.optim.AdamW(self.parameters(), lr=1e-4)
+            >>> import torch_optimizer
+            >>> optim = torch_optimizer.RAdam(self.parameters(), lr=3e-3, weight_decay=1e-5)
+
+            >>> from kwplot.mpl_make import render_figure_to_image
             >>> import xdev
-            >>> for _ in xdev.InteractiveIter(list(range(1000))):
-            >>>     num_steps = 50
+            >>> import kwimage
+            >>> fig = kwplot.figure(fnum=1, doclf=True)
+            >>> fig.set_size_inches(15, 6)
+            >>> fig.subplots_adjust(left=0.05, top=0.9)
+            >>> #for frame_idx in xdev.InteractiveIter(list(range(frame_idx + 1, 1000))):
+            >>> for frame_idx in list(range(frame_idx, 1000)):
+            >>>     num_steps = 20
             >>>     for i in ub.ProgIter(range(num_steps), desc='overfit'):
             >>>         optim.zero_grad()
             >>>         outputs = self.training_step(batch)
@@ -419,19 +436,32 @@ class MultimodalTransformer(pl.LightningModule):
             >>>         loss.backward()
             >>>         optim.step()
             >>>         step += 1
-            >>>     canvas = datamodule.draw_batch(batch, outputs=outputs, max_channels=4, max_items=4)
+            >>>     canvas = datamodule.draw_batch(batch, outputs=outputs, max_channels=1, overlay_on_image=0, max_items=4)
             >>>     kwplot.imshow(canvas, pnum=(1, 2, 1), fnum=1)
-            >>>     kwplot.figure(fnum=1, pnum=(1, 2, 2))
+            >>>     fig = kwplot.figure(fnum=1, pnum=(1, 2, 2))
             >>>     #kwplot.imshow(canvas, pnum=(1, 2, 1))
             >>>     import pandas as pd
-            >>>     sns.lineplot(data=pd.DataFrame(loss_records), x='step', y='val', hue='part')
-            >>>     xdev.InteractiveIter.draw()
+            >>>     ax = sns.lineplot(data=pd.DataFrame(loss_records), x='step', y='val', hue='part')
+            >>>     ax.set_yscale('log')
+            >>>     fig.suptitle(smart_truncate(str(optim).replace('\n',''), max_length=64))
+            >>>     img = render_figure_to_image(fig)
+            >>>     img = kwimage.convert_colorspace(img, src_space='bgr', dst_space='rgb')
+            >>>     fpath = join(dpath, 'frame_{:04d}.png'.format(frame_idx))
+            >>>     kwimage.imwrite(fpath, img)
+            >>>     #xdev.InteractiveIter.draw()
             >>> # TODO: can we get this batch to update in real time?
             >>> # TODO: start a server process that listens for new images
             >>> # as it gets new images, it starts playing through the animation
             >>> # looping as needed
 
         Ignore:
+            python -m watch.cli.gifify \
+                    -i /home/local/KHQ/jon.crall/data/work/toy_change/_overfit_viz7/ \
+                    -o /home/local/KHQ/jon.crall/data/work/toy_change/_overfit_viz7.gif
+
+            nh.initializers.functional.apply_initializer(self, torch.nn.init.kaiming_normal, {})
+
+
             # How to get data we need to step back into the dataloader
             # to debug the batch
             item = batch[0]

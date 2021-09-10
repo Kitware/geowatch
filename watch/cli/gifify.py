@@ -55,6 +55,8 @@ def main():
         else:
             frame_fpaths.append(p)
 
+    # frame_fpaths = frame_fpaths[::2]
+
     print('frame_fpaths = {!r}'.format(frame_fpaths))
 
     backend = 'imagemagik'
@@ -83,7 +85,7 @@ def main():
                               max_width=ns['max_width'])
 
 
-def ffmpeg_animate_frames(frame_fpaths, output_fpath, in_framerate=1, verbose=1, max_width=None):
+def ffmpeg_animate_frames(frame_fpaths, output_fpath, in_framerate=1, verbose=3, max_width=None):
     """
     Use ffmpeg to transform a series of frames into a video.
 
@@ -164,6 +166,12 @@ def ffmpeg_animate_frames(frame_fpaths, output_fpath, in_framerate=1, verbose=1,
             # '-crf 20',
             # '-r {OUT_FRAMERATE}',
             # '-filter:v scale=512:-1',
+
+            # higher quality
+            # https://stackoverflow.com/questions/42980663/ffmpeg-high-quality-animated-gif
+            # '-filter_complex "fps=10;scale=500:-1:flags=lanczos,palettegen=stats_mode=full"'
+            # '-filter_complex "fps=10;scale=500:-1:flags=lanczos,palettegen=stats_mode=full"'
+            # '-filter_complex "fps=10;scale=500:-1:flags=lanczos,split[v1][v2]; [v1]palettegen=stats_mode=full [palette];[v2]palette]paletteuse=dither=sierra2_4a" -t 10'
         ]
         fmtkw.update(dict(
             # OUT_FRAMERATE=5,
@@ -195,7 +203,7 @@ def ffmpeg_animate_frames(frame_fpaths, output_fpath, in_framerate=1, verbose=1,
         if verbose > 0:
             print('Converting {} images to animation: {}'.format(len(frame_fpaths), output_fpath))
 
-        info = ub.cmd(command, verbose=3 if verbose > 1 else 0)
+        info = ub.cmd(command, verbose=3 if verbose > 1 else 0, shell=True)
 
         if verbose > 0:
             print('finished')

@@ -1003,13 +1003,18 @@ class KWCocoVideoDataset(data.Dataset):
 
     @profile
     def draw_item(self, item, item_output=None, combinable_extra=None,
-                  max_channels=5, max_dim=256, norm_over_time=0):
+                  max_channels=5, max_dim=256, norm_over_time=0,
+                  overlay_on_image=True):
         """
         Visualize an item produced by this DataSet.
 
         Args:
             item (Dict): An item returned from the torch Dataset.
                 (It is a dict right? { ಠ ︿ ಠ } )
+
+            overlay_on_image (bool):
+                if True, the truth and prediction is drawn on top of
+                an image, otherwise it is drawn on a black image.
 
             item_output (Dict):
                 Special task keys that we know how to plot.
@@ -1053,11 +1058,13 @@ class KWCocoVideoDataset(data.Dataset):
             >>> class_probs = np.stack(class_prob_list)
             >>> item_output['class_probs'] = class_probs  # first frame does not have change
             >>> #binprobs[0][:] = 0  # first change prob should be all zeros
-            >>> canvas = self.draw_item(item, item_output, combinable_extra=combinable_extra)
+            >>> canvas = self.draw_item(item, item_output, combinable_extra=combinable_extra, overlay_on_image=1)
+            >>> canvas2 = self.draw_item(item, item_output, combinable_extra=combinable_extra, max_channels=1, overlay_on_image=0)
             >>> # xdoctest: +REQUIRES(--show)
             >>> import kwplot
             >>> kwplot.autompl()
-            >>> kwplot.imshow(canvas)
+            >>> kwplot.imshow(canvas, fnum=1, pnum=(1, 2, 1))
+            >>> kwplot.imshow(canvas2, fnum=1, pnum=(1, 2, 2))
             >>> kwplot.show_if_requested()
         """
         classes = self.classes
@@ -1219,62 +1226,81 @@ class KWCocoVideoDataset(data.Dataset):
                 header_part = header_text(f'{full_mode_code}', shrink=True)
                 vertical_stack.append(header_part)
 
+            # Create overlays for training objective targets
+            truth_overlays = []
+            if True:
+                # Create the the true class label overlay
+                true_heatmap = kwimage.Heatmap(class_idx=class_idxs, classes=classes)
+                class_overlay = true_heatmap.colorize('class_idx')
+                class_overlay[..., 3] = 0.5
+                truth_overlays.append({
+                    'overlay': class_overlay,
+                    'label_text': 'true class',
+                })
+
+            if True:
+                # Create the true change label overlay
+                change_overlay = np.zeros(changes.shape[0:2] + (4,), dtype=np.float32)
+                change_overlay = kwimage.Mask(changes, format='c_mask').draw_on(change_overlay, color='lime')
+                change_overlay = kwimage.ensure_alpha_channel(change_overlay)
+                change_overlay[..., 3] = (changes > 0).astype(np.float32) * 0.5
+                truth_overlays.append({
+                    'overlay': change_overlay,
+                    'label_text': 'true change',
+                })
+                # change_overlay = kwimage.make_heatmask(changes)
+
+            if not overlay_on_image:
+                # Draw the truth by itself
+                for overlay_info in truth_overlays:
+                    label_text = overlay_info['label_text']
+                    row_canvas = overlay_info['overlay'][..., 0:3]
+                    row_canvas = kwimage.imresize(row_canvas, max_dim=max_dim).clip(0, 1)
+                    # TODO: deduplicate this block of code
+                    # TODO: make draw_text_on_image able to return the
+                    # geometry of what it drew and use that.
+                    signal_bottom_y = 1  # hack: hardcoded
+                    row_canvas = kwimage.draw_text_on_image(
+                        row_canvas, label_text, (1, signal_bottom_y + 1),
+                        valign='top', color='lime', border=3)
+                    vertical_stack.append(row_canvas)
+
             for iterx, row in enumerate(chan_rows):
-                norm_signal = row['norm_signal']
-                true_layers = []
-                if iterx == 0:
-                    # Draw class label on odd frames
-                    true_heatmap = kwimage.Heatmap(class_idx=class_idxs, classes=classes)
-                    # true_part = heatmap.draw_on(true_part, with_alpha=0.5)
-                    # Hack: -1 is given the last color by colorize, it would
-                    # be better if there was a non-negative background class index
-                    class_overlay = true_heatmap.colorize('class_idx')
-                    class_overlay[..., 3] = 0.5
-                    # class_overlay[class_idxs == -1, 3] = 0
-                    true_layers.append(class_overlay)
-                    label_text = 'true class'
-                elif iterx == 1:
-                    # Draw change label on even frames
-                    change_overlay = np.zeros(changes.shape[0:2] + (4,), dtype=np.float32)
-                    change_overlay = kwimage.Mask(changes, format='c_mask').draw_on(change_overlay, color='lime')
-                    change_overlay = kwimage.ensure_alpha_channel(change_overlay)
-                    change_overlay[..., 3] = (changes > 0).astype(np.float32) * 0.5
-                    # change_overlay = kwimage.make_heatmask(changes)
-                    # print('change_overlay = {!r}'.format(change_overlay))
-                    true_layers.append(change_overlay)
-                    label_text = 'true change'
-                else:
-                    label_text = None
+                layers = []
+                label_text = None
+                if overlay_on_image:
+                    # Draw truth on the image itself
+                    if iterx < len(truth_overlays):
+                        overlay_info = truth_overlays[iterx]
+                        layers.append(overlay_info['overlay'])
+                        label_text = overlay_info['label_text']
 
-                true_layers.append(norm_signal)
-                # for x in true_layers:
-                #     print('x.shape = {!r}'.format(x.shape))
-                #     print(x.sum())
+                layers.append(row['norm_signal'])
+                row_canvas = kwimage.overlay_alpha_layers(layers)[..., 0:3]
 
-                true_part = kwimage.overlay_alpha_layers(true_layers)[..., 0:3]
-
-                true_part = kwimage.imresize(true_part, max_dim=max_dim).clip(0, 1)
-                true_part = kwimage.draw_text_on_image(
-                    true_part, row['signal_text'], (1, 1), valign='top',
+                row_canvas = kwimage.imresize(row_canvas, max_dim=max_dim).clip(0, 1)
+                row_canvas = kwimage.draw_text_on_image(
+                    row_canvas, row['signal_text'], (1, 1), valign='top',
                     color='white', border=3)
 
                 if label_text:
                     # TODO: make draw_text_on_image able to return the
                     # geometry of what it drew and use that.
                     signal_bottom_y = 31  # hack: hardcoded
-                    true_part = kwimage.draw_text_on_image(
-                        true_part, label_text, (1, signal_bottom_y + 1),
+                    row_canvas = kwimage.draw_text_on_image(
+                        row_canvas, label_text, (1, signal_bottom_y + 1),
                         valign='top', color='lime', border=3)
-                vertical_stack.append(true_part)
+                vertical_stack.append(row_canvas)
 
+            # TODO: clean up logic
             key = 'class_probs'
             if item_output and  key in item_output:
-                norm_signal = chan_rows[0]['norm_signal']
-                # print('norm_signal.shape = {!r}'.format(norm_signal.shape))
+                if overlay_on_image:
+                    norm_signal = chan_rows[0]['norm_signal']
+                else:
+                    norm_signal = np.zeros_like(chan_rows[0]['norm_signal'])
                 x = item_output[key][frame_idx]
-                # print('x.shape = {!r}'.format(x.shape))
                 class_probs = einops.rearrange(x, 'h w c -> c h w')
-                # print('class_probs.shape = {!r}'.format(class_probs.shape))
                 class_heatmap = kwimage.Heatmap(class_probs=class_probs, classes=classes)
                 pred_part = class_heatmap.draw_on(norm_signal, with_alpha=0.7)
                 # TODO: we might want to overlay the prediction on one or
@@ -1304,6 +1330,10 @@ class KWCocoVideoDataset(data.Dataset):
                     # Draw predictions on the first item
                     pred_mask = kwimage.make_heatmask(pred_raw)
                     norm_signal = chan_rows[1 if len(chan_rows) > 1 else 0]['norm_signal']
+                    if overlay_on_image:
+                        norm_signal = norm_signal
+                    else:
+                        norm_signal = np.zeros_like(norm_signal)
                     pred_layers = [pred_mask, norm_signal]
                     pred_part = kwimage.overlay_alpha_layers(pred_layers)
                     # TODO: we might want to overlay the prediction on one or

@@ -300,10 +300,11 @@ train_model(){
     WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 
     ARCH=smt_it_stm_p8
+    #ARCH=smt_it_joint_p8
 
     CHANNELS="blue|green|red|nir|inv_sort1|inv_sort2|inv_sort3|inv_sort4|inv_sort5|inv_sort6|inv_sort7|inv_sort8|inv_augment1|inv_augment2|inv_augment3|inv_augment4|inv_augment5|inv_augment6|inv_augment7|inv_augment8|inv_overlap1|inv_overlap2|inv_overlap3|inv_overlap4|inv_overlap5|inv_overlap6|inv_overlap7|inv_overlap8|inv_shared1|inv_shared2|inv_shared3|inv_shared4|inv_shared5|inv_shared6|inv_shared7|inv_shared8|rice_field|cropland|water|inland_water|river_or_stream|sebkha|snow_or_ice_field|bare_ground|sand_dune|built_up|grassland|brush|forest|wetland|road"
 
-    EXPERIMENT_NAME=DirectCD_${ARCH}_teamfeat_v012
+    EXPERIMENT_NAME=DirectCD_${ARCH}_teamfeat_v013
     DATASET_CODE=Drop1_RightLeft_V1
 
     DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
@@ -324,16 +325,19 @@ train_model(){
         --method="MultimodalTransformer" \
         --arch_name=$ARCH \
         --time_steps=9 \
-        --chip_size=128 \
+        --chip_size=96 \
         --batch_size=1 \
-        --accumulate_grad_batches=64 \
+        --accumulate_grad_batches=32 \
+        --window_overlap=0.5 \
+        --time_overlap=0.6 \
         --num_workers=6 \
         --max_epochs=400 \
         --patience=400 \
         --gpus=1  \
-        --learning_rate=1e-4 \
+        --learning_rate=1e-3 \
         --weight_decay=1e-4 \
         --dropout=0.1 \
+        --attention_impl=exact \
         --window_size=8 \
         --dump=$TRAIN_CONFIG_FPATH 
 
@@ -355,8 +359,7 @@ train_model(){
             --train_dataset=$TRAIN_FPATH \
              --vali_dataset=$VALI_FPATH \
              --test_dataset=$TEST_FPATH \
-             --num_sanity_val_steps=0
-
+             --num_sanity_val_steps=0  && \
     python -m watch.tasks.fusion.predict \
             --config=$PRED_CONFIG_FPATH \
             --test_dataset=$TEST_FPATH \
