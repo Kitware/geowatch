@@ -37,7 +37,7 @@ class PropagateLabelsConfig(scfg.Config):
         - [ ] Pull in and merge annotations from an external kwcoco file
         - [x] Handle splitting and merging tracks (non-unique frame_index)
         - [ ] Stop propagation at category change (could be taken care of by external kwcoco file)
-        - [ ] Parallelize
+        - [X] Parallelize
 
     """
     default = {
@@ -60,7 +60,9 @@ class PropagateLabelsConfig(scfg.Config):
 
         'validate': scfg.Value(1, help="Validate spatial and temporal AOI of each site after propagating"),
 
-        'crop': scfg.Value(1, help="Crop propagated annotations to the valid data mask of the new image")
+        'crop': scfg.Value(1, help="Crop propagated annotations to the valid data mask of the new image"),
+
+        'max_workers': scfg.Value(None, help="Max. number of workers to parallelize over, up to the number of regions/ROIs. None is auto; 0 is serial.")
     }
 
     epilog = """
@@ -231,29 +233,31 @@ def get_canvas_concat_channels(annotations, dataset, img_id):
 
 def save_visualizations(canvas_chunk, fpath):
     # save visualizations of original and propagated labels
+    # Tried to make this thread-safe by using the Axis object
+    # TODO finish this
     import kwplot
     plt = kwplot.autoplt()
 
-    plt.figure(figsize=(30, 8))
+    fig = plt.figure(figsize=(30, 8))
     n_images = len(canvas_chunk)
     for i, info in enumerate(canvas_chunk):
         before = info['before_canvas']
         after = info['after_canvas']
-        plt.subplot(2, n_images, i + 1)
-        plt.imshow(before)
+        ax1 = plt.subplot(2, n_images, i + 1)
+        ax1.imshow(before)
         if i == 3:
-            plt.title('Original')
-        plt.axis('off')
+            ax1.set_title('Original')
+        ax1.axis('off')
 
-        plt.subplot(2, n_images, n_images + i + 1)
-        plt.imshow(after)
+        ax2 = plt.subplot(2, n_images, n_images + i + 1)
+        ax2.imshow(after)
         if i == 3:
-            plt.title('Propagated')
-        plt.axis('off')
+            ax2.set_title('Propagated')
+        ax2.axis('off')
 
-    plt.tight_layout()
-    plt.savefig(fpath, bbox_inches='tight')
-    plt.close()
+    fig.tight_layout()
+    fig.savefig(fpath, bbox_inches='tight')
+    # plt.close()
 
 
 def validate_inbounds(anns, img):
@@ -391,11 +395,9 @@ def main(cmdline=False, **kwargs):
 
     # a list of newly generated annotation IDs, for debugging purposes
     new_aids = []
-
-    prog = ub.ProgIter(
-        full_ds.index.videos.items(),
-        total=len(full_ds.index.videos), desc='process video')
-    for vid_id, video in prog:
+    
+    # parallelize over videos
+    def _job(vid_id, video, full_ds):
         image_ids = full_ds.index.vidid_to_gids[vid_id]
 
         # a set of all the track IDs in this video
@@ -409,11 +411,14 @@ def main(cmdline=False, **kwargs):
 
         # canvases for visualizations
         canvas_infos = []
+        
+        # results for this video
+        warped_annotations = []
 
         # for all images in this video
         for j, img_id in enumerate(image_ids):
             if 1:
-                prog.ensure_newline()
+                # prog.ensure_newline()
                 print('img_id = {!r}'.format(img_id))
 
             this_track_ids = set()
@@ -456,7 +461,7 @@ def main(cmdline=False, **kwargs):
                             # only possible with crop
                             if warped_annotation is None:
                                 if config['verbose']:
-                                    prog.ensure_newline()
+                                    # prog.ensure_newline()
                                     print('skipped OOB annotation for image', img_id, 'track ID', missing)
                                 continue
                         else:
@@ -466,14 +471,13 @@ def main(cmdline=False, **kwargs):
                             warped_annotation = get_warped_ann(previous_annotation, warp_previous_to_this_image, full_ds.imgs[img_id], previous_image_id, crop_to_valid=False)
 
                         # add the propagated annotation in the new kwcoco dataset
-                        new_aid = propagated_ds.add_annotation(**warped_annotation)
-                        new_aids.append(new_aid)
+                        warped_annotations.append(warped_annotation)
 
                         # append in the list for visualizations
                         this_image_fixed_anns.append(warped_annotation)
 
                         if config['verbose']:
-                            prog.ensure_newline()
+                            # prog.ensure_newline()
                             print('added annotation for image', img_id, 'track ID', missing)
 
             # Get "n_image_viz" number of canvases for visualization with original annotations
@@ -494,6 +498,19 @@ def main(cmdline=False, **kwargs):
                         'after_canvas': after_canvas,
                         'frame_num': j,
                     })
+        
+        return warped_annotations, canvas_infos
+
+    max_workers = config['max_workers']
+    if max_workers is None:
+        max_workers = len(full_ds.index.videos)
+    executor = ub.Executor(mode='thread', max_workers=max_workers)
+    prog = ub.ProgIter(
+        [(vid_id, video, executor.submit(_job, vid_id, video, full_ds.copy())) for vid_id, video in full_ds.index.videos.items()],
+        total=len(full_ds.index.videos), desc='process video')
+    for vid_id, video, job in prog:
+        warped_annotations, canvas_infos = job.result()
+        new_aids.extend([propagated_ds.add_annotation(**a) for a in warped_annotations])
 
         # save visualization
         if viz_dpath is not None:
