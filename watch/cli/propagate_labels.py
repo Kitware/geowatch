@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
+import os
+import json
+import dateutil
 import shapely
 import shapely.ops
+import pygeos
 import kwcoco
 import kwimage
 import ubelt as ub
@@ -32,6 +36,7 @@ class PropagateLabelsConfig(scfg.Config):
         - [ ] Pull in and merge annotations from an external kwcoco file
         - [x] Handle splitting and merging tracks (non-unique frame_index)
         - [ ] Stop propagation at category change (could be taken care of by external kwcoco file)
+        - [ ] Parallelize
 
     """
     default = {
@@ -50,7 +55,9 @@ class PropagateLabelsConfig(scfg.Config):
             if specified, visualizations will be written to this directory
             ''')),
 
-        'verbose': scfg.Value(1, help="use this to print details")
+        'verbose': scfg.Value(1, help="use this to print details"),
+
+        'validate': scfg.Value(1, help="Validate spatial and temporal AOI of each site after propagating")
     }
 
     epilog = """
@@ -147,6 +154,8 @@ def get_warped_ann(previous_ann,
     warped_ann['track_id'] = previous_ann['track_id']
     warped_ann['image_id'] = image_entry['id']
     warped_ann['source_gid'] = previous_image_id
+    warped_ann['properties'] = previous_ann['properties']
+    warped_ann['segmentation_geos'] = previous_ann['segmentation_geos']
 
     return warped_ann
 
@@ -187,6 +196,70 @@ def save_visualizations(canvas_chunk, fpath):
     plt.tight_layout()
     plt.savefig(fpath, bbox_inches='tight')
     plt.close()
+
+
+def validate_inbounds(anns, img):
+    warp_wld_to_pxl = kwimage.Affine.coerce(img['wld_to_pxl'])
+
+    band = img['auxiliary'][0]
+    warp_aux_to_img = kwimage.Affine.coerce(band['warp_aux_to_img'])
+
+    # use pygeos to vectorize this bit
+    box = pygeos.box(0, 0, *kwimage.load_image_shape(band['file_name'])[:2])
+    mask = pygeos.from_shapely(
+        util_raster.mask(band['file_name'], as_poly=True))
+    segs = pygeos.from_shapely([
+        kwimage.Segmentation.coerce(ann['segmentation']).warp(
+            warp_aux_to_img.inv()).to_multi_polygon().to_shapely()
+        for ann in anns
+    ])
+    geos = pygeos.from_shapely([
+        kwimage.Polygon.from_geojson(
+            ann['segmentation_geos']).warp(warp_wld_to_pxl).warp(
+                warp_aux_to_img.inv()).to_multi_polygon().to_shapely()
+        for ann in anns
+    ])
+
+    assert pygeos.contains(box, mask)
+    assert all(pygeos.contains(geos, segs))
+    assert all(pygeos.contains(mask, segs))
+    assert all(pygeos.intersects(mask, geos))
+
+
+def validate_timebounds(track_id, full_ds):
+
+    anns = full_ds.annots(full_ds.index.trackid_to_aids[track_id])
+
+    # are all the images in the same video?
+    imgs = anns.images
+    vidids = set(imgs.lookup('video_id'))
+    assert len(vidids) == 1
+    vidid = vidids.pop()
+
+    # get the matching track/site from the video
+    # we can't directly use track_id as a key in sites because of the missing MGRS tile
+    # (could differ between sites and region)
+    sites = []
+    for s in json.loads(full_ds.index.videos[vidid]['properties']['sites']):
+        sid = s['properties']['site_id']
+        if sid[sid.index('_'):] == track_id:
+            sites.append(s)
+    assert len(sites) == 1
+    site = sites[0]
+
+    # check its time bounds
+    img_datetimes = [
+        dateutil.parser.parse(dt) for dt in imgs.lookup('date_captured')
+    ]
+    min_day = dateutil.parser.parse(site['properties']['start_date']).date()
+    assert min_day == min(img_datetimes).date()
+    # is the track finished?
+    try:
+        max_day = dateutil.parser.parse(site['properties']['end_date']).date()
+        assert max_day == max(img_datetimes).date()
+        assert 'Post Construction' in anns.cnames
+    except dateutil.parser.ParserError:
+        pass
 
 
 def main(cmdline=False, **kwargs):
@@ -363,12 +436,30 @@ def main(cmdline=False, **kwargs):
     propagated_ds.dump(propagated_ds.fpath, newlines=True)
 
     if viz_dpath:
+        os.makedirs(viz_dpath, exist_ok=True)
         print('saved visualizations to: {!r}'.format(viz_dpath))
 
     # print statistics about propagation
     print('original annotations:', full_ds.n_annots, 'propagated annotations:', len(new_aids), 'total annotations:', propagated_ds.n_annots)
+    
+    # update index (add new anns to tracks) by reloading from disk
+    propagated_ds = kwcoco.CocoDataset(propagated_ds.fpath)
+    # validate correctness
+    if config['validate']:
+        for gid, img in propagated_ds.imgs.items():
+            try:
+                validate_inbounds(propagated_ds.annots(gid=gid).objs, img)
+            except AssertionError:
+                print(f'image {gid} has OOB annotations')
+
+        for track_id in sorted(propagated_ds.index.trackid_to_aids):
+            try:
+                validate_timebounds(track_id, propagated_ds)
+            except AssertionError:
+                print(f'track {track_id} is incomplete or overpropagated')
 
     return propagated_ds
+
 
 _SubConfig = PropagateLabelsConfig
 
