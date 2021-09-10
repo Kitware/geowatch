@@ -28,21 +28,21 @@ def _benchmark_model():
     # https://pytorch.org/tutorials/recipes/recipes/profiler_recipe.html
     # TODO: profile attention_impl
     import netharn as nh
-    from watch.tasks.fusion import datamodules
+    # from watch.tasks.fusion import datamodules
     import torch.profiler
     from torch.profiler import profile, ProfilerActivity, record_function
-    datamodule = datamodules.KWCocoVideoDataModule(
-        train_dataset='special:vidshapes8', num_workers=0)
-    datamodule.setup('fit')
-    loader = datamodule.train_dataloader()
-    batch = next(iter(loader))
+    # datamodule = datamodules.KWCocoVideoDataModule(
+    #     train_dataset='special:vidshapes8', num_workers=0)
+    # datamodule.setup('fit')
+    # loader = datamodule.train_dataloader()
+    # batch = next(iter(loader))
     #self = MultimodalTransformer(arch_name='smt_it_joint_p8')
-    frames = batch[0]['frames']
-    collate_images = torch.cat([frame['modes']['r|g|b'][None, :].float() for frame in frames], dim=0)
+    # frames = batch[0]['frames']
+    # collate_images = torch.cat([frame['modes']['r|g|b'][None, :].float() for frame in frames], dim=0)
     device = nh.XPU.coerce('cpu').main_device
     device = nh.XPU.coerce('gpu').main_device
     #device = nh.XPU.coerce('auto').main_device
-    images = collate_images[None, :].to(device)
+    # images = collate_images[None, :].to(device)
 
     input_grid = list(ub.named_product({
         'S': [32, 64, 96, 128],
@@ -50,12 +50,48 @@ def _benchmark_model():
         # 'T': [2, 5, 9],
         # 'T': [2, 5, 9],
         'T': [2],
-        'M': [3, 32, 64],
+        'M': [3, 32, 64, 128, 256],
     }))
 
+    encoder_info = transformer.encoder_configs.copy()
+
+    import pandas as pd
+    df = pd.DataFrame(encoder_info).T
+    df['num_atten_mechs'] = df['axes'].map(len)
+    df['axes'] = df['axes'].map(lambda x: '.'.join([
+        ''.join([p[0] for p in part])
+        for part in x
+    ]))
+    df['default_shape'] = df['default_shape'].map(lambda x: ''.join([c[0] for c in x]))
+    df.drop('axes', axis=1)
+    df.index.name = 'arch_name'
+    # df = df.drop('axes', axis=1)
+    # df = df.drop('default_shape', axis=1)
+    flags = (
+        (df['n_layers'] >= 12)
+        & (df['n_layers'] < 24)
+        & (df['num_atten_mechs'] == 1)
+    )
+    df_subset = df[flags]
+
+    print(df_subset.to_string())
+
+    df = df[df['n_heads'] >= 8]
+
+    chosen_arch = [
+        'smt_it_stm_p8', 'smt_it_joint_p8', 'smt_it_hwtm_p8',
+        'smt_it_joint_n12',
+    ]
+    # chosen_arch = df_subset.index.values.tolist()
+
+    # all_arch_names = list(transformer.encoder_configs.keys())
+
     model_grid = list(ub.named_product({
-        'arch_name': ['smt_it_stm_p8', 'smt_it_joint_p8', 'smt_it_hwtm_p8'],
-        'attention_impl': ['exact', 'performer'],
+        'arch_name': chosen_arch,
+        'attention_impl': [
+            # 'exact',
+            'performer'
+        ],
     }))
     import itertools as it
     bench_grid = list(it.product(model_grid, input_grid))
@@ -71,7 +107,7 @@ def _benchmark_model():
     torch.cuda.reset_max_memory_allocated()
 
     # Pure memory benchmarks
-    for modelkw, inputkw in bench_grid:
+    for modelkw, inputkw in ub.ProgIter(bench_grid, verbose=3):
         # for arch_name in ['smt_it_stm_p8']:
         M = inputkw['M']
         T = inputkw['T']
@@ -79,6 +115,7 @@ def _benchmark_model():
         row = {}
         row.update(inputkw)
         row.update(modelkw)
+        row.update(ub.dict_isect(transformer.encoder_configs[modelkw['arch_name']], {'n_layers', 'embedding_size', 'n_heads'}))
 
         images = torch.rand(1, T, M, S, S).to(device)
 
@@ -127,7 +164,7 @@ def _benchmark_model():
         if not errored:
             rows.append(row)
             nicerow = row.copy()
-            nicestats = {k + '_str': xdev.byte_str(v) if isinstance(v, int) else v for k, v in mem_stats.items()}
+            nicestats = {k + '_str': xdev.byte_str(v, unit='GB') if isinstance(v, int) else v for k, v in mem_stats.items()}
             nicerow.update(nicestats)
             nicerows.append(nicerow)
             print(nicerow)
@@ -135,7 +172,10 @@ def _benchmark_model():
     import pandas as pd
     df = (pd.DataFrame(nicerows))
     df = df.sort_values('max_mem_alloc')
-    print(df)
+    df['max_mem_alloc_str'] = df['max_mem_alloc'].map(lambda x: xdev.byte_str(x, 'GB'))
+    print(df.to_string())
+
+    df_subset = df[df.arch_name.apply(lambda x: 'joint' in x)]
 
     for k, subdf in df.groupby(['arch_name', 'attention_impl']):
         print('')

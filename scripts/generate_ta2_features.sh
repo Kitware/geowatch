@@ -371,3 +371,19 @@ train_model(){
               --eval_dpath=$EVAL_DPATH
         
 }
+
+basic_left_right_split(){
+    # This is just the basic data for the teams
+    LEFT_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_data_left.kwcoco.json
+    RIGHT_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_data_right.kwcoco.json
+
+    python -m watch.cli.coco_spatial_crop \
+            --src $COMBO_PROPOGATED_COCO_FPATH --dst $LEFT_COCO_FPATH \
+            --suffix=_left
+
+    python -m watch.cli.coco_spatial_crop \
+            --src $COMBO_PROPOGATED_COCO_FPATH --dst $RIGHT_COCO_FPATH \
+            --suffix=_right
+    
+
+}
