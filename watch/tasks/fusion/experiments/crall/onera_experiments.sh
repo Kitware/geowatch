@@ -145,18 +145,18 @@ kwcoco stats $TRAIN_FPATH $VALI_FPATH $TEST_FPATH
 python -m watch.tasks.fusion.fit \
     --channels=${CHANNELS} \
     --method="MultimodalTransformer" \
-    --arch_name=$ARCH \
+    --arch_name=${ARCH} \
     --time_steps=2 \
-    --chip_size=96 \
+    --chip_size=128 \
     --batch_size=1 \
     --accumulate_grad_batches=32 \
-    --num_workers=12 \
+    --num_workers=14 \
     --max_epochs=2000 \
     --chip_overlap=0.5 \
     --neg_to_pos_ratio=2.0 \
     --patience=2000 \
     --gpus=1  \
-    --learning_rate=1e-3 \
+    --learning_rate=3e-3 \
     --weight_decay=1e-5 \
     --dropout=0.1 \
     --window_size=8 \

@@ -24,6 +24,164 @@ except Exception:
     profile = ub.identity
 
 
+def _benchmark_model():
+    # https://pytorch.org/tutorials/recipes/recipes/profiler_recipe.html
+    # TODO: profile attention_impl
+    import netharn as nh
+    from watch.tasks.fusion import datamodules
+    import torch.profiler
+    from torch.profiler import profile, ProfilerActivity, record_function
+    datamodule = datamodules.KWCocoVideoDataModule(
+        train_dataset='special:vidshapes8', num_workers=0)
+    datamodule.setup('fit')
+    loader = datamodule.train_dataloader()
+    batch = next(iter(loader))
+    #self = MultimodalTransformer(arch_name='smt_it_joint_p8')
+    frames = batch[0]['frames']
+    collate_images = torch.cat([frame['modes']['r|g|b'][None, :].float() for frame in frames], dim=0)
+    device = nh.XPU.coerce('cpu').main_device
+    device = nh.XPU.coerce('gpu').main_device
+    #device = nh.XPU.coerce('auto').main_device
+    images = collate_images[None, :].to(device)
+
+    input_grid = list(ub.named_product({
+        'S': [32, 64, 96, 128],
+        # 'T': [2, 3, 5, 9],
+        # 'T': [2, 5, 9],
+        # 'T': [2, 5, 9],
+        'T': [2],
+        'M': [3, 32, 64],
+    }))
+
+    model_grid = list(ub.named_product({
+        'arch_name': ['smt_it_stm_p8', 'smt_it_joint_p8', 'smt_it_hwtm_p8'],
+        'attention_impl': ['exact', 'performer'],
+    }))
+    import itertools as it
+    bench_grid = list(it.product(model_grid, input_grid))
+
+    rows = []
+    nicerows = []
+    self = None
+    images = None
+    train_prof = None
+    output = None
+    torch.cuda.empty_cache()
+    torch.cuda.reset_peak_memory_stats()
+    torch.cuda.reset_max_memory_allocated()
+
+    # Pure memory benchmarks
+    for modelkw, inputkw in bench_grid:
+        # for arch_name in ['smt_it_stm_p8']:
+        M = inputkw['M']
+        T = inputkw['T']
+        S = inputkw['S']
+        row = {}
+        row.update(inputkw)
+        row.update(modelkw)
+
+        images = torch.rand(1, T, M, S, S).to(device)
+
+        errored = False
+
+        try:
+            self = MultimodalTransformer(input_channels=M, **modelkw)
+            num_params = nh.util.number_of_parameters(self)
+            self = self.to(device)
+            optim = torch.optim.SGD(self.parameters(), lr=1e-9)
+            # with torch.profiler.profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True, profile_memory=True) as train_prof:
+            # with torch.profiler.profile(activities=[ProfilerActivity.CUDA], record_shapes=False, profile_memory=True) as train_prof:
+            #     with record_function(f"train_{arch_name}"):
+            optim.zero_grad()
+            output = self(images)['change']
+            output.sum().backward()
+            optim.step()
+
+            # total_memory = sum(event.cuda_memory_usage for event in train_prof.events())
+            # total_mem_str = xdev.byte_str(total_memory)
+            # print(total_mem_str)
+
+            row.update({
+                'num_params': num_params,
+            })
+            mem_stats = ({
+                'max_mem_alloc': torch.cuda.max_memory_allocated(),
+                'mem_alloc': torch.cuda.memory_allocated(),
+                'mem_reserve': torch.cuda.memory_reserved(),
+                'max_mem_reserve': torch.cuda.max_memory_reserved(),
+            })
+            row.update(mem_stats)
+        except RuntimeError:
+            errored = True
+            pass
+
+        self = None
+        images = None
+        train_prof = None
+        output = None
+        optim = None
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats()
+        torch.cuda.reset_max_memory_allocated()
+
+        if not errored:
+            rows.append(row)
+            nicerow = row.copy()
+            nicestats = {k + '_str': xdev.byte_str(v) if isinstance(v, int) else v for k, v in mem_stats.items()}
+            nicerow.update(nicestats)
+            nicerows.append(nicerow)
+            print(nicerow)
+
+    import pandas as pd
+    df = (pd.DataFrame(nicerows))
+    df = df.sort_values('max_mem_alloc')
+    print(df)
+
+    for k, subdf in df.groupby(['arch_name', 'attention_impl']):
+        print('')
+        print('k = {!r}'.format(k))
+        print(subdf.pivot(['S', 'T'], ['M'], ['max_mem_alloc_str']))
+
+    import timerit
+    ti = timerit.Timerit(3, bestof=1, verbose=2)
+    #
+    for arch_name in ['smt_it_stm_p8', 'smt_it_joint_p8', 'smt_it_hwtm_p8']:
+        print('====')
+        self = MultimodalTransformer(arch_name=arch_name, input_channels=datamodule.channels)
+        num_params = nh.util.number_of_parameters(self)
+        print('arch_name = {!r}'.format(arch_name))
+        print('num_params = {!r}'.format(num_params))
+        print('running')
+        self = self.to(device)
+        output = self(images)
+        for timer in ti.reset(f'inference-{arch_name}'):
+            torch.cuda.synchronize()
+            with timer:
+                output = self(images)['change']
+                torch.cuda.synchronize()
+        for timer in ti.reset(f'train-{arch_name}'):
+            torch.cuda.synchronize()
+            with timer:
+                output = self(images)['change']
+                output.sum().backward()
+                torch.cuda.synchronize()
+        with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True, profile_memory=True) as pred_prof:
+            with record_function(f"pred_{arch_name}"):
+                output = self(images)['change']
+        with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True, profile_memory=True) as train_prof:
+            with record_function(f"train_{arch_name}"):
+                output = self(images)['change']
+                output.sum().backward()
+        print('arch_name = {!r}'.format(arch_name))
+        print('num_params = {!r}'.format(num_params))
+        print(pred_prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
+        print(train_prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
+
+        total_memory = sum(event.cuda_memory_usage for event in train_prof.events())
+        total_mem_str = xdev.byte_str(total_memory)
+        print(total_mem_str)
+
+
 class MultimodalTransformer(pl.LightningModule):
     """
     CommandLine:
@@ -56,63 +214,6 @@ class MultimodalTransformer(pl.LightningModule):
         >>>     with torch.profiler.record_function("model_inference"):
         >>>         output = self(images)
         >>> print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
-
-    Benchmark:
-        >>> # https://pytorch.org/tutorials/recipes/recipes/profiler_recipe.html
-        >>> # TODO: profile attention_impl
-        >>> import netharn as nh
-        >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
-        >>> from watch.tasks.fusion import datamodules
-        >>> import torch.profiler
-        >>> from torch.profiler import profile, ProfilerActivity, record_function
-        >>> datamodule = datamodules.KWCocoVideoDataModule(
-        >>>     train_dataset='special:vidshapes8', num_workers=0)
-        >>> datamodule.setup('fit')
-        >>> loader = datamodule.train_dataloader()
-        >>> batch = next(iter(loader))
-        >>> #self = MultimodalTransformer(arch_name='smt_it_joint_p8')
-        >>> frames = batch[0]['frames']
-        >>> collate_images = torch.cat([frame['modes']['r|g|b'][None, :].float() for frame in frames], dim=0)
-        >>> device = nh.XPU.coerce('cpu').main_device
-        >>> device = nh.XPU.coerce('gpu').main_device
-        >>> #device = nh.XPU.coerce('auto').main_device
-        >>> images = collate_images[None, :].to(device)
-        >>> import timerit
-        >>> ti = timerit.Timerit(3, bestof=1, verbose=2)
-        >>> #
-        >>> for arch_name in ['smt_it_stm_p8', 'smt_it_joint_p8', 'smt_it_hwtm_p8']:
-        >>>     print('====')
-        >>>     self = MultimodalTransformer(arch_name=arch_name)
-        >>>     num_params = nh.util.number_of_parameters(self)
-        >>>     print('arch_name = {!r}'.format(arch_name))
-        >>>     print('num_params = {!r}'.format(num_params))
-        >>>     print('running')
-        >>>     self = self.to(device)
-        >>>     output = self(images)
-        >>>     for timer in ti.reset(f'inference-{arch_name}'):
-        >>>         torch.cuda.synchronize()
-        >>>         with timer:
-        >>>             output = self(images)['change']
-        >>>             torch.cuda.synchronize()
-        >>>     for timer in ti.reset(f'train-{arch_name}'):
-        >>>         torch.cuda.synchronize()
-        >>>         with timer:
-        >>>             output = self(images)['change']
-        >>>             output.sum().backward()
-        >>>             torch.cuda.synchronize()
-        >>>     with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True, profile_memory=True) as pred_prof:
-        >>>         with record_function(f"train_{arch_name}"):
-        >>>             output = self(images)['change']
-        >>>             output.sum().backward()
-        >>>     with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True, profile_memory=True) as train_prof:
-        >>>         with record_function(f"train_{arch_name}"):
-        >>>             output = self(images)['change']
-        >>>             output.sum().backward()
-        >>>     print('arch_name = {!r}'.format(arch_name))
-        >>>     print('num_params = {!r}'.format(num_params))
-        >>>     print(pred_prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
-        >>>     print(train_prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
-        >>> print('ti.rankings = {}'.format(ub.repr2(ti.rankings, precision=4, nl=2, align=':')))
     """
 
     def __init__(self,
