@@ -44,7 +44,8 @@ def mask(raster, nodata=0, save=True, convex_hull=False, as_poly=True):
         convex_hull: if True, return the convex hull of the mask image or poly
 
         as_poly: if True, return the mask as a shapely Polygon or MultiPolygon
-            instead of a raster image
+            instead of a raster image, in (w, h) order (opposite of Python
+            convention).
 
     Returns:
         If as_poly, a shapely Polygon or MultiPolygon bounding the valid
@@ -119,7 +120,8 @@ def crop_to(pxl_polys, raster, bounds_policy, intersect_policy='crop'):
     Computation is independent per pxl_poly, but vectorized for speed.
     
     Args:
-        pxl_polys (List[shapely.Polygon]): In pixel coordinates.
+        pxl_polys (List[shapely.Polygon]): In pixel coordinates in (w,h) order
+            (opposite of Python convention).
 
         raster: Path to a dataset (raster image file).
 
@@ -179,7 +181,7 @@ def crop_to(pxl_polys, raster, bounds_policy, intersect_policy='crop'):
 
     if bounds_policy == 'bounds':
         h, w = kwimage.load_image_shape(raster)[:2]
-        geom = pygeos.box(0, 0, h, w)
+        geom = pygeos.box(0, 0, w, h)
 
     elif bounds_policy == 'valid':
         geom = pygeos.from_shapely(mask(raster, as_poly=True))
