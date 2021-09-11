@@ -35,7 +35,7 @@ class CocoVisualizeConfig(scfg.Config):
 
         'num_workers': scfg.Value(0, help='number of parallel draw jobs'),
 
-        'space': scfg.Value('image', help='can be image or video space'),
+        'space': scfg.Value('video', help='can be image or video space'),
 
         'channels': scfg.Value(None, type=str, help='only viz these channels'),
     }
