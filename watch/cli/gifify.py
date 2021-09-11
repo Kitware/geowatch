@@ -127,7 +127,7 @@ def ffmpeg_animate_frames(frame_fpaths, output_fpath, in_framerate=1, verbose=3,
         >>> # Test output to video
         >>> output_fpath = join(test_dpath, 'test.mp4')
     """
-    from os.path import join
+    from os.path import join, abspath
     import uuid
 
     ffmpeg_exe = ub.find_exe('ffmpeg')
@@ -137,8 +137,9 @@ def ffmpeg_animate_frames(frame_fpaths, output_fpath, in_framerate=1, verbose=3,
     try:
         temp_dpath = ub.ensure_app_cache_dir('gifify', 'temp')
         temp_fpath = join(temp_dpath, 'temp_list_{}.txt'.format(str(uuid.uuid4())))
-        lines = ["file '{}'".format(fpath) for fpath in frame_fpaths]
+        lines = ["file '{}'".format(abspath(fpath)) for fpath in frame_fpaths]
         text = '\n'.join(lines)
+        print(text)
         with open(temp_fpath, 'w') as file:
             file.write(text + '\n')
 

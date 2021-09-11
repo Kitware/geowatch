@@ -9,9 +9,19 @@ class CocoVisualizeConfig(scfg.Config):
     Visualizes annotations on kwcoco video frames on each band
 
     TODO:
-        - [ ] Could parameterize which bands are displayed if that is useful
+        - [X] Could parameterize which bands are displayed if that is useful
         - [ ] Could finalize by creating an animation if we need these for slides
         - [X] Could parallelize with ub.JobPool
+
+    CommandLine:
+        # Point to your kwcoco file
+        DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+        COCO_FPATH=$DVC_DPATH/drop1-S2-L8-aligned/data.kwcoco.json
+
+        python -m watch.cli.coco_visualize_videos --src $COCO_FPATH --viz_dpath ./viz_out --channels="red|green|blue" --space="video"
+
+        # Also note you can make an animated gif
+        python -m watch.cli.gifify -i "./viz_out/US_Jacksonville_R01/_anns/red|green|blue/" -o US_Jacksonville_R01_anns.gif
 
     """
     default = {
