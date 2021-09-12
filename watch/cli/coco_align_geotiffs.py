@@ -232,11 +232,12 @@ def main(**kw):
     write_subsets = config['write_subsets']
     max_workers = config['max_workers']
     aux_workers = config['aux_workers']
+    keep = config['keep']
 
     output_bundle_dpath = dst_dpath
 
-    from pympler.tracker import SummaryTracker
-    tracker = SummaryTracker()
+    # from pympler.tracker import SummaryTracker
+    # tracker = SummaryTracker()
 
     if regions == 'annots':
         pass
@@ -246,7 +247,7 @@ def main(**kw):
     else:
         raise KeyError(regions)
 
-    tracker.print_diff()
+    # tracker.print_diff()
 
     # Load the dataset and extract geotiff metadata from each image.
     dset = kwcoco.CocoDataset.coerce(src_fpath)
@@ -280,12 +281,12 @@ def main(**kw):
     new_dset.dataset['info'] = [
         process_info,
     ]
-    tracker.print_diff()
+    # tracker.print_diff()
     to_extract = cube.query_image_overlaps2(region_df)
 
-    tracker.print_diff()
+    # tracker.print_diff()
     for image_overlaps in ub.ProgIter(to_extract, desc='extract ROI videos', verbose=3):
-        tracker.print_diff()
+        # tracker.print_diff()
         video_name = image_overlaps['video_name']
         print('video_name = {!r}'.format(video_name))
 
@@ -296,7 +297,8 @@ def main(**kw):
                               rpc_align_method=rpc_align_method,
                               new_dset=new_dset, visualize=visualize,
                               write_subsets=write_subsets,
-                              max_workers=max_workers, aux_workers=aux_workers)
+                              max_workers=max_workers, aux_workers=aux_workers,
+                              keep=keep)
 
     new_dset.fpath = join(extract_dpath, 'data.kwcoco.json')
     print('Dumping new_dset.fpath = {!r}'.format(new_dset.fpath))
@@ -1000,11 +1002,13 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
         'sensor_coarse',
         'site_tag',
         'channels',
+        'aux_annotated_candidate'
     })
 
     # Carry over appropriate metadata from original image
     new_img.update(carry_over)
     new_img['parent_file_name'] = img['file_name']  # remember which image this came from
+    new_img['parent_name'] = img['name']  # remember which image this came from, and is guaranteed to not be None
     # new_img['video_id'] = new_vidid  # Done outside of this worker
     new_img['frame_index'] = frame_index
     new_img['timestamp'] = date.toordinal()
@@ -1564,40 +1568,37 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
         # TODO: reproject to utm
         # https://gis.stackexchange.com/questions/193094/can-gdalwarp-reproject-from-espg4326-wgs84-to-utm
         # '+proj=utm +zone=12 +datum=WGS84 +units=m +no_defs'
+        
+        prefix_template = (
+        '''
+            gdalwarp
+            - multi
+            --config GDAL_CACHEMAX 500 -wm 500
+            --debug off 
+            -te {xmin} {ymin} {xmax} {ymax}
+            -te_srs epsg:4326
+            -t_srs epsg:4326
+            -co TILED=YES
+            -co BLOCKXSIZE=256
+            -co BLOCKYSIZE=256
+            -overwrite
+        ''')
 
         if hasattr(dems, 'find_reference_fpath'):
             dem_fpath, dem_info = dems.find_reference_fpath(latmin, lonmin)
             template = ub.paragraph(
+                prefix_template + \
                 '''
-                gdalwarp
-                --config GDAL_CACHEMAX 500 -wm 500
-                --debug off 
-                -te {xmin} {ymin} {xmax} {ymax}
-                -te_srs epsg:4326
-                -t_srs epsg:4326
                 -rpc -et 0
                 -to RPC_DEM={dem_fpath}
-                -co TILED=YES
-                -co BLOCKXSIZE=256
-                -co BLOCKYSIZE=256
-                -overwrite
                 {SRC} {DST}
                 ''')
         else:
             dem_fpath = None
             template = ub.paragraph(
+                prefix_template + \
                 '''
-                gdalwarp
-                --config GDAL_CACHEMAX 500 -wm 500
-                --debug off 
-                -te {xmin} {ymin} {xmax} {ymax}
-                -te_srs epsg:4326
-                -t_srs epsg:4326
                 -rpc -et 0
-                -co TILED=YES
-                -co BLOCKXSIZE=256
-                -co BLOCKYSIZE=256
-                -overwrite
                 {SRC} {DST}
                 ''')
         command = template.format(
@@ -1610,16 +1611,8 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
             SRC=src_gpath, DST=dst_gpath,
         )
     elif align_method == 'affine_warp':
-        template = (
-            'gdalwarp '
-            '--config GDAL_CACHEMAX 500 -wm 500 '
-            '--debug off '
-            '-te {xmin} {ymin} {xmax} {ymax} '
-            '-te_srs epsg:4326 '
-            '-overwrite '
-            '-co TILED=YES '
-            '-co BLOCKXSIZE=256 '
-            '-co BLOCKYSIZE=256 '
+        template = ub.paragraph(
+            prefix_template + \
             '{SRC} {DST}')
         command = template.format(
             ymin=latmin,

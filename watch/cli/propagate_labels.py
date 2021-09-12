@@ -52,6 +52,11 @@ class PropagateLabelsConfig(scfg.Config):
             Where the output kwcoco file with propagated labels is saved
             '''),
                    position=2),
+        'ext':
+        scfg.Value(None,
+                   help=ub.paragraph('''
+            Path to an optional external kwcoco file to merge annotations from
+            ''')),
         'viz_dpath':
         scfg.Value(None,
                    help=ub.paragraph('''
@@ -86,13 +91,13 @@ class PropagateLabelsConfig(scfg.Config):
 
 
 def annotated_band(img):
-    # assume each band has the same valid mask
-    # the 'aux_annotated_candidate' attr should be moved from ann to img,
-    # then it can be used here
-    # but note that it is a heuristic and not guaranteed correct
+    # we hope each band has the same valid mask
+    # but if not, this field picks out the (probable; heuristic-based)
+    # band that the annotation was actually done on
     if img['file_name'] is not None:
         return img
-    return img['auxiliary'][0]
+    aux_ix = img.get('aux_annotated_candidate', 0)
+    return img['auxiliary'][aux_ix]
 
 
 def warped_wgs84_to_img(poly, img, inv=False):
@@ -108,7 +113,10 @@ def warped_wgs84_to_img(poly, img, inv=False):
     # info = cacher.tryload()
     # if info is None:
     if 1:
-        info = geotiff.geotiff_crs_info(fpath)
+        try:
+            info = geotiff.geotiff_crs_info(fpath)
+        except NotImplementedError:
+            xdev.embed()
         # can't pickle a function...
         # cacher.save(info)
 
@@ -161,24 +169,21 @@ def get_warp(gid1, gid2, dataset, use_geo=False):
         return img2_from_img1
 
 
-def ann_orig_info(ann):
+def ann_add_orig_info(ann, dset):
     # information needed to pass along to propagated anns
-    if 'orig_info' in ann:
-        return ann['orig_info']
-    else:
-        return {
-            'segmentation_orig': ann['segmentation'],
+    if 'orig_info' not in ann:
+        ann['orig_info'] = {
+            'segmentation_orig': ann.get('segmentation', None),
             'segmentation_geos': ann['segmentation_geos'],
             'source_gid': ann['image_id'],
-            'source_name': 0
+            'source_name': dset.imgs[ann['image_id']]['name'],
+            'source_dset': dset.tag
         }
 
+    return ann
 
-def get_warped_ann(previous_ann,
-                   warp,
-                   image_entry,
-                   previous_image_id,
-                   crop_to_valid=True):
+
+def get_warped_ann(previous_ann, warp, image_entry, crop_to_valid=True):
     '''
     Returns new annotation by applying a warp and optional crop
 
@@ -196,11 +201,19 @@ def get_warped_ann(previous_ann,
     4.44 ms ± 87.4 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
     '''
 
+    # note we are using the semgentations stored in orig_info because the
+    # most recent one may be cropped
     if warp == 'geo':
         try:
             segmentation_geo = (kwimage.MultiPolygon([
-                kwimage.Polygon.from_geojson(previous_ann['segmentation_geos'])
+                kwimage.Polygon.from_geojson(
+                    previous_ann['orig_info']['segmentation_geos'])
             ]))
+            # TODO
+            # 'geo' will be used when the orig annotation is from an external
+            # (un-aligned, possibly nonexistent) image. This means this transformation
+            # will be inaccurate, because it is not being done from *this* image's geocoords.
+            # this cannot be fixed until external images are found and aligned.
             warped_seg = kwimage.Segmentation(
                 warped_wgs84_to_img(segmentation_geo, image_entry))
         except AssertionError:
@@ -208,7 +221,7 @@ def get_warped_ann(previous_ann,
             xdev.embed()
     else:
         segmentation = kwimage.Segmentation.coerce(
-            previous_ann['segmentation'])
+            previous_ann['orig_info']['segmentation_orig'])
         warped_seg = segmentation.warp(warp)
 
     if crop_to_valid:
@@ -244,11 +257,59 @@ def get_warped_ann(previous_ann,
     warped_ann['category_id'] = previous_ann['category_id']
     warped_ann['track_id'] = previous_ann['track_id']
     warped_ann['image_id'] = image_entry['id']
-    warped_ann['source_gid'] = previous_image_id
     warped_ann['properties'] = previous_ann['properties']
-    warped_ann['orig_info'] = previous_ann
+    warped_ann['orig_info'] = previous_ann['orig_info']
 
     return warped_ann
+
+
+def build_external_video(vid_id, full_ds, ext_ds):
+    '''
+    Given two datasets with a corresponding video, match images between them
+    assuming the gids and names are unreliable, and return an ordered list
+    of all images from both videos, with full_ds taking precedence.
+
+    Args:
+        vid_id: of a corresponding video in both dsets
+
+        full_ds: main dset to preferentially grab images from
+
+        ext_ds: empty, or external dataset where images may not be well formed or exist,
+            but images are a superset of full_ds's, which do exist
+
+    Returns:
+        List[Tuple[Dict, bool]]: image entries with a boolean flag "is from ext_ds"
+    '''
+
+    if ext_ds.n_images == 0:
+        return [(i, False) for i in full_ds.images(vidid=vid_id).objs]
+
+    # are these actually the same video?
+    assert (full_ds.index.videos[vid_id]['name'] == ext_ds.index.videos[vid_id]
+            ['name'])
+
+    full_imgs = full_ds.images(vidid=vid_id).objs
+    full_names = full_ds.images(vidid=vid_id).lookup('parent_name')
+
+    ext_imgs = ext_ds.images(vidid=vid_id).objs
+    ext_names = ext_ds.images(vidid=vid_id).lookup('canonical_name')
+
+    matched_imgs = []
+    for ext in ext_names:
+        try:
+            matched_imgs.append(full_imgs[full_names.index(ext)])
+        except ValueError:
+            matched_imgs.append(None)
+
+    # does ext_ds's video completely contain full_ds's [annotated] video?
+    full_imgs_with_annots = [
+        i for i in full_imgs if len(full_ds.gid_to_aids[i['id']]) > 0
+    ]
+    assert len([m for m in matched_imgs
+                if m is not None]) == len(full_imgs_with_annots), ext_ds
+
+    return [(m, False) if m is not None else (e, True)
+            for m, e in zip(matched_imgs, ext_imgs)]
 
 
 def get_canvas_concat_channels(annotations, dataset, img_id):
@@ -287,7 +348,7 @@ def save_visualizations(canvas_chunk, fpath):
 
     fig.tight_layout()
     fig.savefig(fpath, bbox_inches='tight')
-    # plt.close()
+    plt.close(fig)
 
 
 def validate_inbounds(anns, img):
@@ -306,7 +367,8 @@ def validate_inbounds(anns, img):
     ])
     geos = pygeos.from_shapely([
         warped_wgs84_to_img(
-            kwimage.Polygon.from_geojson(ann['segmentation_geos']),
+            kwimage.Polygon.from_geojson(
+                ann['orig_info']['segmentation_geos']),
             img).warp(warp_aux_to_img.inv()).to_multi_polygon().swap_axes().
         to_shapely() for ann in anns
     ])
@@ -323,10 +385,10 @@ def validate_inbounds(anns, img):
 
     # this is only true if crop is used
     # actually, only 13 failed instances anyway
-    # assert all(pygeos.contains(mask, segs)) or pygeos.is_empty(mask)
+    assert all(pygeos.contains(mask, segs)) or pygeos.is_empty(mask)
 
     # and 4 instances which are completely outside the valid mask without crop
-    # assert all(pygeos.intersects(mask, geos)) or pygeos.is_empty(mask)
+    assert all(pygeos.intersects(mask, geos)) or pygeos.is_empty(mask)
 
 
 def validate_timebounds(track_id, full_ds):
@@ -383,12 +445,16 @@ def main(cmdline=False, **kwargs):
     full_ds = kwcoco.CocoDataset.coerce(config['src'])
     print(ub.repr2(full_ds.basic_stats(), nl=1))
 
-    # make a copy of the original kwcoco dataset
-    dst_fpath = pathlib.Path(config['dst'])
     # Ensure the output directory exists
+    dst_fpath = pathlib.Path(config['dst'])
     dst_fpath.parent.mkdir(exist_ok=True, parents=True)
-    propagated_ds = full_ds.copy()
-    propagated_ds.fpath = config['dst']
+
+    # Read or stub external dataset
+    try:
+        ext_ds = kwcoco.CocoDataset.coerce(config['ext'])
+        print(ub.repr2(ext_ds.basic_stats(), nl=1))
+    except TypeError:
+        ext_ds = kwcoco.CocoDataset()
 
     viz_dpath = config['viz_dpath']
     if viz_dpath not in {None, False}:
@@ -397,16 +463,16 @@ def main(cmdline=False, **kwargs):
     else:
         viz_dpath = None
 
-    # preprocessing step: in the new dataset, add a new field 'source_gid' to every *annotation*.
-    # original annotations: source_gid == gid
-    # when we propagate labels, we will add the image id of the original image from which we copied
-    # the annotation. In the case of propagated labels, we will have source_gid != gid
+    # preprocessing step: add new 'orig_info' to every *annotation*.
+    # original annotations: source_gid == gid and source_name == name
+    # when we propagate labels, we will copy 'orig_info' from the copied
+    # annotation. This includes the full segmentation (in case of cropping) and the
+    # original image in the src or ext dataset.
 
-    for aid in propagated_ds.index.anns:
-        # load annotation
-        ann = propagated_ds.index.anns[aid]
-        image_id = ann['image_id']
-        ann['source_gid'] = image_id
+    for ann in full_ds.anns.values():
+        ann = ann_add_orig_info(ann, full_ds)
+    for ann in ext_ds.anns.values():
+        ann = ann_add_orig_info(ann, ext_ds)
 
     # which categories we want to propagate
     # TODO: parameterize
@@ -428,9 +494,7 @@ def main(cmdline=False, **kwargs):
     new_aids = []
 
     # parallelize over videos
-    def _job(vid_id, video, full_ds):
-        image_ids = full_ds.index.vidid_to_gids[vid_id]
-
+    def _job(vid_id, full_ds, ext_ds):
         # a set of all the track IDs in this video
         track_ids = set(
             full_ds.subset(full_ds.index.vidid_to_gids[vid_id]).index.
@@ -442,41 +506,55 @@ def main(cmdline=False, **kwargs):
         # a dictionary of latest image IDs, this will be needed to apply affine transform on images
         latest_img_ids = {}
 
+        # whether the latest image ID is from the external dataset
+        latest_is_ext = {}
+
         # canvases for visualizations
         canvas_infos = []
 
         # results for this video
         warped_annotations = []
 
-        # for all images in this video
-        for j, img_id in enumerate(image_ids):
+        # for all sorted images in this video in both dsets
+        # for j, (img, is_ext) in enumerate(
+        #         build_external_video(vid_id, full_ds, ext_ds)):
+        for j, (img, is_ext) in enumerate(
+                build_external_video(vid_id, full_ds, ext_ds)):
+            img_id = img['id']
             if 1:
                 # prog.ensure_newline()
-                print('img_id = {!r}'.format(img_id))
+                print('{} img_id = {!r}'.format(('ext' if is_ext else 'int'),
+                                                img_id))
 
             this_track_ids = set()
-            this_image_anns = []
 
             # Update all current tracks to have their latest annotation state
-            for aid in list(full_ds.gid_to_aids[img_id]):
-                ann = full_ds.anns[aid]
-                if 1:
+            this_image_anns = (ext_ds if is_ext else full_ds).annots(
+                gid=img_id).objs
+            for ann in this_image_anns:
+                if 0:
                     print('ann = {}'.format(
                         ub.repr2(ub.dict_diff(
                             ann, {
                                 'segmentation', 'segmentation_geos',
-                                'properties'
+                                'properties', 'orig_info'
                             }),
                                  nl=0)))
-                this_image_anns.append(ann)
                 track_id = ann['track_id']
                 this_track_ids.add(track_id)
 
                 # handle non-unique track ids
-                if latest_img_ids.get(track_id) != img_id:
+                if not (latest_img_ids.get(track_id) == img_id
+                        and latest_is_ext.get(track_id) == is_ext):
                     latest_ann_ids[track_id] = set()
                 latest_img_ids[track_id] = img_id
-                latest_ann_ids[track_id].add(aid)
+                latest_is_ext[track_id] = is_ext
+                latest_ann_ids[track_id].add(ann['id'])
+
+            # don't need to fix anything if this is an external image
+            if is_ext:
+                continue
+            # from now on we know that this_image, img_id is from full_ds
 
             this_image_fixed_anns = this_image_anns.copy(
             )  # if there is anything missing, we are going to fix now
@@ -484,44 +562,29 @@ def main(cmdline=False, **kwargs):
             # was there any seen track ID that was not in this image?
             for missing in track_ids - this_track_ids:
                 for aid in latest_ann_ids.get(missing, {}):
-                    previous_annotation = full_ds.anns[aid]
+                    previous_annotation = (ext_ds.anns[aid]
+                                           if latest_is_ext[missing] else
+                                           full_ds.anns[aid])
                     # check if the annotation belongs to the list of cats we want to propagate
                     if previous_annotation[
                             'category_id'] in cat_ids_to_propagate:
 
                         # get the warp from previous image to this image
-                        #
-                        # NOTE: geo must be used if crop_to_valid is used.
-                        # this is because segmentation_geo will remain correct,
-                        # but segmentation will NOT, when this propagated annot
-                        # is used as a source to re-propagate further.
                         previous_image_id = latest_img_ids[missing]
-                        if config['crop']:
+                        warped_annotation = get_warped_ann(
+                            previous_annotation,
+                            ('geo' if latest_is_ext[missing] else get_warp(
+                                previous_image_id, img_id, full_ds)),
+                            full_ds.imgs[img_id],
+                            crop_to_valid=config['crop'])
 
-                            warped_annotation = get_warped_ann(
-                                previous_annotation,
-                                'geo',
-                                full_ds.imgs[img_id],
-                                previous_image_id,
-                                crop_to_valid=True)
-                            # only possible with crop
-                            if warped_annotation is None:
-                                if config['verbose']:
-                                    # prog.ensure_newline()
-                                    print('skipped OOB annotation for image',
-                                          img_id, 'track ID', missing)
-                                continue
-                        else:
-                            warp_previous_to_this_image = get_warp(
-                                previous_image_id, img_id, full_ds)
-
-                            # apply the warp
-                            warped_annotation = get_warped_ann(
-                                previous_annotation,
-                                warp_previous_to_this_image,
-                                full_ds.imgs[img_id],
-                                previous_image_id,
-                                crop_to_valid=False)
+                        # only possible with crop
+                        if warped_annotation is None:
+                            if config['verbose']:
+                                # prog.ensure_newline()
+                                print('skipped OOB annotation for image',
+                                      img_id, 'track ID', missing)
+                            continue
 
                         # add the propagated annotation in the new kwcoco dataset
                         warped_annotations.append(warped_annotation)
@@ -557,23 +620,28 @@ def main(cmdline=False, **kwargs):
 
         return warped_annotations, canvas_infos
 
+    # output dataset to write to
+    propagated_ds = full_ds.copy()
+    propagated_ds.fpath = config['dst']
+
+    # run job for each video
     max_workers = config['max_workers']
     if max_workers is None:
         max_workers = len(full_ds.index.videos)
     executor = ub.Executor(mode='thread', max_workers=max_workers)
     prog = ub.ProgIter(
-        [(vid_id, video, executor.submit(_job, vid_id, video, full_ds.copy()))
-         for vid_id, video in full_ds.index.videos.items()],
+        [(vid_id, executor.submit(_job, vid_id, full_ds.copy(), ext_ds.copy()))
+         for vid_id in full_ds.index.videos],
         total=len(full_ds.index.videos),
         desc='process video')
-    for vid_id, video, job in prog:
+    for vid_id, job in prog:
         warped_annotations, canvas_infos = job.result()
         new_aids.extend(
             [propagated_ds.add_annotation(**a) for a in warped_annotations])
 
         # save visualization
         if viz_dpath is not None:
-            vid_name = video['name']
+            vid_name = full_ds.index.videos[vid_id]['name']
             for canvas_chunk in ub.chunks(canvas_infos, n_image_viz):
                 min_frame = min([d['frame_num'] for d in canvas_chunk])
                 max_frame = max([d['frame_num'] for d in canvas_chunk])
