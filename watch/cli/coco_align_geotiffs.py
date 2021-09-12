@@ -78,6 +78,7 @@ import shapely
 from shapely import ops
 from os.path import join, exists
 
+
 class CocoAlignGeotiffConfig(scfg.Config):
     """
     Create a dataset of aligned temporal sequences around objects of interest
@@ -197,6 +198,8 @@ def main(**kw):
         >>>     'src': dset,
         >>>     'dst': dst,
         >>>     'regions': 'annots',
+        >>>     'max_workers': 0,
+        >>>     'aux_workers': 0,
         >>> }
         >>> new_dset = main(**kw)
     """
@@ -254,6 +257,8 @@ def main(**kw):
     update_coco_geotiff_metadata(dset, serializable=False,
                                  max_workers=max_workers)
 
+    print('dset.dataset = {}'.format(ub.repr2(dset.dataset, nl=3)))
+
     # Construct the "data cube"
     cube = SimpleDataCube(dset)
 
@@ -293,12 +298,11 @@ def main(**kw):
         sub_bundle_dpath = join(extract_dpath, video_name)
         print('sub_bundle_dpath = {!r}'.format(sub_bundle_dpath))
 
-        new_dset = cube.extract_overlaps(image_overlaps, extract_dpath,
-                              rpc_align_method=rpc_align_method,
-                              new_dset=new_dset, visualize=visualize,
-                              write_subsets=write_subsets,
-                              max_workers=max_workers, aux_workers=aux_workers,
-                              keep=keep)
+        new_dset = cube.extract_overlaps(
+            image_overlaps, extract_dpath, rpc_align_method=rpc_align_method,
+            new_dset=new_dset, visualize=visualize,
+            write_subsets=write_subsets, max_workers=max_workers,
+            aux_workers=aux_workers, keep=keep)
 
     new_dset.fpath = join(extract_dpath, 'data.kwcoco.json')
     print('Dumping new_dset.fpath = {!r}'.format(new_dset.fpath))
@@ -591,6 +595,7 @@ class SimpleDataCube(object):
             image_id=gid, bbox=[0, 0, 0, 0], segmentation_geos=sseg_geos)
 
         update_coco_geotiff_metadata(dset, serializable=False, max_workers=0)
+
         cube = SimpleDataCube(dset)
         if with_region:
             img_poly = kwimage.Polygon(exterior=cube.dset.imgs[1]['geotiff_metadata']['wgs84_corners'])
@@ -938,10 +943,7 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
     job_list = []
 
     # Turn off internal threading because we refactored this to thread over all
-    # iamges instead
-    Prog = ub.ProgIter
-    # import tqdm
-    # Prog = tqdm.tqdm
+    # images instead
     executor = ub.Executor(mode='thread', max_workers=aux_workers)
     for obj in ub.ProgIter(objs, desc='submit warp auxiliaries', verbose=0):
         job = executor.submit(
@@ -951,9 +953,9 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
         job_list.append(job)
 
     dst_list = []
-    for job in Prog(job_list, total=len(job_list),
-                    desc='collect warp auxiliaries {}'.format(name),
-                    disable=1):
+    for job in ub.ProgIter(job_list, total=len(job_list),
+                           desc='collect warp auxiliaries {}'.format(name),
+                           enabled=0):
         dst = job.result()
         dst_list.append(dst)
 
@@ -1007,8 +1009,8 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
 
     # Carry over appropriate metadata from original image
     new_img.update(carry_over)
-    new_img['parent_file_name'] = img['file_name']  # remember which image this came from
-    new_img['parent_name'] = img['name']  # remember which image this came from, and is guaranteed to not be None
+    new_img['parent_file_name'] = img.get('file_name', None)  # remember which image this came from
+    new_img['parent_name'] = img.get('name', None)  # remember which image this came from
     # new_img['video_id'] = new_vidid  # Done outside of this worker
     new_img['frame_index'] = frame_index
     new_img['timestamp'] = date.toordinal()
@@ -1524,7 +1526,6 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
     latmin, lonmin, latmax, lonmax = space_box.data[0]
 
     if is_multi_image:
-        # obj.get('channels', None)
         multi_dpath = ub.ensuredir((dst_dpath, name))
         dst_gpath = join(multi_dpath, name + '_' + obj['channels'] + '.tif')
     else:
@@ -1541,13 +1542,13 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
         dst['channels'] = obj['channels']
     if obj.get('num_bands', None):
         dst['num_bands'] = obj['num_bands']
-        
+
     prefix_template = (
-    '''
+        '''
         gdalwarp
-        - multi
+        -multi
         --config GDAL_CACHEMAX 500 -wm 500
-        --debug off 
+        --debug off
         -te {xmin} {ymin} {xmax} {ymax}
         -te_srs epsg:4326
         -t_srs epsg:4326
@@ -1555,7 +1556,7 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
         -co BLOCKXSIZE=256
         -co BLOCKYSIZE=256
         -overwrite
-    ''')
+        ''')
 
     if align_method == 'pixel_crop':
         align_method = 'pixel_crop'
@@ -1587,7 +1588,7 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
         if hasattr(dems, 'find_reference_fpath'):
             dem_fpath, dem_info = dems.find_reference_fpath(latmin, lonmin)
             template = ub.paragraph(
-                prefix_template + \
+                prefix_template +
                 '''
                 -rpc -et 0
                 -to RPC_DEM={dem_fpath}
@@ -1596,7 +1597,7 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
         else:
             dem_fpath = None
             template = ub.paragraph(
-                prefix_template + \
+                prefix_template +
                 '''
                 -rpc -et 0
                 {SRC} {DST}
@@ -1612,7 +1613,7 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
         )
     elif align_method == 'affine_warp':
         template = ub.paragraph(
-            prefix_template + \
+            prefix_template +
             '{SRC} {DST}')
         command = template.format(
             ymin=latmin,
@@ -1626,7 +1627,13 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
 
     if not (exists(dst_gpath) and keep):
         cmd_info = ub.cmd(command, verbose=0)  # NOQA
+        if cmd_info['ret'] != 0:
+            print('\n\nCOMMAND FAILED: {!r}'.format(command))
+            raise Exception(cmd_info['err'])
         # cmd_info = ub.cmd(command, verbose=1)  # NOQA
+
+    if not exists(dst_gpath):
+        raise Exception('THE DESTINATION PATH WAS NOT COMPUTED')
 
     return dst
 
