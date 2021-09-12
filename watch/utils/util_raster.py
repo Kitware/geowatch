@@ -27,7 +27,7 @@ from watch.gis.spatial_reference import utm_epsg_from_latlon
 def mask(raster, nodata=0, save=True, convex_hull=False, as_poly=True):
     '''
     Compute a raster's valid data mask in pixel coordinates.
-    
+
     Note that this is the rasterio mask, which for multi-band rasters is the
     binary OR of the individual band masks. This is different from the gdal
     mask, which is always per-band.
@@ -59,12 +59,12 @@ def mask(raster, nodata=0, save=True, convex_hull=False, as_poly=True):
         >>> from watch.utils.util_raster import *
         >>> from watch.demo.landsat_demodata import grab_landsat_product
         >>> path = grab_landsat_product()['bands'][0]
-        >>> 
+        >>>
         >>> mask_img = mask(path, as_poly=False)
         >>> import kwimage as ki
         >>> assert mask_img.shape == ki.load_image_shape(path)[:2]
         >>> assert set(np.unique(mask_img)) == {0, 255}
-        >>> 
+        >>>
         >>> mask_poly = mask(path, as_poly=True)
         >>> import shapely
         >>> assert isinstance(mask_poly, shapely.geometry.Polygon)
@@ -118,7 +118,7 @@ def crop_to(pxl_polys, raster, bounds_policy, intersect_policy='crop'):
     Crop pxl_polys to raster in one of several ways.
 
     Computation is independent per pxl_poly, but vectorized for speed.
-    
+
     Args:
         pxl_polys (List[shapely.Polygon]): In pixel coordinates in (w,h) order
             (opposite of Python convention).
@@ -146,15 +146,15 @@ def crop_to(pxl_polys, raster, bounds_policy, intersect_policy='crop'):
         >>> from watch.utils.util_raster import *
         >>> from watch.demo.landsat_demodata import grab_landsat_product
         >>> path = grab_landsat_product()['bands'][0]
-        >>> 
+        >>>
         >>> # a polygon that partially intersects this image's bounds
         >>> # and valid mask
         >>> import shapely
         >>> poly = shapely.geometry.box(-500, -500, 2000, 2000)
-        >>> 
+        >>>
         >>> # no-op for testing purposes
         >>> assert crop_to([poly], path, bounds_policy='none')[0] == poly
-        >>> 
+        >>>
         >>> # handle intersecting polygons
         >>> assert crop_to([poly], path, bounds_policy='bounds',
         >>>                intersect_policy='keep')[0] == poly
@@ -163,7 +163,7 @@ def crop_to(pxl_polys, raster, bounds_policy, intersect_policy='crop'):
         >>> cropped = crop_to([poly], path, bounds_policy='bounds',
         >>>                intersect_policy='crop')[0]  # default
         >>> assert cropped.bounds == (0, 0, 2000, 2000)
-        >>> 
+        >>>
         >>> # same with valid mask
         >>> cropped = crop_to([poly], path, bounds_policy='valid')[0]
         >>> assert cropped.bounds == (924, 14, 2000, 2000)

@@ -25,9 +25,7 @@ class PropagateLabelsConfig(scfg.Config):
     a site in the first few images with a label (say, Active Construction) and
     then this annotation was missing for the next few frames.
 
-
     Note:
-
         # Given a kwcoco file with original annotations, this script forward propagates those annotations
         # and creates a new kwcoco file.
 
@@ -68,20 +66,17 @@ class PropagateLabelsConfig(scfg.Config):
         'validate':
         scfg.Value(
             1,
-            help=
-            "Validate spatial and temporal AOI of each site after propagating"
+            help="Validate spatial and temporal AOI of each site after propagating"
         ),
         'crop':
         scfg.Value(
             1,
-            help=
-            "Crop propagated annotations to the valid data mask of the new image"
+            help="Crop propagated annotations to the valid data mask of the new image"
         ),
         'max_workers':
         scfg.Value(
             None,
-            help=
-            "Max. number of workers to parallelize over, up to the number of regions/ROIs. None is auto; 0 is serial."
+            help="Max. number of workers to parallelize over, up to the number of regions/ROIs. None is auto; 0 is serial."
         )
     }
 
@@ -154,10 +149,9 @@ def get_warp(gid1, gid2, dataset, use_geo=False):
         raise NotImplementedError('this is for the image CRS, not WGS84')
         # Use the geocoordinates as a base space to avoid propagating
         # badly-aligned annotations
-        geo_to_img1 = _warp_wgs84_to_img(img1)
-        geo_to_img2 = _warp_wgs84_to_img(img2)
-
-        return geo_to_img2 @ geo_to_img1.inv()
+        # geo_to_img1 = _warp_wgs84_to_img(img1)
+        # geo_to_img2 = _warp_wgs84_to_img(img2)
+        # return geo_to_img2 @ geo_to_img1.inv()
 
     else:
         # Get the transform from each image to the aligned "video-space"
@@ -190,15 +184,15 @@ def get_warped_ann(previous_ann, warp, image_entry, crop_to_valid=True):
     Returns new annotation by applying a warp and optional crop
 
     If the new annotation falls outside the new image, returns None instead.
-    
+
     This should be vectorized across annotations, because util_raster.to_crop
-    supports this, since it assumes finding the valid mask of an image is 
+    supports this, since it assumes finding the valid mask of an image is
     expensive. But this is not a problem for the very small sizes we're
     working with here:
 
     >>> %timeit watch.utils.util_raster.mask(full_tile)
     1.19 s ± 22.5 ms per loop (mean ± std. dev. of 7 runs, 1 loop each)
-    
+
     >>> %timeit watch.utils.util_raster.mask(aligned_crop)
     4.44 ms ± 87.4 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
     '''
@@ -486,7 +480,7 @@ def main(cmdline=False, **kwargs):
     # when we propagate labels, we will copy 'orig_info' from the copied
     # annotation. This includes the full segmentation (in case of cropping) and the
     # original image in the src or ext dataset.
-    
+
     # why doesn't this get saved on dump()??
     if full_ds.tag == '':
         full_ds.tag  = 'data.kwcoco.json'
@@ -535,7 +529,7 @@ def main(cmdline=False, **kwargs):
 
         # results for this video
         warped_annotations = []
-        
+
         def _is_ext(ann):
             return ann
         # for all sorted images in this video in both dsets
