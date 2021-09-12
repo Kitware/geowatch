@@ -1541,6 +1541,21 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
         dst['channels'] = obj['channels']
     if obj.get('num_bands', None):
         dst['num_bands'] = obj['num_bands']
+        
+    prefix_template = (
+    '''
+        gdalwarp
+        - multi
+        --config GDAL_CACHEMAX 500 -wm 500
+        --debug off 
+        -te {xmin} {ymin} {xmax} {ymax}
+        -te_srs epsg:4326
+        -t_srs epsg:4326
+        -co TILED=YES
+        -co BLOCKXSIZE=256
+        -co BLOCKYSIZE=256
+        -overwrite
+    ''')
 
     if align_method == 'pixel_crop':
         align_method = 'pixel_crop'
@@ -1568,21 +1583,6 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
         # TODO: reproject to utm
         # https://gis.stackexchange.com/questions/193094/can-gdalwarp-reproject-from-espg4326-wgs84-to-utm
         # '+proj=utm +zone=12 +datum=WGS84 +units=m +no_defs'
-        
-        prefix_template = (
-        '''
-            gdalwarp
-            - multi
-            --config GDAL_CACHEMAX 500 -wm 500
-            --debug off 
-            -te {xmin} {ymin} {xmax} {ymax}
-            -te_srs epsg:4326
-            -t_srs epsg:4326
-            -co TILED=YES
-            -co BLOCKXSIZE=256
-            -co BLOCKYSIZE=256
-            -overwrite
-        ''')
 
         if hasattr(dems, 'find_reference_fpath'):
             dem_fpath, dem_info = dems.find_reference_fpath(latmin, lonmin)

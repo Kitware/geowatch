@@ -32,12 +32,12 @@ class PropagateLabelsConfig(scfg.Config):
         # and creates a new kwcoco file.
 
     TODO:
-        - [ ] Make sure the original annotations are correct. Currently annotations with very low overlap with images are showing up. Could be fixed by relying on geo-coordinates instead?
+        - [x] Make sure the original annotations are correct. Currently annotations with very low overlap with images are showing up. Could be fixed by relying on geo-coordinates instead?
         - [x] Crop propagated annotations to bounds or valid data mask of new image
-        - [ ] Pull in and merge annotations from an external kwcoco file
+        - [x] Pull in and merge annotations from an external kwcoco file
         - [x] Handle splitting and merging tracks (non-unique frame_index)
-        - [ ] Stop propagation at category change (could be taken care of by external kwcoco file)
-        - [X] Parallelize
+        - [x] Stop propagation at category change (could be taken care of by external kwcoco file)
+        - [x] Parallelize
 
     """
     default = {
@@ -55,7 +55,8 @@ class PropagateLabelsConfig(scfg.Config):
         'ext':
         scfg.Value(None,
                    help=ub.paragraph('''
-            Path to an optional external kwcoco file to merge annotations from
+            Path to an optional external kwcoco file to merge annotations from.
+            Must have a tag different from src's.
             ''')),
         'viz_dpath':
         scfg.Value(None,
@@ -115,8 +116,10 @@ def warped_wgs84_to_img(poly, img, inv=False):
     if 1:
         try:
             info = geotiff.geotiff_crs_info(fpath)
-        except NotImplementedError:
+        except NotImplementedError as e:
             xdev.embed()
+            raise e
+
         # can't pickle a function...
         # cacher.save(info)
 
@@ -138,7 +141,6 @@ def warped_wgs84_to_img(poly, img, inv=False):
     poly = poly.swap_axes()
     for tfm in tfms:
         poly = poly.warp(tfm)
-    poly = poly.swap_axes()
 
     return poly
 
@@ -317,10 +319,33 @@ def get_canvas_concat_channels(annotations, dataset, img_id):
     canvas = kwimage.normalize_intensity(canvas)
     canvas = kwimage.ensure_float01(canvas)
 
-    dets = kwimage.Detections.from_coco_annots(annotations, dset=dataset)
-    ann_canvas = dets.draw_on(canvas)
+    # draw on annotations
+    # hack because draw_on(color=list) is not supported
+    this_dset_anns = []
+    ext_dset_anns = []
+    for ann in annotations:
+        if ann['orig_info']['source_dset'] == dataset.tag:
+            this_dset_anns.append(ann)
+        else:
+            ext_dset_anns.append(ann)
+    this_dets = kwimage.Detections.from_coco_annots(this_dset_anns,
+                                                    dset=dataset)
+    ext_dets = kwimage.Detections.from_coco_annots(ext_dset_anns, dset=dataset)
+    canvas = this_dets.draw_on(canvas, color='blue')
+    canvas = ext_dets.draw_on(canvas, color='green')
 
-    return ann_canvas
+    # draw on site boundaries
+    image = dataset.imgs[img_id]
+    video = dataset.index.videos[image['video_id']]
+    for site in json.loads(video['properties']['sites']):
+        site_geopoly = kwimage.Polygon.from_geojson(site['geometry'])
+        site_poly = warped_wgs84_to_img(site_geopoly, image)
+        canvas = site_poly.draw_on(canvas,
+                                   color='red',
+                                   fill=False,
+                                   border=True)
+
+    return canvas
 
 
 def save_visualizations(canvas_chunk, fpath):
@@ -369,8 +394,8 @@ def validate_inbounds(anns, img):
         warped_wgs84_to_img(
             kwimage.Polygon.from_geojson(
                 ann['orig_info']['segmentation_geos']),
-            img).warp(warp_aux_to_img.inv()).to_multi_polygon().swap_axes().
-        to_shapely() for ann in anns
+            img).warp(warp_aux_to_img.inv()).to_multi_polygon().to_shapely()
+        for ann in anns
     ])
 
     # getting an empty mask for 7 total blank images
@@ -430,13 +455,6 @@ def validate_timebounds(track_id, full_ds):
 def main(cmdline=False, **kwargs):
     """
     Main function for propagate_labels.
-
-    Example:
-        >>> # xdoctest: +SKIP
-        >>> from watch.cli.propagate_labels import *  # NOQA
-        >>> dataset_directory = 'drop1-S2-aligned-c1'
-
-        python -m watch.demo.propagate_labels --data_dir=dataset_directory --out_dir='propagation_output'
     """
     config = PropagateLabelsConfig(default=kwargs, cmdline=cmdline)
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
@@ -468,7 +486,10 @@ def main(cmdline=False, **kwargs):
     # when we propagate labels, we will copy 'orig_info' from the copied
     # annotation. This includes the full segmentation (in case of cropping) and the
     # original image in the src or ext dataset.
-
+    
+    # why doesn't this get saved on dump()??
+    if full_ds.tag == '':
+        full_ds.tag  = 'data.kwcoco.json'
     for ann in full_ds.anns.values():
         ann = ann_add_orig_info(ann, full_ds)
     for ann in ext_ds.anns.values():
@@ -514,12 +535,17 @@ def main(cmdline=False, **kwargs):
 
         # results for this video
         warped_annotations = []
-
+        
+        def _is_ext(ann):
+            return ann
         # for all sorted images in this video in both dsets
-        # for j, (img, is_ext) in enumerate(
-        #         build_external_video(vid_id, full_ds, ext_ds)):
-        for j, (img, is_ext) in enumerate(
-                build_external_video(vid_id, full_ds, ext_ds)):
+        j = 0
+        for img, is_ext in build_external_video(vid_id, full_ds, ext_ds):
+
+            # frame counter for viz
+            if not is_ext:
+                j += 1
+
             img_id = img['id']
             if 1:
                 # prog.ensure_newline()
@@ -562,9 +588,12 @@ def main(cmdline=False, **kwargs):
             # was there any seen track ID that was not in this image?
             for missing in track_ids - this_track_ids:
                 for aid in latest_ann_ids.get(missing, {}):
-                    previous_annotation = (ext_ds.anns[aid]
-                                           if latest_is_ext[missing] else
-                                           full_ds.anns[aid])
+                    previous_annotation = (ext_ds if latest_is_ext[missing] else
+                                           full_ds).anns[aid]
+                    # this should be an original annotation
+                    assert (previous_annotation['image_id'] == previous_annotation['orig_info']['source_gid'] and
+                            (previous_annotation['orig_info']['source_dset'] != full_ds.tag) == latest_is_ext[missing])
+
                     # check if the annotation belongs to the list of cats we want to propagate
                     if previous_annotation[
                             'category_id'] in cat_ids_to_propagate:
@@ -573,8 +602,10 @@ def main(cmdline=False, **kwargs):
                         previous_image_id = latest_img_ids[missing]
                         warped_annotation = get_warped_ann(
                             previous_annotation,
-                            ('geo' if latest_is_ext[missing] else get_warp(
-                                previous_image_id, img_id, full_ds)),
+                            ('geo'
+                             if previous_annotation['orig_info']['source_dset']
+                             != full_ds.tag else get_warp(
+                                 previous_image_id, img_id, full_ds)),
                             full_ds.imgs[img_id],
                             crop_to_valid=config['crop'])
 
@@ -624,13 +655,16 @@ def main(cmdline=False, **kwargs):
     propagated_ds = full_ds.copy()
     propagated_ds.fpath = config['dst']
 
+    # TODO multithreading breaks this, don't know why
+    PROJ_LIB = os.environ['PROJ_LIB']
+
     # run job for each video
     max_workers = config['max_workers']
     if max_workers is None:
         max_workers = len(full_ds.index.videos)
     executor = ub.Executor(mode='thread', max_workers=max_workers)
     prog = ub.ProgIter(
-        [(vid_id, executor.submit(_job, vid_id, full_ds.copy(), ext_ds.copy()))
+        [(vid_id, executor.submit(_job, vid_id, full_ds, ext_ds))
          for vid_id in full_ds.index.videos],
         total=len(full_ds.index.videos),
         desc='process video')
@@ -648,6 +682,8 @@ def main(cmdline=False, **kwargs):
                 fname = f'video_{vid_id:04d}_{vid_name}_frames_{min_frame}_to_{max_frame}.jpg'
                 fpath = viz_dpath / fname
                 save_visualizations(canvas_chunk, fpath)
+
+    os.environ['PROJ_LIB'] = PROJ_LIB
 
     # save the propagated dataset
     print('Save: propagated_ds.fpath = {!r}'.format(propagated_ds.fpath))
@@ -667,6 +703,7 @@ def main(cmdline=False, **kwargs):
     if config['validate']:
         for gid, img in propagated_ds.imgs.items():
             try:
+                # no idea why PROJ was failing here
                 validate_inbounds(propagated_ds.annots(gid=gid).objs, img)
             except AssertionError:
                 print(f'image {gid} has OOB annotations')
