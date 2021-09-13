@@ -505,7 +505,7 @@ class KWCocoVideoDataset(data.Dataset):
         >>>     sample_shape=(2, 128, 128),
         >>>     window_overlap=0,
         >>>     channels="blue|green|red|nir|swir22|swir16",
-        >>>     neg_to_pos_ratio=0, max_lookahead=2.0
+        >>>     neg_to_pos_ratio=0, max_lookahead=2.0, diff_inputs=True
         >>> )
         >>> item = self[0]
         >>> canvas = self.draw_item(item)
@@ -513,13 +513,13 @@ class KWCocoVideoDataset(data.Dataset):
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> kwplot.autompl()
-        >>> canvas = self.draw_item(item)
+        >>> canvas = self.draw_item(item, max_channels=7)
         >>> kwplot.imshow(canvas)
         >>> import xdev
         >>> sample_indices = list(range(len(self)))
         >>> for index in xdev.InteractiveIter(sample_indices):
         >>>     item = self[index]
-        >>>     canvas = self.draw_item(item)
+        >>>     canvas = self.draw_item(item, max_channels=7)
         >>>     kwplot.imshow(canvas)
         >>>     xdev.InteractiveIter.draw()
     """
@@ -652,7 +652,7 @@ class KWCocoVideoDataset(data.Dataset):
         if self.diff_inputs:
             # Add frame_differences between channels
             self.input_channels = kwcoco.channel_spec.ChannelSpec.coerce(','.join(
-                ['|'.join([s + p for p in part for s in ['', 'Δ']])
+                ['|'.join([s + p for p in part for s in ['', 'D']])
                  for part in self.channels.parse().values()]))
         else:
             self.input_channels = channels
@@ -717,6 +717,36 @@ class KWCocoVideoDataset(data.Dataset):
             >>> kwplot.autompl()
             >>> kwplot.imshow(canvas)
             >>> kwplot.show_if_requested()
+
+        Ignore:
+            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+            >>> # Debug issues seen in training
+            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+            >>> import os
+            >>> from os.path import join
+            >>> import ndsampler
+            >>> import kwcoco
+            >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
+            >>> dvc_dpath = os.environ.get('DVC_DPATH', _default)
+            >>> coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/data.kwcoco.json')
+            >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+            >>> sampler = ndsampler.CocoSampler(coco_dset)
+            >>> self = KWCocoVideoDataset(
+            >>>     sampler,
+            >>>     sample_shape=(2, 128, 128),
+            >>>     window_overlap=0,
+            >>>     channels="blue|green|red|nir|swir16",
+            >>>     neg_to_pos_ratio=0, max_lookahead=2.0, diff_inputs=True
+            >>> )
+            >>> item = self[5]
+            >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0)
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas)
+            >>> kwplot.show_if_requested()
+
+            kwplot.imshow(self.draw_item(self[4], max_channels=10, overlay_on_image=0))
         """
 
         if self.mode == 'test':
@@ -770,11 +800,14 @@ class KWCocoVideoDataset(data.Dataset):
         raw_det_list = sample['annots']['frame_dets']
         raw_gids = sample['tr']['gids']
 
-        # channel_keys = sample['tr']['_coords']['c'].values.tolist()
+        channel_keys = sample['tr']['_coords']['c'].values.tolist()
+        print('channel_keys = {!r}'.format(channel_keys))
 
         mode_lists = list(self.input_channels.values())
         assert len(mode_lists) == 1, 'no late fusion yet'
         mode_key = '|'.join(mode_lists[0])
+
+        print('mode_key = {!r}'.format(mode_key))
         # mode_key = '|'.join(channel_keys)
 
         # Break data down on a per-frame basis so we can apply image-based
@@ -875,10 +908,30 @@ class KWCocoVideoDataset(data.Dataset):
             if self.diff_inputs:
                 if prev_frame_chw is not None:
                     frame_diff = np.abs(frame_chw - prev_frame_chw)
+                    # kwimage.normalize(frame_chw) -
+                    # kwimage.normalize(prev_frame_chw))
                 else:
                     frame_diff = np.zeros_like(frame_chw)
-                # Interlace the diffs and the channels
-                input_chw = einops.rearrange([frame_diff, frame_chw], '(c1 c2) c h w -> (c2 c1 c) h w', c1=1)
+                # frame_diff = np.zeros_like(frame_chw)
+                """
+                # Check:
+                hwc = kwimage.ensure_float01(kwimage.grab_test_image('astro'))
+                hwc2 = kwimage.gaussian_blur(hwc)
+                v1 = einops.rearrange(hwc, 'h w c -> c h w')
+                v2 = einops.rearrange(hwc2, 'h w c -> c h w')
+                diff = np.abs(v1 - v2)
+
+                kwplot.imshow(kwimage.stack_images(v1))
+                kwplot.imshow(kwimage.stack_images(v2))
+                kwplot.imshow(kwimage.stack_images(diff))
+
+                input_chw = einops.rearrange([v1, diff], '(c1 c2) c h w -> (c1 c c2) h w', c1=1)
+                kwplot.imshow(kwimage.stack_images(input_chw))
+                """
+                # Interlace/Interweave the diffs and the channels
+                parts = list(ub.flatten(zip(frame_chw, frame_diff)))
+                input_chw = np.stack(parts, axis=0)
+                # input_chw = einops.rearrange([frame_chw, frame_diff], '(c1 c2) c h w -> (c1 c c2) h w', c1=1)
             else:
                 input_chw = frame_chw
                 pass
@@ -1151,6 +1204,7 @@ class KWCocoVideoDataset(data.Dataset):
         # otherwise it is a cool feature.
         default_combinable_channels = [
             ub.oset(['red', 'green', 'blue']),
+            ub.oset(['Dred', 'Dgreen', 'Dblue']),
             ub.oset(['r', 'g', 'b']),
             ub.oset(['B04', 'B03', 'B02']),  # for onera
         ]
@@ -1210,7 +1264,8 @@ class KWCocoVideoDataset(data.Dataset):
                         'signal_text': signal_text,
                     }
                     if not norm_over_time:
-                        norm_signal = kwimage.normalize_intensity(raw_signal).copy()
+                        # norm_signal = kwimage.normalize_intensity(raw_signal).copy()
+                        norm_signal = kwimage.normalize(raw_signal).copy()
                         norm_signal = kwimage.atleast_3channels(norm_signal)
                         norm_signal = np.nan_to_num(norm_signal)
                         row['norm_signal'] = norm_signal
@@ -1234,7 +1289,8 @@ class KWCocoVideoDataset(data.Dataset):
                     flat = [c['raw_signal'].ravel() for c in chans_over_time]
                     cums = np.cumsum(list(map(len, flat)))
                     combo = np.hstack(flat)
-                    combo_normed = kwimage.normalize_intensity(combo).copy()
+                    # combo_normed = kwimage.normalize_intensity(combo).copy()
+                    combo_normed = kwimage.normalize(combo).copy()
                     flat_normed = np.split(combo_normed, cums)
                     for row, flat_item in zip(chans_over_time, flat_normed):
                         norm_signal = flat_item.reshape(*row['raw_signal'].shape)
