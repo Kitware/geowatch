@@ -1770,7 +1770,7 @@ def sample_vidspace_grid(dset, window_dims, window_overlap=0.0, negative_classes
 
             region_tid_to_info = ub.dict_subset(tid_to_dframe, unique_tracks)
 
-            sensor_coarse = dset.images(video_gids).lookup('sensor_coarse')
+            sensor_coarse = dset.images(video_gids).lookup('sensor_coarse', '')
             flags = [s == 'S2' for s in sensor_coarse]
             if any(flags):
                 video_gids = list(ub.compress(video_gids, flags))

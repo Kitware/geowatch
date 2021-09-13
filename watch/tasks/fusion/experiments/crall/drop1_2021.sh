@@ -1,13 +1,13 @@
 #### Simple classifier on raw bands
 
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc 
-SUBDATA_PATH=$DVC_DPATH/drop1-S2-L8-aligned
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/drop1-S2-L8-aligned
 
 
 # Ensure "Video Space" is 10 GSD
 #python -m watch.cli.coco_add_watch_fields \
-#    --src $SUBDATA_PATH/data.kwcoco.json \
-#    --dst $SUBDATA_PATH/data_gsd10.kwcoco.json \
+#    --src $KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
+#    --dst $KWCOCO_BUNDLE_DPATH/data_gsd10.kwcoco.json \
 #    --target_gsd 10
 
 
@@ -35,22 +35,22 @@ basic_left_right_split(){
 }
 
 
-#jq ".videos[] | .name"  $SUBDATA_PATH/data_gsd10.kwcoco.json
+#jq ".videos[] | .name"  $KWCOCO_BUNDLE_DPATH/data_gsd10.kwcoco.json
 
 ## Split out train and validation data (TODO: add test when we can)
-#kwcoco subset --src $SUBDATA_PATH/data_gsd10.kwcoco.json \
-#        --dst $SUBDATA_PATH/vali_gsd10.kwcoco.json \
+#kwcoco subset --src $KWCOCO_BUNDLE_DPATH/data_gsd10.kwcoco.json \
+#        --dst $KWCOCO_BUNDLE_DPATH/vali_gsd10.kwcoco.json \
 #        --select_videos '.name | startswith("KR_Pyeongchang_R02")'
 
-#kwcoco subset --src $SUBDATA_PATH/data_gsd10.kwcoco.json \
-#        --dst $SUBDATA_PATH/train_gsd10.kwcoco.json \
+#kwcoco subset --src $KWCOCO_BUNDLE_DPATH/data_gsd10.kwcoco.json \
+#        --dst $KWCOCO_BUNDLE_DPATH/train_gsd10.kwcoco.json \
 #        --select_videos '.name | startswith("KR_Pyeongchang_R02") | not'
 
 
 #### Training
 
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc 
-SUBDATA_PATH=$DVC_DPATH/drop1-S2-L8-aligned
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/drop1-S2-L8-aligned
 
 LEFT_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/data_left.kwcoco.json
 RIGHT_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/data_right.kwcoco.json
@@ -115,6 +115,12 @@ PRED_CONFIG_FPATH=$WORKDIR/$DATASET_NAME/configs/predict_$EXPERIMENT_NAME.yml
 
 kwcoco stats $TRAIN_FPATH $VALI_FPATH $TEST_FPATH
 
+python -m watch.tasks.fusion.predict \
+    --gpus=1 \
+    --write_preds=True \
+    --write_probs=False \
+    --dump=$PRED_CONFIG_FPATH
+
 # Write train and prediction configs
 python -m watch.tasks.fusion.fit \
     --method="MultimodalTransformer" \
@@ -139,16 +145,10 @@ python -m watch.tasks.fusion.fit \
     --neg_to_pos_ratio=0.2 \
     --global_change_weight=1.0 \
     --diff_inputs=True \
-    --torch_sharing_strategy=file_system \
-    --torch_start_method=spawn \
+    --torch_sharing_strategy=default \
+    --torch_start_method=default \
     --num_sanity_val_steps=0 \
     --dump=$TRAIN_CONFIG_FPATH 
-
-python -m watch.tasks.fusion.predict \
-    --gpus=1 \
-    --write_preds=True \
-    --write_probs=False \
-    --dump=$PRED_CONFIG_FPATH
 
 ## TODO: predict and eval steps should be called after training.
 # But perhaps it should be a different invocation of the fit script?
