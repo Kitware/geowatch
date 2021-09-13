@@ -9,14 +9,215 @@ from tempenv import TemporaryEnvironment
 from lxml import etree
 import shapely as shp
 import shapely.geometry
+import shapely.ops
+from skimage.morphology import convex_hull_image
+import kwimage
+import pygeos
 
 from osgeo import gdal, osr
 
 import rasterio
+import rasterio.features
 from rasterio import Affine, MemoryFile
 from rasterio.enums import Resampling
 
 from watch.gis.spatial_reference import utm_epsg_from_latlon
+
+
+def mask(raster, nodata=0, save=True, convex_hull=False, as_poly=True):
+    '''
+    Compute a raster's valid data mask in pixel coordinates.
+
+    Note that this is the rasterio mask, which for multi-band rasters is the
+    binary OR of the individual band masks. This is different from the gdal
+    mask, which is always per-band.
+
+    Args:
+        raster: Path to a dataset (raster image file)
+
+        nodata: if raster's nodata value is None, default to this
+
+        save: if True and raster's nodata value is None, write the default
+            to it. If False, performance overhead is incurred from creating a
+            tempfile
+
+        convex_hull: if True, return the convex hull of the mask image or poly
+
+        as_poly: if True, return the mask as a shapely Polygon or MultiPolygon
+            instead of a raster image, in (w, h) order (opposite of Python
+            convention).
+
+    Returns:
+        If as_poly, a shapely Polygon or MultiPolygon bounding the valid
+        data region(s) in pixel coordinates.
+
+        Else, a uint8 raster mask of the same shape as the input, where
+        255 == valid and 0 == invalid.
+
+    Example:
+        >>> # xdoctest: +REQUIRES(--network)
+        >>> from watch.utils.util_raster import *
+        >>> from watch.demo.landsat_demodata import grab_landsat_product
+        >>> path = grab_landsat_product()['bands'][0]
+        >>>
+        >>> mask_img = mask(path, as_poly=False)
+        >>> import kwimage as ki
+        >>> assert mask_img.shape == ki.load_image_shape(path)[:2]
+        >>> assert set(np.unique(mask_img)) == {0, 255}
+        >>>
+        >>> mask_poly = mask(path, as_poly=True)
+        >>> import shapely
+        >>> assert isinstance(mask_poly, shapely.geometry.Polygon)
+    '''
+    # workaround for
+    # https://rasterio.readthedocs.io/en/latest/faq.html#why-can-t-rasterio-find-proj-db-rasterio-from-pypi-versions-1-2-0
+    with TemporaryEnvironment({'PROJ_LIB': None}):
+        img = rasterio.open(raster, 'r+')
+        if img.nodata is None and nodata is not None:
+            if save:
+                img.nodata = nodata
+                img.close()  # to apply changes
+                img = rasterio.open(raster, 'r')
+            else:
+                profile = img.profile
+                # TODO could optimize this with rasterio.shutil.copy
+                # or https://rasterio.readthedocs.io/en/latest/topics/windowed-rw.html#blocks
+                data = img.read()
+                img.close()
+
+                profile.update(nodata=nodata)
+                memfile = MemoryFile()
+                img = memfile.open(profile)
+                img.write(data)
+
+        mask = img.dataset_mask()
+        img.close()
+
+    if convex_hull:
+        mask = convex_hull_image(mask).astype(np.uint8)
+
+    if not as_poly:
+        return mask
+
+    # mask has values 0 and 255
+    polys = [
+        shp.geometry.shape(poly) for poly, val in rasterio.features.shapes(mask)
+        if val == 255
+    ]
+    poly = shp.ops.unary_union(polys).buffer(0)
+
+    # do this again to fix any weirdness from union
+    if convex_hull:
+        poly = poly.convex_hull
+
+    return poly
+
+
+def crop_to(pxl_polys, raster, bounds_policy, intersect_policy='crop'):
+    '''
+    Crop pxl_polys to raster in one of several ways.
+
+    Computation is independent per pxl_poly, but vectorized for speed.
+
+    Args:
+        pxl_polys (List[shapely.Polygon]): In pixel coordinates in (w,h) order
+            (opposite of Python convention).
+
+        raster: Path to a dataset (raster image file).
+
+        bounds_policy: "none", "bounds", or "valid"
+            "none": Do not crop polygons. Makes this function a no-op.
+            "bounds": Crop polygons that fall outside the image's height/width
+            "valid": Crop polygons that fall outside the image's valid data
+                mask. This is more restrictive than "bounds".
+
+        intersect_policy: "keep", "crop", or "discard". Polygons that fall
+            completely outside the bounds are discarded. This arg decides
+            how to handle polygons that intersect the bounds.
+            "keep": Return the polygon unchanged.
+            "crop": Crop the polygon to the bounds.
+            "discard": Discard the polygon (replace it with None).
+    Returns:
+        List[shapely.Polygon] of cropped polys, some of which may be None. This
+        maintains indexing relative to the input polygons.
+
+    Example:
+        >>> # xdoctest: +REQUIRES(--network)
+        >>> from watch.utils.util_raster import *
+        >>> from watch.demo.landsat_demodata import grab_landsat_product
+        >>> path = grab_landsat_product()['bands'][0]
+        >>>
+        >>> # a polygon that partially intersects this image's bounds
+        >>> # and valid mask
+        >>> import shapely
+        >>> poly = shapely.geometry.box(-500, -500, 2000, 2000)
+        >>>
+        >>> # no-op for testing purposes
+        >>> assert crop_to([poly], path, bounds_policy='none')[0] == poly
+        >>>
+        >>> # handle intersecting polygons
+        >>> assert crop_to([poly], path, bounds_policy='bounds',
+        >>>                intersect_policy='keep')[0] == poly
+        >>> assert crop_to([poly], path, bounds_policy='bounds',
+        >>>                intersect_policy='discard')[0] == None
+        >>> cropped = crop_to([poly], path, bounds_policy='bounds',
+        >>>                intersect_policy='crop')[0]  # default
+        >>> assert cropped.bounds == (0, 0, 2000, 2000)
+        >>>
+        >>> # same with valid mask
+        >>> cropped = crop_to([poly], path, bounds_policy='valid')[0]
+        >>> assert cropped.bounds == (924, 14, 2000, 2000)
+
+
+    '''
+    assert bounds_policy in {'none', 'bounds', 'valid'}, bounds_policy
+    assert intersect_policy in {'keep', 'crop', 'discard'}, intersect_policy
+
+    if bounds_policy == 'none':
+        return pxl_polys
+
+    # convert to pygeos for vectorized operations
+    pxl_polys = pygeos.from_shapely(pxl_polys)
+
+    if bounds_policy == 'bounds':
+        h, w = kwimage.load_image_shape(raster)[:2]
+        geom = pygeos.box(0, 0, w, h)
+
+    elif bounds_policy == 'valid':
+        geom = pygeos.from_shapely(mask(raster, as_poly=True))
+
+    else:
+        raise ValueError(bounds_policy)
+
+    contains = pygeos.contains(geom, pxl_polys)
+    overlaps = pygeos.overlaps(geom, pxl_polys)
+    if intersect_policy == 'crop':  # optimization
+        intersections = pygeos.intersection(geom, pxl_polys)
+    else:
+        intersections = pxl_polys
+
+    # I don't see an obvious way to vectorize this part
+    # due to the branching
+    result = []
+    for poly, c, o, inter in zip(pygeos.to_shapely(pxl_polys),
+                                 contains,
+                                 overlaps,
+                                 pygeos.to_shapely(intersections)):
+        if c:
+            result.append(poly)
+        elif o:
+            if intersect_policy == 'keep':
+                result.append(poly)
+            elif intersect_policy == 'crop':
+                result.append(inter)
+            elif intersect_policy == 'discard':
+                result.append(None)
+            else:
+                raise ValueError(intersect_policy)
+        else:
+            result.append(None)
+
+    return result
 
 
 @dataclass
@@ -81,7 +282,8 @@ class ResampledRaster(ExitStack):
         super().__init__()
 
     def __enter__(self):
-        if not isinstance(self.raster, rasterio.DatasetReader) or self.raster.closed:
+        if not isinstance(self.raster,
+                          rasterio.DatasetReader) or self.raster.closed:
             # workaround for
             # https://rasterio.readthedocs.io/en/latest/faq.html#why-can-t-rasterio-find-proj-db-rasterio-from-pypi-versions-1-2-0
             with TemporaryEnvironment({'PROJ_LIB': None}):
@@ -90,7 +292,8 @@ class ResampledRaster(ExitStack):
         t = self.raster.transform
 
         # rescale the metadata
-        transform = Affine(t.a / self.scale, t.b, t.c, t.d, t.e / self.scale, t.f)
+        transform = Affine(t.a / self.scale, t.b, t.c, t.d, t.e / self.scale,
+                           t.f)
         height = int(np.ceil(self.raster.height * self.scale))
         width = int(np.ceil(self.raster.width * self.scale))
 
@@ -113,7 +316,8 @@ class ResampledRaster(ExitStack):
                 dataset.write(data)
                 del data
 
-            dataset = self.enter_context(memfile.open())  # Reopen as DatasetReader
+            dataset = self.enter_context(
+                memfile.open())  # Reopen as DatasetReader
             return dataset
 
         else:
@@ -343,20 +547,18 @@ def scenes_to_vrt(scenes, vrt_root, relative_to_path):
     # TODO use https://rasterio.readthedocs.io/en/latest/topics/memory-files.html
     # for these intermediate files?
     tmp_vrts = [
-        make_vrt(
-            scene,
-            os.path.join(vrt_root, f'{hash(scene[0])}.vrt'),
-            mode='stacked',
-            relative_to_path=relative_to_path
-        ) for scene in scenes
+        make_vrt(scene,
+                 os.path.join(vrt_root, f'{hash(scene[0])}.vrt'),
+                 mode='stacked',
+                 relative_to_path=relative_to_path) for scene in scenes
     ]
 
     # then mosaic them
-    final_vrt = make_vrt(
-        tmp_vrts,
-        os.path.join(vrt_root, f'{hash(scenes[0][0] + "final")}.vrt'),
-        mode='mosaicked',
-        relative_to_path=relative_to_path)
+    final_vrt = make_vrt(tmp_vrts,
+                         os.path.join(vrt_root,
+                                      f'{hash(scenes[0][0] + "final")}.vrt'),
+                         mode='mosaicked',
+                         relative_to_path=relative_to_path)
 
     if 0:  # can't do this because final_vrt still references them
         for t in tmp_vrts:
@@ -429,11 +631,13 @@ def reproject_crop(in_path, aoi, code=None, out_path=None, vrt_root=None):
     if code is None:
         # find the UTM zone(s) of the AOI
         codes = [
-            utm_epsg_from_latlon(lat, lon) for lon, lat in aoi['coordinates'][0]
+            utm_epsg_from_latlon(lat, lon)
+            for lon, lat in aoi['coordinates'][0]
         ]
         u, counts = np.unique(codes, return_counts=True)
         if len(u) > 1:
-            print(f'Warning: AOI crosses UTM zones {u}. Taking majority vote...')
+            print(
+                f'Warning: AOI crosses UTM zones {u}. Taking majority vote...')
         code = int(u[np.argsort(-counts)][0])
 
     dst_crs = osr.SpatialReference()
