@@ -266,6 +266,8 @@ class MultimodalTransformer(pl.LightningModule):
                  input_channels=None,
                  attention_impl='exact',
                  window_size=8,
+                 global_class_weight=1.0,
+                 global_change_weight=1.0,
                  classes=10):
 
         super().__init__()
@@ -331,6 +333,9 @@ class MultimodalTransformer(pl.LightningModule):
 
         feat_dim = self.encoder.out_features
 
+        self.global_class_weight = global_class_weight
+        self.global_change_weight = global_change_weight
+
         # A simple linear layer that learns to combine channels
         self.channel_fuser = nh.layers.MultiLayerPerceptronNd(
             0, num_channels, [], 1, norm=None)
@@ -382,6 +387,8 @@ class MultimodalTransformer(pl.LightningModule):
         parser.add_argument("--arch_name", default='smt_it_stm_p8', type=str,
                             choices=available_encoders)
         parser.add_argument("--dropout", default=0.1, type=float)
+        parser.add_argument("--global_class_weight", default=1.0, type=float)
+        parser.add_argument("--global_change_weight", default=1.0, type=float)
         # parser.add_argument("--input_scale", default=2000.0, type=float)
         parser.add_argument("--window_size", default=8, type=int)
         parser.add_argument(
@@ -692,7 +699,7 @@ class MultimodalTransformer(pl.LightningModule):
                 # print('true_changes.shape = {!r}'.format(true_changes.shape))
 
                 change_loss = self.change_criterion(change_logits, true_changes.float()).mean()
-                item_loss_parts['change'] = change_loss
+                item_loss_parts['change'] = self.global_change_weight * change_loss
 
                 true_ohe = kwarray.one_hot_embedding(true_class.long(), self.num_classes, dim=-1).float()
                 # y = true_ohe
@@ -701,8 +708,7 @@ class MultimodalTransformer(pl.LightningModule):
                 class_loss = self.class_criterion(class_logits, true_ohe).mean()
                 # class_loss = torch.nn.functional.binary_cross_entropy_with_logits(class_logits, true_ohe)
 
-                class_weight = 0.001  # hack: downweight class
-                item_loss_parts['class'] = class_weight * class_loss
+                item_loss_parts['class'] = self.global_class_weight * class_loss
 
                 item_losses.append(item_loss_parts)
 
