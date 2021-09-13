@@ -327,9 +327,9 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     print("{train_name}\n====================".format(**args_dict))
     print('args_dict = {}'.format(ub.repr2(args_dict, nl=1, sort=0)))
 
-    import netharn as nh
-    nh.api.configure_hacks(
-        workers=args.num_workers,
+    from watch.utils.lightning_ext import util_globals
+    util_globals.configure_hacks(
+        num_workers=args.num_workers,
         sharing_strategy=args.sharing_strategy,
     )
 
