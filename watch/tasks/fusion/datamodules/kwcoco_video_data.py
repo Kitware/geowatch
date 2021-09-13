@@ -1538,6 +1538,8 @@ def sample_vidspace_grid(dset, window_dims, window_overlap=0.0, negative_classes
     """
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> import os
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
         >>> dvc_dpath = os.environ.get('DVC_DPATH', _default)
         >>> # coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/data.kwcoco.json')
@@ -1548,11 +1550,12 @@ def sample_vidspace_grid(dset, window_dims, window_overlap=0.0, negative_classes
         >>> # have different sizes, technically we could memoize this)
         >>> import kwarray
         >>> window_overlap = 0.5
-        >>> window_dims = (96, 96)
+        >>> window_dims = (2, 96, 96)
         >>> keepbound = False
+        >>> sample_grid = sample_vidspace_grid(dset, window_dims, window_overlap)
+        >>> list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> import ndsampler
         >>> import kwcoco
@@ -1595,16 +1598,16 @@ def sample_vidspace_grid(dset, window_dims, window_overlap=0.0, negative_classes
     positive_idxs = []
     negative_idxs = []
 
+    print('dset.cats = {}'.format(ub.repr2(dset.cats, nl=1)))
+
     # FIXME: HARD CODED CONSTANTS
-    special_cids = {
-        'pre_cids': set(),
-        'post_cids': set(),
-        'ignore_cids': set(),
-    }
+    special_cids = ub.ddict(set)
     special_aliases = {
         'pre_cids': {'background', 'No Activity'},
-        'post_cids': {'Post Construct'},
         'ignore_cids': {'ignore', 'Unknown', 'clouds'},
+
+        'active': {'Active Construction'},
+        'post_cids': {'Post Construction'},
     }
     for key, aliases in special_aliases.items():
         for name in aliases:
@@ -1676,6 +1679,12 @@ def sample_vidspace_grid(dset, window_dims, window_overlap=0.0, negative_classes
             unique_tracks = set(isect_annots.lookup('track_id'))
 
             region_tid_to_info = ub.dict_subset(tid_to_dframe, unique_tracks)
+
+            sensor_coarse = dset.images(video_gids).lookup('sensor_coarse')
+            flags = [s == 'S2' for s in sensor_coarse]
+            if any(flags):
+                video_gids = list(ub.compress(video_gids, flags))
+
             video_frame_idxs = list(range(len(video_gids)))
 
             # precompute for speed
@@ -1753,18 +1762,25 @@ def sample_vidspace_grid(dset, window_dims, window_overlap=0.0, negative_classes
                     if is_visibly_moving.any():
                         changes.append('visibly_moving')
 
-                    unique_cids = set(sampled_info['cid']) - special_cids['ignore_cids']
-                    # TODO: dont mark change when post_cid moves to background
-                    if len(unique_cids) > 1:
-                        changes.append('category change')
+                    if 1:
+                        has_pre = set(sampled_info['cid']) & special_cids['pre_cids']
+                        has_active = set(sampled_info['cid']) & special_cids['active']
+                        if len(has_pre) and len(has_active):
+                            changes.append('hack')
+
+                    if 0:
+                        unique_cids = set(sampled_info['cid']) - special_cids['ignore_cids']
+                        # TODO: dont mark change when post_cid moves to background
+                        if len(unique_cids) > 1:
+                            changes.append('category change')
 
                     region_tracks.append({
                         'tid': tid,
                         'sampled_info': sampled_info,
-                        'is_visibly_moving': is_visibly_moving,
-                        'is_moving': is_moving,
-                        'is_change_visible': is_change_visible,
-                        'is_visible': is_visible,
+                        # 'is_visibly_moving': is_visibly_moving,
+                        # 'is_moving': is_moving,
+                        # 'is_change_visible': is_change_visible,
+                        # 'is_visible': is_visible,
                     })
 
                 if changes:
