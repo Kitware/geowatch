@@ -137,6 +137,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         preprocessing_step=None,
         tfms_channel_subset=None,
         normalize_inputs=False,
+        diff_inputs=False,
         verbose=1,
     ):
         """
@@ -167,17 +168,19 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.time_overlap = time_overlap
         self.chip_overlap = chip_overlap
         self.neg_to_pos_ratio = neg_to_pos_ratio
-        self.requested_channels = channels
+        self.channels = channels
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.preprocessing_step = preprocessing_step
         self.normalize_inputs = normalize_inputs
         self.max_lookahead = max_lookahead
+        self.diff_inputs = diff_inputs
+
         self.input_stats = None
 
         # will only correspond to train
         self.classes = None
-        self.channels = None
+        self.input_channels = None
 
         # Store train / test / vali
         self.torch_datasets = {}
@@ -190,7 +193,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             print('self.test_kwcoco = {!r}'.format(self.test_kwcoco))
             print('self.time_steps = {!r}'.format(self.time_steps))
             print('self.chip_size = {!r}'.format(self.chip_size))
-            print('self.requested_channels = {!r}'.format(self.requested_channels))
+            print('self.channels = {!r}'.format(self.channels))
 
     @classmethod
     def add_argparse_args(cls, parent_parser):
@@ -227,6 +230,12 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 if True, computes the mean/std for this dataset on each mode
                 so this can be passed to the model.
                 '''))
+        parser.add_argument(
+            "--diff_inputs", default=True, help=ub.paragraph(
+                '''
+                if True, also includes a difference between consecutive frames
+                in the inputs produced.
+                '''))
         return parent_parser
 
     def setup(self, stage):
@@ -247,9 +256,10 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 coco_train_sampler,
                 sample_shape=(self.time_steps, self.chip_size, self.chip_size),
                 window_overlap=(self.time_overlap, self.chip_overlap, self.chip_overlap),
-                channels=self.requested_channels,
+                channels=self.channels,
                 neg_to_pos_ratio=self.neg_to_pos_ratio,
                 max_lookahead=self.max_lookahead,
+                diff_inputs=self.diff_inputs,
             )
 
             # Unfortunately lightning seems to only enable / disables
@@ -259,8 +269,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             self.torch_datasets['train'] = train_dataset
             ub.inject_method(self, lambda self: self._make_dataloader('train', shuffle=True), 'train_dataloader')
 
-            if self.channels is None:
-                self.channels = train_dataset.channels
+            if self.input_channels is None:
+                self.input_channels = train_dataset.input_channels
 
             if self.normalize_inputs:
                 if isinstance(self.normalize_inputs, str):
@@ -292,10 +302,11 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                     vali_coco_sampler,
                     sample_shape=(self.time_steps, self.chip_size, self.chip_size),
                     window_overlap=(self.time_overlap, self.chip_overlap, self.chip_overlap),
-                    channels=self.requested_channels,
+                    channels=self.channels,
                     max_lookahead=self.max_lookahead,
                     mode='vali',
                     neg_to_pos_ratio=0,
+                    diff_inputs=self.diff_inputs,
                 )
                 self.torch_datasets['vali'] = vali_dataset
                 ub.inject_method(self, lambda self: self._make_dataloader('vali', shuffle=False), 'val_dataloader')
@@ -313,8 +324,9 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 test_coco_sampler,
                 sample_shape=(self.time_steps, self.chip_size, self.chip_size),
                 window_overlap=(self.time_overlap, self.chip_overlap, self.chip_overlap),
-                channels=self.requested_channels,
+                channels=self.channels,
                 mode='test',
+                diff_inputs=self.diff_inputs,
             )
 
             ub.inject_method(self, lambda self: self._make_dataloader('test', shuffle=False), 'test_dataloader')
@@ -442,7 +454,7 @@ class KWCocoVideoDataset(data.Dataset):
         >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
         >>> sampler = ndsampler.CocoSampler(coco_dset)
         >>> sample_shape = (2, 128, 128)
-        >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=None)
+        >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=None, diff_inputs=True)
         >>> index = 0
         >>> item = self[index]
         >>> canvas = self.draw_item(item)
@@ -523,15 +535,11 @@ class KWCocoVideoDataset(data.Dataset):
         transform=None,
         neg_to_pos_ratio=1.0,
         max_lookahead=1.0,
+        diff_inputs=False,
     ):
 
         self._hueristic_background_classnames = _HEURISTIC_CATEGORIES['background']
         self._heuristic_ignore_classnames = _HEURISTIC_CATEGORIES['ignore']
-        #     'background', 'No Activity',
-        # }
-        # = {
-        #     'ignore', 'Unknown', 'clouds',
-        # }
 
         if channels is None:
             # Hack to use all channels in the first image.
@@ -639,6 +647,15 @@ class KWCocoVideoDataset(data.Dataset):
 
         self.sample_shape = sample_shape
         self.channels = channels
+
+        self.diff_inputs = diff_inputs
+        if self.diff_inputs:
+            # Add frame_differences between channels
+            self.input_channels = kwcoco.channel_spec.ChannelSpec.coerce(','.join(
+                ['|'.join([s + p for p in part for s in ['', 'Δ']])
+                 for part in self.channels.parse().values()]))
+        else:
+            self.input_channels = channels
         self.mode = mode
 
         self.augment = False
@@ -675,7 +692,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> channels = 'B10|B8a|B1|B8'
             >>> sample_shape = (5, 530, 610)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, diff_inputs=True)
             >>> item = self[0]
             >>> canvas = self.draw_item(item)
             >>> # xdoctest: +REQUIRES(--show)
@@ -753,8 +770,12 @@ class KWCocoVideoDataset(data.Dataset):
         raw_det_list = sample['annots']['frame_dets']
         raw_gids = sample['tr']['gids']
 
-        channel_keys = sample['tr']['_coords']['c'].values.tolist()
-        mode_key = '|'.join(channel_keys)
+        # channel_keys = sample['tr']['_coords']['c'].values.tolist()
+
+        mode_lists = list(self.input_channels.values())
+        assert len(mode_lists) == 1, 'no late fusion yet'
+        mode_key = '|'.join(mode_lists[0])
+        # mode_key = '|'.join(channel_keys)
 
         # Break data down on a per-frame basis so we can apply image-based
         # augmentations.
@@ -783,6 +804,7 @@ class KWCocoVideoDataset(data.Dataset):
             do_vflip = np.random.rand() > 0.5
 
         prev_frame_cidxs = None
+        prev_frame_chw = None
 
         for frame, dets, gid in zip(raw_frame_list, raw_det_list, raw_gids):
             img = self.sampler.dset.imgs[gid]
@@ -850,6 +872,17 @@ class KWCocoVideoDataset(data.Dataset):
             # rearrange image axes for pytorch
             frame_chw = einops.rearrange(frame_hwc, 'h w c -> c h w')
 
+            if self.diff_inputs:
+                if prev_frame_chw is not None:
+                    frame_diff = np.abs(frame_chw - prev_frame_chw)
+                else:
+                    frame_diff = np.zeros_like(frame_chw)
+                # Interlace the diffs and the channels
+                input_chw = einops.rearrange([frame_diff, frame_chw], '(c1 c2) c h w -> (c2 c1 c) h w', c1=1)
+            else:
+                input_chw = frame_chw
+                pass
+
             # convert annotations into a change detection task suitable for
             # the network.
             if prev_frame_cidxs is None:
@@ -866,13 +899,15 @@ class KWCocoVideoDataset(data.Dataset):
                 'date_captured': img.get('date_captured', ''),
                 'sensor_coarse': img.get('sensor_coarse', ''),
                 'modes': {
-                    mode_key: torch.from_numpy(frame_chw),
+                    mode_key: torch.from_numpy(input_chw),
                 },
                 'change': frame_change,
                 'class_idxs': torch.from_numpy(frame_cidxs),
                 'ignore': torch.from_numpy(frame_ignore),
             }
             prev_frame_cidxs = frame_cidxs
+            prev_frame_chw = frame_chw
+
             frame_items.append(frame_item)
 
         vidid = sample['tr']['vidid']
@@ -900,7 +935,7 @@ class KWCocoVideoDataset(data.Dataset):
         depends = ub.odict([
             ('num', num),
             ('hashid', self.sampler.dset._build_hashid()),
-            ('channels', self.channels.__json__()),
+            ('channels', self.input_channels.__json__()),
             # ('sample_shape', self.sample_shape),
             ('depends_version', 4),  # bump if `compute_input_stats` changes
         ])
@@ -960,7 +995,6 @@ class KWCocoVideoDataset(data.Dataset):
             >>> #self.compute_input_stats(num=10)
             >>> self.compute_input_stats(num=1000, num_workers=4, batch_size=1)
 
-
         Ignore:
             # TODO: profile and optimize loading in ndsampler / kwcoco
             _ = xdev.profile_now(self.__getitem__)(0)
@@ -1006,7 +1040,7 @@ class KWCocoVideoDataset(data.Dataset):
 
         # Track moving average of each fused channel stream
         channel_stats = {key: kwarray.RunningStats()
-                         for key in self.channels.keys()}
+                         for key in self.input_channels.keys()}
 
         timer = ub.Timer().tic()
         timer.first = 1

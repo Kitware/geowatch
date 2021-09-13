@@ -348,7 +348,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         print('datamodule.input_stats = {}'.format(
             ub.repr2(datamodule.input_stats, nl=2, sort=0)))
         method_var_dict["input_stats"] = datamodule.input_stats
-        method_var_dict["input_channels"] = datamodule.channels
+        method_var_dict["input_channels"] = datamodule.input_channels
 
     method_var_dict["classes"] = datamodule.classes
     # Note: Changed name from method to model

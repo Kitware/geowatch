@@ -187,7 +187,7 @@ def _benchmark_model():
     # #
     # for arch_name in ['smt_it_stm_p8', 'smt_it_joint_p8', 'smt_it_hwtm_p8']:
     #     print('====')
-    #     # self = MultimodalTransformer(arch_name=arch_name, input_channels=datamodule.channels)
+    #     # self = MultimodalTransformer(arch_name=arch_name, input_channels=datamodule.input_channels)
     #     num_params = nh.util.number_of_parameters(self)
     #     print('arch_name = {!r}'.format(arch_name))
     #     print('num_params = {!r}'.format(num_params))
@@ -236,7 +236,7 @@ class MultimodalTransformer(pl.LightningModule):
         >>> loader = datamodule.train_dataloader()
         >>> batch = next(iter(loader))
         >>> #self = MultimodalTransformer(arch_name='smt_it_joint_p8')
-        >>> self = MultimodalTransformer(arch_name='smt_it_stm_p8', input_channels=datamodule.channels)
+        >>> self = MultimodalTransformer(arch_name='smt_it_stm_p8', input_channels=datamodule.input_channels)
         >>> import netharn as nh
         >>> # device = nh.XPU.coerce('auto')
         >>> device = nh.XPU.coerce('cpu').main_device
@@ -495,7 +495,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> self = methods.MultimodalTransformer(
             >>>     arch_name='smt_it_joint_p8',
             >>>     input_stats=datamodule.input_stats,
-            >>>     classes=datamodule.classes, input_channels=datamodule.channels)
+            >>>     classes=datamodule.classes, input_channels=datamodule.input_channels)
             >>> outputs = self.forward_step(batch, with_loss=True)
             >>> canvas = datamodule.draw_batch(batch, outputs=outputs)
             >>> # xdoctest: +REQUIRES(--show)
@@ -540,7 +540,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     arch_name='smt_it_stm_p8',
             >>>     attention_impl='exact',
             >>>     input_stats=datamodule.input_stats,
-            >>>     classes=datamodule.classes, input_channels=datamodule.channels)
+            >>>     classes=datamodule.classes, input_channels=datamodule.input_channels)
             >>> device = 0
             >>> self = self.to(device)
 
@@ -852,7 +852,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> # Use one of our fusion.architectures in a test
             >>> self = methods.MultimodalTransformer(
             >>>     "smt_it_stm_p8", classes=classes,
-            >>>     input_stats=input_stats, input_channels=datamodule.channels)
+            >>>     input_stats=input_stats, input_channels=datamodule.input_channels)
 
             >>> # We have to run an input through the module because it is lazy
             >>> batch = ub.peek(iter(datamodule.train_dataloader()))
