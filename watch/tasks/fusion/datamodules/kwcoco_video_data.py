@@ -24,6 +24,21 @@ except Exception:
     profile = ub.identity
 
 
+# FIXME: Hard-coded category aliases.
+# The correct way to handle these would be to have some information in the
+# kwcoco category dictionary that specifies how the categories should be
+# interpreted.
+_HEURISTIC_CATEGORIES = {
+
+    'background': {'background', 'No Activity', 'Post Construction'},
+
+    'pre_background': {'No Activity'},
+    'post_background': {'Post Construction'},
+
+    'ignore': {'ignore', 'Unknown', 'clouds'},
+}
+
+
 class KWCocoVideoDataModule(pl.LightningDataModule):
     """
     Prepare the kwcoco dataset as torch video datamodules
@@ -46,8 +61,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         >>> #chan_spec = kwcoco.channel_spec.FusedChannelSpec.coerce(channels)
         >>> #channels = None
         >>> #
-        >>> batch_size = 2
-        >>> time_steps = 5
+        >>> batch_size = 1
+        >>> time_steps = 2
         >>> chip_size = 330
         >>> self = KWCocoVideoDataModule(
         >>>     train_dataset=train_dataset,
@@ -461,21 +476,24 @@ class KWCocoVideoDataset(data.Dataset):
         >>> import kwcoco
         >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
         >>> dvc_dpath = os.environ.get('DVC_DPATH', _default)
-        >>> coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/combo_data_right.kwcoco.json')
+        >>> coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/data.kwcoco.json')
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
         >>> sampler = ndsampler.CocoSampler(coco_dset)
-        >>> sample_shape = (7, 128, 128)
         >>> self = KWCocoVideoDataset(
         >>>     sampler,
-        >>>     sample_shape=(5, 120, 120),
+        >>>     sample_shape=(2, 128, 128),
         >>>     window_overlap=0,
-        >>>     channels="blue|green|red|nir|inv_sort1|inv_sort2|inv_sort3",
+        >>>     channels="blue|green|red|nir|swir22|swir16",
+        >>>     neg_to_pos_ratio=0,
         >>> )
-        >>> item = self[4]
+        >>> item = self[0]
         >>> canvas = self.draw_item(item)
+        >>> print(ub.repr2(item['tr'], nl=-1))
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> kwplot.autompl()
+        >>> canvas = self.draw_item(item)
+        >>> kwplot.imshow(canvas)
         >>> import xdev
         >>> sample_indices = list(range(len(self)))
         >>> for index in xdev.InteractiveIter(sample_indices):
@@ -497,13 +515,13 @@ class KWCocoVideoDataset(data.Dataset):
         neg_to_pos_ratio=1.0,
     ):
 
-        self._hueristic_background_classnames = {
-            'background', 'No Activity',
-        }
-
-        self._heuristic_ignore_classnames = {
-            'ignore', 'Unknown', 'clouds',
-        }
+        self._hueristic_background_classnames = _HEURISTIC_CATEGORIES['background']
+        self._heuristic_ignore_classnames = _HEURISTIC_CATEGORIES['ignore']
+        #     'background', 'No Activity',
+        # }
+        # = {
+        #     'ignore', 'Unknown', 'clouds',
+        # }
 
         if channels is None:
             # Hack to use all channels in the first image.
@@ -528,32 +546,44 @@ class KWCocoVideoDataset(data.Dataset):
                 self._heuristic_ignore_classnames |
                 self._hueristic_background_classnames
             )
-            new_sample_grid = new_video_sample_grid(
-                sampler.dset, window_dims=sample_shape,
-                window_overlap=window_overlap,
-                negative_classes=negative_classes,
-                keepbound=False,
-            )
+            if 1:
+                # Sample more regions
+                new_sample_grid = sample_vidspace_grid(
+                    sampler.dset, window_dims=sample_shape,
+                    window_overlap=window_overlap,
+                    negative_classes=negative_classes,
+                    keepbound=False,
+                )
+            else:
+                new_sample_grid = new_video_sample_grid(
+                    sampler.dset, window_dims=sample_shape,
+                    window_overlap=window_overlap,
+                    negative_classes=negative_classes,
+                    keepbound=False,
+                )
 
             n_pos = len(new_sample_grid["positives_indexes"])
             n_neg = len(new_sample_grid["negatives_indexes"])
 
-            max_neg = min(int(max(1, (neg_to_pos_ratio * n_pos))), n_neg)
+            max_neg = min(int(max(0, (neg_to_pos_ratio * n_pos))), n_neg)
             if n_neg > max_neg:
                 print('restrict to max_neg = {!r}'.format(max_neg))
 
             # We have too many negatives, so we are going to "group" negatives
             # and when we select one we will really just randomly select from
             # within the pool
-            negative_pool = list(util_iter.chunks(new_sample_grid["negatives_indexes"], nchunks=max_neg))
-            self.negative_pool = negative_pool
-            neg_pool_chunksizes = set(map(len, self.negative_pool))
+            if max_neg > 0:
+                negative_pool = list(util_iter.chunks(new_sample_grid["negatives_indexes"], nchunks=max_neg))
+                self.negative_pool = negative_pool
+                neg_pool_chunksizes = set(map(len, self.negative_pool))
+                print('neg_pool_chunksizes = {!r}'.format(neg_pool_chunksizes))
+            else:
+                self.negative_pool = []
 
             # This is in a per-iteration basis
             self.n_pos = n_pos
-            self.n_neg = len(negative_pool)
+            self.n_neg = len(self.negative_pool)
             self.length = self.n_pos + self.n_neg
-            print('neg_pool_chunksizes = {!r}'.format(neg_pool_chunksizes))
             print('len(neg_pool) ' + str(len(self.negative_pool)))
             print('self.n_pos = {!r}'.format(self.n_pos))
             print('self.n_neg = {!r}'.format(self.n_neg))
@@ -1486,6 +1516,259 @@ def new_video_sample_grid(dset, window_dims=None, window_overlap=0.0,
     sample_grid = {
         'positives_indexes': positives,
         'negatives_indexes': negatives,
+        'targets': targets,
+    }
+    return sample_grid
+
+
+def sample_vidspace_grid(dset, window_dims, window_overlap=0.0, negative_classes=None, keepbound=False):
+    """
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
+        >>> dvc_dpath = os.environ.get('DVC_DPATH', _default)
+        >>> # coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/data.kwcoco.json')
+        >>> bundle_dpath = join(dvc_dpath, 'drop1-S2-L8-aligned')
+        >>> coco_fpath = join(bundle_dpath, 'combo_data.kwcoco.json')
+        >>> dset = kwcoco.CocoDataset(coco_fpath)
+        >>> # Create a sliding window object for each specific image (because they may
+        >>> # have different sizes, technically we could memoize this)
+        >>> import kwarray
+        >>> window_overlap = 0.5
+        >>> window_dims = (96, 96)
+        >>> keepbound = False
+
+    Example:
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> import ndsampler
+        >>> import kwcoco
+        >>> dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=30)
+        >>> # Create a sliding window object for each specific image (because they may
+        >>> # have different sizes, technically we could memoize this)
+        >>> import kwarray
+        >>> window_overlap = 0.0
+        >>> window_dims = (2, 96, 96)
+        >>> keepbound = False
+        >>> sample_grid = sample_vidspace_grid(dset, window_dims, window_overlap)
+
+        _ = xdev.profile_now(sample_vidspace_grid)(dset, window_dims, window_overlap)
+    """
+    # Create a sliding window object for each specific image (because they may
+    # have different sizes, technically we could memoize this)
+    import kwarray
+    import pyqtree
+    import itertools as it
+
+    # window_overlap = 0.5
+    window_space_dims = window_dims[1:3]
+    window_time_dims = window_dims[0]
+    print('window_time_dims = {!r}'.format(window_time_dims))
+    keepbound = False
+    vidid_to_space_slider = {}
+    for vidid, video in dset.index.videos.items():
+        full_dims = [video['height'], video['width']]
+        window_dims_ = full_dims if window_space_dims == 'full' else window_space_dims
+        slider = kwarray.SlidingWindow(full_dims, window_dims_,
+                                       overlap=window_overlap,
+                                       keepbound=keepbound,
+                                       allow_overshoot=True)
+        vidid_to_space_slider[vidid] = slider
+
+    # from ndsampler import isect_indexer
+    # _isect_index = isect_indexer.FrameIntersectionIndex.from_coco(dset)
+
+    targets = []
+    positive_idxs = []
+    negative_idxs = []
+
+    # FIXME: HARD CODED CONSTANTS
+    special_cids = {
+        'pre_cids': set(),
+        'post_cids': set(),
+        'ignore_cids': set(),
+    }
+    special_aliases = {
+        'pre_cids': {'background', 'No Activity'},
+        'post_cids': {'Post Construct'},
+        'ignore_cids': {'ignore', 'Unknown', 'clouds'},
+    }
+    for key, aliases in special_aliases.items():
+        for name in aliases:
+            if name in dset.index.name_to_cat:
+                special_cids[key].add(dset.index.name_to_cat[name]['id'])
+
+    # Given an video
+    # video_id = ub.peek()
+    for video_id in dset.index.videos.keys():
+        slider = vidid_to_space_slider[video_id]
+
+        video_info = dset.index.videos[video_id]
+        video_gids = list(dset.index.vidid_to_gids[video_id])
+
+        qtree = pyqtree.Index((0, 0, video_info['width'], video_info['height']))
+        qtree.aid_to_tlbr = {}
+
+        tid_to_infos = ub.ddict(list)
+        video_aids = dset.images(video_gids).annots.lookup('id')
+        for aids, gid in zip(video_aids, video_gids):
+
+            warp_vid_from_img = kwimage.Affine.coerce(dset.index.imgs[gid]['warp_img_to_vid'])
+            # warp_img_from_vid = warp_vid_from_img.inv()
+
+            img_info = dset.index.imgs[gid]
+            frame_index = img_info['frame_index']
+            tids = dset.annots(aids).lookup('track_id')
+            cids = dset.annots(aids).lookup('category_id')
+            for tid, aid, cid in zip(tids, aids, cids):
+
+                imgspace_box = kwimage.Boxes([dset.index.anns[aid]['bbox']], 'xywh')
+                vidspace_box = imgspace_box.warp(warp_vid_from_img)
+
+                tlbr_box = vidspace_box.to_tlbr().data[0]
+                qtree.insert(aid, tlbr_box)
+                qtree.aid_to_tlbr[aid] = tlbr_box
+
+                dset.index.anns[aid]['bbox']
+
+                tid_to_infos[tid].append({
+                    'gid': gid,
+                    'cid': cid,
+                    'frame_index': frame_index,
+                    'vidspace_box': tlbr_box,
+                    'cname': dset._resolve_to_cat(cid)['name'],
+                    'aid': aid,
+                })
+
+        tid_to_dframe = ub.map_vals(kwarray.DataFrameLight.from_dict, tid_to_infos)
+        for tid, track_dframe in tid_to_dframe.items():
+            track_dframe['gid'] = np.array(track_dframe['gid'])
+            track_dframe['frame_index'] = np.array(track_dframe['frame_index'])
+
+            # Precompute for speed
+            track_boxes = kwimage.Boxes(np.array(track_dframe['vidspace_box']), 'ltrb')
+            track_dframe['track_pairwise_ious'] = track_boxes.ious(track_boxes)
+            track_dframe['track_boxes'] = track_boxes
+
+        # print('tid_to_info = {}'.format(ub.repr2(tid_to_info, nl=2, sort=0)))
+        for space_region in list(slider):
+            y_sl, x_sl = space_region
+
+            # Find all annotations that pass through this spatial region
+            vid_box = kwimage.Boxes.from_slice((y_sl, x_sl))
+            query = vid_box.to_tlbr().data[0]
+            isect_aids = sorted(set(qtree.intersect(query)))
+
+            isect_annots = dset.annots(isect_aids)
+            unique_tracks = set(isect_annots.lookup('track_id'))
+
+            region_tid_to_info = ub.dict_subset(tid_to_dframe, unique_tracks)
+            video_frame_idxs = list(range(len(video_gids)))
+
+            # precompute for speed
+            tid_to_region_iooa = {}
+            for tid, track_dframe in region_tid_to_info.items():
+                track_boxes = track_dframe['track_boxes']
+                # track_boxes = kwimage.Boxes(track_dframe['vidspace_box'], 'tlbr')
+                tid_to_region_iooa[tid] = vid_box.iooas(track_boxes)[0, :]
+
+            # Generate all combinations of sample frames
+            for frame_idxs in list(it.combinations(video_frame_idxs, window_time_dims)):
+
+                # Default is to assume this spacetime region has no change
+                changes = []
+
+                gids = list(ub.take(video_gids, frame_idxs))
+                region_tracks = []
+                # For each track that passes through this region
+                for tid, track_dframe in region_tid_to_info.items():
+
+                    # Interpolate / Extrapolate track annotations onto the
+                    # sample frame indexes The track might not be annotated on
+                    # each frame. For each timestep check the most recent state
+                    # of the track.
+                    sampled_info = ub.ddict(list)
+                    _explicit_track_fxs = track_dframe['frame_index']
+                    _region_iooas = tid_to_region_iooa[tid]
+                    most_recent_idxs = np.searchsorted(_explicit_track_fxs, frame_idxs, 'right') - 1
+                    # prev_box = None
+                    prev_idx = None
+                    for idx in most_recent_idxs:
+                        if idx < 0:
+                            # The sample frame is before this track starts
+                            cid = ub.peek(special_cids['pre_cids'])
+                            curr_box = None
+                            region_iooa = 0
+                            prev_iou = np.nan
+                        elif idx > _explicit_track_fxs[-1]:
+                            # The sampled frame is after this track ends
+                            cid = track_dframe['cid'][idx]
+                            curr_box = track_dframe['vidspace_box'][idx]
+                            region_iooa = _region_iooas[idx]
+                            if prev_idx is None:
+                                prev_iou = np.nan
+                            else:
+                                prev_iou = track_dframe['track_pairwise_ious'][idx][prev_idx]
+                        else:
+                            cid = track_dframe['cid'][idx]
+                            curr_box = track_dframe['vidspace_box'][idx]
+                            region_iooa = _region_iooas[idx]
+                            if prev_idx is None:
+                                prev_iou = np.nan
+                            else:
+                                prev_iou = track_dframe['track_pairwise_ious'][idx][prev_idx]
+                        sampled_info['cid'].append(cid)
+                        sampled_info['box'].append(curr_box)
+                        sampled_info['region_iooa'].append(region_iooa)
+                        sampled_info['prev_iou'].append(prev_iou)
+                        prev_idx = idx
+
+                    # Heuristic: flag this region as a positive if any of these
+                    # heuristics are detected.  TODO: we need to figure out the
+                    # best method for determening if a space-time window
+                    # contains a positive example of change or not. What is the
+                    # best way to encode this in a kwcoco dataset?
+
+                    # Detect if the category of track changes.
+                    is_visible = np.array(sampled_info['region_iooa']) > 0.1
+                    is_change_visible = (is_visible[0:-1] & is_visible[1:])
+                    is_moving = np.array(sampled_info['prev_iou'][1:]) < 0.6
+                    is_visibly_moving = is_change_visible & is_moving
+
+                    if is_visibly_moving.any():
+                        changes.append('visibly_moving')
+
+                    unique_cids = set(sampled_info['cid']) - special_cids['ignore_cids']
+                    # TODO: dont mark change when post_cid moves to background
+                    if len(unique_cids) > 1:
+                        changes.append('category change')
+
+                    region_tracks.append({
+                        'tid': tid,
+                        'sampled_info': sampled_info,
+                        'is_visibly_moving': is_visibly_moving,
+                        'is_moving': is_moving,
+                        'is_change_visible': is_change_visible,
+                        'is_visible': is_visible,
+                    })
+
+                if changes:
+                    positive_idxs.append(len(targets))
+                else:
+                    negative_idxs.append(len(targets))
+
+                targets.append({
+                    'gids': gids,
+                    'space_slice': space_region,
+                    'changes': ','.join(changes),
+                    'region_tracks': region_tracks,
+                })
+
+    print('Found {} positives'.format(len(positive_idxs)))
+    print('Found {} negatives'.format(len(negative_idxs)))
+    sample_grid = {
+        'positives_indexes': positive_idxs,
+        'negatives_indexes': negative_idxs,
         'targets': targets,
     }
     return sample_grid

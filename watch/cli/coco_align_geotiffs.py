@@ -409,6 +409,9 @@ def geopandas_pairwise_overlaps(gdf1, gdf2, predicate='intersects'):
     References:
         ..[1] https://en.wikipedia.org/wiki/DE-9IM
 
+    TODO:
+        - [ ] This can move to watch.utils
+
     Returns:
         dict: mapping from indexes in gdf1 to overlapping indexes in gdf2
 
@@ -474,6 +477,9 @@ def latlon_text(lat, lon, precision=6):
                 6 - for ~10cm accuracy,
                 5 - for ~1m accuracy,
                 2 - for ~1km accuracy,
+
+    TODO:
+        - [ ] This can move to watch.utils
 
     Notes:
         1 degree of latitude is *very* roughly the order of 100km, so the
@@ -1400,6 +1406,11 @@ def shapely_bounding_box(geom):
 
 
 def flip_xy(poly):
+    """
+    TODO:
+        - [ ] This is unused in this file and thus should move to the dev
+        folder or somewhere else for to keep useful scratch work.
+    """
     if hasattr(poly, 'reorder_axes'):
         new_poly = poly.reorder_axes((1, 0))
     else:
@@ -1411,6 +1422,11 @@ def flip_xy(poly):
 
 
 def coco_geopandas_images(dset):
+    """
+    TODO:
+        - [ ] This is unused in this file and thus should move to the dev
+        folder or somewhere else for to keep useful scratch work.
+    """
     df_input = []
     for gid, img in dset.imgs.items():
         info  = img['geotiff_metadata']
@@ -1431,6 +1447,10 @@ def visualize_rois(dset, kw_all_box_rois):
     matplotlib visualization of image and annotation regions on a world map
 
     Developer function, unused in the script
+
+    TODO:
+        - [ ] This is unused in this file and thus should move to the dev
+        folder or somewhere else for to keep useful scratch work.
     """
 
     sh_coverage_rois = find_covered_regions(dset)
