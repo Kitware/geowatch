@@ -130,6 +130,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         time_overlap=0,
         chip_overlap=0.1,
         neg_to_pos_ratio=1.0,
+        max_lookahead=1,
         channels=None,
         batch_size=4,
         num_workers=4,
@@ -148,6 +149,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             time_overlap (float): fraction of time steps to overlap
             chip_overlap (float): fraction of space steps to overlap
             neg_to_pos_ratio (float): maximum ratio of samples with no annotations to samples with annots
+            max_lookahead (int): number of frames allowed to sample in the future from the base
             channels : channels to use should be ChannelSpec coercable
             batch_size (int) : number of items per batch
             num_workers (int) : number of background workers
@@ -170,6 +172,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.num_workers = num_workers
         self.preprocessing_step = preprocessing_step
         self.normalize_inputs = normalize_inputs
+        self.max_lookahead = max_lookahead
         self.input_stats = None
 
         # will only correspond to train
@@ -210,6 +213,10 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         parser.add_argument("--time_overlap", default=0.0, type=float, help='fraction of time steps to overlap')
         parser.add_argument("--chip_overlap", default=0.1, type=float, help='fraction of space steps to overlap')
         parser.add_argument("--neg_to_pos_ratio", default=1.0, type=float, help='maximum ratio of samples with no annotations to samples with annots')
+        parser.add_argument("--max_lookahead",  # rename?
+                            # default=float('inf'),
+                            default=1,
+                            type=float, help='number of frames allowed to sample in the future from the base. Set to inf for all')
         parser.add_argument("--channels", default=None, type=str, help='channels to use should be ChannelSpec coercable')
         parser.add_argument("--batch_size", default=4, type=int)
         parser.add_argument("--num_workers", default=4, type=int)
@@ -242,6 +249,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 window_overlap=(self.time_overlap, self.chip_overlap, self.chip_overlap),
                 channels=self.requested_channels,
                 neg_to_pos_ratio=self.neg_to_pos_ratio,
+                max_lookahead=self.max_lookahead,
             )
 
             # Unfortunately lightning seems to only enable / disables
@@ -285,6 +293,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                     sample_shape=(self.time_steps, self.chip_size, self.chip_size),
                     window_overlap=(self.time_overlap, self.chip_overlap, self.chip_overlap),
                     channels=self.requested_channels,
+                    max_lookahead=self.max_lookahead,
                     mode='vali',
                     neg_to_pos_ratio=0,
                 )
@@ -484,7 +493,7 @@ class KWCocoVideoDataset(data.Dataset):
         >>>     sample_shape=(2, 128, 128),
         >>>     window_overlap=0,
         >>>     channels="blue|green|red|nir|swir22|swir16",
-        >>>     neg_to_pos_ratio=0,
+        >>>     neg_to_pos_ratio=0, max_lookahead=2.0
         >>> )
         >>> item = self[0]
         >>> canvas = self.draw_item(item)
@@ -513,6 +522,7 @@ class KWCocoVideoDataset(data.Dataset):
         window_overlap=0,
         transform=None,
         neg_to_pos_ratio=1.0,
+        max_lookahead=1.0,
     ):
 
         self._hueristic_background_classnames = _HEURISTIC_CATEGORIES['background']
@@ -546,16 +556,19 @@ class KWCocoVideoDataset(data.Dataset):
                 self._heuristic_ignore_classnames |
                 self._hueristic_background_classnames
             )
-            if 1:
-                # Sample more regions
-                new_sample_grid = sample_vidspace_grid(
+
+            if max_lookahead == 1:
+                # Old behavior
+                new_sample_grid = new_video_sample_grid(
                     sampler.dset, window_dims=sample_shape,
                     window_overlap=window_overlap,
                     negative_classes=negative_classes,
                     keepbound=False,
                 )
             else:
-                new_sample_grid = new_video_sample_grid(
+                # Sample more regions
+                # TODO: finer grained control with max_lookahead
+                new_sample_grid = sample_vidspace_grid(
                     sampler.dset, window_dims=sample_shape,
                     window_overlap=window_overlap,
                     negative_classes=negative_classes,
@@ -1673,6 +1686,8 @@ def sample_vidspace_grid(dset, window_dims, window_overlap=0.0, negative_classes
                 tid_to_region_iooa[tid] = vid_box.iooas(track_boxes)[0, :]
 
             # Generate all combinations of sample frames
+            # TODO: ITERATING THROUGH ALL COMBINATIONS IS SLOW!
+            # Could likely reparametarize to sample implicitly in getitem
             for frame_idxs in list(it.combinations(video_frame_idxs, window_time_dims)):
 
                 # Default is to assume this spacetime region has no change
