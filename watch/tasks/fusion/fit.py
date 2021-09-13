@@ -153,10 +153,16 @@ def make_fit_config(cmdline=False, **kwargs):
         profiling.
         '''))
 
-    config_parser.add_argument('--sharing_strategy', default='default', help=ub.paragraph(
+    config_parser.add_argument('--torch_sharing_strategy', default='default', help=ub.paragraph(
         '''
         Torch multiprocessing sharing strategy.
         Can be default, file_descriptor, file_system
+        '''))
+
+    config_parser.add_argument('--torch_start_method', default='default', help=ub.paragraph(
+        '''
+        Torch multiprocessing sharing strategy.
+        Can be fork, spawn, forkserver
         '''))
 
     # config_parser.add_argument('--name', default=None, help=ub.paragraph(
@@ -330,7 +336,8 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     from watch.utils.lightning_ext import util_globals
     util_globals.configure_hacks(
         num_workers=args.num_workers,
-        sharing_strategy=args.sharing_strategy,
+        torch_sharing_strategy=args.torch_sharing_strategy,
+        torch_start_method=args.torch_start_method,
     )
 
     pathlib.Path(args.workdir).mkdir(exist_ok=True, parents=True)
