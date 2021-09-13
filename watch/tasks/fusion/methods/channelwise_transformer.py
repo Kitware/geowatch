@@ -30,7 +30,7 @@ def _benchmark_model():
     import netharn as nh
     # from watch.tasks.fusion import datamodules
     import torch.profiler
-    from torch.profiler import profile, ProfilerActivity, record_function
+    # from torch.profiler import profile, ProfilerActivity, record_function
     # datamodule = datamodules.KWCocoVideoDataModule(
     #     train_dataset='special:vidshapes8', num_workers=0)
     # datamodule.setup('fit')
@@ -50,7 +50,7 @@ def _benchmark_model():
         # 'T': [2, 5, 9],
         # 'T': [2, 5, 9],
         'T': [2],
-        'M': [3, 32, 64, 128, 256],
+        'M': [3, 5, 7, 11, 13, 32, 64, 128, 256],
     }))
 
     encoder_info = transformer.encoder_configs.copy()
@@ -100,7 +100,7 @@ def _benchmark_model():
     nicerows = []
     self = None
     images = None
-    train_prof = None
+    # train_prof = None
     output = None
     torch.cuda.empty_cache()
     torch.cuda.reset_peak_memory_stats()
@@ -154,7 +154,7 @@ def _benchmark_model():
 
         self = None
         images = None
-        train_prof = None
+        # train_prof = None
         output = None
         optim = None
         torch.cuda.empty_cache()
@@ -180,46 +180,46 @@ def _benchmark_model():
     for k, subdf in df.groupby(['arch_name', 'attention_impl']):
         print('')
         print('k = {!r}'.format(k))
-        print(subdf.pivot(['S', 'T'], ['M'], ['max_mem_alloc_str']))
+        print(subdf.pivot(['S', 'T'], ['M', 'num_params'], ['max_mem_alloc_str']))
 
-    import timerit
-    ti = timerit.Timerit(3, bestof=1, verbose=2)
-    #
-    for arch_name in ['smt_it_stm_p8', 'smt_it_joint_p8', 'smt_it_hwtm_p8']:
-        print('====')
-        self = MultimodalTransformer(arch_name=arch_name, input_channels=datamodule.channels)
-        num_params = nh.util.number_of_parameters(self)
-        print('arch_name = {!r}'.format(arch_name))
-        print('num_params = {!r}'.format(num_params))
-        print('running')
-        self = self.to(device)
-        output = self(images)
-        for timer in ti.reset(f'inference-{arch_name}'):
-            torch.cuda.synchronize()
-            with timer:
-                output = self(images)['change']
-                torch.cuda.synchronize()
-        for timer in ti.reset(f'train-{arch_name}'):
-            torch.cuda.synchronize()
-            with timer:
-                output = self(images)['change']
-                output.sum().backward()
-                torch.cuda.synchronize()
-        with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True, profile_memory=True) as pred_prof:
-            with record_function(f"pred_{arch_name}"):
-                output = self(images)['change']
-        with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True, profile_memory=True) as train_prof:
-            with record_function(f"train_{arch_name}"):
-                output = self(images)['change']
-                output.sum().backward()
-        print('arch_name = {!r}'.format(arch_name))
-        print('num_params = {!r}'.format(num_params))
-        print(pred_prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
-        print(train_prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
+    # import timerit
+    # ti = timerit.Timerit(3, bestof=1, verbose=2)
+    # #
+    # for arch_name in ['smt_it_stm_p8', 'smt_it_joint_p8', 'smt_it_hwtm_p8']:
+    #     print('====')
+    #     # self = MultimodalTransformer(arch_name=arch_name, input_channels=datamodule.channels)
+    #     num_params = nh.util.number_of_parameters(self)
+    #     print('arch_name = {!r}'.format(arch_name))
+    #     print('num_params = {!r}'.format(num_params))
+    #     print('running')
+    #     self = self.to(device)
+    #     output = self(images)
+    #     for timer in ti.reset(f'inference-{arch_name}'):
+    #         torch.cuda.synchronize()
+    #         with timer:
+    #             output = self(images)['change']
+    #             torch.cuda.synchronize()
+    #     for timer in ti.reset(f'train-{arch_name}'):
+    #         torch.cuda.synchronize()
+    #         with timer:
+    #             output = self(images)['change']
+    #             output.sum().backward()
+    #             torch.cuda.synchronize()
+    #     with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True, profile_memory=True) as pred_prof:
+    #         with record_function(f"pred_{arch_name}"):
+    #             output = self(images)['change']
+    #     with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True, profile_memory=True) as train_prof:
+    #         with record_function(f"train_{arch_name}"):
+    #             output = self(images)['change']
+    #             output.sum().backward()
+    #     print('arch_name = {!r}'.format(arch_name))
+    #     print('num_params = {!r}'.format(num_params))
+    #     print(pred_prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
+    #     print(train_prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
 
-        total_memory = sum(event.cuda_memory_usage for event in train_prof.events())
-        total_mem_str = xdev.byte_str(total_memory)
-        print(total_mem_str)
+    #     total_memory = sum(event.cuda_memory_usage for event in train_prof.events())
+    #     total_mem_str = xdev.byte_str(total_memory)
+    #     print(total_mem_str)
 
 
 class MultimodalTransformer(pl.LightningModule):
@@ -700,7 +700,9 @@ class MultimodalTransformer(pl.LightningModule):
 
                 class_loss = self.class_criterion(class_logits, true_ohe).mean()
                 # class_loss = torch.nn.functional.binary_cross_entropy_with_logits(class_logits, true_ohe)
-                item_loss_parts['class'] = class_loss
+
+                class_weight = 0.001  # hack: downweight class
+                item_loss_parts['class'] = class_weight * class_loss
 
                 item_losses.append(item_loss_parts)
 
