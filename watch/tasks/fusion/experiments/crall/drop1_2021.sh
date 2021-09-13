@@ -90,6 +90,8 @@ S   T
 128 2                0.22 GB  0.37 GB  0.51 GB  0.78 GB  0.96 GB  2.27 GB  4.54 GB  8.95 GB  17.89 GB
 "
 
+
+#export CUDA_VISIBLE_DEVICES="1"
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 
 ARCH=smt_it_joint_p8
@@ -100,7 +102,7 @@ TIME_STEPS=2
 #ARCH=smt_it_stm_s12
 CHANNELS="coastal|blue|green|red|nir|swir16"
 
-EXPERIMENT_NAME=DirectCD_${ARCH}_raw7common_v4
+EXPERIMENT_NAME=DirectCD_${ARCH}_raw7common_v5
 DATASET_NAME=Drop1RawLeftRight
 
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_NAME/runs/$EXPERIMENT_NAME
@@ -134,7 +136,9 @@ python -m watch.tasks.fusion.fit \
     --window_size=8 \
     --window_overlap=0.5 \
     --global_class_weight=0.0 \
+    --neg_to_pos_ratio=0.2 \
     --global_change_weight=1.0 \
+    --diff_inputs=True \
     --num_sanity_val_steps=0 \
     --dump=$TRAIN_CONFIG_FPATH 
 

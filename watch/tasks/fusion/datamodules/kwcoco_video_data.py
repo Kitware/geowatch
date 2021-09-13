@@ -231,7 +231,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 so this can be passed to the model.
                 '''))
         parser.add_argument(
-            "--diff_inputs", default=True, help=ub.paragraph(
+            "--diff_inputs", default=False, help=ub.paragraph(
                 '''
                 if True, also includes a difference between consecutive frames
                 in the inputs produced.
@@ -801,13 +801,13 @@ class KWCocoVideoDataset(data.Dataset):
         raw_gids = sample['tr']['gids']
 
         channel_keys = sample['tr']['_coords']['c'].values.tolist()
-        print('channel_keys = {!r}'.format(channel_keys))
+        # print('channel_keys = {!r}'.format(channel_keys))
 
         mode_lists = list(self.input_channels.values())
         assert len(mode_lists) == 1, 'no late fusion yet'
         mode_key = '|'.join(mode_lists[0])
 
-        print('mode_key = {!r}'.format(mode_key))
+        # print('mode_key = {!r}'.format(mode_key))
         # mode_key = '|'.join(channel_keys)
 
         # Break data down on a per-frame basis so we can apply image-based
