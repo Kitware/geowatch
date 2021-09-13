@@ -139,6 +139,7 @@ python -m watch.tasks.fusion.fit \
     --neg_to_pos_ratio=0.2 \
     --global_change_weight=1.0 \
     --diff_inputs=True \
+    --sharing_strategy=file_system \
     --num_sanity_val_steps=0 \
     --dump=$TRAIN_CONFIG_FPATH 
 

@@ -153,6 +153,18 @@ def make_fit_config(cmdline=False, **kwargs):
         profiling.
         '''))
 
+    config_parser.add_argument('--sharing_strategy', default='default', help=ub.paragraph(
+        '''
+        Torch multiprocessing sharing strategy.
+        Can be default, file_descriptor, file_system
+        '''))
+
+    # config_parser.add_argument('--name', default=None, help=ub.paragraph(
+    #     '''
+    #     TODO: allow for the user to specify a name, and do netharn-like
+    #     fit/runs and fit/name directories?
+    #     '''))
+
     callback_parser = parser.add_argument_group("Callbacks")
 
     # our extension callbacks have arg parsers
@@ -161,12 +173,6 @@ def make_fit_config(cmdline=False, **kwargs):
 
     callback_parser.add_argument('--patience', default=100, type=int, help=ub.paragraph(
         '''Number of epochs with no improvement before early stopping'''))
-
-    # config_parser.add_argument('--name', default=None, help=ub.paragraph(
-    #     '''
-    #     TODO: allow for the user to specify a name, and do netharn-like
-    #     fit/runs and fit/name directories?
-    #     '''))
 
     # Setup common fields and modal switches
     modal_parser = parser.add_argument_group("Modal")
@@ -321,6 +327,12 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     print("{train_name}\n====================".format(**args_dict))
     print('args_dict = {}'.format(ub.repr2(args_dict, nl=1, sort=0)))
 
+    import netharn as nh
+    nh.api.configure_hacks(
+        workers=args.num_workers,
+        sharing_strategy=args.sharing_strategy,
+    )
+
     pathlib.Path(args.workdir).mkdir(exist_ok=True, parents=True)
 
     method_class = getattr(methods, args.method)
@@ -438,12 +450,6 @@ def fit_model(args=None, cmdline=False, **kwargs):
     from watch.tasks.fusion import utils
     modules = make_lightning_modules(cmdline=cmdline, **kwargs)
 
-    import netharn as nh
-    nh.api.configure_hacks(
-        workers=modules['args'].num_workers,
-        sharing_strategy='default',
-    )
-
     # args = modules['args']
     trainer = modules['trainer']
     datamodule = modules['datamodule']
@@ -539,6 +545,6 @@ def main(**kwargs):
 if __name__ == "__main__":
     # import xdev
     # xdev.make_warnings_print_tracebacks()
-    from watch.tasks.fusion import fit as this_module
-    this_module.main()
-    # main()
+    # from watch.tasks.fusion import fit as this_module
+    # this_module.main()
+    main()

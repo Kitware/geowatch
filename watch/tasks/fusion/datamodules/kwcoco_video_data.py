@@ -800,7 +800,7 @@ class KWCocoVideoDataset(data.Dataset):
         raw_det_list = sample['annots']['frame_dets']
         raw_gids = sample['tr']['gids']
 
-        channel_keys = sample['tr']['_coords']['c'].values.tolist()
+        # channel_keys = sample['tr']['_coords']['c'].values.tolist()
         # print('channel_keys = {!r}'.format(channel_keys))
 
         mode_lists = list(self.input_channels.values())
