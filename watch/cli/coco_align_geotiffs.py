@@ -76,6 +76,7 @@ import geopandas as gpd
 import datetime
 import shapely
 from shapely import ops
+import pathlib
 from os.path import join, exists
 
 
@@ -93,7 +94,7 @@ class CocoAlignGeotiffConfig(scfg.Config):
     default = {
         'src': scfg.Value('in.geojson.json', help='input dataset to chip'),
 
-        'dst': scfg.Value(None, help='bundle directory for the output'),
+        'dst': scfg.Value(None, help='bundle directory or kwcoco json file for the output'),
 
         'max_workers': scfg.Value(4, help='number of parallel procs'),
         'aux_workers': scfg.Value(4, help='additional inner threads for aux imgs'),
@@ -227,7 +228,7 @@ def main(**kw):
     print('process_info = {}'.format(ub.repr2(process_info, nl=2)))
 
     src_fpath = config['src']
-    dst_dpath = config['dst']
+    dst = config['dst']
     regions = config['regions']
     context_factor = config['context_factor']
     rpc_align_method = config['rpc_align_method']
@@ -237,7 +238,14 @@ def main(**kw):
     aux_workers = config['aux_workers']
     keep = config['keep']
 
-    output_bundle_dpath = dst_dpath
+    dst = pathlib.Path(ub.expandpath(dst))
+    # TODO: handle this coercion of directories or bundles in kwcoco itself
+    if 'json' in dst.stem.split('.'):
+        output_bundle_dpath = str(dst.parent)
+        dst_fpath = str(dst)
+    else:
+        output_bundle_dpath = str(dst)
+        dst_fpath = str(dst / 'data.kwcoco.json')
 
     # from pympler.tracker import SummaryTracker
     # tracker = SummaryTracker()
@@ -277,8 +285,7 @@ def main(**kw):
             xfact=context_factor, yfact=context_factor, origin='center')
 
     # For each ROI extract the aligned regions to the target path
-    extract_dpath = ub.expandpath(output_bundle_dpath)
-    ub.ensuredir(extract_dpath)
+    extract_dpath = ub.ensuredir(output_bundle_dpath)
 
     # Create a new dataset that we will extend as we extract ROIs
     new_dset = kwcoco.CocoDataset()
@@ -304,7 +311,7 @@ def main(**kw):
             write_subsets=write_subsets, max_workers=max_workers,
             aux_workers=aux_workers, keep=keep)
 
-    new_dset.fpath = join(extract_dpath, 'data.kwcoco.json')
+    new_dset.fpath = dst_fpath
     print('Dumping new_dset.fpath = {!r}'.format(new_dset.fpath))
     new_dset.reroot(new_root=output_bundle_dpath, absolute=False)
     new_dset.dump(new_dset.fpath, newlines=True)
