@@ -240,12 +240,15 @@ def main(**kw):
 
     dst = pathlib.Path(ub.expandpath(dst))
     # TODO: handle this coercion of directories or bundles in kwcoco itself
-    if 'json' in dst.stem.split('.'):
+    if 'json' in dst.name.split('.'):
         output_bundle_dpath = str(dst.parent)
         dst_fpath = str(dst)
     else:
         output_bundle_dpath = str(dst)
         dst_fpath = str(dst / 'data.kwcoco.json')
+
+    print('output_bundle_dpath = {!r}'.format(output_bundle_dpath))
+    print('dst_fpath = {!r}'.format(dst_fpath))
 
     # from pympler.tracker import SummaryTracker
     # tracker = SummaryTracker()
