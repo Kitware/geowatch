@@ -1024,6 +1024,7 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
     new_img.update(carry_over)
     new_img['parent_file_name'] = img.get('file_name', None)  # remember which image this came from
     new_img['parent_name'] = img.get('name', None)  # remember which image this came from
+    new_img['parent_canonical_name'] = img.get('canonical_name', None)  # remember which image this came from
     # new_img['video_id'] = new_vidid  # Done outside of this worker
     new_img['frame_index'] = frame_index
     new_img['timestamp'] = date.toordinal()

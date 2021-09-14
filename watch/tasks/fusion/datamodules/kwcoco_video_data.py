@@ -1798,6 +1798,8 @@ def sample_vidspace_grid(dset, window_dims, window_overlap=0.0, negative_classes
                 # Default is to assume this spacetime region has no change
                 changes = []
 
+                any_visible = False
+
                 gids = list(ub.take(video_gids, frame_idxs))
                 region_tracks = []
                 # For each track that passes through this region
@@ -1855,6 +1857,9 @@ def sample_vidspace_grid(dset, window_dims, window_overlap=0.0, negative_classes
                     is_moving = np.array(sampled_info['prev_iou'][1:]) < 0.6
                     is_visibly_moving = is_change_visible & is_moving
 
+                    if is_visible.any():
+                        any_visible = True
+
                     if is_visibly_moving.any():
                         changes.append('visibly_moving')
 
@@ -1882,6 +1887,9 @@ def sample_vidspace_grid(dset, window_dims, window_overlap=0.0, negative_classes
                 if changes:
                     positive_idxs.append(len(targets))
                 else:
+                    # Hack: exclude all annotated regions from negative sampling
+                    if any_visible:
+                        continue
                     negative_idxs.append(len(targets))
 
                 targets.append({

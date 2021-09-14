@@ -433,6 +433,9 @@ def main(cmdline=False, **kwargs):
         >>>     'dst': bundle_dpath / 'post_prob.kwcoco.json',
         >>>     'ext': dvc_dpath / 'drop1/annots.kwcoco.json',
         >>> }
+
+        >>> kwargs['src'] = '/home/joncrall/data/dvc-repos/smart_watch_dvc/drop1-S2-L8-aligned/pre-prop2.kwcoco.json/pre-prop3.kwcoco.json'
+
         >>> cmdline = False
         >>> main(**kwargs)
     """
@@ -497,6 +500,9 @@ def main(cmdline=False, **kwargs):
     cat_ids_to_propagate = [
         full_ds.index.name_to_cat[c]['id'] for c in catnames_to_propagate
     ]
+
+    full_ds.annots().objs[1]
+    ext_ds.annots().objs[1]
 
     # number of visualizations of every sequence
     frames_per_image = 7
@@ -612,6 +618,9 @@ def build_external_video(vid_id, full_ds, ext_ds):
     ext_imgs = ext_images.objs
     ext_names = ext_images.lookup('canonical_name')
 
+    print('ext_names = {!r}'.format(ext_names[0:]))
+    print('full_names = {!r}'.format(full_names[0:]))
+
     # For each ext image, find the corresponding image in our dataset
     name_to_idx = {name: idx for idx, name in enumerate(full_names)}
     matched_idxs = [name_to_idx.get(ext, None) for ext in ext_names]
@@ -621,8 +630,13 @@ def build_external_video(vid_id, full_ds, ext_ds):
     num_full_imgs_with_annots = sum(map(bool, full_images.annots))
     num_matched_full_images = sum(m is not None for m in matched_imgs)
     if num_matched_full_images != num_full_imgs_with_annots:
-        raise AssertionError(str(ext_ds))
-
+        raise AssertionError(ub.paragraph(
+            f'''
+            num_matched_full_images={num_matched_full_images},
+            num_full_imgs_with_annots={num_full_imgs_with_annots},
+            ext_ds={ext_ds},
+            full_ds={full_ds},
+            '''))
     all_frames_iter =  [(m, False) if m is not None else (e, True)
                         for m, e in zip(matched_imgs, ext_imgs)]
     return all_frames_iter
@@ -674,10 +688,9 @@ def _propogate_video_worker(vid_id, full_ds, ext_ds, cat_ids_to_propagate,
                                             img_id))
 
         this_track_ids = set()
-
-        parent_dset = (ext_ds if is_ext else full_ds)
+        frame_dset = (ext_ds if is_ext else full_ds)
         # Update all current tracks to have their latest annotation state
-        this_image_annots = parent_dset.annots(gid=img_id)
+        this_image_annots = frame_dset.annots(gid=img_id)
         track_ids = this_image_annots.lookup('track_id')
         print('track_ids = {!r}'.format(track_ids))
 
