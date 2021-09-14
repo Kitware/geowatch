@@ -261,7 +261,8 @@ class MultimodalTransformer(pl.LightningModule):
                  dropout=0.0,
                  learning_rate=1e-3,
                  weight_decay=0.,
-                 pos_weight=1.,
+                 positive_change_weight=1.,
+                 negative_change_weight=1.,
                  input_stats=None,
                  input_channels=None,
                  attention_impl='exact',
@@ -291,11 +292,43 @@ class MultimodalTransformer(pl.LightningModule):
         # TODO: rework "streams" to get the sum
         num_channels = sum(ub.map_vals(len, input_channels.normalize().parse()).values())
 
+        self.global_class_weight = global_class_weight
+        self.global_change_weight = global_change_weight
+        self.positive_change_weight = positive_change_weight
+        self.negative_change_weight = negative_change_weight
+
         # criterion and metrics
         import monai
         # self.change_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
         self.class_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
-        self.change_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
+
+        # self.change_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
+        self.change_criterion = torch.nn.CrossEntropyLoss(
+            weight=torch.FloatTensor([self.negative_change_weight, self.positive_change_weight]),
+            reduction='none')
+
+        """
+        import monai
+        import torch
+
+        pred = torch.FloatTensor([
+            [ 10, 1],
+            [  1, 10],
+            [ 100, 0],
+            [ 1, 10],
+            [ 10, 1],
+            [ 0, 100],
+        ])
+        true = torch.FloatTensor([1, 1, 1, 0, 0, 0]).long()
+        crit = torch.nn.CrossEntropyLoss(weight=torch.FloatTensor([2, 1]), reduction='none')
+        crit(pred, true.long())
+
+        change_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=True, weight=[0, 1])
+        print(change_criterion.forward(pred, true))
+
+        crit = torch.nn.BCEWithLogitsLoss(reduction='none', pos_weight=torch.ones(1)2.)
+        crit(pred, true)
+        """
 
         # self.change_criterion = nn.BCEWithLogitsLoss(
         #         pos_weight=torch.ones(1) * pos_weight)
@@ -333,9 +366,6 @@ class MultimodalTransformer(pl.LightningModule):
 
         feat_dim = self.encoder.out_features
 
-        self.global_class_weight = global_class_weight
-        self.global_change_weight = global_change_weight
-
         # A simple linear layer that learns to combine channels
         self.channel_fuser = nh.layers.MultiLayerPerceptronNd(
             0, num_channels, [], 1, norm=None)
@@ -347,7 +377,7 @@ class MultimodalTransformer(pl.LightningModule):
         # self.binary_clf = nn.LazyLinear(1)  # TODO: rename to change_clf
         # self.class_clf = nn.LazyLinear(len(self.classes))  # category classifier
         self.change_clf = nh.layers.MultiLayerPerceptronNd(
-            0, feat_dim, [], 1, norm=None)
+            0, feat_dim, [], 2, norm=None)
         self.class_clf = nh.layers.MultiLayerPerceptronNd(
             0, feat_dim, [], self.num_classes, norm=None)
 
@@ -380,7 +410,8 @@ class MultimodalTransformer(pl.LightningModule):
         parser = parent_parser.add_argument_group("MultimodalTransformer")
         parser.add_argument("--learning_rate", default=1e-3, type=float)
         parser.add_argument("--weight_decay", default=0., type=float)
-        parser.add_argument("--pos_weight", default=1.0, type=float)
+        parser.add_argument("--positive_change_weight", default=1.0, type=float)
+        parser.add_argument("--negative_change_weight", default=1.0, type=float)
 
         # Model names define the transformer encoder used by the method
         available_encoders = list(transformer.encoder_configs.keys())
@@ -464,12 +495,12 @@ class MultimodalTransformer(pl.LightningModule):
         #     distance = -3.0 * similarity
 
         # Pass the final fused space-time feature to a classifier
-        change_logits = self.change_clf(spacetime_fused_features[:, 1:])[..., 0]  # only one prediction
+        change_logits = self.change_clf(spacetime_fused_features[:, 1:])
         class_logits = self.class_clf(spacetime_fused_features)
 
         logits = {
-            'class': class_logits,
             'change': change_logits,
+            'class': class_logits,
         }
         return logits
 
@@ -517,16 +548,17 @@ class MultimodalTransformer(pl.LightningModule):
             >>> import os
             >>> import kwplot
             >>> sns = kwplot.autosns()
-            >>> if 1:
+            >>> if 0:
             >>>     _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
             >>>     dvc_dpath = os.environ.get('DVC_DPATH', _default)
             >>>     coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/combo_propogated_data.kwcoco.json')
+            >>>     channels='blue|green|red',
             >>> else:
             >>>     coco_fpath = 'special:vidshapes8-frames9-speed0.5-multispectral'
+            >>>     channels='B1|B11|B8',
             >>> coco_dset = kwcoco.CocoDataset.coerce(coco_fpath)
             >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset=coco_dset,
-            >>>     channels='blue|green|red',
             >>>     chip_size=128, batch_size=1, time_steps=4,
             >>>     normalize_inputs=True, neg_to_pos_ratio=0, num_workers=0,
             >>> )
@@ -536,10 +568,13 @@ class MultimodalTransformer(pl.LightningModule):
 
             >>> # Choose subclass to test this with (does not cover all cases)
             >>> self = methods.MultimodalTransformer(
-            >>>     #arch_name='smt_it_joint_p8',
-            >>>     arch_name='smt_it_stm_p8',
-            >>>     attention_impl='exact',
+            >>>     arch_name='smt_it_joint_p8',
+            >>>     #arch_name='smt_it_stm_p8',
+            >>>     attention_impl='performer',
             >>>     input_stats=datamodule.input_stats,
+            >>>     positive_change_weight=1.0,
+            >>>     negative_change_weight=0.01,
+            >>>     global_class_weight=0.00,
             >>>     classes=datamodule.classes, input_channels=datamodule.input_channels)
             >>> device = 0
             >>> self = self.to(device)
@@ -570,8 +605,8 @@ class MultimodalTransformer(pl.LightningModule):
             >>> fig = kwplot.figure(fnum=1, doclf=True)
             >>> fig.set_size_inches(15, 6)
             >>> fig.subplots_adjust(left=0.05, top=0.9)
-            >>> #for frame_idx in xdev.InteractiveIter(list(range(frame_idx + 1, 1000))):
-            >>> for frame_idx in list(range(frame_idx, 1000)):
+            >>> for frame_idx in xdev.InteractiveIter(list(range(frame_idx + 1, 1000))):
+            >>> #for frame_idx in list(range(frame_idx, 1000)):
             >>>     num_steps = 20
             >>>     for i in ub.ProgIter(range(num_steps), desc='overfit'):
             >>>         optim.zero_grad()
@@ -595,8 +630,8 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     img = render_figure_to_image(fig)
             >>>     img = kwimage.convert_colorspace(img, src_space='bgr', dst_space='rgb')
             >>>     fpath = join(dpath, 'frame_{:04d}.png'.format(frame_idx))
-            >>>     kwimage.imwrite(fpath, img)
-            >>>     #xdev.InteractiveIter.draw()
+            >>>     #kwimage.imwrite(fpath, img)
+            >>>     xdev.InteractiveIter.draw()
             >>> # TODO: can we get this batch to update in real time?
             >>> # TODO: start a server process that listens for new images
             >>> # as it gets new images, it starts playing through the animation
@@ -666,8 +701,10 @@ class MultimodalTransformer(pl.LightningModule):
             class_logits_small = logits['class']
             change_logits_small = logits['change']
 
-            change_logits = nn.functional.interpolate(
-                change_logits_small, [H, W], mode="bilinear", align_corners=True)
+            _tmp = einops.rearrange(change_logits_small, 'b t h w c -> b (t c) h w')
+            _tmp2 = nn.functional.interpolate(
+                _tmp, [H, W], mode="bilinear", align_corners=True)
+            change_logits = einops.rearrange(_tmp2, 'b (t c) h w -> b t h w c', c=change_logits_small.shape[4])
 
             _tmp = einops.rearrange(class_logits_small, 'b t h w c -> b (t c) h w')
             _tmp2 = nn.functional.interpolate(
@@ -675,11 +712,17 @@ class MultimodalTransformer(pl.LightningModule):
             class_logits = einops.rearrange(_tmp2, 'b (t c) h w -> b t h w c', c=class_logits_small.shape[4])
 
             # Remove batch index in both cases
-            change_prob = change_logits.sigmoid()[0]
-            class_prob = class_logits.sigmoid()[0]
+            # change_prob = change_logits.detach().sigmoid()[0]
+            change_prob = change_logits.detach().softmax(dim=4)[0, ..., 1]
 
-            item_change_probs.append(change_prob.detach())
-            item_class_probs.append(class_prob.detach())
+            class_prob = class_logits.detach().sigmoid()[0]
+
+            # Hack the change prob so it works with our currently binary
+            # visualizations
+            # change_prob = ((1 - change_prob[..., 0]) + change_prob[..., 0]) / 2.0
+
+            item_change_probs.append(change_prob)
+            item_class_probs.append(class_prob)
 
             item_loss_parts = {}
 
@@ -698,15 +741,18 @@ class MultimodalTransformer(pl.LightningModule):
                 # print('change_logits.shape = {!r}'.format(change_logits.shape))
                 # print('true_changes.shape = {!r}'.format(true_changes.shape))
 
-                change_loss = self.change_criterion(change_logits, true_changes.float()).mean()
+                # Hack: change the 1-logit binary case to 2 class binary case
+
+                change_loss = self.change_criterion(change_logits.contiguous().view(-1, 2), true_changes.long().view(-1)).mean()
+                # num_change_states = 2
+                # true_change_ohe = kwarray.one_hot_embedding(true_changes.long(), num_change_states, dim=-1).float()
+                # change_loss = self.change_criterion(change_logits, true_change_ohe).mean()
+                # change_loss = self.change_criterion(change_logits, true_changes.float()).mean()
                 item_loss_parts['change'] = self.global_change_weight * change_loss
 
-                true_ohe = kwarray.one_hot_embedding(true_class.long(), self.num_classes, dim=-1).float()
-                # y = true_ohe
-                # x = class_logits
-
-                class_loss = self.class_criterion(class_logits, true_ohe).mean()
-                # class_loss = torch.nn.functional.binary_cross_entropy_with_logits(class_logits, true_ohe)
+                true_class_ohe = kwarray.one_hot_embedding(true_class.long(), self.num_classes, dim=-1).float()
+                class_loss = self.class_criterion(class_logits, true_class_ohe).mean()
+                # class_loss = torch.nn.functional.binary_cross_entropy_with_logits(class_logits, true_class_ohe)
 
                 item_loss_parts['class'] = self.global_class_weight * class_loss
 

@@ -226,8 +226,14 @@ python -m watch.tasks.fusion.fit \
     --global_class_weight=0.0 \
     --neg_to_pos_ratio=0.2 \
     --global_change_weight=1.0 \
+    --negative_change_weight=0.05 \
     --diff_inputs=False \
     --torch_sharing_strategy=default \
     --torch_start_method=default \
     --num_sanity_val_steps=0 \
-    --init=$HOME/remote/yardrat/data/dvc-repos/smart_watch_dvc/training/yardrat/jon.crall/Drop1RawLeftRight/runs/DirectCD_smt_it_joint_p8_raw7common_v4/lightning_logs/version_1/package-interupt/package_epoch38_step26579.pt
+    --init=$HOME/remote/yardrat/data/dvc-repos/smart_watch_dvc/training/yardrat/jon.crall/Drop1RawLeftRight/runs/DirectCD_smt_it_joint_p8_raw7common_v4/lightning_logs/version_1/package-interupt/package_epoch38_step26579.pt \
+    --default_root_dir=$DEFAULT_ROOT_DIR \
+       --package_fpath=$PACKAGE_FPATH \
+        --train_dataset=$TRAIN_FPATH \
+         --vali_dataset=$VALI_FPATH \
+         --test_dataset=$TEST_FPATH 
