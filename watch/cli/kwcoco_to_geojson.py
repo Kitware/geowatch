@@ -275,7 +275,10 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id):
 
     sites = {}
     for site_name, features in site_features.items():
-        sites[site_name] = geojson.FeatureCollection(features, id=region_id)
+        feature_collection = geojson.FeatureCollection(features, id=region_id)
+        feature_collection['version'] = watch.__version__
+        # feature_collection['mgrs'] = coco_dset.mgrs_tile
+        sites[site_name] = feature_collection
     return sites
 
 
