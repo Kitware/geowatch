@@ -165,6 +165,11 @@ def make_fit_config(cmdline=False, **kwargs):
         Can be fork, spawn, forkserver
         '''))
 
+    config_parser.add_argument('--init', default='noop', help=ub.paragraph(
+        '''
+        Initialization strategy. Can be a path to a pretrained network.
+        '''))
+
     # config_parser.add_argument('--name', default=None, help=ub.paragraph(
     #     '''
     #     TODO: allow for the user to specify a name, and do netharn-like
@@ -372,6 +377,33 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     method_var_dict["classes"] = datamodule.classes
     # Note: Changed name from method to model
     model = method_class(**method_var_dict)
+
+    if args.resume_from_checkpoint is None:
+        import netharn as nh
+        init_cls, init_kw = nh.api.Initializer.coerce(init=args.init)
+        if 'fpath' in init_kw:
+            # Hack: try and add support for torch.package
+            # from torch import package
+            try:
+                from watch.tasks.fusion import utils
+                other_model = utils.load_model_from_package(init_kw['fpath'])
+            except Exception:
+                pass
+            else:
+                import torch
+                # from rasterio import MemoryFile  # try rasterio memory file
+                # mfile = MemoryFile(ext='.pt')
+                # with mfile.open('w') as file:
+                #     torch.save(other_model.state_dict(), file)
+                # init_kw['fpath'] = mfile.name
+
+                import tempfile
+                tfile = tempfile.NamedTemporaryFile()
+                torch.save(other_model.state_dict(), tfile.name)
+                init_kw['fpath'] = tfile.name
+
+        initializer = init_cls(**init_kw)
+        info = initializer(model)  # NOQA
 
     # init trainer from args
     callbacks = [
