@@ -172,3 +172,62 @@ python -m watch.tasks.fusion.evaluate \
         --pred_dataset=$PRED_FPATH \
           --eval_dpath=$EVAL_DPATH
 
+
+
+
+# Tune from previous
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc 
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/drop1-S2-L8-aligned
+
+LEFT_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/data_left.kwcoco.json
+RIGHT_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/data_right.kwcoco.json
+
+TRAIN_FPATH=$RIGHT_COCO_FPATH
+VALI_FPATH=$LEFT_COCO_FPATH
+TEST_FPATH=$LEFT_COCO_FPATH
+ARCH=smt_it_joint_p8
+BATCH_SIZE=2
+CHIP_SIZE=128
+TIME_STEPS=2
+CHANNELS="coastal|blue|green|red|nir|swir16"
+
+EXPERIMENT_NAME=DirectCD_${ARCH}_raw7common_v5_tune
+DATASET_NAME=Drop1RawLeftRight
+
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_NAME/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package.pt 
+PRED_FPATH=$DEFAULT_ROOT_DIR/pred/pred.kwcoco.json
+EVAL_DPATH=$DEFAULT_ROOT_DIR/pred/eval
+
+TRAIN_CONFIG_FPATH=$WORKDIR/$DATASET_NAME/configs/train_$EXPERIMENT_NAME.yml 
+PRED_CONFIG_FPATH=$WORKDIR/$DATASET_NAME/configs/predict_$EXPERIMENT_NAME.yml 
+
+# Write train and prediction configs
+python -m watch.tasks.fusion.fit \
+    --method="MultimodalTransformer" \
+    --arch_name=${ARCH} \
+    --channels=${CHANNELS} \
+    --time_steps=$TIME_STEPS \
+    --chip_size=$CHIP_SIZE \
+    --batch_size=$BATCH_SIZE \
+    --accumulate_grad_batches=32 \
+    --num_workers=8 \
+    --max_lookahead=1000000 \
+    --max_epochs=400 \
+    --patience=400 \
+    --gpus=1  \
+    --attention_impl=performer \
+    --learning_rate=1e-3 \
+    --weight_decay=1.2e-4 \
+    --dropout=0.11 \
+    --window_size=8 \
+    --window_overlap=0.5 \
+    --global_class_weight=0.0 \
+    --neg_to_pos_ratio=0.2 \
+    --global_change_weight=1.0 \
+    --diff_inputs=False \
+    --torch_sharing_strategy=default \
+    --torch_start_method=default \
+    --num_sanity_val_steps=0 \
+    --init=$HOME/remote/yardrat/data/dvc-repos/smart_watch_dvc/training/yardrat/jon.crall/Drop1RawLeftRight/runs/DirectCD_smt_it_joint_p8_raw7common_v4/lightning_logs/version_1/package-interupt/package_epoch38_step26579.pt

@@ -207,6 +207,10 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             >>> parent_parser = argparse.ArgumentParser()
             >>> cls.add_argparse_args(parent_parser)
             >>> parent_parser.print_help()
+            >>> args, _ = parent_parser.parse_known_args(['--diff_inputs=True'])
+            >>> assert args.diff_inputs
+            >>> args, _ = parent_parser.parse_known_args(['--diff_inputs=False'])
+            >>> assert not args.diff_inputs
         """
         parser = parent_parser.add_argument_group("kwcoco_video_data")
         parser.add_argument("--train_dataset", default=None, help='path to the train kwcoco file')
@@ -231,8 +235,9 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 if True, computes the mean/std for this dataset on each mode
                 so this can be passed to the model.
                 '''))
+        from scriptconfig.smartcast import smartcast
         parser.add_argument(
-            "--diff_inputs", default=False, help=ub.paragraph(
+            "--diff_inputs", default=False, type=smartcast, help=ub.paragraph(
                 '''
                 if True, also includes a difference between consecutive frames
                 in the inputs produced.
