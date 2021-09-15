@@ -3,9 +3,14 @@ These functions might be added to kwimage
 """
 
 
-def draw_header_text(image, text, fit=False, color='red', halign='center'):
+def draw_header_text(image, text, fit=False, color='red', halign='center',
+                     stack=True):
     """
     Places a black bar on top of an image and writes text in it
+
+    Args:
+        stack (bool): if True returns the stacked image, otherwise just returns
+            the header.
 
     Example:
         >>> from watch.utils.util_kwimage import *  # NOQA
@@ -58,5 +63,8 @@ def draw_header_text(image, text, fit=False, color='red', halign='center'):
             {'width': width}, text, org=org,
             valign='top', halign=halign, color=color)
 
-    stacked = kwimage.stack_images([header, image], axis=0, overlap=-1)
-    return stacked
+    if stack:
+        stacked = kwimage.stack_images([header, image], axis=0, overlap=-1)
+        return stacked
+    else:
+        return header

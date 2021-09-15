@@ -107,7 +107,7 @@ def predict(cmdline=False, **kwargs):
         ...     'workdir': ub.ensuredir((test_dpath, 'train')),
         ...     'package_fpath': package_fpath,
         ...     'max_epochs': 1,
-        ...     'time_steps': 3,
+        ...     'time_steps': 2,
         ...     'chip_size': 64,
         ...     'max_steps': 1,
         ...     'learning_rate': 1e-5,
@@ -115,6 +115,11 @@ def predict(cmdline=False, **kwargs):
         ...     'gpus': gpus,
         ... }
         >>> package_fpath = fit_model(**fit_kwargs)
+        if 0:
+            import os
+            package_fpath = list((pathlib.Path(os.readlink(package_fpath)).parent.parent / 'checkpoints').glob('*'))[0]
+
+
         >>> # Predict via that model
         >>> predict_kwargs = kwargs = {
         >>>     'package_fpath': package_fpath,
@@ -148,8 +153,19 @@ def predict(cmdline=False, **kwargs):
     args = make_predict_config(cmdline=cmdline, **kwargs)
     print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=2)))
 
-    # init method from checkpoint
-    method = utils.load_model_from_package(args.package_fpath)
+    try:
+        # Ideally we have a package, everything is defined there
+        method = utils.load_model_from_package(args.package_fpath)
+    except Exception:
+        # If we have a checkpoint path we can load it if we make assumptions
+        # init method from checkpoint.
+        checkpoint = torch.load(args.package_fpath)
+        print(list(checkpoint.keys()))
+        from watch.tasks.fusion import methods
+        method = methods.MultimodalTransformer(**checkpoint['hyper_parameters'])
+        state_dict = checkpoint['state_dict']
+        method.load_state_dict(state_dict)
+
     method.eval()
     method.freeze()
 
@@ -164,11 +180,17 @@ def predict(cmdline=False, **kwargs):
     )
 
     # TODO: default to this, but allow the user to overwrite
-    datamodule_vars['chip_size'] = method.datamodule_hparams['chip_size']
-    datamodule_vars['time_steps'] = method.datamodule_hparams['time_steps']
-    datamodule_vars['channels'] = method.datamodule_hparams['channels']
+    if hasattr(method, 'datamodule_hparams'):
+        datamodule_vars['chip_size'] = method.datamodule_hparams['chip_size']
+        datamodule_vars['time_steps'] = method.datamodule_hparams['time_steps']
+        datamodule_vars['channels'] = method.datamodule_hparams['channels']
+    else:
+        print('Warning have to make assumptions')
+        # datamodule_vars['chip_size'] = method.datamodule_hparams['chip_size']
+        # datamodule_vars['time_steps'] = method.datamodule_hparams['time_steps']
+        datamodule_vars['channels'] = list(method.input_norms.keys())[0]
+        # method.datamodule_hparams['channels']
 
-    # datamodule_vars["preprocessing_step"] = method.preprocessing_step
     datamodule = datamodule_class(
         **datamodule_vars
     )
@@ -217,9 +239,6 @@ def predict(cmdline=False, **kwargs):
         write_preds=args.write_preds,
     )
 
-    prog = ub.ProgIter(test_dataloader, desc='predicting', verbose=1)
-    # nanns = 0
-
     result_infos = []
     total_info = {'n_anns': 0, 'n_imgs': 0, 'total_prob': 0}
 
@@ -246,6 +265,7 @@ def predict(cmdline=False, **kwargs):
     import kwarray
     running_stats = kwarray.RunningStats()  # for inspecting probability
 
+    prog = ub.ProgIter(test_dataloader, desc='predicting', verbose=1)
     for batch in prog:
         # Move data onto the prediction device
         for item in batch:
@@ -408,7 +428,7 @@ class CocoStitchingManager(object):
 
             self._last_vidid = vidid
         else:
-            raise NotImplementedError
+            raise NotImplementedError(self.stiching_space)
 
         stitcher = self.image_stitchers[gid]
         stitcher.add(space_slice, data)
@@ -449,10 +469,29 @@ class CocoStitchingManager(object):
         change_probs = stitcher.finalize()
 
         # Get spatial relationship between the image and the video
-        vid_to_img = kwimage.Affine.coerce(img['warp_img_to_vid']).inv()
+        vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
+        img_from_vid = vid_from_img.inv()
 
         n_anns = 0
         total_prob = 0
+
+        # TODO: find and record the valid prediction regions
+        # Given a (rectilinear) non-convex multipolygon where we are guarenteed
+        # that all of the angles in the polygon are right angles, what is an
+        # efficient algorithm to decompose it into a minimal set of disjoint
+        # rectangles?
+        # https://stackoverflow.com/questions/5919298/algorithm-for-finding-the-fewest-rectangles-to-cover-a-set-of-rectangles-without/6634668#6634668
+        import numpy as np
+        is_predicted_pixel = (stitcher.weights > 0).astype(np.uint8)
+        predicted_region = kwimage.Mask(is_predicted_pixel, 'c_mask').to_multi_polygon().to_geojson()
+        # Mark that we made a prediction on this image.
+        img['prediction_region'] = predicted_region
+        img['has_predictions'] = True
+
+        # to_coco('new')
+        # .bounding_box().to_xywh().quantize().data[0].tolist()
+        # import cv2
+        # num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(is_predicted_pixel)
 
         if self.write_probs:
             # This currently exists as an example to demonstrate how a
@@ -470,8 +509,9 @@ class CocoStitchingManager(object):
                 'height': new_feature.shape[0],
                 'width': new_feature.shape[1],
                 'num_bands': new_feature.shape[2],
-                'warp_aux_to_img': vid_to_img.inv().concise(),
+                'warp_aux_to_img': img_from_vid.concise(),
             })
+
             # Save the prediction to disk
             total_prob += new_feature.sum()
             kwimage.imwrite(
@@ -499,7 +539,7 @@ class CocoStitchingManager(object):
                 score = (w * change_probs).sum() / w.sum()
 
                 # Transform the video polygon into image space
-                img_poly = vid_poly.warp(vid_to_img)
+                img_poly = vid_poly.warp(img_from_vid)
                 bbox = list(img_poly.bounding_box().to_coco())[0]
                 # Add the polygon as an annotation on the image
                 self.result_dataset.add_annotation(

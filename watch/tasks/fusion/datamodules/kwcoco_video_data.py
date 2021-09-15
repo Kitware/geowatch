@@ -349,7 +349,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             pin_memory=True,
         )
 
-    def draw_batch(self, batch, stage='train', outputs=None, max_items=2, **kwargs):
+    def draw_batch(self, batch, stage='train', outputs=None, max_items=2, overlay_on_image=False, **kwargs):
         """
         Visualize a batch produced by this DataSet.
 
@@ -380,7 +380,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             >>> import kwplot
             >>> kwplot.autompl()
             >>> kwplot.imshow(canvas)
-            >>> kwplot.show_if_requested()
+            >>> kwplot.show_if_requestedV
         """
         import kwimage
         dataset = self.torch_datasets[stage]
@@ -405,7 +405,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                     if k in outputs:
                         item_output[k] = outputs[k][item_idx].data.cpu().numpy()
 
-            part = dataset.draw_item(item, item_output=item_output, **kwargs)
+            part = dataset.draw_item(item, item_output=item_output, overlay_on_image=overlay_on_image, **kwargs)
             canvas_list.append(part)
         canvas = kwimage.stack_images_grid(
             canvas_list, axis=1, overlap=-12, bg_value=[64, 60, 60])
@@ -511,7 +511,7 @@ class KWCocoVideoDataset(data.Dataset):
         >>>     sample_shape=(2, 128, 128),
         >>>     window_overlap=0,
         >>>     channels="blue|green|red|nir|swir22|swir16",
-        >>>     neg_to_pos_ratio=0, max_lookahead=2.0, diff_inputs=True
+        >>>     neg_to_pos_ratio=0, max_lookahead=2.0, diff_inputs=0, mode='test'
         >>> )
         >>> item = self[0]
         >>> canvas = self.draw_item(item)
@@ -559,11 +559,16 @@ class KWCocoVideoDataset(data.Dataset):
 
         if mode == 'test':
             # In test mode we have to sample everything
-            new_sample_grid = new_video_sample_grid(
+            new_sample_grid = sample_test_vidspace_grid(
                 sampler.dset, window_dims=sample_shape,
                 window_overlap=window_overlap,
                 keepbound=True,
             )
+            # new_sample_grid = new_video_sample_grid(
+            #     sampler.dset, window_dims=sample_shape,
+            #     window_overlap=window_overlap,
+            #     keepbound=True,
+            # )
             self.length = len(new_sample_grid['targets'])
         else:
             negative_classes = (
@@ -1270,8 +1275,8 @@ class KWCocoVideoDataset(data.Dataset):
                         'signal_text': signal_text,
                     }
                     if not norm_over_time:
-                        # norm_signal = kwimage.normalize_intensity(raw_signal).copy()
-                        norm_signal = kwimage.normalize(raw_signal).copy()
+                        norm_signal = kwimage.normalize_intensity(raw_signal).copy()
+                        # norm_signal = kwimage.normalize(raw_signal).copy()
                         norm_signal = kwimage.atleast_3channels(norm_signal)
                         norm_signal = np.nan_to_num(norm_signal)
                         row['norm_signal'] = norm_signal
@@ -1295,8 +1300,8 @@ class KWCocoVideoDataset(data.Dataset):
                     flat = [c['raw_signal'].ravel() for c in chans_over_time]
                     cums = np.cumsum(list(map(len, flat)))
                     combo = np.hstack(flat)
-                    # combo_normed = kwimage.normalize_intensity(combo).copy()
-                    combo_normed = kwimage.normalize(combo).copy()
+                    combo_normed = kwimage.normalize_intensity(combo).copy()
+                    # combo_normed = kwimage.normalize(combo).copy()
                     flat_normed = np.split(combo_normed, cums)
                     for row, flat_item in zip(chans_over_time, flat_normed):
                         norm_signal = flat_item.reshape(*row['raw_signal'].shape)
@@ -1904,6 +1909,95 @@ def sample_vidspace_grid(dset, window_dims, window_overlap=0.0, negative_classes
     sample_grid = {
         'positives_indexes': positive_idxs,
         'negatives_indexes': negative_idxs,
+        'targets': targets,
+    }
+    return sample_grid
+
+
+def sample_test_vidspace_grid(dset, window_dims, window_overlap=0.0, negative_classes=None, keepbound=True):
+    """
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> import os
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
+        >>> dvc_dpath = os.environ.get('DVC_DPATH', _default)
+        >>> # coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/data.kwcoco.json')
+        >>> bundle_dpath = join(dvc_dpath, 'drop1-S2-L8-aligned')
+        >>> coco_fpath = join(bundle_dpath, 'combo_data.kwcoco.json')
+        >>> dset = kwcoco.CocoDataset(coco_fpath)
+        >>> # Create a sliding window object for each specific image (because they may
+        >>> # have different sizes, technically we could memoize this)
+        >>> import kwarray
+        >>> window_overlap = 0.5
+        >>> window_dims = (2, 96, 96)
+        >>> keepbound = False
+        >>> sample_grid = sample_vidspace_grid(dset, window_dims, window_overlap)
+        >>> list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
+
+    Example:
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> import ndsampler
+        >>> import kwcoco
+        >>> dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=30)
+        >>> # Create a sliding window object for each specific image (because they may
+        >>> # have different sizes, technically we could memoize this)
+        >>> import kwarray
+        >>> window_overlap = 0.0
+        >>> window_dims = (2, 96, 96)
+        >>> keepbound = False
+        >>> sample_grid = sample_test_vidspace_grid(dset, window_dims, window_overlap)
+
+        _ = xdev.profile_now(sample_vidspace_grid)(dset, window_dims, window_overlap)
+    """
+    # Create a sliding window object for each specific image (because they may
+    # have different sizes, technically we could memoize this)
+    import kwarray
+
+    # window_overlap = 0.5
+    window_space_dims = window_dims[1:3]
+    window_time_dims = window_dims[0]
+    print('window_time_dims = {!r}'.format(window_time_dims))
+    vidid_to_space_slider = {}
+    for vidid, video in dset.index.videos.items():
+        full_dims = [video['height'], video['width']]
+        window_dims_ = full_dims if window_space_dims == 'full' else window_space_dims
+        slider = kwarray.SlidingWindow(full_dims, window_dims_,
+                                       overlap=window_overlap,
+                                       keepbound=keepbound,
+                                       allow_overshoot=True)
+        vidid_to_space_slider[vidid] = slider
+    targets = []
+    # Given an video
+    # video_id = ub.peek()
+    for video_id in dset.index.videos.keys():
+        slider = vidid_to_space_slider[video_id]
+        video_gids = list(dset.index.vidid_to_gids[video_id])
+
+        # print('tid_to_info = {}'.format(ub.repr2(tid_to_info, nl=2, sort=0)))
+        for space_region in list(slider):
+            y_sl, x_sl = space_region
+
+            sensor_coarse = dset.images(video_gids).lookup('sensor_coarse', '')
+            flags = [s == 'S2' for s in sensor_coarse]
+            if any(flags):
+                video_gids = list(ub.compress(video_gids, flags))
+
+            video_frame_idxs = list(range(len(video_gids)))
+            frame_skip = len(video_gids) // 2
+
+            assert window_time_dims == 2
+            # HARD CODED HACK TO MAKE THE SAMPLER TAKE PAIRS OF IMAGES ACROSS TIME GAPS
+            for idx1 in video_frame_idxs:
+                for idx2 in video_frame_idxs[idx1 + frame_skip::frame_skip]:
+                    frame_idxs = [idx1, idx2]
+                    gids = list(ub.take(video_gids, frame_idxs))
+                    targets.append({
+                        'gids': gids,
+                        'space_slice': space_region,
+                    })
+
+    sample_grid = {
         'targets': targets,
     }
     return sample_grid

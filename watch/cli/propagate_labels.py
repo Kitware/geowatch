@@ -112,7 +112,7 @@ def warped_wgs84_to_img(poly, img, inv=False):
         try:
             info = geotiff.geotiff_crs_info(fpath)
         except NotImplementedError as e:
-            xdev.embed()
+            # xdev.embed()
             raise e
 
         # can't pickle a function...
@@ -214,6 +214,7 @@ def get_warped_ann(previous_ann, warp, image_entry, crop_to_valid=True):
                 warped_wgs84_to_img(segmentation_geo, image_entry))
         except AssertionError:
             # try to correct for lat/lon ordering
+            raise
             xdev.embed()
     else:
         segmentation = kwimage.Segmentation.coerce(
@@ -272,7 +273,6 @@ def get_canvas_concat_channels(annotations, dataset, img_id):
         channels = '|'.join(have_parts[0:3])
 
     canvas = delayed.take_channels(channels).finalize()
-    # canvas = dataset.delayed_load(img_id, channels='red|green|blue').finalize()
     canvas = kwimage.normalize_intensity(canvas)
     canvas = kwimage.ensure_float01(canvas)
     canvas = np.nan_to_num(canvas)
@@ -286,8 +286,8 @@ def get_canvas_concat_channels(annotations, dataset, img_id):
             this_dset_anns.append(ann)
         else:
             ext_dset_anns.append(ann)
-    this_dets = kwimage.Detections.from_coco_annots(this_dset_anns,
-                                                    dset=dataset)
+    this_dets = kwimage.Detections.from_coco_annots(
+        this_dset_anns, dset=dataset)
     ext_dets = kwimage.Detections.from_coco_annots(ext_dset_anns, dset=dataset)
     canvas = this_dets.draw_on(canvas, color='blue')
     canvas = ext_dets.draw_on(canvas, color='green')
@@ -428,15 +428,14 @@ def main(cmdline=False, **kwargs):
         >>> from watch.utils import util_data
         >>> dvc_dpath = util_data.find_smart_dvc_dpath()
         >>> bundle_dpath = dvc_dpath / 'drop1-S2-L8-aligned'
+        >>> cmdline = False
         >>> kwargs = {
         >>>     'src': bundle_dpath / 'pre_prop.kwcoco.json',
         >>>     'dst': bundle_dpath / 'post_prob.kwcoco.json',
         >>>     'ext': dvc_dpath / 'drop1/annots.kwcoco.json',
         >>> }
 
-        >>> kwargs['src'] = '/home/joncrall/data/dvc-repos/smart_watch_dvc/drop1-S2-L8-aligned/pre-prop2.kwcoco.json/pre-prop3.kwcoco.json'
-
-        >>> cmdline = False
+        >>> kwargs['src'] = '/home/joncrall/data/dvc-repos/smart_watch_dvc/jons-hacked-drop1-S2-L8-aligned/pre-prop2.kwcoco.json'
         >>> main(**kwargs)
     """
     config = PropagateLabelsConfig(default=kwargs, cmdline=cmdline)
@@ -466,6 +465,13 @@ def main(cmdline=False, **kwargs):
 
     print(full_ds.videos().lookup('name'))
     print(ext_ds.videos().lookup('name'))
+
+    print(set(full_ds.annots().lookup('track_id')))
+    print(set(ext_ds.annots().lookup('track_id')))
+
+    full_ds_imgnames = set(full_ds.images().lookup('parent_canonical_name'))
+    ext_dst_imgnames = set(ext_ds.images().lookup('canonical_name'))
+    full_ds_imgnames & ext_dst_imgnames
 
     # preprocessing step: add new 'orig_info' to every *annotation*.
     # original annotations: source_gid == gid and source_name == name
@@ -522,10 +528,13 @@ def main(cmdline=False, **kwargs):
     if max_workers is None:
         max_workers = min(len(full_ds.index.videos), 8)
     executor = ub.Executor(mode='thread', max_workers=max_workers)
+
+    all_video_ids = list(full_ds.index.videos.keys())
+    all_video_ids = list(full_ds.index.videos.keys())[0:1]
     jobs = [(vid_id, executor.submit(_propogate_video_worker, vid_id, full_ds,
                                      ext_ds, cat_ids_to_propagate, viz_dpath,
                                      config))
-            for vid_id in full_ds.index.videos]
+            for vid_id in all_video_ids]
     prog = ub.ProgIter(jobs, total=len(full_ds.index.videos),
                        desc='process video')
     for vid_id, job in prog:
@@ -612,14 +621,14 @@ def build_external_video(vid_id, full_ds, ext_ds):
 
     full_images = full_ds.images(vidid=vid_id)
     full_imgs = full_images.objs
-    full_names = full_images.lookup('parent_name')
+    full_names = full_images.lookup('parent_canonical_name')
 
     ext_images = ext_ds.images(vidid=vid_id)
     ext_imgs = ext_images.objs
     ext_names = ext_images.lookup('canonical_name')
 
-    print('ext_names = {!r}'.format(ext_names[0:]))
-    print('full_names = {!r}'.format(full_names[0:]))
+    # print('ext_names = {!r}'.format(ext_names[0:]))
+    # print('full_names = {!r}'.format(full_names[0:]))
 
     # For each ext image, find the corresponding image in our dataset
     name_to_idx = {name: idx for idx, name in enumerate(full_names)}
@@ -637,14 +646,40 @@ def build_external_video(vid_id, full_ds, ext_ds):
             ext_ds={ext_ds},
             full_ds={full_ds},
             '''))
-    all_frames_iter =  [(m, False) if m is not None else (e, True)
-                        for m, e in zip(matched_imgs, ext_imgs)]
-    return all_frames_iter
+    all_frames_sequence =  [(m, False) if m is not None else (e, True)
+                            for m, e in zip(matched_imgs, ext_imgs)]
+    return all_frames_sequence
 
 
 # parallelize over videos
 def _propogate_video_worker(vid_id, full_ds, ext_ds, cat_ids_to_propagate,
                             viz_dpath, config):
+    """
+    - start with a list of images from ext_ds, with the corresponding image
+      from full_ds swapped in if we have it (build_external_video)
+
+    - for each image:
+
+      - for each track:
+
+        - if it's already annotated, store all of these annots to propagate
+          forward
+
+        - if not, and this image is from full_ds, grab the most recent annots from this track
+
+          - for each annot:
+
+            - if it was last seen in ext_ds, it is a geo-segmentation. warp it
+                to this image space from WGS84 using [mostly] the same thing done
+                in coco_align_geotiffs. (get_warped_ann(warp='geo'))
+
+            - else, it is a segmentation. Warp it[s original extent] to this
+                image through the video space. (get_warped_ann(warp=get_warp()))
+
+            - crop it to the image's valid mask.
+
+      - if this image is from full_ds, save its annotations in the result.
+    """
     # a set of all the track IDs in this video
 
     full_video_gids = full_ds.index.vidid_to_gids[vid_id]
@@ -676,39 +711,41 @@ def _propogate_video_worker(vid_id, full_ds, ext_ds, cat_ids_to_propagate,
     warped_annotations = []
 
     # for all sorted images in this video in both dsets
-    all_frames_iter = build_external_video(vid_id, full_ds, ext_ds)
+    all_frames_sequence = build_external_video(vid_id, full_ds, ext_ds)
 
-    tracked_annots = ub.ddict(list)
+    # if 0:
+    #     track_id = ub.peek(full_ds.index.trackid_to_aids)
+    #     full_track = full_ds.index.trackid_to_aids[track_id]
+    #     for track_id in ext_ds.index.trackid_to_aids.keys():
+    #         ext_track = ext_ds.index.trackid_to_aids[track_id]
+    #         ext_track_annots = ext_ds.annots(ext_track)
+    #         grouped = ub.group_items(ext_track_annots, ext_track_annots.images.lookup('frame_index'))
+    #         print(max(map(len, grouped.values())))
+    #         ext_ds.annots([1609, 1610]).objs
+    #         lookup('track_id')
 
-    for img, is_ext in all_frames_iter:
+    #######
+
+    full_frame_idx = 0
+    for img, is_ext in all_frames_sequence:
         img_id = img['id']
         if 1:
             # prog.ensure_newline()
             print('{} img_id = {!r}'.format(('ext' if is_ext else 'int'),
                                             img_id))
 
-        this_track_ids = set()
         frame_dset = (ext_ds if is_ext else full_ds)
         # Update all current tracks to have their latest annotation state
         this_image_annots = frame_dset.annots(gid=img_id)
-        track_ids = this_image_annots.lookup('track_id')
-        print('track_ids = {!r}'.format(track_ids))
-
-        # Why are some ints and some string ids?
-        for tid, taids in ub.group_items(this_image_annots, track_ids).items():
-            tracked_annots[tid].append(taids)
-        print('tracked_annots = {}'.format(ub.repr2(tracked_annots, nl=1)))
-
         this_image_anns = this_image_annots.objs
+
+        this_track_ids = set()
         for ann in this_image_anns:
             if 0:
                 print('ann = {}'.format(
                     ub.repr2(ub.dict_diff(
-                        ann, {
-                            'segmentation', 'segmentation_geos',
-                            'properties', 'orig_info'
-                        }),
-                             nl=0)))
+                        ann, {'segmentation', 'segmentation_geos',
+                              'properties', 'orig_info'}), nl=0)))
             track_id = ann['track_id']
             this_track_ids.add(track_id)
 
@@ -731,8 +768,7 @@ def _propogate_video_worker(vid_id, full_ds, ext_ds, cat_ids_to_propagate,
         # was there any seen track ID that was not in this image?
         for missing in track_ids - this_track_ids:
             for aid in latest_ann_ids.get(missing, {}):
-                previous_annotation = (ext_ds if latest_is_ext[missing] else
-                                       full_ds).anns[aid]
+                previous_annotation = (ext_ds if latest_is_ext[missing] else full_ds).anns[aid]
                 # this should be an original annotation
                 assert (previous_annotation['image_id'] == previous_annotation['orig_info']['source_gid'] and
                         (previous_annotation['orig_info']['source_dset'] != full_ds.tag) == latest_is_ext[missing])
@@ -791,10 +827,150 @@ def _propogate_video_worker(vid_id, full_ds, ext_ds, cat_ids_to_propagate,
                 canvas_infos.append({
                     'before_canvas': before_canvas,
                     'after_canvas': after_canvas,
-                    'frame_num': 42,
+                    'frame_num': full_frame_idx,
                 })
 
+        full_frame_idx += 1
+
     return warped_annotations, canvas_infos
+
+
+def __SIMPLE_GEOSPACE_PROPOGATE(ext_ds, vid_id, full_ds):
+    """
+    This is broken, but it has useful code I dont want to lose quite yet
+    """
+    full_video_gids = full_ds.index.vidid_to_gids[vid_id]
+    full_aids = list(ub.flatten(full_ds.images(full_video_gids).annots))
+    full_annots = full_ds.annots(full_aids)
+
+    all_frames_sequence = build_external_video(vid_id, full_ds, ext_ds)
+    INTERACTIVE = 1
+    if INTERACTIVE:
+        import kwplot
+        import geopandas as gpd
+        kwplot.autompl()
+        wld_map_gdf = gpd.read_file(
+            gpd.datasets.get_path('naturalearth_lowres')
+        )
+        fig = kwplot.figure(fnum=1, doclf=1)
+        ax = fig.gca()
+        ax = wld_map_gdf.plot(ax=ax)
+
+        from shapely import ops
+        combo = ops.unary_union([kwimage.Polygon.coerce(s).to_shapely() for s in full_annots.lookup('segmentation_geos')])
+        aoi = combo.convex_hull
+        box = kwimage.Polygon.from_shapely(aoi).bounding_box()
+        box = box.scale(1.3, about='center')
+        minx, miny, maxx, maxy = box.to_tlbr().data[0]
+        ax.set_xlim(minx, maxx)
+        ax.set_ylim(miny, maxy)
+        # frame_iter = xdev.InteractiveIter(all_frames_sequence)
+        frame_iter = (all_frames_sequence)
+
+        def clear_ax(ax):
+            attrs = ['lines', 'patches', 'texts', 'tables', 'artists',
+                     'images', 'child_axes', 'collections', 'containers']
+            for attr in attrs:
+                while len(getattr(ax, attr)):
+                    getattr(ax, attr)[0].remove()
+        clear_ax(ax)
+
+        dpath = ub.ensure_app_cache_dir('watch/tmpviz432/frames')
+    else:
+        frame_iter = all_frames_sequence
+
+    latest = []
+    import numpy as np
+    for frame_idx, (img, is_ext) in enumerate(frame_iter):
+        img_id = img['id']
+        print('{} img_id = {!r}'.format(('ext' if is_ext else 'int'), img_id))
+        frame_dset = (ext_ds if is_ext else full_ds)
+        this_annots = frame_dset.annots(gid=img_id)
+
+        cand_anns = [ann.copy() for ann in this_annots.objs]
+        for ann in cand_anns:
+            kw_poly = kwimage.Polygon.coerce(ann['segmentation_geos'])
+            sh_poly = kw_poly.to_shapely()
+            ann['sh_poly'] = sh_poly
+
+        # Mark which of the previous annotations our new annotation will update
+        cand_flags = []
+        for ann1 in cand_anns:
+            ann1_flags = []
+            for ann2 in latest:
+                flag = False
+                if ann1['track_id'] == ann2['track_id']:
+                    if ann2['sh_poly'].intersects(ann1['sh_poly']):
+                        flag = True
+                ann1_flags.append(flag)
+            # flags = [ann2['sh_poly'].intersects(ann['sh_poly']) for ann2 in latest]
+            cand_flags.append(ann1_flags)
+        cand_flags = np.array(cand_flags)
+
+        is_new = ~cand_flags.any(axis=1)
+
+        # Gather new annotations that will update old ones
+        update_annots = list(ub.compress(cand_anns, ~is_new))
+        update_flags = cand_flags[~is_new]
+        is_updated = np.zeros(len(latest)).astype(bool)
+        for ann, flags in zip(update_annots, update_flags):
+            is_updated[flags] = True
+            # assert flags.sum() == 1
+
+        new_anns = list(ub.compress(cand_anns, is_new))
+        replacement_anns = list(ub.compress(cand_anns, ~is_new))
+        removed_anns = list(ub.compress(latest, is_updated))
+        keep_anns = list(ub.compress(latest, ~is_updated))
+
+        latest = keep_anns + replacement_anns + new_anns
+
+        # if is_updated.any():
+        #     print('Update {}'.format(is_updated.sum()))
+        #     # Remove annots that were updated
+        #     latest = list(ub.compress(latest, ~is_updated))
+
+        if INTERACTIVE:
+            clear_ax(ax)
+            wld_map_gdf.plot(ax=ax)
+
+            for ann in keep_anns:
+                catname = ext_ds.cats[ann['category_id']]['name']
+                text = 'keep - {} - {}'.format(catname, ann['track_id'])
+                poly = kwimage.Polygon.from_shapely(ann['sh_poly'])
+                poly.to_boxes().draw(labels=[text], alpha=0.2)
+                poly.draw(color='yellow', alpha=0.5)
+
+            for ann in removed_anns:
+                catname = ext_ds.cats[ann['category_id']]['name']
+                text = 'removed - {} - {}'.format(catname, ann['track_id'])
+                poly = kwimage.Polygon.from_shapely(ann['sh_poly'])
+                poly.to_boxes().draw(labels=[text], alpha=0.2)
+                poly.draw(color='red', alpha=0.5)
+
+            for ann in new_anns:
+                catname = ext_ds.cats[ann['category_id']]['name']
+                text = 'new - {} - {}'.format(catname, ann['track_id'])
+                poly = kwimage.Polygon.from_shapely(ann['sh_poly'])
+                poly.to_boxes().draw(labels=[text], alpha=0.2)
+                poly.draw(color='pink', alpha=0.5)
+
+            for ann in replacement_anns:
+                catname = ext_ds.cats[ann['category_id']]['name']
+                text = 'replacement - {} - {}'.format(catname, ann['track_id'])
+                poly = kwimage.Polygon.from_shapely(ann['sh_poly'])
+                poly.to_boxes().draw(labels=[text], alpha=0.2)
+                poly.draw(color='green', alpha=0.5)
+
+            from kwplot.mpl_make import render_figure_to_image
+            img = render_figure_to_image(fig)
+            img = kwimage.convert_colorspace(img, src_space='bgr', dst_space='rgb')
+            fpath = os.path.join(dpath, 'frame_{:04d}.png'.format(frame_idx))
+            kwimage.imwrite(fpath, img)
+            xdev.InteractiveIter.draw()
+
+        # Update everything with the latest state
+        # latest.extend(cand_anns)
+    pass
 
 
 _SubConfig = PropagateLabelsConfig
