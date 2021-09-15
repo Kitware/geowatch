@@ -9,11 +9,10 @@ import kwcoco
 import kwimage
 import ubelt as ub
 import pathlib
+import numpy as np
 import scriptconfig as scfg
 from watch.utils import util_raster
 from watch.gis import geotiff
-
-# import xdev
 
 
 class PropagateLabelsConfig(scfg.Config):
@@ -36,54 +35,55 @@ class PropagateLabelsConfig(scfg.Config):
         - [x] Handle splitting and merging tracks (non-unique frame_index)
         - [x] Stop propagation at category change (could be taken care of by external kwcoco file)
         - [x] Parallelize
-
     """
     default = {
-        'src':
-        scfg.Value(position=1,
-                   help=ub.paragraph('''
+        'src': scfg.Value(help=ub.paragraph(
+            '''
             path to the kwcoco file to propagate labels in
-            ''')),
-        'dst':
-        scfg.Value('propagated_data.kwcoco.json',
-                   help=ub.paragraph('''
+            '''), position=1),
+
+        'dst': scfg.Value('propagated_data.kwcoco.json', help=ub.paragraph(
+            '''
             Where the output kwcoco file with propagated labels is saved
-            '''),
-                   position=2),
-        'ext':
-        scfg.Value(None,
-                   help=ub.paragraph('''
+            '''), position=2),
+
+        'ext': scfg.Value(None, help=ub.paragraph(
+            '''
             Path to an optional external kwcoco file to merge annotations from.
             Must have a tag different from src's.
             ''')),
-        'viz_dpath':
-        scfg.Value(None,
-                   help=ub.paragraph('''
+
+        'viz_dpath': scfg.Value(None, help=ub.paragraph(
+            '''
             if specified, visualizations will be written to this directory
             ''')),
-        'verbose':
-        scfg.Value(1, help="use this to print details"),
-        'validate':
-        scfg.Value(
-            1,
-            help="Validate spatial and temporal AOI of each site after propagating"
-        ),
-        'crop':
-        scfg.Value(
-            1,
-            help="Crop propagated annotations to the valid data mask of the new image"
-        ),
-        'max_workers':
-        scfg.Value(
-            None,
-            help="Max. number of workers to parallelize over, up to the number of regions/ROIs. None is auto; 0 is serial."
-        )
+
+        'verbose': scfg.Value(default=1, help=ub.paragraph(
+            '''
+            use this to print details
+            ''')),
+
+        'validate': scfg.Value(default=1, help=ub.paragraph(
+            '''
+            Validate spatial and temporal AOI of each site after propagating
+            ''')),
+
+        'crop': scfg.Value(default=1, help=ub.paragraph(
+            '''
+            Crop propagated annotations to the valid data mask of the new image
+            ''')),
+
+        'max_workers': scfg.Value(default=None, help=ub.paragraph(
+            '''
+            Max. number of workers to parallelize over, up to the number of
+            regions/ROIs. None is auto; 0 is serial.
+            '''))
     }
 
-    epilog = """
-    Example Usage:
-        watch-cli scriptconfig_cli_template --arg1=foobar
-    """
+    # epilog = """
+    # Example Usage:
+    #     watch-cli propogate_labels --arg1=foobar
+    # """
 
 
 def annotated_band(img):
@@ -260,7 +260,6 @@ def get_warped_ann(previous_ann, warp, image_entry, crop_to_valid=True):
 
 
 def get_canvas_concat_channels(annotations, dataset, img_id):
-    import numpy as np
     delayed = dataset.delayed_load(img_id)
 
     have_parts = delayed.channels.spec.split('|')
@@ -711,17 +710,6 @@ def _propogate_video_worker(vid_id, full_ds, ext_ds, cat_ids_to_propagate,
     # for all sorted images in this video in both dsets
     all_frames_sequence = build_external_video(vid_id, full_ds, ext_ds)
 
-    # if 0:
-    #     track_id = ub.peek(full_ds.index.trackid_to_aids)
-    #     full_track = full_ds.index.trackid_to_aids[track_id]
-    #     for track_id in ext_ds.index.trackid_to_aids.keys():
-    #         ext_track = ext_ds.index.trackid_to_aids[track_id]
-    #         ext_track_annots = ext_ds.annots(ext_track)
-    #         grouped = ub.group_items(ext_track_annots, ext_track_annots.images.lookup('frame_index'))
-    #         print(max(map(len, grouped.values())))
-    #         ext_ds.annots([1609, 1610]).objs
-    #         lookup('track_id')
-
     #######
 
     full_frame_idx = 0
@@ -836,6 +824,14 @@ def _propogate_video_worker(vid_id, full_ds, ext_ds, cat_ids_to_propagate,
 def __SIMPLE_GEOSPACE_PROPOGATE(ext_ds, vid_id, full_ds):
     """
     This is broken, but it has useful code I dont want to lose quite yet
+
+    This code can interactively (or automatically depending on what is
+    commented in / out) write an animation that displays the process of
+    propogation in geo-space.
+
+    TODO: Either this script should be fixed up, or this visaulization
+    capabilities of this script should be incorporated into the main
+    functionality.
     """
     full_video_gids = full_ds.index.vidid_to_gids[vid_id]
     full_aids = list(ub.flatten(full_ds.images(full_video_gids).annots))
@@ -846,6 +842,7 @@ def __SIMPLE_GEOSPACE_PROPOGATE(ext_ds, vid_id, full_ds):
     if INTERACTIVE:
         import kwplot
         import geopandas as gpd
+        from shapely import ops
         kwplot.autompl()
         wld_map_gdf = gpd.read_file(
             gpd.datasets.get_path('naturalearth_lowres')
@@ -854,7 +851,6 @@ def __SIMPLE_GEOSPACE_PROPOGATE(ext_ds, vid_id, full_ds):
         ax = fig.gca()
         ax = wld_map_gdf.plot(ax=ax)
 
-        from shapely import ops
         combo = ops.unary_union([kwimage.Polygon.coerce(s).to_shapely() for s in full_annots.lookup('segmentation_geos')])
         aoi = combo.convex_hull
         box = kwimage.Polygon.from_shapely(aoi).bounding_box()
@@ -862,6 +858,8 @@ def __SIMPLE_GEOSPACE_PROPOGATE(ext_ds, vid_id, full_ds):
         minx, miny, maxx, maxy = box.to_tlbr().data[0]
         ax.set_xlim(minx, maxx)
         ax.set_ylim(miny, maxy)
+
+        import xdev
         # frame_iter = xdev.InteractiveIter(all_frames_sequence)
         frame_iter = (all_frames_sequence)
 
@@ -878,7 +876,6 @@ def __SIMPLE_GEOSPACE_PROPOGATE(ext_ds, vid_id, full_ds):
         frame_iter = all_frames_sequence
 
     latest = []
-    import numpy as np
     for frame_idx, (img, is_ext) in enumerate(frame_iter):
         img_id = img['id']
         print('{} img_id = {!r}'.format(('ext' if is_ext else 'int'), img_id))
@@ -922,11 +919,6 @@ def __SIMPLE_GEOSPACE_PROPOGATE(ext_ds, vid_id, full_ds):
 
         latest = keep_anns + replacement_anns + new_anns
 
-        # if is_updated.any():
-        #     print('Update {}'.format(is_updated.sum()))
-        #     # Remove annots that were updated
-        #     latest = list(ub.compress(latest, ~is_updated))
-
         if INTERACTIVE:
             clear_ax(ax)
             wld_map_gdf.plot(ax=ax)
@@ -965,10 +957,6 @@ def __SIMPLE_GEOSPACE_PROPOGATE(ext_ds, vid_id, full_ds):
             fpath = os.path.join(dpath, 'frame_{:04d}.png'.format(frame_idx))
             kwimage.imwrite(fpath, img)
             xdev.InteractiveIter.draw()
-
-        # Update everything with the latest state
-        # latest.extend(cand_anns)
-    pass
 
 
 _SubConfig = PropagateLabelsConfig
