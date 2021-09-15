@@ -96,11 +96,9 @@ def predict(ann, vid_id, coco_dset, phase):
     construction phase wrt the phase in ann. Return that new phase plus the date
     of the annotation in which that phase was found.
     """
-    def _union(seg_geos):
-        return shapely.ops.unary_union([
-            kwimage.MultiPolygon.from_geojson(seg_geo).to_shapely().buffer(0)
-            for seg_geo in seg_geos
-        ])
+
+    def _shp(seg_geo):
+        return kwimage.MultiPolygon.from_geojson(seg_geo).to_shapely().buffer(0)
 
     # Default prediction if one cannot be found
     prediction = {
@@ -120,7 +118,7 @@ def predict(ann, vid_id, coco_dset, phase):
             cand_aids.extend(coco_dset.index.gid_to_aids[frame_gid])
         
         # TODO check this
-        union_poly_ann = _union(ann['segmentation_geos'])
+        union_poly_ann = _shp(ann['segmentation_geos'])
         for cand_aid in cand_aids:
             ann_obs = coco_dset.index.anns[cand_aid]
             cat = coco_dset.index.cats[ann_obs['category_id']]
@@ -128,9 +126,11 @@ def predict(ann, vid_id, coco_dset, phase):
             # HACK for change-only preds
             if (phase != predict_phase) or predict_phase == 'change':
                 # TODO check this
-                union_poly_obs = _union(ann_obs['segmentation_geos'])
-                overlap = (union_poly_obs.intersection(union_poly_ann).area /
-                           union_poly_ann.area)
+                union_poly_obs = _shp(ann_obs['segmentation_geos'])
+                intersect = union_poly_obs.intersection(union_poly_ann).area
+                if intersect == 0:
+                    continue
+                overlap = intersect / union_poly_ann.area
                 if overlap > min_overlap:
                     obs_img = coco_dset.index.imgs[ann_obs['image_id']]
                     date = dateutil.parser.parse(obs_img['date_captured']).date()
@@ -216,29 +216,31 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id):
     annotated_gids = np.extract(np.array(list(map(len, coco_dset.images().annots))) > 0,
                                 coco_dset.images().gids)
     infos = {gid: executor.submit(_info, coco_dset.imgs[gid]) for gid in annotated_gids}
+    # missing_geo_aids = np.extract(np.array(coco_dset.annots().lookup('segmentation_geos', None)) == None, coco_dset.annots().aids)
+    for gid, img in ProgIter(coco_dset.imgs.items(), desc='precomputing geo-segmentations'):
 
-    for gid in ProgIter(coco_dset.imgs, desc='getting image geo info'):
-        img = coco_dset.imgs[gid]
+        # vectorize over anns; this does some unnecessary computation
+        annots = coco_dset.annots(gid=gid)
+        if len(annots) == 0:
+            continue
+        info = infos[gid].result()
+        pxl_anns = annots.detections.data['segmentations']
+        wld_anns = pxl_anns.warp(info['pxl_to_wld'])
+        wgs_anns = wld_anns.warp(info['wld_to_wgs84'])
+        geojson_anns = [poly.swap_axes().to_geojson() for poly in wgs_anns]
         
-        for aid in coco_dset.gid_to_aids[gid]:
+        for ann, geojson_ann in zip(annots.objs, geojson_anns):
             
-            ann = coco_dset.anns[aid]
-
             # Non-standard COCO fields, needed by watch
             if 'segmentation_geos' not in ann:
-            
-                info = infos[gid].result()
 
                 # Note that each segmentation annotation here will get
                 # written out as a separate GeoJSON feature.
                 # TODO: Confirm that this is the desired behavior
                 # (especially with respect to the evaluation metrics)
-                pxl_anns = coco_dset.annots(gid=gid).detections.data['segmentations']
-                wld_anns = pxl_anns.warp(info['pxl_to_wld'])
-                wgs_anns = wld_anns.warp(info['wld_to_wgs84'])
-                geojson_anns = [poly.swap_axes().to_geojson() for poly in wgs_anns]
 
-                ann['segmentation_geos'] = geojson_anns
+                ann['segmentation_geos'] = geojson_ann
+
 
     site_features = defaultdict(list)
     for ann in ProgIter(coco_dset.index.anns.values(), desc='converting annotations'):
@@ -382,8 +384,8 @@ def main(args):
     # Write site to disk
     os.makedirs(args.out_dir, exist_ok=True)
     for site, collection in sites.items():
-        with open(os.path.join(args.out_dir, site + '.json'), 'w') as f:
-            json.dump(collection, f, indent=2)
+        with open(os.path.join(args.out_dir, site + '.geojson'), 'w') as f:
+            geojson.dump(collection, f, indent=2)
     return 0
 
 
