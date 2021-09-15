@@ -71,6 +71,7 @@ from progiter import ProgIter
 import numpy as np
 import ubelt as ub
 
+import xdev
 
 # TODO: if we are hardcoding names we should have some constants file
 # to keep things sane.w:
@@ -98,6 +99,9 @@ def predict(ann, vid_id, coco_dset, phase):
     """
 
     def _shp(seg_geo):
+        # xdev.embed()
+        if isinstance(seg_geo, list):
+            seg_geo = seg_geo[0]
         return kwimage.MultiPolygon.from_geojson(seg_geo).to_shapely().buffer(0)
 
     # Default prediction if one cannot be found
@@ -120,8 +124,8 @@ def predict(ann, vid_id, coco_dset, phase):
         # TODO check this
         union_poly_ann = _shp(ann['segmentation_geos'])
         for cand_aid in cand_aids:
-            ann_obs = coco_dset.index.anns[cand_aid]
-            cat = coco_dset.index.cats[ann_obs['category_id']]
+            ann_obs = coco_dset.anns[cand_aid]
+            cat = coco_dset.cats[ann_obs['category_id']]
             predict_phase = category_dict.get(cat['name'], cat['name'])
             # HACK for change-only preds
             if (phase != predict_phase) or predict_phase == 'change':
@@ -161,7 +165,7 @@ def boundary(sseg_geos, img_path):
     return is_site_boundary
 
 
-def convert_kwcoco_to_iarpa(coco_dset, region_id):
+def convert_kwcoco_to_iarpa(coco_dset, region_id, coerce_site_boundary=True):
     """
     Convert a kwcoco coco_dset to the IARPA JSON format
 
@@ -229,10 +233,12 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id):
         wgs_anns = wld_anns.warp(info['wld_to_wgs84'])
         geojson_anns = [poly.swap_axes().to_geojson() for poly in wgs_anns]
         
-        for ann, geojson_ann in zip(annots.objs, geojson_anns):
+        for aid, geojson_ann in zip(annots.aids, geojson_anns):
             
+            ann = coco_dset.anns[aid]
+
             # Non-standard COCO fields, needed by watch
-            if 'segmentation_geos' not in ann:
+            if 'segmentation_geos' not in ann or 1:
 
                 # Note that each segmentation annotation here will get
                 # written out as a separate GeoJSON feature.
@@ -240,7 +246,38 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id):
                 # (especially with respect to the evaluation metrics)
 
                 ann['segmentation_geos'] = geojson_ann
+    
+    coco_dset.dump(coco_dset.fpath)
+    coco_dset = kwcoco.CocoDataset(coco_dset.fpath)
 
+    # HACK for mono-site
+    if coerce_site_boundary:
+        for gid in coco_dset.imgs:
+            annots = coco_dset.annots(gid=gid)
+            if len(annots) == 0:
+                continue
+
+            template_ann = annots.peek()
+            
+            # print(list(np.unique(annots.lookup('category_id'))), [coco_dset.name_to_cat['change']['id']])
+            assert list(np.unique(annots.lookup('category_id'))) == [coco_dset.name_to_cat['change']['id']]
+            try:
+                sseg_geos = [kwimage.MultiPolygon.from_shapely(
+                    shapely.ops.unary_union([
+                        kwimage.MultiPolygon.from_geojson(seg_geo).to_shapely().buffer(0)
+                        for seg_geo in (annots.lookup('segmentation_geos'))])).to_geojson()]
+            except TypeError:
+                xdev.embed()
+            
+            template_ann.pop('segmentation', None)
+            template_ann.pop('bbox', None)
+            template_ann['score'] == np.mean(annots.lookup('score'))
+            template_ann['segmentation_geos'] = sseg_geos
+
+            coco_dset.remove_annotations(annots.aids[1:])
+    
+    # HACK
+    first_half, second_half = np.split(np.array(ub.peek(coco_dset.index.vidid_to_gids.values())), 2)
 
     site_features = defaultdict(list)
     for ann in ProgIter(coco_dset.index.anns.values(), desc='converting annotations'):
@@ -266,7 +303,11 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id):
             sseg_geos = [sseg_geos]
 
         for sseg_geo in sseg_geos:
-            feature = geojson.Feature(geometry=sseg_geo)
+            try:
+                feature = geojson.Feature(geometry=sseg_geo)
+            except TypeError:
+                xdev.embed()
+
             properties = feature['properties']
 
             properties['source'] = source
@@ -276,7 +317,9 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id):
 
             # This was supercategory, is that supposed to be name instead?
             # FIXME: what happens when the category nmames dont work?
-            properties['current_phase'] = category_dict.get(catname, catname)
+            # properties['current_phase'] = category_dict.get(catname, catname)
+            # HACK
+            properties['current_phase'] = 'Site Preparation' if img['id'] in first_half else 'Active Construction'
 
             # If there's no video associated with
             # this image, take annotations as they are
@@ -302,7 +345,9 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id):
             depends on cloud masking output?
             '''
 
-            properties['is_site_boundary'] = boundary(sseg_geo, fpath(img))
+            # properties['is_site_boundary'] = boundary(sseg_geo, fpath(img))
+            # HACK
+            properties['is_site_boundary'] = ','.join([str(True)] * len(kwimage.MultiPolygon.from_geojson(sseg_geo)))
 
             # site_name should be a property of the track, not the image.
             # right now predict() is implicitly treating the whole video as one site,
