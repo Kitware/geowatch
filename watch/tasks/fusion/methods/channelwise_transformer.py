@@ -100,6 +100,9 @@ class MultimodalTransformer(pl.LightningModule):
         self.negative_change_weight = negative_change_weight
 
         # criterion and metrics
+        # TODO: parametarize loss criterions
+        # For loss function experiments, see and work in
+        # ~/code/watch/watch/tasks/fusion/methods/channelwise_transformer.py
         import monai
         # self.change_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
         self.class_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
@@ -109,32 +112,8 @@ class MultimodalTransformer(pl.LightningModule):
             weight=torch.FloatTensor([self.negative_change_weight, self.positive_change_weight]),
             reduction='none')
 
-        """
-        import monai
-        import torch
-
-        pred = torch.FloatTensor([
-            [ 10, 1],
-            [  1, 10],
-            [ 100, 0],
-            [ 1, 10],
-            [ 10, 1],
-            [ 0, 100],
-        ])
-        true = torch.FloatTensor([1, 1, 1, 0, 0, 0]).long()
-        crit = torch.nn.CrossEntropyLoss(weight=torch.FloatTensor([2, 1]), reduction='none')
-        crit(pred, true.long())
-
-        change_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=True, weight=[0, 1])
-        print(change_criterion.forward(pred, true))
-
-        crit = torch.nn.BCEWithLogitsLoss(reduction='none', pos_weight=torch.ones(1)2.)
-        crit(pred, true)
-        """
-
         # self.change_criterion = nn.BCEWithLogitsLoss(
         #         pos_weight=torch.ones(1) * pos_weight)
-
         # self.class_criterion = nn.CrossEntropyLoss()
         # self.class_criterion = nn.BCEWithLogitsLoss()
 
@@ -464,8 +443,6 @@ class MultimodalTransformer(pl.LightningModule):
             kwplot.imshow(self.draw_item(item), fnum=3)
 
             kwplot.imshow(item['frames'][1]['change'].cpu().numpy(), fnum=4)
-
-
         """
         outputs = {}
 
