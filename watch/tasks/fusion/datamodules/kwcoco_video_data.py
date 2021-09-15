@@ -602,7 +602,8 @@ class KWCocoVideoDataset(data.Dataset):
         tr['as_xarray'] = False
         tr['use_experimental_loader'] = 1
         if not self.disable_augmenter and self.mode == 'fit':
-            do_shift = np.random.rand() > 0.5
+            # do_shift = np.random.rand() > 0.5
+            do_shift = True
         if not do_shift:
             # collect sample
             sample = sampler.load_sample(tr, padkw={'constant_values': np.nan})
