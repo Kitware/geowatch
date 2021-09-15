@@ -22,6 +22,7 @@ def make_predict_config(cmdline=False, **kwargs):
     Configuration for fusion prediction
     """
     from watch.utils import configargparse_ext
+    from scriptconfig.smartcast import smartcast
 
     parser = configargparse_ext.ArgumentParser(
         add_config_file_help=False,
@@ -42,9 +43,6 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.add_argument("--package_fpath", type=pathlib.Path)
     parser.add_argument("--gpus", default=None, help="todo: hook up to lightning")
     parser.add_argument("--thresh", type=float, default=0.01)
-
-    from scriptconfig.smartcast import smartcast
-    # Not sure if smartcast will work here
 
     parser.add_argument(
         "--write_preds", default=True, type=smartcast, help=ub.paragraph(
@@ -115,11 +113,6 @@ def predict(cmdline=False, **kwargs):
         ...     'gpus': gpus,
         ... }
         >>> package_fpath = fit_model(**fit_kwargs)
-        if 0:
-            import os
-            package_fpath = list((pathlib.Path(os.readlink(package_fpath)).parent.parent / 'checkpoints').glob('*'))[0]
-
-
         >>> # Predict via that model
         >>> predict_kwargs = kwargs = {
         >>>     'package_fpath': package_fpath,
@@ -481,17 +474,13 @@ class CocoStitchingManager(object):
         # efficient algorithm to decompose it into a minimal set of disjoint
         # rectangles?
         # https://stackoverflow.com/questions/5919298/algorithm-for-finding-the-fewest-rectangles-to-cover-a-set-of-rectangles-without/6634668#6634668
+        # Or... just write out a polygon... KISS
         import numpy as np
         is_predicted_pixel = (stitcher.weights > 0).astype(np.uint8)
         predicted_region = kwimage.Mask(is_predicted_pixel, 'c_mask').to_multi_polygon().to_geojson()
         # Mark that we made a prediction on this image.
         img['prediction_region'] = predicted_region
         img['has_predictions'] = True
-
-        # to_coco('new')
-        # .bounding_box().to_xywh().quantize().data[0].tolist()
-        # import cv2
-        # num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(is_predicted_pixel)
 
         if self.write_probs:
             # This currently exists as an example to demonstrate how a

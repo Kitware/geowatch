@@ -310,6 +310,11 @@ python -m watch.tasks.fusion.fit \
 
 
 
+EXPERIMENT_NAME=DirectCD_${ARCH}_raw9common_v6_tune_from_onera
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_NAME/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package.pt 
+PRED_FPATH=$DEFAULT_ROOT_DIR/pred/pred.kwcoco.json
+EVAL_DPATH=$DEFAULT_ROOT_DIR/pred/eval
 # Write train and prediction configs
 python -m watch.tasks.fusion.fit \
     --method="MultimodalTransformer" \
@@ -318,29 +323,28 @@ python -m watch.tasks.fusion.fit \
     --time_steps=$TIME_STEPS \
     --chip_size=$CHIP_SIZE \
     --batch_size=$BATCH_SIZE \
-    --accumulate_grad_batches=32 \
+    --accumulate_grad_batches=16 \
     --num_workers=8 \
     --max_lookahead=1000000 \
     --max_epochs=400 \
     --patience=400 \
     --gpus=1  \
     --attention_impl=performer \
-    --learning_rate=1e-3 \
-    --weight_decay=1.2e-5 \
+    --learning_rate=3e-3 \
+    --weight_decay=1e-4 \
     --dropout=0.1 \
     --window_size=8 \
     --window_overlap=0.9 \
-    --global_class_weight=0.001 \
+    --global_class_weight=0.000 \
     --neg_to_pos_ratio=1.0 \
     --global_change_weight=1.0 \
-    --negative_change_weight=0.06 \
+    --negative_change_weight=0.05 \
     --diff_inputs=False \
     --torch_sharing_strategy=default \
     --torch_start_method=default \
     --num_sanity_val_steps=0 \
-    --init=$HOME/remote/yardrat/smart_watch_dvc/training/yardrat/jon.crall/Drop1RawHoldout/runs/DirectCD_smt_it_joint_p8_raw9common_v5_tune_from_onera/lightning_logs/version_0/checkpoints/epoch=11-step=8591.ckpt \
+    --init=$HOME/remote/yardrat/smart_watch_dvc/training/yardrat/jon.crall/Drop1RawHoldout/runs/DirectCD_smt_it_joint_p8_raw9common_v5_tune_from_onera/lightning_logs/version_1/checkpoints/epoch=0-step=715-v4.ckpt \
     --default_root_dir=$DEFAULT_ROOT_DIR \
        --package_fpath=$PACKAGE_FPATH \
         --train_dataset=$TRAIN_FPATH \
          --vali_dataset=$VALI_FPATH 
-

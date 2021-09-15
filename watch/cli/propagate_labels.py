@@ -13,7 +13,7 @@ import scriptconfig as scfg
 from watch.utils import util_raster
 from watch.gis import geotiff
 
-import xdev
+# import xdev
 
 
 class PropagateLabelsConfig(scfg.Config):
@@ -190,10 +190,10 @@ def get_warped_ann(previous_ann, warp, image_entry, crop_to_valid=True):
     expensive. But this is not a problem for the very small sizes we're
     working with here:
 
-    >>> %timeit watch.utils.util_raster.mask(full_tile)
+    %timeit watch.utils.util_raster.mask(full_tile)
     1.19 s ± 22.5 ms per loop (mean ± std. dev. of 7 runs, 1 loop each)
 
-    >>> %timeit watch.utils.util_raster.mask(aligned_crop)
+    %timeit watch.utils.util_raster.mask(aligned_crop)
     4.44 ms ± 87.4 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
     '''
 
@@ -215,7 +215,6 @@ def get_warped_ann(previous_ann, warp, image_entry, crop_to_valid=True):
         except AssertionError:
             # try to correct for lat/lon ordering
             raise
-            xdev.embed()
     else:
         segmentation = kwimage.Segmentation.coerce(
             previous_ann['orig_info']['segmentation_orig'])
@@ -434,8 +433,7 @@ def main(cmdline=False, **kwargs):
         >>>     'dst': bundle_dpath / 'post_prob.kwcoco.json',
         >>>     'ext': dvc_dpath / 'drop1/annots.kwcoco.json',
         >>> }
-
-        >>> kwargs['src'] = '/home/joncrall/data/dvc-repos/smart_watch_dvc/jons-hacked-drop1-S2-L8-aligned/pre-prop2.kwcoco.json'
+        >>> #kwargs['src'] = '/home/joncrall/data/dvc-repos/smart_watch_dvc/jons-hacked-drop1-S2-L8-aligned/pre-prop2.kwcoco.json'
         >>> main(**kwargs)
     """
     config = PropagateLabelsConfig(default=kwargs, cmdline=cmdline)
