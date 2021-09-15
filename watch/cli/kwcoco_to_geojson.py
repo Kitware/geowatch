@@ -53,6 +53,8 @@ References:
     .. [2] https://infrastructure.smartgitlab.com/docs/pages/api_documentation.html#site-model
     .. [3] https://smartgitlab.com/TE/annotations
 """
+import itertools
+import geojson
 import json
 import os
 import sys
@@ -61,8 +63,13 @@ import kwcoco
 import dateutil.parser
 import watch
 import kwimage
+import shapely
+import shapely.ops
 from os.path import join
 from collections import defaultdict
+from progiter import ProgIter
+import numpy as np
+import ubelt as ub
 
 
 # TODO: if we are hardcoding names we should have some constants file
@@ -89,6 +96,12 @@ def predict(ann, vid_id, coco_dset, phase):
     construction phase wrt the phase in ann. Return that new phase plus the date
     of the annotation in which that phase was found.
     """
+    def _union(seg_geos):
+        return shapely.ops.unary_union([
+            kwimage.MultiPolygon.from_geojson(seg_geo).to_shapely().buffer(0)
+            for seg_geo in seg_geos
+        ])
+
     # Default prediction if one cannot be found
     prediction = {
         'predicted_phase': None,
@@ -105,16 +118,17 @@ def predict(ann, vid_id, coco_dset, phase):
         cand_aids = []
         for frame_gid in future_gids:
             cand_aids.extend(coco_dset.index.gid_to_aids[frame_gid])
-
-        union_poly_ann = kwimage.MultiPolygon.from_geojson(
-            ann['segmentation_geos']).to_shapely()
+        
+        # TODO check this
+        union_poly_ann = _union(ann['segmentation_geos'])
         for cand_aid in cand_aids:
             ann_obs = coco_dset.index.anns[cand_aid]
             cat = coco_dset.index.cats[ann_obs['category_id']]
             predict_phase = category_dict.get(cat['name'], cat['name'])
-            if phase != predict_phase:
-                union_poly_obs = kwimage.MultiPolygon.from_geojson(
-                    ann_obs['segmentation_geos']).to_shapely()
+            # HACK for change-only preds
+            if (phase != predict_phase) or predict_phase == 'change':
+                # TODO check this
+                union_poly_obs = _union(ann_obs['segmentation_geos'])
                 overlap = (union_poly_obs.intersection(union_poly_ann).area /
                            union_poly_ann.area)
                 if overlap > min_overlap:
@@ -175,13 +189,13 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id):
         >>>     jsonschema.validate(collection, schema=SITE_SCHEMA)
 
     """
-    import geojson
     site_features = defaultdict(list)
     for ann in coco_dset.index.anns.values():
         img = coco_dset.index.imgs[ann['image_id']]
         cat = coco_dset.index.cats[ann['category_id']]
         catname = cat['name']
 
+    def fpath(img):
         # Handle the case if an image consists of one main image or multiple
         # auxiliary images
         if img.get('file_name', None) is not None:
@@ -190,21 +204,47 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id):
             # Use the first auxiliary image
             # (todo: might want to choose determine the image "canvas" coordinates?)
             img_path = join(coco_dset.bundle_dpath, img['auxiliary'][0]['file_name'])
+            return img_path
 
-        # Non-standard COCO fields, needed by watch
-        if 'segmentation_geos' not in ann:
-            gid = img['id']
-            info = watch.gis.geotiff.geotiff_crs_info(img_path)
-            # Note that each segmentation annotation here will get
-            # written out as a separate GeoJSON feature.
-            # TODO: Confirm that this is the desired behavior
-            # (especially with respect to the evaluation metrics)
-            pxl_anns = coco_dset.annots(gid=gid).detections.data['segmentations']
-            wld_anns = pxl_anns.warp(info['pxl_to_wld'])
-            wgs_anns = wld_anns.warp(info['wld_to_wgs84'])
-            geojson_anns = [poly.swap_axes().to_geojson() for poly in wgs_anns]
+    # parallelize grabbing img CRS info
+    def _info(img):
+        info = watch.gis.geotiff.geotiff_crs_info(fpath(img))
+        return info
 
-            ann['segmentation_geos'] = geojson_anns
+    executor = ub.Executor('thread', 16)
+    # optimization: filter to only images containing at least 1 annotation
+    annotated_gids = np.extract(np.array(list(map(len, coco_dset.images().annots))) > 0,
+                                coco_dset.images().gids)
+    infos = {gid: executor.submit(_info, coco_dset.imgs[gid]) for gid in annotated_gids}
+
+    for gid in ProgIter(coco_dset.imgs, desc='getting image geo info'):
+        img = coco_dset.imgs[gid]
+        
+        for aid in coco_dset.gid_to_aids[gid]:
+            
+            ann = coco_dset.anns[aid]
+
+            # Non-standard COCO fields, needed by watch
+            if 'segmentation_geos' not in ann:
+            
+                info = infos[gid].result()
+
+                # Note that each segmentation annotation here will get
+                # written out as a separate GeoJSON feature.
+                # TODO: Confirm that this is the desired behavior
+                # (especially with respect to the evaluation metrics)
+                pxl_anns = coco_dset.annots(gid=gid).detections.data['segmentations']
+                wld_anns = pxl_anns.warp(info['pxl_to_wld'])
+                wgs_anns = wld_anns.warp(info['wld_to_wgs84'])
+                geojson_anns = [poly.swap_axes().to_geojson() for poly in wgs_anns]
+
+                ann['segmentation_geos'] = geojson_anns
+
+    site_features = defaultdict(list)
+    for ann in ProgIter(coco_dset.index.anns.values(), desc='converting annotations'):
+        img = coco_dset.imgs[ann['image_id']]
+        cat = coco_dset.cats[ann['category_id']]
+        catname = cat['name']
 
         sseg_geos = ann['segmentation_geos']
 
@@ -260,8 +300,13 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id):
             depends on cloud masking output?
             '''
 
-            properties['is_site_boundary'] = boundary(sseg_geo, img_path)
+            properties['is_site_boundary'] = boundary(sseg_geo, fpath(img))
 
+            # site_name should be a property of the track, not the image.
+            # right now predict() is implicitly treating the whole video as one site,
+            # so let's jut do that:
+            site_name = 'dummy'
+            '''
             # This seems fragile? Needs docs.
             site_name = None
             if img.get('site_tag', None):
@@ -270,6 +315,7 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id):
                 site_name = source
             else:
                 raise Exception('cannot determine site_name')
+            '''
 
             site_features[site_name].append(feature)
 
@@ -277,9 +323,40 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id):
     for site_name, features in site_features.items():
         feature_collection = geojson.FeatureCollection(features, id=region_id)
         feature_collection['version'] = watch.__version__
-        # feature_collection['mgrs'] = coco_dset.mgrs_tile
+        # HACK for now assume we have exactly 1 video per region
+        # each site could actually have a different MGRS tile
+        feature_collection['mgrs'] = coco_dset.videos().peek()['properties']['mgrs']
         sites[site_name] = feature_collection
     return sites
+
+
+def remove_empty_annots(coco_dset):
+    '''
+    We are getting some detections with 2 points that aren't well-formed polygons.
+    Remove these and return the rest of the dataset.
+
+    Ex.
+    {'type': 'MultiPolygon',
+      'coordinates': [[[[128.80465424559546, 37.62042949252145],
+         [128.80465693697536, 37.61940084645075]]]]},
+    
+    These don't show up too often in an arbitrary dset:
+    >>> k = kwcoco.CocoDataset('KR_Pyeongchang_R01.kwcoco.json')
+    >>> sum(are_empty(k.annots())), k.n_annots
+    94, 654
+    '''
+    def are_empty(annots):
+        return np.array(
+            list(
+                itertools.chain.from_iterable(
+                    annots.detections.data['boxes'].area))) == 0
+
+    annots = coco_dset.annots()
+    empty_aids = np.extract(are_empty(annots), annots.aids)
+
+    coco_dset.remove_annotations(list(empty_aids))
+
+    return coco_dset
 
 
 def main(args):
@@ -295,6 +372,9 @@ def main(args):
 
     # Read the kwcoco file
     coco_dset = kwcoco.CocoDataset(args.in_file)
+
+    # Normalize
+    coco_dset = remove_empty_annots(coco_dset)
 
     # Convert kwcoco to sites
     sites = convert_kwcoco_to_iarpa(coco_dset, args.region_id)
