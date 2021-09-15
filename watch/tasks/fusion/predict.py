@@ -127,14 +127,12 @@ def predict(cmdline=False, **kwargs):
         >>> dset = result_dataset
         >>> # Check that the result format looks correct
         >>> for vidid in dset.index.videos.keys():
-        >>>     # The first image in each video should not get predictions
-        >>>     # (There is no change!)
+        >>>     # Note: only some of the images in the pred sequence will get
+        >>>     # a change predictoion, depending on the temporal sampling.
         >>>     images = dset.images(dset.index.vidid_to_gids[1])
-        >>>     aux_per_frame = list(map(len, images.lookup('auxiliary')))
-        >>>     # Test number of auxiliary images
-        >>>     first, *rest = aux_per_frame
-        >>>     assert ub.allsame(rest)
-        >>>     assert first == rest[0] - 1
+        >>>     pred_chans = [[a['channels'] for a in aux] for aux in images.lookup('auxiliary')]
+        >>>     assert any('change_prob' in cs for cs in pred_chans), 'some frames should have change'
+        >>>     assert not all('change_prob' in cs for cs in pred_chans), 'some frames should not have change'
         >>>     # Test number of annots in each frame
         >>>     num_annots = list(map(len, images.annots))
         >>>     assert num_annots[0] == 0, 'first frame should have none'

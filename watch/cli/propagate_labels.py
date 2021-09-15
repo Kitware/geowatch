@@ -58,22 +58,22 @@ class PropagateLabelsConfig(scfg.Config):
             if specified, visualizations will be written to this directory
             ''')),
 
-        'verbose': scfg.Value(default=1, help=ub.paragraph(
+        'verbose': scfg.Value(1, help=ub.paragraph(
             '''
             use this to print details
             ''')),
 
-        'validate': scfg.Value(default=1, help=ub.paragraph(
+        'validate': scfg.Value(1, help=ub.paragraph(
             '''
             Validate spatial and temporal AOI of each site after propagating
             ''')),
 
-        'crop': scfg.Value(default=1, help=ub.paragraph(
+        'crop': scfg.Value(1, help=ub.paragraph(
             '''
             Crop propagated annotations to the valid data mask of the new image
             ''')),
 
-        'max_workers': scfg.Value(default=None, help=ub.paragraph(
+        'max_workers': scfg.Value(None, help=ub.paragraph(
             '''
             Max. number of workers to parallelize over, up to the number of
             regions/ROIs. None is auto; 0 is serial.
