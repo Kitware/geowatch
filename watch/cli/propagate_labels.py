@@ -97,12 +97,12 @@ def annotated_band(img):
 
 
 def warped_wgs84_to_img(poly, img, inv=False):
-    '''
+    """
     Return poly warped from WGS84 geocoordinates to img's base space
 
     img['warp_wld_to_pxl'] does not give the appropriate transform for
     ann['segmentation_geo'] because it is in WGS84, not the wld CRS
-    '''
+    """
     band = annotated_band(img)
     fpath = band['file_name']
     # cacher = ub.Cacher('geotiff_crs_info', depends=fpath)
@@ -180,7 +180,7 @@ def ann_add_orig_info(ann, dset):
 
 
 def get_warped_ann(previous_ann, warp, image_entry, crop_to_valid=True):
-    '''
+    """
     Returns new annotation by applying a warp and optional crop
 
     If the new annotation falls outside the new image, returns None instead.
@@ -195,7 +195,7 @@ def get_warped_ann(previous_ann, warp, image_entry, crop_to_valid=True):
 
     %timeit watch.utils.util_raster.mask(aligned_crop)
     4.44 ms ± 87.4 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
-    '''
+    """
 
     # note we are using the semgentations stored in orig_info because the
     # most recent one may be cropped
@@ -584,7 +584,7 @@ def main(cmdline=False, **kwargs):
 
 
 def build_external_video(vid_id, full_ds, ext_ds):
-    '''
+    """
     Given two datasets with a corresponding video, match images between them
     assuming the gids and names are unreliable, and return an ordered list
     of all images from both videos, with full_ds taking precedence.
@@ -601,7 +601,7 @@ def build_external_video(vid_id, full_ds, ext_ds):
         List[Tuple[Dict, bool]]:
             image entries with a boolean flag. The image dictionary is from the
             external dataset when True and from the full dataset when False.
-    '''
+    """
 
     if ext_ds.n_images == 0:
         return [(i, False) for i in full_ds.images(vidid=vid_id).objs]
