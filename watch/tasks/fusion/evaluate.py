@@ -328,7 +328,13 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, plot_dpath):
         #     confusion_image, image_text, org=(1, 1), valign='top',
         #     color='white', border={'color': 'black'})
 
+        # TODO:
+        # Can we show the reference image?
+        # TODO:
+        # Show the datetime on the top of the image (and the display band?)
+
         real_image_norm = None
+        real_image_int = None
 
         TRY_IMREAD = 1
         if TRY_IMREAD:
@@ -346,11 +352,11 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, plot_dpath):
                 real_image_norm = kwimage.normalize_intensity(real_image)
                 # Make into gray
                 real_image_int = kwimage.ensure_uint255(real_image_norm)
-                vert_parts.append(real_image_int)
             except Exception:
                 pass
 
         TRY_SOFT = 1
+        change_prob = None
         if TRY_SOFT:
             change_prob = info.get('change_prob', None)
             invalid_mask = info.get('invalid_mask', None)
@@ -363,6 +369,9 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, plot_dpath):
                     overlaid = kwimage.overlay_alpha_layers([heatmap, real_image_norm.mean(axis=2)])
                     overlaid = kwimage.ensure_uint255(overlaid[..., 0:3])
                     vert_parts.append(overlaid)
+
+        if real_image_int is not None and change_prob is None:
+            vert_parts.append(real_image_int)
 
         vert_stack = kwimage.stack_images(vert_parts, axis=0)
         parts.append(vert_stack)
