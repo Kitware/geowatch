@@ -22,6 +22,7 @@ def make_predict_config(cmdline=False, **kwargs):
     Configuration for fusion prediction
     """
     from watch.utils import configargparse_ext
+    from scriptconfig.smartcast import smartcast
 
     parser = configargparse_ext.ArgumentParser(
         add_config_file_help=False,
@@ -42,9 +43,6 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.add_argument("--package_fpath", type=pathlib.Path)
     parser.add_argument("--gpus", default=None, help="todo: hook up to lightning")
     parser.add_argument("--thresh", type=float, default=0.01)
-
-    from scriptconfig.smartcast import smartcast
-    # Not sure if smartcast will work here
 
     parser.add_argument(
         "--write_preds", default=True, type=smartcast, help=ub.paragraph(
@@ -107,7 +105,7 @@ def predict(cmdline=False, **kwargs):
         ...     'workdir': ub.ensuredir((test_dpath, 'train')),
         ...     'package_fpath': package_fpath,
         ...     'max_epochs': 1,
-        ...     'time_steps': 3,
+        ...     'time_steps': 2,
         ...     'chip_size': 64,
         ...     'max_steps': 1,
         ...     'learning_rate': 1e-5,
@@ -129,14 +127,12 @@ def predict(cmdline=False, **kwargs):
         >>> dset = result_dataset
         >>> # Check that the result format looks correct
         >>> for vidid in dset.index.videos.keys():
-        >>>     # The first image in each video should not get predictions
-        >>>     # (There is no change!)
+        >>>     # Note: only some of the images in the pred sequence will get
+        >>>     # a change predictoion, depending on the temporal sampling.
         >>>     images = dset.images(dset.index.vidid_to_gids[1])
-        >>>     aux_per_frame = list(map(len, images.lookup('auxiliary')))
-        >>>     # Test number of auxiliary images
-        >>>     first, *rest = aux_per_frame
-        >>>     assert ub.allsame(rest)
-        >>>     assert first == rest[0] - 1
+        >>>     pred_chans = [[a['channels'] for a in aux] for aux in images.lookup('auxiliary')]
+        >>>     assert any('change_prob' in cs for cs in pred_chans), 'some frames should have change'
+        >>>     assert not all('change_prob' in cs for cs in pred_chans), 'some frames should not have change'
         >>>     # Test number of annots in each frame
         >>>     num_annots = list(map(len, images.annots))
         >>>     assert num_annots[0] == 0, 'first frame should have none'
@@ -148,8 +144,19 @@ def predict(cmdline=False, **kwargs):
     args = make_predict_config(cmdline=cmdline, **kwargs)
     print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=2)))
 
-    # init method from checkpoint
-    method = utils.load_model_from_package(args.package_fpath)
+    try:
+        # Ideally we have a package, everything is defined there
+        method = utils.load_model_from_package(args.package_fpath)
+    except Exception:
+        # If we have a checkpoint path we can load it if we make assumptions
+        # init method from checkpoint.
+        checkpoint = torch.load(args.package_fpath)
+        print(list(checkpoint.keys()))
+        from watch.tasks.fusion import methods
+        method = methods.MultimodalTransformer(**checkpoint['hyper_parameters'])
+        state_dict = checkpoint['state_dict']
+        method.load_state_dict(state_dict)
+
     method.eval()
     method.freeze()
 
@@ -164,11 +171,17 @@ def predict(cmdline=False, **kwargs):
     )
 
     # TODO: default to this, but allow the user to overwrite
-    datamodule_vars['chip_size'] = method.datamodule_hparams['chip_size']
-    datamodule_vars['time_steps'] = method.datamodule_hparams['time_steps']
-    datamodule_vars['channels'] = method.datamodule_hparams['channels']
+    if hasattr(method, 'datamodule_hparams'):
+        datamodule_vars['chip_size'] = method.datamodule_hparams['chip_size']
+        datamodule_vars['time_steps'] = method.datamodule_hparams['time_steps']
+        datamodule_vars['channels'] = method.datamodule_hparams['channels']
+    else:
+        print('Warning have to make assumptions')
+        # datamodule_vars['chip_size'] = method.datamodule_hparams['chip_size']
+        # datamodule_vars['time_steps'] = method.datamodule_hparams['time_steps']
+        datamodule_vars['channels'] = list(method.input_norms.keys())[0]
+        # method.datamodule_hparams['channels']
 
-    # datamodule_vars["preprocessing_step"] = method.preprocessing_step
     datamodule = datamodule_class(
         **datamodule_vars
     )
@@ -217,9 +230,6 @@ def predict(cmdline=False, **kwargs):
         write_preds=args.write_preds,
     )
 
-    prog = ub.ProgIter(test_dataloader, desc='predicting', verbose=1)
-    # nanns = 0
-
     result_infos = []
     total_info = {'n_anns': 0, 'n_imgs': 0, 'total_prob': 0}
 
@@ -246,6 +256,7 @@ def predict(cmdline=False, **kwargs):
     import kwarray
     running_stats = kwarray.RunningStats()  # for inspecting probability
 
+    prog = ub.ProgIter(test_dataloader, desc='predicting', verbose=1)
     for batch in prog:
         # Move data onto the prediction device
         for item in batch:
@@ -408,7 +419,7 @@ class CocoStitchingManager(object):
 
             self._last_vidid = vidid
         else:
-            raise NotImplementedError
+            raise NotImplementedError(self.stiching_space)
 
         stitcher = self.image_stitchers[gid]
         stitcher.add(space_slice, data)
@@ -449,10 +460,25 @@ class CocoStitchingManager(object):
         change_probs = stitcher.finalize()
 
         # Get spatial relationship between the image and the video
-        vid_to_img = kwimage.Affine.coerce(img['warp_img_to_vid']).inv()
+        vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
+        img_from_vid = vid_from_img.inv()
 
         n_anns = 0
         total_prob = 0
+
+        # TODO: find and record the valid prediction regions
+        # Given a (rectilinear) non-convex multipolygon where we are guarenteed
+        # that all of the angles in the polygon are right angles, what is an
+        # efficient algorithm to decompose it into a minimal set of disjoint
+        # rectangles?
+        # https://stackoverflow.com/questions/5919298/algorithm-for-finding-the-fewest-rectangles-to-cover-a-set-of-rectangles-without/6634668#6634668
+        # Or... just write out a polygon... KISS
+        import numpy as np
+        is_predicted_pixel = (stitcher.weights > 0).astype(np.uint8)
+        predicted_region = kwimage.Mask(is_predicted_pixel, 'c_mask').to_multi_polygon().to_geojson()
+        # Mark that we made a prediction on this image.
+        img['prediction_region'] = predicted_region
+        img['has_predictions'] = True
 
         if self.write_probs:
             # This currently exists as an example to demonstrate how a
@@ -470,8 +496,9 @@ class CocoStitchingManager(object):
                 'height': new_feature.shape[0],
                 'width': new_feature.shape[1],
                 'num_bands': new_feature.shape[2],
-                'warp_aux_to_img': vid_to_img.inv().concise(),
+                'warp_aux_to_img': img_from_vid.concise(),
             })
+
             # Save the prediction to disk
             total_prob += new_feature.sum()
             kwimage.imwrite(
@@ -499,7 +526,7 @@ class CocoStitchingManager(object):
                 score = (w * change_probs).sum() / w.sum()
 
                 # Transform the video polygon into image space
-                img_poly = vid_poly.warp(vid_to_img)
+                img_poly = vid_poly.warp(img_from_vid)
                 bbox = list(img_poly.bounding_box().to_coco())[0]
                 # Add the polygon as an annotation on the image
                 self.result_dataset.add_annotation(

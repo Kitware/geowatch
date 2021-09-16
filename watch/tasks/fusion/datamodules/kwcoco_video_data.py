@@ -1,5 +1,5 @@
 import einops
-import itertools as it
+
 import kwarray
 import kwcoco
 import kwimage
@@ -14,6 +14,7 @@ from kwcoco import channel_spec
 from torch.utils import data
 from watch.tasks.fusion import utils
 from watch.utils import kwcoco_extensions
+from watch.utils import util_iter
 
 # __all__ = ['KWCocoVideoDataModule', 'KWCocoVideoDataset']
 
@@ -22,6 +23,21 @@ try:
     profile = xdev.profile
 except Exception:
     profile = ub.identity
+
+
+# FIXME: Hard-coded category aliases.
+# The correct way to handle these would be to have some information in the
+# kwcoco category dictionary that specifies how the categories should be
+# interpreted.
+_HEURISTIC_CATEGORIES = {
+
+    'background': {'background', 'No Activity', 'Post Construction'},
+
+    'pre_background': {'No Activity'},
+    'post_background': {'Post Construction'},
+
+    'ignore': {'ignore', 'Unknown', 'clouds'},
+}
 
 
 class KWCocoVideoDataModule(pl.LightningDataModule):
@@ -46,8 +62,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         >>> #chan_spec = kwcoco.channel_spec.FusedChannelSpec.coerce(channels)
         >>> #channels = None
         >>> #
-        >>> batch_size = 2
-        >>> time_steps = 5
+        >>> batch_size = 1
+        >>> time_steps = 2
         >>> chip_size = 330
         >>> self = KWCocoVideoDataModule(
         >>>     train_dataset=train_dataset,
@@ -114,13 +130,15 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         chip_size=128,
         time_overlap=0,
         chip_overlap=0.1,
-        neg_to_pos_ratio=2.0,
+        neg_to_pos_ratio=1.0,
+        max_lookahead=1,
         channels=None,
         batch_size=4,
         num_workers=4,
         preprocessing_step=None,
         tfms_channel_subset=None,
         normalize_inputs=False,
+        diff_inputs=False,
         verbose=1,
     ):
         """
@@ -133,6 +151,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             time_overlap (float): fraction of time steps to overlap
             chip_overlap (float): fraction of space steps to overlap
             neg_to_pos_ratio (float): maximum ratio of samples with no annotations to samples with annots
+            max_lookahead (int): number of frames allowed to sample in the future from the base
             channels : channels to use should be ChannelSpec coercable
             batch_size (int) : number of items per batch
             num_workers (int) : number of background workers
@@ -150,16 +169,19 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.time_overlap = time_overlap
         self.chip_overlap = chip_overlap
         self.neg_to_pos_ratio = neg_to_pos_ratio
-        self.requested_channels = channels
+        self.channels = channels
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.preprocessing_step = preprocessing_step
         self.normalize_inputs = normalize_inputs
+        self.max_lookahead = max_lookahead
+        self.diff_inputs = diff_inputs
+
         self.input_stats = None
 
         # will only correspond to train
         self.classes = None
-        self.channels = None
+        self.input_channels = None
 
         # Store train / test / vali
         self.torch_datasets = {}
@@ -172,7 +194,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             print('self.test_kwcoco = {!r}'.format(self.test_kwcoco))
             print('self.time_steps = {!r}'.format(self.time_steps))
             print('self.chip_size = {!r}'.format(self.chip_size))
-            print('self.requested_channels = {!r}'.format(self.requested_channels))
+            print('self.channels = {!r}'.format(self.channels))
 
     @classmethod
     def add_argparse_args(cls, parent_parser):
@@ -185,6 +207,10 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             >>> parent_parser = argparse.ArgumentParser()
             >>> cls.add_argparse_args(parent_parser)
             >>> parent_parser.print_help()
+            >>> args, _ = parent_parser.parse_known_args(['--diff_inputs=True'])
+            >>> assert args.diff_inputs
+            >>> args, _ = parent_parser.parse_known_args(['--diff_inputs=False'])
+            >>> assert not args.diff_inputs
         """
         parser = parent_parser.add_argument_group("kwcoco_video_data")
         parser.add_argument("--train_dataset", default=None, help='path to the train kwcoco file')
@@ -194,7 +220,11 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         parser.add_argument("--chip_size", default=128, type=int)
         parser.add_argument("--time_overlap", default=0.0, type=float, help='fraction of time steps to overlap')
         parser.add_argument("--chip_overlap", default=0.1, type=float, help='fraction of space steps to overlap')
-        parser.add_argument("--neg_to_pos_ratio", default=2.0, type=float, help='maximum ratio of samples with no annotations to samples with annots')
+        parser.add_argument("--neg_to_pos_ratio", default=1.0, type=float, help='maximum ratio of samples with no annotations to samples with annots')
+        parser.add_argument("--max_lookahead",  # rename?
+                            # default=float('inf'),
+                            default=1,
+                            type=float, help='number of frames allowed to sample in the future from the base. Set to inf for all')
         parser.add_argument("--channels", default=None, type=str, help='channels to use should be ChannelSpec coercable')
         parser.add_argument("--batch_size", default=4, type=int)
         parser.add_argument("--num_workers", default=4, type=int)
@@ -204,6 +234,13 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 '''
                 if True, computes the mean/std for this dataset on each mode
                 so this can be passed to the model.
+                '''))
+        from scriptconfig.smartcast import smartcast
+        parser.add_argument(
+            "--diff_inputs", default=False, type=smartcast, help=ub.paragraph(
+                '''
+                if True, also includes a difference between consecutive frames
+                in the inputs produced.
                 '''))
         return parent_parser
 
@@ -225,8 +262,10 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 coco_train_sampler,
                 sample_shape=(self.time_steps, self.chip_size, self.chip_size),
                 window_overlap=(self.time_overlap, self.chip_overlap, self.chip_overlap),
-                channels=self.requested_channels,
+                channels=self.channels,
                 neg_to_pos_ratio=self.neg_to_pos_ratio,
+                max_lookahead=self.max_lookahead,
+                diff_inputs=self.diff_inputs,
             )
 
             # Unfortunately lightning seems to only enable / disables
@@ -236,8 +275,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             self.torch_datasets['train'] = train_dataset
             ub.inject_method(self, lambda self: self._make_dataloader('train', shuffle=True), 'train_dataloader')
 
-            if self.channels is None:
-                self.channels = train_dataset.channels
+            if self.input_channels is None:
+                self.input_channels = train_dataset.input_channels
 
             if self.normalize_inputs:
                 if isinstance(self.normalize_inputs, str):
@@ -269,8 +308,11 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                     vali_coco_sampler,
                     sample_shape=(self.time_steps, self.chip_size, self.chip_size),
                     window_overlap=(self.time_overlap, self.chip_overlap, self.chip_overlap),
-                    channels=self.requested_channels,
+                    channels=self.channels,
+                    max_lookahead=self.max_lookahead,
+                    mode='vali',
                     neg_to_pos_ratio=0,
+                    diff_inputs=self.diff_inputs,
                 )
                 self.torch_datasets['vali'] = vali_dataset
                 ub.inject_method(self, lambda self: self._make_dataloader('vali', shuffle=False), 'val_dataloader')
@@ -288,8 +330,9 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 test_coco_sampler,
                 sample_shape=(self.time_steps, self.chip_size, self.chip_size),
                 window_overlap=(self.time_overlap, self.chip_overlap, self.chip_overlap),
-                channels=self.requested_channels,
+                channels=self.channels,
                 mode='test',
+                diff_inputs=self.diff_inputs,
             )
 
             ub.inject_method(self, lambda self: self._make_dataloader('test', shuffle=False), 'test_dataloader')
@@ -306,7 +349,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             pin_memory=True,
         )
 
-    def draw_batch(self, batch, stage='train', outputs=None, max_items=2, **kwargs):
+    def draw_batch(self, batch, stage='train', outputs=None, max_items=2, overlay_on_image=False, **kwargs):
         """
         Visualize a batch produced by this DataSet.
 
@@ -337,7 +380,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             >>> import kwplot
             >>> kwplot.autompl()
             >>> kwplot.imshow(canvas)
-            >>> kwplot.show_if_requested()
+            >>> kwplot.show_if_requestedV
         """
         import kwimage
         dataset = self.torch_datasets[stage]
@@ -362,7 +405,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                     if k in outputs:
                         item_output[k] = outputs[k][item_idx].data.cpu().numpy()
 
-            part = dataset.draw_item(item, item_output=item_output, **kwargs)
+            part = dataset.draw_item(item, item_output=item_output, overlay_on_image=overlay_on_image, **kwargs)
             canvas_list.append(part)
         canvas = kwimage.stack_images_grid(
             canvas_list, axis=1, overlap=-12, bg_value=[64, 60, 60])
@@ -388,7 +431,7 @@ class KWCocoVideoDataset(data.Dataset):
         >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
         >>> sampler = ndsampler.CocoSampler(coco_dset)
         >>> channels = 'B10|B8a|B1|B8'
-        >>> sample_shape = (3, 530, 610)
+        >>> sample_shape = (3, 128, 128)
         >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels)
         >>> index = len(self) // 4
         >>> item = self[index]
@@ -399,6 +442,17 @@ class KWCocoVideoDataset(data.Dataset):
         >>> kwplot.imshow(canvas)
         >>> kwplot.show_if_requested()
 
+    Ignore:
+        import kwplot
+        kwplot.autompl()
+        import xdev
+        sample_indices = list(range(len(self)))
+        for index in xdev.InteractiveIter(sample_indices):
+            item = self[index]
+            canvas = self.draw_item(item)
+            kwplot.imshow(canvas)
+            xdev.InteractiveIter.draw()
+
     Example:
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> import ndsampler
@@ -406,7 +460,7 @@ class KWCocoVideoDataset(data.Dataset):
         >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
         >>> sampler = ndsampler.CocoSampler(coco_dset)
         >>> sample_shape = (2, 128, 128)
-        >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=None)
+        >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=None, diff_inputs=True)
         >>> index = 0
         >>> item = self[index]
         >>> canvas = self.draw_item(item)
@@ -438,6 +492,42 @@ class KWCocoVideoDataset(data.Dataset):
         >>> kwplot.autompl()
         >>> kwplot.imshow(canvas)
         >>> kwplot.show_if_requested()
+
+    Ignore:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> # Debug issues seen in training
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> import os
+        >>> from os.path import join
+        >>> import ndsampler
+        >>> import kwcoco
+        >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
+        >>> dvc_dpath = os.environ.get('DVC_DPATH', _default)
+        >>> coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/data.kwcoco.json')
+        >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+        >>> sampler = ndsampler.CocoSampler(coco_dset)
+        >>> self = KWCocoVideoDataset(
+        >>>     sampler,
+        >>>     sample_shape=(2, 128, 128),
+        >>>     window_overlap=0,
+        >>>     channels="blue|green|red|nir|swir22|swir16",
+        >>>     neg_to_pos_ratio=0, max_lookahead=2.0, diff_inputs=0, mode='test'
+        >>> )
+        >>> item = self[0]
+        >>> canvas = self.draw_item(item)
+        >>> print(ub.repr2(item['tr'], nl=-1))
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> canvas = self.draw_item(item, max_channels=7)
+        >>> kwplot.imshow(canvas)
+        >>> import xdev
+        >>> sample_indices = list(range(len(self)))
+        >>> for index in xdev.InteractiveIter(sample_indices):
+        >>>     item = self[index]
+        >>>     canvas = self.draw_item(item, max_channels=7)
+        >>>     kwplot.imshow(canvas)
+        >>>     xdev.InteractiveIter.draw()
     """
     # TODO: add torchvision.transforms or albumentations
 
@@ -449,16 +539,13 @@ class KWCocoVideoDataset(data.Dataset):
         mode="fit",
         window_overlap=0,
         transform=None,
-        neg_to_pos_ratio=2.0,
+        neg_to_pos_ratio=1.0,
+        max_lookahead=1.0,
+        diff_inputs=False,
     ):
 
-        self._hueristic_background_classnames = {
-            'background', 'No Activity',
-        }
-
-        self._heuristic_ignore_classnames = {
-            'ignore', 'Unknown', 'clouds',
-        }
+        self._hueristic_background_classnames = _HEURISTIC_CATEGORIES['background']
+        self._heuristic_ignore_classnames = _HEURISTIC_CATEGORIES['ignore']
 
         if channels is None:
             # Hack to use all channels in the first image.
@@ -472,43 +559,69 @@ class KWCocoVideoDataset(data.Dataset):
 
         if mode == 'test':
             # In test mode we have to sample everything
-            sample_grid = simple_video_sample_grid(
+            new_sample_grid = sample_test_vidspace_grid(
                 sampler.dset, window_dims=sample_shape,
-                window_overlap=window_overlap)
+                window_overlap=window_overlap,
+                keepbound=True,
+            )
+            # new_sample_grid = new_video_sample_grid(
+            #     sampler.dset, window_dims=sample_shape,
+            #     window_overlap=window_overlap,
+            #     keepbound=True,
+            # )
+            self.length = len(new_sample_grid['targets'])
         else:
             negative_classes = (
                 self._heuristic_ignore_classnames |
                 self._hueristic_background_classnames
             )
-            full_sample_grid = new_video_sample_grid(
-                sampler.dset, window_dims=sample_shape,
-                window_overlap=window_overlap,
-                negative_classes=negative_classes,
-            )
 
-            # BUGGED
-            # sampler.new_sample_grid(
-            #     "video_detection", sample_shape,
-            #     window_overlap=window_overlap)
-
-            n_pos = len(full_sample_grid["positives"])
-            n_neg = len(full_sample_grid["negatives"])
-
-            max_neg = int(max(1, (neg_to_pos_ratio * n_pos)))
-            if n_neg > max_neg:
-                print('chose max_neg = {!r}'.format(max_neg))
-                neg_idxs = kwarray.shuffle(np.arange(n_neg), rng=47789403)[0:max_neg]
-                chosen_negs = list(ub.take(full_sample_grid["negatives"], neg_idxs))
+            if max_lookahead == 1:
+                # Old behavior
+                new_sample_grid = new_video_sample_grid(
+                    sampler.dset, window_dims=sample_shape,
+                    window_overlap=window_overlap,
+                    negative_classes=negative_classes,
+                    keepbound=False,
+                )
             else:
-                chosen_negs = full_sample_grid["negatives"]
+                # Sample more regions
+                # TODO: finer grained control with max_lookahead
+                new_sample_grid = sample_vidspace_grid(
+                    sampler.dset, window_dims=sample_shape,
+                    window_overlap=window_overlap,
+                    negative_classes=negative_classes,
+                    keepbound=False,
+                )
 
-            sample_grid = list(it.chain(
-                full_sample_grid["positives"],
-                chosen_negs,
-            ))
+            n_pos = len(new_sample_grid["positives_indexes"])
+            n_neg = len(new_sample_grid["negatives_indexes"])
 
-        self.sample_grid = sample_grid
-        self.transform = transform
+            max_neg = min(int(max(0, (neg_to_pos_ratio * n_pos))), n_neg)
+            if n_neg > max_neg:
+                print('restrict to max_neg = {!r}'.format(max_neg))
+
+            # We have too many negatives, so we are going to "group" negatives
+            # and when we select one we will really just randomly select from
+            # within the pool
+            if max_neg > 0:
+                negative_pool = list(util_iter.chunks(new_sample_grid["negatives_indexes"], nchunks=max_neg))
+                self.negative_pool = negative_pool
+                neg_pool_chunksizes = set(map(len, self.negative_pool))
+                print('neg_pool_chunksizes = {!r}'.format(neg_pool_chunksizes))
+            else:
+                self.negative_pool = []
+
+            # This is in a per-iteration basis
+            self.n_pos = n_pos
+            self.n_neg = len(self.negative_pool)
+            self.length = self.n_pos + self.n_neg
+            print('len(neg_pool) ' + str(len(self.negative_pool)))
+            print('self.n_pos = {!r}'.format(self.n_pos))
+            print('self.n_neg = {!r}'.format(self.n_neg))
+            print('self.length = {!r}'.format(self.length))
+        self.new_sample_grid = new_sample_grid
+
         self.window_overlap = window_overlap
         self.sampler = sampler
 
@@ -545,13 +658,22 @@ class KWCocoVideoDataset(data.Dataset):
 
         self.sample_shape = sample_shape
         self.channels = channels
+
+        self.diff_inputs = diff_inputs
+        if self.diff_inputs:
+            # Add frame_differences between channels
+            self.input_channels = kwcoco.channel_spec.ChannelSpec.coerce(','.join(
+                ['|'.join([s + p for p in part for s in ['', 'D']])
+                 for part in self.channels.parse().values()]))
+        else:
+            self.input_channels = channels
         self.mode = mode
 
         self.augment = False
         self.disable_augmenter = False
 
     def __len__(self):
-        return len(self.sample_grid)
+        return self.length
 
     # def _make_augmenter():
     #     # TODO: how to make this work with kwimage polygons?
@@ -581,7 +703,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> channels = 'B10|B8a|B1|B8'
             >>> sample_shape = (5, 530, 610)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, diff_inputs=True)
             >>> item = self[0]
             >>> canvas = self.draw_item(item)
             >>> # xdoctest: +REQUIRES(--show)
@@ -589,15 +711,80 @@ class KWCocoVideoDataset(data.Dataset):
             >>> kwplot.autompl()
             >>> kwplot.imshow(canvas)
             >>> kwplot.show_if_requested()
+
+        Example:
+            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+            >>> import ndsampler
+            >>> import kwcoco
+            >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
+            >>> sampler = ndsampler.CocoSampler(coco_dset)
+            >>> channels = 'B10|B8|B1'
+            >>> sample_shape = (4, 96, 96)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, neg_to_pos_ratio=0.1)
+            >>> item = self[self.n_pos + 1]
+            >>> canvas = self.draw_item(item)
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas)
+            >>> kwplot.show_if_requested()
+
+        Ignore:
+            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+            >>> # Debug issues seen in training
+            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+            >>> import os
+            >>> from os.path import join
+            >>> import ndsampler
+            >>> import kwcoco
+            >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
+            >>> dvc_dpath = os.environ.get('DVC_DPATH', _default)
+            >>> coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/data.kwcoco.json')
+            >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+            >>> sampler = ndsampler.CocoSampler(coco_dset)
+            >>> self = KWCocoVideoDataset(
+            >>>     sampler,
+            >>>     sample_shape=(2, 128, 128),
+            >>>     window_overlap=0,
+            >>>     channels="blue|green|red|nir|swir16",
+            >>>     neg_to_pos_ratio=0, max_lookahead=2.0, diff_inputs=True
+            >>> )
+            >>> item = self[5]
+            >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0)
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas)
+            >>> kwplot.show_if_requested()
+
+            kwplot.imshow(self.draw_item(self[4], max_channels=10, overlay_on_image=0))
         """
 
+        if self.mode == 'test':
+            tr = self.new_sample_grid['targets'][index]
+        else:
+            # Hack: we will make all of the first indexes positives
+            # in the non-shuffled case. A negative index will randomly get
+            # assigned a real negative target from its "group"
+
+            # TODO: we can generalize this into generic pools
+            # that happend to correspond to positive / negative or any
+            # other distribution of examples we want
+            if index < self.n_pos:
+                tr_idx = self.new_sample_grid['positives_indexes'][index]
+            else:
+                import random
+                neg_chunk = self.negative_pool[self.n_pos - index]
+                tr_idx = random.choice(neg_chunk)
+            tr = self.new_sample_grid['targets'][tr_idx]
+
         # get positive sample definition
-        tr = self.sample_grid[index]
         if self.channels:
             tr["channels"] = self.channels
 
         # TODO: perterb the spatial and time sample coordinates
         do_shift = False
+        # collect sample
         sampler = self.sampler
         tr['as_xarray'] = False
         tr['use_experimental_loader'] = 1
@@ -615,24 +802,6 @@ class KWCocoVideoDataset(data.Dataset):
             tr_['space_slice'] = space_box.astype(int).to_slices()[0]
             sample = sampler.load_sample(tr_, padkw=dict(constant_values=np.nan))
 
-        if 0:
-            # debug
-            dset = sampler.dset
-            vid_box = kwimage.Boxes.from_slice(tr['space_slice'])
-            for gid in tr['gids']:
-                warp_img_to_vid = kwimage.Affine.coerce(
-                    dset.index.imgs[gid].get('warp_img_to_vid', None))
-                img_box = vid_box.warp(warp_img_to_vid.inv())
-                aids = sampler.regions._isect_index.overlapping_aids(gid, img_box)
-                qtree = sampler.regions._isect_index.qtrees[gid]
-                for aid in aids:
-                    annot_box = kwimage.Boxes(qtree.aid_to_tlbr[aid][None, :], 'tlbr')
-                    annot_box.warp(warp_img_to_vid.inv())
-                    img_box.iooas(annot_box)
-
-                    raise Exception
-                print('aids = {!r}'.format(aids))
-
         # Access the sampled image and annotation data
         raw_frame_list = sample['im']
 
@@ -643,8 +812,15 @@ class KWCocoVideoDataset(data.Dataset):
         raw_det_list = sample['annots']['frame_dets']
         raw_gids = sample['tr']['gids']
 
-        channel_keys = sample['tr']['_coords']['c'].values.tolist()
-        mode_key = '|'.join(channel_keys)
+        # channel_keys = sample['tr']['_coords']['c'].values.tolist()
+        # print('channel_keys = {!r}'.format(channel_keys))
+
+        mode_lists = list(self.input_channels.values())
+        assert len(mode_lists) == 1, 'no late fusion yet'
+        mode_key = '|'.join(mode_lists[0])
+
+        # print('mode_key = {!r}'.format(mode_key))
+        # mode_key = '|'.join(channel_keys)
 
         # Break data down on a per-frame basis so we can apply image-based
         # augmentations.
@@ -672,7 +848,8 @@ class KWCocoVideoDataset(data.Dataset):
             vflipper = make_vflipper(input_dsize[1])
             do_vflip = np.random.rand() > 0.5
 
-        prev_frame_cids = None
+        prev_frame_cidxs = None
+        prev_frame_chw = None
 
         for frame, dets, gid in zip(raw_frame_list, raw_det_list, raw_gids):
             img = self.sampler.dset.imgs[gid]
@@ -699,10 +876,16 @@ class KWCocoVideoDataset(data.Dataset):
             # allocate class masks
             bg_idx = self.bg_idx
 
-            frame_cidxs = np.full(frame.shape[:2], dtype=np.int32,
+            space_shape = frame.shape[:2]
+
+            frame_cidxs = np.full(space_shape, dtype=np.int32,
                                   fill_value=bg_idx)
 
-            frame_ignore = np.full(frame.shape[:2], dtype=np.uint8,
+            ohe_shape = (len(self.classes),) + space_shape
+            frame_class_ohe = np.full(ohe_shape, dtype=np.uint8,
+                                      fill_value=0)
+
+            frame_ignore = np.full(space_shape, dtype=np.uint8,
                                    fill_value=0)
 
             # Rasterize frame targets
@@ -715,10 +898,17 @@ class KWCocoVideoDataset(data.Dataset):
             for poly, aid, cid in zip(ann_polys, ann_aids, ann_cids):
                 cidx = self.classes.id_to_idx[cid]
                 catname = self.classes.id_to_node[cid]
-                if catname in self.ignore_classes:
+                if catname in self.background_classes:
+                    pass
+                elif catname in self.ignore_classes:
                     poly.fill(frame_ignore, value=1)
                 else:
-                    poly.fill(frame_cidxs, value=cidx)
+                    poly.fill(frame_class_ohe[cidx], value=1)
+
+            # Dilate the truth map
+            for cidx, class_map in enumerate(frame_class_ohe):
+                class_map = utils.morphology(class_map, 'dilate', kernel=5)
+                frame_cidxs[class_map > 0] = cidx
 
             # ensure channel dim is not squeezed
             frame_hwc = kwarray.atleast_nd(frame, 3)
@@ -727,12 +917,43 @@ class KWCocoVideoDataset(data.Dataset):
             # rearrange image axes for pytorch
             frame_chw = einops.rearrange(frame_hwc, 'h w c -> c h w')
 
+            if self.diff_inputs:
+                if prev_frame_chw is not None:
+                    frame_diff = np.abs(frame_chw - prev_frame_chw)
+                    # kwimage.normalize(frame_chw) -
+                    # kwimage.normalize(prev_frame_chw))
+                else:
+                    frame_diff = np.zeros_like(frame_chw)
+                # frame_diff = np.zeros_like(frame_chw)
+                """
+                # Check:
+                hwc = kwimage.ensure_float01(kwimage.grab_test_image('astro'))
+                hwc2 = kwimage.gaussian_blur(hwc)
+                v1 = einops.rearrange(hwc, 'h w c -> c h w')
+                v2 = einops.rearrange(hwc2, 'h w c -> c h w')
+                diff = np.abs(v1 - v2)
+
+                kwplot.imshow(kwimage.stack_images(v1))
+                kwplot.imshow(kwimage.stack_images(v2))
+                kwplot.imshow(kwimage.stack_images(diff))
+
+                input_chw = einops.rearrange([v1, diff], '(c1 c2) c h w -> (c1 c c2) h w', c1=1)
+                kwplot.imshow(kwimage.stack_images(input_chw))
+                """
+                # Interlace/Interweave the diffs and the channels
+                parts = list(ub.flatten(zip(frame_chw, frame_diff)))
+                input_chw = np.stack(parts, axis=0)
+                # input_chw = einops.rearrange([frame_chw, frame_diff], '(c1 c2) c h w -> (c1 c c2) h w', c1=1)
+            else:
+                input_chw = frame_chw
+                pass
+
             # convert annotations into a change detection task suitable for
             # the network.
-            if prev_frame_cids is None:
+            if prev_frame_cidxs is None:
                 frame_change = None
             else:
-                frame_change = (frame_cidxs != prev_frame_cids).astype(np.uint8)
+                frame_change = (frame_cidxs != prev_frame_cidxs).astype(np.uint8)
                 # Clean up the change target
                 frame_change = utils.morphology(frame_change, 'open', kernel=3)
                 frame_change = torch.from_numpy(frame_change)
@@ -743,13 +964,15 @@ class KWCocoVideoDataset(data.Dataset):
                 'date_captured': img.get('date_captured', ''),
                 'sensor_coarse': img.get('sensor_coarse', ''),
                 'modes': {
-                    mode_key: torch.from_numpy(frame_chw),
+                    mode_key: torch.from_numpy(input_chw),
                 },
                 'change': frame_change,
                 'class_idxs': torch.from_numpy(frame_cidxs),
                 'ignore': torch.from_numpy(frame_ignore),
             }
-            prev_frame_cids = frame_cidxs
+            prev_frame_cidxs = frame_cidxs
+            prev_frame_chw = frame_chw
+
             frame_items.append(frame_item)
 
         vidid = sample['tr']['vidid']
@@ -777,7 +1000,7 @@ class KWCocoVideoDataset(data.Dataset):
         depends = ub.odict([
             ('num', num),
             ('hashid', self.sampler.dset._build_hashid()),
-            ('channels', self.channels.__json__()),
+            ('channels', self.input_channels.__json__()),
             # ('sample_shape', self.sample_shape),
             ('depends_version', 4),  # bump if `compute_input_stats` changes
         ])
@@ -830,19 +1053,18 @@ class KWCocoVideoDataset(data.Dataset):
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (3, 96, 96)
-            >>> #channels = 'blue|green|red|nir|inv_sort1|inv_sort2|inv_sort3|inv_sort4|inv_sort5|inv_sort6|inv_sort7|inv_sort8|inv_augment1|inv_augment2|inv_augment3|inv_augment4|inv_augment5|inv_augment6|inv_augment7|inv_augment8|inv_overlap1|inv_overlap2|inv_overlap3|inv_overlap4|inv_overlap5|inv_overlap6|inv_overlap7|inv_overlap8|inv_shared1|inv_shared2|inv_shared3|inv_shared4|inv_shared5|inv_shared6|inv_shared7|inv_shared8|matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7|matseg_8|matseg_9|matseg_10|matseg_11|matseg_12|matseg_13|matseg_14|matseg_15|matseg_16|matseg_17|matseg_18|matseg_19|rice_field|cropland|water|inland_water|river_or_stream|sebkha|snow_or_ice_field|bare_ground|sand_dune|built_up|grassland|brush|forest|wetland|road'
             >>> channels = 'rice_field|cropland|water|inland_water|river_or_stream|sebkha|snow_or_ice_field|bare_ground|sand_dune|built_up|grassland|brush|forest|wetland|road'
-            >>> channels = 'matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7|matseg_8|matseg_9|matseg_10|matseg_11|matseg_12|matseg_13|matseg_14|matseg_15|matseg_16|matseg_17|matseg_18|matseg_19'
+            >>> channels = 'matseg_0|matseg_1|matseg_2|matseg_3|matseg_4'
             >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels)
             >>> item = self[0]
             >>> #self.compute_input_stats(num=10)
             >>> self.compute_input_stats(num=1000, num_workers=4, batch_size=1)
 
-
         Ignore:
+            # TODO: profile and optimize loading in ndsampler / kwcoco
             _ = xdev.profile_now(self.__getitem__)(0)
             _ = xdev.profile_now(self.compute_input_stats)(num=10, num_workers=4, batch_size=1)
-            tr = self.sample_grid[0]
+            tr = self.new_sample_grid['targets'][0]
             tr['channels'] = self.channels
             _ = xdev.profile_now(self.sampler.load_sample)(tr)
             pad = None
@@ -883,7 +1105,7 @@ class KWCocoVideoDataset(data.Dataset):
 
         # Track moving average of each fused channel stream
         channel_stats = {key: kwarray.RunningStats()
-                         for key in self.channels.keys()}
+                         for key in self.input_channels.keys()}
 
         timer = ub.Timer().tic()
         timer.first = 1
@@ -923,13 +1145,18 @@ class KWCocoVideoDataset(data.Dataset):
 
     @profile
     def draw_item(self, item, item_output=None, combinable_extra=None,
-                  max_channels=5, max_dim=256, norm_over_time=0):
+                  max_channels=5, max_dim=256, norm_over_time=0,
+                  overlay_on_image=True):
         """
         Visualize an item produced by this DataSet.
 
         Args:
             item (Dict): An item returned from the torch Dataset.
                 (It is a dict right? { ಠ ︿ ಠ } )
+
+            overlay_on_image (bool):
+                if True, the truth and prediction is drawn on top of
+                an image, otherwise it is drawn on a black image.
 
             item_output (Dict):
                 Special task keys that we know how to plot.
@@ -973,11 +1200,13 @@ class KWCocoVideoDataset(data.Dataset):
             >>> class_probs = np.stack(class_prob_list)
             >>> item_output['class_probs'] = class_probs  # first frame does not have change
             >>> #binprobs[0][:] = 0  # first change prob should be all zeros
-            >>> canvas = self.draw_item(item, item_output, combinable_extra=combinable_extra)
+            >>> canvas = self.draw_item(item, item_output, combinable_extra=combinable_extra, overlay_on_image=1)
+            >>> canvas2 = self.draw_item(item, item_output, combinable_extra=combinable_extra, max_channels=1, overlay_on_image=0)
             >>> # xdoctest: +REQUIRES(--show)
             >>> import kwplot
             >>> kwplot.autompl()
-            >>> kwplot.imshow(canvas)
+            >>> kwplot.imshow(canvas, fnum=1, pnum=(1, 2, 1))
+            >>> kwplot.imshow(canvas2, fnum=1, pnum=(1, 2, 2))
             >>> kwplot.show_if_requested()
         """
         classes = self.classes
@@ -987,13 +1216,15 @@ class KWCocoVideoDataset(data.Dataset):
         # otherwise it is a cool feature.
         default_combinable_channels = [
             ub.oset(['red', 'green', 'blue']),
-            ub.oset(['r', 'g', 'b'])
+            ub.oset(['Dred', 'Dgreen', 'Dblue']),
+            ub.oset(['r', 'g', 'b']),
+            ub.oset(['B04', 'B03', 'B02']),  # for onera
         ]
         combinable_channels = default_combinable_channels
         if combinable_extra is not None:
             combinable_channels += list(map(ub.oset, combinable_extra))
 
-        def make_frame_infos():
+        def prepare_frames():
             frame_metas = []
             for frame_idx, frame_item in enumerate(item['frames']):
 
@@ -1046,7 +1277,9 @@ class KWCocoVideoDataset(data.Dataset):
                     }
                     if not norm_over_time:
                         norm_signal = kwimage.normalize_intensity(raw_signal).copy()
+                        # norm_signal = kwimage.normalize(raw_signal).copy()
                         norm_signal = kwimage.atleast_3channels(norm_signal)
+                        norm_signal = np.nan_to_num(norm_signal)
                         row['norm_signal'] = norm_signal
                     chan_rows.append(row)
 
@@ -1069,10 +1302,12 @@ class KWCocoVideoDataset(data.Dataset):
                     cums = np.cumsum(list(map(len, flat)))
                     combo = np.hstack(flat)
                     combo_normed = kwimage.normalize_intensity(combo).copy()
+                    # combo_normed = kwimage.normalize(combo).copy()
                     flat_normed = np.split(combo_normed, cums)
                     for row, flat_item in zip(chans_over_time, flat_normed):
                         norm_signal = flat_item.reshape(*row['raw_signal'].shape)
                         norm_signal = kwimage.atleast_3channels(norm_signal)
+                        norm_signal = np.nan_to_num(norm_signal)
                         row['norm_signal'] = norm_signal
 
             # chan = kwimage.normalize_intensity(chan)
@@ -1080,7 +1315,7 @@ class KWCocoVideoDataset(data.Dataset):
 
             return frame_metas
 
-        frame_metas = make_frame_infos()
+        frame_metas = prepare_frames()
 
         horizontal_stack = []
         for frame_meta in frame_metas:
@@ -1136,58 +1371,81 @@ class KWCocoVideoDataset(data.Dataset):
                 header_part = header_text(f'{full_mode_code}', shrink=True)
                 vertical_stack.append(header_part)
 
+            # Create overlays for training objective targets
+            truth_overlays = []
+            if True:
+                # Create the the true class label overlay
+                true_heatmap = kwimage.Heatmap(class_idx=class_idxs, classes=classes)
+                class_overlay = true_heatmap.colorize('class_idx')
+                class_overlay[..., 3] = 0.5
+                truth_overlays.append({
+                    'overlay': class_overlay,
+                    'label_text': 'true class',
+                })
+
+            if True:
+                # Create the true change label overlay
+                change_overlay = np.zeros(changes.shape[0:2] + (4,), dtype=np.float32)
+                change_overlay = kwimage.Mask(changes, format='c_mask').draw_on(change_overlay, color='lime')
+                change_overlay = kwimage.ensure_alpha_channel(change_overlay)
+                change_overlay[..., 3] = (changes > 0).astype(np.float32) * 0.5
+                truth_overlays.append({
+                    'overlay': change_overlay,
+                    'label_text': 'true change',
+                })
+                # change_overlay = kwimage.make_heatmask(changes)
+
+            if not overlay_on_image:
+                # Draw the truth by itself
+                for overlay_info in truth_overlays:
+                    label_text = overlay_info['label_text']
+                    row_canvas = overlay_info['overlay'][..., 0:3]
+                    row_canvas = kwimage.imresize(row_canvas, max_dim=max_dim).clip(0, 1)
+                    # TODO: deduplicate this block of code
+                    # TODO: make draw_text_on_image able to return the
+                    # geometry of what it drew and use that.
+                    signal_bottom_y = 1  # hack: hardcoded
+                    row_canvas = kwimage.draw_text_on_image(
+                        row_canvas, label_text, (1, signal_bottom_y + 1),
+                        valign='top', color='lime', border=3)
+                    vertical_stack.append(row_canvas)
+
             for iterx, row in enumerate(chan_rows):
-                norm_signal = row['norm_signal']
-                true_layers = []
-                if iterx == 0:
-                    # Draw class label on odd frames
-                    true_heatmap = kwimage.Heatmap(class_idx=class_idxs, classes=classes)
-                    # true_part = heatmap.draw_on(true_part, with_alpha=0.5)
-                    # Hack: -1 is given the last color by colorize, it would
-                    # be better if there was a non-negative background class index
-                    class_overlay = true_heatmap.colorize('class_idx')
-                    class_overlay[..., 3] = 0.5
-                    # class_overlay[class_idxs == -1, 3] = 0
-                    true_layers.append(class_overlay)
-                    label_text = 'true class'
-                elif iterx == 1:
-                    # Draw change label on even frames
-                    change_overlay = np.zeros(changes.shape[0:2] + (4,), dtype=np.float32)
-                    change_overlay = kwimage.Mask(changes, format='c_mask').draw_on(change_overlay, color='lime')
-                    change_overlay = kwimage.ensure_alpha_channel(change_overlay)
-                    change_overlay[..., 3] = (changes > 0).astype(np.float32) * 0.5
-                    # change_overlay = kwimage.make_heatmask(changes)
-                    # print('change_overlay = {!r}'.format(change_overlay))
-                    true_layers.append(change_overlay)
-                    label_text = 'true change'
-                else:
-                    label_text = None
+                layers = []
+                label_text = None
+                if overlay_on_image:
+                    # Draw truth on the image itself
+                    if iterx < len(truth_overlays):
+                        overlay_info = truth_overlays[iterx]
+                        layers.append(overlay_info['overlay'])
+                        label_text = overlay_info['label_text']
 
-                true_layers.append(norm_signal)
-                true_part = kwimage.overlay_alpha_layers(true_layers)[..., 0:3]
+                layers.append(row['norm_signal'])
+                row_canvas = kwimage.overlay_alpha_layers(layers)[..., 0:3]
 
-                true_part = kwimage.imresize(true_part, max_dim=max_dim).clip(0, 1)
-                true_part = kwimage.draw_text_on_image(
-                    true_part, row['signal_text'], (1, 1), valign='top',
+                row_canvas = kwimage.imresize(row_canvas, max_dim=max_dim).clip(0, 1)
+                row_canvas = kwimage.draw_text_on_image(
+                    row_canvas, row['signal_text'], (1, 1), valign='top',
                     color='white', border=3)
 
                 if label_text:
                     # TODO: make draw_text_on_image able to return the
                     # geometry of what it drew and use that.
                     signal_bottom_y = 31  # hack: hardcoded
-                    true_part = kwimage.draw_text_on_image(
-                        true_part, label_text, (1, signal_bottom_y + 1),
+                    row_canvas = kwimage.draw_text_on_image(
+                        row_canvas, label_text, (1, signal_bottom_y + 1),
                         valign='top', color='lime', border=3)
-                vertical_stack.append(true_part)
+                vertical_stack.append(row_canvas)
 
+            # TODO: clean up logic
             key = 'class_probs'
             if item_output and  key in item_output:
-                norm_signal = chan_rows[0]['norm_signal']
-                # print('norm_signal.shape = {!r}'.format(norm_signal.shape))
+                if overlay_on_image:
+                    norm_signal = chan_rows[0]['norm_signal']
+                else:
+                    norm_signal = np.zeros_like(chan_rows[0]['norm_signal'])
                 x = item_output[key][frame_idx]
-                # print('x.shape = {!r}'.format(x.shape))
                 class_probs = einops.rearrange(x, 'h w c -> c h w')
-                # print('class_probs.shape = {!r}'.format(class_probs.shape))
                 class_heatmap = kwimage.Heatmap(class_probs=class_probs, classes=classes)
                 pred_part = class_heatmap.draw_on(norm_signal, with_alpha=0.7)
                 # TODO: we might want to overlay the prediction on one or
@@ -1217,6 +1475,10 @@ class KWCocoVideoDataset(data.Dataset):
                     # Draw predictions on the first item
                     pred_mask = kwimage.make_heatmask(pred_raw)
                     norm_signal = chan_rows[1 if len(chan_rows) > 1 else 0]['norm_signal']
+                    if overlay_on_image:
+                        norm_signal = norm_signal
+                    else:
+                        norm_signal = np.zeros_like(norm_signal)
                     pred_layers = [pred_mask, norm_signal]
                     pred_part = kwimage.overlay_alpha_layers(pred_layers)
                     # TODO: we might want to overlay the prediction on one or
@@ -1265,53 +1527,11 @@ class KWCocoVideoDataset(data.Dataset):
         return loader
 
 
-def simple_video_sample_grid(dset, window_dims=None, window_overlap=0.0):
-    import kwarray
-    keepbound = True
-
-    # Create a sliding window object for each specific image (because they may
-    # have different sizes, technically we could memoize this)
-    vidid_to_slider = {}
-    for vidid, video in dset.index.videos.items():
-        gids = dset.index.vidid_to_gids[vidid]
-        num_frames = len(gids)
-        full_dims = [num_frames, video['height'], video['width']]
-        window_dims_ = full_dims if window_dims == 'full' else window_dims
-        slider = kwarray.SlidingWindow(full_dims, window_dims_,
-                                       overlap=window_overlap,
-                                       keepbound=keepbound,
-                                       allow_overshoot=True)
-
-        vidid_to_slider[vidid] = slider
-
-    sample_grid = []
-    for vidid, slider in vidid_to_slider.items():
-        regions = list(slider)
-        gids = dset.index.vidid_to_gids[vidid]
-        box_gids = []
-        for region in regions:
-            t_sl, y_sl, x_sl = region
-            region_gids = gids[t_sl]
-            box_gids.append(region_gids)
-
-        for region, region_gids in zip(regions, box_gids):
-            space_slice = region[1:3]
-            time_slice = region[0]
-
-            tr = {
-                'vidid': vidid,
-                'time_slice': time_slice,
-                'space_slice': space_slice,
-                'gids': region_gids,
-            }
-            sample_grid.append(tr)
-    return sample_grid
-
-
 def new_video_sample_grid(dset, window_dims=None, window_overlap=0.0,
                           space_dims=None, time_dim=None,  # TODO
                           classes_of_interest=None, ignore_coverage_thresh=0.6,
-                          negative_classes={'ignore', 'background'}):
+                          negative_classes={'ignore', 'background'},
+                          keepbound=False):
     """
     PORTED FROM NDSAMPLER TO FIX A BIG
 
@@ -1324,7 +1544,8 @@ def new_video_sample_grid(dset, window_dims=None, window_overlap=0.0,
         >>> sample_grid = new_video_sample_grid(dset, window_dims)
         >>> print('sample_grid = {}'.format(ub.repr2(sample_grid, nl=2)))
         >>> # Now try to load a sample
-        >>> tr = sample_grid['positives'][0]
+        >>> idx = sample_grid['positives_indexes'][0]
+        >>> tr = sample_grid['targets'][idx]
         >>> import ndsampler
         >>> sampler = ndsampler.CocoSampler(dset)
         >>> tr_ = sampler._infer_target_attributes(tr)
@@ -1338,7 +1559,6 @@ def new_video_sample_grid(dset, window_dims=None, window_overlap=0.0,
     """
     import kwarray
     from ndsampler import isect_indexer
-    keepbound = True
 
     if classes_of_interest:
         raise NotImplementedError
@@ -1363,10 +1583,12 @@ def new_video_sample_grid(dset, window_dims=None, window_overlap=0.0,
         return kwimage.Affine.coerce(warp_img_to_vid)
 
     # NOTE: this is in IMAGE space, not video space
+    # TODO: we dont need this if we don't care about pos vs neg
     _isect_index = isect_indexer.FrameIntersectionIndex.from_coco(dset)
 
     positives = []
     negatives = []
+    targets = []
     for vidid, slider in vidid_to_slider.items():
         video_regions = list(slider)
         gids = dset.index.vidid_to_gids[vidid]
@@ -1394,19 +1616,389 @@ def new_video_sample_grid(dset, window_dims=None, window_overlap=0.0,
                 'vidid': vidid,
                 'time_slice': time_slice,
                 'space_slice': space_slice,
-                # 'slices': region,
                 'gids': region_gids,
                 'aids': pos_aids,
             }
+            index = len(targets)
             if len(pos_aids):
-                positives.append(tr)
+                positives.append(index)
             else:
-                negatives.append(tr)
+                negatives.append(index)
+            targets.append(tr)
 
     print('Found {} positives'.format(len(positives)))
     print('Found {} negatives'.format(len(negatives)))
     sample_grid = {
-        'positives': positives,
-        'negatives': negatives,
+        'positives_indexes': positives,
+        'negatives_indexes': negatives,
+        'targets': targets,
+    }
+    return sample_grid
+
+
+def sample_vidspace_grid(dset, window_dims, window_overlap=0.0, negative_classes=None, keepbound=False):
+    """
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> import os
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
+        >>> dvc_dpath = os.environ.get('DVC_DPATH', _default)
+        >>> # coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/data.kwcoco.json')
+        >>> bundle_dpath = join(dvc_dpath, 'drop1-S2-L8-aligned')
+        >>> coco_fpath = join(bundle_dpath, 'combo_data.kwcoco.json')
+        >>> dset = kwcoco.CocoDataset(coco_fpath)
+        >>> # Create a sliding window object for each specific image (because they may
+        >>> # have different sizes, technically we could memoize this)
+        >>> import kwarray
+        >>> window_overlap = 0.5
+        >>> window_dims = (2, 96, 96)
+        >>> keepbound = False
+        >>> sample_grid = sample_vidspace_grid(dset, window_dims, window_overlap)
+        >>> list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
+
+    Example:
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> import ndsampler
+        >>> import kwcoco
+        >>> dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=30)
+        >>> # Create a sliding window object for each specific image (because they may
+        >>> # have different sizes, technically we could memoize this)
+        >>> import kwarray
+        >>> window_overlap = 0.0
+        >>> window_dims = (2, 96, 96)
+        >>> keepbound = False
+        >>> sample_grid = sample_vidspace_grid(dset, window_dims, window_overlap)
+
+        _ = xdev.profile_now(sample_vidspace_grid)(dset, window_dims, window_overlap)
+    """
+    # Create a sliding window object for each specific image (because they may
+    # have different sizes, technically we could memoize this)
+    import kwarray
+    import pyqtree
+    import itertools as it
+
+    # window_overlap = 0.5
+    window_space_dims = window_dims[1:3]
+    window_time_dims = window_dims[0]
+    print('window_time_dims = {!r}'.format(window_time_dims))
+    keepbound = False
+    vidid_to_space_slider = {}
+    for vidid, video in dset.index.videos.items():
+        full_dims = [video['height'], video['width']]
+        window_dims_ = full_dims if window_space_dims == 'full' else window_space_dims
+        slider = kwarray.SlidingWindow(full_dims, window_dims_,
+                                       overlap=window_overlap,
+                                       keepbound=keepbound,
+                                       allow_overshoot=True)
+        vidid_to_space_slider[vidid] = slider
+
+    # from ndsampler import isect_indexer
+    # _isect_index = isect_indexer.FrameIntersectionIndex.from_coco(dset)
+
+    targets = []
+    positive_idxs = []
+    negative_idxs = []
+
+    print('dset.cats = {}'.format(ub.repr2(dset.cats, nl=1)))
+
+    # FIXME: HARD CODED CONSTANTS
+    special_cids = ub.ddict(set)
+    special_aliases = {
+        'pre_cids': {'background', 'No Activity'},
+        'ignore_cids': {'ignore', 'Unknown', 'clouds'},
+
+        'active': {'Active Construction'},
+        'post_cids': {'Post Construction'},
+    }
+    for key, aliases in special_aliases.items():
+        for name in aliases:
+            if name in dset.index.name_to_cat:
+                special_cids[key].add(dset.index.name_to_cat[name]['id'])
+
+    # Given an video
+    # video_id = ub.peek()
+    for video_id in dset.index.videos.keys():
+        slider = vidid_to_space_slider[video_id]
+
+        video_info = dset.index.videos[video_id]
+        video_gids = list(dset.index.vidid_to_gids[video_id])
+
+        qtree = pyqtree.Index((0, 0, video_info['width'], video_info['height']))
+        qtree.aid_to_tlbr = {}
+
+        tid_to_infos = ub.ddict(list)
+        video_aids = dset.images(video_gids).annots.lookup('id')
+        for aids, gid in zip(video_aids, video_gids):
+
+            warp_vid_from_img = kwimage.Affine.coerce(dset.index.imgs[gid]['warp_img_to_vid'])
+            # warp_img_from_vid = warp_vid_from_img.inv()
+
+            img_info = dset.index.imgs[gid]
+            frame_index = img_info['frame_index']
+            tids = dset.annots(aids).lookup('track_id')
+            cids = dset.annots(aids).lookup('category_id')
+            for tid, aid, cid in zip(tids, aids, cids):
+
+                imgspace_box = kwimage.Boxes([dset.index.anns[aid]['bbox']], 'xywh')
+                vidspace_box = imgspace_box.warp(warp_vid_from_img)
+
+                tlbr_box = vidspace_box.to_tlbr().data[0]
+                qtree.insert(aid, tlbr_box)
+                qtree.aid_to_tlbr[aid] = tlbr_box
+
+                dset.index.anns[aid]['bbox']
+
+                tid_to_infos[tid].append({
+                    'gid': gid,
+                    'cid': cid,
+                    'frame_index': frame_index,
+                    'vidspace_box': tlbr_box,
+                    'cname': dset._resolve_to_cat(cid)['name'],
+                    'aid': aid,
+                })
+
+        tid_to_dframe = ub.map_vals(kwarray.DataFrameLight.from_dict, tid_to_infos)
+        for tid, track_dframe in tid_to_dframe.items():
+            track_dframe['gid'] = np.array(track_dframe['gid'])
+            track_dframe['frame_index'] = np.array(track_dframe['frame_index'])
+
+            # Precompute for speed
+            track_boxes = kwimage.Boxes(np.array(track_dframe['vidspace_box']), 'ltrb')
+            track_dframe['track_pairwise_ious'] = track_boxes.ious(track_boxes)
+            track_dframe['track_boxes'] = track_boxes
+
+        # print('tid_to_info = {}'.format(ub.repr2(tid_to_info, nl=2, sort=0)))
+        for space_region in list(slider):
+            y_sl, x_sl = space_region
+
+            # Find all annotations that pass through this spatial region
+            vid_box = kwimage.Boxes.from_slice((y_sl, x_sl))
+            query = vid_box.to_tlbr().data[0]
+            isect_aids = sorted(set(qtree.intersect(query)))
+
+            isect_annots = dset.annots(isect_aids)
+            unique_tracks = set(isect_annots.lookup('track_id'))
+
+            region_tid_to_info = ub.dict_subset(tid_to_dframe, unique_tracks)
+
+            sensor_coarse = dset.images(video_gids).lookup('sensor_coarse', '')
+            flags = [s == 'S2' for s in sensor_coarse]
+            if any(flags):
+                video_gids = list(ub.compress(video_gids, flags))
+
+            video_frame_idxs = list(range(len(video_gids)))
+
+            # precompute for speed
+            tid_to_region_iooa = {}
+            for tid, track_dframe in region_tid_to_info.items():
+                track_boxes = track_dframe['track_boxes']
+                # track_boxes = kwimage.Boxes(track_dframe['vidspace_box'], 'tlbr')
+                tid_to_region_iooa[tid] = vid_box.iooas(track_boxes)[0, :]
+
+            # Generate all combinations of sample frames
+            # TODO: ITERATING THROUGH ALL COMBINATIONS IS SLOW!
+            # Could likely reparametarize to sample implicitly in getitem
+            for frame_idxs in list(it.combinations(video_frame_idxs, window_time_dims)):
+
+                # Default is to assume this spacetime region has no change
+                changes = []
+
+                any_visible = False
+
+                gids = list(ub.take(video_gids, frame_idxs))
+                region_tracks = []
+                # For each track that passes through this region
+                for tid, track_dframe in region_tid_to_info.items():
+
+                    # Interpolate / Extrapolate track annotations onto the
+                    # sample frame indexes The track might not be annotated on
+                    # each frame. For each timestep check the most recent state
+                    # of the track.
+                    sampled_info = ub.ddict(list)
+                    _explicit_track_fxs = track_dframe['frame_index']
+                    _region_iooas = tid_to_region_iooa[tid]
+                    most_recent_idxs = np.searchsorted(_explicit_track_fxs, frame_idxs, 'right') - 1
+                    # prev_box = None
+                    prev_idx = None
+                    for idx in most_recent_idxs:
+                        if idx < 0:
+                            # The sample frame is before this track starts
+                            cid = ub.peek(special_cids['pre_cids'])
+                            curr_box = None
+                            region_iooa = 0
+                            prev_iou = np.nan
+                        elif idx > _explicit_track_fxs[-1]:
+                            # The sampled frame is after this track ends
+                            cid = track_dframe['cid'][idx]
+                            curr_box = track_dframe['vidspace_box'][idx]
+                            region_iooa = _region_iooas[idx]
+                            if prev_idx is None:
+                                prev_iou = np.nan
+                            else:
+                                prev_iou = track_dframe['track_pairwise_ious'][idx][prev_idx]
+                        else:
+                            cid = track_dframe['cid'][idx]
+                            curr_box = track_dframe['vidspace_box'][idx]
+                            region_iooa = _region_iooas[idx]
+                            if prev_idx is None:
+                                prev_iou = np.nan
+                            else:
+                                prev_iou = track_dframe['track_pairwise_ious'][idx][prev_idx]
+                        sampled_info['cid'].append(cid)
+                        sampled_info['box'].append(curr_box)
+                        sampled_info['region_iooa'].append(region_iooa)
+                        sampled_info['prev_iou'].append(prev_iou)
+                        prev_idx = idx
+
+                    # Heuristic: flag this region as a positive if any of these
+                    # heuristics are detected.  TODO: we need to figure out the
+                    # best method for determening if a space-time window
+                    # contains a positive example of change or not. What is the
+                    # best way to encode this in a kwcoco dataset?
+
+                    # Detect if the category of track changes.
+                    is_visible = np.array(sampled_info['region_iooa']) > 0.1
+                    is_change_visible = (is_visible[0:-1] & is_visible[1:])
+                    is_moving = np.array(sampled_info['prev_iou'][1:]) < 0.6
+                    is_visibly_moving = is_change_visible & is_moving
+
+                    if is_visible.any():
+                        any_visible = True
+
+                    if is_visibly_moving.any():
+                        changes.append('visibly_moving')
+
+                    if 1:
+                        has_pre = set(sampled_info['cid']) & special_cids['pre_cids']
+                        has_active = set(sampled_info['cid']) & special_cids['active']
+                        if len(has_pre) and len(has_active):
+                            changes.append('hack')
+
+                    if 0:
+                        unique_cids = set(sampled_info['cid']) - special_cids['ignore_cids']
+                        # TODO: dont mark change when post_cid moves to background
+                        if len(unique_cids) > 1:
+                            changes.append('category change')
+
+                    region_tracks.append({
+                        'tid': tid,
+                        'sampled_info': sampled_info,
+                        # 'is_visibly_moving': is_visibly_moving,
+                        # 'is_moving': is_moving,
+                        # 'is_change_visible': is_change_visible,
+                        # 'is_visible': is_visible,
+                    })
+
+                if changes:
+                    positive_idxs.append(len(targets))
+                else:
+                    # Hack: exclude all annotated regions from negative sampling
+                    if any_visible:
+                        continue
+                    negative_idxs.append(len(targets))
+
+                targets.append({
+                    'gids': gids,
+                    'space_slice': space_region,
+                    'changes': ','.join(changes),
+                    'region_tracks': region_tracks,
+                })
+
+    print('Found {} positives'.format(len(positive_idxs)))
+    print('Found {} negatives'.format(len(negative_idxs)))
+    sample_grid = {
+        'positives_indexes': positive_idxs,
+        'negatives_indexes': negative_idxs,
+        'targets': targets,
+    }
+    return sample_grid
+
+
+def sample_test_vidspace_grid(dset, window_dims, window_overlap=0.0, negative_classes=None, keepbound=True):
+    """
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> import os
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
+        >>> dvc_dpath = os.environ.get('DVC_DPATH', _default)
+        >>> # coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/data.kwcoco.json')
+        >>> bundle_dpath = join(dvc_dpath, 'drop1-S2-L8-aligned')
+        >>> coco_fpath = join(bundle_dpath, 'combo_data.kwcoco.json')
+        >>> dset = kwcoco.CocoDataset(coco_fpath)
+        >>> # Create a sliding window object for each specific image (because they may
+        >>> # have different sizes, technically we could memoize this)
+        >>> import kwarray
+        >>> window_overlap = 0.5
+        >>> window_dims = (2, 96, 96)
+        >>> keepbound = False
+        >>> sample_grid = sample_vidspace_grid(dset, window_dims, window_overlap)
+        >>> list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
+
+    Example:
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> import ndsampler
+        >>> import kwcoco
+        >>> dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=30)
+        >>> # Create a sliding window object for each specific image (because they may
+        >>> # have different sizes, technically we could memoize this)
+        >>> import kwarray
+        >>> window_overlap = 0.0
+        >>> window_dims = (2, 96, 96)
+        >>> keepbound = False
+        >>> sample_grid = sample_test_vidspace_grid(dset, window_dims, window_overlap)
+
+        _ = xdev.profile_now(sample_vidspace_grid)(dset, window_dims, window_overlap)
+    """
+    # Create a sliding window object for each specific image (because they may
+    # have different sizes, technically we could memoize this)
+    import kwarray
+
+    # window_overlap = 0.5
+    window_space_dims = window_dims[1:3]
+    window_time_dims = window_dims[0]
+    print('window_time_dims = {!r}'.format(window_time_dims))
+    vidid_to_space_slider = {}
+    for vidid, video in dset.index.videos.items():
+        full_dims = [video['height'], video['width']]
+        window_dims_ = full_dims if window_space_dims == 'full' else window_space_dims
+        slider = kwarray.SlidingWindow(full_dims, window_dims_,
+                                       overlap=window_overlap,
+                                       keepbound=keepbound,
+                                       allow_overshoot=True)
+        vidid_to_space_slider[vidid] = slider
+    targets = []
+    # Given an video
+    # video_id = ub.peek()
+    for video_id in dset.index.videos.keys():
+        slider = vidid_to_space_slider[video_id]
+        video_gids = list(dset.index.vidid_to_gids[video_id])
+
+        # print('tid_to_info = {}'.format(ub.repr2(tid_to_info, nl=2, sort=0)))
+        for space_region in list(slider):
+            y_sl, x_sl = space_region
+
+            sensor_coarse = dset.images(video_gids).lookup('sensor_coarse', '')
+            flags = [s == 'S2' for s in sensor_coarse]
+            if any(flags):
+                video_gids = list(ub.compress(video_gids, flags))
+
+            video_frame_idxs = list(range(len(video_gids)))
+            frame_skip = len(video_gids) // 2
+
+            assert window_time_dims == 2
+            # HARD CODED HACK TO MAKE THE SAMPLER TAKE PAIRS OF IMAGES ACROSS TIME GAPS
+            for idx1 in video_frame_idxs:
+                for idx2 in video_frame_idxs[idx1 + frame_skip::frame_skip]:
+                    frame_idxs = [idx1, idx2]
+                    gids = list(ub.take(video_gids, frame_idxs))
+                    targets.append({
+                        'gids': gids,
+                        'space_slice': space_region,
+                    })
+
+    sample_grid = {
+        'targets': targets,
     }
     return sample_grid

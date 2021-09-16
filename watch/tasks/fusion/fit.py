@@ -153,6 +153,29 @@ def make_fit_config(cmdline=False, **kwargs):
         profiling.
         '''))
 
+    config_parser.add_argument('--torch_sharing_strategy', default='default', help=ub.paragraph(
+        '''
+        Torch multiprocessing sharing strategy.
+        Can be default, file_descriptor, file_system
+        '''))
+
+    config_parser.add_argument('--torch_start_method', default='default', help=ub.paragraph(
+        '''
+        Torch multiprocessing sharing strategy.
+        Can be fork, spawn, forkserver
+        '''))
+
+    config_parser.add_argument('--init', default='noop', help=ub.paragraph(
+        '''
+        Initialization strategy. Can be a path to a pretrained network.
+        '''))
+
+    # config_parser.add_argument('--name', default=None, help=ub.paragraph(
+    #     '''
+    #     TODO: allow for the user to specify a name, and do netharn-like
+    #     fit/runs and fit/name directories?
+    #     '''))
+
     callback_parser = parser.add_argument_group("Callbacks")
 
     # our extension callbacks have arg parsers
@@ -161,12 +184,6 @@ def make_fit_config(cmdline=False, **kwargs):
 
     callback_parser.add_argument('--patience', default=100, type=int, help=ub.paragraph(
         '''Number of epochs with no improvement before early stopping'''))
-
-    # config_parser.add_argument('--name', default=None, help=ub.paragraph(
-    #     '''
-    #     TODO: allow for the user to specify a name, and do netharn-like
-    #     fit/runs and fit/name directories?
-    #     '''))
 
     # Setup common fields and modal switches
     modal_parser = parser.add_argument_group("Modal")
@@ -235,8 +252,8 @@ def make_fit_config(cmdline=False, **kwargs):
 
     # Extend the parser based on the chosen dataset / method modes
     datamodule_class.add_argparse_args(parser)
-    method_parser = parser.add_argument_group("Method")
-    method_class.add_argparse_args(method_parser)
+    # method_parser = parser.add_argument_group("Method")
+    method_class.add_argparse_args(parser)
     pl.Trainer.add_argparse_args(parser)
 
     # Hard code custom default settings for lightning to enable certain tricks
@@ -321,6 +338,13 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     print("{train_name}\n====================".format(**args_dict))
     print('args_dict = {}'.format(ub.repr2(args_dict, nl=1, sort=0)))
 
+    from watch.utils.lightning_ext import util_globals
+    util_globals.configure_hacks(
+        num_workers=args.num_workers,
+        torch_sharing_strategy=args.torch_sharing_strategy,
+        torch_start_method=args.torch_start_method,
+    )
+
     pathlib.Path(args.workdir).mkdir(exist_ok=True, parents=True)
 
     method_class = getattr(methods, args.method)
@@ -348,11 +372,38 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         print('datamodule.input_stats = {}'.format(
             ub.repr2(datamodule.input_stats, nl=2, sort=0)))
         method_var_dict["input_stats"] = datamodule.input_stats
-        method_var_dict["input_channels"] = datamodule.channels
+        method_var_dict["input_channels"] = datamodule.input_channels
 
     method_var_dict["classes"] = datamodule.classes
     # Note: Changed name from method to model
     model = method_class(**method_var_dict)
+
+    if args.resume_from_checkpoint is None:
+        import netharn as nh
+        init_cls, init_kw = nh.api.Initializer.coerce(init=args.init)
+        if 'fpath' in init_kw:
+            # Hack: try and add support for torch.package
+            # from torch import package
+            try:
+                from watch.tasks.fusion import utils
+                other_model = utils.load_model_from_package(init_kw['fpath'])
+            except Exception:
+                pass
+            else:
+                import torch
+                # from rasterio import MemoryFile  # try rasterio memory file
+                # mfile = MemoryFile(ext='.pt')
+                # with mfile.open('w') as file:
+                #     torch.save(other_model.state_dict(), file)
+                # init_kw['fpath'] = mfile.name
+
+                import tempfile
+                tfile = tempfile.NamedTemporaryFile()
+                torch.save(other_model.state_dict(), tfile.name)
+                init_kw['fpath'] = tfile.name
+
+        initializer = init_cls(**init_kw)
+        info = initializer(model)  # NOQA
 
     # init trainer from args
     callbacks = [
@@ -368,13 +419,13 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
 
         pl.callbacks.ModelCheckpoint(monitor='train_loss', mode='min', save_top_k=1),
-        # pl.callbacks.GPUStatsMonitor(),
+        # pl.callbacks.GPUStatsMonitor(),  # enabling this breaks CPU tests
     ]
     if args.vali_dataset is not None:
         callbacks += [
             pl.callbacks.EarlyStopping(
                 monitor='val_loss', mode='min', patience=args.patience,
-                verbose=True),
+                verbose=True, strict=False),
             pl.callbacks.ModelCheckpoint(
                 monitor='val_loss', mode='min', save_top_k=4),
             pl.callbacks.ModelCheckpoint(
@@ -437,12 +488,6 @@ def fit_model(args=None, cmdline=False, **kwargs):
 
     from watch.tasks.fusion import utils
     modules = make_lightning_modules(cmdline=cmdline, **kwargs)
-
-    import netharn as nh
-    nh.api.configure_hacks(
-        workers=modules['args'].num_workers,
-        sharing_strategy='default',
-    )
 
     # args = modules['args']
     trainer = modules['trainer']
@@ -539,4 +584,6 @@ def main(**kwargs):
 if __name__ == "__main__":
     # import xdev
     # xdev.make_warnings_print_tracebacks()
+    # from watch.tasks.fusion import fit as this_module
+    # this_module.main()
     main()

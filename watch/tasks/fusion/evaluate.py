@@ -1,13 +1,22 @@
 import kwcoco
 import kwimage
+import kwarray
 import sklearn.metrics as skm
 import pandas as pd
 import numpy as np
 import pathlib
-from watch.tasks.fusion import utils
 import ubelt as ub
+from watch.tasks.fusion import utils
+from watch.utils import util_kwimage
+from watch.utils.kwcoco_extensions import CocoImage
+
+try:
+    from xdev import profile
+except Exception:
+    profile = ub.identity
 
 
+@profile
 def binary_confusion_measures(tn, fp, fn, tp):
     """
     Metrics derived from a binary confusion matrix
@@ -125,6 +134,7 @@ def binary_confusion_measures(tn, fp, fn, tp):
     return info
 
 
+@profile
 def associate_images(true_coco, pred_coco):
     # TODO: robust image/video association (see kwcoco eval)
     common_vidnames = set(true_coco.index.name_to_video) & set(pred_coco.index.name_to_video)
@@ -186,7 +196,10 @@ def associate_images(true_coco, pred_coco):
     return video_matches, image_matches
 
 
+@profile
 def single_image_segmentation_metrics(true_coco, pred_coco, gid1, gid2):
+    from kwcoco.metrics.confusion_vectors import BinaryConfusionVectors
+    import kwarray
     img1 = true_coco.imgs[gid1]
     vidid1 = true_coco.imgs[gid1]['video_id']
     video1 = true_coco.index.videos[vidid1]
@@ -226,6 +239,34 @@ def single_image_segmentation_metrics(true_coco, pred_coco, gid1, gid2):
     row["pred_gid"] = gid2
     row["video"] = video1['name']
     info['row'] = row
+
+    TRY_SOFT = 1
+    if TRY_SOFT:
+        try:
+            pred_gid = gid2
+            pred_img = pred_coco.index.imgs[pred_gid]
+            pred_coco_img = CocoImage(pred_img, pred_coco)
+
+            change_prob = pred_coco_img.delay('change_prob', space='image').finalize()[..., 0]
+            invalid_mask = np.isnan(change_prob)
+            change_prob[invalid_mask] = 0
+
+            bin_cfns = BinaryConfusionVectors(kwarray.DataFrameArray({
+                'is_true': true_canvas.ravel(),
+                'pred_score': change_prob.ravel(),
+                'weight': (1 - invalid_mask).ravel().astype(np.float32),
+            }))
+            change_measures = bin_cfns.measures()
+            row.update(ub.dict_isect(change_measures.summary(), {'ap', 'auc', 'max_f1'}))
+
+            info.update({
+                'change_measures': change_measures,
+                'change_prob': change_prob,
+                'invalid_mask': invalid_mask,
+            })
+        except Exception:
+            pass
+
     return info
 
 
@@ -236,6 +277,7 @@ def _memo_legend(label_to_color):
     return legend_img
 
 
+@profile
 def dump_chunked_confusion(true_coco, pred_coco, chunk_info, plot_dpath):
     """
     Draw a a sequence of true/pred image predictions
@@ -258,13 +300,13 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, plot_dpath):
     for info in chunk_info:
         row = info['row']
         unique_vidnames.add(row['video'])
+
         true_gid = row['true_gid']
-        img = true_coco.index.imgs[true_gid]
-        frame_index = img['frame_index']
+
+        true_img = true_coco.index.imgs[true_gid]
+        frame_index = true_img['frame_index']
         frame_nums.append(frame_index)
         true_gids.append(true_gid)
-
-        # pred_gid = row['pred_gid']
 
         pred_canvas = info['pred_canvas']
         true_canvas = info['true_canvas']
@@ -274,11 +316,65 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, plot_dpath):
         image_text = f'{frame_index} - gid = {true_gid}'
 
         confusion_image = kwimage.ensure_uint255(confusion_image)
-        confusion_image = kwimage.draw_text_on_image(
-            confusion_image, image_text, org=(1, 1), valign='top',
-            color='white', border={'color': 'black'})
 
-        parts.append(confusion_image)
+        header = util_kwimage.draw_header_text(
+            confusion_image, image_text, color='white', stack=False)
+
+        vert_parts = [
+            header,
+            confusion_image
+        ]
+        # confusion_image = kwimage.draw_text_on_image(
+        #     confusion_image, image_text, org=(1, 1), valign='top',
+        #     color='white', border={'color': 'black'})
+
+        # TODO:
+        # Can we show the reference image?
+        # TODO:
+        # Show the datetime on the top of the image (and the display band?)
+
+        real_image_norm = None
+        real_image_int = None
+
+        TRY_IMREAD = 1
+        if TRY_IMREAD:
+            true_coco_img = CocoImage(true_img, true_coco)
+            avali_chans = {p2 for p1 in true_coco_img.channels.spec.split(',') for p2 in p1.split('|')}
+            chosen_viz_channs = None
+            if len(avali_chans & {'red', 'green', 'blue'}) == 3:
+                chosen_viz_channs = 'red|green|blue'
+            elif len(avali_chans & {'r', 'g', 'b'}) == 3:
+                chosen_viz_channs = 'r|g|b'
+            else:
+                chosen_viz_channs = true_coco_img.primary_asset()['channels']
+            try:
+                real_image = true_coco_img.delay(chosen_viz_channs, space='image').finalize()
+                real_image_norm = kwimage.normalize_intensity(real_image)
+                # Make into gray
+                real_image_int = kwimage.ensure_uint255(real_image_norm)
+            except Exception:
+                pass
+
+        TRY_SOFT = 1
+        change_prob = None
+        if TRY_SOFT:
+            change_prob = info.get('change_prob', None)
+            invalid_mask = info.get('invalid_mask', None)
+            if change_prob is not None:
+                heatmap = kwimage.make_heatmask(change_prob, with_alpha=0.5)
+                heatmap[invalid_mask] = 0
+                heatmap_int = kwimage.ensure_uint255(heatmap[..., 0:3])
+                vert_parts.append(heatmap_int)
+                if real_image_norm is not None:
+                    overlaid = kwimage.overlay_alpha_layers([heatmap, real_image_norm.mean(axis=2)])
+                    overlaid = kwimage.ensure_uint255(overlaid[..., 0:3])
+                    vert_parts.append(overlaid)
+
+        if real_image_int is not None and change_prob is None:
+            vert_parts.append(real_image_int)
+
+        vert_stack = kwimage.stack_images(vert_parts, axis=0)
+        parts.append(vert_stack)
 
     max_frame = min(frame_nums)
     min_frame = max(frame_nums)
@@ -311,6 +407,7 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, plot_dpath):
     kwimage.imwrite(str(plot_fpath), plot_canvas)
 
 
+@profile
 def header_text(text, max_dim=None, shrink=False):
     """
     If shrink is true, shrinks the text to fit, otherwise text is
@@ -332,6 +429,7 @@ def header_text(text, max_dim=None, shrink=False):
     return header
 
 
+@profile
 def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None):
     """
 
@@ -352,6 +450,13 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None):
         >>> print('eval_dpath = {!r}'.format(eval_dpath))
         >>> evaluate_segmentations(true_coco, pred_coco, eval_dpath)
     """
+
+    required_marked = 'auto'  # parametarize
+    if required_marked == 'auto':
+        # In "auto" mode dont require marks if all images are unmarked,
+        # otherwise assume that we should restirct to marked images
+        required_marked = any(pred_coco.images().lookup('has_predictions', False))
+
     video_matches, image_matches = associate_images(true_coco, pred_coco)
     rows = []
     chunk_size = 5
@@ -364,26 +469,91 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None):
         plot_dpath.mkdir(exist_ok=True, parents=True)
         draw = True
 
+    combo_measures = None
+
+    total_images = 0
+
+    if required_marked:
+        for video_match in video_matches:
+            gids1 = video_match['match_gids1']
+            gids2 = video_match['match_gids2']
+            flags = pred_coco.images(gids2).lookup('has_predictions', False)
+            video_match['match_gids1'] = list(ub.compress(gids1, flags))
+            video_match['match_gids2'] = list(ub.compress(gids2, flags))
+            total_images += len(gids1)
+        gids1 = image_matches['match_gids1']
+        gids2 = image_matches['match_gids2']
+        flags = pred_coco.images(gids2).lookup('has_predictions', False)
+        image_matches['match_gids1'] = list(ub.compress(gids1, flags))
+        image_matches['match_gids2'] = list(ub.compress(gids2, flags))
+        total_images += len(gids1)
+
+    prog = ub.ProgIter(total=total_images, desc='scoring', adjust=False, freq=1)
+    prog.begin()
+
     # Handle images in videos
     for video_match in video_matches:
+        prog.set_extra('comparing ' + video_match['vidname'])
         gids1 = video_match['match_gids1']
         gids2 = video_match['match_gids2']
+        if required_marked:
+            flags = pred_coco.images(gids2).lookup('has_predictions', False)
+            gids1 = list(ub.compress(gids1, flags))
+            gids2 = list(ub.compress(gids2, flags))
+
         pairs = list(zip(gids1, gids2))
         for chunk in ub.chunks(pairs, chunk_size):
             chunk_info = []
+
+            chunk_measures = []
+            if combo_measures is not None:
+                chunk_measures.append(combo_measures)
+
             for gid1, gid2 in chunk:
                 info = single_image_segmentation_metrics(
                     true_coco, pred_coco, gid1, gid2)
                 rows.append(info['row'])
+
+                measures = info.get('change_measures', None)
+                if measures is not None:
+                    chunk_measures.append(measures)
+
                 if draw:
                     chunk_info.append(info)
+                prog.update()
+
+            if chunk_measures:
+                # Reduce measures over the chunk
+                combo_measures = combine_kwcoco_measures(chunk_measures, precision=5)
+
             if draw:
                 dump_chunked_confusion(
                     true_coco, pred_coco, chunk_info, plot_dpath)
 
+    if combo_measures is not None:
+        curve_dpath = pathlib.Path(eval_dpath) / 'curves'
+        curve_dpath.mkdir(exist_ok=True, parents=True)
+        measure_info = combo_measures.__json__()
+        import json
+        with open(curve_dpath / 'measures.json', 'w') as file:
+            json.dump(measure_info, file)
+        if draw:
+            combo_measures.reconstruct()
+            print('combo_measures = {!r}'.format(combo_measures))
+            import kwplot
+            kwplot.autompl()
+            fig = kwplot.figure(doclf=True)
+            combo_measures.summary_plot(fnum=1)
+            fig = kwplot.autoplt().gcf()
+            fig.savefig(str(curve_dpath / 'summary.png'))
+
     # Handle standalone images
     gids1 = image_matches['match_gids1']
     gids2 = image_matches['match_gids2']
+
+    chunk_measures = []
+    if combo_measures is not None:
+        chunk_measures.append(combo_measures)
     for gid1, gid2 in zip(gids1, gids2):
         info = single_image_segmentation_metrics(
             true_coco, pred_coco, gid1, gid2)
@@ -392,6 +562,14 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None):
             chunk_info = [info]
             dump_chunked_confusion(
                 true_coco, pred_coco, chunk_info, plot_dpath)
+        prog.update()
+    if chunk_measures:
+        if len(chunk_measures) == 1:
+            combo_measures = chunk_measures[0]
+        else:
+            combo_measures = combine_kwcoco_measures(chunk_measures, precision=5)
+
+    prog.end()
 
     df = pd.DataFrame(rows)
     print(df)
@@ -399,6 +577,10 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None):
     summary = binary_confusion_measures(
         df.tn.sum(), df.fp.sum(), df.fn.sum(), df.tp.sum())
     summary = ub.map_vals(lambda x: x.item(), summary)
+    if combo_measures is not None:
+        summary['ap'] = combo_measures['ap']
+        summary['auc'] = combo_measures['auc']
+        summary['max_f1'] = combo_measures['max_f1']
     print('summary = {}'.format(ub.repr2(summary, nl=1, precision=4, align=':',
                                          sort=0)))
 
@@ -412,13 +594,128 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None):
     return df
 
 
+@profile
+def combine_kwcoco_measures(tocombine, precision=None):
+    """
+    Combine binary confusion metrics
+
+    TODO:
+        - [ ] Remove and use the version in kwcoco.metrics once that is released
+
+    Example:
+        >>> from watch.tasks.fusion.evaluate import *  # NOQA
+        >>> from kwcoco.metrics.confusion_vectors import BinaryConfusionVectors
+        >>> measures1 = BinaryConfusionVectors.demo(n=15).measures()
+        >>> measures2 = measures1  # BinaryConfusionVectors.demo(n=15).measures()
+        >>> tocombine = [measures1, measures2]
+        >>> new_measures = combine_kwcoco_measures(tocombine)
+        >>> print('new_measures = {!r}'.format(new_measures))
+        >>> print('measures1 = {!r}'.format(measures1))
+        >>> print('measures2 = {!r}'.format(measures2))
+        >>> new_measures.reconstruct()
+        >>> print(ub.repr2(measures1.__json__(), nl=1, sort=0))
+        >>> print(ub.repr2(measures2.__json__(), nl=1, sort=0))
+        >>> print(ub.repr2(new_measures.__json__(), nl=1, sort=0))
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.figure(fnum=1)
+        >>> new_measures.summary_plot()
+        >>> measures1.summary_plot()
+        >>> measures1.draw('roc')
+        >>> measures2.draw('roc')
+        >>> new_measures.draw('roc')
+    """
+    from kwcoco.metrics.confusion_vectors import Measures
+
+    combo_thresh_asc = np.hstack([m['thresholds'] for m in tocombine])
+    if precision is not None:
+        combo_thresh_asc = combo_thresh_asc.round(precision)
+
+    combo_thresh_asc = np.unique(combo_thresh_asc)
+    new_thresh = combo_thresh_asc[::-1]
+
+    summable = {
+        'nsupport': 0,
+        'realpos_total': 0,
+        'realneg_total': 0,
+    }
+
+    fp_accum = np.zeros(len(new_thresh))
+    tp_accum = np.zeros(len(new_thresh))
+    tn_accum = np.zeros(len(new_thresh))
+    fn_accum = np.zeros(len(new_thresh))
+
+    for measures in tocombine:
+        thresholds = measures['thresholds']
+        if precision is not None:
+            thresholds = thresholds.round(precision)
+
+        right_idxs = np.searchsorted(combo_thresh_asc, thresholds, 'right')
+        left_idxs = len(combo_thresh_asc) - right_idxs
+        left_idxs = left_idxs.clip(0, len(combo_thresh_asc) - 1)
+        # NOTE: if the min is non-zero in each array the diff wont work
+        # reformulate if this case arrises
+        fp_pos = np.diff(np.r_[[0], measures['fp_count']])
+        tp_pos = np.diff(np.r_[[0], measures['tp_count']])
+        tn_pos = np.diff(np.r_[[0], measures['tn_count'][::-1]])[::-1]
+        fn_pos = np.diff(np.r_[[0], measures['fn_count'][::-1]])[::-1]
+        # Handle the case where we round the thresholds for space reasons
+        if 1:
+            np.add.at(fp_accum, left_idxs, fp_pos)
+            np.add.at(tp_accum, left_idxs, tp_pos)
+            np.add.at(fn_accum, left_idxs, fn_pos)
+            np.add.at(tn_accum, left_idxs, tn_pos)
+        else:
+            unique_idxs, groupxs = kwarray.group_indices(left_idxs)
+            fp_pos2 = [g.sum() for g in kwarray.apply_grouping(fp_pos, groupxs)]
+            tp_pos2 = [g.sum() for g in kwarray.apply_grouping(tp_pos, groupxs)]
+            tn_pos2 = [g.sum() for g in kwarray.apply_grouping(tn_pos, groupxs)]
+            fn_pos2 = [g.sum() for g in kwarray.apply_grouping(fn_pos, groupxs)]
+            fp_accum[unique_idxs] += fp_pos2
+            tp_accum[unique_idxs] += tp_pos2
+            tn_accum[unique_idxs] += tn_pos2
+            fn_accum[unique_idxs] += fn_pos2
+
+        for k in summable:
+            summable[k] += measures[k]
+
+    new_fp = np.cumsum(fp_accum)
+    new_tp = np.cumsum(tp_accum)
+    new_tn = np.cumsum(tn_accum[::-1])[::-1]
+    new_fn = np.cumsum(fn_accum[::-1])[::-1]
+
+    new_info = {
+        'fp_count': new_fp,
+        'tp_count': new_tp,
+        'tn_count': new_tn,
+        'fn_count': new_fn,
+        'thresholds': new_thresh,
+    }
+    new_info.update(summable)
+
+    other = {
+        'fp_cutoff',
+        'monotonic_ppv',
+        'node',
+        'cx',
+        'stabalize_thresh',
+        'trunc_idx'
+    }
+    rest = ub.dict_isect(tocombine[0], other)
+    new_info.update(rest)
+    new_measures = Measures(new_info)
+    # new_measures.reconstruct()
+    return new_measures
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--true_dataset", help='path to the groundtruth dataset')
     parser.add_argument("--pred_dataset", help='path to the predicted dataset')
     parser.add_argument("--eval_dpath", help='path to dump results')
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
 
     true_coco = kwcoco.CocoDataset.coerce(args.true_dataset)
     pred_coco = kwcoco.CocoDataset.coerce(args.pred_dataset)

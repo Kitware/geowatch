@@ -76,6 +76,7 @@ import geopandas as gpd
 import datetime
 import shapely
 from shapely import ops
+import pathlib
 from os.path import join, exists
 
 
@@ -93,7 +94,7 @@ class CocoAlignGeotiffConfig(scfg.Config):
     default = {
         'src': scfg.Value('in.geojson.json', help='input dataset to chip'),
 
-        'dst': scfg.Value(None, help='bundle directory for the output'),
+        'dst': scfg.Value(None, help='bundle directory or kwcoco json file for the output'),
 
         'max_workers': scfg.Value(4, help='number of parallel procs'),
         'aux_workers': scfg.Value(4, help='additional inner threads for aux imgs'),
@@ -227,7 +228,7 @@ def main(**kw):
     print('process_info = {}'.format(ub.repr2(process_info, nl=2)))
 
     src_fpath = config['src']
-    dst_dpath = config['dst']
+    dst = config['dst']
     regions = config['regions']
     context_factor = config['context_factor']
     rpc_align_method = config['rpc_align_method']
@@ -237,7 +238,17 @@ def main(**kw):
     aux_workers = config['aux_workers']
     keep = config['keep']
 
-    output_bundle_dpath = dst_dpath
+    dst = pathlib.Path(ub.expandpath(dst))
+    # TODO: handle this coercion of directories or bundles in kwcoco itself
+    if 'json' in dst.name.split('.'):
+        output_bundle_dpath = str(dst.parent)
+        dst_fpath = str(dst)
+    else:
+        output_bundle_dpath = str(dst)
+        dst_fpath = str(dst / 'data.kwcoco.json')
+
+    print('output_bundle_dpath = {!r}'.format(output_bundle_dpath))
+    print('dst_fpath = {!r}'.format(dst_fpath))
 
     # from pympler.tracker import SummaryTracker
     # tracker = SummaryTracker()
@@ -277,8 +288,7 @@ def main(**kw):
             xfact=context_factor, yfact=context_factor, origin='center')
 
     # For each ROI extract the aligned regions to the target path
-    extract_dpath = ub.expandpath(output_bundle_dpath)
-    ub.ensuredir(extract_dpath)
+    extract_dpath = ub.ensuredir(output_bundle_dpath)
 
     # Create a new dataset that we will extend as we extract ROIs
     new_dset = kwcoco.CocoDataset()
@@ -304,7 +314,7 @@ def main(**kw):
             write_subsets=write_subsets, max_workers=max_workers,
             aux_workers=aux_workers, keep=keep)
 
-    new_dset.fpath = join(extract_dpath, 'data.kwcoco.json')
+    new_dset.fpath = dst_fpath
     print('Dumping new_dset.fpath = {!r}'.format(new_dset.fpath))
     new_dset.reroot(new_root=output_bundle_dpath, absolute=False)
     new_dset.dump(new_dset.fpath, newlines=True)
@@ -409,6 +419,9 @@ def geopandas_pairwise_overlaps(gdf1, gdf2, predicate='intersects'):
     References:
         ..[1] https://en.wikipedia.org/wiki/DE-9IM
 
+    TODO:
+        - [ ] This can move to watch.utils
+
     Returns:
         dict: mapping from indexes in gdf1 to overlapping indexes in gdf2
 
@@ -474,6 +487,9 @@ def latlon_text(lat, lon, precision=6):
                 6 - for ~10cm accuracy,
                 5 - for ~1m accuracy,
                 2 - for ~1km accuracy,
+
+    TODO:
+        - [ ] This can move to watch.utils
 
     Notes:
         1 degree of latitude is *very* roughly the order of 100km, so the
@@ -1011,6 +1027,7 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
     new_img.update(carry_over)
     new_img['parent_file_name'] = img.get('file_name', None)  # remember which image this came from
     new_img['parent_name'] = img.get('name', None)  # remember which image this came from
+    new_img['parent_canonical_name'] = img.get('canonical_name', None)  # remember which image this came from
     # new_img['video_id'] = new_vidid  # Done outside of this worker
     new_img['frame_index'] = frame_index
     new_img['timestamp'] = date.toordinal()
@@ -1096,6 +1113,9 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
 def _write_ann_visualizations(new_dset, new_img, new_anns, sub_bundle_dpath):
     """
     Helper for :func:`SimpleDataCube.extract_overlaps`.
+
+    TODO:
+        refactor because this is also used in coco_visualize_videos
     """
     # See if we can look at what we made
     from watch.utils.util_norm import normalize_intensity
@@ -1397,6 +1417,11 @@ def shapely_bounding_box(geom):
 
 
 def flip_xy(poly):
+    """
+    TODO:
+        - [ ] This is unused in this file and thus should move to the dev
+        folder or somewhere else for to keep useful scratch work.
+    """
     if hasattr(poly, 'reorder_axes'):
         new_poly = poly.reorder_axes((1, 0))
     else:
@@ -1408,6 +1433,11 @@ def flip_xy(poly):
 
 
 def coco_geopandas_images(dset):
+    """
+    TODO:
+        - [ ] This is unused in this file and thus should move to the dev
+        folder or somewhere else for to keep useful scratch work.
+    """
     df_input = []
     for gid, img in dset.imgs.items():
         info  = img['geotiff_metadata']
@@ -1428,6 +1458,10 @@ def visualize_rois(dset, kw_all_box_rois):
     matplotlib visualization of image and annotation regions on a world map
 
     Developer function, unused in the script
+
+    TODO:
+        - [ ] This is unused in this file and thus should move to the dev
+        folder or somewhere else for to keep useful scratch work.
     """
 
     sh_coverage_rois = find_covered_regions(dset)

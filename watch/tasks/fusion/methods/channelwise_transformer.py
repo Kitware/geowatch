@@ -38,7 +38,7 @@ class MultimodalTransformer(pl.LightningModule):
         >>> loader = datamodule.train_dataloader()
         >>> batch = next(iter(loader))
         >>> #self = MultimodalTransformer(arch_name='smt_it_joint_p8')
-        >>> self = MultimodalTransformer(arch_name='smt_it_stm_p8', input_channels=datamodule.channels)
+        >>> self = MultimodalTransformer(arch_name='smt_it_stm_p8', input_channels=datamodule.input_channels)
         >>> import netharn as nh
         >>> # device = nh.XPU.coerce('auto')
         >>> device = nh.XPU.coerce('cpu').main_device
@@ -56,63 +56,6 @@ class MultimodalTransformer(pl.LightningModule):
         >>>     with torch.profiler.record_function("model_inference"):
         >>>         output = self(images)
         >>> print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
-
-    Benchmark:
-        >>> # https://pytorch.org/tutorials/recipes/recipes/profiler_recipe.html
-        >>> # TODO: profile attention_impl
-        >>> import netharn as nh
-        >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
-        >>> from watch.tasks.fusion import datamodules
-        >>> import torch.profiler
-        >>> from torch.profiler import profile, ProfilerActivity, record_function
-        >>> datamodule = datamodules.KWCocoVideoDataModule(
-        >>>     train_dataset='special:vidshapes8', num_workers=0)
-        >>> datamodule.setup('fit')
-        >>> loader = datamodule.train_dataloader()
-        >>> batch = next(iter(loader))
-        >>> #self = MultimodalTransformer(arch_name='smt_it_joint_p8')
-        >>> frames = batch[0]['frames']
-        >>> collate_images = torch.cat([frame['modes']['r|g|b'][None, :].float() for frame in frames], dim=0)
-        >>> device = nh.XPU.coerce('cpu').main_device
-        >>> device = nh.XPU.coerce('gpu').main_device
-        >>> #device = nh.XPU.coerce('auto').main_device
-        >>> images = collate_images[None, :].to(device)
-        >>> import timerit
-        >>> ti = timerit.Timerit(3, bestof=1, verbose=2)
-        >>> #
-        >>> for arch_name in ['smt_it_stm_p8', 'smt_it_joint_p8', 'smt_it_hwtm_p8']:
-        >>>     print('====')
-        >>>     self = MultimodalTransformer(arch_name=arch_name)
-        >>>     num_params = nh.util.number_of_parameters(self)
-        >>>     print('arch_name = {!r}'.format(arch_name))
-        >>>     print('num_params = {!r}'.format(num_params))
-        >>>     print('running')
-        >>>     self = self.to(device)
-        >>>     output = self(images)
-        >>>     for timer in ti.reset(f'inference-{arch_name}'):
-        >>>         torch.cuda.synchronize()
-        >>>         with timer:
-        >>>             output = self(images)['change']
-        >>>             torch.cuda.synchronize()
-        >>>     for timer in ti.reset(f'train-{arch_name}'):
-        >>>         torch.cuda.synchronize()
-        >>>         with timer:
-        >>>             output = self(images)['change']
-        >>>             output.sum().backward()
-        >>>             torch.cuda.synchronize()
-        >>>     with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True, profile_memory=True) as pred_prof:
-        >>>         with record_function(f"train_{arch_name}"):
-        >>>             output = self(images)['change']
-        >>>             output.sum().backward()
-        >>>     with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True, profile_memory=True) as train_prof:
-        >>>         with record_function(f"train_{arch_name}"):
-        >>>             output = self(images)['change']
-        >>>             output.sum().backward()
-        >>>     print('arch_name = {!r}'.format(arch_name))
-        >>>     print('num_params = {!r}'.format(num_params))
-        >>>     print(pred_prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
-        >>>     print(train_prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
-        >>> print('ti.rankings = {}'.format(ub.repr2(ti.rankings, precision=4, nl=2, align=':')))
     """
 
     def __init__(self,
@@ -120,11 +63,14 @@ class MultimodalTransformer(pl.LightningModule):
                  dropout=0.0,
                  learning_rate=1e-3,
                  weight_decay=0.,
-                 pos_weight=1.,
+                 positive_change_weight=1.,
+                 negative_change_weight=1.,
                  input_stats=None,
                  input_channels=None,
                  attention_impl='exact',
                  window_size=8,
+                 global_class_weight=1.0,
+                 global_change_weight=1.0,
                  classes=10):
 
         super().__init__()
@@ -148,10 +94,26 @@ class MultimodalTransformer(pl.LightningModule):
         # TODO: rework "streams" to get the sum
         num_channels = sum(ub.map_vals(len, input_channels.normalize().parse()).values())
 
-        # criterion and metrics
-        self.change_criterion = nn.BCEWithLogitsLoss(
-                pos_weight=torch.ones(1) * pos_weight)
+        self.global_class_weight = global_class_weight
+        self.global_change_weight = global_change_weight
+        self.positive_change_weight = positive_change_weight
+        self.negative_change_weight = negative_change_weight
 
+        # criterion and metrics
+        # TODO: parametarize loss criterions
+        # For loss function experiments, see and work in
+        # ~/code/watch/watch/tasks/fusion/methods/channelwise_transformer.py
+        import monai
+        # self.change_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
+        self.class_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
+
+        # self.change_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
+        self.change_criterion = torch.nn.CrossEntropyLoss(
+            weight=torch.FloatTensor([self.negative_change_weight, self.positive_change_weight]),
+            reduction='none')
+
+        # self.change_criterion = nn.BCEWithLogitsLoss(
+        #         pos_weight=torch.ones(1) * pos_weight)
         # self.class_criterion = nn.CrossEntropyLoss()
         # self.class_criterion = nn.BCEWithLogitsLoss()
 
@@ -196,7 +158,7 @@ class MultimodalTransformer(pl.LightningModule):
         # self.binary_clf = nn.LazyLinear(1)  # TODO: rename to change_clf
         # self.class_clf = nn.LazyLinear(len(self.classes))  # category classifier
         self.change_clf = nh.layers.MultiLayerPerceptronNd(
-            0, feat_dim, [], 1, norm=None)
+            0, feat_dim, [], 2, norm=None)
         self.class_clf = nh.layers.MultiLayerPerceptronNd(
             0, feat_dim, [], self.num_classes, norm=None)
 
@@ -229,13 +191,16 @@ class MultimodalTransformer(pl.LightningModule):
         parser = parent_parser.add_argument_group("MultimodalTransformer")
         parser.add_argument("--learning_rate", default=1e-3, type=float)
         parser.add_argument("--weight_decay", default=0., type=float)
-        parser.add_argument("--pos_weight", default=1.0, type=float)
+        parser.add_argument("--positive_change_weight", default=1.0, type=float)
+        parser.add_argument("--negative_change_weight", default=1.0, type=float)
 
         # Model names define the transformer encoder used by the method
         available_encoders = list(transformer.encoder_configs.keys())
         parser.add_argument("--arch_name", default='smt_it_stm_p8', type=str,
                             choices=available_encoders)
         parser.add_argument("--dropout", default=0.1, type=float)
+        parser.add_argument("--global_class_weight", default=1.0, type=float)
+        parser.add_argument("--global_change_weight", default=1.0, type=float)
         # parser.add_argument("--input_scale", default=2000.0, type=float)
         parser.add_argument("--window_size", default=8, type=int)
         parser.add_argument(
@@ -311,12 +276,12 @@ class MultimodalTransformer(pl.LightningModule):
         #     distance = -3.0 * similarity
 
         # Pass the final fused space-time feature to a classifier
-        change_logits = self.change_clf(spacetime_fused_features[:, 1:])[..., 0]  # only one prediction
+        change_logits = self.change_clf(spacetime_fused_features[:, 1:])
         class_logits = self.class_clf(spacetime_fused_features)
 
         logits = {
-            'class': class_logits,
             'change': change_logits,
+            'class': class_logits,
         }
         return logits
 
@@ -342,7 +307,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> self = methods.MultimodalTransformer(
             >>>     arch_name='smt_it_joint_p8',
             >>>     input_stats=datamodule.input_stats,
-            >>>     classes=datamodule.classes, input_channels=datamodule.channels)
+            >>>     classes=datamodule.classes, input_channels=datamodule.input_channels)
             >>> outputs = self.forward_step(batch, with_loss=True)
             >>> canvas = datamodule.draw_batch(batch, outputs=outputs)
             >>> # xdoctest: +REQUIRES(--show)
@@ -353,25 +318,29 @@ class MultimodalTransformer(pl.LightningModule):
 
         Example:
             >>> # xdoctest: +SKIP
-            >>> # Demo Overfit:
+            >>> # ============
+            >>> # DEMO OVERFIT:
+            >>> # ============
             >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datamodules
+            >>> from watch.utils.slugify_ext import smart_truncate
             >>> import kwcoco
             >>> import os
             >>> import kwplot
             >>> sns = kwplot.autosns()
-            >>> if 1:
+            >>> if 0:
             >>>     _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
             >>>     dvc_dpath = os.environ.get('DVC_DPATH', _default)
-            >>>     coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/data.kwcoco.json')
+            >>>     coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/combo_propogated_data.kwcoco.json')
+            >>>     channels='blue|green|red',
             >>> else:
-            >>>     coco_fpath = 'special:vidshapes8-multispectral'
+            >>>     coco_fpath = 'special:vidshapes8-frames9-speed0.5-multispectral'
+            >>>     channels='B1|B11|B8',
             >>> coco_dset = kwcoco.CocoDataset.coerce(coco_fpath)
             >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset=coco_dset,
-            >>>     #channels='blue|green|red|nir|coastal|swir22',
-            >>>     chip_size=96, batch_size=1, time_steps=3,
+            >>>     chip_size=128, batch_size=1, time_steps=4,
             >>>     normalize_inputs=True, neg_to_pos_ratio=0, num_workers=0,
             >>> )
             >>> datamodule.setup('fit')
@@ -381,28 +350,46 @@ class MultimodalTransformer(pl.LightningModule):
             >>> # Choose subclass to test this with (does not cover all cases)
             >>> self = methods.MultimodalTransformer(
             >>>     arch_name='smt_it_joint_p8',
+            >>>     #arch_name='smt_it_stm_p8',
             >>>     attention_impl='performer',
             >>>     input_stats=datamodule.input_stats,
-            >>>     classes=datamodule.classes, input_channels=datamodule.channels)
+            >>>     positive_change_weight=1.0,
+            >>>     negative_change_weight=0.01,
+            >>>     global_class_weight=0.00,
+            >>>     classes=datamodule.classes, input_channels=datamodule.input_channels)
+            >>> device = 0
+            >>> self = self.to(device)
 
             >>> # Run one visualization
             >>> batch = next(iter(loader))
-            >>> device = 0
-            >>> self = self.to(device)
             >>> walker = ub.IndexableWalker(batch)
             >>> for path, val in walker:
             >>>     if isinstance(val, torch.Tensor):
             >>>         walker[path] = val.to(device)
             >>> outputs = self.training_step(batch)
-            >>> canvas = datamodule.draw_batch(batch, outputs=outputs)
+            >>> canvas = datamodule.draw_batch(batch, outputs=outputs, max_channels=1, overlay_on_image=0)
             >>> kwplot.imshow(canvas)
 
             >>> loss_records = []
+            >>> loss_records = [g[0] for g in ub.group_items(loss_records, lambda x: x['step']).values()]
             >>> step = 0
-            >>> optim = torch.optim.AdamW(self.parameters(), lr=1e-3)
+            >>> frame_idx = 0
+            >>> dpath = ub.ensuredir('_overfit_viz09')
+            >>> #optim = torch.optim.SGD(self.parameters(), lr=1e-4)
+            >>> #optim = torch.optim.AdamW(self.parameters(), lr=1e-4)
+            >>> import torch_optimizer
+            >>> optim = torch_optimizer.RAdam(self.parameters(), lr=3e-3, weight_decay=1e-5)
+
+            >>> from kwplot.mpl_make import render_figure_to_image
             >>> import xdev
-            >>> for _ in xdev.InteractiveIter(list(range(1000))):
-            >>>     for i in ub.ProgIter(range(10), desc='overfit'):
+            >>> import kwimage
+            >>> fig = kwplot.figure(fnum=1, doclf=True)
+            >>> fig.set_size_inches(15, 6)
+            >>> fig.subplots_adjust(left=0.05, top=0.9)
+            >>> for frame_idx in xdev.InteractiveIter(list(range(frame_idx + 1, 1000))):
+            >>> #for frame_idx in list(range(frame_idx, 1000)):
+            >>>     num_steps = 20
+            >>>     for i in ub.ProgIter(range(num_steps), desc='overfit'):
             >>>         optim.zero_grad()
             >>>         outputs = self.training_step(batch)
             >>>         outputs['item_losses']
@@ -413,17 +400,49 @@ class MultimodalTransformer(pl.LightningModule):
             >>>         loss.backward()
             >>>         optim.step()
             >>>         step += 1
-            >>>     canvas = datamodule.draw_batch(batch, outputs=outputs, max_channels=4, max_items=4)
+            >>>     canvas = datamodule.draw_batch(batch, outputs=outputs, max_channels=1, overlay_on_image=0, max_items=4)
             >>>     kwplot.imshow(canvas, pnum=(1, 2, 1), fnum=1)
-            >>>     kwplot.figure(fnum=1, pnum=(1, 2, 2))
+            >>>     fig = kwplot.figure(fnum=1, pnum=(1, 2, 2))
             >>>     #kwplot.imshow(canvas, pnum=(1, 2, 1))
             >>>     import pandas as pd
-            >>>     sns.lineplot(data=pd.DataFrame(loss_records), x='step', y='val', hue='part')
+            >>>     ax = sns.lineplot(data=pd.DataFrame(loss_records), x='step', y='val', hue='part')
+            >>>     ax.set_yscale('log')
+            >>>     fig.suptitle(smart_truncate(str(optim).replace('\n',''), max_length=64))
+            >>>     img = render_figure_to_image(fig)
+            >>>     img = kwimage.convert_colorspace(img, src_space='bgr', dst_space='rgb')
+            >>>     fpath = join(dpath, 'frame_{:04d}.png'.format(frame_idx))
+            >>>     #kwimage.imwrite(fpath, img)
             >>>     xdev.InteractiveIter.draw()
             >>> # TODO: can we get this batch to update in real time?
             >>> # TODO: start a server process that listens for new images
             >>> # as it gets new images, it starts playing through the animation
             >>> # looping as needed
+
+        Ignore:
+            python -m watch.cli.gifify \
+                    -i /home/local/KHQ/jon.crall/data/work/toy_change/_overfit_viz7/ \
+                    -o /home/local/KHQ/jon.crall/data/work/toy_change/_overfit_viz7.gif
+
+            nh.initializers.functional.apply_initializer(self, torch.nn.init.kaiming_normal, {})
+
+
+            # How to get data we need to step back into the dataloader
+            # to debug the batch
+            item = batch[0]
+
+            item['frames'][0]['class_idxs'].unique()
+            item['frames'][1]['class_idxs'].unique()
+            item['frames'][2]['class_idxs'].unique()
+
+            # print(item['frames'][0]['change'].unique())
+            print(item['frames'][1]['change'].unique())
+            print(item['frames'][2]['change'].unique())
+
+            tr = item['tr']
+            self = torch_dset
+            kwplot.imshow(self.draw_item(item), fnum=3)
+
+            kwplot.imshow(item['frames'][1]['change'].cpu().numpy(), fnum=4)
         """
         outputs = {}
 
@@ -461,8 +480,10 @@ class MultimodalTransformer(pl.LightningModule):
             class_logits_small = logits['class']
             change_logits_small = logits['change']
 
-            change_logits = nn.functional.interpolate(
-                change_logits_small, [H, W], mode="bilinear", align_corners=True)
+            _tmp = einops.rearrange(change_logits_small, 'b t h w c -> b (t c) h w')
+            _tmp2 = nn.functional.interpolate(
+                _tmp, [H, W], mode="bilinear", align_corners=True)
+            change_logits = einops.rearrange(_tmp2, 'b (t c) h w -> b t h w c', c=change_logits_small.shape[4])
 
             _tmp = einops.rearrange(class_logits_small, 'b t h w c -> b (t c) h w')
             _tmp2 = nn.functional.interpolate(
@@ -470,11 +491,17 @@ class MultimodalTransformer(pl.LightningModule):
             class_logits = einops.rearrange(_tmp2, 'b (t c) h w -> b t h w c', c=class_logits_small.shape[4])
 
             # Remove batch index in both cases
-            change_prob = change_logits.sigmoid()[0]
-            class_prob = class_logits.sigmoid()[0]
+            # change_prob = change_logits.detach().sigmoid()[0]
+            change_prob = change_logits.detach().softmax(dim=4)[0, ..., 1]
 
-            item_change_probs.append(change_prob.detach())
-            item_class_probs.append(class_prob.detach())
+            class_prob = class_logits.detach().sigmoid()[0]
+
+            # Hack the change prob so it works with our currently binary
+            # visualizations
+            # change_prob = ((1 - change_prob[..., 0]) + change_prob[..., 0]) / 2.0
+
+            item_change_probs.append(change_prob)
+            item_class_probs.append(class_prob)
 
             item_loss_parts = {}
 
@@ -493,15 +520,20 @@ class MultimodalTransformer(pl.LightningModule):
                 # print('change_logits.shape = {!r}'.format(change_logits.shape))
                 # print('true_changes.shape = {!r}'.format(true_changes.shape))
 
-                change_loss = self.change_criterion(change_logits, true_changes.float())
-                item_loss_parts['change'] = change_loss
+                # Hack: change the 1-logit binary case to 2 class binary case
 
-                true_ohe = kwarray.one_hot_embedding(true_class.long(), self.num_classes, dim=-1).float()
-                y = true_ohe
-                x = class_logits
-                # class_loss = torch.nn.functional.cross_entropy(x, y)
-                class_loss = torch.nn.functional.binary_cross_entropy_with_logits(x, y)
-                item_loss_parts['class'] = class_loss
+                change_loss = self.change_criterion(change_logits.contiguous().view(-1, 2), true_changes.long().view(-1)).mean()
+                # num_change_states = 2
+                # true_change_ohe = kwarray.one_hot_embedding(true_changes.long(), num_change_states, dim=-1).float()
+                # change_loss = self.change_criterion(change_logits, true_change_ohe).mean()
+                # change_loss = self.change_criterion(change_logits, true_changes.float()).mean()
+                item_loss_parts['change'] = self.global_change_weight * change_loss
+
+                true_class_ohe = kwarray.one_hot_embedding(true_class.long(), self.num_classes, dim=-1).float()
+                class_loss = self.class_criterion(class_logits, true_class_ohe).mean()
+                # class_loss = torch.nn.functional.binary_cross_entropy_with_logits(class_logits, true_class_ohe)
+
+                item_loss_parts['class'] = self.global_class_weight * class_loss
 
                 item_losses.append(item_loss_parts)
 
@@ -645,7 +677,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> # Use one of our fusion.architectures in a test
             >>> self = methods.MultimodalTransformer(
             >>>     "smt_it_stm_p8", classes=classes,
-            >>>     input_stats=input_stats, input_channels=datamodule.channels)
+            >>>     input_stats=input_stats, input_channels=datamodule.input_channels)
 
             >>> # We have to run an input through the module because it is lazy
             >>> batch = ub.peek(iter(datamodule.train_dataloader()))

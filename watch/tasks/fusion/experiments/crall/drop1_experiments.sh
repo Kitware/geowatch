@@ -26,7 +26,7 @@ CHANNELS="blue|green|red|nir|inv_sort1|inv_sort2|inv_sort3|inv_sort4|inv_sort5|i
 #CHANNELS="matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7|matseg_8|matseg_9|matseg_10|matseg_11|matseg_12|matseg_13|matseg_14|matseg_15|matseg_16|matseg_17|matseg_18|matseg_19"
 
 EXPERIMENT_NAME=DirectCD_${ARCH}_teamfeat_v010
-DATASET_CODE=Drop1_TeamFeats_V5
+DATASET_CODE=Drop1_TeamFeats_V6
 
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package.pt 
@@ -78,7 +78,7 @@ python -m watch.tasks.fusion.fit \
         --train_dataset=$TRAIN_FPATH \
          --vali_dataset=$VALI_FPATH \
          --test_dataset=$TEST_FPATH \
-         --num_sanity_val_steps=1
+         --num_sanity_val_steps=0
 
 python -m watch.tasks.fusion.predict \
         --config=$PRED_CONFIG_FPATH \
