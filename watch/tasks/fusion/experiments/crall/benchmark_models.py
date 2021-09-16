@@ -14,6 +14,7 @@ def benchmark_models():
     import netharn as nh
     # from watch.tasks.fusion import datamodules
     import torch.profiler
+    from watch.tasks.fusion.methods.channelwise_transformer import MultimodalTransformer
     # from torch.profiler import profile, ProfilerActivity, record_function
     # datamodule = datamodules.KWCocoVideoDataModule(
     #     train_dataset='special:vidshapes8', num_workers=0)

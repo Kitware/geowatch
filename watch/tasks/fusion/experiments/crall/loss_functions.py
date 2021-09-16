@@ -5,6 +5,7 @@ def devcheck_loss_functions():
 
     """
     import monai
+    # from watch.tasks.fusion.methods.channelwise_transformer import M
     import torch
 
     pred = torch.FloatTensor([
@@ -22,5 +23,5 @@ def devcheck_loss_functions():
     change_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=True, weight=[0, 1])
     print(change_criterion.forward(pred, true))
 
-    crit = torch.nn.BCEWithLogitsLoss(reduction='none', pos_weight=torch.ones(1)2.)
+    crit = torch.nn.BCEWithLogitsLoss(reduction='none', pos_weight=torch.ones(1) * 2.)
     crit(pred, true)
