@@ -5,7 +5,6 @@ def devcheck_loss_functions():
 
     """
     import monai
-    # from watch.tasks.fusion.methods.channelwise_transformer import M
     import torch
 
     pred = torch.FloatTensor([
