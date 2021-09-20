@@ -7,7 +7,6 @@ ipython
 xdev
 flake8
 autopep8
-fire
 mkinit
 
 timerit
