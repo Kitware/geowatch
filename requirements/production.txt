@@ -1,4 +1,4 @@
-# Cknife droneore dependencies needed at runtime that that should install without much issue
+# Core dependencies needed at runtime that that should install without much issue
 
 # Numeric
 kwarray >= 0.5.19
@@ -34,6 +34,7 @@ einops == 0.3.0
 python_dateutil >= 2.8.1
 pytimeparse >= 1.1.8
 progiter >= 0.1.3
+fire >= 0.4.0
 
 # Imaging
 kwimage >= 0.7.11
