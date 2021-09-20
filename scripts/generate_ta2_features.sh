@@ -23,7 +23,7 @@ BASE_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json
 UKY_S2_MODEL_FPATH=${UKY_L8_MODEL_FPATH:-$DVC_DPATH/models/uky_invariants/sort_augment_overlap/S2_drop1-S2-L8-aligned-old.0.ckpt}
 UKY_L8_MODEL_FPATH=${UKY_L8_MODEL_FPATH:-$DVC_DPATH/models/uky_invariants/sort_augment_overlap/L8_drop1-S2-L8-aligned-old.0.ckpt}
 RUTGERS_MATERIAL_MODEL_FPATH="$DVC_DPATH/models/rutgers/experiments_epoch_30_loss_0.05691597167379317_valmIoU_0.5694727912477856_time_2021-08-07-09:01:01.pth"
-DZYNE_LANDCOVER_MODEL_FPATH="$DVC_DPATH/models/dzyne/todo.pt"
+DZYNE_LANDCOVER_MODEL_FPATH="$DVC_DPATH/models/landcover/visnav_osm.pt"
 
 UKY_S2_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/_partial_uky_pred_S2.kwcoco.json
 UKY_L8_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/_partial_uky_pred_L8.kwcoco.json
@@ -115,6 +115,13 @@ dzyne_prediction(){
     # DZYNE Prediction
     # ----------------
     echo "# TODO: generate landcover features"
+    python -m watch.tasks.landcover.predict \
+        --dataset=$BASE_COCO_FPATH \
+        --deployed=$DZYNE_LANDCOVER_MODEL_FPATH  \
+        --output=$DZYNE_LANDCOVER_COCO_FPATH  \
+        --num_workers=12 \
+        --batch_size=4 --profile
+    #--gpus "0"
 }
 
 
@@ -384,6 +391,5 @@ basic_left_right_split(){
     python -m watch.cli.coco_spatial_crop \
             --src $COMBO_PROPOGATED_COCO_FPATH --dst $RIGHT_COCO_FPATH \
             --suffix=_right
-    
 
 }
