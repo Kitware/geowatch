@@ -52,53 +52,6 @@ References:
     .. [1] https://gitlab.kitware.com/computer-vision/kwcoco
     .. [2] https://infrastructure.smartgitlab.com/docs/pages/api_documentation.html#site-model
     .. [3] https://smartgitlab.com/TE/annotations
-
-.. code:: markdown
-
-    ## Annotation Terminology
-
-    - Time slice / Image Layer:
-      - A single image capturing the scene of interest on a specific day
-    - Datacube:
-      - A collection of images from one or more sensor platforms covering the same spatial area of interest. The set of images will span some time period T = [Tstart, Tend] and include multiple images (time slices).
-    - Site / Site Boundary:
-      - A geographical area defining the spatial boundaries of large-scale change (anthropogenic or not).
-      - This is the fundamental unit of activity that SMART is focused on; it is what human annotators will be labeling and what algorithms are expected to detect and classify.
-      - For SMART Phase 1, sites of interest must be larger than 8000 m². (Note that this size is in reference to the entire site area, not the objects within the site.).
-      - There can be any number of sites within a ROI (including none)
-    - Sub-site / Sub-site Boundary:
-      - Used to indicate that an area within the site boundary is in a different activity phase as the surrounding or neighboring plots of land
-      - Sub-site boundaries are only required _**if and only if**_ the site is exhibiting multiple activity phases in a single time slice
-
-
-    ## Defining Boundaries
-
-    ### Site Boundaries
-
-    Site boundaries delineate the border of a site. They should be easily distinguishable using visible features in the imagery and should include supporting infrastructure (i.e. parking lots, pavement, etc.). Examples of features that define site boundaries include the following:
-    - Major roads and above (using [OSM definitions](https://wiki.openstreetmap.org/wiki/United_States/Road_classification))
-    - Uninhabited areas
-    - Water (rivers, ocean, etc.)
-    - Large areas of vegetation (e.g. forests)
-    - Inhabited/completed areas that don’t undergo construction in any of the views
-
-
-    ### Sub-site (intra-site) Boundaries
-
-    These are features that may be used to further split a site into sub-sites when multiple activity phases are present within the same time slice and within the bounds of a single site polygon. Sub-site/Intra-site boundaries are necessary _**if and only if**_ they separate areas that are in different construction phases at a given time slice.
-    - Completed roads (lower than ‘OSM: Major Roads’)
-    - Completed “natural” areas (e.g., open green space)
-    - Clear, visible delineations between two plots of land (only necessary if they are distinguishing between areas that are in different phases)
-
-
-    ### Site/sub-site rules
-
-    - Site boundaries should never overlap other site boundaries
-    - Sub-site boundaries will never overlap other sub-site boundaries
-    - Sub-site boundaries must not extend outside site boundaries (but they can share borders)
-    - Sub-sites must exist inside site boundaries. They cannot exist on their own.
-
-
 """
 import geojson
 import json
