@@ -1,6 +1,7 @@
 """
 These functions might be added to kwimage
 """
+from functools import lru_cache
 
 
 def draw_header_text(image, text, fit=False, color='red', halign='center',
@@ -68,3 +69,51 @@ def draw_header_text(image, text, fit=False, color='red', halign='center',
         return stacked
     else:
         return header
+
+
+@lru_cache
+def _morph_kernel_core(h, w):
+    import numpy as np
+    return np.ones((h, w), np.uint8)
+
+
+def _morph_kernel(size):
+    if isinstance(size, int):
+        h = size
+        w = size
+    else:
+        raise NotImplementedError
+    return _morph_kernel_core(h, w)
+
+
+def morphology(data, mode, kernel=5):
+    """
+    Executes a morphological operation.
+
+    Args:
+        input (ndarray): data
+        mode (str) : morphology mode.  currently only open
+
+    Example:
+        >>> data = (np.random.rand(32, 32) > 0.5).astype(np.uint8)
+        >>> mode = 'open'
+        >>> kernel = 5
+        >>> morphology(data, mode, kernel=5)
+
+    """
+    import cv2
+    import numpy as np
+    if data.dtype.kind == 'b':
+        data = data.astype(np.uint8)
+    kernel = _morph_kernel(kernel)
+    if mode == 'open':
+        new = cv2.morphologyEx(data, cv2.MORPH_OPEN, kernel)
+    elif mode == 'close':
+        new = cv2.morphologyEx(data, cv2.MORPH_CLOSE, kernel)
+    elif mode == 'dilate':
+        new = cv2.morphologyEx(data, cv2.MORPH_DILATE, kernel)
+    elif mode == 'erode':
+        new = cv2.morphologyEx(data, cv2.MORPH_ERODE, kernel)
+    else:
+        raise NotImplementedError
+    return new

@@ -861,7 +861,8 @@ class CocoImage(ub.NiceRepr):
 
     @property
     def num_channels(self):
-        return sum(map(len, self.channels.streams()))
+        return self.channels.numel()
+        # return sum(map(len, self.channels.streams()))
 
     @property
     def dsize(self):
@@ -1020,7 +1021,7 @@ class CocoImage(ub.NiceRepr):
         img = self.img
         requested = channels
         if requested is not None:
-            requested = FusedChannelSpec.coerce(requested)
+            requested = FusedChannelSpec.coerce(requested).normalize()
 
         def _delay_load_imglike(obj):
             info = {}

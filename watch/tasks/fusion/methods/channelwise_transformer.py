@@ -92,7 +92,7 @@ class MultimodalTransformer(pl.LightningModule):
         input_channels = channel_spec.ChannelSpec.coerce(input_channels)
 
         # TODO: rework "streams" to get the sum
-        num_channels = sum(ub.map_vals(len, input_channels.normalize().parse()).values())
+        num_channels = input_channels.numel()
 
         self.global_class_weight = global_class_weight
         self.global_change_weight = global_change_weight
