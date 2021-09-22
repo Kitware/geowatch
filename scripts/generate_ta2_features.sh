@@ -34,8 +34,6 @@ DZYNE_LANDCOVER_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/landcover.kwcoco.json
 
 COMBO_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_data.kwcoco.json
 
-COMBO_PROPOGATED_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_propogated_data.kwcoco.json
-
 COMBO_TRAIN_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_train_data.kwcoco.json
 COMBO_VALI_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_data.kwcoco.json
 
@@ -64,7 +62,6 @@ DZYNE_LANDCOVER_COCO_FPATH  = $DZYNE_LANDCOVER_COCO_FPATH
 
 # Final output file
 COMBO_COCO_FPATH           = $COMBO_COCO_FPATH
-COMBO_PROPOGATED_COCO_FPATH = $COMBO_PROPOGATED_COCO_FPATH
 
 =====================================================
 "
@@ -114,13 +111,12 @@ dzyne_prediction(){
     # ----------------
     # DZYNE Prediction
     # ----------------
-    echo "# TODO: generate landcover features"
     python -m watch.tasks.landcover.predict \
         --dataset=$BASE_COCO_FPATH \
         --deployed=$DZYNE_LANDCOVER_MODEL_FPATH  \
         --output=$DZYNE_LANDCOVER_COCO_FPATH  \
         --num_workers=12 \
-        --batch_size=4 --profile
+        --batch_size=4 
     #--gpus "0"
 }
 
@@ -159,28 +155,26 @@ predict_all_ta2_features(){
         --dst $COMBO_COCO_FPATH \
         --target_gsd 10
     
-    # Propogate labels
-    python -m watch.cli.propagate_labels \
-            --src $COMBO_COCO_FPATH --dst $COMBO_PROPOGATED_COCO_FPATH \
-            --viz_dpath=$KWCOCO_BUNDLE_DPATH/_prop_viz
+    # Propogate labels (should no longer be needed)
+    # python -m watch.cli.propagate_labels \
+    #         --src $COMBO_COCO_FPATH --dst $COMBO_PROPOGATED_COCO_FPATH \
+    #         --viz_dpath=$KWCOCO_BUNDLE_DPATH/_prop_viz
 
-    LEFT_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_data_left.kwcoco.json
-    RIGHT_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_data_right.kwcoco.json
-
-    python -m watch.cli.coco_spatial_crop \
-            --src $COMBO_PROPOGATED_COCO_FPATH --dst $LEFT_COCO_FPATH \
-            --suffix=_left
-
-    python -m watch.cli.coco_spatial_crop \
-            --src $COMBO_PROPOGATED_COCO_FPATH --dst $RIGHT_COCO_FPATH \
-            --suffix=_right
+    #LEFT_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_data_left.kwcoco.json
+    #RIGHT_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_data_right.kwcoco.json
+    #python -m watch.cli.coco_spatial_crop \
+    #        --src $COMBO_PROPOGATED_COCO_FPATH --dst $LEFT_COCO_FPATH \
+    #        --suffix=_left
+    #python -m watch.cli.coco_spatial_crop \
+    #        --src $COMBO_PROPOGATED_COCO_FPATH --dst $RIGHT_COCO_FPATH \
+    #        --suffix=_right
 
     # Split out train and validation data (TODO: add test when we can)
-    kwcoco subset --src $COMBO_PROPOGATED_COCO_FPATH \
+    kwcoco subset --src $COMBO_COCO_FPATH \
             --dst $COMBO_VALI_COCO_FPATH \
             --select_videos '.name | startswith("KR_")'
 
-    kwcoco subset --src $COMBO_PROPOGATED_COCO_FPATH \
+    kwcoco subset --src $COMBO_COCO_FPATH \
             --dst $COMBO_TRAIN_COCO_FPATH \
             --select_videos '.name | startswith("KR_") | not'
 }

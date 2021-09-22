@@ -27,11 +27,13 @@ def accumulate_temporal_predictions_simple_v1(result_dataset):
     """
     find $HOME/remote/yardrat/smart_watch_dvc/training/yardrat/jon.crall/ -iname "package_*.pt"
 
-    EXPERIMENT_DPATH=$HOME/remote/yardrat/smart_watch_dvc/training/yardrat/jon.crall/Drop1RawHoldout
-    PACKAGE_FPATH=$EXPERIMENT_DPATH/runs/DirectCD_smt_it_joint_p8_raw9common_v5_tune_from_onera/lightning_logs/version_0/checkpoints/epoch=1-step=1431.ckpt
     TEST_DATASET=$HOME/remote/yardrat/smart_watch_dvc/drop1-S2-L8-aligned/vali_data.kwcoco.json
 
-    PACKAGE_FPATH=$EXPERIMENT_DPATH/runs/DirectCD_smt_it_joint_p8_raw9common_v5_tune_from_onera/lightning_logs/version_0/checkpoints/epoch=0-step=715-v1.ckpt
+    PACKAGE_FPATH=$HOME/remote/yardrat/smart_watch_dvc/training/yardrat/jon.crall/Drop1RawHoldout/runs/DirectCD_smt_it_joint_p8_raw9common_v5_tune_from_onera/lightning_logs/version_0/checkpoints/epoch=1-step=1431.ckpt
+
+    PACKAGE_FPATH=$HOME/remote/yardrat/smart_watch_dvc/training/yardrat/jon.crall/Drop1RawHoldout/runs/DirectCD_smt_it_joint_p8_raw9common_v5_tune_from_onera/lightning_logs/version_0/checkpoints/epoch=0-step=715-v1.ckpt
+
+    PACKAGE_FPATH=$HOME/remote/yardrat/smart_watch_dvc/training/yardrat/jon.crall/Drop1RawHoldout/runs/DirectCD_smt_it_joint_p8_raw9common_v5_tune_from_onera/lightning_logs/version_0/checkpoints/epoch=2-step=2147.ckpt
 
     SUGGESTIONS="$(python -m watch.tasks.fusion.organize suggest_paths \
         --package_fpath=$PACKAGE_FPATH \
