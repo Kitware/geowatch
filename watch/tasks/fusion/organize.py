@@ -59,7 +59,7 @@ def suggest_paths(test_dataset=None, package_fpath=None, pred_root=None):
 
         suggestions['pred_dataset'] = str(pred_dataset)
 
-        suggestions['eval_dpath'] = str(pred_dataset / 'eval')
+        suggestions['eval_dpath'] = str(pred_dpath / 'eval')
 
     import json
     return json.dumps(suggestions)
