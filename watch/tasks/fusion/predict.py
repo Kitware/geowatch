@@ -156,11 +156,14 @@ def predict(cmdline=False, **kwargs):
         from watch.tasks.fusion import methods
         hparams = checkpoint['hyper_parameters']
         if 'input_channels' in hparams:
+            from kwcoco.channel_spec import ChannelSpec
             # Hack for strange pickle issue
             chan = hparams['input_channels']
             if not hasattr(chan, '_spec') and hasattr(chan, '_info'):
-                chan = chan.__class__.coerce(chan._info['spec'])
+                chan = ChannelSpec.coerce(chan._info['spec'])
                 hparams['input_channels'] = chan
+            else:
+                hparams['input_channels'] = ChannelSpec.coerce(chan.spec)
 
         method = methods.MultimodalTransformer(**hparams)
         state_dict = checkpoint['state_dict']
