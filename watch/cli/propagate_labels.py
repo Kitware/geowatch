@@ -2,17 +2,12 @@
 import os
 import json
 import dateutil
-import shapely
-import shapely.ops
-import pygeos
 import kwcoco
 import kwimage
 import ubelt as ub
 import pathlib
 import numpy as np
 import scriptconfig as scfg
-from watch.utils import util_raster
-from watch.gis import geotiff
 
 
 class PropagateLabelsConfig(scfg.Config):
@@ -103,6 +98,7 @@ def warped_wgs84_to_img(poly, img, inv=False):
     img['warp_wld_to_pxl'] does not give the appropriate transform for
     ann['segmentation_geo'] because it is in WGS84, not the wld CRS
     """
+    from watch.gis import geotiff
     band = annotated_band(img)
     fpath = band['file_name']
     # cacher = ub.Cacher('geotiff_crs_info', depends=fpath)
@@ -196,6 +192,9 @@ def get_warped_ann(previous_ann, warp, image_entry, crop_to_valid=True):
     %timeit watch.utils.util_raster.mask(aligned_crop)
     4.44 ms ± 87.4 µs per loop (mean ± std. dev. of 7 runs, 100 loops each)
     """
+    from watch.utils import util_raster
+    import shapely
+    import shapely.ops
 
     # note we are using the semgentations stored in orig_info because the
     # most recent one may be cropped
@@ -341,6 +340,8 @@ def save_visualizations(canvas_chunk, fpath):
 
 
 def validate_inbounds(anns, img):
+    import pygeos
+    from watch.utils import util_raster
 
     band = annotated_band(img)
     warp_aux_to_img = kwimage.Affine.coerce(band['warp_aux_to_img'])

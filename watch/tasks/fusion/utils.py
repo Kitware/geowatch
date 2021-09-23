@@ -2,10 +2,8 @@ from torch import nn
 import torch
 import numpy as np
 import math
-from torch import package
 import ubelt as ub
 import kwimage
-import cv2
 
 millnames = ['', ' K', ' M', ' B', ' T']
 
@@ -27,6 +25,7 @@ def load_model_from_package(package_path, module_name="watch_tasks_fusion", arch
           given a path to a package, I just want to be able to construct
           the model instance.
     """
+    from torch import package
     # imp = package.PackageImporter(package_path)
     import pathlib
     if not isinstance(package_path, (str, pathlib.Path)):
@@ -207,50 +206,6 @@ def model_json(model, max_depth=float('inf'), depth=0):
             }
             info['children'] = children
     return info
-
-
-# TODO: LRU cache?
-@ub.memoize
-def _morph_kernel_core(h, w):
-    return np.ones((h, w), np.uint8)
-
-
-def _morph_kernel(size):
-    if isinstance(size, int):
-        h = size
-        w = size
-    else:
-        raise NotImplementedError
-    return _morph_kernel_core(h, w)
-
-
-def morphology(data, mode, kernel=5):
-    """
-    Executes a morphological operation.
-
-    Args:
-        input (ndarray): data
-        mode (str) : morphology mode.  currently only open
-
-    Example:
-        >>> data = (np.random.rand(32, 32) > 0.5).astype(np.uint8)
-        >>> mode = 'open'
-        >>> kernel = 5
-        >>> morphology(data, mode, kernel=5)
-
-    """
-    kernel = _morph_kernel(kernel)
-    if mode == 'open':
-        new = cv2.morphologyEx(data, cv2.MORPH_OPEN, kernel)
-    elif mode == 'close':
-        new = cv2.morphologyEx(data, cv2.MORPH_CLOSE, kernel)
-    elif mode == 'dilate':
-        new = cv2.morphologyEx(data, cv2.MORPH_DILATE, kernel)
-    elif mode == 'erode':
-        new = cv2.morphologyEx(data, cv2.MORPH_ERODE, kernel)
-    else:
-        raise NotImplementedError
-    return new
 
 
 @ub.memoize

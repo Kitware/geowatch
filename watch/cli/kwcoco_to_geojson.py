@@ -53,7 +53,6 @@ References:
     .. [2] https://infrastructure.smartgitlab.com/docs/pages/api_documentation.html#site-model
     .. [3] https://smartgitlab.com/TE/annotations
 """
-import geojson
 import json
 import os
 import sys
@@ -176,6 +175,7 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id):
         >>>     jsonschema.validate(collection, schema=SITE_SCHEMA)
 
     """
+    import geojson
     site_features = defaultdict(list)
     for ann in coco_dset.index.anns.values():
         img = coco_dset.index.imgs[ann['image_id']]

@@ -42,7 +42,6 @@ Notes:
 import torch
 import einops
 import ubelt as ub  # NOQA
-import netharn as nh  # NOQA
 from torch import nn
 
 
@@ -503,6 +502,7 @@ class FusionEncoder(nn.Module):
         >>> # Get a sense of the arch size
         >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
         >>> rows = []
+        >>> import netharn as nh  # NOQA
         >>> for key, config in ub.ProgIter(list(encoder_configs.items())):
         >>>     self = FusionEncoder(in_features=256, **config)
         >>>     num_params = nh.util.number_of_parameters(self)

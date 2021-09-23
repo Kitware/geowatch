@@ -5,7 +5,6 @@ import re
 from uuid import uuid4
 import glob
 
-from shapely.geometry import shape
 import pystac
 
 from watch.datacube.registration.s2_coreg_l1c import (
@@ -40,6 +39,7 @@ def main():
 
 
 def run_s2_coreg_l1c(stac_catalog, outdir):
+    from shapely.geometry import shape
     if isinstance(stac_catalog, str):
         catalog = pystac.read_file(href=stac_catalog).full_copy()
     else:

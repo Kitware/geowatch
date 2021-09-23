@@ -549,7 +549,7 @@ class CocoStitchingManager(object):
             scored_polys = list(postprocess.mask_to_scored_polygons(
                 change_probs, thresh))
             n_anns = len(scored_polys)
-            for score, vid_poly in scored_polys:
+            for vid_poly, score in scored_polys:
                 # Transform the video polygon into image space
                 img_poly = vid_poly.warp(img_from_vid)
                 bbox = list(img_poly.bounding_box().to_coco())[0]

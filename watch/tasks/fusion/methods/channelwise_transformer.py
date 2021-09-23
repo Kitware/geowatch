@@ -8,7 +8,6 @@ from torchvision import transforms
 from watch.tasks.fusion.architectures import transformer
 from watch.tasks.fusion import utils
 import ubelt as ub
-import netharn as nh
 import kwarray
 import kwcoco
 from kwcoco import channel_spec
@@ -72,6 +71,7 @@ class MultimodalTransformer(pl.LightningModule):
                  global_class_weight=1.0,
                  global_change_weight=1.0,
                  classes=10):
+        import netharn as nh
 
         super().__init__()
         self.save_hyperparameters()

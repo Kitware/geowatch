@@ -1,5 +1,4 @@
 import einops
-
 import kwarray
 import kwcoco
 import kwimage
@@ -15,6 +14,7 @@ from torch.utils import data
 from watch.tasks.fusion import utils
 from watch.utils import kwcoco_extensions
 from watch.utils import util_iter
+from watch.utils import util_kwimage
 
 # __all__ = ['KWCocoVideoDataModule', 'KWCocoVideoDataset']
 
@@ -907,7 +907,7 @@ class KWCocoVideoDataset(data.Dataset):
 
             # Dilate the truth map
             for cidx, class_map in enumerate(frame_class_ohe):
-                class_map = utils.morphology(class_map, 'dilate', kernel=5)
+                class_map = util_kwimage.morphology(class_map, 'dilate', kernel=5)
                 frame_cidxs[class_map > 0] = cidx
 
             # ensure channel dim is not squeezed
@@ -955,7 +955,7 @@ class KWCocoVideoDataset(data.Dataset):
             else:
                 frame_change = (frame_cidxs != prev_frame_cidxs).astype(np.uint8)
                 # Clean up the change target
-                frame_change = utils.morphology(frame_change, 'open', kernel=3)
+                frame_change = util_kwimage.morphology(frame_change, 'open', kernel=3)
                 frame_change = torch.from_numpy(frame_change)
 
             # convert to torch

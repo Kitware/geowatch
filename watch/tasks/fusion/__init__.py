@@ -67,9 +67,16 @@ def lazy_import(module_name, submodules, submod_attrs):
 __getattr__ = lazy_import(
     __name__,
     submodules={
+        'architectures',
+        'datamodules',
         'evaluate',
         'fit',
+        'methods',
+        'organize',
+        'postprocess',
         'predict',
+        'repackage',
+        'utils',
     },
     submod_attrs={},
 )
@@ -78,8 +85,5 @@ __getattr__ = lazy_import(
 def __dir__():
     return __all__
 
-
-__all__ = [
-    'architectures', 'datamodules', 'fit', 'predict', 'evaluate', 'methods',
-    'utils'
-]
+__all__ = ['architectures', 'datamodules', 'evaluate', 'fit', 'methods',
+           'organize', 'postprocess', 'predict', 'repackage', 'utils']

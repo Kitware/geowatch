@@ -14,7 +14,6 @@ import kwimage
 import numpy as np
 from os.path import join
 import numbers
-
 from kwimage.transform import Affine
 
 try:

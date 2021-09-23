@@ -80,7 +80,6 @@ def accumulate_temporal_predictions_simple_v1(result_dataset):
     """
     from watch.utils import kwcoco_extensions
     from watch.utils import util_kwimage
-    from watch.tasks.fusion.utils import morphology
     key = 'change_prob'
     dset = result_dataset
 

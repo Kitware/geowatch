@@ -7,12 +7,12 @@ Wrapper around imgmagik convert or ffmpeg
 """
 
 import ubelt as ub
+from os.path import isdir, join
 
 
 def main():
     import argparse
     import glob
-    from os.path import isdir, join
     description = ub.codeblock(
         '''
         Convert a sequence of images into a gif

@@ -9,7 +9,8 @@ import os
 import json
 import dateutil
 from datetime import datetime, timedelta
-from fels import run_fels, safedir_to_datetime, landsatdir_to_date
+from fels import run_fels
+# from fels import safedir_to_datetime, landsatdir_to_date
 from rgd_client import Rgdc
 import ubelt as ub
 import scriptconfig as scfg
@@ -90,17 +91,17 @@ def try_fels(geojson_bbox, dt_min, dt_max, with_l7=True, with_l8=True,
     if with_s2:
         print('Sentinel-2:')
         print(s2_urls)
-        print([safedir_to_datetime(u.split('/')[-1]) for u in s2_urls])
+        # print([safedir_to_datetime(u.split('/')[-1]) for u in s2_urls])
 
     if with_l7:
         print('Landsat-7:')
         print(l7_urls)
-        print([landsatdir_to_date(u.split('/')[-1]) for u in l7_urls])
+        # print([landsatdir_to_date(u.split('/')[-1]) for u in l7_urls])
 
     if with_l8:
         print('Landsat-8:')
         print(l8_urls)
-        print([landsatdir_to_date(u.split('/')[-1]) for u in l8_urls])
+        # print([landsatdir_to_date(u.split('/')[-1]) for u in l8_urls])
 
 
 def try_rgdc(geojson_bbox, dt_min, dt_max, out_dpath=None, username=None,
