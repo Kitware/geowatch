@@ -2,6 +2,7 @@
 These functions might be added to kwimage
 """
 from functools import lru_cache
+import numpy as np
 
 
 def draw_header_text(image, text, fit=False, color='red', halign='center',
@@ -73,7 +74,6 @@ def draw_header_text(image, text, fit=False, color='red', halign='center',
 
 @lru_cache
 def _morph_kernel_core(h, w):
-    import numpy as np
     return np.ones((h, w), np.uint8)
 
 
@@ -102,7 +102,6 @@ def morphology(data, mode, kernel=5):
 
     """
     import cv2
-    import numpy as np
     if data.dtype.kind == 'b':
         data = data.astype(np.uint8)
     kernel = _morph_kernel(kernel)

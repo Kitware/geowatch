@@ -3,6 +3,7 @@ mkinit ~/code/watch/watch/utils/__init__.py --lazy --noattr -w
 """
 
 
+
 def lazy_import(module_name, submodules, submod_attrs):
     import importlib
     import os
@@ -44,11 +45,17 @@ def lazy_import(module_name, submodules, submod_attrs):
 __getattr__ = lazy_import(
     __name__,
     submodules={
+        'configargparse_ext',
         'kwcoco_extensions',
         'lightning_ext',
+        'slugify_ext',
         'util_bands',
+        'util_data',
         'util_girder',
+        'util_iter',
+        'util_kwimage',
         'util_norm',
+        'util_path',
         'util_raster',
         'util_rgdc',
         'util_stac',
@@ -60,5 +67,7 @@ __getattr__ = lazy_import(
 def __dir__():
     return __all__
 
-__all__ = ['kwcoco_extensions', 'lightning_ext', 'util_bands', 'util_girder',
-           'util_norm', 'util_raster', 'util_rgdc', 'util_stac']
+__all__ = ['configargparse_ext', 'kwcoco_extensions', 'lightning_ext',
+           'slugify_ext', 'util_bands', 'util_data', 'util_girder',
+           'util_iter', 'util_kwimage', 'util_norm', 'util_path',
+           'util_raster', 'util_rgdc', 'util_stac']
