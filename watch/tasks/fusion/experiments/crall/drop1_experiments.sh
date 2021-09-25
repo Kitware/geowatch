@@ -65,7 +65,7 @@ python -m watch.tasks.fusion.fit \
     --max_epochs=400 \
     --patience=400 \
     --gpus=1  \
-    --learning_rate=1e-5 \
+    --learning_rate=1e-4 \
     --weight_decay=1e-5 \
     --dropout=0.1 \
     --window_size=8 \
@@ -74,7 +74,7 @@ python -m watch.tasks.fusion.fit \
         --train_dataset=$TRAIN_FPATH \
          --vali_dataset=$VALI_FPATH \
          --test_dataset=$TEST_FPATH \
-         --num_sanity_val_steps=2
+         --num_sanity_val_steps=0 
 
     #--dump=$TRAIN_CONFIG_FPATH 
 
