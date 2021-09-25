@@ -28,6 +28,10 @@ class MultimodalTransformer(pl.LightningModule):
     CommandLine:
         xdoctest -m watch.tasks.fusion.methods.channelwise_transformer MultimodalTransformer
 
+    TODO:
+        - [ ] Change name to FusionModel
+        - [ ] Move parent module methods -> models
+
     Example:
         >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
         >>> from watch.tasks.fusion import datamodules
@@ -37,7 +41,7 @@ class MultimodalTransformer(pl.LightningModule):
         >>> loader = datamodule.train_dataloader()
         >>> batch = next(iter(loader))
         >>> #self = MultimodalTransformer(arch_name='smt_it_joint_p8')
-        >>> self = MultimodalTransformer(arch_name='smt_it_stm_p8', input_channels=datamodule.input_channels)
+        >>> self = MultimodalTransformer(arch_name='smt_it_stm_p8', input_channels=datamodule.input_channels, change_loss='dicefocal')
         >>> import netharn as nh
         >>> # device = nh.XPU.coerce('auto')
         >>> device = nh.XPU.coerce('cpu').main_device
@@ -70,6 +74,10 @@ class MultimodalTransformer(pl.LightningModule):
                  window_size=8,
                  global_class_weight=1.0,
                  global_change_weight=1.0,
+                 change_head_hidden=2,
+                 class_head_hidden=2,
+                 change_loss='cce',
+                 class_loss='focal',
                  classes=10):
         import netharn as nh
 
@@ -99,23 +107,46 @@ class MultimodalTransformer(pl.LightningModule):
         self.positive_change_weight = positive_change_weight
         self.negative_change_weight = negative_change_weight
 
+        self.class_loss = class_loss
+        self.change_loss = change_loss
+
         # criterion and metrics
         # TODO: parametarize loss criterions
         # For loss function experiments, see and work in
         # ~/code/watch/watch/tasks/fusion/methods/channelwise_transformer.py
         import monai
         # self.change_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
-        self.class_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
+        if class_loss == 'focal':
+            self.class_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
+        else:
+            # self.class_criterion = nn.CrossEntropyLoss()
+            # self.class_criterion = nn.BCEWithLogitsLoss()
+            raise NotImplementedError
 
         # self.change_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
-        self.change_criterion = torch.nn.CrossEntropyLoss(
-            weight=torch.FloatTensor([self.negative_change_weight, self.positive_change_weight]),
-            reduction='none')
+        if self.change_loss.lower() == 'cce':
+            self.change_criterion = torch.nn.CrossEntropyLoss(
+                weight=torch.FloatTensor([self.negative_change_weight, self.positive_change_weight]),
+                reduction='none')
+            self.change_criterion_needs_ohe = True
+            self.change_criterion_logit_shape = '(b t h w) c'
+            self.change_criterion_target_shape = '(b t h w)'
+        elif self.change_loss.lower() == 'dicefocal':
+            # TODO: can we apply weights here?
+            self.change_criterion = monai.losses.DiceFocalLoss(
+                # weight=torch.FloatTensor([self.negative_change_weight, self.positive_change_weight]),
+                sigmoid=True,
+                to_onehot_y=False,
+                reduction='mean')
+            self.change_criterion_needs_ohe = False
+            self.change_criterion_needs_flat = False
+            self.change_criterion_logit_shape = 'b c h w t'
+            self.change_criterion_target_shape = 'b c h w t'
+        else:
+            raise NotImplementedError
 
         # self.change_criterion = nn.BCEWithLogitsLoss(
         #         pos_weight=torch.ones(1) * pos_weight)
-        # self.class_criterion = nn.CrossEntropyLoss()
-        # self.class_criterion = nn.BCEWithLogitsLoss()
 
         self.class_metrics = nn.ModuleDict({
             # "acc": torchmetrics.Accuracy(),
@@ -137,6 +168,22 @@ class MultimodalTransformer(pl.LightningModule):
         in_features = in_features_pos + in_features_raw
         encoder_config = transformer.encoder_configs[arch_name]
 
+        # TODO:
+        #     - [X] Classifier MLP, skip connections
+        #     - [ ] Decoder
+        #     - [ ] Dynamic / Learned embeddings
+        self.tokenize = Rearrange("b t c (h hs) (w ws) -> b t c h w (ws hs)",
+                                  hs=self.hparams.window_size,
+                                  ws=self.hparams.window_size)
+
+        encode_t = utils.SinePositionalEncoding(5, 1, sine_pairs=4)
+        encode_m = utils.SinePositionalEncoding(5, 2, sine_pairs=4)
+        encode_h = utils.SinePositionalEncoding(5, 3, sine_pairs=4)
+        encode_w = utils.SinePositionalEncoding(5, 4, sine_pairs=4)
+        self.add_encoding = transforms.Compose([
+            encode_t, encode_m, encode_h, encode_w,
+        ])
+
         encoder = transformer.FusionEncoder(
             **encoder_config,
             in_features=in_features,
@@ -147,34 +194,31 @@ class MultimodalTransformer(pl.LightningModule):
 
         feat_dim = self.encoder.out_features
 
+        self.move_channels_last = Rearrange("b t c h w f -> b t h w f c")
+
         # A simple linear layer that learns to combine channels
         self.channel_fuser = nh.layers.MultiLayerPerceptronNd(
             0, num_channels, [], 1, norm=None)
 
-        # TODO:
-        #     - [X] Classifier MLP, skip connections
-        #     - [ ] Decoder
-        #     - [ ] Dynamic / Learned embeddings
         # self.binary_clf = nn.LazyLinear(1)  # TODO: rename to change_clf
         # self.class_clf = nn.LazyLinear(len(self.classes))  # category classifier
+        self.change_head_hidden = change_head_hidden
+        self.class_head_hidden = class_head_hidden
+
         self.change_clf = nh.layers.MultiLayerPerceptronNd(
-            0, feat_dim, [], 2, norm=None)
+            dim=0,
+            in_channels=feat_dim,
+            hidden_channels=self.change_head_hidden,
+            out_channels=2,
+            norm=None
+        )
         self.class_clf = nh.layers.MultiLayerPerceptronNd(
-            0, feat_dim, [], self.num_classes, norm=None)
-
-        self.tokenize = Rearrange("b t c (h hs) (w ws) -> b t c h w (ws hs)",
-                                  hs=self.hparams.window_size,
-                                  ws=self.hparams.window_size)
-
-        self.move_channels_last = Rearrange("b t c h w f -> b t h w f c")
-
-        encode_t = utils.SinePositionalEncoding(5, 1, sine_pairs=4)
-        encode_m = utils.SinePositionalEncoding(5, 2, sine_pairs=4)
-        encode_h = utils.SinePositionalEncoding(5, 3, sine_pairs=4)
-        encode_w = utils.SinePositionalEncoding(5, 4, sine_pairs=4)
-        self.add_encoding = transforms.Compose([
-            encode_t, encode_m, encode_h, encode_w,
-        ])
+            dim=0,
+            in_channels=feat_dim,
+            hidden_channels=self.class_head_hidden,
+            out_channels=self.num_classes,
+            norm=None
+        )
 
     @classmethod
     def add_argparse_args(cls, parent_parser):
@@ -201,6 +245,13 @@ class MultimodalTransformer(pl.LightningModule):
         parser.add_argument("--dropout", default=0.1, type=float)
         parser.add_argument("--global_class_weight", default=1.0, type=float)
         parser.add_argument("--global_change_weight", default=1.0, type=float)
+
+        parser.add_argument("--change_loss", default='cce')
+        parser.add_argument("--class_loss", default='focal')
+
+        parser.add_argument("--change_head_hidden", default=2, help='number of hidden layers in the change head')
+        parser.add_argument("--class_head_hidden", default=2, help='number of hidden layers in the category head')
+
         # parser.add_argument("--input_scale", default=2000.0, type=float)
         parser.add_argument("--window_size", default=8, type=int)
         parser.add_argument(
@@ -352,6 +403,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     arch_name='smt_it_joint_p8',
             >>>     #arch_name='smt_it_stm_p8',
             >>>     attention_impl='performer',
+            >>>     change_loss='dicefocal',
             >>>     input_stats=datamodule.input_stats,
             >>>     positive_change_weight=1.0,
             >>>     negative_change_weight=0.01,
@@ -521,8 +573,21 @@ class MultimodalTransformer(pl.LightningModule):
                 # print('true_changes.shape = {!r}'.format(true_changes.shape))
 
                 # Hack: change the 1-logit binary case to 2 class binary case
+                change_pred_input = einops.rearrange(
+                    change_logits,
+                    'b t h w c -> ' + self.change_criterion_logit_shape).contiguous()
+                if self.change_criterion_needs_ohe:
+                    change_true_cxs = true_changes.long()
+                    change_true_input = einops.rearrange(
+                        change_true_cxs,
+                        'b t h w -> ' + self.change_criterion_logit_shape).contiguous()
+                else:
+                    change_true_ohe = kwarray.one_hot_embedding(true_changes.long(), 2, dim=-1)
+                    change_true_input = einops.rearrange(
+                        change_true_ohe,
+                        'b t h w c -> ' + self.change_criterion_logit_shape).contiguous()
+                change_loss = self.change_criterion(change_pred_input, change_true_input)
 
-                change_loss = self.change_criterion(change_logits.contiguous().view(-1, 2), true_changes.long().view(-1)).mean()
                 # num_change_states = 2
                 # true_change_ohe = kwarray.one_hot_embedding(true_changes.long(), num_change_states, dim=-1).float()
                 # change_loss = self.change_criterion(change_logits, true_change_ohe).mean()
