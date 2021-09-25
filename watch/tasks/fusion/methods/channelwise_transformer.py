@@ -249,8 +249,8 @@ class MultimodalTransformer(pl.LightningModule):
         parser.add_argument("--change_loss", default='cce')
         parser.add_argument("--class_loss", default='focal')
 
-        parser.add_argument("--change_head_hidden", default=2, help='number of hidden layers in the change head')
-        parser.add_argument("--class_head_hidden", default=2, help='number of hidden layers in the category head')
+        parser.add_argument("--change_head_hidden", default=2, type=int, help='number of hidden layers in the change head')
+        parser.add_argument("--class_head_hidden", default=2, type=int, help='number of hidden layers in the category head')
 
         # parser.add_argument("--input_scale", default=2000.0, type=float)
         parser.add_argument("--window_size", default=8, type=int)
