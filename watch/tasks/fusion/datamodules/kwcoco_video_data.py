@@ -1002,7 +1002,7 @@ class KWCocoVideoDataset(data.Dataset):
             ('hashid', self.sampler.dset._build_hashid()),
             ('channels', self.input_channels.__json__()),
             # ('sample_shape', self.sample_shape),
-            ('depends_version', 4),  # bump if `compute_input_stats` changes
+            ('depends_version', 5),  # bump if `compute_input_stats` changes
         ])
         workdir = None
         cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends)
@@ -1138,7 +1138,7 @@ class KWCocoVideoDataset(data.Dataset):
             perchan_stats = running.summarize(axis=(1, 2))
             input_stats[key] = {
                 'mean': perchan_stats['mean'].round(3),  # only take 3 sigfigs
-                'std': perchan_stats['std'].round(3),
+                'std': np.maximum(perchan_stats['std'], 1e-3).round(3),
             }
         self.disable_augmenter = False
         return input_stats

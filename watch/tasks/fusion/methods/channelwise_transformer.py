@@ -580,12 +580,12 @@ class MultimodalTransformer(pl.LightningModule):
                     change_true_cxs = true_changes.long()
                     change_true_input = einops.rearrange(
                         change_true_cxs,
-                        'b t h w -> ' + self.change_criterion_logit_shape).contiguous()
+                        'b t h w -> ' + self.change_criterion_target_shape).contiguous()
                 else:
                     change_true_ohe = kwarray.one_hot_embedding(true_changes.long(), 2, dim=-1)
                     change_true_input = einops.rearrange(
                         change_true_ohe,
-                        'b t h w c -> ' + self.change_criterion_logit_shape).contiguous()
+                        'b t h w c -> ' + self.change_criterion_target_shape).contiguous()
                 change_loss = self.change_criterion(change_pred_input, change_true_input)
 
                 # num_change_states = 2

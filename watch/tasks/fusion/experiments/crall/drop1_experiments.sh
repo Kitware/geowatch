@@ -50,14 +50,14 @@ python -m watch.tasks.fusion.fit \
     --method="MultimodalTransformer" \
     --arch_name=$ARCH \
     --time_steps=2 \
-    --chip_size=96 \
-    --batch_size=1 \
-    --accumulate_grad_batches=16 \
+    --chip_size=64 \
+    --batch_size=2 \
+    --accumulate_grad_batches=8 \
     --num_workers=14 \
     --max_lookahead=1000000 \
     --attention_impl=performer \
     --global_class_weight=0.0 \
-    --neg_to_pos_ratio=1.0 \
+    --neg_to_pos_ratio=0.5 \
     --global_change_weight=1.0 \
     --negative_change_weight=0.05 \
     --change_loss='dicefocal' \
@@ -65,31 +65,32 @@ python -m watch.tasks.fusion.fit \
     --max_epochs=400 \
     --patience=400 \
     --gpus=1  \
-    --learning_rate=1e-4 \
-    --weight_decay=1e-4 \
+    --learning_rate=1e-5 \
+    --weight_decay=1e-5 \
     --dropout=0.1 \
     --window_size=8 \
-    --dump=$TRAIN_CONFIG_FPATH 
+    --default_root_dir=$DEFAULT_ROOT_DIR \
+       --package_fpath=$PACKAGE_FPATH \
+        --train_dataset=$TRAIN_FPATH \
+         --vali_dataset=$VALI_FPATH \
+         --test_dataset=$TEST_FPATH \
+         --num_sanity_val_steps=2
 
-python -m watch.tasks.fusion.predict \
-    --gpus=1 \
-    --write_preds=True \
-    --write_probs=False \
-    --dump=$PRED_CONFIG_FPATH
+    #--dump=$TRAIN_CONFIG_FPATH 
 
 ## TODO: predict and eval steps should be called after training.
 # But perhaps it should be a different invocation of the fit script?
 # So the simple route is still available?
 
 # Execute train -> predict -> evaluate
-python -m watch.tasks.fusion.fit \
-           --config=$TRAIN_CONFIG_FPATH \
-    --default_root_dir=$DEFAULT_ROOT_DIR \
-       --package_fpath=$PACKAGE_FPATH \
-        --train_dataset=$TRAIN_FPATH \
-         --vali_dataset=$VALI_FPATH \
-         --test_dataset=$TEST_FPATH \
-         --num_sanity_val_steps=0
+#python -m watch.tasks.fusion.fit \
+#           --config=$TRAIN_CONFIG_FPATH \
+
+python -m watch.tasks.fusion.predict \
+    --gpus=1 \
+    --write_preds=True \
+    --write_probs=False \
+    --dump=$PRED_CONFIG_FPATH
 
 python -m watch.tasks.fusion.predict \
         --config=$PRED_CONFIG_FPATH \
