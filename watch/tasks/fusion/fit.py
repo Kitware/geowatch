@@ -266,7 +266,7 @@ def make_fit_config(cmdline=False, **kwargs):
         'gradient_clip_algorithm': 'value',
 
         # Device defaults
-        'auto_select_gpus': True,
+        # 'auto_select_gpus': True,
         # 'gpus': 1 if has_gpu else None,
 
         # Data defaults
