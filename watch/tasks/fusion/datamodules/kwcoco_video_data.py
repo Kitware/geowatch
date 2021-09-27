@@ -132,7 +132,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         chip_overlap=0.1,
         neg_to_pos_ratio=1.0,
         max_lookahead=1,
-        avoid_sensors=['L8'],
+        exclude_sensors=['L8'],
         channels=None,
         batch_size=4,
         num_workers=4,
@@ -176,7 +176,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.preprocessing_step = preprocessing_step
         self.normalize_inputs = normalize_inputs
         self.max_lookahead = max_lookahead
-        self.avoid_sensors = avoid_sensors
+        self.exclude_sensors = exclude_sensors
         self.diff_inputs = diff_inputs
 
         self.input_stats = None
@@ -213,7 +213,13 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             >>> assert args.diff_inputs
             >>> args, _ = parent_parser.parse_known_args(['--diff_inputs=False'])
             >>> assert not args.diff_inputs
+            >>> args, _ = parent_parser.parse_known_args(['--exclude_sensors=l8,f3'])
+            >>> assert args.exclude_sensors == ['l8', 'f3']
+            >>> args, _ = parent_parser.parse_known_args(['--exclude_sensors=l8'])
+            >>> assert args.exclude_sensors == ['l8']
         """
+        from scriptconfig.smartcast import smartcast
+        from functools import partial
         parser = parent_parser.add_argument_group("kwcoco_video_data")
         parser.add_argument("--train_dataset", default=None, help='path to the train kwcoco file')
         parser.add_argument("--vali_dataset", default=None, help='path to the validation kwcoco file')
@@ -227,7 +233,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                             # default=float('inf'),
                             default=1,
                             type=float, help='number of frames allowed to sample in the future from the base. Set to inf for all')
-        parser.add_argument("--avoid_sensors", default=[''], nargs='+', help='comma delimited list of sensors to avoid, such as S2 or L8')
+        parser.add_argument("--exclude_sensors", type=partial(smartcast, astype=list), help='comma delimited list of sensors to avoid, such as S2 or L8')
         parser.add_argument("--channels", default=None, type=str, help='channels to use should be ChannelSpec coercable')
         parser.add_argument("--batch_size", default=4, type=int)
         parser.add_argument("--num_workers", default=4, type=int)
@@ -238,7 +244,6 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 if True, computes the mean/std for this dataset on each mode
                 so this can be passed to the model.
                 '''))
-        from scriptconfig.smartcast import smartcast
         parser.add_argument(
             "--diff_inputs", default=False, type=smartcast, help=ub.paragraph(
                 '''
@@ -260,7 +265,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             train_coco_dset = kwcoco.CocoDataset.coerce(train_data)
             self.coco_datasets['train'] = train_coco_dset
 
-            print('self.avoid_sensors', self.avoid_sensors)
+            print('self.exclude_sensors', self.exclude_sensors)
             coco_train_sampler = ndsampler.CocoSampler(train_coco_dset)
             train_dataset = KWCocoVideoDataset(
                 coco_train_sampler,
@@ -270,7 +275,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 neg_to_pos_ratio=self.neg_to_pos_ratio,
                 max_lookahead=self.max_lookahead,
                 diff_inputs=self.diff_inputs,
-                avoid_sensors=self.avoid_sensors,
+                exclude_sensors=self.exclude_sensors,
             )
 
             # Unfortunately lightning seems to only enable / disables
@@ -318,7 +323,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                     mode='vali',
                     neg_to_pos_ratio=0,
                     diff_inputs=self.diff_inputs,
-                    avoid_sensors=self.avoid_sensors,
+                    exclude_sensors=self.exclude_sensors,
                 )
                 self.torch_datasets['vali'] = vali_dataset
                 ub.inject_method(self, lambda self: self._make_dataloader('vali', shuffle=False), 'val_dataloader')
@@ -339,7 +344,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 channels=self.channels,
                 mode='test',
                 diff_inputs=self.diff_inputs,
-                avoid_sensors=self.avoid_sensors,
+                exclude_sensors=self.exclude_sensors,
             )
 
             ub.inject_method(self, lambda self: self._make_dataloader('test', shuffle=False), 'test_dataloader')
@@ -549,7 +554,7 @@ class KWCocoVideoDataset(data.Dataset):
         neg_to_pos_ratio=1.0,
         max_lookahead=1.0,
         diff_inputs=False,
-        avoid_sensors=None,
+        exclude_sensors=None,
     ):
 
         self._hueristic_background_classnames = _HEURISTIC_CATEGORIES['background']
@@ -571,7 +576,7 @@ class KWCocoVideoDataset(data.Dataset):
                 sampler.dset, window_dims=sample_shape,
                 window_overlap=window_overlap,
                 keepbound=True,
-                avoid_sensors=avoid_sensors, 
+                exclude_sensors=exclude_sensors,
             )
             # new_sample_grid = new_video_sample_grid(
             #     sampler.dset, window_dims=sample_shape,
@@ -601,7 +606,7 @@ class KWCocoVideoDataset(data.Dataset):
                     window_overlap=window_overlap,
                     negative_classes=negative_classes,
                     keepbound=False,
-                    avoid_sensors=avoid_sensors, 
+                    exclude_sensors=exclude_sensors,
                 )
 
             n_pos = len(new_sample_grid["positives_indexes"])
@@ -1646,7 +1651,7 @@ def new_video_sample_grid(dset, window_dims=None, window_overlap=0.0,
     return sample_grid
 
 
-def sample_vidspace_grid(dset, window_dims, window_overlap=0.0, negative_classes=None, keepbound=False, avoid_sensors=None):
+def sample_vidspace_grid(dset, window_dims, window_overlap=0.0, negative_classes=None, keepbound=False, exclude_sensors=None):
     """
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -1792,10 +1797,9 @@ def sample_vidspace_grid(dset, window_dims, window_overlap=0.0, negative_classes
 
             region_tid_to_info = ub.dict_subset(tid_to_dframe, unique_tracks)
 
-            sensor_coarse = dset.images(video_gids).lookup('sensor_coarse', '')
-            #flags = [s == 'S2' for s in sensor_coarse]
-            if avoid_sensors is not None:
-                flags = [s not in avoid_sensors for s in sensor_coarse]
+            if exclude_sensors is not None:
+                sensor_coarse = dset.images(video_gids).lookup('sensor_coarse', '')
+                flags = [s not in exclude_sensors for s in sensor_coarse]
             else:
                 flags = []
             if any(flags):
@@ -1929,7 +1933,7 @@ def sample_vidspace_grid(dset, window_dims, window_overlap=0.0, negative_classes
     return sample_grid
 
 
-def sample_test_vidspace_grid(dset, window_dims, window_overlap=0.0, negative_classes=None, keepbound=True, avoid_sensors=None):
+def sample_test_vidspace_grid(dset, window_dims, window_overlap=0.0, negative_classes=None, keepbound=True, exclude_sensors=None):
     """
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -1993,10 +1997,9 @@ def sample_test_vidspace_grid(dset, window_dims, window_overlap=0.0, negative_cl
         for space_region in list(slider):
             y_sl, x_sl = space_region
 
-            sensor_coarse = dset.images(video_gids).lookup('sensor_coarse', '')
-            #flags = [s == 'S2' for s in sensor_coarse]
-            if avoid_sensors is not None:
-                flags = [s not in avoid_sensors for s in sensor_coarse]
+            if exclude_sensors is not None:
+                sensor_coarse = dset.images(video_gids).lookup('sensor_coarse', '')
+                flags = [s not in exclude_sensors for s in sensor_coarse]
             else:
                 flags = []
             if any(flags):
