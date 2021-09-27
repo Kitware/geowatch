@@ -592,6 +592,10 @@ class MultimodalTransformer(pl.LightningModule):
                 else:
                     raise KeyError(self.change_criterion_target_encoding)
 
+                # TODO: it would be nice instead of having a valid mask, if we
+                # had a pixelwise weighting of how much we care about each
+                # pixel. This would let us upweight particular instances
+                # and also ignore regions by setting the weights to zero.
                 mask = einops.rearrange(valids_, 'b t h w c -> ' + self.change_criterion_logit_shape, c=1)
                 change_loss = self.change_criterion(change_pred_input * mask, change_true_input * mask)
 
