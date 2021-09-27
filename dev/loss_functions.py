@@ -1,6 +1,14 @@
 # import warnings
 # from typing import Optional, Sequence, Union
 import torch
+import kwimage
+import monai
+import numpy as np
+import kwarray
+import kwplot
+import einops  # NOQA
+import pandas as pd
+import ubelt as ub
 # import torch.nn.functional as F
 # from torch.nn.modules.loss import _Loss
 # from monai.networks import one_hot
@@ -30,24 +38,74 @@ def inverse_sigmoid(x):
     return -torch.log((1 / (x + 1e-8)) - 1)
 
 
-def single_example_dice_focal():
-    import kwimage
-    import monai
-    import torch
-    import numpy as np
-    import kwarray
+def colorize2(heatmap):
+    prob_chw = heatmap.data['class_probs']
+
+    # Define default colors
+    default_cidx_to_color = kwimage.Color.distinct(len(prob_chw))
+    classes = heatmap.classes
+
+    # try and read colors from classes CategoryTree
+    try:
+        cidx_to_color = []
+        for cidx in range(len(prob_chw)):
+            node = classes[cidx]
+            color = classes.graph.nodes[node].get('color', None)
+            if True:
+                assert color is not None
+            if color is None:
+                # fallback, ignore conflicts
+                color = default_cidx_to_color[cidx]
+            else:
+                color = kwimage.Color(color).as01()
+            cidx_to_color.append(color)
+    except Exception:
+        # fallback on default colors
+        cidx_to_color = default_cidx_to_color
+
+    # TODO: make heatmap do this better
+    # img_dims = prob_hwc.shape[0:2]
+    # canvas = np.zeros(img_dims + (3,))
+    # heatmap = kwimage.Heatmap(class_probs=prob_hwc, classes=['fg', 'bg'], img_dims=img_dims)
+    # heatmap.colorize(with_alpha=False, imgspace=False, cmap='plasma').shape
+    # kwimage.Heatmap(class_probs=prob_hwc).colorize().shape
+    # heatmap.draw_on(canvas, imgspace=False)
+    prob_dims = prob_chw.shape[1:3]
+    chan_alphas = []
+    for cx, prob_hw in enumerate(prob_chw):
+        rgb_chan = np.tile(np.array(cidx_to_color[cx])[None, None, :], prob_dims + (1,))
+        alpha_chan = prob_hw[:, :, None] * 0.5
+        class_heatmap = np.concatenate([rgb_chan, alpha_chan], axis=2)
+        chan_alphas.append(class_heatmap)
+    background = kwimage.ensure_alpha_channel(np.zeros(prob_dims + (3,)))
+    chan_alphas.append(background)
+    colored_alpha = kwimage.overlay_alpha_layers(chan_alphas)
+    # colored = kwimage.ensure_uint255(colored_alpha[:, :, 0:3])
+    colored = colored_alpha
+    return colored
+
+
+def single_example_loss_functions():
+
+    sns = kwplot.autosns()
 
     S = 64
-    poly = kwimage.Polygon.random().scale(S).scale(1.1, about='center')
+    C = 3
+    poly = kwimage.Polygon.random().scale(S).scale(0.3, about='center')
 
     is_fg = np.zeros((S, S))
     is_fg = poly.fill(is_fg, value=1).astype(np.int64)
     is_bg = (1 - is_fg)
 
-    C = 3
+    import kwcoco
+    classes = kwcoco.CategoryTree.from_coco([
+        {'name': 'background', 'id': 0, 'color': 'orange'},
+        {'name': 'foreground', 'id': 1, 'color': 'dodgerblue'},
+        {'name': 'other', 'id': 3, 'color': 'black'},
+    ])
 
     eps = 1e-3
-    dist_matrix = 1 - np.eye(C, C)
+    # dist_matrix = 1 - np.eye(C, C)
 
     true_cxs = torch.Tensor(is_fg[None, :]).long()
     true_ohe = kwarray.one_hot_embedding(true_cxs, C)
@@ -59,42 +117,101 @@ def single_example_dice_focal():
 
     # rng = np.random.RandomState(0)
 
-    # noise = rng.randn(*true_cxs.shape)
-    noise = 0
-
     # Different loss criterions require different encodings of the truth
     targets = {
         'ohe': true_ohe,  # one hot embedding
         'idx': true_cxs,  # true class index
     }
 
-    # Invert probabilities into raw network "logit" outputs
+    def _weights(w_bg):
+        return torch.Tensor([w_bg, 1.0, 1.0])
 
-    class_weights = torch.Tensor([0.05, 5.0])
+    class_weights = torch.Tensor([0.00, 1.0, 1.0])
 
     loss_infos = [
-        {'cls': monai.losses.FocalLoss, 'input_style': 'logit', 'target_style': 'ohe', 'kwargs': {'gamma': 5.0, 'weight': class_weights}},
-        # {'cls': FixedFocalLoss, 'input_style': 'logit', 'target_style': 'ohe'},
-        # {'cls': NetharnFocalLoss, 'input_style': 'logit', 'target_style': 'idx'},
-        {'cls': monai.losses.DiceLoss, 'input_style': 'prob', 'target_style': 'ohe', 'kwargs': {'pixelwise': False}},
-        {'cls': monai.losses.DiceFocalLoss, 'input_style': 'prob', 'target_style': 'ohe'},
-        # {'cls': monai.losses.GeneralizedDiceLoss, 'input_style': 'prob', 'target_style': 'ohe'},
-        # {'cls': monai.losses.GeneralizedWassersteinDiceLoss, 'input_style': 'prob', 'target_style': 'idx', 'kwargs': {'dist_matrix': dist_matrix}},
-        # {'cls': monai.losses.DiceFocalLoss, 'input_style': 'logit', 'target_style': 'ohe'},
-        # {'cls': torch.nn.CrossEntropyLoss, 'input_style': 'logit', 'target_style': 'idx'},
+        {
+            'cls': monai.losses.FocalLoss, 'input_style': 'logit', 'target_style': 'ohe',
+            'kwargs': {'gamma': 2.0, 'weight': _weights(0.05), 'reduction': 'mean'}
+        },
 
-        {'cls': CrossEntropyLoss_KeepDim, 'input_style': 'logit', 'target_style': 'idx', 'kwargs': {'weight': class_weights}},
+        {
+            'cls': monai.losses.FocalLoss, 'input_style': 'logit', 'target_style': 'ohe',
+            'kwargs': {'gamma': 2.0, 'weight': _weights(0.001), 'reduction': 'mean'}
+        },
+
+        {
+            'cls': monai.losses.FocalLoss, 'input_style': 'logit', 'target_style': 'ohe',
+            'kwargs': {'gamma': 0.0, 'weight': _weights(0.001), 'reduction': 'mean'}
+        },
+
+        {
+            'cls': monai.losses.FocalLoss, 'input_style': 'logit', 'target_style': 'ohe',
+            'kwargs': {'gamma': 2.0, 'weight': None, 'reduction': 'mean'}
+        },
+
+        {
+            'cls': monai.losses.FocalLoss, 'input_style': 'logit', 'target_style': 'ohe',
+            'kwargs': {'gamma': 0.0, 'weight': None, 'reduction': 'mean'}
+        },
+
+
+        {
+            'cls': CrossEntropyLoss_KeepDim, 'input_style': 'logit', 'target_style': 'idx',
+            'kwargs': {'weight': _weights(0.05), 'reduction': 'mean'}
+        },
+
+        {
+            'cls': CrossEntropyLoss_KeepDim, 'input_style': 'logit', 'target_style': 'idx',
+            'kwargs': {'weight': None, 'reduction': 'mean'}
+        },
 
         # torch.nn.NLLLoss,
         # torch.nn.BCELoss,
+        # {'cls': FixedFocalLoss, 'input_style': 'logit', 'target_style': 'ohe'},
+        # {'cls': NetharnFocalLoss, 'input_style': 'logit', 'target_style': 'idx'},
+        # {'cls': monai.losses.DiceLoss, 'input_style': 'prob', 'target_style': 'ohe', 'kwargs': {'pixelwise': False}},
 
-        {'cls': BCEWithLogitsLoss_BetterWeight, 'input_style': 'logit', 'target_style': 'ohe', 'kwargs': {'pos_weight': class_weights}},
+        {
+            'cls': BCEWithLogitsLoss_BetterWeight, 'input_style': 'logit', 'target_style': 'ohe',
+            'kwargs': {'pos_weight': class_weights, 'reduction': 'mean'}
+        },
+
+        {
+            'cls': BCEWithLogitsLoss_BetterWeight, 'input_style': 'logit', 'target_style': 'ohe',
+            'kwargs': {'pos_weight': None, 'reduction': 'mean'}
+        },
     ]
+
+    if 0:
+        loss_infos += [
+            {
+                'cls': monai.losses.DiceLoss, 'input_style': 'prob',
+                'target_style': 'ohe', 'kwargs': {'reduction': 'mean'}
+            },
+
+            {
+                'cls': monai.losses.DiceFocalLoss, 'input_style': 'prob',
+                'target_style': 'ohe', 'kwargs': {'reduction': 'mean'}
+            },
+
+            # {'cls': monai.losses.GeneralizedDiceLoss, 'input_style': 'prob', 'target_style': 'ohe'},
+            # {'cls': monai.losses.GeneralizedWassersteinDiceLoss, 'input_style': 'prob', 'target_style': 'idx', 'kwargs': {'dist_matrix': dist_matrix}},
+            # {'cls': monai.losses.DiceFocalLoss, 'input_style': 'logit', 'target_style': 'ohe'},
+            # {'cls': torch.nn.CrossEntropyLoss, 'input_style': 'logit', 'target_style': 'idx'},
+        ]
 
     for loss_info in loss_infos:
         kwargs = loss_info.get('kwargs', {})
-        loss_info['instance'] = loss_info['cls'](reduction='mean', **kwargs)
+        loss_info['instance'] = loss_info['cls'](**kwargs)
         loss_info['name'] = loss_info['cls'].__name__
+
+        loss_json = {
+            'type': loss_info['cls'].__name__,
+            **kwargs
+        }
+        title = ub.repr2(loss_json, compact=True, sort=0, nl=1)
+        print('title = {}'.format(title))
+        loss_info['title'] = title
 
     # torch.nn.BCEWithLogitsLoss(reduction='none', pos_weight=torch.ones(5))(torch.rand(3, 5), torch.rand(3, 5))
     # BCEWithLogitsLoss_BetterWeight(reduction='none', pos_weight=torch.ones(5))(torch.rand(3, 5, 1), torch.rand(3, 5, 1))
@@ -108,22 +225,23 @@ def single_example_dice_focal():
             return list(range(*slice(None, None, step).indices(total)))
 
     # Show modulated truth
-    modulated_preds = []
-    rows = []
-
-    p_fg = 0.4
-    p_bg = 0.3
 
     select_idxs = index_sample(len(realpos_mean), 3)
     select_jdxs = index_sample(len(realneg_mean), 3)
 
-    def make_prob(p_fg, p_bg):
+    rng = np.random.RandomState(0)
+
+    noise = rng.randn(*is_fg.shape) * 0.0
+    # noise = 0
+    def make_prob(p_fg, p_bg, noise):
         fg_probs = ((p_fg + noise) * is_fg).clip(0, 1)
         bg_probs = ((p_bg + noise) * is_bg).clip(0, 1)
         other_probs = np.zeros_like(fg_probs)
         prob = np.stack([bg_probs, fg_probs, other_probs], axis=0)
-        # Ensure sum to 1?
-        prob[2] = 1 - prob.sum(axis=0)
+
+        if 0:
+            # Ensure sum to 1?
+            prob[2] = 1 - prob.sum(axis=0)
 
         # prob = (torch.Tensor(prob) * 1).softmax(dim=0)
         # bg_probs[is_fg.astype(bool)] = 1 - fg_probs[is_fg.astype(bool)]
@@ -131,116 +249,76 @@ def single_example_dice_focal():
         prob = torch.Tensor(prob).clamp(eps, 1 - eps)[None, :]
         return prob
 
-    def false_color(prob):
-        pass
-
-    rng = np.random.RandomState(0)
-    idx_to_color = np.array(kwimage.Color.distinct(C))
-    # rand_colors = rng.rand(C, 3)
-    # seedmat = rng.rand(C, 3)
-    # q, r = np.linalg.qr(seedmat)
-    random_ortho = r
-    # false_colored = (prob_hwc @ random_ortho)
-    # false_colored = kwimage.normalize_intensity(false_colored)
-    # u, s, vh = np.linalg.svd(seedmat, full_matrices=False)
-    # print('u.shape = {!r}'.format(u.shape))
-    # print('s.shape = {!r}'.format(s.shape))
-    # print('vh.shape = {!r}'.format(vh.shape))
-    # u @ np.diag(s) @ vh
-    # ortho = u @ vh?
-
-    import kwplot
     sns = kwplot.autosns()
     pnum_ = kwplot.PlotNums(nRows=len(select_idxs), nCols=len(select_jdxs))
-    kwplot.figure(fnum=2)
+    fig = kwplot.figure(fnum=2)
     for p_fg in realpos_mean[select_idxs]:
         for p_bg in realneg_mean[select_jdxs]:
-            prob_bchw = make_prob(p_fg, p_bg)
-            import einops
-            prob_hwc = einops.rearrange(prob_bchw[0], 'c h w -> h w c').numpy()
-            prob_dims = prob_hwc.shape[0:2]
-
-            chan_alphas = []
-            for cx, prob_hw in enumerate(prob_bchw[0]):
-                rgb_chan = np.tile(idx_to_color[cx][None, None, :], prob_dims + (1,))
-                alpha_chan = prob_hw[:, :, None] * 0.5
-                class_heatmap = np.concatenate([rgb_chan, alpha_chan], axis=2)
-                chan_alphas.append(class_heatmap)
-
-            background = kwimage.ensure_alpha_channel(np.zeros(prob_dims + (3,)))
-            chan_alphas.append(background)
-            colored_alpha = kwimage.overlay_alpha_layers(chan_alphas)
-            # colored = kwimage.ensure_uint255(colored_alpha[:, :, 0:3])
-            colored = colored_alpha
+            prob_bchw = make_prob(p_fg, p_bg, noise)
+            heatmap = kwimage.Heatmap(class_probs=prob_bchw[0], classes=classes)
+            colored = colorize2(heatmap)
 
             # _, ax = kwplot.imshow(false_colored)
             fig = kwplot.figure(pnum=pnum_())
-            # img_dims = prob_hwc.shape[0:2]
-            # canvas = np.zeros(img_dims + (3,))
-            # heatmap = kwimage.Heatmap(class_probs=prob_hwc, classes=['fg', 'bg'], img_dims=img_dims)
-            # heatmap.colorize(with_alpha=False, imgspace=False, cmap='plasma').shape
-            # kwimage.Heatmap(class_probs=prob_hwc).colorize().shape
-            # heatmap.draw_on(canvas, imgspace=False)
             ax = fig.gca()
             kwplot.imshow(colored)
-            title = f'p_fg={p_fg:0.3f}, p_bg={p_bg:0.3f}'
+            title = f'p(fg)={p_fg:0.3f}, p(bg)={p_bg:0.3f}'
             ax.set_title(title)
+    fig.suptitle('Modulated input predictions')
 
-    for idx, p_fg in enumerate(realpos_mean):
-        for jdx, p_bg in enumerate(realneg_mean):
-            prob = make_prob(p_fg, p_bg)
-            fg_probs = ((p_fg + noise) * is_fg).clip(0, 1)
-            bg_probs = ((p_bg + noise) * is_bg).clip(0, 1)
-            # Ensure sum to 1
-            bg_probs[is_fg.astype(bool)] = 1 - fg_probs[is_fg.astype(bool)]
-            fg_probs[is_bg.astype(bool)] = 1 - bg_probs[is_bg.astype(bool)]
-            prob = np.stack([bg_probs, fg_probs], axis=0)
-            prob = torch.Tensor(prob).clamp(eps, 1 - eps)[None, :]
+    # Draw loss surfaces over modulated predictions
+    import itertools as it
+    rows = []
+    grid = list(it.product(realpos_mean, realneg_mean))
+    for p_fg, p_bg in ub.ProgIter(grid, desc='compute loss'):
+        prob = make_prob(p_fg, p_bg, noise)
 
-            logit = inverse_sigmoid(prob)
+        # Invert probabilities into raw network "logit" outputs
+        logit = inverse_sigmoid(prob)
 
-            inputs = {
-                'logit': logit,
-                'prob': prob,
-                'p_fg': p_fg,
-                'p_bg': p_bg,
-            }
+        inputs = {
+            'logit': logit,
+            'prob': prob,
+            'p_fg': p_fg,
+            'p_bg': p_bg,
+        }
 
-            modulated_preds.append(inputs)
+        for loss_info in loss_infos:
+            input = inputs[loss_info['input_style']]
+            # print('loss_info = {}'.format(ub.repr2(loss_info, nl=1)))
+            target = targets[loss_info['target_style']]
+            loss_instance = loss_info['instance']
 
-            for loss_info in loss_infos:
-                input = inputs[loss_info['input_style']]
-                target = targets[loss_info['target_style']]
-                loss_instance = loss_info['instance']
-                loss_values = loss_instance(input, target).mean()
+            loss_values = loss_instance(input, target)
+            loss = loss_values.mean().item()
+            rows.append({
+                'loss': loss,
+                'p(fg)': p_fg,
+                'p(bg)': p_bg,
+                'title': loss_info['title']
+            })
 
-                loss = loss_values.item()
-                rows.append({
-                    'loss': loss,
-                    'realpos_prob': p_fg,
-                    'realneg_prob': p_bg,
-                    'type': loss_info['name']
-                })
-
-    import pandas as pd
     df = pd.DataFrame(rows)
-    import kwplot
-    sns = kwplot.autosns()
-    groups = dict(list(df.groupby('type')))
-    pnum_ = kwplot.PlotNums(nSubplots=len(groups) + 1)
+    groups = dict(list(df.groupby('title')))
+
     fig = kwplot.figure(fnum=1, doclf=True)
 
+    pnum_ = kwplot.PlotNums(nSubplots=len(groups) + 1)
     kwplot.figure(fnum=1, pnum=pnum_())
     ax = kwplot.imshow(is_fg)[1]
     ax.set_title('Truth (to be modulated)')
 
+    from matplotlib.colors import LogNorm
     for loss_name, group in groups.items():
-        heatmap = group.pivot('realneg_prob', 'realpos_prob', 'loss')
+        heatmap = group.pivot('p(bg)', 'p(fg)', 'loss')
         kwplot.figure(fnum=1, pnum=pnum_())
         ax = sns.heatmap(
             heatmap,
-            robust=True,
+            norm=LogNorm(),
+            cbar_kws={'label': 'loss'},
+            # robust=True,
             # vmin=0,
+            # vmax=20,
             # vmax=heatmap.values.max(),
             # xticklabels=['{:.2f}'.format(x) for x in heatmap.index.values],
             # yticklabels=['{:.2f}'.format(x) for x in heatmap.index.values],
@@ -259,7 +337,9 @@ def single_example_dice_focal():
             new_labels.append(t.get_text()[0:4])
         ax.set_yticklabels(new_labels)
 
-    fig.tight_layout()
+    fig.subplots_adjust(hspace=0.5, wspace=0.8)
+
+    # fig.tight_layout()
 
 
 # def test_loss():
@@ -635,3 +715,24 @@ def single_example_dice_focal():
 #         return nll_focal_loss(
 #             nll, target, focus=self.focus, dim=1, weight=self.weight,
 #             ignore_index=self.ignore_index, reduction=self.reduction)
+
+
+# rand_colors = rng.rand(C, 3)
+# seedmat = rng.rand(C, 3)
+# q, r = np.linalg.qr(seedmat)
+# random_ortho = r
+# false_colored = (prob_hwc @ random_ortho)
+# false_colored = kwimage.normalize_intensity(false_colored)
+# u, s, vh = np.linalg.svd(seedmat, full_matrices=False)
+# print('u.shape = {!r}'.format(u.shape))
+# print('s.shape = {!r}'.format(s.shape))
+# print('vh.shape = {!r}'.format(vh.shape))
+# u @ np.diag(s) @ vh
+# ortho = u @ vh?
+
+if __name__ == '__main__':
+    """
+    CommandLine:
+        python ~/code/watch/dev/loss_functions.py
+    """
+    single_example_loss_functions()

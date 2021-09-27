@@ -41,24 +41,19 @@ class MultimodalTransformer(pl.LightningModule):
         >>> loader = datamodule.train_dataloader()
         >>> batch = next(iter(loader))
         >>> #self = MultimodalTransformer(arch_name='smt_it_joint_p8')
-        >>> self = MultimodalTransformer(arch_name='smt_it_stm_p8', input_channels=datamodule.input_channels, change_loss='dicefocal')
+        >>> self = MultimodalTransformer(arch_name='smt_it_joint_p8', input_channels=datamodule.input_channels, change_loss='dicefocal', attention_impl='performer')
         >>> import netharn as nh
-        >>> # device = nh.XPU.coerce('auto')
         >>> device = nh.XPU.coerce('cpu').main_device
-        >>> frames = batch[0]['frames']
-        >>> collate_images = torch.cat([frame['modes']['r|g|b'][None, :].float() for frame in frames], dim=0)
-        >>> images = collate_images[None, :].to(device)
         >>> self = self.to(device)
         >>> # Run forward pass
-        >>> output = self(images)
         >>> num_params = nh.util.number_of_parameters(self)
         >>> print('num_params = {!r}'.format(num_params))
         >>> import torch.profiler
         >>> from torch.profiler import profile, ProfilerActivity
-        >>> with profile(activities=[ProfilerActivity.CPU], record_shapes=True) as prof:
+        >>> with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True) as prof:
         >>>     with torch.profiler.record_function("model_inference"):
-        >>>         output = self(images)
-        >>> print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
+        >>>         output = self.forward_step(batch, with_loss=True)
+        >>> print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
     """
 
     def __init__(self,
@@ -117,7 +112,7 @@ class MultimodalTransformer(pl.LightningModule):
         import monai
         # self.change_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
         if class_loss == 'focal':
-            self.class_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
+            self.class_criterion = monai.losses.FocalLoss(reduction='mean', to_onehot_y=False)
         else:
             # self.class_criterion = nn.CrossEntropyLoss()
             # self.class_criterion = nn.BCEWithLogitsLoss()
@@ -126,9 +121,12 @@ class MultimodalTransformer(pl.LightningModule):
         # self.change_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
         if self.change_loss.lower() == 'cce':
             self.change_criterion = torch.nn.CrossEntropyLoss(
-                weight=torch.FloatTensor([self.negative_change_weight, self.positive_change_weight]),
-                reduction='none')
-            self.change_criterion_needs_ohe = True
+                weight=torch.FloatTensor([
+                    self.negative_change_weight,
+                    self.positive_change_weight
+                ]),
+                reduction='mean')
+            self.change_criterion_target_encoding = 'onehot'
             self.change_criterion_logit_shape = '(b t h w) c'
             self.change_criterion_target_shape = '(b t h w)'
         elif self.change_loss.lower() == 'dicefocal':
@@ -138,7 +136,7 @@ class MultimodalTransformer(pl.LightningModule):
                 sigmoid=True,
                 to_onehot_y=False,
                 reduction='mean')
-            self.change_criterion_needs_ohe = False
+            self.change_criterion_target_encoding = 'index'
             self.change_criterion_needs_flat = False
             self.change_criterion_logit_shape = 'b c h w t'
             self.change_criterion_target_shape = 'b c h w t'
@@ -162,9 +160,7 @@ class MultimodalTransformer(pl.LightningModule):
         })
 
         in_features_raw = self.hparams.window_size * self.hparams.window_size
-        print('in_features_raw = {!r}'.format(in_features_raw))
         in_features_pos = (2 * 4 * 4)  # positional encoding feature
-        print('in_features_pos = {!r}'.format(in_features_pos))
         in_features = in_features_pos + in_features_raw
         encoder_config = transformer.encoder_configs[arch_name]
 
@@ -510,6 +506,7 @@ class MultimodalTransformer(pl.LightningModule):
             # the heterogeneous inputs
 
             frame_ims = []
+            frame_ignores = []
             for frame in item['frames']:
                 assert len(frame['modes']) == 1, 'only handle one mode for now'
                 mode_key, mode_val = ub.peek(frame['modes'].items())
@@ -519,8 +516,10 @@ class MultimodalTransformer(pl.LightningModule):
                     mode_norm = self.input_norms[mode_key]
                     mode_val = mode_norm(mode_val)
                 frame_ims.append(mode_val)
+                frame_ignores.append(frame['ignore'])
 
             # Because we are not collating we need to add a batch dimension
+            ignores = torch.stack(frame_ignores)[None, ...]
             images = torch.stack(frame_ims)[None, ...]
 
             B, T, C, H, W = images.shape
@@ -561,32 +560,40 @@ class MultimodalTransformer(pl.LightningModule):
                 true_changes = torch.stack([
                     frame['change'] for frame in item['frames'][1:]
                 ])[None, ...]
-                item_changes_truth.append(true_changes)
+                item_changes_truth.append(true_changes)  # [B, T, H, W, C]
 
                 true_class = torch.stack([
                     frame['class_idxs'] for frame in item['frames']
                 ])[None, ...]
-                item_classes_truth.append(true_class)
+                item_classes_truth.append(true_class)  # [B, T, H, W, C]
 
                 # compute criterion
                 # print('change_logits.shape = {!r}'.format(change_logits.shape))
                 # print('true_changes.shape = {!r}'.format(true_changes.shape))
 
+                valids_ = (1 - ignores)[..., None]  # [B, T, H, W, 1]
+
                 # Hack: change the 1-logit binary case to 2 class binary case
                 change_pred_input = einops.rearrange(
                     change_logits,
                     'b t h w c -> ' + self.change_criterion_logit_shape).contiguous()
-                if self.change_criterion_needs_ohe:
+                if self.change_criterion_target_encoding == 'onehot':
                     change_true_cxs = true_changes.long()
                     change_true_input = einops.rearrange(
                         change_true_cxs,
                         'b t h w -> ' + self.change_criterion_target_shape).contiguous()
-                else:
+
+                elif self.change_criterion_target_encoding == 'index':
+                    # Note: 1HE is much easier to work with
                     change_true_ohe = kwarray.one_hot_embedding(true_changes.long(), 2, dim=-1)
                     change_true_input = einops.rearrange(
                         change_true_ohe,
                         'b t h w c -> ' + self.change_criterion_target_shape).contiguous()
-                change_loss = self.change_criterion(change_pred_input, change_true_input)
+                else:
+                    raise KeyError(self.change_criterion_target_encoding)
+
+                mask = einops.rearrange(valids_, 'b t h w c -> ' + self.change_criterion_logit_shape, c=1)
+                change_loss = self.change_criterion(change_pred_input * mask, change_true_input * mask)
 
                 # num_change_states = 2
                 # true_change_ohe = kwarray.one_hot_embedding(true_changes.long(), num_change_states, dim=-1).float()
