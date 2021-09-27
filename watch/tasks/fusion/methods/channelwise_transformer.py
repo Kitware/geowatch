@@ -519,7 +519,7 @@ class MultimodalTransformer(pl.LightningModule):
                 frame_ignores.append(frame['ignore'])
 
             # Because we are not collating we need to add a batch dimension
-            ignores = torch.stack(frame_ignores)[None, ...]
+            # ignores = torch.stack(frame_ignores)[None, ...]
             images = torch.stack(frame_ims)[None, ...]
 
             B, T, C, H, W = images.shape
@@ -570,8 +570,7 @@ class MultimodalTransformer(pl.LightningModule):
                 # compute criterion
                 # print('change_logits.shape = {!r}'.format(change_logits.shape))
                 # print('true_changes.shape = {!r}'.format(true_changes.shape))
-
-                valids_ = (1 - ignores)[..., None]  # [B, T, H, W, 1]
+                # valids_ = (1 - ignores)[..., None]  # [B, T, H, W, 1]
 
                 # Hack: change the 1-logit binary case to 2 class binary case
                 change_pred_input = einops.rearrange(
@@ -596,8 +595,13 @@ class MultimodalTransformer(pl.LightningModule):
                 # had a pixelwise weighting of how much we care about each
                 # pixel. This would let us upweight particular instances
                 # and also ignore regions by setting the weights to zero.
-                mask = einops.rearrange(valids_, 'b t h w c -> ' + self.change_criterion_logit_shape, c=1)
-                change_loss = self.change_criterion(change_pred_input * mask, change_true_input * mask)
+                # mask = einops.rearrange(valids_, 'b t h w c -> ' + self.change_criterion_logit_shape, c=1)
+                change_loss = self.change_criterion(
+                    change_pred_input,
+                    change_true_input
+                    # change_pred_input * mask,
+                    # change_true_input * mask
+                )
 
                 # num_change_states = 2
                 # true_change_ohe = kwarray.one_hot_embedding(true_changes.long(), num_change_states, dim=-1).float()
