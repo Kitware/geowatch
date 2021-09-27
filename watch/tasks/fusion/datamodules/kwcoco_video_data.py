@@ -1929,7 +1929,7 @@ def sample_vidspace_grid(dset, window_dims, window_overlap=0.0, negative_classes
     return sample_grid
 
 
-def sample_test_vidspace_grid(dset, window_dims, window_overlap=0.0, negative_classes=None, keepbound=True, avoid_sensors=avoid_sensors):
+def sample_test_vidspace_grid(dset, window_dims, window_overlap=0.0, negative_classes=None, keepbound=True, avoid_sensors=None):
     """
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
