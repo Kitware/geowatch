@@ -125,7 +125,7 @@ def make_fit_config(cmdline=False, **kwargs):
         >>> from watch.tasks.fusion.fit import *  # NOQA
         >>> cmdline = False
         >>> kwargs = {}
-        >>> args = make_fit_config(cmdline=cmdline, **kwargs)
+        >>> args, parser = make_fit_config(cmdline=cmdline, **kwargs)
         >>> print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1, sort=0)))
     """
     from watch.utils import configargparse_ext
@@ -212,10 +212,10 @@ def make_fit_config(cmdline=False, **kwargs):
     modal, _ = parser.parse_known_args(ignore_help_args=True,
                                        ignore_write_args=True)
 
+    # NOTE: if default_root_dir is specified, this workdir can be ignored
     # I strongly recommend that ~/data is a symlink to a drive with more
     # storage space.
     default_workdir = './_trained_models'
-
     ENABLE_SMART_DEFAULT_WORKDIR = 1
     if ENABLE_SMART_DEFAULT_WORKDIR:
         # Write to a sensible default location instead of CWD
@@ -314,7 +314,7 @@ def make_fit_config(cmdline=False, **kwargs):
 
     if args.default_root_dir is None:
         args.default_root_dir = pathlib.Path(args.workdir) / args.train_name
-    return args
+    return args, parser
 
 
 @profile
@@ -332,7 +332,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     """
     from watch.tasks.fusion import datamodules
     from watch.tasks.fusion import methods
-    args = make_fit_config(args=args, cmdline=cmdline, **kwargs)
+    args, parser = make_fit_config(args=args, cmdline=cmdline, **kwargs)
 
     args_dict = args.__dict__
     print("{train_name}\n====================".format(**args_dict))
@@ -406,9 +406,13 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         info = initializer(model)  # NOQA
 
     # init trainer from args
+    from os.path import join
     callbacks = [
         # pl_ext.callbacks.AutoResumer(),
         pl_ext.callbacks.StateLogger(),
+        pl_ext.callbacks.TextLogger(args),
+        pl.callbacks.LambdaCallback(
+            on_init_end=lambda trainer: parser.write_config_file(args, [join(trainer.log_dir, 'fit_config.yaml')])),
         pl_ext.callbacks.Packager(package_fpath=args.package_fpath),
         pl_ext.callbacks.BatchPlotter(
             num_draw=args.num_draw,
@@ -454,6 +458,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         'model': model,
         'trainer': trainer,
         'args': args,
+        'parser': parser,  # return parser so we can write the config
     }
     return modules
 
@@ -480,8 +485,6 @@ def fit_model(args=None, cmdline=False, **kwargs):
         ...     'auto_lr_find': True,
         ...     'num_workers': 1,
         ... }
-        >>> #args = make_fit_config(args=None, cmdline=cmdline, **kwargs)
-        >>> #print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
         >>> fit_model(**kwargs)
     """
     # cv2.setNumThreads(0)

@@ -24,12 +24,13 @@ ARCH=smt_it_joint_p8
 
 #CHANNELS="blue|green|red|nir|inv_sort1|inv_sort2|inv_sort3|inv_sort4|inv_sort5|inv_sort6|inv_sort7|inv_sort8|inv_augment1|inv_augment2|inv_augment3|inv_augment4|inv_augment5|inv_augment6|inv_augment7|inv_augment8|inv_overlap1|inv_overlap2|inv_overlap3|inv_overlap4|inv_overlap5|inv_overlap6|inv_overlap7|inv_overlap8|inv_shared1|inv_shared2|inv_shared3|inv_shared4|inv_shared5|inv_shared6|inv_shared7|inv_shared8|rice_field|cropland|water|inland_water|river_or_stream|sebkha|snow_or_ice_field|bare_ground|sand_dune|built_up|grassland|brush|forest|wetland|road"
 
-CHANNELS="blue|green|red|nir|swir16|coastal|rice_field|cropland|water|inland_water|river_or_stream|sebkha|snow_or_ice_field|bare_ground|sand_dune|built_up|grassland|brush|forest|wetland|road"
+#CHANNELS="blue|green|red|nir|swir16|coastal|rice_field|cropland|water|inland_water|river_or_stream|sebkha|snow_or_ice_field|bare_ground|sand_dune|built_up|grassland|brush|forest|wetland|road"
+CHANNELS="blue|green|red|nir|swir16|coastal|road|water|inland_water|river_or_stream|bare_ground|built_up|forest"
 #CHANNELS="blue|green|red"
 
 #CHANNELS="matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7|matseg_8|matseg_9|matseg_10|matseg_11|matseg_12|matseg_13|matseg_14|matseg_15|matseg_16|matseg_17|matseg_18|matseg_19"
 
-EXPERIMENT_NAME=DirectCD_${ARCH}_teamfeat_dicefocal_v011
+EXPERIMENT_NAME=DirectCD_${ARCH}_teamfeat_dicefocal_v012
 DATASET_CODE=Drop1_TeamFeat_Holdout
 
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
@@ -40,9 +41,8 @@ EVAL_DPATH=$DEFAULT_ROOT_DIR/pred/eval
 TRAIN_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/train_$EXPERIMENT_NAME.yml 
 PRED_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/predict_$EXPERIMENT_NAME.yml 
 
-python -m watch stats $TRAIN_FPATH
-
-kwcoco stats $TRAIN_FPATH $VALI_FPATH $TEST_FPATH
+#python -m watch stats $TRAIN_FPATH 
+#kwcoco stats $TRAIN_FPATH $VALI_FPATH $TEST_FPATH
 
 
 # Write train and prediction configs
@@ -52,9 +52,10 @@ python -m watch.tasks.fusion.fit \
     --method="MultimodalTransformer" \
     --arch_name=$ARCH \
     --time_steps=2 \
+    --chip_overlap=0.5 \
     --chip_size=64 \
     --batch_size=2 \
-    --accumulate_grad_batches=8 \
+    --accumulate_grad_batches=64 \
     --num_workers=14 \
     --max_lookahead=1000000 \
     --attention_impl=performer \
@@ -67,8 +68,8 @@ python -m watch.tasks.fusion.fit \
     --max_epochs=400 \
     --patience=400 \
     --gpus=1  \
-    --learning_rate=1e-4 \
-    --weight_decay=1e-5 \
+    --learning_rate=1e-3 \
+    --weight_decay=1e-4 \
     --dropout=0.1 \
     --window_size=8 \
     --default_root_dir=$DEFAULT_ROOT_DIR \
