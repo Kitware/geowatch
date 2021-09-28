@@ -363,10 +363,10 @@ python -m netharn.examples.segmentation \
     --channels="red|green|blue|nir|swir22" \
     --input_overlap=0.5 \
     --input_dims=256,256 \
-    --batch_size=32 \
+    --batch_size=48 \
     --arch=psp \
     --optim=AdamW \
-    --lr=1e-6 \
+    --lr=1e-4 \
     --max_epoch=500 \
     --patience=500 \
     --decay=1e-8 \
