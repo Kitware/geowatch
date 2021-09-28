@@ -446,6 +446,9 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto'):
         >>>     'n_fn': (0, 10),
         >>>     'with_probs': True,
         >>> }
+        >>> # TODO: it would be nice to demo the soft metrics
+        >>> # functionality by adding "change_prob" or "class_prob"
+        >>> # auxiliary channels to this demodata.
         >>> pred_coco = perterb_coco(true_coco, **kwargs)
         >>> eval_dpath = ub.ensure_app_cache_dir('watch/tests/fusion_eval')
         >>> print('eval_dpath = {!r}'.format(eval_dpath))
@@ -587,8 +590,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto'):
         summary['ap'] = combo_measures['ap']
         summary['auc'] = combo_measures['auc']
         summary['max_f1'] = combo_measures['max_f1']
-    print('summary = {}'.format(ub.repr2(summary, nl=1, precision=4, align=':',
-                                         sort=0)))
+    print('summary = {}'.format(ub.repr2(
+        summary, nl=1, precision=4, align=':', sort=0)))
 
     if eval_dpath is not None:
         eval_dpath = pathlib.Path(eval_dpath)

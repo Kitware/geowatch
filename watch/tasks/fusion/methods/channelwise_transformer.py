@@ -29,7 +29,7 @@ class MultimodalTransformer(pl.LightningModule):
         xdoctest -m watch.tasks.fusion.methods.channelwise_transformer MultimodalTransformer
 
     TODO:
-        - [ ] Change name to FusionModel
+        - [ ] Change name MultimodalTransformer -> FusionModel
         - [ ] Move parent module methods -> models
 
     Example:
@@ -59,6 +59,7 @@ class MultimodalTransformer(pl.LightningModule):
     def __init__(self,
                  arch_name='smt_it_stm_p8',
                  dropout=0.0,
+                 optimizer='RAdam',
                  learning_rate=1e-3,
                  weight_decay=0.,
                  positive_change_weight=1.,
@@ -168,6 +169,8 @@ class MultimodalTransformer(pl.LightningModule):
         #     - [X] Classifier MLP, skip connections
         #     - [ ] Decoder
         #     - [ ] Dynamic / Learned embeddings
+
+        # TODO: add tokenization strat to the FusionEncoder itself
         self.tokenize = Rearrange("b t c (h hs) (w ws) -> b t c h w (ws hs)",
                                   hs=self.hparams.window_size,
                                   ws=self.hparams.window_size)
@@ -229,6 +232,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> parent_parser.parse_known_args()
         """
         parser = parent_parser.add_argument_group("MultimodalTransformer")
+        parser.add_argument("--optimizer", default='RAdam', type=str, help='Optimizer name supported by the netharn API')
         parser.add_argument("--learning_rate", default=1e-3, type=float)
         parser.add_argument("--weight_decay", default=0., type=float)
         parser.add_argument("--positive_change_weight", default=1.0, type=float)
@@ -288,11 +292,22 @@ class MultimodalTransformer(pl.LightningModule):
             >>> sns = kwplot.autosns()
             >>> sns.lineplot(data=data, y='lr', x='last_epoch')
         """
-        optimizer = optim.RAdam(
-                self.parameters(),
-                lr=self.hparams.learning_rate,
-                weight_decay=self.hparams.weight_decay,
-                betas=(0.9, 0.99))
+        import netharn as nh
+        optim_cls, optim_kw = nh.api.Optimizer.coerce(
+            optimizer=self.hparams.optimizer,
+            learning_rate=self.hparams.learning_rate,
+            weight_decay=self.hparams.weight_decay)
+        if self.hparams.optimizer == 'RAdam':
+            optim_kw['betas'] = (0.9, 0.99)  # backwards compat
+
+        optim_kw['params'] = self.parameters()
+        optimizer = optim_cls(**optim_kw)
+
+        # optimizer = optim.RAdam(
+        #         self.parameters(),
+        #         lr=self.hparams.learning_rate,
+        #         weight_decay=self.hparams.weight_decay,
+        #         betas=(0.9, 0.99))
         scheduler = lr_scheduler.CosineAnnealingLR(
             optimizer, T_max=self.trainer.max_epochs)
         return [optimizer], [scheduler]
@@ -376,7 +391,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> import os
             >>> import kwplot
             >>> sns = kwplot.autosns()
-            >>> if 0:
+            >>> if 1:
             >>>     _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
             >>>     dvc_dpath = os.environ.get('DVC_DPATH', _default)
             >>>     coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/combo_propogated_data.kwcoco.json')
@@ -402,8 +417,9 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     change_loss='dicefocal',
             >>>     input_stats=datamodule.input_stats,
             >>>     positive_change_weight=1.0,
-            >>>     negative_change_weight=0.01,
-            >>>     global_class_weight=0.00,
+            >>>     negative_change_weight=0.05,
+            >>>     global_class_weight=1.00,
+            >>>     global_change_weight=1.00,
             >>>     classes=datamodule.classes, input_channels=datamodule.input_channels)
             >>> device = 0
             >>> self = self.to(device)
