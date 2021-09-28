@@ -15,6 +15,8 @@ tensorboard >= 2.4.1
 torch_optimizer >= 0.1.0
 torchmetrics >= 0.4.0
 monai >= 0.6.0
+performer_pytorch >= 1.0.11
+torch-optimizer >= 0.1.0 ;python_version>='3.6'
 
 # GIS
 fels >= 1.4.0
