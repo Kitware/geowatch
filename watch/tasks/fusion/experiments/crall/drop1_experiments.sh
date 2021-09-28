@@ -46,7 +46,7 @@ PRED_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/predict_$EXPERIMENT_NAME.yml
 
 
 # Write train and prediction configs
-CUDA_VISIBLE_DEVICES="1"
+CUDA_VISIBLE_DEVICES="0"
 python -m watch.tasks.fusion.fit \
     --channels=${CHANNELS} \
     --method="MultimodalTransformer" \
@@ -58,7 +58,7 @@ python -m watch.tasks.fusion.fit \
     --accumulate_grad_batches=64 \
     --num_workers=14 \
     --max_lookahead=1000000 \
-    --attention_impl=performer \
+    --attention_impl=exact \
     --global_class_weight=0.0 \
     --neg_to_pos_ratio=0.5 \
     --global_change_weight=1.0 \

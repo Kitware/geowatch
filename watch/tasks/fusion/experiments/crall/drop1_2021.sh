@@ -348,3 +348,22 @@ python -m watch.tasks.fusion.fit \
        --package_fpath=$PACKAGE_FPATH \
         --train_dataset=$TRAIN_FPATH \
          --vali_dataset=$VALI_FPATH 
+
+
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc 
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/drop1-S2-L8-aligned
+
+TRAIN_DATASET=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json
+VALI_DATASET=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json
+# Run on the explicit kwcoco files
+python -m netharn.examples.segmentation \
+    --name=shapes_segmentation_demo \
+    --train_dataset=$TRAIN_DATASET \
+    --vali_dataset=$VALI_DATASET \
+    --channels="red|green|blue" \
+    --input_overlap=0.9 \
+    --input_dims=256,256 \
+    --batch_size=8 \
+    --arch=deeplab_v3 \
+    --optim=RAdam \
+    --workers=14 --xpu=0
