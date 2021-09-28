@@ -357,13 +357,17 @@ TRAIN_DATASET=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json
 VALI_DATASET=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json
 # Run on the explicit kwcoco files
 python -m netharn.examples.segmentation \
-    --name=shapes_segmentation_demo \
+    --name=check_train_rgb_v2 \
     --train_dataset=$TRAIN_DATASET \
     --vali_dataset=$VALI_DATASET \
-    --channels="red|green|blue" \
-    --input_overlap=0.9 \
+    --channels="red|green|blue|nir|swir22" \
+    --input_overlap=0.5 \
     --input_dims=256,256 \
-    --batch_size=8 \
-    --arch=deeplab_v3 \
-    --optim=RAdam \
-    --workers=14 --xpu=0
+    --batch_size=32 \
+    --arch=psp \
+    --optim=AdamW \
+    --lr=1e-6 \
+    --max_epoch=500 \
+    --patience=500 \
+    --decay=1e-8 \
+    --workers=14 --xpu=0 --reset 
