@@ -76,9 +76,9 @@ def baseline_framework_egress(stac_catalog,
 
             print("Running: {}".format(' '.join(command)))
             # TODO: Manually check return code / output
-            # subprocess.run(command, check=True)
-            # Update feature asset href to point to local outpath
+            subprocess.run(command, check=True)
 
+            # Update feature asset href to point to local outpath
             asset['href'] = asset_outpath
 
         with tempfile.NamedTemporaryFile() as temporary_file:
