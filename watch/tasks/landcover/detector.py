@@ -12,66 +12,6 @@ from .nets import LinkNet34
 
 log = logging.getLogger(__name__)
 
-# the output of the detector (value) maps to these entries
-# feature_mapping[value + 1]
-feature_mapping = [
-    'NONE',
-    'BH135',  # Agriculture, Paddy
-    'EA010',  # Agriculture, General
-    'BA040',  # Ocean < 10m depth
-    'BH082',  # Lakes & Water
-    'BH140',  # Rivers
-    'BH160',  # Sabkha
-    'BJ100',  # Permanent or Nearly Permanent Ice and/or Snow
-    'DA010',  # Barren/Minimal Vegetation, Beaches, Non-herbaceous Alluvial Deposits/Fans
-    'DB170',  # Sand dunes
-    'AL020',  # Urban/Built-Up
-    'EB010',  # Grassland
-    'EB070',  # Shrub/Scrub
-    'EC015',  # Forest, Deciduous, Evergreen
-    'ED010',  # Wetland, Permanent/Herbaceous
-    'AP030'  # Road
-]
-
-# outputs from the model
-channels = [
-    'rice_field',  # 0
-    'cropland',  # 1
-    'water',  # 2
-    'inland_water',  # 3
-    'river_or_stream',  # 4
-    'sebkha',  # 5
-    'snow_or_ice_field',  # 6
-    'bare_ground',  # 7
-    'sand_dune',  # 8
-    'built_up',  # 9
-    'grassland',  # 10
-    'brush',  # 11
-    'forest',  # 12
-    'wetland',  # 13
-    'road',  # 14
-]
-
-cmap8 = np.array([[0, 0, 0],  # 0  noInformation
-                  [79, 235, 52],  # 1  Agriculture, Paddy
-                  [235, 211, 52],  # 2  Agriculture, General
-                  [114, 151, 255],  # 3  Ocean
-                  [0, 152, 203],  # 4  Lakes & Water
-                  [77, 182, 255],  # 5  Rivers
-                  [168, 198, 227],  # 6  Sabkha
-                  [30, 254, 254],  # 7  Permanent or Nearly Permanent Ice and/or Snow
-                  [145, 141, 118],  # 8  Barren/Minimal Vegetation, Beaches, Non-herbaceous Alluvial Deposits/Fans
-                  [255, 194, 168],  # 9  Sand dunes
-                  [255, 141, 0],  # 10 Urban/Built-Up
-                  [21, 255, 0],  # 11 Grassland
-                  [72, 190, 54],  # 12 Shrub/Scrub
-                  [200, 0, 255],  # 13 Forest, Deciduous, Evergreen
-                  [100, 21, 255],  # 14 Wetland, Permanent/Herbaceous
-                  [255, 0, 0],  # 15 Roads
-                  ],
-                 np.uint8)
-cmap = cmap8 / 255.
-
 # The nodata value in the output from the model
 PRED_NODATA = -1
 
@@ -94,7 +34,7 @@ def preprocess(img):
 
 def pad(fn):
     def wrapped(img, *args, **kwargs):
-        pads = [(c - s % c) % c for s, c in zip(img.shape, (512, 512, 8))]
+        pads = [(c - s % c) % c for s, c in zip(img.shape, (512, 512, 1))]
         # log.debug('{} pad with {}'.format(img.shape, pads))
 
         # pad right and bottom only
@@ -195,8 +135,8 @@ def load_model(filename, num_outputs, num_channels):
         filename = Path(filename)
     torch.hub.set_dir('/tmp')
     model = LinkNet34(num_outputs=num_outputs, num_channels=num_channels)
-    model.load_state_dict(torch.load(filename))
     device = get_device()
+    model.load_state_dict(torch.load(filename, map_location=device))
     log.debug('  device {}'.format(device))
     model.to(device)
     model.eval()
