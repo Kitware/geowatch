@@ -319,7 +319,7 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, plot_dpath):
         confusion_image = kwimage.ensure_uint255(confusion_image)
 
         header = util_kwimage.draw_header_text(
-            confusion_image, image_text, color='white', stack=False)
+            image=confusion_image, text=image_text, color='white', stack=False)
 
         vert_parts = [
             header,

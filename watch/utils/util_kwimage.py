@@ -6,26 +6,51 @@ import numpy as np
 
 
 def draw_header_text(image, text, fit=False, color='red', halign='center',
-                     stack=True):
+                     stack='auto'):
     """
     Places a black bar on top of an image and writes text in it
 
     Args:
-        stack (bool): if True returns the stacked image, otherwise just returns
-            the header.
+
+        image (ndarray | dict | None):
+            numpy image or dictionary containing a key width
+
+        text (str) :
+            text to draw
+
+        fit (bool | str):
+            If False, will draw as much text within the given width as possible.
+            If True, will draw all text and then resize to fit in the given width
+            If "shrink", will only resize the text if it is too big to fit, in
+            other words this is like fit=True, but it wont enlarge the text.
+
+        color (str | Tuple) :
+            a color coercable to :class:`kwimage.Color`.
+
+        halign (str) :
+            Horizontal alignment. Can be left, center, or right.
+
+        stack (bool | str):
+            if True returns the stacked image, otherwise just returns the
+            header. If 'auto', will only stack if an image is given as an
+            ndarray.
+
+    Returns:
+        ndarray
 
     Example:
         >>> from watch.utils.util_kwimage import *  # NOQA
         >>> import kwimage
         >>> image = kwimage.grab_test_image()
         >>> canvases = []
-        >>> canvases += [draw_header_text(image, 'unfit long header ' * 5, fit=False)]
-        >>> canvases += [draw_header_text(image, 'shrunk long header ' * 5, fit='shrink')]
-        >>> canvases += [draw_header_text(image, 'left header', fit=False, halign='left')]
-        >>> canvases += [draw_header_text(image, 'center header', fit=False, halign='center')]
-        >>> canvases += [draw_header_text(image, 'right header', fit=False, halign='right')]
-        >>> canvases += [draw_header_text(image, 'shrunk header', fit='shrink', halign='left')]
-        >>> canvases += [draw_header_text(image, 'fit header', fit=True, halign='left')]
+        >>> canvases += [draw_header_text(image=image, text='unfit long header ' * 5, fit=False)]
+        >>> canvases += [draw_header_text(image=image, text='shrunk long header ' * 5, fit='shrink')]
+        >>> canvases += [draw_header_text(image=image, text='left header', fit=False, halign='left')]
+        >>> canvases += [draw_header_text(image=image, text='center header', fit=False, halign='center')]
+        >>> canvases += [draw_header_text(image=image, text='right header', fit=False, halign='right')]
+        >>> canvases += [draw_header_text(image=image, text='shrunk header', fit='shrink', halign='left')]
+        >>> canvases += [draw_header_text(image=image, text='fit header', fit=True, halign='left')]
+        >>> canvases += [draw_header_text(image={'width': 200}, text='header only', fit=True, halign='left')]
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> kwplot.autompl()
@@ -36,7 +61,17 @@ def draw_header_text(image, text, fit=False, color='red', halign='center',
     """
     # import cv2
     import kwimage
-    width = image.shape[1]
+
+    if stack == 'auto':
+        stack = isinstance(image, np.ndarray)
+
+    if isinstance(image, dict):
+        width = image['width']
+        if stack:
+            raise ValueError('Must pass in the actual image if stack is True')
+    else:
+        width = image.shape[1]
+
     if fit:
         # TODO: allow a shrink-to-fit only option
         header = kwimage.draw_text_on_image(
@@ -51,7 +86,7 @@ def draw_header_text(image, text, fit=False, color='red', halign='center',
         else:
             header = kwimage.imresize(header, dsize=(width, None))
     else:
-        # Allows for howeverm much height is needed
+        # Allows for however much height is needed
         if halign == 'left':
             org = (1, 1)
         elif halign == 'center':

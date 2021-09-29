@@ -166,7 +166,9 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset, img, anns,
         header_text = '\n'.join(chan_header_info)
 
         img_canvas = kwimage.ensure_uint255(canvas)
-        img_canvas = util_kwimage.draw_header_text(img_canvas, header_text)
+        img_canvas = util_kwimage.draw_header_text(image=img_canvas,
+                                                   text=header_text,
+                                                   stack=True)
         kwimage.imwrite(view_img_fpath, img_canvas)
 
         view_ann_fpath = ub.augpath(name, dpath=ann_chan_dpath) + '_' + suffix + '.view_ann.jpg'
@@ -176,7 +178,9 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset, img, anns,
             ann_canvas = dets.draw_on(canvas)
         ann_canvas = kwimage.ensure_uint255(ann_canvas)
 
-        ann_canvas = util_kwimage.draw_header_text(ann_canvas, header_text)
+        ann_canvas = util_kwimage.draw_header_text(image=ann_canvas,
+                                                   text=header_text,
+                                                   stack=True)
         kwimage.imwrite(view_ann_fpath, ann_canvas)
 
 

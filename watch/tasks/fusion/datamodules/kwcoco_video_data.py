@@ -1351,40 +1351,31 @@ class KWCocoVideoDataset(data.Dataset):
             changes = frame_meta['changes']
             gid = frame_item['gid']
 
-            def header_text(text, shrink=False):
-                """
-                If shrink is true, shrinks the text to fit, otherwise text is
-                placed in the center at a constant size, but is not guarenteed
-                to fit.
-                """
-                if shrink:
-                    header = kwimage.draw_text_on_image(
-                        None, text, org=(1, 1),
-                        valign='top', halign='left', color='salmon')
-                    header = cv2.copyMakeBorder(header, 3, 3, 3, 3,
-                                                cv2.BORDER_CONSTANT)
-                    header = kwimage.imresize(header, dsize=(max_dim, None))
-                else:
-                    header = kwimage.draw_text_on_image(
-                        {'width': max_dim}, text, org=(max_dim // 2, 1),
-                        valign='top', halign='center', color='salmon')
-                return header
+            header_dims = {'width': max_dim}
 
-            header_part = header_text(f't={frame_idx} gid={gid}', shrink=False)
+            header_part = util_kwimage.draw_header_text(
+                image=header_dims, fit=False,
+                text=f't={frame_idx} gid={gid}', color='salmon')
             vertical_stack.append(header_part)
 
             sensor_coarse = frame_item.get('sensor_coarse', '')
             if sensor_coarse:
-                header_part = header_text(f'{sensor_coarse}', shrink=False)
+                header_part = util_kwimage.draw_header_text(
+                    image=header_dims, fit=False, text=f'{sensor_coarse}',
+                    color='salmon')
                 vertical_stack.append(header_part)
 
             date_captured = frame_item.get('date_captured', '')
             if date_captured:
-                header_part = header_text(f'{date_captured}', shrink=True)
+                header_part = util_kwimage.draw_header_text(
+                    header_dims, fit='shrink', text=f'{date_captured}',
+                    color='salmon')
                 vertical_stack.append(header_part)
 
             if 0:
-                header_part = header_text(f'{full_mode_code}', shrink=True)
+                header_part = util_kwimage.draw_header_text(
+                    header_dims, fit='shrink', text=f'{full_mode_code}',
+                    color='salmon')
                 vertical_stack.append(header_part)
 
             # Create overlays for training objective targets

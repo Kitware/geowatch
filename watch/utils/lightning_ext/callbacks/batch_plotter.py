@@ -94,11 +94,10 @@ class BatchPlotter(pl.callbacks.Callback):
         stage = trainer.state.stage.lower()
         epoch = trainer.current_epoch
 
-        # canvas = kwimage.draw_text_on_image(
         canvas = util_kwimage.draw_header_text(
-            canvas, f'{stage}_epoch{epoch:08d}_bx{batch_idx:04d}',
-            # org=(1, 1),
-            # valign='top'
+            image=canvas,
+            text=f'{stage}_epoch{epoch:08d}_bx{batch_idx:04d}',
+            stack=True,
         )
 
         dump_dpath = ub.ensuredir((trainer.log_dir, 'monitor', stage, 'batch'))
