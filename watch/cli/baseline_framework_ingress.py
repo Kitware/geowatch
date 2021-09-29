@@ -10,6 +10,9 @@ import requests
 import pystac
 
 
+SENTINEL_PLATFORMS = {'sentinel-2b', 'sentinel-2a'}
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Align all STAC item data assets to the same CRS")
@@ -86,8 +89,17 @@ def baseline_framework_ingress(input_path,
 
             feature_output_dir = os.path.join(
                 outdir, feature['id'])
+
             asset_outpath = os.path.join(
                 feature_output_dir, asset_basename)
+
+            try:
+                if(feature['properties']['platform'] in SENTINEL_PLATFORMS
+                   and asset_name == "metadata"):
+                    asset_outpath = os.path.join(
+                        feature_output_dir, "MTD_TL.xml")
+            except KeyError:
+                pass
 
             if not dryrun:
                 os.makedirs(feature_output_dir, exist_ok=True)
