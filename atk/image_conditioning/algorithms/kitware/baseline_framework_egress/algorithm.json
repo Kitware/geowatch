@@ -1,0 +1,104 @@
+{
+    "description": "Convert STAC Catalog to T&E baseline framework format and upload to S3",
+    "display_name": "Baseline Framework Egress",
+    "homepage": "",
+    "license": "Other",
+    "name": "kitware/baseline_framework_egress",
+    "optional_parameters": [
+        {
+            "custom_validation": "",
+            "data_type": "string",
+            "default_value": "",
+            "description": "Optionally provide an AWS profile for AWS CLI commands",
+            "display_name": "AWS Profile",
+            "field_type": "text",
+            "help_text": "",
+            "max_value": "",
+            "min_value": "",
+            "name": "aws_profile",
+            "parameter_choices": "",
+            "required": false,
+            "sort_order": 3
+        },
+        {
+            "custom_validation": "",
+            "data_type": "string",
+            "default_value": "0",
+            "description": "Don't actually upload anything to S3",
+            "display_name": "Dry run",
+            "field_type": "text",
+            "help_text": "If set to '1' this algorithm will use the '--dryrun' flag on any aws commands, meaning that no data will actually be uploaded",
+            "max_value": "1",
+            "min_value": "0",
+            "name": "dryrun",
+            "parameter_choices": "",
+            "required": false,
+            "sort_order": 4
+        }
+    ],
+    "outputs": [
+        {
+            "data_type": "string",
+            "description": "S3 output path where converted STAC Catalog JSON was written",
+            "display_name": "Output Path",
+            "name": "output_path",
+            "sort_order": 0
+        },
+        {
+            "data_type": "string",
+            "description": "Output S3 Bucket where output STAC Items and their assets were written",
+            "display_name": "Output Bucket",
+            "name": "output_bucket",
+            "sort_order": 1
+        }
+    ],
+    "private": false,
+    "required_parameters": [
+        {
+            "custom_validation": "",
+            "data_type": "string",
+            "default_value": "",
+            "description": "Input STAC Catalog to convert and egress",
+            "display_name": "STAC Catalog",
+            "field_type": "text",
+            "help_text": "",
+            "max_value": "",
+            "min_value": "",
+            "name": "stac_catalog",
+            "parameter_choices": "",
+            "required": true,
+            "sort_order": 0
+        },
+        {
+            "custom_validation": "",
+            "data_type": "string",
+            "default_value": "",
+            "description": "S3 output path for converted STAC Catalog",
+            "display_name": "Output Path",
+            "field_type": "text",
+            "help_text": "",
+            "max_value": "",
+            "min_value": "",
+            "name": "output_path",
+            "parameter_choices": "",
+            "required": true,
+            "sort_order": 1
+        },
+        {
+            "custom_validation": "",
+            "data_type": "string",
+            "default_value": "",
+            "description": "Output S3 Bucket where output STAC Items and their assets will be written",
+            "display_name": "Output S3 Bucket",
+            "field_type": "text",
+            "help_text": "",
+            "max_value": "",
+            "min_value": "",
+            "name": "output_bucket",
+            "parameter_choices": "",
+            "required": true,
+            "sort_order": 2
+        }
+    ],
+    "version": "0.0.1"
+}
