@@ -1098,3 +1098,28 @@ class CocoImage(ub.NiceRepr):
         else:
             raise KeyError('space = {}'.format(space))
         return delayed
+
+
+import itertools
+
+
+class TrackidGenerator(ub.NiceRepr):
+    '''
+    Keep track of which trackids have been used and generate new ones on demand
+
+    TODO merge this into kwcoco as something like CocoDataset.next_trackid()?
+    Or expose whatever mechanism is already generating new aids, gids, etc
+    '''
+    def update_generator(self):
+        used_trackids = self.dset.index.trackid_to_aids.keys()
+        new_generator = filter(lambda x: x not in used_trackids,
+                               itertools.count(start=next(self.generator)))
+        self.generator = new_generator
+
+    def __init__(self, coco_dset):
+        self.dset = coco_dset
+        self.generator = itertools.count()
+        self.update_generator()
+
+    def __next__(self):
+        return next(self.generator)
