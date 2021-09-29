@@ -4,7 +4,9 @@ import json
 import os
 import tempfile
 import subprocess
+from urllib.parse import urlparse
 
+import requests
 import pystac
 
 
@@ -55,20 +57,17 @@ def baseline_framework_ingress(input_path,
 
     if aws_profile is not None:
         aws_base_command =\
-            ['aws', 's3', '--profile', aws_profile]
+            ['aws', 's3', '--profile', aws_profile, 'cp']
     else:
-        aws_base_command = ['aws', 's3']
+        aws_base_command = ['aws', 's3', 'cp']
 
     if requester_pays:
-        requester_args = ['--request-payer', 'requester']
-    else:
-        requester_args = []
+        aws_base_command.extend(['--request-payer', 'requester'])
 
     if input_path.startswith('s3'):
         with tempfile.NamedTemporaryFile() as temporary_file:
             subprocess.run(
-                [*aws_base_command, 'cp', *requester_args, input_path,
-                 temporary_file.name],
+                [*aws_base_command, input_path, temporary_file.name],
                 check=True)
 
             with open(temporary_file.name) as f:
@@ -90,36 +89,54 @@ def baseline_framework_ingress(input_path,
             asset_outpath = os.path.join(
                 feature_output_dir, asset_basename)
 
-            if aws_profile is not None:
-                command =\
-                    ['aws', 's3', '--profile', aws_profile, 'cp']
-            else:
-                command = ['aws', 's3', 'cp']
-
-            if dryrun:
-                command.append('--dryrun')
-            else:
+            if not dryrun:
                 os.makedirs(feature_output_dir, exist_ok=True)
 
-            command.extend([*requester_args, asset['href'], asset_outpath])
+            if os.path.isfile(asset_outpath):
+                print("Asset already exists at outpath '{}', "
+                      "not redownloading".format(asset_outpath))
+                # Update feature asset href to point to local outpath
+                asset['href'] = asset_outpath
+            else:
+                scheme, *_ = urlparse(asset['href'])
 
-            # TODO: Manually check return code / output
-            print("Running: {}".format(' '.join(command)))
-            subprocess.run(command, check=True)
+                if scheme == 's3':
+                    command = [*aws_base_command, asset['href'], asset_outpath]
 
-            # Update feature asset href to point to local outpath
-            asset['href'] = asset_outpath
+                    print("Running: {}".format(' '.join(command)))
+                    # TODO: Manually check return code / output
+                    subprocess.run(command, check=True)
+                    # Update feature asset href to point to local outpath
+                    asset['href'] = asset_outpath
+                elif scheme in {'https', 'http'}:
+                    print("Downloading: '{}' to '{}'".format(
+                        asset['href'], asset_outpath))
+                    if not dryrun:
+                        download_http_asset(asset['href'], asset_outpath)
+                    # Update feature asset href to point to local outpath
+                    asset['href'] = asset_outpath
+                else:
+                    print("Warning unrecognized scheme for asset href: '{}', "
+                          "skipping!".format(asset['href']))
+                    continue
 
         item = pystac.Item.from_dict(feature)
         item.set_collection(None)  # Clear the collection if present
-        item.set_self_href(os.path.join(outdir,
-                                        feature['id'],
-                                        feature['id'] + '.json'))
+        item.set_self_href(
+            os.path.join(outdir, feature['id'], feature['id'] + '.json'))
         catalog.add_item(item)
 
     catalog.save(catalog_type=pystac.CatalogType.ABSOLUTE_PUBLISHED)
 
     return catalog
+
+
+def download_http_asset(url, outpath):
+    response = requests.get(url)
+
+    with open(outpath, 'wb') as outf:
+        for chunk in response.iter_content(chunk_size=128):
+            outf.write(chunk)
 
 
 if __name__ == "__main__":

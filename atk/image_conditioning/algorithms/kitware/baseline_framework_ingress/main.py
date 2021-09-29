@@ -10,9 +10,12 @@ class Main(Algorithm):
         params = self.params  # type: dict
         # Add your algorithm code here
 
-        catalog = baseline_framework_ingress(params['input_path'],
-                                             params['output_dir'],
-                                             params.get('aws_profile'))
+        catalog = baseline_framework_ingress(
+            params['input_path'],
+            params['output_dir'],
+            params.get('aws_profile'),
+            params.get('dryrun', 0) == 1,
+            params.get('requester_pays', 0) == 1)
 
         cl.add_to_metadata('stac_catalog', catalog.to_dict())
 
