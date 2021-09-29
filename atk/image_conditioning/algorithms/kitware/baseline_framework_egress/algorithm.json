@@ -50,6 +50,13 @@
             "display_name": "Output Bucket",
             "name": "output_bucket",
             "sort_order": 1
+        },
+        {
+            "data_type": "string",
+            "description": "T&E baseline framework formatted output",
+            "display_name": "T&E Output",
+            "name": "te_output",
+            "sort_order": 2
         }
     ],
     "private": false,
