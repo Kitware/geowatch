@@ -15,13 +15,14 @@ SENTINEL_PLATFORMS = {'sentinel-2b', 'sentinel-2a'}
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Align all STAC item data assets to the same CRS")
+        description="Ingress data from T&E baseline framework input file")
 
     parser.add_argument('input_path',
                         type=str,
                         help="Path to input T&E Baseline Framework JSON")
     parser.add_argument("-o", "--outdir",
                         type=str,
+                        required=True,
                         help="Output directory for ingressed assets an output "
                              "STAC Catalog")
     parser.add_argument("--aws_profile",
@@ -64,6 +65,9 @@ def baseline_framework_ingress(input_path,
     else:
         aws_base_command = ['aws', 's3', 'cp']
 
+    if dryrun:
+        aws_base_command.append('--dryrun')
+
     if requester_pays:
         aws_base_command.extend(['--request-payer', 'requester'])
 
@@ -81,10 +85,14 @@ def baseline_framework_ingress(input_path,
 
     input_stac = input_json['stac']
     for feature in input_stac.get('features', ()):
-        for asset_name, asset in feature.get('assets').items():
-            if asset_name == "index":
-                continue
+        assets = feature.get('assets', {})
 
+        # HTML index page for certain Landsat items, not needed here
+        # so remove from assets dict
+        if 'index' in assets:
+            del assets['index']
+
+        for asset_name, asset in assets.items():
             asset_basename = os.path.basename(asset['href'])
 
             feature_output_dir = os.path.join(
