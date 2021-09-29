@@ -18,3 +18,4 @@ Name|Description
 ---|---
 output_path|S3 output path where converted STAC Catalog JSON was written
 output_bucket|Output S3 Bucket where output STAC Items and their assets were written
+te_output|T&E baseline framework formatted output
