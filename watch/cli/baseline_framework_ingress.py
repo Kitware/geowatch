@@ -85,6 +85,22 @@ def baseline_framework_ingress(input_path,
 
     input_stac = input_json['stac']
     for feature in input_stac.get('features', ()):
+        # Adding a reference back to the original STAC
+        # item if not already present
+        self_link = None
+        has_original = False
+        for link in feature.get('links', ()):
+            if link['rel'] == 'self':
+                self_link = link
+            elif link['rel'] == 'original':
+                has_original = True
+
+        if not has_original and self_link is not None:
+            feature.setdefault('links', []).append(
+                {'rel': 'original',
+                 'href': self_link['href'],
+                 'type': 'application/json'})
+
         assets = feature.get('assets', {})
 
         # HTML index page for certain Landsat items, not needed here
