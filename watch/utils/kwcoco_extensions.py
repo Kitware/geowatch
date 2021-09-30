@@ -1118,7 +1118,7 @@ class TrackidGenerator(ub.NiceRepr):
 
     def __init__(self, coco_dset):
         self.dset = coco_dset
-        self.generator = itertools.count()
+        self.generator = itertools.count(start=1)
         self.update_generator()
 
     def __next__(self):

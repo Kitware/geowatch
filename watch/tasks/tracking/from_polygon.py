@@ -1,3 +1,43 @@
+def add_to_track(ann, gen, prev_ann=None):
+    if 'track_id' not in ann:
+        if prev_ann is None or 'track_id' not in prev_ann:
+            ann['track_id'] = next(gen)
+            ann['track_index'] = 0
+        else:
+            ann['track_id'] = prev_ann['track_id']
+            ann['track_index'] = prev_ann['track_index'] + 1
+
+    return ann
+
+
+def mono(video):
+        # HACK for mono-site
+    if coerce_site_boundary:
+        for gid in coco_dset.imgs:
+            annots = coco_dset.annots(gid=gid)
+            if len(annots) == 0:
+                continue
+
+            template_ann = annots.peek()
+
+            # print(list(np.unique(annots.lookup('category_id'))), [coco_dset.name_to_cat['change']['id']])
+            assert list(np.unique(annots.lookup('category_id'))) == [coco_dset.name_to_cat['change']['id']]
+            try:
+                sseg_geos = [kwimage.MultiPolygon.from_shapely(
+                    shapely.ops.unary_union([
+                        kwimage.MultiPolygon.from_geojson(seg_geo).to_shapely().buffer(0)
+                        for seg_geo in (annots.lookup('segmentation_geos'))])).to_geojson()]
+            except TypeError:
+                xdev.embed()
+
+            template_ann.pop('segmentation', None)
+            template_ann.pop('bbox', None)
+            template_ann['score'] == np.mean(annots.lookup('score'))
+            template_ann['segmentation_geos'] = sseg_geos
+
+            coco_dset.remove_annotations(annots.aids[1:])
+
+
 def from_overlap(ann, vid_id, coco_dset, phase, gen):
     """
     For each annotation, look forward in time and find the closest overlapping
