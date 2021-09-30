@@ -8,7 +8,9 @@ import pathlib
 import pytorch_lightning as pl
 import torch
 import ubelt as ub
-import cv2
+import math
+import datetime
+from dateutil import parser
 from kwcoco import channel_spec
 from torch.utils import data
 from watch.tasks.fusion import utils
@@ -1659,11 +1661,13 @@ def sample_dilated_vidspace_grid(dset, window_dims, window_overlap=0.0, negative
         >>> # have different sizes, technically we could memoize this)
         >>> import kwarray
         >>> window_overlap = 0.5
-        >>> window_dims = (9, 64, 64)
+        >>> window_dims = (5, 64, 64)
         >>> keepbound = False
         >>> exclude_sensors = None
         >>> sample_grid = sample_dilated_vidspace_grid(dset, window_dims, window_overlap)
         >>> list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
+
+        _ = xdev.profile_now(sample_dilated_vidspace_grid)(dset, window_dims, window_overlap)
 
     Example:
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
@@ -1739,7 +1743,6 @@ def sample_dilated_vidspace_grid(dset, window_dims, window_overlap=0.0, negative
         video_frame_idxs = np.array(list(range(len(video_gids))))
 
         # If the dataset has dates, we can use that
-        from dateutil import parser
         gid_to_datetime = {}
         frame_dates = dset.images(video_gids).lookup('date_captured', None)
         for gid, date in zip(video_gids, frame_dates):
@@ -1783,54 +1786,14 @@ def sample_dilated_vidspace_grid(dset, window_dims, window_overlap=0.0, negative
             track_dframe['track_pairwise_ious'] = track_boxes.ious(track_boxes)
             track_dframe['track_boxes'] = track_boxes
 
-        # For each frame, calculate a weight proportional to how much we
-        # would like to include any other frame in the sample.
-        if len(gid_to_datetime):
-            import math
-            seconds_per_year = ((60 * 60 * 24) * 365)
-            unixtimes = np.array([
-                gid_to_datetime[gid].timestamp()
-                if gid in gid_to_datetime else np.nan for gid in video_gids])
+        # For each frame, calculate a weight proportional to how much we would
+        # like to include any other frame in the sample.
+        unixtimes = np.array([
+            gid_to_datetime[gid].timestamp()
+            if gid in gid_to_datetime else np.nan
+            for gid in video_gids])
 
-            # unixtimes[np.random.rand(*unixtimes.shape) > 0.1] = np.nan
-
-            second_deltas = np.abs(unixtimes[None, :] - unixtimes[:, None])
-            year_deltas = second_deltas / seconds_per_year
-            season_weights = (1 + np.cos(year_deltas * math.tau)) / 2.0
-            timedelta_weights = year_deltas ** 0.5
-
-            frame_weights = season_weights * timedelta_weights
-        else:
-            frame_weights = np.full(
-                    (len(video_gids), len(video_gids)), fill_value=np.nan)
-
-        is_missing_date = np.isnan(frame_weights)
-        if np.any(is_missing_date):
-            # For the frames that don't have dates on them, we use indexes to
-            # calculate a proxy weight.
-            frame_weights = np.nan_to_num(frame_weights)
-
-            frame_dist = np.abs(video_frame_idxs[:, None] - video_frame_idxs[None, ])
-            index_weight = (frame_dist / len(video_frame_idxs)) ** 0.33
-
-            # Interpolate over any existing values
-            # https://stackoverflow.com/questions/21690608/numpy-inpaint-nans-interpolate-and-extrapolate
-            has_valid_date = ~is_missing_date
-            if np.any(has_valid_date):
-                missing_coords = np.array(np.nonzero(is_missing_date)).T
-                have_coords = np.array(np.nonzero(has_valid_date)).T
-                have_values = frame_weights[has_valid_date]
-                from scipy import interpolate
-                interp = interpolate.LinearNDInterpolator(have_coords, have_values, fill_value=1)
-
-                missing_flat_idxs = np.ravel_multi_index(missing_coords.T, frame_weights.shape)
-                interp_vals = interp(missing_coords)
-                frame_weights.ravel()[missing_flat_idxs] = interp_vals
-
-                # Average interpolation with the base case
-                frame_weights[is_missing_date] = (frame_weights[is_missing_date] + index_weight[is_missing_date]) / 2
-            else:
-                frame_weights[is_missing_date] = index_weight[is_missing_date]
+        dilated_weights = dilated_time_weights(unixtimes)['final']
 
         tid_to_track_changemat = {}
         for tid, track_dframe in tid_to_dframe.items():
@@ -1839,34 +1802,11 @@ def sample_dilated_vidspace_grid(dset, window_dims, window_overlap=0.0, negative
             at_idxs = np.searchsorted(video_frame_idxs, track_dframe['frame_index'])
             track_phase = np.full(len(video_frame_idxs), fill_value=np.nan)
             track_phase[at_idxs] = track_cids
-
             track_missing = np.isnan(track_phase)
-
             is_change = (track_phase[:, None] != track_phase[None, :])
             is_change[track_missing, :] = 0
             is_change[:, track_missing] = 0
-
             tid_to_track_changemat[tid] = is_change
-
-        if 0:
-            import kwplot
-            import pandas as pd
-            sns = kwplot.autosns()
-
-            idx = 15
-
-            df = pd.DataFrame({
-                'w_season': season_weights[idx],
-                'w_timedelta': timedelta_weights[idx],
-                'frame_index': video_frame_idxs,
-                'is_change': is_change[idx],
-            })
-            df['w'] = df['w_timedelta'] * df['w_season'] * df['is_change']
-            sns.lineplot(data=df, x='frame_index', y='w_season')
-            sns.lineplot(data=df, x='frame_index', y='w_timedelta')
-            sns.lineplot(data=df, x='frame_index', y='is_change')
-            sns.lineplot(data=df, x='frame_index', y='w')
-            sns.lineplot(data=pd.melt(df, ['frame_index']), x='frame_index', y='value', hue='variable')
 
         # print('tid_to_info = {}'.format(ub.repr2(tid_to_info, nl=2, sort=0)))
         for space_region in list(slider):
@@ -1905,39 +1845,15 @@ def sample_dilated_vidspace_grid(dset, window_dims, window_overlap=0.0, negative
                 frame_change_w = np.add.reduce(window_change_weights)
                 min_p = 0.1
                 frame_change_w = (frame_change_w * (1 - min_p)) + min_p
-                frame_w = (frame_weights * frame_change_w)
+                frame_w = (dilated_weights * frame_change_w)
             else:
                 has_annot = False
-                frame_w = (frame_weights)
-
-            def random_dilated_sample(base_idx, num):
-                # TODO: make this faster
-                # Probability sampling
-                chosen = [base_idx]
-                current_weights = frame_w[base_idx].copy()
-                current_weights[base_idx] = 0
-                for _ in range(num):
-                    probs = current_weights / current_weights.sum()
-                    next_idx = np.random.choice(video_frame_idxs, size=1, replace=False, p=probs)[0]
-                    chosen.append(next_idx)
-                    current_weights = current_weights * frame_w[next_idx]
-                    current_weights[next_idx] = 0
-                chosen = sorted(chosen)
-                return chosen
-                # if 0:
-                #     z = pd.DataFrame(ub.dzip(['a', 'b'], frame_w[chosen])).reset_index()
-                #     z['c'] = z.a * z.b
-                #     sns.lineplot(data=z.melt(['index']), x='index', y='value', hue='variable')
-                # frame_w[chosen]
+                frame_w = (dilated_weights)
 
             for base_idx in video_frame_idxs:
-                chosen = random_dilated_sample(base_idx, window_time_dims - 1)
-                # print('chosen = {!r}'.format(chosen))
-                # probs = frame_w[base_idx].copy()
-                # probs[base_idx] = 0
-                # probs = probs / probs.sum()
-                # sorted(np.random.choice(video_frame_idxs, size=window_time_dims - 1, replace=False, p=probs))
-
+                chosen = affinity_sample(
+                    frame_w, window_time_dims, include_indices=[base_idx],
+                    jit=1)
                 gids = list(ub.take(video_gids, chosen))
 
                 if has_annot:
@@ -2080,11 +1996,131 @@ def sample_dilated_vidspace_grid(dset, window_dims, window_overlap=0.0, negative
     return sample_grid
 
 
-def dilated_time_sample():
+def dilated_time_weights(unixtimes):
     """
     A minimal function for playing with time dilation sampling in a video
+
+    Example:
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> low = datetime.datetime.now().timestamp()
+        >>> high = low + datetime.timedelta(days=365 * 5).total_seconds()
+        >>> rng = kwarray.ensure_rng(0)
+        >>> base_unixtimes = np.array(sorted(rng.randint(low, high, 113)), dtype=float)
+
+        >>> # Test no missing data case
+        >>> unixtimes = base_unixtimes.copy()
+        >>> allhave_weights = dilated_time_weights(unixtimes)
+        >>> #
+        >>> # Test all missing data case
+        >>> unixtimes = np.full_like(unixtimes, fill_value=np.nan)
+        >>> allmiss_weights = dilated_time_weights(unixtimes)
+        >>> #
+        >>> # Test partial missing data case
+        >>> unixtimes = base_unixtimes.copy()
+        >>> unixtimes[rng.rand(*unixtimes.shape) < 0.1] = np.nan
+        >>> anymiss_weights_1 = dilated_time_weights(unixtimes)
+        >>> unixtimes = base_unixtimes.copy()
+        >>> unixtimes[rng.rand(*unixtimes.shape) < 0.5] = np.nan
+        >>> anymiss_weights_2 = dilated_time_weights(unixtimes)
+        >>> unixtimes = base_unixtimes.copy()
+        >>> unixtimes[rng.rand(*unixtimes.shape) < 0.9] = np.nan
+        >>> anymiss_weights_3 = dilated_time_weights(unixtimes)
+
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autoplt()
+        >>> pnum_ = kwplot.PlotNums(nCols=5)
+        >>> kwplot.figure(fnum=1, doclf=True)
+        >>> # kwplot.imshow(kwimage.normalize(daylight_weights))
+        >>> kwplot.imshow(kwimage.normalize(allhave_weights['final']), pnum=pnum_(), title='no missing dates')
+        >>> kwplot.imshow(kwimage.normalize(anymiss_weights_1['final']), pnum=pnum_(), title='any missing dates (0.1)')
+        >>> kwplot.imshow(kwimage.normalize(anymiss_weights_2['final']), pnum=pnum_(), title='any missing dates (0.5)')
+        >>> kwplot.imshow(kwimage.normalize(anymiss_weights_3['final']), pnum=pnum_(), title='any missing dates (0.9)')
+        >>> kwplot.imshow(kwimage.normalize(allmiss_weights['final']), pnum=pnum_(), title='all missing dates')
+
+        >>> import pandas as pd
+        >>> sns = kwplot.autosns()
+        >>> fig = kwplot.figure(fnum=2, doclf=True)
+        >>> kwplot.imshow(kwimage.normalize(allhave_weights['final']), pnum=(1, 3, 1), title='pairwise affinity')
+        >>> row_idx = 0
+        >>> df = pd.DataFrame({k: v[row_idx] for k, v in allhave_weights.items()})
+        >>> df['index'] = np.arange(df.shape[0])
+        >>> data = df.drop(['final'], axis=1).melt(['index'])
+        >>> kwplot.figure(fnum=2, pnum=(1, 3, 2))
+        >>> sns.lineplot(data=data, x='index', y='value', hue='variable')
+        >>> fig.gca().set_title('Affinity components for row={}'.format(row_idx))
+        >>> kwplot.figure(fnum=2, pnum=(1, 3, 3))
+        >>> sns.lineplot(data=df, x='index', y='final')
+        >>> fig.gca().set_title('Affinity components for row={}'.format(row_idx))
     """
-    pass
+    missing_date = np.isnan(unixtimes)
+    missing_any_dates = np.any(missing_date)
+    have_any_dates = not np.all(missing_date)
+
+    weights = {}
+
+    if have_any_dates:
+        # unixtimes[np.random.rand(*unixtimes.shape) > 0.1] = np.nan
+        seconds_per_year = datetime.timedelta(days=365).total_seconds()
+        seconds_per_day = datetime.timedelta(days=1).total_seconds()
+
+        second_deltas = np.abs(unixtimes[None, :] - unixtimes[:, None])
+        year_deltas = second_deltas / seconds_per_year
+        day_deltas = second_deltas / seconds_per_day
+
+        # Upweight similar seasons
+        season_weights = (1 + np.cos(year_deltas * math.tau)) / 2.0
+
+        # Upweight similar times of day
+        daylight_weights = ((1 + np.cos(day_deltas * math.tau)) / 2.0) * 0.5 + 0.5
+
+        # Upweight times in the future
+        # future_weights = year_deltas ** 0.25
+        future_weights = asymptotic(year_deltas)
+
+        weights['daylight'] = daylight_weights
+        weights['season'] = season_weights
+        weights['future'] = future_weights
+
+        frame_weights = season_weights * future_weights * daylight_weights
+
+    if missing_any_dates:
+        # For the frames that don't have dates on them, we use indexes to
+        # calculate a proxy weight.
+        frame_idxs = np.arange(len(unixtimes))
+        frame_dist = np.abs(frame_idxs[:, None] - frame_idxs[None, ])
+        index_weight = (frame_dist / len(frame_idxs)) ** 0.33
+        weights['index'] = index_weight
+
+        # Interpolate over any existing values
+        # https://stackoverflow.com/questions/21690608/numpy-inpaint-nans-interpolate-and-extrapolate
+        if have_any_dates:
+            from scipy import interpolate
+            miss_idxs = frame_idxs[missing_date]
+            have_idxs = frame_idxs[~missing_date]
+
+            miss_coords = np.vstack([
+                cartesian_product(miss_idxs, frame_idxs),
+                cartesian_product(have_idxs, miss_idxs)])
+            have_coords = cartesian_product(have_idxs, have_idxs)
+            have_values = frame_weights[tuple(have_coords.T)]
+
+            interp = interpolate.LinearNDInterpolator(have_coords, have_values, fill_value=0.8)
+            interp_vals = interp(miss_coords)
+
+            miss_coords_fancy = tuple(miss_coords.T)
+            frame_weights[miss_coords_fancy] = interp_vals
+
+            # Average interpolation with the base case
+            frame_weights[miss_coords_fancy] = (
+                frame_weights[miss_coords_fancy] +
+                index_weight[miss_coords_fancy]) / 2
+        else:
+            # No data to use, just use
+            frame_weights = index_weight
+
+    weights['final'] = frame_weights
+    return weights
 
 
 def sample_test_vidspace_grid(dset, window_dims, window_overlap=0.0, negative_classes=None, keepbound=True, exclude_sensors=None):
@@ -2176,7 +2212,63 @@ def sample_test_vidspace_grid(dset, window_dims, window_overlap=0.0, negative_cl
     return sample_grid
 
 
+def robust_limits(values):
+    """
+    # TODO: Proper Robust estimator for matplotlib ylim and general use
+
+    values = np.array([-1000, -4, -3, -2, 0, 2.7, 3.1415, 1, 2, 3, 4, 100000])
+    robust_limits(values)
+    """
+    quants = [0.0, 0.05, 0.08, 0.2, 0.5, 0.8, 0.9, 0.5, 1.0]
+    values = values[~np.isnan(values)]
+    quantiles = np.quantile(values, quants)
+    print('quantiles = {!r}'.format(quantiles))
+
+    lower_idx1 = 1
+    upper_idx1 = 2
+    part = quantiles[upper_idx1] - quantiles[lower_idx1]
+    inner_w = quants[upper_idx1] - quants[lower_idx1]
+    extrap_w = quants[lower_idx1] - quants[0]
+
+    extrap_part = part * extrap_w / inner_w
+    low_value = quantiles[lower_idx1]
+    robust_min = low_value - extrap_part
+    #
+    lower_idx2 = -3
+    upper_idx2 = -2
+    high_value = quantiles[upper_idx2]
+    part = quantiles[upper_idx2] - quantiles[lower_idx2]
+    inner_w = quants[upper_idx2] - quants[lower_idx2]
+    extrap_w = quants[lower_idx1] - quants[0]
+
+    extrap_part = part * extrap_w / inner_w
+    robust_max = high_value + extrap_part
+
+    robust_min
+    return robust_min, robust_max
+
+
 def tukey_loss(r, c=4.685):
+    """
+    Example:
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> r = np.linspace(-20, 20, 1000)
+        >>> data = {'r': r}
+        >>> grid = ub.named_product({
+        >>>     'c': [4.685, 2, 6],
+        >>> })
+        >>> for kwargs in grid:
+        >>>     key = ub.repr2(kwargs, compact=1)
+        >>>     loss = tukey_loss(r, **kwargs)
+        >>>     data[key] = loss
+        >>> melted = pd.DataFrame(data).melt(['r'])
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> sns = kwplot.autosns()
+        >>> kwplot.figure(fnum=1, doclf=True)
+        >>> ax = sns.lineplot(data=melted, x='r', y='value', hue='variable', style='variable')
+        >>> #ax.set_ylim(*robust_limits(melted.value))
+    """
     # https://statisticaloddsandends.wordpress.com/2021/04/23/what-is-the-tukey-loss-function/
     is_inside = np.abs(r) < c
     c26 = (c ** 2) / 6
@@ -2185,3 +2277,205 @@ def tukey_loss(r, c=4.685):
     loss_inside = c26 * (1 - (1 - (r_inside / c) ** 2) ** 3)
     loss[is_inside] = loss_inside
     return loss
+
+
+def asymptotic(x, offset=1, gamma=1, horizontal=1):
+    """
+    Example:
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> x = np.linspace(-5, 29, 1000)
+        >>> data = {'x': x}
+        >>> grid = ub.named_product({
+        >>>     'gamma': [0.5, 1.0, 2.0],
+        >>>     'offset': [0, 2],
+        >>>     'horizontal': [1],
+        >>> })
+        >>> for kwargs in grid:
+        >>>     key = ub.repr2(kwargs, compact=1)
+        >>>     data[key] = asymptotic(x, **kwargs)
+        >>> melted = pd.DataFrame(data).melt(['x'])
+        >>> print(melted)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> sns = kwplot.autosns()
+        >>> kwplot.figure(fnum=1, doclf=True)
+        >>> ax = sns.lineplot(data=melted, x='x', y='value', hue='variable', style='variable')
+        >>> ax.set_ylim(0, 2)
+    """
+    # A function with a horizontal asymptote at ``horizontal``
+    return ((x + offset) ** gamma / (x + offset + 1) ** gamma) + (horizontal - 1)
+
+
+@ub.memoize
+def cython_aff_samp_mod():
+    import os
+    from watch.tasks.fusion.datamodules import kwcoco_video_data
+    fpath = os.path.join(os.path.dirname(kwcoco_video_data.__file__), 'affinity_sampling.pyx')
+    cython_mod = xdev.import_module_from_pyx(fpath, verbose=0, annotate=True)
+    return cython_mod
+
+
+def affinity_sample(affinity, size, include_indices, return_info=False,
+                    rng=None, jit=False):
+    """
+    Choose random samples to maximize
+
+    Args:
+        affinity (ndarray):
+            pairwise affinity matrix
+
+        size (int):
+            Number of sample indices to return
+
+        include_indices (List[int]):
+            Indicies that must be included in the sample
+
+        rng (Coercable[RandomState]):
+            random state
+
+    Possible Related Work:
+        * Random Stratified Sampling Affinity Matrix
+        * A quasi-random sampling approach to image retrieval
+
+    Example:
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> low = datetime.datetime.now().timestamp()
+        >>> high = low + datetime.timedelta(days=365 * 5).total_seconds()
+        >>> rng = kwarray.ensure_rng(0)
+        >>> unixtimes = np.array(sorted(rng.randint(low, high, 113)), dtype=float)
+        >>> affinity = dilated_time_weights(unixtimes)['final']
+        >>> include_indices = [5]
+        >>> size = 5
+        >>> chosen, info = affinity_sample(affinity, size, include_indices, return_info=True)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> steps = info['steps']
+        >>> import kwplot
+        >>> sns = kwplot.autosns()
+        >>> plt = kwplot.autoplt()
+        >>> pnum_ = kwplot.PlotNums(nCols=2, nSubplots=len(steps) * 2 + 1)
+        >>> kwplot.figure(pnum=pnum_(), fnum=1, doclf=True)
+        >>> kwplot.imshow(kwimage.normalize(affinity), title='Pairwise Affinity')
+        >>> chosen_so_far = list(info['include_indices'])
+        >>> for step_idx, step in enumerate(steps, start=len(include_indices)):
+        >>>     fig = kwplot.figure(pnum=pnum_())
+        >>>     ax = fig.gca()
+        >>>     idx = step['next_idx']
+        >>>     probs = step['probs']
+        >>>     ymax = probs.max()
+        >>>     xmax = len(probs)
+        >>>     x, y = idx, probs[idx]
+        >>>     for x_ in chosen_so_far:
+        >>>         ax.plot([x_, x_], [0, ymax], color='gray')
+        >>>     ax.plot(np.arange(xmax), probs)
+        >>>     xpos = x + xmax * 0.0 if x < (xmax / 2) else x - xmax * 0.0
+        >>>     ypos = y + ymax * 0.3 if y < (ymax / 2) else y - ymax * 0.3
+        >>>     ax.annotate('chosen', (x, y), xytext=(xpos, ypos), color='black', arrowprops=dict(color='orange', arrowstyle="->"))
+        >>>     ax.plot([x, x], [0, ymax], color='orange')
+        >>>     #ax.annotate('chosen', (x, y), color='black')
+        >>>     ax.set_title('Sample {}'.format(step_idx))
+        >>>     chosen_so_far.append(idx)
+        >>>     fig = kwplot.figure(pnum=pnum_())
+        >>>     ax = fig.gca()
+        >>>     ax.plot(np.arange(xmax), step['next_affinity'], color='orange')
+        >>>     #ax.annotate('chosen', (x, y), xytext=(xpos, ypos), color='black', arrowprops=dict(color='black', arrowstyle="->"))
+        >>>     ax.plot([x, x], [0, step['next_affinity'].max()], color='orange')
+        >>>     ax.set_title('New affinity {}'.format(step_idx))
+        >>> kwplot.imshow(kwimage.normalize(affinity[sorted(chosen)][:, sorted(chosen)]), pnum=pnum_(), title='Final Affinities')
+
+    Ignore:
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> low = datetime.datetime.now().timestamp()
+        >>> high = low + datetime.timedelta(days=365 * 5).total_seconds()
+        >>> rng = kwarray.ensure_rng(0)
+        >>> unixtimes = np.array(sorted(rng.randint(low, high, 113)), dtype=float)
+        >>> affinity = dilated_time_weights(unixtimes)['final']
+        >>> include_indices = [5]
+        >>> size = 20
+        >>> xdev.profile_now(affinity_sample)(affinity, size, include_indices)
+
+    CommandLine:
+        xdoctest -m /home/joncrall/code/watch/watch/tasks/fusion/datamodules/kwcoco_video_data.py affinity_sample:1 --cython
+
+    Example:
+        >>> # xdoctest: +REQUIRES(--cython)
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> low = datetime.datetime.now().timestamp()
+        >>> high = low + datetime.timedelta(days=365 * 5).total_seconds()
+        >>> rng = kwarray.ensure_rng(0)
+        >>> unixtimes = np.array(sorted(rng.randint(low, high, 113)), dtype=float)
+        >>> affinity = dilated_time_weights(unixtimes)['final']
+        >>> include_indices = [5]
+        >>> size = 5
+        >>> import timerit
+        >>> ti = timerit.Timerit(100, bestof=10, verbose=2)
+        >>> for timer in ti.reset('python'):
+        >>>     with timer:
+        >>>         affinity_sample(affinity, size, include_indices, jit=False)
+        >>> for timer in ti.reset('cython'):
+        >>>     with timer:
+        >>>         chosen = affinity_sample(affinity, size, include_indices, jit=True)
+        >>> # xdev.profile_now(affinity_sample)(affinity, size, include_indices, jit=True)
+        >>> # xdev.profile_now(affinity_sample)(affinity, size, include_indices, jit=False)
+
+        fig.tight_layout()
+    """
+    # TODO: make this faster
+    chosen = list(include_indices)
+    if len(chosen) == 1:
+        current_weights = affinity[chosen[0]]
+    else:
+        current_weights = affinity[chosen].prod(axis=0)
+    num_sample = size - len(chosen)
+    rng = kwarray.ensure_rng(rng)
+    if jit:
+        cython_mod = cython_aff_samp_mod()
+        return cython_mod.cython_affinity_sample(affinity, num_sample, current_weights, chosen, rng)
+    current_weights[chosen] = 0
+    # available_idxs = np.arange(affinity.shape[0])
+    if return_info:
+        info = {'steps': [], 'initial_weights': current_weights, 'include_indices': include_indices}
+    for _ in range(num_sample):
+        # Choose the next image based on combined sample affinity
+
+        # probs = current_weights / current_weights.sum()
+        # next_idx = rng.choice(available_idxs, size=1, p=probs)[0]
+
+        cumprobs = current_weights.cumsum()
+        dart = rng.rand() * cumprobs[-1]
+        next_idx = np.searchsorted(cumprobs, dart)
+
+        next_affinity = affinity[next_idx]
+        chosen.append(next_idx)
+
+        if return_info:
+            probs = current_weights / current_weights.sum()
+            info['steps'].append({
+                'probs': probs,
+                'next_idx': next_idx,
+                'next_affinity': next_affinity,
+            })
+        # Don't resample the same item
+        current_weights = current_weights * next_affinity
+        current_weights[next_idx] = 0
+    chosen = sorted(chosen)
+    if return_info:
+        return chosen, info
+    else:
+        return chosen
+
+
+def cartesian_product(*arrays):
+    """
+    Fast numpy version of itertools.product
+
+    TODO: Move to kwarray
+
+    Referencs:
+        https://stackoverflow.com/a/11146645/887074
+    """
+    la = len(arrays)
+    dtype = np.result_type(*arrays)
+    arr = np.empty([len(a) for a in arrays] + [la], dtype=dtype)
+    for i, a in enumerate(np.ix_(*arrays)):
+        arr[..., i] = a
+    return arr.reshape(-1, la)
