@@ -1,0 +1,30 @@
+{
+  "chain_name": "baseline_framework_coreg",
+  "algorithms": [
+    {
+      "name": "kitware/baseline_framework_ingress",
+      "parameters": {
+        "input_path": "$INPUT_STAC_LIST",
+        "dry_run": 1,
+        "output_dir": "/tmp/ingress",
+        "requester_pays": 1,
+        "aws_profile": "iarpa"
+      }
+    },
+    {
+      "name": "UMD/coregistration",
+      "parameters": {
+        "output_dir": "/tmp/coreg"
+      }
+    },
+    {
+      "name": "kitware/baseline_framework_egress",
+      "parameters": {
+        "output_bucket": "s3://kitware-smart-watch-data/runs/baseline_coreg_test",
+        "output_path": "s3://kitware-smart-watch-data/runs/baseline_coreg_test/coreg_output.json",
+        "dryrun": 0,
+        "aws_profile": "iarpa"
+      }
+    }
+  ]
+}
