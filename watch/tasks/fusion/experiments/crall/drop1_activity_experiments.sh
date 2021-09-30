@@ -18,7 +18,7 @@ WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 ARCH=smt_it_joint_p8
 
 #CHANNELS="blue|green|red|nir|swir16|coastal"
-CHANNELS="blue|green|red|nir|swir16"
+CHANNELS="blue|green|red|nir|swir16|swir22"
 
 EXPERIMENT_NAME=ActivityClf_${ARCH}_raw_v017
 DATASET_CODE=Drop1_Raw_Holdout
@@ -30,6 +30,9 @@ EVAL_DPATH=$DEFAULT_ROOT_DIR/pred/eval
 
 TRAIN_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/train_$EXPERIMENT_NAME.yml 
 PRED_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/predict_$EXPERIMENT_NAME.yml 
+
+#python -m watch stats $TRAIN_FPATH 
+#kwcoco stats $TRAIN_FPATH $VALI_FPATH $TEST_FPATH
 
 
 # Write train and prediction configs
@@ -65,5 +68,5 @@ python -m watch.tasks.fusion.fit \
         --train_dataset=$TRAIN_FPATH \
          --vali_dataset=$VALI_FPATH \
          --test_dataset=$TEST_FPATH \
-         --num_sanity_val_steps=0 
+         --num_sanity_val_steps=0  --force-recompute-stats
 

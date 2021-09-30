@@ -355,6 +355,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         print('self.torch_datasets = {}'.format(ub.repr2(self.torch_datasets, nl=1)))
 
     def _make_dataloader(self, stage, shuffle=False):
+        if self.num_workers > 0:
+            self._fixup_file_limit_hueristics()
         return data.DataLoader(
             self.torch_datasets[stage],
             batch_size=self.batch_size,
@@ -559,7 +561,7 @@ class KWCocoVideoDataset(data.Dataset):
         window_overlap=0,
         transform=None,
         neg_to_pos_ratio=1.0,
-        time_sampling='none',
+        time_sampling='auto',
         diff_inputs=False,
         exclude_sensors=None,
     ):
@@ -991,13 +993,20 @@ class KWCocoVideoDataset(data.Dataset):
         vidid = sample['tr']['vidid']
         video = self.sampler.dset.index.videos[vidid]
 
+        # Only pass back some of the metadata (because I think torch
+        # multiprocessing makes a new file descriptor for every Python object
+        # or something like that)
+        tr_subset = ub.dict_isect(sample['tr'], {
+            'gids', 'space_slice', 'annot_idx', 'slices', 'vidid',
+        })
+
         item = {
             # TODO: breakup modes into different items
             "index": index,
             "frames": frame_items,
             "video_id": sample['tr']['vidid'],
             "video_name": video['name'],
-            "tr": sample['tr'],  # pass all of the metadata
+            "tr": tr_subset
         }
         return item
 
@@ -1020,11 +1029,22 @@ class KWCocoVideoDataset(data.Dataset):
         workdir = None
         cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends)
         input_stats = cacher.tryload()
-        if input_stats is None:
+        if input_stats is None or ub.argflag('--force-recompute-stats'):
             input_stats = self.compute_input_stats(
                 num, num_workers=num_workers, batch_size=batch_size)
             cacher.save(input_stats)
         return input_stats
+
+    def _fixup_file_limit_hueristics(self):
+        if ub.LINUX:
+            import resource
+            soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+            print('Before FileLimit: soft={}, hard={}'.format(soft, hard))
+            requested_soft = 8192
+            print('requested_soft = {!r}'.format(requested_soft))
+            resource.setrlimit(resource.RLIMIT_NOFILE, (requested_soft, hard))
+            soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+            print('After FileLimit: soft={}, hard={}'.format(soft, hard))
 
     def compute_input_stats(self, num=None, num_workers=0, batch_size=2):
         """
@@ -1059,19 +1079,23 @@ class KWCocoVideoDataset(data.Dataset):
             >>> from os.path import join
             >>> import ndsampler
             >>> import kwcoco
-            >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
-            >>> dvc_dpath = os.environ.get('DVC_DPATH', _default)
-            >>> coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/combo_train_data.kwcoco.json')
-            >>> coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/rutgers_material_seg.kwcoco.json')
+            >>> from watch.utils.util_data import find_smart_dvc_dpath
+            >>> dvc_dpath = find_smart_dvc_dpath()
+            >>> coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/data.kwcoco.json')
+            >>> #coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/rutgers_material_seg.kwcoco.json')
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (3, 96, 96)
-            >>> channels = 'rice_field|cropland|water|inland_water|river_or_stream|sebkha|snow_or_ice_field|bare_ground|sand_dune|built_up|grassland|brush|forest|wetland|road'
-            >>> channels = 'matseg_0|matseg_1|matseg_2|matseg_3|matseg_4'
+            >>> channels = 'blue|green|red|nir|swir16'
+            >>> #channels = 'rice_field|cropland|water|inland_water|river_or_stream|sebkha|snow_or_ice_field|bare_ground|sand_dune|built_up|grassland|brush|forest|wetland|road'
+            >>> #channels = 'matseg_0|matseg_1|matseg_2|matseg_3|matseg_4'
             >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels)
-            >>> item = self[0]
+            >>> item = self[100]
             >>> #self.compute_input_stats(num=10)
-            >>> self.compute_input_stats(num=1000, num_workers=4, batch_size=1)
+            >>> num_workers = 14
+            >>> num = 1000
+            >>> batch_size = 6
+            >>> self.compute_input_stats(num=num, num_workers=num_workers, batch_size=batch_size)
 
         Ignore:
             # TODO: profile and optimize loading in ndsampler / kwcoco
@@ -1111,6 +1135,8 @@ class KWCocoVideoDataset(data.Dataset):
 
         # Hack: disable augmentation if we are doing that
         self.disable_augmenter = True
+        if num_workers > 0:
+            self._fixup_file_limit_hueristics()
         loader = torch.utils.data.DataLoader(
             stats_subset,
             collate_fn=ub.identity, num_workers=num_workers, shuffle=True,
@@ -1122,6 +1148,7 @@ class KWCocoVideoDataset(data.Dataset):
 
         timer = ub.Timer().tic()
         timer.first = 1
+
         prog = ub.ProgIter(loader, desc='estimate mean/std')
         for batch_items in prog:
             for item in batch_items:
@@ -1522,6 +1549,8 @@ class KWCocoVideoDataset(data.Dataset):
             >>> loader = self.make_loader(batch_size=2)
             >>> batch = next(iter(loader))
         """
+        if num_workers > 0:
+            self._fixup_file_limit_hueristics()
         loader = torch.utils.data.DataLoader(
             self, batch_size=batch_size, num_workers=num_workers,
             shuffle=shuffle, pin_memory=pin_memory, collate_fn=ub.identity)
