@@ -34,7 +34,6 @@ PRED_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/predict_$EXPERIMENT_NAME.yml
 #python -m watch stats $TRAIN_FPATH 
 #kwcoco stats $TRAIN_FPATH $VALI_FPATH $TEST_FPATH
 
-
 # Write train and prediction configs
 CUDA_VISIBLE_DEVICES="0"
 python -m watch.tasks.fusion.fit \
@@ -69,4 +68,3 @@ python -m watch.tasks.fusion.fit \
          --vali_dataset=$VALI_FPATH \
          --test_dataset=$TEST_FPATH \
          --num_sanity_val_steps=0  --force-recompute-stats
-

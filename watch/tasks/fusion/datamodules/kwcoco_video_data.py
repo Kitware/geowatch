@@ -174,6 +174,44 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.neg_to_pos_ratio = neg_to_pos_ratio
         self.channels = channels
         self.batch_size = batch_size
+        if isinstance(num_workers, str):
+            if num_workers == 'auto':
+                num_workers = 'avail-2'
+
+            # input normalization
+            num_workers = num_workers.replace('available', 'avail')
+            base_workers = None
+
+            prefix = 'avail'
+            if num_workers.startswith(prefix):
+                base_workers = available_cpus_hueristic()
+                suffix = num_workers[len(prefix):]
+
+            prefix = 'all'
+            if num_workers.startswith(prefix):
+                import psutil
+                base_workers = psutil.cpu_count()
+                suffix = num_workers[len(prefix):]
+
+            if base_workers is None:
+                raise KeyError(num_workers)
+
+            if suffix:
+                expr = '{}{}'.format(base_workers, suffix)
+                if len(expr) > 8:
+                    raise Exception(
+                        'num-workers-hueristic should be small text. '
+                        'We want to disallow attempts at crashing python '
+                        'by feeding nasty input into eval '
+                    )
+                # FIME: eval is not very safe, add numexpr dependency instead
+                # import numexpr
+                # numexpr.evaluate('3 - 2')
+                num_workers = max(eval(expr, {}, {}), 0)
+            else:
+                num_workers = base_workers
+            print('Choose num_workers = {!r}'.format(num_workers))
+
         self.num_workers = num_workers
         self.preprocessing_step = preprocessing_step
         self.normalize_inputs = normalize_inputs
@@ -356,7 +394,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
     def _make_dataloader(self, stage, shuffle=False):
         if self.num_workers > 0:
-            self._fixup_file_limit_hueristics()
+            _fixup_file_limit_hueristics()
         return data.DataLoader(
             self.torch_datasets[stage],
             batch_size=self.batch_size,
@@ -1035,16 +1073,6 @@ class KWCocoVideoDataset(data.Dataset):
             cacher.save(input_stats)
         return input_stats
 
-    def _fixup_file_limit_hueristics(self):
-        if ub.LINUX:
-            import resource
-            soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-            print('Before FileLimit: soft={}, hard={}'.format(soft, hard))
-            requested_soft = 8192
-            print('requested_soft = {!r}'.format(requested_soft))
-            resource.setrlimit(resource.RLIMIT_NOFILE, (requested_soft, hard))
-            soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-            print('After FileLimit: soft={}, hard={}'.format(soft, hard))
 
     def compute_input_stats(self, num=None, num_workers=0, batch_size=2):
         """
@@ -1070,6 +1098,9 @@ class KWCocoVideoDataset(data.Dataset):
             >>> sample_shape = (2, 128, 128)
             >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=None)
             >>> self.compute_input_stats()
+
+        CommandLine:
+            DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.datamodules.kwcoco_video_data KWCocoVideoDataset.compute_input_stats:1
 
         Example:
             >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -1136,7 +1167,7 @@ class KWCocoVideoDataset(data.Dataset):
         # Hack: disable augmentation if we are doing that
         self.disable_augmenter = True
         if num_workers > 0:
-            self._fixup_file_limit_hueristics()
+            _fixup_file_limit_hueristics()
         loader = torch.utils.data.DataLoader(
             stats_subset,
             collate_fn=ub.identity, num_workers=num_workers, shuffle=True,
@@ -1550,7 +1581,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> batch = next(iter(loader))
         """
         if num_workers > 0:
-            self._fixup_file_limit_hueristics()
+            _fixup_file_limit_hueristics()
         loader = torch.utils.data.DataLoader(
             self, batch_size=batch_size, num_workers=num_workers,
             shuffle=shuffle, pin_memory=pin_memory, collate_fn=ub.identity)
@@ -2595,3 +2626,35 @@ def cartesian_product(*arrays):
     for i, a in enumerate(np.ix_(*arrays)):
         arr[..., i] = a
     return arr.reshape(-1, la)
+
+
+def available_cpus_hueristic():
+    import psutil
+    import numpy as np
+    # num_cores = psutil.cpu_count()
+    current_load = np.array(psutil.cpu_percent(percpu=True)) / 100
+    num_available = np.sum(current_load < 0.5)
+    return num_available
+
+
+def _fixup_file_limit_hueristics():
+    """
+    Ignore:
+        # Helpful file descriptor monitor script:
+        watch -x bash -c '
+            PROC_ID_LIST=($(ps -a | grep python | awk '"'"'{print $1}'"'"' ))
+            for PROC_ID in "${PROC_ID_LIST[@]}"; do
+                NUM_OPEN_FILES=$(lsof -p $PROC_ID | wc -l)
+                echo "PROC_ID=$PROC_ID, NUM_OPEN_FILES=$NUM_OPEN_FILES"
+            done
+        '
+    """
+    if ub.LINUX:
+        import resource
+        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        print('Before FileLimit: soft={}, hard={}'.format(soft, hard))
+        requested_soft = 8192
+        print('requested_soft = {!r}'.format(requested_soft))
+        resource.setrlimit(resource.RLIMIT_NOFILE, (requested_soft, hard))
+        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        print('After FileLimit: soft={}, hard={}'.format(soft, hard))
