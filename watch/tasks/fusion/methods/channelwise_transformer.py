@@ -1,20 +1,21 @@
-import torch
-from torch import nn
-from einops.layers.torch import Rearrange
 import einops
-
-from torchvision import transforms
-
-from watch.tasks.fusion.architectures import transformer
-from watch.tasks.fusion import utils
-import ubelt as ub
 import kwarray
 import kwcoco
-from kwcoco import channel_spec
+import ubelt as ub
+import torch
 import torchmetrics
+
+import netharn as nh
 import pytorch_lightning as pl
-import torch_optimizer as optim
+
+# import torch_optimizer as optim
+from torch import nn
+from einops.layers.torch import Rearrange
+from kwcoco import channel_spec
+from torchvision import transforms
 from torch.optim import lr_scheduler
+from watch.tasks.fusion import utils
+from watch.tasks.fusion.architectures import transformer
 
 try:
     import xdev
@@ -42,7 +43,6 @@ class MultimodalTransformer(pl.LightningModule):
         >>> batch = next(iter(loader))
         >>> #self = MultimodalTransformer(arch_name='smt_it_joint_p8')
         >>> self = MultimodalTransformer(arch_name='smt_it_joint_p8', input_channels=datamodule.input_channels, change_loss='dicefocal', attention_impl='performer')
-        >>> import netharn as nh
         >>> device = nh.XPU.coerce('cpu').main_device
         >>> self = self.to(device)
         >>> # Run forward pass
@@ -75,7 +75,6 @@ class MultimodalTransformer(pl.LightningModule):
                  change_loss='cce',
                  class_loss='focal',
                  classes=10):
-        import netharn as nh
 
         super().__init__()
         self.save_hyperparameters()
@@ -391,10 +390,10 @@ class MultimodalTransformer(pl.LightningModule):
             >>> import os
             >>> import kwplot
             >>> sns = kwplot.autosns()
-            >>> if 1:
+            >>> if 0:
             >>>     _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
             >>>     dvc_dpath = os.environ.get('DVC_DPATH', _default)
-            >>>     coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/combo_propogated_data.kwcoco.json')
+            >>>     coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/data.kwcoco.json')
             >>>     channels='blue|green|red',
             >>> else:
             >>>     coco_fpath = 'special:vidshapes8-frames9-speed0.5-multispectral'

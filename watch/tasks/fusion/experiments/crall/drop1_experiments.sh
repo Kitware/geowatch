@@ -57,7 +57,7 @@ python -m watch.tasks.fusion.fit \
     --batch_size=2 \
     --accumulate_grad_batches=64 \
     --num_workers=14 \
-    --time_dilation=1000000 \
+    --time_sampling=1000000 \
     --attention_impl=exact \
     --global_class_weight=0.0 \
     --neg_to_pos_ratio=0.5 \

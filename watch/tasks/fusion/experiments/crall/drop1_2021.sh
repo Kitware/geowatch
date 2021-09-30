@@ -131,7 +131,7 @@ python -m watch.tasks.fusion.fit \
     --batch_size=$BATCH_SIZE \
     --accumulate_grad_batches=32 \
     --num_workers=8 \
-    --time_dilation=1000000 \
+    --time_sampling=1000000 \
     --max_epochs=400 \
     --patience=400 \
     --gpus=1  \
@@ -213,7 +213,7 @@ python -m watch.tasks.fusion.fit \
     --batch_size=$BATCH_SIZE \
     --accumulate_grad_batches=32 \
     --num_workers=8 \
-    --time_dilation=1000000 \
+    --time_sampling=1000000 \
     --max_epochs=400 \
     --patience=400 \
     --gpus=1  \
@@ -281,7 +281,7 @@ python -m watch.tasks.fusion.fit \
     --batch_size=$BATCH_SIZE \
     --accumulate_grad_batches=32 \
     --num_workers=8 \
-    --time_dilation=1000000 \
+    --time_sampling=1000000 \
     --max_epochs=400 \
     --patience=400 \
     --gpus=1  \
@@ -325,7 +325,7 @@ python -m watch.tasks.fusion.fit \
     --batch_size=$BATCH_SIZE \
     --accumulate_grad_batches=16 \
     --num_workers=8 \
-    --time_dilation=1000000 \
+    --time_sampling=1000000 \
     --max_epochs=400 \
     --patience=400 \
     --gpus=1  \
