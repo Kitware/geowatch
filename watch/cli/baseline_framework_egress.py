@@ -31,6 +31,10 @@ def main():
                         action='store_true',
                         default=False,
                         help="Run AWS CLI commands with --dryrun flag")
+    parser.add_argument("-n", "--newline",
+                        action='store_true',
+                        default=False,
+                        help="Output as simple newline separated STAC items")
 
     baseline_framework_egress(**vars(parser.parse_args()))
 
@@ -41,7 +45,8 @@ def baseline_framework_egress(stac_catalog,
                               output_path,
                               outbucket,
                               aws_profile=None,
-                              dryrun=False):
+                              dryrun=False,
+                              newline=False):
     if isinstance(stac_catalog, str):
         catalog = pystac.read_file(href=stac_catalog).full_copy()
     elif isinstance(stac_catalog, dict):
@@ -92,14 +97,20 @@ def baseline_framework_egress(stac_catalog,
 
         output_stac_items.append(stac_item_dict)
 
-    te_output = {'raw_images': [],
-                 'stac': {
-                     'type': 'FeatureCollection',
-                     'features': output_stac_items}}
+    if newline:
+        te_output = '\n'.join((json.dumps(item) for item in output_stac_items))
+    else:
+        te_output = {'raw_images': [],
+                     'stac': {
+                         'type': 'FeatureCollection',
+                         'features': output_stac_items}}
 
     with tempfile.NamedTemporaryFile() as temporary_file:
         with open(temporary_file.name, 'w') as f:
-            print(json.dumps(te_output, indent=2), file=f)
+            if newline:
+                print(te_output, end='', file=f)
+            else:
+                print(json.dumps(te_output, indent=2), file=f)
 
         command = [*aws_base_command, temporary_file.name, output_path]
 
