@@ -143,7 +143,7 @@ class Bottleneck(nn.Module):
 class ResNet(nn.Module):
 
     def __init__(self, block, layers, num_classes, num_groups=None,
-                 weight_std=False, beta=False, num_channels=3):
+                 weight_std=False, beta=False, num_channels=3 ,feats=None, out_dim=None):
         self.inplanes = 64
 
         def _norm(planes, momentum=0.05):
@@ -172,7 +172,7 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=1,
                                        dilation=2)
         # self.aspp = ASPP(512 * block.expansion, 256, num_classes, conv=self.conv, norm=self.norm)
-        self.aspp = ASPP(512 * block.expansion, 256, 64, conv=self.conv, norm=self.norm)
+        self.aspp = ASPP(512 * block.expansion, 512, 512, conv=self.conv, norm=self.norm)
 
         for m in self.modules():
             if isinstance(m, self.conv):
@@ -191,7 +191,7 @@ class ResNet(nn.Module):
                                       # nn.BatchNorm2d(48, track_running_stats = False),
                                       nn.GroupNorm(24, 48),
                                       nn.ReLU())
-        self.fc8_x = nn.Sequential(Conv2d(112, 256, kernel_size=3, stride=1, padding=1, bias=False),
+        self.fc8_x = nn.Sequential(Conv2d(560, 256, kernel_size=3, stride=1, padding=1, bias=False),
                                    #    nn.BatchNorm2d(256, track_running_stats = False),
                                    nn.GroupNorm(32, 256),
                                    nn.ReLU())
@@ -246,10 +246,10 @@ class ResNet(nn.Module):
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
-        x = self.aspp(x)
+        x_feats = self.aspp(x)
 
         x2_x = self.fc8_skip(conv3)
-        x_up = rescale_as(x, x2_x)
+        x_up = rescale_as(x_feats, x2_x)
         x = self.fc8_x(torch.cat([x_up, x2_x], 1))
         # 3.2 deep feature context for shallow features
         x2 = self.shallow_mask(conv3, x)
@@ -257,7 +257,7 @@ class ResNet(nn.Module):
         x = self.sg(x, x2, alpha_rate=0.3)
         x = self.last_conv(x)
         # x = nn.Upsample(size, mode='bilinear', align_corners=True)(x)
-        return x
+        return x, x_feats
 
 
 def resnet50(pretrained=False, **kwargs):

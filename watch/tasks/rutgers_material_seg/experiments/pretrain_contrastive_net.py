@@ -192,28 +192,43 @@ class Trainer(object):
             output1, features1 = self.model(image1)  ## [B,22,150,150]
             output2, features2 = self.model(image2)  ## [B,22,150,150]
             
+            # print(features1.shape)
+
             negative_output1, negative_features1 = self.model(negative_image1)  ## [B,22,150,150]
             patched_output1 = torch.stack([transforms.functional.crop(output1, *params) for params in self.all_crops_params],dim=1)
             patched_output2 = torch.stack([transforms.functional.crop(output2, *params) for params in self.all_crops_params],dim=1)
             patched_negative_output1 = torch.stack([transforms.functional.crop(negative_output1, *params) for params in self.all_crops_params],dim=1)
             
-            bs, ps, c, h, w = patched_output1.shape
-            patched_output1 = patched_output1.view(bs*ps,c,h,w)
-            patched_output2 = patched_output2.view(bs*ps,c,h,w)
-            patched_negative_output1 = patched_negative_output1.view(bs*ps,c,h,w)
+            bs, ps, c, ph, pw = patched_output1.shape
+            patched_output1 = patched_output1.view(bs*ps,c,ph,pw)
+            patched_output2 = patched_output2.view(bs*ps,c,ph,pw)
+            patched_negative_output1 = patched_negative_output1.view(bs*ps,c,ph,pw)
 
-            patch_max = 8000
-            patched_output1 = F.normalize(patched_output1, dim=1, p=1) #[bs*ps, c*h*w]
-            patched_output2 = F.normalize(patched_output2, dim=1, p=1)
-            features = torch.cat([patched_output1.unsqueeze(1), patched_output2.unsqueeze(1)], dim=1)[:patch_max,:,:]
+            # patch_max = 8000
+            # patched_output1 = F.normalize(patched_output1, dim=1, p=1) #[bs*ps, c*h*w]
+            # patched_output2 = F.normalize(patched_output2, dim=1, p=1)
+            # features = torch.cat([patched_output1.unsqueeze(1), patched_output2.unsqueeze(1)], dim=1)[:patch_max,:,:]
+            # print(patched_output1.shape)
+            # print(features1.shape)
+            # features1 = F.normalize(features1, dim=1, p=1) #[bs*ps, c*h*w]
+            # features2 = F.normalize(features2, dim=1, p=1)
+            # print(features1.shape)
+            # print(features.shape)
+            # features = torch.cat([features1.unsqueeze(1), features2.unsqueeze(1)], dim=1)#[:patch_max,:,:]
+            # print(features.shape)
 
             # pre-text: Augmentation
-            loss = 5*self.contrastive_loss(features)
-            # loss = 30*F.triplet_margin_loss(patched_output1,#.unsqueeze(0), 
-            #                                 patched_output2,#.unsqueeze(0), 
-            #                                 patched_negative_output1
-            #                                 )
+            # loss = 5*self.contrastive_loss(features)
+            loss = 30*F.triplet_margin_loss(patched_output1,#.unsqueeze(0), 
+                                            patched_output2,#.unsqueeze(0), 
+                                            patched_negative_output1
+                                            )
 
+            loss += 30*F.triplet_margin_loss(features1,#.unsqueeze(0), 
+                                            features2,#.unsqueeze(0), 
+                                            negative_features1
+                                            )
+            # print(loss)
 
             # pre-text: relative patch distance:
             # number_of_patches = 1000
@@ -250,9 +265,28 @@ class Trainer(object):
             pred2 = masks2.max(1)[1].cpu().detach()  # .numpy()
             change_detection_prediction = (pred1 != pred2).type(torch.uint8)
 
+            pad_amount = (config['evaluation']['inference_window']-1)//2
+            padded_output1 = F.pad(input=output1, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
+            padded_output2 = F.pad(input=output2, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
+            patched_padded_output1 = torch.stack([transforms.functional.crop(padded_output1, *params) for params in self.inference_all_crops_params], dim=1)#.flatten(-3,-1)
+            patched_padded_output2 = torch.stack([transforms.functional.crop(padded_output2, *params) for params in self.inference_all_crops_params], dim=1)#.flatten(-3,-1)
+
+            patched_padded_output1_distributions = patched_padded_output1.flatten(-2, -1).mean(axis=3) #[bs, n_patches, k]
+            patched_padded_output2_distributions = patched_padded_output2.flatten(-2, -1).mean(axis=3) #[bs, n_patches, k]
+
+            # patched_diff_change_features = torch.sqrt(torch.pow(patched_padded_output1_distributions - patched_padded_output2_distributions, 2).sum(axis=2)).view(bs,h,w)
+            patched_diff_change_features = torch.abs((patched_padded_output1_distributions - patched_padded_output2_distributions).sum(axis=2)).view(bs,h,w)
+            # diff_change_features = torch.abs((output1-output2).sum(axis=1))
+            # diff_change_features = torch.sqrt(torch.pow(output1 - output2, 2).sum(axis=1))#.view(bs,h,w)
+            inference_otsu_coeff = 1.0
+            inference_otsu_threshold = inference_otsu_coeff*otsu(patched_diff_change_features.cpu().detach().numpy(), nbins=256)
+            # print(inference_otsu_threshold)
+            diff_change_thresholded = torch.zeros_like(patched_diff_change_features)
+            diff_change_thresholded[patched_diff_change_features > inference_otsu_threshold] = 1
+
             total_loss += loss.item()
             mask1[mask1 == -1] = 0
-            preds.append(change_detection_prediction.cpu())
+            preds.append(diff_change_thresholded.cpu())
             targets.append(mask1.cpu())#.numpy())
             """
             if config['visualization']['train_visualizer'] :
@@ -489,34 +523,27 @@ class Trainer(object):
 
                 patched_padded_output1_distributions = patched_padded_output1.flatten(-2, -1).mean(axis=3) #[bs, n_patches, k]
                 patched_padded_output2_distributions = patched_padded_output2.flatten(-2, -1).mean(axis=3) #[bs, n_patches, k]
-                # print(patched_padded_output1_distributions.shape)
-                # bins=100
-                # histogram1 = torch.zeros((bs, patched_padded_output1.shape[1], bins))
-                # histogram2 = torch.zeros((bs, patched_padded_output1.shape[1], bins))
-                # for b in range(bs):
-                # print(patched_padded_output1_distributions.shape)
-                # print(patched_padded_output1_distributions[0,0,:])
-                patched_padded_output1_distributions = (patched_padded_output1_distributions - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output1_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])
-                patched_padded_output2_distributions = (patched_padded_output2_distributions - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output2_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])            
 
-                # print(patched_padded_output1_distributions[0,0,:])
-                # print(patched_padded_output1_distributions.shape)
+                # patched_padded_output1_distributions = (patched_padded_output1_distributions - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output1_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])
+                # patched_padded_output2_distributions = (patched_padded_output2_distributions - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output2_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])            
+
                 # patched_padded_output1_distributions = torch.histc(patched_padded_output1.flatten(-2, -1)) #[bs, n_patches, k]
                 # find intersection of each histogram
-                minima = torch.minimum(patched_padded_output1_distributions, patched_padded_output2_distributions)
-                histograms_intersection = torch.true_divide(minima.sum(axis=2), patched_padded_output2_distributions.sum(axis=2)).view(bs,h,w)
+                # minima = torch.minimum(patched_padded_output1_distributions, patched_padded_output2_distributions)
+                # histograms_intersection = torch.true_divide(minima.sum(axis=2), patched_padded_output2_distributions.sum(axis=2)).view(bs,h,w)
                 # print(f"min:{histograms_intersection.min()} max: {histograms_intersection.max()}")
                 # print(histograms_intersection.shape)
                 # exit()
-                patched_diff_change_features = torch.sqrt(torch.pow(patched_padded_output1_distributions - patched_padded_output2_distributions, 2).sum(axis=2)).view(bs,h,w)
+                # patched_diff_change_features = torch.sqrt(torch.pow(patched_padded_output1_distributions - patched_padded_output2_distributions, 2).sum(axis=2)).view(bs,h,w)
+                patched_diff_change_features = torch.abs((patched_padded_output1_distributions - patched_padded_output2_distributions).sum(axis=2)).view(bs,h,w)
 
                 diff_change_features = torch.abs((output1-output2).sum(axis=1))
                 # diff_change_features = torch.sqrt(torch.pow(output1 - output2, 2).sum(axis=1))#.view(bs,h,w)
-                inference_otsu_coeff = 1.5
-                inference_otsu_threshold = inference_otsu_coeff*otsu(histograms_intersection.cpu().detach().numpy(), nbins=256)
+                inference_otsu_coeff = 1.0
+                inference_otsu_threshold = inference_otsu_coeff*otsu(patched_diff_change_features.cpu().detach().numpy(), nbins=256)
                 # print(inference_otsu_threshold)
-                diff_change_thresholded = torch.zeros_like(histograms_intersection)
-                diff_change_thresholded[histograms_intersection < inference_otsu_threshold] = 1
+                diff_change_thresholded = torch.zeros_like(patched_diff_change_features)
+                diff_change_thresholded[patched_diff_change_features > inference_otsu_threshold] = 1
 
                 pred1 = masks1.max(1)[1].cpu().detach()  # .numpy()
                 pred2 = masks2.max(1)[1].cpu().detach()  # .numpy()
@@ -562,9 +589,9 @@ class Trainer(object):
                             # gt_mask_show2 = mask2.cpu().detach()[batch_index_to_show,:,:].numpy().squeeze()
                             distances_show = diff_change_features.cpu().detach()[batch_index_to_show, :, :].numpy()
                             distances_show = (distances_show - distances_show.min())/(distances_show.max() - distances_show.min())
-                            histograms_intersection_show = histograms_intersection.cpu().detach()[batch_index_to_show, :, :].numpy()
-                            histograms_intersection_show = (histograms_intersection_show - histograms_intersection_show.min())/(histograms_intersection_show.max() - histograms_intersection_show.min())
-                            print(f"min:{histograms_intersection_show.min()} max: {histograms_intersection_show.max()}")
+                            patched_diff_change_features_show = patched_diff_change_features.cpu().detach()[batch_index_to_show, :, :].numpy()
+                            patched_diff_change_features_show = (patched_diff_change_features_show - patched_diff_change_features_show.min())/(patched_diff_change_features_show.max() - patched_diff_change_features_show.min())
+                            # print(f"min:{patched_diff_change_features_show.min()} max: {patched_diff_change_features_show.max()}")
                             fp_tp_fn_prediction_mask = gt_mask_show1 + (2*change_detection_show)
 
                             logits_show1[logits_show1 == -1] = 0
@@ -599,7 +626,7 @@ class Trainer(object):
 
                             ax8.imshow(distances_show)
 
-                            ax9.imshow(histograms_intersection_show)
+                            ax9.imshow(patched_diff_change_features_show)
 
                             ax1.axis('off')
                             ax2.axis('off')
@@ -616,7 +643,7 @@ class Trainer(object):
                                 ax5.set_title(f"Prediction overlaid 2", fontsize=config['visualization']['font_size'])
                                 ax6.set_title(f"Change Detection Prediction", fontsize=config['visualization']['font_size'])
                                 ax8.set_title(f"Distances min:{distances_show.min():.2f}, max:{distances_show.max():.2f}", fontsize=config['visualization']['font_size'])
-                                ax9.set_title(f"Histogram Intersection, min:{histograms_intersection_show.min():.2f}, max:{histograms_intersection_show.max():.2f}", fontsize=config['visualization']['font_size'])
+                                # ax9.set_title(f"Histogram Intersection, min:{histograms_intersection_show.min():.2f}, max:{histograms_intersection_show.max():.2f}", fontsize=config['visualization']['font_size'])
                                 figure.suptitle(
                                     f"Epoch: {epoch+1}\nGT labels for classification: {classes_in_gt}, \nunique in change predictions: {np.unique(change_detection_show)}\nunique in predictions1: {np.unique(logits_show1)}", fontsize=config['visualization']['font_size'])
 
@@ -774,6 +801,15 @@ if __name__ == "__main__":
     dset = kwcoco.CocoDataset(coco_fpath)
     sampler = ndsampler.CocoSampler(dset)
 
+
+    if config['training']['resume'] != False:
+        base_path = '/'.join(config['training']['resume'].split('/')[:-1])
+        pretrain_config_path = f"{base_path}/config.yaml"
+        pretrain_config = utils.load_yaml_as_dict(pretrain_config_path)
+        if not config['training']['model_feats_channels'] == pretrain_config_path['training']['model_feats_channels']:
+            print("the loaded model does not have the same number of features as configured in the experiment yaml file. Matching channel sizes to the loaded model instead.")
+        config['training']['model_feats_channels'] = pretrain_config_path['training']['model_feats_channels']
+
     # # print(sampler)
     # number_of_timestamps, h, w = 2, 300, 300
     window_dims = (config['data']['time_steps'], config['data']['image_size'], config['data']['image_size'])  # [t,h,w]
@@ -797,7 +833,8 @@ if __name__ == "__main__":
                         weight_std=config['training']['weight_std'],
                         beta=config['training']['beta'],
                         num_channels=config['training']['num_channels'],
-                        out_dim=config['training']['out_features_dim'])
+                        out_dim=config['training']['out_features_dim'],
+                        feats=config['training']['model_feats_channels'])
 
     # model = SupConResNet(name=config['training']['backbone'])
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
