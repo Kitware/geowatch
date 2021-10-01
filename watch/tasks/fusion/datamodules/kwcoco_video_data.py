@@ -220,6 +220,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.diff_inputs = diff_inputs
 
         self.input_stats = None
+        self.dataset_stats = None
 
         # will only correspond to train
         self.classes = None
@@ -342,9 +343,12 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                         num = self.normalize_inputs
                     else:
                         num = None
-                    self.input_stats = train_dataset.cached_input_stats(
+                    self.dataset_stats = train_dataset.cached_dataset_stats(
                         num=num, num_workers=self.num_workers,
                         batch_size=self.batch_size)
+
+                    # Hack for now:
+                    self.input_stats = self.dataset_stats
 
             if self.vali_kwcoco is not None:
                 # Explicit validation dataset should be prefered
@@ -1048,7 +1052,7 @@ class KWCocoVideoDataset(data.Dataset):
         }
         return item
 
-    def cached_input_stats(self, num=None, num_workers=0, batch_size=2):
+    def cached_dataset_stats(self, num=None, num_workers=0, batch_size=2):
         """
         Compute the normalization stats, and caches them
 
@@ -1062,18 +1066,18 @@ class KWCocoVideoDataset(data.Dataset):
             ('hashid', self.sampler.dset._build_hashid()),
             ('channels', self.input_channels.__json__()),
             # ('sample_shape', self.sample_shape),
-            ('depends_version', 6),  # bump if `compute_input_stats` changes
+            ('depends_version', 6),  # bump if `compute_dataset_stats` changes
         ])
         workdir = None
         cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends)
         input_stats = cacher.tryload()
         if input_stats is None or ub.argflag('--force-recompute-stats'):
-            input_stats = self.compute_input_stats(
+            input_stats = self.compute_dataset_stats(
                 num, num_workers=num_workers, batch_size=batch_size)
             cacher.save(input_stats)
         return input_stats
 
-    def compute_input_stats(self, num=None, num_workers=0, batch_size=2):
+    def compute_dataset_stats(self, num=None, num_workers=0, batch_size=2):
         """
         Args:
             num (int | None): number of input items to compute stats for
@@ -1086,7 +1090,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (2, 128, 128)
             >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=None)
-            >>> self.compute_input_stats()
+            >>> self.compute_dataset_stats()
 
         Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
@@ -1096,10 +1100,10 @@ class KWCocoVideoDataset(data.Dataset):
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (2, 128, 128)
             >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=None)
-            >>> self.compute_input_stats()
+            >>> self.compute_dataset_stats()
 
         CommandLine:
-            DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.datamodules.kwcoco_video_data KWCocoVideoDataset.compute_input_stats:1
+            DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.datamodules.kwcoco_video_data KWCocoVideoDataset.compute_dataset_stats:1
 
         Example:
             >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -1121,16 +1125,16 @@ class KWCocoVideoDataset(data.Dataset):
             >>> #channels = 'matseg_0|matseg_1|matseg_2|matseg_3|matseg_4'
             >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, neg_to_pos_ratio=1.0)
             >>> item = self[100]
-            >>> #self.compute_input_stats(num=10)
+            >>> #self.compute_dataset_stats(num=10)
             >>> num_workers = 14
             >>> num = 1000
             >>> batch_size = 6
-            >>> self.compute_input_stats(num=num, num_workers=num_workers, batch_size=batch_size)
+            >>> self.compute_dataset_stats(num=num, num_workers=num_workers, batch_size=batch_size)
 
         Ignore:
             # TODO: profile and optimize loading in ndsampler / kwcoco
             _ = xdev.profile_now(self.__getitem__)(0)
-            _ = xdev.profile_now(self.compute_input_stats)(num=10, num_workers=4, batch_size=1)
+            _ = xdev.profile_now(self.compute_dataset_stats)(num=10, num_workers=4, batch_size=1)
             tr = self.new_sample_grid['targets'][0]
             tr['channels'] = self.channels
             _ = xdev.profile_now(self.sampler.load_sample)(tr)

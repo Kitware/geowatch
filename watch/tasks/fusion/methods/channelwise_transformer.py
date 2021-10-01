@@ -479,7 +479,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> input_stats = datamodule.input_stats
             >>> input_channels = datamodule.input_channels
             >>> classes = datamodule.classes
-            >>> print('input_stats = {}'.format(ub.repr2(input_stats, nl=2)))
+            >>> print('input_stats = {}'.format(ub.repr2(input_stats, nl=3)))
             >>> print('input_channels = {}'.format(input_channels))
             >>> print('classes = {}'.format(classes))
             >>> # Choose subclass to test this with (does not cover all cases)
@@ -923,7 +923,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     'special:vidshapes8-multispectral', chip_size=32,
             >>>     batch_size=1, time_steps=2, num_workers=0)
             >>> datamodule.setup('fit')
-            >>> input_stats = datamodule.torch_datasets['train'].cached_input_stats()
+            >>> input_stats = datamodule.torch_datasets['train'].cached_dataset_stats()
             >>> classes = datamodule.torch_datasets['train'].classes
 
             >>> # Use one of our fusion.architectures in a test
