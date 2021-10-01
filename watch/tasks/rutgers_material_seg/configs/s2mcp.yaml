@@ -1,0 +1,63 @@
+# Ours
+# location: server
+location: local
+data:
+  type: semantic_seg
+  name: s2mcp
+  num_classes: 20
+  window_size: 7
+  image_size: 128
+  time_steps: 2
+  weights: []
+  channels: B01|B02|B03|B04|B05|B06|B07|B08|B09|B10|B11|B12|B8A
+  # channels: r|g|b
+  local:
+    model_save_dir: /home/native/projects/data/smart_watch/models/
+    train_dir: /media/native/data2/data/Sentinel2_change_detection_MTCP/data_S21C/
+    test_dir: /media/native/data2/data/Sentinel2_change_detection_MTCP/data_S21C/
+    coco_json: /media/native/data2/data/Sentinel2_change_detection_MTCP/data_S21C/train_data.kwcoco.json
+    val_dir:
+  server:
+    model_save_dir: /data4/peri/smart_watch/models/
+    train_dir: /data4/datasets/Sentinel2_change_detection_MTCP/data_S21C/
+    test_dir: /data4/datasets/Sentinel2_change_detection_MTCP/data_S21C/
+    val_dir: /data4/datasets/Sentinel2_change_detection_MTCP/data_S21C/
+    coco_json:  /data4/datasets/Sentinel2_change_detection_MTCP/data_S21C/train_data.kwcoco.json
+
+training:
+  backbone: 
+  model_name: shallow_seg
+  gn_n_groups: 32
+  num_channels: 13
+  out_features_dim: 10
+  weight_std: True
+  beta: False
+  pretrained: False
+  distributed: False
+  learning_rate: 0.002 # best: 0.00007
+  # resume: /home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-08-02-13:25-pretrain2/experiments_epoch_2_loss_0.22385694841647932_valmIoU_0_time_2021-08-02-14:01:34.pth
+  resume: False
+  train_val_test_split: [0.95, 0.02, 0.03]
+  epochs: 200
+  start_epoch: 0
+  batch_size: 12
+  drop_last_batch: True
+  momentum: 0.9
+  weight_decay: 0.0001
+  num_workers: 4
+  test_with_full_supervision: 1
+
+high_confidence_threshold:
+  train_cutoff: 0.2
+  val_cutoff: 0.2
+  train_low_cutoff: 0.0
+  val_low_cutoff: 0.0
+
+evaluation:
+  use_crf: False
+  crf_t: 1
+  crf_scale_factor: 1
+
+procedures:
+  train:  True
+  validate: False

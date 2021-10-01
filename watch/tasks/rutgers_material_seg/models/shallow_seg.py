@@ -103,14 +103,14 @@ class ShallowSeg(nn.Module):
     def __init__(self, num_channels=3, num_classes=3,
                  bilinear=True, pretrained=False,
                  beta=False, weight_std=False,
-                 num_groups=32, out_dim=128):
+                 num_groups=32, out_dim=128, feats=[64, 64, 128, 256, 512]):
         super(ShallowSeg, self).__init__()
         self.num_channels = num_channels
         self.num_classes = num_classes
         self.bilinear = bilinear
         self.out_dim = out_dim
-        # feats = [64,128,256,512,1024]
-        feats = [32, 32, 64, 64, 128]
+        # feats = [64, 64, 128, 256, 512]
+        # feats = [32, 32, 64, 64, 128]
 
         self.inc = DoubleConv(num_channels, feats[0])
         self.down1 = Down(feats[0], feats[1])

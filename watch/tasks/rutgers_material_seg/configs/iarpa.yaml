@@ -4,7 +4,7 @@ location: local
 data:
   type: semantic_seg
   name: iarpa
-  num_classes: 15
+  num_classes: 20
   window_size: 7
   image_size: 128
   time_steps: 2
@@ -28,14 +28,14 @@ training:
   model_name: shallow_seg
   gn_n_groups: 32
   num_channels: 6
-  out_features_dim: 16
+  out_features_dim: 10
   weight_std: True
   beta: False
   pretrained: False
   distributed: False
   learning_rate: 0.001 # best: 0.00007
-  # resume: /home/native/projects/data/smart_watch/models/experiments_iarpa/tasks_experiments_2021-06-30-17:49/experiments_epoch_11_loss_15182018.848935883_valmIoU_0.4333376202246598_time_2021-06-30-17:57:50.pth
-  resume: False
+  resume: /home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-08-07-19:23/experiments_epoch_101_loss_0.023881608880887435_valmIoU_0.4973623793928845_time_2021-08-09-07:50:57.pth
+  # resume: False
   train_val_test_split: [0.95, 0.02, 0.03]
   epochs: 200
   start_epoch: 0
