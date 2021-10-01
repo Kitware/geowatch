@@ -67,4 +67,4 @@ python -m watch.tasks.fusion.fit \
         --train_dataset=$TRAIN_FPATH \
          --vali_dataset=$VALI_FPATH \
          --test_dataset=$TEST_FPATH \
-         --num_sanity_val_steps=0  --force-recompute-stats
+         --num_sanity_val_steps=0  

@@ -132,6 +132,7 @@ class MultimodalTransformer(pl.LightningModule):
                     heuristic_weights = {}
                 else:
                     total_freq = np.array(list(self.class_freq.values()))
+                    print('total_freq = {!r}'.format(total_freq))
                     cat_weights = _class_weights_from_freq(total_freq)
                     heuristic_weights = ub.dzip(self.class_freq.keys(), cat_weights)
 
@@ -992,6 +993,12 @@ class MultimodalTransformer(pl.LightningModule):
 
 def _class_weights_from_freq(total_freq, mode='median-idf'):
     """
+    Example:
+        >>> from watch.tasks.fusion.methods.channelwise_transformer import _class_weights_from_freq
+        >>> total_freq = np.array([19503736, 92885, 883379, 0, 0])
+        >>> _class_weights_from_freq(total_freq, mode='idf')
+        >>> _class_weights_from_freq(total_freq, mode='median-idf')
+        >>> _class_weights_from_freq(total_freq, mode='log-median-idf')
     """
     import numpy as np
     def logb(arr, base):
@@ -1021,7 +1028,18 @@ def _class_weights_from_freq(total_freq, mode='median-idf'):
     if len(nonzero_freq):
         freq[freq == 0] = nonzero_freq.min() / 2
 
-    if mode == 'median-idf':
+    if mode == 'idf':
+        # There is no difference and this and median after reweighting
+        weights = (1 / freq)
+        mask &= np.isfinite(weights)
+    elif mode == 'name-me':
+        z = freq[mask]
+        a = ((1 - np.eye(len(z))) * z[:, None]).sum(axis=0)
+        b = a / z
+        c = b / b.max()
+        weights = np.zeros(len(freq))
+        weights[mask] = c
+    elif mode == 'median-idf':
         weights = (middle_value / freq)
         mask &= np.isfinite(weights)
     elif mode == 'log-median-idf':

@@ -1207,9 +1207,13 @@ class KWCocoVideoDataset(data.Dataset):
                         running.update(val.astype(np.float64))
 
             if timer.first or timer.toc() > 5:
+                from watch.utils.slugify_ext import smart_truncate
+                intermediate = ub.sorted_vals(ub.dzip(classes, total_freq), reverse=True)
+                intermediate_text = ub.repr2(intermediate, compact=1)
+                intermediate_text = smart_truncate(intermediate_text, max_length=40, trunc_loc=0.8)
                 curr = ub.dict_isect(running.summarize(keepdims=False), {'mean', 'std', 'max', 'min'})
                 curr = ub.map_vals(float, curr)
-                text = ub.repr2(curr, compact=1, precision=1, nl=0)
+                text = ub.repr2(curr, compact=1, precision=1, nl=0) + ' ' + intermediate_text
                 prog.set_postfix_str(text)
                 timer.first = 0
                 timer.tic()
