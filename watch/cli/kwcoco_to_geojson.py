@@ -159,10 +159,10 @@ def geojson_feature(img, anns, coco_dset):
             assert len(set(values)) == 1
             properties[key] = str(values[0])
 
-        # take average score
-        # TODO do something smarter like weighting by each polygon's area
-        properties['score'] = np.mean(
-            list(map(float, properties_list['score'])))
+        # take area-weighted average score
+        properties['score'] = np.average(
+            list(map(float, properties_list['score'])),
+            weights=[geom.area for geom in geometry_list])
 
         return properties
 
@@ -391,6 +391,10 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id=None):
         sub_dset = coco_dset.subset(gids=coco_dset.index.vidid_to_gids[vidid])
 
         for trackid in sub_dset.index.trackid_to_aids:
+            
+            # TODO these should have been eliminated in normalize.apply_tracks
+            if trackid == None:
+                continue
 
             site = track_to_site(sub_dset, trackid, _region_id, mgrs)
             sites.append(site)
@@ -418,7 +422,7 @@ def main(args):
     # Normalize
     coco_dset = watch.tasks.tracking.normalize.normalize(
         coco_dset,
-        track_fn=watch.tasks.tracking.from_polygon.from_overlap,
+        track_fn=(lambda x: x),  # no-op function to use existing tracks
         overwrite=False)
 
     # Convert kwcoco to sites

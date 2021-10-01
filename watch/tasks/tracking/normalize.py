@@ -90,7 +90,8 @@ def dedupe_annots(coco_dset):
         annots = coco_dset.annots()
         eq_keys = ['image_id', 'category_id', 'track_id', 'segmentation']
         groups_dict = ub.group_items(
-            annots.aids, zip(*(map(str, annots.get(k)) for k in eq_keys)))
+            annots.aids,
+            zip(*(map(str, annots.get(k, None)) for k in eq_keys)))
         aids_to_remove = itertools.chain.from_iterable(
             aids[1:] for aids in groups_dict.values())
 
@@ -210,6 +211,7 @@ def apply_tracks(coco_dset, track_fn, overwrite):
     Returns:
         modified coco_dset
     '''
+    # first, for each video, apply a track_fn from from_heatmap or from_polygon
     for gids in coco_dset.index.vidid_to_gids.values():
         sub_dset = coco_dset.subset(gids=gids)
         if overwrite:
@@ -221,8 +223,12 @@ def apply_tracks(coco_dset, track_fn, overwrite):
                 annots = sub_dset.annots()
                 annots.set(
                     'track_id',
-                    np.where(existing_tracks == None, annots.get('track_id'),
-                             existing_tracks))
+                    np.where(existing_tracks == None,
+                             annots.get('track_id', None), existing_tracks))
+
+    # then cleanup leftover untracked annots
+    coco_dset.remove_annotations(
+        filter(lambda ann: 'track_id' not in ann, coco_dset.anns.values()))
 
     return coco_dset
 
@@ -301,7 +307,7 @@ def normalize_phases(coco_dset):
     # TODO break out these heuristics
     for trackid in coco_dset.index.trackid_to_aids.keys():
         annots = coco_dset.annots(trackid=trackid)
-        cats = np.array(annots.cnames)
+        cats = annots.cnames
         if 'change' in cats:
             if len(set(cats) - {'change'}) > 0:
                 cids = np.array(annots.cids)
@@ -313,8 +319,9 @@ def normalize_phases(coco_dset):
                            [ix_to_cid[int(ix)] for ix in np.round(interp)])
             else:
                 gids_first_half, _ = np.split(
-                    np.array(coco_dset.index._set_sorted_by_frame_index(
-                        coco_dset.annots(trackid=trackid).gids)), 2)
+                    np.array(
+                        coco_dset.index._set_sorted_by_frame_index(
+                            coco_dset.annots(trackid=trackid).gids)), 2)
                 siteprep_cid = coco_dset.name_to_cat['Site Preparation']['id']
                 active_cid = coco_dset.name_to_cat['Active Construction']['id']
                 annots.set('category_id', [
