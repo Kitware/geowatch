@@ -4,7 +4,7 @@ location: local
 data:
   type: semantic_seg
   name: onera
-  num_classes: 200
+  num_classes: 30
   window_size: 5
   image_size: 128
   time_steps: 2
@@ -27,9 +27,9 @@ data:
     test_coco_json: /data4/datasets/smart_watch_dvc/extern/onera_2018/onera_test.kwcoco.json
 
 training:
-  backbone: 
-  model_name: shallow_seg
-  model_feats_channels: [64, 64, 128, 256, 512] #[32, 32, 64, 64, 128], [64, 64, 128, 256, 512] # this needs to match the correct number of layers in the model
+  backbone: resnet101 #resnet101, resnet50
+  model_name: deeplabWS #shallow_seg, deeplabWS
+  model_feats_channels: [32, 32, 64, 128, 256] #[32, 32, 64, 64, 128], [64, 64, 128, 256, 512] # this needs to match the correct number of layers in the model
   gn_n_groups: 32
   num_channels: 13
   out_features_dim: 10
@@ -38,12 +38,12 @@ training:
   pretrained: False
   distributed: False
   learning_rate: 0.002 # best: 0.00007
-  resume: /home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-09-30-12:39/experiments_epoch_0_loss_13.832722841265454_valmIoU_0.2637822904832666_time_2021-09-30-13:02:34.pth
-  # resume: False
+  # resume: /home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-09-30-12:39/experiments_epoch_0_loss_13.832722841265454_valmIoU_0.2637822904832666_time_2021-09-30-13:02:34.pth
+  resume: False
   train_val_test_split: [0.95, 0.02, 0.03]
   epochs: 200
   start_epoch: 0
-  batch_size: 1
+  batch_size: 4
   drop_last_batch: True
   momentum: 0.9
   weight_decay: 0.0001

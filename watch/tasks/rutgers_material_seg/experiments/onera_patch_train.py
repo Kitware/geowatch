@@ -1034,6 +1034,13 @@ if __name__ == "__main__":
     if config['visualization']['train_imshow'] or config['visualization']['val_imshow']:
         matplotlib.use('TkAgg')
 
+    if config['training']['resume'] != False:
+        base_path = '/'.join(config['training']['resume'].split('/')[:-1])
+        pretrain_config_path = f"{base_path}/config.yaml"
+        pretrain_config = utils.load_yaml_as_dict(pretrain_config_path)
+        if not config['training']['model_feats_channels'] == pretrain_config_path['training']['model_feats_channels']:
+            print("the loaded model does not have the same number of features as configured in the experiment yaml file. Matching channel sizes to the loaded model instead.")
+        config['training']['model_feats_channels'] = pretrain_config_path['training']['model_feats_channels']
 
     if config['data']['name'] == 'watch' or config['data']['name'] == 'onera':
         coco_fpath = ub.expandpath(config['data'][config['location']]['train_coco_json'])
