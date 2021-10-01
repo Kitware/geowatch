@@ -87,6 +87,9 @@ class BatchPlotter(pl.callbacks.Callback):
             # must have datamodule to draw batches
             return
 
+        import xdev
+        xdev.embed()
+
         canvas = datamodule.draw_batch(batch, outputs=outputs)
 
         canvas = np.nan_to_num(canvas)

@@ -20,7 +20,7 @@ ARCH=smt_it_joint_p8
 #CHANNELS="blue|green|red|nir|swir16|coastal"
 CHANNELS="blue|green|red|nir|swir16|swir22"
 
-EXPERIMENT_NAME=ActivityClf_${ARCH}_raw_v018
+EXPERIMENT_NAME=ActivityClf_${ARCH}_raw_v019
 DATASET_CODE=Drop1_Raw_Holdout
 
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
@@ -41,8 +41,8 @@ python -m watch.tasks.fusion.fit \
     --method="MultimodalTransformer" \
     --arch_name=$ARCH \
     --chip_size=64 \
-    --chip_overlap=0.5 \
-    --time_steps=5 \
+    --chip_overlap=0.86 \
+    --time_steps=7 \
     --time_sampling=dilate_template \
     --batch_size=6 \
     --accumulate_grad_batches=10 \
@@ -52,13 +52,13 @@ python -m watch.tasks.fusion.fit \
     --global_class_weight=1.0 \
     --global_change_weight=0.0 \
     --negative_change_weight=0.05 \
-    --change_loss='cce' \
+    --change_loss='dicefocal' \
     --class_loss='cce' \
     --diff_inputs=False \
     --max_epochs=400 \
     --patience=400 \
     --gpus=1  \
-    --learning_rate=1e-3 \
+    --learning_rate=1e-2 \
     --weight_decay=1e-5 \
     --dropout=0.1 \
     --window_size=8 \
