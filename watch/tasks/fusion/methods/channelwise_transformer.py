@@ -87,11 +87,11 @@ class MultimodalTransformer(pl.LightningModule):
         if input_stats is not None and 'input_stats' in input_stats:
             dataset_stats = input_stats
             input_stats = dataset_stats['input_stats']
-            catname_freq = dataset_stats['catname_freq']
+            class_freq = dataset_stats['class_freq']
         else:
-            catname_freq = None
+            class_freq = None
 
-        self.catname_freq = catname_freq
+        self.class_freq = class_freq
 
         # Handle channel-wise input mean/std in the network (This is in
         # contrast to common practice where it is done in the dataloader)
@@ -128,12 +128,12 @@ class MultimodalTransformer(pl.LightningModule):
         if isinstance(class_weights, str):
             if class_weights == 'auto':
                 import numpy as np
-                if self.catname_freq is None:
+                if self.class_freq is None:
                     heuristic_weights = {}
                 else:
-                    total_freq = np.array(list(self.catname_freq.values()))
+                    total_freq = np.array(list(self.class_freq.values()))
                     cat_weights = _class_weights_from_freq(total_freq)
-                    heuristic_weights = ub.dzip(self.catname_freq.keys(), cat_weights)
+                    heuristic_weights = ub.dzip(self.class_freq.keys(), cat_weights)
 
                 heuristic_weights.update({
                     'ignore': 0.00,

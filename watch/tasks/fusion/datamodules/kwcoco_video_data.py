@@ -1214,11 +1214,8 @@ class KWCocoVideoDataset(data.Dataset):
                 timer.first = 0
                 timer.tic()
 
-        # TODO: do stuff with this
-        # peritem_weight = _class_weights_from_freq(total_freq, mode='median-idf')
-        # cname_to_weight = ub.dzip(classes, peritem_weight)
-        catname_to_freq = ub.dzip(classes, total_freq)
-        # print('TODO: save measured weights = ' + ub.repr2(cname_to_weight, align=':'))
+        # Return the raw counts and let the model choose how to handle it
+        class_freq = ub.dzip(classes, total_freq)
 
         input_stats = {}
         for key, running in channel_stats.items():
@@ -1232,7 +1229,7 @@ class KWCocoVideoDataset(data.Dataset):
         # TODO: Make this function return DATASET_STATS
         dataset_stats = {
             'input_stats': input_stats,
-            'catname_to_freq': catname_to_freq,
+            'class_freq': class_freq,
         }
         return dataset_stats
 
