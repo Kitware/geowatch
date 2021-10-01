@@ -71,20 +71,27 @@ def baseline_framework_ingress(input_path,
     if requester_pays:
         aws_base_command.extend(['--request-payer', 'requester'])
 
+    def _load_input(path):
+        try:
+            with open(path) as f:
+                input_json = json.load(f)
+            return input_json['stac'].get('features', [])
+        except json.decoder.JSONDecodeError:
+            # Support for simple newline separated STAC items
+            with open(path) as f:
+                return [json.loads(line) for line in f]
+
     if input_path.startswith('s3'):
         with tempfile.NamedTemporaryFile() as temporary_file:
             subprocess.run(
                 [*aws_base_command, input_path, temporary_file.name],
                 check=True)
 
-            with open(temporary_file.name) as f:
-                input_json = json.load(f)
+            input_stac_items = _load_input(temporary_file.name)
     else:
-        with open(input_path) as f:
-            input_json = json.load(f)
+        input_stac_items = _load_input(input_path)
 
-    input_stac = input_json['stac']
-    for feature in input_stac.get('features', ()):
+    for feature in input_stac_items:
         # Adding a reference back to the original STAC
         # item if not already present
         self_link = None
