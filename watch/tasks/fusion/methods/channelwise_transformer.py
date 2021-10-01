@@ -134,7 +134,9 @@ class MultimodalTransformer(pl.LightningModule):
                     total_freq = np.array(list(self.class_freq.values()))
                     print('total_freq = {!r}'.format(total_freq))
                     cat_weights = _class_weights_from_freq(total_freq)
-                    heuristic_weights = ub.dzip(self.class_freq.keys(), cat_weights)
+                    print('cat_weights = {!r}'.format(cat_weights))
+                    catnames = list(self.class_freq.keys())
+                    heuristic_weights = ub.dzip(catnames, cat_weights)
                 print('heuristic_weights = {}'.format(ub.repr2(heuristic_weights, nl=1)))
 
                 heuristic_weights.update({
@@ -998,7 +1000,7 @@ def _class_weights_from_freq(total_freq, mode='median-idf'):
         >>> from watch.tasks.fusion.methods.channelwise_transformer import _class_weights_from_freq
         >>> total_freq = np.array([19503736, 92885, 883379, 0, 0])
         >>> _class_weights_from_freq(total_freq, mode='idf')
-        >>> _class_weights_from_freq(total_freq, mode='median-idf')
+        >>> print(_class_weights_from_freq(total_freq, mode='median-idf'))
         >>> _class_weights_from_freq(total_freq, mode='log-median-idf')
     """
     import numpy as np
