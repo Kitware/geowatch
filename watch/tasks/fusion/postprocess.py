@@ -1,17 +1,4 @@
-
 def mask_to_scored_polygons(probs, thresh):
-    """
-    Example:
-        >>> from watch.tasks.fusion.postprocess import *  # NOQA
-        >>> import kwimage
-        >>> probs = kwimage.Heatmap.random(dims=(64, 64), rng=0).data['class_probs'][0]
-        >>> thresh = 0.5
-        >>> poly1, score1 = list(mask_to_scored_polygons(probs, thresh))[0]
-        >>> # xdoctest: +IGNORE_WANT
-        >>> import kwplot
-        >>> kwplot.autompl()
-        >>> kwplot.imshow(probs > 0.5)
-    """
     import kwimage
     import numpy as np
     # Threshold scores
@@ -26,7 +13,7 @@ def mask_to_scored_polygons(probs, thresh):
         # Ensure w/h are positive
         box.data[:, 2:4] = np.maximum(box.data[:, 2:4], 1)
         x, y, w, h = box.data[0]
-        rel_poly = poly.translate((-x, -y))
+        rel_poly = poly.translate(-x, -y)
         rel_mask = rel_poly.to_mask((h, w)).data
         # Slice out the corresponding region of probabilities
         rel_probs = probs[y:y + h, x:x + w]
@@ -35,7 +22,7 @@ def mask_to_scored_polygons(probs, thresh):
         yield poly, score
 
 
-def accumulate_temporal_predictions_simple_v1(result_dataset):
+def accumulate_temporal_predictions_simple_v1(pred_fpath='/home/local/KHQ/usman.rafique/data/dvc-repos/smart_watch_dvc/training/horologic/usman.rafique/Drop1_TeamFeat_Holdout/runs/DirectCD_smt_it_joint_p8_teamfeat_v010/pred/pred.kwcoco.json'):
     """
     find $HOME/remote/yardrat/smart_watch_dvc/training/yardrat/jon.crall/ -iname "package_*.pt"
 
@@ -96,12 +83,16 @@ def accumulate_temporal_predictions_simple_v1(result_dataset):
     """
     from watch.utils import kwcoco_extensions
     from watch.utils import util_kwimage
-    key = 'change_prob'
-    dset = result_dataset
-
+    import kwcoco
     import kwarray
     import ubelt as ub
 
+    # This pred_fpath is the file is written using the model package on DVC: 
+    # data/dvc-repos/smart_watch_dvc/models/fusion/checkpoint_DirectCD_smt_it_joint_p8_raw9common_v5_tune_from_onera_epoch=2-step=2147.ckpt
+    result_dataset = kwcoco.CocoDataset.coerce(ub.expandpath(pred_fpath))
+    dset = result_dataset
+
+    key = 'change_prob'
     for vidid, video in dset.index.videos.items():
         print('video', ub.dict_isect(video, ['width', 'height']))
         running = kwarray.RunningStats()
@@ -120,7 +111,7 @@ def accumulate_temporal_predictions_simple_v1(result_dataset):
         modulated_probs = probs * hard_probs
 
         scored_polys = list(mask_to_scored_polygons(modulated_probs, thresh))
-
+        print('number of polygons:', len(scored_polys))
         # Add each polygon to every images as a track
         import kwimage
         change_cid = dset.index.name_to_cat['change']['id']
@@ -209,3 +200,5 @@ def _checkkalman():
 
     # X2, P2 = kalman.update(X1, P=P1, z=Z1, R=R)
     # pass
+if __name__ == '__main__':
+    accumulate_temporal_predictions_simple_v1()
