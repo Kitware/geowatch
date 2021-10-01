@@ -33,6 +33,9 @@ class MultimodalTransformer(pl.LightningModule):
         - [ ] Change name MultimodalTransformer -> FusionModel
         - [ ] Move parent module methods -> models
 
+    CommandLine:
+        xdoctest -m /home/joncrall/code/watch/watch/tasks/fusion/methods/channelwise_transformer.py MultimodalTransformer
+
     Example:
         >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
         >>> from watch.tasks.fusion import datamodules
@@ -62,6 +65,7 @@ class MultimodalTransformer(pl.LightningModule):
                  optimizer='RAdam',
                  learning_rate=1e-3,
                  weight_decay=0.,
+                 class_weights='auto',
                  positive_change_weight=1.,
                  negative_change_weight=1.,
                  input_stats=None,
@@ -111,37 +115,102 @@ class MultimodalTransformer(pl.LightningModule):
         # ~/code/watch/watch/tasks/fusion/methods/channelwise_transformer.py
         import monai
         # self.change_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
-        if class_loss == 'focal':
-            self.class_criterion = monai.losses.FocalLoss(reduction='mean', to_onehot_y=False)
+        if isinstance(class_weights, str):
+            if class_weights == 'auto':
+                _HEURISTIC_CATEGORIES = {
+                    'background': {'background', 'No Activity', 'Post Construction'},
+                    'ignore': {'ignore', 'Unknown', 'clouds'},
+                }
+                class_weights = []
+                for catname in self.classes:
+                    if catname in _HEURISTIC_CATEGORIES['background']:
+                        class_weights.append(0.05)
+                    elif catname in _HEURISTIC_CATEGORIES['ignore']:
+                        class_weights.append(0.0)
+                    else:
+                        class_weights.append(1.0)
+                class_weights = torch.FloatTensor(class_weights)
+                print('AUTO class_weights = {!r}'.format(class_weights))
+            else:
+                raise KeyError(class_weights)
         else:
-            # self.class_criterion = nn.CrossEntropyLoss()
-            # self.class_criterion = nn.BCEWithLogitsLoss()
-            raise NotImplementedError
+            raise NotImplementedError(class_weights)
+        self.class_weights = class_weights
+        self.change_weights = torch.FloatTensor([
+            self.negative_change_weight,
+            self.positive_change_weight
+        ])
 
-        # self.change_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
-        if self.change_loss.lower() == 'cce':
-            self.change_criterion = torch.nn.CrossEntropyLoss(
-                weight=torch.FloatTensor([
-                    self.negative_change_weight,
-                    self.positive_change_weight
-                ]),
-                reduction='mean')
-            self.change_criterion_target_encoding = 'onehot'
-            self.change_criterion_logit_shape = '(b t h w) c'
-            self.change_criterion_target_shape = '(b t h w)'
-        elif self.change_loss.lower() == 'dicefocal':
-            # TODO: can we apply weights here?
-            self.change_criterion = monai.losses.DiceFocalLoss(
-                # weight=torch.FloatTensor([self.negative_change_weight, self.positive_change_weight]),
-                sigmoid=True,
-                to_onehot_y=False,
-                reduction='mean')
-            self.change_criterion_target_encoding = 'index'
-            self.change_criterion_needs_flat = False
-            self.change_criterion_logit_shape = 'b c h w t'
-            self.change_criterion_target_shape = 'b c h w t'
-        else:
-            raise NotImplementedError
+        def construct_loss(loss_code, weights):
+            if class_loss == 'cce':
+                criterion = torch.nn.CrossEntropyLoss(
+                    weight=weights, reduction='mean')
+                target_encoding = 'index'
+                logit_shape = '(b t h w) c'
+                target_shape = '(b t h w)'
+            elif class_loss == 'focal':
+                criterion = monai.losses.FocalLoss(
+                    reduction='mean', to_onehot_y=False, weight=weights)
+
+                target_encoding = 'onehot'
+                logit_shape = 'b c h w t'
+                target_shape = 'b c h w t'
+
+            elif self.change_loss.lower() == 'dicefocal':
+                # TODO: can we apply weights here?
+                criterion = monai.losses.DiceFocalLoss(
+                    # weight=torch.FloatTensor([self.negative_change_weight, self.positive_change_weight]),
+                    sigmoid=True,
+                    to_onehot_y=False,
+                    reduction='mean')
+                target_encoding = 'onehot'
+                logit_shape = 'b c h w t'
+                target_shape = 'b c h w t'
+            else:
+                # self.class_criterion = nn.CrossEntropyLoss()
+                # self.class_criterion = nn.BCEWithLogitsLoss()
+                raise NotImplementedError(class_loss)
+            return criterion, target_encoding, logit_shape, target_shape
+
+        (criterion, target_encoding,
+         logit_shape, target_shape) = construct_loss(self.class_loss,
+                                                     self.class_weights)
+        self.class_criterion = criterion
+        self.class_criterion_target_encoding = target_encoding
+        self.class_criterion_logit_shape = logit_shape
+        self.class_criterion_target_shape = target_shape
+
+        (criterion, target_encoding,
+         logit_shape, target_shape) = construct_loss(
+             change_loss, self.change_weights)
+        self.change_criterion = criterion
+        self.change_criterion_target_encoding = target_encoding
+        self.change_criterion_logit_shape = logit_shape
+        self.change_criterion_target_shape = target_shape
+
+        # # self.change_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
+        # if self.change_loss.lower() == 'cce':
+        #     self.change_criterion = torch.nn.CrossEntropyLoss(
+        #         weight=torch.FloatTensor([
+        #             self.negative_change_weight,
+        #             self.positive_change_weight
+        #         ]),
+        #         reduction='mean')
+        #     self.change_criterion_target_encoding = 'onehot'
+        #     self.change_criterion_logit_shape = '(b t h w) c'
+        #     self.change_criterion_target_shape = '(b t h w)'
+        # elif self.change_loss.lower() == 'dicefocal':
+        #     # TODO: can we apply weights here?
+        #     self.change_criterion = monai.losses.DiceFocalLoss(
+        #         # weight=torch.FloatTensor([self.negative_change_weight, self.positive_change_weight]),
+        #         sigmoid=True,
+        #         to_onehot_y=False,
+        #         reduction='mean')
+        #     self.change_criterion_target_encoding = 'index'
+        #     self.change_criterion_logit_shape = 'b c h w t'
+        #     self.change_criterion_target_shape = 'b c h w t'
+        # else:
+        #     raise NotImplementedError
 
         # self.change_criterion = nn.BCEWithLogitsLoss(
         #         pos_weight=torch.ones(1) * pos_weight)
@@ -234,8 +303,10 @@ class MultimodalTransformer(pl.LightningModule):
         parser.add_argument("--optimizer", default='RAdam', type=str, help='Optimizer name supported by the netharn API')
         parser.add_argument("--learning_rate", default=1e-3, type=float)
         parser.add_argument("--weight_decay", default=0., type=float)
+
         parser.add_argument("--positive_change_weight", default=1.0, type=float)
         parser.add_argument("--negative_change_weight", default=1.0, type=float)
+        parser.add_argument("--class_weights", default='auto', type=str, help='class weighting strategy')
 
         # Model names define the transformer encoder used by the method
         available_encoders = list(transformer.encoder_configs.keys())
@@ -346,7 +417,7 @@ class MultimodalTransformer(pl.LightningModule):
         }
         return logits
 
-    def overfit(self):
+    def overfit(self, batch):
         """
         Overfit script and demo
 
@@ -393,14 +464,20 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     #arch_name='smt_it_stm_p8',
             >>>     attention_impl='performer',
             >>>     change_loss='dicefocal',
+            >>>     #class_loss='cce',
+            >>>     class_loss='dicefocal',
             >>>     input_stats=input_stats,
             >>>     positive_change_weight=1.0,
             >>>     negative_change_weight=0.05,
+            >>>     class_weights='auto',
             >>>     global_class_weight=1.00,
-            >>>     global_change_weight=1.00,
+            >>>     global_change_weight=0.00,
             >>>     classes=classes, input_channels=input_channels)
             >>> self.datamodule = datamodule
-
+            >>> # Run one visualization
+            >>> loader = datamodule.train_dataloader()
+            >>> batch = next(iter(loader))
+            >>> self.overfit(batch)
         """
         import kwplot
         from watch.utils.slugify_ext import smart_truncate
@@ -409,15 +486,16 @@ class MultimodalTransformer(pl.LightningModule):
         import xdev
         import kwimage
         # from os.path import join
+        kwplot.autompl(force='Qt5Agg')
+
         sns = kwplot.autosns()
         datamodule = self.datamodule
 
-        loader = datamodule.train_dataloader()
         device = 0
         self = self.to(device)
 
-        # Run one visualization
-        batch = next(iter(loader))
+        # loader = datamodule.train_dataloader()
+        # batch = next(iter(loader))
         walker = ub.IndexableWalker(batch)
         for path, val in walker:
             if isinstance(val, torch.Tensor):
@@ -617,13 +695,12 @@ class MultimodalTransformer(pl.LightningModule):
                 change_pred_input = einops.rearrange(
                     change_logits,
                     'b t h w c -> ' + self.change_criterion_logit_shape).contiguous()
-                if self.change_criterion_target_encoding == 'onehot':
+                if self.change_criterion_target_encoding == 'index':
                     change_true_cxs = true_changes.long()
                     change_true_input = einops.rearrange(
                         change_true_cxs,
                         'b t h w -> ' + self.change_criterion_target_shape).contiguous()
-
-                elif self.change_criterion_target_encoding == 'index':
+                elif self.change_criterion_target_encoding == 'onehot':
                     # Note: 1HE is much easier to work with
                     change_true_ohe = kwarray.one_hot_embedding(true_changes.long(), 2, dim=-1)
                     change_true_input = einops.rearrange(
@@ -637,24 +714,44 @@ class MultimodalTransformer(pl.LightningModule):
                 # pixel. This would let us upweight particular instances
                 # and also ignore regions by setting the weights to zero.
                 # mask = einops.rearrange(valids_, 'b t h w c -> ' + self.change_criterion_logit_shape, c=1)
+                # print('change_pred_input.shape = {!r}'.format(change_pred_input.shape))
+                # print('change_true_input.shape = {!r}'.format(change_true_input.shape))
                 change_loss = self.change_criterion(
                     change_pred_input,
                     change_true_input
-                    # change_pred_input * mask,
-                    # change_true_input * mask
                 )
-
                 # num_change_states = 2
                 # true_change_ohe = kwarray.one_hot_embedding(true_changes.long(), num_change_states, dim=-1).float()
                 # change_loss = self.change_criterion(change_logits, true_change_ohe).mean()
                 # change_loss = self.change_criterion(change_logits, true_changes.float()).mean()
                 item_loss_parts['change'] = self.global_change_weight * change_loss
 
-                true_class_ohe = kwarray.one_hot_embedding(true_class.long(), self.num_classes, dim=-1).float()
-                class_loss = self.class_criterion(class_logits, true_class_ohe).mean()
-                # class_loss = torch.nn.functional.binary_cross_entropy_with_logits(class_logits, true_class_ohe)
-
+                # Class loss part
+                class_pred_input = einops.rearrange(
+                    class_logits,
+                    'b t h w c -> ' + self.class_criterion_logit_shape).contiguous()
+                if self.class_criterion_target_encoding == 'index':
+                    class_true_cxs = true_class.long()
+                    class_true_input = einops.rearrange(
+                        class_true_cxs,
+                        'b t h w -> ' + self.class_criterion_target_shape).contiguous()
+                elif self.class_criterion_target_encoding == 'onehot':
+                    class_true_ohe = kwarray.one_hot_embedding(true_class.long(), len(self.classes), dim=-1)
+                    class_true_input = einops.rearrange(
+                        class_true_ohe,
+                        'b t h w c -> ' + self.class_criterion_target_shape).contiguous()
+                else:
+                    raise KeyError(self.class_criterion_target_encoding)
+                class_loss = self.class_criterion(
+                    class_pred_input,
+                    class_true_input
+                )
                 item_loss_parts['class'] = self.global_class_weight * class_loss
+
+                # true_class_ohe = kwarray.one_hot_embedding(true_class.long(), self.num_classes, dim=-1).float()
+                # class_loss = self.class_criterion(class_logits, true_class_ohe).mean()
+                # # class_loss = torch.nn.functional.binary_cross_entropy_with_logits(class_logits, true_class_ohe)
+                # item_loss_parts['class'] = self.global_class_weight * class_loss
 
                 item_losses.append(item_loss_parts)
 

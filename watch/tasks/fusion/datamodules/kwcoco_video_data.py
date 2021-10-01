@@ -701,7 +701,7 @@ class KWCocoVideoDataset(data.Dataset):
 
         self.classes = kwcoco.CategoryTree(graph)
 
-        bg_catname = ub.peek(self.background_classes)
+        bg_catname = ub.peek(sorted(self.background_classes))
         self.bg_idx = self.classes.node_to_idx[bg_catname]
 
         # bg_node = graph.nodes['background']
