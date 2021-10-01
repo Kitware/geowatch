@@ -83,6 +83,16 @@ class MultimodalTransformer(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
+        # HACK:
+        if input_stats is not None and 'input_stats' in input_stats:
+            dataset_stats = input_stats
+            input_stats = dataset_stats['input_stats']
+            catname_freq = dataset_stats['catname_freq']
+        else:
+            catname_freq = None
+
+        self.catname_freq = catname_freq
+
         # Handle channel-wise input mean/std in the network (This is in
         # contrast to common practice where it is done in the dataloader)
         self.input_norms = None
@@ -117,20 +127,34 @@ class MultimodalTransformer(pl.LightningModule):
         # self.change_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
         if isinstance(class_weights, str):
             if class_weights == 'auto':
-                _HEURISTIC_CATEGORIES = {
-                    'background': {'background', 'No Activity', 'Post Construction'},
-                    'ignore': {'ignore', 'Unknown', 'clouds'},
-                }
+                import numpy as np
+                if self.catname_freq is None:
+                    heuristic_weights = {}
+                else:
+                    total_freq = np.array(list(self.catname_freq.values()))
+                    cat_weights = _class_weights_from_freq(total_freq)
+                    heuristic_weights = ub.dzip(self.catname_freq.keys(), cat_weights)
+
+                heuristic_weights.update({
+                    'ignore': 0.00,
+                    'clouds': 0.00,
+                    'Unknown' : 0.0,
+                    # 'background': 0.05,
+                    # 'No Activity'        : 0.003649,
+                    # 'Active Construction': 0.188011,
+                    # 'Site Preparation'   : 1.0,
+                    # 'Post Construction'  : 0.142857,
+                })
+                # print('heuristic_weights = {}'.format(ub.repr2(heuristic_weights, nl=1, align=':')))
                 class_weights = []
                 for catname in self.classes:
-                    if catname in _HEURISTIC_CATEGORIES['background']:
-                        class_weights.append(0.05)
-                    elif catname in _HEURISTIC_CATEGORIES['ignore']:
-                        class_weights.append(0.0)
-                    else:
-                        class_weights.append(1.0)
+                    w = heuristic_weights.get(catname, 1.0)
+                    class_weights.append(w)
+                using_class_weights = ub.dzip(self.classes, class_weights)
+                print('using_class_weights = {}'.format(ub.repr2(using_class_weights, nl=1, align=':')))
                 class_weights = torch.FloatTensor(class_weights)
-                print('AUTO class_weights = {!r}'.format(class_weights))
+                # print('self.classes = {!r}'.format(self.classes))
+                # print('AUTO class_weights = {!r}'.format(class_weights))
             else:
                 raise KeyError(class_weights)
         else:
@@ -460,19 +484,29 @@ class MultimodalTransformer(pl.LightningModule):
             >>> print('classes = {}'.format(classes))
             >>> # Choose subclass to test this with (does not cover all cases)
             >>> self = methods.MultimodalTransformer(
+            >>>     # ===========
+            >>>     # Backbone
             >>>     arch_name='smt_it_joint_p8',
             >>>     #arch_name='smt_it_stm_p8',
             >>>     attention_impl='performer',
+            >>>     # ===========
+            >>>     # Change Loss
             >>>     change_loss='dicefocal',
-            >>>     #class_loss='cce',
-            >>>     class_loss='dicefocal',
-            >>>     input_stats=input_stats,
+            >>>     global_change_weight=0.00,
             >>>     positive_change_weight=1.0,
             >>>     negative_change_weight=0.05,
-            >>>     class_weights='auto',
+            >>>     # ===========
+            >>>     # Class Loss
             >>>     global_class_weight=1.00,
-            >>>     global_change_weight=0.00,
-            >>>     classes=classes, input_channels=input_channels)
+            >>>     #class_loss='cce',
+            >>>     class_loss='focal',
+            >>>     class_weights='auto',
+            >>>     # ===========
+            >>>     # Domain Metadata (Look Ma, not hard coded!)
+            >>>     input_stats=input_stats,
+            >>>     classes=classes,
+            >>>     input_channels=input_channels
+            >>>     )
             >>> self.datamodule = datamodule
             >>> # Run one visualization
             >>> loader = datamodule.train_dataloader()
@@ -954,3 +988,62 @@ class MultimodalTransformer(pl.LightningModule):
             )
 
             exp.save_pickle(module_name, arch_name, model)
+
+
+def _class_weights_from_freq(total_freq, mode='median-idf'):
+    """
+    """
+    import numpy as np
+    def logb(arr, base):
+        if base == 'e':
+            return np.log(arr)
+        elif base == 2:
+            return np.log2(arr)
+        elif base == 10:
+            return np.log10(arr)
+        else:
+            out = np.log(arr)
+            out /= np.log(base)
+            return out
+
+    freq = total_freq.copy()
+
+    _min, _max = np.percentile(freq, [5, 95])
+    is_valid = (_min <= freq) & (freq <= _max)
+    if np.any(is_valid):
+        middle_value = np.median(freq[is_valid])
+    else:
+        middle_value = np.median(freq)
+
+    # variant of median-inverse-frequency
+    mask = freq != 0
+    nonzero_freq = freq[mask]
+    if len(nonzero_freq):
+        freq[freq == 0] = nonzero_freq.min() / 2
+
+    if mode == 'median-idf':
+        weights = (middle_value / freq)
+        mask &= np.isfinite(weights)
+    elif mode == 'log-median-idf':
+        weights = (middle_value / freq)
+        mask &= np.isfinite(weights)
+        weights[~np.isfinite(weights)] = 1.0
+        base = 2
+        base = np.exp(1)
+        weights = logb(weights + (base - 1), base)
+        weights = np.maximum(weights, .1)
+        weights = np.minimum(weights, 10)
+    else:
+        raise KeyError('mode = {!r}'.format(mode))
+
+    # unseen classes should probably get a reasonably high weight in case we do
+    # see them and need to learn them, but my intuition is to give them
+    # less weight than things we have a shot of learning well
+    # so they dont mess up the main categories
+    weights[mask] = weights[mask] / weights[mask].max()
+    weights[~mask] = weights[mask].max() / 7
+
+    # weights[] = 1.0
+
+    weights = np.round(weights, 6)
+    return weights

@@ -1062,7 +1062,7 @@ class KWCocoVideoDataset(data.Dataset):
             ('hashid', self.sampler.dset._build_hashid()),
             ('channels', self.input_channels.__json__()),
             # ('sample_shape', self.sample_shape),
-            ('depends_version', 5),  # bump if `compute_input_stats` changes
+            ('depends_version', 6),  # bump if `compute_input_stats` changes
         ])
         workdir = None
         cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends)
@@ -1072,7 +1072,6 @@ class KWCocoVideoDataset(data.Dataset):
                 num, num_workers=num_workers, batch_size=batch_size)
             cacher.save(input_stats)
         return input_stats
-
 
     def compute_input_stats(self, num=None, num_workers=0, batch_size=2):
         """
@@ -1120,7 +1119,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> channels = 'blue|green|red|nir|swir16'
             >>> #channels = 'rice_field|cropland|water|inland_water|river_or_stream|sebkha|snow_or_ice_field|bare_ground|sand_dune|built_up|grassland|brush|forest|wetland|road'
             >>> #channels = 'matseg_0|matseg_1|matseg_2|matseg_3|matseg_4'
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, neg_to_pos_ratio=1.0)
             >>> item = self[100]
             >>> #self.compute_input_stats(num=10)
             >>> num_workers = 14
@@ -1180,10 +1179,20 @@ class KWCocoVideoDataset(data.Dataset):
         timer = ub.Timer().tic()
         timer.first = 1
 
+        classes = self.classes
+        num_classes = len(classes)
+        bins = np.arange(num_classes + 1)
+        total_freq = np.zeros(num_classes, dtype=np.int64)
+
         prog = ub.ProgIter(loader, desc='estimate mean/std')
         for batch_items in prog:
             for item in batch_items:
                 for frame_item in item['frames']:
+
+                    class_idxs = frame_item['class_idxs']
+                    item_freq = np.histogram(class_idxs.ravel(), bins=bins)[0]
+                    total_freq += item_freq
+
                     for mode_code, mode_val in frame_item['modes'].items():
                         running = channel_stats[mode_code]
                         val = mode_val.numpy()
@@ -1201,6 +1210,12 @@ class KWCocoVideoDataset(data.Dataset):
                 timer.first = 0
                 timer.tic()
 
+        # TODO: do stuff with this
+        # peritem_weight = _class_weights_from_freq(total_freq, mode='median-idf')
+        # cname_to_weight = ub.dzip(classes, peritem_weight)
+        catname_to_freq = ub.dzip(classes, total_freq)
+        # print('TODO: save measured weights = ' + ub.repr2(cname_to_weight, align=':'))
+
         input_stats = {}
         for key, running in channel_stats.items():
             perchan_stats = running.summarize(axis=(1, 2))
@@ -1209,7 +1224,13 @@ class KWCocoVideoDataset(data.Dataset):
                 'std': np.maximum(perchan_stats['std'], 1e-3).round(3),
             }
         self.disable_augmenter = False
-        return input_stats
+
+        # TODO: Make this function return DATASET_STATS
+        dataset_stats = {
+            'input_stats': input_stats,
+            'catname_to_freq': catname_to_freq,
+        }
+        return dataset_stats
 
     @profile
     def draw_item(self, item, item_output=None, combinable_extra=None,
