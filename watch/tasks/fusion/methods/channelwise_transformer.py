@@ -135,6 +135,7 @@ class MultimodalTransformer(pl.LightningModule):
                     print('total_freq = {!r}'.format(total_freq))
                     cat_weights = _class_weights_from_freq(total_freq)
                     heuristic_weights = ub.dzip(self.class_freq.keys(), cat_weights)
+                print('heuristic_weights = {}'.format(ub.repr2(heuristic_weights, nl=1)))
 
                 heuristic_weights.update({
                     'ignore': 0.00,
