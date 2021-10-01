@@ -149,8 +149,8 @@ class Evaluator(object):
                 image2 = image2.to(self.device)
                 mask = mask.to(self.device)
 
-                image1 = utils.stad_image(image1)
-                image2 = utils.stad_image(image2)
+                # image1 = utils.stad_image(image1)
+                # image2 = utils.stad_image(image2)
 
                 output1, features1 = self.model(image1)  # [B,22,150,150]
                 output2, features2 = self.model(image2)
