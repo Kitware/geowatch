@@ -37,6 +37,17 @@ class BatchPlotter(pl.callbacks.Callback):
     TODO:
         - [ ] Doctest
 
+    Ignore:
+        >>> from watch.tasks.fusion.fit import make_lightning_modules # NOQA
+        >>> args = None
+        >>> cmdline = False
+        >>> kwargs = {
+        ...     'train_dataset': 'special:vidshapes8-multispectral',
+        ...     'datamodule': 'KWCocoVideoDataModule',
+        ... }
+        >>> modules = make_lightning_modules(args=None, cmdline=cmdline, **kwargs)
+
+
     References:
         https://pytorch-lightning.readthedocs.io/en/latest/extensions/callbacks.html
     """
@@ -78,6 +89,14 @@ class BatchPlotter(pl.callbacks.Callback):
         argparse_ext.add_arginfos_to_parser(parent_parser, arg_infos)
         return parent_parser
 
+    def compute_model_cfgstr(self, model):
+        type(model)
+
+    # @classmethod
+    # TODO
+    # def demo(cls):
+    #     utils()
+
     @profile
     def draw_batch(self, trainer, outputs, batch, batch_idx):
         from watch.utils import util_kwimage
@@ -87,8 +106,19 @@ class BatchPlotter(pl.callbacks.Callback):
             # must have datamodule to draw batches
             return
 
-        import xdev
-        xdev.embed()
+        model = trainer.model
+
+        # TODO: get step number
+        if hasattr(model, 'get_cfgstr()'):
+            model_cfgstr = model.get_cfgstr()
+        else:
+            from watch.utils.slugify_ext import smart_truncate
+            model_config = {
+                'type': str(model.__class__),
+                'hp': smart_truncate(ub.repr2(model.hparams, compact=1, nl=0), max_length=8),
+            }
+            model_cfgstr = smart_truncate(ub.repr2(
+                model_config, compact=1, nl=0), max_length=64)
 
         canvas = datamodule.draw_batch(batch, outputs=outputs)
 
@@ -97,6 +127,11 @@ class BatchPlotter(pl.callbacks.Callback):
         stage = trainer.state.stage.lower()
         epoch = trainer.current_epoch
 
+        canvas = util_kwimage.draw_header_text(
+            image=canvas,
+            text=f'{model_cfgstr}',
+            stack=True,
+        )
         canvas = util_kwimage.draw_header_text(
             image=canvas,
             text=f'{stage}_epoch{epoch:08d}_bx{batch_idx:04d}',

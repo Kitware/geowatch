@@ -40,9 +40,9 @@ python -m watch.tasks.fusion.fit \
     --channels=${CHANNELS} \
     --method="MultimodalTransformer" \
     --arch_name=$ARCH \
-    --chip_size=64 \
+    --chip_size=96 \
     --chip_overlap=0.86 \
-    --time_steps=7 \
+    --time_steps=5 \
     --time_sampling=dilate_template \
     --batch_size=6 \
     --accumulate_grad_batches=10 \
@@ -60,6 +60,7 @@ python -m watch.tasks.fusion.fit \
     --gpus=1  \
     --learning_rate=1e-2 \
     --weight_decay=1e-5 \
+    --num_draw=6 \
     --dropout=0.1 \
     --window_size=8 \
     --default_root_dir=$DEFAULT_ROOT_DIR \
