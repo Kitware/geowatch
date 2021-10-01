@@ -20,7 +20,7 @@ ARCH=smt_it_joint_p8
 #CHANNELS="blue|green|red|nir|swir16|coastal"
 CHANNELS="blue|green|red|nir|swir16|swir22"
 
-EXPERIMENT_NAME=ActivityClf_${ARCH}_raw_v017
+EXPERIMENT_NAME=ActivityClf_${ARCH}_raw_v018
 DATASET_CODE=Drop1_Raw_Holdout
 
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
@@ -53,7 +53,7 @@ python -m watch.tasks.fusion.fit \
     --global_change_weight=0.0 \
     --negative_change_weight=0.05 \
     --change_loss='cce' \
-    --class_loss='focal' \
+    --class_loss='cce' \
     --diff_inputs=False \
     --max_epochs=400 \
     --patience=400 \
