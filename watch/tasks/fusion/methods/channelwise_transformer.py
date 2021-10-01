@@ -132,10 +132,11 @@ class MultimodalTransformer(pl.LightningModule):
                     heuristic_weights = {}
                 else:
                     total_freq = np.array(list(self.class_freq.values()))
-                    print('total_freq = {!r}'.format(total_freq))
                     cat_weights = _class_weights_from_freq(total_freq)
-                    print('cat_weights = {!r}'.format(cat_weights))
                     catnames = list(self.class_freq.keys())
+                    print('total_freq = {!r}'.format(total_freq))
+                    print('cat_weights = {!r}'.format(cat_weights))
+                    print('catnames = {!r}'.format(catnames))
                     heuristic_weights = ub.dzip(catnames, cat_weights)
                 print('heuristic_weights = {}'.format(ub.repr2(heuristic_weights, nl=1)))
 
