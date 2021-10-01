@@ -166,7 +166,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_workers', type=str, default=0, help='number of background data loading workers')
 
     # data flags - make sure these match the trained checkpoint
-    parser.add_argument('--sensor', type=str, help='Sensor to generate features from. Currently must choose from S2, LS, or L8. Make sure this matches the sensor used to train the model in ckpt_path.', default='S2')
+    parser.add_argument('--sensor', type=str, help='Sensor to generate features from. Currently must choose from S2 or L8. Make sure this matches the sensor used to train the model in ckpt_path.', default='S2')
     parser.add_argument('--bands', type=list, help='Bands to use in evaluation. Choose from \'all\' or create list of acceptable bands. Make sure this matches the bands used to train the model in ckpt_path.', default=['all'])
 
     # output flags
