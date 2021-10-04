@@ -691,6 +691,8 @@ class Trainer(object):
                 masks2 = F.softmax(output2, dim=1)  # .detach()
 
                 #region-wise inference
+                inference_otsu_coeff = 1.0
+                hist_inference_otsu_coeff = 0.95
                 pad_amount = (config['evaluation']['inference_window']-1)//2
                 padded_output1 = F.pad(input=output1, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
                 padded_output2 = F.pad(input=output2, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
@@ -701,33 +703,56 @@ class Trainer(object):
                 patched_padded_output2_distributions = patched_padded_output2.flatten(-2, -1).sum(axis=3) #[bs, n_patches, k]
 
                 # print(patched_padded_output1_distributions[0,0,:])
-                patched_padded_output1_distributions = (patched_padded_output1_distributions - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output1_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])
-                patched_padded_output2_distributions = (patched_padded_output2_distributions - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output2_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])            
+                normalized_patched_padded_output1_distributions = (patched_padded_output1_distributions - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output1_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])
+                normalized_patched_padded_output2_distributions = (patched_padded_output2_distributions - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output2_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])            
 
-                patched_diff_change_features = torch.sqrt(torch.pow(patched_padded_output1_distributions - patched_padded_output2_distributions, 2).sum(axis=2)).view(bs,h,w)
+                # histogram intersection raw features
+                # normalized_patched_padded_output1_distributions = (patched_padded_output1_distributions - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output1_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])
+                # normalized_patched_padded_output2_distributions = (patched_padded_output2_distributions - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output2_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])
+                minima = torch.minimum(normalized_patched_padded_output1_distributions, normalized_patched_padded_output2_distributions)
+                histograms_intersection_features = torch.true_divide(minima.sum(axis=2), normalized_patched_padded_output2_distributions.sum(axis=2)).view(bs,h,w)
+                histc_int_change_feats_pred = torch.zeros_like(histograms_intersection_features)
+                histc_int_inference_otsu_threshold = hist_inference_otsu_coeff*otsu(histograms_intersection_features.cpu().detach().numpy(), nbins=256)
+                histc_int_change_feats_pred[histograms_intersection_features < histc_int_inference_otsu_threshold] = 1
+                histc_int_change_feats_pred = histc_int_change_feats_pred.cpu().detach().type(torch.uint8)
 
-                diff_change_features = torch.abs(masks1-masks2).sum(axis=1)
-                # diff_change_features = torch.sqrt(torch.pow(output1 - output2, 2).sum(axis=1))#.view(bs,h,w)
-                inference_otsu_coeff = 1.0
-                inference_otsu_threshold = inference_otsu_coeff*otsu(patched_diff_change_features.cpu().detach().numpy(), nbins=512)
-                print(inference_otsu_threshold)
-                diff_change_thresholded = torch.zeros_like(diff_change_features)
-                diff_change_thresholded[patched_diff_change_features > inference_otsu_threshold] = 1
+                # l1 region-wise inference raw features
+                l1_patched_diff_change_features = torch.abs((patched_padded_output1_distributions - patched_padded_output2_distributions).sum(axis=2)).view(bs,h,w)
+                l1_dist_change_feats_pred = torch.zeros_like(l1_patched_diff_change_features)
+                l1_inference_otsu_threshold = inference_otsu_coeff*otsu(l1_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
+                l1_dist_change_feats_pred[l1_patched_diff_change_features > l1_inference_otsu_threshold] = 1
+                l1_dist_change_feats_pred = l1_dist_change_feats_pred.cpu().detach().type(torch.uint8)
 
-                pred1 = masks1.max(1)[1].cpu().detach()  # .numpy()
-                pred2 = masks2.max(1)[1].cpu().detach()  # .numpy()
-                change_detection_prediction = diff_change_thresholded.cpu().detach().type(torch.uint8)
+                # l2 region-wise inference raw features
+                l2_patched_diff_change_features = torch.sqrt(torch.pow(patched_padded_output1_distributions - patched_padded_output2_distributions, 2).sum(axis=2)).view(bs,h,w)
+                l2_dist_change_feats_pred = torch.zeros_like(l2_patched_diff_change_features)
+                l2_inference_otsu_threshold = inference_otsu_coeff*otsu(l2_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
+                l2_dist_change_feats_pred[l2_patched_diff_change_features > l2_inference_otsu_threshold] = 1
+                l2_dist_change_feats_pred = l2_dist_change_feats_pred.cpu().detach().type(torch.uint8)
+
+
+                # patched_diff_change_features = torch.sqrt(torch.pow(patched_padded_output1_distributions - patched_padded_output2_distributions, 2).sum(axis=2)).view(bs,h,w)
+
+                # diff_change_features = torch.abs(masks1-masks2).sum(axis=1)
+                # # diff_change_features = torch.sqrt(torch.pow(output1 - output2, 2).sum(axis=1))#.view(bs,h,w)
+                # inference_otsu_threshold = inference_otsu_coeff*otsu(patched_diff_change_features.cpu().detach().numpy(), nbins=512)
+                # diff_change_thresholded = torch.zeros_like(diff_change_features)
+                # diff_change_thresholded[patched_diff_change_features > inference_otsu_threshold] = 1
+
+                # pred1 = masks1.max(1)[1].cpu().detach()  # .numpy()
+                # pred2 = masks2.max(1)[1].cpu().detach()  # .numpy()
+                # change_detection_prediction = diff_change_thresholded.cpu().detach().type(torch.uint8)
                 # change_detection_prediction = (pred1!=pred2).type(torch.uint8)
 
-                preds.append(change_detection_prediction)
+                preds.append(l2_dist_change_feats_pred)
                 mask1[mask1 == -1] = 0
                 targets.append(mask1.cpu())  # .numpy())
 
                 if config['visualization']['val_visualizer'] or (config['visualization']['save_individual_plots'] and save_individual_plots_specific):
                     if (epoch) % config['visualization']['visualize_val_every'] == 0:
                         if (batch_index % iter_visualization) == 0:
-                            figure = plt.figure(figsize=(
-                                config['visualization']['fig_size'], config['visualization']['fig_size']))
+                            figure = plt.figure(figsize=(config['visualization']['fig_size'], config['visualization']['fig_size']),
+                                                dpi=config['visualization']['dpi'])
                             ax1 = figure.add_subplot(3, 3, 1)
                             ax2 = figure.add_subplot(3, 3, 2)
                             ax3 = figure.add_subplot(3, 3, 3)
@@ -737,61 +762,72 @@ class Trainer(object):
                             ax7 = figure.add_subplot(3, 3, 7)
                             ax8 = figure.add_subplot(3, 3, 8)
                             ax9 = figure.add_subplot(3, 3, 9)
+                            # ax10 = figure.add_subplot(3, 4, 10)
+                            # ax11 = figure.add_subplot(3, 4, 11)
+                            # ax12 = figure.add_subplot(3, 4, 12)
 
                             cmap_gradients = plt.cm.get_cmap('jet')
-
+                            # image_show = np.transpose(image1.cpu().detach().numpy()[batch_index_to_show,:,:,:],(1,2,0))[:,:1:4,:3]
                             image_show1 = np.transpose(image1.cpu().detach().numpy()[batch_index_to_show, :, :, :], (1, 2, 0))[:, :, :3]
                             image_show1 = np.flip(image_show1, axis=2)
 
                             image_show2 = np.transpose(image2.cpu().detach().numpy()[batch_index_to_show, :, :, :], (1, 2, 0))[:, :, :3]
                             image_show2 = np.flip(image_show2, axis=2)
 
-                            image_show1 = (image_show1 - image_show1.min())/(image_show1.max() - image_show1.min())
-                            image_show2 = (image_show2 - image_show2.min())/(image_show2.max() - image_show2.min())
-                            # print(f"min: {image_show.min()}, max: {image_show.max()}")
-                            # image_show = np.transpose(outputs['visuals']['image'][batch_index_to_show,:,:,:].numpy(),(1,2,0))
-                            logits_show1 = masks1.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
-                            logits_show2 = masks2.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
-                            change_detection_prediction_show = change_detection_prediction.numpy()[batch_index_to_show, :, :]
-                            change_detection_show = change_detection_prediction_show
+
+                            image_show1 = (image_show1 - image_show1.min()) / (image_show1.max() - image_show1.min())
+                            image_show2 = (image_show2 - image_show2.min()) / (image_show2.max() - image_show2.min())
                             gt_mask_show1 = mask1.cpu().detach()[batch_index_to_show, :, :].numpy().squeeze()
-                            # gt_mask_show2 = mask2.cpu().detach()[batch_index_to_show,:,:].numpy().squeeze()
-                            distances_show = diff_change_features.cpu().detach()[batch_index_to_show, :, :].numpy()
-                            distances_show = (distances_show - distances_show.min())/(distances_show.max() - distances_show.min())
 
-                            fp_tp_fn_prediction_mask = gt_mask_show1 + (2*change_detection_show)
+                            l1_dist_change_feats_pred_show = l1_dist_change_feats_pred.numpy()[batch_index_to_show, :, :]
+                            l2_dist_change_feats_pred_show = l2_dist_change_feats_pred.numpy()[batch_index_to_show, :, :]
+                            histc_int_change_feats_pred_show = histc_int_change_feats_pred.numpy()[batch_index_to_show, :, :]
 
-                            logits_show1[logits_show1 == -1] = 0
-                            logits_show2[logits_show2 == -1] = 0
-                            gt_mask_show_no_bg1 = np.ma.masked_where(gt_mask_show1 == 0, gt_mask_show1)
-                            # gt_mask_show_no_bg2 = np.ma.masked_where(gt_mask_show2==0,gt_mask_show2)
-                            # logits_show_no_bg = np.ma.masked_where(logits_show==0,logits_show)
+                            l1_patched_diff_change_features_show = l1_patched_diff_change_features.cpu().detach().numpy()[batch_index_to_show, :, :]
+                            l2_patched_diff_change_features_show = l2_patched_diff_change_features.cpu().detach().numpy()[batch_index_to_show, :, :]
+                            histograms_intersection_show = histograms_intersection_features.cpu().detach().numpy()[batch_index_to_show, :, :]
+
+                            l1_patched_diff_change_features_show = (l1_patched_diff_change_features_show - l1_patched_diff_change_features_show.min())/(l1_patched_diff_change_features_show.max() - l1_patched_diff_change_features_show.min())
+                            l2_patched_diff_change_features_show = (l2_patched_diff_change_features_show - l2_patched_diff_change_features_show.min())/(l2_patched_diff_change_features_show.max() - l2_patched_diff_change_features_show.min())
+                            histograms_intersection_show = (histograms_intersection_show - histograms_intersection_show.min())/(histograms_intersection_show.max() - histograms_intersection_show.min())
+
+                            pred1_show = masks1.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
+                            pred2_show = masks2.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
+
+                            l1_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*l1_dist_change_feats_pred_show)
+                            l2_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*l2_dist_change_feats_pred_show)
+                            histc_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*histc_int_change_feats_pred_show)
+
+                            # vca_pseudomask_show = image_change_magnitude_binary.cpu().detach()[batch_index_to_show, :, :].numpy()
+                            # vca_pseudomask_crop_show = cm_binary_crop.cpu().detach()[batch_index_to_show,:,:].numpy()
+                            # dictionary_show = dictionary1.cpu().detach()[batch_index_to_show,:,:].numpy()
+                            # dictionary_show = dictionary2_post_assignment.cpu().detach()[batch_index_to_show, :, :].numpy()
+                            # dictionary2_show = dictionary1_post_assignment.cpu().detach()[batch_index_to_show, :, :].numpy()
 
                             classes_in_gt = np.unique(gt_mask_show1)
                             ax1.imshow(image_show1)
 
-                            ax2.imshow(image_show1)
-                            # , alpha=alphas_final_gt)
-                            ax2.imshow(logits_show1, cmap=self.cmap, vmin=0, vmax=self.max_label)
+                            ax2.imshow(image_show2)
 
                             ax3.imshow(image_show1)
-                            # , alpha=alphas_final_gt)
                             ax3.imshow(gt_mask_show1, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
-                            ax4.imshow(image_show2)
 
-                            ax5.imshow(image_show2)
-                            ax5.imshow(logits_show2, cmap=self.cmap, vmin=0, vmax=self.max_label)
+                            ax4.imshow(l1_patched_diff_change_features_show)
 
-                            ax6.imshow(image_show2)
-                            # ax6.imshow(change_detection_prediction_show, cmap=self.cmap, vmin=0, vmax=self.max_label)#, alpha=alphas_final_gt)
-                            # , alpha=alphas_final_gt)
-                            ax6.imshow(change_detection_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
+                            ax5.imshow(l2_patched_diff_change_features_show)
 
-                            # , alpha=alphas_final_gt)
-                            ax7.imshow(fp_tp_fn_prediction_mask, cmap=self.cmap, vmin=0, vmax=self.max_label)
+                            ax6.imshow(histograms_intersection_show)
 
-                            ax8.imshow(distances_show)
+                            # ax8.imshow(dictionary2_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
+
+                            ax7.imshow(l1_fp_tp_fn_prediction_mask, cmap=self.cmap, vmin=0, vmax=self.max_label)
+
+                            ax8.imshow(l2_fp_tp_fn_prediction_mask, cmap=self.cmap, vmin=0, vmax=self.max_label)
+
+                            ax9.imshow(histc_fp_tp_fn_prediction_mask, cmap=self.cmap, vmin=0, vmax=self.max_label)
+
+                            # ax12.imshow(vw_dis_fp_tp_fn_prediction_mask, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
                             ax1.axis('off')
                             ax2.axis('off')
@@ -799,17 +835,22 @@ class Trainer(object):
                             ax4.axis('off')
                             ax5.axis('off')
                             ax6.axis('off')
+                            ax7.axis('off')
+                            ax8.axis('off')
+                            # ax9.axis('off')
 
                             if config['visualization']['titles']:
                                 ax1.set_title(f"Input Image 1", fontsize=config['visualization']['font_size'])
-                                ax2.set_title(f"GT Mask overlaid 1", fontsize=config['visualization']['font_size'])
-                                ax3.set_title(f"Prediction overlaid 1", fontsize=config['visualization']['font_size'])
-                                ax4.set_title(f"Input Image 2", fontsize=config['visualization']['font_size'])
-                                ax5.set_title(f"Prediction overlaid 2", fontsize=config['visualization']['font_size'])
-                                ax6.set_title(f"Change Detection Prediction", fontsize=config['visualization']['font_size'])
-                                ax8.set_title(f"Distances, max:{distances_show.max():.2f}, min:{distances_show.min():.2f}", fontsize=config['visualization']['font_size'])
-                                figure.suptitle(
-                                    f"Epoch: {epoch+1}\nGT labels for classification: {classes_in_gt}, \nunique in change predictions: {np.unique(change_detection_show)}\nunique in predictions1: {np.unique(logits_show1)}", fontsize=config['visualization']['font_size'])
+                                ax2.set_title(f"Input Image 2", fontsize=config['visualization']['font_size'])
+                                ax3.set_title(f"Change GT Mask overlaid", fontsize=config['visualization']['font_size'])
+                                ax4.set_title(f"l1_patched_diff_change_features_show", fontsize=config['visualization']['font_size'])
+                                ax5.set_title(f"l2_patched_diff_change_features_show", fontsize=config['visualization']['font_size'])
+                                ax6.set_title(f"histograms_intersection_show", fontsize=config['visualization']['font_size'])
+                                ax7.set_title(f"l1_fp_tp_fn_prediction_mask", fontsize=config['visualization']['font_size'])
+                                ax8.set_title(f"l2_fp_tp_fn_prediction_mask", fontsize=config['visualization']['font_size'])
+                                ax9.set_title(f"histc_fp_tp_fn_prediction_mask", fontsize=config['visualization']['font_size'])
+                                # figure.suptitle(
+                                #     f"Epoch: {epoch+1}\nGT labels for classification: {classes_in_gt}, \nunique in change predictions: {np.unique(change_detection_show)}\nunique in predictions1: {np.unique(logits_show1)}", fontsize=config['visualization']['font_size'])
 
                             figure.tight_layout()
                             if config['visualization']['val_imshow']:

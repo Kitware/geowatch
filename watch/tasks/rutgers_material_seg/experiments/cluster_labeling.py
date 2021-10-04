@@ -1,3 +1,4 @@
+# flake8: noqa
 """
 This method uses K-Means clusters as region proposals,
 which this tool allows you to label. Note that this tool:
