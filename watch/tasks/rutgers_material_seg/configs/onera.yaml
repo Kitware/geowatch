@@ -38,12 +38,12 @@ training:
   pretrained: False
   distributed: False
   learning_rate: 0.002 # best: 0.00007
-  resume: /home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-08-06-22:35_baseline/experiments_epoch_49_loss_0.04315589724482366_valmIoU_0.5678595403613368_time_2021-08-07-15:25:56.pth
-  # resume: False
+  # resume: /home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-08-06-22:35_baseline/experiments_epoch_49_loss_0.04315589724482366_valmIoU_0.5678595403613368_time_2021-08-07-15:25:56.pth
+  resume: False
   train_val_test_split: [0.95, 0.02, 0.03]
   epochs: 200
   start_epoch: 0
-  batch_size: 2
+  batch_size: 4
   drop_last_batch: True
   momentum: 0.9
   weight_decay: 0.0001
@@ -63,5 +63,5 @@ evaluation:
   inference_window: 7
 
 procedures:
-  train:  False
+  train:  True
   validate: True

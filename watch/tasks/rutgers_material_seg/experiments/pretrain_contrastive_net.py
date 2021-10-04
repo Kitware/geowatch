@@ -255,8 +255,6 @@ class Trainer(object):
             # relative_distances = torch.sqrt(torch.pow(inds1 - inds2, 2).sum(axis=1))
             
 
-
-
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
@@ -814,6 +812,8 @@ if __name__ == "__main__":
         # if not config['training']['model_feats_channels'] == pretrain_config_path['training']['model_feats_channels']:
         #     print("the loaded model does not have the same number of features as configured in the experiment yaml file. Matching channel sizes to the loaded model instead.")
         # config['training']['model_feats_channels'] = pretrain_config_path['training']['model_feats_channels']
+        config['data']['num_classes'] = pretrain_config['data']['num_classes']
+        config['training']['model_feats_channels'] = pretrain_config['training']['model_feats_channels']
 
     # # print(sampler)
     # number_of_timestamps, h, w = 2, 300, 300

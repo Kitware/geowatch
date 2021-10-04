@@ -29,21 +29,12 @@ import kwimage
 import kwarray
 import ndsampler
 import numpy as np
-# from torch import nn
 from tqdm import tqdm  # NOQA
 import ubelt as ub
 import pathlib
 import watch.tasks.rutgers_material_seg.utils.utils as utils
 from watch.tasks.rutgers_material_seg.models import build_model
 from watch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import SequenceDataset
-
-
-# if 0:
-#     torch.backends.cudnn.enabled = False
-#     torch.backends.cudnn.deterministic = True
-#     torch.set_printoptions(precision=6, sci_mode=False)
-#     np.set_printoptions(precision=3, suppress=True)
-
 
 class Evaluator(object):
     def __init__(self,
@@ -82,9 +73,6 @@ class Evaluator(object):
         stitcher = self.stitcher_dict[gid]
         recon = stitcher.finalize()
         self.stitcher_dict.pop(gid)
-
-        # percent_nan = np.isnan(recon).sum() / recon.size
-        # print('percent_nan = {!r}'.format(percent_nan))
 
         save_path = self.output_feat_dpath / f'{gid}.tiff'
         save_path = os.fspath(save_path)
@@ -327,12 +315,12 @@ def main(cmdline=True, **kwargs):
     config['data']['num_classes'] = num_classes
     config['training']['out_features_dim'] = out_features_dim
 
-
-    base_path = '/'.join(config['training']['resume'].split('/')[:-1])
+    base_path = '/'.join(args.checkpoint_fpath.split('/')[:-1])
     pretrain_config_path = f"{base_path}/config.yaml"
-    pretrain_config = utils.load_yaml_as_dict(pretrain_config_path)
-    config['data']['channels'] = pretrain_config['data']['channels']
-    config['training']['model_feats_channels'] = pretrain_config_path['training']['model_feats_channels']
+    if os.path.isfile(pretrain_config_path):
+        pretrain_config = utils.load_yaml_as_dict(pretrain_config_path)
+        config['data']['channels'] = pretrain_config['data']['channels']
+        config['training']['model_feats_channels'] = pretrain_config_path['training']['model_feats_channels']
 
     model = build_model(model_name=config['training']['model_name'],
                         backbone=config['training']['backbone'],
