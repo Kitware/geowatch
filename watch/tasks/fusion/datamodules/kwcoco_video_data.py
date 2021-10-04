@@ -2042,6 +2042,9 @@ def dilated_template_sample(unixtimes, time_window):
         time_window (int):
             number of frames per sample
 
+    References:
+        https://docs.google.com/presentation/d/1GSOaY31cKNERQObl_L3vk0rGu6zU7YM_ZFLrdksHSC0/edit#slide=id.p
+
     Example:
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> low = datetime.datetime.now().timestamp()
@@ -2049,12 +2052,12 @@ def dilated_template_sample(unixtimes, time_window):
         >>> rng = kwarray.ensure_rng(0)
         >>> base_unixtimes = np.array(sorted(rng.randint(low, high, 20)), dtype=float)
         >>> unixtimes = base_unixtimes.copy()
-        >>> unixtimes[rng.rand(*unixtimes.shape) < 0.1] = np.nan
+        >>> #unixtimes[rng.rand(*unixtimes.shape) < 0.1] = np.nan
         >>> time_window = 5
         >>> sample_idxs = dilated_template_sample(unixtimes, time_window)
         >>> name = 'demo-data'
 
-        >>> unixtimes[:] = np.nan
+        >>> #unixtimes[:] = np.nan
         >>> time_window = 5
         >>> sample_idxs = dilated_template_sample(unixtimes, time_window)
         >>> name = 'demo-data'
@@ -2077,7 +2080,7 @@ def dilated_template_sample(unixtimes, time_window):
         >>> unixtimes = np.array([dt.timestamp() for dt in datetimes])
         >>> time_window = 5
         >>> sample_idxs = dilated_template_sample(unixtimes, time_window)
-        >>> unixtimes[:] = 0
+        >>> #unixtimes[:] = 0
 
     Ignore:
         >>> import kwplot
@@ -2086,7 +2089,7 @@ def dilated_template_sample(unixtimes, time_window):
 
         >>> # =====================
         >>> # Show Sample Pattern in heatmap
-        >>> datetimes = [datetime.datetime.fromtimestamp(t) for t in unixtimes]
+        >>> datetimes = np.array([datetime.datetime.fromtimestamp(t) for t in unixtimes])
         >>> dates = np.array([datetime.datetime.fromtimestamp(t).date() for t in unixtimes])
         >>> #
         >>> sample_pattern = kwarray.one_hot_embedding(sample_idxs, len(unixtimes), dim=1).sum(axis=2)
@@ -2111,10 +2114,10 @@ def dilated_template_sample(unixtimes, time_window):
         >>> # Show Sample Pattern WRT to time
         >>> fig = kwplot.figure(fnum=2, doclf=True)
         >>> ax = fig.gca()
-        >>> for t in dates:
+        >>> for t in datetimes:
         >>>     ax.plot([t, t], [0, len(sample_idxs) + 1], color='orange')
         >>> for sample_ypos, sample in enumerate(sample_idxs, start=1):
-        >>>     ax.plot(dates[sample], [sample_ypos] * len(sample), '-x')
+        >>>     ax.plot(datetimes[sample], [sample_ypos] * len(sample), '-x')
         >>> ax.set_title(f'Sample Pattern wrt Time Range: {name}')
         >>> ax.set_xlabel('Time')
         >>> ax.set_ylabel('Sample Index')
@@ -2141,46 +2144,99 @@ def dilated_template_sample(unixtimes, time_window):
         >>> indicator[positions] = 1
         >>> dates_unixtimes = [d for d in dates]
         >>> july.heatmap(grid_dates, indicator, title=f'Available Observations: {name}', cmap="github")
+
+    Ignore:
+
+        name = 'demo'
+        unixtimes = np.arange(11)
+        time_window = 5
+        time_window = np.array([-5, -1, 0, 1, 5])
+        sample_idxs = dilated_template_sample(unixtimes, time_window)
+
+        template_deltas = np.array([-5, -1, 0, 1, 5])
+
+        ideal_time_samples = unixtimes[:, None] + template_deltas[None, :]
+        losses = np.abs(ideal_time_samples[None, :, :] - unixtimes[:, None, None])
+
+        losses = np.abs(ideal_time_samples[None, :, :] - unixtimes[:, None, None])
+
+
+        idx = 5
+        all_rows = []
+        for idx in range(len(ideal_time_samples)):
+            ideal_sample_for_row = ideal_time_samples[idx]
+            unixtimes[:, None] - ideal_sample_for_row[None, :]
+            loss_for_row = np.abs(ideal_sample_for_row[:, None] - unixtimes[None, :])
+            # For each row find the closest available frames to the ideal
+            # sample without duplicates.
+            candidiates = kwarray.argmaxima(-loss_for_row, axis=1, num=time_window).T
+            sample_idxs = sorted(it.islice(ub.unique(candidiates.ravel()), time_window))
+            all_rows.append(sample_idxs)
+        print('all_rows = {}'.format(ub.repr2(all_rows, nl=1)))
+        all_sample_idxs = np.vstack(all_rows)
+
+
     """
     import itertools as it
     missing_date = np.isnan(unixtimes)
     missing_any_dates = np.any(missing_date)
     have_any_dates = not np.all(missing_date)
 
-    # TODO: formulate how to choose template delta for given window dims
-    # Or pass in a delta
-    if time_window == 1:
-        template_deltas = np.array([
-            datetime.timedelta(days=0).total_seconds(),
-        ])
-    elif time_window == 2:
-        template_deltas = np.array([
-            datetime.timedelta(days=0).total_seconds(),
-            datetime.timedelta(days=+365).total_seconds(),
-        ])
-    elif time_window == 3:
-        template_deltas = np.array([
-            datetime.timedelta(days=-365).total_seconds(),
-            datetime.timedelta(days=0).total_seconds(),
-            datetime.timedelta(days=+365).total_seconds(),
-        ])
-    elif time_window == 4:
-        template_deltas = np.array([
-            datetime.timedelta(days=-365).total_seconds(),
-            datetime.timedelta(days=-1).total_seconds(),
-            datetime.timedelta(days=0).total_seconds(),
-            datetime.timedelta(days=+365).total_seconds(),
-        ])
-    elif time_window == 5:
-        template_deltas = np.array([
-            datetime.timedelta(days=-365).total_seconds(),
-            datetime.timedelta(days=-1).total_seconds(),
-            datetime.timedelta(days=0).total_seconds(),
-            datetime.timedelta(days=+1).total_seconds(),
-            datetime.timedelta(days=+365).total_seconds(),
-        ])
+    if isinstance(time_window, int):
+        # TODO: formulate how to choose template delta for given window dims
+        # Or pass in a delta
+        if time_window == 1:
+            template_deltas = np.array([
+                datetime.timedelta(days=0).total_seconds(),
+            ])
+        elif time_window == 2:
+            template_deltas = np.array([
+                datetime.timedelta(days=0).total_seconds(),
+                datetime.timedelta(days=+365).total_seconds(),
+            ])
+        elif time_window == 3:
+            template_deltas = np.array([
+                datetime.timedelta(days=-365).total_seconds(),
+                datetime.timedelta(days=0).total_seconds(),
+                datetime.timedelta(days=+365).total_seconds(),
+            ])
+        elif time_window == 4:
+            template_deltas = np.array([
+                datetime.timedelta(days=-365).total_seconds(),
+                datetime.timedelta(days=-1).total_seconds(),
+                datetime.timedelta(days=0).total_seconds(),
+                datetime.timedelta(days=+365).total_seconds(),
+            ])
+        elif time_window == 5:
+            template_deltas = np.array([
+                datetime.timedelta(days=-365).total_seconds(),
+                datetime.timedelta(days=-1).total_seconds(),
+                datetime.timedelta(days=0).total_seconds(),
+                datetime.timedelta(days=+1).total_seconds(),
+                datetime.timedelta(days=+365).total_seconds(),
+            ])
+        elif time_window == 7:
+            template_deltas = np.array([
+                datetime.timedelta(days=-365).total_seconds(),
+                datetime.timedelta(days=-1).total_seconds(),
+                datetime.timedelta(days=-17).total_seconds(),
+                datetime.timedelta(days=0).total_seconds(),
+                datetime.timedelta(days=+1).total_seconds(),
+                datetime.timedelta(days=+17).total_seconds(),
+                datetime.timedelta(days=+365).total_seconds(),
+            ])
+        else:
+            num_years = 3
+            min_time = -365 * num_years
+            max_time = 365 * num_years
+            template_deltas = np.linspace(min_time, max_time, time_window).round().astype(int)
+            # Always include a delta of 0
+            template_deltas[np.abs(template_deltas).argmin()] = 0
     else:
-        raise NotImplementedError(str(time_window))
+        template_deltas = time_window
+
+    num_frames = len(template_deltas)
+
     # template_deltas = np.array([
     #     datetime.timedelta(days=-365).total_seconds(),
     #     datetime.timedelta(days=-30).total_seconds(),
@@ -2207,15 +2263,42 @@ def dilated_template_sample(unixtimes, time_window):
 
     ideal_time_samples = unixtimes[:, None] + template_deltas[None, :]
 
-    losses = np.abs(ideal_time_samples[None, :, :] - unixtimes[:, None, None])
-    all_candidates = kwarray.argmaxima(-losses, axis=1, num=time_window)
-    all_rows = []
-    for candidates in all_candidates:
-        sample_idxs = sorted(it.islice(ub.unique(candidates.ravel()), time_window))
-        all_rows.append(sample_idxs)
+    if 0:
+        # Broken, not sure why
+        losses = np.abs(ideal_time_samples[None, :, :] - unixtimes[:, None, None])
+        all_candidates = kwarray.argmaxima(-losses, axis=1, num=num_frames)
+        all_rows = []
+        for candidates in all_candidates:
+            sample_idxs = sorted(it.islice(ub.unique(candidates.ravel()), num_frames))
+            all_rows.append(sample_idxs)
+    else:
+        # Seems to work correctly?
+        all_rows = []
+        for idx in range(len(ideal_time_samples)):
+            ideal_sample_for_row = ideal_time_samples[idx]
+            loss_for_row = np.abs(ideal_sample_for_row[:, None] - unixtimes[None, :])
+            loss_for_row[loss_for_row == 0] = -np.inf
+            # For each row find the closest available frames to the ideal
+            # sample without duplicates.
+            if 1:
+                sample_idxs = np.array(kwarray.mincost_assignment(loss_for_row)[0]).T[1]
+            else:
+                candidiates = np.array([zz.argsort()[0:num_frames] for zz in loss_for_row]).T
+                # candidates =
+                # np.array([zz.argsort()[0:5] for zz in loss_for_row]).T
+                # kwarray.argmaxima(-loss_for_row, axis=1, num=num_frames).T
+                # candidiates = kwarray.argmaxima(-loss_for_row, axis=1, num=num_frames).T
+                sample_idxs = sorted(it.islice(ub.unique(candidiates.ravel()), num_frames))
+            all_rows.append(sample_idxs)
 
     all_sample_idxs = np.vstack(all_rows)
     sample_idxs = unique_rows(all_sample_idxs)
+
+    if 0:
+        time_sample = np.array([unixtimes[x] for x in all_sample_idxs])
+        ideal_time_samples - time_sample
+        pass
+
     return sample_idxs
 
 

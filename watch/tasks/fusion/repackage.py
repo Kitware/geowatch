@@ -47,7 +47,8 @@ def repackage(checkpoint_fpath):
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/tasks/fusion/repackage.py
+        python ~/code/watch/watch/tasks/fusion/repackage.py /home/joncrall/data/dvc-repos/smart_watch_dvc/training/toothbrush/joncrall/Drop1_Raw_Holdout/runs/ActivityClf_smt_it_joint_p8_raw_v019/lightning_logs/version_0/checkpoints/epoch=9-step=2299.ckpt
+
     """
     import fire
     fire.Fire(repackage)
