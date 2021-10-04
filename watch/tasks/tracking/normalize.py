@@ -20,35 +20,6 @@ from watch.utils.kwcoco_extensions import TrackidGenerator
 from watch.gis.geotiff import geotiff_crs_info
 
 
-def remove_empty_annots(coco_dset):
-    '''
-    We are getting some detections with 2 points that aren't well-formed polygons.
-    Remove these and return the rest of the dataset.
-
-    Ex.
-    {'type': 'MultiPolygon',
-      'coordinates': [[[[128.80465424559546, 37.62042949252145],
-         [128.80465693697536, 37.61940084645075]]]]},
-    
-    These don't show up too often in an arbitrary dset:
-    >>> k = kwcoco.CocoDataset('KR_Pyeongchang_R01.kwcoco.json')
-    >>> sum(are_empty(k.annots())), k.n_annots
-    94, 654
-    '''
-    def are_empty(annots):
-        return np.array(
-            list(
-                itertools.chain.from_iterable(
-                    annots.detections.data['boxes'].area))) == 0
-
-    annots = coco_dset.annots()
-    empty_aids = np.extract(are_empty(annots), annots.aids)
-
-    coco_dset.remove_annotations(list(empty_aids))
-
-    return coco_dset
-
-
 def dedupe_annots(coco_dset):
     '''
     Check for annotations with different aids that are the same geometry
@@ -176,6 +147,99 @@ def add_geos(coco_dset, overwrite, max_workers=16):
     return coco_dset
 
 
+def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
+    '''
+    There are several reasons for a detection to be too small to keep.
+    Remove these and return the rest of the dataset.
+
+    1. Detections that aren't well-formed polygons.
+        These are simply errors.
+        They show up fairly often in an arbitrary dset; TODO figure out why
+        possible culprits:
+            mask_to_scored_polygons?
+            cropping in propagate_labels?
+        >>> d = kwcoco.CocoDataset('pred_KR_R01.kwcoco_timeagg_v1.json')
+        >>> sum(are_invalid(d.annots())), d.n_annots
+        6686, 13136
+
+    2. Very small detections in pixel-space (area <1 pixel).
+        These probably couldn't represent something visible,
+        unless the GSD is very large.
+        Skip this check by setting min_area_px=0
+
+    3. Overly-precise geo-detections.
+        Because GSD varies, and because lat-lon isn't equal-area, detections
+        can be trivial in geo space but not pixel space.
+        GeoJSON spec recommends a precision of 6 decimal places, which is
+        ~10cm. (IARPA annotations conform to this).
+        This check removes detections that are empty when rounded.
+        Skip this check by setting min_geo_precision=None
+
+    Sources:
+        [1] https://pypi.org/project/geojson/#default-and-custom-precision
+    
+    '''
+    def remove_annotations(coco_dset, remove_fn):
+        # TODO merge into kwcoco?
+        annots = coco_dset.annots()
+        empty_aids = np.extract(remove_fn(annots), annots.aids)
+        coco_dset.remove_annotations(list(empty_aids))
+        return coco_dset
+
+    #
+    # 1.
+    #
+
+    def are_invalid(annots):
+        return list(
+            map(lambda area, poly: area == 0 or not poly.to_shapely().is_valid,
+                annots.detections.data['boxes'].area.sum(axis=1),
+                annots.detections.data['segmentations'].to_polygon_list()))
+
+    coco_dset = remove_annotations(coco_dset, are_invalid)
+
+    #
+    # 2.
+    #
+
+    if min_area_px is not None and min_area_px > 0:
+
+        def are_small(annots):
+            return annots.detections.data['boxes'].area.sum(
+                axis=1) < min_area_px
+
+        coco_dset = remove_annotations(coco_dset, are_small)
+
+    #
+    # 3.
+    #
+
+    if min_geo_precision is not None:
+
+        # https://github.com/perrygeo/geojson-precision
+        def _set_precision(coords, precision):
+            result = []
+            try:
+                return round(coords, int(precision))
+            except TypeError:
+                for coord in coords:
+                    result.append(_set_precision(coord, precision))
+            return result
+
+        def is_empty_rounded(geom):
+            geom['coordinates'] = _set_precision(geom['coordinates'],
+                                                 min_geo_precision)
+            return shapely.geometry.asShape(geom).is_empty
+
+        def are_empty_rounded(annots):
+            return list(
+                map(is_empty_rounded, annots.lookup('segmentation_geos')))
+
+        coco_dset = remove_annotations(coco_dset, are_empty_rounded)
+
+    return coco_dset
+
+
 def ensure_videos(coco_dset):
     '''
     Ensure every image belongs to a video, even a dummy video
@@ -211,24 +275,31 @@ def apply_tracks(coco_dset, track_fn, overwrite):
     Returns:
         modified coco_dset
     '''
+    def tracks(annots):
+        return annots.get('track_id', None)
+
+    def are_trackless(annots):
+        return np.array(tracks(annots)) == None
+
     # first, for each video, apply a track_fn from from_heatmap or from_polygon
     for gids in coco_dset.index.vidid_to_gids.values():
         sub_dset = coco_dset.subset(gids=gids)
         if overwrite:
             sub_dset = track_fn(sub_dset)
         else:
-            existing_tracks = np.array(sub_dset.annots().get('track_id', None))
-            if None in existing_tracks:
+            existing_tracks = tracks(sub_dset.annots())
+            _are_trackless = are_trackless(sub_dset.annots())
+            if np.any(_are_trackless):
                 sub_dset = track_fn(sub_dset)
                 annots = sub_dset.annots()
                 annots.set(
                     'track_id',
-                    np.where(existing_tracks == None,
-                             annots.get('track_id', None), existing_tracks))
+                    np.where(_are_trackless, tracks(annots), existing_tracks))
 
     # then cleanup leftover untracked annots
     coco_dset.remove_annotations(
-        filter(lambda ann: 'track_id' not in ann, coco_dset.anns.values()))
+        list(np.extract(are_trackless(coco_dset.annots()),
+                   coco_dset.annots().aids)))
 
     return coco_dset
 
@@ -362,9 +433,9 @@ def normalize(coco_dset, track_fn, overwrite):
     '''
     Driver function to apply all normalizations
     '''
-    coco_dset = remove_empty_annots(coco_dset)
     coco_dset = dedupe_annots(coco_dset)
     coco_dset = add_geos(coco_dset, overwrite)
+    coco_dset = remove_small_annots(coco_dset)
     coco_dset = ensure_videos(coco_dset)
     coco_dset = apply_tracks(coco_dset, track_fn, overwrite)
     coco_dset = dedupe_tracks(coco_dset)

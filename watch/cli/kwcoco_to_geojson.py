@@ -68,10 +68,20 @@ import shapely.ops
 from os.path import join
 from collections import defaultdict
 from progiter import ProgIter
+from mgrs import MGRS
 import numpy as np
 import ubelt as ub
 
-import xdev
+# import xdev
+
+
+def _single_geometry(geom):
+    return shapely.geometry.asShape(geom).buffer(0)
+
+
+def _combined_geometries(geometry_list):
+    # TODO does this respect ordering for disjoint polys?
+    return shapely.ops.unary_union(geometry_list).buffer(0)
 
 
 def geojson_feature(img, anns, coco_dset):
@@ -82,8 +92,7 @@ def geojson_feature(img, anns, coco_dset):
     def single_geometry(ann):
         seg_geo = ann['segmentation_geos']
         assert isinstance(seg_geo, dict)
-        return kwimage.MultiPolygon.from_geojson(seg_geo).to_shapely().buffer(
-            0)
+        return _single_geometry(seg_geo)
 
     # grab source and date for single_properties per-img instead of per-ann
 
@@ -118,15 +127,15 @@ def geojson_feature(img, anns, coco_dset):
 
     def combined_geometries(geometry_list):
         '''
-        # annotations should be disjoint before being combined
+        # TODO should annotations be disjoint before being combined?
+        # this is not true in general
         for geom1, geom2 in itertools.combinations(geometry_list, 2):
             try:
                 assert geom1.disjoint(geom2), [ann['id'] for ann in anns]
             except AssertionError:
                 xdev.embed()
         '''
-        # TODO ensure this respects ordering
-        return shapely.ops.unary_union(geometry_list).buffer(0)
+        return _combined_geometries(geometry_list)
 
     def combined_properties(properties_list, geometry_list):
         # list of dicts -> dict of lists for easy indexing
@@ -171,7 +180,7 @@ def geojson_feature(img, anns, coco_dset):
                                properties_list, geometry_list))
 
 
-def track_to_site(coco_dset, trackid, region_id, mgrs):
+def track_to_site(coco_dset, trackid, region_id):
     '''
     Turn a kwcoco track into an IARPA site model
     '''
@@ -230,11 +239,17 @@ def track_to_site(coco_dset, trackid, region_id, mgrs):
         feat['properties'].update(prediction)
 
     # add other top-level fields
+
+    centroid_latlon = np.array(
+            _combined_geometries([
+                _single_geometry(feat['geometry']) for feat in features
+                ]).centroid)[::-1]
+
     return geojson.FeatureCollection(
         features,
         id='_'.join((region_id, str(trackid).zfill(4))),
         version=watch.__version__,
-        mgrs=mgrs,
+        mgrs=MGRS().toMGRS(*centroid_latlon, MGRSPrecision=0),
         status='positive_annotated',
         score=1.0,  # TODO does this matter?
     )
@@ -384,19 +399,17 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id=None):
         else:
             _region_id = region_id
 
-        # TODO each site could actually have a different MGRS tile
-        # call mgrs.MGRS() on its centroid
-        mgrs = video['properties']['mgrs']
-
         sub_dset = coco_dset.subset(gids=coco_dset.index.vidid_to_gids[vidid])
 
         for trackid in sub_dset.index.trackid_to_aids:
-            
+
+            '''
             # TODO these should have been eliminated in normalize.apply_tracks
             if trackid == None:
                 continue
+            '''
 
-            site = track_to_site(sub_dset, trackid, _region_id, mgrs)
+            site = track_to_site(sub_dset, trackid, _region_id)
             sites.append(site)
 
     return sites
