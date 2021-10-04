@@ -384,6 +384,7 @@ def compute_jaccard(preds_masks_all, targets_masks_all, num_classes=21):
 
     for mask_pred, mask_gt in zip(preds_masks_all, targets_masks_all):
         # print(mask_pred.shape)
+        # print(mask_gt.shape)
         # print(mask_pred.size())
         bs, h, w = mask_pred.size()
         assert bs == mask_gt.size(0), "Batch size mismatch"

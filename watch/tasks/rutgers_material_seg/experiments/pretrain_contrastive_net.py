@@ -224,10 +224,10 @@ class Trainer(object):
                                             patched_negative_output1
                                             )
 
-            loss += 30*F.triplet_margin_loss(features1,#.unsqueeze(0), 
-                                            features2,#.unsqueeze(0), 
-                                            negative_features1
-                                            )
+            # loss += 30*F.triplet_margin_loss(features1,#.unsqueeze(0), 
+            #                                 features2,#.unsqueeze(0), 
+            #                                 negative_features1
+            #                                 )
             # print(loss)
 
             # pre-text: relative patch distance:
@@ -263,7 +263,7 @@ class Trainer(object):
             masks2 = F.softmax(output2, dim=1)
             pred1 = masks1.max(1)[1].cpu().detach()  # .numpy()
             pred2 = masks2.max(1)[1].cpu().detach()  # .numpy()
-            change_detection_prediction = (pred1 != pred2).type(torch.uint8)
+            # change_detection_prediction = (pred1 != pred2).type(torch.uint8)
 
             pad_amount = (config['evaluation']['inference_window']-1)//2
             padded_output1 = F.pad(input=output1, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
@@ -271,8 +271,8 @@ class Trainer(object):
             patched_padded_output1 = torch.stack([transforms.functional.crop(padded_output1, *params) for params in self.inference_all_crops_params], dim=1)#.flatten(-3,-1)
             patched_padded_output2 = torch.stack([transforms.functional.crop(padded_output2, *params) for params in self.inference_all_crops_params], dim=1)#.flatten(-3,-1)
 
-            patched_padded_output1_distributions = patched_padded_output1.flatten(-2, -1).mean(axis=3) #[bs, n_patches, k]
-            patched_padded_output2_distributions = patched_padded_output2.flatten(-2, -1).mean(axis=3) #[bs, n_patches, k]
+            patched_padded_output1_distributions = patched_padded_output1.flatten(-2, -1).sum(axis=3) #[bs, n_patches, k]
+            patched_padded_output2_distributions = patched_padded_output2.flatten(-2, -1).sum(axis=3) #[bs, n_patches, k]
 
             # patched_diff_change_features = torch.sqrt(torch.pow(patched_padded_output1_distributions - patched_padded_output2_distributions, 2).sum(axis=2)).view(bs,h,w)
             patched_diff_change_features = torch.abs((patched_padded_output1_distributions - patched_padded_output2_distributions).sum(axis=2)).view(bs,h,w)
@@ -280,13 +280,13 @@ class Trainer(object):
             # diff_change_features = torch.sqrt(torch.pow(output1 - output2, 2).sum(axis=1))#.view(bs,h,w)
             inference_otsu_coeff = 1.0
             inference_otsu_threshold = inference_otsu_coeff*otsu(patched_diff_change_features.cpu().detach().numpy(), nbins=256)
-            # print(inference_otsu_threshold)
             diff_change_thresholded = torch.zeros_like(patched_diff_change_features)
             diff_change_thresholded[patched_diff_change_features > inference_otsu_threshold] = 1
+            change_detection_prediction = diff_change_thresholded.cpu().detach().type(torch.uint8)
 
             total_loss += loss.item()
+            preds.append(change_detection_prediction)
             mask1[mask1 == -1] = 0
-            preds.append(diff_change_thresholded.cpu())
             targets.append(mask1.cpu())#.numpy())
             """
             if config['visualization']['train_visualizer'] :
@@ -521,8 +521,8 @@ class Trainer(object):
                 patched_padded_output1 = torch.stack([transforms.functional.crop(padded_output1, *params) for params in self.inference_all_crops_params], dim=1)#.flatten(-3,-1)
                 patched_padded_output2 = torch.stack([transforms.functional.crop(padded_output2, *params) for params in self.inference_all_crops_params], dim=1)#.flatten(-3,-1)
 
-                patched_padded_output1_distributions = patched_padded_output1.flatten(-2, -1).mean(axis=3) #[bs, n_patches, k]
-                patched_padded_output2_distributions = patched_padded_output2.flatten(-2, -1).mean(axis=3) #[bs, n_patches, k]
+                patched_padded_output1_distributions = patched_padded_output1.flatten(-2, -1).sum(axis=3) #[bs, n_patches, k]
+                patched_padded_output2_distributions = patched_padded_output2.flatten(-2, -1).sum(axis=3) #[bs, n_patches, k]
 
                 # patched_padded_output1_distributions = (patched_padded_output1_distributions - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output1_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])
                 # patched_padded_output2_distributions = (patched_padded_output2_distributions - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output2_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])            
@@ -541,7 +541,6 @@ class Trainer(object):
                 # diff_change_features = torch.sqrt(torch.pow(output1 - output2, 2).sum(axis=1))#.view(bs,h,w)
                 inference_otsu_coeff = 1.0
                 inference_otsu_threshold = inference_otsu_coeff*otsu(patched_diff_change_features.cpu().detach().numpy(), nbins=256)
-                # print(inference_otsu_threshold)
                 diff_change_thresholded = torch.zeros_like(patched_diff_change_features)
                 diff_change_thresholded[patched_diff_change_features > inference_otsu_threshold] = 1
 
@@ -628,12 +627,12 @@ class Trainer(object):
 
                             ax9.imshow(patched_diff_change_features_show)
 
-                            ax1.axis('off')
-                            ax2.axis('off')
-                            ax3.axis('off')
-                            ax4.axis('off')
-                            ax5.axis('off')
-                            ax6.axis('off')
+                            # ax1.axis('off')
+                            # ax2.axis('off')
+                            # ax3.axis('off')
+                            # ax4.axis('off')
+                            # ax5.axis('off')
+                            # ax6.axis('off')
 
                             if config['visualization']['titles']:
                                 ax1.set_title(f"Input Image 1", fontsize=config['visualization']['font_size'])
@@ -806,9 +805,12 @@ if __name__ == "__main__":
         base_path = '/'.join(config['training']['resume'].split('/')[:-1])
         pretrain_config_path = f"{base_path}/config.yaml"
         pretrain_config = utils.load_yaml_as_dict(pretrain_config_path)
-        if not config['training']['model_feats_channels'] == pretrain_config_path['training']['model_feats_channels']:
-            print("the loaded model does not have the same number of features as configured in the experiment yaml file. Matching channel sizes to the loaded model instead.")
-        config['training']['model_feats_channels'] = pretrain_config_path['training']['model_feats_channels']
+        # print(config['training']['model_feats_channels'])
+        # print(pretrain_config_path['training']['model_feats_channels'])
+        config['data']['channels'] = pretrain_config['data']['channels']
+        # if not config['training']['model_feats_channels'] == pretrain_config_path['training']['model_feats_channels']:
+        #     print("the loaded model does not have the same number of features as configured in the experiment yaml file. Matching channel sizes to the loaded model instead.")
+        # config['training']['model_feats_channels'] = pretrain_config_path['training']['model_feats_channels']
 
     # # print(sampler)
     # number_of_timestamps, h, w = 2, 300, 300
@@ -861,7 +863,7 @@ if __name__ == "__main__":
         if os.path.isfile(config['training']['resume']):
             checkpoint = torch.load(config['training']['resume'])
             start_epoch = checkpoint['epoch']
-            model.load_state_dict(checkpoint['model'])
+            model.load_state_dict(checkpoint['model'], strict= False)
             optimizer.load_state_dict(checkpoint['optimizer'])
             scheduler.load_state_dict(checkpoint['scheduler'])
             print(f"loaded model from {config['training']['resume']}")
