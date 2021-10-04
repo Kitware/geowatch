@@ -221,7 +221,10 @@ class Trainer(object):
             # loss = 5*self.contrastive_loss(features)
             loss = 30*F.triplet_margin_loss(patched_output1,#.unsqueeze(0), 
                                             patched_output2,#.unsqueeze(0), 
-                                            patched_negative_output1
+                                            patched_negative_output1,
+                                            swap=True,
+                                            p=1,
+                                            reduction='sum'
                                             )
 
             # loss += 30*F.triplet_margin_loss(features1,#.unsqueeze(0), 
