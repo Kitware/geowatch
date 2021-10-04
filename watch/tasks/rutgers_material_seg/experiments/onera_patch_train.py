@@ -1,3 +1,5 @@
+# flake8: noqa
+
 import comet_ml
 import time
 from watch.tasks.rutgers_material_seg.models.canny_edge import CannyFilter
