@@ -7,9 +7,12 @@ from contextlib import contextmanager
 import tempfile
 import subprocess
 import shutil
-from s2angs.cli import generate_anglebands
+from concurrent.futures import as_completed
+from typing import cast
 
+from s2angs.cli import generate_anglebands
 import pystac
+import ubelt
 
 
 L7_RE = re.compile(r'^L[COTEM]07')
@@ -18,6 +21,36 @@ S2_RE = re.compile(r'^S2[AB]')
 
 LANDSAT_ANGLES_FILE_RE = re.compile(r'^(.*_)ANG\.txt$', re.IGNORECASE)
 S2_MTD_TL_FILE_RE = re.compile(r'MTD_TL\.xml$', re.IGNORECASE)
+
+
+def parallel_map_items(catalog, mapper_func, max_workers=4, mode='thread'):
+    out_catalog = catalog.full_copy()
+
+    executor = ubelt.Executor(mode=mode, max_workers=max_workers)
+
+    input_stac_items = []
+    for item_link in catalog.get_item_links():
+        item_link.resolve_stac_object(root=catalog.get_root())
+
+        input_stac_items.append(cast(pystac.Item, item_link.target))
+
+    jobs = [executor.submit(mapper_func, item) for item in input_stac_items]
+
+    output_item_links = []
+    for mapped in (job.result() for job in as_completed(jobs)):
+        # Allowing mappers to act as filters as well by returning None
+        if mapped is None:
+            continue
+        elif isinstance(mapped, pystac.Item):
+            output_item_links.append(pystac.Link('item', mapped))
+        else:
+            for i in mapped:
+                output_item_links.append(pystac.Link('item', mapped))
+
+    out_catalog.clear_items()
+    out_catalog.add_links(output_item_links)
+
+    return out_catalog
 
 
 def main():
@@ -87,7 +120,8 @@ def add_angle_bands(stac_catalog, outdir):
 
         return output_stac_item
 
-    output_catalog = catalog.map_items(_item_map)
+    # output_catalog = catalog.map_items(_item_map)
+    output_catalog = parallel_map_items(catalog, _item_map)
 
     output_catalog.set_self_href(os.path.join(outdir, 'catalog.json'))
     output_catalog.save(catalog_type=pystac.CatalogType.ABSOLUTE_PUBLISHED)
