@@ -455,6 +455,39 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
         return x
 
 
+class TimmEncoder:
+    """
+
+    Example:
+        >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
+        >>> import torch
+        >>> in_features = 7
+        >>> input_shape = B, T, M, H, W, F = (2, 3, 5, 2, 2, in_features)
+        >>> inputs = torch.rand(*input_shape)
+        >>> arch_name = 'vit_base_patch16_224'
+        >>> self = TimmEncoder(arch_name)
+    """
+    def __init__(self, arch_name='vit_base_patch16_224', pretrained=True,
+                 dropout=0.0, attention_impl='exact', in_features=None):
+        import timm
+        self.timm_model = timm.create_model(arch_name, pretrained=True)
+        # embedding_size=128,
+        # n_layers=4,
+        # n_heads=8,
+        self.timm_model
+        timm.create_model('mobilenetv3_large_100_miil_in21k')
+        import netharn as nh
+        nh.OutputShapeFor(self.timm_model.patch_embed.proj)
+        nh.OutputShapeFor(self.timm_model.blocks)
+        nh.OutputShapeFor(self.timm_model.head)
+
+
+# class ViViTEncoder:
+#     """
+#     https://github.com/rishikksh20/ViViT-pytorch
+#     """
+
+
 class FusionEncoder(nn.Module):
     """
     Primary entry point to create a feature transformer
@@ -466,6 +499,8 @@ class FusionEncoder(nn.Module):
         >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
         >>> import torch
         >>> in_features = 7
+        >>> input_shape = B, T, M, H, W, F = (2, 3, 5, 2, 2, in_features)
+        >>> inputs = torch.rand(*input_shape)
         >>> model = FusionEncoder(
         >>>     in_features=in_features,
         >>>     axes=[("time", "mode", "height", "width")],
@@ -476,8 +511,6 @@ class FusionEncoder(nn.Module):
         >>>     embedding_size=256,
         >>>     n_heads=4
         >>> )
-        >>> input_shape = B, T, M, H, W, F = (2, 3, 5, 2, 2, in_features)
-        >>> inputs = torch.rand(*input_shape)
         >>> model(inputs)
         >>> output = model(inputs)
         >>> assert output.shape == (2, 3, 5, 2, 2, 256)

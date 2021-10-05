@@ -24,6 +24,136 @@ except Exception:
     profile = ub.identity
 
 
+# class Tokenizer(self):
+#     def __init__(self, in_features):
+#         pass
+
+from timm.models.layers import create_conv2d, drop_path, make_divisible, create_act_layer
+from timm.models.layers.activations import sigmoid
+from timm.models import efficientnet_blocks  # NOQA
+
+
+class OurDepthwiseSeparableConv(nn.Module):
+    """ DepthwiseSeparable block
+    Used for DS convs in MobileNet-V1 and in the place of IR blocks that have no expansion
+    (factor of 1.0). This is an alternative to having a IR with an optional first pw conv.
+
+    From timm
+
+    Example:
+        from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+
+        norm = nh.layers.rectify_normalizer(in_channels=3, key={'type': 'group', 'num_groups': 1})
+        norm(torch.rand(2, 1))
+
+        self = OurDepthwiseSeparableConv(11, 13, kernel_size=3, padding=1, residual=1)
+        x = torch.rand(2, 11, 3, 3)
+        y = self.forward(x)
+
+        z = nh.OutputShapeFor(self.conv_dw)((2, 11, 1, 1))
+        print('z = {!r}'.format(z))
+        nh.OutputShapeFor(self.conv_pw)(z)
+
+        in_modes = 13
+        self =
+
+        tokenizer = nn.Sequential(*[
+            OurDepthwiseSeparableConv(in_modes, in_modes, kernel_size=3, stride=1, padding=1, residual=1, norm=None, noli=None),
+            OurDepthwiseSeparableConv(in_modes, in_modes * 2, kernel_size=3, stride=2, padding=1, residual=0, norm=None),
+            OurDepthwiseSeparableConv(in_modes * 2, in_modes * 4, kernel_size=3, stride=2, padding=1, residual=0),
+            OurDepthwiseSeparableConv(in_modes * 4, in_modes * 8, kernel_size=3, stride=2, padding=1, residual=0),
+        ])
+
+        tokenizer = nn.Sequential(*[
+            OurDepthwiseSeparableConv(in_modes, in_modes, kernel_size=3, stride=1, padding=1, residual=1),
+            OurDepthwiseSeparableConv(in_modes, in_modes * 2, kernel_size=3, stride=2, padding=1, residual=0),
+            OurDepthwiseSeparableConv(in_modes * 2, in_modes * 4, kernel_size=3, stride=2, padding=1, residual=0),
+            OurDepthwiseSeparableConv(in_modes * 4, in_modes * 8, kernel_size=3, stride=2, padding=1, residual=0),
+        ])
+    """
+    def __init__(
+            self, in_chs, out_chs, kernel_size=3, stride=1, dilation=1,
+            padding=0, residual=False, pw_kernel_size=1, norm='group',
+            noli='swish', drop_path_rate=0.):
+
+        super().__init__()
+        if norm == 'auto':
+            norm = {'type': 'group', 'num_groups': 'auto'}
+
+        self.has_residual = (stride == 1 and in_chs == out_chs) and residual
+        self.drop_path_rate = drop_path_rate
+
+
+        conv_cls = nh.layers.rectify_conv(dim=2)
+        # self.conv_dw = create_conv2d(
+        #     in_chs, in_chs, kernel_size, stride=stride, dilation=dilation, padding=pad_type, depthwise=True)
+        self.conv_dw = conv_cls(
+            in_chs, in_chs, kernel_size, stride=stride, dilation=dilation,
+            padding=padding, groups=in_chs)  # depthwise
+
+        self.bn1 = nh.layers.rectify_normalizer(in_channels=in_chs, key=norm)
+        if self.bn1 is None:
+            self.bn1 = nh.layers.Identity()
+        self.act1 = nh.layers.rectify_nonlinearity(noli)
+        if self.act1 is None:
+            self.act1 = nh.layers.Identity()
+
+        self.conv_pw = conv_cls(in_chs, out_chs, pw_kernel_size, padding=0)
+        # self.bn2 = norm_layer(out_chs)
+        self.bn2 = nh.layers.rectify_normalizer(in_channels=out_chs, key=norm)
+        if self.bn2 is None:
+            self.bn2 = nh.layers.Identity()
+
+    def feature_info(self, location):
+        if location == 'expansion':  # after SE, input to PW
+            info = dict(module='conv_pw', hook_type='forward_pre', num_chs=self.conv_pw.in_channels)
+        else:  # location == 'bottleneck', block output
+            info = dict(module='', hook_type='', num_chs=self.conv_pw.out_channels)
+        return info
+
+    def forward(self, x):
+        shortcut = x
+
+        x = self.conv_dw(x)
+        x = self.bn1(x)
+        x = self.act1(x)
+
+        x = self.conv_pw(x)
+        x = self.bn2(x)
+
+        if self.has_residual:
+            if self.drop_path_rate > 0.:
+                x = drop_path(x, self.drop_path_rate, self.training)
+            x += shortcut
+        return x
+
+class DWCNNTokenizer(nn.Module):
+    def __init__(self, in_chn):
+        super().__init__()
+        # self.to_images = Rearrange("b t c h w -> (b t) c h w")
+        self.stem = nn.Sequential(*[
+            OurDepthwiseSeparableConv(in_chn, in_chn, kernel_size=3, stride=1, padding=1, residual=1, norm=None, noli=None),
+            OurDepthwiseSeparableConv(in_chn, in_chn * 4, kernel_size=3, stride=2, padding=1, residual=0, norm='group'),
+            OurDepthwiseSeparableConv(in_chn * 4, in_chn * 8, kernel_size=3, stride=2, padding=1, residual=0, norm='group'),
+            OurDepthwiseSeparableConv(in_chn * 8, in_chn * 64, kernel_size=3, stride=2, padding=1, residual=0, norm='group'),
+        ])
+        self.expand_factor = 64
+        # self.to_tokens = Rearrange("(b t) (c ef) h w -> (b t) c h w ef", ef=self.expand_factor, b=1)
+
+    def forward(self, inputs):
+        """
+        self = DWCNNTokenizer(13)
+        inputs = torch.rand(2, 5, 13, 16, 16)
+        self(inputs)
+        """
+        b, t, c, h, w = inputs.shape
+        inputs2d = einops.rearrange(inputs, "b t c h w -> (b t) c h w")
+        tokens2d = self.stem(inputs2d)
+        tokens = einops.rearrange(tokens2d, "(b t) (c ef) h w -> b t c h w ef", b=b, t=t, ef=self.expand_factor)
+        return tokens
+
+
+
 class MultimodalTransformer(pl.LightningModule):
     """
     CommandLine:
@@ -78,6 +208,7 @@ class MultimodalTransformer(pl.LightningModule):
                  class_head_hidden=2,
                  change_loss='cce',
                  class_loss='focal',
+                 tokenizer='rearange',
                  classes=10):
 
         super().__init__()
@@ -107,6 +238,10 @@ class MultimodalTransformer(pl.LightningModule):
         if input_channels is None:
             raise Exception('need them for num input_channels!')
         input_channels = channel_spec.ChannelSpec.coerce(input_channels)
+
+        input_streams = list(input_channels.streams())
+        stream_num_channels = {s.spec: s.numel() for s in input_streams}
+        self.stream_num_channels = stream_num_channels
 
         # TODO: rework "streams" to get the sum
         num_channels = input_channels.numel()
@@ -260,17 +395,31 @@ class MultimodalTransformer(pl.LightningModule):
         in_features_raw = self.hparams.window_size * self.hparams.window_size
         in_features_pos = (2 * 4 * 4)  # positional encoding feature
         in_features = in_features_pos + in_features_raw
-        encoder_config = transformer.encoder_configs[arch_name]
 
         # TODO:
         #     - [X] Classifier MLP, skip connections
         #     - [ ] Decoder
-        #     - [ ] Dynamic / Learned embeddings
+        #     - [ ] Dynamic / Learned embeddi
 
         # TODO: add tokenization strat to the FusionEncoder itself
-        self.tokenize = Rearrange("b t c (h hs) (w ws) -> b t c h w (ws hs)",
-                                  hs=self.hparams.window_size,
-                                  ws=self.hparams.window_size)
+        if tokenizer == 'rearange':
+            stream_tokenizers = nn.ModuleDict()
+            for stream_key, num_chan in stream_num_channels.items():
+                # Construct tokenize on a per-stream basis
+                # import netharn as nh
+                tokenize = Rearrange(
+                    "b t c (h hs) (w ws) -> b t c h w (ws hs)",
+                    hs=self.hparams.window_size,
+                    ws=self.hparams.window_size)
+                stream_tokenizers[stream_key] = tokenize
+        elif tokenizer == 'dwcnn':
+            stream_tokenizers = nn.ModuleDict()
+            for stream_key, num_chan in stream_num_channels.items():
+                # Construct tokenize on a per-stream basis
+                # import netharn as nh
+                tokenize = DWCNNTokenizer(num_chan)
+                stream_tokenizers[stream_key] = tokenize
+        self.stream_tokenizers = stream_tokenizers
 
         encode_t = utils.SinePositionalEncoding(5, 1, sine_pairs=4)
         encode_m = utils.SinePositionalEncoding(5, 2, sine_pairs=4)
@@ -280,13 +429,26 @@ class MultimodalTransformer(pl.LightningModule):
             encode_t, encode_m, encode_h, encode_w,
         ])
 
-        encoder = transformer.FusionEncoder(
-            **encoder_config,
-            in_features=in_features,
-            attention_impl=attention_impl,
-            dropout=dropout,
-        )
-        self.encoder = encoder
+        #'https://rwightman.github.io/pytorch-image-models/models/vision-transformer/'
+        if arch_name in transformer.encoder_configs:
+            encoder_config = transformer.encoder_configs[arch_name]
+            encoder = transformer.FusionEncoder(
+                **encoder_config,
+                in_features=in_features,
+                attention_impl=attention_impl,
+                dropout=dropout,
+            )
+            self.encoder = encoder
+        else:
+            raise NotImplementedError
+        # else:
+        #     if arch_name != 'vit_base_patch16_224':
+        #         print('might not work')
+        #         transformer.TimmEncoder(arch_name)
+        #         import timm
+        #         model = timm.create_model('vit_base_patch16_224', pretrained=True)
+        #         import netharn as nh
+        #         nh.OutputShapeFor(model)
 
         feat_dim = self.encoder.out_features
 
@@ -300,6 +462,7 @@ class MultimodalTransformer(pl.LightningModule):
         # self.class_clf = nn.LazyLinear(len(self.classes))  # category classifier
         self.change_head_hidden = change_head_hidden
         self.class_head_hidden = class_head_hidden
+
 
         self.change_clf = nh.layers.MultiLayerPerceptronNd(
             dim=0,
@@ -339,6 +502,8 @@ class MultimodalTransformer(pl.LightningModule):
 
         # Model names define the transformer encoder used by the method
         available_encoders = list(transformer.encoder_configs.keys())
+        parser.add_argument("--tokenizer", default='rearrange', type=str,
+                            choices=['dwcnn', 'rearrange'])
         parser.add_argument("--arch_name", default='smt_it_stm_p8', type=str,
                             choices=available_encoders)
         parser.add_argument("--dropout", default=0.1, type=float)
@@ -412,8 +577,39 @@ class MultimodalTransformer(pl.LightningModule):
         return [optimizer], [scheduler]
 
     def forward(self, images):
+        """
+        Example:
+            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> from watch.tasks.fusion import datamodules
+            >>> channels = 'B1,B8|B8a,B10|B11'
+            >>> channels = 'B1|B8|B10|B8a|B11'
+            >>> datamodule = datamodules.KWCocoVideoDataModule(
+            >>>     train_dataset='special:vidshapes8-multispectral', num_workers=0, channels=channels)
+            >>> datamodule.setup('fit')
+            >>> input_channels = datamodule.input_channels
+            >>> train_dataset = datamodule.torch_datasets['train']
+            >>> input_stats = train_dataset.cached_dataset_stats()
+            >>> loader = datamodule.train_dataloader()
+            >>> tokenizer = 'convexpt-v1'
+            >>> tokenizer = 'dwcnn'
+            >>> batch = next(iter(loader))
+            >>> #self = MultimodalTransformer(arch_name='smt_it_joint_p8')
+            >>> self = MultimodalTransformer(
+            >>>     arch_name='smt_it_joint_p8',
+            >>>     input_channels=input_channels,
+            >>>     input_stats=input_stats,
+            >>>     change_loss='dicefocal',
+            >>>     attention_impl='performer',
+            >>>     tokenizer=tokenizer,
+            >>> )
+            >>> images = torch.stack([ub.peek(f['modes'].values()) for f in batch[0]['frames']])[None, :]
+            >>> images.shape
+            >>> self.forward(images)
+        """
         # Break images up into patches
-        raw_patch_tokens = self.tokenize(images)
+        assert len(self.stream_tokenizers) == 1
+        tokenize = ub.peek(self.stream_tokenizers.values())
+        raw_patch_tokens = tokenize(images)
         # Add positional encodings for time, mode, and space.
         patch_tokens = self.add_encoding(raw_patch_tokens)
 
@@ -465,13 +661,13 @@ class MultimodalTransformer(pl.LightningModule):
             >>> import kwcoco
             >>> from os.path import join
             >>> import os
-            >>> if 1:
+            >>> if 0:
             >>>     dvc_dpath = find_smart_dvc_dpath()
             >>>     coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/data.kwcoco.json')
             >>>     channels='swir16|swir22|blue|green|red|nir'
             >>> else:
             >>>     coco_fpath = 'special:vidshapes8-frames9-speed0.5-multispectral'
-            >>>     channels='B1|B11|B8',
+            >>>     channels='B1|B11|B8'
             >>> coco_dset = kwcoco.CocoDataset.coerce(coco_fpath)
             >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset=coco_dset,
@@ -497,7 +693,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     # ===========
             >>>     # Change Loss
             >>>     change_loss='dicefocal',
-            >>>     global_change_weight=0.00,
+            >>>     global_change_weight=1.00,
             >>>     positive_change_weight=1.0,
             >>>     negative_change_weight=0.05,
             >>>     # ===========
@@ -510,7 +706,8 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     # Domain Metadata (Look Ma, not hard coded!)
             >>>     input_stats=input_stats,
             >>>     classes=classes,
-            >>>     input_channels=input_channels
+            >>>     input_channels=input_channels,
+            >>>     tokenizer='dwcnn',
             >>>     )
             >>> self.datamodule = datamodule
             >>> # Run one visualization
@@ -870,6 +1067,10 @@ class MultimodalTransformer(pl.LightningModule):
             'kitware_package_header', 'kitware_package_header.pkl')
         arch_name = package_header['arch_name']
         module_name = package_header['module_name']
+
+        # from timm.models import efficientnet_blocks
+        # efficientnet_blocks.DepthwiseSeparableConv
+
 
         # pkg_root = imp.file_structure()
         # print(pkg_root)
