@@ -2,7 +2,7 @@
 imgaug >= 0.4.0
 
 # Brings in imgaug, which has the same opencv-problem
-netharn >= 0.5.16
+# netharn >= 0.5.16
 
 # This is usually the opencv version we want, but other packages might conflict with it
 opencv_python_headless >= 4.5.2.52  
