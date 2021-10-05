@@ -12,8 +12,6 @@ dependencies:
 
     # Brings in opencv-python, which conflicts with opencv-python-headless
     - imgaug >= 0.4.0
-    # Brings in imgaug, which has the same opencv-problem
-    - netharn >= 0.5.16
     # Can conflict with opencv-python
     - opencv_python_headless >= 4.5.2.52
     # Doesn't play nicely in requirements/production.txt when needed by setup.py
