@@ -11,7 +11,7 @@ from watch.utils.lightning_ext.callbacks import text_logger
 from watch.utils.lightning_ext.callbacks.auto_resumer import (AutoResumer,)
 from watch.utils.lightning_ext.callbacks.batch_plotter import (BatchPlotter,)
 from watch.utils.lightning_ext.callbacks.packager import (Packager,
-    default_save_package,)
+                                                          default_save_package,)
 from watch.utils.lightning_ext.callbacks.state_logger import (StateLogger,)
 from watch.utils.lightning_ext.callbacks.tensorboard_plotter import (
     TensorboardPlotter,)

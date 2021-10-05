@@ -28,9 +28,9 @@ except Exception:
 #     def __init__(self, in_features):
 #         pass
 
-from timm.models.layers import create_conv2d, drop_path, make_divisible, create_act_layer
-from timm.models.layers.activations import sigmoid
-from timm.models import efficientnet_blocks  # NOQA
+# from timm.models.layers import create_conv2d, drop_path, make_divisible, create_act_layer
+from timm.models.layers import drop_path
+# from timm.models.layers.activations import sigmoid
 
 
 class OurDepthwiseSeparableConv(nn.Module):
@@ -83,7 +83,6 @@ class OurDepthwiseSeparableConv(nn.Module):
         self.has_residual = (stride == 1 and in_chs == out_chs) and residual
         self.drop_path_rate = drop_path_rate
 
-
         conv_cls = nh.layers.rectify_conv(dim=2)
         # self.conv_dw = create_conv2d(
         #     in_chs, in_chs, kernel_size, stride=stride, dilation=dilation, padding=pad_type, depthwise=True)
@@ -127,6 +126,7 @@ class OurDepthwiseSeparableConv(nn.Module):
             x += shortcut
         return x
 
+
 class DWCNNTokenizer(nn.Module):
     def __init__(self, in_chn, norm='auto'):
         super().__init__()
@@ -152,7 +152,6 @@ class DWCNNTokenizer(nn.Module):
         tokens2d = self.stem(inputs2d)
         tokens = einops.rearrange(tokens2d, "(b t) (c ef) h w -> b t c h w ef", b=b, t=t, ef=self.expand_factor)
         return tokens
-
 
 
 class MultimodalTransformer(pl.LightningModule):
@@ -471,7 +470,6 @@ class MultimodalTransformer(pl.LightningModule):
         # self.class_clf = nn.LazyLinear(len(self.classes))  # category classifier
         self.change_head_hidden = change_head_hidden
         self.class_head_hidden = class_head_hidden
-
 
         self.change_clf = nh.layers.MultiLayerPerceptronNd(
             dim=0,
@@ -1089,8 +1087,8 @@ class MultimodalTransformer(pl.LightningModule):
         module_name = package_header['module_name']
 
         # from timm.models import efficientnet_blocks
+        # from timm.models import efficientnet_blocks  # NOQA
         # efficientnet_blocks.DepthwiseSeparableConv
-
 
         # pkg_root = imp.file_structure()
         # print(pkg_root)
