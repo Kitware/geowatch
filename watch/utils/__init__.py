@@ -51,6 +51,7 @@ __getattr__ = lazy_import(
         'util_norm',
         'util_raster',
         'util_rgdc',
+        'util_stac',
     },
     submod_attrs={},
 )
@@ -60,4 +61,4 @@ def __dir__():
     return __all__
 
 __all__ = ['kwcoco_extensions', 'lightning_ext', 'util_bands', 'util_girder',
-           'util_norm', 'util_raster', 'util_rgdc']
+           'util_norm', 'util_raster', 'util_rgdc', 'util_stac']
