@@ -23,7 +23,7 @@ def sentinel2_grid():
         >>> s2_tiles = sentinel2_grid()
         >>> assert s2_tiles.crs.name == 'WGS 84'
         >>> # Print out the first 5 tile rows
-        >>> print(s2_tiles.iloc[0:5])  # xdoctest +IGNORE_WANT
+        >>> print(s2_tiles.iloc[0:5])  # xdoctest: +IGNORE_WANT
             Name                                           geometry
         0  01CCV  POLYGON Z ...180.000 -73.060...
         1  01CCV  POLYGON Z ...-180.000 -72.073...
