@@ -186,83 +186,6 @@ def new_attention_layer(embedding_size, n_heads, attention_impl='exact'):
     return layer
 
 
-def num_groups_hueristic(num_features):
-    """
-    Number of groups hueristic for GroupNorm:
-
-    Example:
-        >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
-        >>> lut = {}
-        >>> for num_features in range(2, 1024):
-        >>>     num_groups = num_groups_hueristic(num_features)
-        >>>     lut[num_features] = num_groups
-        >>> print('lut = {}'.format(ub.repr2(lut, nl=1)))
-
-    """
-    if num_features <= 1:
-        raise ValueError('need more than 1 feature for group norm')
-
-    # The hueristically "ideal" number of groups and number of channels per group
-    ideal_num_groups = num_features ** (0.5)
-    ideal_channels_per_group = num_features ** (0.5)
-
-    def hueristic_loss(num_groups):
-        channels_per_group = num_features // num_groups
-        loss = (
-            abs(ideal_num_groups - num_groups) *
-            abs(ideal_channels_per_group - channels_per_group)
-        )
-        return loss
-
-    # Minimize helper function
-    def minimize(func, argiter):
-        best_loss = None
-        best_arg = None
-        # TODO implement binary search
-        # https://medium.com/swlh/problems-with-advanced-ds-binary-search-optimization-56efedb274d5
-        for arg in argiter:
-            loss = func(arg)
-            if best_loss is None or loss < best_loss:
-                best_loss = loss
-                best_arg = arg
-            else:
-                break  # assume once we start getting worse we dont get better
-        return best_arg
-
-    # Find the number of groups that optimizes the hueristic
-    valid_num_groups = [
-        factor for factor in range(1, num_features)
-        if num_features % factor == 0
-    ]
-
-    num_groups = minimize(hueristic_loss, valid_num_groups)
-
-    if 0:
-        rows = []
-        for num_groups in valid_num_groups:
-            channels_per_group = num_features // num_groups
-            rows.append({
-                'num_features': num_features,
-                'num_groups': num_groups,
-                'channels_per_group': channels_per_group,
-                'loss': hueristic_loss(num_groups),
-            })
-
-        import timerit
-        ti = timerit.Timerit(100, bestof=10, verbose=2)
-        for timer in ti.reset('simple-stop'):
-            with timer:
-                num_groups1 = minimize(hueristic_loss, valid_num_groups)
-
-        for timer in ti.reset('brute-force'):
-            with timer:
-                num_groups2 = min(valid_num_groups, key=hueristic_loss)
-        print('num_groups1 = {!r}'.format(num_groups1))
-        print('num_groups2 = {!r}'.format(num_groups2))
-
-    return num_groups
-
-
 def new_mlp_layer(embedding_size, dropout, **kwargs):
     """
     Example:
@@ -482,10 +405,37 @@ class TimmEncoder:
         nh.OutputShapeFor(self.timm_model.head)
 
 
-# class ViViTEncoder:
-#     """
-#     https://github.com/rishikksh20/ViViT-pytorch
-#     """
+class DeiTEncoder(nn.Module):
+    """
+    https://github.com/rishikksh20/ViViT-pytorch
+    https://pytorch.org/tutorials/beginner/vt_tutorial.html
+
+    Example:
+        >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
+        >>> import torch
+        >>> in_features = 7
+        >>> input_shape = B, T, M, H, W, F = (2, 3, 5, 2, 2, in_features)
+        >>> inputs = torch.rand(*input_shape)
+        >>> self = DeiTEncoder(in_features)
+        >>> outputs = self.forward(inputs)
+    """
+    def __init__(self, in_features):
+        super().__init__()
+        deit = torch.hub.load('facebookresearch/deit:main', 'deit_base_patch16_224', pretrained=True)
+        blocks = deit.blocks
+        block_in_features = blocks[0].norm1.weight.shape[0]
+        self.first = nn.Linear(in_features, out_features=block_in_features)
+        self.blocks = blocks
+        self.in_features = in_features
+        self.out_features = blocks[-1].mlp.fc2.out_features
+
+    def forward(self, inputs):
+        B, T, M, H, W, F = inputs.shape
+        x = einops.rearrange(inputs, 'b t m h w f -> b (t m h w) f')
+        x = self.first(x)
+        x = self.blocks(x)
+        outputs = einops.rearrange(x, 'b (t m h w) f -> b t m h w f', t=T, m=M, h=H, w=W)
+        return outputs
 
 
 class FusionEncoder(nn.Module):

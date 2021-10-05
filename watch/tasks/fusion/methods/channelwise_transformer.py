@@ -441,6 +441,13 @@ class MultimodalTransformer(pl.LightningModule):
                 dropout=dropout,
             )
             self.encoder = encoder
+        elif arch_name.startswith('deit'):
+            self.encoder = transformer.DeiTEncoder(
+                # **encoder_config,
+                in_features=in_features,
+                # attention_impl=attention_impl,
+                # dropout=dropout,
+            )
         else:
             raise NotImplementedError
         # else:
@@ -503,9 +510,16 @@ class MultimodalTransformer(pl.LightningModule):
         parser.add_argument("--class_weights", default='auto', type=str, help='class weighting strategy')
 
         # Model names define the transformer encoder used by the method
-        available_encoders = list(transformer.encoder_configs.keys())
-        parser.add_argument("--tokenizer", default='rearrange', type=str,
-                            choices=['dwcnn', 'rearrange'])
+        available_encoders = list(transformer.encoder_configs.keys()) + ['deit']
+
+        parser.add_argument(
+            "--tokenizer", default='rearrange', type=str,
+            choices=['dwcnn', 'rearrange'], help=ub.paragraph(
+                '''
+                How image patches aare broken into tokens.
+                rearrange just shuffles raw pixels. dwcnn is a is a mobile
+                convolutional stem.
+                '''))
         parser.add_argument("--token_norm", default='auto', type=str,
                             choices=['auto', 'group', 'batch'])
         parser.add_argument("--arch_name", default='smt_it_stm_p8', type=str,
@@ -675,7 +689,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> coco_dset = kwcoco.CocoDataset.coerce(coco_fpath)
             >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset=coco_dset,
-            >>>     chip_size=128, batch_size=1, time_steps=5,
+            >>>     chip_size=128, batch_size=1, time_steps=3,
             >>>     channels=channels,
             >>>     normalize_inputs=True, neg_to_pos_ratio=0, num_workers='avail//2',
             >>> )
@@ -691,9 +705,10 @@ class MultimodalTransformer(pl.LightningModule):
             >>> self = methods.MultimodalTransformer(
             >>>     # ===========
             >>>     # Backbone
-            >>>     arch_name='smt_it_joint_p8',
+            >>>     #arch_name='smt_it_joint_p8',
             >>>     #arch_name='smt_it_stm_p8',
-            >>>     attention_impl='performer',
+            >>>     #attention_impl='performer',
+            >>>     arch_name='deit',
             >>>     # ===========
             >>>     # Change Loss
             >>>     change_loss='dicefocal',
@@ -717,6 +732,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> # Run one visualization
             >>> loader = datamodule.train_dataloader()
             >>> batch = next(iter(loader))
+            >>> device = 0
             >>> self.overfit(batch)
         """
         import kwplot
@@ -731,7 +747,7 @@ class MultimodalTransformer(pl.LightningModule):
         sns = kwplot.autosns()
         datamodule = self.datamodule
 
-        device = 0
+        device = 1
         self = self.to(device)
 
         # loader = datamodule.train_dataloader()
@@ -751,7 +767,7 @@ class MultimodalTransformer(pl.LightningModule):
         # dpath = ub.ensuredir('_overfit_viz09')
 
         optim_cls, optim_kw = nh.api.Optimizer.coerce(
-            optim='RAdam', lr=3e-3, weight_decay=1e-5,
+            optim='RAdam', lr=1e-3, weight_decay=1e-4,
             params=self.parameters())
 
         #optim = torch.optim.SGD(self.parameters(), lr=1e-4)
