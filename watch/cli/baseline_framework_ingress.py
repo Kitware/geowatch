@@ -4,7 +4,7 @@ import json
 import os
 import tempfile
 import subprocess
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 import requests
 import pystac
@@ -124,6 +124,8 @@ def baseline_framework_ingress(input_path,
             asset_outpath = os.path.join(
                 feature_output_dir, asset_basename)
 
+            asset_href = asset['href']
+
             try:
                 if(feature['properties']['platform'] in SENTINEL_PLATFORMS
                    and asset_name == "metadata"):
@@ -141,27 +143,25 @@ def baseline_framework_ingress(input_path,
                 # Update feature asset href to point to local outpath
                 asset['href'] = asset_outpath
             else:
-                scheme, *_ = urlparse(asset['href'])
-
-                if scheme == 's3':
-                    command = [*aws_base_command, asset['href'], asset_outpath]
-
-                    print("Running: {}".format(' '.join(command)))
-                    # TODO: Manually check return code / output
-                    subprocess.run(command, check=True)
-                    # Update feature asset href to point to local outpath
-                    asset['href'] = asset_outpath
-                elif scheme in {'https', 'http'}:
-                    print("Downloading: '{}' to '{}'".format(
-                        asset['href'], asset_outpath))
-                    if not dryrun:
-                        download_http_asset(asset['href'], asset_outpath)
-                    # Update feature asset href to point to local outpath
+                success = download_file(
+                    asset_href, asset_outpath, aws_base_command, dryrun)
+                if success:
                     asset['href'] = asset_outpath
                 else:
                     print("Warning unrecognized scheme for asset href: '{}', "
-                          "skipping!".format(asset['href']))
-                    continue
+                          "skipping!".format(asset_href))
+                    continue                 
+
+            try:
+                if(feature['properties']['platform'] in SENTINEL_PLATFORMS
+                   and asset_name == "info"):
+                    new_assets = download_mtd_msil1c(
+                        asset_href, feature_output_dir, aws_base_command, dryrun)
+            except KeyError:
+                pass
+
+        if new_assets:
+            assets.update(new_assets)
 
         item = pystac.Item.from_dict(feature)
         item.set_collection(None)  # Clear the collection if present
@@ -174,12 +174,74 @@ def baseline_framework_ingress(input_path,
     return catalog
 
 
-def download_http_asset(url, outpath):
+def download_file(href, outpath, aws_base_command, dryrun):
+    # TODO: better handling of possible download failure?
+    scheme, *_ = urlparse(href)
+
+    if scheme == 's3':
+        command = [*aws_base_command, href, outpath]
+
+        print("Running: {}".format(' '.join(command)))
+        # TODO: Manually check return code / output
+        subprocess.run(command, check=True)
+    elif scheme in {'https', 'http'}:
+        print("Downloading: '{}' to '{}'".format(
+            href, outpath))
+        if not dryrun:
+            download_http_file(href, outpath)
+    else:
+        return False
+
+    return True
+
+
+def download_http_file(url, outpath):
     response = requests.get(url)
 
     with open(outpath, 'wb') as outf:
         for chunk in response.iter_content(chunk_size=128):
             outf.write(chunk)
+
+
+def download_mtd_msil1c(tile_info_href, outdir, aws_base_command, dryrun):
+    product_info_href = tile_info_href.replace('tileInfo', 'productInfo')
+    product_info_outpath = os.path.join(outdir, 'productInfo.json')
+
+    def _create_asset(href, type, title):
+        return {
+            'href': href,
+            'type': type,
+            'title': title,
+            'roles': ['metadata']
+        }
+    assets = {}
+
+    success = download_file(
+        product_info_href, product_info_outpath, aws_base_command, dryrun)
+    if success:
+        assets['productinfo'] = _create_asset(
+            product_info_href, 'application/json', 'Product JSON metadata')
+
+        with open(product_info_outpath) as product_info_file:
+            product_info = json.load(product_info_file)
+    
+        scheme, netloc, *_ = urlparse(product_info_href)
+        mtd_msil1c_href = urlunparse((scheme, netloc, product_info['path']))
+        mtd_msil1c_outpath = os.path.join(outdir, 'MTD_MSIL1C.xml')
+
+        success = download_file(
+            mtd_msil1c_href, mtd_msil1c_outpath, aws_base_command, dryrun)
+        if success:
+            assets['productmetadata'] = _create_asset(
+                mtd_msil1c_href, 'application/xml', 'Product XML metadata')
+        else:
+            print("Warning unrecognized scheme for asset href: '{}', "
+                  "skipping!".format(mtd_msil1c_href))
+    else:
+        print("Warning unrecognized scheme for asset href: '{}', "
+              "skipping!".format(product_info_href))
+
+    return assets
 
 
 if __name__ == "__main__":
