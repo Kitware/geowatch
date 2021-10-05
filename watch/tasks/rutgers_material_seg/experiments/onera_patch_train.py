@@ -156,6 +156,10 @@ class Trainer(object):
         total_loss = 0
         total_loss_seg = 0
         preds, targets = [], []
+        histogram_distance, l1_dist, l2_dist = [], [], []
+        # topk_pre_histogram_distance, topk_pre_l1_dist, topk_pre_l2_dist = [], [], []
+        # topk_post_histogram_distance, topk_post_l1_dist, topk_post_l2_dist = [], [], []
+
         self.model.train()
         print(f"starting epoch {epoch}")
         loader_size = len(self.train_loader)
@@ -400,7 +404,7 @@ class Trainer(object):
 
 
             inference_otsu_coeff = 1.4
-            hist_inference_otsu_coeff = 0.95
+            hist_inference_otsu_coeff = 0.8
             pad_amount = (config['evaluation']['inference_window']-1)//2
             padded_output1 = F.pad(input=output1, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
             padded_output2 = F.pad(input=output2, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
@@ -442,8 +446,6 @@ class Trainer(object):
             # kl_div_distance = (kl_div_distance - kl_div_distance.min(dim=1, keepdim=True)[0])/(kl_div_distance.max(dim=1, keepdim=True)[0] - kl_div_distance.min(dim=1, keepdim=True)[0])
             # patched_diff_change_residuals_distribution = kl_div_distance.view(bs,h,w)
 
-            # print(f"output min: {output1.min()}, max: {output1.max()}")
-
             # l1 region-wise inference raw features
             l1_patched_diff_change_features = torch.abs((patched_padded_output1_distributions - patched_padded_output2_distributions).sum(axis=2)).view(bs,h,w)
             l1_dist_change_feats_pred = torch.zeros_like(l1_patched_diff_change_features)
@@ -470,6 +472,11 @@ class Trainer(object):
             mask1[mask1 == -1] = 0
             preds.append(l2_dist_change_feats_pred)
             targets.append(mask1.cpu())  # .numpy())
+            
+            histogram_distance.append(histc_int_change_feats_pred)
+            l1_dist.append(l1_dist_change_feats_pred)
+            l2_dist.append(l2_dist_change_feats_pred)
+
 
             if config['visualization']['train_visualizer']:
                 if (epoch) % config['visualization']['visualize_training_every'] == 0:
@@ -602,6 +609,22 @@ class Trainer(object):
                 f"(timing, secs) crop_collection: {crop_collection_time:0.3f}, run_network: {run_network_time:0.3f}, clustering: {clustering_time:0.3f}, backprob: {backprop_time:0.3f}, log: {logging_time:0.3f}")
 
         mean_iou, precision, recall = eval_utils.compute_jaccard(preds, targets, num_classes=2)
+        
+        hist_mean_iou, hist_precision, hist_recall = eval_utils.compute_jaccard(histogram_distance, targets, num_classes=2)
+        l1_mean_iou, l1_precision, l1_recall = eval_utils.compute_jaccard(l1_dist, targets, num_classes=2)
+        l2_mean_iou, l2_precision, l2_recall = eval_utils.compute_jaccard(l2_dist, targets, num_classes=2)
+
+        l1_precision = np.array(l1_precision)
+        l1_recall = np.array(l1_recall)
+        l1_f1 = 2 * (l1_precision * l1_recall) / (l1_precision + l1_recall)
+
+        l2_precision = np.array(l2_precision)
+        l2_recall = np.array(l2_recall)
+        l2_f1 = 2 * (l2_precision * l2_recall) / (l2_precision + l2_recall)
+
+        hist_precision = np.array(hist_precision)
+        hist_recall = np.array(hist_recall)
+        hist_f1 = 2 * (hist_precision * hist_recall) / (hist_precision + hist_recall)
 
         mean_iou = np.array(mean_iou)
         precision = np.array(precision)
@@ -624,9 +647,21 @@ class Trainer(object):
         cometml_experiemnt.log_metric("Training mIoU", overall_miou, epoch=epoch+1)
         cometml_experiemnt.log_metric("Training mean_f1_score", mean_f1_score, epoch=epoch+1)
 
-        cometml_experiemnt.log_metrics({f"Training Recall class {str(x)}": recall[x] for x in range(len(recall))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"Training Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"Training F1_score class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch+1)
+        # cometml_experiemnt.log_metrics({f"Training Recall class {str(x)}": recall[x] for x in range(len(recall))}, epoch=epoch+1)
+        # cometml_experiemnt.log_metrics({f"Training Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch+1)
+        # cometml_experiemnt.log_metrics({f"Training F1_score class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch+1)
+
+        cometml_experiemnt.log_metrics({f"L1 Training Recall class {str(x)}": l1_recall[x] for x in range(len(l1_recall))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"L1 Training Precision class {str(x)}": l1_precision[x] for x in range(len(l1_precision))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"L1 Training F1_score class {str(x)}": l1_f1[x] for x in range(len(l1_f1))}, epoch=epoch+1)
+
+        cometml_experiemnt.log_metrics({f"L2 Training Recall class {str(x)}": l2_recall[x] for x in range(len(l2_recall))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"L2 Training Precision class {str(x)}": l2_precision[x] for x in range(len(l2_precision))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"L2 Training F1_score class {str(x)}": l2_f1[x] for x in range(len(l2_f1))}, epoch=epoch+1)
+
+        cometml_experiemnt.log_metrics({f"Histogram Distance Training Recall class {str(x)}": hist_recall[x] for x in range(len(hist_recall))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"Histogram Distance Training Precision class {str(x)}": hist_precision[x] for x in range(len(hist_precision))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"Histogram Distance Training F1_score class {str(x)}": hist_f1[x] for x in range(len(hist_f1))}, epoch=epoch+1)
 
         print("Training Epoch {0:2d} average loss: {1:1.2f}".format(epoch+1, total_loss/self.train_loader.__len__()))
 
@@ -645,6 +680,7 @@ class Trainer(object):
         print("validating")
         total_loss = 0
         preds, stacked_preds, targets = [], [], []
+        histogram_distance, l1_dist, l2_dist = [], [], []
         accuracies = 0
         running_ap = 0.0
         batch_index_to_show = config['visualization']['batch_index_to_show']
@@ -691,8 +727,8 @@ class Trainer(object):
                 masks2 = F.softmax(output2, dim=1)  # .detach()
 
                 #region-wise inference
-                inference_otsu_coeff = 1.0
-                hist_inference_otsu_coeff = 0.95
+                inference_otsu_coeff = 1.4
+                hist_inference_otsu_coeff = 0.92
                 pad_amount = (config['evaluation']['inference_window']-1)//2
                 padded_output1 = F.pad(input=output1, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
                 padded_output2 = F.pad(input=output2, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
@@ -743,6 +779,9 @@ class Trainer(object):
                 # pred2 = masks2.max(1)[1].cpu().detach()  # .numpy()
                 # change_detection_prediction = diff_change_thresholded.cpu().detach().type(torch.uint8)
                 # change_detection_prediction = (pred1!=pred2).type(torch.uint8)
+                histogram_distance.append(histc_int_change_feats_pred)
+                l1_dist.append(l1_dist_change_feats_pred)
+                l2_dist.append(l2_dist_change_feats_pred)
 
                 preds.append(l2_dist_change_feats_pred)
                 mask1[mask1 == -1] = 0
@@ -886,6 +925,22 @@ class Trainer(object):
 
         mean_iou, precision, recall = eval_utils.compute_jaccard(preds, targets, num_classes=2)
 
+        hist_mean_iou, hist_precision, hist_recall = eval_utils.compute_jaccard(histogram_distance, targets, num_classes=2)
+        l1_mean_iou, l1_precision, l1_recall = eval_utils.compute_jaccard(l1_dist, targets, num_classes=2)
+        l2_mean_iou, l2_precision, l2_recall = eval_utils.compute_jaccard(l2_dist, targets, num_classes=2)
+
+        l1_precision = np.array(l1_precision)
+        l1_recall = np.array(l1_recall)
+        l1_f1 = 2 * (l1_precision * l1_recall) / (l1_precision + l1_recall)
+
+        l2_precision = np.array(l2_precision)
+        l2_recall = np.array(l2_recall)
+        l2_f1 = 2 * (l2_precision * l2_recall) / (l2_precision + l2_recall)
+
+        hist_precision = np.array(hist_precision)
+        hist_recall = np.array(hist_recall)
+        hist_f1 = 2 * (hist_precision * hist_recall) / (hist_precision + hist_recall)
+
         mean_iou = np.array(mean_iou)
         precision = np.array(precision)
         recall = np.array(recall)
@@ -903,9 +958,22 @@ class Trainer(object):
         cometml_experiemnt.log_metric("Validation mean f1_score", mean_f1_score, epoch=epoch+1)
         print({f"Recall class {str(x)}": recall[x] for x in range(len(recall))})
         print({f"Precision class {str(x)}": precision[x] for x in range(len(precision))})
-        cometml_experiemnt.log_metrics({f"Recall class {str(x)}": recall[x] for x in range(len(recall))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch+1)
-        cometml_experiemnt.log_metrics({f"F1_score class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch+1)
+
+        # cometml_experiemnt.log_metrics({f"Recall class {str(x)}": recall[x] for x in range(len(recall))}, epoch=epoch+1)
+        # cometml_experiemnt.log_metrics({f"Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch+1)
+        # cometml_experiemnt.log_metrics({f"F1_score class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))}, epoch=epoch+1)
+
+        cometml_experiemnt.log_metrics({f"L1 Training Recall class {str(x)}": l1_recall[x] for x in range(len(l1_recall))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"L1 Training Precision class {str(x)}": l1_precision[x] for x in range(len(l1_precision))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"L1 Training F1_score class {str(x)}": l1_f1[x] for x in range(len(l1_f1))}, epoch=epoch+1)
+
+        cometml_experiemnt.log_metrics({f"L2 Training Recall class {str(x)}": l2_recall[x] for x in range(len(l2_recall))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"L2 Training Precision class {str(x)}": l2_precision[x] for x in range(len(l2_precision))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"L2 Training F1_score class {str(x)}": l2_f1[x] for x in range(len(l2_f1))}, epoch=epoch+1)
+
+        cometml_experiemnt.log_metrics({f"Histogram Distance Training Recall class {str(x)}": hist_recall[x] for x in range(len(hist_recall))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"Histogram Distance Training Precision class {str(x)}": hist_precision[x] for x in range(len(hist_precision))}, epoch=epoch+1)
+        cometml_experiemnt.log_metrics({f"Histogram Distance Training F1_score class {str(x)}": hist_f1[x] for x in range(len(hist_f1))}, epoch=epoch+1)
 
         cometml_experiemnt.log_metric("Validation Average Loss", total_loss/loader.__len__(), epoch=epoch+1)
 

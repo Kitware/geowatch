@@ -4,7 +4,7 @@ location: local
 data:
   type: semantic_seg
   name: onera
-  num_classes: 40
+  num_classes: 100
   window_size: 5
   image_size: 128
   time_steps: 2
@@ -29,7 +29,7 @@ data:
 training:
   backbone: #resnet18 #resnet101, resnet50
   model_name: shallow_seg #shallow_seg, deeplabWS
-  model_feats_channels: [64, 64, 128, 256, 512] #[32, 32, 64, 64, 128], [64, 64, 128, 256, 512], [32, 32, 64, 128, 256] # this needs to match the correct number of layers in the model
+  model_feats_channels: [64, 128, 256, 512, 1024] #[32, 32, 64, 64, 128], [64, 64, 128, 256, 512], [32, 32, 64, 128, 256] # this needs to match the correct number of layers in the model
   gn_n_groups: 32
   num_channels: 13
   out_features_dim: 10
@@ -38,7 +38,7 @@ training:
   pretrained: False
   distributed: False
   learning_rate: 0.002 # best: 0.00007
-  # resume: /home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-08-06-22:35_baseline/experiments_epoch_49_loss_0.04315589724482366_valmIoU_0.5678595403613368_time_2021-08-07-15:25:56.pth
+  # resume: /home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-10-04-15:54/experiments_epoch_3_loss_3.3695905646770306_valmIoU_0.43526471424924096_time_2021-10-04-16:28:05.pth
   resume: False
   train_val_test_split: [0.95, 0.02, 0.03]
   epochs: 200

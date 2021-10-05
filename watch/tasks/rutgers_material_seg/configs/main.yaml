@@ -20,7 +20,7 @@ visualization:
   fg_alpha: 0.6
   bg_alpha: 0.5
   font_size: 10
-  fig_size: 20
+  fig_size: 15
   dpi: 200
 
 cometml:
