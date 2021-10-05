@@ -2200,40 +2200,41 @@ def dilated_template_sample(unixtimes, time_window):
                 datetime.timedelta(days=0).total_seconds(),
                 datetime.timedelta(days=+365).total_seconds(),
             ])
-        elif time_window == 4:
-            template_deltas = np.array([
-                datetime.timedelta(days=-365).total_seconds(),
-                datetime.timedelta(days=-1).total_seconds(),
-                datetime.timedelta(days=0).total_seconds(),
-                datetime.timedelta(days=+365).total_seconds(),
-            ])
-        elif time_window == 5:
-            template_deltas = np.array([
-                datetime.timedelta(days=-365).total_seconds(),
-                datetime.timedelta(days=-1).total_seconds(),
-                datetime.timedelta(days=0).total_seconds(),
-                datetime.timedelta(days=+1).total_seconds(),
-                datetime.timedelta(days=+365).total_seconds(),
-            ])
-        elif time_window == 7:
-            template_deltas = np.array([
-                datetime.timedelta(days=-365).total_seconds(),
-                datetime.timedelta(days=-1).total_seconds(),
-                datetime.timedelta(days=-17).total_seconds(),
-                datetime.timedelta(days=0).total_seconds(),
-                datetime.timedelta(days=+1).total_seconds(),
-                datetime.timedelta(days=+17).total_seconds(),
-                datetime.timedelta(days=+365).total_seconds(),
-            ])
+        # elif time_window == 4:
+        #     template_deltas = np.array([
+        #         datetime.timedelta(days=-365).total_seconds(),
+        #         datetime.timedelta(days=-1).total_seconds(),
+        #         datetime.timedelta(days=0).total_seconds(),
+        #         datetime.timedelta(days=+365).total_seconds(),
+        #     ])
+        # elif time_window == 5:
+        #     template_deltas = np.array([
+        #         datetime.timedelta(days=-365).total_seconds(),
+        #         datetime.timedelta(days=-1).total_seconds(),
+        #         datetime.timedelta(days=0).total_seconds(),
+        #         datetime.timedelta(days=+1).total_seconds(),
+        #         datetime.timedelta(days=+365).total_seconds(),
+        #     ])
+        # elif time_window == 7:
+        #     template_deltas = np.array([
+        #         datetime.timedelta(days=-365).total_seconds(),
+        #         datetime.timedelta(days=-1).total_seconds(),
+        #         datetime.timedelta(days=-17).total_seconds(),
+        #         datetime.timedelta(days=0).total_seconds(),
+        #         datetime.timedelta(days=+1).total_seconds(),
+        #         datetime.timedelta(days=+17).total_seconds(),
+        #         datetime.timedelta(days=+365).total_seconds(),
+        #     ])
         else:
             num_years = 3
-            min_time = -365 * num_years
-            max_time = 365 * num_years
+            min_time = -datetime.timedelta(days=365).total_seconds() * num_years
+            max_time = datetime.timedelta(days=365).total_seconds() * num_years
             template_deltas = np.linspace(min_time, max_time, time_window).round().astype(int)
             # Always include a delta of 0
             template_deltas[np.abs(template_deltas).argmin()] = 0
     else:
         template_deltas = time_window
+    print('template_deltas = {!r}'.format(template_deltas))
 
     num_frames = len(template_deltas)
 
@@ -2289,15 +2290,10 @@ def dilated_template_sample(unixtimes, time_window):
                 # kwarray.argmaxima(-loss_for_row, axis=1, num=num_frames).T
                 # candidiates = kwarray.argmaxima(-loss_for_row, axis=1, num=num_frames).T
                 sample_idxs = sorted(it.islice(ub.unique(candidiates.ravel()), num_frames))
-            all_rows.append(sample_idxs)
+            all_rows.append(sorted(sample_idxs))
 
     all_sample_idxs = np.vstack(all_rows)
     sample_idxs = unique_rows(all_sample_idxs)
-
-    if 0:
-        time_sample = np.array([unixtimes[x] for x in all_sample_idxs])
-        ideal_time_samples - time_sample
-        pass
 
     return sample_idxs
 

@@ -128,14 +128,15 @@ class OurDepthwiseSeparableConv(nn.Module):
         return x
 
 class DWCNNTokenizer(nn.Module):
-    def __init__(self, in_chn):
+    def __init__(self, in_chn, norm='auto'):
         super().__init__()
+        self.norm = norm
         # self.to_images = Rearrange("b t c h w -> (b t) c h w")
         self.stem = nn.Sequential(*[
             OurDepthwiseSeparableConv(in_chn, in_chn, kernel_size=3, stride=1, padding=1, residual=1, norm=None, noli=None),
-            OurDepthwiseSeparableConv(in_chn, in_chn * 4, kernel_size=3, stride=2, padding=1, residual=0, norm='group'),
-            OurDepthwiseSeparableConv(in_chn * 4, in_chn * 8, kernel_size=3, stride=2, padding=1, residual=0, norm='group'),
-            OurDepthwiseSeparableConv(in_chn * 8, in_chn * 64, kernel_size=3, stride=2, padding=1, residual=0, norm='group'),
+            OurDepthwiseSeparableConv(in_chn, in_chn * 4, kernel_size=3, stride=2, padding=1, residual=0, norm=norm),
+            OurDepthwiseSeparableConv(in_chn * 4, in_chn * 8, kernel_size=3, stride=2, padding=1, residual=0, norm=norm),
+            OurDepthwiseSeparableConv(in_chn * 8, in_chn * 64, kernel_size=3, stride=2, padding=1, residual=0, norm=norm),
         ])
         self.expand_factor = 64
         # self.to_tokens = Rearrange("(b t) (c ef) h w -> (b t) c h w ef", ef=self.expand_factor, b=1)
@@ -209,6 +210,7 @@ class MultimodalTransformer(pl.LightningModule):
                  change_loss='cce',
                  class_loss='focal',
                  tokenizer='rearange',
+                 token_norm='auto',
                  classes=10):
 
         super().__init__()
@@ -417,7 +419,7 @@ class MultimodalTransformer(pl.LightningModule):
             for stream_key, num_chan in stream_num_channels.items():
                 # Construct tokenize on a per-stream basis
                 # import netharn as nh
-                tokenize = DWCNNTokenizer(num_chan)
+                tokenize = DWCNNTokenizer(num_chan, norm=token_norm)
                 stream_tokenizers[stream_key] = tokenize
         self.stream_tokenizers = stream_tokenizers
 
@@ -504,6 +506,8 @@ class MultimodalTransformer(pl.LightningModule):
         available_encoders = list(transformer.encoder_configs.keys())
         parser.add_argument("--tokenizer", default='rearrange', type=str,
                             choices=['dwcnn', 'rearrange'])
+        parser.add_argument("--token_norm", default='auto', type=str,
+                            choices=['auto', 'group', 'batch'])
         parser.add_argument("--arch_name", default='smt_it_stm_p8', type=str,
                             choices=available_encoders)
         parser.add_argument("--dropout", default=0.1, type=float)
