@@ -5,6 +5,7 @@ import ubelt as ub
 import torch
 import torchmetrics
 
+import numpy as np
 import netharn as nh
 import pytorch_lightning as pl
 
@@ -208,7 +209,7 @@ class MultimodalTransformer(pl.LightningModule):
                  class_head_hidden=2,
                  change_loss='cce',
                  class_loss='focal',
-                 tokenizer='rearange',
+                 tokenizer='rearrange',
                  token_norm='auto',
                  classes=10):
 
@@ -263,7 +264,6 @@ class MultimodalTransformer(pl.LightningModule):
         # self.change_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
         if isinstance(class_weights, str):
             if class_weights == 'auto':
-                import numpy as np
                 if self.class_freq is None:
                     heuristic_weights = {}
                 else:
@@ -403,7 +403,7 @@ class MultimodalTransformer(pl.LightningModule):
         #     - [ ] Dynamic / Learned embeddi
 
         # TODO: add tokenization strat to the FusionEncoder itself
-        if tokenizer == 'rearange':
+        if tokenizer == 'rearrange':
             stream_tokenizers = nn.ModuleDict()
             for stream_key, num_chan in stream_num_channels.items():
                 # Construct tokenize on a per-stream basis
@@ -420,6 +420,8 @@ class MultimodalTransformer(pl.LightningModule):
                 # import netharn as nh
                 tokenize = DWCNNTokenizer(num_chan, norm=token_norm)
                 stream_tokenizers[stream_key] = tokenize
+        else:
+            raise KeyError(tokenizer)
         self.stream_tokenizers = stream_tokenizers
 
         encode_t = utils.SinePositionalEncoding(5, 1, sine_pairs=4)
@@ -1193,7 +1195,7 @@ class MultimodalTransformer(pl.LightningModule):
 
         arch_name = "model.pkl"
         module_name = 'watch_tasks_fusion'
-        with torch.package.PackageExporter(package_path, verbose=verbose) as exp:
+        with torch.package.PackageExporter(package_path) as exp:
             # TODO: this is not a problem yet, but some package types (mainly
             # binaries) will need to be excluded and added as mocks
             exp.extern("**", exclude=["watch.tasks.fusion.**"])
