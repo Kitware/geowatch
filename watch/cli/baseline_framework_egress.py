@@ -7,6 +7,8 @@ import subprocess
 
 import pystac
 
+from watch.utils.util_stac import parallel_map_items
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -35,10 +37,51 @@ def main():
                         action='store_true',
                         default=False,
                         help="Output as simple newline separated STAC items")
+    parser.add_argument("-j", "--jobs",
+                        type=int,
+                        default=1,
+                        required=False,
+                        help="Number of jobs to run in parallel")
 
     baseline_framework_egress(**vars(parser.parse_args()))
 
     return 0
+
+
+def _item_map(stac_item, outbucket, aws_base_command):
+    stac_item_dict = stac_item.to_dict()
+
+    stac_item_outpath = os.path.join(
+        outbucket, "{}.json".format(stac_item.id))
+
+    assets_outdir = os.path.join(outbucket, stac_item.id)
+
+    for asset_name, asset in stac_item_dict.get('assets', {}).items():
+        asset_basename = os.path.basename(asset['href'])
+
+        asset_outpath = os.path.join(assets_outdir, asset_basename)
+
+        command = [*aws_base_command, asset['href'], asset_outpath]
+
+        print("Running: {}".format(' '.join(command)))
+        # TODO: Manually check return code / output
+        subprocess.run(command, check=True)
+
+        # Update feature asset href to point to local outpath
+        asset['href'] = asset_outpath
+
+    with tempfile.NamedTemporaryFile() as temporary_file:
+        with open(temporary_file.name, 'w') as f:
+            print(json.dumps(stac_item_dict, indent=2), file=f)
+
+        command = [*aws_base_command,
+                   temporary_file.name, stac_item_outpath]
+
+        subprocess.run(command, check=True)
+
+    output_stac_item = pystac.Item.from_dict(stac_item_dict)
+    output_stac_item.set_self_href(stac_item_outpath)
+    return output_stac_item
 
 
 def baseline_framework_egress(stac_catalog,
@@ -46,7 +89,8 @@ def baseline_framework_egress(stac_catalog,
                               outbucket,
                               aws_profile=None,
                               dryrun=False,
-                              newline=False):
+                              newline=False,
+                              jobs=1):
     if isinstance(stac_catalog, str):
         catalog = pystac.read_file(href=stac_catalog).full_copy()
     elif isinstance(stac_catalog, dict):
@@ -63,39 +107,15 @@ def baseline_framework_egress(stac_catalog,
     if dryrun:
         aws_base_command.append('--dryrun')
 
-    output_stac_items = []
-    for stac_item in catalog.get_all_items():
-        stac_item_outpath = os.path.join(
-            outbucket, "{}.json".format(stac_item.id))
-        stac_item.set_self_href(stac_item_outpath)
+    output_catalog = parallel_map_items(
+        catalog,
+        _item_map,
+        max_workers=jobs,
+        mode='process' if jobs > 1 else 'serial',
+        extra_args=[outbucket, aws_base_command])
 
-        assets_outdir = os.path.join(outbucket, stac_item.id)
-
-        stac_item_dict = stac_item.to_dict()
-        for asset_name, asset in stac_item_dict.get('assets', {}).items():
-            asset_basename = os.path.basename(asset['href'])
-
-            asset_outpath = os.path.join(assets_outdir, asset_basename)
-
-            command = [*aws_base_command, asset['href'], asset_outpath]
-
-            print("Running: {}".format(' '.join(command)))
-            # TODO: Manually check return code / output
-            subprocess.run(command, check=True)
-
-            # Update feature asset href to point to local outpath
-            asset['href'] = asset_outpath
-
-        with tempfile.NamedTemporaryFile() as temporary_file:
-            with open(temporary_file.name, 'w') as f:
-                print(json.dumps(stac_item_dict, indent=2), file=f)
-
-            command = [*aws_base_command,
-                       temporary_file.name, stac_item_outpath]
-
-            subprocess.run(command, check=True)
-
-        output_stac_items.append(stac_item_dict)
+    output_stac_items = [item.to_dict() for item
+                         in output_catalog.get_all_items()]
 
     if newline:
         te_output = '\n'.join((json.dumps(item) for item in output_stac_items))
