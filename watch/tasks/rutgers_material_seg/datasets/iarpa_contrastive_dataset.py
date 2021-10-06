@@ -1,3 +1,5 @@
+# flake8: noqa
+
 import kwarray
 import kwimage
 import numpy as np

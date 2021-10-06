@@ -1,3 +1,5 @@
+# flake8: noqa
+
 from watch.tasks.rutgers_material_seg.datasets import deepglobe
 from watch.tasks.rutgers_material_seg.datasets import iarpa_dataset
 

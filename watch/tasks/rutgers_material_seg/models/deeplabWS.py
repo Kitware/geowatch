@@ -1,3 +1,5 @@
+# flake8: noqa
+
 import torch
 import torch.nn as nn
 import math

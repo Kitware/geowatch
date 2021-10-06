@@ -1,3 +1,5 @@
+# flake8: noqa
+
 from PIL import Image
 import watch.tasks.rutgers_material_seg.utils.utils as utils
 import torchvision.transforms.functional as FT

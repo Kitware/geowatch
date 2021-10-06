@@ -1,7 +1,5 @@
-"""
-Author: Yonglong Tian (yonglong@mit.edu)
-Date: May 07, 2020
-"""
+# flake8: noqa
+
 from __future__ import print_function
 
 import torch

@@ -1,3 +1,5 @@
+# flake8: noqa
+
 """ResNet in PyTorch.
 ImageNet-Style ResNet
 [1] Kaiming He, Xiangyu Zhang, Shaoqing Ren, Jian Sun

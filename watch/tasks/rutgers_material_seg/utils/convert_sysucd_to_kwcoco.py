@@ -1,3 +1,6 @@
+# flake8: noqa
+
+
 from os.path import dirname
 from os.path import exists
 from os.path import join

@@ -1,3 +1,5 @@
+# flake8: noqa
+
 from PIL import Image
 import torchvision.transforms.functional as FT
 import torchvision
