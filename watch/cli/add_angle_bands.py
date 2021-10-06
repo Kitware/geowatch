@@ -7,9 +7,11 @@ from contextlib import contextmanager
 import tempfile
 import subprocess
 import shutil
-from s2angs.cli import generate_anglebands
 
+from s2angs.cli import generate_anglebands
 import pystac
+
+from watch.utils.util_stac import parallel_map_items
 
 
 L7_RE = re.compile(r'^L[COTEM]07')
@@ -31,13 +33,59 @@ def main():
                         type=str,
                         help="Output directory for coregistered scenes and "
                              "updated STAC catalog")
+    parser.add_argument("-j", "--jobs",
+                        type=int,
+                        default=1,
+                        required=False,
+                        help="Number of jobs to run in parallel")
 
     add_angle_bands(**vars(parser.parse_args()))
 
     return 0
 
 
-def add_angle_bands(stac_catalog, outdir):
+def _item_map(stac_item, outdir):
+    # This assumes we're not changing the stac_item ID in any of
+    # the mapping functions
+    item_outdir = os.path.join(outdir, stac_item.id)
+    os.makedirs(item_outdir, exist_ok=True)
+
+    # Adding a reference back to the original STAC
+    # item if not already present
+    if len(stac_item.get_links('original')) == 0:
+        stac_item.links.append(pystac.Link.from_dict(
+            {'rel': 'original',
+             'href': stac_item.get_self_href(),
+             'type': 'application/json'}))
+
+    print("* Generating angle bands for item: '{}'".format(stac_item.id))
+
+    if re.search(L7_RE, stac_item.id):
+        output_stac_item = add_angles_landsat(
+            stac_item, item_outdir, 'L7')
+    elif re.search(L8_RE, stac_item.id):
+        output_stac_item = add_angles_landsat(
+            stac_item, item_outdir, 'L8')
+    elif re.search(S2_RE, stac_item.id):
+        output_stac_item = add_angles_s2(stac_item, item_outdir)
+    else:
+        print("** No angle band generation implemented for item, "
+              "skipping!")
+        output_stac_item = stac_item
+
+    output_stac_item.set_self_href(os.path.join(
+        item_outdir,
+        "{}.json".format(output_stac_item.id)))
+
+    # Roughly keeping track of what WATCH processes have been
+    # run on this particular item
+    output_stac_item.properties.setdefault(
+        'watch:process_history', []).append('add_angle_bands')
+
+    return output_stac_item
+
+
+def add_angle_bands(stac_catalog, outdir, jobs=1):
     if isinstance(stac_catalog, str):
         catalog = pystac.read_file(href=stac_catalog).full_copy()
     elif isinstance(stac_catalog, dict):
@@ -47,47 +95,13 @@ def add_angle_bands(stac_catalog, outdir):
 
     os.makedirs(outdir, exist_ok=True)
 
-    def _item_map(stac_item):
-        # This assumes we're not changing the stac_item ID in any of
-        # the mapping functions
-        item_outdir = os.path.join(outdir, stac_item.id)
-        os.makedirs(item_outdir, exist_ok=True)
-
-        # Adding a reference back to the original STAC
-        # item if not already present
-        if len(stac_item.get_links('original')) == 0:
-            stac_item.links.append(pystac.Link.from_dict(
-                {'rel': 'original',
-                 'href': stac_item.get_self_href(),
-                 'type': 'application/json'}))
-
-        print("* Generating angle bands for item: '{}'".format(stac_item.id))
-
-        if re.search(L7_RE, stac_item.id):
-            output_stac_item = add_angles_landsat(
-                stac_item, item_outdir, 'L7')
-        elif re.search(L8_RE, stac_item.id):
-            output_stac_item = add_angles_landsat(
-                stac_item, item_outdir, 'L8')
-        elif re.search(S2_RE, stac_item.id):
-            output_stac_item = add_angles_s2(stac_item, item_outdir)
-        else:
-            print("** No angle band generation implemented for item, "
-                  "skipping!")
-            output_stac_item = stac_item
-
-        output_stac_item.set_self_href(os.path.join(
-            item_outdir,
-            "{}.json".format(output_stac_item.id)))
-
-        # Roughly keeping track of what WATCH processes have been
-        # run on this particular item
-        output_stac_item.properties.setdefault(
-            'watch:process_history', []).append('add_angle_bands')
-
-        return output_stac_item
-
-    output_catalog = catalog.map_items(_item_map)
+    # output_catalog = catalog.map_items(_item_map)
+    output_catalog = parallel_map_items(
+        catalog,
+        _item_map,
+        max_workers=jobs,
+        mode='process' if jobs > 1 else 'serial',
+        extra_args=[outdir])
 
     output_catalog.set_self_href(os.path.join(outdir, 'catalog.json'))
     output_catalog.save(catalog_type=pystac.CatalogType.ABSOLUTE_PUBLISHED)
