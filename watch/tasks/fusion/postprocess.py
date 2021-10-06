@@ -1,5 +1,17 @@
 
 def mask_to_scored_polygons(probs, thresh):
+    """
+    Example:
+        >>> from watch.tasks.fusion.postprocess import *  # NOQA
+        >>> import kwimage
+        >>> probs = kwimage.Heatmap.random(dims=(64, 64), rng=0).data['class_probs'][0]
+        >>> thresh = 0.5
+        >>> poly1, score1 = list(mask_to_scored_polygons(probs, thresh))[0]
+        >>> # xdoctest: +IGNORE_WANT
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(probs > 0.5)
+    """
     import kwimage
     import numpy as np
     # Threshold scores
@@ -14,7 +26,7 @@ def mask_to_scored_polygons(probs, thresh):
         # Ensure w/h are positive
         box.data[:, 2:4] = np.maximum(box.data[:, 2:4], 1)
         x, y, w, h = box.data[0]
-        rel_poly = poly.translate(-x, -y)
+        rel_poly = poly.translate((-x, -y))
         rel_mask = rel_poly.to_mask((h, w)).data
         # Slice out the corresponding region of probabilities
         rel_probs = probs[y:y + h, x:x + w]
