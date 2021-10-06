@@ -1,0 +1,246 @@
+{
+    "backbone_params": {
+        "dropout_2d": 0.0,
+        "encoder_depth": 101,
+        "input_features": 3,
+        "is_deconv": false,
+        "name": "unet_resnet",
+        "num_filters": 32,
+        "pretrained": true
+    },
+    "compute_crossfield": true,
+    "compute_seg": true,
+    "data_aug_params": {
+        "affine": true,
+        "color_jitter": true,
+        "device": "cuda",
+        "enable": true,
+        "scaling": [
+            0.75,
+            1.5
+        ],
+        "vflip": true
+    },
+    "data_dir_candidates": [
+        "./data/",
+        "~/data",
+        "/data"
+    ],
+    "dataset_params": {
+        "data_patch_size": 512,
+        "gt_dirname": "gt_polygonized",
+        "gt_source": "disk",
+        "gt_type": "geojson",
+        "input_patch_size": 512,
+        "mask_only": false,
+        "pre_process": true,
+        "root_dirname": "AerialImageDataset",
+        "small": true,
+        "train_fraction": 0.75
+    },
+    "device": "cuda",
+    "eval_params": {
+        "batch_size_mult": 1,
+        "patch_overlap": 200,
+        "patch_size": 256,
+        "results_dirname": "eval_runs",
+        "save_aggregated_outputs": {
+            "poly_coco": false,
+            "seg_coco": false,
+            "stats": true
+        },
+        "save_individual_outputs": {
+            "crossfield": false,
+            "image": false,
+            "poly_geojson": false,
+            "poly_shapefile": false,
+            "poly_viz": true,
+            "seg": true,
+            "seg_gt": false,
+            "seg_luxcarta": false,
+            "seg_mask": true,
+            "seg_opencities_mask": false,
+            "uv_angles": false
+        },
+        "seg_threshold": 0.4,
+        "test_time_augmentation": true
+    },
+    "expt_params": {
+        "is_facade": false,
+        "is_geopose": true,
+        "is_shadow": false,
+        "is_upsample": true
+    },
+    "loss_params": {
+        "multiloss": {
+            "coefs": {
+                "crossfield_align": 1,
+                "crossfield_align90": 0.2,
+                "crossfield_smooth": 0.005,
+                "epoch_thresholds": [
+                    0,
+                    5
+                ],
+                "seg": 10,
+                "seg_edge_crossfield": [
+                    0.0,
+                    0.2
+                ],
+                "seg_edge_interior": [
+                    0.0,
+                    0.2
+                ],
+                "seg_interior_crossfield": [
+                    0.0,
+                    0.2
+                ]
+            },
+            "normalization_params": {
+                "max_samples": 1000,
+                "min_samples": 10
+            }
+        },
+        "seg_loss_params": {
+            "bce_coef": 1.0,
+            "dice_coef": 0.2,
+            "sigma": 10,
+            "use_dist": true,
+            "use_size": false,
+            "w0": 50
+        }
+    },
+    "num_workers": 1,
+    "optim_params": {
+        "base_lr": 0.0001,
+        "batch_size": 1,
+        "checkpoint_epoch": 1,
+        "checkpoints_dirname": "checkpoints",
+        "checkpoints_to_keep": 10,
+        "dropout_keep_prob": 1.0,
+        "gamma": 0.99,
+        "log_steps": 200,
+        "logs_dirname": "logs",
+        "max_epoch": 1000,
+        "max_lr": 0.1,
+        "optimizer": "Adam",
+        "weight_decay": 0
+    },
+    "polygonize_params": {
+        "acm_method": {
+            "crossfield_coef": 0.5,
+            "data_coef": 0.1,
+            "data_level": 0.4,
+            "device": "cuda",
+            "length_coef": 0.4,
+            "min_area": 100,
+            "poly_lr": 0.01,
+            "seg_threshold": 0.4,
+            "steps": 500,
+            "tolerance": [
+                0.125
+            ],
+            "warmup_factor": 0.1,
+            "warmup_iters": 100
+        },
+        "asm_method": {
+            "data_level": 0.5,
+            "device": "cuda",
+            "gamma": 0.995,
+            "init_method": "marching_squares",
+            "loss_params": {
+                "coefs": {
+                    "corner": [
+                        0.0,
+                        0.0,
+                        0.5,
+                        0.0
+                    ],
+                    "crossfield": [
+                        0.0,
+                        0.05,
+                        0.0,
+                        0.0
+                    ],
+                    "curvature": [
+                        0.0,
+                        0.0,
+                        1.0,
+                        0.0
+                    ],
+                    "data": [
+                        1.0,
+                        0.1,
+                        0.0,
+                        0.0
+                    ],
+                    "junction": [
+                        0.0,
+                        0.0,
+                        0.5,
+                        0.0
+                    ],
+                    "length": [
+                        0.1,
+                        0.01,
+                        0.0,
+                        0.0
+                    ],
+                    "step_thresholds": [
+                        0,
+                        100,
+                        200,
+                        300
+                    ]
+                },
+                "corner_angle_threshold": 22.5,
+                "corner_angles": [
+                    45,
+                    90,
+                    135
+                ],
+                "curvature_dissimilarity_threshold": 2,
+                "junction_angle_threshold": 22.5,
+                "junction_angle_weights": [
+                    1,
+                    0.01,
+                    0.1,
+                    0.01
+                ],
+                "junction_angles": [
+                    0,
+                    45,
+                    90,
+                    135
+                ]
+            },
+            "lr": 0.1,
+            "min_area": 10,
+            "seg_threshold": 0.5,
+            "tolerance": [
+                0.125,
+                1
+            ]
+        },
+        "common_params": {
+            "init_data_level": 0.5
+        },
+        "method": [
+            "acm"
+        ],
+        "simple_method": {
+            "data_level": 0.5,
+            "min_area": 10,
+            "seg_threshold": 0.5,
+            "tolerance": [
+                0.125
+            ]
+        }
+    },
+    "run_name": "inria_dataset_osm_aligned.unet_resnet101_pretrained",
+    "seg_params": {
+        "compute_edge": true,
+        "compute_interior": true,
+        "compute_vertex": false
+    },
+    "use_amp": false
+}

@@ -46,6 +46,7 @@ albumentations >= 1.0.0
 scikit_image >= 0.18.1
 ndsampler >= 0.6.4
 tifffile >= 2021.4.8
+medpy == 0.4.0
 
 # Plotting
 matplotlib >= 3.4.1
@@ -72,3 +73,5 @@ monai >= 0.6.0
 torch_optimizer >= 0.1.0
 netharn >= 0.5.17
 timm >= 0.4.12
+kornia <= 0.5
+segmentation-models-pytorch == 0.2.0
