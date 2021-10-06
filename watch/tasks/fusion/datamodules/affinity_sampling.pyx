@@ -1,7 +1,8 @@
 #cython: language_level=3
 """
-Faster affinity sampling
+Faster affinity sampling (marginally)
 
+References:
     https://github.com/numpy/numpy/issues/16686
     https://gist.github.com/kdubovikov/d4e5c688fa771227fdf8c924196a59fe
     https://gist.github.com/joshlk/5b1a2c3a8d4bcf94476cafa33e611795

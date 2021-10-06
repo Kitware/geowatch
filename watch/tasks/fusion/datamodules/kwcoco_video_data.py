@@ -10,6 +10,7 @@ import torch
 import ubelt as ub
 import math
 import datetime
+import itertools as it
 from dateutil import parser
 from kwcoco import channel_spec
 from torch.utils import data
@@ -18,6 +19,7 @@ from watch.utils import kwcoco_extensions
 from watch.utils import util_iter
 from watch.utils import util_kwimage
 from watch.utils import util_kwarray
+from watch.utils.lightning_ext import util_globals
 
 # __all__ = ['KWCocoVideoDataModule', 'KWCocoVideoDataset']
 
@@ -185,7 +187,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
             prefix = 'avail'
             if num_workers.startswith(prefix):
-                base_workers = available_cpus_hueristic()
+                base_workers = util_globals.request_cpus(max_load=0.5)
                 suffix = num_workers[len(prefix):]
 
             prefix = 'all'
@@ -333,12 +335,9 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
             if self.normalize_inputs:
                 if isinstance(self.normalize_inputs, str):
-                    if self.normalize_inputs == 'some-special-key':
-                        # TODO: hard code any special input normalization you
-                        # want here
-                        pass
-                    else:
-                        raise KeyError(self.normalize_inputs)
+                    raise NotImplementedError(
+                        'TODO: handle special normalization keys, '
+                        'e.g. imagenet')
                 else:
                     if isinstance(self.normalize_inputs, int):
                         num = self.normalize_inputs
@@ -399,7 +398,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
     def _make_dataloader(self, stage, shuffle=False):
         if self.num_workers > 0:
-            _fixup_file_limit_hueristics()
+            util_globals.request_nofile_limits()
         return data.DataLoader(
             self.torch_datasets[stage],
             batch_size=self.batch_size,
@@ -982,7 +981,6 @@ class KWCocoVideoDataset(data.Dataset):
                     # kwimage.normalize(prev_frame_chw))
                 else:
                     frame_diff = np.zeros_like(frame_chw)
-                # frame_diff = np.zeros_like(frame_chw)
                 """
                 # Check:
                 hwc = kwimage.ensure_float01(kwimage.grab_test_image('astro'))
@@ -1171,7 +1169,7 @@ class KWCocoVideoDataset(data.Dataset):
         # Hack: disable augmentation if we are doing that
         self.disable_augmenter = True
         if num_workers > 0:
-            _fixup_file_limit_hueristics()
+            util_globals.request_nofile_limits()
         loader = torch.utils.data.DataLoader(
             stats_subset,
             collate_fn=ub.identity, num_workers=num_workers, shuffle=True,
@@ -1231,7 +1229,6 @@ class KWCocoVideoDataset(data.Dataset):
             }
         self.disable_augmenter = False
 
-        # TODO: Make this function return DATASET_STATS
         dataset_stats = {
             'input_stats': input_stats,
             'class_freq': class_freq,
@@ -1319,108 +1316,95 @@ class KWCocoVideoDataset(data.Dataset):
         if combinable_extra is not None:
             combinable_channels += list(map(ub.oset, combinable_extra))
 
-        def prepare_frames():
-            frame_metas = []
-            for frame_idx, frame_item in enumerate(item['frames']):
+        # Prepare metadata on each frame
+        frame_metas = []
+        for frame_idx, frame_item in enumerate(item['frames']):
+            class_idxs = frame_item['class_idxs'].data.cpu().numpy()
+            changes = frame_item['change']
+            if changes is None:
+                changes = np.zeros_like(class_idxs)
+            else:
+                changes = changes.data.cpu().numpy()
 
-                class_idxs = frame_item['class_idxs'].data.cpu().numpy()
-                changes = frame_item['change']
-                if changes is None:
-                    changes = np.zeros_like(class_idxs)
-                else:
-                    changes = changes.data.cpu().numpy()
+            # hack just use one of the modes, todo: use them all
+            full_mode_code = ','.join(list(frame_item['modes'].keys()))
+            mode_code, mode_data = ub.peek(frame_item['modes'].items())
+            chan_names = mode_code.split('|')
+            frame_chw = mode_data.data.cpu().numpy()
 
-                # hack just use one of the modes, todo: use them all
-                full_mode_code = ','.join(list(frame_item['modes'].keys()))
-                mode_code, mode_data = ub.peek(frame_item['modes'].items())
-                chan_names = mode_code.split('|')
-                frame_chw = mode_data.data.cpu().numpy()
+            chan_name_to_idx = {
+                chan_name: chan_idx
+                for chan_idx, chan_name in enumerate(chan_names)
+            }
 
-                chan_name_to_idx = {
-                    chan_name: chan_idx
-                    for chan_idx, chan_name in enumerate(chan_names)
+            unused_names = set(chan_name_to_idx)
+            # unused_chan_idx = ub.oset(chan_name_to_idx.values())
+
+            combos_to_use = []
+            for combinable in combinable_channels:
+                if combinable.issubset(unused_names):
+                    combo = [chan_name_to_idx[c] for c in combinable]
+                    if len(combos_to_use) < max_channels:
+                        combos_to_use.append(combo)
+                    unused_names.difference_update(combinable)
+
+            available = sorted(ub.dict_subset(chan_name_to_idx, unused_names).values())
+
+            first_to_use = available[0:max(0, max_channels - len(combos_to_use))]
+            chans_to_use = first_to_use + combos_to_use
+
+            # Prepare and normalize the channels for visualization
+            chan_rows = []
+            for chanxs in chans_to_use:
+                if not isinstance(chanxs, list):
+                    chanxs = [chanxs]
+                chan_name = '|'.join([chan_names[x] for x in chanxs])
+                raw_signal = frame_chw[chanxs].transpose(1, 2, 0)
+                # normalize across channel?
+                signal_text = f'c={ub.repr2(chanxs, nobr=1, compact=1, trailsep=0)}:{chan_name}'
+                row = {
+                    'raw_signal': raw_signal,
+                    'signal_text': signal_text,
                 }
+                if not norm_over_time:
+                    norm_signal = kwimage.normalize_intensity(raw_signal).copy()
+                    # norm_signal = kwimage.normalize(raw_signal).copy()
+                    norm_signal = kwimage.atleast_3channels(norm_signal)
+                    norm_signal = np.nan_to_num(norm_signal)
+                    row['norm_signal'] = norm_signal
+                chan_rows.append(row)
 
-                unused_names = set(chan_name_to_idx)
-                # unused_chan_idx = ub.oset(chan_name_to_idx.values())
+            assert len(chan_rows) > 0, 'no channels to draw on'
 
-                combos_to_use = []
-                for combinable in combinable_channels:
-                    if combinable.issubset(unused_names):
-                        combo = [chan_name_to_idx[c] for c in combinable]
-                        if len(combos_to_use) < max_channels:
-                            combos_to_use.append(combo)
-                        unused_names.difference_update(combinable)
+            frame_meta = {
+                'full_mode_code': full_mode_code,
+                'changes': changes,
+                'class_idxs': class_idxs,
+                'frame_idx': frame_idx,
+                'frame_item': frame_item,
+                'chan_rows': chan_rows,
+            }
+            frame_metas.append(frame_meta)
 
-                available = sorted(ub.dict_subset(chan_name_to_idx, unused_names).values())
+        if norm_over_time:
+            for chans_over_time in zip(*[frame_meta['chan_rows'] for frame_meta in frame_metas]):
+                flat = [c['raw_signal'].ravel() for c in chans_over_time]
+                cums = np.cumsum(list(map(len, flat)))
+                combo = np.hstack(flat)
+                combo_normed = kwimage.normalize_intensity(combo).copy()
+                # combo_normed = kwimage.normalize(combo).copy()
+                flat_normed = np.split(combo_normed, cums)
+                for row, flat_item in zip(chans_over_time, flat_normed):
+                    norm_signal = flat_item.reshape(*row['raw_signal'].shape)
+                    norm_signal = kwimage.atleast_3channels(norm_signal)
+                    norm_signal = np.nan_to_num(norm_signal)
+                    row['norm_signal'] = norm_signal
 
-                first_to_use = available[0:max(0, max_channels - len(combos_to_use))]
-                chans_to_use = first_to_use + combos_to_use
-
-                # Prepare and normalize the channels for visualization
-                chan_rows = []
-                for chanxs in chans_to_use:
-                    if not isinstance(chanxs, list):
-                        chanxs = [chanxs]
-                    chan_name = '|'.join([chan_names[x] for x in chanxs])
-                    raw_signal = frame_chw[chanxs].transpose(1, 2, 0)
-                    # normalize across channel?
-                    signal_text = f'c={ub.repr2(chanxs, nobr=1, compact=1, trailsep=0)}:{chan_name}'
-                    row = {
-                        'raw_signal': raw_signal,
-                        'signal_text': signal_text,
-                    }
-                    if not norm_over_time:
-                        norm_signal = kwimage.normalize_intensity(raw_signal).copy()
-                        # norm_signal = kwimage.normalize(raw_signal).copy()
-                        norm_signal = kwimage.atleast_3channels(norm_signal)
-                        norm_signal = np.nan_to_num(norm_signal)
-                        row['norm_signal'] = norm_signal
-                    chan_rows.append(row)
-
-                assert len(chan_rows) > 0, 'no channels to draw on'
-
-                frame_meta = {
-                    'full_mode_code': full_mode_code,
-                    'changes': changes,
-                    'class_idxs': class_idxs,
-                    'frame_idx': frame_idx,
-                    'frame_item': frame_item,
-                    'chan_rows': chan_rows,
-                }
-                frame_metas.append(frame_meta)
-
-            # normalize across time?
-            if norm_over_time:
-                for chans_over_time in zip(*[frame_meta['chan_rows'] for frame_meta in frame_metas]):
-                    flat = [c['raw_signal'].ravel() for c in chans_over_time]
-                    cums = np.cumsum(list(map(len, flat)))
-                    combo = np.hstack(flat)
-                    combo_normed = kwimage.normalize_intensity(combo).copy()
-                    # combo_normed = kwimage.normalize(combo).copy()
-                    flat_normed = np.split(combo_normed, cums)
-                    for row, flat_item in zip(chans_over_time, flat_normed):
-                        norm_signal = flat_item.reshape(*row['raw_signal'].shape)
-                        norm_signal = kwimage.atleast_3channels(norm_signal)
-                        norm_signal = np.nan_to_num(norm_signal)
-                        row['norm_signal'] = norm_signal
-
-            # chan = kwimage.normalize_intensity(chan)
-            # signal = kwimage.atleast_3channels(chan).copy()
-
-            return frame_metas
-
-        frame_metas = prepare_frames()
-
+        # Given prepared frame metadata, build a vertical stack of per-chanel
+        # information, and then horizontally stack the timesteps.
         horizontal_stack = []
         for frame_meta in frame_metas:
-            # Start building the visualization
             vertical_stack = []
-
-            # frame_text = f't={frame_idx} - {date_captured}\n{full_mode_code}'
-            # frame_header = kwimage.draw_text_on_image(
-            #     {'width': max_dim}, frame_text, org=(max_dim // 2, 5), valign='top',
-            #     halign='center', color='purple')
 
             frame_idx = frame_meta['frame_idx']
             frame_item = frame_meta['frame_item']
@@ -1451,35 +1435,28 @@ class KWCocoVideoDataset(data.Dataset):
                     color='salmon')
                 vertical_stack.append(header_part)
 
-            if 0:
-                header_part = util_kwimage.draw_header_text(
-                    header_dims, fit='shrink', text=f'{full_mode_code}',
-                    color='salmon')
-                vertical_stack.append(header_part)
-
             # Create overlays for training objective targets
             truth_overlays = []
-            if True:
-                # Create the the true class label overlay
-                true_heatmap = kwimage.Heatmap(class_idx=class_idxs, classes=classes)
-                class_overlay = true_heatmap.colorize('class_idx')
-                class_overlay[..., 3] = 0.5
-                truth_overlays.append({
-                    'overlay': class_overlay,
-                    'label_text': 'true class',
-                })
 
-            if True:
-                # Create the true change label overlay
-                change_overlay = np.zeros(changes.shape[0:2] + (4,), dtype=np.float32)
-                change_overlay = kwimage.Mask(changes, format='c_mask').draw_on(change_overlay, color='lime')
-                change_overlay = kwimage.ensure_alpha_channel(change_overlay)
-                change_overlay[..., 3] = (changes > 0).astype(np.float32) * 0.5
-                truth_overlays.append({
-                    'overlay': change_overlay,
-                    'label_text': 'true change',
-                })
-                # change_overlay = kwimage.make_heatmask(changes)
+            # Create the the true class label overlay
+            true_heatmap = kwimage.Heatmap(class_idx=class_idxs, classes=classes)
+            class_overlay = true_heatmap.colorize('class_idx')
+            class_overlay[..., 3] = 0.5
+            truth_overlays.append({
+                'overlay': class_overlay,
+                'label_text': 'true class',
+            })
+
+            # Create the true change label overlay
+            change_overlay = np.zeros(changes.shape[0:2] + (4,), dtype=np.float32)
+            change_overlay = kwimage.Mask(changes, format='c_mask').draw_on(change_overlay, color='lime')
+            change_overlay = kwimage.ensure_alpha_channel(change_overlay)
+            change_overlay[..., 3] = (changes > 0).astype(np.float32) * 0.5
+            truth_overlays.append({
+                'overlay': change_overlay,
+                'label_text': 'true change',
+            })
+            # change_overlay = kwimage.make_heatmask(changes)
 
             if not overlay_on_image:
                 # Draw the truth by itself
@@ -1551,8 +1528,7 @@ class KWCocoVideoDataset(data.Dataset):
                     # BIG RED X
                     h, w = vertical_stack[-1].shape[0:2]
                     pred_mask = kwimage.draw_text_on_image(
-                        {'width': w, 'height': h},
-                        'X', org=(w // 2, h // 2),
+                        {'width': w, 'height': h}, 'X', org=(w // 2, h // 2),
                         valign='center', halign='center', fontScale=10,
                         color='red')
                     pred_part = pred_mask
@@ -1608,11 +1584,148 @@ class KWCocoVideoDataset(data.Dataset):
             >>> batch = next(iter(loader))
         """
         if num_workers > 0:
-            _fixup_file_limit_hueristics()
+            util_globals.request_nofile_limits()
         loader = torch.utils.data.DataLoader(
             self, batch_size=batch_size, num_workers=num_workers,
             shuffle=shuffle, pin_memory=pin_memory, collate_fn=ub.identity)
         return loader
+
+
+def debug_video_information(dset, video_id):
+    """
+    Ignore:
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> from watch.utils.util_data import find_smart_dvc_dpath
+        >>> dvc_dpath = find_smart_dvc_dpath()
+        >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
+        >>> dset = kwcoco.CocoDataset(coco_fpath)
+
+        for video_id in dset.index.videos.keys():
+            debug_video_information(dset, video_id)
+    """
+    exclude_sensors = None
+    # exclude_sensors = {'L8'}
+    video_info = dset.index.videos[video_id]
+    video_name = video_info['name']
+    all_video_gids = list(dset.index.vidid_to_gids[video_id])
+
+    if exclude_sensors is not None:
+        sensor_coarse = dset.images(all_video_gids).lookup('sensor_coarse', '')
+        flags = [s not in exclude_sensors for s in sensor_coarse]
+        video_gids = list(ub.compress(all_video_gids, flags))
+    else:
+        video_gids = all_video_gids
+    video_gids = np.array(video_gids)
+
+    video_frame_idxs = np.array(list(range(len(video_gids))))
+
+    # If the dataset has dates, we can use that
+    gid_to_datetime = {}
+    frame_dates = dset.images(video_gids).lookup('date_captured', None)
+    for gid, date in zip(video_gids, frame_dates):
+        if date is not None:
+            gid_to_datetime[gid] = parser.parse(date)
+    unixtimes = np.array([
+        gid_to_datetime[gid].timestamp()
+        if gid in gid_to_datetime else np.nan
+        for gid in video_gids])
+
+    window_time_dims = 5
+
+    sample_idxs = dilated_template_sample(unixtimes, window_time_dims)
+    sample_pattern_v1 = kwarray.one_hot_embedding(sample_idxs, len(unixtimes), dim=1).sum(axis=2)
+
+    # For each frame, calculate a weight proportional to how much we would
+    # like to include any other frame in the sample.
+    sensors = np.array(dset.images(video_gids).lookup('sensor_coarse', None))
+    dilated_weights = dilated_time_weights(unixtimes)['final']
+    same_sensor = sensors[:, None] == sensors[None, :]
+    sensor_weights = ((same_sensor * 0.5) + 0.5)
+    pair_weights = dilated_weights * sensor_weights
+    pair_weights[np.eye(len(pair_weights), dtype=bool)] = 1.0
+
+    # Get track info in this video
+    classes = dset.object_categories()
+    tid_to_infos = ub.ddict(list)
+    video_aids = dset.images(video_gids).annots.lookup('id')
+    for aids, gid, frame_idx in zip(video_aids, video_gids, video_frame_idxs):
+        tids = dset.annots(aids).lookup('track_id')
+        cids = dset.annots(aids).lookup('category_id')
+        for tid, aid, cid in zip(tids, aids, cids):
+            dset.index.anns[aid]['bbox']
+            tid_to_infos[tid].append({
+                'gid': gid,
+                'cid': cid,
+                'aid': aid,
+                'cx': classes.id_to_idx[cid],
+                'frame_idx': frame_idx,
+            })
+
+    nancx = len(classes) + 1
+    track_phase_mat = []
+    # bg_cid = classes.node_to_cid['No Activity']
+    for tid, track_infos in tid_to_infos.items():
+        track_phase = np.full(len(video_frame_idxs), fill_value=nancx)
+        at_idxs = np.array([row['frame_idx'] for row in track_infos])
+        track_cxs = np.array([row['cx'] for row in track_infos])
+        track_phase[at_idxs] = track_cxs
+        track_phase_mat.append(track_phase)
+    track_phase_mat = np.array(track_phase_mat)
+
+    if 1:
+        import kwplot
+        import pandas as pd
+        kwplot.autompl()
+        sns = kwplot.autosns()
+
+        fnum = video_id
+
+        utils.category_tree_ensure_color(classes)
+        color_lut = np.zeros((nancx + 1, 3))
+        for node, node_data in classes.graph.nodes.items():
+            cx = classes.id_to_idx[node_data['id']]
+            color_lut[cx] = node_data['color']
+        color_lut[nancx] = (0, 0, 0)
+        colored_track_phase = color_lut[track_phase_mat]
+
+        fig = kwplot.figure(fnum=fnum, pnum=(3, 4, slice(0, 3)), doclf=True)
+        ax = fig.gca()
+        kwplot.imshow(colored_track_phase, ax=ax)
+        ax.set_xlabel('observation index')
+        ax.set_ylabel('track')
+        ax.set_title(f'{video_name} tracks')
+
+        fig = kwplot.figure(fnum=fnum, pnum=(3, 4, 4))
+        label_to_color = {
+            node: data['color']
+            for node, data in classes.graph.nodes.items()}
+        label_to_color = ub.sorted_keys(label_to_color)
+        legend_img = utils._memo_legend(label_to_color)
+        kwplot.imshow(legend_img)
+
+        # pairwise affinity
+        fig = kwplot.figure(fnum=fnum, pnum=(3, 1, 2))
+        ax = fig.gca()
+        kwplot.imshow(kwimage.normalize(pair_weights), ax=ax)
+        ax.set_title('pairwise affinity')
+
+        # =====================
+        # Show Sample Pattern in heatmap
+        datetimes = np.array([datetime.datetime.fromtimestamp(t) for t in unixtimes])
+        # dates = np.array([datetime.datetime.fromtimestamp(t).date() for t in unixtimes])
+        #
+        df = pd.DataFrame(sample_pattern_v1)
+        df.index.name = 'index'
+        #
+        df.columns = pd.to_datetime(datetimes).date
+        df.columns.name = 'date'
+        #
+        kwplot.figure(fnum=fnum, pnum=(3, 1, 3))
+        ax = sns.heatmap(data=df)
+        # ax.set_title(f'Sample Pattern wrt Available Observations: {video_name}')
+        ax.set_title('Sample pattern')
+        ax.set_xlabel('Observation Index')
+        ax.set_ylabel('Sample Index')
 
 
 def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
@@ -1625,11 +1738,9 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> import os
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
-        >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
-        >>> dvc_dpath = os.environ.get('DVC_DPATH', _default)
-        >>> # coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/data.kwcoco.json')
-        >>> bundle_dpath = join(dvc_dpath, 'drop1-S2-L8-aligned')
-        >>> coco_fpath = join(bundle_dpath, 'data.kwcoco.json')
+        >>> from watch.utils.util_data import find_smart_dvc_dpath
+        >>> dvc_dpath = find_smart_dvc_dpath()
+        >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
         >>> # Create a sliding window object for each specific image (because they may
         >>> # have different sizes, technically we could memoize this)
@@ -1641,7 +1752,6 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> sample_grid = sample_video_spacetime_targets(dset, window_dims, window_overlap)
         >>> time_sampling = 'dilate_template'
         >>> positives = list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
-
         _ = xdev.profile_now(sample_video_spacetime_targets)(dset, window_dims, window_overlap)
 
     Example:
@@ -1662,9 +1772,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
     """
     # Create a sliding window object for each specific image (because they may
     # have different sizes, technically we could memoize this)
-    import kwarray
     import pyqtree
-    import itertools as it
 
     # window_overlap = 0.5
     window_space_dims = window_dims[1:3]
@@ -1725,11 +1833,14 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         for gid, date in zip(video_gids, frame_dates):
             if date is not None:
                 gid_to_datetime[gid] = parser.parse(date)
+        unixtimes = np.array([
+            gid_to_datetime[gid].timestamp()
+            if gid in gid_to_datetime else np.nan
+            for gid in video_gids])
 
         if use_annot_info:
             qtree = pyqtree.Index((0, 0, video_info['width'], video_info['height']))
             qtree.aid_to_tlbr = {}
-
             tid_to_infos = ub.ddict(list)
             video_aids = dset.images(video_gids).annots.lookup('id')
             for aids, gid in zip(video_aids, video_gids):
@@ -1764,15 +1875,10 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                 track_dframe['track_pairwise_ious'] = track_boxes.ious(track_boxes)
                 track_dframe['track_boxes'] = track_boxes
 
-        # For each frame, calculate a weight proportional to how much we would
-        # like to include any other frame in the sample.
-        unixtimes = np.array([
-            gid_to_datetime[gid].timestamp()
-            if gid in gid_to_datetime else np.nan
-            for gid in video_gids])
-
         if time_sampling == 'dilate_template':
             sample_idxs = dilated_template_sample(unixtimes, window_time_dims)
+            # sample_pattern = kwarray.one_hot_embedding(sample_idxs, len(unixtimes), dim=1).sum(axis=2)
+
         elif time_sampling == 'contiguous':
             time_slider = kwarray.SlidingWindow(
                 (len(unixtimes),), (window_time_dims,), stride=(1,), keepbound=True,
@@ -1816,7 +1922,38 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                 })
 
         if 0:
+            # For each frame, calculate a weight proportional to how much we would
+            # like to include any other frame in the sample.
+            sensors = np.array(dset.images(video_gids).lookup('sensor_coarse', None))
             dilated_weights = dilated_time_weights(unixtimes)['final']
+            same_sensor = sensors[:, None] == sensors[None, :]
+            sensor_weights = ((same_sensor * 0.5) + 0.5)
+            pair_weights = dilated_weights * sensor_weights
+            pair_weights[np.eye(len(pair_weights), dtype=bool)] = 1.0
+
+            classes = dset.object_categories()
+            nancx = len(classes) + 1
+            track_phase_mat = []
+            # bg_cid = classes.node_to_cid['No Activity']
+            for tid, track_dframe in tid_to_dframe.items():
+                # FIXME; BROKEN, NOT THE RIGHT INDEX
+                at_idxs = np.searchsorted(video_frame_idxs, track_dframe['frame_index'])
+                track_phase = np.full(len(video_frame_idxs), fill_value=nancx)
+                track_cids = np.array(track_dframe['cid'])
+                track_cxs = [classes.id_to_idx[cid] for cid in track_cids]
+                track_phase[at_idxs] = track_cxs
+                track_phase_mat.append(track_phase)
+            track_phase_mat = np.array(track_phase_mat)
+
+            if 0:
+                utils.category_tree_ensure_color(classes)
+                color_lut = np.zeros((nancx + 1, 3))
+                for node, node_data in classes.graph.nodes.items():
+                    cx = classes.id_to_idx[node_data['id']]
+                    color_lut[cx] = node_data['color']
+                color_lut[nancx] = (0, 0, 0)
+                colored_track_phase = color_lut[track_phase_mat]
+                kwplot.imshow(colored_track_phase)
 
             tid_to_track_changemat = {}
             for tid, track_dframe in tid_to_dframe.items():
@@ -2450,6 +2587,7 @@ def affinity_sample(affinity, size, include_indices, return_info=False,
         >>> high = low + datetime.timedelta(days=365 * 5).total_seconds()
         >>> rng = kwarray.ensure_rng(0)
         >>> unixtimes = np.array(sorted(rng.randint(low, high, 113)), dtype=float)
+        >>> #
         >>> affinity = dilated_time_weights(unixtimes)['final']
         >>> include_indices = [5]
         >>> size = 5
@@ -2569,35 +2707,3 @@ def affinity_sample(affinity, size, include_indices, return_info=False,
         return chosen, info
     else:
         return chosen
-
-
-def available_cpus_hueristic():
-    import psutil
-    import numpy as np
-    # num_cores = psutil.cpu_count()
-    current_load = np.array(psutil.cpu_percent(percpu=True)) / 100
-    num_available = np.sum(current_load < 0.5)
-    return num_available
-
-
-def _fixup_file_limit_hueristics():
-    """
-    Ignore:
-        # Helpful file descriptor monitor script:
-        watch -x bash -c '
-            PROC_ID_LIST=($(ps -a | grep python | awk '"'"'{print $1}'"'"' ))
-            for PROC_ID in "${PROC_ID_LIST[@]}"; do
-                NUM_OPEN_FILES=$(lsof -p $PROC_ID | wc -l)
-                echo "PROC_ID=$PROC_ID, NUM_OPEN_FILES=$NUM_OPEN_FILES"
-            done
-        '
-    """
-    if ub.LINUX:
-        import resource
-        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-        print('Before FileLimit: soft={}, hard={}'.format(soft, hard))
-        requested_soft = 8192
-        print('requested_soft = {!r}'.format(requested_soft))
-        resource.setrlimit(resource.RLIMIT_NOFILE, (requested_soft, hard))
-        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-        print('After FileLimit: soft={}, hard={}'.format(soft, hard))
