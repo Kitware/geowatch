@@ -4,6 +4,7 @@ import sys
 import os
 current_path = os.getcwd().split("/")
 
+import time
 import matplotlib
 import gc
 import cv2
@@ -78,7 +79,8 @@ class Trainer(object):
         self.k = config['data']['num_classes']
         self.kmeans = KMeans(n_clusters=self.k, mode='euclidean', verbose=0, minibatch=None)
         self.max_label = self.k
-        self.all_crops_params = [tuple([i,j,config['data']['window_size'], config['data']['window_size']]) for i in range(config['data']['window_size'],config['data']['image_size']-config['data']['window_size']) for j in range(config['data']['window_size'],config['data']['image_size']-config['data']['window_size'])]
+        # self.all_crops_params = [tuple([i,j,config['data']['window_size'], config['data']['window_size']]) for i in range(config['data']['window_size'],config['data']['image_size']-config['data']['window_size']) for j in range(config['data']['window_size'],config['data']['image_size']-config['data']['window_size'])]
+        self.all_crops_params = [tuple([i,j,config['data']['window_size'], config['data']['window_size']]) for i in range(0,config['data']['image_size']) for j in range(0,config['data']['image_size'])]
         self.inference_all_crops_params = [tuple([i, j, config['evaluation']['inference_window'], config['evaluation']['inference_window']]) for i in range(0, config['data']['image_size']) for j in range(0, config['data']['image_size'])]
         if test_loader is not None:
             self.test_loader = test_loader
@@ -183,33 +185,30 @@ class Trainer(object):
             image2 = utils.stad_image(image1).float()
             negative_image1 = utils.stad_image(negative_image1).float()
         
-            # sampled_crops = random.sample(self.all_crops_params, 1000)
-            # patched_image1 = torch.stack([transforms.functional.crop(image1, *params) for params in sampled_crops],dim=1)
-            # patched_image2 = torch.stack([transforms.functional.crop(image1, *params) for params in sampled_crops],dim=1)
-            # patched_negative_image1 = torch.stack([transforms.functional.crop(negative_image1, *params) for params in sampled_crops],dim=1)
+            sampled_crops = random.sample(self.all_crops_params, 300)
+            patched_image1 = torch.stack([transforms.functional.crop(image1, *params) for params in sampled_crops],dim=1)
+            patched_image2 = torch.stack([transforms.functional.crop(image2, *params) for params in sampled_crops],dim=1)
+            patched_negative_image1 = torch.stack([transforms.functional.crop(negative_image1, *params) for params in sampled_crops],dim=1)
 
-            # bs, ps, c, h, w = patched_image1.shape
-            # patched_image1 = patched_image1.view(bs*ps,c,h,w)
-            # patched_image2 = patched_image2.view(bs*ps,c,h,w)
-            # patched_negative_image1 = patched_negative_image1.view(bs*ps,c,h,w)
+            bs, ps, c, h, w = patched_image1.shape
+            patched_image1 = patched_image1.view(bs*ps,c,h,w)
+            patched_image2 = patched_image2.view(bs*ps,c,h,w)
+            patched_negative_image1 = patched_negative_image1.view(bs*ps,c,h,w)
             
-            # output1, features1 = self.model(image1)  ## [B,22,150,150]
-            # output2, features2 = self.model(image2)  ## [B,22,150,150]
-            # negative_output1, negative_features1 = self.model(negative_image1)  ## [B,22,150,150]
+            output1 = self.model(patched_image1)  ## [B,22,150,150]
+            output2 = self.model(patched_image2)  ## [B,22,150,150]
+            # negative_output1 = self.model(patched_negative_image1)  ## [B,22,150,150]
+            
+            # print(features1.shape)
 
-            output1, features1 = self.model(image1)  ## [B,22,150,150]
-            output2, features2 = self.model(image2)  ## [B,22,150,150]
-            negative_output1, negative_features1 = self.model(negative_image1)  ## [B,22,150,150]
+            # patched_output1 = torch.stack([transforms.functional.crop(output1, *params) for params in self.all_crops_params],dim=1)
+            # patched_output2 = torch.stack([transforms.functional.crop(output2, *params) for params in self.all_crops_params],dim=1)
+            # patched_negative_output1 = torch.stack([transforms.functional.crop(negative_output1, *params) for params in self.all_crops_params],dim=1)
             
-
-            patched_output1 = torch.stack([transforms.functional.crop(output1, *params) for params in self.all_crops_params],dim=1)
-            patched_output2 = torch.stack([transforms.functional.crop(output2, *params) for params in self.all_crops_params],dim=1)
-            patched_negative_output1 = torch.stack([transforms.functional.crop(negative_output1, *params) for params in self.all_crops_params],dim=1)
-            
-            bs, ps, c, ph, pw = patched_output1.shape
-            patched_output1 = patched_output1.view(bs*ps,c,ph,pw)
-            patched_output2 = patched_output2.view(bs*ps,c,ph,pw)
-            patched_negative_output1 = patched_negative_output1.view(bs*ps,c,ph,pw)
+            # bs, ps, c, ph, pw = patched_output1.shape
+            # patched_output1 = patched_output1.view(bs*ps,c,ph,pw)
+            # patched_output2 = patched_output2.view(bs*ps,c,ph,pw)
+            # patched_negative_output1 = patched_negative_output1.view(bs*ps,c,ph,pw)
 
             # patch_max = 8000
             # patched_output1 = F.normalize(patched_output1, dim=1, p=1) #[bs*ps, c*h*w]
@@ -219,20 +218,24 @@ class Trainer(object):
             # print(features1.shape)
             # features1 = F.normalize(features1, dim=1, p=1) #[bs*ps, c*h*w]
             # features2 = F.normalize(features2, dim=1, p=1)
-            # print(features1.shape)
-            # print(features.shape)
+            # print(output1.shape)
+            # print(output2.shape)
+            # print(negative_output1.shape)
             # features = torch.cat([features1.unsqueeze(1), features2.unsqueeze(1)], dim=1)#[:patch_max,:,:]
-            # print(features.shape)
 
             # pre-text: Augmentation
             # loss = 5*self.contrastive_loss(features)
-            loss = 30*F.triplet_margin_loss(features1,#.unsqueeze(0), 
-                                            features2,#.unsqueeze(0), 
-                                            negative_features1,
-                                            swap=True,
-                                            p=1,
-                                            reduction='mean'
-                                            )
+            # loss = 30*F.triplet_margin_loss(output1,#.unsqueeze(0), 
+            #                                 output2,#.unsqueeze(0), 
+            #                                 negative_output1,
+            #                                 swap=True,
+            #                                 p=1,
+            #                                 reduction='mean'
+            #                                 )
+            targets = torch.zeros(output1.shape[0], dtype=torch.long).to(device)
+            outputs = torch.cat([output1, output2], dim=1) 
+
+            loss = F.cross_entropy(outputs.float(), targets.long())
             # loss += 30*F.triplet_margin_loss(features1,#.unsqueeze(0), 
             #                                 features2,#.unsqueeze(0), 
             #                                 negative_features1
@@ -360,143 +363,7 @@ class Trainer(object):
                 histogram_distance.append(histc_int_change_feats_pred)
                 l1_dist.append(l1_dist_change_feats_pred)
                 l2_dist.append(l2_dist_change_feats_pred)
-            """
-            if config['visualization']['train_visualizer'] :
-                if (epoch) % config['visualization']['visualize_training_every'] == 0:
-                    if (batch_index % iter_visualization) == 0:
-                        figure = plt.figure(figsize=(config['visualization']['fig_size'], config['visualization']['fig_size']))
-                        ax1 = figure.add_subplot(3, 4, 1)
-                        ax2 = figure.add_subplot(3, 4, 2)
-                        ax3 = figure.add_subplot(3, 4, 3)
-                        ax4 = figure.add_subplot(3, 4, 4)
-                        ax5 = figure.add_subplot(3, 4, 5)
-                        ax6 = figure.add_subplot(3, 4, 6)
-                        ax7 = figure.add_subplot(3, 4, 7)
-                        ax8 = figure.add_subplot(3, 4, 8)
-                        ax9 = figure.add_subplot(3, 4, 9)
-                        ax10 = figure.add_subplot(3, 4, 10)
-                        ax11 = figure.add_subplot(3, 4, 11)
-                        ax12 = figure.add_subplot(3, 4, 12)
 
-                        cmap_gradients = plt.cm.get_cmap('jet')
-                        # image_show = np.transpose(image1.cpu().detach().numpy()[batch_index_to_show,:,:,:],(1,2,0))[:,:,:3]
-                        image_show1 = np.transpose(image1.cpu().detach().numpy()[batch_index_to_show, :, :, :], (1, 2, 0))[:, :, 1:4]
-                        image_show1 = np.flip(image_show1, axis=2)
-
-                        image_show2 = np.transpose(image2.cpu().detach().numpy()[batch_index_to_show, :, :, :], (1, 2, 0))[:, :, 1:4]
-                        image_show2 = np.flip(image_show2, axis=2)
-
-                        negative_image1_show = np.transpose(negative_image1.cpu().detach().numpy()[batch_index_to_show, :, :, :], (1, 2, 0))[:, :, 1:4]
-                        negative_image1_show = np.flip(negative_image1_show, axis=2)
-
-                        # cropped_image1_show = np.transpose(cropped_image1.cpu().detach().numpy()[batch_index_to_show,:,:,:],(1,2,0))[:,:,1:4]
-                        # cropped_image1_show = np.flip(cropped_image1_show, axis=2)
-
-                        # cropped_image2_show = np.transpose(cropped_image2.cpu().detach().numpy()[batch_index_to_show,:,:,:],(1,2,0))[:,:,1:4]
-                        # cropped_image2_show = np.flip(cropped_image2_show, axis=2)
-
-                        image_show1 = (image_show1 - image_show1.min()) / (image_show1.max() - image_show1.min())
-                        image_show2 = (image_show2 - image_show2.min()) / (image_show2.max() - image_show2.min())
-                        negative_image1_show = (negative_image1_show - negative_image1_show.min()) / (negative_image1_show.max() - negative_image1_show.min())
-                        # cropped_image1_show = (cropped_image1_show - cropped_image1_show.min())/(cropped_image1_show.max() - cropped_image1_show.min())
-                        # cropped_image2_show = (cropped_image2_show - cropped_image2_show.min())/(cropped_image2_show.max() - cropped_image2_show.min())
-
-                        # print(f"min: {image_show.min()}, max: {image_show.max()}")
-                        # image_show = np.transpose(outputs['visuals']['image'][batch_index_to_show,:,:,:].numpy(),(1,2,0))
-                        logits_show1 = masks1.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
-                        logits_show2 = masks2.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
-                        change_detection_prediction_show = change_detection_prediction.numpy()[batch_index_to_show, :, :]
-                        # stacked_change_detection_prediction_show = pred_stacked.numpy()[batch_index_to_show,:,:]
-                        change_detection_show = change_detection_prediction_show
-                        # change_detection_show = stacked_change_detection_prediction_show
-                        gt_mask_show1 = mask.cpu().detach()[batch_index_to_show, 0, :, :].numpy().squeeze()
-                        gt_mask_show2 = mask.cpu().detach()[batch_index_to_show, 1, :, :].numpy().squeeze()
-                        output1_sample1 = masks1[batch_index_to_show, class_to_show, :, :].cpu().detach().numpy().squeeze()
-
-                        # vca_pseudomask_show = image_change_magnitude_binary.cpu().detach()[batch_index_to_show,:,:].numpy()
-                        # vca_pseudomask_crop_show = cm_binary_crop.cpu().detach()[batch_index_to_show,:,:].numpy()
-                        # dictionary_show = dictionary1.cpu().detach()[batch_index_to_show,:,:].numpy()
-                        # dictionary2_show = cropped_dictionary.cpu().detach()[batch_index_to_show,:,:].numpy()
-                        # print(vca_pseudomask_crop_show.shape)
-
-                        fp_tp_fn_prediction_mask = gt_mask_show1 + (2 * change_detection_show)
-
-                        logits_show1[logits_show1 == -1] = 0
-                        logits_show2[logits_show2 == -1] = 0
-                        gt_mask_show_no_bg1 = np.ma.masked_where(gt_mask_show1 == 0, gt_mask_show1)
-                        gt_mask_show_no_bg2 = np.ma.masked_where(gt_mask_show2 == 0, gt_mask_show2)
-                        # logits_show_no_bg = np.ma.masked_where(logits_show==0,logits_show)
-
-                        classes_in_gt = np.unique(gt_mask_show1)
-                        ax1.imshow(image_show1)
-
-                        ax2.imshow(image_show2)
-
-                        ax3.imshow(negative_image1_show)
-
-                        ax4.imshow(image_show1)
-                        ax4.imshow(gt_mask_show1, cmap=self.cmap, vmin=0, vmax=self.max_label)  # , alpha=alphas_final_gt)
-
-                        ax5.imshow(image_show1)
-                        ax5.imshow(logits_show1, cmap=self.cmap, vmin=0, vmax=self.max_label)  # , alpha=alphas_final_gt)
-
-                        ax6.imshow(image_show2)
-                        ax6.imshow(logits_show2, cmap=self.cmap, vmin=0, vmax=self.max_label)
-
-                        ax7.imshow(image_show2)
-                        # ax6.imshow(change_detection_prediction_show, cmap=self.cmap, vmin=0, vmax=self.max_label)#, alpha=alphas_final_gt)
-                        ax7.imshow(change_detection_show, cmap=self.cmap, vmin=0, vmax=self.max_label)  # , alpha=alphas_final_gt)
-                        # ax6.imshow(fp_tp_fn_prediction_mask, cmap='tab20c', vmin=0, vmax=6)#, alpha=alphas_final_gt)
-
-                        # ax8.imshow(vca_pseudomask_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
-
-                        # ax9.imshow(cropped_image1_show)
-
-                        # ax10.imshow(cropped_image2_show)
-
-                        # ax11.imshow(dictionary_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
-
-                        # ax12.imshow(dictionary2_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
-
-                        ax1.axis('off')
-                        ax2.axis('off')
-                        ax3.axis('off')
-                        ax4.axis('off')
-                        ax5.axis('off')
-                        ax6.axis('off')
-                        ax7.axis('off')
-                        ax8.axis('off')
-                        # ax9.axis('off')
-
-                        if config['visualization']['titles']:
-                            ax1.set_title(f"Input Image 1", fontsize=config['visualization']['font_size'])
-                            ax2.set_title(f"Input Image 2", fontsize=config['visualization']['font_size'])
-                            ax3.set_title(f"Negative Sample", fontsize=config['visualization']['font_size'])
-                            ax4.set_title(f"Change GT Mask overlaid", fontsize=config['visualization']['font_size'])
-                            ax5.set_title(f"Prediction overlaid 1", fontsize=config['visualization']['font_size'])
-                            ax6.set_title(f"Prediction overlaid 2", fontsize=config['visualization']['font_size'])
-                            ax7.set_title(f"Change Detection Prediction", fontsize=config['visualization']['font_size'])
-                            ax8.set_title(f"Pseudo-Mask for Change", fontsize=config['visualization']['font_size'])
-                            ax9.set_title(f"Cropped Input Image 1", fontsize=config['visualization']['font_size'])
-                            ax10.set_title(f"Cropped Input Image 2", fontsize=config['visualization']['font_size'])
-                            ax11.set_title(f"Visual Words", fontsize=config['visualization']['font_size'])
-                            ax12.set_title(f"Cropped Visual Words", fontsize=config['visualization']['font_size'])
-                            figure.suptitle(f"Epoch: {epoch+1}\nGT labels for classification: {classes_in_gt}, \nunique in change predictions: {np.unique(change_detection_show)}\nunique in predictions1: {np.unique(logits_show1)}", fontsize=config['visualization']['font_size'])
-
-                        figure.tight_layout()
-                        # cometml_experiemnt.log_figure(figure_name=f"Training, image name: {image_name}, epoch: {epoch}, classes in gt: {classes_in_gt}, classifier predictions: {labels_predicted_indices}",figure=figure)
-                        cometml_experiemnt.log_figure(figure_name=f"Training, image name: {image_name}", figure=figure)
-
-                        if config['visualization']['train_imshow']:
-                            plt.show()
-
-                        figure.clear()
-                        plt.cla()
-                        plt.clf()
-                        plt.close('all')
-                        plt.close(figure)
-                        gc.collect()
-            """
         if 'mask1' in vars(__builtins__):
             mean_iou, precision, recall = eval_utils.compute_jaccard(preds, targets, num_classes=2)
         
@@ -614,62 +481,88 @@ class Trainer(object):
                 image1 = utils.stad_image(image1)
                 image2 = utils.stad_image(image2)
 
-                output1, features1 = self.model(image1)  # [B,22,150,150]
-                output2, features2 = self.model(image2)
+                # sampled_crops = random.sample(self.all_crops_params, 1000)
+                pad_amount = (config['evaluation']['inference_window']-1)//2
+                padded_image1 = F.pad(input=image1, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
+                padded_image2 = F.pad(input=image2, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
+
+                start = time.time()
+                patched_image1 = torch.stack([transforms.functional.crop(padded_image1, *params) for params in self.inference_all_crops_params],dim=1)
+                patched_image2 = torch.stack([transforms.functional.crop(padded_image2, *params) for params in self.inference_all_crops_params],dim=1)
+
+                bs, ps, c, ph, pw = patched_image1.shape
+                patched_image1 = patched_image1.view(bs*ps,c,ph,pw)
+                patched_image2 = patched_image2.view(bs*ps,c,ph,pw)
+                
+                crop_collection_time = time.time() - start
+
+                start = time.time()
+
+                output1 = self.model(patched_image1)  # [B,22,150,150]
+                output2 = self.model(patched_image2)
+
+                network_run_time = time.time() - start
+
+                start = time.time()
+                output1 = torch.stack(torch.chunk(output1, chunks=bs, dim=0), dim=0)
+                output2 = torch.stack(torch.chunk(output2, chunks=bs, dim=0), dim=0)
+
+                chunking_time = time.time() - start
+                print(output1.shape)
                 # output1 = F.normalize(output1, dim=1, p=1) #[bs*ps, c*h*w]
                 # output2 = F.normalize(output2, dim=1, p=1)
-                masks1 = F.softmax(output1, dim=1)  # .detach()
-                masks2 = F.softmax(output2, dim=1)  # .detach()
+                masks1 = F.softmax(output1, dim=2)  # .detach()
+                masks2 = F.softmax(output2, dim=2)  # .detach()
 
                 #region-wise inference
                 inference_otsu_coeff = 1.4
                 hist_inference_otsu_coeff = 1.0
                 topk = 33
 
-                pad_amount = (config['evaluation']['inference_window']-1)//2
-                padded_output1 = F.pad(input=output1, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
-                padded_output2 = F.pad(input=output2, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
-                patched_padded_output1 = torch.stack([transforms.functional.crop(padded_output1, *params) for params in self.inference_all_crops_params], dim=1)#.flatten(-3,-1)
-                patched_padded_output2 = torch.stack([transforms.functional.crop(padded_output2, *params) for params in self.inference_all_crops_params], dim=1)#.flatten(-3,-1)
+                # padded_output1 = F.pad(input=output1, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
+                # padded_output2 = F.pad(input=output2, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
+                # patched_padded_output1 = torch.stack([transforms.functional.crop(padded_output1, *params) for params in self.inference_all_crops_params], dim=1)#.flatten(-3,-1)
+                # patched_padded_output2 = torch.stack([transforms.functional.crop(padded_output2, *params) for params in self.inference_all_crops_params], dim=1)#.flatten(-3,-1)
 
-                padded_mask1 = F.pad(input=masks1, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
-                padded_mask2 = F.pad(input=masks2, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
-                patched_padded_mask1 = torch.stack([transforms.functional.crop(padded_mask1, *params) for params in self.inference_all_crops_params], dim=1)#.flatten(-3,-1)
-                patched_padded_mask2 = torch.stack([transforms.functional.crop(padded_mask2, *params) for params in self.inference_all_crops_params], dim=1)#.flatten(-3,-1)
+                # padded_mask1 = F.pad(input=masks1, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
+                # padded_mask2 = F.pad(input=masks2, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
+                # patched_padded_mask1 = torch.stack([transforms.functional.crop(padded_mask1, *params) for params in self.inference_all_crops_params], dim=1)#.flatten(-3,-1)
+                # patched_padded_mask2 = torch.stack([transforms.functional.crop(padded_mask2, *params) for params in self.inference_all_crops_params], dim=1)#.flatten(-3,-1)
 
-                patched_padded_output1_distributions = patched_padded_output1.flatten(-2, -1)#.sum(axis=3) #[bs, n_patches, k]
-                patched_padded_output2_distributions = patched_padded_output2.flatten(-2, -1)#.sum(axis=3) #[bs, n_patches, k]
-                patched_padded_mask1_distributions = patched_padded_mask1.flatten(-2, -1)#.sum(axis=3) #[bs, n_patches, k]
-                patched_padded_mask2_distributions = patched_padded_mask2.flatten(-2, -1)#.sum(axis=3) #[bs, n_patches, k]
+                # patched_padded_output1_distributions = patched_padded_output1.flatten(-2, -1)#.sum(axis=3) #[bs, n_patches, k]
+                # patched_padded_output2_distributions = patched_padded_output2.flatten(-2, -1)#.sum(axis=3) #[bs, n_patches, k]
+                # patched_padded_mask1_distributions = patched_padded_mask1.flatten(-2, -1)#.sum(axis=3) #[bs, n_patches, k]
+                # patched_padded_mask2_distributions = patched_padded_mask2.flatten(-2, -1)#.sum(axis=3) #[bs, n_patches, k]
 
-                patched_padded_output1_distributions = patched_padded_output1_distributions.sum(axis=3)
-                patched_padded_output2_distributions = patched_padded_output2_distributions.sum(axis=3)
-                patched_padded_mask1_distributions = patched_padded_mask1_distributions.sum(axis=3) #[bs, n_patches, k]
-                patched_padded_mask2_distributions = patched_padded_mask2_distributions.sum(axis=3) #[bs, n_patches, k]     
+                # patched_padded_output1_distributions = patched_padded_output1_distributions.sum(axis=3)
+                # patched_padded_output2_distributions = patched_padded_output2_distributions.sum(axis=3)
+                # patched_padded_mask1_distributions = patched_padded_mask1_distributions.sum(axis=3) #[bs, n_patches, k]
+                # patched_padded_mask2_distributions = patched_padded_mask2_distributions.sum(axis=3) #[bs, n_patches, k]     
 
-                topk_patched_output1_post_distributions, largest_elements_post_inds = torch.topk(patched_padded_mask1_distributions, k=topk, sorted=False, dim=2)
-                topk_patched_output2_post_distributions = torch.gather(patched_padded_mask2_distributions, dim=2, index=largest_elements_post_inds)
+                
+                # topk_patched_output1_post_distributions, largest_elements_post_inds = torch.topk(patched_padded_mask1_distributions, k=topk, sorted=False, dim=2)
+                # topk_patched_output2_post_distributions = torch.gather(patched_padded_mask2_distributions, dim=2, index=largest_elements_post_inds)
 
-                normalized_patched_padded_output1_distributions = (patched_padded_output1_distributions - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output1_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])
-                normalized_patched_padded_output2_distributions = (patched_padded_output2_distributions - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output2_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])            
+                # normalized_patched_padded_output1_distributions = (patched_padded_output1_distributions - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output1_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])
+                # normalized_patched_padded_output2_distributions = (patched_padded_output2_distributions - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output2_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])            
 
                 # histogram intersection raw features
-                minima = torch.minimum(topk_patched_output1_post_distributions, topk_patched_output2_post_distributions)
-                histograms_intersection_features = torch.true_divide(minima.sum(axis=2), topk_patched_output2_post_distributions.sum(axis=2)).view(bs,h,w)
+                minima = torch.minimum(masks1, masks2)
+                histograms_intersection_features = torch.true_divide(minima.sum(axis=2), masks2.sum(axis=2)).view(bs,h,w)
                 histc_int_change_feats_pred = torch.zeros_like(histograms_intersection_features)
                 histc_int_inference_otsu_threshold = hist_inference_otsu_coeff*otsu(histograms_intersection_features.cpu().detach().numpy(), nbins=256)
                 histc_int_change_feats_pred[histograms_intersection_features < histc_int_inference_otsu_threshold] = 1
                 histc_int_change_feats_pred = histc_int_change_feats_pred.cpu().detach().type(torch.uint8)
 
                 # l1 region-wise inference raw features
-                l1_patched_diff_change_features = torch.abs((patched_padded_output1_distributions - patched_padded_output2_distributions).sum(axis=2)).view(bs,h,w)
+                l1_patched_diff_change_features = torch.abs((output1 - output2).sum(axis=2)).view(bs,h,w)
                 l1_dist_change_feats_pred = torch.zeros_like(l1_patched_diff_change_features)
                 l1_inference_otsu_threshold = inference_otsu_coeff*otsu(l1_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
                 l1_dist_change_feats_pred[l1_patched_diff_change_features > l1_inference_otsu_threshold] = 1
                 l1_dist_change_feats_pred = l1_dist_change_feats_pred.cpu().detach().type(torch.uint8)
 
                 # l2 region-wise inference raw features
-                l2_patched_diff_change_features = torch.sqrt(torch.pow(patched_padded_output1_distributions - patched_padded_output2_distributions, 2).sum(axis=2)).view(bs,h,w)
+                l2_patched_diff_change_features = torch.sqrt(torch.pow(output1 - output2, 2).sum(axis=2)).view(bs,h,w)
                 l2_dist_change_feats_pred = torch.zeros_like(l2_patched_diff_change_features)
                 l2_inference_otsu_threshold = inference_otsu_coeff*otsu(l2_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
                 l2_dist_change_feats_pred[l2_patched_diff_change_features > l2_inference_otsu_threshold] = 1
@@ -695,6 +588,8 @@ class Trainer(object):
                 preds.append(l2_dist_change_feats_pred)
                 mask1[mask1 == -1] = 0
                 targets.append(mask1.cpu())  # .numpy())
+
+                pbar.set_description(f"(timing, secs) crop_collection: {crop_collection_time:0.3f}, network_run: {network_run_time:0.3f}, chunking_time: {chunking_time:0.3f}")
 
                 if config['visualization']['val_visualizer'] or (config['visualization']['save_individual_plots'] and save_individual_plots_specific):
                     if (epoch) % config['visualization']['visualize_val_every'] == 0:
@@ -739,8 +634,8 @@ class Trainer(object):
                             l2_patched_diff_change_features_show = (l2_patched_diff_change_features_show - l2_patched_diff_change_features_show.min())/(l2_patched_diff_change_features_show.max() - l2_patched_diff_change_features_show.min())
                             histograms_intersection_show = (histograms_intersection_show - histograms_intersection_show.min())/(histograms_intersection_show.max() - histograms_intersection_show.min())
 
-                            pred1_show = masks1.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
-                            pred2_show = masks2.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
+                            # pred1_show = masks1.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
+                            # pred2_show = masks2.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
 
                             l1_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*l1_dist_change_feats_pred_show)
                             l2_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*l2_dist_change_feats_pred_show)
@@ -1007,7 +902,7 @@ if __name__ == "__main__":
         test_sampler = ndsampler.CocoSampler(test_dset)
 
         test_dataset = SequenceDataset(test_sampler, window_dims, input_dims, channels)
-        test_dataloader = test_dataset.make_loader(batch_size=config['training']['batch_size'])
+        test_dataloader = test_dataset.make_loader(batch_size=config['evaluation']['batch_size'])
     else:
         train_dataloader = build_dataset(dataset_name=config['data']['name'], 
                                         root=config['data'][config['location']]['train_dir'], 
@@ -1029,7 +924,7 @@ if __name__ == "__main__":
         test_sampler = ndsampler.CocoSampler(test_dset)
 
         test_dataset = SequenceDataset(test_sampler, window_dims, input_dims, channels)
-        test_dataloader = test_dataset.make_loader(batch_size=config['training']['batch_size'])
+        test_dataloader = test_dataset.make_loader(batch_size=config['evaluation']['batch_size'])
                 
 
     model = build_model(model_name=config['training']['model_name'],

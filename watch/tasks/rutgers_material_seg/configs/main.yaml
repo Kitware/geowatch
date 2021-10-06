@@ -1,4 +1,4 @@
-dataset: onera
+dataset: onera # onera, iarpa, s2self
 use_cuda: True
 seed: 128
 
