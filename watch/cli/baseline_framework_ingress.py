@@ -133,8 +133,7 @@ def baseline_framework_ingress(input_path,
                     asset_outpath = os.path.join(
                         feature_output_dir, "MTD_TL.xml")
 
-                    # we are iterating a copy (.items()) so this is safe
-                    assets['productmetadata'] = download_mtd_msil1c(
+                    new_asset = download_mtd_msil1c(
                         feature['properties']['sentinel:product_id'], 
                         asset_href, feature_output_dir, aws_base_command, 
                         dryrun)
@@ -159,6 +158,9 @@ def baseline_framework_ingress(input_path,
                     print("Warning unrecognized scheme for asset href: '{}', "
                           "skipping!".format(asset_href))
                     continue
+
+        if new_asset:
+            assets['productmetadata'] = new_asset
 
         item = pystac.Item.from_dict(feature)
         item.set_collection(None)  # Clear the collection if present
@@ -211,7 +213,7 @@ def download_mtd_msil1c(product_id, metadata_href, outdir, aws_base_command, dry
     index = path.find('tiles')
     path = path[:index] + \
         f'products/{dt.year}/{dt.month}/{dt.day}/{product_id}/metadata.xml'
-    mtd_msil1c_href = urlunparse((scheme, netloc, path))
+    mtd_msil1c_href = f'{scheme}://{netloc}/{path}'
     mtd_msil1c_outpath = os.path.join(outdir, 'MTD_MSIL1C.xml')
 
     success = download_file(
