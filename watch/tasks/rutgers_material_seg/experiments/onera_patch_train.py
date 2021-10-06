@@ -379,8 +379,8 @@ class Trainer(object):
             # loss = loss1 + loss2
             # print(cropped_features1.shape)
             loss = 25*F.triplet_margin_loss(cropped_features1,  # .unsqueeze(0),
-                                           cropped_features2,  # .unsqueeze(0),
-                                           cropped_negative_features1,
+                                            cropped_features2,  # .unsqueeze(0),
+                                            cropped_negative_features1,
                                             swap=True,
                                             p=1,
                                             reduction='mean'
@@ -399,38 +399,51 @@ class Trainer(object):
             backprop_time = time.time() - start
 
             start = time.time()
+
             masks1 = F.softmax(output1, dim=1)
             masks2 = F.softmax(output2, dim=1)
 
-
             inference_otsu_coeff = 1.4
-            hist_inference_otsu_coeff = 0.8
+            hist_inference_otsu_coeff = 1.0
+            topk = 45
+
             pad_amount = (config['evaluation']['inference_window']-1)//2
             padded_output1 = F.pad(input=output1, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
             padded_output2 = F.pad(input=output2, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
-
             #those are [bs, n_patches, k, window_size, window_size], where each patch is represented by a histogram of k,window_size,window_size
             patched_padded_output1 = torch.stack([transforms.functional.crop(padded_output1, *params) for params in self.inference_all_crops_params], dim=1)#.flatten(-3,-1) 
             patched_padded_output2 = torch.stack([transforms.functional.crop(padded_output2, *params) for params in self.inference_all_crops_params], dim=1)#.flatten(-3,-1)
 
+            padded_mask1 = F.pad(input=masks1, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
+            padded_mask2 = F.pad(input=masks2, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
+            patched_padded_mask1 = torch.stack([transforms.functional.crop(padded_mask1, *params) for params in self.inference_all_crops_params], dim=1)#.flatten(-3,-1)
+            patched_padded_mask2 = torch.stack([transforms.functional.crop(padded_mask2, *params) for params in self.inference_all_crops_params], dim=1)#.flatten(-3,-1)
+
             # here we sum all vectors to make a 1,k vector for each patch
             patched_padded_output1_distributions = patched_padded_output1.flatten(-2, -1)#.sum(axis=3) #[bs, n_patches, k]
             patched_padded_output2_distributions = patched_padded_output2.flatten(-2, -1)#.sum(axis=3) #[bs, n_patches, k]
+            patched_padded_mask1_distributions = patched_padded_mask1.flatten(-2, -1)#.sum(axis=3) #[bs, n_patches, k]
+            patched_padded_mask2_distributions = patched_padded_mask2.flatten(-2, -1)#.sum(axis=3) #[bs, n_patches, k]
 
             patched_padded_output1_distributions = patched_padded_output1_distributions.sum(axis=3)
             patched_padded_output2_distributions = patched_padded_output2_distributions.sum(axis=3)
+            patched_padded_mask1_distributions = patched_padded_mask1_distributions.sum(axis=3) #[bs, n_patches, k]
+            patched_padded_mask2_distributions = patched_padded_mask2_distributions.sum(axis=3) #[bs, n_patches, k]
+
+            topk_patched_mask1_post_distributions, largest_elements_post_inds = torch.topk(patched_padded_mask1_distributions, k=topk, sorted=False, dim=2)
+            topk_patched_mask2_post_distributions = torch.gather(patched_padded_mask2_distributions, dim=2, index=largest_elements_post_inds)
 
             # normalize those vectors to 0-1
-            normalized_patched_padded_output1_distributions = (patched_padded_output1_distributions - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output1_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])
-            normalized_patched_padded_output2_distributions = (patched_padded_output2_distributions - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output2_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])            
+            normalized_patched_padded_mask1_distributions = (patched_padded_mask1_distributions - patched_padded_mask1_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_mask1_distributions.max(dim=2, keepdim=True)[0] - patched_padded_mask1_distributions.min(dim=2, keepdim=True)[0])
+            normalized_patched_padded_mask2_distributions = (patched_padded_mask2_distributions - patched_padded_mask2_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_mask2_distributions.max(dim=2, keepdim=True)[0] - patched_padded_mask2_distributions.min(dim=2, keepdim=True)[0])            
 
             # histogram intersection raw features
             # normalized_patched_padded_output1_distributions = (patched_padded_output1_distributions - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output1_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])
             # normalized_patched_padded_output2_distributions = (patched_padded_output2_distributions - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output2_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])
-            minima = torch.minimum(normalized_patched_padded_output1_distributions, normalized_patched_padded_output2_distributions)
-            histograms_intersection_features = torch.true_divide(minima.sum(axis=2), normalized_patched_padded_output2_distributions.sum(axis=2)).view(bs,h,w)
+            minima = torch.minimum(topk_patched_mask1_post_distributions, topk_patched_mask2_post_distributions)
+            histograms_intersection_features = torch.true_divide(minima.sum(axis=2), topk_patched_mask2_post_distributions.sum(axis=2)).view(bs,h,w)
             histc_int_change_feats_pred = torch.zeros_like(histograms_intersection_features)
-            histc_int_inference_otsu_threshold = hist_inference_otsu_coeff*otsu(histograms_intersection_features.cpu().detach().numpy(), nbins=256)
+            histc_int_inference_otsu_threshold = hist_inference_otsu_coeff*otsu(histograms_intersection_features.cpu().detach().numpy(), nbins=128)
             histc_int_change_feats_pred[histograms_intersection_features < histc_int_inference_otsu_threshold] = 1
             histc_int_change_feats_pred = histc_int_change_feats_pred.cpu().detach().type(torch.uint8)
 
@@ -522,7 +535,7 @@ class Trainer(object):
 
                         l1_patched_diff_change_features_show = (l1_patched_diff_change_features_show - l1_patched_diff_change_features_show.min())/(l1_patched_diff_change_features_show.max() - l1_patched_diff_change_features_show.min())
                         l2_patched_diff_change_features_show = (l2_patched_diff_change_features_show - l2_patched_diff_change_features_show.min())/(l2_patched_diff_change_features_show.max() - l2_patched_diff_change_features_show.min())
-                        histograms_intersection_show = (histograms_intersection_show - histograms_intersection_show.min())/(histograms_intersection_show.max() - histograms_intersection_show.min())
+                        # histograms_intersection_show = (histograms_intersection_show - histograms_intersection_show.min())/(histograms_intersection_show.max() - histograms_intersection_show.min())
 
                         pred1_show = masks1.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
                         pred2_show = masks2.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
@@ -728,25 +741,39 @@ class Trainer(object):
 
                 #region-wise inference
                 inference_otsu_coeff = 1.4
-                hist_inference_otsu_coeff = 0.92
+                hist_inference_otsu_coeff = 1.0
+                topk = 33
+
                 pad_amount = (config['evaluation']['inference_window']-1)//2
                 padded_output1 = F.pad(input=output1, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
                 padded_output2 = F.pad(input=output2, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
                 patched_padded_output1 = torch.stack([transforms.functional.crop(padded_output1, *params) for params in self.inference_all_crops_params], dim=1)#.flatten(-3,-1)
                 patched_padded_output2 = torch.stack([transforms.functional.crop(padded_output2, *params) for params in self.inference_all_crops_params], dim=1)#.flatten(-3,-1)
 
-                patched_padded_output1_distributions = patched_padded_output1.flatten(-2, -1).sum(axis=3) #[bs, n_patches, k]
-                patched_padded_output2_distributions = patched_padded_output2.flatten(-2, -1).sum(axis=3) #[bs, n_patches, k]
+                padded_mask1 = F.pad(input=masks1, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
+                padded_mask2 = F.pad(input=masks2, pad=(pad_amount,pad_amount,pad_amount,pad_amount), mode='replicate')
+                patched_padded_mask1 = torch.stack([transforms.functional.crop(padded_mask1, *params) for params in self.inference_all_crops_params], dim=1)#.flatten(-3,-1)
+                patched_padded_mask2 = torch.stack([transforms.functional.crop(padded_mask2, *params) for params in self.inference_all_crops_params], dim=1)#.flatten(-3,-1)
 
-                # print(patched_padded_output1_distributions[0,0,:])
+                patched_padded_output1_distributions = patched_padded_output1.flatten(-2, -1)#.sum(axis=3) #[bs, n_patches, k]
+                patched_padded_output2_distributions = patched_padded_output2.flatten(-2, -1)#.sum(axis=3) #[bs, n_patches, k]
+                patched_padded_mask1_distributions = patched_padded_mask1.flatten(-2, -1)#.sum(axis=3) #[bs, n_patches, k]
+                patched_padded_mask2_distributions = patched_padded_mask2.flatten(-2, -1)#.sum(axis=3) #[bs, n_patches, k]
+
+                patched_padded_output1_distributions = patched_padded_output1_distributions.sum(axis=3)
+                patched_padded_output2_distributions = patched_padded_output2_distributions.sum(axis=3)
+                patched_padded_mask1_distributions = patched_padded_mask1_distributions.sum(axis=3) #[bs, n_patches, k]
+                patched_padded_mask2_distributions = patched_padded_mask2_distributions.sum(axis=3) #[bs, n_patches, k]     
+
+                topk_patched_output1_post_distributions, largest_elements_post_inds = torch.topk(patched_padded_mask1_distributions, k=topk, sorted=False, dim=2)
+                topk_patched_output2_post_distributions = torch.gather(patched_padded_mask2_distributions, dim=2, index=largest_elements_post_inds)
+
                 normalized_patched_padded_output1_distributions = (patched_padded_output1_distributions - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output1_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])
                 normalized_patched_padded_output2_distributions = (patched_padded_output2_distributions - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output2_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])            
 
                 # histogram intersection raw features
-                # normalized_patched_padded_output1_distributions = (patched_padded_output1_distributions - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output1_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])
-                # normalized_patched_padded_output2_distributions = (patched_padded_output2_distributions - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output2_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])
-                minima = torch.minimum(normalized_patched_padded_output1_distributions, normalized_patched_padded_output2_distributions)
-                histograms_intersection_features = torch.true_divide(minima.sum(axis=2), normalized_patched_padded_output2_distributions.sum(axis=2)).view(bs,h,w)
+                minima = torch.minimum(topk_patched_output1_post_distributions, topk_patched_output2_post_distributions)
+                histograms_intersection_features = torch.true_divide(minima.sum(axis=2), topk_patched_output2_post_distributions.sum(axis=2)).view(bs,h,w)
                 histc_int_change_feats_pred = torch.zeros_like(histograms_intersection_features)
                 histc_int_inference_otsu_threshold = hist_inference_otsu_coeff*otsu(histograms_intersection_features.cpu().detach().numpy(), nbins=256)
                 histc_int_change_feats_pred[histograms_intersection_features < histc_int_inference_otsu_threshold] = 1
