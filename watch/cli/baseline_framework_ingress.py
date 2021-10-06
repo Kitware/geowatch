@@ -4,9 +4,11 @@ import json
 import os
 import tempfile
 import subprocess
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlparse
 from datetime import datetime
+from concurrent.futures import as_completed
 
+import ubelt
 import requests
 import pystac
 
@@ -39,17 +41,104 @@ def main():
                         default=False,
                         help="Run AWS CLI commands with "
                              "`--requestor_payer requester` flag")
+    parser.add_argument("-j", "--jobs",
+                        type=int,
+                        default=1,
+                        required=False,
+                        help="Number of jobs to run in parallel")
 
     baseline_framework_ingress(**vars(parser.parse_args()))
 
     return 0
 
 
+def _item_map(feature, outdir, aws_base_command, dryrun):
+    # Adding a reference back to the original STAC
+    # item if not already present
+    self_link = None
+    has_original = False
+    for link in feature.get('links', ()):
+        if link['rel'] == 'self':
+            self_link = link
+        elif link['rel'] == 'original':
+            has_original = True
+
+    if not has_original and self_link is not None:
+        feature.setdefault('links', []).append(
+            {'rel': 'original',
+             'href': self_link['href'],
+             'type': 'application/json'})
+
+    assets = feature.get('assets', {})
+
+    # HTML index page for certain Landsat items, not needed here
+    # so remove from assets dict
+    if 'index' in assets:
+        del assets['index']
+
+    new_assets = {}
+    for asset_name, asset in assets.items():
+        asset_basename = os.path.basename(asset['href'])
+
+        feature_output_dir = os.path.join(
+            outdir, feature['id'])
+
+        asset_outpath = os.path.join(
+            feature_output_dir, asset_basename)
+
+        asset_href = asset['href']
+
+        try:
+            if(feature['properties']['platform'] in SENTINEL_PLATFORMS
+               and asset_name == "metadata"):
+                asset_outpath = os.path.join(
+                    feature_output_dir, "MTD_TL.xml")
+
+                new_asset = download_mtd_msil1c(
+                    feature['properties']['sentinel:product_id'],
+                    asset_href, feature_output_dir, aws_base_command,
+                    dryrun)
+
+                if new_asset is not None:
+                    new_assets['productmetadata'] = new_asset
+        except KeyError:
+            pass
+
+        if not dryrun:
+            os.makedirs(feature_output_dir, exist_ok=True)
+
+        if os.path.isfile(asset_outpath):
+            print("Asset already exists at outpath '{}', "
+                  "not redownloading".format(asset_outpath))
+            # Update feature asset href to point to local outpath
+            asset['href'] = asset_outpath
+        else:
+            success = download_file(
+                asset_href, asset_outpath, aws_base_command, dryrun)
+            if success:
+                asset['href'] = asset_outpath
+            else:
+                print("Warning unrecognized scheme for asset href: '{}', "
+                      "skipping!".format(asset_href))
+                continue
+
+    for new_asset_name, new_asset in new_assets.items():
+        assets[new_asset_name] = new_asset
+
+    item = pystac.Item.from_dict(feature)
+    item.set_collection(None)  # Clear the collection if present
+    item.set_self_href(
+        os.path.join(outdir, feature['id'], feature['id'] + '.json'))
+
+    return item
+
+
 def baseline_framework_ingress(input_path,
                                outdir,
                                aws_profile=None,
                                dryrun=False,
-                               requester_pays=False):
+                               requester_pays=False,
+                               jobs=1):
     os.makedirs(outdir, exist_ok=True)
 
     catalog_outpath = os.path.join(outdir, 'catalog.json')
@@ -92,81 +181,15 @@ def baseline_framework_ingress(input_path,
     else:
         input_stac_items = _load_input(input_path)
 
-    for feature in input_stac_items:
-        # Adding a reference back to the original STAC
-        # item if not already present
-        self_link = None
-        has_original = False
-        for link in feature.get('links', ()):
-            if link['rel'] == 'self':
-                self_link = link
-            elif link['rel'] == 'original':
-                has_original = True
+    executor = ubelt.Executor(mode='process' if jobs > 1 else 'serial',
+                              max_workers=jobs)
 
-        if not has_original and self_link is not None:
-            feature.setdefault('links', []).append(
-                {'rel': 'original',
-                 'href': self_link['href'],
-                 'type': 'application/json'})
+    jobs = [executor.submit(_item_map, feature,
+                            outdir, aws_base_command, dryrun)
+            for feature in input_stac_items]
 
-        assets = feature.get('assets', {})
-
-        # HTML index page for certain Landsat items, not needed here
-        # so remove from assets dict
-        if 'index' in assets:
-            del assets['index']
-
-        for asset_name, asset in assets.items():
-            asset_basename = os.path.basename(asset['href'])
-
-            feature_output_dir = os.path.join(
-                outdir, feature['id'])
-
-            asset_outpath = os.path.join(
-                feature_output_dir, asset_basename)
-
-            asset_href = asset['href']
-
-            try:
-                if(feature['properties']['platform'] in SENTINEL_PLATFORMS
-                   and asset_name == "metadata"):
-                    asset_outpath = os.path.join(
-                        feature_output_dir, "MTD_TL.xml")
-
-                    new_asset = download_mtd_msil1c(
-                        feature['properties']['sentinel:product_id'], 
-                        asset_href, feature_output_dir, aws_base_command, 
-                        dryrun)
-                    
-            except KeyError:
-                pass
-
-            if not dryrun:
-                os.makedirs(feature_output_dir, exist_ok=True)
-
-            if os.path.isfile(asset_outpath):
-                print("Asset already exists at outpath '{}', "
-                      "not redownloading".format(asset_outpath))
-                # Update feature asset href to point to local outpath
-                asset['href'] = asset_outpath
-            else:
-                success = download_file(
-                    asset_href, asset_outpath, aws_base_command, dryrun)
-                if success:
-                    asset['href'] = asset_outpath
-                else:
-                    print("Warning unrecognized scheme for asset href: '{}', "
-                          "skipping!".format(asset_href))
-                    continue
-
-        if new_asset:
-            assets['productmetadata'] = new_asset
-
-        item = pystac.Item.from_dict(feature)
-        item.set_collection(None)  # Clear the collection if present
-        item.set_self_href(
-            os.path.join(outdir, feature['id'], feature['id'] + '.json'))
-        catalog.add_item(item)
+    for mapped_item in (job.result() for job in as_completed(jobs)):
+        catalog.add_item(mapped_item)
 
     catalog.save(catalog_type=pystac.CatalogType.ABSOLUTE_PUBLISHED)
 
@@ -202,18 +225,22 @@ def download_http_file(url, outpath):
             outf.write(chunk)
 
 
-def download_mtd_msil1c(product_id, metadata_href, outdir, aws_base_command, dryrun):
-    # "The metadata of the product, which tile is part of, are available in 
-    # parallel folder (productInfo.json contains the name of the product). 
+def download_mtd_msil1c(product_id,
+                        metadata_href,
+                        outdir,
+                        aws_base_command,
+                        dryrun):
+    # "The metadata of the product, which tile is part of, are available in
+    # parallel folder (productInfo.json contains the name of the product).
     # This can be found in products/[year]/[month]/[day]/[product name]."
     # (https://roda.sentinel-hub.com/sentinel-s2-l1c/readme.html)
     dt = datetime.strptime(product_id.split('_')[2], '%Y%m%dT%H%M%S')
-    
+
     scheme, netloc, path, *_ = urlparse(metadata_href)
     index = path.find('tiles')
     path = path[:index] + \
         f'products/{dt.year}/{dt.month}/{dt.day}/{product_id}/metadata.xml'
-    mtd_msil1c_href = f'{scheme}://{netloc}/{path}'
+    mtd_msil1c_href = f'{scheme}://{netloc}{path}'
     mtd_msil1c_outpath = os.path.join(outdir, 'MTD_MSIL1C.xml')
 
     success = download_file(
@@ -227,8 +254,8 @@ def download_mtd_msil1c(product_id, metadata_href, outdir, aws_base_command, dry
         }
     else:
         print("Warning unrecognized scheme for asset href: '{}', "
-                "skipping!".format(mtd_msil1c_href))
-        return {}
+              "skipping!".format(mtd_msil1c_href))
+        return None
 
 
 if __name__ == "__main__":
