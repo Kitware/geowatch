@@ -1,4 +1,4 @@
-
+# flake8: noqa
 import kwcoco
 import ndsampler
 import ubelt as ub

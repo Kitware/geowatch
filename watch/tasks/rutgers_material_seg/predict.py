@@ -29,20 +29,12 @@ import kwimage
 import kwarray
 import ndsampler
 import numpy as np
-# from torch import nn
 from tqdm import tqdm  # NOQA
 import ubelt as ub
 import pathlib
 import watch.tasks.rutgers_material_seg.utils.utils as utils
 from watch.tasks.rutgers_material_seg.models import build_model
 from watch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import SequenceDataset
-
-
-# if 0:
-#     torch.backends.cudnn.enabled = False
-#     torch.backends.cudnn.deterministic = True
-#     torch.set_printoptions(precision=6, sci_mode=False)
-#     np.set_printoptions(precision=3, suppress=True)
 
 
 class Evaluator(object):
@@ -82,9 +74,6 @@ class Evaluator(object):
         stitcher = self.stitcher_dict[gid]
         recon = stitcher.finalize()
         self.stitcher_dict.pop(gid)
-
-        # percent_nan = np.isnan(recon).sum() / recon.size
-        # print('percent_nan = {!r}'.format(percent_nan))
 
         save_path = self.output_feat_dpath / f'{gid}.tiff'
         save_path = os.fspath(save_path)
@@ -149,8 +138,8 @@ class Evaluator(object):
                 image2 = image2.to(self.device)
                 mask = mask.to(self.device)
 
-                image1 = utils.stad_image(image1)
-                image2 = utils.stad_image(image2)
+                # image1 = utils.stad_image(image1)
+                # image2 = utils.stad_image(image2)
 
                 output1, features1 = self.model(image1)  # [B,22,150,150]
                 output2, features2 = self.model(image2)
@@ -179,16 +168,6 @@ class Evaluator(object):
                                     device='numpy')
                             slice_ = outputs['tr'].data[0][b]['space_slice']
                             self.stitcher_dict[gid].add(slice_, output)
-
-                # masks1 = F.softmax(output1, dim=1)#.detach()
-                # masks2 = F.softmax(output2, dim=1)#.detach()
-                # # masks1 = F.softmax(features1, dim=1)
-                # # masks2 = F.softmax(features2, dim=1)
-                # # masks1 = self.high_confidence_filter(masks1, cutoff_top=self.config['high_confidence_threshold']['val_cutoff'])
-                # # masks2 = self.high_confidence_filter(masks2, cutoff_top=self.config['high_confidence_threshold']['val_cutoff'])
-                # pred1 = masks1.max(1)[1].cpu().detach()#.numpy()
-                # pred2 = masks2.max(1)[1].cpu().detach()#.numpy()
-                # change_detection_prediction = (pred1!=pred2).type(torch.uint8)
 
         if self.write_probs:
             # Finalize any remaining images
@@ -296,7 +275,7 @@ def main(cmdline=True, **kwargs):
 
     # Hacks to modify the config
     config['training']['pretrained'] = False
-
+    print(config)
     if 0:
         torch.manual_seed(config['seed'])
         torch.cuda.manual_seed(config['seed'])
@@ -309,14 +288,6 @@ def main(cmdline=True, **kwargs):
     if len(devices) > 1:
         raise NotImplementedError('TODO: handle multiple devices')
     device = devices[0]
-
-    # device = torch.device('cpu' if args.gpus is None else int(args.gpus))
-    # device = 0
-
-    # config['device_ids'] = device_ids
-    # config['devices_used'] = gpu_devices
-    # coco_fpath = config['data'][config['location']]['coco_json']
-    # coco_fpath = ub.expandpath(coco_fpath)
 
     input_coco_dset = kwcoco.CocoDataset.coerce(args.test_dataset)
     sampler = ndsampler.CocoSampler(input_coco_dset)
@@ -339,10 +310,18 @@ def main(cmdline=True, **kwargs):
     # THIS IS WHY WE SAVE METADATA WITH THE MODEL!
     # WE DONT WANT TO HAVE TO FUDGE RECONSTRUCTION IN PRODUCTION!!!
     checkpoint_state = torch.load(args.checkpoint_fpath)
+
     num_classes = checkpoint_state['model']['module.outc.conv.weight'].shape[0]
     out_features_dim = checkpoint_state['model']['module.features_outc.conv.weight'].shape[0]
     config['data']['num_classes'] = num_classes
     config['training']['out_features_dim'] = out_features_dim
+
+    base_path = '/'.join(args.checkpoint_fpath.split('/')[:-1])
+    pretrain_config_path = f"{base_path}/config.yaml"
+    if os.path.isfile(pretrain_config_path):
+        pretrain_config = utils.load_yaml_as_dict(pretrain_config_path)
+        config['data']['channels'] = pretrain_config['data']['channels']
+        config['training']['model_feats_channels'] = pretrain_config_path['training']['model_feats_channels']
 
     model = build_model(model_name=config['training']['model_name'],
                         backbone=config['training']['backbone'],
@@ -352,7 +331,8 @@ def main(cmdline=True, **kwargs):
                         weight_std=config['training']['weight_std'],
                         beta=config['training']['beta'],
                         num_channels=config['training']['num_channels'],
-                        out_dim=config['training']['out_features_dim'])
+                        out_dim=config['training']['out_features_dim'],
+                        feats=config['training']['model_feats_channels'])
 
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 

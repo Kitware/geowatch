@@ -1,3 +1,5 @@
+# flake8: noqa
+
 import kwarray
 import kwimage
 import numpy as np
@@ -46,6 +48,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         if input_dims is None:
             input_dims = window_dims[-2:]
         # print(sampler)
+        self.training = training
         self.rng = kwarray.ensure_rng(rng)
         self.sampler = sampler
         self.window_dims = window_dims
@@ -211,7 +214,7 @@ class SequenceDataset(torch.utils.data.Dataset):
             # UNUSED? FIXME?
             # negative_class_masks = np.concatenate([m[None, ...] for m in negative_frame_masks], axis=0)  # NOQA
 
-            inputs['negative_im']: ItemContainer(torch.from_numpy(negative_cthw_im), stack=True)
+            inputs['negative_im']=ItemContainer(torch.from_numpy(negative_cthw_im), stack=True)
 
         item = {
             'inputs': inputs,
