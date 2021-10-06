@@ -135,8 +135,10 @@ def baseline_framework_ingress(input_path,
 
                     # we are iterating a copy (.items()) so this is safe
                     assets['productmetadata'] = download_mtd_msil1c(
-                        feature['properties']['product_id'], asset_href, 
-                        feature_output_dir, aws_base_command, dryrun)
+                        feature['properties']['sentinel:product_id'], 
+                        asset_href, feature_output_dir, aws_base_command, 
+                        dryrun)
+                    
             except KeyError:
                 pass
 
@@ -205,8 +207,10 @@ def download_mtd_msil1c(product_id, metadata_href, outdir, aws_base_command, dry
     # (https://roda.sentinel-hub.com/sentinel-s2-l1c/readme.html)
     dt = datetime.strptime(product_id.split('_')[2], '%Y%m%dT%H%M%S')
     
-    scheme, netloc, *_ = urlparse(metadata_href)
-    path = f'products/{dt.year}/{dt.month}/{dt.day}/{product_id}/MTD_MSIL1C.xml'
+    scheme, netloc, path, *_ = urlparse(metadata_href)
+    index = path.find('tiles')
+    path = path[:index] + \
+        f'products/{dt.year}/{dt.month}/{dt.day}/{product_id}/metadata.xml'
     mtd_msil1c_href = urlunparse((scheme, netloc, path))
     mtd_msil1c_outpath = os.path.join(outdir, 'MTD_MSIL1C.xml')
 
