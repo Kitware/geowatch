@@ -36,7 +36,6 @@ import watch.tasks.rutgers_material_seg.utils.utils as utils
 from watch.tasks.rutgers_material_seg.models import build_model
 from watch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import SequenceDataset
 
-
 class Evaluator(object):
     def __init__(self,
                  model: object,

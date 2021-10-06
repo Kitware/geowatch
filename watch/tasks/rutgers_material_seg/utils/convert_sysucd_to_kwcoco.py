@@ -1,6 +1,9 @@
+<<<<<<< HEAD
 # flake8: noqa
 
 
+=======
+>>>>>>> 3caec627550d31085592b7ded8b7e9f528a64f91
 from os.path import dirname
 from os.path import exists
 from os.path import join
