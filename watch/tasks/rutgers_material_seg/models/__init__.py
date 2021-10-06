@@ -2,11 +2,13 @@
 from watch.tasks.rutgers_material_seg.models import deeplabWS
 from watch.tasks.rutgers_material_seg.models.shallow_seg import ShallowSeg
 from watch.tasks.rutgers_material_seg.models.linear_classifier import VSNet
+from watch.tasks.rutgers_material_seg.models import resnet
 
 models = {
     'deeplabWS': deeplabWS,
     'shallow_seg': ShallowSeg,
-    'vsnet': VSNet
+    'vsnet': VSNet,
+    'resnet': resnet
 }
 
 
