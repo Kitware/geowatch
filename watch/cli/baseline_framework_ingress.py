@@ -5,6 +5,7 @@ import os
 import tempfile
 import subprocess
 from urllib.parse import urlparse, urlunparse
+from datetime import datetime
 
 import requests
 import pystac
@@ -131,6 +132,11 @@ def baseline_framework_ingress(input_path,
                    and asset_name == "metadata"):
                     asset_outpath = os.path.join(
                         feature_output_dir, "MTD_TL.xml")
+
+                    # we are iterating a copy (.items()) so this is safe
+                    assets['productmetadata'] = download_mtd_msil1c(
+                        feature['properties']['product_id'], asset_href, 
+                        feature_output_dir, aws_base_command, dryrun)
             except KeyError:
                 pass
 
@@ -150,18 +156,7 @@ def baseline_framework_ingress(input_path,
                 else:
                     print("Warning unrecognized scheme for asset href: '{}', "
                           "skipping!".format(asset_href))
-                    continue                 
-
-            try:
-                if(feature['properties']['platform'] in SENTINEL_PLATFORMS
-                   and asset_name == "info"):
-                    new_assets = download_mtd_msil1c(
-                        asset_href, feature_output_dir, aws_base_command, dryrun)
-            except KeyError:
-                pass
-
-        if new_assets:
-            assets.update(new_assets)
+                    continue
 
         item = pystac.Item.from_dict(feature)
         item.set_collection(None)  # Clear the collection if present
@@ -203,45 +198,31 @@ def download_http_file(url, outpath):
             outf.write(chunk)
 
 
-def download_mtd_msil1c(tile_info_href, outdir, aws_base_command, dryrun):
-    product_info_href = tile_info_href.replace('tileInfo', 'productInfo')
-    product_info_outpath = os.path.join(outdir, 'productInfo.json')
-
-    def _create_asset(href, type, title):
-        return {
-            'href': href,
-            'type': type,
-            'title': title,
-            'roles': ['metadata']
-        }
-    assets = {}
+def download_mtd_msil1c(product_id, metadata_href, outdir, aws_base_command, dryrun):
+    # "The metadata of the product, which tile is part of, are available in 
+    # parallel folder (productInfo.json contains the name of the product). 
+    # This can be found in products/[year]/[month]/[day]/[product name]."
+    # (https://roda.sentinel-hub.com/sentinel-s2-l1c/readme.html)
+    dt = datetime.strptime(product_id.split('_')[2], '%Y%m%dT%H%M%S')
+    
+    scheme, netloc, *_ = urlparse(metadata_href)
+    path = f'products/{dt.year}/{dt.month}/{dt.day}/{product_id}/MTD_MSIL1C.xml'
+    mtd_msil1c_href = urlunparse((scheme, netloc, path))
+    mtd_msil1c_outpath = os.path.join(outdir, 'MTD_MSIL1C.xml')
 
     success = download_file(
-        product_info_href, product_info_outpath, aws_base_command, dryrun)
+        mtd_msil1c_href, mtd_msil1c_outpath, aws_base_command, dryrun)
     if success:
-        assets['productinfo'] = _create_asset(
-            product_info_href, 'application/json', 'Product JSON metadata')
-
-        with open(product_info_outpath) as product_info_file:
-            product_info = json.load(product_info_file)
-    
-        scheme, netloc, *_ = urlparse(product_info_href)
-        mtd_msil1c_href = urlunparse((scheme, netloc, product_info['path']))
-        mtd_msil1c_outpath = os.path.join(outdir, 'MTD_MSIL1C.xml')
-
-        success = download_file(
-            mtd_msil1c_href, mtd_msil1c_outpath, aws_base_command, dryrun)
-        if success:
-            assets['productmetadata'] = _create_asset(
-                mtd_msil1c_href, 'application/xml', 'Product XML metadata')
-        else:
-            print("Warning unrecognized scheme for asset href: '{}', "
-                  "skipping!".format(mtd_msil1c_href))
+        return {
+            'href': mtd_msil1c_outpath,
+            'type': 'application/xml',
+            'title': 'Product XML metadata',
+            'roles': ['metadata']
+        }
     else:
         print("Warning unrecognized scheme for asset href: '{}', "
-              "skipping!".format(product_info_href))
-
-    return assets
+                "skipping!".format(mtd_msil1c_href))
+        return {}
 
 
 if __name__ == "__main__":
