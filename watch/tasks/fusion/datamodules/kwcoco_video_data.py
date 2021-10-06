@@ -1688,6 +1688,17 @@ def debug_video_information(dset, video_id):
         ax.set_xlabel('Observation Index')
         ax.set_ylabel('Sample Index')
 
+        # extract track animations
+        for tid, track_infos in tid_to_infos.items():
+            for info in track_infos:
+                aid = info['aid']
+                gid = info['gid']
+                imgspace_box = kwimage.Boxes([dset.index.anns[aid]['bbox']], 'xywh')
+                delayed = dset.delayed_load(gid, channels='red|green|blue')
+                imgspace_sl = imgspace_box.to_slices()[0]
+                delayed_chip = delayed.crop(imgspace_sl)
+                chip = delayed_chip.finalize()
+
 
 def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                                    negative_classes=None, keepbound=False,
