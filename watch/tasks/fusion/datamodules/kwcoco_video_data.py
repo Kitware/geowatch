@@ -177,45 +177,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.neg_to_pos_ratio = neg_to_pos_ratio
         self.channels = channels
         self.batch_size = batch_size
-        if isinstance(num_workers, str):
-            if num_workers == 'auto':
-                num_workers = 'avail-2'
-
-            # input normalization
-            num_workers = num_workers.replace('available', 'avail')
-            base_workers = None
-
-            prefix = 'avail'
-            if num_workers.startswith(prefix):
-                base_workers = util_globals.request_cpus(max_load=0.5)
-                suffix = num_workers[len(prefix):]
-
-            prefix = 'all'
-            if num_workers.startswith(prefix):
-                import psutil
-                base_workers = psutil.cpu_count()
-                suffix = num_workers[len(prefix):]
-
-            if base_workers is None:
-                raise KeyError(num_workers)
-
-            if suffix:
-                expr = '{}{}'.format(base_workers, suffix)
-                if len(expr) > 8:
-                    raise Exception(
-                        'num-workers-hueristic should be small text. '
-                        'We want to disallow attempts at crashing python '
-                        'by feeding nasty input into eval '
-                    )
-                # FIME: eval is not very safe, add numexpr dependency instead
-                # import numexpr
-                # numexpr.evaluate('3 - 2')
-                num_workers = max(eval(expr, {}, {}), 0)
-            else:
-                num_workers = base_workers
-            print('Choose num_workers = {!r}'.format(num_workers))
-
-        self.num_workers = num_workers
+        self.num_workers = util_globals.coerce_num_workers(num_workers)
         self.preprocessing_step = preprocessing_step
         self.normalize_inputs = normalize_inputs
         self.time_sampling = time_sampling
@@ -442,7 +404,6 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             >>> kwplot.imshow(canvas)
             >>> kwplot.show_if_requestedV
         """
-        import kwimage
         dataset = self.torch_datasets[stage]
         # Get the raw dataset class
         while hasattr(dataset, 'dataset'):
@@ -1944,16 +1905,6 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                 track_phase[at_idxs] = track_cxs
                 track_phase_mat.append(track_phase)
             track_phase_mat = np.array(track_phase_mat)
-
-            if 0:
-                utils.category_tree_ensure_color(classes)
-                color_lut = np.zeros((nancx + 1, 3))
-                for node, node_data in classes.graph.nodes.items():
-                    cx = classes.id_to_idx[node_data['id']]
-                    color_lut[cx] = node_data['color']
-                color_lut[nancx] = (0, 0, 0)
-                colored_track_phase = color_lut[track_phase_mat]
-                kwplot.imshow(colored_track_phase)
 
             tid_to_track_changemat = {}
             for tid, track_dframe in tid_to_dframe.items():
