@@ -1169,12 +1169,6 @@ if __name__ == "__main__":
     model = nn.DataParallel(model)
     model.to(device)
 
-    # for m in model.modules():
-    #     if isinstance(m, nn.BatchNorm2d):
-    #         m.eval()
-    #         m.weight.requires_grad = False
-    #         m.bias.requires_grad = False
-
     optimizer = optim.SGD(model.parameters(),
                           lr=config['training']['learning_rate'],
                           momentum=config['training']['momentum'],
@@ -1187,7 +1181,6 @@ if __name__ == "__main__":
 
         if os.path.isfile(config['training']['resume']):
             checkpoint = torch.load(config['training']['resume'])
-
             # model_dict = model.state_dict()
             # if model_dict == checkpoint['model']:
             #     print(f"Succesfuly loaded model from {config['training']['resume']}")
