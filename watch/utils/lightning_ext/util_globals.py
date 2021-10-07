@@ -78,6 +78,15 @@ def request_nofile_limits(requested_limit='auto'):
             done
         '
 
+        # Query current soft limit
+        ulimit -S -n
+
+        # Query current hard limit
+        ulimit -H -n
+
+        # Request higher soft limit
+        ulimit -S -n 8192
+
     Example:
         >>> from watch.utils.lightning_ext.util_globals import *  # NOQA
         >>> request_nofile_limits()
