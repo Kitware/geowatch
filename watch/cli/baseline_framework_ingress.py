@@ -89,7 +89,8 @@ def _item_map(feature, outdir, aws_base_command, dryrun):
         asset_href = asset['href']
 
         try:
-            if(feature['properties']['platform'] in SENTINEL_PLATFORMS
+            if('productmetadata' not in assets
+               and feature['properties']['platform'] in SENTINEL_PLATFORMS
                and asset_name == "metadata"):
                 asset_outpath = os.path.join(
                     feature_output_dir, "MTD_TL.xml")
@@ -243,8 +244,13 @@ def download_mtd_msil1c(product_id,
     mtd_msil1c_href = f'{scheme}://{netloc}{path}'
     mtd_msil1c_outpath = os.path.join(outdir, 'MTD_MSIL1C.xml')
 
-    success = download_file(
-        mtd_msil1c_href, mtd_msil1c_outpath, aws_base_command, dryrun)
+    try:
+        success = download_file(
+            mtd_msil1c_href, mtd_msil1c_outpath, aws_base_command, dryrun)
+    except subprocess.CalledProcessError:
+        print("* Warning * Failed to download MTD_MSIL1C.xml")
+        return None
+
     if success:
         return {
             'href': mtd_msil1c_outpath,
