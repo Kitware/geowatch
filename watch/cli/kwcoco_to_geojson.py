@@ -187,10 +187,15 @@ def track_to_site(coco_dset, trackid, region_id):
 
     # get annotations in this track, sort them, and group them into features
     annots = coco_dset.annots(trackid=trackid)
-    ixs, gids, anns = annots.lookup('track_index'), annots.gids, annots.objs
-    # HACK because track_index is not unique, need a tiebreaker key to sort on
-    # _, gids, anns = zip(*sorted(zip(ixs, gids, anns)))
-    _, _, gids, anns = zip(*sorted(zip(ixs, range(len(ixs)), gids, anns)))
+    try:
+        ixs, gids, anns = annots.lookup(
+            'track_index'), annots.gids, annots.objs
+        # HACK because track_index is not unique, need a tiebreaker key to sort on
+        # _, gids, anns = zip(*sorted(zip(ixs, gids, anns)))
+        _, _, gids, anns = zip(*sorted(zip(ixs, range(len(ixs)), gids, anns)))
+    except KeyError:
+        # if track_index is missing, assume they're already sorted
+        gids, anns = annots.gids, annots.objs
     features = [
         geojson_feature(coco_dset.imgs[gid], _anns, coco_dset)
         for gid, _anns in ub.group_items(anns, gids).items()
@@ -241,9 +246,9 @@ def track_to_site(coco_dset, trackid, region_id):
     # add other top-level fields
 
     centroid_latlon = np.array(
-            _combined_geometries([
-                _single_geometry(feat['geometry']) for feat in features
-                ]).centroid)[::-1]
+        _combined_geometries([
+            _single_geometry(feat['geometry']) for feat in features
+        ]).centroid)[::-1]
 
     return geojson.FeatureCollection(
         features,
@@ -279,118 +284,10 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id=None):
         >>> import jsonschema
         >>> import watch
         >>> SITE_SCHEMA = watch.rc.load_site_model_schema()
-        >>> for site_name, collection in sites.items():
-        >>>     jsonschema.validate(collection, schema=SITE_SCHEMA)
+        >>> for site in sites:
+        >>>     jsonschema.validate(site, schema=SITE_SCHEMA)
 
     """
-    def fpath(img):
-        # Handle the case if an image consists of one main image or multiple
-        # auxiliary images
-        if img.get('file_name', None) is not None:
-            img_path = join(coco_dset.bundle_dpath, img['file_name'])
-        else:
-            # Use the first auxiliary image
-            # (todo: might want to choose determine the image "canvas" coordinates?)
-            img_path = join(coco_dset.bundle_dpath, img['auxiliary'][0]['file_name'])
-            return img_path
-
-    # parallelize grabbing img CRS info
-    def _info(img):
-        info = watch.gis.geotiff.geotiff_crs_info(fpath(img))
-        return info
-
-    executor = ub.Executor('thread', 16)
-    # optimization: filter to only images containing at least 1 annotation
-    annotated_gids = np.extract(np.array(list(map(len, coco_dset.images().annots))) > 0,
-                                coco_dset.images().gids)
-    infos = {gid: executor.submit(_info, coco_dset.imgs[gid]) for gid in annotated_gids}
-    # missing_geo_aids = np.extract(np.array(coco_dset.annots().lookup('segmentation_geos', None)) == None, coco_dset.annots().aids)
-    for gid, img in ProgIter(coco_dset.imgs.items(), desc='precomputing geo-segmentations'):
-
-        # vectorize over anns; this does some unnecessary computation
-        annots = coco_dset.annots(gid=gid)
-        if len(annots) == 0:
-            continue
-        info = infos[gid].result()
-        pxl_anns = annots.detections.data['segmentations']
-        wld_anns = pxl_anns.warp(info['pxl_to_wld'])
-        wgs_anns = wld_anns.warp(info['wld_to_wgs84'])
-        geojson_anns = [poly.swap_axes().to_geojson() for poly in wgs_anns]
-        
-        for aid, geojson_ann in zip(annots.aids, geojson_anns):
-            
-            ann = coco_dset.anns[aid]
-
-            # Non-standard COCO fields, needed by watch
-            if 'segmentation_geos' not in ann or 1:
-
-                # Note that each segmentation annotation here will get
-                # written out as a separate GeoJSON feature.
-                # TODO: Confirm that this is the desired behavior
-                # (especially with respect to the evaluation metrics)
-
-                ann['segmentation_geos'] = geojson_ann
-    
-    coco_dset.dump(coco_dset.fpath)
-    coco_dset = kwcoco.CocoDataset(coco_dset.fpath)
-
-    # HACK for mono-site
-    if coerce_site_boundary:
-        for gid in coco_dset.imgs:
-            annots = coco_dset.annots(gid=gid)
-            if len(annots) == 0:
-                continue
-
-            template_ann = annots.peek()
-            
-            # print(list(np.unique(annots.lookup('category_id'))), [coco_dset.name_to_cat['change']['id']])
-            assert list(np.unique(annots.lookup('category_id'))) == [coco_dset.name_to_cat['change']['id']]
-            try:
-                sseg_geos = [kwimage.MultiPolygon.from_shapely(
-                    shapely.ops.unary_union([
-                        kwimage.MultiPolygon.from_geojson(seg_geo).to_shapely().buffer(0)
-                        for seg_geo in (annots.lookup('segmentation_geos'))])).to_geojson()]
-            except TypeError:
-                xdev.embed()
-            
-            template_ann.pop('segmentation', None)
-            template_ann.pop('bbox', None)
-            template_ann['score'] == np.mean(annots.lookup('score'))
-            template_ann['segmentation_geos'] = sseg_geos
-
-            coco_dset.remove_annotations(annots.aids[1:])
-    
-    # HACK
-    first_half, second_half = np.split(np.array(ub.peek(coco_dset.index.vidid_to_gids.values())), 2)
-
-    site_features = defaultdict(list)
-    for ann in ProgIter(coco_dset.index.anns.values(), desc='converting annotations'):
-        img = coco_dset.imgs[ann['image_id']]
-        cat = coco_dset.cats[ann['category_id']]
-        catname = cat['name']
-
-        sseg_geos = ann['segmentation_geos']
-
-        date = dateutil.parser.parse(img['date_captured']).date()
-
-        source = None
-        # FIXME: seems fragile?
-        if img.get('parent_file_name', None):
-            source = img.get('parent_file_name').split('/')[0]
-        elif img.get('name', None):
-            source = img.get('name')
-        else:
-            raise Exception('cannot determine source')
-
-        # Consider that sseg_geos could one (dict) or more (list)
-        if isinstance(sseg_geos, dict):
-            sseg_geos = [sseg_geos]
-
-        for sseg_geo in sseg_geos:
-            try:
-                feature = geojson.Feature(geometry=sseg_geo)
-            except TypeError:
-                xdev.embed()
     sites = []
 
     for vidid, video in coco_dset.index.videos.items():
@@ -402,12 +299,6 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id=None):
         sub_dset = coco_dset.subset(gids=coco_dset.index.vidid_to_gids[vidid])
 
         for trackid in sub_dset.index.trackid_to_aids:
-
-            '''
-            # TODO these should have been eliminated in normalize.apply_tracks
-            if trackid == None:
-                continue
-            '''
 
             site = track_to_site(sub_dset, trackid, _region_id)
             sites.append(site)
@@ -435,7 +326,8 @@ def main(args):
     # Normalize
     coco_dset = watch.tasks.tracking.normalize.normalize(
         coco_dset,
-        track_fn=(lambda x: x),  # no-op function to use existing tracks
+        # track_fn=(lambda x: x),  # no-op function to use existing tracks
+        track_fn=watch.tasks.tracking.from_heatmap.time_aggregated_polys,
         overwrite=False)
 
     # Convert kwcoco to sites

@@ -191,9 +191,17 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
     #
 
     def are_invalid(annots):
+        def _is_valid(poly):
+            try:
+                return poly.to_shapely().is_valid
+            except ValueError:
+                return False
+
         return list(
-            map(lambda area, poly: area == 0 or not poly.to_shapely().is_valid,
-                annots.detections.data['boxes'].area.sum(axis=1),
+            map(
+                lambda area, poly: area == 0 or not _is_valid(poly),
+                np.atleast_2d(
+                    annots.detections.data['boxes'].area).sum(axis=1),
                 annots.detections.data['segmentations'].to_polygon_list()))
 
     coco_dset = remove_annotations(coco_dset, are_invalid)
@@ -205,8 +213,8 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
     if min_area_px is not None and min_area_px > 0:
 
         def are_small(annots):
-            return annots.detections.data['boxes'].area.sum(
-                axis=1) < min_area_px
+            return np.atleast_2d(
+                annots.detections.data['boxes'].area).sum(axis=1) < min_area_px
 
         coco_dset = remove_annotations(coco_dset, are_small)
 
@@ -298,8 +306,9 @@ def apply_tracks(coco_dset, track_fn, overwrite):
 
     # then cleanup leftover untracked annots
     coco_dset.remove_annotations(
-        list(np.extract(are_trackless(coco_dset.annots()),
-                   coco_dset.annots().aids)))
+        list(
+            np.extract(are_trackless(coco_dset.annots()),
+                       coco_dset.annots().aids)))
 
     return coco_dset
 
@@ -440,6 +449,7 @@ def normalize(coco_dset, track_fn, overwrite):
     coco_dset = apply_tracks(coco_dset, track_fn, overwrite)
     coco_dset = dedupe_tracks(coco_dset)
     coco_dset = add_track_index(coco_dset)
+    coco_dset = add_geos(coco_dset, overwrite=False)  # anns from apply_tracks
     coco_dset = normalize_phases(coco_dset)
     coco_dset = normalize_sensors(coco_dset)
     # HACK, ensure coco_dset.index is up to date

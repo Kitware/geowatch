@@ -80,6 +80,9 @@ OUT_PATH=out-$REGION
 rm -r $OUT_PATH
 mkdir $OUT_PATH
 
+# this is supposed to be a cache, but it is currently bugged on T&E's end
+rm -r pickled
+
 python run_evaluation.py \
     --roi $REGION \
     --gt_path  $GT_PATH \
