@@ -356,16 +356,16 @@ def dilated_template_sample(unixtimes, time_window):
 
         template_deltas = np.array([-5, -1, 0, 1, 5])
 
-        ideal_time_samples = unixtimes[:, None] + template_deltas[None, :]
-        losses = np.abs(ideal_time_samples[None, :, :] - unixtimes[:, None, None])
+        temporal_sampling = unixtimes[:, None] + template_deltas[None, :]
+        losses = np.abs(temporal_sampling[None, :, :] - unixtimes[:, None, None])
 
-        losses = np.abs(ideal_time_samples[None, :, :] - unixtimes[:, None, None])
+        losses = np.abs(temporal_sampling[None, :, :] - unixtimes[:, None, None])
 
 
         idx = 5
         all_rows = []
-        for idx in range(len(ideal_time_samples)):
-            ideal_sample_for_row = ideal_time_samples[idx]
+        for idx in range(len(temporal_sampling)):
+            ideal_sample_for_row = temporal_sampling[idx]
             unixtimes[:, None] - ideal_sample_for_row[None, :]
             loss_for_row = np.abs(ideal_sample_for_row[:, None] - unixtimes[None, :])
             # For each row find the closest available frames to the ideal
@@ -402,14 +402,14 @@ def dilated_template_sample(unixtimes, time_window):
 
     unixtimes = guess_missing_unixtimes(unixtimes)
     rel_unixtimes = unixtimes - unixtimes[0]
-    ideal_time_samples = rel_unixtimes[:, None] + template_deltas[None, :]
+    temporal_sampling = rel_unixtimes[:, None] + template_deltas[None, :]
 
     # Wraparound
     wraparound = 1
     if wraparound:
-        ideal_time_samples = ideal_time_samples % (rel_unixtimes[-1] + 1)
+        temporal_sampling = temporal_sampling % (rel_unixtimes[-1] + 1)
 
-    losses = np.abs(ideal_time_samples[:, :, None] - rel_unixtimes[None, None, :])
+    losses = np.abs(temporal_sampling[:, :, None] - rel_unixtimes[None, None, :])
     losses[losses == 0] = -np.inf
     all_rows = []
     for loss_for_row in losses:
@@ -420,8 +420,8 @@ def dilated_template_sample(unixtimes, time_window):
     # else:
     #     # Seems to work correctly?
     #     all_rows = []
-    #     for idx in range(len(ideal_time_samples)):
-    #         ideal_sample_for_row = ideal_time_samples[idx]
+    #     for idx in range(len(temporal_sampling)):
+    #         ideal_sample_for_row = temporal_sampling[idx]
     #         loss_for_row = np.abs(ideal_sample_for_row[:, None] - rel_unixtimes[None, :])
     #         loss_for_row[loss_for_row == 0] = -np.inf
     #         if 1:
@@ -457,7 +457,7 @@ def guess_missing_unixtimes(unixtimes):
             unixtimes = unixtimes.copy()
             unixtimes[miss_idxs] = interp_vals
         else:
-            unixtimes = np.linspace(0, 1, len(unixtimes))
+            unixtimes = np.linspace(0, len(unixtimes) * 60 * 60 * 24, len(unixtimes))
     return unixtimes
 
 
@@ -555,13 +555,18 @@ def soft_frame_affinity(unixtimes, sensors=None):
 
         frame_weights = season_weights * daylight_weights
         frame_weights = frame_weights * future_weights
+    else:
+        frame_weights = None
 
     if sensors is not None:
         sensors = np.asarray(sensors)
         same_sensor = sensors[:, None] == sensors[None, :]
         sensor_weights = ((same_sensor * 0.5) + 0.5)
         weights['sensor'] = sensor_weights
-        frame_weights = frame_weights * sensor_weights
+        if frame_weights is None:
+            frame_weights = frame_weights
+        else:
+            frame_weights = frame_weights * sensor_weights
 
     if missing_any_dates:
         # For the frames that don't have dates on them, we use indexes to
@@ -707,6 +712,8 @@ def affinity_sample(affinity, size, include_indices, return_info=False,
 
     Ignore:
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> import kwplot
+        >>> kwplot.autompl()
         >>> from watch.tasks.fusion.datamodules.time_sampling import *  # NOQA
         >>> low = datetime.datetime.now().timestamp()
         >>> high = low + datetime.timedelta(days=365 * 5).total_seconds()
@@ -756,7 +763,10 @@ def affinity_sample(affinity, size, include_indices, return_info=False,
 
     # available_idxs = np.arange(affinity.shape[0])
     if return_info:
-        initial_probs = current_weights / current_weights.sum()
+        denom = current_weights.sum()
+        if denom == 0:
+            denom = 1
+        initial_probs = current_weights / denom
         info = {
             'steps': [],
 
@@ -771,6 +781,22 @@ def affinity_sample(affinity, size, include_indices, return_info=False,
     for _ in range(num_sample):
         # Choose the next image based on combined sample affinity
 
+        total_weight = current_weights.sum()
+
+        # If we zeroed out all of the probabilities try two things before
+        # punting and setting everything to uniform.
+        if total_weight == 0:
+            current_weights = affinity[chosen[0]].copy()
+            current_weights[chosen] = 0
+            total_weight = current_weights.sum()
+            if total_weight == 0:
+                # Should really never get here in day-to-day, but just in case
+                current_weights[:] = 1
+                current_weights[chosen] = 0
+                total_weight = current_weights.sum()
+                if total_weight == 0:
+                    current_weights[:] = 1
+
         if determenistic:
             next_idx = current_weights.argmax()
         else:
@@ -781,7 +807,8 @@ def affinity_sample(affinity, size, include_indices, return_info=False,
         update_weights = 1
 
         if do_pairwise:
-            update_weights = affinity[next_idx] * update_weights
+            if next_idx < affinity.shape[0]:
+                update_weights = affinity[next_idx] * update_weights
 
         if do_distribute:
             update_weights = (np.abs(col_idxs - next_idx) / len(col_idxs)) * update_weights
@@ -789,7 +816,11 @@ def affinity_sample(affinity, size, include_indices, return_info=False,
         chosen.append(next_idx)
 
         if return_info:
-            probs = current_weights / current_weights.sum()
+            if total_weight == 0:
+                probs = current_weights.copy()
+            else:
+                probs = current_weights / total_weight
+            probs = current_weights
             info['steps'].append({
                 'probs': probs,
                 'next_idx': next_idx,
@@ -853,6 +884,8 @@ def show_affinity_sample_process(chosen, info, fnum=1):
         idx = step['next_idx']
         probs = step['probs']
         ymax = probs.max()
+        if ymax == 0:
+            ymax = 1
         xmax = len(probs)
         x, y = idx, probs[idx]
         for x_ in chosen_so_far:
@@ -883,7 +916,10 @@ def show_affinity_sample_process(chosen, info, fnum=1):
     ax.set_title('Chosen Affinities')
     # kwplot.imshow(kwimage.normalize(), pnum=pnum_(), title='Chosen Affinities')
 
-    kwplot.imshow(kwimage.normalize(affinity[chosen][:, chosen]), pnum=pnum_(), title='Final Affinities')
+    final_mat = affinity[chosen][:, chosen]
+    final_mat[np.isnan(final_mat)] = 0
+    final_mat = kwimage.normalize(final_mat)
+    kwplot.imshow(final_mat, pnum=pnum_(), title='Final Affinities')
 
     title_suffix = info.get('title_suffix', '')
     fig.suptitle(f'Sample procedure: {start_index}{title_suffix}')
@@ -893,7 +929,10 @@ def show_affinity_sample_process(chosen, info, fnum=1):
 def plot_dense_sample_indices(sample_idxs, unixtimes, title_suffix='', linewidths=0):
     import seaborn as sns
     import pandas as pd
+
     dense_sample = kwarray.one_hot_embedding(sample_idxs, len(unixtimes), dim=1).sum(axis=2)
+    unixtimes = guess_missing_unixtimes(unixtimes)
+
     # =====================
     # Show Sample Pattern in heatmap
     datetimes = np.array([datetime.datetime.fromtimestamp(t) for t in unixtimes])
@@ -911,6 +950,7 @@ def plot_dense_sample_indices(sample_idxs, unixtimes, title_suffix='', linewidth
 
 def plot_temporal_sample_indices(sample_idxs, unixtimes, title_suffix=''):
     import matplotlib.pyplot as plt
+    unixtimes = guess_missing_unixtimes(unixtimes)
     datetimes = np.array([datetime.datetime.fromtimestamp(t) for t in unixtimes])
     # =====================
     # Show Sample Pattern WRT to time
@@ -968,8 +1008,6 @@ class TimeWindowSampler:
         >>> self.show_summary(samples_per_frame=3, fnum=1)
         >>> self.determenistic = True
         >>> self.show_summary(samples_per_frame=3, fnum=2)
-
-
     """
 
     def __init__(self, unixtimes, sensors, time_window,
@@ -993,8 +1031,8 @@ class TimeWindowSampler:
             gids = dset.images(vidid=vidid).lookup('id')
         images = dset.images(gids)
         name = dset.index.videos[ub.peek(images.lookup('video_id'))].get('name', '<no-name?>')
-        datetimes = [parser.parse(date) for date in images.lookup('date_captured')]
-        unixtimes = np.array([dt.timestamp() for dt in datetimes])
+        datetimes = [None if date is None else parser.parse(date) for date in images.lookup('date_captured', None)]
+        unixtimes = np.array([np.nan if dt is None else dt.timestamp() for dt in datetimes])
         sensors = images.lookup('sensor_coarse', None)
         kwargs['unixtimes'] = unixtimes
         kwargs['sensors'] = sensors
@@ -1003,6 +1041,25 @@ class TimeWindowSampler:
         return self
 
     def compute_affinity(self):
+        """
+        Example:
+            >>> import os
+            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+            >>> from watch.tasks.fusion.datamodules.time_sampling import *  # NOQA
+            >>> from watch.utils.util_data import find_smart_dvc_dpath
+            >>> dvc_dpath = find_smart_dvc_dpath()
+            >>> bundle_dpath = join(dvc_dpath, 'drop1-S2-L8-aligned')
+            >>> coco_fpath = join(bundle_dpath, 'data.kwcoco.json')
+            >>> dset = kwcoco.CocoDataset(coco_fpath)
+            >>> vidid = dset.dataset['videos'][0]['id']
+            >>> self = TimeWindowSampler.from_coco_video(
+            >>>     dset, vidid,
+            >>>     time_window=5,
+            >>>     affinity_type='contiguous',
+            >>>     update_rule='pairwise')
+            >>> self.determenistic = True
+            >>> self.show_procedure(fnum=1)
+        """
         if self.affinity_type == 'soft':
             # Soft affinity
             self.affinity = soft_frame_affinity(self.unixtimes, self.sensors)['final']
@@ -1015,8 +1072,26 @@ class TimeWindowSampler:
             self.affinity = hard_frame_affinity(self.unixtimes, self.sensors,
                                                 time_window=self.time_window,
                                                 blur=True)
+        elif self.affinity_type == 'contiguous':
+            time_slider = kwarray.SlidingWindow(
+                (len(self.unixtimes),), (self.time_window,), stride=(1,), keepbound=True,
+                allow_overshoot=True)
+            all_indexes = np.arange(len(self.unixtimes))
+            sample_idxs = np.array([all_indexes[sl] for sl in time_slider])
+            self.affinity = kwarray.one_hot_embedding(
+                sample_idxs, len(self.unixtimes), dim=1).sum(axis=2)
+            # affinity[np.eye(len(affinity), dtype=bool)] = 0
+            # if blur:
+            #     affinity = kwimage.gaussian_blur(affinity, kernel=(5, 1))
+            # affinity[np.eye(len(affinity), dtype=bool)] = 0
+            # # affinity = affinity * 0.99 + 0.01
+            # affinity = affinity / affinity.max()
+            # affinity[np.eye(len(affinity), dtype=bool)] = 1
+
         else:
             raise Exception
+
+        self.main_indexes = np.arange(self.affinity.shape[0])
 
     def sample(self, main_frame_idx, return_info=False):
         """
@@ -1037,6 +1112,7 @@ class TimeWindowSampler:
             >>>     update_rule='distribute')
             >>> self.determenistic = True
             >>> self.show_procedure(fnum=1)
+            >>> self.show_summary(fnum=1)
         """
         return affinity_sample(
             self.affinity, self.time_window, [main_frame_idx],
@@ -1066,10 +1142,10 @@ class TimeWindowSampler:
             >>> for idx, kwargs in enumerate(grid):
             >>>     print('kwargs = {!r}'.format(kwargs))
             >>>     self = TimeWindowSampler.from_coco_video(dset, vidid, **kwargs)
-            >>>     self.show_summary(samples_per_frame=5, fnum=idx)
+            >>>     self.show_summary(samples_per_frame=30, fnum=idx)
         """
         sample_idxs = []
-        for idx in range(self.num_frames):
+        for idx in range(self.affinity.shape[0]):
             for _ in range(samples_per_frame):
                 idxs = self.sample(idx)
                 sample_idxs.append(idxs)
@@ -1111,6 +1187,14 @@ class TimeWindowSampler:
         plot_temporal_sample_indices(sample_idxs, self.unixtimes)
         fig.suptitle(title_info)
 
+    def show_affinity(self, fnum=3):
+        import kwplot
+        kwplot.autompl()
+        fig = kwplot.figure(fnum=fnum)
+        ax = fig.gca()
+        kwplot.imshow(self.affinity, ax=ax)
+        ax.set_title('frame affinity')
+
     def show_procedure(self, idx=None, fnum=2):
         """
         Example:
@@ -1125,10 +1209,11 @@ class TimeWindowSampler:
             >>> vidid = dset.dataset['videos'][0]['id']
             >>> self = TimeWindowSampler.from_coco_video(
             >>>     dset, vidid,
-            >>>     time_window=3,
-            >>>     affinity_type='hard',
+            >>>     time_window=5,
+            >>>     affinity_type='soft',
             >>>     update_rule='distribute+pairwise')
             >>> self.determenistic = False
+            >>> self.show_affinity(fnum=100)
             >>> self.show_procedure(idx=0, fnum=10)
 
             for idx in xdev.InteractiveIter(list(range(self.num_frames))):
@@ -1136,13 +1221,29 @@ class TimeWindowSampler:
                 xdev.InteractiveIter.draw()
 
 
-            >>> self.determenistic = False
+            self = TimeWindowSampler.from_coco_video(dset, vidid, time_window=5, affinity_type='soft', update_rule='distribute+pairwise')
+            self.determenistic = True
+            self.show_summary(samples_per_frame=20, fnum=1)
+            self.determenistic = False
+            self.show_summary(samples_per_frame=20, fnum=2)
+
+            self = TimeWindowSampler.from_coco_video(dset, vidid, time_window=5, affinity_type='hard', update_rule='distribute')
+            self.determenistic = True
+            self.show_summary(samples_per_frame=20, fnum=3)
+            self.determenistic = False
+            self.show_summary(samples_per_frame=20, fnum=4)
+
+            self = TimeWindowSampler.from_coco_video(dset, vidid, time_window=5, affinity_type='hardish', update_rule='distribute')
+            self.determenistic = True
+            self.show_summary(samples_per_frame=20, fnum=5)
+            self.determenistic = False
+            self.show_summary(samples_per_frame=20, fnum=6)
+
             >>> self.show_procedure(fnum=1)
             >>> self.determenistic = True
             >>> self.show_procedure(fnum=2)
             >>> self.show_procedure(fnum=3)
             >>> self.show_procedure(fnum=4)
-            >>> self.show_summary(samples_per_frame=3, fnum=10)
             >>> self.determenistic = False
             >>> self.show_summary(samples_per_frame=3, fnum=10)
 
