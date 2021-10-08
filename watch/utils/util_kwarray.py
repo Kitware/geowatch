@@ -155,13 +155,27 @@ def robust_limits(values):
     return robust_min, robust_max
 
 
-def unique_rows(arr):
+def unique_rows(arr, ordered=False):
     """
     Note: function also added to kwarray and will be available in >0.5.20
+
+    Example:
+        >>> import kwarray
+        >>> from kwarray.util_numpy import *  # NOQA
+        >>> rng = kwarray.ensure_rng(0)
+        >>> arr = rng.randint(0, 2, size=(12, 3))
+        >>> arr_unique = unique_rows(arr)
+        >>> print('arr_unique = {!r}'.format(arr_unique))
     """
     dtype_view = np.dtype((np.void, arr.dtype.itemsize * arr.shape[1]))
     arr_view = arr.view(dtype_view)
-    arr_view_unique = np.unique(arr_view)
-    arr_flat_unique = arr_view_unique.view(arr.dtype)
-    arr_unique = arr_flat_unique.reshape(-1, arr.shape[1])
+    if ordered:
+        arr_view_unique, idxs = np.unique(arr_view, return_index=True)
+        arr_flat_unique = arr_view_unique.view(arr.dtype)
+        arr_unique = arr_flat_unique.reshape(-1, arr.shape[1])
+        arr_unique = arr_unique[np.argsort(idxs)]
+    else:
+        arr_view_unique = np.unique(arr_view)
+        arr_flat_unique = arr_view_unique.view(arr.dtype)
+        arr_unique = arr_flat_unique.reshape(-1, arr.shape[1])
     return arr_unique
