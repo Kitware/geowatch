@@ -272,7 +272,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             train_dataset = KWCocoVideoDataset(
                 coco_train_sampler,
                 sample_shape=(self.time_steps, self.chip_size, self.chip_size),
-                window_overlap=(self.time_overlap, self.chip_overlap, self.chip_overlap),
+                # window_overlap=(self.time_overlap, self.chip_overlap, self.chip_overlap),
+                window_overlap=self.chip_overlap,  # FIXME
                 channels=self.channels,
                 neg_to_pos_ratio=self.neg_to_pos_ratio,
                 time_sampling=self.time_sampling,
@@ -319,7 +320,9 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 vali_dataset = KWCocoVideoDataset(
                     vali_coco_sampler,
                     sample_shape=(self.time_steps, self.chip_size, self.chip_size),
-                    window_overlap=(self.time_overlap, self.chip_overlap, self.chip_overlap),
+                    # window_overlap=(self.time_overlap, self.chip_overlap, self.chip_overlap),
+                    # window_overlap=self.chip_overlap,  # FIXME
+                    window_overlap=0,
                     channels=self.channels,
                     time_sampling=self.time_sampling,
                     mode='vali',
@@ -342,7 +345,9 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             self.torch_datasets['test'] = KWCocoVideoDataset(
                 test_coco_sampler,
                 sample_shape=(self.time_steps, self.chip_size, self.chip_size),
-                window_overlap=(self.time_overlap, self.chip_overlap, self.chip_overlap),
+                window_overlap=self.chip_overlap,  # FIXME
+                # window_overlap=0,
+                # (self.time_overlap, self.chip_overlap, self.chip_overlap),
                 channels=self.channels,
                 mode='test',
                 diff_inputs=self.diff_inputs,
