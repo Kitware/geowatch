@@ -815,7 +815,21 @@ class KWCocoVideoDataset(data.Dataset):
         if do_shift:
             # Spatial augmentation
             rng = kwarray.ensure_rng(None)
-            aff = kwimage.Affine.coerce(offset=rng.randint(-8, 8, size=2))
+
+            space_box = kwimage.Boxes.from_slice(tr_['space_slice'])
+            w = space_box.width.ravel()[0]
+            h = space_box.height.ravel()[0]
+
+            # hack: this prevents us from assuming there is a target in the
+            # window, but it lets us get the benefit of chip_overlap=0.5 while
+            # still having it at 0 for faster epochs.
+            # TODO: dont shift off the edge.
+            aff = kwimage.Affine.coerce(offset=(
+                rng.randint(-w // 2, w // 2),
+                rng.randint(-h // 2, h // 2)))
+
+            space_box = space_box.warp(aff).quantize()
+            # aff = kwimage.Affine.coerce(offset=rng.randint(-8, 8, size=2))
             space_box = kwimage.Boxes.from_slice(tr_['space_slice']).warp(aff).quantize()
             tr_['space_slice'] = space_box.astype(int).to_slices()[0]
 
