@@ -4,7 +4,7 @@
 PyQt5 >= 5.15
 
 ipython
-xdev
+#xdev
 flake8
 autopep8
 mkinit

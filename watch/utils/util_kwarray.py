@@ -80,7 +80,7 @@ def tukey_biweight_loss(r, c=4.685):
     return loss
 
 
-def asymptotic(x, offset=1, gamma=1, horizontal=1):
+def asymptotic(x, offset=1, gamma=1, degree=0, horizontal=1):
     """
     A function with a horizontal asymptote at ``horizontal``
 
@@ -96,10 +96,12 @@ def asymptotic(x, offset=1, gamma=1, horizontal=1):
     Example:
         >>> from watch.utils.util_kwarray import *  # NOQA
         >>> import ubelt as ub
-        >>> x = np.linspace(-5, 29, 1000)
+        >>> x = np.linspace(0, 27, 1000)
         >>> data = {'x': x}
         >>> grid = ub.named_product({
-        >>>     'gamma': [0.5, 1.0, 2.0],
+        >>>     #'gamma': [0.5, 1.0, 2.0, 3.0],
+        >>>     'gamma': [1.0, 3.0],
+        >>>     'degree': [0, 1, 2, 3],
         >>>     'offset': [0, 2],
         >>>     'horizontal': [1],
         >>> })
@@ -116,7 +118,13 @@ def asymptotic(x, offset=1, gamma=1, horizontal=1):
         >>> ax = sns.lineplot(data=melted, x='x', y='value', hue='variable', style='variable')
         >>> ax.set_ylim(0, 2)
     """
-    return ((x + offset) ** gamma / (x + offset + 1) ** gamma) + (horizontal - 1)
+    gamma_denom = gamma + degree
+    gamma_numer = gamma
+    assert gamma_numer <= gamma_denom
+    hz_offset = horizontal - 1 if gamma_numer == gamma_denom else horizontal
+    numer = (x + offset) ** gamma_numer
+    denom = (x + offset + 1) ** gamma_denom
+    return  (numer / denom) + hz_offset
 
 
 def robust_limits(values):

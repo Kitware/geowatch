@@ -539,11 +539,15 @@ def soft_frame_affinity(unixtimes, sensors=None):
         season_weights = (1 + np.cos(year_deltas * math.tau)) / 2.0
 
         # Upweight similar times of day
-        daylight_weights = ((1 + np.cos(day_deltas * math.tau)) / 2.0) * 0.5 + 0.5
+        daylight_weights = ((1 + np.cos(day_deltas * math.tau)) / 2.0) * 0.95 + 0.95
 
         # Upweight times in the future
-        future_weights = year_deltas ** 0.25
-        future_weights = util_kwarray.asymptotic(year_deltas)
+        # future_weights = year_deltas ** 0.25
+        # future_weights = util_kwarray.asymptotic(year_deltas, degree=1)
+        future_weights = util_kwarray.tukey_biweight_loss(year_deltas, c=0.5)
+        future_weights = future_weights - future_weights.min()
+        future_weights = (future_weights / future_weights.max())
+        future_weights = future_weights * 0.8 + 0.2
 
         weights['daylight'] = daylight_weights
         weights['season'] = season_weights
@@ -598,16 +602,16 @@ def soft_frame_affinity(unixtimes, sensors=None):
     return weights
 
 
-def hard_frame_affinity(unixtimes, sensors, time_window):
+def hard_frame_affinity(unixtimes, sensors, time_window, blur=False):
     # Hard affinity
     sample_idxs = dilated_template_sample(unixtimes, time_window)
     affinity = kwarray.one_hot_embedding(
         sample_idxs, len(unixtimes), dim=1).sum(axis=2)
     affinity[np.eye(len(affinity), dtype=bool)] = 0
-    if 0:
+    if blur:
         affinity = kwimage.gaussian_blur(affinity, kernel=(5, 1))
     affinity[np.eye(len(affinity), dtype=bool)] = 0
-    affinity = affinity * 0.99 + 0.01
+    # affinity = affinity * 0.99 + 0.01
     affinity = affinity / affinity.max()
     affinity[np.eye(len(affinity), dtype=bool)] = 1
     return affinity
@@ -625,7 +629,7 @@ def cython_aff_samp_mod():
 
 def affinity_sample(affinity, size, include_indices, return_info=False,
                     rng=None, jit=False, determenistic=False,
-                    update_rule='maximize_pairwise', gamma=1):
+                    update_rule='pairwise', gamma=1):
     """
     Choose random samples to maximize
 
@@ -701,31 +705,51 @@ def affinity_sample(affinity, size, include_indices, return_info=False,
         >>> # xdev.profile_now(affinity_sample)(affinity, size, include_indices, jit=True)
         >>> # xdev.profile_now(affinity_sample)(affinity, size, include_indices, jit=False)
 
+    Ignore:
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.time_sampling import *  # NOQA
+        >>> low = datetime.datetime.now().timestamp()
+        >>> high = low + datetime.timedelta(days=365 * 5).total_seconds()
+        >>> rng = kwarray.ensure_rng(0)
+        >>> unixtimes = np.array(sorted(rng.randint(low, high, 113)), dtype=float)
+        >>> self = TimeWindowSampler(unixtimes, sensors=None, time_window=3,
+        >>>     affinity_type='hard',
+        >>>     update_rule='distribute+pairwise')
+        >>> self.determenistic = False
+        >>> self.show_procedure(idx=0, fnum=10)
+
         fig.tight_layout()
     """
     # TODO: make this faster
     chosen = list(include_indices)
 
-    if update_rule == 'maximize_pairwise':
-        if len(chosen) == 1:
-            initial_weights = affinity[chosen[0]]
-        else:
-            initial_weights = affinity[chosen].prod(axis=0)
-        update_weights = initial_weights.copy()
-    elif update_rule == 'distribute':
-        col_idxs = np.arange(0, affinity.shape[1])
-        assert len(chosen) == 1
-        update_weights = (np.abs(col_idxs - np.array(chosen)[:, None]) / len(col_idxs)).min(axis=0)
+    update_rules = set(update_rule.split('+'))
+    config = ub.dict_subset({'pairwise': True, 'distribute': True}, update_rules)
+    do_pairwise = config.get('pairwise', False)
+    do_distribute = config.get('distribute', False)
+
+    if len(chosen) == 1:
         initial_weights = affinity[chosen[0]]
     else:
-        raise KeyError
+        initial_weights = affinity[chosen].prod(axis=0)
+
+    update_weights = 1
+
+    if do_pairwise:
+        update_weights = initial_weights * update_weights
+
+    if do_distribute:
+        col_idxs = np.arange(0, affinity.shape[1])
+        update_weights *= (np.abs(col_idxs - np.array(chosen)[:, None]) / len(col_idxs)).min(axis=0)
 
     current_weights = initial_weights * update_weights
     current_weights[chosen] = 0
 
     num_sample = size - len(chosen)
     rng = kwarray.ensure_rng(rng)
+
     if jit:
+        raise NotImplementedError
         # out of date
         cython_mod = cython_aff_samp_mod()
         return cython_mod.cython_affinity_sample(affinity, num_sample, current_weights, chosen, rng)
@@ -754,12 +778,13 @@ def affinity_sample(affinity, size, include_indices, return_info=False,
             dart = rng.rand() * cumprobs[-1]
             next_idx = np.searchsorted(cumprobs, dart)
 
-        if update_rule == 'maximize_pairwise':
-            update_weights = affinity[next_idx]
-        elif update_rule == 'distribute':
-            update_weights = np.abs(col_idxs - next_idx) / len(col_idxs)
-        else:
-            raise KeyError
+        update_weights = 1
+
+        if do_pairwise:
+            update_weights = affinity[next_idx] * update_weights
+
+        if do_distribute:
+            update_weights = (np.abs(col_idxs - next_idx) / len(col_idxs)) * update_weights
 
         chosen.append(next_idx)
 
@@ -790,14 +815,33 @@ def show_affinity_sample_process(chosen, info, fnum=1):
     import kwplot
     # from matplotlib import pyplot as plt
     steps = info['steps']
-    pnum_ = kwplot.PlotNums(nCols=2, nSubplots=len(steps) * 2 + 2)
+    pnum_ = kwplot.PlotNums(nCols=2, nSubplots=len(steps) * 2 + 4)
     fig = kwplot.figure(fnum=fnum, doclf=True)
 
     fig = kwplot.figure(pnum=pnum_(), fnum=fnum)
     ax = fig.gca()
 
-    initial_weights = info['initial_weights']
+    # initial_weights = info['initial_weights']
     initial_indexes = info['include_indices']
+
+    idx = initial_indexes[0]
+    probs = info['initial_weights']
+    ymax = probs.max()
+    xmax = len(probs)
+    x, y = idx, probs[idx]
+    for x_ in initial_indexes:
+        ax.plot([x_, x_], [0, ymax], color='gray')
+    ax.plot(np.arange(xmax), probs)
+    xpos = x + xmax * 0.0 if x < (xmax / 2) else x - xmax * 0.0
+    ypos = y + ymax * 0.3 if y < (ymax / 2) else y - ymax * 0.3
+    ax.plot([x, x], [0, ymax], color='gray')
+    ax.set_title('Initial probs')
+
+    fig = kwplot.figure(pnum=pnum_())
+    ax = fig.gca()
+    ax.plot(np.arange(xmax), info['initial_update_weights'], color='orange')
+    ax.set_title('Initial Update weights')
+
     # kwplot.imshow(kwimage.normalize(affinity), title='Pairwise Affinity')
 
     chosen_so_far = list(initial_indexes)
@@ -820,6 +864,7 @@ def show_affinity_sample_process(chosen, info, fnum=1):
         ax.plot([x, x], [0, ymax], color='orange')
         #ax.annotate('chosen', (x, y), color='black')
         ax.set_title('Sample {}'.format(step_idx))
+
         chosen_so_far.append(idx)
         fig = kwplot.figure(pnum=pnum_())
         ax = fig.gca()
@@ -828,65 +873,24 @@ def show_affinity_sample_process(chosen, info, fnum=1):
         ax.plot([x, x], [0, step['update_weights'].max()], color='orangered')
         ax.set_title('Update weights {}'.format(step_idx))
 
-    # affinity = info['affinity']
-    # kwplot.imshow(kwimage.normalize(affinity[sorted(chosen)][:, sorted(chosen)]), pnum=pnum_(), title='Final Affinities')
+    affinity = info['affinity']
+
+    fig = kwplot.figure(pnum=pnum_())
+    ax = fig.gca()
+
+    for row in affinity[chosen]:
+        ax.plot(row)
+    ax.set_title('Chosen Affinities')
+    # kwplot.imshow(kwimage.normalize(), pnum=pnum_(), title='Chosen Affinities')
+
+    kwplot.imshow(kwimage.normalize(affinity[chosen][:, chosen]), pnum=pnum_(), title='Final Affinities')
 
     title_suffix = info.get('title_suffix', '')
-    _title_suffix = ''
-    if title_suffix:
-        _title_suffix = ' ' + _title_suffix
-    fig.suptitle(f'Sample procedure: {start_index}{_title_suffix}')
+    fig.suptitle(f'Sample procedure: {start_index}{title_suffix}')
     return fig
 
 
-def is_affinity_sampling_all_you_need__Qmark():
-    from watch.utils.util_data import find_smart_dvc_dpath
-    from os.path import join
-    import kwcoco
-    dvc_dpath = find_smart_dvc_dpath()
-    bundle_dpath = join(dvc_dpath, 'drop1-S2-L8-aligned')
-    coco_fpath = join(bundle_dpath, 'data.kwcoco.json')
-    dset = kwcoco.CocoDataset(coco_fpath)
-    video_ids = list(ub.sorted_vals(dset.index.vidid_to_gids, key=len).keys())
-    vidid = video_ids[0]
-    video = dset.index.videos[vidid]
-    name = (video['name'])
-    print('name = {!r}'.format(name))
-    images = dset.images(vidid=vidid)
-    video_gids = images.lookup('id')
-    datetimes = [parser.parse(date) for date in images.lookup('date_captured')]
-    unixtimes = np.array([dt.timestamp() for dt in datetimes])
-    sensors = images.lookup('sensor_coarse', None)
-
-    window_size = 3
-    gamma = 1
-    update_rule = 'maximize_pairwise'
-    update_rule = 'distribute'
-
-    self = TimeWindowSampler.from_coco_video(
-        dset, vidid,
-        time_window=2,
-        affinity_type='hard',
-        update_rule='distribute',
-    )
-
-    if 0:
-        # Soft affinity
-        affinity = soft_frame_affinity(unixtimes, sensors)['final']
-    else:
-        # Hard affinity
-        sample_idxs = dilated_template_sample(unixtimes, window_size)
-        affinity = kwarray.one_hot_embedding(sample_idxs, len(unixtimes), dim=1).sum(axis=2)
-        affinity[np.eye(len(affinity), dtype=bool)] = 0
-        if 0:
-            affinity = kwimage.gaussian_blur(affinity, kernel=(5, 1))
-        affinity[np.eye(len(affinity), dtype=bool)] = 0
-        affinity = affinity * 0.99 + 0.01
-        affinity = affinity / affinity.max()
-        affinity[np.eye(len(affinity), dtype=bool)] = 1
-
-
-def plot_dense_sample_indices(sample_idxs, unixtimes, title_suffix=''):
+def plot_dense_sample_indices(sample_idxs, unixtimes, title_suffix='', linewidths=0):
     import seaborn as sns
     import pandas as pd
     dense_sample = kwarray.one_hot_embedding(sample_idxs, len(unixtimes), dim=1).sum(axis=2)
@@ -898,7 +902,7 @@ def plot_dense_sample_indices(sample_idxs, unixtimes, title_suffix=''):
     df.index.name = 'index'
     df.columns = pd.to_datetime(datetimes).date
     df.columns.name = 'date'
-    ax = sns.heatmap(data=df, cbar=False, linewidths=0.1, linecolor='gray')
+    ax = sns.heatmap(data=df, cbar=False, linewidths=linewidths, linecolor='darkgray')
     ax.set_title('Sample Indexes' + title_suffix)
     ax.set_xlabel('Observation Index')
     ax.set_ylabel('Sample Index')
@@ -954,23 +958,23 @@ class TimeWindowSampler:
         >>> bundle_dpath = join(dvc_dpath, 'drop1-S2-L8-aligned')
         >>> coco_fpath = join(bundle_dpath, 'data.kwcoco.json')
         >>> dset = kwcoco.CocoDataset(coco_fpath)
-        >>> video_ids = list(ub.sorted_vals(dset.index.vidid_to_gids, key=len).keys())
-        >>> vidid = video_ids[2]
-        >>> video = dset.index.videos[vidid]
-        >>> name = (video['name'])
-        >>> print('name = {!r}'.format(name))
+        >>> vidid = dset.dataset['videos'][0]['id']
         >>> self = TimeWindowSampler.from_coco_video(
         >>>     dset, vidid,
-        >>>     time_window=20,
+        >>>     time_window=5,
         >>>     affinity_type='hard',
-        >>>     update_rule='distribute',
-        >>> )
-        >>> self.show_summary_visualization()
+        >>>     update_rule='distribute')
+        >>> self.determenistic = False
+        >>> self.show_summary(samples_per_frame=3, fnum=1)
+        >>> self.determenistic = True
+        >>> self.show_summary(samples_per_frame=3, fnum=2)
+
+
     """
 
     def __init__(self, unixtimes, sensors, time_window,
                  affinity_type='hard', update_rule='distribute',
-                 determenistic=False, gamma=1):
+                 determenistic=False, gamma=1, name='?'):
         self.sensors = sensors
         self.unixtimes = unixtimes
         self.time_window = time_window
@@ -978,6 +982,7 @@ class TimeWindowSampler:
         self.affinity_type = affinity_type
         self.determenistic = determenistic
         self.gamma = gamma
+        self.name = name
         self.num_frames = len(unixtimes)
 
         self.compute_affinity()
@@ -987,12 +992,13 @@ class TimeWindowSampler:
         if gids is None:
             gids = dset.images(vidid=vidid).lookup('id')
         images = dset.images(gids)
+        name = dset.index.videos[ub.peek(images.lookup('video_id'))].get('name', '<no-name?>')
         datetimes = [parser.parse(date) for date in images.lookup('date_captured')]
         unixtimes = np.array([dt.timestamp() for dt in datetimes])
         sensors = images.lookup('sensor_coarse', None)
-
         kwargs['unixtimes'] = unixtimes
         kwargs['sensors'] = sensors
+        kwargs['name'] = name
         self = cls(**kwargs)
         return self
 
@@ -1004,53 +1010,151 @@ class TimeWindowSampler:
             # Hard affinity
             self.affinity = hard_frame_affinity(self.unixtimes, self.sensors,
                                                 time_window=self.time_window)
+        elif self.affinity_type == 'hardish':
+            # Hardish affinity
+            self.affinity = hard_frame_affinity(self.unixtimes, self.sensors,
+                                                time_window=self.time_window,
+                                                blur=True)
         else:
             raise Exception
 
     def sample(self, main_frame_idx, return_info=False):
+        """
+        Example:
+            >>> import os
+            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+            >>> from watch.tasks.fusion.datamodules.time_sampling import *  # NOQA
+            >>> from watch.utils.util_data import find_smart_dvc_dpath
+            >>> dvc_dpath = find_smart_dvc_dpath()
+            >>> bundle_dpath = join(dvc_dpath, 'drop1-S2-L8-aligned')
+            >>> coco_fpath = join(bundle_dpath, 'data.kwcoco.json')
+            >>> dset = kwcoco.CocoDataset(coco_fpath)
+            >>> vidid = dset.dataset['videos'][0]['id']
+            >>> self = TimeWindowSampler.from_coco_video(
+            >>>     dset, vidid,
+            >>>     time_window=5,
+            >>>     affinity_type='soft',
+            >>>     update_rule='distribute')
+            >>> self.determenistic = True
+            >>> self.show_procedure(fnum=1)
+        """
         return affinity_sample(
             self.affinity, self.time_window, [main_frame_idx],
             update_rule=self.update_rule, gamma=self.gamma,
             determenistic=self.determenistic, return_info=return_info)
 
-    def show_summary_visualization(self, samples_per_frame=1):
+    def show_summary(self, samples_per_frame=1, fnum=1):
+        """
+        Example:
+            >>> import os
+            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+            >>> from watch.tasks.fusion.datamodules.time_sampling import *  # NOQA
+            >>> from watch.utils.util_data import find_smart_dvc_dpath
+            >>> dvc_dpath = find_smart_dvc_dpath()
+            >>> bundle_dpath = join(dvc_dpath, 'drop1-S2-L8-aligned')
+            >>> coco_fpath = join(bundle_dpath, 'data.kwcoco.json')
+            >>> dset = kwcoco.CocoDataset(coco_fpath)
+            >>> video_ids = list(ub.sorted_vals(dset.index.vidid_to_gids, key=len).keys())
+            >>> vidid = video_ids[2]
+            >>> grid = list(ub.named_product({
+            >>>     'affinity_type': ['hard', 'soft'],
+            >>>     'update_rule': ['distribute', 'pairwise+distribute'],
+            >>>     #'determenistic': [False, True],
+            >>>     'determenistic': [False],
+            >>>     'time_window': [2],
+            >>> }))
+            >>> for idx, kwargs in enumerate(grid):
+            >>>     print('kwargs = {!r}'.format(kwargs))
+            >>>     self = TimeWindowSampler.from_coco_video(dset, vidid, **kwargs)
+            >>>     self.show_summary(samples_per_frame=5, fnum=idx)
+        """
         sample_idxs = []
         for idx in range(self.num_frames):
             for _ in range(samples_per_frame):
                 idxs = self.sample(idx)
                 sample_idxs.append(idxs)
 
-        if 1:
+        if 0:
             sample_idxs = np.array(sorted(map(tuple, sample_idxs)))
+        else:
+            sample_idxs = np.array(sample_idxs)
 
         title_info = ub.codeblock(
             f'''
+            name={self.name}
             affinity_type={self.affinity_type} determenistic={self.determenistic}
             update_rule={self.update_rule} gamma={self.gamma}
             ''')
 
-        num_unique_samples = len(util_kwarray.unique_rows(sample_idxs))
-        print('num_unique_samples = {!r}'.format(num_unique_samples))
+        # num_unique_samples = len(util_kwarray.unique_rows(sample_idxs))
+        # print('num_unique_samples = {!r}'.format(num_unique_samples))
 
         import kwplot
         kwplot.autompl()
+        pnum_ = kwplot.PlotNums(nCols=3)
 
-        fnum = 1
         fig = kwplot.figure(fnum=fnum, doclf=True)
-        kwplot.imshow(self.affinity, fnum=1, title='frame affinity')
-        fig.suptitle(ub.paragraph(
-            f'''
-                affinity_type={self.affinity_type}
-            '''))
 
-        fnum = 2
-        fig = kwplot.figure(fnum=fnum, pnum=(1, 2, 1))
-        plot_dense_sample_indices(sample_idxs, self.unixtimes)
+        fig = kwplot.figure(fnum=fnum, pnum=pnum_())
+        ax = fig.gca()
+        kwplot.imshow(self.affinity, ax=ax)
+        ax.set_title('frame affinity')
 
-        kwplot.figure(fnum=fnum, pnum=(1, 2, 2))
+        fig = kwplot.figure(fnum=fnum, pnum=pnum_())
+        if samples_per_frame < 5:
+            ax = plot_dense_sample_indices(sample_idxs, self.unixtimes, linewidths=0.1)
+            ax.set_aspect('equal')
+        else:
+            ax = plot_dense_sample_indices(sample_idxs, self.unixtimes, linewidths=0.001)
+
+        kwplot.figure(fnum=fnum, pnum=pnum_())
         plot_temporal_sample_indices(sample_idxs, self.unixtimes)
         fig.suptitle(title_info)
 
-        chosen, info = self.sample(self.num_frames // 2, return_info=True)
+    def show_procedure(self, idx=None, fnum=2):
+        """
+        Example:
+            >>> import os
+            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+            >>> from watch.tasks.fusion.datamodules.time_sampling import *  # NOQA
+            >>> from watch.utils.util_data import find_smart_dvc_dpath
+            >>> dvc_dpath = find_smart_dvc_dpath()
+            >>> bundle_dpath = join(dvc_dpath, 'drop1-S2-L8-aligned')
+            >>> coco_fpath = join(bundle_dpath, 'data.kwcoco.json')
+            >>> dset = kwcoco.CocoDataset(coco_fpath)
+            >>> vidid = dset.dataset['videos'][0]['id']
+            >>> self = TimeWindowSampler.from_coco_video(
+            >>>     dset, vidid,
+            >>>     time_window=3,
+            >>>     affinity_type='hard',
+            >>>     update_rule='distribute+pairwise')
+            >>> self.determenistic = False
+            >>> self.show_procedure(idx=0, fnum=10)
+
+            for idx in xdev.InteractiveIter(list(range(self.num_frames))):
+                self.show_procedure(idx=idx, fnum=1)
+                xdev.InteractiveIter.draw()
+
+
+            >>> self.determenistic = False
+            >>> self.show_procedure(fnum=1)
+            >>> self.determenistic = True
+            >>> self.show_procedure(fnum=2)
+            >>> self.show_procedure(fnum=3)
+            >>> self.show_procedure(fnum=4)
+            >>> self.show_summary(samples_per_frame=3, fnum=10)
+            >>> self.determenistic = False
+            >>> self.show_summary(samples_per_frame=3, fnum=10)
+
+        """
+        if idx is None:
+            idx = self.num_frames // 2
+        title_info = ub.codeblock(
+            f'''
+            name={self.name}
+            affinity_type={self.affinity_type} determenistic={self.determenistic}
+            update_rule={self.update_rule} gamma={self.gamma}
+            ''')
+        chosen, info = self.sample(idx, return_info=True)
         info['title_suffix'] = title_info
-        show_affinity_sample_process(chosen, info, fnum=5)
+        show_affinity_sample_process(chosen, info, fnum=fnum)
