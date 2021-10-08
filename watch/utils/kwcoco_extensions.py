@@ -774,6 +774,12 @@ class CocoImage(ub.NiceRepr):
         self.img = img
         self.dset = dset
 
+    @classmethod
+    def from_gid(cls, dset, gid):
+        img = dset.index.imgs[gid]
+        self = cls(img, dset=dset)
+        return self
+
     def __nice__(self):
         """
         Example:

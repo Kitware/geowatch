@@ -100,19 +100,42 @@ Example:
     >>> assert dicts_contain(SENTINEL2, bands)
 '''
 SENTINEL2 = [
-        { 'name': 'B01', 'common_name': 'coastal', 'gsd': 60, 'center_wavelength': 0.4439, 'full_width_half_max': 0.027 },
-        { 'name': 'B02', 'common_name': 'blue', 'gsd': 10, 'center_wavelength': 0.4966, 'full_width_half_max': 0.098 },
-        { 'name': 'B03', 'common_name': 'green', 'gsd': 10, 'center_wavelength': 0.56, 'full_width_half_max': 0.045 },
-        { 'name': 'B04', 'common_name': 'red', 'gsd': 10, 'center_wavelength': 0.6645, 'full_width_half_max': 0.038 },
-        { 'name': 'B05', 'gsd': 20, 'center_wavelength': 0.7039, 'full_width_half_max': 0.019 },
-        { 'name': 'B06', 'gsd': 20, 'center_wavelength': 0.7402, 'full_width_half_max': 0.018 },
-        { 'name': 'B07', 'gsd': 20, 'center_wavelength': 0.7825, 'full_width_half_max': 0.028 },
-        { 'name': 'B08', 'gsd': 10, 'common_name': 'nir', 'center_wavelength': 0.8351, 'full_width_half_max': 0.145 },
-        { 'name': 'B8A', 'gsd': 20, 'center_wavelength': 0.8648, 'full_width_half_max': 0.033 },
-        { 'name': 'B09', 'gsd': 60, 'center_wavelength': 0.945, 'full_width_half_max': 0.026 },
-        { 'name': 'B10', 'gsd': 60, 'common_name': 'cirrus', 'center_wavelength': 1.3735, 'full_width_half_max': 0.075 },
-        { 'name': 'B11', 'gsd': 20, 'common_name': 'swir16', 'center_wavelength': 1.6137, 'full_width_half_max': 0.143 },
-        { 'name': 'B12', 'gsd': 20, 'common_name': 'swir22', 'center_wavelength': 2.22024, 'full_width_half_max': 0.242 }
+    {'name': 'B01', 'common_name': 'coastal', 'gsd': 60,
+        'center_wavelength': 0.4439, 'full_width_half_max': 0.027},
+    {'name': 'B02', 'common_name': 'blue', 'gsd': 10,
+        'center_wavelength': 0.4966, 'full_width_half_max': 0.098},
+    {'name': 'B03', 'common_name': 'green', 'gsd': 10,
+        'center_wavelength': 0.56, 'full_width_half_max': 0.045},
+    {'name': 'B04', 'common_name': 'red', 'gsd': 10,
+        'center_wavelength': 0.6645, 'full_width_half_max': 0.038},
+    {'name': 'B05',
+     'gsd': 20,
+     'center_wavelength': 0.7039,
+     'full_width_half_max': 0.019},
+    {'name': 'B06',
+     'gsd': 20,
+     'center_wavelength': 0.7402,
+     'full_width_half_max': 0.018},
+    {'name': 'B07',
+     'gsd': 20,
+     'center_wavelength': 0.7825,
+     'full_width_half_max': 0.028},
+    {'name': 'B08', 'gsd': 10, 'common_name': 'nir',
+        'center_wavelength': 0.8351, 'full_width_half_max': 0.145},
+    {'name': 'B8A',
+     'gsd': 20,
+     'center_wavelength': 0.8648,
+     'full_width_half_max': 0.033},
+    {'name': 'B09',
+     'gsd': 60,
+     'center_wavelength': 0.945,
+     'full_width_half_max': 0.026},
+    {'name': 'B10', 'gsd': 60, 'common_name': 'cirrus',
+        'center_wavelength': 1.3735, 'full_width_half_max': 0.075},
+    {'name': 'B11', 'gsd': 20, 'common_name': 'swir16',
+        'center_wavelength': 1.6137, 'full_width_half_max': 0.143},
+    {'name': 'B12', 'gsd': 20, 'common_name': 'swir22',
+        'center_wavelength': 2.22024, 'full_width_half_max': 0.242}
 ]
 
 
@@ -140,17 +163,28 @@ Example:
     >>> assert dicts_contain(LANDSAT8, bands)
 '''
 LANDSAT8 = [
-        { 'name': 'B1', 'common_name': 'coastal', 'gsd': 30, 'center_wavelength': 0.48, 'full_width_half_max': 0.02 },
-        { 'name': 'B2', 'common_name': 'blue', 'gsd': 30, 'center_wavelength': 0.44, 'full_width_half_max': 0.06 },
-        { 'name': 'B3', 'common_name': 'green', 'gsd': 30, 'center_wavelength': 0.56, 'full_width_half_max': 0.06 },
-        { 'name': 'B4', 'common_name': 'red', 'gsd': 30, 'center_wavelength': 0.65, 'full_width_half_max': 0.04 },
-        { 'name': 'B5', 'common_name': 'nir', 'gsd': 30, 'center_wavelength': 0.86, 'full_width_half_max': 0.03 },
-        { 'name': 'B6', 'common_name': 'swir16', 'gsd': 30, 'center_wavelength': 1.6, 'full_width_half_max': 0.08 },
-        { 'name': 'B7', 'common_name': 'swir22', 'gsd': 30, 'center_wavelength': 2.2, 'full_width_half_max': 0.2 },
-        { 'name': 'B8', 'common_name': 'pan', 'gsd': 15, 'center_wavelength': 0.59, 'full_width_half_max': 0.18 },
-        { 'name': 'B9', 'common_name': 'cirrus', 'gsd': 30, 'center_wavelength': 1.37, 'full_width_half_max': 0.02 },
-        { 'name': 'B10', 'common_name': 'lwir11', 'gsd': 100, 'center_wavelength': 10.9, 'full_width_half_max': 0.8 },
-        { 'name': 'B11', 'common_name': 'lwir12', 'gsd': 100, 'center_wavelength': 12, 'full_width_half_max': 1 }
+    {'name': 'B1', 'common_name': 'coastal', 'gsd': 30,
+        'center_wavelength': 0.48, 'full_width_half_max': 0.02},
+    {'name': 'B2', 'common_name': 'blue', 'gsd': 30,
+        'center_wavelength': 0.44, 'full_width_half_max': 0.06},
+    {'name': 'B3', 'common_name': 'green', 'gsd': 30,
+        'center_wavelength': 0.56, 'full_width_half_max': 0.06},
+    {'name': 'B4', 'common_name': 'red', 'gsd': 30,
+        'center_wavelength': 0.65, 'full_width_half_max': 0.04},
+    {'name': 'B5', 'common_name': 'nir', 'gsd': 30,
+        'center_wavelength': 0.86, 'full_width_half_max': 0.03},
+    {'name': 'B6', 'common_name': 'swir16', 'gsd': 30,
+        'center_wavelength': 1.6, 'full_width_half_max': 0.08},
+    {'name': 'B7', 'common_name': 'swir22', 'gsd': 30,
+        'center_wavelength': 2.2, 'full_width_half_max': 0.2},
+    {'name': 'B8', 'common_name': 'pan', 'gsd': 15,
+        'center_wavelength': 0.59, 'full_width_half_max': 0.18},
+    {'name': 'B9', 'common_name': 'cirrus', 'gsd': 30,
+        'center_wavelength': 1.37, 'full_width_half_max': 0.02},
+    {'name': 'B10', 'common_name': 'lwir11', 'gsd': 100,
+        'center_wavelength': 10.9, 'full_width_half_max': 0.8},
+    {'name': 'B11', 'common_name': 'lwir12', 'gsd': 100,
+        'center_wavelength': 12, 'full_width_half_max': 1}
 ]
 
 
@@ -178,8 +212,10 @@ LANDSAT7 = [
     {'name': 'B3', 'common_name': 'red', 'gsd': 30, 'center_wavelength': 0.66},
     {'name': 'B4', 'common_name': 'nir08', 'gsd': 30, 'center_wavelength': 0.84},
     {'name': 'B5', 'common_name': 'swir16', 'gsd': 30, 'center_wavelength': 1.65},
-    {'name': 'B6', 'common_name': 'tir', 'gsd': 30, 'center_wavelength': 11.45},  # B6_VCID_1.TIF
-    {'name': 'B6', 'common_name': 'tir', 'gsd': 30, 'center_wavelength': 11.45},  # B6_VCID_2.TIF
+    {'name': 'B6', 'common_name': 'tir', 'gsd': 30,
+        'center_wavelength': 11.45},  # B6_VCID_1.TIF
+    {'name': 'B6', 'common_name': 'tir', 'gsd': 30,
+        'center_wavelength': 11.45},  # B6_VCID_2.TIF
     {'name': 'B7', 'common_name': 'swir22', 'gsd': 30, 'center_wavelength': 2.22},
     {'name': 'B8', 'common_name': 'pan', 'gsd': 30, 'center_wavelength': 0.71}
 ]
@@ -256,7 +292,8 @@ WORLDVIEW2_MS8 = [
 WORLDVIEW3_PAN = [
     {'name': 'PAN', 'common_name': 'panchromatic', 'center_wavelength': 0.625}
 ]
-# TODO does WORLDVIEW3_MS4 not exist or did we just happen to not get it in the initial catalog?
+# TODO does WORLDVIEW3_MS4 not exist or did we just happen to not get it
+# in the initial catalog?
 WORLDVIEW3_MS8 = [
     {'name': 'B1', 'common_name': 'coastal', 'center_wavelength': 0.425},
     {'name': 'B2', 'common_name': 'blue', 'center_wavelength': 0.48},
@@ -299,22 +336,22 @@ References:
     https://github.com/stac-extensions/eo/blob/main/json-schema/schema.json#L151
 '''
 EO_COMMONNAMES = {
-        "coastal": [],
-        "blue": [],
-        "green": [],
-        "red": [],
-        "rededge": ['red-edge'],
-        "yellow": [],
-        "pan": ['panchromatic'],
-        "nir": ['near-ir1', 'near-ir2'],
-        "nir08": [],
-        "nir09": [],
-        "cirrus": [],
-        "swir16": [],
-        "swir22": [],
-        "lwir": [],
-        "lwir11": [],
-        "lwir12": []
+    "coastal": [],
+    "blue": [],
+    "green": [],
+    "red": [],
+    "rededge": ['red-edge'],
+    "yellow": [],
+    "pan": ['panchromatic'],
+    "nir": ['near-ir1', 'near-ir2'],
+    "nir08": [],
+    "nir09": [],
+    "cirrus": [],
+    "swir16": [],
+    "swir22": [],
+    "lwir": [],
+    "lwir11": [],
+    "lwir12": []
 }
 
 
@@ -328,16 +365,16 @@ Example:
     >>> assert GROUND.issubset(set(EO_COMMONNAMES.keys()))
 '''
 GROUND = {
-        "coastal",
-        "blue",
-        "green",
-        "red",
-        "rededge",
-        "yellow",
-        "pan",
-        "nir",
-        "nir08",
-        "nir09",
+    "coastal",
+    "blue",
+    "green",
+    "red",
+    "rededge",
+    "yellow",
+    "pan",
+    "nir",
+    "nir08",
+    "nir09",
 }
 
 '''
@@ -350,3 +387,88 @@ Example:
     >>>     band.pop('gsd', None)  # pystac doesn't support this yet
     >>>     b = Band.create(**band)
 '''
+
+
+def artificial_surface_index(coco_img):
+    """
+    Ported from code from by (Yongquan Zhao on 26 April 2017)
+
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> from watch.utils.util_bands import *  # NOQA
+        >>> from watch.utils.util_data import find_smart_dvc_dpath
+        >>> import kwcoco
+        >>> dvc_dpath = find_smart_dvc_dpath()
+        >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
+        >>> dset = kwcoco.CocoDataset(coco_fpath)
+        >>> from watch.utils import kwcoco_extensions
+        >>> gid = ub.peek(dset.index.imgs.keys())
+        >>> coco_img = kwcoco_extensions.CocoImage.from_gid(dset, gid)
+        >>> print('coco_img.channels = {!r}'.format(coco_img.channels))
+        >>> indexes = artificial_surface_index(coco_img)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> import kwimage
+        >>> kwplot.autompl()
+        >>> pnum_ = kwplot.PlotNums(nSubplots=len(indexes))
+        >>> for key, value in indexes.items():
+        >>>     kwplot.imshow(kwimage.normalize_intensity(value), title=key, pnum=pnum_())
+    """
+    # https://mail.google.com/mail/u/1/#chat/space/AAAAE5jpxTc
+
+    if 0:
+        import sympy as sym
+        ρRed, ρBlue, ρGreen, ρSWIR1, ρSWIR2, ρNIR = sym.symbols('ρRed, ρBlue, ρGreen, ρSWIR1, ρSWIR2, ρNIR')
+
+    delayed = coco_img.delay()
+    rgbir123 = delayed.take_channels('red|blue|green|swir16|swir22|nir')
+    chw = rgbir123.finalize().transpose(2, 0, 1)
+
+    # ρRed = coastal,lwir11,lwir12,blue,green,red,nir,swir16,swir22,pan,cirrus
+    # Raw bands
+    ρRed = chw[0]
+    ρBlue = chw[1]
+    ρGreen = chw[2]
+    ρSWIR1 = chw[3]
+    ρSWIR2 = chw[4]
+    ρNIR = chw[5]
+
+    # constants
+    G = 2.5
+    C1 = 6
+    C2 = 7.5
+    L = 1
+
+    # Might be tricky
+    toplogical_effects = False
+
+    # Formulas
+    NDVI = (ρNIR - ρRed) / (ρNIR + ρRed)
+    EVI = G * (ρNIR - ρRed) / (ρNIR + C1 * ρRed - C2 * ρBlue + L)
+    BSI = ((ρSWIR1 + ρRed) - (ρNIR + ρBlue)) / ((ρSWIR1 + ρRed) + (ρNIR + ρBlue))
+    MBI = (ρSWIR1 + ρSWIR2 - ρNIR) / (ρSWIR1 + ρSWIR2 - ρNIR) + 0.5
+    MNDWI = (ρGreen - ρSWIR1) / (ρGreen + ρSWIR1)
+    EBSI = (BSI - MNDWI) / (BSI + MNDWI)
+    EMBI = (MBI - MNDWI) / (MBI + MNDWI)
+    AF = ((ρSWIR1 + ρNIR) / 2 - ρBlue) / ((ρSWIR1 + ρNIR) / 2 + ρBlue) + 1
+    SDF = (EMBI + 1) / (MBI + 0.5) * (1 - EBSI)
+    VDF = 1 - EVI if toplogical_effects else 1 - NDVI
+    MF = ((ρBlue + ρGreen) - (ρNIR + ρSWIR1)) / ((ρBlue + ρGreen) + (ρNIR + ρSWIR1))
+    ASI = (AF * SDF * VDF * MF)
+
+    indexes = {
+        'ASI': ASI,
+        'MF': MF,
+        'VDF': VDF,
+        'SDF': SDF,
+        'AF': AF,
+        'EMBI': EMBI,
+        'EBSI': EBSI,
+        'MNDWI': EBSI,
+        'MBI': MBI,
+        'BSI': BSI,
+        'EVI': EVI,
+        'NDVI': NDVI,
+    }
+
+    return indexes

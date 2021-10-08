@@ -14,6 +14,7 @@ from watch.utils import util_kwarray
 def debug_video_information(dset, video_id):
     """
     Ignore:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
         >>> from watch.utils.util_data import find_smart_dvc_dpath
@@ -259,6 +260,7 @@ def dilated_template_sample(unixtimes, time_window):
         >>> name = 'demo-data'
 
     Ignore:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> import os
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> from watch.utils.util_data import find_smart_dvc_dpath
@@ -989,6 +991,7 @@ class TimeWindowSampler:
     Helper for sampling temporal regions over an entire video.
 
     Ignore:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> import os
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
@@ -1041,6 +1044,7 @@ class TimeWindowSampler:
     def compute_affinity(self):
         """
         Example:
+            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
             >>> import os
             >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
             >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
@@ -1093,6 +1097,7 @@ class TimeWindowSampler:
     def sample(self, main_frame_idx, return_info=False):
         """
         Example:
+            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
             >>> import os
             >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
             >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
@@ -1118,6 +1123,7 @@ class TimeWindowSampler:
     def show_summary(self, samples_per_frame=1, fnum=1):
         """
         Example:
+            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
             >>> import os
             >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
             >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
@@ -1193,6 +1199,7 @@ class TimeWindowSampler:
     def show_procedure(self, idx=None, fnum=2):
         """
         Example:
+            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
             >>> import os
             >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
             >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
