@@ -15,7 +15,7 @@ def debug_video_information(dset, video_id):
     """
     Ignore:
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
-        >>> from watch.tasks.fusion.datamodules.time_sampling import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
         >>> from watch.utils.util_data import find_smart_dvc_dpath
         >>> dvc_dpath = find_smart_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
@@ -263,8 +263,7 @@ def dilated_template_sample(unixtimes, time_window):
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> from watch.utils.util_data import find_smart_dvc_dpath
         >>> dvc_dpath = find_smart_dvc_dpath()
-        >>> bundle_dpath = join(dvc_dpath, 'drop1-S2-L8-aligned')
-        >>> coco_fpath = join(bundle_dpath, 'data.kwcoco.json')
+        >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
         >>> video_ids = list(ub.sorted_vals(dset.index.vidid_to_gids, key=len).keys())
         >>> vidid = video_ids[0]
@@ -657,7 +656,7 @@ def affinity_sample(affinity, size, include_indices, return_info=False,
 
     Example:
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
-        >>> from watch.tasks.fusion.datamodules.time_sampling import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
         >>> low = datetime.datetime.now().timestamp()
         >>> high = low + datetime.timedelta(days=365 * 5).total_seconds()
         >>> rng = kwarray.ensure_rng(0)
@@ -675,7 +674,7 @@ def affinity_sample(affinity, size, include_indices, return_info=False,
 
     Ignore:
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
-        >>> from watch.tasks.fusion.datamodules.time_sampling import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
         >>> low = datetime.datetime.now().timestamp()
         >>> high = low + datetime.timedelta(days=365 * 5).total_seconds()
         >>> rng = kwarray.ensure_rng(0)
@@ -691,7 +690,7 @@ def affinity_sample(affinity, size, include_indices, return_info=False,
     Example:
         >>> # xdoctest: +REQUIRES(--cython)
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
-        >>> from watch.tasks.fusion.datamodules.time_sampling import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
         >>> low = datetime.datetime.now().timestamp()
         >>> high = low + datetime.timedelta(days=365 * 5).total_seconds()
         >>> rng = kwarray.ensure_rng(0)
@@ -714,7 +713,7 @@ def affinity_sample(affinity, size, include_indices, return_info=False,
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> import kwplot
         >>> kwplot.autompl()
-        >>> from watch.tasks.fusion.datamodules.time_sampling import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
         >>> low = datetime.datetime.now().timestamp()
         >>> high = low + datetime.timedelta(days=365 * 5).total_seconds()
         >>> rng = kwarray.ensure_rng(0)
@@ -992,11 +991,10 @@ class TimeWindowSampler:
     Ignore:
         >>> import os
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
-        >>> from watch.tasks.fusion.datamodules.time_sampling import *  # NOQA
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
         >>> from watch.utils.util_data import find_smart_dvc_dpath
         >>> dvc_dpath = find_smart_dvc_dpath()
-        >>> bundle_dpath = join(dvc_dpath, 'drop1-S2-L8-aligned')
-        >>> coco_fpath = join(bundle_dpath, 'data.kwcoco.json')
+        >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
         >>> vidid = dset.dataset['videos'][0]['id']
         >>> self = TimeWindowSampler.from_coco_video(
@@ -1045,11 +1043,10 @@ class TimeWindowSampler:
         Example:
             >>> import os
             >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
-            >>> from watch.tasks.fusion.datamodules.time_sampling import *  # NOQA
+            >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
             >>> from watch.utils.util_data import find_smart_dvc_dpath
             >>> dvc_dpath = find_smart_dvc_dpath()
-            >>> bundle_dpath = join(dvc_dpath, 'drop1-S2-L8-aligned')
-            >>> coco_fpath = join(bundle_dpath, 'data.kwcoco.json')
+            >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
             >>> dset = kwcoco.CocoDataset(coco_fpath)
             >>> vidid = dset.dataset['videos'][0]['id']
             >>> self = TimeWindowSampler.from_coco_video(
@@ -1098,11 +1095,10 @@ class TimeWindowSampler:
         Example:
             >>> import os
             >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
-            >>> from watch.tasks.fusion.datamodules.time_sampling import *  # NOQA
+            >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
             >>> from watch.utils.util_data import find_smart_dvc_dpath
             >>> dvc_dpath = find_smart_dvc_dpath()
-            >>> bundle_dpath = join(dvc_dpath, 'drop1-S2-L8-aligned')
-            >>> coco_fpath = join(bundle_dpath, 'data.kwcoco.json')
+            >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
             >>> dset = kwcoco.CocoDataset(coco_fpath)
             >>> vidid = dset.dataset['videos'][0]['id']
             >>> self = TimeWindowSampler.from_coco_video(
@@ -1124,11 +1120,10 @@ class TimeWindowSampler:
         Example:
             >>> import os
             >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
-            >>> from watch.tasks.fusion.datamodules.time_sampling import *  # NOQA
+            >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
             >>> from watch.utils.util_data import find_smart_dvc_dpath
             >>> dvc_dpath = find_smart_dvc_dpath()
-            >>> bundle_dpath = join(dvc_dpath, 'drop1-S2-L8-aligned')
-            >>> coco_fpath = join(bundle_dpath, 'data.kwcoco.json')
+            >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
             >>> dset = kwcoco.CocoDataset(coco_fpath)
             >>> video_ids = list(ub.sorted_vals(dset.index.vidid_to_gids, key=len).keys())
             >>> vidid = video_ids[2]
@@ -1200,11 +1195,10 @@ class TimeWindowSampler:
         Example:
             >>> import os
             >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
-            >>> from watch.tasks.fusion.datamodules.time_sampling import *  # NOQA
+            >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
             >>> from watch.utils.util_data import find_smart_dvc_dpath
             >>> dvc_dpath = find_smart_dvc_dpath()
-            >>> bundle_dpath = join(dvc_dpath, 'drop1-S2-L8-aligned')
-            >>> coco_fpath = join(bundle_dpath, 'data.kwcoco.json')
+            >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
             >>> dset = kwcoco.CocoDataset(coco_fpath)
             >>> vidid = dset.dataset['videos'][0]['id']
             >>> self = TimeWindowSampler.from_coco_video(
