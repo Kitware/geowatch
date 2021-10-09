@@ -12,6 +12,7 @@ from kwcoco import channel_spec
 from torch.utils import data
 from watch.tasks.fusion import utils
 from watch.utils import kwcoco_extensions
+from watch.utils import util_bands
 from watch.utils import util_iter
 from watch.utils import util_kwimage
 from watch.utils.lightning_ext import util_globals
@@ -506,7 +507,7 @@ class KWCocoVideoDataset(data.Dataset):
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
         >>> sampler = ndsampler.CocoSampler(coco_dset)
         >>> sample_shape = (7, 128, 128)
-        >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=None)
+        >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels='red|green|blue|swir16|swir22|nir|ASI')
         >>> item = self[4]
         >>> canvas = self.draw_item(item)
         >>> # xdoctest: +REQUIRES(--show)
@@ -678,13 +679,40 @@ class KWCocoVideoDataset(data.Dataset):
         self.channels = channels
 
         self.diff_inputs = diff_inputs
-        if self.diff_inputs:
-            # Add frame_differences between channels
-            self.input_channels = kwcoco.channel_spec.ChannelSpec.coerce(','.join(
-                ['|'.join([s + p for p in part for s in ['', 'D']])
-                 for part in self.channels.parse().values()]))
-        else:
-            self.input_channels = channels
+
+        self.special_inputs = {}
+
+
+        _input_channels = []
+        _sample_channels = []
+        for key, stream in channels.parse().items():
+            _stream = stream.as_oset()
+            _sample_stream = _stream.copy()
+            special_bands = _stream & util_bands.SPECIALIZED_BANDS
+            if special_bands:
+                _sample_stream -= special_bands
+                self.special_inputs[key] = special_bands
+            if self.diff_inputs:
+                _stream = [s + p for p in _stream for s in ['', 'D']]
+            _input_channels.append('|'.join(_stream))
+            _sample_channels.append('|'.join(_sample_stream))
+
+        # Some of the channels are computed on the fly.
+        # This is the list of ones that are loaded from disk.
+        self.sample_channels = kwcoco.channel_spec.ChannelSpec(
+            ','.join(_sample_channels)
+        )
+
+        self.input_channels = kwcoco.channel_spec.ChannelSpec.coerce(
+            ','.join(_input_channels)
+        )
+
+        # if self.diff_inputs:
+        #     # Add frame_differences between channels
+        #     # self.input_channels = kwcoco.channel_spec.ChannelSpec.coerce(','.join(
+        #     #      for part in self.channels.parse().values()]))
+        # else:
+        #     self.input_channels = channels
         self.mode = mode
 
         self.augment = False
@@ -764,8 +792,8 @@ class KWCocoVideoDataset(data.Dataset):
             >>>     sampler,
             >>>     sample_shape=(2, 128, 128),
             >>>     window_overlap=0,
-            >>>     channels="blue|green|red|nir|swir16",
-            >>>     neg_to_pos_ratio=0, time_sampling='auto', diff_inputs=True
+            >>>     channels="ASI|MF_Norm|AF|EVI|red|green|blue|swir16|swir22|nir",
+            >>>     neg_to_pos_ratio=0, time_sampling='auto', diff_inputs=0,
             >>> )
             >>> item = self[5]
             >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0)
@@ -799,9 +827,6 @@ class KWCocoVideoDataset(data.Dataset):
         tr_ = tr.copy()
 
         # get positive sample definition
-        if self.channels:
-            tr_["channels"] = self.channels
-
         # TODO: perterb the spatial and time sample coordinates
         do_shift = False
         # collect sample
@@ -839,11 +864,53 @@ class KWCocoVideoDataset(data.Dataset):
             valid_gids = self.new_sample_grid['vidid_to_valid_gids'][vidid]
             tr_['gids'] = list(ub.take(valid_gids, time_sampler.sample(tr_['main_idx'])))
 
+        if self.channels:
+            tr_["channels"] = self.sample_channels
+
         # collect sample
         sample = sampler.load_sample(tr_, padkw={'constant_values': np.nan})
 
-        # Access the sampled image and annotation data
-        raw_frame_list = sample['im']
+        if self.special_inputs or self.diff_inputs:
+            import xarray as xr
+            im = sample['im']
+            # chan_coords = list(self.sample_channels.values())[0].split('|')
+            chan_coords = self.sample_channels.streams()[0].parsed
+            sample_im = xr.DataArray(
+                im, dims=('t', 'h', 'w', 'c'),
+                coords={'c': chan_coords})
+            special_ims = []
+            if self.special_inputs:
+                bands = {c: sample_im.sel(c=c).data for c in chan_coords}
+                indexes = util_bands.specialized_index_bands(bands=bands)
+                indexes = ub.map_vals(np.nan_to_num, indexes)
+                special_ims = [
+                    xr.DataArray(
+                        indexes[v][..., None],
+                        dims=('t', 'h', 'w', 'c'),
+                        coords={'c': [v]}
+                    )
+                    for _, values in self.special_inputs.items()
+                    for v in values
+                ]
+            concat1 = xr.concat([sample_im] + special_ims, dim='c')
+
+            if self.diff_inputs:
+                diff_ims = np.abs(concat1.diff(dim='t'))
+                diff_ims.coords.update({
+                    'c': ['D' + s for s in diff_ims.coords['c'].data]
+                })
+                diff_ims = diff_ims.pad({'t': (1, 0)}).fillna(0)
+                concat2 = xr.concat([concat1, diff_ims], dim='c')
+            else:
+                concat2 = concat1
+
+            # TODO: multi-modal inputs
+            requested_channel_order = self.input_channels.spec.split('|')
+            final = concat2.sel(c=requested_channel_order)
+            raw_frame_list = final
+        else:
+            # Access the sampled image and annotation data
+            raw_frame_list = sample['im']
 
         # TODO: use this
         nodata_mask = np.isnan(raw_frame_list)  # NOQA
@@ -956,36 +1023,37 @@ class KWCocoVideoDataset(data.Dataset):
             frame_hwc[np.isnan(frame_hwc)] = -1.
             # rearrange image axes for pytorch
             frame_chw = einops.rearrange(frame_hwc, 'h w c -> c h w')
+            input_chw = frame_chw
 
-            if self.diff_inputs:
-                if prev_frame_chw is not None:
-                    frame_diff = np.abs(frame_chw - prev_frame_chw)
-                    # kwimage.normalize(frame_chw) -
-                    # kwimage.normalize(prev_frame_chw))
-                else:
-                    frame_diff = np.zeros_like(frame_chw)
-                """
-                # Check:
-                hwc = kwimage.ensure_float01(kwimage.grab_test_image('astro'))
-                hwc2 = kwimage.gaussian_blur(hwc)
-                v1 = einops.rearrange(hwc, 'h w c -> c h w')
-                v2 = einops.rearrange(hwc2, 'h w c -> c h w')
-                diff = np.abs(v1 - v2)
+            # if self.diff_inputs:
+            #     if prev_frame_chw is not None:
+            #         frame_diff = np.abs(frame_chw - prev_frame_chw)
+            #         # kwimage.normalize(frame_chw) -
+            #         # kwimage.normalize(prev_frame_chw))
+            #     else:
+            #         frame_diff = np.zeros_like(frame_chw)
+            #     """
+            #     # Check:
+            #     hwc = kwimage.ensure_float01(kwimage.grab_test_image('astro'))
+            #     hwc2 = kwimage.gaussian_blur(hwc)
+            #     v1 = einops.rearrange(hwc, 'h w c -> c h w')
+            #     v2 = einops.rearrange(hwc2, 'h w c -> c h w')
+            #     diff = np.abs(v1 - v2)
 
-                kwplot.imshow(kwimage.stack_images(v1))
-                kwplot.imshow(kwimage.stack_images(v2))
-                kwplot.imshow(kwimage.stack_images(diff))
+            #     kwplot.imshow(kwimage.stack_images(v1))
+            #     kwplot.imshow(kwimage.stack_images(v2))
+            #     kwplot.imshow(kwimage.stack_images(diff))
 
-                input_chw = einops.rearrange([v1, diff], '(c1 c2) c h w -> (c1 c c2) h w', c1=1)
-                kwplot.imshow(kwimage.stack_images(input_chw))
-                """
-                # Interlace/Interweave the diffs and the channels
-                parts = list(ub.flatten(zip(frame_chw, frame_diff)))
-                input_chw = np.stack(parts, axis=0)
-                # input_chw = einops.rearrange([frame_chw, frame_diff], '(c1 c2) c h w -> (c1 c c2) h w', c1=1)
-            else:
-                input_chw = frame_chw
-                pass
+            #     input_chw = einops.rearrange([v1, diff], '(c1 c2) c h w -> (c1 c c2) h w', c1=1)
+            #     kwplot.imshow(kwimage.stack_images(input_chw))
+            #     """
+            #     # Interlace/Interweave the diffs and the channels
+            #     parts = list(ub.flatten(zip(frame_chw, frame_diff)))
+            #     input_chw = np.stack(parts, axis=0)
+            #     # input_chw = einops.rearrange([frame_chw, frame_diff], '(c1 c2) c h w -> (c1 c c2) h w', c1=1)
+            # else:
+            #     input_chw = frame_chw
+            #     pass
 
             # convert annotations into a change detection task suitable for
             # the network.

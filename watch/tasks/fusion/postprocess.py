@@ -10,9 +10,23 @@ def accumulate_temporal_predictions_simple_v1(pred_fpath='/home/local/KHQ/usman.
 
 
 
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+    TEST_DATASET=$DVC_DPATH/drop1-S2-L8-aligned/vali_data.kwcoco.json
+    PACKAGE_FPATH=$DVC_DPATH/models/fusion/package_DirectCD_smt_it_joint_p8_raw9common_v5_tune_from_onera_epoch=2-step=2147.pt
+    PRED_DATASET=./tmp_preds/tmp_pred.kwcoco.json
+    python -m watch.tasks.fusion.predict \
+        --test_dataset="$TEST_DATASET" \
+        --package_fpath="$PACKAGE_FPATH" \
+        --pred_dataset="$PRED_DATASET" \
+        --write_probs=True \
+        --write_preds=False --gpus=1
+
+
+
+
     DVC_DPATH=$HOME/remote/yardrat/smart_watch_dvc
     TEST_DATASET=$DVC_DPATH/drop1-S2-L8-aligned/vali_data.kwcoco.json
-    PACKAGE_FPATH=$DVC_DPATH/training/yardrat/jon.crall/Drop1RawHoldout/runs/DirectCD_smt_it_joint_p8_raw9common_v5_tune_from_onera/lightning_logs/version_0/checkpoints/epoch=2-step=2147.ckpt
+    PACKAGE_FPATH=$DVC_DPATH/training/yardrat/jon.crall/Drop1RawHoldout/runs/DirectCD_smt_it_joint_p8_raw9common_v5_tune_from_onera/lightning_logs/version_0/checkpoints/epoch=2-step=2147.pt
 
     SUGGESTIONS="$(python -m watch.tasks.fusion.organize suggest_paths \
         --package_fpath=$PACKAGE_FPATH \

@@ -20,15 +20,28 @@ KWCOCO_BUNDLE_DPATH=${KWCOCO_BUNDLE_DPATH:-$DVC_DPATH/drop1-S2-L8-aligned}
 BASE_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json
 #BASE_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/propogated.kwcoco.json
 
-UKY_S2_MODEL_FPATH=${UKY_L8_MODEL_FPATH:-$DVC_DPATH/models/uky_invariants/sort_augment_overlap/S2_drop1-S2-L8-aligned-old.0.ckpt}
-UKY_L8_MODEL_FPATH=${UKY_L8_MODEL_FPATH:-$DVC_DPATH/models/uky_invariants/sort_augment_overlap/L8_drop1-S2-L8-aligned-old.0.ckpt}
-RUTGERS_MATERIAL_MODEL_FPATH="$DVC_DPATH/models/rutgers/experiments_epoch_30_loss_0.05691597167379317_valmIoU_0.5694727912477856_time_2021-08-07-09:01:01.pth"
-DZYNE_LANDCOVER_MODEL_FPATH="$DVC_DPATH/models/landcover/visnav_osm.pt"
+
+# Models
+
+# Gen1
+#RUTGERS_MATERIAL_MODEL_FPATH="$DVC_DPATH/models/rutgers/experiments_epoch_30_loss_0.05691597167379317_valmIoU_0.5694727912477856_time_2021-08-07-09:01:01.pth"
+#DZYNE_LANDCOVER_MODEL_FPATH="$DVC_DPATH/models/landcover/visnav_osm.pt"
+#UKY_S2_MODEL_FPATH=${UKY_L8_MODEL_FPATH:-$DVC_DPATH/models/uky_invariants/sort_augment_overlap/S2_drop1-S2-L8-aligned-old.0.ckpt}
+#UKY_L8_MODEL_FPATH=${UKY_L8_MODEL_FPATH:-$DVC_DPATH/models/uky_invariants/sort_augment_overlap/L8_drop1-S2-L8-aligned-old.0.ckpt}
+
+
+# Gen2
+UKY_S2_MODEL_FPATH=${UKY_L8_MODEL_FPATH:-$DVC_DPATH/models/uky_features_21-10-01/S2_model/drop1-S2-L8-aligned/checkpoints/S2_drop1-S2-L8-aligned.cpkt}
+UKY_L8_MODEL_FPATH=${UKY_L8_MODEL_FPATH:-$DVC_DPATH/models/uky_features_21-10-01/L8_model/drop1-S2-L8-aligned/checkpoints/L8_drop1-S2-L8-aligned.cpkt}
+RUTGERS_MATERIAL_MODEL_FPATH="$DVC_DPATH/models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_2021-10-01-16:27:07.pth"
+DZYNE_LANDCOVER_MODEL_FPATH="$DVC_DPATH/models/landcover/visnav_sentinel2.pt"
+
+
 
 UKY_S2_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/_partial_uky_pred_S2.kwcoco.json
 UKY_L8_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/_partial_uky_pred_L8.kwcoco.json
 
-UKY_INVARIANTS_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/uky_invariants.kwcoco.json
+UKY_INVARIANTS_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/uky_pred_S2_L8.kwcoco.json
 RUTGERS_MATERIAL_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/rutgers_material_seg.kwcoco.json
 DZYNE_LANDCOVER_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/landcover.kwcoco.json
 
@@ -76,21 +89,25 @@ uky_prediction(){
     python -m watch.tasks.invariants.predict \
         --sensor S2 \
         --input_kwcoco $BASE_COCO_FPATH \
-        --output_kwcoco $UKY_L8_COCO_FPATH \
-        --gpus 1 \
-        --ckpt_path $UKY_S2_MODEL_FPATH
+        --output_kwcoco $UKY_S2_COCO_FPATH \
+        --ckpt_path $UKY_S2_MODEL_FPATH 
+
+        #--gpus 1 \
 
     python -m watch.tasks.invariants.predict \
         --sensor L8 \
         --input_kwcoco $BASE_COCO_FPATH \
-        --output_kwcoco $UKY_S2_COCO_FPATH \
-        --gpus 1 \
+        --output_kwcoco $UKY_L8_COCO_FPATH \
         --ckpt_path $UKY_L8_MODEL_FPATH
+
+        #--gpus 1 \
+
+    kwcoco stats $UKY_S2_COCO_FPATH $UKY_L8_COCO_FPATH
 
     # Combine S2 and L8 outputs into a single UKY file
     python -m watch.cli.coco_combine_features \
         --src $UKY_S2_COCO_FPATH $UKY_L8_COCO_FPATH \
-        --dst $UKY_COCO_FPATH
+        --dst $UKY_INVARIANTS_COCO_FPATH
 }
 
 
@@ -114,10 +131,12 @@ dzyne_prediction(){
     python -m watch.tasks.landcover.predict \
         --dataset=$BASE_COCO_FPATH \
         --deployed=$DZYNE_LANDCOVER_MODEL_FPATH  \
-        --output=$DZYNE_LANDCOVER_COCO_FPATH  \
-        --num_workers=12 \
-        --batch_size=4 
-    #--gpus "0"
+        --output=$DZYNE_LANDCOVER_COCO_FPATH
+          
+    #\
+    #    --num_workers=12 \
+    #    --batch_size=4 
+    ##--gpus "0"
 }
 
 
@@ -145,15 +164,18 @@ predict_all_ta2_features(){
 
     # Final Combination
     # Combine TA2 Team Features into a single file
+    kwcoco stats $BASE_COCO_FPATH $UKY_INVARIANTS_COCO_FPATH $RUTGERS_MATERIAL_COCO_FPATH $DZYNE_LANDCOVER_COCO_FPATH
+
     python ~/code/watch/watch/cli/coco_combine_features.py \
         --src $BASE_COCO_FPATH $UKY_INVARIANTS_COCO_FPATH $RUTGERS_MATERIAL_COCO_FPATH $DZYNE_LANDCOVER_COCO_FPATH \
         --dst $COMBO_COCO_FPATH
 
     # Ensure "Video Space" is 10 GSD
-    python -m watch.cli.coco_add_watch_fields \
-        --src $COMBO_COCO_FPATH \
-        --dst $COMBO_COCO_FPATH \
-        --target_gsd 10
+    # Might not need to do that?
+    #python -m watch.cli.coco_add_watch_fields \
+    #    --src $COMBO_COCO_FPATH \
+    #    --dst $COMBO_COCO_FPATH \
+    #    --target_gsd 10
     
     # Propogate labels (should no longer be needed)
     # python -m watch.cli.propagate_labels \
@@ -168,6 +190,8 @@ predict_all_ta2_features(){
     #python -m watch.cli.coco_spatial_crop \
     #        --src $COMBO_PROPOGATED_COCO_FPATH --dst $RIGHT_COCO_FPATH \
     #        --suffix=_right
+
+    python -m watch stats $COMBO_COCO_FPATH
 
     # Split out train and validation data (TODO: add test when we can)
     kwcoco subset --src $COMBO_COCO_FPATH \
@@ -192,6 +216,12 @@ viz_check(){
         --src $COMBO_COCO_FPATH --space=video --num_workers=6 \
         --viz_dpath $KWCOCO_BUNDLE_DPATH/_viz_preprop \
         --channels "red|green|blue,inv_sort1|inv_augment1|inv_shared1"
+
+    CHANNELS=matseg_0|matseg_1|matseg_2
+    python -m watch.cli.coco_visualize_videos \
+        --src $COMBO_COCO_FPATH --space=video --num_workers=6 \
+        --viz_dpath $KWCOCO_BUNDLE_DPATH/_viz_preprop \
+        --channels "$CHANNELS"
 
     # Optional: visualize the combo data before and after propogation
     python -m watch.cli.coco_visualize_videos \

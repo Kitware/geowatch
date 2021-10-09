@@ -389,9 +389,12 @@ Example:
 '''
 
 
-def artificial_surface_index(coco_img):
-    """
+def specialized_index_bands(bands=None, coco_img=None, symbolic=False):
+    r"""
     Ported from code from by (Yongquan Zhao on 26 April 2017)
+
+    References:
+        https://mail.google.com/mail/u/1/#chat/space/AAAAE5jpxTc
 
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -405,70 +408,294 @@ def artificial_surface_index(coco_img):
         >>> gid = ub.peek(dset.index.imgs.keys())
         >>> coco_img = kwcoco_extensions.CocoImage.from_gid(dset, gid)
         >>> print('coco_img.channels = {!r}'.format(coco_img.channels))
-        >>> indexes = artificial_surface_index(coco_img)
+        >>> symbolic = False
+        >>> indexes = specialized_index_bands(coco_img)
+        >>> import kwarray
+        >>> print(ub.repr2(ub.map_vals(kwarray.stats_dict, indexes), nl=1))
+        >>> import pandas as pd
+        >>> print(pd.DataFrame(ub.map_vals(kwarray.stats_dict, indexes)))
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> import kwimage
         >>> kwplot.autompl()
         >>> pnum_ = kwplot.PlotNums(nSubplots=len(indexes))
         >>> for key, value in indexes.items():
-        >>>     kwplot.imshow(kwimage.normalize_intensity(value), title=key, pnum=pnum_())
+        >>>     kwplot.imshow(kwimage.normalize(value), title=key, pnum=pnum_())
+
+    # Example:
+    #     >>> # xdoctest: +REQUIRES(module:sympy)
+    #     >>> from watch.utils.util_bands import *  # NOQA
+    #     >>> symbolic = True
+    #     >>> indexes = specialized_index_bands(coco_img=None, symbolic=symbolic)
+    #     >>> import sympy as sym
+    #     >>> for key, index in indexes.items():
+    #     >>>     print('===============')
+    #     >>>     print('key = {!r}'.format(key))
+    #     >>>     print('\nOrig {}'.format(key))
+    #     >>>     print(index)
+    #     >>>     print('\nSimplified {}'.format(key))
+    #     >>>     print(sym.simplify(index))
     """
-    # https://mail.google.com/mail/u/1/#chat/space/AAAAE5jpxTc
+    import ubelt as ub
+    import numpy as np
+    import kwimage
 
-    if 0:
-        import sympy as sym
-        ρRed, ρBlue, ρGreen, ρSWIR1, ρSWIR2, ρNIR = sym.symbols('ρRed, ρBlue, ρGreen, ρSWIR1, ρSWIR2, ρNIR')
+    if bands is not None:
+        allbands = np.stack(list(ub.take(bands, ['blue', 'green', 'red', 'swir16', 'swir22', 'nir'])))
+        allbands = kwimage.normalize_intensity(allbands)
+        ρBlue, ρGreen, ρRed, ρSWIR1, ρSWIR2, ρNIR = allbands
 
-    delayed = coco_img.delay()
-    rgbir123 = delayed.take_channels('red|blue|green|swir16|swir22|nir')
-    chw = rgbir123.finalize().transpose(2, 0, 1)
-
-    # ρRed = coastal,lwir11,lwir12,blue,green,red,nir,swir16,swir22,pan,cirrus
     # Raw bands
-    ρRed = chw[0]
-    ρBlue = chw[1]
-    ρGreen = chw[2]
-    ρSWIR1 = chw[3]
-    ρSWIR2 = chw[4]
-    ρNIR = chw[5]
+    elif symbolic:
+        # Sympy can help explore different forms of these equations.
+        import sympy as sym
+        ρBlue, ρGreen, ρRed, ρSWIR1, ρSWIR2, ρNIR = sym.symbols(
+            'ρBlue, ρGreen, ρRed, ρSWIR1, ρSWIR2, ρNIR')
+    else:
+        delayed = coco_img.delay()
+        rgbir123 = delayed.take_channels('blue|green|red|swir16|swir22|nir')
+        chw = rgbir123.finalize().transpose(2, 0, 1)
+
+        chw = kwimage.normalize_intensity(chw)
+
+        ρBlue = chw[0]    # NOQA
+        ρGreen = chw[1]  # NOQA
+        ρRed = chw[2]      # NOQA
+        ρSWIR1 = chw[3]  # NOQA
+        ρSWIR2 = chw[4]  # NOQA
+        ρNIR = chw[5]      # NOQA
+
+    Blue = ρBlue     # NOQA
+    Grn = ρGreen   # NOQA
+    Red = ρRed      # NOQA
+    SWIR2 = ρSWIR1   # NOQA
+    SWIR1 = ρSWIR2  # NOQA
+    NIR = ρNIR     # NOQA
+
+    def hist_cut(band, fill_value=0, k=1, minmax='std'):
+        if minmax == 'std':
+            mean = band.mean()
+            std = band.std()
+            low_val = (mean + k * std)
+            high_val = (mean + k * std)
+        else:
+            low_val, high_val = minmax
+        # is_low = band < low_val
+        # is_high = band > high_val
+        # [is_high] = fill
+        band = band.clip(low_val, high_val)
+        return band
+
+    def minmax_norm(band, mask):
+        mask = mask & np.isfinite(band)
+        if mask.sum() > 0:
+            max_val = band[mask].max()
+            min_val = band[mask].min()
+            extent = max_val - min_val
+            if extent > 0:
+                shifted = band - min_val
+                scaled = shifted / extent
+                band[mask] = scaled[mask]
+        return band
+
+    # TODO:
+    # Need a valid_mask
+    valid_mask = None
+    if valid_mask is None:
+        valid_mask = np.ones(Blue.shape, dtype=bool)
+
+    MinMaxNorm = minmax_norm
+    HistCut = hist_cut
+    MaskValid = valid_mask
 
     # constants
     G = 2.5
     C1 = 6
     C2 = 7.5
-    L = 1
+
+    # L = 1
+    L = 1000
+
+    fillV = 0
 
     # Might be tricky
-    toplogical_effects = False
+    # toplogical_effects = False
 
     # Formulas
-    NDVI = (ρNIR - ρRed) / (ρNIR + ρRed)
-    EVI = G * (ρNIR - ρRed) / (ρNIR + C1 * ρRed - C2 * ρBlue + L)
-    BSI = ((ρSWIR1 + ρRed) - (ρNIR + ρBlue)) / ((ρSWIR1 + ρRed) + (ρNIR + ρBlue))
-    MBI = (ρSWIR1 + ρSWIR2 - ρNIR) / (ρSWIR1 + ρSWIR2 - ρNIR) + 0.5
-    MNDWI = (ρGreen - ρSWIR1) / (ρGreen + ρSWIR1)
-    EBSI = (BSI - MNDWI) / (BSI + MNDWI)
-    EMBI = (MBI - MNDWI) / (MBI + MNDWI)
-    AF = ((ρSWIR1 + ρNIR) / 2 - ρBlue) / ((ρSWIR1 + ρNIR) / 2 + ρBlue) + 1
-    SDF = (EMBI + 1) / (MBI + 0.5) * (1 - EBSI)
-    VDF = 1 - EVI if toplogical_effects else 1 - NDVI
-    MF = ((ρBlue + ρGreen) - (ρNIR + ρSWIR1)) / ((ρBlue + ρGreen) + (ρNIR + ρSWIR1))
-    ASI = (AF * SDF * VDF * MF)
+
+    # Artificial surface Factor (AF).
+    AF = ((SWIR1 + NIR) / 2 - Blue) / ((SWIR1 + NIR) / 2 + Blue)
+    AF = HistCut(AF, fillV, 6, [-1, 1])
+    AF_Norm = MinMaxNorm(AF, MaskValid)
+
+    # Vegetation Suppressing Factor (VSF).
+    # EVI is better in general cases, but its adjustment for mountain shadows
+    # (with vegetation) is not as good as NDVI.
+    EVI = G * ((NIR - Red) / (NIR + C1 * Red - C2 * Blue + L))
+    EVI = HistCut(EVI, fillV, 6, [-1, 1])
+    VSF = 1 - EVI
+    # NDVI = (NIR - Red) / (NIR + Red)
+    #  NDVI  = HistCut( NDVI, fillV, 6, [-1 1])
+    # VSF = 1 - NDVI
+    VSF_Norm = MinMaxNorm(VSF, MaskValid)
+
+    # Soil Suppressing Factor (SSF).
+    # Derive the Modified Bare soil Index (MBI).
+    MBI = (SWIR1 - SWIR2 - NIR) / (SWIR1 + SWIR2 + NIR) + 0.5
+    MBI = HistCut(MBI, fillV, 6, [-0.5, 1.5])
+    MBI_Norm = MinMaxNorm(MBI, MaskValid)
+    # Deriving Enhanced-MBI based on MBI and MNDWI.
+    MNDWI = (Grn - SWIR1) / (Grn + SWIR1)
+    MNDWI = HistCut(MNDWI, fillV, 6, [-1, 1])
+    MNDWI_Norm = MinMaxNorm(MNDWI, MaskValid)
+    EMBI = ((MBI_Norm) - (MNDWI_Norm)) / ((MBI_Norm) + (MNDWI_Norm))
+    EMBI_Norm = MinMaxNorm(EMBI, MaskValid)
+
+    invalid = (MBI_Norm == 0)
+    MBI_Norm[invalid] = 1
+    C = EMBI_Norm / MBI_Norm
+    C[invalid] = 0
+
+    # Derive the Bare Soil Index (BSI).
+    BSI = ((SWIR1 + Red) - (NIR + Blue)) / ((SWIR1 + Red) + (NIR + Blue))
+    MNDWI = HistCut(MNDWI, fillV, 6, [-1, 1])
+    EMBI = HistCut(EMBI, fillV, 6, [-1, 1])
+    BSI = HistCut(BSI, fillV, 6, [-1, 1])
+    BSI_Norm = MinMaxNorm(BSI, MaskValid)
+    # Deriving Eenhanced-BSI based on BSI and MNDWI.
+    EBSI = ((BSI_Norm) - (MNDWI_Norm)) / ((BSI_Norm) + (MNDWI_Norm))
+    MNDWI = HistCut(MNDWI, fillV, 6, [-1, 1])
+    EMBI = HistCut(EMBI, fillV, 6, [-1, 1])
+    BSI = HistCut(BSI, fillV, 6, [-1, 1])
+    EBSI = HistCut(EBSI, fillV, 6, [-1, 1])
+
+    # Derive SSF.
+    SSF = C * (1 - EBSI)
+    SSF_Norm = MinMaxNorm(SSF, MaskValid)
+
+    # Modulation Factor (MF).
+    MF = (Blue + Grn - NIR - SWIR1) / (Blue + Grn + NIR + SWIR1)
+    MNDWI = HistCut(MNDWI, fillV, 6, [-1, 1])
+    EMBI = HistCut(EMBI, fillV, 6, [-1, 1])
+    BSI = HistCut(BSI, fillV, 6, [-1, 1])
+    EBSI = HistCut(EBSI, fillV, 6, [-1, 1])
+
+    MF = HistCut(MF, fillV, 6, [-1, 1])
+    MF_Norm = MinMaxNorm(MF, MaskValid)
+
+    # Derive ASI.
+    ASI = AF_Norm * SSF_Norm * VSF_Norm * MF_Norm
+
+    MNDWI = HistCut(MNDWI, fillV, 6, [-1, 1])
+    EMBI = HistCut(EMBI, fillV, 6, [-1, 1])
+    BSI = HistCut(BSI, fillV, 6, [-1, 1])
+    EBSI = HistCut(EBSI, fillV, 6, [-1, 1])
+
+    MF = HistCut(MF, fillV, 6, [-1, 1])
+    ASI = HistCut(ASI, fillV, 6, [0, 1])
+
+    # # The Artificial surface Factor (AF)
+    # AF = (((ρSWIR1 + ρNIR) / 2) - ρBlue) / (((ρSWIR1 + ρNIR) / 2) + ρBlue) + 1
+
+    # # %%%%% Vegetation Suppressing Factor (VSF).
+    # # % EVI is better in general cases, but its adjustment for mountain shadows (with vegetation) is not as good as NDVI.
+    # # EVI = G * ((NIR - Red) / (NIR + C1 * Red - C2 * Blue + L))
+    # # https://en.wikipedia.org/wiki/Enhanced_vegetation_index
+    # # Enhanced vegetation index
+    # EVI = G * (ρNIR - ρRed) / (ρNIR + C1 * ρRed - C2 * ρBlue + L)
+    # EVI = hist_cut(EVI, fillV)
+
+    # # Normalized Difference Vegetation Index
+    # # https://gisgeography.com/ndvi-normalized-difference-vegetation-index/
+    # NDVI = (ρNIR - ρRed) / (ρNIR + ρRed)
+
+    # # bare soil index
+    # # https://www.geo.university/pages/blog?p=spectral-indices-with-multispectral-satellite-data#:~:text=Bare%20Soil%20Index%20(BSI)%20is,used%20in%20a%20normalized%20manner.
+    # BSI = ((ρSWIR1 + ρRed) - (ρNIR + ρBlue)) / ((ρSWIR1 + ρRed) + (ρNIR + ρBlue))
+    # BSI  = hist_cut( BSI, fillV, 6, minmax=[-1, 1])
+    # BSI_Norm = minmax_norm(BSI, valid_mask)
+
+    # # Modified Bare Soil Index
+    # MBI = ((ρSWIR1 - ρSWIR2 - ρNIR) / (ρSWIR1 + ρSWIR2 + ρNIR)) + 0.5
+    # MBI = hist_cut(MBI, fillV, minmax=[-0.5, 1.5])
+
+    # # Note that BSI, MBI, and MNDWI need to be normalized when calculation EBSI
+    # # and EMBI to avoid unmeaningful values caused by the negative values in
+    # # BSI/MBI/MNDW
+    # MNDWI = (ρGreen - ρSWIR1) / (ρGreen + ρSWIR1)
+    # MNDWI  = hist_cut( MNDWI, fillV, 6, minmax=[-1, 1])
+    # MNDWI_Norm = minmax_norm(MNDWI, valid_mask)
+
+    # # EBSI/EMBI were designed based on BSI/MBI to enhance barren further,
+    # # however, artificial surface still has relative high magnitude, thereby
+    # # leading to the over-depressing of artificial surface.
+
+    # # EBSI = (BSI - MNDWI) / (BSI + MNDWI)
+    # EBSI = ((BSI_Norm) - (MNDWI_Norm)) / ((BSI_Norm) + (MNDWI_Norm));
+
+    # EBSI  = hist_cut( EBSI, fillV, 6, minmax=[-1, 1])
+
+    # EMBI = (MBI - MNDWI) / (MBI + MNDWI)
+    # EMBI  = hist_cut( EMBI, fillV, 6, minmax=[-1, 1])
+
+    # # Soil Depressing Factor
+    # SDF = (EMBI + 1) / (MBI + 0.5) * (1 - EBSI)
+
+    # # Vegetation Depressing Factor
+    # # VDF is based on NDVI (Rouse et al. 1974) or EVI (Huete et al. 1997),
+    # VDF = 1 - EVI if toplogical_effects else 1 - NDVI
+
+    # # Therefore, we design a modulation factor to depress the dark bare land
+    # # and enhance dark artificial surfaces simultaneous
+    # MF = ((ρBlue + ρGreen) - (ρNIR + ρSWIR1)) / ((ρBlue + ρGreen) + (ρNIR + ρSWIR1)) + 1
+    # MF  = hist_cut( MF, fillV, 6, minmax=[-1, 1])
+
+    # ASI = (AF * SDF * VDF * MF) + 1
+    # ASI  = hist_cut( ASI, fillV, 6, minmax=[0, 1])
 
     indexes = {
         'ASI': ASI,
         'MF': MF,
-        'VDF': VDF,
-        'SDF': SDF,
+        # 'VDF': VDF,
+        # 'SDF': SDF,
         'AF': AF,
-        'EMBI': EMBI,
         'EBSI': EBSI,
-        'MNDWI': EBSI,
+        'MNDWI': MNDWI,
         'MBI': MBI,
         'BSI': BSI,
+        'BSI_Norm': BSI_Norm,
         'EVI': EVI,
-        'NDVI': NDVI,
+
+        'EMBI': EMBI,
+
+        'SSF_Norm': SSF_Norm,
+        'AF_Norm': AF_Norm,
+        'VSF_Norm': VSF_Norm,
+        'MF_Norm': MF_Norm,
+        # 'NDVI': NDVI,
     }
 
     return indexes
+
+
+SPECIALIZED_BANDS = {
+    'ASI',
+    'MF',
+    # 'VDF',
+    # 'SDF',
+    'AF',
+    'EBSI',
+    'MNDWI',
+    'MBI',
+    'BSI',
+    'BSI_Norm',
+    'EVI',
+
+    'EMBI',
+
+    'SSF_Norm',
+    'AF_Norm',
+    'VSF_Norm',
+    'MF_Norm',
+}
+
