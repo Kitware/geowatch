@@ -1,3 +1,8 @@
+"""
+Utilities for handling global resources
+"""
+
+
 def configure_hacks(**config):
     """
     Configures hacks to fix global settings in external modules
@@ -52,3 +57,126 @@ def configure_hacks(**config):
         # torch.multiprocessing.get_all_start_methods()
         # torch_multiprocessing.get_context()
         torch.multiprocessing.set_start_method('spawn')
+
+
+def request_nofile_limits(requested_limit='auto'):
+    """
+    Attempts to increase the limit of open file descriptors on the system.
+
+    Args:
+        requested_limit (int | str):
+            attempt to increase rlimit_nofile to this number of open files,
+            if auto, uses a hueristic
+
+    Ignore:
+        # Helpful file descriptor monitor script:
+        watch -x bash -c '
+            PROC_ID_LIST=($(ps -a | grep python | awk '"'"'{print $1}'"'"' ))
+            for PROC_ID in "${PROC_ID_LIST[@]}"; do
+                NUM_OPEN_FILES=$(lsof -p $PROC_ID | wc -l)
+                echo "PROC_ID=$PROC_ID, NUM_OPEN_FILES=$NUM_OPEN_FILES"
+            done
+        '
+
+        # Query current soft limit
+        ulimit -S -n
+
+        # Query current hard limit
+        ulimit -H -n
+
+        # Request higher soft limit
+        ulimit -S -n 8192
+
+    Example:
+        >>> from watch.utils.lightning_ext.util_globals import *  # NOQA
+        >>> request_nofile_limits()
+    """
+    import ubelt as ub
+    if ub.LINUX:
+        import resource
+        if isinstance(requested_limit, str):
+            if requested_limit == 'auto':
+                requested_limit = 8192
+            else:
+                raise KeyError(requested_limit)
+        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        if requested_limit > soft:
+            print('Requesting FileLimit = {!r}'.format(requested_limit))
+            print(' * Before FileLimit: soft={}, hard={}'.format(soft, hard))
+            resource.setrlimit(resource.RLIMIT_NOFILE, (requested_limit, hard))
+            soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+            print(' * After FileLimit: soft={}, hard={}'.format(soft, hard))
+
+
+def coerce_num_workers(num_workers='auto', minimum=0):
+    """
+    Return some number of CPUs based on a chosen hueristic
+
+    Args:
+        num_workers (int | str):
+            A special string code, or an exact number of cpus
+
+        minimum (int): minimum workers we are allowed to return
+
+    Returns:
+        int : number of available cpus based on request parameters
+
+    Example:
+        >>> from watch.utils.lightning_ext.util_globals import *  # NOQA
+        >>> print(coerce_num_workers('all'))
+        >>> print(coerce_num_workers('avail'))
+        >>> print(coerce_num_workers('auto'))
+        >>> print(coerce_num_workers('all-2'))
+        >>> print(coerce_num_workers('avail-2'))
+        >>> print(coerce_num_workers('all/2'))
+        >>> import pytest
+        >>> with pytest.raises(Exception):
+        >>>     print(coerce_num_workers('all - 100 + 3 * 2'))
+        >>> total_cpus = coerce_num_workers('all')
+        >>> assert coerce_num_workers('all-2') == max(total_cpus - 2, 0)
+        >>> assert coerce_num_workers('all-100') == max(total_cpus - 100, 0)
+        >>> assert coerce_num_workers('avail') <= coerce_num_workers('all')
+        >>> assert coerce_num_workers(3) == max(3, 0)
+    """
+    import numpy as np
+    import psutil
+
+    if isinstance(num_workers, str):
+        if num_workers == 'auto':
+            num_workers = 'avail-2'
+
+        # input normalization
+        num_workers = num_workers.replace('available', 'avail')
+        base_workers = None
+
+        prefix = 'avail'
+        if num_workers.startswith(prefix):
+            current_load = np.array(psutil.cpu_percent(percpu=True)) / 100
+            base_workers = np.sum(current_load < 0.5)
+            suffix = num_workers[len(prefix):]
+
+        prefix = 'all'
+        if num_workers.startswith(prefix):
+            base_workers = psutil.cpu_count()
+            suffix = num_workers[len(prefix):]
+
+        if base_workers is None:
+            raise KeyError(num_workers)
+
+        if suffix:
+            expr = '{}{}'.format(base_workers, suffix)
+            if len(expr) > 8:
+                raise Exception(
+                    'num-workers-hueristic should be small text. '
+                    'We want to disallow attempts at crashing python '
+                    'by feeding nasty input into eval'
+                )
+            # note: eval is not safe, using numexpr instead
+            # evaluated = eval(expr, {}, {})
+            import numexpr
+            num_workers = numexpr.evaluate(expr)
+        else:
+            num_workers = base_workers
+
+    num_workers = max(int(num_workers), minimum)
+    return num_workers

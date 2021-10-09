@@ -131,7 +131,7 @@ python -m watch.tasks.fusion.fit \
     --batch_size=$BATCH_SIZE \
     --accumulate_grad_batches=32 \
     --num_workers=8 \
-    --max_lookahead=1000000 \
+    --time_sampling=1000000 \
     --max_epochs=400 \
     --patience=400 \
     --gpus=1  \
@@ -213,7 +213,7 @@ python -m watch.tasks.fusion.fit \
     --batch_size=$BATCH_SIZE \
     --accumulate_grad_batches=32 \
     --num_workers=8 \
-    --max_lookahead=1000000 \
+    --time_sampling=1000000 \
     --max_epochs=400 \
     --patience=400 \
     --gpus=1  \
@@ -281,7 +281,7 @@ python -m watch.tasks.fusion.fit \
     --batch_size=$BATCH_SIZE \
     --accumulate_grad_batches=32 \
     --num_workers=8 \
-    --max_lookahead=1000000 \
+    --time_sampling=1000000 \
     --max_epochs=400 \
     --patience=400 \
     --gpus=1  \
@@ -325,7 +325,7 @@ python -m watch.tasks.fusion.fit \
     --batch_size=$BATCH_SIZE \
     --accumulate_grad_batches=16 \
     --num_workers=8 \
-    --max_lookahead=1000000 \
+    --time_sampling=1000000 \
     --max_epochs=400 \
     --patience=400 \
     --gpus=1  \
@@ -348,3 +348,26 @@ python -m watch.tasks.fusion.fit \
        --package_fpath=$PACKAGE_FPATH \
         --train_dataset=$TRAIN_FPATH \
          --vali_dataset=$VALI_FPATH 
+
+
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc 
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/drop1-S2-L8-aligned
+
+TRAIN_DATASET=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json
+VALI_DATASET=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json
+# Run on the explicit kwcoco files
+python -m netharn.examples.segmentation \
+    --name=check_train_rgb_v2 \
+    --train_dataset=$TRAIN_DATASET \
+    --vali_dataset=$VALI_DATASET \
+    --channels="red|green|blue|nir|swir22" \
+    --input_overlap=0.5 \
+    --input_dims=256,256 \
+    --batch_size=48 \
+    --arch=psp \
+    --optim=AdamW \
+    --lr=1e-4 \
+    --max_epoch=500 \
+    --patience=500 \
+    --decay=1e-8 \
+    --workers=14 --xpu=0 --reset 

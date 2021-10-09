@@ -14,6 +14,7 @@ import kwimage
 import kwarray
 from watch.tasks.fusion import datamodules
 from watch.tasks.fusion import utils
+from watch.tasks.fusion import postprocess
 from watch.utils import util_path
 
 
@@ -153,7 +154,18 @@ def predict(cmdline=False, **kwargs):
         checkpoint = torch.load(args.package_fpath)
         print(list(checkpoint.keys()))
         from watch.tasks.fusion import methods
-        method = methods.MultimodalTransformer(**checkpoint['hyper_parameters'])
+        hparams = checkpoint['hyper_parameters']
+        if 'input_channels' in hparams:
+            from kwcoco.channel_spec import ChannelSpec
+            # Hack for strange pickle issue
+            chan = hparams['input_channels']
+            if not hasattr(chan, '_spec') and hasattr(chan, '_info'):
+                chan = ChannelSpec.coerce(chan._info['spec'])
+                hparams['input_channels'] = chan
+            else:
+                hparams['input_channels'] = ChannelSpec.coerce(chan.spec)
+
+        method = methods.MultimodalTransformer(**hparams)
         state_dict = checkpoint['state_dict']
         method.load_state_dict(state_dict)
 
@@ -208,6 +220,23 @@ def predict(cmdline=False, **kwargs):
     else:
         result_dataset.fpath = str(args.pred_dataset)
     result_fpath = util_path.coercepath(result_dataset.fpath)
+
+    # add hyperparam info to "info" section
+    info = result_dataset.dataset.get('info', [])
+
+    from kwcoco.util import util_json
+    import os
+    import socket
+    info.append({
+        'type': 'process',
+        'properties': {
+            'name': 'watch.tasks.fusion.predict',
+            'args': util_json.ensure_json_serializable(args.__dict__),
+            'hostname': socket.gethostname(),
+            'cwd': os.getcwd(),
+            'timestamp': ub.timestamp(),
+        }
+    })
 
     result_fpath.parent.mkdir(parents=True, exist_ok=True)
 
@@ -515,16 +544,12 @@ class CocoStitchingManager(object):
             change_cid = self.result_dataset.index.name_to_cat['change']['id']
 
             # Threshold scores
-            change_pred = change_probs > self.thresh
+            thresh = self.thresh
             # Convert to polygons
-            vid_polys = kwimage.Mask(change_pred, 'c_mask').to_multi_polygon()
-            n_anns = len(vid_polys)
-            for vid_poly in vid_polys:
-                # Compute a score for the polygon
-                # TODO: This is very inefficient, should fix this
-                w = vid_poly.to_mask(change_probs.shape).data
-                score = (w * change_probs).sum() / w.sum()
-
+            scored_polys = list(postprocess.mask_to_scored_polygons(
+                change_probs, thresh))
+            n_anns = len(scored_polys)
+            for vid_poly, score in scored_polys:
                 # Transform the video polygon into image space
                 img_poly = vid_poly.warp(img_from_vid)
                 bbox = list(img_poly.bounding_box().to_coco())[0]

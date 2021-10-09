@@ -72,10 +72,7 @@ import scriptconfig as scfg
 import socket
 import ubelt as ub
 import dateutil.parser
-import geopandas as gpd
 import datetime
-import shapely
-from shapely import ops
 import pathlib
 from os.path import join, exists
 
@@ -204,6 +201,7 @@ def main(**kw):
         >>> }
         >>> new_dset = main(**kw)
     """
+    import geopandas as gpd
     config = CocoAlignGeotiffConfig(default=kw, cmdline=True)
 
     # Store that this dataset is a result of a process.
@@ -372,6 +370,7 @@ def read_geojson(file, default_axis_mapping='OAMS_TRADITIONAL_GIS_ORDER'):
         >>> file.seek(0)
         >>> region_df = read_geojson(file)
     """
+    import geopandas as gpd
     valid_axis_mappings = {
         'OAMS_TRADITIONAL_GIS_ORDER',
         'OAMS_AUTHORITY_COMPLIANT',
@@ -565,6 +564,7 @@ class SimpleDataCube(object):
 
     def __init__(cube, dset):
         # old way: gid_to_poly is old and should be deprecated
+        import geopandas as gpd
         gid_to_poly = {}
 
         # new way: put data in the cube into a geopandas data frame
@@ -593,6 +593,7 @@ class SimpleDataCube(object):
         from watch.demo.landsat_demodata import grab_landsat_product
         from watch.gis.geotiff import geotiff_metadata
         # Create a dead simple coco dataset with one image
+        import geopandas as gpd
         import kwcoco
         dset = kwcoco.CocoDataset()
         ls_prod = grab_landsat_product()
@@ -1322,6 +1323,7 @@ def find_roi_regions(dset):
     """
     Given a dataset find spatial regions of interest that contain annotations
     """
+    from shapely import ops
     aid_to_poly = {}
     for aid, ann in dset.anns.items():
         geo = _fix_geojson_poly(ann['segmentation_geos'])
@@ -1377,6 +1379,7 @@ def find_covered_regions(dset):
     Find the intersection of all image bounding boxes in world space
     to see what spatial regions are covered by the imagery.
     """
+    from shapely import ops
     gid_to_poly = {}
     for gid, img in dset.imgs.items():
         info  = img['geotiff_metadata']
@@ -1409,10 +1412,12 @@ def _flip(x, y):
 
 
 def shapely_flip_xy(geom):
+    from shapely import ops
     return ops.transform(_flip, geom)
 
 
 def shapely_bounding_box(geom):
+    import shapely
     return shapely.geometry.box(*geom.bounds)
 
 
@@ -1438,6 +1443,7 @@ def coco_geopandas_images(dset):
         - [ ] This is unused in this file and thus should move to the dev
         folder or somewhere else for to keep useful scratch work.
     """
+    import geopandas as gpd
     df_input = []
     for gid, img in dset.imgs.items():
         info  = img['geotiff_metadata']
@@ -1463,7 +1469,7 @@ def visualize_rois(dset, kw_all_box_rois):
         - [ ] This is unused in this file and thus should move to the dev
         folder or somewhere else for to keep useful scratch work.
     """
-
+    import geopandas as gpd
     sh_coverage_rois = find_covered_regions(dset)
     sh_coverage_rois_trad = [flip_xy(p) for p in sh_coverage_rois]
     kw_coverage_rois_trad = list(map(kwimage.Polygon.from_shapely, sh_coverage_rois_trad))
@@ -1482,7 +1488,6 @@ def visualize_rois(dset, kw_all_box_rois):
 
     if True:
         import kwplot
-        import geopandas as gpd
         kwplot.autompl()
 
         wld_map_gdf = gpd.read_file(

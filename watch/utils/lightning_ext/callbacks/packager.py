@@ -181,7 +181,10 @@ def default_save_package(model, package_path, verbose=1):
     model.test_dataloader = None
     model_name = "model.pkl"
     module_name = 'default_save_module_name'
-    with torch.package.PackageExporter(package_path, verbose=verbose) as exp:
+    if verbose:
+        print('Packaging package_path = {!r}'.format(package_path))
+
+    with torch.package.PackageExporter(package_path) as exp:
         # TODO: this is not a problem yet, but some package types (mainly binaries) will need to be excluded and added as mocks
         # exp.extern("**", exclude=["watch.tasks.fusion.**"])
         exp.extern("**")

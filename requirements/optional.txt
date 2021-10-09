@@ -4,13 +4,10 @@
 PyQt5 >= 5.15
 
 ipython
-xdev
+#xdev
 flake8
 autopep8
 mkinit
 
 timerit
 pint
-
-performer_pytorch >= 1.0.11
-torch-optimizer >= 0.1.0 ;python_version>='3.6'

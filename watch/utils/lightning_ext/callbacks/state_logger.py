@@ -7,6 +7,10 @@ class StateLogger(pl.callbacks.Callback):
     """
     Prints out what callbacks are being called
     """
+
+    def __init__(self):
+        pass
+
     def setup(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", stage: Optional[str] = None) -> None:
         print('setup state logger')
         print('trainer.default_root_dir = {!r}'.format(trainer.default_root_dir))

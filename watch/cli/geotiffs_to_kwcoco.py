@@ -3,7 +3,7 @@ Attempts to register directory of geotiffs into a kwcoco dataset
 """
 
 from dateutil.parser import isoparse
-from kwimage.transform import Affine
+import kwimage
 from os.path import join, basename, normpath, splitext
 import datetime
 import glob
@@ -11,7 +11,6 @@ import kwcoco
 import scriptconfig as scfg
 import ubelt as ub
 import watch
-
 from watch.utils import util_bands
 
 
@@ -136,7 +135,7 @@ def make_coco_img_from_geotiff(tiff_fpath, name=None, force_affine=True):
     # TODO support RPC
     info.update(**watch.gis.geotiff.geotiff_crs_info(tiff_fpath, force_affine=force_affine))
 
-    warp_pxl_to_wld = Affine.coerce(info['pxl_to_wld'])
+    warp_pxl_to_wld = kwimage.Affine.coerce(info['pxl_to_wld'])
     height, width = info['img_shape']
     file_meta = info['filename_meta']
     channels = file_meta.get('channels', None)

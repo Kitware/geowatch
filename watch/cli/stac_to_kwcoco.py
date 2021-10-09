@@ -4,8 +4,6 @@ import json
 import argparse
 import pystac
 import ubelt as ub
-from watch.gis import geotiff
-import watch.cli.geotiffs_to_kwcoco as gtk
 import dateutil.parser
 
 
@@ -40,6 +38,8 @@ def hack_resolve_sensor_candidate(dset):
 
 
 def convert(out_file, cat, ignore_dem=True):
+    from watch.gis import geotiff
+    import watch.cli.geotiffs_to_kwcoco as gtk
     dset = kwcoco.CocoDataset()
 
     if isinstance(cat, str):

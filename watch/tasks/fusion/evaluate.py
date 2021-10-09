@@ -1,6 +1,7 @@
 import kwcoco
 import kwimage
 import kwarray
+import json
 import sklearn.metrics as skm
 import pandas as pd
 import numpy as np
@@ -9,6 +10,8 @@ import ubelt as ub
 from watch.tasks.fusion import utils
 from watch.utils import util_kwimage
 from watch.utils.kwcoco_extensions import CocoImage
+from kwcoco.metrics.confusion_vectors import BinaryConfusionVectors
+from kwcoco.metrics.confusion_vectors import Measures
 
 try:
     from xdev import profile
@@ -198,8 +201,6 @@ def associate_images(true_coco, pred_coco):
 
 @profile
 def single_image_segmentation_metrics(true_coco, pred_coco, gid1, gid2):
-    from kwcoco.metrics.confusion_vectors import BinaryConfusionVectors
-    import kwarray
     img1 = true_coco.imgs[gid1]
     vidid1 = true_coco.imgs[gid1]['video_id']
     video1 = true_coco.index.videos[vidid1]
@@ -235,9 +236,9 @@ def single_image_segmentation_metrics(true_coco, pred_coco, gid1, gid2):
     tn, fp, fn, tp = mat.ravel()
     row = binary_confusion_measures(tn, fp, fn, tp)
     row = ub.map_vals(lambda x: x.item(), row)
-    row["true_gid"] = gid1
-    row["pred_gid"] = gid2
-    row["video"] = video1['name']
+    row['true_gid'] = gid1
+    row['pred_gid'] = gid2
+    row['video'] = video1['name']
     info['row'] = row
 
     TRY_SOFT = 1
@@ -282,8 +283,8 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, plot_dpath):
     """
     Draw a a sequence of true/pred image predictions
     """
-    colors = ["white", "green", "yellow", "red"]
-    color_labels = ["TN", "TP", "FN", "FP"]
+    colors = ['white', 'green', 'yellow', 'red']
+    color_labels = ['TN', 'TP', 'FN', 'FP']
     color_lut = np.array([kwimage.Color(c).as255() for c in colors])
 
     # Make a legend
@@ -318,7 +319,7 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, plot_dpath):
         confusion_image = kwimage.ensure_uint255(confusion_image)
 
         header = util_kwimage.draw_header_text(
-            confusion_image, image_text, color='white', stack=False)
+            image=confusion_image, text=image_text, color='white', stack=False)
 
         vert_parts = [
             header,
@@ -430,7 +431,7 @@ def header_text(text, max_dim=None, shrink=False):
 
 
 @profile
-def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None):
+def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto'):
     """
 
     Example:
@@ -445,6 +446,9 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None):
         >>>     'n_fn': (0, 10),
         >>>     'with_probs': True,
         >>> }
+        >>> # TODO: it would be nice to demo the soft metrics
+        >>> # functionality by adding "change_prob" or "class_prob"
+        >>> # auxiliary channels to this demodata.
         >>> pred_coco = perterb_coco(true_coco, **kwargs)
         >>> eval_dpath = ub.ensure_app_cache_dir('watch/tests/fusion_eval')
         >>> print('eval_dpath = {!r}'.format(eval_dpath))
@@ -460,14 +464,16 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None):
     video_matches, image_matches = associate_images(true_coco, pred_coco)
     rows = []
     chunk_size = 5
+    combo_precision = 5
+
+    if draw == 'auto':
+        draw = bool(eval_dpath is not None)
 
     if eval_dpath is None:
         plot_dpath = None
-        draw = False
     else:
         plot_dpath = pathlib.Path(eval_dpath) / 'plots'
         plot_dpath.mkdir(exist_ok=True, parents=True)
-        draw = True
 
     combo_measures = None
 
@@ -524,28 +530,12 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None):
 
             if chunk_measures:
                 # Reduce measures over the chunk
-                combo_measures = combine_kwcoco_measures(chunk_measures, precision=5)
+                combo_measures = Measures.combine(
+                    chunk_measures, precision=combo_precision)
 
             if draw:
                 dump_chunked_confusion(
                     true_coco, pred_coco, chunk_info, plot_dpath)
-
-    if combo_measures is not None:
-        curve_dpath = pathlib.Path(eval_dpath) / 'curves'
-        curve_dpath.mkdir(exist_ok=True, parents=True)
-        measure_info = combo_measures.__json__()
-        import json
-        with open(curve_dpath / 'measures.json', 'w') as file:
-            json.dump(measure_info, file)
-        if draw:
-            combo_measures.reconstruct()
-            print('combo_measures = {!r}'.format(combo_measures))
-            import kwplot
-            kwplot.autompl()
-            fig = kwplot.figure(doclf=True)
-            combo_measures.summary_plot(fnum=1)
-            fig = kwplot.autoplt().gcf()
-            fig.savefig(str(curve_dpath / 'summary.png'))
 
     # Handle standalone images
     gids1 = image_matches['match_gids1']
@@ -567,9 +557,28 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None):
         if len(chunk_measures) == 1:
             combo_measures = chunk_measures[0]
         else:
-            combo_measures = combine_kwcoco_measures(chunk_measures, precision=5)
+            combo_measures = Measures.combine(
+                chunk_measures, precision=combo_precision)
 
     prog.end()
+
+    if combo_measures is not None:
+        combo_measures.reconstruct()
+
+        if eval_dpath is not None:
+            curve_dpath = pathlib.Path(eval_dpath) / 'curves'
+            curve_dpath.mkdir(exist_ok=True, parents=True)
+            measure_info = combo_measures.__json__()
+            with open(curve_dpath / 'measures.json', 'w') as file:
+                json.dump(measure_info, file)
+            if draw:
+                print('combo_measures = {!r}'.format(combo_measures))
+                import kwplot
+                kwplot.autompl()
+                fig = kwplot.figure(doclf=True)
+                combo_measures.summary_plot(fnum=1)
+                fig = kwplot.autoplt().gcf()
+                fig.savefig(str(curve_dpath / 'summary.png'))
 
     df = pd.DataFrame(rows)
     print(df)
@@ -581,8 +590,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None):
         summary['ap'] = combo_measures['ap']
         summary['auc'] = combo_measures['auc']
         summary['max_f1'] = combo_measures['max_f1']
-    print('summary = {}'.format(ub.repr2(summary, nl=1, precision=4, align=':',
-                                         sort=0)))
+    print('summary = {}'.format(ub.repr2(
+        summary, nl=1, precision=4, align=':', sort=0)))
 
     if eval_dpath is not None:
         eval_dpath = pathlib.Path(eval_dpath)
@@ -594,134 +603,33 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None):
     return df
 
 
-@profile
-def combine_kwcoco_measures(tocombine, precision=None):
-    """
-    Combine binary confusion metrics
-
-    TODO:
-        - [ ] Remove and use the version in kwcoco.metrics once that is released
-
-    Example:
-        >>> from watch.tasks.fusion.evaluate import *  # NOQA
-        >>> from kwcoco.metrics.confusion_vectors import BinaryConfusionVectors
-        >>> measures1 = BinaryConfusionVectors.demo(n=15).measures()
-        >>> measures2 = measures1  # BinaryConfusionVectors.demo(n=15).measures()
-        >>> tocombine = [measures1, measures2]
-        >>> new_measures = combine_kwcoco_measures(tocombine)
-        >>> print('new_measures = {!r}'.format(new_measures))
-        >>> print('measures1 = {!r}'.format(measures1))
-        >>> print('measures2 = {!r}'.format(measures2))
-        >>> new_measures.reconstruct()
-        >>> print(ub.repr2(measures1.__json__(), nl=1, sort=0))
-        >>> print(ub.repr2(measures2.__json__(), nl=1, sort=0))
-        >>> print(ub.repr2(new_measures.__json__(), nl=1, sort=0))
-        >>> # xdoctest: +REQUIRES(--show)
-        >>> import kwplot
-        >>> kwplot.autompl()
-        >>> kwplot.figure(fnum=1)
-        >>> new_measures.summary_plot()
-        >>> measures1.summary_plot()
-        >>> measures1.draw('roc')
-        >>> measures2.draw('roc')
-        >>> new_measures.draw('roc')
-    """
-    from kwcoco.metrics.confusion_vectors import Measures
-
-    combo_thresh_asc = np.hstack([m['thresholds'] for m in tocombine])
-    if precision is not None:
-        combo_thresh_asc = combo_thresh_asc.round(precision)
-
-    combo_thresh_asc = np.unique(combo_thresh_asc)
-    new_thresh = combo_thresh_asc[::-1]
-
-    summable = {
-        'nsupport': 0,
-        'realpos_total': 0,
-        'realneg_total': 0,
-    }
-
-    fp_accum = np.zeros(len(new_thresh))
-    tp_accum = np.zeros(len(new_thresh))
-    tn_accum = np.zeros(len(new_thresh))
-    fn_accum = np.zeros(len(new_thresh))
-
-    for measures in tocombine:
-        thresholds = measures['thresholds']
-        if precision is not None:
-            thresholds = thresholds.round(precision)
-
-        right_idxs = np.searchsorted(combo_thresh_asc, thresholds, 'right')
-        left_idxs = len(combo_thresh_asc) - right_idxs
-        left_idxs = left_idxs.clip(0, len(combo_thresh_asc) - 1)
-        # NOTE: if the min is non-zero in each array the diff wont work
-        # reformulate if this case arrises
-        fp_pos = np.diff(np.r_[[0], measures['fp_count']])
-        tp_pos = np.diff(np.r_[[0], measures['tp_count']])
-        tn_pos = np.diff(np.r_[[0], measures['tn_count'][::-1]])[::-1]
-        fn_pos = np.diff(np.r_[[0], measures['fn_count'][::-1]])[::-1]
-        # Handle the case where we round the thresholds for space reasons
-        if 1:
-            np.add.at(fp_accum, left_idxs, fp_pos)
-            np.add.at(tp_accum, left_idxs, tp_pos)
-            np.add.at(fn_accum, left_idxs, fn_pos)
-            np.add.at(tn_accum, left_idxs, tn_pos)
-        else:
-            unique_idxs, groupxs = kwarray.group_indices(left_idxs)
-            fp_pos2 = [g.sum() for g in kwarray.apply_grouping(fp_pos, groupxs)]
-            tp_pos2 = [g.sum() for g in kwarray.apply_grouping(tp_pos, groupxs)]
-            tn_pos2 = [g.sum() for g in kwarray.apply_grouping(tn_pos, groupxs)]
-            fn_pos2 = [g.sum() for g in kwarray.apply_grouping(fn_pos, groupxs)]
-            fp_accum[unique_idxs] += fp_pos2
-            tp_accum[unique_idxs] += tp_pos2
-            tn_accum[unique_idxs] += tn_pos2
-            fn_accum[unique_idxs] += fn_pos2
-
-        for k in summable:
-            summable[k] += measures[k]
-
-    new_fp = np.cumsum(fp_accum)
-    new_tp = np.cumsum(tp_accum)
-    new_tn = np.cumsum(tn_accum[::-1])[::-1]
-    new_fn = np.cumsum(fn_accum[::-1])[::-1]
-
-    new_info = {
-        'fp_count': new_fp,
-        'tp_count': new_tp,
-        'tn_count': new_tn,
-        'fn_count': new_fn,
-        'thresholds': new_thresh,
-    }
-    new_info.update(summable)
-
-    other = {
-        'fp_cutoff',
-        'monotonic_ppv',
-        'node',
-        'cx',
-        'stabalize_thresh',
-        'trunc_idx'
-    }
-    rest = ub.dict_isect(tocombine[0], other)
-    new_info.update(rest)
-    new_measures = Measures(new_info)
-    # new_measures.reconstruct()
-    return new_measures
-
-
 def main():
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--true_dataset", help='path to the groundtruth dataset')
-    parser.add_argument("--pred_dataset", help='path to the predicted dataset')
-    parser.add_argument("--eval_dpath", help='path to dump results')
+    from watch.utils.configargparse_ext import ArgumentParser
+    parser = ArgumentParser(
+        add_config_file_help=False,
+        description='Evaluation script for change/segmentation task',
+        auto_env_var_prefix='WATCH_FUSION_EVAL_',
+        add_env_var_help=True,
+        formatter_class='defaults',
+        config_file_parser_class='yaml',
+        args_for_setting_config_path=['--config'],
+        args_for_writing_out_config_file=['--dump'],
+    )
+    parser.add_argument('--true_dataset', '--test_dataset', help='path to the groundtruth dataset')
+    parser.add_argument('--pred_dataset', help='path to the predicted dataset')
+    parser.add_argument('--eval_dpath', help='path to dump results')
+    parser.add_argument('--draw', default='auto', help='flag to draw or not')
     args, _ = parser.parse_known_args()
 
     true_coco = kwcoco.CocoDataset.coerce(args.true_dataset)
     pred_coco = kwcoco.CocoDataset.coerce(args.pred_dataset)
     eval_dpath = args.eval_dpath
-    evaluate_segmentations(true_coco, pred_coco, eval_dpath)
+    from scriptconfig.smartcast import smartcast
+    draw = smartcast(args.draw)
+    evaluate_segmentations(true_coco, pred_coco, eval_dpath, draw=draw)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
+    import xdev
+    xdev.make_warnings_print_tracebacks()
     main()

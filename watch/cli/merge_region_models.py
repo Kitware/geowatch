@@ -4,7 +4,6 @@ import re
 import ubelt as ub
 import scriptconfig as scfg
 import json
-import geojson
 
 
 class MergeRegionModelConfig(scfg.Config):
@@ -66,6 +65,7 @@ def main(cmdline=False, **kwargs):
         >>> main(**kwargs)
 
     """
+    import geojson
     config = MergeRegionModelConfig(default=kwargs, cmdline=cmdline)
     # print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
@@ -87,6 +87,7 @@ _SubConfig = MergeRegionModelConfig
 
 
 def combine_region_models(json_paths, match_type=None, match_subtype=None):
+    import geojson
     if match_type is None:
         match_re = None
     else:

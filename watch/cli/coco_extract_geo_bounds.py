@@ -17,7 +17,6 @@ import json
 import itertools as it
 import networkx as nx
 import scriptconfig as scfg
-from shapely import ops
 
 
 class CocoExtractBoundsConfig(scfg.Config):
@@ -66,6 +65,7 @@ def find_spacetime_cluster_regions(dset, mode='annots', breakup_times=False):
     """
     Given a dataset find spatial regions of interest that contain annotations
     """
+    from shapely import ops
     gid_to_rois = {}
 
     if mode == 'images':
