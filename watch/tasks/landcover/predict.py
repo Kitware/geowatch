@@ -20,7 +20,9 @@ log = logging.getLogger(__name__)
 @click.option('--dataset', required=True, type=click.Path(exists=True), help='input kwcoco dataset')
 @click.option('--deployed', required=True, type=click.Path(exists=True), help='pytorch weights file')
 @click.option('--output', required=False, type=click.Path(), help='output kwcoco dataset')
-def predict(dataset, deployed, output):
+@click.option('--num_workers', default=0, required=False, type=int, help='number of dataloading workers')
+@click.option('--device', default='auto', required=False, type=str, help='auto, cpu, or integer of the device to use')
+def predict(dataset, deployed, output, num_workers=0, device='auto'):
     coco_dset_filename = dataset
     weights_filename = Path(deployed)
     output_dset_filename = get_output_file(output)
@@ -31,6 +33,11 @@ def predict(dataset, deployed, output):
     log.info('Weights:        {}'.format(weights_filename))
     log.info('Output:         {}'.format(output_dset_filename))
     log.info('Output Images:  {}'.format(output_data_dir))
+
+    try:
+        device = int(device)
+    except Exception:
+        pass
 
     if weights_filename.stem == 'visnav_osm':
         #
@@ -46,7 +53,8 @@ def predict(dataset, deployed, output):
             'grassland', 'brush', 'forest', 'wetland', 'road'
         ]
         assert len(model_outputs) == 15
-        model = detector.load_model(weights_filename, num_outputs=15, num_channels=8)
+        model = detector.load_model(weights_filename, num_outputs=15,
+                                    num_channels=8, device=device)
 
     elif weights_filename.stem == 'visnav_sentinel2':
         #
@@ -61,27 +69,40 @@ def predict(dataset, deployed, output):
             'alluvial_deposits', 'med_low_density_built_up'
         ]
         assert len(model_outputs) == 22
-        model = detector.load_model(weights_filename, num_outputs=22, num_channels=13)
+        model = detector.load_model(weights_filename, num_outputs=22,
+                                    num_channels=13, device=device)
     else:
         raise Exception('unknown weights file')
 
     log.info('Using {}'.format(type(ptdataset)))
 
     output_dset = kwcoco.CocoDataset(coco_dset_filename).copy()
-    for img_info in tqdm(DataLoader(ptdataset, num_workers=0,
-                                    batch_size=None, collate_fn=lambda x: x),
-                         miniters=1):
+
+    dataloader = DataLoader(ptdataset, num_workers=num_workers,
+                            batch_size=None, collate_fn=lambda x: x)
+
+    # Start the worker processes before we do threading
+    dataloader_iter = iter(dataloader)
+
+    # Create a queue that writes data to disk in the background
+    writer = BlockingJobQueue(max_workers=num_workers)
+
+    for img_info in tqdm(dataloader_iter, miniters=1):
         try:
-            _predict_single(img_info, model=model,
-                            model_outputs=model_outputs,
-                            output_dset=output_dset,
-                            output_dir=output_dset_filename.parent)
+            pred_filename, pred = _predict_single(
+                img_info, model=model, model_outputs=model_outputs,
+                output_dset=output_dset,
+                output_dir=output_dset_filename.parent)
+
+            writer.submit(_write_worker, pred_filename, pred)
 
         except KeyboardInterrupt:
             log.info('interrupted')
             break
         except Exception:
             log.exception('Unable to load id:{} - {}'.format(img_info['id'], img_info['name']))
+
+    writer.wait_until_finished()
 
     # self.dset.dump(str(self.output_dset_filename)+'_orig.json', indent=2)
     output_dset.dump(str(output_dset_filename), indent=2)
@@ -91,6 +112,10 @@ def predict(dataset, deployed, output):
 def _predict_single(img_info, model, model_outputs,
                     output_dset: kwcoco.CocoDataset,
                     output_dir: Path):
+    """
+    Modifies the coco dataset inplace, returns the data that needs to be
+    written to disk.
+    """
     gid = img_info['id']
     name = img_info['name']
     img = img_info['imgdata']
@@ -119,26 +144,47 @@ def _predict_single(img_info, model, model_outputs,
     }
 
     output_dset.imgs[gid]['auxiliary'].append(info)
+    return (pred_filename, pred)
 
+
+class BlockingJobQueue(object):
+    """
+    Helper to execute some number of processes in a separate thread
+    """
+    def __init__(self, mode='thread', max_workers=0):
+        import ubelt as ub
+        self.max_workers = max_workers
+        self.executor = ub.Executor(mode=mode, max_workers=max_workers)
+        self.jobs = []
+
+    def _wait_for_room(self):
+        # Wait until the pool has available workers
+        while len(self.jobs) >= max(1, self.max_workers):
+            new_active_jobs = []
+            for job in self.jobs:
+                if job.running():
+                    new_active_jobs.append(job)
+                else:
+                    # Check that the result is ok
+                    job.result()
+            self.jobs = new_active_jobs
+
+    def wait_until_finished(self):
+        for job in self.jobs:
+            job.result()
+
+    def submit(self, func, *args, **kwargs):
+        self._wait_for_room()
+        job = self.executor.submit(func, *args, **kwargs)
+        self.jobs.append(job)
+
+
+def _write_worker(pred_filename, pred):
     pred_filename.parent.mkdir(parents=True, exist_ok=True)
-
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', UserWarning)
-        kwimage.imwrite(str(pred_filename),
-                        pred,
-                        backend='gdal',
+        kwimage.imwrite(str(pred_filename), pred, backend='gdal',
                         compress='deflate')
-
-        # kwimage.imwrite(str(pred_filename)[:-4] + '_orig.tif',
-        #                 img[:, :, [3, 2, 1]],
-        #                 backend='gdal',
-        #                 compress='deflate')
-        # # single band images
-        # for band in range(pred.shape[2]):
-        #     kwimage.imwrite(str(pred_filename)[:-4] + '_color_{}.tif'.format(band),
-        #                     pred[:, :, band],
-        #                     backend='gdal',
-        #                     compress='deflate')
 
 
 def get_output_file(output):

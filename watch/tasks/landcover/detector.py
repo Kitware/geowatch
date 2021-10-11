@@ -60,7 +60,7 @@ def predict_image(img, model):
         pred = np.full(img.shape[:2], PRED_NODATA, dtype=dtype)
         return pred
 
-    device = get_device()
+    device = get_model_device(model)
 
     t_image = to_tensor(img).float().unsqueeze(0).to(device)
 
@@ -130,14 +130,24 @@ def get_device():
     return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-def load_model(filename, num_outputs, num_channels):
+def get_model_device(model):
+    """
+    Return the device associated with the model
+    """
+    device = next(model.parameters()).device
+    return device
+
+
+def load_model(filename, num_outputs, num_channels, device='auto'):
     if isinstance(filename, str):
         filename = Path(filename)
     torch.hub.set_dir('/tmp')
     model = LinkNet34(num_outputs=num_outputs, num_channels=num_channels)
-    device = get_device()
-    model.load_state_dict(torch.load(filename, map_location=device))
+    if device == 'auto':
+        device = get_device()
     log.debug('  device {}'.format(device))
     model.to(device)
+    device = get_model_device(model)  # ensure a proper torch.device
+    model.load_state_dict(torch.load(filename, map_location=device))
     model.eval()
     return model
