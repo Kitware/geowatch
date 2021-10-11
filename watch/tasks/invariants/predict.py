@@ -91,22 +91,15 @@ def main(args):
                 else:
                     save_path = os.path.join(root, 'uky_invariants', path)
 
-            if not os.path.exists(save_path):
-                os.makedirs(save_path, exist_ok=True)
+                if args.data_save_folder is not None:
+                    save_path = args.data_save_folder
+                else:
+                    save_path = os.path.join(root, 'uky_invariants', path)
 
-            features = model.predict(image)
+                if not os.path.exists(save_path):
+                    os.makedirs(save_path, exist_ok=True)
 
-            # Predictions are saved in 'video space', so warp_aux_to_img is the inverse of warp_img_to_vid
-            warp_img_to_vid = kwimage.Affine.coerce(image_info.get('warp_img_to_vid', None))
-            warp_aux_to_img = warp_img_to_vid.inv().concise()
-
-            for key in feature_types:
-                feat = features[key].squeeze()
-                feat = feat.permute(1, 2, 0).detach().cpu().numpy()
-                last_us_idx = file_name.rfind('_')
-                name = file_name[:last_us_idx] + '_invariants_' + key + '.tif'
-                kwimage.imwrite(os.path.join(save_path, name), feat, space=None,
-                                backend='gdal', compress='DEFLATE')
+                features = model.predict(image)
 
                 if not os.path.exists(save_path):
                     os.makedirs(save_path, exist_ok=True)

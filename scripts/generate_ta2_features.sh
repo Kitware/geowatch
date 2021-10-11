@@ -128,9 +128,14 @@ dzyne_prediction(){
     # ----------------
     # DZYNE Prediction
     # ----------------
+
+    # 88 in 40 seconds
+    # 44 in 40 seconds
     python -m watch.tasks.landcover.predict \
         --dataset=$BASE_COCO_FPATH \
         --deployed=$DZYNE_LANDCOVER_MODEL_FPATH  \
+        --device=0 \
+        --num_workers="avail/2" \
         --output=$DZYNE_LANDCOVER_COCO_FPATH
           
     #\

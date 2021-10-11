@@ -204,17 +204,18 @@ EVAL_DPATH=$DEFAULT_ROOT_DIR/pred/eval
 # Consumes 6.7GB
 ####
 
-CHANNELS="blue|green|red|nir|swir16|swir22"
+CHANNELS="ASI|AF|BSI|blue|green|red|nir|swir16|swir22"
 #ARCH=smt_it_joint_p8
 ARCH=deit
-EXPERIMENT_NAME=ActivityClf_${ARCH}_raw_v028
+EXPERIMENT_NAME=ActivityClf_${ARCH}_raw_v029
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 TRAIN_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/train_$EXPERIMENT_NAME.yml 
 PRED_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/predict_$EXPERIMENT_NAME.yml 
 
 #python -m watch.tasks.fusion.fit --help | grep arch | grep joint
 
-CUDA_VISIBLE_DEVICES="0" python -m watch.tasks.fusion.fit \
+export CUDA_VISIBLE_DEVICES="0"
+python -m watch.tasks.fusion.fit \
     --channels=${CHANNELS} \
     --method="MultimodalTransformer" \
     --arch_name=$ARCH \
@@ -223,26 +224,26 @@ CUDA_VISIBLE_DEVICES="0" python -m watch.tasks.fusion.fit \
     --time_steps=6 \
     --time_sampling=hardish+distribute \
     --batch_size=1 \
-    --accumulate_grad_batches=16 \
+    --accumulate_grad_batches=8 \
     --num_workers=10 \
     --attention_impl=performer \
     --tokenizer=dwcnn \
     --token_norm=group \
-    --neg_to_pos_ratio=0.5 \
+    --neg_to_pos_ratio=0.0 \
     --global_class_weight=1.0 \
     --global_change_weight=0.0 \
     --negative_change_weight=0.05 \
     --change_loss='dicefocal' \
     --class_loss='focal' \
     --diff_inputs=False \
-    --max_epochs=220 \
-    --patience=220 \
+    --max_epochs=20 \
+    --patience=20 \
     --gpus=1  \
-    --learning_rate=1.5e-3 \
-    --weight_decay=1e-5 \
+    --learning_rate=1e0 \
+    --weight_decay=1e-6 \
     --num_draw=8 \
     --draw_interval="1m" \
-    --dropout=0.1 \
+    --dropout=0.03 \
     --window_size=8 \
     --default_root_dir=$DEFAULT_ROOT_DIR \
        --package_fpath=$PACKAGE_FPATH \
@@ -414,8 +415,12 @@ EVAL_DPATH=$DEFAULT_ROOT_DIR/pred/eval
 # Consumes 6.7GB
 ####
 
+
+
 #CHANNELS="blue|green|red|nir|swir16|coastal"
-CHANNELS="blue|green|red|nir|swir16|swir22"
+#CHANNELS="ASI|EVI|blue|green|red|nir|swir16|swir22|AF|SDF|VDF|BSI|MBI|matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7|matseg_8|inv_shared1|inv_shared2|inv_shared3|inv_shared4|inv_shared5|inv_shared6|inv_shared7|inv_shared8"
+CHANNELS="ASI|inv_shared1|EVI|blue|green|red|nir|swir16|swir22|AF|SDF|VDF|BSI|MBI"
+CHANNELS="ASI|inv_shared1|EVI|blue|green|red|nir|swir16|swir22|AF|SDF|VDF|BSI|MBI"
 ARCH=smt_it_joint_p8
 EXPERIMENT_NAME=ActivityClf_${ARCH}_raw_v019
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
@@ -446,8 +451,8 @@ python -m watch.tasks.fusion.fit \
     --change_loss='dicefocal' \
     --class_loss='cce' \
     --diff_inputs=False \
-    --max_epochs=400 \
-    --patience=400 \
+    --max_epochs=200 \
+    --patience=200 \
     --gpus=1  \
     --learning_rate=1e-2 \
     --weight_decay=1e-5 \
@@ -460,5 +465,3 @@ python -m watch.tasks.fusion.fit \
          --vali_dataset=$VALI_FPATH \
          --test_dataset=$TEST_FPATH \
          --num_sanity_val_steps=0  
-
-

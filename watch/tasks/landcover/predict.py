@@ -12,6 +12,8 @@ from tqdm import tqdm
 from . import detector
 from .datasets import L8asWV3Dataset, S2asWV3Dataset, S2Dataset
 from .utils import setup_logging
+
+from watch.utils.lightning_ext import util_globals
 from watch.utils import util_parallel
 
 log = logging.getLogger(__name__)
@@ -21,7 +23,7 @@ log = logging.getLogger(__name__)
 @click.option('--dataset', required=True, type=click.Path(exists=True), help='input kwcoco dataset')
 @click.option('--deployed', required=True, type=click.Path(exists=True), help='pytorch weights file')
 @click.option('--output', required=False, type=click.Path(), help='output kwcoco dataset')
-@click.option('--num_workers', default=0, required=False, type=int, help='number of dataloading workers')
+@click.option('--num_workers', default=0, required=False, type=str, help='number of dataloading workers. Can be "auto"')
 @click.option('--device', default='auto', required=False, type=str, help='auto, cpu, or integer of the device to use')
 def predict(dataset, deployed, output, num_workers=0, device='auto'):
     coco_dset_filename = dataset
@@ -39,6 +41,8 @@ def predict(dataset, deployed, output, num_workers=0, device='auto'):
         device = int(device)
     except Exception:
         pass
+
+    num_workers = util_globals.coerce_num_workers(num_workers)
 
     if weights_filename.stem == 'visnav_osm':
         #
@@ -95,7 +99,8 @@ def predict(dataset, deployed, output, num_workers=0, device='auto'):
                 output_dset=output_dset,
                 output_dir=output_dset_filename.parent)
 
-            writer.submit(_write_worker, pred_filename, pred)
+            if pred is not None:
+                writer.submit(_write_worker, pred_filename, pred)
 
         except KeyboardInterrupt:
             log.info('interrupted')
@@ -124,7 +129,7 @@ def _predict_single(img_info, model, model_outputs,
     pred = detector.run(model, img, img_info)
 
     if pred is None:
-        return
+        return None, None
 
     if img_info.get('file_name'):
         dir = Path(img_info.get('file_name')).parent
