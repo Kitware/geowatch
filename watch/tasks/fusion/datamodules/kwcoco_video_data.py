@@ -682,7 +682,6 @@ class KWCocoVideoDataset(data.Dataset):
 
         self.special_inputs = {}
 
-
         _input_channels = []
         _sample_channels = []
         for key, stream in channels.parse().items():
@@ -1159,14 +1158,11 @@ class KWCocoVideoDataset(data.Dataset):
             >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
             >>> # Run the following tests on real watch data if DVC is available
             >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
-            >>> import os
-            >>> from os.path import join
             >>> import ndsampler
             >>> import kwcoco
             >>> from watch.utils.util_data import find_smart_dvc_dpath
             >>> dvc_dpath = find_smart_dvc_dpath()
-            >>> coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/data.kwcoco.json')
-            >>> #coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/rutgers_material_seg.kwcoco.json')
+            >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (3, 96, 96)
@@ -1180,38 +1176,6 @@ class KWCocoVideoDataset(data.Dataset):
             >>> num = 1000
             >>> batch_size = 6
             >>> self.compute_dataset_stats(num=num, num_workers=num_workers, batch_size=batch_size)
-
-        Ignore:
-            # TODO: profile and optimize loading in ndsampler / kwcoco
-            _ = xdev.profile_now(self.__getitem__)(0)
-            _ = xdev.profile_now(self.compute_dataset_stats)(num=10, num_workers=4, batch_size=1)
-            tr = self.new_sample_grid['targets'][0]
-            tr['channels'] = self.channels
-            _ = xdev.profile_now(self.sampler.load_sample)(tr)
-            pad = None
-            padkw = {}
-            tr['use_experimental_loader'] = 0
-            item1 = xdev.profile_now(self.sampler._load_slice)(tr, pad, padkw)
-            item1['im'].shape
-            item1['im'].sum()
-            print(item1['im'].mean(axis=(1, 2)))
-
-            tr['use_experimental_loader'] = 1
-            item2 = xdev.profile_now(self.sampler._load_slice)(tr, pad, padkw)
-            item2['im'].shape
-            print(item2['im'].mean(axis=(1, 2)))
-
-            import timerit
-            ti = timerit.Timerit(10, bestof=2, verbose=2)
-            for timer in ti.reset('time'):
-                with timer:
-                    tr['use_experimental_loader'] = 0
-                    (self.sampler._load_slice)(tr, pad, padkw)
-
-            for timer in ti.reset('time'):
-                with timer:
-                    tr['use_experimental_loader'] = 1
-                    (self.sampler._load_slice)(tr, pad, padkw)
         """
         num = num if isinstance(num, int) and num is not True else 1000
         stats_idxs = kwarray.shuffle(np.arange(len(self)), rng=0)[0:min(num, len(self))]
