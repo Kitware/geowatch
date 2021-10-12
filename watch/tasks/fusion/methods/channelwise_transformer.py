@@ -25,11 +25,6 @@ except Exception:
     profile = ub.identity
 
 
-# class Tokenizer(self):
-#     def __init__(self, in_features):
-#         pass
-
-# from timm.models.layers import create_conv2d, drop_path, make_divisible, create_act_layer
 from timm.models.layers import drop_path
 # from timm.models.layers.activations import sigmoid
 
@@ -129,33 +124,6 @@ class OurDepthwiseSeparableConv(nn.Module):
         return x
 
 
-class DWCNNTokenizer(nn.Module):
-    def __init__(self, in_chn, norm='auto'):
-        super().__init__()
-        self.norm = norm
-        # self.to_images = Rearrange("b t c h w -> (b t) c h w")
-        self.stem = nn.Sequential(*[
-            OurDepthwiseSeparableConv(in_chn, in_chn, kernel_size=3, stride=1, padding=1, residual=1, norm=None, noli=None),
-            OurDepthwiseSeparableConv(in_chn, in_chn * 4, kernel_size=3, stride=2, padding=1, residual=0, norm=norm),
-            OurDepthwiseSeparableConv(in_chn * 4, in_chn * 8, kernel_size=3, stride=2, padding=1, residual=0, norm=norm),
-            OurDepthwiseSeparableConv(in_chn * 8, in_chn * 64, kernel_size=3, stride=2, padding=1, residual=0, norm=norm),
-        ])
-        self.expand_factor = 64
-        # self.to_tokens = Rearrange("(b t) (c ef) h w -> (b t) c h w ef", ef=self.expand_factor, b=1)
-
-    def forward(self, inputs):
-        """
-        self = DWCNNTokenizer(13)
-        inputs = torch.rand(2, 5, 13, 16, 16)
-        self(inputs)
-        """
-        b, t, c, h, w = inputs.shape
-        inputs2d = einops.rearrange(inputs, "b t c h w -> (b t) c h w")
-        tokens2d = self.stem(inputs2d)
-        tokens = einops.rearrange(tokens2d, "(b t) (c ef) h w -> b t c h w ef", b=b, t=t, ef=self.expand_factor)
-        return tokens
-
-
 class MultimodalTransformer(pl.LightningModule):
     """
     CommandLine:
@@ -181,6 +149,7 @@ class MultimodalTransformer(pl.LightningModule):
         >>> self = MultimodalTransformer(arch_name='smt_it_joint_p8',
         >>>                              input_channels=datamodule.input_channels,
         >>>                              input_stats=dataset_stats,
+        >>>                              classes=datamodule.classes,
         >>>                              change_loss='dicefocal',
         >>>                              attention_impl='performer')
         >>> device = nh.XPU.coerce('cpu').main_device
@@ -236,6 +205,7 @@ class MultimodalTransformer(pl.LightningModule):
         parser.add_argument("--dropout", default=0.1, type=float)
         parser.add_argument("--global_class_weight", default=1.0, type=float)
         parser.add_argument("--global_change_weight", default=1.0, type=float)
+        parser.add_argument("--global_saliency_weight", default=0.0, type=float)
 
         parser.add_argument("--change_loss", default='cce')
         parser.add_argument("--class_loss", default='focal')
@@ -274,9 +244,9 @@ class MultimodalTransformer(pl.LightningModule):
                  global_class_weight=1.0,
                  global_change_weight=1.0,
                  global_saliency_weight=0.0,
-                 change_head_hidden=2,
-                 class_head_hidden=2,
-                 saliency_head_hidden=2,
+                 change_head_hidden=1,
+                 class_head_hidden=1,
+                 saliency_head_hidden=1,
                  change_loss='cce',
                  class_loss='focal',
                  saliency_loss='focal',
@@ -321,6 +291,7 @@ class MultimodalTransformer(pl.LightningModule):
 
         self.global_class_weight = global_class_weight
         self.global_change_weight = global_change_weight
+        self.global_saliency_weight = global_saliency_weight
         self.positive_change_weight = positive_change_weight
         self.negative_change_weight = negative_change_weight
 
@@ -334,6 +305,8 @@ class MultimodalTransformer(pl.LightningModule):
         # hueristic_occluded_keys = {
         # }
 
+        # FIXME: case sensitivity
+
         hueristic_ignore_keys = {
             'clouds', 'occluded',
             'ignore', 'unknown',
@@ -344,15 +317,20 @@ class MultimodalTransformer(pl.LightningModule):
         self.foreground_classes = (all_keys - self.background_classes) - self.ignore_classes
         # hueristic_ignore_keys.update(hueristic_occluded_keys)
 
+        self.saliency_num_classes = 2
+
         if isinstance(saliency_weights, str):
             if saliency_weights == 'auto':
                 bg_freq = sum(class_freq.get(k, 0) for k in self.background_classes)
                 fg_freq = sum(class_freq.get(k, 0) for k in self.foreground_classes)
                 bg_weight = 1.
                 fg_weight = bg_freq / (fg_freq + 1)
-                saliency_weights = torch.Tensor([bg_weight, fg_weight, 0.0])
-                total_freq = np.array(list())
-                cat_weights = _class_weights_from_freq(total_freq)
+                fg_bg_weights = [bg_weight, fg_weight]
+                _w = fg_bg_weights + ([0.0] * (self.saliency_num_classes - len(fg_bg_weights)))
+                saliency_weights = torch.Tensor(_w)
+                # total_freq = np.array(list())
+                # print('total_freq = {!r}'.format(total_freq))
+                # cat_weights = _class_weights_from_freq(total_freq)
             else:
                 raise KeyError(saliency_weights)
         else:
@@ -432,6 +410,12 @@ class MultimodalTransformer(pl.LightningModule):
         })
 
         self.change_metrics = nn.ModuleDict({
+            # "acc": torchmetrics.Accuracy(),
+            # "iou": torchmetrics.IoU(2),
+            "f1": torchmetrics.F1(),
+        })
+
+        self.saliency_metrics = nn.ModuleDict({
             # "acc": torchmetrics.Accuracy(),
             # "iou": torchmetrics.IoU(2),
             "f1": torchmetrics.F1(),
@@ -517,6 +501,7 @@ class MultimodalTransformer(pl.LightningModule):
         # self.class_clf = nn.LazyLinear(len(self.classes))  # category classifier
         self.change_head_hidden = change_head_hidden
         self.class_head_hidden = class_head_hidden
+        self.saliency_head_hidden = saliency_head_hidden
 
         self.change_clf = nh.layers.MultiLayerPerceptronNd(
             dim=0,
@@ -539,7 +524,7 @@ class MultimodalTransformer(pl.LightningModule):
             dim=0,
             in_channels=feat_dim,
             hidden_channels=self.saliency_head_hidden,
-            out_channels=3,  # saliency will be trinary with an "other" class
+            out_channels=self.saliency_num_classes,  # saliency will be trinary with an "other" class
             norm=None
         )
 
@@ -650,10 +635,12 @@ class MultimodalTransformer(pl.LightningModule):
         # Pass the final fused space-time feature to a classifier
         change_logits = self.change_clf(spacetime_fused_features[:, 1:])
         class_logits = self.class_clf(spacetime_fused_features)
+        saliency_logits = self.saliency_clf(spacetime_fused_features)
 
         logits = {
             'change': change_logits,
             'class': class_logits,
+            'saliency': saliency_logits,
         }
         return logits
 
@@ -702,10 +689,10 @@ class MultimodalTransformer(pl.LightningModule):
             >>> self = methods.MultimodalTransformer(
             >>>     # ===========
             >>>     # Backbone
-            >>>     #arch_name='smt_it_joint_p8',
+            >>>     arch_name='smt_it_joint_p8',
             >>>     #arch_name='smt_it_stm_p8',
-            >>>     #attention_impl='performer',
-            >>>     arch_name='deit',
+            >>>     attention_impl='performer',
+            >>>     #arch_name='deit',
             >>>     # ===========
             >>>     # Change Loss
             >>>     change_loss='dicefocal',
@@ -715,6 +702,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     # ===========
             >>>     # Class Loss
             >>>     global_class_weight=1.00,
+            >>>     global_saliency_weight=1.00,
             >>>     #class_loss='cce',
             >>>     class_loss='focal',
             >>>     class_weights='auto',
@@ -729,8 +717,17 @@ class MultimodalTransformer(pl.LightningModule):
             >>> # Run one visualization
             >>> loader = datamodule.train_dataloader()
             >>> batch = next(iter(loader))
+            >>> # Show batch before we do anything
+            >>> import kwplot
+            >>> kwplot.autompl(force='Qt5Agg')
+            >>> canvas = datamodule.draw_batch(batch, max_channels=1, overlay_on_image=0)
+            >>> kwplot.imshow(canvas)
             >>> device = 0
             >>> self.overfit(batch)
+
+        nh.initializers.KaimingNormal()(self)
+
+
         """
         import kwplot
         from watch.utils.slugify_ext import smart_truncate
@@ -738,15 +735,11 @@ class MultimodalTransformer(pl.LightningModule):
         from kwplot.mpl_make import render_figure_to_image
         import xdev
         import kwimage
-        # from os.path import join
-        kwplot.autompl(force='Qt5Agg')
 
         sns = kwplot.autosns()
         datamodule = self.datamodule
-
         device = 1
         self = self.to(device)
-
         # loader = datamodule.train_dataloader()
         # batch = next(iter(loader))
         walker = ub.IndexableWalker(batch)
@@ -764,7 +757,7 @@ class MultimodalTransformer(pl.LightningModule):
         # dpath = ub.ensuredir('_overfit_viz09')
 
         optim_cls, optim_kw = nh.api.Optimizer.coerce(
-            optim='RAdam', lr=1e-3, weight_decay=1e-4,
+            optim='RAdam', lr=1e-0, weight_decay=1e-9,
             params=self.parameters())
 
         #optim = torch.optim.SGD(self.parameters(), lr=1e-4)
@@ -867,10 +860,14 @@ class MultimodalTransformer(pl.LightningModule):
         outputs = {}
 
         item_losses = []
+
         item_changes_truth = []
         item_classes_truth = []
+        item_saliency_truth = []
+
         item_change_probs = []
         item_class_probs = []
+        item_saliency_probs = []
         for item in batch:
 
             # For now, just reconstruct the stacked input, but
@@ -890,7 +887,7 @@ class MultimodalTransformer(pl.LightningModule):
                 frame_ims.append(mode_val)
                 frame_ignores.append(frame['ignore'])
 
-            # Because we are not collating we need to add a batch dimension
+            # Because we are nt collating we need to add a batch dimension
             # ignores = torch.stack(frame_ignores)[None, ...]
             images = torch.stack(frame_ims)[None, ...]
 
@@ -900,24 +897,23 @@ class MultimodalTransformer(pl.LightningModule):
 
             # TODO: it may be faster to compute loss at the downsampled
             # resolution.
-            class_logits_small = logits['class']
-            change_logits_small = logits['change']
+            resampled_logits = {}
+            # Loop over change, categories, saliency
+            for logit_key, logit_val in logits.items():
+                _tmp = einops.rearrange(logit_val, 'b t h w c -> b (t c) h w')
+                _tmp2 = nn.functional.interpolate(
+                    _tmp, [H, W], mode="bilinear", align_corners=True)
+                resampled = einops.rearrange(_tmp2, 'b (t c) h w -> b t h w c', c=logit_val.shape[4])
+                resampled_logits[logit_key] = resampled
 
-            _tmp = einops.rearrange(change_logits_small, 'b t h w c -> b (t c) h w')
-            _tmp2 = nn.functional.interpolate(
-                _tmp, [H, W], mode="bilinear", align_corners=True)
-            change_logits = einops.rearrange(_tmp2, 'b (t c) h w -> b t h w c', c=change_logits_small.shape[4])
-
-            _tmp = einops.rearrange(class_logits_small, 'b t h w c -> b (t c) h w')
-            _tmp2 = nn.functional.interpolate(
-                _tmp, [H, W], mode="bilinear", align_corners=True)
-            class_logits = einops.rearrange(_tmp2, 'b (t c) h w -> b t h w c', c=class_logits_small.shape[4])
+            class_logits = resampled_logits['class']
+            change_logits = resampled_logits['change']
+            saliency_logits = resampled_logits['saliency']
 
             # Remove batch index in both cases
-            # change_prob = change_logits.detach().sigmoid()[0]
             change_prob = change_logits.detach().softmax(dim=4)[0, ..., 1]
-
             class_prob = class_logits.detach().sigmoid()[0]
+            saliency_prob = saliency_logits.detach().sigmoid()[0]
 
             # Hack the change prob so it works with our currently binary
             # visualizations
@@ -925,6 +921,7 @@ class MultimodalTransformer(pl.LightningModule):
 
             item_change_probs.append(change_prob)
             item_class_probs.append(class_prob)
+            item_saliency_probs.append(saliency_prob)
 
             item_loss_parts = {}
 
@@ -939,87 +936,125 @@ class MultimodalTransformer(pl.LightningModule):
                 ])[None, ...]
                 item_classes_truth.append(true_class)  # [B, T, H, W, C]
 
+                try:
+                    self._fg_idxs
+                    # self._bg_idxs
+                except AttributeError:
+                    fg_idxs = sorted(ub.take(self.classes.node_to_idx, self.foreground_classes))
+                    # bg_idxs = sorted(ub.take(self.classes.node_to_idx, self.background_classes))
+                    fg_idxs = np.expand_dims(np.array(fg_idxs), (0, 1, 2, 3))
+                    self._fg_idxs = torch.Tensor(fg_idxs).to(true_class.device)
+                    # true_class[..., None] == torch.Tensor(self._fg_idxs)
+                    # self._bg_idxs = bg_idxs
+
+                true_saliency = (true_class[..., None] == self._fg_idxs).any(dim=4).long()
+                item_saliency_truth.append(true_saliency)
+
                 # compute criterion
-                # print('change_logits.shape = {!r}'.format(change_logits.shape))
-                # print('true_changes.shape = {!r}'.format(true_changes.shape))
                 # valids_ = (1 - ignores)[..., None]  # [B, T, H, W, 1]
 
                 # Hack: change the 1-logit binary case to 2 class binary case
-                change_pred_input = einops.rearrange(
-                    change_logits,
-                    'b t h w c -> ' + self.change_criterion_logit_shape).contiguous()
-                if self.change_criterion_target_encoding == 'index':
-                    change_true_cxs = true_changes.long()
-                    change_true_input = einops.rearrange(
-                        change_true_cxs,
-                        'b t h w -> ' + self.change_criterion_target_shape).contiguous()
-                elif self.change_criterion_target_encoding == 'onehot':
-                    # Note: 1HE is much easier to work with
-                    change_true_ohe = kwarray.one_hot_embedding(true_changes.long(), 2, dim=-1)
-                    change_true_input = einops.rearrange(
-                        change_true_ohe,
-                        'b t h w c -> ' + self.change_criterion_target_shape).contiguous()
-                else:
-                    raise KeyError(self.change_criterion_target_encoding)
+                need_change_loss   = 1 or self.global_change_weight > 0
+                need_class_loss    = 1 or self.global_class_weight > 0
+                need_saliency_loss = 1 or self.global_saliency_weight > 0
 
-                # TODO: it would be nice instead of having a valid mask, if we
-                # had a pixelwise weighting of how much we care about each
-                # pixel. This would let us upweight particular instances
-                # and also ignore regions by setting the weights to zero.
-                # mask = einops.rearrange(valids_, 'b t h w c -> ' + self.change_criterion_logit_shape, c=1)
-                # print('change_pred_input.shape = {!r}'.format(change_pred_input.shape))
-                # print('change_true_input.shape = {!r}'.format(change_true_input.shape))
-                change_loss = self.change_criterion(
-                    change_pred_input,
-                    change_true_input
-                )
-                # num_change_states = 2
-                # true_change_ohe = kwarray.one_hot_embedding(true_changes.long(), num_change_states, dim=-1).float()
-                # change_loss = self.change_criterion(change_logits, true_change_ohe).mean()
-                # change_loss = self.change_criterion(change_logits, true_changes.float()).mean()
-                item_loss_parts['change'] = self.global_change_weight * change_loss
+                if need_change_loss:
+                    change_pred_input = einops.rearrange(
+                        change_logits,
+                        'b t h w c -> ' + self.change_criterion_logit_shape).contiguous()
+                    if self.change_criterion_target_encoding == 'index':
+                        change_true_cxs = true_changes.long()
+                        change_true_input = einops.rearrange(
+                            change_true_cxs,
+                            'b t h w -> ' + self.change_criterion_target_shape).contiguous()
+                    elif self.change_criterion_target_encoding == 'onehot':
+                        # Note: 1HE is much easier to work with
+                        change_true_ohe = kwarray.one_hot_embedding(true_changes.long(), 2, dim=-1)
+                        change_true_input = einops.rearrange(
+                            change_true_ohe,
+                            'b t h w c -> ' + self.change_criterion_target_shape).contiguous()
+                    else:
+                        raise KeyError(self.change_criterion_target_encoding)
+
+                    # TODO: it would be nice instead of having a valid mask, if we
+                    # had a pixelwise weighting of how much we care about each
+                    # pixel. This would let us upweight particular instances
+                    # and also ignore regions by setting the weights to zero.
+                    # mask = einops.rearrange(valids_, 'b t h w c -> ' + self.change_criterion_logit_shape, c=1)
+                    change_loss = self.change_criterion(
+                        change_pred_input,
+                        change_true_input
+                    )
+                    # num_change_states = 2
+                    # true_change_ohe = kwarray.one_hot_embedding(true_changes.long(), num_change_states, dim=-1).float()
+                    # change_loss = self.change_criterion(change_logits, true_change_ohe).mean()
+                    # change_loss = self.change_criterion(change_logits, true_changes.float()).mean()
+                    item_loss_parts['change'] = self.global_change_weight * change_loss
 
                 # Class loss part
-                class_pred_input = einops.rearrange(
-                    class_logits,
-                    'b t h w c -> ' + self.class_criterion_logit_shape).contiguous()
-                if self.class_criterion_target_encoding == 'index':
-                    class_true_cxs = true_class.long()
-                    class_true_input = einops.rearrange(
-                        class_true_cxs,
-                        'b t h w -> ' + self.class_criterion_target_shape).contiguous()
-                elif self.class_criterion_target_encoding == 'onehot':
-                    class_true_ohe = kwarray.one_hot_embedding(true_class.long(), len(self.classes), dim=-1)
-                    class_true_input = einops.rearrange(
-                        class_true_ohe,
-                        'b t h w c -> ' + self.class_criterion_target_shape).contiguous()
-                else:
-                    raise KeyError(self.class_criterion_target_encoding)
-                class_loss = self.class_criterion(
-                    class_pred_input,
-                    class_true_input
-                )
-                item_loss_parts['class'] = self.global_class_weight * class_loss
+                if need_class_loss:
+                    class_pred_input = einops.rearrange(
+                        class_logits,
+                        'b t h w c -> ' + self.class_criterion_logit_shape).contiguous()
+                    if self.class_criterion_target_encoding == 'index':
+                        class_true_cxs = true_class.long()
+                        class_true_input = einops.rearrange(
+                            class_true_cxs,
+                            'b t h w -> ' + self.class_criterion_target_shape).contiguous()
+                    elif self.class_criterion_target_encoding == 'onehot':
+                        class_true_ohe = kwarray.one_hot_embedding(true_class.long(), len(self.classes), dim=-1)
+                        class_true_input = einops.rearrange(
+                            class_true_ohe,
+                            'b t h w c -> ' + self.class_criterion_target_shape).contiguous()
+                    else:
+                        raise KeyError(self.class_criterion_target_encoding)
+                    class_loss = self.class_criterion(
+                        class_pred_input,
+                        class_true_input
+                    )
+                    item_loss_parts['class'] = self.global_class_weight * class_loss
 
-                # true_class_ohe = kwarray.one_hot_embedding(true_class.long(), self.num_classes, dim=-1).float()
-                # class_loss = self.class_criterion(class_logits, true_class_ohe).mean()
-                # # class_loss = torch.nn.functional.binary_cross_entropy_with_logits(class_logits, true_class_ohe)
-                # item_loss_parts['class'] = self.global_class_weight * class_loss
+                # Saliency loss part
+                if need_saliency_loss:
+                    saliency_pred_input = einops.rearrange(
+                        saliency_logits,
+                        'b t h w c -> ' + self.saliency_criterion_logit_shape).contiguous()
+                    if self.saliency_criterion_target_encoding == 'index':
+                        saliency_true_cxs = true_saliency.long()
+                        saliency_true_input = einops.rearrange(
+                            saliency_true_cxs,
+                            'b t h w -> ' + self.saliency_criterion_target_shape).contiguous()
+                    elif self.saliency_criterion_target_encoding == 'onehot':
+                        saliency_true_ohe = kwarray.one_hot_embedding(true_saliency.long(), self.saliency_num_classes, dim=-1)
+                        saliency_true_input = einops.rearrange(
+                            saliency_true_ohe,
+                            'b t h w c -> ' + self.saliency_criterion_target_shape).contiguous()
+                    else:
+                        raise KeyError(self.saliency_criterion_target_encoding)
+                    saliency_loss = self.saliency_criterion(
+                        saliency_pred_input,
+                        saliency_true_input
+                    )
+                    item_loss_parts['saliency'] = self.global_saliency_weight * saliency_loss
 
                 item_losses.append(item_loss_parts)
 
         outputs['change_probs'] = item_change_probs
         outputs['class_probs'] = item_class_probs
+        outputs['saliency_probs'] = item_saliency_probs
 
         if with_loss:
             total_loss = sum(
                 val for parts in item_losses for val in parts.values())
 
-            all_pred_change = torch.stack(item_change_probs)
             all_true_change = torch.cat(item_changes_truth, dim=0)
+            all_pred_change = torch.stack(item_change_probs)
 
             all_true_class = torch.cat(item_classes_truth, dim=0).view(-1)
             all_pred_class = torch.stack(item_class_probs).view(-1, self.num_classes)
+
+            all_true_saliency = torch.cat(item_saliency_truth, dim=0).view(-1)
+            all_pred_saliency = torch.stack(item_saliency_probs).view(-1, self.saliency_num_classes)
 
             # compute metrics
             if self.trainer is not None:
@@ -1033,6 +1068,10 @@ class MultimodalTransformer(pl.LightningModule):
                 for key, metric in self.class_metrics.items():
                     val = metric(all_pred_class, all_true_class)
                     item_metrics[f'{stage}_class_{key}'] = val
+
+                for key, metric in self.saliency_metrics.items():
+                    val = metric(all_pred_saliency, all_true_saliency)
+                    item_metrics[f'{stage}_saliency_{key}'] = val
 
                 for key, val in item_metrics.items():
                     self.log(key, val, prog_bar=True)
@@ -1331,3 +1370,124 @@ def coerce_criterion(loss_code, weights):
         'target_shape': target_shape,
     }
     return criterion_info
+
+
+class OurDepthwiseSeparableConv(nn.Module):
+    """ DepthwiseSeparable block
+    Used for DS convs in MobileNet-V1 and in the place of IR blocks that have no expansion
+    (factor of 1.0). This is an alternative to having a IR with an optional first pw conv.
+
+    From timm
+
+    Example:
+        from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+
+        norm = nh.layers.rectify_normalizer(in_channels=3, key={'type': 'group', 'num_groups': 1})
+        norm(torch.rand(2, 1))
+
+        self = OurDepthwiseSeparableConv(11, 13, kernel_size=3, padding=1, residual=1)
+        x = torch.rand(2, 11, 3, 3)
+        y = self.forward(x)
+
+        z = nh.OutputShapeFor(self.conv_dw)((2, 11, 1, 1))
+        print('z = {!r}'.format(z))
+        nh.OutputShapeFor(self.conv_pw)(z)
+
+        in_modes = 13
+        self =
+
+        tokenizer = nn.Sequential(*[
+            OurDepthwiseSeparableConv(in_modes, in_modes, kernel_size=3, stride=1, padding=1, residual=1, norm=None, noli=None),
+            OurDepthwiseSeparableConv(in_modes, in_modes * 2, kernel_size=3, stride=2, padding=1, residual=0, norm=None),
+            OurDepthwiseSeparableConv(in_modes * 2, in_modes * 4, kernel_size=3, stride=2, padding=1, residual=0),
+            OurDepthwiseSeparableConv(in_modes * 4, in_modes * 8, kernel_size=3, stride=2, padding=1, residual=0),
+        ])
+
+        tokenizer = nn.Sequential(*[
+            OurDepthwiseSeparableConv(in_modes, in_modes, kernel_size=3, stride=1, padding=1, residual=1),
+            OurDepthwiseSeparableConv(in_modes, in_modes * 2, kernel_size=3, stride=2, padding=1, residual=0),
+            OurDepthwiseSeparableConv(in_modes * 2, in_modes * 4, kernel_size=3, stride=2, padding=1, residual=0),
+            OurDepthwiseSeparableConv(in_modes * 4, in_modes * 8, kernel_size=3, stride=2, padding=1, residual=0),
+        ])
+    """
+    def __init__(
+            self, in_chs, out_chs, kernel_size=3, stride=1, dilation=1,
+            padding=0, residual=False, pw_kernel_size=1, norm='group',
+            noli='swish', drop_path_rate=0.):
+
+        super().__init__()
+        if norm == 'auto':
+            norm = {'type': 'group', 'num_groups': 'auto'}
+
+        self.has_residual = (stride == 1 and in_chs == out_chs) and residual
+        self.drop_path_rate = drop_path_rate
+
+        conv_cls = nh.layers.rectify_conv(dim=2)
+        # self.conv_dw = create_conv2d(
+        #     in_chs, in_chs, kernel_size, stride=stride, dilation=dilation, padding=pad_type, depthwise=True)
+        self.conv_dw = conv_cls(
+            in_chs, in_chs, kernel_size, stride=stride, dilation=dilation,
+            padding=padding, groups=in_chs)  # depthwise
+
+        self.bn1 = nh.layers.rectify_normalizer(in_channels=in_chs, key=norm)
+        if self.bn1 is None:
+            self.bn1 = nh.layers.Identity()
+        self.act1 = nh.layers.rectify_nonlinearity(noli)
+        if self.act1 is None:
+            self.act1 = nh.layers.Identity()
+
+        self.conv_pw = conv_cls(in_chs, out_chs, pw_kernel_size, padding=0)
+        # self.bn2 = norm_layer(out_chs)
+        self.bn2 = nh.layers.rectify_normalizer(in_channels=out_chs, key=norm)
+        if self.bn2 is None:
+            self.bn2 = nh.layers.Identity()
+
+    def feature_info(self, location):
+        if location == 'expansion':  # after SE, input to PW
+            info = dict(module='conv_pw', hook_type='forward_pre', num_chs=self.conv_pw.in_channels)
+        else:  # location == 'bottleneck', block output
+            info = dict(module='', hook_type='', num_chs=self.conv_pw.out_channels)
+        return info
+
+    def forward(self, x):
+        shortcut = x
+
+        x = self.conv_dw(x)
+        x = self.bn1(x)
+        x = self.act1(x)
+
+        x = self.conv_pw(x)
+        x = self.bn2(x)
+
+        if self.has_residual:
+            if self.drop_path_rate > 0.:
+                x = drop_path(x, self.drop_path_rate, self.training)
+            x += shortcut
+        return x
+
+
+class DWCNNTokenizer(nn.Module):
+    def __init__(self, in_chn, norm='auto'):
+        super().__init__()
+        self.norm = norm
+        # self.to_images = Rearrange("b t c h w -> (b t) c h w")
+        self.stem = nn.Sequential(*[
+            OurDepthwiseSeparableConv(in_chn, in_chn, kernel_size=3, stride=1, padding=1, residual=1, norm=None, noli=None),
+            OurDepthwiseSeparableConv(in_chn, in_chn * 4, kernel_size=3, stride=2, padding=1, residual=0, norm=norm),
+            OurDepthwiseSeparableConv(in_chn * 4, in_chn * 8, kernel_size=3, stride=2, padding=1, residual=0, norm=norm),
+            OurDepthwiseSeparableConv(in_chn * 8, in_chn * 64, kernel_size=3, stride=2, padding=1, residual=0, norm=norm),
+        ])
+        self.expand_factor = 64
+        # self.to_tokens = Rearrange("(b t) (c ef) h w -> (b t) c h w ef", ef=self.expand_factor, b=1)
+
+    def forward(self, inputs):
+        """
+        self = DWCNNTokenizer(13)
+        inputs = torch.rand(2, 5, 13, 16, 16)
+        self(inputs)
+        """
+        b, t, c, h, w = inputs.shape
+        inputs2d = einops.rearrange(inputs, "b t c h w -> (b t) c h w")
+        tokens2d = self.stem(inputs2d)
+        tokens = einops.rearrange(tokens2d, "(b t) (c ef) h w -> b t c h w ef", b=b, t=t, ef=self.expand_factor)
+        return tokens

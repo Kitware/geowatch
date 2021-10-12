@@ -423,7 +423,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             # - [ ] per-frame semenatic segmentation
             item_output = {}
             if outputs is not None:
-                for k in ['change_probs', 'class_probs']:
+                for k in ['change_probs', 'class_probs', 'saliency_probs']:
                     if k in outputs:
                         item_output[k] = outputs[k][item_idx].data.cpu().numpy()
 
@@ -1553,11 +1553,12 @@ class KWCocoVideoDataset(data.Dataset):
 
             # TODO: clean up logic
             key = 'class_probs'
-            if item_output and key in item_output:
+            overlay_index = 0
+            if item_output and  key in item_output:
                 if overlay_on_image:
-                    norm_signal = chan_rows[0]['norm_signal']
+                    norm_signal = chan_rows[overlay_index]['norm_signal']
                 else:
-                    norm_signal = np.zeros_like(chan_rows[0]['norm_signal'])
+                    norm_signal = np.zeros_like(chan_rows[min(overlay_index, len(chan_rows) - 1)]['norm_signal'])
                 x = item_output[key][frame_idx]
                 class_probs = einops.rearrange(x, 'h w c -> c h w')
                 class_heatmap = kwimage.Heatmap(class_probs=class_probs, classes=classes)
@@ -1572,7 +1573,8 @@ class KWCocoVideoDataset(data.Dataset):
                 vertical_stack.append(pred_part)
 
             key = 'change_probs'
-            if item_output and key in item_output:
+            overlay_index = 1
+            if item_output and  key in item_output:
                 # Make a probability heatmap we can either display
                 # independently or overlay on a rendered channel
                 if frame_idx == 0:
@@ -1587,7 +1589,7 @@ class KWCocoVideoDataset(data.Dataset):
                     pred_raw = item_output[key][frame_idx - 1]
                     # Draw predictions on the first item
                     pred_mask = kwimage.make_heatmask(pred_raw)
-                    norm_signal = chan_rows[1 if len(chan_rows) > 1 else 0]['norm_signal']
+                    norm_signal = chan_rows[min(overlay_index, len(chan_rows) - 1)]['norm_signal']
                     if overlay_on_image:
                         norm_signal = norm_signal
                     else:
@@ -1601,6 +1603,25 @@ class KWCocoVideoDataset(data.Dataset):
                     pred_part = kwimage.draw_text_on_image(
                         pred_part, pred_text, (1, 1), valign='top',
                         color='dodgerblue', border=3)
+                vertical_stack.append(pred_part)
+
+            key = 'saliency_probs'
+            if item_output and  key in item_output:
+                if overlay_on_image:
+                    norm_signal = chan_rows[0]['norm_signal']
+                else:
+                    norm_signal = np.zeros_like(chan_rows[min(overlay_index, len(chan_rows) - 1)]['norm_signal'])
+                x = item_output[key][frame_idx]
+                saliency_probs = einops.rearrange(x, 'h w c -> c h w')
+                saliency_heatmap = kwimage.Heatmap(class_probs=saliency_probs)
+                pred_part = saliency_heatmap.draw_on(norm_signal, with_alpha=0.7)
+                # TODO: we might want to overlay the prediction on one or
+                # all of the channels
+                pred_part = kwimage.imresize(pred_part, max_dim=max_dim).clip(0, 1)
+                pred_text = f'pred saliency t={frame_idx}'
+                pred_part = kwimage.draw_text_on_image(
+                    pred_part, pred_text, (1, 1), valign='top',
+                    color='dodgerblue', border=3)
                 vertical_stack.append(pred_part)
 
             vertical_stack = [kwimage.ensure_uint255(p) for p in vertical_stack]
