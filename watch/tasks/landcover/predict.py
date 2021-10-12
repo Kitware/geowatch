@@ -12,6 +12,7 @@ from tqdm import tqdm
 from . import detector
 from .datasets import L8asWV3Dataset, S2asWV3Dataset, S2Dataset
 from .utils import setup_logging
+from watch.utils import util_parallel
 
 log = logging.getLogger(__name__)
 
@@ -85,7 +86,7 @@ def predict(dataset, deployed, output, num_workers=0, device='auto'):
     dataloader_iter = iter(dataloader)
 
     # Create a queue that writes data to disk in the background
-    writer = BlockingJobQueue(max_workers=num_workers)
+    writer = util_parallel.BlockingJobQueue(max_workers=num_workers)
 
     for img_info in tqdm(dataloader_iter, miniters=1):
         try:
@@ -145,38 +146,6 @@ def _predict_single(img_info, model, model_outputs,
 
     output_dset.imgs[gid]['auxiliary'].append(info)
     return (pred_filename, pred)
-
-
-class BlockingJobQueue(object):
-    """
-    Helper to execute some number of processes in a separate thread
-    """
-    def __init__(self, mode='thread', max_workers=0):
-        import ubelt as ub
-        self.max_workers = max_workers
-        self.executor = ub.Executor(mode=mode, max_workers=max_workers)
-        self.jobs = []
-
-    def _wait_for_room(self):
-        # Wait until the pool has available workers
-        while len(self.jobs) >= max(1, self.max_workers):
-            new_active_jobs = []
-            for job in self.jobs:
-                if job.running():
-                    new_active_jobs.append(job)
-                else:
-                    # Check that the result is ok
-                    job.result()
-            self.jobs = new_active_jobs
-
-    def wait_until_finished(self):
-        for job in self.jobs:
-            job.result()
-
-    def submit(self, func, *args, **kwargs):
-        self._wait_for_room()
-        job = self.executor.submit(func, *args, **kwargs)
-        self.jobs.append(job)
 
 
 def _write_worker(pred_filename, pred):
