@@ -73,6 +73,8 @@ class kwcoco_dataset(torch.utils.data.Dataset):
                 A.RandomBrightnessContrast(brightness_by_max=False, always_apply=True)
         ])
 
+        self.mode = 'train'
+
     def __len__(self,):
         return len(self.dset_ids)
 
@@ -94,6 +96,10 @@ class kwcoco_dataset(torch.utils.data.Dataset):
         return image_id, image_info, image
 
     def __getitem__(self, idx):
+        if self.mode == 'test':
+            # hack
+            return self.get_img(idx)
+
         # get image1 id and the video it is associated with
         img1_id = self.dset_ids[idx]
         video = [ y for y in self.videos if img1_id in self.dset.index.vidid_to_gids[y] ][0]
