@@ -174,10 +174,15 @@ class MultimodalTransformer(pl.LightningModule):
         >>> datamodule = datamodules.KWCocoVideoDataModule(
         >>>     train_dataset='special:vidshapes8', num_workers=0)
         >>> datamodule.setup('fit')
+        >>> dataset_stats = datamodule.torch_datasets['train'].cached_dataset_stats()
         >>> loader = datamodule.train_dataloader()
         >>> batch = next(iter(loader))
         >>> #self = MultimodalTransformer(arch_name='smt_it_joint_p8')
-        >>> self = MultimodalTransformer(arch_name='smt_it_joint_p8', input_channels=datamodule.input_channels, change_loss='dicefocal', attention_impl='performer')
+        >>> self = MultimodalTransformer(arch_name='smt_it_joint_p8',
+        >>>                              input_channels=datamodule.input_channels,
+        >>>                              input_stats=dataset_stats,
+        >>>                              change_loss='dicefocal',
+        >>>                              attention_impl='performer')
         >>> device = nh.XPU.coerce('cpu').main_device
         >>> self = self.to(device)
         >>> # Run forward pass
@@ -191,6 +196,67 @@ class MultimodalTransformer(pl.LightningModule):
         >>> print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
     """
 
+    @classmethod
+    def add_argparse_args(cls, parent_parser):
+        """
+        Example:
+            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> from watch.utils.configargparse_ext import ArgumentParser
+            >>> cls = MultimodalTransformer
+            >>> parent_parser = ArgumentParser(formatter_class='defaults')
+            >>> cls.add_argparse_args(parent_parser)
+            >>> parent_parser.print_help()
+            >>> parent_parser.parse_known_args()
+        """
+        parser = parent_parser.add_argument_group("MultimodalTransformer")
+        parser.add_argument("--optimizer", default='RAdam', type=str, help='Optimizer name supported by the netharn API')
+        parser.add_argument("--learning_rate", default=1e-3, type=float)
+        parser.add_argument("--weight_decay", default=0., type=float)
+
+        parser.add_argument("--positive_change_weight", default=1.0, type=float)
+        parser.add_argument("--negative_change_weight", default=1.0, type=float)
+        parser.add_argument("--class_weights", default='auto', type=str, help='class weighting strategy')
+        parser.add_argument("--saliency_weights", default='auto', type=str, help='class weighting strategy')
+
+        # Model names define the transformer encoder used by the method
+        available_encoders = list(transformer.encoder_configs.keys()) + ['deit']
+
+        parser.add_argument(
+            "--tokenizer", default='rearrange', type=str,
+            choices=['dwcnn', 'rearrange'], help=ub.paragraph(
+                '''
+                How image patches aare broken into tokens.
+                rearrange just shuffles raw pixels. dwcnn is a is a mobile
+                convolutional stem.
+                '''))
+        parser.add_argument("--token_norm", default='auto', type=str,
+                            choices=['auto', 'group', 'batch'])
+        parser.add_argument("--arch_name", default='smt_it_stm_p8', type=str,
+                            choices=available_encoders)
+        parser.add_argument("--dropout", default=0.1, type=float)
+        parser.add_argument("--global_class_weight", default=1.0, type=float)
+        parser.add_argument("--global_change_weight", default=1.0, type=float)
+
+        parser.add_argument("--change_loss", default='cce')
+        parser.add_argument("--class_loss", default='focal')
+        parser.add_argument("--saliency_loss", default='focal', help='saliency is trained to match any "positive/foreground/salient" class')
+
+        parser.add_argument("--change_head_hidden", default=2, type=int, help='number of hidden layers in the change head')
+        parser.add_argument("--class_head_hidden", default=2, type=int, help='number of hidden layers in the category head')
+        parser.add_argument("--saliency_head_hidden", default=2, type=int, help='number of hidden layers in the saliency head')
+
+        # parser.add_argument("--input_scale", default=2000.0, type=float)
+        parser.add_argument("--window_size", default=8, type=int)
+        parser.add_argument(
+            "--attention_impl", default='exact', type=str, help=ub.paragraph(
+                '''
+                Implementation for attention computation.
+                Can be:
+                'exact' - the original O(n^2) method.
+                'performer' - a linear approximation.
+                '''))
+        return parent_parser
+
     def __init__(self,
                  arch_name='smt_it_stm_p8',
                  dropout=0.0,
@@ -198,6 +264,7 @@ class MultimodalTransformer(pl.LightningModule):
                  learning_rate=1e-3,
                  weight_decay=0.,
                  class_weights='auto',
+                 saliency_weights='auto',
                  positive_change_weight=1.,
                  negative_change_weight=1.,
                  input_stats=None,
@@ -206,10 +273,13 @@ class MultimodalTransformer(pl.LightningModule):
                  window_size=8,
                  global_class_weight=1.0,
                  global_change_weight=1.0,
+                 global_saliency_weight=0.0,
                  change_head_hidden=2,
                  class_head_hidden=2,
+                 saliency_head_hidden=2,
                  change_loss='cce',
                  class_loss='focal',
+                 saliency_loss='focal',
                  tokenizer='rearrange',
                  token_norm='auto',
                  classes=10):
@@ -257,11 +327,41 @@ class MultimodalTransformer(pl.LightningModule):
         self.class_loss = class_loss
         self.change_loss = change_loss
 
+        hueristic_background_keys = {
+            'background', 'No Activity', 'Post Construction',
+        }
+
+        # hueristic_occluded_keys = {
+        # }
+
+        hueristic_ignore_keys = {
+            'clouds', 'occluded',
+            'ignore', 'unknown',
+        }
+        all_keys = set(self.class_freq.keys())
+        self.background_classes = all_keys & hueristic_background_keys
+        self.ignore_classes = all_keys & hueristic_ignore_keys
+        self.foreground_classes = (all_keys - self.background_classes) - self.ignore_classes
+        # hueristic_ignore_keys.update(hueristic_occluded_keys)
+
+        if isinstance(saliency_weights, str):
+            if saliency_weights == 'auto':
+                bg_freq = sum(class_freq.get(k, 0) for k in self.background_classes)
+                fg_freq = sum(class_freq.get(k, 0) for k in self.foreground_classes)
+                bg_weight = 1.
+                fg_weight = bg_freq / (fg_freq + 1)
+                saliency_weights = torch.Tensor([bg_weight, fg_weight, 0.0])
+                total_freq = np.array(list())
+                cat_weights = _class_weights_from_freq(total_freq)
+            else:
+                raise KeyError(saliency_weights)
+        else:
+            raise NotImplementedError(saliency_weights)
+
         # criterion and metrics
         # TODO: parametarize loss criterions
         # For loss function experiments, see and work in
         # ~/code/watch/watch/tasks/fusion/methods/channelwise_transformer.py
-        import monai
         # self.change_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
         if isinstance(class_weights, str):
             if class_weights == 'auto':
@@ -277,16 +377,13 @@ class MultimodalTransformer(pl.LightningModule):
                     heuristic_weights = ub.dzip(catnames, cat_weights)
                 print('heuristic_weights = {}'.format(ub.repr2(heuristic_weights, nl=1)))
 
-                heuristic_weights.update({
-                    'ignore': 0.00,
-                    'clouds': 0.00,
-                    'Unknown' : 0.0,
-                    # 'background': 0.05,
-                    # 'No Activity'        : 0.003649,
-                    # 'Active Construction': 0.188011,
-                    # 'Site Preparation'   : 1.0,
-                    # 'Post Construction'  : 0.142857,
-                })
+                heuristic_weights.update({k: 0 for k in hueristic_ignore_keys})
+                # 'background': 0.05,
+                # 'No Activity'        : 0.003649,
+                # 'Active Construction': 0.188011,
+                # 'Site Preparation'   : 1.0,
+                # 'Post Construction'  : 0.142857,
+
                 # print('heuristic_weights = {}'.format(ub.repr2(heuristic_weights, nl=1, align=':')))
                 class_weights = []
                 for catname in self.classes:
@@ -301,85 +398,31 @@ class MultimodalTransformer(pl.LightningModule):
                 raise KeyError(class_weights)
         else:
             raise NotImplementedError(class_weights)
+
+        self.saliency_weights = saliency_weights
         self.class_weights = class_weights
         self.change_weights = torch.FloatTensor([
             self.negative_change_weight,
             self.positive_change_weight
         ])
 
-        def construct_loss(loss_code, weights):
-            if class_loss == 'cce':
-                criterion = torch.nn.CrossEntropyLoss(
-                    weight=weights, reduction='mean')
-                target_encoding = 'index'
-                logit_shape = '(b t h w) c'
-                target_shape = '(b t h w)'
-            elif class_loss == 'focal':
-                criterion = monai.losses.FocalLoss(
-                    reduction='mean', to_onehot_y=False, weight=weights)
+        _info = coerce_criterion(self.class_loss, self.class_weights)
+        self.class_criterion = _info['criterion']
+        self.class_criterion_target_encoding = _info['target_encoding']
+        self.class_criterion_logit_shape = _info['logit_shape']
+        self.class_criterion_target_shape = _info['target_shape']
 
-                target_encoding = 'onehot'
-                logit_shape = 'b c h w t'
-                target_shape = 'b c h w t'
+        _info = coerce_criterion(change_loss, self.change_weights)
+        self.change_criterion = _info['criterion']
+        self.change_criterion_target_encoding = _info['target_encoding']
+        self.change_criterion_logit_shape = _info['logit_shape']
+        self.change_criterion_target_shape = _info['target_shape']
 
-            elif self.change_loss.lower() == 'dicefocal':
-                # TODO: can we apply weights here?
-                criterion = monai.losses.DiceFocalLoss(
-                    # weight=torch.FloatTensor([self.negative_change_weight, self.positive_change_weight]),
-                    sigmoid=True,
-                    to_onehot_y=False,
-                    reduction='mean')
-                target_encoding = 'onehot'
-                logit_shape = 'b c h w t'
-                target_shape = 'b c h w t'
-            else:
-                # self.class_criterion = nn.CrossEntropyLoss()
-                # self.class_criterion = nn.BCEWithLogitsLoss()
-                raise NotImplementedError(class_loss)
-            return criterion, target_encoding, logit_shape, target_shape
-
-        (criterion, target_encoding,
-         logit_shape, target_shape) = construct_loss(self.class_loss,
-                                                     self.class_weights)
-        self.class_criterion = criterion
-        self.class_criterion_target_encoding = target_encoding
-        self.class_criterion_logit_shape = logit_shape
-        self.class_criterion_target_shape = target_shape
-
-        (criterion, target_encoding,
-         logit_shape, target_shape) = construct_loss(
-             change_loss, self.change_weights)
-        self.change_criterion = criterion
-        self.change_criterion_target_encoding = target_encoding
-        self.change_criterion_logit_shape = logit_shape
-        self.change_criterion_target_shape = target_shape
-
-        # # self.change_criterion = monai.losses.FocalLoss(reduction='none', to_onehot_y=False)
-        # if self.change_loss.lower() == 'cce':
-        #     self.change_criterion = torch.nn.CrossEntropyLoss(
-        #         weight=torch.FloatTensor([
-        #             self.negative_change_weight,
-        #             self.positive_change_weight
-        #         ]),
-        #         reduction='mean')
-        #     self.change_criterion_target_encoding = 'onehot'
-        #     self.change_criterion_logit_shape = '(b t h w) c'
-        #     self.change_criterion_target_shape = '(b t h w)'
-        # elif self.change_loss.lower() == 'dicefocal':
-        #     # TODO: can we apply weights here?
-        #     self.change_criterion = monai.losses.DiceFocalLoss(
-        #         # weight=torch.FloatTensor([self.negative_change_weight, self.positive_change_weight]),
-        #         sigmoid=True,
-        #         to_onehot_y=False,
-        #         reduction='mean')
-        #     self.change_criterion_target_encoding = 'index'
-        #     self.change_criterion_logit_shape = 'b c h w t'
-        #     self.change_criterion_target_shape = 'b c h w t'
-        # else:
-        #     raise NotImplementedError
-
-        # self.change_criterion = nn.BCEWithLogitsLoss(
-        #         pos_weight=torch.ones(1) * pos_weight)
+        _info = coerce_criterion(saliency_loss, self.saliency_weights)
+        self.saliency_criterion = _info['criterion']
+        self.saliency_criterion_target_encoding = _info['target_encoding']
+        self.saliency_criterion_logit_shape = _info['logit_shape']
+        self.saliency_criterion_target_shape = _info['target_shape']
 
         self.class_metrics = nn.ModuleDict({
             # "acc": torchmetrics.Accuracy(),
@@ -400,8 +443,7 @@ class MultimodalTransformer(pl.LightningModule):
 
         # TODO:
         #     - [X] Classifier MLP, skip connections
-        #     - [ ] Decoder
-        #     - [ ] Dynamic / Learned embeddi
+        #     - [ ] Decoder - unsure if necessary
 
         # TODO: add tokenization strat to the FusionEncoder itself
         if tokenizer == 'rearrange':
@@ -425,6 +467,8 @@ class MultimodalTransformer(pl.LightningModule):
             raise KeyError(tokenizer)
         self.stream_tokenizers = stream_tokenizers
 
+        # TODO:
+        #     - [ ] Dynamic / Learned embedding
         encode_t = utils.SinePositionalEncoding(5, 1, sine_pairs=4)
         encode_m = utils.SinePositionalEncoding(5, 2, sine_pairs=4)
         encode_h = utils.SinePositionalEncoding(5, 3, sine_pairs=4)
@@ -489,63 +533,15 @@ class MultimodalTransformer(pl.LightningModule):
             norm=None
         )
 
-    @classmethod
-    def add_argparse_args(cls, parent_parser):
-        """
-        Example:
-            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
-            >>> from watch.utils.configargparse_ext import ArgumentParser
-            >>> cls = MultimodalTransformer
-            >>> parent_parser = ArgumentParser(formatter_class='defaults')
-            >>> cls.add_argparse_args(parent_parser)
-            >>> parent_parser.print_help()
-            >>> parent_parser.parse_known_args()
-        """
-        parser = parent_parser.add_argument_group("MultimodalTransformer")
-        parser.add_argument("--optimizer", default='RAdam', type=str, help='Optimizer name supported by the netharn API')
-        parser.add_argument("--learning_rate", default=1e-3, type=float)
-        parser.add_argument("--weight_decay", default=0., type=float)
-
-        parser.add_argument("--positive_change_weight", default=1.0, type=float)
-        parser.add_argument("--negative_change_weight", default=1.0, type=float)
-        parser.add_argument("--class_weights", default='auto', type=str, help='class weighting strategy')
-
-        # Model names define the transformer encoder used by the method
-        available_encoders = list(transformer.encoder_configs.keys()) + ['deit']
-
-        parser.add_argument(
-            "--tokenizer", default='rearrange', type=str,
-            choices=['dwcnn', 'rearrange'], help=ub.paragraph(
-                '''
-                How image patches aare broken into tokens.
-                rearrange just shuffles raw pixels. dwcnn is a is a mobile
-                convolutional stem.
-                '''))
-        parser.add_argument("--token_norm", default='auto', type=str,
-                            choices=['auto', 'group', 'batch'])
-        parser.add_argument("--arch_name", default='smt_it_stm_p8', type=str,
-                            choices=available_encoders)
-        parser.add_argument("--dropout", default=0.1, type=float)
-        parser.add_argument("--global_class_weight", default=1.0, type=float)
-        parser.add_argument("--global_change_weight", default=1.0, type=float)
-
-        parser.add_argument("--change_loss", default='cce')
-        parser.add_argument("--class_loss", default='focal')
-
-        parser.add_argument("--change_head_hidden", default=2, type=int, help='number of hidden layers in the change head')
-        parser.add_argument("--class_head_hidden", default=2, type=int, help='number of hidden layers in the category head')
-
-        # parser.add_argument("--input_scale", default=2000.0, type=float)
-        parser.add_argument("--window_size", default=8, type=int)
-        parser.add_argument(
-            "--attention_impl", default='exact', type=str, help=ub.paragraph(
-                '''
-                Implementation for attention computation.
-                Can be:
-                'exact' - the original O(n^2) method.
-                'performer' - a linear approximation.
-                '''))
-        return parent_parser
+        # TODO:
+        # Maybe drop heads if their weight is None?
+        self.saliency_clf = nh.layers.MultiLayerPerceptronNd(
+            dim=0,
+            in_channels=feat_dim,
+            hidden_channels=self.saliency_head_hidden,
+            out_channels=3,  # saliency will be trinary with an "other" class
+            norm=None
+        )
 
     def configure_optimizers(self):
         """
@@ -576,6 +572,9 @@ class MultimodalTransformer(pl.LightningModule):
             >>> sns.lineplot(data=data, y='lr', x='last_epoch')
         """
         import netharn as nh
+
+        # Netharn api will convert a string code into a type/class and
+        # keyword-arguments to create an instance.
         optim_cls, optim_kw = nh.api.Optimizer.coerce(
             optimizer=self.hparams.optimizer,
             learning_rate=self.hparams.learning_rate,
@@ -586,11 +585,8 @@ class MultimodalTransformer(pl.LightningModule):
         optim_kw['params'] = self.parameters()
         optimizer = optim_cls(**optim_kw)
 
-        # optimizer = optim.RAdam(
-        #         self.parameters(),
-        #         lr=self.hparams.learning_rate,
-        #         weight_decay=self.hparams.weight_decay,
-        #         betas=(0.9, 0.99))
+        # TODO:
+        # - coerce schedulers
         scheduler = lr_scheduler.CosineAnnealingLR(
             optimizer, T_max=self.trainer.max_epochs)
         return [optimizer], [scheduler]
@@ -639,7 +635,7 @@ class MultimodalTransformer(pl.LightningModule):
         # Final channel-wise fusion
         chan_last = self.move_channels_last(patch_feats)
 
-        # Channels are now marginalized away
+        # Latent channels are now marginalized away
         spacetime_fused_features = self.channel_fuser(chan_last)[..., 0]
         # spacetime_fused_features = einops.reduce(similarity, "b t c h w -> b t h w", "mean")
 
@@ -1292,3 +1288,46 @@ def _class_weights_from_freq(total_freq, mode='median-idf'):
 
     weights = np.round(weights, 6)
     return weights
+
+
+def coerce_criterion(loss_code, weights):
+    """
+    Helps build a loss function
+    """
+    import monai
+    if loss_code == 'cce':
+        criterion = torch.nn.CrossEntropyLoss(
+            weight=weights, reduction='mean')
+        target_encoding = 'index'
+        logit_shape = '(b t h w) c'
+        target_shape = '(b t h w)'
+    elif loss_code == 'focal':
+        criterion = monai.losses.FocalLoss(
+            reduction='mean', to_onehot_y=False, weight=weights)
+
+        target_encoding = 'onehot'
+        logit_shape = 'b c h w t'
+        target_shape = 'b c h w t'
+
+    elif loss_code == 'dicefocal':
+        # TODO: can we apply weights here?
+        criterion = monai.losses.DiceFocalLoss(
+            # weight=torch.FloatTensor([self.negative_change_weight, self.positive_change_weight]),
+            sigmoid=True,
+            to_onehot_y=False,
+            reduction='mean')
+        target_encoding = 'onehot'
+        logit_shape = 'b c h w t'
+        target_shape = 'b c h w t'
+    else:
+        # self.class_criterion = nn.CrossEntropyLoss()
+        # self.class_criterion = nn.BCEWithLogitsLoss()
+        raise NotImplementedError(loss_code)
+
+    criterion_info = {
+        'criterion': criterion,
+        'target_encoding': target_encoding,
+        'logit_shape': logit_shape,
+        'target_shape': target_shape,
+    }
+    return criterion_info

@@ -396,6 +396,11 @@ def specialized_index_bands(bands=None, coco_img=None, symbolic=False):
     References:
         https://mail.google.com/mail/u/1/#chat/space/AAAAE5jpxTc
 
+    Ignore:
+        DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+        jq '.images[0].id' $DVC_DPATH/drop1-S2-L8-aligned/data.kwcoco.json
+        kwcoco subset --src $DVC_DPATH/drop1-S2-L8-aligned/data.kwcoco.json --gids=2, --dst=./one_image_data/data.kwcoco.json --copy_assets=True
+
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from watch.utils.util_bands import *  # NOQA
@@ -421,6 +426,7 @@ def specialized_index_bands(bands=None, coco_img=None, symbolic=False):
         >>> pnum_ = kwplot.PlotNums(nSubplots=len(indexes))
         >>> for key, value in indexes.items():
         >>>     kwplot.imshow(kwimage.normalize(value), title=key, pnum=pnum_())
+
 
     # Example:
     #     >>> # xdoctest: +REQUIRES(module:sympy)
