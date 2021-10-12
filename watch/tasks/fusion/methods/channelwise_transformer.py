@@ -726,7 +726,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> self.overfit(batch)
 
         nh.initializers.KaimingNormal()(self)
-
+        nh.initializers.Orthogonal()(self)
 
         """
         import kwplot

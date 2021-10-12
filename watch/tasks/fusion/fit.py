@@ -562,8 +562,9 @@ def main(**kwargs):
 
 
 if __name__ == "__main__":
-    # import xdev
-    # xdev.make_warnings_print_tracebacks()
+    if ub.argflag('--warntb'):
+        import xdev
+        xdev.make_warnings_print_tracebacks()
     # from watch.tasks.fusion import fit as this_module
     # this_module.main()
     main()

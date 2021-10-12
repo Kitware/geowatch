@@ -501,7 +501,7 @@ PRED_CONFIG_FPATH=$WORKDIR/$DATASET_CODE/configs/predict_$EXPERIMENT_NAME.yml
 #kwcoco stats $TRAIN_FPATH $VALI_FPATH $TEST_FPATH
 
 # Write train and prediction configs
-CUDA_VISIBLE_DEVICES="0"
+export CUDA_VISIBLE_DEVICES="1"
 python -m watch.tasks.fusion.fit \
     --channels=${CHANNELS} \
     --method="MultimodalTransformer" \
@@ -536,4 +536,4 @@ python -m watch.tasks.fusion.fit \
         --train_dataset=$TRAIN_FPATH \
          --vali_dataset=$VALI_FPATH \
          --test_dataset=$TEST_FPATH \
-         --num_sanity_val_steps=0  
+         --num_sanity_val_steps=0 

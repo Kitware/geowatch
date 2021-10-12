@@ -922,9 +922,9 @@ class KWCocoVideoDataset(data.Dataset):
         # channel_keys = sample['tr']['_coords']['c'].values.tolist()
         # print('channel_keys = {!r}'.format(channel_keys))
 
-        mode_lists = list(self.input_channels.values())
-        assert len(mode_lists) == 1, 'no late fusion yet'
-        mode_key = '|'.join(mode_lists[0])
+        stream_specs = self.input_channels.streams()
+        assert len(stream_specs) == 1, 'no late fusion yet'
+        mode_key = self.input_channels.fuse().spec
 
         # print('mode_key = {!r}'.format(mode_key))
         # mode_key = '|'.join(channel_keys)
