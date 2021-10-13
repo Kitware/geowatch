@@ -318,17 +318,25 @@ def main(args):
         help=
         "ID for region that sites belong to. If None, try to infer from kwcoco file."
     )
+    parser.add_argument(
+        "--track_fn",
+        help=
+        "Function to add tracks. If None, use existing tracks.         Example: 'watch.tasks.tracking.from_heatmap.time_aggregated_polys'"
+    )
     args = parser.parse_args(args)
 
     # Read the kwcoco file
     coco_dset = kwcoco.CocoDataset(args.in_file)
 
     # Normalize
-    coco_dset = watch.tasks.tracking.normalize.normalize(
-        coco_dset,
-        # track_fn=(lambda x: x),  # no-op function to use existing tracks
-        track_fn=watch.tasks.tracking.from_heatmap.time_aggregated_polys,
-        overwrite=False)
+    if args.track_fn is None:
+        track_fn = lambda x: x  # no-op
+    else:
+        track_fn = eval(args.track_fn)
+
+    coco_dset = watch.tasks.tracking.normalize.normalize(coco_dset,
+                                                         track_fn=track_fn,
+                                                         overwrite=False)
 
     # Convert kwcoco to sites
     sites = convert_kwcoco_to_iarpa(coco_dset, args.region_id)
