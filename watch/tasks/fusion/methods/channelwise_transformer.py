@@ -311,7 +311,11 @@ class MultimodalTransformer(pl.LightningModule):
             'clouds', 'occluded',
             'ignore', 'unknown',
         }
-        all_keys = set(self.class_freq.keys())
+        if self.class_freq is not None:
+            all_keys = set(self.class_freq.keys())
+        else:
+            all_keys = set(self.classes)
+
         self.background_classes = all_keys & hueristic_background_keys
         self.ignore_classes = all_keys & hueristic_ignore_keys
         self.foreground_classes = (all_keys - self.background_classes) - self.ignore_classes
@@ -321,13 +325,18 @@ class MultimodalTransformer(pl.LightningModule):
 
         if isinstance(saliency_weights, str):
             if saliency_weights == 'auto':
-                bg_freq = sum(class_freq.get(k, 0) for k in self.background_classes)
-                fg_freq = sum(class_freq.get(k, 0) for k in self.foreground_classes)
-                bg_weight = 1.
-                fg_weight = bg_freq / (fg_freq + 1)
-                fg_bg_weights = [bg_weight, fg_weight]
-                _w = fg_bg_weights + ([0.0] * (self.saliency_num_classes - len(fg_bg_weights)))
-                saliency_weights = torch.Tensor(_w)
+                if class_freq is not None:
+                    bg_freq = sum(class_freq.get(k, 0) for k in self.background_classes)
+                    fg_freq = sum(class_freq.get(k, 0) for k in self.foreground_classes)
+                    bg_weight = 1.
+                    fg_weight = bg_freq / (fg_freq + 1)
+                    fg_bg_weights = [bg_weight, fg_weight]
+                    _w = fg_bg_weights + ([0.0] * (self.saliency_num_classes - len(fg_bg_weights)))
+                    saliency_weights = torch.Tensor(_w)
+                else:
+                    fg_bg_weights = [1.0, 1.0]
+                    _w = fg_bg_weights + ([0.0] * (self.saliency_num_classes - len(fg_bg_weights)))
+                    saliency_weights = torch.Tensor(_w)
                 # total_freq = np.array(list())
                 # print('total_freq = {!r}'.format(total_freq))
                 # cat_weights = _class_weights_from_freq(total_freq)
@@ -936,10 +945,7 @@ class MultimodalTransformer(pl.LightningModule):
                 ])[None, ...]
                 item_classes_truth.append(true_class)  # [B, T, H, W, C]
 
-                try:
-                    self._fg_idxs
-                    # self._bg_idxs
-                except AttributeError:
+                if not hasattr(self, '_fg_idxs'):
                     fg_idxs = sorted(ub.take(self.classes.node_to_idx, self.foreground_classes))
                     # bg_idxs = sorted(ub.take(self.classes.node_to_idx, self.background_classes))
                     fg_idxs = np.expand_dims(np.array(fg_idxs), (0, 1, 2, 3))
@@ -1109,6 +1115,7 @@ class MultimodalTransformer(pl.LightningModule):
                   to this class. What is the right way to do that?
         """
         import torch.package
+        import json
         #
         # TODO: is there any way to introspect what these variables could be?
 
@@ -1119,8 +1126,13 @@ class MultimodalTransformer(pl.LightningModule):
 
         # Assume this standardized header information exists that tells us the
         # name of the resource corresponding to the model
-        package_header = imp.load_pickle(
-            'kitware_package_header', 'kitware_package_header.pkl')
+        try:
+            package_header = json.loads(imp.load_text(
+                'kitware_package_header', 'kitware_package_header.json'))
+        except Exception:
+            package_header = imp.load_pickle(
+                'kitware_package_header', 'kitware_package_header.pkl')
+            pass
         arch_name = package_header['arch_name']
         module_name = package_header['module_name']
 
@@ -1185,7 +1197,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     'special:vidshapes8-multispectral', chip_size=32,
             >>>     batch_size=1, time_steps=2, num_workers=0)
             >>> datamodule.setup('fit')
-            >>> input_stats = datamodule.torch_datasets['train'].cached_dataset_stats()
+            >>> input_stats = datamodule.torch_datasets['train'].cached_dataset_stats(num=3)
             >>> classes = datamodule.torch_datasets['train'].classes
 
             >>> # Use one of our fusion.architectures in a test
@@ -1214,8 +1226,12 @@ class MultimodalTransformer(pl.LightningModule):
             >>> for key in recon_state.keys():
             >>>     assert (model_state[key] == recon_state[key]).all()
             >>>     assert model_state[key] is not recon_state[key]
+
+        Ignore:
+            7z l $HOME/.cache/watch/tests/package/my_package.pt
         """
         import copy
+        import json
         import torch.package
 
         # shallow copy of self, to apply attribute hacks to
@@ -1231,22 +1247,33 @@ class MultimodalTransformer(pl.LightningModule):
 
         arch_name = "model.pkl"
         module_name = 'watch_tasks_fusion'
+        """
+        exp = torch.package.PackageExporter(package_path, verbose=True)
+        """
         with torch.package.PackageExporter(package_path) as exp:
             # TODO: this is not a problem yet, but some package types (mainly
             # binaries) will need to be excluded and added as mocks
             exp.extern("**", exclude=["watch.tasks.fusion.**"])
-            exp.intern("watch.tasks.fusion.**")
+            exp.intern("watch.tasks.fusion.**", allow_empty=False)
 
             # Attempt to standardize some form of package metadata that can
             # allow for model importing with fewer hard-coding requirements
             package_header = {
-                'version': '0.0.1',
+                'version': '0.1.0',
                 'arch_name': arch_name,
                 'module_name': module_name,
             }
+
+            # old encoding (keep for a while)
             exp.save_pickle(
                 'kitware_package_header', 'kitware_package_header.pkl',
                 package_header
+            )
+
+            # new encoding
+            exp.save_text(
+                'kitware_package_header', 'kitware_package_header.json',
+                json.dumps(package_header)
             )
 
             exp.save_pickle(module_name, arch_name, model)
