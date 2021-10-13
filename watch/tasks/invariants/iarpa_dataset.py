@@ -119,7 +119,7 @@ class kwcoco_dataset(torch.utils.data.Dataset):
         img2 = self.dset.delayed_load(img2_id, channels=self.channels, space='video').finalize().astype(np.float32)
         img1 = np.nan_to_num(img1)
         img2 = np.nan_to_num(img2)
-        
+
         # normalize
         if img1.std() != 0.0:
             img1 = (img1 - img1.mean()) / img1.std()

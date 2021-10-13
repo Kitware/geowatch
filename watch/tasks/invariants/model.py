@@ -9,6 +9,7 @@ from .iarpa_dataset import kwcoco_dataset
 from .unet_blur import UNetEncoder, UNetDecoder
 from .focal_loss import BinaryFocalLoss
 
+
 class pretext(pl.LightningModule):
     TASK_NAMES = [
         'sort',
@@ -28,7 +29,6 @@ class pretext(pl.LightningModule):
             self.trainset = kwcoco_dataset(hparams.train_dataset, hparams.sensor, hparams.bands, hparams.patch_size)
         else:
             self.trainset = None
-        
         if hparams.vali_dataset is not None:
             self.valset = kwcoco_dataset(hparams.vali_dataset, hparams.sensor, hparams.bands, hparams.patch_size)
         else:
@@ -78,14 +78,12 @@ class pretext(pl.LightningModule):
             self.image_classification_head( self.hparams.feature_dim_each_task),  # overlap task
         ]
         self.heads = nn.ModuleList([ self.heads[i] for i in self.task_indices ])
-
         # task specific criterion
         self.criteria = [
             BinaryFocalLoss(gamma=self.hparams.focal_gamma),  # sort task
             nn.TripletMarginLoss(),  # augment task
             nn.TripletMarginLoss(),  # overlap task
         ]
-        
         self.criteria = [ self.criteria[i] for i in self.task_indices ]
 
         # task specific metrics
@@ -122,9 +120,8 @@ class pretext(pl.LightningModule):
             loss_time = self.criteria[module_list_idx](time_sort_prediction, time_sort_labels)
             if self.hparams.aot_penalty_weight:
                 l1_penalty = torch.norm(image1_sort_out - image2_sort_out, 1, dim=1) / image1_sort_out.shape[1]
-                l1_penalty_filtered = -1*torch.topk(-1*l1_penalty.flatten(), int(self.hparams.aot_penalty_percentage*l1_penalty.numel())).values
-                loss_time = loss_time + self.hparams.aot_penalty_weight*l1_penalty_filtered.mean()
-          
+                l1_penalty_filtered = -1 * torch.topk(-1 * l1_penalty.flatten(), int(self.hparams.aot_penalty_percentage * l1_penalty.numel())).values
+                loss_time = loss_time + self.hparams.aot_penalty_weight * l1_penalty_filtered.mean()
             time_accuracy = self.sort_accuracy((time_sort_prediction > 0.), time_sort_labels.int())
 
             losses.append(loss_time)

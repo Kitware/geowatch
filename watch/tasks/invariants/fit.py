@@ -30,7 +30,7 @@ def main(args):
         )
 
     model = pretext(hparams=args)
-    
+
     if args.vali_dataset is None:
         ckpt_monitors = (
             ModelCheckpoint(monitor='loss', mode='min', save_top_k=1),
