@@ -69,7 +69,7 @@ def time_aggregated_polys(coco_dset, thresh=0.15, morph_kernel=3):
     change_cid = coco_dset.ensure_category('change')
     for vid_poly, score in scored_polys:
         track_id = next(new_trackids)
-        for img in coco_dset.imgs.values():
+        for gid, img in coco_dset.imgs.items():
             vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
             img_from_vid = vid_from_img.inv()
 

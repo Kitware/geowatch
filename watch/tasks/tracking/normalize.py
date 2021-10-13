@@ -182,8 +182,9 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
     def remove_annotations(coco_dset, remove_fn):
         # TODO merge into kwcoco?
         annots = coco_dset.annots()
-        empty_aids = np.extract(remove_fn(annots), annots.aids)
-        coco_dset.remove_annotations(list(empty_aids))
+        if len(annots) > 0:
+            empty_aids = np.extract(remove_fn(annots), annots.aids)
+            coco_dset.remove_annotations(list(empty_aids))
         return coco_dset
 
     #
@@ -200,8 +201,7 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
         return list(
             map(
                 lambda area, poly: area == 0 or not _is_valid(poly),
-                np.atleast_2d(
-                    annots.detections.data['boxes'].area).sum(axis=1),
+                annots.detections.data['boxes'].area.sum(axis=1),
                 annots.detections.data['segmentations'].to_polygon_list()))
 
     coco_dset = remove_annotations(coco_dset, are_invalid)
@@ -213,8 +213,7 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
     if min_area_px is not None and min_area_px > 0:
 
         def are_small(annots):
-            return np.atleast_2d(
-                annots.detections.data['boxes'].area).sum(axis=1) < min_area_px
+            return annots.detections.data['boxes'].area.sum(axis=1) < min_area_px
 
         coco_dset = remove_annotations(coco_dset, are_small)
 
@@ -287,7 +286,8 @@ def apply_tracks(coco_dset, track_fn, overwrite):
         return annots.get('track_id', None)
 
     def are_trackless(annots):
-        return np.array(tracks(annots)) == None
+        _tracks = tracks(annots)
+        return np.array(_tracks) == None
 
     # first, for each video, apply a track_fn from from_heatmap or from_polygon
     for gids in coco_dset.index.vidid_to_gids.values():
@@ -297,12 +297,20 @@ def apply_tracks(coco_dset, track_fn, overwrite):
         else:
             existing_tracks = tracks(sub_dset.annots())
             _are_trackless = are_trackless(sub_dset.annots())
-            if np.any(_are_trackless):
+            if np.any(_are_trackless) or len(existing_tracks) == 0:
                 sub_dset = track_fn(sub_dset)
                 annots = sub_dset.annots()
-                annots.set(
-                    'track_id',
-                    np.where(_are_trackless, tracks(annots), existing_tracks))
+                # if new annots were not created, rollover the old tracks
+                if len(annots) == len(existing_tracks):
+                    annots.set(
+                        'track_id',
+                        np.where(_are_trackless, tracks(annots), existing_tracks))
+            
+            # could maybe use coco_dset.union, but it doesn't reuse IDs
+            # TODO an ensure_annotations to do this properly
+            # coco_dset.anns.update(sub_dset.anns)
+            coco_dset.remove_annotations(set(sub_dset.anns).intersection(coco_dset.anns))
+            coco_dset.add_annotations(sub_dset.anns.values())
 
     # then cleanup leftover untracked annots
     coco_dset.remove_annotations(
@@ -398,7 +406,7 @@ def normalize_phases(coco_dset):
                 annots.set('category_id',
                            [ix_to_cid[int(ix)] for ix in np.round(interp)])
             else:
-                gids_first_half, _ = np.split(
+                gids_first_half, _ = np.array_split(
                     np.array(
                         coco_dset.index._set_sorted_by_frame_index(
                             coco_dset.annots(trackid=trackid).gids)), 2)
@@ -442,16 +450,27 @@ def normalize(coco_dset, track_fn, overwrite):
     '''
     Driver function to apply all normalizations
     '''
-    coco_dset = dedupe_annots(coco_dset)
-    coco_dset = add_geos(coco_dset, overwrite)
-    coco_dset = remove_small_annots(coco_dset)
+    def _normalize_annots(coco_dset, overwrite):
+        coco_dset = dedupe_annots(coco_dset)
+        coco_dset = add_geos(coco_dset, overwrite)
+        coco_dset = remove_small_annots(coco_dset)
+        return coco_dset
+
+    coco_dset = _normalize_annots(coco_dset, overwrite)
     coco_dset = ensure_videos(coco_dset)
+    
+    # apply tracks; ensuring we process newly added annots
+    n_existing_annots = coco_dset.n_annots
     coco_dset = apply_tracks(coco_dset, track_fn, overwrite)
+    if coco_dset.n_annots > n_existing_annots:
+        coco_dset = _normalize_annots(coco_dset, overwrite=False)
+
     coco_dset = dedupe_tracks(coco_dset)
     coco_dset = add_track_index(coco_dset)
-    coco_dset = add_geos(coco_dset, overwrite=False)  # anns from apply_tracks
     coco_dset = normalize_phases(coco_dset)
     coco_dset = normalize_sensors(coco_dset)
+
     # HACK, ensure coco_dset.index is up to date
     coco_dset._build_index()
+    
     return coco_dset
