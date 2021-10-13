@@ -74,5 +74,6 @@ COPY . /watch
 RUN conda activate watch && \
     pip install --no-deps -e /watch
 
+RUN pip install awscli
 
 # docker build --build-arg BUILD_STRICT=1 .

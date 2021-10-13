@@ -1,0 +1,97 @@
+{
+    "description": "Ingress data from T&E Baseline Framework input JSON file.",
+    "display_name": "Baseline Framework Ingress",
+    "homepage": "",
+    "license": "Other",
+    "name": "kitware/baseline_framework_ingress",
+    "optional_parameters": [
+        {
+            "custom_validation": "",
+            "data_type": "string",
+            "default_value": "",
+            "description": "Optionally provide an AWS profile for AWS CLI commands",
+            "display_name": "AWS Profile",
+            "field_type": "text",
+            "help_text": "",
+            "max_value": "",
+            "min_value": "",
+            "name": "aws_profile",
+            "parameter_choices": "",
+            "required": false,
+            "sort_order": 2
+        },
+        {
+            "custom_validation": "",
+            "data_type": "integer",
+            "default_value": 0,
+            "description": "Don't actually download remote assets",
+            "display_name": "Dryrun",
+            "field_type": "number",
+            "help_text": "",
+            "max_value": null,
+            "min_value": null,
+            "name": "dryrun",
+            "parameter_choices": "",
+            "required": false,
+            "sort_order": 3
+        },
+        {
+            "custom_validation": "",
+            "data_type": "integer",
+            "default_value": 0,
+            "description": "Confirm that some S3 assets may require requester to pay",
+            "display_name": "Requester Pays",
+            "field_type": "number",
+            "help_text": "",
+            "max_value": null,
+            "min_value": null,
+            "name": "requester_pays",
+            "parameter_choices": "",
+            "required": false,
+            "sort_order": 4
+        }
+    ],
+    "outputs": [
+        {
+            "data_type": "string",
+            "description": "STAC Catalog JSON string",
+            "display_name": "STAC Catalog",
+            "name": "stac_catalog",
+            "sort_order": 0
+        }
+    ],
+    "private": false,
+    "required_parameters": [
+        {
+            "custom_validation": "",
+            "data_type": "string",
+            "default_value": "",
+            "description": "Path to input JSON file",
+            "display_name": "Input Path",
+            "field_type": "text",
+            "help_text": "",
+            "max_value": "",
+            "min_value": "",
+            "name": "input_path",
+            "parameter_choices": "",
+            "required": true,
+            "sort_order": 0
+        },
+        {
+            "custom_validation": "",
+            "data_type": "string",
+            "default_value": "",
+            "description": "Output directory for downloaded assets",
+            "display_name": "Output Dir",
+            "field_type": "text",
+            "help_text": "",
+            "max_value": "",
+            "min_value": "",
+            "name": "output_dir",
+            "parameter_choices": "",
+            "required": true,
+            "sort_order": 1
+        }
+    ],
+    "version": "0.0.1"
+}
