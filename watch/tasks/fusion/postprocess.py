@@ -57,15 +57,12 @@ def accumulate_temporal_predictions_simple_v1(pred_fpath='/home/local/KHQ/usman.
 
     Drop1RawLeftRight/runs/DirectCD_smt_it_joint_p8_raw7common_v4/lightning_logs/version_2/checkpoints/epoch=2-step=1241-v3.ckpt
     """
-    from watch.utils import kwcoco_extensions
-    from watch.utils import util_kwimage
     import kwcoco
-    import kwarray
     import ubelt as ub
     from watch.tasks.tracking.from_heatmap import time_aggregated_polys
     from watch.tasks.tracking.normalize import apply_tracks
 
-    # This pred_fpath is the file is written using the model package on DVC: 
+    # This pred_fpath is the file is written using the model package on DVC:
     # data/dvc-repos/smart_watch_dvc/models/fusion/checkpoint_DirectCD_smt_it_joint_p8_raw9common_v5_tune_from_onera_epoch=2-step=2147.ckpt
     result_dataset = kwcoco.CocoDataset.coerce(ub.expandpath(pred_fpath))
     dset = result_dataset
@@ -140,7 +137,10 @@ def _checkkalman():
     # X0 = np.zeros_like(Z1)
     # X1, P1 = kalman.predict(X0, P=P, u=0, Q=Q)
 
+
     # X2, P2 = kalman.update(X1, P=P1, z=Z1, R=R)
     # pass
+
+
 if __name__ == '__main__':
     accumulate_temporal_predictions_simple_v1()

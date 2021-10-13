@@ -1,21 +1,12 @@
 import itertools
-import geojson
-import json
-import os
-import sys
-import argparse
-import kwcoco
-import dateutil.parser
 import kwimage
 import shapely
 import shapely.ops
 from os.path import join
-from collections import defaultdict
 from progiter import ProgIter
 import numpy as np
 import ubelt as ub
 
-import watch
 from watch.utils.kwcoco_extensions import TrackidGenerator
 from watch.gis.geotiff import geotiff_crs_info
 
@@ -177,7 +168,6 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
 
     Sources:
         [1] https://pypi.org/project/geojson/#default-and-custom-precision
-    
     '''
     def remove_annotations(coco_dset, remove_fn):
         # TODO merge into kwcoco?
@@ -199,8 +189,7 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
                 return False
 
         return list(
-            map(
-                lambda area, poly: area == 0 or not _is_valid(poly),
+            map(lambda area, poly: area == 0 or not _is_valid(poly),
                 annots.detections.data['boxes'].area.sum(axis=1),
                 annots.detections.data['segmentations'].to_polygon_list()))
 
@@ -213,7 +202,8 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
     if min_area_px is not None and min_area_px > 0:
 
         def are_small(annots):
-            return annots.detections.data['boxes'].area.sum(axis=1) < min_area_px
+            return annots.detections.data['boxes'].area.sum(
+                axis=1) < min_area_px
 
         coco_dset = remove_annotations(coco_dset, are_small)
 
@@ -287,7 +277,7 @@ def apply_tracks(coco_dset, track_fn, overwrite):
 
     def are_trackless(annots):
         _tracks = tracks(annots)
-        return np.array(_tracks) == None
+        return np.array(_tracks) == None  # noqa
 
     # first, for each video, apply a track_fn from from_heatmap or from_polygon
     for gids in coco_dset.index.vidid_to_gids.values():
@@ -304,12 +294,14 @@ def apply_tracks(coco_dset, track_fn, overwrite):
                 if len(annots) == len(existing_tracks):
                     annots.set(
                         'track_id',
-                        np.where(_are_trackless, tracks(annots), existing_tracks))
-            
+                        np.where(_are_trackless, tracks(annots),
+                                 existing_tracks))
+
             # could maybe use coco_dset.union, but it doesn't reuse IDs
             # TODO an ensure_annotations to do this properly
             # coco_dset.anns.update(sub_dset.anns)
-            coco_dset.remove_annotations(set(sub_dset.anns).intersection(coco_dset.anns))
+            coco_dset.remove_annotations(
+                set(sub_dset.anns).intersection(coco_dset.anns))
             coco_dset.add_annotations(sub_dset.anns.values())
 
     # then cleanup leftover untracked annots
@@ -458,7 +450,7 @@ def normalize(coco_dset, track_fn, overwrite):
 
     coco_dset = _normalize_annots(coco_dset, overwrite)
     coco_dset = ensure_videos(coco_dset)
-    
+
     # apply tracks; ensuring we process newly added annots
     n_existing_annots = coco_dset.n_annots
     coco_dset = apply_tracks(coco_dset, track_fn, overwrite)
@@ -472,5 +464,5 @@ def normalize(coco_dset, track_fn, overwrite):
 
     # HACK, ensure coco_dset.index is up to date
     coco_dset._build_index()
-    
+
     return coco_dset

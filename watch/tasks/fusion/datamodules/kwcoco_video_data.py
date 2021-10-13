@@ -1485,7 +1485,7 @@ class KWCocoVideoDataset(data.Dataset):
 
             # TODO: clean up logic
             key = 'class_probs'
-            if item_output and  key in item_output:
+            if item_output and key in item_output:
                 if overlay_on_image:
                     norm_signal = chan_rows[0]['norm_signal']
                 else:
@@ -1504,7 +1504,7 @@ class KWCocoVideoDataset(data.Dataset):
                 vertical_stack.append(pred_part)
 
             key = 'change_probs'
-            if item_output and  key in item_output:
+            if item_output and key in item_output:
                 # Make a probability heatmap we can either display
                 # independently or overlay on a rendered channel
                 if frame_idx == 0:

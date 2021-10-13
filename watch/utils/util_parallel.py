@@ -5,6 +5,7 @@ class BlockingJobQueue(object):
     """
     Helper to execute some number of processes in a separate thread
     """
+
     def __init__(self, mode='thread', max_workers=0):
         self.max_workers = max_workers
         self.executor = ub.Executor(mode=mode, max_workers=max_workers)

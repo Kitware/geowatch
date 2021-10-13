@@ -72,6 +72,7 @@ class OurDepthwiseSeparableConv(nn.Module):
             OurDepthwiseSeparableConv(in_modes * 4, in_modes * 8, kernel_size=3, stride=2, padding=1, residual=0),
         ])
     """
+
     def __init__(
             self, in_chs, out_chs, kernel_size=3, stride=1, dilation=1,
             padding=0, residual=False, pw_kernel_size=1, norm='group',
@@ -432,7 +433,7 @@ class MultimodalTransformer(pl.LightningModule):
             encode_t, encode_m, encode_h, encode_w,
         ])
 
-        #'https://rwightman.github.io/pytorch-image-models/models/vision-transformer/'
+        # 'https://rwightman.github.io/pytorch-image-models/models/vision-transformer/'
         if arch_name in transformer.encoder_configs:
             encoder_config = transformer.encoder_configs[arch_name]
             encoder = transformer.FusionEncoder(
@@ -778,7 +779,7 @@ class MultimodalTransformer(pl.LightningModule):
         fig.set_size_inches(15, 6)
         fig.subplots_adjust(left=0.05, top=0.9)
         for frame_idx in xdev.InteractiveIter(list(range(frame_idx + 1, 1000))):
-            #for frame_idx in list(range(frame_idx, 1000)):
+            # for frame_idx in list(range(frame_idx, 1000)):
             num_steps = 20
             for i in ub.ProgIter(range(num_steps), desc='overfit'):
                 optim.zero_grad()
@@ -1226,6 +1227,7 @@ def _class_weights_from_freq(total_freq, mode='median-idf'):
         >>> _class_weights_from_freq(total_freq, mode='log-median-idf')
     """
     import numpy as np
+
     def logb(arr, base):
         if base == 'e':
             return np.log(arr)

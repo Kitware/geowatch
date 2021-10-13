@@ -53,21 +53,15 @@ References:
     .. [2] https://infrastructure.smartgitlab.com/docs/pages/api_documentation.html#site-model
     .. [3] https://smartgitlab.com/TE/annotations
 """
-import itertools
 import geojson
-import json
 import os
 import sys
 import argparse
 import kwcoco
 import dateutil.parser
 import watch
-import kwimage
 import shapely
 import shapely.ops
-from os.path import join
-from collections import defaultdict
-from progiter import ProgIter
 from mgrs import MGRS
 import numpy as np
 import ubelt as ub
@@ -190,7 +184,7 @@ def track_to_site(coco_dset, trackid, region_id):
     try:
         ixs, gids, anns = annots.lookup(
             'track_index'), annots.gids, annots.objs
-        # HACK because track_index is not unique, need a tiebreaker key to sort on
+        # HACK because track_index isn't unique, need tiebreaker key to sort on
         # _, gids, anns = zip(*sorted(zip(ixs, gids, anns)))
         _, _, gids, anns = zip(*sorted(zip(ixs, range(len(ixs)), gids, anns)))
     except KeyError:
@@ -205,7 +199,7 @@ def track_to_site(coco_dset, trackid, region_id):
     # > A “Polygon” should define the foreign members “current_phase”,
     # > “predicted_next_phase”, and “predicted_next_phase_date”.
     # TODO we need to figure out how to link individual polygons across frames
-    # within a track when we have >1 polygon per track_index (from MultiPolygons
+    # within a track when we have >1 polygon per track_index (from MultiPolygon
     # or multiple annotations) to handle splitting/merging.
     # This is because this prediction foreign field is defined wrt the CURRENT
     # polygon, not per-observation.
@@ -221,7 +215,6 @@ def track_to_site(coco_dset, trackid, region_id):
         for future_feat in features[ix + 1:]:
             future_phase = future_feat['properties']['current_phase']
             future_date = future_feat['properties']['observation_date']
-            future_n_polys = future_phase.count(sep)
             # HACK need to let these vary between polys in an observation
             if future_phase != current_phase:
                 current_phases = current_phase.split(sep)
@@ -291,7 +284,7 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id=None):
     sites = []
 
     for vidid, video in coco_dset.index.videos.items():
-        if region_id == None:
+        if region_id is None:
             _region_id = video['name']
         else:
             _region_id = region_id
@@ -315,13 +308,17 @@ def main(args):
         help="Output directory where GeoJSON files will be written")
     parser.add_argument(
         "--region_id",
-        help=
-        "ID for region that sites belong to. If None, try to infer from kwcoco file."
+        help=ub.paragraph('''
+        ID for region that sites belong to.
+        If None, try to infer from kwcoco file.
+        ''')
     )
     parser.add_argument(
         "--track_fn",
-        help=
-        "Function to add tracks. If None, use existing tracks.         Example: 'watch.tasks.tracking.from_heatmap.time_aggregated_polys'"
+        help=ub.paragraph('''
+        Function to add tracks. If None, use existing tracks.
+        Example: 'watch.tasks.tracking.from_heatmap.time_aggregated_polys'
+        ''')
     )
     args = parser.parse_args(args)
 
@@ -330,7 +327,8 @@ def main(args):
 
     # Normalize
     if args.track_fn is None:
-        track_fn = lambda x: x  # no-op
+        # no-op function
+        track_fn = lambda x: x  # noqa
     else:
         track_fn = eval(args.track_fn)
 

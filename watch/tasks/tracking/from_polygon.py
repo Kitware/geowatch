@@ -1,21 +1,4 @@
-import itertools
-import geojson
-import json
-import os
-import sys
-import argparse
-import kwcoco
-import dateutil.parser
-import kwimage
-import shapely
-import shapely.ops
-from os.path import join
-from collections import defaultdict
-from progiter import ProgIter
-import numpy as np
-import ubelt as ub
 
-import watch
 from watch.utils.kwcoco_extensions import TrackidGenerator
 
 

@@ -1,8 +1,6 @@
 from watch.utils import kwcoco_extensions
 from watch.utils import util_kwimage
-import kwcoco
 import kwarray
-import ubelt as ub
 import kwimage
 import numpy as np
 
@@ -83,4 +81,3 @@ def time_aggregated_polys(coco_dset, thresh=0.15, morph_kernel=3):
                 track_id=track_id)
 
     return coco_dset
-
