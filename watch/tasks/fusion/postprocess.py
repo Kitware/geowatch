@@ -137,7 +137,6 @@ def _checkkalman():
     # X0 = np.zeros_like(Z1)
     # X1, P1 = kalman.predict(X0, P=P, u=0, Q=Q)
 
-
     # X2, P2 = kalman.update(X1, P=P1, z=Z1, R=R)
     # pass
 
