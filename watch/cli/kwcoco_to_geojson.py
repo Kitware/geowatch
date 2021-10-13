@@ -53,101 +53,207 @@ References:
     .. [2] https://infrastructure.smartgitlab.com/docs/pages/api_documentation.html#site-model
     .. [3] https://smartgitlab.com/TE/annotations
 """
-import json
+import geojson
 import os
 import sys
 import argparse
 import kwcoco
 import dateutil.parser
 import watch
-import kwimage
-from os.path import join
-from collections import defaultdict
+import shapely
+import shapely.ops
+from mgrs import MGRS
+import numpy as np
+import ubelt as ub
+
+# import xdev
 
 
-# TODO: if we are hardcoding names we should have some constants file
-# to keep things sane.w:
-category_dict = {
-    'construction': 'Active Construction',
-    'pre-construction': 'Site Preparation',
-    'finalized': 'Post Construction',
-    'obscured': 'Unknown'
-}
-
-sensor_dict = {
-    'WV': 'WorldView',
-    'S2': 'Sentinel-2',
-    'LE': 'Landsat',
-    'LC': 'Landsat',
-    'L8': 'Landsat',
-}
+def _single_geometry(geom):
+    return shapely.geometry.asShape(geom).buffer(0)
 
 
-def predict(ann, vid_id, coco_dset, phase):
-    """
-    Look forward in time and find the closest video frame that has a different
-    construction phase wrt the phase in ann. Return that new phase plus the date
-    of the annotation in which that phase was found.
-    """
-    # Default prediction if one cannot be found
-    prediction = {
-        'predicted_phase': None,
-        'predicted_phase_start_date': None,
-    }
-    if phase != 'Post Construction':
-        img_id = ann['image_id']
-        min_overlap = .5
-
-        # Find all images that come after this one
-        video_gids = coco_dset.index.vidid_to_gids[vid_id]
-        img_index = video_gids.index(img_id)
-        future_gids = video_gids[img_index:]
-        cand_aids = []
-        for frame_gid in future_gids:
-            cand_aids.extend(coco_dset.index.gid_to_aids[frame_gid])
-
-        union_poly_ann = kwimage.MultiPolygon.from_geojson(
-            ann['segmentation_geos']).to_shapely()
-        for cand_aid in cand_aids:
-            ann_obs = coco_dset.index.anns[cand_aid]
-            cat = coco_dset.index.cats[ann_obs['category_id']]
-            predict_phase = category_dict.get(cat['name'], cat['name'])
-            if phase != predict_phase:
-                union_poly_obs = kwimage.MultiPolygon.from_geojson(
-                    ann_obs['segmentation_geos']).to_shapely()
-                overlap = (union_poly_obs.intersection(union_poly_ann).area /
-                           union_poly_ann.area)
-                if overlap > min_overlap:
-                    obs_img = coco_dset.index.imgs[ann_obs['image_id']]
-                    date = dateutil.parser.parse(obs_img['date_captured']).date()
-                    # We found a valid prediction
-                    prediction = {
-                        'predicted_phase': predict_phase,
-                        'predicted_phase_start_date': date.isoformat(),
-                    }
-                    break
-    return prediction
+def _combined_geometries(geometry_list):
+    # TODO does this respect ordering for disjoint polys?
+    return shapely.ops.unary_union(geometry_list).buffer(0)
 
 
-def boundary(sseg_geos, img_path):
-    info = watch.gis.geotiff.geotiff_crs_info(img_path)
-    img_bounds_wgs84 = kwimage.Polygon(exterior=info['wgs84_corners'])
-    if info['wgs84_crs_info']['axis_mapping'] != 'OAMS_TRADITIONAL_GIS_ORDER':
-        # If this is in traditional (lon/lat), convert to authority lat/long
-        img_bounds_wgs84 = img_bounds_wgs84.swap_axes()
-    img_wgs84 = img_bounds_wgs84.to_shapely()
-    # Geojson is always supposed to be lon/lat, so swap to lat/lon to compare
-    # with authority wgs84
-    ann_lonlat = kwimage.MultiPolygon.from_geojson(sseg_geos)
-    ann_wgs84 = ann_lonlat.swap_axes().to_shapely()
-    lst = [img_wgs84.intersection(s).area / img_wgs84.area
-           for s in ann_wgs84.geoms]
-    bool_lst = [str(area > .9) for area in lst]
-    is_site_boundary = ','.join(bool_lst)
-    return is_site_boundary
+def geojson_feature(img, anns, coco_dset):
+    '''
+    Group kwcoco annotations in the same track (site) and image
+    into one Feature in an IARPA site model
+    '''
+    def single_geometry(ann):
+        seg_geo = ann['segmentation_geos']
+        assert isinstance(seg_geo, dict)
+        return _single_geometry(seg_geo)
+
+    # grab source and date for single_properties per-img instead of per-ann
+
+    try:
+        # Pick a reasonable source image, we don't have a spec for this yet
+        candidate_keys = [
+            'parent_name', 'parent_file_name', 'name', 'file_name'
+        ]
+        candidate_sources = list(filter(None, map(img.get, candidate_keys)))
+        source = candidate_sources[0]
+    except IndexError:
+        raise Exception(f'cannot determine source of gid {img["gid"]}')
+
+    date = dateutil.parser.parse(img['date_captured']).date()
+
+    def single_properties(ann):
+
+        current_phase = coco_dset.cats[ann['category_id']]['name'],
+
+        return {
+            'current_phase': current_phase,
+            'is_occluded': False,  # HACK
+            'is_site_boundary': True,  # HACK
+            'source': source,
+            'observation_date': date.isoformat(),
+            'sensor_name': img['sensor_coarse'],
+            'score': ann.get('score', 1.0)
+        }
+
+    geometry_list = list(map(single_geometry, anns))
+    properties_list = list(map(single_properties, anns))
+
+    def combined_geometries(geometry_list):
+        '''
+        # TODO should annotations be disjoint before being combined?
+        # this is not true in general
+        for geom1, geom2 in itertools.combinations(geometry_list, 2):
+            try:
+                assert geom1.disjoint(geom2), [ann['id'] for ann in anns]
+            except AssertionError:
+                xdev.embed()
+        '''
+        return _combined_geometries(geometry_list)
+
+    def combined_properties(properties_list, geometry_list):
+        # list of dicts -> dict of lists for easy indexing
+        properties_list = {
+            k: [dct[k] for dct in properties_list]
+            for k in properties_list[0]
+        }
+
+        properties = {}
+
+        def _len(geom):
+            if isinstance(geom, shapely.geometry.Polygon):
+                return 1  # this is probably the case
+            elif isinstance(geom, shapely.geometry.MultiPolygon):
+                return len(geom)
+            else:
+                raise TypeError(type(geom))
+
+        # per-polygon properties
+        sep = ','
+        for key in ['current_phase', 'is_occluded', 'is_site_boundary']:
+            value = []
+            for prop, geom in zip(properties_list[key], geometry_list):
+                value.append(sep.join(map(str, [prop] * _len(geom))))
+            properties[key] = sep.join(value)
+
+        # identical properties
+        for key in ['source', 'observation_date', 'sensor_name']:
+            values = properties_list[key]
+            assert len(set(values)) == 1
+            properties[key] = str(values[0])
+
+        # take area-weighted average score
+        properties['score'] = np.average(
+            list(map(float, properties_list['score'])),
+            weights=[geom.area for geom in geometry_list])
+
+        return properties
+
+    return geojson.Feature(geometry=combined_geometries(geometry_list),
+                           properties=combined_properties(
+                               properties_list, geometry_list))
 
 
-def convert_kwcoco_to_iarpa(coco_dset, region_id):
+def track_to_site(coco_dset, trackid, region_id):
+    '''
+    Turn a kwcoco track into an IARPA site model
+    '''
+
+    # get annotations in this track, sort them, and group them into features
+    annots = coco_dset.annots(trackid=trackid)
+    try:
+        ixs, gids, anns = annots.lookup(
+            'track_index'), annots.gids, annots.objs
+        # HACK because track_index isn't unique, need tiebreaker key to sort on
+        # _, gids, anns = zip(*sorted(zip(ixs, gids, anns)))
+        _, _, gids, anns = zip(*sorted(zip(ixs, range(len(ixs)), gids, anns)))
+    except KeyError:
+        # if track_index is missing, assume they're already sorted
+        gids, anns = annots.gids, annots.objs
+    features = [
+        geojson_feature(coco_dset.imgs[gid], _anns, coco_dset)
+        for gid, _anns in ub.group_items(anns, gids).items()
+    ]
+
+    # add prediction field to each feature
+    # > A “Polygon” should define the foreign members “current_phase”,
+    # > “predicted_next_phase”, and “predicted_next_phase_date”.
+    # TODO we need to figure out how to link individual polygons across frames
+    # within a track when we have >1 polygon per track_index (from MultiPolygon
+    # or multiple annotations) to handle splitting/merging.
+    # This is because this prediction foreign field is defined wrt the CURRENT
+    # polygon, not per-observation.
+    for ix, feat in enumerate(features):
+
+        current_phase = feat['properties']['current_phase']
+        sep = ','
+        n_polys = current_phase.count(sep)
+        prediction = {
+            'predicted_phase': None,
+            'predicted_phase_start_date': None,
+        }
+        for future_feat in features[ix + 1:]:
+            future_phase = future_feat['properties']['current_phase']
+            future_date = future_feat['properties']['observation_date']
+            # HACK need to let these vary between polys in an observation
+            if future_phase != current_phase:
+                current_phases = current_phase.split(sep)
+                future_phases = future_phase.split(sep)
+                n_diff = len(current_phases) - len(future_phases)
+                if n_diff > 0:
+                    predicted_phase = sep.join(
+                        future_phases + current_phases[len(future_phases):])
+                else:
+                    predicted_phase = sep.join(
+                        future_phases[:len(current_phases)])
+                prediction = {
+                    'predicted_phase':
+                    predicted_phase,
+                    'predicted_phase_start_date':
+                    sep.join([future_date] * n_polys),
+                }
+                break
+
+        feat['properties'].update(prediction)
+
+    # add other top-level fields
+
+    centroid_latlon = np.array(
+        _combined_geometries([
+            _single_geometry(feat['geometry']) for feat in features
+        ]).centroid)[::-1]
+
+    return geojson.FeatureCollection(
+        features,
+        id='_'.join((region_id, str(trackid).zfill(4))),
+        version=watch.__version__,
+        mgrs=MGRS().toMGRS(*centroid_latlon, MGRSPrecision=0),
+        status='positive_annotated',
+        score=1.0,  # TODO does this matter?
+    )
+
+
+def convert_kwcoco_to_iarpa(coco_dset, region_id=None):
     """
     Convert a kwcoco coco_dset to the IARPA JSON format
 
@@ -171,111 +277,25 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id):
         >>> import jsonschema
         >>> import watch
         >>> SITE_SCHEMA = watch.rc.load_site_model_schema()
-        >>> for site_name, collection in sites.items():
-        >>>     jsonschema.validate(collection, schema=SITE_SCHEMA)
+        >>> for site in sites:
+        >>>     jsonschema.validate(site, schema=SITE_SCHEMA)
 
     """
-    import geojson
-    site_features = defaultdict(list)
-    for ann in coco_dset.index.anns.values():
-        img = coco_dset.index.imgs[ann['image_id']]
-        cat = coco_dset.index.cats[ann['category_id']]
-        catname = cat['name']
+    sites = []
 
-        # Handle the case if an image consists of one main image or multiple
-        # auxiliary images
-        if img.get('file_name', None) is not None:
-            img_path = join(coco_dset.bundle_dpath, img['file_name'])
+    for vidid, video in coco_dset.index.videos.items():
+        if region_id is None:
+            _region_id = video['name']
         else:
-            # Use the first auxiliary image
-            # (todo: might want to choose determine the image "canvas" coordinates?)
-            img_path = join(coco_dset.bundle_dpath, img['auxiliary'][0]['file_name'])
+            _region_id = region_id
 
-        # Non-standard COCO fields, needed by watch
-        if 'segmentation_geos' not in ann:
-            gid = img['id']
-            info = watch.gis.geotiff.geotiff_crs_info(img_path)
-            # Note that each segmentation annotation here will get
-            # written out as a separate GeoJSON feature.
-            # TODO: Confirm that this is the desired behavior
-            # (especially with respect to the evaluation metrics)
-            pxl_anns = coco_dset.annots(gid=gid).detections.data['segmentations']
-            wld_anns = pxl_anns.warp(info['pxl_to_wld'])
-            wgs_anns = wld_anns.warp(info['wld_to_wgs84'])
-            geojson_anns = [poly.swap_axes().to_geojson() for poly in wgs_anns]
+        sub_dset = coco_dset.subset(gids=coco_dset.index.vidid_to_gids[vidid])
 
-            ann['segmentation_geos'] = geojson_anns
+        for trackid in sub_dset.index.trackid_to_aids:
 
-        sseg_geos = ann['segmentation_geos']
+            site = track_to_site(sub_dset, trackid, _region_id)
+            sites.append(site)
 
-        date = dateutil.parser.parse(img['date_captured']).date()
-
-        source = None
-        # FIXME: seems fragile?
-        if img.get('parent_file_name', None):
-            source = img.get('parent_file_name').split('/')[0]
-        elif img.get('name', None):
-            source = img.get('name')
-        else:
-            raise Exception('cannot determine source')
-
-        # Consider that sseg_geos could one (dict) or more (list)
-        if isinstance(sseg_geos, dict):
-            sseg_geos = [sseg_geos]
-
-        for sseg_geo in sseg_geos:
-            feature = geojson.Feature(geometry=sseg_geo)
-            properties = feature['properties']
-
-            properties['source'] = source
-            properties['observation_date'] = date.isoformat()
-            # Is this default supposed to be a string?
-            properties['score'] = ann.get('score', 1.0)
-
-            # This was supercategory, is that supposed to be name instead?
-            # FIXME: what happens when the category nmames dont work?
-            properties['current_phase'] = category_dict.get(catname, catname)
-
-            # If there's no video associated with
-            # this image, take annotations as they are
-            # TODO: Ensure that this is the desired behavior in this case
-            if 'video_id' in img:
-                prediction = predict(ann, img['video_id'], coco_dset,
-                                     properties['current_phase'])
-                properties.update(prediction)
-            else:
-                print("* Warning * No 'video_id' found for image; won't be "
-                      "able to properly predict phase changes")
-                properties.update({
-                    'predicted_phase': properties['current_phase'],
-                    'predicted_phase_start_date': properties['observation_date']})
-
-            properties['sensor_name'] = sensor_dict[img['sensor_coarse']]
-
-            # HACK IN IS_OCCLUDED
-            num_polys = len(kwimage.MultiPolygon.from_geojson(sseg_geo).data)
-            properties['is_occluded'] = ','.join(['False'] * num_polys)
-            '''
-            properties['is_occluded']
-            depends on cloud masking output?
-            '''
-
-            properties['is_site_boundary'] = boundary(sseg_geo, img_path)
-
-            # This seems fragile? Needs docs.
-            site_name = None
-            if img.get('site_tag', None):
-                site_name = img['site_tag']
-            elif source is not None:
-                site_name = source
-            else:
-                raise Exception('cannot determine site_name')
-
-            site_features[site_name].append(feature)
-
-    sites = {}
-    for site_name, features in site_features.items():
-        sites[site_name] = geojson.FeatureCollection(features, id=region_id)
     return sites
 
 
@@ -283,24 +303,48 @@ def main(args):
     parser = argparse.ArgumentParser(
         description="Convert KWCOCO to IARPA GeoJSON")
     parser.add_argument("--in_file", help="Input KWCOCO to convert")
-    parser.add_argument("--out_dir",
-                        help="Output directory where GeoJSON files will be written")
+    parser.add_argument(
+        "--out_dir",
+        help="Output directory where GeoJSON files will be written")
     parser.add_argument(
         "--region_id",
-        help="ID for region that site belongs to")
+        help=ub.paragraph('''
+        ID for region that sites belong to.
+        If None, try to infer from kwcoco file.
+        ''')
+    )
+    parser.add_argument(
+        "--track_fn",
+        help=ub.paragraph('''
+        Function to add tracks. If None, use existing tracks.
+        Example: 'watch.tasks.tracking.from_heatmap.time_aggregated_polys'
+        ''')
+    )
     args = parser.parse_args(args)
 
     # Read the kwcoco file
     coco_dset = kwcoco.CocoDataset(args.in_file)
 
+    # Normalize
+    if args.track_fn is None:
+        # no-op function
+        track_fn = lambda x: x  # noqa
+    else:
+        track_fn = eval(args.track_fn)
+
+    coco_dset = watch.tasks.tracking.normalize.normalize(coco_dset,
+                                                         track_fn=track_fn,
+                                                         overwrite=False)
+
     # Convert kwcoco to sites
     sites = convert_kwcoco_to_iarpa(coco_dset, args.region_id)
 
-    # Write site to disk
+    # Write sites to disk
     os.makedirs(args.out_dir, exist_ok=True)
-    for site, collection in sites.items():
-        with open(os.path.join(args.out_dir, site + '.json'), 'w') as f:
-            json.dump(collection, f, indent=2)
+    for site in sites:
+        with open(os.path.join(args.out_dir, site['id'] + '.geojson'),
+                  'w') as f:
+            geojson.dump(site, f, indent=2)
     return 0
 
 

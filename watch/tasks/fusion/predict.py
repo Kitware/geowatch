@@ -14,7 +14,7 @@ import kwimage
 import kwarray
 from watch.tasks.fusion import datamodules
 from watch.tasks.fusion import utils
-from watch.tasks.fusion import postprocess
+from watch.tasks.tracking import from_heatmap
 from watch.utils import util_path
 
 
@@ -546,7 +546,7 @@ class CocoStitchingManager(object):
             # Threshold scores
             thresh = self.thresh
             # Convert to polygons
-            scored_polys = list(postprocess.mask_to_scored_polygons(
+            scored_polys = list(from_heatmap.mask_to_scored_polygons(
                 change_probs, thresh))
             n_anns = len(scored_polys)
             for vid_poly, score in scored_polys:

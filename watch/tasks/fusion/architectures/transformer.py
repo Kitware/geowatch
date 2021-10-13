@@ -390,6 +390,7 @@ class TimmEncoder:
         >>> arch_name = 'vit_base_patch16_224'
         >>> self = TimmEncoder(arch_name)
     """
+
     def __init__(self, arch_name='vit_base_patch16_224', pretrained=True,
                  dropout=0.0, attention_impl='exact', in_features=None):
         import timm
@@ -419,6 +420,7 @@ class DeiTEncoder(nn.Module):
         >>> self = DeiTEncoder(in_features)
         >>> outputs = self.forward(inputs)
     """
+
     def __init__(self, in_features):
         super().__init__()
         deit = torch.hub.load('facebookresearch/deit:main', 'deit_base_patch16_224', pretrained=True)

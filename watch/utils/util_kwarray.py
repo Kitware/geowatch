@@ -124,7 +124,7 @@ def asymptotic(x, offset=1, gamma=1, degree=0, horizontal=1):
     hz_offset = horizontal - 1 if gamma_numer == gamma_denom else horizontal
     numer = (x + offset) ** gamma_numer
     denom = (x + offset + 1) ** gamma_denom
-    return  (numer / denom) + hz_offset
+    return (numer / denom) + hz_offset
 
 
 def robust_limits(values):
