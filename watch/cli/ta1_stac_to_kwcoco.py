@@ -1,6 +1,6 @@
 import argparse
 import sys
-from dateutil.parser import isoparse
+from dateutil.parser import isoparse, parse
 from concurrent.futures import as_completed
 import os
 import json
@@ -15,6 +15,7 @@ import kwcoco
 import watch
 from watch.utils import util_bands
 from watch.utils import util_raster
+from watch.utils import kwcoco_extensions
 
 
 def main():
@@ -148,7 +149,8 @@ def make_coco_img_from_stac_asset(asset_dict,
             print(msg)
             return None
 
-        infos['crs'] = watch.gis.geotiff.geotiff_crs_info(ref)
+        infos['crs'] = watch.gis.geotiff.geotiff_crs_info(
+            ref, force_affine=force_affine)
         infos['header'] = watch.gis.geotiff.geotiff_header_info(ref)
     finally:
         del ref
@@ -235,6 +237,8 @@ def _stac_item_to_kwcoco_image(stac_item, assume_relative=False):
     warp_img_to_wld = base['warp_pxl_to_wld']
     warp_wld_to_img = warp_img_to_wld.inv()
     img['warp_img_to_wld'] = warp_img_to_wld.concise()
+    img['warp_to_wld'] = warp_img_to_wld.concise()
+    img['approx_meter_gsd'] = base['approx_meter_gsd']
     img.update(ub.dict_isect(base,
                              {'utm_corners', 'wld_crs_info', 'utm_crs_info'}))
 
@@ -242,6 +246,7 @@ def _stac_item_to_kwcoco_image(stac_item, assume_relative=False):
         aux.pop('utm_corners')
         aux.pop('utm_crs_info')
         aux.pop('wld_crs_info')
+        aux['warp_to_wld'] = aux['warp_pxl_to_wld'].concise()
         warp_aux_to_img = warp_wld_to_img @ aux.pop('warp_pxl_to_wld')
         aux['warp_aux_to_img'] = warp_aux_to_img.concise()
 
@@ -281,9 +286,25 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
             for stac_item in catalog.get_all_items()]
 
     output_dset = kwcoco.CocoDataset()
+    output_dset.fpath = outpath
+    # TODO: Should make this name the MGRS tile
+    video_id = output_dset.add_video(name=ub.hash_data(catalog.to_dict()))
     for kwcoco_img in (job.result() for job in as_completed(jobs)):
         if kwcoco_img is not None:
             output_dset.add_image(**kwcoco_img)
+
+    ordered_images = sorted(
+        output_dset.images().objs,
+        key=lambda obj: parse(obj['date_captured']))
+
+    for i, img in enumerate(ordered_images):
+        img['frame_index'] = i
+        img['video_id'] = video_id
+
+    output_dset.index.build(output_dset)
+
+    kwcoco_extensions.coco_populate_geo_video_stats(
+        output_dset, video_id, target_gsd=10.0)
 
     with open(outpath, 'w') as f:
         f.write(json.dumps(output_dset.dataset, indent=2))
