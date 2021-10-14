@@ -91,8 +91,58 @@ def populate_watch_fields(dset, target_gsd=10.0, overwrite=False, default_gsd=No
 
 def coco_populate_geo_video_stats(dset, vidid, target_gsd='max-resolution'):
     """
+    Create a "video-space" for all images in a video sequence at a specified
+    resolution.
+
+    For this video, this chooses the "best" image as the "video canvas /
+    region" and registers everything to that canvas/region. This creates the
+    "video-space" for this image sequence. Currently the "best" image is the
+    one that has the GSD closest to the target-gsd. This hueristic works well
+    in most cases, but no all.
+
+    Notes:
+        * Currently the "best image" exactly define the video canvas / region.
+
+        * Areas where other images do not overlap the vieo canvas are
+          effectively lost when sampling in video space, because anything
+          outside the video canvas is cropped out.
+
+        * Auxilary images are required to have an "approx_meter_gsd" and a
+          "warp_to_wld" attribute to use this function atm.
+
+    TODO:
+        - [ ] Allow choosing of a custom "video-canvas" not based on any one image.
+        - [ ] Allow choosing a "video-canvas" that encompases all images
+        - [ ] Allow the base image to contain "approx_meter_gsd" /
+              "warp_to_wld" instead of the auxiliary image
+        - [ ] Is computing the scale factor based on approx_meter_gsd safe?
+
+    Args:
+        dset (CocoDataset): coco dataset to be modified inplace
+        vidid (int): video_id to modify
+        target_gsd (float | str): string code, or float target gsd
+
+
     Example:
-        import kwcoco
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> from watch.utils.kwcoco_extensions import *  # NOQA
+        >>> from watch.utils.util_data import find_smart_dvc_dpath
+        >>> import kwcoco
+        >>> dvc_dpath = find_smart_dvc_dpath()
+        >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
+        >>> dset = kwcoco.CocoDataset(coco_fpath)
+        >>> target_gsd = 10.0
+        >>> vidid = 2
+        >>> # We can check transforms before we apply this function
+        >>> dset.images(vidid=vidid).lookup('warp_img_to_vid', None)
+        >>> # Apply the function
+        >>> coco_populate_geo_video_stats(dset, vidid, target_gsd)
+        >>> # Check these transforms to make sure they look right
+        >>> popualted_video = dset.index.videos[vidid]
+        >>> popualted_video = ub.dict_isect(popualted_video, ['width', 'height', 'warp_wld_to_vid', 'target_gsd'])
+        >>> print('popualted_video = {}'.format(ub.repr2(popualted_video, nl=-1)))
+        >>> dset.images(vidid=vidid).lookup('warp_img_to_vid')
+
         # TODO: make a demo dataset with some sort of gsd metadata
         dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
         print('dset = {!r}'.format(dset))
@@ -115,25 +165,38 @@ def coco_populate_geo_video_stats(dset, vidid, target_gsd='max-resolution'):
         img = dset.index.imgs[gid]
         coco_img = CocoImage(img)
 
-        if img.get('file_name', None) is None:
+        # If the base dictionary has "warp_to_wld" and "approx_meter_gsd"
+        # information we use that.
+        wld_from_img = img.get('warp_to_wld', None)
+        approx_meter_gsd = img.get('approx_meter_gsd', None)
+
+        # Otherwise we try to obtain it from the auxiliary images
+        if approx_meter_gsd is None or wld_from_img is None:
             # Choose any one of the auxiliary images that has the required
             # attribute
             aux_chosen = coco_img.primary_asset(requires=[
                 'warp_to_wld', 'approx_meter_gsd'])
             if aux_chosen is None:
-                raise Exception(
-                    'Image has no warp_to_wld and approx_meter gsd. '
-                    'The image may not have associated geo metadata.'
-                )
+                raise Exception(ub.paragraph(
+                    '''
+                    Image auxiliary images have no warp_to_wld and approx_meter
+                    gsd. The auxiliary images may not have associated geo
+                    metadata.
+                    '''))
 
             wld_from_aux = Affine.coerce(aux_chosen.get('warp_to_wld', None))
             img_from_aux = Affine.coerce(aux_chosen['warp_aux_to_img'])
             aux_from_img = img_from_aux.inv()
             wld_from_img = wld_from_aux @ aux_from_img
             approx_meter_gsd = aux_chosen['approx_meter_gsd']
-        else:
-            wld_from_img = Affine.coerce(img.get('warp_to_wld', None))
-            approx_meter_gsd = img['approx_meter_gsd']
+
+        if approx_meter_gsd is None or wld_from_img is None:
+            raise Exception(ub.paragraph(
+                '''
+                Both the base image and its auxiliary images do not seem to
+                have the required warp_to_wld and approx_meter_gsd fields.
+                The image may not have associated geo metadata.
+                '''))
 
         asset_channels = []
         asset_gsds = []
@@ -175,6 +238,8 @@ def coco_populate_geo_video_stats(dset, vidid, target_gsd='max-resolution'):
             raise TypeError('target_gsd must be a code or number = {}'.format(type(target_gsd)))
     target_gsd_ = float(target_gsd_)
 
+    # Compute the scale factor needed to be applied to each image to achieve
+    # the target videospace GSD.
     for info in frame_infos.values():
         info['target_gsd'] = target_gsd_
         info['to_target_scale_factor'] = info['approx_meter_gsd'] / target_gsd_
@@ -189,9 +254,12 @@ def coco_populate_geo_video_stats(dset, vidid, target_gsd='max-resolution'):
             if _gsd is not None:
                 available_gsds.add(round(_gsd, 1))
 
-    # Align to frame closest to the target GSD
-    base_gid, info = min(frame_infos.items(),
-                         key=lambda kv: 1 - kv[1]['to_target_scale_factor'])
+    # Align to frame closest to the target GSD, which is the frame that has the
+    # "to_target_scale_factor" that is closest to 1.0
+    base_gid, info = min(
+        frame_infos.items(),
+        key=lambda kv: abs(1 - kv[1]['to_target_scale_factor'])
+    )
     scale = info['to_target_scale_factor']
 
     # Can add an extra transform here if the video is not exactly in
