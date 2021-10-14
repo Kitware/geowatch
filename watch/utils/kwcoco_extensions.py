@@ -169,6 +169,7 @@ def coco_populate_geo_video_stats(dset, vidid, target_gsd='max-resolution'):
         # information we use that.
         wld_from_img = img.get('warp_to_wld', None)
         approx_meter_gsd = img.get('approx_meter_gsd', None)
+        wld_crs_info = img.get('wld_crs_info', None)
 
         # Otherwise we try to obtain it from the auxiliary images
         if approx_meter_gsd is None or wld_from_img is None:
@@ -189,6 +190,7 @@ def coco_populate_geo_video_stats(dset, vidid, target_gsd='max-resolution'):
             aux_from_img = img_from_aux.inv()
             wld_from_img = wld_from_aux @ aux_from_img
             approx_meter_gsd = aux_chosen['approx_meter_gsd']
+            wld_crs_info = aux_chosen.get('wld_crs_info', None)
 
         if approx_meter_gsd is None or wld_from_img is None:
             raise Exception(ub.paragraph(
@@ -211,6 +213,7 @@ def coco_populate_geo_video_stats(dset, vidid, target_gsd='max-resolution'):
 
         frame_infos[gid] = {
             'img_to_wld': wld_from_img,
+            'wld_crs_info': wld_crs_info,
             # Note: division because gsd is inverted. This got me confused, but
             # I'm pretty sure this works.
             'target_gsd': target_gsd,
@@ -258,18 +261,19 @@ def coco_populate_geo_video_stats(dset, vidid, target_gsd='max-resolution'):
 
     # Align to frame closest to the target GSD, which is the frame that has the
     # "to_target_scale_factor" that is closest to 1.0
-    base_gid, info = min(
+    base_gid, base_info = min(
         frame_infos.items(),
         key=lambda kv: abs(1 - kv[1]['to_target_scale_factor'])
     )
-    scale = info['to_target_scale_factor']
+    scale = base_info['to_target_scale_factor']
+    base_info = base_info['wld_crs_info']
 
     # Can add an extra transform here if the video is not exactly in
     # any specific image space
-    img_from_wld = info['img_to_wld'].inv()
-    vid_from_wld = Affine.scale(scale) @ img_from_wld
-    video['width'] = int(np.ceil(info['width'] * scale))
-    video['height'] = int(np.ceil(info['height'] * scale))
+    baseimg_from_wld = base_info['img_to_wld'].inv()
+    vid_from_wld = Affine.scale(scale) @ baseimg_from_wld
+    video['width'] = int(np.ceil(base_info['width'] * scale))
+    video['height'] = int(np.ceil(base_info['height'] * scale))
 
     # Store metadata in the video
     video['num_frames'] = len(gids)
