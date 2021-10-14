@@ -198,6 +198,8 @@ def coco_populate_geo_video_stats(dset, vidid, target_gsd='max-resolution'):
                 The image may not have associated geo metadata.
                 '''))
 
+        wld_from_img = Affine.coerce(wld_from_img)
+
         asset_channels = []
         asset_gsds = []
         for obj in coco_img.iter_asset_objs():
@@ -264,13 +266,14 @@ def coco_populate_geo_video_stats(dset, vidid, target_gsd='max-resolution'):
 
     # Can add an extra transform here if the video is not exactly in
     # any specific image space
-    wld_to_vid = Affine.scale(scale) @ info['img_to_wld'].inv()
+    img_from_wld = info['img_to_wld'].inv()
+    vid_from_wld = Affine.scale(scale) @ img_from_wld
     video['width'] = int(np.ceil(info['width'] * scale))
     video['height'] = int(np.ceil(info['height'] * scale))
 
     # Store metadata in the video
     video['num_frames'] = len(gids)
-    video['warp_wld_to_vid'] = wld_to_vid.__json__()
+    video['warp_wld_to_vid'] = vid_from_wld.__json__()
     video['target_gsd'] = target_gsd_
     video['min_gsd'] = min_gsd
     video['max_gsd'] = max_gsd
@@ -280,9 +283,9 @@ def coco_populate_geo_video_stats(dset, vidid, target_gsd='max-resolution'):
 
     for gid in gids:
         img = dset.index.imgs[gid]
-        img_to_wld = frame_infos[gid]['img_to_wld']
-        img_to_vid = wld_to_vid @ img_to_wld
-        img['warp_img_to_vid'] = img_to_vid.concise()
+        wld_from_img = frame_infos[gid]['img_to_wld']
+        vid_from_wld = vid_from_wld @ wld_from_img
+        img['warp_img_to_vid'] = vid_from_wld.concise()
 
 
 def coco_populate_geo_img_heuristics(dset, gid, overwrite=False,
