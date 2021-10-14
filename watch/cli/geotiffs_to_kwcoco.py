@@ -23,6 +23,7 @@ class KWCocoFromGeotiffConfig(scfg.Config):
         'relative': scfg.Value(False, help='if true make paths relative'),
         'dst': scfg.Value(None, help='path to write new kwcoco file'),
         'workers': scfg.Value(0, help='number of parallel jobs'),
+        'strict': scfg.Value(False, help='it True, will raise an errornumber of parallel jobs'),
     }
 
 
@@ -42,7 +43,13 @@ def main(**kwargs):
     geotiff_dpath = config['geotiff_dpath']
     dst = config['dst']
 
-    dset = find_geotiffs(geotiff_dpath, workers=config['workers'])
+    imgs = find_geotiffs(geotiff_dpath, workers=config['workers'],
+                         strict=config['strict'])
+
+    dset = kwcoco.CocoDataset()
+    for img in imgs:
+        dset.add_image(**img)
+    return dset
     dset.fpath = dst
 
     if config['relative']:
@@ -113,7 +120,8 @@ def ingest_sentinel2_directory(s2_dpath):
     return img
 
 
-def make_coco_img_from_geotiff(tiff_fpath, name=None, force_affine=True):
+def make_coco_img_from_geotiff(tiff_fpath, name=None, force_affine=True,
+                               with_info=False):
     """
     TODO: move to coco extensions
 
@@ -178,7 +186,8 @@ def make_coco_img_from_geotiff(tiff_fpath, name=None, force_affine=True):
         'wld_crs_info': wld_crs_info,
         'utm_crs_info': utm_crs_info,
     })
-
+    if with_info:
+        img['info'] = info
     return img
 
 
@@ -194,16 +203,18 @@ def make_coco_img_from_auxiliary_geotiffs(tiffs, name):
         >>> img = make_coco_img_from_auxiliary_geotiffs(tiffs, name)
         >>> print('img = {}'.format(ub.repr2(img, nl=-1, sort=0)))
     """
+    auxiliary = []
+    for fpath in tiffs:
+        aux = make_coco_img_from_geotiff(fpath, force_affine=True)
+        auxiliary.append(aux)
+    return make_coco_img_from_auxiliary_dicts(auxiliary, name)
+
+
+def make_coco_img_from_auxiliary_dicts(auxiliary, name):
     img = {
         'name': name,
         'file_name': None,
     }
-    auxiliary = []
-
-    for fpath in tiffs:
-        aux = make_coco_img_from_geotiff(fpath, force_affine=True)
-        auxiliary.append(aux)
-
     # Choose a base image canvas and the relationship between auxiliary images
     idx = ub.argmax(auxiliary, lambda x: (x['width'] * x['height']))
     base = auxiliary[idx]
@@ -229,32 +240,47 @@ def make_coco_img_from_auxiliary_geotiffs(tiffs, name):
     return img
 
 
-def find_geotiffs(geotiff_dpath, workers=0):
+def find_geotiffs(geotiff_dpath, workers=0, strict=False):
     """
+    Search a directory for any geotiffs and return a set of kwcoco-style image
+    dictionaries detailing the results.
+
+    Args:
+        geotiff_dpath (str): directory to search
+
+    Returns:
+        List[Dict]: a list of kwcoco-style image dictionaries
+
     geotiff_dpath = '/home/joncrall/data/grab_tiles_out/fels'
     """
+    import os
     dpath_list = list(watch.gis.geotiff.walk_geotiff_products(geotiff_dpath))
 
     print(f'Found candidate {len(dpath_list)} geotiff products')
 
     jobs = ub.JobPool(mode='thread', max_workers=workers)
 
+    loose_files = []
     unknown_products = []
     for dpath in ub.ProgIter(dpath_list, desc='submit geotiffs jobs'):
-        dname = basename(dpath)
-        if dname.startswith(('LC', 'LE07')):
-            lc_dpath = dpath
-            job = jobs.submit(ingest_landsat_directory, lc_dpath)
-            job.dpath = dpath
-        elif dname.startswith('S2'):
-            s2_dpath = dpath
-            # FIXME: undefined name
-            job = jobs.submit(ingest_sentinel2_directory, s2_dpath)
-            job.dpath = dpath
+        if os.path.isfile(dpath):
+            # if we dont't get a directory we have a loose geotiff file
+            loose_files.append(dpath)
         else:
-            msg = ('unknown dpath = {!r}'.format(dpath))
-            print(msg)
-            unknown_products.append(msg)
+            dname = basename(dpath)
+            if dname.startswith(('LC', 'LE07')):
+                lc_dpath = dpath
+                job = jobs.submit(ingest_landsat_directory, lc_dpath)
+                job.dpath = dpath
+            elif dname.startswith('S2'):
+                s2_dpath = dpath
+                # FIXME: undefined name
+                job = jobs.submit(ingest_sentinel2_directory, s2_dpath)
+                job.dpath = dpath
+            else:
+                msg = ('unknown dpath = {!r}'.format(dpath))
+                print(msg)
+                unknown_products.append(msg)
 
     if unknown_products:
         print('\n'.join(unknown_products))
@@ -265,21 +291,61 @@ def find_geotiffs(geotiff_dpath, workers=0):
         try:
             img = job.result()
         except Exception as ex:
+            if strict:
+                raise
             err = (job, job.dpath, ex)
             print('err = {!r}'.format(err))
             errors.append(err)
         else:
             imgs.append(img)
 
+    if loose_files:
+        # Handle loose files (try grouping them by spacetime)
+        groups = ub.ddict(list)
+        for fpath in loose_files:
+            info = watch.gis.geotiff.geotiff_filepath_info(fpath)
+            file_meta = info['filename_meta']
+            file_meta.get('tile_number', None)
+            date_captured = next(iter(ub.dict_isect(file_meta, ['sense_start_time', 'acquisition_date']).values()), None)
+            tile_num = next(iter(ub.dict_isect(file_meta, ['tile_number']).values()), None)
+            groupid = (file_meta['product_guess'], tile_num, date_captured)
+            img = make_coco_img_from_geotiff(fpath, with_info=True)
+            info = img.pop('info')
+            img['date_captured'] = info['filename_meta']['date_captured']
+            if 'landsat' in info['filename_meta']['product_guess']:
+                sensor_coarse = 'LS'
+                if info['filename_meta']['sensor_code'] == 'C':
+                    sensor_coarse = 'L8'
+                elif info['filename_meta']['sensor_code'] == 'E':
+                    sensor_coarse = 'L7'
+            elif 'sentinel' in info['filename_meta']['product_guess']:
+                sensor_coarse = 'S2'
+            else:
+                sensor_coarse = 'null'
+            img['sensor_coarse'] = sensor_coarse
+            groups[groupid].append(img)
+
+        for groupid, group in groups.items():
+            img = make_coco_img_from_auxiliary_dicts(group, name=groupid)
+            img['date_captured'] = group[0]['date_captured']
+            img['sensor_coarse'] = group[0]['sensor_coarse']
+            imgs.append(img)
+
     print('Got {} errors'.format(len(errors)))
     print('Found {} images to add'.format(len(imgs)))
+    return imgs
 
-    dset = kwcoco.CocoDataset()
 
-    for img in imgs:
-        dset.add_image(**img)
 
-    return dset
+def ingest_sentinel2_files(s2_fpaths):
+    """
+    Given a list of s2_filepaths that belong to the same "item/image"
+    return their coco dicts.
+    """
+    img = make_coco_img_from_auxiliary_geotiffs(tiffs, name)
+
+    baseinfo = watch.gis.geotiff.geotiff_filepath_info(s2_dpath)
+    capture_time = isoparse(baseinfo['filename_meta']['sense_start_time'])
 
 
 _SubConfig = KWCocoFromGeotiffConfig
