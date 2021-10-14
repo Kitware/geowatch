@@ -336,18 +336,6 @@ def find_geotiffs(geotiff_dpath, workers=0, strict=False):
     return imgs
 
 
-
-def ingest_sentinel2_files(s2_fpaths):
-    """
-    Given a list of s2_filepaths that belong to the same "item/image"
-    return their coco dicts.
-    """
-    img = make_coco_img_from_auxiliary_geotiffs(tiffs, name)
-
-    baseinfo = watch.gis.geotiff.geotiff_filepath_info(s2_dpath)
-    capture_time = isoparse(baseinfo['filename_meta']['sense_start_time'])
-
-
 _SubConfig = KWCocoFromGeotiffConfig
 
 
