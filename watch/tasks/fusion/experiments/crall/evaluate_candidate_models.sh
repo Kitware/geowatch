@@ -16,10 +16,19 @@ SUGGESTIONS="$(python -m watch.tasks.fusion.organize suggest_paths \
 PRED_DATASET="$(echo "$SUGGESTIONS" | jq -r .pred_dataset)"
 EVAL_DATASET="$(echo "$SUGGESTIONS" | jq -r .eval_dpath)"
 
-python -m watch.tasks.fusion.predict \
-    --gpus=1 \
+
+CUDA_VISIBLE_DEVICES=1 \
+    python -m watch.tasks.fusion.predict \
+    --gpus=0 \
     --write_preds=True \
     --write_probs=True \
+    --write_change=False \
+    --write_saliency=False \
+    --write_class=True \
     --test_dataset=$TEST_DATASET \
    --package_fpath=$PACKAGE_FPATH \
-    --pred_dataset=$PRED_DATASET
+    --pred_dataset=$PRED_DATASET \
+    --time_sampling="soft+dilated" \
+    --chip_overlap=0
+
+    # hidden flag: --debug-timesample

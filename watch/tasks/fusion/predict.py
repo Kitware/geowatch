@@ -40,10 +40,13 @@ def make_predict_config(cmdline=False, **kwargs):
 
     parser.add_argument("--pred_dpath", dest='pred_dpath', type=pathlib.Path, help='path to dump results')
 
-    parser.add_argument("--tag", default='change_prob')
     parser.add_argument("--package_fpath", type=pathlib.Path)
     parser.add_argument("--gpus", default=None, help="todo: hook up to lightning")
-    parser.add_argument("--thresh", type=float, default=0.01)
+    parser.add_argument("--thresh", type=smartcast, default=0.01)
+
+    parser.add_argument("--with_change", type=smartcast, default='auto')
+    parser.add_argument("--with_class", type=smartcast, default='auto')
+    parser.add_argument("--with_saliency", type=smartcast, default='auto')
 
     parser.add_argument(
         "--write_preds", default=True, type=smartcast, help=ub.paragraph(
@@ -56,8 +59,8 @@ def make_predict_config(cmdline=False, **kwargs):
         "--write_probs", default=True, type=smartcast, help=ub.paragraph(
             '''
             If True, write raw "soft" probability maps into the kwcoco file as
-            a new auxiliary channel.  The channel name is currently denoted by
-            the tag parameter, but this may change in the future.
+            a new auxiliary channel.  The channel name is currently hard-coded
+            based on expected output heads. This may change in the future.
             '''))
 
     parser.set_defaults(**kwargs)
@@ -73,12 +76,21 @@ def make_predict_config(cmdline=False, **kwargs):
     # for dataset, method, and trainer
     # Note: Adds '--test_dataset' to argparse (
     # may want to modify behavior to only expose non-training params)
+    overloadable_datamodule_keys = [
+        'chip_size',
+        'time_steps',
+        'channels',
+        'time_sampling',
+    ]
     parser = datamodule_class.add_argparse_args(parser)
+    datamodule_defaults = {k: parser.get_default(k) for k in overloadable_datamodule_keys}
     parser.set_defaults(**{'batch_size': 1})
+    parser.set_defaults(**{k: 'auto' for k in overloadable_datamodule_keys})
 
     # parse and pass to main
     parser.set_defaults(**kwargs)
     args, _ = parser.parse_known_args(default_args)
+    args.datamodule_defaults = datamodule_defaults
     assert args.batch_size == 1
     return args
 
@@ -148,6 +160,11 @@ def predict(cmdline=False, **kwargs):
     try:
         # Ideally we have a package, everything is defined there
         method = utils.load_model_from_package(args.package_fpath)
+        # fix einops bug
+        for name, mod in method.named_modules():
+            if 'Rearrange' in mod.__class__.__name__:
+                mod._recipe = mod.recipe()
+
     except Exception:
         # If we have a checkpoint path we can load it if we make assumptions
         # init method from checkpoint.
@@ -182,11 +199,17 @@ def predict(cmdline=False, **kwargs):
         datamodule_class.__init__,
     )
 
-    # TODO: default to this, but allow the user to overwrite
     if hasattr(method, 'datamodule_hparams'):
-        datamodule_vars['chip_size'] = method.datamodule_hparams['chip_size']
-        datamodule_vars['time_steps'] = method.datamodule_hparams['time_steps']
-        datamodule_vars['channels'] = method.datamodule_hparams['channels']
+        given = ub.dict_isect(datamodule_vars, args.datamodule_defaults)
+        print('given = {}'.format(ub.repr2(given, nl=1)))
+        needs_update = {k for k, v in given.items() if v == 'auto'}
+        traintime_vals = ub.dict_isect(method.datamodule_hparams, args.datamodule_defaults)
+        overloads = ub.dict_isect(method.datamodule_hparams, needs_update)
+        discarded = ub.dict_diff(traintime_vals, needs_update)
+        print('overloads = {}'.format(ub.repr2(overloads, nl=1)))
+        print('deviation from train settings = {}'.format(ub.repr2(discarded, nl=1)))
+        datamodule_vars.update(overloads)
+        # datamodule_vars[k] = args.datamodule_defaults[k]
     else:
         print('Warning have to make assumptions')
         # datamodule_vars['chip_size'] = method.datamodule_hparams['chip_size']
@@ -198,6 +221,17 @@ def predict(cmdline=False, **kwargs):
         **datamodule_vars
     )
     datamodule.setup("test")
+
+    if ub.argflag('--debug-timesample'):
+        import kwplot
+        plt = kwplot.autoplt()
+        # TODO Could
+        test_torch_dset = datamodule.torch_datasets['test']
+        vidid_to_time_sampler = test_torch_dset.new_sample_grid['vidid_to_time_sampler']
+        vidid = ub.peek(vidid_to_time_sampler.keys())
+        time_sampler = vidid_to_time_sampler[vidid]
+        time_sampler.show_summary()
+        plt.show()
 
     test_coco_dataset = datamodule.coco_datasets['test']
     test_torch_dataset = datamodule.torch_datasets['test']
@@ -249,21 +283,65 @@ def predict(cmdline=False, **kwargs):
     print('Predict on device = {!r}'.format(device))
     method = method.to(device)
 
-    stitch_manager = CocoStitchingManager(
-        result_dataset,
-        stiching_space='video',
-        device='numpy',  # could be torch on-device stitching
-        chan_code=args.tag,
-        thresh=args.thresh,
-        write_probs=args.write_probs,
-        write_preds=args.write_preds,
-    )
+    stitch_managers = {}
+
+    if args.with_change == 'auto':
+        args.with_change = getattr(method, 'global_change_weight', 1.0)
+    if args.with_class == 'auto':
+        args.with_class = getattr(method, 'global_class_weight', 1.0)
+    if args.with_saliency == 'auto':
+        args.with_saliency = getattr(method, 'global_saliency_weight', 0.0)
+
+    if args.with_change:
+        stitch_managers['change'] = CocoStitchingManager(
+            result_dataset,
+            stiching_space='video',
+            device='numpy',  # could be torch on-device stitching
+            chan_code='change_prob',
+            thresh=args.thresh,
+            write_probs=args.write_probs,
+            write_preds=args.write_preds,
+        )
+
+    if args.with_class:
+        stitch_managers['class'] = CocoStitchingManager(
+            result_dataset,
+            stiching_space='video',
+            device='numpy',  # could be torch on-device stitching
+            chan_code='class_prob',
+            thresh=args.thresh,
+            write_probs=args.write_probs,
+            write_preds=args.write_preds,
+        )
+
+    if args.with_saliency:
+        stitch_managers['saliency'] = CocoStitchingManager(
+            result_dataset,
+            stiching_space='video',
+            device='numpy',  # could be torch on-device stitching
+            chan_code='saliency_prob',
+            thresh=args.thresh,
+            write_probs=args.write_probs,
+            write_preds=args.write_preds,
+        )
 
     result_infos = []
     total_info = {'n_anns': 0, 'n_imgs': 0, 'total_prob': 0}
 
-    def finalize_ready(gid):
-        info = stitch_manager.finalize_image(gid)
+    expected_outputs = set(stitch_managers.keys())
+    got_outputs = None
+    writable_outputs = None
+
+    print('Expected outputs: ' + str(expected_outputs))
+
+    head_key_mapping = {
+        'saliency_probs': 'saliency',
+        'class_probs': 'class',
+        'change_probs': 'change',
+    }
+
+    def finalize_ready(head_stitcher, gid):
+        info = head_stitcher.finalize_image(gid)
         stats = running_stats.summarize(axis=None, keepdims=False)
         total_info['n_anns'] += info['n_anns']
         total_info['total_prob'] += info['total_prob']
@@ -273,19 +351,16 @@ def predict(cmdline=False, **kwargs):
             ub.dict_isect(stats, {'mean', 'max', 'min', 'std'}),
             ub.dict_isect(total_info, {'n_imgs', 'n_anns', 'total_prob'}),
         )
-        # TODO: once compact=True is available in ub 0.9.6, the rest can be
-        # removed
-        report_info_str = ub.repr2(
-            report_info, precision=4, compact=True, with_dtype=False, nl=0, nobr=1,
-            sk=True, sv=True, kvsep='=', itemsep='')
+        report_info_str = ub.repr2(report_info, precision=4, compact=True)
         prog.set_extra(' {} - '.format(report_info_str))
-        # prog.ensure_newline()
+        prog.ensure_newline()
         result_infos.append(info)
 
     import kwarray
-    running_stats = kwarray.RunningStats()  # for inspecting probability
+    running_stats = kwarray.RunningStats()  # check if probs are non-zero
 
     prog = ub.ProgIter(test_dataloader, desc='predicting', verbose=1)
+    prog.set_extra(' <will populate stats after first video>')
     for batch in prog:
         # Move data onto the prediction device
         for item in batch:
@@ -296,40 +371,47 @@ def predict(cmdline=False, **kwargs):
 
         # Predict on the batch
         outputs = method.forward_step(batch, with_loss=False)
+        outputs = {head_key_mapping.get(k, k): v for k, v in outputs.items()}
 
-        # TODO: we will eventually output more than "binary_predictions"
-        if 'binary_predictions' in outputs:
-            batch_bin_probs = outputs['binary_predictions']
-
-        if 'change_probs' in outputs:
-            batch_bin_probs = outputs['change_probs']
+        if got_outputs is None:
+            got_outputs = list(outputs.keys())
+            prog.ensure_newline()
+            writable_outputs = set(got_outputs) & expected_outputs
+            print('got_outputs = {!r}'.format(got_outputs))
+            print('writable_outputs = {!r}'.format(writable_outputs))
 
         # For each item in the batch, process the results
-        for bx, item in enumerate(batch):
+        for head_key in writable_outputs:
+            head_stitcher = stitch_managers[head_key]
+            head_probs = outputs[head_key]
+            for bx, item in enumerate(batch):
+                # TODO: if the predictions are downsampled wrt to the input images,
+                # we need to determine what that transform is so we can correctly
+                # warp the predictions back into image space.
+                bin_probs = head_probs[bx].detach().cpu().numpy()
 
-            # TODO: if the predictions are downsampled wrt to the input images,
-            # we need to determine what that transform is so we can correctly
-            # warp the predictions back into image space.
-            bin_probs = batch_bin_probs[bx].detach().cpu().numpy()
+                # Get the spatio-temporal subregion that this prediction belongs to
+                in_gids = [frame['gid'] for frame in item['frames']]
 
-            # Get the spatio-temporal subregion that this prediction belongs to
-            in_gids = [frame['gid'] for frame in item['frames']]
-            space_slice = tuple(item['tr']['space_slice'])
-            # NOTE: the returned tr space slice seems bugged?
-            # tuple(item['tr']['space_slice'])
+                if head_key == 'change':
+                    out_gids = in_gids[1:]  # HACK
+                else:
+                    out_gids = in_gids
 
-            # Update the stitcher with this windowed prediction
-            for gid, probs in zip(in_gids[1:], bin_probs):
-                running_stats.update(probs)
-                stitch_manager.accumulate_image(gid, space_slice, probs)
+                space_slice = tuple(item['tr']['space_slice'])
+                # Update the stitcher with this windowed prediction
+                for gid, probs in zip(out_gids, bin_probs):
+                    running_stats.update(probs.mean())
+                    head_stitcher.accumulate_image(gid, space_slice, probs)
 
             # Free up space for any images that have been completed
-            for gid in stitch_manager.ready_image_ids():
-                finalize_ready(gid)
+            for gid in head_stitcher.ready_image_ids():
+                finalize_ready(head_stitcher, gid)
 
     # Prediction is completed, finalize all remaining images.
-    for gid in stitch_manager.managed_image_ids():
-        finalize_ready(gid)
+    for head_key, head_stitcher in stitch_managers.items():
+        for gid in head_stitcher.managed_image_ids():
+            finalize_ready(head_stitcher, gid)
 
     # prog.set_extra('found {}'.format(nanns))
     # print('Predicted total nanns = {!r}'.format(nanns))
@@ -389,11 +471,12 @@ class CocoStitchingManager(object):
 
     def __init__(self, result_dataset, chan_code=None, stiching_space='video',
                  device='numpy', thresh=0.5, write_probs=True,
-                 write_preds=True):
+                 write_preds=True, num_bands='auto'):
         self.result_dataset = result_dataset
         self.device = device
         self.chan_code = chan_code
         self.thresh = thresh
+        self.num_bands = num_bands
 
         self.stiching_space = stiching_space
         if stiching_space != 'video':
@@ -435,15 +518,31 @@ class CocoStitchingManager(object):
             # Create the stitcher if it does not exist
             if gid not in self.image_stitchers:
                 video = dset.index.videos[vidid]
-                space_dims = (video['height'], video['width'])
+
+                if self.num_bands == 'auto':
+                    if len(data.shape) == 3:
+                        self.num_bands = data.shape[2]
+                    elif len(data.shape) == 2:
+                        self.num_bands = None
+                    else:
+                        raise NotImplementedError
+                if self.num_bands is None:
+                    stitch_dims = (video['height'], video['width'])
+                else:
+                    stitch_dims = (video['height'], video['width'], self.num_bands)
                 self.image_stitchers[gid] = kwarray.Stitcher(
-                    space_dims, device=self.device)
+                    stitch_dims, device=self.device)
 
             if self._last_vidid is not None and vidid != self._last_vidid:
                 # We assume sequential video iteration, thus when we see a new
                 # video, we know the images from the previous video are ready.
                 video_gids = set(dset.index.vidid_to_gids[self._last_vidid])
                 ready_gids = video_gids & set(self.image_stitchers)
+
+                # TODO
+                # do something clever to know if frames are ready early?
+                # might be tricky in general if we run over multiple
+                # times per image with different frame samplings.
                 self._ready_gids.update(ready_gids)
 
             self._last_vidid = vidid
@@ -502,8 +601,7 @@ class CocoStitchingManager(object):
         # rectangles?
         # https://stackoverflow.com/questions/5919298/algorithm-for-finding-the-fewest-rectangles-to-cover-a-set-of-rectangles-without/6634668#6634668
         # Or... just write out a polygon... KISS
-        import numpy as np
-        is_predicted_pixel = (stitcher.weights > 0).astype(np.uint8)
+        is_predicted_pixel = (stitcher.weights > 0).astype('uint8')
         predicted_region = kwimage.Mask(is_predicted_pixel, 'c_mask').to_multi_polygon().to_geojson()
         # Mark that we made a prediction on this image.
         img['prediction_region'] = predicted_region

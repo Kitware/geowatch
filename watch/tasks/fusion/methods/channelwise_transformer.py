@@ -1110,6 +1110,8 @@ class MultimodalTransformer(pl.LightningModule):
     @classmethod
     def load_package(cls, package_path, verbose=1):
         """
+        DEPRECATE IN FAVOR OF A KITWARE UTILITY
+
         TODO:
             - [ ] We should be able to load the model without having access
                   to this class. What is the right way to do that?
@@ -1132,7 +1134,6 @@ class MultimodalTransformer(pl.LightningModule):
         except Exception:
             package_header = imp.load_pickle(
                 'kitware_package_header', 'kitware_package_header.pkl')
-            pass
         arch_name = package_header['arch_name']
         module_name = package_header['module_name']
 
@@ -1276,6 +1277,11 @@ class MultimodalTransformer(pl.LightningModule):
                 json.dumps(package_header)
             )
 
+            # move to this?
+            exp.save_text(
+                'package_header', 'package_header.json',
+                json.dumps(package_header)
+            )
             exp.save_pickle(module_name, arch_name, model)
 
 

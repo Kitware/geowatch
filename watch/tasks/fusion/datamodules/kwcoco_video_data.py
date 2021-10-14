@@ -226,10 +226,10 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         parser.add_argument("--train_dataset", default=None, help='path to the train kwcoco file')
         parser.add_argument("--vali_dataset", default=None, help='path to the validation kwcoco file')
         parser.add_argument("--test_dataset", default=None, help='path to the test kwcoco file')
-        parser.add_argument("--time_steps", default=2, type=int)
-        parser.add_argument("--chip_size", default=128, type=int)
-        parser.add_argument("--time_overlap", default=0.0, type=float, help='fraction of time steps to overlap')
-        parser.add_argument("--chip_overlap", default=0.1, type=float, help='fraction of space steps to overlap')
+        parser.add_argument("--time_steps", default=2, type=smartcast)
+        parser.add_argument("--chip_size", default=128, type=smartcast)
+        parser.add_argument("--time_overlap", default=0.0, type=smartcast, help='fraction of time steps to overlap')
+        parser.add_argument("--chip_overlap", default=0.1, type=smartcast, help='fraction of space steps to overlap')
         parser.add_argument("--neg_to_pos_ratio", default=1.0, type=float, help='maximum ratio of samples with no annotations to samples with annots')
         parser.add_argument("--time_sampling", default='contiguous', type=str, help=ub.paragraph(
             '''
