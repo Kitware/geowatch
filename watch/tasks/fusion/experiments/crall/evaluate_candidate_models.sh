@@ -29,6 +29,7 @@ CUDA_VISIBLE_DEVICES=1 \
    --package_fpath=$PACKAGE_FPATH \
     --pred_dataset=$PRED_DATASET \
     --time_sampling="soft+dilated" \
-    --chip_overlap=0
+    --chip_overlap=0 \
+    --num_workers=14
 
     # hidden flag: --debug-timesample
