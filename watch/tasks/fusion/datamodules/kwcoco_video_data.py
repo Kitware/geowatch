@@ -955,7 +955,6 @@ class KWCocoVideoDataset(data.Dataset):
             do_vflip = np.random.rand() > 0.5
 
         prev_frame_cidxs = None
-        prev_frame_chw = None
 
         for frame, dets, gid in zip(raw_frame_list, raw_det_list, raw_gids):
             img = self.sampler.dset.imgs[gid]
@@ -1024,36 +1023,6 @@ class KWCocoVideoDataset(data.Dataset):
             frame_chw = einops.rearrange(frame_hwc, 'h w c -> c h w')
             input_chw = frame_chw
 
-            # if self.diff_inputs:
-            #     if prev_frame_chw is not None:
-            #         frame_diff = np.abs(frame_chw - prev_frame_chw)
-            #         # kwimage.normalize(frame_chw) -
-            #         # kwimage.normalize(prev_frame_chw))
-            #     else:
-            #         frame_diff = np.zeros_like(frame_chw)
-            #     """
-            #     # Check:
-            #     hwc = kwimage.ensure_float01(kwimage.grab_test_image('astro'))
-            #     hwc2 = kwimage.gaussian_blur(hwc)
-            #     v1 = einops.rearrange(hwc, 'h w c -> c h w')
-            #     v2 = einops.rearrange(hwc2, 'h w c -> c h w')
-            #     diff = np.abs(v1 - v2)
-
-            #     kwplot.imshow(kwimage.stack_images(v1))
-            #     kwplot.imshow(kwimage.stack_images(v2))
-            #     kwplot.imshow(kwimage.stack_images(diff))
-
-            #     input_chw = einops.rearrange([v1, diff], '(c1 c2) c h w -> (c1 c c2) h w', c1=1)
-            #     kwplot.imshow(kwimage.stack_images(input_chw))
-            #     """
-            #     # Interlace/Interweave the diffs and the channels
-            #     parts = list(ub.flatten(zip(frame_chw, frame_diff)))
-            #     input_chw = np.stack(parts, axis=0)
-            #     # input_chw = einops.rearrange([frame_chw, frame_diff], '(c1 c2) c h w -> (c1 c c2) h w', c1=1)
-            # else:
-            #     input_chw = frame_chw
-            #     pass
-
             # convert annotations into a change detection task suitable for
             # the network.
             if prev_frame_cidxs is None:
@@ -1077,7 +1046,7 @@ class KWCocoVideoDataset(data.Dataset):
                 'ignore': torch.from_numpy(frame_ignore),
             }
             prev_frame_cidxs = frame_cidxs
-            prev_frame_chw = frame_chw
+            # prev_frame_chw = frame_chw
 
             frame_items.append(frame_item)
 
