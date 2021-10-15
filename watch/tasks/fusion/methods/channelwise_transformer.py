@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import einops
 import kwarray
 import kwcoco
@@ -17,6 +18,7 @@ from torchvision import transforms
 from torch.optim import lr_scheduler
 from watch.tasks.fusion import utils
 from watch.tasks.fusion.architectures import transformer
+from watch.tasks.fusion import heuristics
 
 try:
     import xdev
@@ -186,6 +188,7 @@ class MultimodalTransformer(pl.LightningModule):
         if input_channels is None:
             raise Exception('need them for num input_channels!')
         input_channels = channel_spec.ChannelSpec.coerce(input_channels)
+        self.input_channels = input_channels
 
         input_streams = list(input_channels.streams())
         stream_num_channels = {s.spec: s.numel() for s in input_streams}
@@ -203,19 +206,11 @@ class MultimodalTransformer(pl.LightningModule):
         self.class_loss = class_loss
         self.change_loss = change_loss
 
-        hueristic_background_keys = {
-            'background', 'No Activity', 'Post Construction',
-        }
-
-        # hueristic_occluded_keys = {
-        # }
+        # TODO: this data should be introspectable via the kwcoco file
+        hueristic_background_keys = heuristics.BACKGROUND_CLASSES
 
         # FIXME: case sensitivity
-
-        hueristic_ignore_keys = {
-            'clouds', 'occluded',
-            'ignore', 'unknown',
-        }
+        hueristic_ignore_keys = heuristics.IGNORE_CLASSNAMES
         if self.class_freq is not None:
             all_keys = set(self.class_freq.keys())
         else:
@@ -270,12 +265,6 @@ class MultimodalTransformer(pl.LightningModule):
                 print('heuristic_weights = {}'.format(ub.repr2(heuristic_weights, nl=1)))
 
                 heuristic_weights.update({k: 0 for k in hueristic_ignore_keys})
-                # 'background': 0.05,
-                # 'No Activity'        : 0.003649,
-                # 'Active Construction': 0.188011,
-                # 'Site Preparation'   : 1.0,
-                # 'Post Construction'  : 0.142857,
-
                 # print('heuristic_weights = {}'.format(ub.repr2(heuristic_weights, nl=1, align=':')))
                 class_weights = []
                 for catname in self.classes:
@@ -284,8 +273,6 @@ class MultimodalTransformer(pl.LightningModule):
                 using_class_weights = ub.dzip(self.classes, class_weights)
                 print('using_class_weights = {}'.format(ub.repr2(using_class_weights, nl=1, align=':')))
                 class_weights = torch.FloatTensor(class_weights)
-                # print('self.classes = {!r}'.format(self.classes))
-                # print('AUTO class_weights = {!r}'.format(class_weights))
             else:
                 raise KeyError(class_weights)
         else:

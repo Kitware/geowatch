@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import einops
 import kwarray
 import kwcoco
@@ -11,6 +12,7 @@ import ubelt as ub
 from kwcoco import channel_spec
 from torch.utils import data
 from watch.tasks.fusion import utils
+from watch.tasks.fusion import heuristics
 from watch.utils import kwcoco_extensions
 from watch.utils import util_bands
 from watch.utils import util_iter
@@ -24,21 +26,6 @@ try:
     profile = xdev.profile
 except Exception:
     profile = ub.identity
-
-
-# FIXME: Hard-coded category aliases.
-# The correct way to handle these would be to have some information in the
-# kwcoco category dictionary that specifies how the categories should be
-# interpreted.
-_HEURISTIC_CATEGORIES = {
-
-    'background': {'background', 'No Activity', 'Post Construction'},
-
-    'pre_background': {'No Activity'},
-    'post_background': {'Post Construction'},
-
-    'ignore': {'ignore', 'Unknown', 'clouds'},
-}
 
 
 class KWCocoVideoDataModule(pl.LightningDataModule):
@@ -563,15 +550,18 @@ class KWCocoVideoDataset(data.Dataset):
         channels=None,
         mode="fit",
         window_overlap=0,
-        transform=None,
         neg_to_pos_ratio=1.0,
         time_sampling='auto',
         diff_inputs=False,
         exclude_sensors=None,
     ):
 
-        self._hueristic_background_classnames = _HEURISTIC_CATEGORIES['background']
-        self._heuristic_ignore_classnames = _HEURISTIC_CATEGORIES['ignore']
+        # TODO: the set of "valid" background classnames should be defined
+        # by the inputs, not hard-coded in the dataloader. This can either be a
+        # list of names provided to the training config, or something baked
+        # into the kwcoco spec marking a class as some type of "background"
+        self._hueristic_background_classnames = heuristics.BACKGROUND_CLASSES
+        self._heuristic_ignore_classnames = heuristics.IGNORE_CLASSNAMES
 
         if channels is None:
             # Hack to use all channels in the first image.
@@ -579,9 +569,6 @@ class KWCocoVideoDataset(data.Dataset):
             chan_info = kwcoco_extensions.coco_channel_stats(sampler.dset)
             channels = chan_info['all_channels']
         channels = channel_spec.ChannelSpec.coerce(channels).normalize()
-
-        if transform is not None:
-            raise Exception('I do not like injecting the transforms')
 
         if time_sampling == 'auto':
             time_sampling = 'hard+distribute'
@@ -644,11 +631,6 @@ class KWCocoVideoDataset(data.Dataset):
         self.window_overlap = window_overlap
         self.sampler = sampler
 
-        # TODO: the set of "valid" background classnames should be defined
-        # by the inputs, not hard-coded in the dataloader. This can either be a
-        # list of names provided to the training config, or something baked
-        # into the kwcoco spec marking a class as some type of "background"
-
         # Add extra categories if we need to and construct a new classes object
         graph = self.sampler.classes.graph
         if 0:
@@ -706,12 +688,6 @@ class KWCocoVideoDataset(data.Dataset):
             ','.join(_input_channels)
         )
 
-        # if self.diff_inputs:
-        #     # Add frame_differences between channels
-        #     # self.input_channels = kwcoco.channel_spec.ChannelSpec.coerce(','.join(
-        #     #      for part in self.channels.parse().values()]))
-        # else:
-        #     self.input_channels = channels
         self.mode = mode
 
         self.augment = False
@@ -1643,9 +1619,9 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
     # Create a sliding window object for each specific image (because they may
     # have different sizes, technically we could memoize this)
     import pyqtree
-    # import itertools as it
+    from watch.tasks.fusion.datamodules import temporal_sampling as tsm  # NOQA
+    from watch.utils import util_kwarray
 
-    # window_overlap = 0.5
     window_space_dims = window_dims[1:3]
     window_time_dims = window_dims[0]
     print('window_time_dims = {!r}'.format(window_time_dims))
@@ -1668,24 +1644,6 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
 
     vidid_to_time_sampler = {}
     vidid_to_valid_gids = {}
-
-    if use_annot_info:
-        # FIXME: HARD CODED CONSTANTS
-        print('dset.cats = {}'.format(ub.repr2(dset.cats, nl=1)))
-        special_cids = ub.ddict(set)
-        special_aliases = {
-            'pre_cids': {'background', 'No Activity'},
-            'ignore_cids': {'ignore', 'Unknown', 'clouds'},
-
-            'active': {'Active Construction'},
-            'post_cids': {'Post Construction'},
-        }
-        for key, aliases in special_aliases.items():
-            for name in aliases:
-                if name in dset.index.name_to_cat:
-                    special_cids[key].add(dset.index.name_to_cat[name]['id'])
-
-    from watch.tasks.fusion.datamodules import temporal_sampling as tsm  # NOQA
 
     parts = set(time_sampling.split('+'))
     affinity_type_parts = parts & {'hard', 'hardish', 'contiguous', 'soft'}
@@ -1744,7 +1702,6 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                         'aid': aid,
                     })
 
-            from watch.utils import util_kwarray
             unique_tlbr = util_kwarray.unique_rows(np.array(all_vid_tlbr))
             for idx, tlbr_box in enumerate(unique_tlbr):
                 qtree.insert(idx, tlbr_box)

@@ -8,6 +8,7 @@ TODO:
 import torch  # NOQA
 import pathlib
 import ubelt as ub
+import numpy as np
 from os.path import join
 from os.path import relpath
 import kwimage
@@ -211,11 +212,13 @@ def predict(cmdline=False, **kwargs):
         datamodule_vars.update(overloads)
         # datamodule_vars[k] = args.datamodule_defaults[k]
     else:
-        print('Warning have to make assumptions')
-        # datamodule_vars['chip_size'] = method.datamodule_hparams['chip_size']
-        # datamodule_vars['time_steps'] = method.datamodule_hparams['time_steps']
-        datamodule_vars['channels'] = list(method.input_norms.keys())[0]
-        # method.datamodule_hparams['channels']
+        print('Warning have to make assumptions. Might not always work')
+        if hasattr(method, 'input_channels'):
+            # note input_channels are sometimes different than the channels the
+            # datamodule expects. Depending on special keys and such.
+            datamodule_vars['channels'] = method.input_channels.spec
+        else:
+            datamodule_vars['channels'] = list(method.input_norms.keys())[0]
 
     datamodule = datamodule_class(
         **datamodule_vars
@@ -245,7 +248,6 @@ def predict(cmdline=False, **kwargs):
     result_dataset.clear_annotations()
     # Change all paths to be absolute paths
     result_dataset.reroot(absolute=True)
-    result_dataset.ensure_category("change")
     # Set the filepath for the prediction coco file
     # (modifies the bundle_dpath)
     if args.pred_dataset is None:
@@ -302,8 +304,15 @@ def predict(cmdline=False, **kwargs):
             write_probs=args.write_probs,
             write_preds=args.write_preds,
         )
+        result_dataset.ensure_category("change")
 
     if args.with_class:
+
+        if hasattr(method, 'foreground_classes'):
+            foreground_classes = method.foreground_classes
+        else:
+            raise NotImplementedError('old model, need to hack in fg classes')
+
         stitch_managers['class'] = CocoStitchingManager(
             result_dataset,
             stiching_space='video',
@@ -324,6 +333,7 @@ def predict(cmdline=False, **kwargs):
             write_probs=args.write_probs,
             write_preds=args.write_preds,
         )
+        result_dataset.ensure_category("saliency")
 
     result_infos = []
     total_info = {'n_anns': 0, 'n_imgs': 0, 'total_prob': 0}
@@ -356,7 +366,6 @@ def predict(cmdline=False, **kwargs):
         prog.ensure_newline()
         result_infos.append(info)
 
-    import kwarray
     running_stats = kwarray.RunningStats()  # check if probs are non-zero
 
     prog = ub.ProgIter(test_dataloader, desc='predicting', verbose=1)
@@ -450,6 +459,9 @@ class CocoStitchingManager(object):
             if making hard decisions, determines the threshold for converting a
             soft mask into a hard mask, which can be converted into a polygon.
 
+        prob_compress (str):
+            Compression algorithm to use when writing probabilities to disk.
+            Can be any GDAL compression code, e.g LZW, DEFLATE, RAW, etc.
 
     TODO:
         - [ ] Handle the case where the input space is related to the output
@@ -471,12 +483,13 @@ class CocoStitchingManager(object):
 
     def __init__(self, result_dataset, chan_code=None, stiching_space='video',
                  device='numpy', thresh=0.5, write_probs=True,
-                 write_preds=True, num_bands='auto'):
+                 write_preds=True, num_bands='auto', prob_compress='LZW'):
         self.result_dataset = result_dataset
         self.device = device
         self.chan_code = chan_code
         self.thresh = thresh
         self.num_bands = num_bands
+        self.prob_compress = prob_compress
 
         self.stiching_space = stiching_space
         if stiching_space != 'video':
@@ -585,7 +598,26 @@ class CocoStitchingManager(object):
         stitcher = self.image_stitchers.pop(gid)
 
         # Get the final stitched feature for this image
-        change_probs = stitcher.finalize()
+        final_probs = stitcher.finalize()
+        final_probs = kwarray.atleast_nd(final_probs, 3)
+        final_probs = np.nan_to_num(final_probs)
+
+        final_weights = kwarray.atleast_nd(stitcher.weights, 3)
+        is_predicted_pixel = final_weights.any(axis=2).astype('uint8')
+
+        # NOTE: could find and record the valid prediction regions.
+        # Given a (rectilinear) non-convex multipolygon where we are guarenteed
+        # that all of the angles in the polygon are right angles, what is an
+        # efficient algorithm to decompose it into a minimal set of disjoint
+        # rectangles?
+        # https://stackoverflow.com/questions/5919298/algorithm-for-finding-the-fewest-rectangles-to-cover-a-set-of-rectangles-without/6634668#6634668
+        # Or... just write out a polygon... KISS
+        _mask = kwimage.Mask(is_predicted_pixel, 'c_mask')
+        _poly = _mask.to_multi_polygon()
+        predicted_region = _poly.to_geojson()
+        # Mark that we made a prediction on this image.
+        img['prediction_region'] = predicted_region
+        img['has_predictions'] = ub.dict_union(img.get('has_predictions', {}), {self.chan_code: True})
 
         # Get spatial relationship between the image and the video
         vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
@@ -594,19 +626,6 @@ class CocoStitchingManager(object):
         n_anns = 0
         total_prob = 0
 
-        # TODO: find and record the valid prediction regions
-        # Given a (rectilinear) non-convex multipolygon where we are guarenteed
-        # that all of the angles in the polygon are right angles, what is an
-        # efficient algorithm to decompose it into a minimal set of disjoint
-        # rectangles?
-        # https://stackoverflow.com/questions/5919298/algorithm-for-finding-the-fewest-rectangles-to-cover-a-set-of-rectangles-without/6634668#6634668
-        # Or... just write out a polygon... KISS
-        is_predicted_pixel = (stitcher.weights > 0).astype('uint8')
-        predicted_region = kwimage.Mask(is_predicted_pixel, 'c_mask').to_multi_polygon().to_geojson()
-        # Mark that we made a prediction on this image.
-        img['prediction_region'] = predicted_region
-        img['has_predictions'] = True
-
         if self.write_probs:
             # This currently exists as an example to demonstrate how a
             # prediction script can write a pre-fusion TA-2 feature to disk and
@@ -614,23 +633,22 @@ class CocoStitchingManager(object):
             #
             # Save probabilities (or feature maps) as a new auxiliary image
             bundle_dpath = self.result_dataset.bundle_dpath
-            new_feature = kwarray.atleast_nd(change_probs, 3)
             new_fname = img.get('name', str(img['id'])) + f'_{self.chan_code}.tiff'  # FIXME
             new_fpath = join(self.prob_dpath, new_fname)
             img.get('auxiliary', []).append({
                 'file_name': relpath(new_fpath, bundle_dpath),
                 'channels': self.chan_code,
-                'height': new_feature.shape[0],
-                'width': new_feature.shape[1],
-                'num_bands': new_feature.shape[2],
+                'height': final_probs.shape[0],
+                'width': final_probs.shape[1],
+                'num_bands': final_probs.shape[2],
                 'warp_aux_to_img': img_from_vid.concise(),
             })
 
             # Save the prediction to disk
-            total_prob += new_feature.sum()
+            total_prob += final_probs.sum()
             kwimage.imwrite(
-                str(new_fpath), new_feature, space=None, backend='gdal',
-                compress='LZW'
+                str(new_fpath), final_probs, space=None, backend='gdal',
+                compress=self.prob_compress,
             )
 
         if self.write_preds:
@@ -656,10 +674,11 @@ class CocoStitchingManager(object):
                     image_id=gid, category_id=change_cid,
                     bbox=bbox, segmentation=img_poly, score=score)
 
-        return {
+        info = {
             'n_anns': n_anns,
             'total_prob': total_prob,
         }
+        return info
 
 
 def main(cmdline=True, **kwargs):
