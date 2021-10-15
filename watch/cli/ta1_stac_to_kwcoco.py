@@ -131,7 +131,7 @@ def make_coco_img_from_stac_asset(asset_dict,
     asset_href = asset_dict['href']
 
     # Skip assets with metadata extensions
-    if re.search(r'\.(txt|csv|json|xml)$', asset_href, re.I):
+    if re.search(r'\.(txt|csv|json|xml|vrt)$', asset_href, re.I):
         return None
 
     # Largely a copy-paste of
