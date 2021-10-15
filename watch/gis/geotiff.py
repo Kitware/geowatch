@@ -524,6 +524,8 @@ def geotiff_filepath_info(gpath, fast=True):
         >>>     'S2B_MSIL1C_20181219T022109_N0207_R003_T52SDG_20181219T051028.SAFE/GRANULE/L1C_T52SDG_A009324_20181219T022640/IMG_DATA/T52SDG_20181219T022109_TCI.jp2',
         >>>     'S2B_MSIL1C_20181219T022109_N0207_R003_T52SDG_20181219T051028/S2B_MSIL1C_20181219T022109_N0207_R003_T52SDG_20181219T051028.SAFE/GRANULE/L1C_T52SDG_A009324_20181219T022640/IMG_DATA/T52SDG_20181219T022109_B01.jp2',
         >>>     'S2A_MSIL1C_20151021T022702_N0204_R003_T52SDG_20151021T022701.SAFE/GRANULE/L1C_T52SDG_A001716_20151021T022701/IMG_DATA/T52SDG_20151021T022702_TCI.jp2',
+        >>>     'LC08_L2SP_217076_20190107_20211008_02_T1_T23KPQ_B1.tif',
+        >>>     'S2B_MSI_L2A_T23KPQ_20190114_20211008_SR_B01.tif',
         >>> ]
         >>> gpath = inputs[-1]
         >>> print('gpath = {!r}'.format(gpath))
@@ -703,7 +705,7 @@ def _parser_lut(pattern):
 
 
 def parse_sentinel2_product_id(parts):
-    '''
+    """
     Try to parse the Sentinel-2 pre-2016 and post-2016 safedir formats.
 
     Note that unlike parse_landsat_product_id, which expects a band file basename,
@@ -714,7 +716,13 @@ def parse_sentinel2_product_id(parts):
     For now, we just need all names to be minimally parseable, even if some info is incorrect.
 
     General plan is to check the old formats strictly first, and then check the new safedir loosely as a default
-    '''
+
+    Example:
+
+        parts = ['S2B_MSI_L2A_T23KPQ_20190114_20211008_SR_B01.tif']
+        parse_sentinel2_product_id(parts)
+
+    """
 
     def _dt(name):
         # expand to a named ISO 8601 datetime without separators, which is not supported by parse
@@ -836,9 +844,8 @@ def parse_sentinel2_product_id(parts):
     # Handbook I'm not sure what the standard for this format is I just know a
     # suffix of _TCI means true color image. ANd these are from sentinel2, I'm
     # guessing on the rest of the format.
-
-    s2_format_guess = '{tile_number:.6}_{date:.15}_{band:.3}.{ext}'
-    s2_parser = _parser_lut(s2_format_guess)
+    s2_format_guess1 = '{tile_number:.6}_{date:.15}_{band:.3}.{ext}'
+    s2_parser = _parser_lut(s2_format_guess1)
     result = s2_parser.parse(parts[-1])
     if result:
         tile_number = result.named['tile_number']
@@ -858,7 +865,35 @@ def parse_sentinel2_product_id(parts):
             if 'mission_id' not in meta:
                 meta['mission_id'] = 'S2'
 
+    # This is another guess based on a file that failed to ingest
+    s2_format_guess2 = '{MMM:.3}_MSI_{XXX:.3}_{Txxxxx:.6}_{SENSE_YYYYMMDD:.8}_{PROC_YYYYMMDD:.8}_{correction_code}_{band:.3}.{ext}'
+    s2_parser2 = _parser_lut(s2_format_guess2)
+    result = s2_parser2.parse(parts[-1])
+    if result:
+        s2_meta = {}
+        mission_id = result.named['MMM']
+        if mission_id not in {'S2A', 'S2B'}:
+            raise InvalidFormat
+        s2_meta['mission_id'] = mission_id
+        s2_meta['product_level'] = result.named['XXX']
+        s2_meta['tile_number'] = result.named['Txxxxx']
+        s2_meta['sense_start_time'] = result.named['SENSE_YYYYMMDD']
+        s2_meta['processing_date'] = result.named['PROC_YYYYMMDD']  # is this corret?
+        s2_meta['correction_code'] = result.named['correction_code']
+        s2_meta['product_guess'] = 'sentinel2'
+        s2_meta['guess_heuristic'] = 's2_format_guess2'
+        s2_meta['band'] = band = result.named['band']
+        s2_meta['channels'] = s2_channel_alias.get(band, band)
+        # l8_channel_alias = {
+        #     band['name']: band['common_name'] for band in SENTINEL2 if 'common_name' in band
+        # }
+
+        meta.update(s2_meta)
+
     if meta:
+        if 'sense_start_time' in meta:
+            # Write data to a consistent key
+            meta['date_captured'] = isoparse(meta['sense_start_time']).isoformat()
         return meta
 
 
@@ -907,10 +942,13 @@ def parse_landsat_product_id(product_id):
         .. [LS_578] https://github.com/dgketchum/Landsat578#-1
         .. [ExampleLandSat]  https://console.cloud.google.com/storage/browser/gcp-public-data-landsat/LC08/01/044/034/LC08_L1GT_044034_20130330_20170310_01_T2?_ga=2.210779154.665659046.1615242530-37570621.1615242530
         .. [LandSatSuffixFormat] https://prd-wret.s3.us-west-2.amazonaws.com/assets/palladium/production/atoms/files/LSDS-750_Landsat8_Level-0-Reformatted_DataFormatControlBook-v15.pdf (page 26 / 99)
+        .. [LandsatProcLevels] https://www.usgs.gov/core-science-systems/nli/landsat/landsat-levels-processing
+        .. [LandsatL2Names] https://www.usgs.gov/faqs/what-naming-convention-landsat-collection-2-level-1-and-level-2-scenes?qt-news_science_products=0#qt-news_science_products
     """
     # Landsat filename pattern. See [LanSatName]_
     # LXSS_LLLL_PPPRRR_YYYYMMDD_yyyymmdd_CC_TX
     #                   LXSS     _ LLLL_  PPPRRR _ YYYYMMDD _ yyyymmdd _ CC _ TX
+    from dateutil.parser import isoparse
     landsat_pattern = 'L{X:1}{SS}_{LLLL}_{PPPRRR}_{YYYYMMDD}_{yyyymmdd}_{CC}_{TX}'
     landsat_parser = _parser_lut(landsat_pattern)
     result = landsat_parser.parse(product_id)
@@ -928,6 +966,9 @@ def parse_landsat_product_id(product_id):
             'L1TP': 'Precision Terrain',
             'L1GT': 'Systematic Terrain',
             'L1GS': 'Systematic',
+            'L2SP': 'Science Package',
+            'L2SR': 'Surface Reflectance',
+            'L2ST': 'Surface Temperature',  # this is a guess
         }
 
         # use util_bands for this
@@ -957,11 +998,15 @@ def parse_landsat_product_id(product_id):
         ls_meta['sat_code'] = sat_code
         ls_meta['WRS_path'] = wrs[:3]
         ls_meta['WRS_row'] = wrs[3:]
+        ls_meta['tile_number'] = wrs
         ls_meta['correction_level_code'] = correction_code
         ls_meta['acquisition_date'] = result.named['YYYYMMDD']
         ls_meta['processing_date'] = result.named['yyyymmdd']
         ls_meta['collection_number'] = result.named['CC']
         ls_meta['collection_category'] = tx
+
+        # Common key
+        ls_meta['date_captured'] = isoparse(ls_meta['acquisition_date']).isoformat()
 
         if len(trailing) > 1:
             suffix = '_'.join(trailing[1:])

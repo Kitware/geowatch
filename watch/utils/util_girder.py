@@ -58,11 +58,11 @@ def grabdata_girder(api_url, resource_id, name=None, dpath=None, hash_prefix=Non
         globals().update(xdev.get_func_kwargs(grabdata_girder))
     """
     # Use the CLI version to get a progress bar
+    import girder_client
     if verbose:
         from girder_client.cli import GirderCli
         client = GirderCli(username=None, password=None, apiUrl=api_url)
     else:
-        import girder_client
         client = girder_client.GirderClient(apiUrl=api_url)
 
     auth_info = {'api_key': api_key}
@@ -87,6 +87,15 @@ def grabdata_girder(api_url, resource_id, name=None, dpath=None, hash_prefix=Non
     for resoure_type, get_info in get_info_methods.items():
         try:
             resource_info = get_info(resource_id)
+        except girder_client.HttpError as ex:
+            if ex.response.status_code == 400:
+                pass
+            elif ex.response.status_code == 401:
+                print('Unauthorized, probably need to set credentials')
+                raise
+            else:
+                print('Unhandled error ex = {}'.format(ex))
+            resource_info = None
         except Exception:
             resource_info = None
         else:
