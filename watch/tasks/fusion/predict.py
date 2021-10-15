@@ -15,6 +15,7 @@ import kwimage
 import kwarray
 from watch.tasks.fusion import datamodules
 from watch.tasks.fusion import utils
+from watch.tasks.fusion import heuristics
 from watch.tasks.tracking import from_heatmap
 from watch.utils import util_path
 
@@ -36,28 +37,28 @@ def make_predict_config(cmdline=False, **kwargs):
         args_for_setting_config_path=['--config'],
         args_for_writing_out_config_file=['--dump'],
     )
-    parser.add_argument("--datamodule", default='KWCocoVideoDataModule')
-    parser.add_argument("--pred_dataset", default=None, dest='pred_dataset')
+    parser.add_argument('--datamodule', default='KWCocoVideoDataModule')
+    parser.add_argument('--pred_dataset', default=None, dest='pred_dataset')
 
-    parser.add_argument("--pred_dpath", dest='pred_dpath', type=pathlib.Path, help='path to dump results')
+    parser.add_argument('--pred_dpath', dest='pred_dpath', type=pathlib.Path, help='path to dump results')
 
-    parser.add_argument("--package_fpath", type=pathlib.Path)
-    parser.add_argument("--gpus", default=None, help="todo: hook up to lightning")
-    parser.add_argument("--thresh", type=smartcast, default=0.01)
+    parser.add_argument('--package_fpath', type=pathlib.Path)
+    parser.add_argument('--gpus', default=None, help='todo: hook up to lightning')
+    parser.add_argument('--thresh', type=smartcast, default=0.01)
 
-    parser.add_argument("--with_change", type=smartcast, default='auto')
-    parser.add_argument("--with_class", type=smartcast, default='auto')
-    parser.add_argument("--with_saliency", type=smartcast, default='auto')
+    parser.add_argument('--with_change', type=smartcast, default='auto')
+    parser.add_argument('--with_class', type=smartcast, default='auto')
+    parser.add_argument('--with_saliency', type=smartcast, default='auto')
 
     parser.add_argument(
-        "--write_preds", default=True, type=smartcast, help=ub.paragraph(
+        '--write_preds', default=True, type=smartcast, help=ub.paragraph(
             '''
             If True, convert probability maps into raw "hard" predictions and
             write them as annotations to the prediction kwcoco file.
             '''))
 
     parser.add_argument(
-        "--write_probs", default=True, type=smartcast, help=ub.paragraph(
+        '--write_probs', default=True, type=smartcast, help=ub.paragraph(
             '''
             If True, write raw "soft" probability maps into the kwcoco file as
             a new auxiliary channel.  The channel name is currently hard-coded
@@ -121,6 +122,9 @@ def predict(cmdline=False, **kwargs):
         ...     'max_epochs': 1,
         ...     'time_steps': 2,
         ...     'chip_size': 64,
+        ...     'global_change_weight': 1.0,
+        ...     'global_class_weight': 1.0,
+        ...     'global_saliency_weight': 1.0,
         ...     'max_steps': 1,
         ...     'learning_rate': 1e-5,
         ...     'num_workers': 0,
@@ -145,15 +149,18 @@ def predict(cmdline=False, **kwargs):
         >>>     # a change predictoion, depending on the temporal sampling.
         >>>     images = dset.images(dset.index.vidid_to_gids[1])
         >>>     pred_chans = [[a['channels'] for a in aux] for aux in images.lookup('auxiliary')]
-        >>>     assert any('change_prob' in cs for cs in pred_chans), 'some frames should have change'
-        >>>     assert not all('change_prob' in cs for cs in pred_chans), 'some frames should not have change'
+        >>>     assert any('change' in cs for cs in pred_chans), 'some frames should have change'
+        >>>     assert not all('change' in cs for cs in pred_chans), 'some frames should not have change'
         >>>     # Test number of annots in each frame
-        >>>     num_annots = list(map(len, images.annots))
-        >>>     assert num_annots[0] == 0, 'first frame should have none'
+        >>>     frame_to_cathist = {
+        >>>         img['frame_index']: ub.dict_hist(annots.cnames, labels=result_dataset.object_categories())
+        >>>         for img, annots in zip(images.objs, images.annots)
+        >>>     }
+        >>>     assert frame_to_cathist[0]['change'] == 0, 'first frame should have no change polygons'
         >>>     # This test may fail with very low probability, so warn
         >>>     import warnings
-        >>>     if sum(num_annots[1:]) == 0:
-        >>>         warnings.warn('should be predictions elsewhere')
+        >>>     if sum(d['change'] for d in frame_to_cathist.values()) == 0:
+        >>>         warnings.warn('should have some change predictions elsewhere')
     """
     args = make_predict_config(cmdline=cmdline, **kwargs)
     print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=2)))
@@ -223,7 +230,7 @@ def predict(cmdline=False, **kwargs):
     datamodule = datamodule_class(
         **datamodule_vars
     )
-    datamodule.setup("test")
+    datamodule.setup('test')
 
     if ub.argflag('--debug-timesample'):
         import kwplot
@@ -294,46 +301,56 @@ def predict(cmdline=False, **kwargs):
     if args.with_saliency == 'auto':
         args.with_saliency = getattr(method, 'global_saliency_weight', 0.0)
 
+    # could be torch on-device stitching
+    stitch_device = 'numpy'
+
     if args.with_change:
         stitch_managers['change'] = CocoStitchingManager(
             result_dataset,
             stiching_space='video',
-            device='numpy',  # could be torch on-device stitching
-            chan_code='change_prob',
+            device=stitch_device,
+            chan_code='change',
             thresh=args.thresh,
             write_probs=args.write_probs,
             write_preds=args.write_preds,
+            num_bands=1,
         )
-        result_dataset.ensure_category("change")
+        result_dataset.ensure_category('change')
 
     if args.with_class:
-
         if hasattr(method, 'foreground_classes'):
             foreground_classes = method.foreground_classes
         else:
+            not_foreground = (heuristics.BACKGROUND_CLASSES | heuristics.IGNORE_CLASSNAMES)
+            foreground_classes = ub.oset(method.classes) - not_foreground
+            # hueristics.B
             raise NotImplementedError('old model, need to hack in fg classes')
 
+        class_chan_code = '|'.join(list(method.classes))
         stitch_managers['class'] = CocoStitchingManager(
             result_dataset,
             stiching_space='video',
-            device='numpy',  # could be torch on-device stitching
-            chan_code='class_prob',
+            device=stitch_device,
+            chan_code=class_chan_code,
             thresh=args.thresh,
             write_probs=args.write_probs,
             write_preds=args.write_preds,
+            polygon_categories=foreground_classes,
+            num_bands=len(method.classes),
         )
 
     if args.with_saliency:
         stitch_managers['saliency'] = CocoStitchingManager(
             result_dataset,
             stiching_space='video',
-            device='numpy',  # could be torch on-device stitching
-            chan_code='saliency_prob',
+            device=stitch_device,
+            chan_code='not_salient|salient',
             thresh=args.thresh,
             write_probs=args.write_probs,
             write_preds=args.write_preds,
+            polygon_categories=['salient'],
+            num_bands=2,
         )
-        result_dataset.ensure_category("saliency")
 
     result_infos = []
     total_info = {'n_anns': 0, 'n_imgs': 0, 'total_prob': 0}
@@ -403,7 +420,9 @@ def predict(cmdline=False, **kwargs):
                 in_gids = [frame['gid'] for frame in item['frames']]
 
                 if head_key == 'change':
-                    out_gids = in_gids[1:]  # HACK
+                    # HACK: FIXME: WE ARE HARD CODING THAT CHANGE IS GIVEN TO
+                    # ALL FRAMES EXECPT THE FIRST IN MULTIPLE PLACES.
+                    out_gids = in_gids[1:]
                 else:
                     out_gids = in_gids
 
@@ -446,6 +465,9 @@ class CocoStitchingManager(object):
             The CocoDataset that is being predicted on. This will be modified
             when an image prediction is finalized.
 
+        short_code (str):
+            short identifier used for directory names.
+
         chan_code (str):
             If saving the stitched features, this is the channel code to use.
 
@@ -462,6 +484,10 @@ class CocoStitchingManager(object):
         prob_compress (str):
             Compression algorithm to use when writing probabilities to disk.
             Can be any GDAL compression code, e.g LZW, DEFLATE, RAW, etc.
+
+        polygon_categories (List[str] | None):
+            These are the list of channels that should be transformed into
+            polygons. If not set, all are used.
 
     TODO:
         - [ ] Handle the case where the input space is related to the output
@@ -481,15 +507,23 @@ class CocoStitchingManager(object):
               the code that adds soft predictions to the kwcoco file?
     """
 
-    def __init__(self, result_dataset, chan_code=None, stiching_space='video',
+    def __init__(self, result_dataset, short_code=None, chan_code=None, stiching_space='video',
                  device='numpy', thresh=0.5, write_probs=True,
-                 write_preds=True, num_bands='auto', prob_compress='LZW'):
+                 write_preds=True, num_bands='auto', prob_compress='LZW',
+                 polygon_categories=None):
+        self.short_code = short_code
         self.result_dataset = result_dataset
         self.device = device
         self.chan_code = chan_code
         self.thresh = thresh
         self.num_bands = num_bands
         self.prob_compress = prob_compress
+        self.polygon_categories = polygon_categories
+
+        self.suffix_code = (
+            self.chan_code if '|' not in self.chan_code else
+            ub.hash_data(self.chan_code)[0:16]
+        )
 
         self.stiching_space = stiching_space
         if stiching_space != 'video':
@@ -506,9 +540,18 @@ class CocoStitchingManager(object):
         self.write_probs = write_probs
         self.write_preds = write_preds
 
+        if self.write_preds:
+            from kwcoco import channel_spec
+            chan_spec = channel_spec.FusedChannelSpec.coerce(chan_code)
+            if self.polygon_categories is None:
+                self.polygon_categories = chan_spec.parsed
+            # Determine the indexes that we will use for polygon extraction
+            _idx_lut = {c: idx for idx, c in enumerate(chan_spec.parsed)}
+            self.polygon_idxs = [_idx_lut[c] for c in self.polygon_categories]
+
         if self.write_probs:
             bundle_dpath = self.result_dataset.bundle_dpath
-            prob_subdir = f'_assets/{self.chan_code}'
+            prob_subdir = f'_assets/{self.short_code}'
             self.prob_dpath = join(bundle_dpath, prob_subdir)
             ub.ensuredir(self.prob_dpath)
 
@@ -525,24 +568,19 @@ class CocoStitchingManager(object):
 
             data (ndarray | Tensor): the feature or probability data
         """
+        data = kwarray.atleast_nd(data, 3)
         dset = self.result_dataset
         if self.stiching_space == 'video':
             vidid = dset.index.imgs[gid]['video_id']
             # Create the stitcher if it does not exist
             if gid not in self.image_stitchers:
                 video = dset.index.videos[vidid]
-
                 if self.num_bands == 'auto':
                     if len(data.shape) == 3:
                         self.num_bands = data.shape[2]
-                    elif len(data.shape) == 2:
-                        self.num_bands = None
                     else:
                         raise NotImplementedError
-                if self.num_bands is None:
-                    stitch_dims = (video['height'], video['width'])
-                else:
-                    stitch_dims = (video['height'], video['width'], self.num_bands)
+                stitch_dims = (video['height'], video['width'], self.num_bands)
                 self.image_stitchers[gid] = kwarray.Stitcher(
                     stitch_dims, device=self.device)
 
@@ -633,8 +671,9 @@ class CocoStitchingManager(object):
             #
             # Save probabilities (or feature maps) as a new auxiliary image
             bundle_dpath = self.result_dataset.bundle_dpath
-            new_fname = img.get('name', str(img['id'])) + f'_{self.chan_code}.tiff'  # FIXME
+            new_fname = img.get('name', str(img['id'])) + f'_{self.suffix_code}.tiff'  # FIXME
             new_fpath = join(self.prob_dpath, new_fname)
+            assert final_probs.shape[2] == (self.chan_code.count('|') + 1)
             img.get('auxiliary', []).append({
                 'file_name': relpath(new_fpath, bundle_dpath),
                 'channels': self.chan_code,
@@ -657,22 +696,25 @@ class CocoStitchingManager(object):
 
             # HACK: We happen to know this is the category atm.
             # Should have a better way to determine it via metadata
-            change_cid = self.result_dataset.index.name_to_cat['change']['id']
 
-            # Threshold scores
-            thresh = self.thresh
-            # Convert to polygons
-            scored_polys = list(from_heatmap.mask_to_scored_polygons(
-                change_probs, thresh))
-            n_anns = len(scored_polys)
-            for vid_poly, score in scored_polys:
-                # Transform the video polygon into image space
-                img_poly = vid_poly.warp(img_from_vid)
-                bbox = list(img_poly.bounding_box().to_coco())[0]
-                # Add the polygon as an annotation on the image
-                self.result_dataset.add_annotation(
-                    image_id=gid, category_id=change_cid,
-                    bbox=bbox, segmentation=img_poly, score=score)
+            for catname, band_idx in zip(self.polygon_categories, self.polygon_idxs):
+                cid = self.result_dataset.ensure_category(catname)
+
+                band_probs = final_probs[..., band_idx]
+                # Threshold scores (todo: could be per class)
+                thresh = self.thresh
+                # Convert to polygons
+                scored_polys = list(from_heatmap.mask_to_scored_polygons(
+                    band_probs, thresh))
+                n_anns = len(scored_polys)
+                for vid_poly, score in scored_polys:
+                    # Transform the video polygon into image space
+                    img_poly = vid_poly.warp(img_from_vid)
+                    bbox = list(img_poly.bounding_box().to_coco())[0]
+                    # Add the polygon as an annotation on the image
+                    self.result_dataset.add_annotation(
+                        image_id=gid, category_id=cid,
+                        bbox=bbox, segmentation=img_poly, score=score)
 
         info = {
             'n_anns': n_anns,
@@ -685,5 +727,5 @@ def main(cmdline=True, **kwargs):
     predict(cmdline=cmdline, **kwargs)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

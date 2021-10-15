@@ -7,6 +7,8 @@ cutting corners or using magic numbers. The idea is that  this will make it
 easier for us to go back and make the code robust.
 """
 
+
+# Might need to split this up into a finger-grained structure
 IGNORE_CLASSNAMES = {
     'clouds', 'occluded',
     'ignore', 'unknown',
