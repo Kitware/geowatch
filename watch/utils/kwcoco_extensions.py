@@ -266,7 +266,7 @@ def coco_populate_geo_video_stats(dset, vidid, target_gsd='max-resolution'):
         key=lambda kv: abs(1 - kv[1]['to_target_scale_factor'])
     )
     scale = base_info['to_target_scale_factor']
-    base_info = base_info['wld_crs_info']
+    base_wld_crs_info = base_info['wld_crs_info']
 
     # Can add an extra transform here if the video is not exactly in
     # any specific image space
@@ -288,8 +288,18 @@ def coco_populate_geo_video_stats(dset, vidid, target_gsd='max-resolution'):
     for gid in gids:
         img = dset.index.imgs[gid]
         wld_from_img = frame_infos[gid]['img_to_wld']
+        wld_crs_info = frame_infos[gid]['wld_crs_info']
         vid_from_wld = vid_from_wld @ wld_from_img
         img['warp_img_to_vid'] = vid_from_wld.concise()
+
+        if base_wld_crs_info != wld_crs_info:
+            import warnings
+            warnings.warn(ub.paragraph(
+                '''
+                Video alignment is warping images with different World
+                Coordinate Reference Systems, but still treating them as the
+                same. FIXME
+                '''))
 
 
 def coco_populate_geo_img_heuristics(dset, gid, overwrite=False,
