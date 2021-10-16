@@ -103,8 +103,6 @@ def main(args):
                 if not os.path.exists(save_path):
                     os.makedirs(save_path, exist_ok=True)
 
-                features = model.predict(image)
-
                 # Predictions are saved in 'video space', so warp_aux_to_img is the inverse of warp_img_to_vid
                 warp_img_to_vid = kwimage.Affine.coerce(image_info.get('warp_img_to_vid', None))
                 warp_aux_to_img = warp_img_to_vid.inv().concise()
