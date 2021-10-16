@@ -224,7 +224,7 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.add_argument("--gpus", default=None, help="todo: hook up to lightning")
 
     parser.add_argument("--batch_size", default=1, type=int, help="prediction batch size")
-    parser.add_argument("--num_workers", default=0, type=int, help="data loader workers")
+    parser.add_argument("--num_workers", default=0, type=str, help="data loader workers, can be set to auto")
     # parser.add_argument("--thresh", type=float, default=0.01)
 
     parser.set_defaults(**kwargs)
@@ -301,9 +301,12 @@ def main(cmdline=True, **kwargs):
     dataset = SequenceDataset(sampler, window_dims, input_dims, channels,
                               training=False)
     print(dataset.__len__())
+
+    from watch.utils.lightning_ext import util_globals
+    num_workers = util_globals.coerce_num_workers(args.num_workers)
     eval_dataloader = dataset.make_loader(
         batch_size=args.batch_size,
-        num_workers=args.num_workers,
+        num_workers=num_workers,
     )
 
     # HACK!!!!

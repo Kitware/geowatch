@@ -121,7 +121,7 @@ rutgers_prediction(){
         --checkpoint_fpath=$RUTGERS_MATERIAL_MODEL_FPATH  \
         --default_config_key=iarpa \
         --pred_dataset=$RUTGERS_MATERIAL_COCO_FPATH \
-        --num_workers=4 \
+        --num_workers=avail/2 \
         --batch_size=32 --gpus "0"
 }
 
