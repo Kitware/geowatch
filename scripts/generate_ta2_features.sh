@@ -92,7 +92,7 @@ uky_prediction(){
         --output_kwcoco $UKY_S2_COCO_FPATH \
         --ckpt_path $UKY_S2_MODEL_FPATH  \
         --device=1 \
-        --num_workers=avail/2
+        --num_workers=6
 
         #--gpus 1 \
 
@@ -102,7 +102,7 @@ uky_prediction(){
         --output_kwcoco $UKY_L8_COCO_FPATH \
         --ckpt_path $UKY_L8_MODEL_FPATH \
         --device=cuda \
-        --num_workers=avail
+        --num_workers=6
 
         #--gpus 1 \
 

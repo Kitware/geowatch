@@ -126,7 +126,7 @@ def main(args):
                     info['warp_aux_to_img'] = warp_aux_to_img
                     dataset.dset.index.imgs[image_id]['auxiliary'].append(info)
 
-                queue.submit(_write_results_fn, features, features_to_write, save_path, file_name)
+                queue.submit(_write_results_fn, features_to_write, save_path, file_name)
 
     if args.output_kwcoco is None:
         args.output_kwcoco = os.path.join(root, 'uky_invariants.kwcoco.json')
@@ -140,7 +140,7 @@ def main(args):
     print('Done')
 
 
-def _write_results_fn(features, features_to_write, save_path, file_name):
+def _write_results_fn(features_to_write, save_path, file_name):
     last_us_idx = file_name.rfind('_')
     for key, feat in features_to_write.items():
         name = file_name[:last_us_idx] + '_invariants_' + key + '.tif'
