@@ -471,7 +471,10 @@ def dilated_template_sample(unixtimes, time_window, time_span='2y'):
                     extra_before = np.linspace(mn - take_before * step, mn, take_before)
 
                     extra = np.hstack([extra_before, extra_after])
-                    row[is_bad] = extra[:need]
+
+                    bad_idxs = np.where(is_bad)[0]
+                    use = min(len(bad_idxs), need)
+                    row[bad_idxs[0:use] = extra[:use]
                     temporal_sampling[rx] = row
         # temporal_sampling = temporal_sampling % ( + 1)
 
