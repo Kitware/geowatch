@@ -110,8 +110,8 @@ def main(args):
                 last_us_idx = file_name.rfind('_')
                 features_to_write = {}
                 for key in feature_types:
-                    feat = features[key].squeeze()
-                    feat = feat.permute(1, 2, 0).detach().cpu().numpy()
+                    feat = features[key].detach().squeeze()
+                    feat = feat.permute(1, 2, 0).cpu().numpy()
                     features_to_write[key] = feat
                     name = file_name[:last_us_idx] + '_invariants_' + key + '.tif'
                     # kwimage.imwrite(os.path.join(save_path, name), feat, space=None,
