@@ -437,7 +437,7 @@ def dilated_template_sample(unixtimes, time_window, time_span='2y'):
             is_bad = is_oob[rx]
             mx = max_ib[rx]
             mn = min_ib[rx]
-            row = temporal_sampling[rx]
+            row = temporal_sampling[rx].copy()
             valid_data = row[is_ib[rx]]
             if not len(valid_data):
                 wraparound = 1
@@ -471,7 +471,8 @@ def dilated_template_sample(unixtimes, time_window, time_span='2y'):
                     extra_before = np.linspace(mn - take_before * step, mn, take_before)
 
                     extra = np.hstack([extra_before, extra_after])
-                    temporal_sampling[rx][is_bad] = extra[:need]
+                    row[is_bad] = extra[:need]
+                    temporal_sampling[rx] = row
         # temporal_sampling = temporal_sampling % ( + 1)
 
     print('last_time = {!r}'.format(last_time))
