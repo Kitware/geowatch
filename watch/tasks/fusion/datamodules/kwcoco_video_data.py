@@ -683,6 +683,8 @@ class KWCocoVideoDataset(data.Dataset):
                 _stream = [s + p for p in _stream for s in ['', 'D']]
             _input_channels.append('|'.join(_stream))
             _sample_channels.append('|'.join(_sample_stream))
+            import xdev
+            xdev.embed()
 
         # Some of the channels are computed on the fly.
         # This is the list of ones that are loaded from disk.
