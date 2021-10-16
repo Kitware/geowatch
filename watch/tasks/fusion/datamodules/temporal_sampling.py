@@ -230,7 +230,7 @@ def debug_video_information(dset, video_id):
             # kwplot.imshow(track_viz)
 
 
-def dilated_template_sample(unixtimes, time_window):
+def dilated_template_sample(unixtimes, time_window, time_span='2y'):
     """
     Args:
         unixtimes (ndarray):
@@ -387,25 +387,28 @@ def dilated_template_sample(unixtimes, time_window):
                 datetime.timedelta(days=0).total_seconds(),
             ])
         else:
-            num_years = 2
-            min_time = -datetime.timedelta(days=365).total_seconds() * num_years
-            max_time = datetime.timedelta(days=365).total_seconds() * num_years
+            if isinstance(time_span, str):
+                # TODO: better coercion function
+                if time_span.endswith('y'):
+                    time_span = datetime.timedelta(days=365 * int(time_span[:-1])).total_seconds()
+                elif time_span.endswith('d'):
+                    time_span = datetime.timedelta(days=1 * int(time_span[:-1])).total_seconds()
+                else:
+                    import pytimeparse  #
+                    pytimeparse.parse(time_span)
+            min_time = -datetime.timedelta(seconds=time_span).total_seconds()
+            max_time = datetime.timedelta(seconds=time_span).total_seconds()
             template_deltas = np.linspace(min_time, max_time, time_window).round().astype(int)
             # Always include a delta of 0
             template_deltas[np.abs(template_deltas).argmin()] = 0
     else:
         template_deltas = time_window
 
-    # num_frames = len(template_deltas)
-
-    # unixtimes = np.arange(20)
-    # template_deltas = np.array([-5, -3, 0, 3, 5])
-
     unixtimes = guess_missing_unixtimes(unixtimes)
     rel_unixtimes = unixtimes - unixtimes[0]
     temporal_sampling = rel_unixtimes[:, None] + template_deltas[None, :]
 
-    # Wraparound
+    # Wraparound (this is a bit of a hack)
     wraparound = 1
     if wraparound:
         temporal_sampling = temporal_sampling % (rel_unixtimes[-1] + 1)
@@ -418,23 +421,6 @@ def dilated_template_sample(unixtimes, time_window):
         # sample without duplicates.
         sample_idxs = np.array(kwarray.mincost_assignment(loss_for_row)[0]).T[1]
         all_rows.append(sorted(sample_idxs))
-    # else:
-    #     # Seems to work correctly?
-    #     all_rows = []
-    #     for idx in range(len(temporal_sampling)):
-    #         ideal_sample_for_row = temporal_sampling[idx]
-    #         loss_for_row = np.abs(ideal_sample_for_row[:, None] - rel_unixtimes[None, :])
-    #         loss_for_row[loss_for_row == 0] = -np.inf
-    #         if 1:
-    #             sample_idxs = np.array(kwarray.mincost_assignment(loss_for_row)[0]).T[1]
-    #         else:
-    #             candidiates = np.array([zz.argsort()[0:num_frames] for zz in loss_for_row]).T
-    #             # candidates =
-    #             # np.array([zz.argsort()[0:5] for zz in loss_for_row]).T
-    #             # kwarray.argmaxima(-loss_for_row, axis=1, num=num_frames).T
-    #             # candidiates = kwarray.argmaxima(-loss_for_row, axis=1, num=num_frames).T
-    #             sample_idxs = sorted(it.islice(ub.unique(candidiates.ravel()), num_frames))
-    #         all_rows.append(sorted(sample_idxs))
 
     sample_idxs = np.vstack(all_rows)
     # sample_idxs = util_kwarray.unique_rows(sample_idxs, ordered=True)
@@ -462,7 +448,7 @@ def guess_missing_unixtimes(unixtimes):
     return unixtimes
 
 
-def soft_frame_affinity(unixtimes, sensors=None):
+def soft_frame_affinity(unixtimes, sensors=None, time_span='2y'):
     """
     Produce a pairwise affinity weights between frames based on a dilated time
     heuristic.
@@ -550,6 +536,9 @@ def soft_frame_affinity(unixtimes, sensors=None):
         future_weights = (future_weights / future_weights.max())
         future_weights = future_weights * 0.8 + 0.2
 
+        # TODO:
+        # incorporate the time_span?
+
         weights['daylight'] = daylight_weights
         weights['season'] = season_weights
         weights['future'] = future_weights
@@ -608,9 +597,9 @@ def soft_frame_affinity(unixtimes, sensors=None):
     return weights
 
 
-def hard_frame_affinity(unixtimes, sensors, time_window, blur=False):
+def hard_frame_affinity(unixtimes, sensors, time_window, time_span='2y', blur=False):
     # Hard affinity
-    sample_idxs = dilated_template_sample(unixtimes, time_window)
+    sample_idxs = dilated_template_sample(unixtimes, time_window, time_span=time_span)
     affinity = kwarray.one_hot_embedding(
         sample_idxs, len(unixtimes), dim=1).sum(axis=2)
     affinity[np.eye(len(affinity), dtype=bool)] = 0
@@ -1013,7 +1002,7 @@ class TimeWindowSampler:
 
     def __init__(self, unixtimes, sensors, time_window,
                  affinity_type='hard', update_rule='distribute',
-                 determenistic=False, gamma=1, name='?'):
+                 determenistic=False, gamma=1, time_span='2y', name='?'):
         self.sensors = sensors
         self.unixtimes = unixtimes
         self.time_window = time_window
@@ -1023,6 +1012,7 @@ class TimeWindowSampler:
         self.gamma = gamma
         self.name = name
         self.num_frames = len(unixtimes)
+        self.time_span = time_span
 
         self.compute_affinity()
 
@@ -1063,16 +1053,17 @@ class TimeWindowSampler:
         """
         if self.affinity_type == 'soft':
             # Soft affinity
-            self.affinity = soft_frame_affinity(self.unixtimes, self.sensors)['final']
+            self.affinity = soft_frame_affinity(self.unixtimes, self.sensors, self.time_span)['final']
         elif self.affinity_type == 'hard':
             # Hard affinity
             self.affinity = hard_frame_affinity(self.unixtimes, self.sensors,
-                                                time_window=self.time_window)
+                                                time_window=self.time_window,
+                                                blur=False, time_span=self.time_span)
         elif self.affinity_type == 'hardish':
             # Hardish affinity
             self.affinity = hard_frame_affinity(self.unixtimes, self.sensors,
                                                 time_window=self.time_window,
-                                                blur=True)
+                                                blur=True, time_span=self.time_span)
         elif self.affinity_type == 'contiguous':
             time_slider = kwarray.SlidingWindow(
                 (len(self.unixtimes),), (self.time_window,), stride=(1,), keepbound=True,

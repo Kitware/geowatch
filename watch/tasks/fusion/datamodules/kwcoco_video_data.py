@@ -120,6 +120,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         chip_overlap=0.1,
         neg_to_pos_ratio=1.0,
         time_sampling='contiguous',
+        time_span='2y',
         exclude_sensors=['L8'],  # NOQA
         channels=None,
         batch_size=4,
@@ -166,6 +167,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.time_sampling = time_sampling
         self.exclude_sensors = exclude_sensors
         self.diff_inputs = diff_inputs
+        self.time_span = time_span
 
         self.input_stats = None
         self.dataset_stats = None
@@ -227,6 +229,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         parser.add_argument("--channels", default=None, type=str, help='channels to use should be ChannelSpec coercable')
         parser.add_argument("--batch_size", default=4, type=int)
         parser.add_argument("--num_workers", default=4, type=int)
+        parser.add_argument("--time_span", default='2y', type=str, help='how long a time window should roughly span by default')
 
         parser.add_argument(
             "--normalize_inputs", default=True, help=ub.paragraph(
@@ -553,6 +556,7 @@ class KWCocoVideoDataset(data.Dataset):
         neg_to_pos_ratio=1.0,
         time_sampling='auto',
         diff_inputs=False,
+        time_span='2y',
         exclude_sensors=None,
     ):
 
@@ -583,6 +587,7 @@ class KWCocoVideoDataset(data.Dataset):
                 use_annot_info=False,
                 exclude_sensors=exclude_sensors,
                 time_sampling=time_sampling,
+                time_span=time_span,
             )
             self.length = len(new_sample_grid['targets'])
         else:
@@ -598,6 +603,7 @@ class KWCocoVideoDataset(data.Dataset):
                 use_annot_info=True,
                 exclude_sensors=exclude_sensors,
                 time_sampling=time_sampling,
+                time_span=time_span,
             )
 
             n_pos = len(new_sample_grid["positives_indexes"])
@@ -1576,7 +1582,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                                    negative_classes=None, keepbound=False,
                                    exclude_sensors=None,
                                    time_sampling='hard+distribute',
-                                   use_annot_info=True):
+                                   time_span='2y', use_annot_info=True):
     """
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -1671,7 +1677,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         time_sampler = tsm.TimeWindowSampler.from_coco_video(
             dset, video_id, gids=video_gids, time_window=window_time_dims,
             affinity_type=affinity_type, update_rule=update_rule,
-            name=video_info['name'])
+            name=video_info['name'], time_span=time_span)
         time_sampler.determenistic = True
 
         if use_annot_info:
