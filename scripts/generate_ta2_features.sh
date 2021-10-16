@@ -91,7 +91,8 @@ uky_prediction(){
         --input_kwcoco $BASE_COCO_FPATH \
         --output_kwcoco $UKY_S2_COCO_FPATH \
         --ckpt_path $UKY_S2_MODEL_FPATH  \
-        --num_workers=avail
+        --device=1 \
+        --num_workers=6
 
         #--gpus 1 \
 
