@@ -405,13 +405,79 @@ def dilated_template_sample(unixtimes, time_window, time_span='2y'):
         template_deltas = time_window
 
     unixtimes = guess_missing_unixtimes(unixtimes)
+
+    unixtimes = unixtimes / (60 * 60 * 24)
+    template_deltas = template_deltas / (60 * 60 * 24)
+
     rel_unixtimes = unixtimes - unixtimes[0]
     temporal_sampling = rel_unixtimes[:, None] + template_deltas[None, :]
 
     # Wraparound (this is a bit of a hack)
+
+    hackit = 1
+    if hackit:
+        wraparound = 1
+        last_time = rel_unixtimes[-1] + 1
+        is_oob_left = temporal_sampling < 0
+        is_oob_right = temporal_sampling >= last_time
+        is_oob = (is_oob_right | is_oob_left)
+        is_ib = ~is_oob
+
+        tmp = temporal_sampling.copy()
+        tmp[is_oob] = np.nan
+        # filter warn
+        max_ib = np.nanmax(tmp, axis=1)
+        min_ib = np.nanmin(tmp, axis=1)
+
+        row_oob_flag = is_oob.any(axis=1)
+
+        # TODO: rewrite this with reasonable logic for fixing oob samples
+        # This is horrible logic, I'd be ashamed, but it works.
+        for rx in np.where(row_oob_flag)[0]:
+            is_bad = is_oob[rx]
+            mx = max_ib[rx]
+            mn = min_ib[rx]
+            row = temporal_sampling[rx]
+            valid_data = row[is_ib[rx]]
+            if not len(valid_data):
+                wraparound = 1
+                temporal_sampling[rx, :] = 0.0
+            else:
+                step = (mx - mn) / len(valid_data)
+                if step < 0:
+                    wraparound = 1
+                else:
+                    avail_after = last_time - mx
+                    avail_before = mn
+
+                    if avail_after > 0:
+                        avail_after_steps = avail_after // step
+                    else:
+                        avail_after_steps = 0
+
+                    if avail_before > 0:
+                        avail_before_steps = avail_before / step
+                    else:
+                        avail_before_steps = 0
+
+                    need = is_bad.sum()
+                    before_oob = is_oob_left[rx]
+                    after_oob = is_oob_right[rx]
+
+                    take_after = min(before_oob.sum(), int(avail_after_steps))
+                    take_before = min(after_oob.sum(), int(avail_before_steps))
+
+                    extra_after = np.linspace(mx, mx + take_after * step, take_after)
+                    extra_before = np.linspace(mn - take_before * step, mn, take_before)
+
+                    extra = np.hstack([extra_before, extra_after])
+                    temporal_sampling[rx][is_bad] = extra[:need]
+        # temporal_sampling = temporal_sampling % ( + 1)
+
+    print('last_time = {!r}'.format(last_time))
     wraparound = 1
     if wraparound:
-        temporal_sampling = temporal_sampling % (rel_unixtimes[-1] + 1)
+        temporal_sampling = temporal_sampling % last_time
 
     losses = np.abs(temporal_sampling[:, :, None] - rel_unixtimes[None, None, :])
     losses[losses == 0] = -np.inf
@@ -992,7 +1058,7 @@ class TimeWindowSampler:
         >>> self = TimeWindowSampler.from_coco_video(
         >>>     dset, vidid,
         >>>     time_window=5,
-        >>>     affinity_type='hard',
+        >>>     affinity_type='hard', time_span='1y',
         >>>     update_rule='distribute')
         >>> self.determenistic = False
         >>> self.show_summary(samples_per_frame=3, fnum=1)
