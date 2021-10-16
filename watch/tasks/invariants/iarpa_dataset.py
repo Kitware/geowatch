@@ -14,7 +14,7 @@ class kwcoco_dataset(torch.utils.data.Dataset):
         'coastal', 'lwir11', 'lwir12', 'blue', 'green', 'red', 'nir', 'swir16', 'swir22', 'pan', 'cirrus'
     ]
 
-    def __init__(self, coco_dset, sensor='S2', bands=['all'], patch_size=64):
+    def __init__(self, coco_dset, sensor='S2', bands=['all'], patch_size=64, mode='train'):
         # initialize dataset
         self.dset = kwcoco.CocoDataset.coerce(coco_dset)
         self.images = self.dset.images()
@@ -73,7 +73,7 @@ class kwcoco_dataset(torch.utils.data.Dataset):
                 A.RandomBrightnessContrast(brightness_by_max=False, always_apply=True)
         ])
 
-        self.mode = 'train'
+        self.mode = mode
 
     def __len__(self,):
         return len(self.dset_ids)

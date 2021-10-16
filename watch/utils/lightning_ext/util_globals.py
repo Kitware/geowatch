@@ -141,6 +141,11 @@ def coerce_num_workers(num_workers='auto', minimum=0):
     import numpy as np
     import psutil
 
+    try:
+        num_workers = int(num_workers)
+    except Exception:
+        pass
+
     if isinstance(num_workers, str):
         if num_workers == 'auto':
             num_workers = 'avail-2'

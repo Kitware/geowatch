@@ -47,8 +47,7 @@ def main(args):
 
     model.eval().to(device)
     print('Initiating dataset')
-    dataset = kwcoco_dataset(args.input_kwcoco, args.sensor, args.bands)
-    dataset.mode = 'test'
+    dataset = kwcoco_dataset(args.input_kwcoco, args.sensor, args.bands, mode='test')
 
     num_workers = util_globals.coerce_num_workers(args.num_workers)
     print('num_workers = {!r}'.format(num_workers))
