@@ -451,7 +451,7 @@ def dilated_template_sample(unixtimes, time_window, time_span='2y'):
                     avail_before = mn
 
                     if avail_after > 0:
-                        avail_after_steps = avail_after // step
+                        avail_after_steps = avail_after / step
                     else:
                         avail_after_steps = 0
 
@@ -474,7 +474,7 @@ def dilated_template_sample(unixtimes, time_window, time_span='2y'):
 
                     bad_idxs = np.where(is_bad)[0]
                     use = min(len(bad_idxs), need)
-                    row[bad_idxs[:use] = extra[:use]
+                    row[bad_idxs[:use]] = extra[:use]
                     temporal_sampling[rx] = row
         # temporal_sampling = temporal_sampling % ( + 1)
 
