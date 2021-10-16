@@ -304,6 +304,9 @@ def main(cmdline=True, **kwargs):
 
     from watch.utils.lightning_ext import util_globals
     num_workers = util_globals.coerce_num_workers(args.num_workers)
+    if num_workers > 0:
+        util_globals.request_nofile_limits()
+
     eval_dataloader = dataset.make_loader(
         batch_size=args.batch_size,
         num_workers=num_workers,
