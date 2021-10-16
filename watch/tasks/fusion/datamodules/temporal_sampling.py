@@ -473,7 +473,7 @@ def dilated_template_sample(unixtimes, time_window, time_span='2y'):
                     extra = np.hstack([extra_before, extra_after])
 
                     bad_idxs = np.where(is_bad)[0]
-                    use = min(len(bad_idxs), need)
+                    use = min(min(len(bad_idxs), need), len(extra))
                     row[bad_idxs[:use]] = extra[:use]
                     temporal_sampling[rx] = row
         # temporal_sampling = temporal_sampling % ( + 1)
@@ -1170,7 +1170,7 @@ class TimeWindowSampler:
             >>> self = TimeWindowSampler.from_coco_video(
             >>>     dset, vidid,
             >>>     time_window=5,
-            >>>     affinity_type='soft',
+            >>>     affinity_type='hard',
             >>>     update_rule='distribute')
             >>> self.determenistic = True
             >>> self.show_procedure(fnum=1)
