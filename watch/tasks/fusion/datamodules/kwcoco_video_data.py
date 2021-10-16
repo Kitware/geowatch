@@ -677,14 +677,15 @@ class KWCocoVideoDataset(data.Dataset):
             _sample_stream = _stream.copy()
             special_bands = _stream & util_bands.SPECIALIZED_BANDS
             if special_bands:
+                # TODO: introspect which extra bands are needed for to compute
+                # the sample, but hard code for now
                 _sample_stream -= special_bands
+                _sample_stream = _sample_stream | ub.oset('blue|green|red|nir|swir16|swir22'.split('|'))
                 self.special_inputs[key] = special_bands
             if self.diff_inputs:
                 _stream = [s + p for p in _stream for s in ['', 'D']]
             _input_channels.append('|'.join(_stream))
             _sample_channels.append('|'.join(_sample_stream))
-            import xdev
-            xdev.embed()
 
         # Some of the channels are computed on the fly.
         # This is the list of ones that are loaded from disk.
