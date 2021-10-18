@@ -82,6 +82,23 @@ COMBO_COCO_FPATH           = $COMBO_COCO_FPATH
 =====================================================
 "
 
+base_split(){
+    __doc__='
+    source ~/code/watch/scripts/generate_ta2_features.sh
+    '
+    python -m watch stats $BASE_COCO_FPATH
+
+    # Split out train and validation data (TODO: add test when we can)
+    kwcoco subset --src $BASE_COCO_FPATH \
+            --dst $BASE_VALI_COCO_FPATH \
+            --select_videos '.name | startswith("KR_")'
+
+    kwcoco subset --src $COMBO_COCO_FPATH \
+            --dst $BASE_TRAIN_COCO_FPATH \
+            --select_videos '.name | startswith("KR_") | not'
+}
+
+
 
 uky_prediction(){
     # --------------
@@ -212,20 +229,6 @@ predict_all_ta2_features(){
 
     kwcoco subset --src $COMBO_COCO_FPATH \
             --dst $COMBO_TRAIN_COCO_FPATH \
-            --select_videos '.name | startswith("KR_") | not'
-}
-
-
-base_split(){
-    python -m watch stats $BASE_COCO_FPATH
-
-    # Split out train and validation data (TODO: add test when we can)
-    kwcoco subset --src $BASE_COCO_FPATH \
-            --dst $BASE_VALI_COCO_FPATH \
-            --select_videos '.name | startswith("KR_")'
-
-    kwcoco subset --src $COMBO_COCO_FPATH \
-            --dst $BASE_TRAIN_COCO_FPATH \
             --select_videos '.name | startswith("KR_") | not'
 }
 
