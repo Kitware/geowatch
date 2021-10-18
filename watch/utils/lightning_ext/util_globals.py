@@ -23,6 +23,7 @@ def configure_hacks(**config):
     """
 
     num_workers = config.get('num_workers', None)
+    num_workers = coerce_num_workers(num_workers)
     if num_workers is not None and num_workers > 0:
         import cv2
         cv2.setNumThreads(0)
@@ -121,6 +122,9 @@ def coerce_num_workers(num_workers='auto', minimum=0):
     Returns:
         int : number of available cpus based on request parameters
 
+    CommandLine:
+        xdoctest -m /home/joncrall/code/watch/watch/utils/lightning_ext/util_globals.py coerce_num_workers
+
     Example:
         >>> from watch.utils.lightning_ext.util_globals import *  # NOQA
         >>> print(coerce_num_workers('all'))
@@ -131,7 +135,7 @@ def coerce_num_workers(num_workers='auto', minimum=0):
         >>> print(coerce_num_workers('all/2'))
         >>> import pytest
         >>> with pytest.raises(Exception):
-        >>>     print(coerce_num_workers('all - 100 + 3 * 2'))
+        >>>     print(coerce_num_workers('all + 1' + (' + 1' * 100)))
         >>> total_cpus = coerce_num_workers('all')
         >>> assert coerce_num_workers('all-2') == max(total_cpus - 2, 0)
         >>> assert coerce_num_workers('all-100') == max(total_cpus - 100, 0)
@@ -147,41 +151,44 @@ def coerce_num_workers(num_workers='auto', minimum=0):
         pass
 
     if isinstance(num_workers, str):
+
+        num_workers = num_workers.lower()
+
         if num_workers == 'auto':
             num_workers = 'avail-2'
 
         # input normalization
         num_workers = num_workers.replace('available', 'avail')
-        base_workers = None
+
+        local_dict = {}
 
         prefix = 'avail'
-        if num_workers.startswith(prefix):
+        if 'avail' in num_workers:
             current_load = np.array(psutil.cpu_percent(percpu=True)) / 100
-            base_workers = np.sum(current_load < 0.5)
-            suffix = num_workers[len(prefix):]
+            local_dict['avail'] = np.sum(current_load < 0.5)
 
         prefix = 'all'
         if num_workers.startswith(prefix):
-            base_workers = psutil.cpu_count()
-            suffix = num_workers[len(prefix):]
+            local_dict['all'] = psutil.cpu_count()
 
-        if base_workers is None:
-            raise KeyError(num_workers)
-
-        if suffix:
-            expr = '{}{}'.format(base_workers, suffix)
-            if len(expr) > 8:
+        if num_workers == 'none':
+            num_workers = None
+        else:
+            expr = num_workers
+            if len(expr) > 32:
                 raise Exception(
                     'num-workers-hueristic should be small text. '
                     'We want to disallow attempts at crashing python '
                     'by feeding nasty input into eval'
                 )
             # note: eval is not safe, using numexpr instead
-            # evaluated = eval(expr, {}, {})
+            # limit chars even futher if eval is used
+            # evaluated = eval(expr, local_dict, local_dict)
             import numexpr
-            num_workers = numexpr.evaluate(expr)
-        else:
-            num_workers = base_workers
+            num_workers = numexpr.evaluate(expr, local_dict=local_dict,
+                                           global_dict={})
 
-    num_workers = max(int(num_workers), minimum)
+    if num_workers is not None:
+        num_workers = max(int(num_workers), minimum)
+
     return num_workers
