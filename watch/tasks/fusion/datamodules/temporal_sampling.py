@@ -406,8 +406,8 @@ def dilated_template_sample(unixtimes, time_window, time_span='2y'):
 
     unixtimes = guess_missing_unixtimes(unixtimes)
 
-    unixtimes = unixtimes / (60 * 60 * 24)
-    template_deltas = template_deltas / (60 * 60 * 24)
+    # unixtimes = unixtimes / (60 * 60 * 24)
+    # template_deltas = template_deltas / (60 * 60 * 24)
 
     rel_unixtimes = unixtimes - unixtimes[0]
     temporal_sampling = rel_unixtimes[:, None] + template_deltas[None, :]
@@ -444,7 +444,7 @@ def dilated_template_sample(unixtimes, time_window, time_span='2y'):
                 temporal_sampling[rx, :] = 0.0
             else:
                 step = (mx - mn) / len(valid_data)
-                if step < 0:
+                if step <= 0:
                     wraparound = 1
                 else:
                     avail_after = last_time - mx

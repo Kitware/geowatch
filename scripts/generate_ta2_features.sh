@@ -50,6 +50,9 @@ COMBO_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_data.kwcoco.json
 COMBO_TRAIN_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_train_data.kwcoco.json
 COMBO_VALI_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_data.kwcoco.json
 
+BASE_TRAIN_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/base_train_data.kwcoco.json
+BASE_VALI_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/base_vali_data.kwcoco.json
+
 
 echo  "
 =====================================================
@@ -209,6 +212,20 @@ predict_all_ta2_features(){
 
     kwcoco subset --src $COMBO_COCO_FPATH \
             --dst $COMBO_TRAIN_COCO_FPATH \
+            --select_videos '.name | startswith("KR_") | not'
+}
+
+
+base_split(){
+    python -m watch stats $BASE_COCO_FPATH
+
+    # Split out train and validation data (TODO: add test when we can)
+    kwcoco subset --src $BASE_COCO_FPATH \
+            --dst $BASE_VALI_COCO_FPATH \
+            --select_videos '.name | startswith("KR_")'
+
+    kwcoco subset --src $COMBO_COCO_FPATH \
+            --dst $BASE_TRAIN_COCO_FPATH \
             --select_videos '.name | startswith("KR_") | not'
 }
 
