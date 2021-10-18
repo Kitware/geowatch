@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-
-import sys, csv, random, glob
+import sys
+import csv
+import random
+import glob
 
 import numpy as np
 import torch
@@ -17,7 +19,7 @@ import rasterio.mask
 from rasterio.windows import Window
 from pyproj import CRS, Transformer
 
-from skimage.transform import resize
+# from skimage.transform import resize
 
 from matplotlib import pyplot as plt
 
@@ -43,13 +45,13 @@ class BuildingDataset(Dataset):
         self.img_ids_to_geojson = dict()
         with open(data_dir + "/train_metadata.csv", 'r') as f:
             csvreader = csv.reader(f)
-            header = next(csvreader)
-            imgs=[]
+            header = next(csvreader)  # NOQA
+            imgs = []
             for row in csvreader:
                 if int(row[3]) <= tier:
                     imgs.append(row)
             random.shuffle(imgs)
-            n_train = int(len(imgs)*(1.0-val_split))
+            n_train = int(len(imgs) * (1.0 - val_split))
             if val:
                 imgs = imgs[n_train:]
             else:
@@ -87,7 +89,6 @@ class BuildingDataset(Dataset):
         for ids, tifs in self.img_ids_to_tif.items():
             with open(data_dir + "/" + ".".join([tifs.split(".")[0], "tif.stats.json"]), "r") as statfile:
                 self.stats[ids] = json.load(statfile)
-            
 
         print("Reprojecting polygons")
 
@@ -151,13 +152,11 @@ class BuildingDataset(Dataset):
         out_image = np.stack([b1, b2, b3])
         out_image = np.swapaxes(out_image, 0, 2)[:, :, 0:3]
 
-
         try:
             img = Image.fromarray(out_image, 'RGB')
-        except:
+        except Exception:
             print(window)
             print(raster.width, raster.height)
-
 
         # create rasterized edges
         polygons = []
@@ -180,7 +179,7 @@ class BuildingDataset(Dataset):
                         x, y = point
                         scaled_poly.append((x * ratio, y * ratio))
                     polygons.append(scaled_poly)
-            except:
+            except Exception:
                 pass
 
         masks = polygon_utils.draw_polygons(polygons, (self.resize_size, self.resize_size), line_width=2, antialiasing=True)
@@ -200,24 +199,23 @@ class BuildingDataset(Dataset):
         out_img = np.array(trans(img))
         out_img = torch.Tensor(np.moveaxis(out_img, -1, 0))
 
-
         if self.show_mode:
             return {"image": trans(img), "gt_polygons_image": masks, "gt_crossfield_angle": angles, "image_mean": mean,
                     "image_std": std}
         elif self.baseline_mode:
-            masks = np.moveaxis(np.array(masks), 0,2)
+            masks = np.moveaxis(np.array(masks), 0, 2)
             masks = masks / 255
             return {"image": self.img_transforms(trans(img)), "gt_polygons_image": masks}
         else:
-            return {"image": out_img, 
-                    "gt_polygons_image": torch.Tensor(masks), 
-                    "gt_crossfield_angle": torch.Tensor(angles), 
+            return {"image": out_img,
+                    "gt_polygons_image": torch.Tensor(masks),
+                    "gt_crossfield_angle": torch.Tensor(angles),
                     "image_mean": torch.Tensor(mean),
                     "image_std": torch.Tensor(std)}
 
     def _get_window(self, raster, feat, padded=True):
 
-        poly = feat["geometry"]["coordinates"]
+        poly = feat["geometry"]["coordinates"]  # NOQA
 
         box = []
 
@@ -250,25 +248,24 @@ class BuildingDataset(Dataset):
 
     def _get_random_window(self):
 
-        rastern = random.randint(0, len(self.img_ids_to_tif)-1)
+        rastern = random.randint(0, len(self.img_ids_to_tif) - 1)
 
         img_id = list(self.img_ids_to_tif)[rastern]
 
         tiff = self.img_ids_to_tif[img_id]
 
         raster = rasterio.open(self.data_dir + "/" + tiff)
-        
-        while True:
-            x = random.randint(0, raster.width-1)
-            y = random.randint(0, raster.height-1)
 
-            sample = [val for val in raster.sample([raster.transform * (x,y)])][0]
+        while True:
+            x = random.randint(0, raster.width - 1)
+            y = random.randint(0, raster.height - 1)
+
+            sample = [val for val in raster.sample([raster.transform * (x, y)])][0]
             if sample[3] == 255:
-                win = Window(x - self.crop_size/2, y - self.crop_size/2, self.crop_size, self.crop_size)
+                win = Window(x - self.crop_size / 2, y - self.crop_size / 2, self.crop_size, self.crop_size)
                 if win.col_off + win.width < raster.width and win.col_off > 0:
                     if win.row_off + win.height < raster.height and win.row_off > 0:
                         return win, img_id
-
 
     def _polygon_pixel_coords(self, raster, poly):
         # converts to raster pixel coords from utm
@@ -311,23 +308,24 @@ class BuildingDataset(Dataset):
     def augmentation(self, enable=True):
         self.augment = enable
 
+
 class RasterizedOpenCities(BuildingDataset):
 
-    def __init__(self, 
-                tier=1, 
-                show_mode=False, 
-                augment=False, 
-                small_subset=False, 
-                crop_size=1024, 
-                resize_size=224,
-                window_random_shift=2048, 
-                data_dir="./", 
-                baseline_mode=False, 
-                transform=None, 
-                val=False, 
-                val_split=0.1, 
-                split_seed=42,
-                sampling_mode="polygons"):
+    def __init__(self,
+                 tier=1,
+                 show_mode=False,
+                 augment=False,
+                 small_subset=False,
+                 crop_size=1024,
+                 resize_size=224,
+                 window_random_shift=2048,
+                 data_dir="./",
+                 baseline_mode=False,
+                 transform=None,
+                 val=False,
+                 val_split=0.1,
+                 split_seed=42,
+                 sampling_mode="polygons"):
 
         super().__init__(tier, show_mode, augment, small_subset, crop_size,
                          resize_size, window_random_shift, data_dir, baseline_mode, transform, val, val_split, split_seed, sampling_mode)
@@ -335,7 +333,7 @@ class RasterizedOpenCities(BuildingDataset):
         self.img_ids_to_label_raster = dict()
         with open(data_dir + "/train_metadata.csv", 'r') as f:
             csvreader = csv.reader(f)
-            header = next(csvreader)
+            header = next(csvreader)  # NOQA
             for row in csvreader:
                 if int(row[3]) <= tier:
                     imgid = row[0].split("/")[2]
@@ -343,18 +341,15 @@ class RasterizedOpenCities(BuildingDataset):
 
     def __getitem__(self, i):
 
-
         if self.sampling_mode == "random":
             window, raster_id = self._get_random_window()
-            img_id=raster_id
+            img_id = raster_id
             raster = rasterio.open(self.data_dir + "/" + self.img_ids_to_tif[raster_id])
-            label_raster = rasterio.open(self.data_dir + "/" +
-                                     self.img_ids_to_label_raster[raster_id])
+            label_raster = rasterio.open(self.data_dir + "/" + self.img_ids_to_label_raster[raster_id])
         else:
             img_id = self.feat_to_img_id[i]
             raster = rasterio.open(self.data_dir + "/" + self.img_ids_to_tif[img_id])
-            label_raster = rasterio.open(self.data_dir + "/" +
-                                     self.img_ids_to_label_raster[img_id])
+            label_raster = rasterio.open(self.data_dir + "/" + self.img_ids_to_label_raster[img_id])
             window = self._get_window(raster, self.all_polygons[i])
 
         b1, b2, b3, b4 = raster.read(window=window)
@@ -393,12 +388,12 @@ class RasterizedOpenCities(BuildingDataset):
             masks = torch.Tensor(np.array(masks))
             angles = np.expand_dims(angles, 0)
             angles = torch.Tensor(np.array(angles))
-            return {"image": out_img, 
-                    "gt_polygons_image": masks, 
-                    "gt_crossfield_angle": angles, 
+            return {"image": out_img,
+                    "gt_polygons_image": masks,
+                    "gt_crossfield_angle": angles,
                     "image_mean": torch.Tensor(mean),
                     "image_std": torch.Tensor(std),
-                    "name":str(i),
+                    "name": str(i),
                     "original_image": img_id}
 
 
@@ -417,11 +412,11 @@ class OpenCitiesTestDataset(Dataset):
     def __getitem__(self, i):
         img = self.get_img(i)
         imgscaled = img / 255.0
-        return {"image": img, 
+        return {"image": img,
                 "image_filepath": self.tif_files[i],
-                "name":self.get_id(i), 
-                "image_mean": torch.mean(imgscaled, (1,2)), 
-                "image_std" : torch.std(imgscaled, (1,2))}
+                "name": self.get_id(i),
+                "image_mean": torch.mean(imgscaled, (1, 2)),
+                "image_std" : torch.std(imgscaled, (1, 2))}
 
     def get_id(self, i):
 
@@ -432,15 +427,12 @@ class OpenCitiesTestDataset(Dataset):
 
         img = Image.open(self.tif_files[i])
         img = img.convert("RGB")
-        img = np.moveaxis(np.array(self.transforms(img)),2,0)
+        img = np.moveaxis(np.array(self.transforms(img)), 2, 0)
 
         return torch.Tensor(img)
 
 
-
-
-if __name__ == "__main__":
-
+def main():
     ds = RasterizedOpenCities(show_mode=True, tier=1, small_subset=False, sampling_mode="random")
 
     n_samples = int(sys.argv[1]) if len(sys.argv) > 1 else 1
@@ -464,3 +456,6 @@ if __name__ == "__main__":
     print("Testing whole dataset")
     for i in tqdm(range(len(ds))):
         sample = ds[i]
+
+if __name__ == "__main__":
+    main()

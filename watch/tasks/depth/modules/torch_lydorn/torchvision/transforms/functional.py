@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from torchvision.transforms.functional import _is_pil_image, _is_numpy_image
 
-from torch_lydorn.torch.utils.complex import complex_mul, complex_abs_squared
+from torch_lydorn.torch.utils.complex import complex_mul
 
 try:
     import accimage
@@ -142,7 +142,7 @@ def crop(tensor, top, left, height, width):
     Returns:
         Tensor: Cropped image.
     """
-    return tensor[..., top:top+height, left:left+width]
+    return tensor[..., top:top + height, left:left + width]
 
 
 def center_crop(tensor, output_size):
@@ -198,8 +198,8 @@ def rotate_framefield(framefield, angle):
     """
     assert framefield.shape[1] == 4, f"framefield should have shape (B, 4, H, W), not {framefield.shape}"
     rad = np.pi * angle / 180
-    z_4angle = torch.tensor([np.cos(4*rad), np.sin(4*rad)], dtype=framefield.dtype, device=framefield.device)
-    z_2angle = torch.tensor([np.cos(2*rad), np.sin(2*rad)], dtype=framefield.dtype, device=framefield.device)
+    z_4angle = torch.tensor([np.cos(4 * rad), np.sin(4 * rad)], dtype=framefield.dtype, device=framefield.device)
+    z_2angle = torch.tensor([np.cos(2 * rad), np.sin(2 * rad)], dtype=framefield.dtype, device=framefield.device)
     framefield[:, :2, :, :] = complex_mul(framefield[:, :2, :, :], z_4angle[None, :, None, None], complex_dim=1)
     framefield[:, 2:, :, :] = complex_mul(framefield[:, 2:, :, :], z_2angle[None, :, None, None], complex_dim=1)
     return framefield

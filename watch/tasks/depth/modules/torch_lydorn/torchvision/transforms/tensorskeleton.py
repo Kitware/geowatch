@@ -1,11 +1,11 @@
-import sys
-import time
+# import sys
+# import time
 from typing import List
 
 import matplotlib.pyplot as plt
 
 import numpy as np
-import scipy.sparse
+# import scipy.sparse
 
 import torch
 
@@ -83,7 +83,7 @@ class TensorSkeleton(object):
         self.batch_delim = self.batch_delim.to(device)
 
 
-def skeletons_to_tensorskeleton(skeletons_batch: List[Skeleton], device: str=None) -> TensorSkeleton:
+def skeletons_to_tensorskeleton(skeletons_batch: List[Skeleton], device: str = None) -> TensorSkeleton:
     """
     In the text below, we use the following notation:
     - B: batch size
@@ -163,7 +163,7 @@ def tensorskeleton_to_skeletons(tensorskeleton: TensorSkeleton) -> List[Skeleton
     path_index_offset = 0
     path_delim_offset = 0
     for batch_i in range(tensorskeleton.batch_size):
-        batch_slice = tensorskeleton.batch_delim[batch_i:batch_i+2]
+        batch_slice = tensorskeleton.batch_delim[batch_i:batch_i + 2]
         # print("batch_slice:", batch_slice)
         # print("path_delim:", tensorskeleton.path_delim.shape)
         indptr = tensorskeleton.path_delim[batch_slice[0]:batch_slice[1] + 1].cpu().numpy()
@@ -200,6 +200,7 @@ def plot_skeleton(skeleton: Skeleton):
 
 
 def main():
+    import skan  # unsure what this should actually be
 
     device = "cuda"
 

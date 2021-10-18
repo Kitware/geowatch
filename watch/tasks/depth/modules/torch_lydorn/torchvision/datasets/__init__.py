@@ -1,3 +1,4 @@
+# flake8: noqa
 from .inria_aerial import InriaAerial
 from .luxcarta_buildings import LuxcartaBuildings
 from .mapping_challenge import MappingChallenge

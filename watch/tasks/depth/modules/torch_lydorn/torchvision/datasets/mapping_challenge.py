@@ -17,7 +17,7 @@ import torch
 from lydorn_utils import print_utils
 from lydorn_utils import python_utils
 
-from torch_lydorn.torch.utils.data import Dataset as LydornDataset, makedirs, files_exist, __repr__
+from torch_lydorn.torch.utils.data import Dataset as LydornDataset, makedirs, __repr__
 
 from torch_lydorn.torchvision.datasets import utils
 
@@ -70,10 +70,10 @@ class MappingChallenge(LydornDataset):
 
     @property
     def processed_file_names(self):
-        l = []
+        ell = []
         for image_id in self.image_id_list:
-            l.append(os.path.join("data_{:012d}.pt".format(image_id)))
-        return l
+            ell.append(os.path.join("data_{:012d}.pt".format(image_id)))
+        return ell
 
     def __len__(self):
         return len(self.image_id_list)
@@ -149,8 +149,8 @@ class MappingChallenge(LydornDataset):
         image_s2_total = np.sum(image_s2_array, axis=0)
 
         image_mean = image_s1_total / image_s0_total
-        image_std = np.sqrt(image_s2_total/image_s0_total - np.power(image_mean, 2))
-        class_freq = np.sum(class_freq_array*image_s0_array[:, None], axis=0) / image_s0_total
+        image_std = np.sqrt(image_s2_total / image_s0_total - np.power(image_mean, 2))
+        class_freq = np.sum(class_freq_array * image_s0_array[:, None], axis=0) / image_s0_total
 
         # Save aggregated stats
         self.stats = {
@@ -268,7 +268,7 @@ def main():
     # --- Transforms: --- #
     # --- pre-processing transform (done once then saved on disk):
     # --- Online transform done on the host (CPU):
-    train_online_cpu_transform = data_transforms.get_online_cpu_transform(config,
+    train_online_cpu_transform = data_transforms.get_online_cpu_transform(config,  # NOQA
                                                                           augmentations=config["data_aug_params"][
                                                                               "enable"])
     test_online_cpu_transform = data_transforms.get_eval_online_cpu_transform()

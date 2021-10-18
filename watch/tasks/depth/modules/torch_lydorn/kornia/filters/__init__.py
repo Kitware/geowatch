@@ -1,3 +1,4 @@
+# flake8: noqa
 from .sobel import SpatialGradient
 from .kernels import get_spatial_gradient_kernel2d
 

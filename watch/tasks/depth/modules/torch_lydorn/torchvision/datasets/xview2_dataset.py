@@ -1,15 +1,11 @@
 import fnmatch
 import os.path
-import pathlib
 import random
-import sys
-import time
 from collections import defaultdict
 
 import shapely.geometry
 import shapely.wkt
 import multiprocess
-import itertools
 import skimage.io
 import numpy as np
 
@@ -17,9 +13,8 @@ from tqdm import tqdm
 
 import torch
 import torch.utils.data
-import torchvision
+import torchvision  # NOQA
 
-from lydorn_utils import run_utils, image_utils, polygon_utils, geo_utils
 from lydorn_utils import print_utils
 from lydorn_utils import python_utils
 
@@ -64,7 +59,7 @@ class xView2Dataset(torch.utils.data.Dataset):
             self.processed_dirpath = os.path.join(self.root, processed_dirname, self.fold)
             stats_filepath = os.path.join(self.processed_dirpath, "stats-small.pt" if self.small else "stats.pt")
             processed_relative_paths_filepath = os.path.join(self.processed_dirpath,
-                                                        "processed_paths-small.json" if self.small else "processed_paths.json")
+                                                             "processed_paths-small.json" if self.small else "processed_paths.json")
 
             # Check if dataset has finished pre-processing by checking processed_relative_paths_filepath:
             if os.path.exists(processed_relative_paths_filepath):
@@ -116,7 +111,7 @@ class xView2Dataset(torch.utils.data.Dataset):
             list_of_stats = list(
                 tqdm(p.imap(self._process_one, tile_info_list), total=len(tile_info_list), desc="Process"))
 
-         # Aggregate stats
+        # Aggregate stats
         mean_per_disaster = defaultdict(list)
         var_per_disaster = defaultdict(list)
         class_freq = []

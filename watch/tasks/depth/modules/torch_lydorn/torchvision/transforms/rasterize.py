@@ -1,15 +1,15 @@
 import math
-import sys
-import time
+# import sys
+# import time
 
 import skimage.morphology
 import skimage.io
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw
 import numpy as np
 import shapely.geometry
 import shapely.affinity
-from lydorn_utils import print_utils
-from scipy.ndimage.morphology import distance_transform_edt
+# from lydorn_utils import print_utils
+# from scipy.ndimage.morphology import distance_transform_edt
 import cv2 as cv
 
 from functools import partial
@@ -69,10 +69,10 @@ def compute_raster_distances_sizes(polygons, shape, fill=True, edges=True, verti
     image_area = shape[0] * shape[1]
     for i, polygon in enumerate(polygons):
         minx, miny, maxx, maxy = polygon.bounds
-        mini = max(0, math.floor(miny) - 2*line_width)
-        minj = max(0, math.floor(minx) - 2*line_width)
-        maxi = min(polygons_raster.shape[0], math.ceil(maxy) + 2*line_width)
-        maxj = min(polygons_raster.shape[1], math.ceil(maxx) + 2*line_width)
+        mini = max(0, math.floor(miny) - 2 * line_width)
+        minj = max(0, math.floor(minx) - 2 * line_width)
+        maxi = min(polygons_raster.shape[0], math.ceil(maxy) + 2 * line_width)
+        maxj = min(polygons_raster.shape[1], math.ceil(maxx) + 2 * line_width)
         bbox_shape = (maxi - mini, maxj - minj)
         bbox_polygon = shapely.affinity.translate(polygon, xoff=-minj, yoff=-mini)
         bbox_raster = draw_polygons([bbox_polygon], bbox_shape, fill, edges, vertices, line_width, antialiasing)
@@ -82,7 +82,7 @@ def compute_raster_distances_sizes(polygons, shape, fill=True, edges=True, verti
             polygon_mask = np.zeros(shape, dtype=np.bool)
             polygon_mask[mini:maxi, minj:maxj] = bbox_mask
             polygon_dist = cv.distanceTransform(1 - polygon_mask.astype(np.uint8), distanceType=cv.DIST_L2, maskSize=cv.DIST_MASK_5,
-                                        dstType=cv.CV_64F)
+                                                dstType=cv.CV_64F)
             polygon_dist /= (polygon_mask.shape[0] + polygon_mask.shape[1])  # Normalize dist
             distance_maps[:, :, i] = polygon_dist
 
@@ -140,7 +140,7 @@ def draw_polygons(polygons, shape, fill=True, edges=True, vertices=True, line_wi
     im_draw_list = []
     for channel_index in range(channel_count):
         im = Image.new("L", (draw_shape[1], draw_shape[0]))
-        im_px_access = im.load()
+        im_px_access = im.load()  # NOQA
         draw = ImageDraw.Draw(im)
         im_draw_list.append((im, draw))
 
@@ -210,11 +210,11 @@ def _test():
             [10, 10],
         ]),
         shapely.geometry.Polygon([
-            [10+150, 10],
-            [100+150, 10],
-            [100+150, 100],
-            [10+150, 100],
-            [10+150, 10],
+            [10 + 150, 10],
+            [100 + 150, 10],
+            [100 + 150, 100],
+            [10 + 150, 100],
+            [10 + 150, 10],
         ]),
     ]
     polygons_raster, distances, size_weights = rasterize(image, polygons)

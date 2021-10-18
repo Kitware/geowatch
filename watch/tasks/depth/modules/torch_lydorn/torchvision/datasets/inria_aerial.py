@@ -1,12 +1,9 @@
 import fnmatch
 import os.path
 import pathlib
-import sys
-import time
 
 import shapely.geometry
 import multiprocess
-import itertools
 import skimage.io
 import numpy as np
 
@@ -14,15 +11,14 @@ from tqdm import tqdm
 
 import torch
 import torch.utils.data
-import torchvision
+import torchvision  # NOQA
 
-from lydorn_utils import run_utils, image_utils, polygon_utils, geo_utils
+from lydorn_utils import image_utils, polygon_utils
+# from lydorn_utils import geo_utils
 from lydorn_utils import print_utils
 from lydorn_utils import python_utils
 
 from torch_lydorn.torchvision.datasets import utils
-
-import pdb
 
 CITY_METADATA_DICT = {
     "bloomington": {
@@ -76,10 +72,10 @@ CITY_METADATA_DICT = {
         "numbers": list(range(1, 37)),
         # "mean": [0.39584444, 0.40599795, 0.38298687],
         # "std": [0.17341954, 0.16856597, 0.16360443],
-         "mean": [0.485, 0.456, 0.406],
+        "mean": [0.485, 0.456, 0.406],
         "std": [0.229, 0.224, 0.225],
 
-    }, 
+    },
     "chicago": {
         "fold": "train",
         "pixelsize": 0.3,
@@ -131,9 +127,9 @@ class InriaAerial(torch.utils.data.Dataset):
     Inria Aerial Image Dataset
     """
 
-    def __init__(self, root: str, fold: str="train", pre_process: bool=True, tile_filter=None, patch_size: int=None, patch_stride: int=None,
-                 pre_transform=None, transform=None, small: bool=False, pool_size: int=1, raw_dirname: str="raw", processed_dirname: str="processed",
-                 gt_source: str="disk", gt_type: str="npy", gt_dirname: str="gt_polygons", mask_only: bool=False):
+    def __init__(self, root: str, fold: str = "train", pre_process: bool = True, tile_filter=None, patch_size: int = None, patch_stride: int = None,
+                 pre_transform=None, transform=None, small: bool = False, pool_size: int = 1, raw_dirname: str = "raw", processed_dirname: str = "processed",
+                 gt_source: str = "disk", gt_type: str = "npy", gt_dirname: str = "gt_polygons", mask_only: bool = False):
         """
 
         @param root:
@@ -242,7 +238,7 @@ class InriaAerial(torch.utils.data.Dataset):
             processed_tile_dirpath = os.path.join(self.processed_dirpath, processed_tile_relative_dirpath)
             sample_filenames = fnmatch.filter(os.listdir(processed_tile_dirpath), "data.*.pt")
             processed_tile_relative_paths = [os.path.join(processed_tile_relative_dirpath, sample_filename) for sample_filename
-                                        in sample_filenames]
+                                             in sample_filenames]
             processed_relative_paths.extend(processed_tile_relative_paths)
         return sorted(processed_relative_paths)
 
@@ -269,7 +265,7 @@ class InriaAerial(torch.utils.data.Dataset):
                 num_array = np.stack(stat_lists["num"], axis=0)
                 if num_array.min() == 0:
                     raise ZeroDivisionError("num_array has some zeros values, cannot divide!")
-                stats["class_freq"] = np.sum(class_freq_array*num_array[:, None], axis=0) / np.sum(num_array)
+                stats["class_freq"] = np.sum(class_freq_array * num_array[:, None], axis=0) / np.sum(num_array)
 
         return stats
 
@@ -280,7 +276,7 @@ class InriaAerial(torch.utils.data.Dataset):
 
         # Image:
         raw_data["image_filepath"] = os.path.join(self.root, self.raw_dirname, self.fold, IMAGE_DIRNAME,
-                                      IMAGE_FILENAME_FORMAT.format(city=tile_info["city"], number=tile_info["number"]))
+                                                  IMAGE_FILENAME_FORMAT.format(city=tile_info["city"], number=tile_info["number"]))
         # print('raw_data image_filepath is : ', raw_data["image_filepath"])
 
         raw_data["image"] = skimage.io.imread(raw_data["image_filepath"])
@@ -369,7 +365,6 @@ class InriaAerial(torch.utils.data.Dataset):
                 # print('sample image_filepath is :', sample['image_filepath'])
                 # print('sample go polygons is: ', raw_data['gt_polygons'])
                 # print('bbox is:', float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3]))
-            
 
                 sample = self.pre_transform(sample)  # Needs "image" to infer shape even if mask_only is True
                 if self.mask_only:
@@ -397,7 +392,7 @@ class InriaAerial(torch.utils.data.Dataset):
                 else:
                     print("Empty tile:", tile_info["city"], tile_info["number"], "polygons:", len(raw_data["gt_polygons"]))
         else:
-            raise NotImplemented("patch_size is None")
+            raise NotImplementedError("patch_size is None")
 
         # Save stats
         if not self.mask_only:
@@ -501,8 +496,10 @@ def main():
         "mask_only": config["dataset_params"]["mask_only"],
     }
     train_val_split_point = config["dataset_params"]["train_fraction"] * 36
-    def train_tile_filter(tile): return tile["number"] <= train_val_split_point
-    def val_tile_filter(tile): return train_val_split_point < tile["number"]
+    def train_tile_filter(tile):
+        return tile["number"] <= train_val_split_point
+    def val_tile_filter(tile):
+        return train_val_split_point < tile["number"]
     # --- --- #
     fold = "train"
     if fold == "train":
