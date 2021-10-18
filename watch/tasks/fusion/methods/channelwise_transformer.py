@@ -5,6 +5,7 @@ import kwcoco
 import ubelt as ub
 import torch
 import torchmetrics
+import pathlib
 
 import numpy as np
 import netharn as nh
@@ -1129,10 +1130,21 @@ class MultimodalTransformer(pl.LightningModule):
 
         # shallow copy of self, to apply attribute hacks to
         model = copy.copy(self)
+
+        train_dpath_hint = getattr(model, 'train_dpath_hint', None)
         if model.trainer is not None:
+            if train_dpath_hint is None:
+                train_dpath_hint = model.trainer.log_dir
             datamodule = model.trainer.datamodule
             if datamodule is not None:
                 model.datamodule_hparams = datamodule.hparams
+
+        metadata_fpaths = []
+        if train_dpath_hint is not None:
+            train_dpath_hint = pathlib.Path(train_dpath_hint)
+            metadata_fpaths += list(train_dpath_hint.glob('hparams.yaml'))
+            metadata_fpaths += list(train_dpath_hint.glob('fit_config.yaml'))
+
         model.trainer = None
         model.train_dataloader = None
         model.val_dataloader = None
@@ -1175,6 +1187,12 @@ class MultimodalTransformer(pl.LightningModule):
                 json.dumps(package_header)
             )
             exp.save_pickle(module_name, arch_name, model)
+
+            # Save metadata
+            for meta_fpath in metadata_fpaths:
+                with open(meta_fpath, 'r') as file:
+                    text = file.read()
+                exp.save_text('package_header', meta_fpath.name, text)
 
 
 def _class_weights_from_freq(total_freq, mode='median-idf'):

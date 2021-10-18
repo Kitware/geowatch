@@ -137,6 +137,7 @@ uky_prediction(){
 
 rutgers_prediction(){
     # Generate Rutgers Features
+    export CUDA_VISIBLE_DEVICES="1"
     python -m watch.tasks.rutgers_material_seg.predict \
         --test_dataset=$BASE_COCO_FPATH \
         --checkpoint_fpath=$RUTGERS_MATERIAL_MODEL_FPATH  \
