@@ -33,8 +33,14 @@ from tqdm import tqdm  # NOQA
 import ubelt as ub
 import pathlib
 import watch.tasks.rutgers_material_seg.utils.utils as utils
+from watch.utils import util_parallel
 from watch.tasks.rutgers_material_seg.models import build_model
 from watch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import SequenceDataset
+
+try:
+    from xdev import profile
+except Exception:
+    profile = ub.identity
 
 
 class Evaluator(object):
@@ -45,7 +51,8 @@ class Evaluator(object):
                  write_probs : bool = True,
                  device=None,
                  config : dict = None,
-                 output_feat_dpath : pathlib.Path = None):
+                 output_feat_dpath : pathlib.Path = None,
+                 num_workers=0):
         """Evaluator class
 
         Args:
@@ -57,6 +64,7 @@ class Evaluator(object):
 
         self.model = model
         self.eval_loader = eval_loader
+        self.num_workers = num_workers
         self.output_coco_dataset = output_coco_dataset
         self.write_probs = write_probs
         self.device = device
@@ -69,6 +77,7 @@ class Evaluator(object):
         # Hack together a channel code
         self.chan_code = '|'.join(['matseg_{}'.format(i) for i in range(self.num_classes)])
 
+    @profile
     def finalize_image(self, gid):
         self.finalized_gids.add(gid)
         stitcher = self.stitcher_dict[gid]
@@ -97,6 +106,7 @@ class Evaluator(object):
         auxiliary = img.setdefault('auxiliary', [])
         auxiliary.append(aux)
 
+    @profile
     def eval(self) -> tuple:
         """evaluate a single epoch
 
@@ -110,10 +120,13 @@ class Evaluator(object):
 
         self.model.eval()
 
+        dataloader_iter = iter(self.eval_loader)
+        writer = util_parallel.BlockingJobQueue(max_workers=self.num_workers)
+
         with torch.no_grad():
             # Prog = ub.ProgIter
             Prog = tqdm
-            pbar = Prog(enumerate(self.eval_loader), total=len(self.eval_loader), desc='predict rutgers')
+            pbar = Prog(enumerate(dataloader_iter), total=len(self.eval_loader), desc='predict rutgers')
             for batch_index, batch in pbar:
                 outputs = batch
                 images, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0]
@@ -158,7 +171,8 @@ class Evaluator(object):
                             mutually_exclusive = (set(previous_gids) - set(current_gids))
                             for gid in mutually_exclusive:
                                 pbar.set_postfix_str('finalized {}'.format(len(self.finalized_gids)))
-                                self.finalize_image(gid)
+                                writer.submit(self.finalize_image, gid)
+                                # self.finalize_image(gid)
 
                         for gid, output in zip(current_gids, [output1_to_save[b, :, :, :], output2_to_save[b, :, :, :]]):
                             if gid not in self.stitcher_dict.keys():
@@ -172,8 +186,11 @@ class Evaluator(object):
         if self.write_probs:
             # Finalize any remaining images
             for gid in Prog(list(self.stitcher_dict.keys()), desc='finish finalization'):
-                self.finalize_image(gid)
+                # self.finalize_image(gid)
+                writer.submit(self.finalize_image, gid)
                 pbar.set_postfix_str('finalized {}'.format(len(self.finalized_gids)))
+
+        writer.wait_until_finished()
 
         # export predictions to a new kwcoco file
         self.output_coco_dataset._invalidate_hashid()
@@ -376,6 +393,7 @@ def main(cmdline=True, **kwargs):
         output_coco_dataset=output_coco_dataset,
         config=config,
         device=device,
+        num_workers=num_workers,
         output_feat_dpath=output_feat_dpath,
     )
     self = evaler  # NOQA
