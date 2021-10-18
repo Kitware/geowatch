@@ -324,7 +324,7 @@ def predict(cmdline=False, **kwargs):
             not_foreground = (heuristics.BACKGROUND_CLASSES | heuristics.IGNORE_CLASSNAMES)
             foreground_classes = ub.oset(method.classes) - not_foreground
             # hueristics.B
-            raise NotImplementedError('old model, need to hack in fg classes')
+            # raise NotImplementedError('old model, need to hack in fg classes')
 
         class_chan_code = '|'.join(list(method.classes))
         stitch_managers['class'] = CocoStitchingManager(
