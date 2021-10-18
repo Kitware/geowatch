@@ -1,7 +1,7 @@
 import numpy as np
 from torchvision import transforms
 
-from .demo_transform import Normalize, ToTensor
+from .demo_transform import Normalize, ToTensor, ToNumpy
 from .dzyne_img_util import normalizeRGB
 from ..landcover.datasets import CocoTorchDataset
 
@@ -19,7 +19,8 @@ class WVRgbDataset(CocoTorchDataset):
         self.transform = transforms.Compose([
             ToTensor(),
             Normalize(__imagenet_stats['mean'],
-                      __imagenet_stats['std'])
+                      __imagenet_stats['std']),
+            ToNumpy()
         ])
 
     def _include(self, gid):

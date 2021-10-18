@@ -22,7 +22,11 @@ def run(model, img, metadata):
         return None
 
     img = preprocess(img)
-    pred = predict_image(img, model)
+    try:
+        pred = predict_image(img, model)
+    except:
+        log.error('error processing image with shape {}'.format(img.shape))
+        raise
     return pred
 
 

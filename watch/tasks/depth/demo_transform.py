@@ -108,6 +108,18 @@ class ToTensor(object):
             return img
 
 
+class ToNumpy(object):
+    """Converts a torch.FloatTensor of shape (C x H x W) to a
+      numpy.ndarray (H x W x C)
+    """
+
+    def __call__(self, image):
+        return self.to_numpy(image)
+
+    def to_numpy(self, image):
+        image = image.cpu().data.numpy()
+        return image.transpose((1, 2, 0))
+
 
 class Normalize(object):
     def __init__(self, mean, std):

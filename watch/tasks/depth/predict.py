@@ -4,17 +4,23 @@ from osgeo import gdal
 import json
 import logging
 import warnings
+from functools import partial
 from pathlib import Path
 
 import click
 import kwcoco
 import kwimage
+import numpy as np
 import torch
+import torchvision.transforms
+from medpy.filter.smoothing import anisotropic_diffusion
+from scipy import ndimage
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from .datasets import WVRgbDataset
-from .pl_highres_verify import MultiTaskModel, modify_bn
+from .pl_highres_verify import MultiTaskModel, modify_bn, dfactor, local_utils
+from .utils import process_image_chunked
 from ..landcover.detector import get_device
 from ..landcover.predict import get_output_file
 from ..landcover.utils import setup_logging
@@ -49,21 +55,26 @@ def predict(dataset, deployed, output):
     log.debug('loading model')
     model = MultiTaskModel(config=_load_config())
     state_dict = torch.load(weights_filename, map_location=lambda storage, loc: storage)
-    # model.load_state_dict(state_dict['state_dict'])
     model.load_state_dict(state_dict)
-    torch.save(model.state_dict(), '/output/state_dict.pt')
 
     model = modify_bn(model, track_running_stats=False, bn_momentum=0.01)
     model.to(get_device())
 
     log.debug('processing images')
     dataloader = DataLoader(dataset, num_workers=0, batch_size=1, collate_fn=lambda x: x)
-    for batch in tqdm(dataloader, miniters=1, unit='image'):
+    for batch in tqdm(dataloader, miniters=1, unit='image', disable=True):
         assert len(batch) == 1
+        img_info = batch[0]
+        gid = img_info['id']
         try:
-            img_info = dataset.dset.imgs[batch[0]['id']]
-            results = model.test_step(batch, 0)
-            gid, pred = results[0]
+            image = img_info['imgdata']
+            pred = process_image_chunked(image,
+                                         partial(run_inference, model=model),
+                                         chip_size=(2048, 2048, 3)
+                                         )
+
+            # get clean img_info
+            img_info = dataset.dset.imgs[gid]
             info = _write_output(img_info, pred, output_dir=output_data_dir)
             output_dset.imgs[gid]['auxiliary'].append(info)
 
@@ -75,6 +86,38 @@ def predict(dataset, deployed, output):
 
     output_dset.dump(str(output_dset_filename), indent=2)
     log.info('output written to {}'.format(output_dset_filename))
+
+
+def run_inference(image, model):
+    with torch.no_grad():
+        image_float = image / 255.0
+        mean = np.mean(image_float.reshape(-1, image_float.shape[-1]), axis=0)
+        std = np.std(image_float.reshape(-1, image_float.shape[-1]), axis=0)
+
+        batch2 = {
+            "image": torchvision.transforms.functional.to_tensor(image)[None, ...],
+            "image_mean": torch.from_numpy(mean)[None, ...],
+            "image_std": torch.from_numpy(std)[None, ...],
+        }
+
+        batch2 = local_utils.batch_to_cuda(batch2)
+
+        pred2, batch2 = model(batch2, tta=True)
+
+        output_depth = pred2['depth'][0, 0, :, :].cpu().data.numpy()
+        output_label = pred2['seg'][0, 0, :, :].cpu().data.numpy()
+
+        weighted_depth = dfactor * output_depth
+
+        alpha = 0.9
+        weighted_seg = alpha * output_label + (1.0 - alpha) * np.minimum(0.99, weighted_depth / 70.0)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            tmp2 = 255 * anisotropic_diffusion(weighted_seg, niter=1, kappa=100, gamma=0.8)
+        weighted_final = ndimage.median_filter(tmp2.astype(np.uint8), size=7)
+
+    return weighted_final
 
 
 def _write_output(img_info, image, output_dir):
