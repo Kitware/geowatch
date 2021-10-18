@@ -228,7 +228,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         parser.add_argument("--exclude_sensors", type=partial(smartcast, astype=list), help='comma delimited list of sensors to avoid, such as S2 or L8')
         parser.add_argument("--channels", default=None, type=str, help='channels to use should be ChannelSpec coercable')
         parser.add_argument("--batch_size", default=4, type=int)
-        parser.add_argument("--num_workers", default=4, type=str, default='number of background workers. Can be auto or an avail expression')
+        parser.add_argument("--num_workers", default=4, type=str, help='number of background workers. Can be auto or an avail expression')
         parser.add_argument("--time_span", default='2y', type=str, help='how long a time window should roughly span by default')
 
         parser.add_argument(
