@@ -11,9 +11,6 @@ if python_utils.module_exists("cv2"):
     import cv2
     CV2 = True
 
-if python_utils.module_exists("matplotlib.pyplot"):
-    import matplotlib.pyplot as plt
-
 
 def get_image_size(filepath):
     im = Image.open(filepath)
@@ -45,7 +42,15 @@ def center_bbox(spatial_shape, output_shape):
     """
     center = (spatial_shape[0] / 2, spatial_shape[1] / 2)
     half_output_shape = (output_shape[0] / 2, output_shape[1] / 2)
-    bbox = [center[0] - half_output_shape[0], center[1] - half_output_shape[1], center[0] + half_output_shape[0], center[1] + half_output_shape[1]]
+    bbox = [
+        center[0] -
+        half_output_shape[0],
+        center[1] -
+        half_output_shape[1],
+        center[0] +
+        half_output_shape[0],
+        center[1] +
+        half_output_shape[1]]
     bbox = bbox_to_int(bbox)
     return bbox
 
@@ -68,9 +73,10 @@ def bbox_to_int(bbox):
 
 
 def draw_line_aa_in_patch(edge, patch_bounds):
-    rr, cc, prob = skimage.draw.line_aa(edge[0][0], edge[0][1], edge[1][0], edge[1][1])
+    rr, cc, prob = skimage.draw.line_aa(
+        edge[0][0], edge[0][1], edge[1][0], edge[1][1])
     keep_mask = (patch_bounds[0] <= rr) & (rr < patch_bounds[2]) \
-                & (patch_bounds[1] <= cc) & (cc < patch_bounds[3])
+        & (patch_bounds[1] <= cc) & (cc < patch_bounds[3])
     rr = rr[keep_mask]
     cc = cc[keep_mask]
     prob = prob[keep_mask]
@@ -95,22 +101,25 @@ def displacement_map_to_transformation_maps(disp_field_map):
     reverse_map_j = jv + disp_field_map[:, :, 0]
     return reverse_map_i, reverse_map_j
 
+
 if CV2:
     def apply_displacement_field_to_image(image, disp_field_map):
-        trans_map_i, trans_map_j = displacement_map_to_transformation_maps(disp_field_map)
-        misaligned_image = cv2.remap(image, trans_map_j, trans_map_i, cv2.INTER_CUBIC)
+        trans_map_i, trans_map_j = displacement_map_to_transformation_maps(
+            disp_field_map)
+        misaligned_image = cv2.remap(
+            image, trans_map_j, trans_map_i, cv2.INTER_CUBIC)
         return misaligned_image
-
 
     def apply_displacement_fields_to_image(image, disp_field_maps):
         disp_field_map_count = disp_field_maps.shape[0]
         misaligned_image_list = []
         for i in range(disp_field_map_count):
-            misaligned_image = apply_displacement_field_to_image(image, disp_field_maps[i, :, :, :])
+            misaligned_image = apply_displacement_field_to_image(
+                image, disp_field_maps[i, :, :, :])
             misaligned_image_list.append(misaligned_image)
         return misaligned_image_list
 else:
-    def apply_displacement_fields_to_image(image, disp_field_map):
+    def apply_displacement_field_to_image(image, disp_field_map):
         print("cv2 is not available, the apply_displacement_fields_to_image(image, disp_field_map) function cannot work!")
 
     def apply_displacement_fields_to_image(image, disp_field_maps):
@@ -119,7 +128,10 @@ else:
 
 def get_axis_patch_count(length, stride, patch_res):
     total_double_padding = patch_res - stride
-    patch_count = max(1, int(math.ceil((length - total_double_padding) / stride)))
+    patch_count = max(
+        1, int(
+            math.ceil(
+                (length - total_double_padding) / stride)))
     return patch_count
 
 
@@ -147,21 +159,24 @@ def compute_patch_boundingboxes(image_size, stride, patch_res):
             row_slice_begin = row_slice_end - patch_res
         for j in range(0, col_patch_count):
             if j < col_patch_count - 1:
-                col_slice_begin = j*stride
+                col_slice_begin = j * stride
                 col_slice_end = col_slice_begin + patch_res
             else:
                 col_slice_end = im_cols
                 col_slice_begin = col_slice_end - patch_res
 
-            patch_boundingbox = np.array([row_slice_begin, col_slice_begin, row_slice_end, col_slice_end], dtype=np.int)
-            assert row_slice_end - row_slice_begin == col_slice_end - col_slice_begin == patch_res, "ERROR: patch does not have the requested shape"
+            patch_boundingbox = np.array(
+                [row_slice_begin, col_slice_begin, row_slice_end, col_slice_end], dtype=np.int)
+            assert row_slice_end - row_slice_begin == col_slice_end - \
+                col_slice_begin == patch_res, "ERROR: patch does not have the requested shape"
             patch_boundingboxes.append(patch_boundingbox)
 
     return patch_boundingboxes
 
 
 def clip_boundingbox(boundingbox, clip_list):
-    assert len(boundingbox) == len(clip_list), "len(boundingbox) should be equal to len(clip_values)"
+    assert len(boundingbox) == len(
+        clip_list), "len(boundingbox) should be equal to len(clip_values)"
     clipped_boundingbox = []
     for bb_value, clip in zip(boundingbox[:2], clip_list[:2]):
         clipped_value = max(clip, bb_value)
@@ -189,14 +204,29 @@ def crop_or_pad_image_with_boundingbox(image, patch_boundingbox):
     row_padding_after = row_padding - row_padding // 2
     col_padding_after = col_padding - col_padding // 2
 
-    clipped_patch_boundingbox = clip_boundingbox(patch_boundingbox, [0, 0, im_rows, im_cols])
+    clipped_patch_boundingbox = clip_boundingbox(
+        patch_boundingbox, [0, 0, im_rows, im_cols])
 
     if len(image.shape) == 2:
-        patch = image[clipped_patch_boundingbox[0]:clipped_patch_boundingbox[2], clipped_patch_boundingbox[1]:clipped_patch_boundingbox[3]]
-        patch = np.pad(patch, [(row_padding_before, row_padding_after), (col_padding_before, col_padding_after)], mode="constant")
+        patch = image[clipped_patch_boundingbox[0]:clipped_patch_boundingbox[2],
+                      clipped_patch_boundingbox[1]:clipped_patch_boundingbox[3]]
+        patch = np.pad(patch,
+                       [(row_padding_before,
+                         row_padding_after),
+                        (col_padding_before,
+                         col_padding_after)],
+                       mode="constant")
     elif len(image.shape) == 3:
-        patch = image[clipped_patch_boundingbox[0]:clipped_patch_boundingbox[2], clipped_patch_boundingbox[1]:clipped_patch_boundingbox[3], :]
-        patch = np.pad(patch, [(row_padding_before, row_padding_after), (col_padding_before, col_padding_after), (0, 0)], mode="constant")
+        patch = image[clipped_patch_boundingbox[0]:clipped_patch_boundingbox[2],
+                      clipped_patch_boundingbox[1]:clipped_patch_boundingbox[3], :]
+        patch = np.pad(patch,
+                       [(row_padding_before,
+                         row_padding_after),
+                        (col_padding_before,
+                         col_padding_after),
+                           (0,
+                            0)],
+                       mode="constant")
     else:
         print("Image input does not have the right shape/")
         patch = None
@@ -207,8 +237,12 @@ def make_grid(images, padding=2, pad_value=0, return_offsets=False):
     nmaps = images.shape[0]
     ymaps = int(math.floor(math.sqrt(nmaps)))
     xmaps = nmaps // ymaps
-    height, width = int(images.shape[1] + padding), int(images.shape[2] + padding)
-    grid = np.zeros((height * ymaps + padding, width * xmaps + padding, images.shape[3])) + pad_value
+    height, width = int(
+        images.shape[1] + padding), int(images.shape[2] + padding)
+    grid = np.zeros(
+        (height * ymaps + padding,
+         width * xmaps + padding,
+         images.shape[3])) + pad_value
     k = 0
     offsets = []
     for y in range(ymaps):
@@ -217,7 +251,9 @@ def make_grid(images, padding=2, pad_value=0, return_offsets=False):
                 break
             x_offset = x * width + padding
             y_offset = y * height + padding
-            grid[y * height + padding:(y+1) * height, x * width + padding:(x+1) * width, :] = images[k]
+            grid[y * height + padding:(y + 1) * height,
+                 x * width + padding:(x + 1) * width,
+                 :] = images[k]
             offsets.append((x_offset, y_offset))
             k = k + 1
     if return_offsets:
@@ -226,13 +262,16 @@ def make_grid(images, padding=2, pad_value=0, return_offsets=False):
         return grid
 
 
-if __name__ == "__main__":
+def main():
+    if python_utils.module_exists("matplotlib.pyplot"):
+        import matplotlib.pyplot as plt
     im_rows = 5
     im_cols = 10
     stride = 1
     patch_res = 15
 
-    image = np.random.randint(0, 256, size=(im_rows, im_cols, 3), dtype=np.uint8)
+    image = np.random.randint(0, 256, size=(
+        im_rows, im_cols, 3), dtype=np.uint8)
     image = Image.fromarray(image)
     image = np.array(image)
     plt.ion()
@@ -241,7 +280,8 @@ if __name__ == "__main__":
     plt.show()
 
     # Cut patches
-    patch_boundingboxes = compute_patch_boundingboxes(image.shape[0:2], stride, patch_res)
+    patch_boundingboxes = compute_patch_boundingboxes(
+        image.shape[0:2], stride, patch_res)
 
     plt.figure(2)
 
@@ -250,3 +290,7 @@ if __name__ == "__main__":
         plt.imshow(patch)
         plt.show()
         input("Press <Enter> to finish...")
+
+
+if __name__ == "__main__":
+    main()
