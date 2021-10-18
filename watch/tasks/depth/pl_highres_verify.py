@@ -49,7 +49,7 @@ def modify_bn(model, track_running_stats = True, bn_momentum = 0.1):
 #-------------------------------------------------
 
 class MultiTaskModel(pl.LightningModule):
-  
+
     def __init__(
         self,
         batch_size: int = 1,
@@ -72,7 +72,7 @@ class MultiTaskModel(pl.LightningModule):
         self.config = config
 
         self.backbone = get_backbone(self.config["backbone_params"])
-       
+
         train_online_cuda_transform = None
         eval_online_cuda_transform = None
 
@@ -89,7 +89,7 @@ class MultiTaskModel(pl.LightningModule):
         return self.net(x, tta)
 
     def test_step(self, batch, batch_idx):
-       
+
         out_arr = []
         for i, image in enumerate(batch):
             if isinstance(image, dict):
