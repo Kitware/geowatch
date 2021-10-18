@@ -112,4 +112,3 @@ def detect_corners(polylines, u, v):
         corner_masks.append(corner_mask)
 
     return corner_masks
-

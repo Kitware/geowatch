@@ -7,7 +7,6 @@ import time
 from lydorn_utils import run_utils, print_utils
 from lydorn_utils import python_utils
 
-import  pdb
 
 def compute_max_disp(disp_params):
     m_g_t = disp_params["max_global_translation"]
@@ -15,7 +14,7 @@ def compute_max_disp(disp_params):
     m_p_t = disp_params["max_poly_translation"]
     m_p_h = disp_params["max_poly_homography"]
     m_h_c = disp_params["max_homography_coef"]
-    return (m_g_t + m_h_c*m_g_h) + (m_p_t + m_h_c*m_p_h)
+    return (m_g_t + m_h_c * m_g_h) + (m_p_t + m_h_c * m_p_h)
 
 
 def get_git_revision_hash():
@@ -212,7 +211,7 @@ def main():
     dict_of_lists = list_of_dicts_to_dict_of_lists(list_of_dicts)
     print(f"list_of_dicts_to_dict_of_lists: {time.time() - t0:02}s")
 
-    flat_dict_of_lists = flatten_dict(dict_of_lists)
+    flat_dict_of_lists = flatten_dict(dict_of_lists)  # NOQA
 
 
 if __name__ == "__main__":

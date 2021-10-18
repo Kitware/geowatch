@@ -5,8 +5,6 @@ import numpy as np
 import torch
 import torchvision
 
-import pdb
-
 import kornia
 
 import torch_lydorn.kornia
@@ -14,7 +12,6 @@ import torch_lydorn.torchvision
 
 from lydorn_utils import print_utils
 
-import pdb
 
 class Print(object):
     """Convert polygons to a single graph"""
@@ -108,16 +105,13 @@ class CudaDataAugmentation(object):
                     torch.nn.functional.grid_sample(combined[:, bilinear_slice, ...],
                                                     affine_grid, mode='bilinear')
 
-
-
                 # Rotate sizes and anglefield with mode='nearest'
                 # because it makes no sense to interpolate size values and angle values:
                 combined[:, nearest_slice, ...] = torch.nn.functional.grid_sample(combined[:, nearest_slice, ...],
                                                                                   affine_grid, mode='nearest')
 
                 # Additionally the angle field's values themselves have to be rotated:
-                combined[:, slices_nearest["gt_crossfield_angle"],
-                ...] = torch_lydorn.torchvision.transforms.functional.rotate_anglefield(
+                combined[:, slices_nearest["gt_crossfield_angle"], ...] = torch_lydorn.torchvision.transforms.functional.rotate_anglefield(
                     combined[:, slices_nearest["gt_crossfield_angle"], ...], angle)
 
                 # The sizes and distances should be adjusted as well because of the scaling.
@@ -161,8 +155,7 @@ class CudaDataAugmentation(object):
                 batch["gt_polygons_image"] = combined[:, slices_bilinear["gt_polygons_image"], ...]
             if "distances" in slices_bilinear:
                 batch["distances"] = combined[:, slices_bilinear["distances"], ...]
-            batch["valid_mask"] = 0.99 < combined[:, slices_bilinear["valid_mask"],
-                                         ...]  # Take a very high threshold to remove fuzzy pixels
+            batch["valid_mask"] = 0.99 < combined[:, slices_bilinear["valid_mask"], ...]  # Take a very high threshold to remove fuzzy pixels
 
             if "sizes" in slices_nearest:
                 batch["sizes"] = combined[:, slices_nearest["sizes"], ...]

@@ -4,7 +4,7 @@ import torch_lydorn.torchvision
 from frame_field_learning import measures
 import cv2 as cv
 import numpy as np
-import pdb
+
 
 def compute_distance_transform(tensor: torch.Tensor) -> torch.Tensor:
     device = tensor.device
@@ -103,7 +103,7 @@ def aggr_translated(all_outputs, seg_threshold, image_display=None):
         all_seg = all_outputs["seg"]
         all_seg_mask: torch.Tensor = seg_threshold < all_seg
         mean_seg = torch.mean(all_seg_mask.float(), dim=0)
-        mean_seg_mask = seg_threshold < mean_seg
+        mean_seg_mask = seg_threshold < mean_seg  # NOQA
         all_cleaned_seg = all_seg_mask * mean_seg[None, ...]
         # all_cleaned_seg_mask = seg_threshold < all_cleaned_seg
         # all_cleaned_seg[~all_cleaned_seg_mask] = 0  # Put 0 where seg is below threshold
@@ -162,7 +162,7 @@ def aggr_translated(all_outputs, seg_threshold, image_display=None):
 
 
 def tta_inference(model, xb, seg_threshold):
-    
+
     # Perform inference several times with transformed input image and aggregate results
     replicates = 4 * 2  # 4 rotations, each with vflip/no vflip
 
@@ -173,20 +173,22 @@ def tta_inference(model, xb, seg_threshold):
     all_outputs = {}
     for key in output_keys:
 
-        if key == 'xydir' or key == 'scale': continue
+        if key == 'xydir' or key == 'scale':
+            continue
 
-        all_outputs[key] = torch.empty((replicates, *notrans_outputs[key].shape), \
-                dtype=notrans_outputs[key].dtype, \
-                device=notrans_outputs[key].device)
+        all_outputs[key] = torch.empty((replicates, *notrans_outputs[key].shape),
+                                       dtype=notrans_outputs[key].dtype,
+                                       device=notrans_outputs[key].device)
         all_outputs[key][0] = notrans_outputs[key]
 
     # Flip image
     flipped_image = kornia.geometry.transform.vflip(xb["image"])
     flipped_outputs = model.inference(flipped_image)
-    
+
     for key in output_keys:
 
-        if key == 'xydir' or key == 'scale': continue
+        if key == 'xydir' or key == 'scale':
+            continue
 
         reversed_output = kornia.geometry.transform.vflip(flipped_outputs[key])
         all_outputs[key][1] = reversed_output
@@ -197,7 +199,8 @@ def tta_inference(model, xb, seg_threshold):
         rotated_outputs = model.inference(rotated_image)
         for key in output_keys:
 
-            if key == 'xydir' or key == 'scale': continue
+            if key == 'xydir' or key == 'scale':
+                continue
 
             reversed_output = torch.rot90(rotated_outputs[key], k=-k, dims=(-2, -1))
             if key == "crossfield":
@@ -212,7 +215,8 @@ def tta_inference(model, xb, seg_threshold):
         flipped_rotated_outputs = model.inference(flipped_rotated_image)
         for key in output_keys:
 
-            if key == 'xydir' or key == 'scale': continue
+            if key == 'xydir' or key == 'scale':
+                continue
 
             reversed_output = torch.rot90(kornia.geometry.transform.vflip(flipped_rotated_outputs[key]), k=-k,
                                           dims=(-2, -1))
@@ -240,7 +244,6 @@ def tta_inference(model, xb, seg_threshold):
     #     all_outputs["seg"][i] += 0.25 * torch.rand(all_outputs["seg"][i].shape, device=all_outputs["seg"][i].device)
     #     all_outputs["seg"][i] = torch.clamp(all_outputs["seg"][i], 0, 1)
 
-
     # # --- DEBUG SAVE
     # image_display = torch_lydorn.torchvision.transforms.functional.batch_denormalize(xb["image"],
     #                                                                                  xb["image_mean"],
@@ -250,7 +253,6 @@ def tta_inference(model, xb, seg_threshold):
     #     image_seg_display = image_seg_display[0].cpu().detach().numpy().transpose(1, 2, 0)
     #     skimage.io.imsave(f"image_seg_display_replicate_{i}.png", image_seg_display)
     # # ---
-
 
     # --- Aggregate results
     # final_outputs = aggr_dist_trans(all_outputs, seg_threshold)
@@ -277,6 +279,5 @@ def tta_inference(model, xb, seg_threshold):
     # # ---
 
     # input("Press <Enter>...")
-
 
     return final_outputs

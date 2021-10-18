@@ -16,19 +16,19 @@ class UNetBackbone(nn.Module):
         super(UNetBackbone, self).__init__()
         self.no_padding = no_padding
         self.inc = InConv(n_channels, n_hidden_base, no_padding)
-        self.down1 = Down(n_hidden_base, n_hidden_base*2, no_padding)
-        self.down2 = Down(n_hidden_base*2, n_hidden_base*4, no_padding)
-        self.down3 = Down(n_hidden_base*4, n_hidden_base*8, no_padding)
-        self.down4 = Down(n_hidden_base*8, n_hidden_base*16, no_padding)
+        self.down1 = Down(n_hidden_base, n_hidden_base * 2, no_padding)
+        self.down2 = Down(n_hidden_base * 2, n_hidden_base * 4, no_padding)
+        self.down3 = Down(n_hidden_base * 4, n_hidden_base * 8, no_padding)
+        self.down4 = Down(n_hidden_base * 8, n_hidden_base * 16, no_padding)
         # self.up1 = Up(n_hidden_base*24, n_hidden_base*8, no_padding)
         # self.up2 = Up(n_hidden_base*12, n_hidden_base*4, no_padding)
         # self.up3 = Up(n_hidden_base*6, n_hidden_base*2, no_padding)
         # self.up4 = Up(n_hidden_base*3, n_hidden_base, no_padding)
 
-        self.up1 = Up(n_hidden_base*16, n_hidden_base*8, n_hidden_base*8, no_padding)
-        self.up2 = Up(n_hidden_base*8, n_hidden_base*4, n_hidden_base*4, no_padding)
-        self.up3 = Up(n_hidden_base*4, n_hidden_base*2, n_hidden_base*2, no_padding)
-        self.up4 = Up(n_hidden_base*2, n_hidden_base, n_hidden_base, no_padding)
+        self.up1 = Up(n_hidden_base * 16, n_hidden_base * 8, n_hidden_base * 8, no_padding)
+        self.up2 = Up(n_hidden_base * 8, n_hidden_base * 4, n_hidden_base * 4, no_padding)
+        self.up3 = Up(n_hidden_base * 4, n_hidden_base * 2, n_hidden_base * 2, no_padding)
+        self.up4 = Up(n_hidden_base * 2, n_hidden_base, n_hidden_base, no_padding)
 
     def forward(self, x):
         x0 = self.inc.forward(x)
