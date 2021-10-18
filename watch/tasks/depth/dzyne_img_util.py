@@ -1,19 +1,16 @@
-import torch
-import math
 import numpy as np
 
-from PIL import Image, ImagePalette
+from PIL import Image
+# from PIL import ImagePalette
 import tifffile as tiff
 
 import rasterio
-from rasterio.features import shapes
-from rasterio.vrt import WarpedVRT
+# from rasterio.features import shapes
+# from rasterio.vrt import WarpedVRT
 from rasterio.windows import Window
 
 
 import cv2
-
-import pdb
 
 LOAD_ORIGINAL = True
 # LOAD_ORIGINAL = False
@@ -24,11 +21,12 @@ RGB_ONLY = True
 # BAND_SWAP = True
 BAND_SWAP = False
 
+
 def pad(img, pad_size=32):
     """
     Pad image on the sides, so that eash side is divisible by 32 (network requirement)
     if pad = True:
-        returns image as numpy.array, 
+        returns image as numpy.array,
         tuple with padding in pixels as(x_min_pad, y_min_pad, x_max_pad, y_max_pad)
     else:
         returns image as numpy.array
@@ -53,8 +51,8 @@ def pad(img, pad_size=32):
         x_min_pad = int(x_pad / 2)
         x_max_pad = x_pad - x_min_pad
 
-    img = cv2.copyMakeBorder(img, y_min_pad, y_max_pad, \
-            x_min_pad, x_max_pad, cv2.BORDER_REFLECT_101)
+    img = cv2.copyMakeBorder(img, y_min_pad, y_max_pad,
+                             x_min_pad, x_max_pad, cv2.BORDER_REFLECT_101)
 
     return img, (x_min_pad, y_min_pad, x_max_pad, y_max_pad)
 
@@ -70,17 +68,18 @@ def unpad(img, pads):
 
     return img[y_min_pad:height - y_max_pad, x_min_pad:width - x_max_pad]
 
+
 def minmax(img):
 
     img_dim = len(img.shape)
     if (img_dim < 3):
         img = np.expand_dims(img, axis=2)
-        
+
     out = np.zeros_like(img).astype(np.float32)
-    
+
     if img.sum() == 0:
         if img_dim < 3:
-            return out[:,:,0].astype(np.float32)
+            return out[:, :, 0].astype(np.float32)
         else:
             return out.astype(np.float32)
 
@@ -88,23 +87,24 @@ def minmax(img):
     # d = img.max()
 
     for i in range(img.shape[2]):
-    
+
         c = img[:, :, i].min()
         d = img[:, :, i].max()
 
-        t = (img[:, :, i] - c) / (float(d - c)+0.001)
+        t = (img[:, :, i] - c) / (float(d - c) + 0.001)
         out[:, :, i] = t
-    
+
     if img_dim < 3:
-        return out[:,:,0].astype(np.float32)
+        return out[:, :, 0].astype(np.float32)
     else:
         return out.astype(np.float32)
 
+
 def equalizeRGB(img):
-    
-    img = minmax(img) * 255 
-    
-    img_y_cr_cb = cv2.cvtColor(img.astype(uint8), cv2.COLOR_BGR2YCrCb)
+
+    img = minmax(img) * 255
+
+    img_y_cr_cb = cv2.cvtColor(img.astype(np.uint8), cv2.COLOR_BGR2YCrCb)
     y, cr, cb = cv2.split(img_y_cr_cb)
 
     # Applying equalize Hist operation on Y channel.
@@ -112,108 +112,111 @@ def equalizeRGB(img):
 
     img_y_cr_cb_eq = cv2.merge((y_eq, cr, cb))
     img_rgb_eq = cv2.cvtColor(img_y_cr_cb_eq, cv2.COLOR_YCR_CB2BGR)
-    
+
     return img_rgb_eq
 
 # This is from Antonio
-def normalizeRGB(img, percent_range = (2, 98)):
-           
+
+
+def normalizeRGB(img, percent_range=(2, 98)):
+
     min_val, max_val = percent_range
-    
+
     img = img.astype(np.float32)
-    
+
     img_dim = len(img.shape)
     if (img_dim < 3):
         img = np.expand_dims(img, axis=2)
-        
+
     for b in range(img.shape[2]):
-        
+
         min = np.percentile(img[:, :, b].flatten(), min_val)
         max = np.percentile(img[:, :, b].flatten(), max_val)
-        
+
         if min == max:
             img[:, :, b] = 255 * (img[:, :, b] - min)
         else:
             img[:, :, b] = 255 * (img[:, :, b] - min) / (max - min)
-        
+
     img /= 255.0
     img[img < 0] = 0
     img[img > 1] = 1
-    
+
     if img_dim < 3:
-        return img[:,:,0]
+        return img[:, :, 0]
     else:
         return img
- 
-def load_image(file_name_rgb, file_name_tif):               
-   
+
+
+def load_image(file_name_rgb, file_name_tif):
+
     # pdb.set_trace()
 
     if RGB_ONLY:
         if file_name_rgb.lower().endswith(('.png', '.jpg', '.jpeg', 'jp2')):
             rgb = np.asarray(Image.open(str(file_name_rgb)))
-        elif file_name_rgb.lower().endswith(('.tif', '.tiff')): 
-        	rgb = tiff.imread(str(file_name_rgb))  
-        	# Some of the spacenet data has channel as the 1st dim
-                #rgb = np.swapaxes(rgb, 0, 2)
-        	#rgb = np.swapaxes(rgb, 0, 1)
-        	#rgb = rgb[:,:,[0,2,1]]
+        elif file_name_rgb.lower().endswith(('.tif', '.tiff')):
+            rgb = tiff.imread(str(file_name_rgb))
+            # Some of the spacenet data has channel as the 1st dim
+            #rgb = np.swapaxes(rgb, 0, 2)
+            #rgb = np.swapaxes(rgb, 0, 1)
+            #rgb = rgb[:,:,[0,2,1]]
 
         elif file_name_rgb.lower().endswith(('.ntf')):
             rgb = readRasterImage(file_name_rgb)[0]
 
         else:
             print("Not valid RGB image format")
-  
+
         if rgb.max() > 255:
-                rgb = (255* minmax(rgb)).astype(np.uint8)
+            rgb = (255 * minmax(rgb)).astype(np.uint8)
 
         if len(rgb.shape) < 3:
-            rgb =  np.dstack((rgb, rgb, rgb))
+            rgb = np.dstack((rgb, rgb, rgb))
 
         if LOAD_ORIGINAL:
             return rgb
-        
-        if rgb.shape[2] == 4 or RGB_ONLY or not BAND_SWAP:
-            rgb = rgb[:,:,:3]
-        else:
-            rgb = rgb[:,:,[4,2,1]]
-                        
-            
-        #if EQUALIZE_FLAG:  
-        #    rgb = equalizeRGB(rgb) 
-         
-        # normalize it to [0, 1]             
-        rgb = minmax(rgb)  
-      
-        tf = np.concatenate([rgb, rgb, rgb[:,:, 0:2]], axis = 2)
-        
-    else:
-        rgb = tiff.imread(str(file_name_tif))                         
-        rgb = minmax(rgb)
-       
-        if len(rgb.shape) < 3:
-            rgb =  np.dstack((rgb, rgb, rgb))
 
-        #tf = tiff.imread(str(file_name_tif)).astype(np.float32) / (2 ** 11 - 1) 
-          
+        if rgb.shape[2] == 4 or RGB_ONLY or not BAND_SWAP:
+            rgb = rgb[:, :, :3]
+        else:
+            rgb = rgb[:, :, [4, 2, 1]]
+
+        # if EQUALIZE_FLAG:
+        #    rgb = equalizeRGB(rgb)
+
+        # normalize it to [0, 1]
+        rgb = minmax(rgb)
+
+        tf = np.concatenate([rgb, rgb, rgb[:, :, 0:2]], axis=2)
+
+    else:
+        rgb = tiff.imread(str(file_name_tif))
+        rgb = minmax(rgb)
+
+        if len(rgb.shape) < 3:
+            rgb = np.dstack((rgb, rgb, rgb))
+
+        #tf = tiff.imread(str(file_name_tif)).astype(np.float32) / (2 ** 11 - 1)
+
         tf = tiff.imread(str(file_name_tif)).astype(np.float32)
         tf = minmax(tf)
 
         if len(tf.shape) < 3:
-            tf =  np.dstack((tf, tf, tf))
+            tf = np.dstack((tf, tf, tf))
 
         if tf.shape[2] == 4:
-            tf = np.concatenate([tf, tf], axis = 2)
-            
-    if  tf.shape[2] == 4 or rgb.shape[2] == 4 or RGB_ONLY or not BAND_SWAP:   
-        return np.concatenate([rgb[:,:,:3], tf], axis=2) * (2 ** 8 - 1)
+            tf = np.concatenate([tf, tf], axis=2)
+
+    if tf.shape[2] == 4 or rgb.shape[2] == 4 or RGB_ONLY or not BAND_SWAP:
+        return np.concatenate([rgb[:, :, :3], tf], axis=2) * (2 ** 8 - 1)
     else:
         if tf.shape[2] <= 4:
-            return np.concatenate([rgb[:,:,:3], tf], axis=2) * (2 ** 8 - 1)
+            return np.concatenate([rgb[:, :, :3], tf], axis=2) * (2 ** 8 - 1)
         else:
-            return np.concatenate([rgb[:,:,[4,2,1]], tf], axis=2) * (2 ** 8 - 1)
- 
+            return np.concatenate(
+                [rgb[:, :, [4, 2, 1]], tf], axis=2) * (2 ** 8 - 1)
+
 
 def readRasterImage(filename: str, geoProps={}, convert=False):
     """Reads ntf files
@@ -299,11 +302,9 @@ def readRasterImage(filename: str, geoProps={}, convert=False):
             if bands == 3:
                 normalizeRGB(img)
             else:
-                normalize(img, bands, datatype)
+                # FIXME: THIS IS A NAME ERROR
+                normalize(img, bands, datatype)  # NOQA
 
         # --- End: Copying imagery by ROIs ---
 
         return (img, transform, bands, datatype)
-
-
-

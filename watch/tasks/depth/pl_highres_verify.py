@@ -1,5 +1,6 @@
-import os
-import sys
+
+import os  # NOQA
+import sys  # NOQA
 
 sys.path.append(os.path.join(os.path.dirname(__file__), 'modules'))
 
@@ -29,7 +30,7 @@ dfactor = 25.5
 # Modify the batch_norm layers
 #-------------------------------------------
 
-def modify_bn(model, track_running_stats = True, bn_momentum = 0.1):
+def modify_bn(model, track_running_stats=True, bn_momentum=0.1):
     for m in model.modules():
         for child in m.children():
             if type(child) == nn.BatchNorm2d:
@@ -76,14 +77,15 @@ class MultiTaskModel(pl.LightningModule):
         train_online_cuda_transform = None
         eval_online_cuda_transform = None
 
-        self.net = Multi_FrameFieldModel(self.config,\
-                backbone=self.backbone, \
-                train_transform=train_online_cuda_transform,\
-                eval_transform=eval_online_cuda_transform)
+        self.net = Multi_FrameFieldModel(
+            self.config,
+            backbone=self.backbone,
+            train_transform=train_online_cuda_transform,
+            eval_transform=eval_online_cuda_transform)
 
-        self.transform =  data_transforms.get_online_cuda_transform(self.config,
-                augmentations=self.config["data_aug_params"]["enable"])
-
+        self.transform =  data_transforms.get_online_cuda_transform(
+            self.config,
+            augmentations=self.config["data_aug_params"]["enable"])
 
     def forward(self, x, tta=False):
         return self.net(x, tta)
@@ -131,21 +133,19 @@ class MultiTaskModel(pl.LightningModule):
             out_arr.append((gid, weighted_final))
         return out_arr
 
-
     @staticmethod
     def add_model_specific_args(parent_parser):  # pragma: no-cover
         parser = parent_parser.add_argument_group("MultiTaskModel")
 
         parser.add_argument('--checkpoint', default=None, type=str,
-                    help='checkpoint to use for testing')
+                            help='checkpoint to use for testing')
         parser.add_argument('--config', '--config', default=None, type=str,
-                    help='Name of the config file, excluding the .json file extension.')
+                            help='Name of the config file, excluding the .json file extension.')
         parser.add_argument('--test_img_dir', '--test_img_dir', default=None, type=str,
-                    help='directory where test images are located')
+                            help='directory where test images are located')
         parser.add_argument('--test_img_list', '--test_img_list', default=None, type=str,
-                    help='list of test images')
+                            help='list of test images')
         parser.add_argument('--gpus', default='0', type=str,
-                    help='GPU')
+                            help='GPU')
 
         return parent_parser
-
