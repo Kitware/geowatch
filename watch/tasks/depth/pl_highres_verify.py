@@ -4,7 +4,6 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), 'modules'))
 
 import warnings
-from argparse import ArgumentParser, Namespace
 import numpy as np
 import torch
 import torch.nn as nn
@@ -100,11 +99,6 @@ class MultiTaskModel(pl.LightningModule):
 
             with torch.no_grad():
 
-                image = image.cpu().data.numpy()
-
-                image = np.swapaxes(image, 0, 2)
-                image = np.swapaxes(image, 0, 1)
-
                 image_float = image / 255.0
                 mean = np.mean(image_float.reshape(-1, image_float.shape[-1]), axis=0)
                 std = np.std(image_float.reshape(-1, image_float.shape[-1]), axis=0)
@@ -118,8 +112,6 @@ class MultiTaskModel(pl.LightningModule):
                 batch2 = local_utils.batch_to_cuda(batch2)
 
                 pred2, batch2 = self(batch2, tta=True)
-
-                out = pred2['depth'], pred2['seg'], pred2['crossfield']
 
                 output_depth = pred2['depth'][0, 0, :, :].cpu().data.numpy()
                 output_label = pred2['seg'][0, 0, :, :].cpu().data.numpy()
