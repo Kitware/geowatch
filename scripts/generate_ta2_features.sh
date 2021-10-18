@@ -50,6 +50,9 @@ COMBO_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_data.kwcoco.json
 COMBO_TRAIN_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_train_data.kwcoco.json
 COMBO_VALI_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_data.kwcoco.json
 
+COMBO_TRAIN_S2_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_train_s2_data.kwcoco.json
+COMBO_VALI_S2_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_s2_data.kwcoco.json
+
 BASE_TRAIN_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/base_train_data.kwcoco.json
 BASE_VALI_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/base_vali_data.kwcoco.json
 
@@ -231,6 +234,16 @@ predict_all_ta2_features(){
     kwcoco subset --src $COMBO_COCO_FPATH \
             --dst $COMBO_TRAIN_COCO_FPATH \
             --select_videos '.name | startswith("KR_") | not'
+
+
+    # Also split out S2
+    kwcoco subset --src $COMBO_TRAIN_COCO_FPATH \
+            --dst $COMBO_TRAIN_S2_COCO_FPATH \
+            --select_images '.sensor_coarse == "S2"'
+
+    kwcoco subset --src $COMBO_VALI_COCO_FPATH \
+            --dst $COMBO_VALI_S2_COCO_FPATH \
+            --select_images '.sensor_coarse == "S2"'
 }
 
 
