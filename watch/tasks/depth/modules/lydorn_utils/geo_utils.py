@@ -3,13 +3,12 @@ import time
 import json
 import os.path
 from tqdm import tqdm
-import functools
 
 import rasterio
 from osgeo import gdal, ogr
 from osgeo import osr
 import overpy
-from pyproj import Proj, transform, Transformer
+from pyproj import Proj, transform
 import fiona
 import fiona.crs
 import shapely.geometry
@@ -18,8 +17,6 @@ import shapely.ops
 from . import polygon_utils
 from . import math_utils
 from . import print_utils
-
-import pdb
 
 # --- Params --- #
 
@@ -249,14 +246,14 @@ def save_image_as_geotiff(save_filepath, image, source_geotiff_filepath):
 
     driver = gdal.GetDriverByName("GTiff")
     outdata = driver.Create(save_filepath, image.shape[1], image.shape[0], image.shape[2])
-    outdata.SetGeoTransform(source_gt)  ##sets same geotransform as input
-    outdata.SetProjection(source_prj)  ##sets same projection as input
+    outdata.SetGeoTransform(source_gt)  # sets same geotransform as input
+    outdata.SetProjection(source_prj)  # sets same projection as input
     for i in range(image.shape[2]):
         outdata.GetRasterBand(i + 1).WriteArray(image[..., i])
-    outdata.FlushCache()  ##saves to disk!!
-    outdata = None
-    band = None
-    ds = None
+    outdata.FlushCache()  # saves to disk!!
+    outdata = None  # NOQA
+    band = None  # NOQA
+    ds = None  # NOQA
 
 
 def save_shapefile_from_polygons(polygons, image_filepath, output_shapefile_filepath, properties_list=None):
@@ -265,7 +262,7 @@ def save_shapefile_from_polygons(polygons, image_filepath, output_shapefile_file
     """
     assert type(polygons) == list and type(polygons[0]) == np.ndarray and \
            len(polygons[0].shape) == 2 and polygons[0].shape[1] == 2, \
-        "polygons should be a list of numpy arrays with shape (N, 2)"
+            "polygons should be a list of numpy arrays with shape (N, 2)"
     if properties_list is not None:
         assert len(polygons) == len(properties_list), "polygons and properties_list should have the same length"
 
@@ -334,13 +331,14 @@ def save_shapefile_from_shapely_polygons(polygons, image_filepath, output_shapef
         'geometry': 'Polygon',
         'properties': {'id': 'int'},
     }
-    shp_crs = "EPSG:4326"
-    shp_srs = Proj(shp_crs)
+    # shp_crs = "EPSG:4326"
+    # shp_srs = Proj(shp_crs)
     raster = rasterio.open(image_filepath)
-    raster_srs = Proj(raster.crs)
-    raster_proj = lambda x, y: raster.transform * (x, y)
+    # raster_srs = Proj(raster.crs)
+    def raster_proj(x, y):
+        return raster.transform * (x, y)
     # shp_proj = functools.partial(transform, raster_srs, shp_srs)
-    shp_proj = Transformer.from_proj(raster_srs, shp_srs).transform
+    # shp_proj = Transformer.from_proj(raster_srs, shp_srs).transform
 
     # Write a new Shapefile
     with fiona.open(output_shapefile_filepath, 'w', driver='ESRI Shapefile', schema=schema, crs=fiona.crs.from_epsg(4326)) as c:
@@ -452,7 +450,7 @@ def crop_shapefile(input_filepath, mask_filepath, output_filepath):
     print(parsed_json)
 
     # create empty result layer
-    ogrGeometryType = ogr.Geometry(ogr.wkbPolygon)
+    ogrGeometryType = ogr.Geometry(ogr.wkbPolygon)  # NOQA
     outDriver = ogr.GetDriverByName("ESRI Shapefile")
     outDs = outDriver.CreateDataSource(output_filepath)
     outLayer = outDs.CreateLayer('', None, ogr.wkbPolygon)

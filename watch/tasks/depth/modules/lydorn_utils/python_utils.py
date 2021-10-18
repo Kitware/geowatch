@@ -87,16 +87,16 @@ def wipe_dir(dirpath):
         os.remove(filepath)
 
 
-def split_list_into_chunks(l, n, pad=False):
-    """Yield successive n-sized chunks from l."""
-    for i in range(0, len(l), n):
+def split_list_into_chunks(ell, n, pad=False):
+    """Yield successive n-sized chunks from ell."""
+    for i in range(0, len(ell), n):
         if pad:
-            chunk = l[i:i + n]
+            chunk = ell[i:i + n]
             if len(chunk) < n:
-                chunk.extend([chunk[-1]]*(n - len(chunk)))
+                chunk.extend([chunk[-1]] * (n - len(chunk)))
             yield chunk
         else:
-            yield l[i:i + n]
+            yield ell[i:i + n]
 
 
 def params_to_str(params):
@@ -109,8 +109,8 @@ def params_to_str(params):
 
 
 def main():
-    l = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-    batches = split_list_into_chunks(l, 4, pad=True)
+    ell = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    batches = split_list_into_chunks(ell, 4, pad=True)
     for batch in batches:
         print(batch)
 

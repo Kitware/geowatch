@@ -1,5 +1,3 @@
-import sys
-import time
 from functools import partial
 import math
 import random
@@ -74,10 +72,10 @@ def l2diffs(polygon1, polygon2):
     Computes vertex-wise L2 difference between the two polygons.
     As the two polygons may not have the same starting vertex,
     all shifts are considred and the shift resulting in the minimum mean L2 difference is chosen
-    
-    :param polygon1: 
-    :param polygon2: 
-    :return: 
+
+    :param polygon1:
+    :param polygon2:
+    :return:
     """
     # Make polygons of equal length
     if len(polygon1) != len(polygon2):
@@ -671,7 +669,7 @@ def draw_triangle(shape, triangle, blur_radius=0):
 def draw_polygon(polygon, shape, fill=True, edges=True, vertices=True, line_width=3):
     # TODO: handle holes in polygons
     im = Image.new("RGB", (shape[1], shape[0]))
-    im_px_access = im.load()
+    im_px_access = im.load()  # NOQA
     draw = ImageDraw.Draw(im)
 
     vertex_list = []
@@ -719,7 +717,7 @@ def draw_polygons(polygons, shape, fill=True, edges=True, vertices=True, line_wi
     im_draw_list = []
     for channel_index in range(channel_count):
         im = Image.new("L", (draw_shape[1], draw_shape[0]))
-        im_px_access = im.load()
+        im_px_access = im.load()  # NOQA
         draw = ImageDraw.Draw(im)
         im_draw_list.append((im, draw))
 
@@ -1300,7 +1298,7 @@ def init_angle_field(polygons, shape, line_width=1):
     polygons = polygons_close(polygons)
 
     im = Image.new("L", (shape[1], shape[0]))
-    im_px_access = im.load()
+    im_px_access = im.load()  # NOQA
     draw = ImageDraw.Draw(im)
 
     for polygon in polygons:
@@ -1444,7 +1442,7 @@ def point_project_onto_geometry(coord, target):
     return projected_point.coords[0]
 
 
-def project_onto_geometry(geom, target, pool: Pool=None):
+def project_onto_geometry(geom, target, pool: Pool = None):
     """
     Projects all points from line_string onto target.
     @param geom:
@@ -1601,7 +1599,7 @@ def compute_contour_measure(pred_polygon, gt_contours, sampling_spacing, max_str
         return None
 
 
-def compute_polygon_contour_measures(pred_polygons: list, gt_polygons: list, sampling_spacing: float, min_precision: float, max_stretch: float, metric_name: str="cosine"):
+def compute_polygon_contour_measures(pred_polygons: list, gt_polygons: list, sampling_spacing: float, min_precision: float, max_stretch: float, metric_name: str = "cosine"):
     """
     pred_polygons are sampled with sampling_spacing before projecting those sampled points to gt_polygons.
     Then the
