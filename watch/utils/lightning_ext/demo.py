@@ -18,6 +18,9 @@ class LightningToyNet2d(pl.LightningModule):
     def forward(self, x):
         return self.model(x)
 
+    def get_cfgstr(self):
+        return 'This is for BatchPlotter'
+
     def forward_step(self, batch, batch_idx):
         if self.trainer is None:
             stage = 'disconnected'

@@ -86,6 +86,11 @@ class MultimodalTransformer(pl.LightningModule):
             >>> parent_parser.parse_known_args()
         """
         parser = parent_parser.add_argument_group("MultimodalTransformer")
+        parser.add_argument('--name', default='unnamed_model', help=ub.paragraph(
+            '''
+            Specify a name for the experiment. (Unsure if the Model is the place for this)
+            '''))
+
         parser.add_argument("--optimizer", default='RAdam', type=str, help='Optimizer name supported by the netharn API')
         parser.add_argument("--learning_rate", default=1e-3, type=float)
         parser.add_argument("--weight_decay", default=0., type=float)
@@ -135,6 +140,13 @@ class MultimodalTransformer(pl.LightningModule):
                 '''))
         return parent_parser
 
+    def get_cfgstr(self):
+        cfgstr = f'{self.name}_{self.arch_name}'
+        return cfgstr
+
+        # model_cfgstr
+        pass
+
     def __init__(self,
                  arch_name='smt_it_stm_p8',
                  dropout=0.0,
@@ -160,10 +172,12 @@ class MultimodalTransformer(pl.LightningModule):
                  saliency_loss='focal',
                  tokenizer='rearrange',
                  token_norm='auto',
+                 name='unnamed_expt',
                  classes=10):
 
         super().__init__()
         self.save_hyperparameters()
+        self.name = name
 
         # HACK:
         if input_stats is not None and 'input_stats' in input_stats:

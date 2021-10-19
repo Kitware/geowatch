@@ -170,12 +170,6 @@ def make_fit_config(cmdline=False, **kwargs):
         Initialization strategy. Can be a path to a pretrained network.
         '''))
 
-    # config_parser.add_argument('--name', default=None, help=ub.paragraph(
-    #     '''
-    #     TODO: allow for the user to specify a name, and do netharn-like
-    #     fit/runs and fit/name directories?
-    #     '''))
-
     callback_parser = parser.add_argument_group("Callbacks")
 
     # our extension callbacks have arg parsers
@@ -254,6 +248,9 @@ def make_fit_config(cmdline=False, **kwargs):
     datamodule_class.add_argparse_args(parser)
     # method_parser = parser.add_argument_group("Method")
     method_class.add_argparse_args(parser)
+    # from watch.utils import util_globals
+    # import watch.utils
+
     pl.Trainer.add_argparse_args(parser)
 
     # Hard code custom default settings for lightning to enable certain tricks

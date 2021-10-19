@@ -14,6 +14,7 @@ DATASET_CODE=Drop1_October2021
 CHANNELS="blue|green|red|nir|swir16|swir22"
 ARCH=smt_it_joint_p8
 EXPERIMENT_NAME=Saliency_${ARCH}_raw_v002
+NAME="Saliency_{ARCH}_raw_v002"
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
@@ -31,6 +32,7 @@ PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt
 # Write train and prediction configs
 export CUDA_VISIBLE_DEVICES="2"
 python -m watch.tasks.fusion.fit \
+    --name="$NAME" \
     --channels=${CHANNELS} \
     --method="MultimodalTransformer" \
     --arch_name=$ARCH \
