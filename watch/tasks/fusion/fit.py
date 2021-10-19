@@ -445,7 +445,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     print('trainer.logger.log_dir = {!r}'.format(trainer.logger.log_dir))
     trainer._hack_args = args
     trainer._hack_parser = parser
-    _on_init_end(trainer_
+    _on_init_end(trainer)
 
     modules = {
         'datamodule': datamodule,
