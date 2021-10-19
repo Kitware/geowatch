@@ -73,6 +73,7 @@ import ubelt as ub
 import platform
 import getpass
 import pathlib
+from os.path import join
 
 from watch.utils import lightning_ext as pl_ext
 
@@ -397,13 +398,11 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         info = initializer(model)  # NOQA
 
     # init trainer from args
-    from os.path import join
     callbacks = [
         # pl_ext.callbacks.AutoResumer(),
         pl_ext.callbacks.StateLogger(),
         pl_ext.callbacks.TextLogger(args),
-        pl.callbacks.LambdaCallback(
-            on_init_end=lambda trainer: parser.write_config_file(args, [join(trainer.log_dir, 'fit_config.yaml')])),
+        pl.callbacks.LambdaCallback(on_init_end=_on_init_end),
         pl_ext.callbacks.Packager(package_fpath=args.package_fpath),
         pl_ext.callbacks.BatchPlotter(
             num_draw=args.num_draw,
@@ -442,6 +441,8 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     # - [ ] Save multiple checkpoints based on metrics
     # https://github.com/PyTorchLightning/pytorch-lightning/issues/2908
     trainer = pl.Trainer.from_argparse_args(args, callbacks=callbacks)
+    trainer._hack_args = args
+    trainer._hack_parser = parser
     print('trainer.logger.log_dir = {!r}'.format(trainer.logger.log_dir))
 
     modules = {
@@ -452,6 +453,12 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         'parser': parser,  # return parser so we can write the config
     }
     return modules
+
+
+def _on_init_end(trainer):
+    trainer._hack_parser.write_config_file(
+        trainer._hack_args,
+        [join(trainer.log_dir, 'fit_config.yaml')])
 
 
 @profile

@@ -20,6 +20,9 @@ def configure_hacks(**config):
     Modules we currently hack:
         * cv2 - fix thread count
         * torch sharing strategy
+
+    References:
+        https://pytorch.org/docs/stable/multiprocessing.html#torch.multiprocessing.get_all_sharing_strategies
     """
 
     num_workers = config.get('num_workers', None)
