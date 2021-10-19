@@ -430,6 +430,8 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
                 pl.callbacks.ModelCheckpoint(
                     monitor='val_class_f1_macro', mode='max', save_top_k=4),
             ]
+    else:
+        callbacks = []
 
     # TODO: explititly initialize the tensorboard logger?
     # logger = [
