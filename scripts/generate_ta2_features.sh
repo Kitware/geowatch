@@ -114,8 +114,8 @@ uky_prediction(){
         --input_kwcoco $BASE_COCO_FPATH \
         --output_kwcoco $UKY_S2_COCO_FPATH \
         --ckpt_path $UKY_S2_MODEL_FPATH  \
-        --device=1 \
-        --num_workers=6
+        --device=0 \
+        --num_workers="min(avail,all/2)" 
 
         #--gpus 1 \
 
@@ -125,7 +125,7 @@ uky_prediction(){
         --output_kwcoco $UKY_L8_COCO_FPATH \
         --ckpt_path $UKY_L8_MODEL_FPATH \
         --device=cuda \
-        --num_workers=avail
+        --num_workers="min(avail,all/2)" 
 
         #--gpus 1 \
 
@@ -146,7 +146,7 @@ rutgers_prediction(){
         --checkpoint_fpath=$RUTGERS_MATERIAL_MODEL_FPATH  \
         --default_config_key=iarpa \
         --pred_dataset=$RUTGERS_MATERIAL_COCO_FPATH \
-        --num_workers=avail/2 \
+        --num_workers="min(avail,all/2)" \
         --batch_size=32 --gpus "0"
 }
 
@@ -163,7 +163,7 @@ dzyne_prediction(){
         --dataset=$BASE_COCO_FPATH \
         --deployed=$DZYNE_LANDCOVER_MODEL_FPATH  \
         --device=0 \
-        --num_workers=avail \
+        --num_workers="min(avail,all/2)" \
         --output=$DZYNE_LANDCOVER_COCO_FPATH
           
     #\

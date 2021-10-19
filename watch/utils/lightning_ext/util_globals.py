@@ -170,14 +170,14 @@ def coerce_num_workers(num_workers='auto', minimum=0):
             current_load = np.array(psutil.cpu_percent(percpu=True)) / 100
             local_dict['avail'] = np.sum(current_load < 0.5)
 
-        prefix = 'all'
+        prefix = 'all_'
         if num_workers.startswith(prefix):
-            local_dict['all'] = psutil.cpu_count()
+            local_dict['all_'] = psutil.cpu_count()
 
         if num_workers == 'none':
             num_workers = None
         else:
-            expr = num_workers
+            expr = num_workers.replace('all', 'all_')
             if len(expr) > 32:
                 raise Exception(
                     'num-workers-hueristic should be small text. '
@@ -189,7 +189,7 @@ def coerce_num_workers(num_workers='auto', minimum=0):
             # evaluated = eval(expr, local_dict, local_dict)
             import numexpr
             num_workers = numexpr.evaluate(expr, local_dict=local_dict,
-                                           global_dict={})
+                                           global_dict=local_dict)
 
     if num_workers is not None:
         num_workers = max(int(num_workers), minimum)
