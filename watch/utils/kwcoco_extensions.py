@@ -289,8 +289,8 @@ def coco_populate_geo_video_stats(dset, vidid, target_gsd='max-resolution'):
         img = dset.index.imgs[gid]
         wld_from_img = frame_infos[gid]['img_to_wld']
         wld_crs_info = frame_infos[gid]['wld_crs_info']
-        vid_from_wld = vid_from_wld @ wld_from_img
-        img['warp_img_to_vid'] = vid_from_wld.concise()
+        vid_from_img = vid_from_wld @ wld_from_img
+        img['warp_img_to_vid'] = vid_from_img.concise()
 
         if base_wld_crs_info != wld_crs_info:
             import warnings
