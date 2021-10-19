@@ -83,6 +83,7 @@ def make_predict_config(cmdline=False, **kwargs):
         'time_steps',
         'channels',
         'time_sampling',
+        'time_span',
     ]
     parser = datamodule_class.add_argparse_args(parser)
     datamodule_defaults = {k: parser.get_default(k) for k in overloadable_datamodule_keys}
@@ -207,30 +208,38 @@ def predict(cmdline=False, **kwargs):
         datamodule_class.__init__,
     )
 
-    given = ub.dict_isect(datamodule_vars, args.datamodule_defaults)
-    print('given = {}'.format(ub.repr2(given, nl=1)))
-    needs_update = {k for k, v in given.items() if v == 'auto'}
-
-    if hasattr(method, 'datamodule_hparams'):
-        traintime_vals = ub.dict_isect(method.datamodule_hparams, args.datamodule_defaults)
-        overloads = ub.dict_isect(method.datamodule_hparams, needs_update)
-        discarded = ub.dict_diff(traintime_vals, needs_update)
-        print('overloads = {}'.format(ub.repr2(overloads, nl=1)))
-        print('deviation from train settings = {}'.format(ub.repr2(discarded, nl=1)))
-        datamodule_vars.update(overloads)
-        # datamodule_vars[k] = args.datamodule_defaults[k]
+    parsetime_vals = ub.dict_isect(datamodule_vars, args.datamodule_defaults)
+    need_infer = {k for k, v in parsetime_vals.items() if v == 'auto'}
+    # Try and infer what data we were given at train time
+    if hasattr(method, 'fit_config'):
+        traintime_vals = method.fit_config
+    elif hasattr(method, 'datamodule_hparams'):
+        traintime_vals = method.datamodule_hparams
     else:
-        overloads = ub.dict_isect(args.datamodule_defaults, needs_update)
-        if datamodule_vars['channels'] is None:
+        traintime_vals = {}
+        if datamodule_vars['channels'] in {None, 'auto'}:
             print('Warning have to make assumptions. Might not always work')
             if hasattr(method, 'input_channels'):
                 # note input_channels are sometimes different than the channels the
                 # datamodule expects. Depending on special keys and such.
-                overloads['channels'] = method.input_channels.spec
+                traintime_vals['channels'] = method.input_channels.spec
             else:
-                overloads['channels'] = list(method.input_norms.keys())[0]
-        print('overloads = {}'.format(ub.repr2(overloads, nl=1)))
-        datamodule_vars.update(overloads)
+                traintime_vals['channels'] = list(method.input_norms.keys())[0]
+    able_to_infer = ub.dict_isect(traintime_vals, need_infer)
+    unable_to_infer = ub.dict_diff(need_infer, traintime_vals)
+    # Use defaults when we can't infer
+    overloads = able_to_infer.copy()
+    overloads.update(ub.dict_isect(args.datamodule_defaults, unable_to_infer))
+    datamodule_vars.update(overloads)
+    print('able_to_infer = {}'.format(ub.repr2(able_to_infer, nl=1)))
+    print('unable_to_infer = {}'.format(ub.repr2(unable_to_infer, nl=1)))
+    print('overloads = {}'.format(ub.repr2(overloads, nl=1)))
+
+    deviation = ub.varied_values([
+        ub.dict_isect(traintime_vals, datamodule_vars),
+        ub.dict_isect(datamodule_vars, traintime_vals),
+    ], min_variations=1)
+    print('deviation from fit->predict settings = {}'.format(ub.repr2(deviation, nl=1)))
 
     datamodule = datamodule_class(
         **datamodule_vars

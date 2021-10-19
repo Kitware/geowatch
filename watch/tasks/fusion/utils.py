@@ -48,7 +48,22 @@ def load_model_from_package(package_path):
     arch_name = package_header['arch_name']
     module_name = package_header['module_name']
 
-    return imp.load_pickle(module_name, arch_name)
+    model = imp.load_pickle(module_name, arch_name)
+
+    try:
+        fit_config_text = imp.load_text('package_header', 'fit_config.yaml')
+    except Exception:
+        pass
+    else:
+        import io
+        import yaml
+        file = io.StringIO()
+        file.write(fit_config_text)
+        file.seek(0)
+        fit_config = yaml.safe_load(file)
+        model.fit_config = fit_config
+
+    return model
 
 
 class Lambda(nn.Module):

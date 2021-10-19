@@ -202,9 +202,16 @@ predict_all_ta2_features(){
     # Combine TA2 Team Features into a single file
     kwcoco stats $BASE_COCO_FPATH $UKY_INVARIANTS_COCO_FPATH $RUTGERS_MATERIAL_COCO_FPATH $DZYNE_LANDCOVER_COCO_FPATH
 
+    kwcoco validate $BASE_COCO_FPATH
+    kwcoco validate $UKY_INVARIANTS_COCO_FPATH
+    kwcoco validate $RUTGERS_MATERIAL_COCO_FPATH
+    kwcoco validate $DZYNE_LANDCOVER_COCO_FPATH
+
     python ~/code/watch/watch/cli/coco_combine_features.py \
         --src $BASE_COCO_FPATH $UKY_INVARIANTS_COCO_FPATH $RUTGERS_MATERIAL_COCO_FPATH $DZYNE_LANDCOVER_COCO_FPATH \
         --dst $COMBO_COCO_FPATH
+
+    kwcoco validate $COMBO_COCO_FPATH
 
     # Ensure "Video Space" is 10 GSD
     # Might not need to do that?
@@ -237,6 +244,9 @@ predict_all_ta2_features(){
     kwcoco subset --src $COMBO_COCO_FPATH \
             --dst $COMBO_TRAIN_COCO_FPATH \
             --select_videos '.name | startswith("KR_") | not'
+
+    kwcoco validate $COMBO_VALI_COCO_FPATH
+    kwcoco validate $COMBO_TRAIN_COCO_FPATH
 
 
     # Also split out S2
