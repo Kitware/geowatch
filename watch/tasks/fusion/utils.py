@@ -8,6 +8,13 @@ import kwimage
 millnames = ['', ' K', ' M', ' B', ' T']
 
 
+try:
+    import xdev
+    profile = xdev.profile
+except Exception:
+    profile = ub.identity
+
+
 def millify(n):
     n = float(n)
     millidx = max(0, min(len(millnames) - 1,
@@ -110,6 +117,7 @@ class SinePositionalEncoding(nn.Module):
         self.sine_pairs = sine_pairs
         assert self.dest_dim != self.dim_to_encode
 
+    @profile
     def forward(self, x):
         expanded_shape = list(x.shape)
         expanded_shape[self.dest_dim] = -1
@@ -118,12 +126,15 @@ class SinePositionalEncoding(nn.Module):
         expand_dims[self.dim_to_encode] = slice(0, None)
         expand_dims[self.dest_dim] = slice(0, None)
 
-        def scale(d):
-            return 1 / 10000 ** (d)
-
+        sf = 10000
         parts = []
+        num = x.shape[self.dim_to_encode]
+        base = torch.arange(num, device=x.device)
+        denom = 2 * self.sine_pairs
         for idx in range(2 * self.sine_pairs):
-            theta = torch.arange(x.shape[self.dim_to_encode]) * scale(idx / (2 * self.sine_pairs))
+            exponent = (idx / (2 * denom))
+            modulator = (1 / (sf ** exponent))
+            theta = base * modulator
             if idx % 2 == 0:
                 part = torch.sin(theta)
             else:

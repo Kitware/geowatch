@@ -64,5 +64,8 @@ CUDA_VISIBLE_DEVICES=0 \
    --package_fpath=$PACKAGE_FPATH \
     --pred_dataset=$PRED_DATASET \
     --time_sampling="hard+dilated" \
-    --chip_overlap=0 --dumps
+    --chip_overlap=0 \
+    --num_workers=16 \
+    --batch_size=32 \
+    --profile
     

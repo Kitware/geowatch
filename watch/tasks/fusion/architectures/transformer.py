@@ -45,6 +45,13 @@ import ubelt as ub  # NOQA
 from torch import nn
 
 
+try:
+    import xdev
+    profile = xdev.profile
+except Exception:
+    profile = ub.identity
+
+
 class ResidualSequential(nn.Sequential):
     """
     A Sequential layer with a residual operation at the end
@@ -135,13 +142,21 @@ try:
                 causal=False, generalized_attention=False, kernel_fn=nn.ReLU(),
                 no_projection=False)
 
+        @profile
         def forward(self, x):
             # import xdev
             # xdev.embed()
             # make compatible with nn.MultiheadAttention
-            q = einops.rearrange(x, 's b (h e) -> b h s e', e=self.dim_heads)
+            s, b, he = x.shape
+            e = self.dim_heads
+            h = self.num_heads
+            # Much faster than einops
+            q = x.view(s, b, h, e).permute(1, 2, 0, 3)
+            # q = einops.rearrange(x, 's b (h e) -> b h s e', e=self.dim_heads)
+            # a = FastAttention.forward(self, q, q, q)
             a = super().forward(q, q, q)
-            out = einops.rearrange(a, 'b h s e -> s b (h e)', e=self.dim_heads)
+            out = a.permute(2, 1, 0, 3).view(s, b, he)
+            # out = einops.rearrange(a, 'b h s e -> s b (h e)', e=self.dim_heads)
             return out
 except ImportError:
     pass
@@ -322,6 +337,7 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
         })
         self.mlp = new_mlp_layer(embedding_size, dropout)
 
+    @profile
     def forward(self, x):
         """
         Args:
@@ -329,15 +345,12 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
         """
         shape_dict = dict(zip(self.default_shape, x.shape))
 
-        DEBUG = 0
-        if DEBUG:
-            log = []
-
         previous_axial_shape = self.default_shape_str
         for axis in self.axes:
             if not isinstance(axis, (list, tuple)):
                 axis = [axis]
             sequence_axes = self.axsep.join(axis)
+            attention_layer = self.attention_modules[sequence_axes]
             batch_axes = self.axsep.join([
                 a for a in self.default_shape
                 if (a == self.batch_axis or a not in axis) and a != self.feature_axis
@@ -348,11 +361,7 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
             axial_shape = f"({sequence_axes}) ({batch_axes}) {self.feature_axis}"
             rearrange_op = f"{previous_axial_shape} -> {axial_shape}"
             x = einops.rearrange(x, rearrange_op, **shape_dict)
-            if DEBUG:
-                log.append(f'prep attention: {rearrange_op}')
-            x = self.attention_modules[sequence_axes](x)
-            if DEBUG:
-                log.append('attention')
+            x = attention_layer(x)
             previous_axial_shape = axial_shape
 
         sequence_axes = self.axsep.join([
@@ -362,19 +371,10 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
         axial_shape = f"({sequence_axes}) {self.batch_axis} {self.feature_axis}"
         rearrange_op = f"{previous_axial_shape} -> {axial_shape}"
         x = einops.rearrange(x, rearrange_op, **shape_dict)
-        if DEBUG:
-            log.append(f'prep mlp: {rearrange_op}')
         x = self.mlp(x)
-        if DEBUG:
-            log.append('mlp')
 
         rearrange_op = f"{axial_shape} -> {self.default_shape_str}"
         x = einops.rearrange(x, rearrange_op, **shape_dict)
-        if DEBUG:
-            log.append(f'prep return: {rearrange_op}')
-
-        if DEBUG:
-            print('log = {}'.format(ub.repr2(log, nl=1)))
         return x
 
 
@@ -482,6 +482,15 @@ class FusionEncoder(nn.Module):
         >>> inputs = torch.rand(*input_shape)
         >>> output = model(inputs)
         >>> assert output.shape == (2, 3, 5, 2, 2, 256)
+
+    Ignore:
+        traced = torch.jit.trace(model, inputs)
+        import timerit
+        ti = timerit.Timerit(5, bestof=1, verbose=2)
+        for timer in ti.reset('time'):
+            model(inputs)
+        for timer in ti.reset('time'):
+            traced(inputs)
 
     Ignore:
         >>> # Get a sense of the arch size

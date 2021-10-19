@@ -492,6 +492,7 @@ class MultimodalTransformer(pl.LightningModule):
             optimizer, T_max=self.trainer.max_epochs)
         return [optimizer], [scheduler]
 
+    @profile
     def forward(self, images):
         """
         Example:
@@ -772,6 +773,41 @@ class MultimodalTransformer(pl.LightningModule):
             kwplot.imshow(self.draw_item(item), fnum=3)
 
             kwplot.imshow(item['frames'][1]['change'].cpu().numpy(), fnum=4)
+
+        Ignore:
+            model = self
+            model = self.to(0)
+
+            for item in batch:
+                for frame in item['frames']:
+                    modes = frame['modes']
+                    for key in modes.keys():
+                        modes[key] = modes[key].to(0)
+            out = model.forward_step(batch)
+
+            batch2 = [ub.dict_diff(item, {'tr', 'index', 'video_name', 'video_id'})  for item in batch[0:1]]
+            for item in batch2:
+                item['frames'] = [
+                    ub.dict_diff(frame, {
+                        'gid', 'date_captured', 'sensor_coarse',
+                        'change', 'ignore', 'class_idxs',
+                    })
+                    for frame in item['frames']
+                ]
+
+            traced = torch.jit.trace_module(model, {'forward_step': (batch2,)}, strict=False)
+
+            traced = torch.jit.trace_module(model, {'forward': (images,)}, strict=False)
+
+            import timerit
+            ti = timerit.Timerit(5, bestof=1, verbose=2)
+            for timer in ti.reset('time'):
+                model.forward(images)
+            for timer in ti.reset('time'):
+                traced.forward(images)
+
+            # traced = torch.jit.trace(model.forward, batch)
+            traced = torch.jit.trace_module(model, {'forward_step': batch2})
         """
         outputs = {}
 
@@ -793,23 +829,27 @@ class MultimodalTransformer(pl.LightningModule):
             frame_ims = []
             frame_ignores = []
             for frame in item['frames']:
-                assert len(frame['modes']) == 1, 'only handle one mode for now'
-                mode_key, mode_val = ub.peek(frame['modes'].items())
-                mode_val = mode_val.float()
-                # self.input_norms = None
-                if self.input_norms is not None:
-                    mode_norm = self.input_norms[mode_key]
-                    mode_val = mode_norm(mode_val)
-                frame_ims.append(mode_val)
-                frame_ignores.append(frame['ignore'])
+                assert len(self.input_norms) == 1, 'only handle one mode for now'
+                for mode_key in self.input_norms.keys():
+                    mode_val = frame['modes'][mode_key]
+                    mode_val = mode_val.float()
+                    # self.input_norms = None
+                    if self.input_norms is not None:
+                        mode_norm = self.input_norms[mode_key]
+                        mode_val = mode_norm(mode_val)
+                    frame_ims.append(mode_val)
+
+                if with_loss:
+                    frame_ignores.append(frame['ignore'])
 
             # Because we are nt collating we need to add a batch dimension
-            # ignores = torch.stack(frame_ignores)[None, ...]
+            # if with_loss:
+            #     ignores = torch.stack(frame_ignores)[None, ...]
             images = torch.stack(frame_ims)[None, ...]
 
             B, T, C, H, W = images.shape
 
-            logits = self(images)
+            logits = self.forward(images)
 
             # TODO: it may be faster to compute loss at the downsampled
             # resolution.

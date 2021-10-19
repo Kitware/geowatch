@@ -18,6 +18,13 @@ from watch.tasks.fusion import utils
 from watch.tasks.fusion import heuristics
 from watch.tasks.tracking import from_heatmap
 from watch.utils import util_path
+from watch.utils import util_parallel
+
+try:
+    import xdev
+    profile = xdev.profile
+except Exception:
+    profile = ub.identity
 
 
 def make_predict_config(cmdline=False, **kwargs):
@@ -94,10 +101,11 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.set_defaults(**kwargs)
     args, _ = parser.parse_known_args(default_args)
     args.datamodule_defaults = datamodule_defaults
-    assert args.batch_size == 1
+    # assert args.batch_size == 1
     return args
 
 
+@profile
 def predict(cmdline=False, **kwargs):
     """
     Example:
@@ -258,7 +266,10 @@ def predict(cmdline=False, **kwargs):
         plt.show()
 
     test_coco_dataset = datamodule.coco_datasets['test']
+
     test_torch_dataset = datamodule.torch_datasets['test']
+    # hack this setting
+    test_torch_dataset.inference_only = True
     test_dataloader = datamodule.test_dataloader()
 
     T, H, W = test_torch_dataset.sample_shape
@@ -304,6 +315,15 @@ def predict(cmdline=False, **kwargs):
     device = devices[0]
 
     print('Predict on device = {!r}'.format(device))
+
+    UNPACKAGE_METHOD_HACK = 1
+    if UNPACKAGE_METHOD_HACK:
+        # unpackage method hack
+        from watch.tasks.fusion import methods
+        unpackged_method = methods.MultimodalTransformer(**method.hparams)
+        unpackged_method.load_state_dict(method.state_dict())
+        method = unpackged_method
+
     method = method.to(device)
 
     stitch_managers = {}
@@ -366,8 +386,8 @@ def predict(cmdline=False, **kwargs):
             num_bands=2,
         )
 
-    result_infos = []
-    total_info = {'n_anns': 0, 'n_imgs': 0, 'total_prob': 0}
+    # result_infos = []
+    # total_info = {'n_anns': 0, 'n_imgs': 0, 'total_prob': 0}
 
     expected_outputs = set(stitch_managers.keys())
     got_outputs = None
@@ -381,79 +401,81 @@ def predict(cmdline=False, **kwargs):
         'change_probs': 'change',
     }
 
-    def finalize_ready(head_stitcher, gid):
-        info = head_stitcher.finalize_image(gid)
-        stats = running_stats.summarize(axis=None, keepdims=False)
-        total_info['n_anns'] += info['n_anns']
-        total_info['total_prob'] += info['total_prob']
-        total_info['n_imgs'] += 1
+    # running_stats = kwarray.RunningStats()  # check if probs are non-zero
 
-        report_info = ub.dict_union(
-            ub.dict_isect(stats, {'mean', 'max', 'min', 'std'}),
-            ub.dict_isect(total_info, {'n_imgs', 'n_anns', 'total_prob'}),
-        )
-        report_info_str = ub.repr2(report_info, precision=4, compact=True)
-        prog.set_extra(' {} - '.format(report_info_str))
-        prog.ensure_newline()
-        result_infos.append(info)
+    # Start background procs before we make threads
+    batch_iter = iter(test_dataloader)
+    writer_queue = util_parallel.BlockingJobQueue(
+        mode='thread', max_workers=datamodule.num_workers)
 
-    running_stats = kwarray.RunningStats()  # check if probs are non-zero
+    prog = ub.ProgIter(batch_iter, desc='predicting', verbose=1)
 
-    prog = ub.ProgIter(test_dataloader, desc='predicting', verbose=1)
-    prog.set_extra(' <will populate stats after first video>')
-    for batch in prog:
-        # Move data onto the prediction device
-        for item in batch:
-            for frame in item['frames']:
-                modes = frame['modes']
-                for key, mode in modes.items():
-                    modes[key] = mode.to(device)
+    with torch.set_grad_enabled(False):
+        # prog.set_extra(' <will populate stats after first video>')
+        for batch in prog:
 
-        # Predict on the batch
-        outputs = method.forward_step(batch, with_loss=False)
-        outputs = {head_key_mapping.get(k, k): v for k, v in outputs.items()}
+            batch_regions = []
+            # Move data onto the prediction device, grab spacetime region info
+            for item in batch:
+                batch_regions.append({
+                    'space_slice': tuple(item['tr']['space_slice']),
+                    'in_gids': [frame['gid'] for frame in item['frames']],
+                })
+                for frame in item['frames']:
+                    modes = frame['modes']
+                    for key, mode in modes.items():
+                        modes[key] = mode.to(device)
 
-        if got_outputs is None:
-            got_outputs = list(outputs.keys())
-            prog.ensure_newline()
-            writable_outputs = set(got_outputs) & expected_outputs
-            print('got_outputs = {!r}'.format(got_outputs))
-            print('writable_outputs = {!r}'.format(writable_outputs))
+            # Predict on the batch
+            outputs = method.forward_step(batch, with_loss=False)
+            outputs = {head_key_mapping.get(k, k): v for k, v in outputs.items()}
 
-        # For each item in the batch, process the results
-        for head_key in writable_outputs:
-            head_stitcher = stitch_managers[head_key]
-            head_probs = outputs[head_key]
-            for bx, item in enumerate(batch):
-                # TODO: if the predictions are downsampled wrt to the input images,
-                # we need to determine what that transform is so we can correctly
-                # warp the predictions back into image space.
-                bin_probs = head_probs[bx].detach().cpu().numpy()
+            if got_outputs is None:
+                got_outputs = list(outputs.keys())
+                prog.ensure_newline()
+                writable_outputs = set(got_outputs) & expected_outputs
+                print('got_outputs = {!r}'.format(got_outputs))
+                print('writable_outputs = {!r}'.format(writable_outputs))
 
-                # Get the spatio-temporal subregion that this prediction belongs to
-                in_gids = [frame['gid'] for frame in item['frames']]
+            # For each item in the batch, process the results
+            for head_key in writable_outputs:
+                head_stitcher = stitch_managers[head_key]
+                head_probs = outputs[head_key]
 
+                # HACK: FIXME: WE ARE HARD CODING THAT CHANGE IS GIVEN TO
+                # ALL FRAMES EXECPT THE FIRST IN MULTIPLE PLACES.
                 if head_key == 'change':
-                    # HACK: FIXME: WE ARE HARD CODING THAT CHANGE IS GIVEN TO
-                    # ALL FRAMES EXECPT THE FIRST IN MULTIPLE PLACES.
-                    out_gids = in_gids[1:]
+                    predicted_frame_slice = slice(1, None)
                 else:
-                    out_gids = in_gids
+                    predicted_frame_slice = slice(None)
 
-                space_slice = tuple(item['tr']['space_slice'])
-                # Update the stitcher with this windowed prediction
-                for gid, probs in zip(out_gids, bin_probs):
-                    running_stats.update(probs.mean())
-                    head_stitcher.accumulate_image(gid, space_slice, probs)
+                for bx, region_info in enumerate(batch_regions):
+                    # TODO: if the predictions are downsampled wrt to the input
+                    # images, we need to determine what that transform is so we can
+                    # correctly warp the predictions back into image space.
+                    bin_probs = head_probs[bx].detach().cpu().numpy()
 
-            # Free up space for any images that have been completed
-            for gid in head_stitcher.ready_image_ids():
-                finalize_ready(head_stitcher, gid)
+                    # Get the spatio-temporal subregion this prediction belongs to
+                    out_gids = region_info['in_gids'][predicted_frame_slice]
+                    space_slice = region_info['space_slice']
 
-    # Prediction is completed, finalize all remaining images.
-    for head_key, head_stitcher in stitch_managers.items():
-        for gid in head_stitcher.managed_image_ids():
-            finalize_ready(head_stitcher, gid)
+                    # Update the stitcher with this windowed prediction
+                    for gid, probs in zip(out_gids, bin_probs):
+                        # running_stats.update(probs.mean())
+                        head_stitcher.accumulate_image(gid, space_slice, probs)
+
+                # Free up space for any images that have been completed
+                for gid in head_stitcher.ready_image_ids():
+                    # finalize_ready(head_stitcher, gid)
+                    writer_queue.submit(head_stitcher.finalize_image, gid)
+
+        # Prediction is completed, finalize all remaining images.
+        for head_key, head_stitcher in stitch_managers.items():
+            for gid in head_stitcher.managed_image_ids():
+                # finalize_ready(head_stitcher, gid)
+                writer_queue.submit(head_stitcher.finalize_image, gid)
+
+        writer_queue.wait_until_finished()
 
     # prog.set_extra('found {}'.format(nanns))
     # print('Predicted total nanns = {!r}'.format(nanns))
@@ -464,6 +486,23 @@ def predict(cmdline=False, **kwargs):
     result_dataset.dump(result_dataset.fpath)
     print('return result_dataset.fpath = {!r}'.format(result_dataset.fpath))
     return result_dataset
+
+
+# def finalize_ready(head_stitcher, gid, running_stats, total_info):
+#     info = head_stitcher.finalize_image(gid)
+#     stats = running_stats.summarize(axis=None, keepdims=False)
+#     total_info['n_anns'] += info['n_anns']
+#     total_info['total_prob'] += info['total_prob']
+#     total_info['n_imgs'] += 1
+
+#     report_info = ub.dict_union(
+#         ub.dict_isect(stats, {'mean', 'max', 'min', 'std'}),
+#         ub.dict_isect(total_info, {'n_imgs', 'n_anns', 'total_prob'}),
+#     )
+#     report_info_str = ub.repr2(report_info, precision=4, compact=True)
+#     prog.set_extra(' {} - '.format(report_info_str))
+#     prog.ensure_newline()
+#     result_infos.append(info)
 
 
 class CocoStitchingManager(object):
