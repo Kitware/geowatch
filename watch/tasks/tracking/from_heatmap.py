@@ -64,7 +64,7 @@ def time_aggregated_polys(coco_dset, thresh=0.15, morph_kernel=3):
     # print('number of polygons:', len(scored_polys))
     # Add each polygon to every images as a track
     new_trackids = kwcoco_extensions.TrackidGenerator(coco_dset)
-    change_cid = coco_dset.ensure_category('change')
+    change_cid = coco_dset.ensure_category(key)
     for vid_poly, score in scored_polys:
         track_id = next(new_trackids)
         for gid, img in coco_dset.imgs.items():
