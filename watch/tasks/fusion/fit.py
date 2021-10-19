@@ -402,7 +402,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         # pl_ext.callbacks.AutoResumer(),
         pl_ext.callbacks.StateLogger(),
         pl_ext.callbacks.TextLogger(args),
-        pl.callbacks.LambdaCallback(on_init_end=_on_init_end),
+        # pl.callbacks.LambdaCallback(on_init_end=_on_init_end),
         pl_ext.callbacks.Packager(package_fpath=args.package_fpath),
         pl_ext.callbacks.BatchPlotter(
             num_draw=args.num_draw,
@@ -441,9 +441,11 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     # - [ ] Save multiple checkpoints based on metrics
     # https://github.com/PyTorchLightning/pytorch-lightning/issues/2908
     trainer = pl.Trainer.from_argparse_args(args, callbacks=callbacks)
+
+    print('trainer.logger.log_dir = {!r}'.format(trainer.logger.log_dir))
     trainer._hack_args = args
     trainer._hack_parser = parser
-    print('trainer.logger.log_dir = {!r}'.format(trainer.logger.log_dir))
+    _on_init_end(trainer_
 
     modules = {
         'datamodule': datamodule,
