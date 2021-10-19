@@ -207,10 +207,11 @@ def predict(cmdline=False, **kwargs):
         datamodule_class.__init__,
     )
 
+    given = ub.dict_isect(datamodule_vars, args.datamodule_defaults)
+    print('given = {}'.format(ub.repr2(given, nl=1)))
+    needs_update = {k for k, v in given.items() if v == 'auto'}
+
     if hasattr(method, 'datamodule_hparams'):
-        given = ub.dict_isect(datamodule_vars, args.datamodule_defaults)
-        print('given = {}'.format(ub.repr2(given, nl=1)))
-        needs_update = {k for k, v in given.items() if v == 'auto'}
         traintime_vals = ub.dict_isect(method.datamodule_hparams, args.datamodule_defaults)
         overloads = ub.dict_isect(method.datamodule_hparams, needs_update)
         discarded = ub.dict_diff(traintime_vals, needs_update)
@@ -219,13 +220,17 @@ def predict(cmdline=False, **kwargs):
         datamodule_vars.update(overloads)
         # datamodule_vars[k] = args.datamodule_defaults[k]
     else:
-        print('Warning have to make assumptions. Might not always work')
-        if hasattr(method, 'input_channels'):
-            # note input_channels are sometimes different than the channels the
-            # datamodule expects. Depending on special keys and such.
-            datamodule_vars['channels'] = method.input_channels.spec
-        else:
-            datamodule_vars['channels'] = list(method.input_norms.keys())[0]
+        overloads = ub.dict_isect(args.datamodule_defaults, needs_update)
+        if datamodule_vars['channels'] is None:
+            print('Warning have to make assumptions. Might not always work')
+            if hasattr(method, 'input_channels'):
+                # note input_channels are sometimes different than the channels the
+                # datamodule expects. Depending on special keys and such.
+                overloads['channels'] = method.input_channels.spec
+            else:
+                overloads['channels'] = list(method.input_norms.keys())[0]
+        print('overloads = {}'.format(ub.repr2(overloads, nl=1)))
+        datamodule_vars.update(overloads)
 
     datamodule = datamodule_class(
         **datamodule_vars
