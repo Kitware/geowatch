@@ -232,7 +232,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         parser.add_argument("--time_span", default='2y', type=str, help='how long a time window should roughly span by default')
 
         parser.add_argument(
-            "--normalize_inputs", default=True, help=ub.paragraph(
+            "--normalize_inputs", default=True, type=smartcast, help=ub.paragraph(
                 '''
                 if True, computes the mean/std for this dataset on each mode
                 so this can be passed to the model.
