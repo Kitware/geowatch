@@ -305,10 +305,10 @@ def apply_tracks(coco_dset, track_fn, overwrite):
             coco_dset.add_annotations(sub_dset.anns.values())
 
     # then cleanup leftover untracked annots
+    annots = coco_dset.annots()
     coco_dset.remove_annotations(
         list(
-            np.extract(are_trackless(coco_dset.annots()),
-                       coco_dset.annots().aids)))
+            np.array(annots.aids[are_trackless(annots)])))
 
     return coco_dset
 
@@ -450,7 +450,8 @@ def normalize(coco_dset, track_fn, overwrite):
         coco_dset = remove_small_annots(coco_dset)
         return coco_dset
 
-    coco_dset = _normalize_annots(coco_dset, overwrite)
+    if len(coco_dset.anns) > 0:
+        coco_dset = _normalize_annots(coco_dset, overwrite)
     coco_dset = ensure_videos(coco_dset)
 
     # apply tracks; ensuring we process newly added annots
