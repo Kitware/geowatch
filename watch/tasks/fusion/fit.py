@@ -398,7 +398,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         info = initializer(model)  # NOQA
 
     # init trainer from args
-    if 0:
+    if 1:
         callbacks = [
             # pl_ext.callbacks.AutoResumer(),
             pl_ext.callbacks.StateLogger(),
@@ -448,7 +448,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     print('trainer.logger.log_dir = {!r}'.format(trainer.logger.log_dir))
     # hack, this should be a callback, but it is not easy to pass the right
     # vars along without using lambdas, had issues with pickling objects
-    if 0:
+    if 1:
         parser.write_config_file(args, [join(trainer.log_dir, 'fit_config.yaml')])
 
     modules = {
