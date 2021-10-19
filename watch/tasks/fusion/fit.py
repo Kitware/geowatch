@@ -448,7 +448,8 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     print('trainer.logger.log_dir = {!r}'.format(trainer.logger.log_dir))
     # hack, this should be a callback, but it is not easy to pass the right
     # vars along without using lambdas, had issues with pickling objects
-    parser.write_config_file(args, [join(trainer.log_dir, 'fit_config.yaml')])
+    if 0:
+        parser.write_config_file(args, [join(trainer.log_dir, 'fit_config.yaml')])
 
     modules = {
         'datamodule': datamodule,
