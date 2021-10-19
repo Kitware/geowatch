@@ -398,37 +398,38 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         info = initializer(model)  # NOQA
 
     # init trainer from args
-    callbacks = [
-        # pl_ext.callbacks.AutoResumer(),
-        pl_ext.callbacks.StateLogger(),
-        pl_ext.callbacks.TextLogger(args),
-        # pl.callbacks.LambdaCallback(on_init_end=_on_init_end),
-        pl_ext.callbacks.Packager(package_fpath=args.package_fpath),
-        pl_ext.callbacks.BatchPlotter(
-            num_draw=args.num_draw,
-            draw_interval=args.draw_interval
-        ),
-        pl_ext.callbacks.TensorboardPlotter(),
-        pl.callbacks.LearningRateMonitor(logging_interval='epoch', log_momentum=True),
-        pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
+    if 0:
+        callbacks = [
+            # pl_ext.callbacks.AutoResumer(),
+            pl_ext.callbacks.StateLogger(),
+            pl_ext.callbacks.TextLogger(args),
+            # pl.callbacks.LambdaCallback(on_init_end=_on_init_end),
+            pl_ext.callbacks.Packager(package_fpath=args.package_fpath),
+            pl_ext.callbacks.BatchPlotter(
+                num_draw=args.num_draw,
+                draw_interval=args.draw_interval
+            ),
+            pl_ext.callbacks.TensorboardPlotter(),
+            pl.callbacks.LearningRateMonitor(logging_interval='epoch', log_momentum=True),
+            pl.callbacks.LearningRateMonitor(logging_interval='step', log_momentum=True),
 
-        pl.callbacks.ModelCheckpoint(monitor='train_loss', mode='min', save_top_k=1),
-        # pl.callbacks.GPUStatsMonitor(),  # enabling this breaks CPU tests
-    ]
-    if args.vali_dataset is not None:
-        callbacks += [
-            pl.callbacks.EarlyStopping(
-                monitor='val_loss', mode='min', patience=args.patience,
-                verbose=True, strict=False),
-            pl.callbacks.ModelCheckpoint(
-                monitor='val_loss', mode='min', save_top_k=4),
-            pl.callbacks.ModelCheckpoint(
-                monitor='val_change_f1', mode='max', save_top_k=4),
-            pl.callbacks.ModelCheckpoint(
-                monitor='val_class_f1_micro', mode='max', save_top_k=4),
-            pl.callbacks.ModelCheckpoint(
-                monitor='val_class_f1_macro', mode='max', save_top_k=4),
+            pl.callbacks.ModelCheckpoint(monitor='train_loss', mode='min', save_top_k=1),
+            # pl.callbacks.GPUStatsMonitor(),  # enabling this breaks CPU tests
         ]
+        if args.vali_dataset is not None:
+            callbacks += [
+                pl.callbacks.EarlyStopping(
+                    monitor='val_loss', mode='min', patience=args.patience,
+                    verbose=True, strict=False),
+                pl.callbacks.ModelCheckpoint(
+                    monitor='val_loss', mode='min', save_top_k=4),
+                pl.callbacks.ModelCheckpoint(
+                    monitor='val_change_f1', mode='max', save_top_k=4),
+                pl.callbacks.ModelCheckpoint(
+                    monitor='val_class_f1_micro', mode='max', save_top_k=4),
+                pl.callbacks.ModelCheckpoint(
+                    monitor='val_class_f1_macro', mode='max', save_top_k=4),
+            ]
 
     # TODO: explititly initialize the tensorboard logger?
     # logger = [
@@ -444,7 +445,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
 
     print('trainer.logger.log_dir = {!r}'.format(trainer.logger.log_dir))
     # hack, this should be a callback, but it is not easy to pass the right
-    # vars along without using lambdas
+    # vars along without using lambdas, had issues with pickling objects
     parser.write_config_file(args, [join(trainer.log_dir, 'fit_config.yaml')])
 
     modules = {
