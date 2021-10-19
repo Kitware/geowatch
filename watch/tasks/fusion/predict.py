@@ -316,7 +316,7 @@ def predict(cmdline=False, **kwargs):
 
     print('Predict on device = {!r}'.format(device))
 
-    UNPACKAGE_METHOD_HACK = 1
+    UNPACKAGE_METHOD_HACK = 0
     if UNPACKAGE_METHOD_HACK:
         # unpackage method hack
         from watch.tasks.fusion import methods
