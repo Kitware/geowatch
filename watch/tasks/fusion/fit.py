@@ -26,12 +26,10 @@ CommandLine:
 Example:
     >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
     >>> from watch.tasks.fusion.fit import *  # NOQA
-    >>> from os.path import join
-    >>> import os
-    >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
-    >>> dvc_dpath = os.environ.get('DVC_DPATH', _default)
-    >>> train_fpath = join(dvc_dpath, 'drop1_S2_aligned_c1/train_data.kwcoco.json')
-    >>> vali_fpath = join(dvc_dpath, 'drop1_S2_aligned_c1/vali_data.kwcoco.json')
+    >>> import watch
+    >>> dvc_dpath = watch.utils.util_data.find_smart_dvc_dpath()
+    >>> train_fpath = dvc_dpath / 'drop1_S2_aligned_c1/train_data.kwcoco.json'
+    >>> vali_fpath = dvc_dpath / 'drop1_S2_aligned_c1/vali_data.kwcoco.json'
 
     >>> import kwcoco
     >>> dset = kwcoco.CocoDataset(train_fpath)
@@ -46,8 +44,7 @@ Example:
     ...     'train_dataset': train_fpath,
     ...     'vali_dataset': vali_fpath,
     ...     'datamodule': 'KWCocoVideoDataModule',
-    ...     #'method': 'MultimodalTransformer',
-    ...     'method': 'MultimodalTransformerDotProdCD',
+    ...     'method': 'MultimodalTransformer',
     ...     'channels': 'coastal|blue|green|red|nir|swir16|swir22',
     ...     #'channels': 'blue|green|red|nir',
     ...     #'channels': None,
@@ -85,8 +82,6 @@ except Exception:
 
 available_methods = [
     'MultimodalTransformer',
-    'MultimodalTransformerDotProdCD',
-    'MultimodalTransformerSegmentation',
 ]
 
 available_datamodules = [
@@ -486,7 +481,6 @@ def fit_model(args=None, cmdline=False, **kwargs):
         >>> fit_model(**kwargs)
     """
     # cv2.setNumThreads(0)
-
     from watch.tasks.fusion import utils
     modules = make_lightning_modules(cmdline=cmdline, **kwargs)
 
@@ -494,7 +488,7 @@ def fit_model(args=None, cmdline=False, **kwargs):
     trainer = modules['trainer']
     datamodule = modules['datamodule']
     model = modules['model']
-    print(ub.repr2(utils.model_json(model, max_depth=1), nl=-1, sort=0))
+    print(ub.repr2(utils.model_json(model, max_depth=2), nl=-1, sort=0))
 
     print('Tune if requested')
     # if requested, tune model with lightning default tuners
