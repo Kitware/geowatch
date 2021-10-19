@@ -556,6 +556,18 @@ def main(**kwargs):
             --chip_size=96 \
             --workdir=$HOME/work/watch/fit
     """
+
+    def setup(rank, world_size):
+        # https://pytorch.org/tutorials/intermediate/dist_tuto.html
+        import torch.distributed as dist
+        import os
+        os.environ['MASTER_ADDR'] = 'localhost'
+        os.environ['MASTER_PORT'] = '12355'
+        # initialize the process group
+        dist.init_process_group("gloo", rank=rank, world_size=world_size)
+
+    setup(0, 1)
+
     import logging
     # configure logging at the root level of lightning
     logging.getLogger("pytorch_lightning").setLevel(logging.DEBUG)
