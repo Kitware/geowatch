@@ -443,9 +443,9 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     trainer = pl.Trainer.from_argparse_args(args, callbacks=callbacks)
 
     print('trainer.logger.log_dir = {!r}'.format(trainer.logger.log_dir))
-    trainer._hack_args = args
-    trainer._hack_parser = parser
-    _on_init_end(trainer)
+    # hack, this should be a callback, but it is not easy to pass the right
+    # vars along without using lambdas
+    parser.write_config_file(args, [join(trainer.log_dir, 'fit_config.yaml')])
 
     modules = {
         'datamodule': datamodule,
@@ -455,12 +455,6 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
         'parser': parser,  # return parser so we can write the config
     }
     return modules
-
-
-def _on_init_end(trainer):
-    trainer._hack_parser.write_config_file(
-        trainer._hack_args,
-        [join(trainer.log_dir, 'fit_config.yaml')])
 
 
 @profile
