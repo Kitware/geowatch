@@ -645,12 +645,12 @@ class KWCocoVideoDataset(data.Dataset):
 
         self.background_classes = self._hueristic_background_classnames & set(graph.nodes)
         if not len(self.background_classes):
-            graph.add_node('background')
+            # graph.add_node('background')
             self.background_classes = self._hueristic_background_classnames & set(graph.nodes)
 
         self.ignore_classes = self._heuristic_ignore_classnames & set(graph.nodes)
         if not len(self.ignore_classes):
-            graph.add_node('ignore')
+            # graph.add_node('ignore')
             self.ignore_classes = self._heuristic_ignore_classnames & set(graph.nodes)
 
         self.classes = kwcoco.CategoryTree(graph)
