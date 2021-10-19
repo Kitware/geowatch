@@ -104,17 +104,17 @@ class SinePositionalEncoding(nn.Module):
         >>> from watch.tasks.fusion.utils import *  # NOQA
         >>> dest_dim = 3
         >>> dim_to_encode = 2
-        >>> sine_pairs = 4
-        >>> self = SinePositionalEncoding(dest_dim, dim_to_encode, sine_pairs=sine_pairs)
+        >>> size = 8
+        >>> self = SinePositionalEncoding(dest_dim, dim_to_encode, size=size)
         >>> x = torch.rand(3, 5, 7, 11, 13)
         >>> y = self(x)
     """
 
-    def __init__(self, dest_dim, dim_to_encode, sine_pairs=2):
+    def __init__(self, dest_dim, dim_to_encode, size=4):
         super().__init__()
         self.dest_dim = dest_dim
         self.dim_to_encode = dim_to_encode
-        self.sine_pairs = sine_pairs
+        self.size = size
         assert self.dest_dim != self.dim_to_encode
 
     @profile
@@ -130,9 +130,8 @@ class SinePositionalEncoding(nn.Module):
         parts = []
         num = x.shape[self.dim_to_encode]
         base = torch.arange(num, device=x.device)
-        denom = 2 * self.sine_pairs
-        for idx in range(2 * self.sine_pairs):
-            exponent = (idx / (2 * denom))
+        for idx in range(self.size):
+            exponent = (idx / self.size)
             modulator = (1 / (sf ** exponent))
             theta = base * modulator
             if idx % 2 == 0:

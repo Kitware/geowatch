@@ -137,6 +137,7 @@ class MultimodalTransformer(pl.LightningModule):
                 Can be:
                 'exact' - the original O(n^2) method.
                 'performer' - a linear approximation.
+                'reformer' - a LSH approximation.
                 '''))
         return parent_parser
 
@@ -337,8 +338,21 @@ class MultimodalTransformer(pl.LightningModule):
             "f1": torchmetrics.F1(),
         })
 
+        self.input_channels.numel()
+
         in_features_raw = self.hparams.window_size * self.hparams.window_size
-        in_features_pos = (2 * 4 * 4)  # positional encoding feature
+
+        # TODO:
+        #     - [ ] Dynamic / Learned embedding
+        encode_t = utils.SinePositionalEncoding(5, 1, size=8)
+        encode_m = utils.SinePositionalEncoding(5, 2, size=8)
+        encode_h = utils.SinePositionalEncoding(5, 3, size=8)
+        encode_w = utils.SinePositionalEncoding(5, 4, size=8)
+        self.add_encoding = transforms.Compose([
+            encode_t, encode_m, encode_h, encode_w,
+        ])
+        in_features_pos = sum(p.size for p in self.add_encoding.transforms)
+
         in_features = in_features_pos + in_features_raw
 
         # TODO:
@@ -366,16 +380,6 @@ class MultimodalTransformer(pl.LightningModule):
         else:
             raise KeyError(tokenizer)
         self.stream_tokenizers = stream_tokenizers
-
-        # TODO:
-        #     - [ ] Dynamic / Learned embedding
-        encode_t = utils.SinePositionalEncoding(5, 1, sine_pairs=4)
-        encode_m = utils.SinePositionalEncoding(5, 2, sine_pairs=4)
-        encode_h = utils.SinePositionalEncoding(5, 3, sine_pairs=4)
-        encode_w = utils.SinePositionalEncoding(5, 4, sine_pairs=4)
-        self.add_encoding = transforms.Compose([
-            encode_t, encode_m, encode_h, encode_w,
-        ])
 
         # 'https://rwightman.github.io/pytorch-image-models/models/vision-transformer/'
         if arch_name in transformer.encoder_configs:
@@ -592,7 +596,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     train_dataset=coco_dset,
             >>>     chip_size=128, batch_size=1, time_steps=3,
             >>>     channels=channels,
-            >>>     normalize_inputs=True, neg_to_pos_ratio=0, num_workers='avail//2',
+            >>>     normalize_inputs=True, neg_to_pos_ratio=0, num_workers='avail/2',
             >>> )
             >>> datamodule.setup('fit')
             >>> torch_dset = datamodule.torch_datasets['train']
@@ -608,7 +612,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     # Backbone
             >>>     arch_name='smt_it_joint_p8',
             >>>     #arch_name='smt_it_stm_p8',
-            >>>     attention_impl='performer',
+            >>>     attention_impl='reformer',
             >>>     #arch_name='deit',
             >>>     # ===========
             >>>     # Change Loss

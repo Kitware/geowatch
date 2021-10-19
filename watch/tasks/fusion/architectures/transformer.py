@@ -42,6 +42,7 @@ Notes:
 import torch
 import einops
 import ubelt as ub  # NOQA
+import math
 from torch import nn
 
 
@@ -110,7 +111,6 @@ class MultiheadSelfAttention(ub.NiceRepr, torch.nn.MultiheadAttention):
 
 try:
     from performer_pytorch import FastAttention
-    import math
 
     class FastMultiheadSelfAttention(FastAttention):
         """
@@ -162,6 +162,55 @@ except ImportError:
     pass
 
 
+try:
+    from reformer_pytorch import LSHSelfAttention
+
+    class ReformerMultiheadedSelfAttention(LSHSelfAttention):
+        """
+        This seems like a good idea, but either I'm using it wrong or the
+        C-bindings in normal attention make this lose all of its benefit.
+
+        Ignore:
+            from watch.tasks.fusion.architectures.transformer import *  # NOQA
+            D = 9  # embedding dimension
+            H = 3   # number of heads
+            B = 5   # batch size
+            S = 7   # sequence length
+            x = torch.rand(S, B, D)
+
+            self = ReformerMultiheadedSelfAttention(D, H)
+
+            MultiheadSelfAttention(D, H)(x).shape
+            ReformerMultiheadedSelfAttention(D, H)(x)
+            from reformer_pytorch import LSHAttention
+            q = einops.rearrange(x, 's b (h e) -> b h s e', h=H)
+            FastAttention(dim_heads=D // H, nb_features=None)(q, q, q).shape
+        """
+
+        def __init__(self, embed_dim, num_heads):
+            self.embed_dim = embed_dim
+            self.num_heads = num_heads
+            assert embed_dim % num_heads == 0
+            dim_heads = embed_dim // num_heads
+            self.dim_heads = dim_heads
+            # nb_features = int(dim_heads * math.log(dim_heads))
+            # nb_features = int(dim_heads * 2)
+            super().__init__(
+                dim=embed_dim, heads=num_heads, dim_head=dim_heads,
+                bucket_size=64, n_hashes=8, causal=False)
+
+        @profile
+        def forward(self, x):
+            s, b, he = x.shape
+            bsd = x.permute(1, 0, 2)
+            # a = LSHSelfAttention.forward(self, bsd)
+            a = super().forward(bsd)
+            out = a.permute(1, 0, 2)
+            return out
+except ImportError:
+    pass
+
+
 def new_attention_layer(embedding_size, n_heads, attention_impl='exact'):
     """
     Example:
@@ -188,6 +237,8 @@ def new_attention_layer(embedding_size, n_heads, attention_impl='exact'):
         # from performer_pytorch import SelfAttention
         # attention = SelfAttention(dim=embedding_size, heads=n_heads)
         attention = FastMultiheadSelfAttention(embedding_size, n_heads)
+    elif attention_impl == 'reformer':
+        attention = ReformerMultiheadedSelfAttention(embedding_size, n_heads)
     else:
         raise KeyError(attention_impl)
 
@@ -577,6 +628,7 @@ def _build_global_configs():
     _encoder_size_basis = {
         'small': dict(n_layers=4, embedding_size=64, n_heads=4),
         'p8': dict(n_layers=8, embedding_size=128, n_heads=4),
+        'b8': dict(n_layers=8, embedding_size=384, n_heads=4),
         'n12': dict(n_layers=12, embedding_size=128, n_heads=4),
         't12': dict(n_layers=12, embedding_size=192, n_heads=4),
         't24': dict(n_layers=24, embedding_size=192, n_heads=4),
