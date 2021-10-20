@@ -704,3 +704,186 @@ SPECIALIZED_BANDS = {
     'VSF_Norm',
     'MF_Norm',
 }
+
+
+def specialized_index_bands2(coco_img=None):
+    r"""
+    Ported from code from by (Yongquan Zhao on 26 April 2017)
+
+    References:
+        https://mail.google.com/mail/u/1/#chat/space/AAAAE5jpxTc
+
+    Ignore:
+        DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+        jq '.images[0].id' $DVC_DPATH/drop1-S2-L8-aligned/data.kwcoco.json
+        kwcoco subset --src $DVC_DPATH/drop1-S2-L8-aligned/data.kwcoco.json --gids=2, --dst=./one_image_data/data.kwcoco.json --copy_assets=True
+
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> from watch.utils.util_bands import *  # NOQA
+        >>> from watch.utils.util_data import find_smart_dvc_dpath
+        >>> import kwcoco
+        >>> dvc_dpath = find_smart_dvc_dpath()
+        >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
+        >>> dset = kwcoco.CocoDataset(coco_fpath)
+        >>> from watch.utils import kwcoco_extensions
+        >>> gid = ub.peek(dset.index.imgs.keys())
+        >>> coco_img = kwcoco_extensions.CocoImage.from_gid(dset, gid)
+        >>> print('coco_img.channels = {!r}'.format(coco_img.channels))
+        >>> symbolic = False
+        >>> indexes = specialized_index_bands2(coco_img=coco_img)
+        >>> import kwarray
+        >>> print(ub.repr2(ub.map_vals(kwarray.stats_dict, indexes), nl=1))
+        >>> import pandas as pd
+        >>> print(pd.DataFrame(ub.map_vals(kwarray.stats_dict, indexes)))
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> import kwimage
+        >>> kwplot.autompl()
+        >>> pnum_ = kwplot.PlotNums(nSubplots=len(indexes))
+        >>> kwplot.figure(fnum=3)
+        >>> indexes['MaskValid'] = indexes['MaskValid'].astype(np.float32)
+        >>> for key, value in indexes.items():
+        >>>     value = value.astype(np.float32)
+        >>>     #value = kwimage.normalize(value.astype(np.float32))
+        >>>     kwplot.imshow(value, title=key, pnum=pnum_(), cmap=None if key == 'MaskValid' else 'viridis', data_colorbar=True)
+
+    Ignore:
+        >>> delayed = coco_img.delay()
+        >>> rgbir123 = delayed.take_channels('blue|green|red|swir16|swir22|nir')
+        >>> chw = rgbir123.finalize().transpose(2, 0, 1).astype(np.float32)
+        >>> Blue, Green, Red, SWIR1, SWIR2, NIR = chw
+        >>> df = pd.DataFrame(chw.reshape(6, -1).T, columns=['blue', 'red', 'green', 'swir1', 'swir2', 'nir'])
+        >>> df = df.melt()
+        >>> import kwplot
+        >>> sns = kwplot.autosns()
+        >>> palette = {
+        >>>     'red': 'red', 'blue': 'blue', 'green': 'green',
+        >>>     'swir1': 'purple', 'swir2': 'orange', 'nir': 'pink',
+        >>> }
+        >>> kwplot.figure(fnum=2)
+        >>> sns.histplot(data=df, x='value', hue='variable', palette=palette)
+
+        >>> kwplot.figure(fnum=4)
+        >>> raw = {
+        >>>     'Red': Red,
+        >>>     'Blue': Blue,
+        >>>     'Green': Green,
+        >>>     'NIR': NIR,
+        >>>     'SWIR1': SWIR1,
+        >>>     'SWIR2': SWIR2,
+        >>> }
+        >>> pnum_ = kwplot.PlotNums(nSubplots=len(raw))
+        >>> for key, value in raw.items():
+        >>>     #value = kwimage.normalize(value.astype(np.float32))
+        >>>     value = value.astype(np.float32)
+        >>>     kwplot.imshow(value, title=key, pnum=pnum_(), cmap='viridis', data_colorbar=True)
+    """
+    import numpy as np
+    # Raw bands
+    # if symbolic:
+    #     # Sympy can help explore different forms of these equations.
+    #     import sympy as sym
+    #     Blue, Green, Red, SWIR1, SWIR2, NIR = sym.symbols(
+    #         'Blue, Green, Red, SWIR1, SWIR2, NIR')
+    # else:
+    delayed = coco_img.delay()
+    rgbir123 = delayed.take_channels('blue|green|red|swir16|swir22|nir')
+    chw = rgbir123.finalize().transpose(2, 0, 1).astype(np.float32)
+    Blue, Green, Red, SWIR1, SWIR2, NIR = chw
+
+    def hist_cut(band, fill_value=0, k=3, minmax='std'):
+        if minmax == 'std':
+            mean = band.mean()
+            std = band.std()
+            low_val = (mean - k * std)  # Corrected.
+            high_val = (mean + k * std)
+        else:
+            low_val, high_val = minmax
+        band = band.clip(low_val, high_val)
+        return band
+
+    def minmax_norm(band, mask):
+        max_val = band[mask].max()
+        min_val = band[mask].min()
+        extent = max_val - min_val
+        if extent != 0:
+            shifted = band - min_val
+            scaled = shifted / extent
+            band[mask] = scaled[mask]
+        return band
+
+    # Artificial Surface Index (ASI) is designed based the surface reflectance imagery of Landsat 8.
+    # The data value range of Landsat surface reflectance [0, 1] is
+    # transformed to [0, 1*Scale].
+    # Scale = 10000
+    Scale = 15000
+
+    fillV = 0
+
+    # Surface reflectance should be within [0, 1*Scale]
+    max_vals = np.maximum.reduce([Blue, Green, Red, NIR, SWIR1, SWIR2])
+    min_vals = np.minimum.reduce([Blue, Green, Red, NIR, SWIR1, SWIR2])
+    MaskValid = (0 < min_vals) & (max_vals < Scale)
+    # MaskValid = MaskValid.astype(np.uint8)
+
+    # Artificial surface Factor (AF).
+    AF = (NIR - Blue) / (NIR + Blue)
+    AF = hist_cut(AF, fillV, 6, [-1, 1])
+    AF_Norm = minmax_norm(AF, MaskValid)
+
+    # Vegetation Suppressing Factor (VSF).
+    # Modified Soil Adjusted Vegetation Index (MSAVI).
+    MSAVI = (2 * NIR + 1 * Scale -
+             ((2 * NIR + 1 * Scale)**2 - 8 * (NIR - Red)) ** 0.5) / 2
+    MSAVI = hist_cut(MSAVI, fillV, 6, [-1, 1])
+    NDVI = (NIR - Red) / (NIR + Red)
+    NDVI = hist_cut(NDVI, fillV, 6, [-1, 1])
+    VSF = 1 - MSAVI * NDVI
+    VSF_Norm = minmax_norm(VSF, MaskValid)
+
+    # Soil Suppressing Factor (SSF).
+    # Derive the Modified Bare soil Index (MBI).
+    MBI = (SWIR1 - SWIR2 - NIR) / (SWIR1 + SWIR2 + NIR) + 0.5
+    MBI = hist_cut(MBI, fillV, 6, [-0.5, 1.5])
+    # Deriving Enhanced-MBI based on MBI and MNDWI.
+    MNDWI = (Green - SWIR1) / (Green + SWIR1)
+    MNDWI = hist_cut(MNDWI, fillV, 6, [-1, 1])
+    EMBI = ((MBI + 0.5) - (MNDWI + 1)) / ((MBI + 0.5) + (MNDWI + 1))
+    EMBI = hist_cut(EMBI, fillV, 6, [-1, 1])
+    # Derive SSF.
+    SSF = (1 - EMBI)
+    SSF_Norm = minmax_norm(SSF, MaskValid)
+
+    # Modulation Factor (MF).
+    MF = (Blue + Green - NIR - SWIR1) / (Blue + Green + NIR + SWIR1)
+    MF = hist_cut(MF, fillV, 6, [-1, 1])
+    MF_Norm = minmax_norm(MF, MaskValid)
+
+    # Derive Artificial Surface Index (ASI).
+    ASI = AF_Norm * SSF_Norm * VSF_Norm * MF_Norm
+    ASI = hist_cut(ASI, fillV, 6, [0, 1])
+    ASI = ASI * MaskValid
+
+    indexes = {
+        'MaskValid': MaskValid,
+        'ASI': ASI,
+
+        'MF': MF,
+        'MF_Norm': MF_Norm,
+
+        'AF': AF,
+        'AF_Norm': AF_Norm,
+
+        'SSF_Norm': SSF_Norm,
+        'VSF_Norm': VSF_Norm,
+
+        'MSAVI': MSAVI,
+        'NDVI': NDVI,
+        'MNDWI': MNDWI,
+        'MBI': MBI,
+
+        'EMBI': EMBI,
+    }
+
+    return indexes

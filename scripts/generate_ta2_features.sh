@@ -150,7 +150,7 @@ rutgers_prediction(){
         --default_config_key=iarpa \
         --pred_dataset=$RUTGERS_MATERIAL_COCO_FPATH \
         --num_workers="8" \
-        --batch_size=32 --gpus "0"
+        --batch_size=32 --gpus "0" --profile
 }
 
 

@@ -48,9 +48,7 @@ SUGGESTIONS="$(python -m watch.tasks.fusion.organize suggest_paths \
 PRED_DATASET="$(echo "$SUGGESTIONS" | jq -r .pred_dataset)"
 EVAL_DATASET="$(echo "$SUGGESTIONS" | jq -r .eval_dpath)"
 
-
 kwcoco validate $TEST_DATASET
-
 
 CUDA_VISIBLE_DEVICES=0 \
     python -m watch.tasks.fusion.predict \
@@ -63,9 +61,9 @@ CUDA_VISIBLE_DEVICES=0 \
     --test_dataset=$TEST_DATASET \
    --package_fpath=$PACKAGE_FPATH \
     --pred_dataset=$PRED_DATASET \
-    --time_sampling="hard+dilated" \
-    --chip_overlap=0 \
     --num_workers=16 \
     --batch_size=32 \
-    --profile
     
+#--profile
+#--time_sampling="hard+dilated" \
+#--chip_overlap=0 \

@@ -142,10 +142,10 @@ class BatchPlotter(pl.callbacks.Callback):
         epoch = trainer.current_epoch
         step = trainer.global_step
 
-        if stage.startswith('val'):
-            title = f'{stage}_bx{batch_idx:04d}_epoch{epoch:08d}_step{step:08d}'
-        else:
-            title = f'{stage}_epoch{epoch:08d}_step{step:08d}_bx{batch_idx:04d}'
+        # This is more trouble than it's worth
+        # if stage.startswith('val'):
+        #     title = f'{stage}_bx{batch_idx:04d}_epoch{epoch:08d}_step{step:08d}'
+        title = f'{stage}_epoch{epoch:08d}_step{step:08d}_bx{batch_idx:04d}'
 
         canvas = util_kwimage.draw_header_text(
             image=canvas,
