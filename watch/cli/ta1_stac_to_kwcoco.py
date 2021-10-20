@@ -30,8 +30,13 @@ def main():
                         help="Output path for updated STAC catalog")
     parser.add_argument("--assume-relative",
                         action='store_true',
+                        default=False,
                         help="Assume the data is in subdirectories relative "
                              "to the output KWCOCO manifest")
+    parser.add_argument("--populate-watch-fields",
+                        action='store_true',
+                        default=False,
+                        help="Populate video / watch fields")
     parser.add_argument("-j", "--jobs",
                         type=int,
                         default=1,
@@ -130,8 +135,8 @@ def make_coco_img_from_stac_asset(asset_dict,
 
     asset_href = asset_dict['href']
 
-    # Skip assets with metadata extensions
-    if re.search(r'\.(txt|csv|json|xml|vrt)$', asset_href, re.I):
+    # Skip assets with metadata or thumbnail extensions
+    if re.search(r'\.(txt|csv|json|xml|vrt|jpe?g)$', asset_href, re.I):
         return None
 
     # Largely a copy-paste of
@@ -267,6 +272,7 @@ def _stac_item_to_kwcoco_image(stac_item, assume_relative=False):
 def ta1_stac_to_kwcoco(input_stac_catalog,
                        outpath,
                        assume_relative=False,
+                       populate_watch_fields=False,
                        jobs=1):
     if isinstance(input_stac_catalog, str):
         catalog = pystac.read_file(href=input_stac_catalog).full_copy()
@@ -288,23 +294,25 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
     output_dset = kwcoco.CocoDataset()
     output_dset.fpath = outpath
     # TODO: Should make this name the MGRS tile
-    video_id = output_dset.add_video(name=ub.hash_data(catalog.to_dict()))
     for kwcoco_img in (job.result() for job in as_completed(jobs)):
         if kwcoco_img is not None:
             output_dset.add_image(**kwcoco_img)
 
-    ordered_images = sorted(
-        output_dset.images().objs,
-        key=lambda obj: parse(obj['date_captured']))
+    if populate_watch_fields:
+        video_id = output_dset.add_video(name=ub.hash_data(catalog.to_dict()))
 
-    for i, img in enumerate(ordered_images):
-        img['frame_index'] = i
-        img['video_id'] = video_id
+        ordered_images = sorted(
+            output_dset.images().objs,
+            key=lambda obj: parse(obj['date_captured']))
 
-    output_dset.index.build(output_dset)
+        for i, img in enumerate(ordered_images):
+            img['frame_index'] = i
+            img['video_id'] = video_id
 
-    kwcoco_extensions.coco_populate_geo_video_stats(
-        output_dset, video_id, target_gsd=10.0)
+        output_dset.index.build(output_dset)
+
+        kwcoco_extensions.coco_populate_geo_video_stats(
+            output_dset, video_id, target_gsd=10.0)
 
     with open(outpath, 'w') as f:
         f.write(json.dumps(output_dset.dataset, indent=2))
