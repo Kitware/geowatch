@@ -305,10 +305,10 @@ def apply_tracks(coco_dset, track_fn, overwrite):
             coco_dset.add_annotations(sub_dset.anns.values())
 
     # then cleanup leftover untracked annots
+    annots = coco_dset.annots()
     coco_dset.remove_annotations(
         list(
-            np.extract(are_trackless(coco_dset.annots()),
-                       coco_dset.annots().aids)))
+            np.array(annots.aids[are_trackless(annots)])))
 
     return coco_dset
 
@@ -356,7 +356,7 @@ def add_track_index(coco_dset):
 def normalize_phases(coco_dset):
     '''
     Convert internal representation of phases to their IARPA standards
-    as well as inserting a baseline guess for the special category 'change'
+    as well as inserting a baseline guess for activity classification
     '''
     # TODO: were these used by some toydata? They aren't in the real files.
     # TODO: if we are hardcoding names we should have some constants file
@@ -372,31 +372,33 @@ def normalize_phases(coco_dset):
     for cat_name in good_cats:
         coco_dset.ensure_category(cat_name)
 
+    # possible category names for a change prediction
+    change_cats = {'change', 'change_prob', 'salient'}
+
     for name, cat in coco_dset.name_to_cat.items():
         try:
-            # if name not in good_cats:
-            if name not in good_cats.union({'change'}):
+            if name not in good_cats.union(change_cats):
                 cat['name'] = category_dict[name]
         except KeyError:
             raise KeyError(f'{coco_dset.tag} has unknown category {name}')
 
     # HACK remove change
-    # if we have partial coverage, interpolate from existing good labels
-    # else, predict site prep for the first half of the track and then
-    # active construction for the second half
     # TODO break out these heuristics
     for trackid in coco_dset.index.trackid_to_aids.keys():
         annots = coco_dset.annots(trackid=trackid)
         cats = annots.cnames
-        if 'change' in cats:
-            if len(set(cats) - {'change'}) > 0:
+        if set(cats) - good_cats:
+            # if we have partial coverage, interpolate from good labels
+            if set(cats) - change_cats:
                 cids = np.array(annots.cids)
-                good_ixs = np.flatnonzero(cats != 'change')
+                good_ixs = np.in1d(cats, list(change_cats), invert=True)
                 ix_to_cid = dict(zip(range(len(good_ixs)), cids[good_ixs]))
                 interp = np.interp(range(len(cats)), good_ixs,
                                    range(len(good_ixs)))
                 annots.set('category_id',
                            [ix_to_cid[int(ix)] for ix in np.round(interp)])
+            # else, predict site prep for the first half of the track and then
+            # active construction for the second half
             else:
                 gids_first_half, _ = np.array_split(
                     np.array(
@@ -448,7 +450,8 @@ def normalize(coco_dset, track_fn, overwrite):
         coco_dset = remove_small_annots(coco_dset)
         return coco_dset
 
-    coco_dset = _normalize_annots(coco_dset, overwrite)
+    if len(coco_dset.anns) > 0:
+        coco_dset = _normalize_annots(coco_dset, overwrite)
     coco_dset = ensure_videos(coco_dset)
 
     # apply tracks; ensuring we process newly added annots
