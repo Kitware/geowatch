@@ -180,6 +180,8 @@ class MultimodalTransformer(pl.LightningModule):
         self.save_hyperparameters()
         self.name = name
 
+        self.arch_name = arch_name
+
         # HACK:
         if input_stats is not None and 'input_stats' in input_stats:
             dataset_stats = input_stats
