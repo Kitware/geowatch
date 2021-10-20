@@ -241,6 +241,10 @@ def ensure_videos(coco_dset):
     Ensure every image belongs to a video, even a dummy video
     and has a frame_index
     '''
+    # HACK, TODO this is probably a kwcoco bug that needs fixed
+    if 'videos' not in coco_dset.dataset:
+        coco_dset.dataset['videos'] = list(coco_dset.index.videos.values())
+
     # TODO guess frame_index in a better way, like by date
     vid_gids = set().union(*coco_dset.index.vidid_to_gids.values())
     missing_gids = set(coco_dset.imgs) - vid_gids
@@ -249,6 +253,10 @@ def ensure_videos(coco_dset):
         for ix, gid in enumerate(missing_gids):
             coco_dset.imgs[gid]['video_id'] = vidid
             coco_dset.imgs[gid]['frame_index'] = ix
+
+        # HACK TODO bug etc
+        gids = coco_dset.index.vidid_to_gids[vidid]
+        coco_dset.index.vidid_to_gids[vidid] = gids.union(missing_gids)
 
     try:
         coco_dset.images().lookup('frame_index')
@@ -279,7 +287,7 @@ def apply_tracks(coco_dset, track_fn, overwrite):
 
     # first, for each video, apply a track_fn from from_heatmap or from_polygon
     for gids in coco_dset.index.vidid_to_gids.values():
-        sub_dset = coco_dset.subset(gids=gids)
+        sub_dset = coco_dset.subset(gids=gids).copy()  # copy necessary?
         if overwrite:
             sub_dset = track_fn(sub_dset)
         else:
@@ -422,13 +430,14 @@ def normalize_sensors(coco_dset):
     }
     good_sensors = set(sensor_dict.values())
 
-    for name, img in coco_dset.index.name_to_img.items():
+    for img in coco_dset.imgs.values():
         try:
             sensor = img['sensor_coarse']
             if sensor not in good_sensors:
                 img['sensor_coarse'] = sensor_dict[sensor]
         except KeyError:
             sensor = img.get('sensor_coarse', None)
+            name = img.get('name', img['file_name'])
             raise KeyError(
                 f'{coco_dset.tag} image {name} has unknown sensor {sensor}')
 
@@ -438,6 +447,56 @@ def normalize_sensors(coco_dset):
 def normalize(coco_dset, track_fn, overwrite):
     '''
     Driver function to apply all normalizations
+
+    Example:
+        >>> import kwcoco as kc
+        >>> from watch.tasks.tracking.normalize import *
+        >>> from watch.tasks.tracking.from_polygon import overlap
+        >>> # create demodata
+        >>> d = kc.CocoDataset.demo()
+        >>> ann_dct = d.anns[1]
+        >>> d.remove_annotations(range(1,12))
+        >>> ann_dct.pop('keypoints')
+        >>> ann_dct.pop('id')
+        >>> for i in range(1,4):
+        >>>     ann_dct.update(image_id=i)
+        >>>     d.add_annotation(**ann_dct)
+        >>> for img, sensor in zip(d.imgs.values(), ['WV', 'S2', 'L8']):
+        >>>     img['sensor_coarse'] = sensor
+        >>> d.remove_categories(range(2,9))
+        >>> d.cats[1]['supercategory'] = None
+        >>> d.cats[1]['name'] = 'change'
+        >>> # test everything except geo-info
+        >>> overwrite = False
+        >>> def _normalize_annots(coco_dset, overwrite):
+        >>>     coco_dset = dedupe_annots(coco_dset)
+        >>>     # coco_dset = add_geos(coco_dset, overwrite)
+        >>>     coco_dset = remove_small_annots(coco_dset,
+        >>>         min_geo_precision=None)
+        >>>     return coco_dset
+        >>> coco_dset = d.copy()
+        >>> coco_dset = _normalize_annots(coco_dset, overwrite)
+        >>> assert coco_dset.anns == d.anns
+        >>> coco_dset = ensure_videos(coco_dset)
+        >>> assert coco_dset.index.vidid_to_gids[1] == coco_dset.imgs.keys()
+        >>> n_existing_annots = coco_dset.n_annots
+        >>> coco_dset = apply_tracks(coco_dset, overlap, overwrite)
+        >>> assert set(coco_dset.annots().get('track_id')) == {1}
+        >>> assert coco_dset.n_annots == n_existing_annots
+        >>> coco_dset = dedupe_tracks(coco_dset)
+        >>> assert set(coco_dset.annots().get('track_id')) == {1}
+        >>> coco_dset = add_track_index(coco_dset)
+        >>> assert coco_dset.annots().get('track_index') == [0,1,2]
+        >>> coco_dset = normalize_phases(coco_dset)
+        >>> assert ([coco_dset.cats[cid]['name']
+        >>>     for cid in coco_dset.annots().cids] ==
+        >>> ['Site Preparation', 'Site Preparation', 'Active Construction'])
+        >>> coco_dset = normalize_sensors(coco_dset)
+        >>> assert (coco_dset.images().get('sensor_coarse') ==
+        >>>     ['WorldView', 'Sentinel-2', 'Landsat 8'])
+
+
+
     '''
     def _normalize_annots(coco_dset, overwrite):
         coco_dset = dedupe_annots(coco_dset)
