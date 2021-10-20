@@ -59,7 +59,7 @@ python -m watch.tasks.fusion.fit \
     --time_steps=3 \
     --time_span=1y \
     --time_sampling=hard+distribute \
-    --batch_size=1 \
+    --batch_size=2 \
     --accumulate_grad_batches=4 \
     --num_workers=16 \
     --attention_impl=reformer \
