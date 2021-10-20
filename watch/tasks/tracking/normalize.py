@@ -90,10 +90,9 @@ def add_geos(coco_dset, overwrite, max_workers=16):
     # parallelize grabbing img CRS info
     executor = ub.Executor('thread', max_workers)
     # optimization: filter to only images containing at least 1 annotation
-    annotated_gids = np.extract(
-        np.array(list(map(len,
-                          coco_dset.images().annots))) > 0,
-        coco_dset.images().gids)
+    images = coco_dset.images()
+    annotated_gids = np.array(
+        images.gids)[np.array(list(map(len, images.annots))) > 0]
     infos = {
         gid: executor.submit(geotiff_crs_info, fpath(coco_dset.imgs[gid]))
         for gid in annotated_gids
@@ -173,7 +172,7 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
         # TODO merge into kwcoco?
         annots = coco_dset.annots()
         if len(annots) > 0:
-            empty_aids = np.extract(remove_fn(annots), annots.aids)
+            empty_aids = np.array(annots.aids)[np.array(remove_fn(annots))]
             coco_dset.remove_annotations(list(empty_aids))
         return coco_dset
 
@@ -276,8 +275,7 @@ def apply_tracks(coco_dset, track_fn, overwrite):
         return annots.get('track_id', None)
 
     def are_trackless(annots):
-        _tracks = tracks(annots)
-        return np.array(_tracks) == None  # noqa
+        return np.array(tracks(annots)) == None  # noqa
 
     # first, for each video, apply a track_fn from from_heatmap or from_polygon
     for gids in coco_dset.index.vidid_to_gids.values():
@@ -307,8 +305,7 @@ def apply_tracks(coco_dset, track_fn, overwrite):
     # then cleanup leftover untracked annots
     annots = coco_dset.annots()
     coco_dset.remove_annotations(
-        list(
-            np.array(annots.aids[are_trackless(annots)])))
+        list(np.array(annots.aids)[are_trackless(annots)]))
 
     return coco_dset
 
@@ -333,9 +330,8 @@ def dedupe_tracks(coco_dset):
                     annots.aids,
                     coco_dset.images(annots.gids).get('video_id',
                                                       None)).items()):
-            sub_annots = coco_dset.annots(aids=aids)
             if idx > 0:
-                sub_annots.set('track_id', next(new_trackids))
+                coco_dset.annots(aids=aids).set('track_id', next(new_trackids))
 
     return coco_dset
 
@@ -347,8 +343,7 @@ def add_track_index(coco_dset):
         # order the track by track_index
         sorted_gids = coco_dset.index._set_sorted_by_frame_index(annots.gids)
         track_index_dict = dict(zip(sorted_gids, range(len(sorted_gids))))
-        annots.set('track_index',
-                   map(lambda gid: track_index_dict[gid], annots.gids))
+        annots.set('track_index', map(track_index_dict.get, annots.gids))
 
     return coco_dset
 
