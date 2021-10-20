@@ -118,7 +118,7 @@ class BatchPlotter(pl.callbacks.Callback):
 
         model = trainer.model
         # TODO: get step number
-        if hasattr(model, 'get_cfgstr()'):
+        if hasattr(model, 'get_cfgstr'):
             model_cfgstr = model.get_cfgstr()
         else:
             from watch.utils.slugify_ext import smart_truncate
@@ -159,7 +159,7 @@ class BatchPlotter(pl.callbacks.Callback):
         dump_dpath = ub.ensuredir((trainer.log_dir, 'monitor', stage, 'batch'))
         dump_fname = f'pred_{title}.jpg'
         fpath = join(dump_dpath, dump_fname)
-        print('write to fpath = {!r}'.format(fpath))
+        # print('write to fpath = {!r}'.format(fpath))
         kwimage.imwrite(fpath, canvas)
 
     def draw_if_ready(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):

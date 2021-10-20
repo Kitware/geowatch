@@ -444,6 +444,9 @@ def dilated_template_sample(unixtimes, time_window, time_span='2y'):
                 temporal_sampling[rx, :] = 0.0
             else:
                 step = (mx - mn) / len(valid_data)
+                if step == 0:
+                    step = np.diff(template_deltas[0:2])[0]
+
                 if step <= 0:
                     wraparound = 1
                 else:
@@ -1169,12 +1172,13 @@ class TimeWindowSampler:
             >>> vidid = dset.dataset['videos'][0]['id']
             >>> self = TimeWindowSampler.from_coco_video(
             >>>     dset, vidid,
-            >>>     time_window=5,
-            >>>     affinity_type='hard',
-            >>>     update_rule='distribute')
-            >>> self.determenistic = True
-            >>> self.show_procedure(fnum=1)
-            >>> self.show_summary(fnum=1)
+            >>>     time_span='1y',
+            >>>     time_window=3,
+            >>>     affinity_type='soft',
+            >>>     update_rule='distribute+pairwise')
+            >>> self.determenistic = False
+            >>> self.show_summary(samples_per_frame=1 if self.determenistic else 10, fnum=1)
+            >>> self.show_procedure(fnum=2)
         """
         return affinity_sample(
             self.affinity, self.time_window, [main_frame_idx],
@@ -1271,7 +1275,7 @@ class TimeWindowSampler:
             >>> vidid = dset.dataset['videos'][0]['id']
             >>> self = TimeWindowSampler.from_coco_video(
             >>>     dset, vidid,
-            >>>     time_window=5,
+            >>>     time_window=7,
             >>>     affinity_type='soft',
             >>>     update_rule='distribute+pairwise')
             >>> self.determenistic = False

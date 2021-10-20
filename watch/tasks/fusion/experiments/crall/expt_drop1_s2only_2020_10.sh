@@ -5,7 +5,7 @@ DVC_DPATH=${DVC_DPATH:-$HOME/data/dvc-repos/smart_watch_dvc}
 
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop1_October2021
-ARCH=smt_it_joint_b8
+ARCH=smt_it_joint_p8
 EXPERIMENT_NAME=Saliency_${ARCH}_uky_dzyne_uconn_s2only_v002
 
 KWCOCO_BUNDLE_DPATH=${KWCOCO_BUNDLE_DPATH:-$DVC_DPATH/drop1-S2-L8-aligned}
@@ -87,7 +87,5 @@ python -m watch.tasks.fusion.fit \
          --vali_dataset=$VALI_FPATH \
          --test_dataset=$TEST_FPATH \
          --num_sanity_val_steps=0 
-
-
-    --torch_sharing_strategy=file_system \
-    --torch_start_method=fork \
+    #--torch_sharing_strategy=file_system \
+    #--torch_start_method=fork \
