@@ -348,6 +348,31 @@ spot_check(){
 
     kwcoco validate $COMBO_COCO_FPATH
 
+    # Optional: visualize the combo data before and after propogation
+    CHANNELS="red|green|blue,inv_sort1|inv_augment1|inv_shared1,matseg_0|matseg_1|matseg_2,grassland|built_up|bare_ground"
+    CHANNELS="matseg_3|matseg_4|matseg_5,med_low_density_built_up|inland_water|alluvial_deposits,inv_shared2|inv_shared3|inv_shared4"
+    CHANNELS="inv_shared2|inv_shared3|inv_shared4"
+    VIZ_DPATH=$KWCOCO_BUNDLE_DPATH/_viz_teamfeats
+    python -m watch.cli.coco_visualize_videos \
+        --src $COMBO_COCO_FPATH --space=video --num_workers=6 \
+        --viz_dpath $VIZ_DPATH \
+        --num_frames=1 \
+        --channels $CHANNELS
+
+    # Split bands up into a bash array
+    mapfile -td \, _BANDS < <(printf "%s\0" "$CHANNELS")
+
+    items=$(jq -r '.videos[] | .name' $COMBO_COCO_FPATH)
+    for item in ${items[@]}; do
+        for bandname in ${_BANDS[@]}; do
+            echo "_BANDS = $_BANDS"
+            BAND_DPATH="$VIZ_DPATH/${item}/_anns/${bandname}/"
+            GIF_FPATH="$VIZ_DPATH/${item}_anns_${bandname}.gif"
+            python -m watch.cli.gifify --frames_per_second .7 \
+                --input "$BAND_DPATH" --output "$GIF_FPATH"
+        done
+    done
+
     # Print stats
     kwcoco stats \
         $COMBO_TRAIN_COCO_FPATH \

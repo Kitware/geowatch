@@ -411,10 +411,14 @@ def specialized_index_bands(bands=None, coco_img=None, symbolic=False):
         >>> dset = kwcoco.CocoDataset(coco_fpath)
         >>> from watch.utils import kwcoco_extensions
         >>> gid = ub.peek(dset.index.imgs.keys())
+        >>> vidid = dset.index.name_to_video['BH_Manama_R01']['id']
+        >>> gid = dset.index.vidid_to_gids[vidid][0]
         >>> coco_img = kwcoco_extensions.CocoImage.from_gid(dset, gid)
         >>> print('coco_img.channels = {!r}'.format(coco_img.channels))
         >>> symbolic = False
-        >>> indexes = specialized_index_bands(coco_img)
+        >>> indexes = specialized_index_bands(coco_img=coco_img)
+        >>> #indexes = ub.dict_isect(indexes, {"ASI", 'AF_Norm', 'SSF_Norm', 'VSF_Norm', 'MF_Norm'})
+        >>> indexes = ub.dict_isect(indexes, {"ASI"})
         >>> import kwarray
         >>> print(ub.repr2(ub.map_vals(kwarray.stats_dict, indexes), nl=1))
         >>> import pandas as pd
@@ -424,6 +428,8 @@ def specialized_index_bands(bands=None, coco_img=None, symbolic=False):
         >>> import kwimage
         >>> kwplot.autompl()
         >>> pnum_ = kwplot.PlotNums(nSubplots=len(indexes))
+        >>> #value = kwimage.normalize_intensity(coco_img.delay('red|green|blue').finalize())
+        >>> #kwplot.imshow(value, title='red|green|blue', pnum=pnum_())
         >>> for key, value in indexes.items():
         >>>     kwplot.imshow(kwimage.normalize(value), title=key, pnum=pnum_())
 

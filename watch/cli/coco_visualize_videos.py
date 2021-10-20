@@ -38,6 +38,10 @@ class CocoVisualizeConfig(scfg.Config):
         'space': scfg.Value('video', help='can be image or video space'),
 
         'channels': scfg.Value(None, type=str, help='only viz these channels'),
+
+        # 'channels': scfg.Value(None, type=str, help='only viz these channels'),
+
+        'num_frames': scfg.Value('inf', type=str, help='show the first N frames from each video')
     }
 
 
@@ -73,11 +77,21 @@ def main(cmdline=True, **kwargs):
 
     pool = ub.JobPool(mode='thread', max_workers=config['num_workers'])
 
+    # TODO:
+    # from scriptconfig.smartcast import smartcast
+    # num = smartcast(config['num_frames'])
+    # if isinstance(num, int):
+    #     time_sl = slice(0, num)
+    # else:
+    #     time_sl = slice(None)
+
     for vidid, video in prog:
         sub_bundle_dpath = viz_dpath / video['name']
         sub_bundle_dpath.mkdir(parents=True, exist_ok=1)
 
         gids = coco_dset.index.vidid_to_gids[vidid]
+        # gids = gids[0:3] + gids[len(gids) // 2 - 2:len(gids) // 2 + 1] + gids[-3:]
+        # time_sl]
         for gid in gids:
             img = coco_dset.index.imgs[gid]
             anns = coco_dset.annots(gid=gid).objs
@@ -117,7 +131,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset, img, anns,
     header_info = []
     header_info.append(vidname)
     if date_captured:
-        header_info.append(date_captured)
+        header_info.append(date_captured + ' ' + sensor_coarse)
 
     delayed = coco_dset.delayed_load(img['id'], space=space)
 
