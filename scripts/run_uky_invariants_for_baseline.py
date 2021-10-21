@@ -49,6 +49,11 @@ def main():
                         required=True,
                         help="S3 Output directory for STAC item / asset "
                              "egress")
+    parser.add_argument("-r", "--requester_pays",
+                        action='store_true',
+                        default=False,
+                        help="Run AWS CLI commands with "
+                             "`--requestor_payer requester` flag")
     parser.add_argument("-n", "--newline",
                         action='store_true',
                         default=False,
@@ -123,6 +128,7 @@ def run_uky_invariants_for_baseline(input_path,
                                     newline=False,
                                     jobs=1):
     # 1. Ingress data
+    print("* Running baseline framework ingress *")
     ingress_dir = '/tmp/ingress'
     ingress_catalog = baseline_framework_ingress(
         input_path,
@@ -133,6 +139,7 @@ def run_uky_invariants_for_baseline(input_path,
         jobs)
 
     # 2. Download and prune region file
+    print("* Downloading and pruning region file *")
     local_region_path = '/tmp/region.json'
     local_region_path = _download_region(input_region_path,
                                          local_region_path,
@@ -141,6 +148,7 @@ def run_uky_invariants_for_baseline(input_path,
                                          strip_nonregions=True)
 
     # 3. Convert ingressed STAC catalog to KWCOCO
+    print("* Converting STAC to KWCOCO *")
     ta1_kwcoco_path = os.path.join(ingress_dir, 'ingress_kwcoco.json')
     ta1_stac_to_kwcoco(ingress_catalog,
                        ta1_kwcoco_path,
@@ -149,6 +157,7 @@ def run_uky_invariants_for_baseline(input_path,
                        jobs=jobs)
 
     # 4. Crop ingress KWCOCO dataset to region
+    print("* Cropping KWCOCO dataset to region *")
     ta1_cropped_dir = '/tmp/cropped_kwcoco/'
     ta1_cropped_kwcoco_path = os.path.join(ta1_cropped_dir,
                                            'cropped_kwcoco.json')
@@ -160,6 +169,7 @@ def run_uky_invariants_for_baseline(input_path,
                     '--repc_align_method', 'affine_warp'], check=True)
 
     # 5. Add WATCH specific fields to cropped KWCOCO dataset
+    print("* Adding WATCH fields to cropped KWCOCO dataset *")
     ta1_cropped_watch_kwcoco_path = os.path.join(ta1_cropped_dir,
                                                  'cropped_watch_kwcoco.json')
     # With overwrite set to True channel names were being clobbered
@@ -171,6 +181,7 @@ def run_uky_invariants_for_baseline(input_path,
                    check=True)
 
     # 6. Generate L8 features
+    print("* Generating UKY invariant features for L8 *")
     ta1_uky_l8_features_kwcoco_path = os.path.join(
         ta1_cropped_dir, 'uky_l8_invariants_kwcoco.json')
     subprocess.run(['python', '-m', 'watch.tasks.invariants.predict',
@@ -183,6 +194,7 @@ def run_uky_invariants_for_baseline(input_path,
                    check=True)
 
     # 7. Generate S2 features
+    print("* Generating UKY invariant features for S2 *")
     ta1_uky_s2_features_kwcoco_path = os.path.join(
         ta1_cropped_dir, 'uky_s2_invariants_kwcoco.json')
     subprocess.run(['python', '-m', 'watch.tasks.invariants.predict',
@@ -195,6 +207,7 @@ def run_uky_invariants_for_baseline(input_path,
                    check=True)
 
     # 8. Combine features
+    print("* Combining UKY invariant features into single KWCOCO dataset *")
     ta1_uky_combined_features_kwcoco_path = os.path.join(
         ta1_cropped_dir, 'uky_combined_invariants_kwcoco.json')
     subprocess.run(['python', '-m', 'watch.cli.coco_combine_features',
@@ -205,6 +218,7 @@ def run_uky_invariants_for_baseline(input_path,
     # 9. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
+    print("* Egressing KWCOCO dataset and associated STAC item *")
     baseline_framework_kwcoco_egress(ta1_uky_combined_features_kwcoco_path,
                                      output_path,
                                      outbucket,
