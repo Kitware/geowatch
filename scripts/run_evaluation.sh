@@ -42,10 +42,6 @@ if [ -z ${DVC_DPATH} ]; then
     DVC_DPATH=~/smart/data/smart_watch_dvc;
 fi
 
-TILE=52SDG
-
-REGION=KR_Pyeongchang_R01
-#REGION=KR_Pyeongchang_R02
 
 DSET_PATH=$DVC_DPATH/drop1-S2-L8-aligned
 
@@ -61,32 +57,62 @@ python -m watch.cli.kwcoco_to_geojson \
 # and the rest of this script in the T&E virtual environment
 """
 
-IMAGE_PATH=$REGION
-rm -r $IMAGE_PATH
-mkdir $IMAGE_PATH
-ln -s $DSET_PATH/$REGION/*/affine_warp/*/*blue.tif $IMAGE_PATH
 
-GT_PATH=gt
-rm -r $GT_PATH
-mkdir $GT_PATH
-ln -s $DVC_DPATH/annotations/site_models/*$REGION\_*.geojson $GT_PATH
+REGIONS_VALI=(
+    "52SDG KR_Pyeongchang_R01"
+    "52SDG KR_Pyeongchang_R02"
+)
+REGIONS_TRAIN=(
+    "17RMP US_Jacksonville_R01"
+    "23KPQ BR_Rio_R01"
+    "23KPR BR_Rio_R02"
+    "35ULA LT_Kaunas_R01"
+    "39RVK BH_Manama_R01"
+    "59GPM NZ_Christchurch_R01"
+)
+REGIONS=("${REGIONS_VALI[@]}")
+# REGIONS=("${REGIONS_TRAIN[@]}")
 
-SITES_PATH=sites
-rm -r $SITES_PATH
-mkdir $SITES_PATH
-ln -s $DSET_PATH/site_models/*$REGION\_*.geojson $SITES_PATH
+for TILE_REGION in "${REGIONS[@]}"; do
+    set -- $TILE_REGION
+    TILE=$1
+    REGION=$2
+    echo EVAL $REGION
 
-OUT_PATH=out-$REGION
-rm -r $OUT_PATH
-mkdir $OUT_PATH
+    IMAGE_PATH=$REGION
+    rm -r $IMAGE_PATH
+    mkdir $IMAGE_PATH
+    # hack in the date string that T&E code is expecting to match filenames
+    for f in $DSET_PATH/$REGION/*/affine_warp/*/*blue.tif; do
+        BASENAME=$(basename $f)
+        DATE="${BASENAME:5:10}"
+        DATESTRING="${DATE//-/}_"
+        ln -s $f $IMAGE_PATH/$DATESTRING$BASENAME
+    done
 
-# this is supposed to be a cache, but it is currently bugged on T&E's end
-rm -r pickled
+    GT_PATH=gt
+    rm -r $GT_PATH
+    mkdir $GT_PATH
+    ln -s $DVC_DPATH/annotations/site_models/*$REGION\_*.geojson $GT_PATH
 
-python run_evaluation.py \
-    --roi $REGION \
-    --gt_path  $GT_PATH \
-    --sm_path $SITES_PATH \
-    --output_dir $OUT_PATH \
-    --image_path $IMAGE_PATH \
-    --rm_path $DVC_DPATH/annotations/region_models/$TILE\_$REGION.geojson
+    SITES_PATH=sites
+    rm -r $SITES_PATH
+    mkdir $SITES_PATH
+    ln -s $DSET_PATH/site_models/*$REGION\_*.geojson $SITES_PATH
+
+    OUT_PATH=out-$REGION
+    rm -r $OUT_PATH
+    mkdir $OUT_PATH
+
+    # this is supposed to be a cache, but it is currently bugged on T&E's end
+    rm -r pickled
+
+    python run_evaluation.py \
+        --roi $REGION \
+        --gt_path  $GT_PATH \
+        --sm_path $SITES_PATH \
+        --output_dir $OUT_PATH \
+        --image_path $IMAGE_PATH \
+        --rm_path $DVC_DPATH/annotations/region_models/$TILE\_$REGION.geojson
+
+done
