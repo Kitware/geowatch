@@ -112,7 +112,7 @@ def geojson_feature(img, anns, coco_dset):
 
     def single_properties(ann):
 
-        current_phase = coco_dset.cats[ann['category_id']]['name'],
+        current_phase = coco_dset.cats[ann['category_id']]['name']
 
         return {
             'current_phase': current_phase,
@@ -174,7 +174,6 @@ def geojson_feature(img, anns, coco_dset):
         properties['score'] = np.average(
             list(map(float, properties_list['score'])),
             weights=[geom.area for geom in geometry_list])
-
         return properties
 
     return geojson.Feature(geometry=combined_geometries(geometry_list),
