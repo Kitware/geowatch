@@ -307,8 +307,7 @@ def apply_tracks(coco_dset, track_fn, overwrite):
     # then cleanup leftover untracked annots
     annots = coco_dset.annots()
     coco_dset.remove_annotations(
-        list(
-            np.array(annots.aids[are_trackless(annots)])))
+        list(np.array(annots.aids)[are_trackless(annots)]))
 
     return coco_dset
 
