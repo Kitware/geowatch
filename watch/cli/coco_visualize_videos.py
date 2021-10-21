@@ -45,6 +45,7 @@ class CocoVisualizeConfig(scfg.Config):
 
 
         # TODO: better support for this
+        # TODO: use the kwcoco_video_data, has good logic for this
         'zoom_to_tracks': scfg.Value(False, type=str, help='if True, zoom to tracked annotations'),
     }
 
@@ -230,12 +231,6 @@ def ensure_false_color(canvas):
         false_colored = (canvas @ h)
         rgb_canvas = kwimage.normalize(false_colored)
     return rgb_canvas
-    # rgb_canvas = canvas
-    # m = np.random.rand(7, 5)
-    # q, r = np.linalg.qr(m, mode='raw')
-    # print('m.shape = {!r}'.format(m.shape))
-    # print('q.shape = {!r}'.format(q.shape))
-    # print('r.shape = {!r}'.format(r.shape))
 
 
 def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
