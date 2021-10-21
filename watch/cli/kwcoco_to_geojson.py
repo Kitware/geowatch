@@ -91,12 +91,20 @@ def geojson_feature(img, anns, coco_dset):
     # grab source and date for single_properties per-img instead of per-ann
 
     try:
-        # Pick a reasonable source image, we don't have a spec for this yet
-        candidate_keys = [
-            'parent_name', 'parent_file_name', 'name', 'file_name'
-        ]
-        candidate_sources = list(filter(None, map(img.get, candidate_keys)))
-        source = candidate_sources[0]
+        # pick the image that is actually copied to the evaluation framework
+        source = None
+        for aux in img.get('auxiliary', []):
+            basename = os.path.basename(aux['file_name'])
+            if basename.endswith('blue.tif'):
+                source = basename
+        if source is None:
+            # Pick a reasonable source image, we don't have a spec for this yet
+            candidate_keys = [
+                'parent_name', 'parent_file_name', 'name', 'file_name'
+            ]
+            candidate_sources = list(filter(None, map(img.get,
+                                                      candidate_keys)))
+            source = candidate_sources[0]
     except IndexError:
         raise Exception(f'cannot determine source of gid {img["gid"]}')
 
@@ -104,7 +112,7 @@ def geojson_feature(img, anns, coco_dset):
 
     def single_properties(ann):
 
-        current_phase = coco_dset.cats[ann['category_id']]['name'],
+        current_phase = coco_dset.cats[ann['category_id']]['name']
 
         return {
             'current_phase': current_phase,
@@ -166,7 +174,6 @@ def geojson_feature(img, anns, coco_dset):
         properties['score'] = np.average(
             list(map(float, properties_list['score'])),
             weights=[geom.area for geom in geometry_list])
-
         return properties
 
     return geojson.Feature(geometry=combined_geometries(geometry_list),
@@ -306,20 +313,16 @@ def main(args):
     parser.add_argument(
         "--out_dir",
         help="Output directory where GeoJSON files will be written")
-    parser.add_argument(
-        "--region_id",
-        help=ub.paragraph('''
+    parser.add_argument("--region_id",
+                        help=ub.paragraph('''
         ID for region that sites belong to.
         If None, try to infer from kwcoco file.
-        ''')
-    )
-    parser.add_argument(
-        "--track_fn",
-        help=ub.paragraph('''
+        '''))
+    parser.add_argument("--track_fn",
+                        help=ub.paragraph('''
         Function to add tracks. If None, use existing tracks.
         Example: 'watch.tasks.tracking.from_heatmap.time_aggregated_polys'
-        ''')
-    )
+        '''))
     args = parser.parse_args(args)
 
     # Read the kwcoco file
