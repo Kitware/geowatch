@@ -1,5 +1,5 @@
 import ubelt as ub
-from collections import deque
+# from collections import deque
 
 
 class BlockingJobQueue(object):

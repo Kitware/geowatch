@@ -165,7 +165,7 @@ def coerce_num_workers(num_workers='auto', minimum=0):
 
         local_dict = {}
 
-        prefix = 'avail'
+        # prefix = 'avail'
         if 'avail' in num_workers:
             current_load = np.array(psutil.cpu_percent(percpu=True)) / 100
             local_dict['avail'] = np.sum(current_load < 0.5)

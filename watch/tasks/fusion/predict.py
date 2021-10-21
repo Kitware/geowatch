@@ -95,7 +95,7 @@ def make_predict_config(cmdline=False, **kwargs):
     parser = datamodule_class.add_argparse_args(parser)
     datamodule_defaults = {k: parser.get_default(k) for k in overloadable_datamodule_keys}
     parser.set_defaults(**{
-        'batch_size': 1
+        'batch_size': 1,
         'chip_overlap': 0.3,
     })
     parser.set_defaults(**{k: 'auto' for k in overloadable_datamodule_keys})
@@ -844,7 +844,6 @@ def _auto_kernel_sigma(kernel=None, sigma=None, autokernel_mode='ours'):
             sigma_x, sigma_y = sigma
 
     if kernel is None:
-        USE_CV2_DEF = 0
         if autokernel_mode == 'zero':
             # When 0 computed internally via cv2
             k_x = k_y = 0
@@ -865,8 +864,8 @@ def _auto_kernel_sigma(kernel=None, sigma=None, autokernel_mode='ours'):
             sa = sym.Rational('3 / 10') * ((k - 1) / 2 - 1) + sym.Rational('8 / 10')
             sym.solve(sym.Eq(s, sa), k)
             """
-            k_x = max(3, round(20 * sigma_x / 3 - 7/3)) | 1
-            k_y = max(3, round(20 * sigma_y / 3 - 7/3)) | 1
+            k_x = max(3, round(20 * sigma_x / 3 - 7 / 3)) | 1
+            k_y = max(3, round(20 * sigma_y / 3 - 7 / 3)) | 1
         else:
             raise KeyError(autokernel_mode)
     sigma = (sigma_x, sigma_y)
@@ -977,7 +976,6 @@ def _demo_weighted_stitcher():
 
         kwplot.imshow(unweighted_stiched_pred, fnum=1, pnum=pnum_(), title=f'Unweighted stitched preds: overlap={overlap}')
         kwplot.imshow(weighted_stiched_pred, fnum=1, pnum=pnum_(), title=f'Weighted stitched preds: overlap={overlap}')
-
 
 
 if __name__ == '__main__':
