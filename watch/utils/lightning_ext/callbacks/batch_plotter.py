@@ -41,13 +41,13 @@ class BatchPlotter(pl.callbacks.Callback):
         >>> #
         >>> from watch.utils.lightning_ext.callbacks.batch_plotter import *  # NOQA
         >>> from watch.utils.lightning_ext import demo
-        >>> self = demo.LightningToyNet2d(num_train=55)
-        >>> default_root_dir = ub.ensure_app_cache_dir('lightning_ext/tests/TensorboardPlotter')
+        >>> model = demo.LightningToyNet2d(num_train=55)
+        >>> default_root_dir = ub.ensure_app_cache_dir('lightning_ext/tests/BatchPlotter')
         >>> #
         >>> trainer = pl.Trainer(callbacks=[BatchPlotter()],
         >>>                      default_root_dir=default_root_dir,
         >>>                      max_epochs=3)
-        >>> trainer.fit(self)
+        >>> trainer.fit(model)
         >>> import pathlib
         >>> train_dpath = pathlib.Path(trainer.log_dir)
         >>> list((train_dpath / 'monitor').glob('*'))

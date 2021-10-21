@@ -197,11 +197,13 @@ def ensure_false_color(canvas):
     I have no idea how well this works. Probably better methods exist.
 
     Example:
+        >>> from watch.cli.coco_visualize_videos import *  # NOQA
         >>> demo_img = kwimage.ensure_float01(kwimage.grab_test_image('astro'))
         >>> canvas = demo_img @ np.random.rand(3, 2)
         >>> rgb_canvas2 = ensure_false_color(canvas)
         >>> canvas = np.tile(demo_img, (1, 1, 10))
         >>> rgb_canvas10 = ensure_false_color(canvas)
+        >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> kwplot.autompl()
         >>> kwplot.imshow(rgb_canvas2, pnum=(1, 2, 1))

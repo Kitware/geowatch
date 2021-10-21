@@ -94,7 +94,10 @@ def make_predict_config(cmdline=False, **kwargs):
     ]
     parser = datamodule_class.add_argparse_args(parser)
     datamodule_defaults = {k: parser.get_default(k) for k in overloadable_datamodule_keys}
-    parser.set_defaults(**{'batch_size': 1})
+    parser.set_defaults(**{
+        'batch_size': 1
+        'chip_overlap': 0.3,
+    })
     parser.set_defaults(**{k: 'auto' for k in overloadable_datamodule_keys})
 
     # parse and pass to main
@@ -654,7 +657,9 @@ class CocoStitchingManager(object):
             raise NotImplementedError(self.stiching_space)
 
         stitcher = self.image_stitchers[gid]
-        stitcher.add(space_slice, data)
+
+        weights = space_slice(data.shape[0:2])
+        stitcher.add(space_slice, data, weights=weights)
 
     def managed_image_ids(self):
         """
@@ -869,7 +874,7 @@ def _auto_kernel_sigma(kernel=None, sigma=None, autokernel_mode='ours'):
     return kernel, sigma
 
 
-# @ub.memoize
+@ub.memoize
 def upweight_center_mask(shape):
     """
     Example:

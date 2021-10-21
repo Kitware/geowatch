@@ -147,16 +147,16 @@ try:
             # import xdev
             # xdev.embed()
             # make compatible with nn.MultiheadAttention
-            s, b, he = x.shape
-            e = self.dim_heads
-            h = self.num_heads
+            # s, b, he = x.shape
+            # e = self.dim_heads
+            # h = self.num_heads
             # Much faster than einops
-            q = x.view(s, b, h, e).permute(1, 2, 0, 3)
-            # q = einops.rearrange(x, 's b (h e) -> b h s e', e=self.dim_heads)
+            # q = x.contiguous().view(s, b, h, e).permute(1, 2, 0, 3)
+            q = einops.rearrange(x, 's b (h e) -> b h s e', e=self.dim_heads)
             # a = FastAttention.forward(self, q, q, q)
             a = super().forward(q, q, q)
-            out = a.permute(2, 1, 0, 3).view(s, b, he)
-            # out = einops.rearrange(a, 'b h s e -> s b (h e)', e=self.dim_heads)
+            # out = a.permute(2, 1, 0, 3).contiguous().view(s, b, he)
+            out = einops.rearrange(a, 'b h s e -> s b (h e)', e=self.dim_heads)
             return out
 except ImportError:
     pass

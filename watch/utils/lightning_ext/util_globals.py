@@ -169,10 +169,7 @@ def coerce_num_workers(num_workers='auto', minimum=0):
         if 'avail' in num_workers:
             current_load = np.array(psutil.cpu_percent(percpu=True)) / 100
             local_dict['avail'] = np.sum(current_load < 0.5)
-
-        prefix = 'all_'
-        if num_workers.startswith(prefix):
-            local_dict['all_'] = psutil.cpu_count()
+        local_dict['all_'] = psutil.cpu_count()
 
         if num_workers == 'none':
             num_workers = None
