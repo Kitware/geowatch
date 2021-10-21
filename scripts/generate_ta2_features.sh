@@ -357,6 +357,7 @@ spot_check(){
         --src $COMBO_COCO_FPATH --space=video --num_workers=6 \
         --viz_dpath $VIZ_DPATH \
         --num_frames=1 \
+        --zoom_to_tracks=True \
         --channels $CHANNELS
 
     # Split bands up into a bash array

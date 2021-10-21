@@ -7,31 +7,38 @@ Look in these paths for models:
 "
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc 
 
-#ls $DVC_DPATH/models/fusion/bas/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001
-#ls $DVC_DPATH/models/fusion/bas/Saliency_smt_it_joint_p8_raw_v001
 #PACKAGE_FPATH=$DVC_DPATH/models/fusion/activity/package_ActivityClf_smt_it_joint_n12_raw_v021_epoch12_step8965.pt
 #PACKAGE_FPATH=$DVC_DPATH/models/fusion/activity/package_ActivityClf_smt_it_joint_n12_raw_v021_epoch12_step8965.pt
 
 
 PACKAGE_FPATH=$DVC_DPATH/models/fusion/bas/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001_epoch=21-step=11593.pt
-
-KWCOCO_BUNDLE_DPATH=$DVC_DPATH/drop1-S2-L8-aligned
-#TEST_DATASET=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json
-TEST_DATASET=$KWCOCO_BUNDLE_DPATH/combo_vali_data.kwcoco.json
+PACKAGE_FPATH=$DVC_DPATH/models/fusion/bas/Saliency_smt_it_joint_p8_raw_v001/Saliency_smt_it_joint_p8_raw_v001_epoch=41-step=22133.pt
 
 
-SUGGESTIONS="$(python -m watch.tasks.fusion.organize suggest_paths \
-    --package_fpath=$PACKAGE_FPATH \
-    --test_dataset=$TEST_DATASET)"
-PRED_DATASET="$(echo "$SUGGESTIONS" | jq -r .pred_dataset)"
-EVAL_DPATH="$(echo "$SUGGESTIONS" | jq -r .eval_dpath)"
+CAND_PACKAGES1=$(ls --color=never $DVC_DPATH/models/fusion/bas/Saliency_smt_it_joint_p8_raw_v001/*.pt)
+CAND_PACKAGES2=$(ls --color=never $DVC_DPATH/models/fusion/bas/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/*.pt)
 
-echo "
-TEST_DATASET = $TEST_DATASET
-PACKAGE_FPATH = $PACKAGE_FPATH
-PRED_DATASET = $PRED_DATASET
-"
+CAND_PACKAGES=("${CAND_PACKAGES2[@]}" "${CAND_PACKAGES1[@]}")
 
+echo "CAND_PACKAGES = $CAND_PACKAGES"
+for PACKAGE_FPATH in ${CAND_PACKAGES[@]}; do
+
+    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/drop1-S2-L8-aligned
+    #TEST_DATASET=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json
+    TEST_DATASET=$KWCOCO_BUNDLE_DPATH/combo_vali_data.kwcoco.json
+
+
+    SUGGESTIONS="$(python -m watch.tasks.fusion.organize suggest_paths \
+        --package_fpath=$PACKAGE_FPATH \
+        --test_dataset=$TEST_DATASET)"
+    PRED_DATASET="$(echo "$SUGGESTIONS" | jq -r .pred_dataset)"
+    EVAL_DPATH="$(echo "$SUGGESTIONS" | jq -r .eval_dpath)"
+
+    echo "
+    TEST_DATASET = $TEST_DATASET
+    PACKAGE_FPATH = $PACKAGE_FPATH
+    PRED_DATASET = $PRED_DATASET
+    "
 
 #CUDA_VISIBLE_DEVICES=1 \
 #    python -m watch.tasks.fusion.predict \
@@ -64,7 +71,7 @@ PRED_DATASET = $PRED_DATASET
 #PRED_DATASET="$(echo "$SUGGESTIONS" | jq -r .pred_dataset)"
 #EVAL_DATASET="$(echo "$SUGGESTIONS" | jq -r .eval_dpath)"
 
-kwcoco validate $TEST_DATASET
+#kwcoco validate $TEST_DATASET
 
 
 CUDA_VISIBLE_DEVICES=0 \
@@ -91,3 +98,5 @@ python -m watch.tasks.fusion.evaluate \
 #--profile
 #--time_sampling="hard+dilated" \
 #--chip_overlap=0 \
+
+done
