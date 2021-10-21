@@ -933,7 +933,11 @@ class KWCocoVideoDataset(data.Dataset):
         # augmentations.
         frame_items = []
 
-        input_dsize = self.sample_shape[-2:][::-1]
+        if self.sample_shape is None:
+            input_dsize = raw_frame_list[0].shape[0:2][::-1]
+        else:
+            input_dsize = self.sample_shape[-2:][::-1]
+
         # hack for augmentation
         # TODO: make a nice "augmenter" pipeline
         do_hflip = False
@@ -954,6 +958,9 @@ class KWCocoVideoDataset(data.Dataset):
                 return vflip
             vflipper = make_vflipper(input_dsize[1])
             do_vflip = np.random.rand() > 0.5
+
+        if 0:
+            pass
 
         prev_frame_cidxs = None
 
@@ -1841,36 +1848,32 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
     return sample_grid
 
 
-def video_track_info(coco_dset, vidid):
-    vid_annots = coco_dset.images(vidid=vidid).annots
-    track_ids = set(ub.flatten(vid_annots.lookup('track_id')))
-    tid_to_info = {}
-    for tid in track_ids:
-        track_aids = coco_dset.index.trackid_to_aids[tid]
-        vidspace_boxes = []
-        track_gids = []
-        for aid in track_aids:
-            ann = coco_dset.index.anns[aid]
-            gid = ann['image_id']
-            track_gids.append(gid)
-            img = coco_dset.index.imgs[gid]
-            bbox = ann['bbox']
-            vid_from_img = kwimage.Affine.coerce(img.get('warp_img_to_vid', None))
-            imgspace_box = kwimage.Boxes([bbox], 'xywh')
-            vidspace_box = imgspace_box.warp(vid_from_img)
-            vidspace_boxes.append(vidspace_box)
-        all_vidspace_boxes = kwimage.Boxes.concatenate(vidspace_boxes)
-        full_vid_box = all_vidspace_boxes.bounding_box().to_xywh()
+def lookup_track_info(coco_dset, tid):
+    track_aids = coco_dset.index.trackid_to_aids[tid]
+    vidspace_boxes = []
+    track_gids = []
+    for aid in track_aids:
+        ann = coco_dset.index.anns[aid]
+        gid = ann['image_id']
+        track_gids.append(gid)
+        img = coco_dset.index.imgs[gid]
+        bbox = ann['bbox']
+        vid_from_img = kwimage.Affine.coerce(img.get('warp_img_to_vid', None))
+        imgspace_box = kwimage.Boxes([bbox], 'xywh')
+        vidspace_box = imgspace_box.warp(vid_from_img)
+        vidspace_boxes.append(vidspace_box)
+    all_vidspace_boxes = kwimage.Boxes.concatenate(vidspace_boxes)
+    full_vid_box = all_vidspace_boxes.bounding_box().to_xywh()
 
-        frame_index = coco_dset.images(track_gids).lookup('frame_index')
-        track_gids = list(ub.take(track_gids, ub.argsort(frame_index)))
+    frame_index = coco_dset.images(track_gids).lookup('frame_index')
+    track_gids = list(ub.take(track_gids, ub.argsort(frame_index)))
 
-        tid_to_info[tid] = {
-            'tid': tid,
-            'full_vid_box': full_vid_box,
-            'track_gids': track_gids,
-        }
-    return tid_to_info
+    track_info = {
+        'tid': tid,
+        'full_vid_box': full_vid_box,
+        'track_gids': track_gids,
+    }
+    return track_info
 
 
 def ensure_false_color(canvas):
@@ -1925,7 +1928,6 @@ def _draw_tracks():
     coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/combo_data.kwcoco.json'
     coco_dset = kwcoco.CocoDataset(coco_fpath)
     sampler = ndsampler.CocoSampler(coco_dset)
-    sample_shape = (7, 128, 128)
 
     channel_groups = [
         'blue|green|red',
@@ -1934,6 +1936,7 @@ def _draw_tracks():
         'inv_shared4|inv_shared5|inv_shared6',
         'matseg_0|matseg_1|matseg_2',
         'matseg_3|matseg_4|matseg_5',
+        'ASI|BSI|MBI',
 
         'bare_ground|built_up|cropland',
         'inland_water|snow_or_ice_field|sebkha',
@@ -1947,42 +1950,80 @@ def _draw_tracks():
     for group in channel_groups[1:]:
         combinable_extra.append(list(group.split('|')))
 
-    self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, mode='custom')
+    self = KWCocoVideoDataset(sampler, sample_shape=None, channels=channels, mode='custom', diff_inputs=True)
     self.disable_augmenter = True
     self.with_change = False
 
-    for vidid in coco_dset.index.videos.keys():
-        tid_to_info = video_track_info(coco_dset, vidid)
-        dump_dpath = pathlib.Path(ub.ensuredir('./trackviz-2021-10-20'))
+    vidids = list(coco_dset.index.videos.keys())
+    tids = list(coco_dset.index.trackid_to_aids.keys())
+
+    dump_dpath = pathlib.Path(ub.ensuredir('./trackviz-2021-10-20'))
+    tids = [35]
+    for tid in tids:
+        track_info = lookup_track_info(coco_dset, tid)
+
+        member_aid = ub.peek(coco_dset.index.trackid_to_aids[tid])
+        member_ann = coco_dset.index.anns[member_aid]
+        member_img = coco_dset.index.imgs[member_ann['image_id']]
+        vidid = member_img['video_id']
         vidname = coco_dset.index.videos[vidid]['name']
 
-        for tid in tid_to_info.keys():
-            print('tid = {!r}'.format(tid))
-            dump_fpath = dump_dpath / f'video{vidid:04d}_{vidname}_track{tid:04d}.jpg'
-            track_info = tid_to_info[tid]
-            gids = track_info['track_gids']
+        print('tid = {!r}'.format(tid))
+        dump_fpath = dump_dpath / f'video{vidid:04d}_{vidname}_track{tid:04d}.jpg'
+        gids = track_info['track_gids']
 
-            vidspace_box = track_info['full_vid_box'].scale(1.9, about='center')
+        vidspace_box = track_info['full_vid_box'].scale(1.9, about='center')
 
-            idxs = np.unique(np.linspace(0, len(gids) - 1, 17).round().astype(int))
-            chosen_gids = np.array(gids)[idxs]
+        idxs = np.unique(np.linspace(0, len(gids) - 1, 17).round().astype(int))
+        chosen_gids = np.array(gids)[idxs]
 
-            index = {
-                'space_slice': vidspace_box.quantize().to_slices()[0],
-                'gids': chosen_gids,
-                'video_id': vidid,
-            }
-            # img = coco_dset.imgs[gids[0]]
+        index = {
+            'space_slice': vidspace_box.quantize().to_slices()[0],
+            'gids': chosen_gids,
+            'video_id': vidid,
+        }
+        # img = coco_dset.imgs[gids[0]]
 
-            item = self.__getitem__(index)
-            canvas = self.draw_item(item, combinable_extra=combinable_extra,
-                                    max_dim=384, overlay_on_image=False,
-                                    norm_over_time=0, max_channels=7)
+        item = self.__getitem__(index)
+
+        if 0:
+            from skimage import exposure
+            from skimage.exposure import match_histograms
+            references = {}
+            for frame in item['frames']:
+                for mode_key, mode_val in frame['modes'].items():
+                    reference = references.get(mode_key)
+                    if reference is None:
+                        references[mode_key] = mode_val
+                    else:
+                        stack = []
+                        for ref_chan, other_chan in zip(reference, mode_val):
+                            ref_np = ref_chan.numpy()
+                            other_np = other_chan.numpy()
+
+                            # min_ = min(other_chan.max(), ref_chan.max())
+                            # max_ = min(other_chan.min(), ref_chan.min())
+                            # extent = max(max_ - min_, 1e-8)
+                            # sf = (2 ** 32) / extent
+                            # other_quant = (other_chan.numpy() * sf).astype(np.int32)
+                            # ref_quant = (ref_chan.numpy() * sf).astype(np.int32)
+                            new_other = match_histograms(other_np, ref_np)
+                            stack.append(new_other)
+                        new_mode = np.stack(stack, axis=0)
+                        frame['modes'][mode_key] = torch.Tensor(new_mode)
+
+
+        canvas = self.draw_item(item, combinable_extra=combinable_extra,
+                                max_dim=384, overlay_on_image=False,
+                                norm_over_time=1, max_channels=7)
+
+        if 1:
+            import kwplot
+            kwplot.autompl()
+            kwplot.imshow(canvas)
+            kwplot.show_if_requested()
+            break
+        else:
             print('dump_fpath = {!r}'.format(dump_fpath))
             kwimage.imwrite(str(dump_fpath), canvas)
-
-            # xdoctest: +REQUIRES(--show)
-            # import kwplot
-            # kwplot.autompl()
-            # kwplot.imshow(canvas)
-            # kwplot.show_if_requested()
+        # xdoctest: +REQUIRES(--show)
