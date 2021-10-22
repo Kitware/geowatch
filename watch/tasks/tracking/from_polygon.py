@@ -42,7 +42,10 @@ def overlap(coco_dset, min_overlap=0):
                                 poly2.area) > min_overlap:
                             return aid2
 
-        return next(filter(None, map(_search_group, aid_groups)))
+        try:
+            return next(filter(None, map(_search_group, aid_groups)))
+        except StopIteration:
+            return None
 
     # update tracks one frame at a time
     aids_by_frame = list(
