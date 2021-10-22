@@ -4,6 +4,7 @@ These functions might be added to kwimage
 from functools import lru_cache
 import numpy as np
 import cv2
+import ubelt as ub
 
 
 def draw_header_text(image, text, fit=False, color='red', halign='center',
@@ -344,7 +345,7 @@ def upweight_center_mask(shape):
     """
     import kwimage
     from watch.utils import util_kwimage
-    shape, sigma = _auto_kernel_sigma(kernel=shape)
+    shape, sigma = util_kwimage._auto_kernel_sigma(kernel=shape)
     sigma_x, sigma_y = sigma
     weights = kwimage.gaussian_patch(shape, sigma=(sigma_x, sigma_y))
     weights = weights / weights.max()
