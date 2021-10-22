@@ -235,3 +235,124 @@ def morphology(data, mode, kernel=5, element='rect', iterations=1):
     new = cv2.morphologyEx(
         data, op=morph_mode, kernel=kernel, iterations=iterations)
     return new
+
+
+def _auto_kernel_sigma(kernel=None, sigma=None, autokernel_mode='ours'):
+    """
+    Attempt to determine sigma and kernel size from heuristics
+
+    Example:
+        >>> _auto_kernel_sigma(None, None)
+        >>> _auto_kernel_sigma(3, None)
+        >>> _auto_kernel_sigma(None, 0.8)
+        >>> _auto_kernel_sigma(7, None)
+        >>> _auto_kernel_sigma(None, 1.4)
+
+    Ignore:
+        >>> # xdoctest: +REQUIRES(--demo)
+        >>> rows = []
+        >>> for k in np.arange(3, 101, 2):
+        >>>     s = _auto_kernel_sigma(k, None)[1][0]
+        >>>     rows.append({'k': k, 's': s, 'type': 'auto_sigma'})
+        >>> #
+        >>> sigmas = np.array([r['s'] for r in rows])
+        >>> other = np.linspace(0, sigmas.max() + 1, 100)
+        >>> sigmas = np.unique(np.hstack([sigmas, other]))
+        >>> sigmas.sort()
+        >>> for s in sigmas:
+        >>>     k = _auto_kernel_sigma(None, s, autokernel_mode='cv2')[0][0]
+        >>>     rows.append({'k': k, 's': s, 'type': 'auto_kernel (cv2)'})
+        >>> #
+        >>> for s in sigmas:
+        >>>     k = _auto_kernel_sigma(None, s, autokernel_mode='ours')[0][0]
+        >>>     rows.append({'k': k, 's': s, 'type': 'auto_kernel (ours)'})
+        >>> import pandas as pd
+        >>> df = pd.DataFrame(rows)
+        >>> p = df.pivot(['s'], ['type'], ['k'])
+        >>> print(p[~p.droplevel(0, axis=1).auto_sigma.isnull()])
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> sns = kwplot.autosns()
+        >>> sns.lineplot(data=df, x='s', y='k', hue='type')
+    """
+    import numbers
+    if kernel is None and sigma is None:
+        kernel = 3
+
+    if kernel is not None:
+        if isinstance(kernel, numbers.Integral):
+            k_x = k_y = kernel
+        else:
+            k_x, k_y = kernel
+
+    if sigma is None:
+        # https://github.com/egonSchiele/OpenCV/blob/09bab41/modules/imgproc/src/smooth.cpp#L344
+        sigma_x = 0.3 * ((k_x - 1) * 0.5 - 1) + 0.8
+        sigma_y = 0.3 * ((k_y - 1) * 0.5 - 1) + 0.8
+    else:
+        if isinstance(sigma, numbers.Number):
+            sigma_x = sigma_y = sigma
+        else:
+            sigma_x, sigma_y = sigma
+
+    if kernel is None:
+        if autokernel_mode == 'zero':
+            # When 0 computed internally via cv2
+            k_x = k_y = 0
+        elif autokernel_mode == 'cv2':
+            # if USE_CV2_DEF:
+            # This is the CV2 definition
+            # https://github.com/egonSchiele/OpenCV/blob/09bab41/modules/imgproc/src/smooth.cpp#L387
+            depth_factor = 3  # or 4 for non-uint8
+            k_x = int(round(sigma_x * depth_factor * 2 + 1)) | 1
+            k_y = int(round(sigma_y * depth_factor * 2 + 1)) | 1
+        elif autokernel_mode == 'ours':
+            # But I think this definition makes more sense because it keeps
+            # sigma and the kernel in agreement more often
+            """
+            # Our hueristic is computed via solving the sigma heuristic for k
+            import sympy as sym
+            s, k = sym.symbols('s, k', rational=True)
+            sa = sym.Rational('3 / 10') * ((k - 1) / 2 - 1) + sym.Rational('8 / 10')
+            sym.solve(sym.Eq(s, sa), k)
+            """
+            k_x = max(3, round(20 * sigma_x / 3 - 7 / 3)) | 1
+            k_y = max(3, round(20 * sigma_y / 3 - 7 / 3)) | 1
+        else:
+            raise KeyError(autokernel_mode)
+    sigma = (sigma_x, sigma_y)
+    kernel = (k_x, k_y)
+    return kernel, sigma
+
+
+@ub.memoize
+def upweight_center_mask(shape):
+    """
+    Example:
+        >>> from watch.tasks.fusion.predict import *  # NOQA
+        >>> shapes = [32, 64, 96, 128, 256]
+        >>> results = {}
+        >>> for shape in shapes:
+        >>>     results[str(shape)] = upweight_center_mask(shape)
+        >>> # xdoc: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> pnum_ = kwplot.PlotNums(nSubplots=len(results))
+        >>> for k, result in results.items():
+        >>>     kwplot.imshow(result, pnum=pnum_(), title=k)
+        >>> kwplot.show_if_requested()
+    """
+    import kwimage
+    from watch.utils import util_kwimage
+    shape, sigma = _auto_kernel_sigma(kernel=shape)
+    sigma_x, sigma_y = sigma
+    weights = kwimage.gaussian_patch(shape, sigma=(sigma_x, sigma_y))
+    weights = weights / weights.max()
+    # weights = kwimage.ensure_uint255(weights)
+    kernel = np.maximum(np.array(shape) // 8, 3)
+    kernel = kernel + (1 - (kernel % 2))
+    weights = util_kwimage.morphology(
+        weights, kernel=kernel, mode='dilate', element='rect', iterations=1)
+    weights = kwimage.ensure_float01(weights)
+    weights = np.maximum(weights, 0.001)
+    return weights

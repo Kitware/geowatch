@@ -18,6 +18,7 @@ if __name__ == '__main__':
         '--cov-report', 'term',
         '--cov=' + package_name,
         '-s',
+        '--durations=0',
     ]
 
     # if not sys.argv[1:]:

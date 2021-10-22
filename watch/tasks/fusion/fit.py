@@ -488,7 +488,7 @@ def fit_model(args=None, cmdline=False, **kwargs):
     trainer = modules['trainer']
     datamodule = modules['datamodule']
     model = modules['model']
-    print(ub.repr2(utils.model_json(model, max_depth=2), nl=-1, sort=0))
+    print(ub.repr2(utils.model_json(model, max_depth=1), nl=-1, sort=0))
 
     print('Tune if requested')
     # if requested, tune model with lightning default tuners

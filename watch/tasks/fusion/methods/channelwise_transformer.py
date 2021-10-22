@@ -732,8 +732,8 @@ class MultimodalTransformer(pl.LightningModule):
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datamodules
             >>> datamodule = datamodules.KWCocoVideoDataModule(
-            >>>     train_dataset='special:vidshapes8-multispectral',
-            >>>     num_workers=4, chip_size=128,
+            >>>     train_dataset='special:vidshapes1-multispectral',
+            >>>     num_workers=0, chip_size=128,
             >>>     normalize_inputs=True, neg_to_pos_ratio=0,
             >>> )
             >>> datamodule.setup('fit')
