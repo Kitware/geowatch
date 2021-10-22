@@ -198,6 +198,7 @@ def ensure_false_color(canvas):
 
     Example:
         >>> from watch.cli.coco_visualize_videos import *  # NOQA
+        >>> import numpy as np
         >>> demo_img = kwimage.ensure_float01(kwimage.grab_test_image('astro'))
         >>> canvas = demo_img @ np.random.rand(3, 2)
         >>> rgb_canvas2 = ensure_false_color(canvas)

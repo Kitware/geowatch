@@ -1396,7 +1396,10 @@ class KWCocoVideoDataset(data.Dataset):
                     'signal_text': signal_text,
                 }
                 if not norm_over_time:
-                    norm_signal = kwimage.normalize_intensity(raw_signal, nodata=0).copy()
+                    try:
+                        norm_signal = kwimage.normalize_intensity(raw_signal, nodata=0).copy()
+                    except Exception:
+                        norm_signal = raw_signal.copy()
                     # norm_signal = kwimage.normalize(raw_signal).copy()
                     norm_signal = kwimage.atleast_3channels(norm_signal)
                     norm_signal = np.nan_to_num(norm_signal)
@@ -1421,7 +1424,11 @@ class KWCocoVideoDataset(data.Dataset):
                 flat = [c['raw_signal'].ravel() for c in chans_over_time]
                 cums = np.cumsum(list(map(len, flat)))
                 combo = np.hstack(flat)
-                combo_normed = kwimage.normalize_intensity(combo, nodata=0).copy()
+                try:
+                    combo_normed = kwimage.normalize_intensity(combo, nodata=0).copy()
+                except Exception:
+                    combo_normed = combo.copy()
+
                 # combo_normed = kwimage.normalize(combo).copy()
                 flat_normed = np.split(combo_normed, cums)
                 for row, flat_item in zip(chans_over_time, flat_normed):

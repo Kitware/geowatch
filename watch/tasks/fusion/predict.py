@@ -220,7 +220,7 @@ def predict(cmdline=False, **kwargs):
     )
 
     parsetime_vals = ub.dict_isect(datamodule_vars, args.datamodule_defaults)
-    need_infer = {k for k, v in parsetime_vals.items() if v == 'auto'}
+    need_infer = {k: v for k, v in parsetime_vals.items() if v == 'auto'}
     # Try and infer what data we were given at train time
     if hasattr(method, 'fit_config'):
         traintime_vals = method.fit_config
@@ -409,7 +409,9 @@ def predict(cmdline=False, **kwargs):
     # Start background procs before we make threads
     batch_iter = iter(test_dataloader)
     writer_queue = util_parallel.BlockingJobQueue(
-        mode='thread', max_workers=datamodule.num_workers)
+        mode='thread',
+        # mode='serial',
+        max_workers=datamodule.num_workers)
 
     prog = ub.ProgIter(batch_iter, desc='predicting', verbose=1)
 
@@ -470,14 +472,16 @@ def predict(cmdline=False, **kwargs):
                 # Free up space for any images that have been completed
                 for gid in head_stitcher.ready_image_ids():
                     # finalize_ready(head_stitcher, gid)
+                    head_stitcher._ready_gids.difference_update({gid})  # avoid race condition
                     writer_queue.submit(head_stitcher.finalize_image, gid)
+
+        writer_queue.wait_until_finished()  # hack to avoid race condition
 
         # Prediction is completed, finalize all remaining images.
         for head_key, head_stitcher in stitch_managers.items():
             for gid in head_stitcher.managed_image_ids():
                 # finalize_ready(head_stitcher, gid)
                 writer_queue.submit(head_stitcher.finalize_image, gid)
-
         writer_queue.wait_until_finished()
 
     # prog.set_extra('found {}'.format(nanns))
@@ -589,6 +593,7 @@ class CocoStitchingManager(object):
         # as needed.  We use the fact that videos are iterated over
         # sequentially so free up memory of a video after it completes.
         self.image_stitchers = {}
+        self._seen_gids = set()
         self._last_vidid = None
         self._ready_gids = set()
 
@@ -656,10 +661,10 @@ class CocoStitchingManager(object):
         else:
             raise NotImplementedError(self.stiching_space)
 
-        stitcher = self.image_stitchers[gid]
+        stitcher: kwarray.Stitcher = self.image_stitchers[gid]
 
-        weights = space_slice(data.shape[0:2])
-        stitcher.add(space_slice, data, weights=weights)
+        weights = upweight_center_mask(data.shape[0:2])[..., None]
+        stitcher.add(space_slice, data, weight=weights)
 
     def managed_image_ids(self):
         """
@@ -690,8 +695,23 @@ class CocoStitchingManager(object):
         """
         # Remove this image from the managed set.
         img = self.result_dataset.index.imgs[gid]
+
         self._ready_gids.difference_update({gid})
-        stitcher = self.image_stitchers.pop(gid)
+
+        try:
+            stitcher = self.image_stitchers.pop(gid)
+        except KeyError:
+            if gid in self._seen_gids:
+                raise KeyError((
+                    'Attempted to finalize image gid={}, but we already '
+                    'finalized it').format(gid))
+            else:
+                raise KeyError('Attempted to finalize image gid={}, but no data was ever accumulated for it'.format(gid))
+                raise KeyError((
+                    'Attempted to finalize image gid={}, but no data '
+                    'was ever accumulated for it ').format(gid))
+
+        self._seen_gids.add(gid)
 
         # Get the final stitched feature for this image
         final_probs = stitcher.finalize()
