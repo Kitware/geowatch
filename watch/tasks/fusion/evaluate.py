@@ -661,7 +661,7 @@ def _redraw_measures(eval_dpath):
             fig.savefig(str(curve_dpath / 'summary_redo.png'))
 
 
-def main():
+def make_evaluate_config(cmdline=False, **kwargs):
     from watch.utils.configargparse_ext import ArgumentParser
     parser = ArgumentParser(
         add_config_file_help=False,
@@ -677,8 +677,14 @@ def main():
     parser.add_argument('--pred_dataset', help='path to the predicted dataset')
     parser.add_argument('--eval_dpath', help='path to dump results')
     parser.add_argument('--draw', default='auto', help='flag to draw or not')
-    args, _ = parser.parse_known_args()
+    parser.set_defaults(**kwargs)
+    default_args = None if cmdline else []
+    args, _ = parser.parse_known_args(default_args)
+    return args
 
+
+def main(cmdline=True, **kwargs):
+    args = make_evaluate_config(cmdline=cmdline, **kwargs)
     true_coco = kwcoco.CocoDataset.coerce(args.true_dataset)
     pred_coco = kwcoco.CocoDataset.coerce(args.pred_dataset)
     eval_dpath = args.eval_dpath

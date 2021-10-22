@@ -113,7 +113,7 @@ class MultimodalTransformer(pl.LightningModule):
                 '''))
         parser.add_argument("--token_norm", default='auto', type=str,
                             choices=['auto', 'group', 'batch'])
-        parser.add_argument("--arch_name", default='smt_it_stm_p8', type=str,
+        parser.add_argument("--arch_name", default='smt_it_joint_p8', type=str,
                             choices=available_encoders)
         parser.add_argument("--dropout", default=0.1, type=float)
         parser.add_argument("--global_class_weight", default=1.0, type=float)
@@ -149,7 +149,7 @@ class MultimodalTransformer(pl.LightningModule):
         pass
 
     def __init__(self,
-                 arch_name='smt_it_stm_p8',
+                 arch_name='smt_it_joint_p8',
                  dropout=0.0,
                  optimizer='RAdam',
                  learning_rate=1e-3,
@@ -1191,6 +1191,20 @@ class MultimodalTransformer(pl.LightningModule):
         # shallow copy of self, to apply attribute hacks to
         model = copy.copy(self)
 
+        backup_attributes = {}
+        # Remove attributes we don't want to pickle before we serialize
+        # then restore them
+        unsaved_attributes = [
+            'trainer',
+            'train_dataloader',
+            'val_dataloader',
+            'test_dataloader',
+        ]
+        for key in unsaved_attributes:
+            val = getattr(model, key)
+            if val is not None:
+                backup_attributes[key] = val
+
         train_dpath_hint = getattr(model, 'train_dpath_hint', None)
         if model.trainer is not None:
             if train_dpath_hint is None:
@@ -1205,54 +1219,57 @@ class MultimodalTransformer(pl.LightningModule):
             metadata_fpaths += list(train_dpath_hint.glob('hparams.yaml'))
             metadata_fpaths += list(train_dpath_hint.glob('fit_config.yaml'))
 
-        model.trainer = None
-        model.train_dataloader = None
-        model.val_dataloader = None
-        model.test_dataloader = None
+        try:
+            for key in backup_attributes.keys():
+                setattr(model, key, None)
 
-        arch_name = "model.pkl"
-        module_name = 'watch_tasks_fusion'
-        """
-        exp = torch.package.PackageExporter(package_path, verbose=True)
-        """
-        with torch.package.PackageExporter(package_path) as exp:
-            # TODO: this is not a problem yet, but some package types (mainly
-            # binaries) will need to be excluded and added as mocks
-            exp.extern("**", exclude=["watch.tasks.fusion.**"])
-            exp.intern("watch.tasks.fusion.**", allow_empty=False)
+            arch_name = "model.pkl"
+            module_name = 'watch_tasks_fusion'
+            """
+            exp = torch.package.PackageExporter(package_path, verbose=True)
+            """
+            with torch.package.PackageExporter(package_path) as exp:
+                # TODO: this is not a problem yet, but some package types (mainly
+                # binaries) will need to be excluded and added as mocks
+                exp.extern("**", exclude=["watch.tasks.fusion.**"])
+                exp.intern("watch.tasks.fusion.**", allow_empty=False)
 
-            # Attempt to standardize some form of package metadata that can
-            # allow for model importing with fewer hard-coding requirements
-            package_header = {
-                'version': '0.1.0',
-                'arch_name': arch_name,
-                'module_name': module_name,
-            }
+                # Attempt to standardize some form of package metadata that can
+                # allow for model importing with fewer hard-coding requirements
+                package_header = {
+                    'version': '0.1.0',
+                    'arch_name': arch_name,
+                    'module_name': module_name,
+                }
 
-            # old encoding (keep for a while)
-            exp.save_pickle(
-                'kitware_package_header', 'kitware_package_header.pkl',
-                package_header
-            )
+                # old encoding (keep for a while)
+                exp.save_pickle(
+                    'kitware_package_header', 'kitware_package_header.pkl',
+                    package_header
+                )
 
-            # new encoding
-            exp.save_text(
-                'kitware_package_header', 'kitware_package_header.json',
-                json.dumps(package_header)
-            )
+                # new encoding
+                exp.save_text(
+                    'kitware_package_header', 'kitware_package_header.json',
+                    json.dumps(package_header)
+                )
 
-            # move to this?
-            exp.save_text(
-                'package_header', 'package_header.json',
-                json.dumps(package_header)
-            )
-            exp.save_pickle(module_name, arch_name, model)
+                # move to this?
+                exp.save_text(
+                    'package_header', 'package_header.json',
+                    json.dumps(package_header)
+                )
+                exp.save_pickle(module_name, arch_name, model)
 
-            # Save metadata
-            for meta_fpath in metadata_fpaths:
-                with open(meta_fpath, 'r') as file:
-                    text = file.read()
-                exp.save_text('package_header', meta_fpath.name, text)
+                # Save metadata
+                for meta_fpath in metadata_fpaths:
+                    with open(meta_fpath, 'r') as file:
+                        text = file.read()
+                    exp.save_text('package_header', meta_fpath.name, text)
+        finally:
+            # restore attributes
+            for key, val in backup_attributes.items():
+                setattr(model, key, val)
 
 
 def _class_weights_from_freq(total_freq, mode='median-idf'):

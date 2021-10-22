@@ -166,6 +166,12 @@ def make_fit_config(cmdline=False, **kwargs):
         Initialization strategy. Can be a path to a pretrained network.
         '''))
 
+    config_parser.add_argument('--eval_after_fit', default=False, help=ub.paragraph(
+        '''
+        If true, attempts to run default prediction and evaluation on the final
+        packaged state.
+        '''))
+
     callback_parser = parser.add_argument_group("Callbacks")
 
     # our extension callbacks have arg parsers
@@ -459,6 +465,9 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
 @profile
 def fit_model(args=None, cmdline=False, **kwargs):
     """
+    CommandLine:
+        CUDA_VISIBLE_DEVICES=0 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.fit fit_model:0 -- --gpu
+
     Example:
         >>> # xdoctest: +REQUIRES(--gpu)
         >>> from watch.tasks.fusion.fit import *  # NOQA
@@ -466,17 +475,19 @@ def fit_model(args=None, cmdline=False, **kwargs):
         >>> cmdline = False
         >>> workdir = ub.ensure_app_cache_dir('watch', 'tests', 'fusion', 'fit')
         >>> kwargs = {
-        ...     'train_dataset': 'special:vidshapes8-multispectral',
-        ...     'vali_dataset': 'special:vidshapes2-multispectral',
+        ...     'train_dataset': 'special:vidshapes2-multispectral',
+        ...     'vali_dataset': 'special:vidshapes1-multispectral',
         ...     'test_dataset': 'special:vidshapes1-multispectral',
         ...     'datamodule': 'KWCocoVideoDataModule',
         ...     'workdir': workdir,
+        ...     'num_sanity_val_steps': 0,
+        ...     'eval_after_fit': True,
         ...     'gpus': 1,
-        ...     'max_epochs': 3,
+        ...     'max_epochs': 2,
         ...     #'max_steps': 1,
         ...     'learning_rate': 1e-5,
-        ...     'auto_lr_find': True,
-        ...     'num_workers': 1,
+        ...     'auto_lr_find': False,
+        ...     'num_workers': 2,
         ... }
         >>> fit_model(**kwargs)
     """
@@ -493,7 +504,6 @@ def fit_model(args=None, cmdline=False, **kwargs):
     print('Tune if requested')
     # if requested, tune model with lightning default tuners
     tune_result = trainer.tune(model, datamodule)
-    print('tune_result = {!r}'.format(tune_result))
     if tune_result:
         finder = tune_result['lr_find']
         print('finder.lr_max = {!r}'.format(finder.lr_max))
@@ -506,8 +516,7 @@ def fit_model(args=None, cmdline=False, **kwargs):
             kwplot.autompl()
             finder.plot()
             kwplot.show_if_requested()
-
-    print('tune_result = {}'.format(ub.repr2(tune_result, nl=1)))
+        print('tune_result = {}'.format(ub.repr2(tune_result, nl=1)))
 
     # fit the model
     print('Fit starting')
@@ -516,6 +525,47 @@ def fit_model(args=None, cmdline=False, **kwargs):
 
     # Hack: what is the best way to get at this info?
     package_fpath = trainer.package_fpath
+
+    args = modules['args']
+    if args.eval_after_fit:
+        print('Attempting to unload resources after fit')
+        # Unload fit resources
+        trainer = None
+        model = None
+        datamodule = None
+        modules = None
+
+        import gc
+        gc.collect()
+
+        import torch
+        torch.cuda.empty_cache()
+
+        # TODO: evaluate multiple checkpoints?
+
+        from watch.tasks.fusion import organize
+        suggestions = organize.suggest_paths(
+            test_dataset=args.test_dataset,
+            package_fpath=package_fpath)
+        import json
+        suggestions = json.loads(suggestions)
+        print('suggestions = {}'.format(ub.repr2(suggestions, nl=1)))
+        from watch.tasks.fusion import predict
+        from watch.tasks.fusion import evaluate
+        predict_cfg = {
+            'package_fpath': package_fpath,
+            'test_dataset': args.test_dataset,
+            'pred_dataset': suggestions['pred_dataset'],
+            'num_workers': args.num_workers,
+            'gpus': args.gpus,
+        }
+        eval_cfg = {
+            'pred_dataset': suggestions['pred_dataset'],
+            'true_dataset': args.test_dataset,
+            'eval_dpath': suggestions['eval_dpath'],
+        }
+        predict.main(cmdline=False, **predict_cfg)
+        evaluate.main(cmdline=False, **eval_cfg)
 
     # TODO:
     # Run prediction code here
@@ -553,22 +603,22 @@ def main(**kwargs):
             --chip_size=96 \
             --workdir=$HOME/work/watch/fit
     """
-
-    def setup(rank, world_size):
-        # https://pytorch.org/tutorials/intermediate/dist_tuto.html
-        import torch.distributed as dist
-        import os
-        os.environ['MASTER_ADDR'] = 'localhost'
-        os.environ['MASTER_PORT'] = '12355'
-        # initialize the process group
-        dist.init_process_group("gloo", rank=rank, world_size=world_size)
-
-    setup(0, 1)
+    # TODO: how to make this work in a distributed (ideally elastic train case)
+    # def setup(rank, world_size):
+    #     # https://pytorch.org/tutorials/intermediate/dist_tuto.html
+    #     import torch.distributed as dist
+    #     import os
+    #     os.environ['MASTER_ADDR'] = 'localhost'
+    #     os.environ['MASTER_PORT'] = '12355'
+    #     # initialize the process group
+    #     dist.init_process_group("gloo", rank=rank, world_size=world_size)
+    # setup(0, 1)
 
     import logging
     # configure logging at the root level of lightning
     logging.getLogger("pytorch_lightning").setLevel(logging.DEBUG)
-    fit_model(cmdline=True, **kwargs)
+
+    package_fpath = fit_model(cmdline=True, **kwargs)
 
 
 if __name__ == "__main__":

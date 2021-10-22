@@ -127,6 +127,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         preprocessing_step=None,
         tfms_channel_subset=None,
         normalize_inputs=False,
+        match_histograms=False,
         diff_inputs=False,
         verbose=1,
     ):
@@ -167,6 +168,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.exclude_sensors = exclude_sensors
         self.diff_inputs = diff_inputs
         self.time_span = time_span
+        self.match_histograms = match_histograms
 
         self.input_stats = None
         self.dataset_stats = None
@@ -236,6 +238,11 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 if True, computes the mean/std for this dataset on each mode
                 so this can be passed to the model.
                 '''))
+
+        parser.add_argument(
+            "--match_histograms", default=True, type=smartcast, help=ub.paragraph(
+                '''
+                '''))
         parser.add_argument(
             "--diff_inputs", default=False, type=smartcast, help=ub.paragraph(
                 '''
@@ -269,6 +276,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 time_sampling=self.time_sampling,
                 diff_inputs=self.diff_inputs,
                 exclude_sensors=self.exclude_sensors,
+                match_histograms=self.match_histograms,
             )
 
             # Unfortunately lightning seems to only enable / disables
@@ -319,6 +327,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                     neg_to_pos_ratio=0,
                     diff_inputs=self.diff_inputs,
                     exclude_sensors=self.exclude_sensors,
+                    match_histograms=self.match_histograms,
                 )
                 self.torch_datasets['vali'] = vali_dataset
                 ub.inject_method(self, lambda self: self._make_dataloader('vali', shuffle=False), 'val_dataloader')
@@ -342,6 +351,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 mode='test',
                 diff_inputs=self.diff_inputs,
                 exclude_sensors=self.exclude_sensors,
+                match_histograms=self.match_histograms,
             )
 
             ub.inject_method(self, lambda self: self._make_dataloader('test', shuffle=False), 'test_dataloader')
@@ -443,7 +453,7 @@ class KWCocoVideoDataset(data.Dataset):
         >>> sampler = ndsampler.CocoSampler(coco_dset)
         >>> channels = 'B10|B8a|B1|B8'
         >>> sample_shape = (3, 256, 256)
-        >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, time_sampling='soft+distribute')
+        >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, time_sampling='soft+distribute', diff_inputs=True, match_histograms=True)
         >>> index = len(self) // 4
         >>> item = self[index]
         >>> canvas = self.draw_item(item)
@@ -496,7 +506,7 @@ class KWCocoVideoDataset(data.Dataset):
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
         >>> sampler = ndsampler.CocoSampler(coco_dset)
         >>> sample_shape = (7, 128, 128)
-        >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels='red|green|blue|swir16|swir22|nir|ASI')
+        >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels='red|green|blue|swir16|swir22|nir|ASI', match_histograms=True)
         >>> item = self[4]
         >>> canvas = self.draw_item(item)
         >>> # xdoctest: +REQUIRES(--show)
@@ -522,7 +532,7 @@ class KWCocoVideoDataset(data.Dataset):
         >>>     sample_shape=(5, 128, 128),
         >>>     window_overlap=0,
         >>>     channels="blue|green|red|nir|swir16",
-        >>>     neg_to_pos_ratio=0, time_sampling='auto', diff_inputs=0, mode='train'
+        >>>     neg_to_pos_ratio=0, time_sampling='auto', diff_inputs=1, mode='train', match_histograms=True,
         >>> )
         >>> item = self[0]
         >>> canvas = self.draw_item(item)
@@ -556,6 +566,7 @@ class KWCocoVideoDataset(data.Dataset):
         diff_inputs=False,
         time_span='2y',
         exclude_sensors=None,
+        match_histograms=False,
     ):
 
         # TODO: the set of "valid" background classnames should be defined
@@ -564,6 +575,8 @@ class KWCocoVideoDataset(data.Dataset):
         # into the kwcoco spec marking a class as some type of "background"
         self._hueristic_background_classnames = heuristics.BACKGROUND_CLASSES
         self._heuristic_ignore_classnames = heuristics.IGNORE_CLASSNAMES
+
+        self.match_histograms = match_histograms
 
         if channels is None:
             # Hack to use all channels in the first image.
@@ -894,6 +907,21 @@ class KWCocoVideoDataset(data.Dataset):
                 ]
             concat1 = xr.concat([sample_im] + special_ims, dim='c')
 
+            main_idx_ = tr.get('main_idx', 0)
+            if self.match_histograms:
+                nodata_mask = np.isnan(concat1)  # NOQA
+                tmp = np.nan_to_num(concat1)
+                # Hack: do before diff
+                from skimage import exposure  # NOQA
+                from skimage.exposure import match_histograms
+                main_idx_ = min(main_idx_, len(tmp) - 1)
+                reference = tmp[main_idx_]
+                for idx, raw_frame in enumerate(tmp):
+                    if idx != main_idx_:
+                        new_frame = match_histograms(raw_frame, reference, multichannel=True)
+                        tmp[idx] = new_frame
+                concat1[...] = tmp
+
             # TODO: add the matching step somewhere around here
 
             if self.diff_inputs:
@@ -915,8 +943,24 @@ class KWCocoVideoDataset(data.Dataset):
             raw_frame_list = sample['im']
 
         # TODO: use this
+        # TODO: read QA bands, input other special QA bands
         nodata_mask = np.isnan(raw_frame_list)  # NOQA
         raw_frame_list = np.nan_to_num(raw_frame_list)
+
+        if not self.special_inputs and not self.diff_inputs:
+            main_idx_ = tr.get('main_idx', 0)
+            if self.match_histograms:
+                nodata_mask = np.isnan(raw_frame_list)  # NOQA
+                raw_frame_list = np.nan_to_num(raw_frame_list)
+                # Hack: do before diff
+                from skimage import exposure  # NOQA
+                from skimage.exposure import match_histograms
+                main_idx_ = min(main_idx_, len(raw_frame_list) - 1)
+                reference = raw_frame_list[main_idx_]
+                for idx, raw_frame in enumerate(raw_frame_list):
+                    if idx != main_idx_:
+                        new_frame = match_histograms(raw_frame, reference, multichannel=True)
+                        raw_frame_list[idx] = new_frame
 
         raw_det_list = sample['annots']['frame_dets']
         raw_gids = sample['tr']['gids']
@@ -1441,6 +1485,10 @@ class KWCocoVideoDataset(data.Dataset):
         # Given prepared frame metadata, build a vertical stack of per-chanel
         # information, and then horizontally stack the timesteps.
         horizontal_stack = []
+
+        any_have_change = any(
+            m.get('changes', None) is not None for m in frame_metas)
+
         for frame_meta in frame_metas:
             vertical_stack = []
 
@@ -1451,6 +1499,11 @@ class KWCocoVideoDataset(data.Dataset):
             class_idxs = frame_meta['class_idxs']
             changes = frame_meta.get('changes', None)
             gid = frame_item['gid']
+
+            if changes is None:
+                overlay_shape = class_idxs.shape[0:2]  # make more robust
+            else:
+                overlay_shape = changes.shape[0:2]
 
             header_dims = {'width': max_dim}
 
@@ -1486,16 +1539,16 @@ class KWCocoVideoDataset(data.Dataset):
             })
 
             # Create the true change label overlay
-            if changes is not None:
-                change_overlay = np.zeros(changes.shape[0:2] + (4,), dtype=np.float32)
-                change_overlay = kwimage.Mask(changes, format='c_mask').draw_on(change_overlay, color='lime')
-                change_overlay = kwimage.ensure_alpha_channel(change_overlay)
-                change_overlay[..., 3] = (changes > 0).astype(np.float32) * 0.5
+            if any_have_change:
+                change_overlay = np.zeros(overlay_shape + (4,), dtype=np.float32)
+                if changes is not None:
+                    change_overlay = kwimage.Mask(changes, format='c_mask').draw_on(change_overlay, color='lime')
+                    change_overlay = kwimage.ensure_alpha_channel(change_overlay)
+                    change_overlay[..., 3] = (changes > 0).astype(np.float32) * 0.5
                 truth_overlays.append({
                     'overlay': change_overlay,
                     'label_text': 'true change',
                 })
-                # change_overlay = kwimage.make_heatmask(changes)
 
             if not overlay_on_image:
                 # Draw the truth by itself
