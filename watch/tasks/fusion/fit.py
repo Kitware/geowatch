@@ -618,7 +618,7 @@ def main(**kwargs):
     # configure logging at the root level of lightning
     logging.getLogger("pytorch_lightning").setLevel(logging.DEBUG)
 
-    package_fpath = fit_model(cmdline=True, **kwargs)
+    fit_model(cmdline=True, **kwargs)
 
 
 if __name__ == "__main__":
