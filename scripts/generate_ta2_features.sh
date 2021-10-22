@@ -142,15 +142,19 @@ uky_prediction(){
 
 
 rutgers_prediction(){
+    __doc__='
+    source ~/code/watch/scripts/generate_ta2_features.sh
+    '
     # Generate Rutgers Features
-    export CUDA_VISIBLE_DEVICES="1"
+    export CUDA_VISIBLE_DEVICES="0"
     python -m watch.tasks.rutgers_material_seg.predict \
         --test_dataset=$BASE_COCO_FPATH \
         --checkpoint_fpath=$RUTGERS_MATERIAL_MODEL_FPATH  \
         --default_config_key=iarpa \
         --pred_dataset=$RUTGERS_MATERIAL_COCO_FPATH \
         --num_workers="8" \
-        --batch_size=32 --gpus "0" --profile
+        --batch_size=32 --gpus "0" \
+        --compress=RAW --blocksize=128
 }
 
 

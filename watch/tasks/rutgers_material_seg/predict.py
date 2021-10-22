@@ -88,7 +88,8 @@ class Evaluator(object):
         save_path = os.fspath(save_path)
         kwimage.imwrite(save_path, recon,
                         backend='gdal', space=None,
-                        compress='DEFLATE')
+                        compress='DEFLATE',
+                        blocksize=128)
 
         aux_height, aux_width = recon.shape[0:2]
         img = self.output_coco_dataset.index.imgs[gid]
@@ -242,6 +243,9 @@ def make_predict_config(cmdline=False, **kwargs):
 
     parser.add_argument("--batch_size", default=1, type=int, help="prediction batch size")
     parser.add_argument("--num_workers", default=0, type=str, help="data loader workers, can be set to auto")
+
+    parser.add_argument("--compress", default='DEFLATE', type=str, help="type of gdal compression to use")
+    parser.add_argument("--blocksize", default=256, type=str, help="gdal COG blocksize")
     # parser.add_argument("--thresh", type=float, default=0.01)
 
     parser.set_defaults(**kwargs)
