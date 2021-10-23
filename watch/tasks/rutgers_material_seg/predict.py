@@ -182,7 +182,10 @@ class Evaluator(object):
                                      self.num_classes),
                                     device='numpy')
                             slice_ = outputs['tr'].data[0][b]['space_slice']
-                            self.stitcher_dict[gid].add(slice_, output)
+
+                            from watch.utils import util_kwimage
+                            weights = util_kwimage.upweight_center_mask(output.shape[0:2])[..., None]
+                            self.stitcher_dict[gid].add(slice_, output, weight=weights)
 
         if self.write_probs:
             # Finalize any remaining images
