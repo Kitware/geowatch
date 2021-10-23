@@ -107,12 +107,14 @@ def check_loadtime():
 
     coco_fpaths = [
         bundle_dpath / 'rutgers_imwrite_test_RAW64/data.kwcoco.json',
-        bundle_dpath / 'rutgers_imwrite_test_RAW128/data.kwcoco.json',
+        # bundle_dpath / 'rutgers_imwrite_test_RAW128/data.kwcoco.json',
         bundle_dpath / 'rutgers_imwrite_test_LZW64/data.kwcoco.json',
-        bundle_dpath / 'rutgers_imwrite_test_LZW128/data.kwcoco.json',
+        # bundle_dpath / 'rutgers_imwrite_test_LZW128/data.kwcoco.json',
         bundle_dpath / 'rutgers_imwrite_test_DEFLATE64/data.kwcoco.json',
-        bundle_dpath / 'rutgers_imwrite_test_DEFLATE128/data.kwcoco.json',
-        # bundle_dpath / 'combo_data.kwcoco.json',
+        # bundle_dpath / 'rutgers_imwrite_test_DEFLATE128/data.kwcoco.json',
+        # bundle_dpath / 'rutgers_imwrite_test_RAW256/data.kwcoco.json',
+        # bundle_dpath / 'rutgers_imwrite_test_LZW256/data.kwcoco.json',
+        # bundle_dpath / 'rutgers_imwrite_test_DEFLATE256/data.kwcoco.json',
     ]
 
     @ub.memoize
@@ -185,7 +187,9 @@ def check_loadtime():
         disk_stats = ub.map_keys(lambda x: x + '_bytes', disk_stats)
         disk_stats_str = ub.map_keys(lambda x: x + '_str', ub.dict_diff(disk_stats, {'shape_bytes'}))
         disk_stats_str = ub.map_vals(xdev.byte_str, disk_stats_str)
+        data_key = coco_fpath.parent.name
         disk_stats_row = {
+            'data_key': data_key,
             'compress': compression,
             'blocksize': blocksize,
             **disk_stats,
@@ -203,6 +207,7 @@ def check_loadtime():
     sns = kwplot.autosns()
 
     disk_piv = disk_df.pivot(['compress'], ['blocksize'], ['mean_bytes'])
+    disk_piv = disk_piv.droplevel(0, axis=1)
     fig = kwplot.figure(fnum=9001)
     # fig.set_size_inches(8.69, 4.93)
     ax = fig.gca()
@@ -214,14 +219,24 @@ def check_loadtime():
                 # norm=LogNorm(vmin=1, vmax=24),
                 annot_kws={'size': 8},
                 cbar_kws={'label': 'bytes', 'pad': 0.001})
+    ax.set_title('Disk usage based on imwrite settings')
 
     # ----
-    sample_grid = ub.named_product({
+    sample_grid = list(ub.named_product({
         'chip_size': [32, 64, 96],
         # 'chip_size': [32, 96],
         # 'time_steps': [1, 3, 5, 7],
-        'time_steps': [1, 2, 3, 5, 7, 11, 13, 17, 19],
-    })
+        'time_steps': [
+            1,
+            # 2,
+            3,
+            # 5,
+            7,
+            # 11,
+            13,
+            # 17,
+            19],
+    }))
 
     sample_time_rows = []
     for sample_kw in sample_grid:
@@ -288,13 +303,15 @@ def check_loadtime():
     # df.set_index(['compress', 'blocksize'])
     # print(df.set_index(['chip_size', 'time_steps', 'num_pixels']).to_string())
 
-    piv = df.pivot(['compress', 'blocksize'], ['chip_size', 'time_steps', 'num_pixels'], ['mean'])
-    piv = piv.droplevel(0, axis=1)
-
     # z = df.melt(id_vars=['compress', 'blocksize', 'time_steps', 'chip_size'], value_vars=['mean'], var_name='var', value_name='val')
     # z.pivot(['compress', 'blocksize'], ['chip_size', 'time_steps'], ['val'])
     # z.pivot(
-    # from matplotlib.colors import LogNorm
+    df = df.rename({'mean': 'mean_seconds'}, axis=1)
+    from matplotlib.colors import LogNorm
+    piv = df.pivot(['compress', 'blocksize'], ['time_steps', 'chip_size', 'num_pixels'], ['mean_seconds'])
+    piv = piv.droplevel(0, axis=1)
+
+    piv = piv.sort_index(axis=1)
     fig = kwplot.figure(fnum=1)
     # fig.set_size_inches(8.69, 4.93)
     ax = fig.gca()
@@ -302,16 +319,22 @@ def check_loadtime():
     sns.heatmap(piv,
                 annot=annot,
                 ax=ax, fmt='s',
-                # norm=LogNorm(vmin=1, vmax=24),
+                norm=LogNorm(vmin=0.2, vmax=5),
                 annot_kws={'size': 8},
                 cbar_kws={'label': 'seconds', 'pad': 0.001})
     ax.set_title('Load times based on COG and Sampler settings')
     ax.figure.subplots_adjust(bottom=0.2)
 
     fig = kwplot.figure(fnum=2)
-    ax = fig.gca()
-    ax.cla()
-    sns.lineplot(ax=ax, data=df, x='time_steps', y='mean', hue='compress', size='chip_size', style='blocksize')
+
+    fig.clf()
+    groups = dict(list(df.groupby('chip_size')))
+    pnum_ = kwplot.PlotNums(nSubplots=len(groups))
+    for chip_size, subdf in groups.items():
+        ax = kwplot.figure(pnum=pnum_(), fnum=fig.number).gca()
+        sns.lineplot(ax=ax, data=subdf, x='time_steps', y='mean_seconds', hue='compress', style='blocksize')
+        ax.set_title('sampler chip_size={}'.format(chip_size))
+        ax.set_ylim(0, df['mean_seconds'].max())
 
     fig = kwplot.figure(fnum=3)
     ax = fig.gca()
@@ -321,7 +344,7 @@ def check_loadtime():
 
     fig = kwplot.figure(fnum=4)
     ax = fig.gca()
-    sns.lineplot(ax=ax, data=df, x='num_pixels', y='mean', hue='data_key', style='chip_size')
+    sns.lineplot(ax=ax, data=df, x='num_pixels', y='mean_seconds', hue='data_key', style='chip_size')
 
     # ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
     # ax.set_title(title)
