@@ -103,6 +103,8 @@ TIME_STEPS=2
 #ARCH=smt_it_stm_s12
 CHANNELS="coastal|blue|green|red|nir|swir16"
 
+# TODO: get experiment name from organize script
+NAME="DirectCD_{arch_name}_raw7common_v5"
 EXPERIMENT_NAME=DirectCD_${ARCH}_raw7common_v5
 DATASET_NAME=Drop1RawLeftRight
 

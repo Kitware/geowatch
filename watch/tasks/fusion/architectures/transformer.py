@@ -42,7 +42,15 @@ Notes:
 import torch
 import einops
 import ubelt as ub  # NOQA
+import math
 from torch import nn
+
+
+try:
+    import xdev
+    profile = xdev.profile
+except Exception:
+    profile = ub.identity
 
 
 class ResidualSequential(nn.Sequential):
@@ -103,7 +111,6 @@ class MultiheadSelfAttention(ub.NiceRepr, torch.nn.MultiheadAttention):
 
 try:
     from performer_pytorch import FastAttention
-    import math
 
     class FastMultiheadSelfAttention(FastAttention):
         """
@@ -135,13 +142,70 @@ try:
                 causal=False, generalized_attention=False, kernel_fn=nn.ReLU(),
                 no_projection=False)
 
+        @profile
         def forward(self, x):
             # import xdev
             # xdev.embed()
             # make compatible with nn.MultiheadAttention
+            # s, b, he = x.shape
+            # e = self.dim_heads
+            # h = self.num_heads
+            # Much faster than einops
+            # q = x.contiguous().view(s, b, h, e).permute(1, 2, 0, 3)
             q = einops.rearrange(x, 's b (h e) -> b h s e', e=self.dim_heads)
+            # a = FastAttention.forward(self, q, q, q)
             a = super().forward(q, q, q)
+            # out = a.permute(2, 1, 0, 3).contiguous().view(s, b, he)
             out = einops.rearrange(a, 'b h s e -> s b (h e)', e=self.dim_heads)
+            return out
+except ImportError:
+    pass
+
+
+try:
+    from reformer_pytorch import LSHSelfAttention
+
+    class ReformerMultiheadedSelfAttention(LSHSelfAttention):
+        """
+        This seems like a good idea, but either I'm using it wrong or the
+        C-bindings in normal attention make this lose all of its benefit.
+
+        Ignore:
+            from watch.tasks.fusion.architectures.transformer import *  # NOQA
+            D = 9  # embedding dimension
+            H = 3   # number of heads
+            B = 5   # batch size
+            S = 7   # sequence length
+            x = torch.rand(S, B, D)
+
+            self = ReformerMultiheadedSelfAttention(D, H)
+
+            MultiheadSelfAttention(D, H)(x).shape
+            ReformerMultiheadedSelfAttention(D, H)(x)
+            from reformer_pytorch import LSHAttention
+            q = einops.rearrange(x, 's b (h e) -> b h s e', h=H)
+            FastAttention(dim_heads=D // H, nb_features=None)(q, q, q).shape
+        """
+
+        def __init__(self, embed_dim, num_heads):
+            self.embed_dim = embed_dim
+            self.num_heads = num_heads
+            assert embed_dim % num_heads == 0
+            dim_heads = embed_dim // num_heads
+            self.dim_heads = dim_heads
+            # nb_features = int(dim_heads * math.log(dim_heads))
+            # nb_features = int(dim_heads * 2)
+            super().__init__(
+                dim=embed_dim, heads=num_heads, dim_head=dim_heads,
+                bucket_size=64, n_hashes=8, causal=False)
+
+        @profile
+        def forward(self, x):
+            s, b, he = x.shape
+            bsd = x.permute(1, 0, 2)
+            # a = LSHSelfAttention.forward(self, bsd)
+            a = super().forward(bsd)
+            out = a.permute(1, 0, 2)
             return out
 except ImportError:
     pass
@@ -173,6 +237,8 @@ def new_attention_layer(embedding_size, n_heads, attention_impl='exact'):
         # from performer_pytorch import SelfAttention
         # attention = SelfAttention(dim=embedding_size, heads=n_heads)
         attention = FastMultiheadSelfAttention(embedding_size, n_heads)
+    elif attention_impl == 'reformer':
+        attention = ReformerMultiheadedSelfAttention(embedding_size, n_heads)
     else:
         raise KeyError(attention_impl)
 
@@ -322,6 +388,7 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
         })
         self.mlp = new_mlp_layer(embedding_size, dropout)
 
+    @profile
     def forward(self, x):
         """
         Args:
@@ -329,15 +396,12 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
         """
         shape_dict = dict(zip(self.default_shape, x.shape))
 
-        DEBUG = 0
-        if DEBUG:
-            log = []
-
         previous_axial_shape = self.default_shape_str
         for axis in self.axes:
             if not isinstance(axis, (list, tuple)):
                 axis = [axis]
             sequence_axes = self.axsep.join(axis)
+            attention_layer = self.attention_modules[sequence_axes]
             batch_axes = self.axsep.join([
                 a for a in self.default_shape
                 if (a == self.batch_axis or a not in axis) and a != self.feature_axis
@@ -348,11 +412,7 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
             axial_shape = f"({sequence_axes}) ({batch_axes}) {self.feature_axis}"
             rearrange_op = f"{previous_axial_shape} -> {axial_shape}"
             x = einops.rearrange(x, rearrange_op, **shape_dict)
-            if DEBUG:
-                log.append(f'prep attention: {rearrange_op}')
-            x = self.attention_modules[sequence_axes](x)
-            if DEBUG:
-                log.append('attention')
+            x = attention_layer(x)
             previous_axial_shape = axial_shape
 
         sequence_axes = self.axsep.join([
@@ -362,19 +422,10 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
         axial_shape = f"({sequence_axes}) {self.batch_axis} {self.feature_axis}"
         rearrange_op = f"{previous_axial_shape} -> {axial_shape}"
         x = einops.rearrange(x, rearrange_op, **shape_dict)
-        if DEBUG:
-            log.append(f'prep mlp: {rearrange_op}')
         x = self.mlp(x)
-        if DEBUG:
-            log.append('mlp')
 
         rearrange_op = f"{axial_shape} -> {self.default_shape_str}"
         x = einops.rearrange(x, rearrange_op, **shape_dict)
-        if DEBUG:
-            log.append(f'prep return: {rearrange_op}')
-
-        if DEBUG:
-            print('log = {}'.format(ub.repr2(log, nl=1)))
         return x
 
 
@@ -484,6 +535,15 @@ class FusionEncoder(nn.Module):
         >>> assert output.shape == (2, 3, 5, 2, 2, 256)
 
     Ignore:
+        traced = torch.jit.trace(model, inputs)
+        import timerit
+        ti = timerit.Timerit(5, bestof=1, verbose=2)
+        for timer in ti.reset('time'):
+            model(inputs)
+        for timer in ti.reset('time'):
+            traced(inputs)
+
+    Ignore:
         >>> # Get a sense of the arch size
         >>> from watch.tasks.fusion.architectures.transformer import *  # NOQA
         >>> rows = []
@@ -568,6 +628,7 @@ def _build_global_configs():
     _encoder_size_basis = {
         'small': dict(n_layers=4, embedding_size=64, n_heads=4),
         'p8': dict(n_layers=8, embedding_size=128, n_heads=4),
+        'b8': dict(n_layers=8, embedding_size=384, n_heads=4),
         'n12': dict(n_layers=12, embedding_size=128, n_heads=4),
         't12': dict(n_layers=12, embedding_size=192, n_heads=4),
         't24': dict(n_layers=24, embedding_size=192, n_heads=4),

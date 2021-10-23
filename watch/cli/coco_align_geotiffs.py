@@ -985,6 +985,9 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
             # We need to overwrite because we changed the bounds
             # Note: if band info is not popluated above, this
             # might write bad data based on hueristics
+            # TODO:
+            # We need to remove all spatial metadata from the base image that a
+            # crop would invalidate, otherwise we will propogate bad info.
             _populate_canvas_obj(bundle_dpath, dst,
                                  overwrite={'warp'}, with_wgs=True)
 

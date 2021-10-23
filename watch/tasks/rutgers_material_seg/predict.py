@@ -33,8 +33,14 @@ from tqdm import tqdm  # NOQA
 import ubelt as ub
 import pathlib
 import watch.tasks.rutgers_material_seg.utils.utils as utils
+from watch.utils import util_parallel
 from watch.tasks.rutgers_material_seg.models import build_model
 from watch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import SequenceDataset
+
+try:
+    from xdev import profile
+except Exception:
+    profile = ub.identity
 
 
 class Evaluator(object):
@@ -45,7 +51,9 @@ class Evaluator(object):
                  write_probs : bool = True,
                  device=None,
                  config : dict = None,
-                 output_feat_dpath : pathlib.Path = None):
+                 output_feat_dpath : pathlib.Path = None,
+                 imwrite_kw={},
+                 num_workers=0):
         """Evaluator class
 
         Args:
@@ -57,6 +65,7 @@ class Evaluator(object):
 
         self.model = model
         self.eval_loader = eval_loader
+        self.num_workers = num_workers
         self.output_coco_dataset = output_coco_dataset
         self.write_probs = write_probs
         self.device = device
@@ -65,10 +74,12 @@ class Evaluator(object):
         self.output_feat_dpath = output_feat_dpath
         self.stitcher_dict = {}
         self.finalized_gids = set()
+        self.imwrite_kw = imwrite_kw
 
         # Hack together a channel code
         self.chan_code = '|'.join(['matseg_{}'.format(i) for i in range(self.num_classes)])
 
+    @profile
     def finalize_image(self, gid):
         self.finalized_gids.add(gid)
         stitcher = self.stitcher_dict[gid]
@@ -77,9 +88,8 @@ class Evaluator(object):
 
         save_path = self.output_feat_dpath / f'{gid}.tiff'
         save_path = os.fspath(save_path)
-        kwimage.imwrite(save_path, recon,
-                        backend='gdal', space=None,
-                        compress='DEFLATE')
+        kwimage.imwrite(save_path, recon, backend='gdal', space=None,
+                        **self.imwrite_kw)
 
         aux_height, aux_width = recon.shape[0:2]
         img = self.output_coco_dataset.index.imgs[gid]
@@ -97,6 +107,7 @@ class Evaluator(object):
         auxiliary = img.setdefault('auxiliary', [])
         auxiliary.append(aux)
 
+    @profile
     def eval(self) -> tuple:
         """evaluate a single epoch
 
@@ -110,10 +121,15 @@ class Evaluator(object):
 
         self.model.eval()
 
+        dataloader_iter = iter(self.eval_loader)
+        writer = util_parallel.BlockingJobQueue(max_workers=self.num_workers)
+
+        seen = set()
+
         with torch.no_grad():
             # Prog = ub.ProgIter
             Prog = tqdm
-            pbar = Prog(enumerate(self.eval_loader), total=len(self.eval_loader), desc='predict rutgers')
+            pbar = Prog(enumerate(dataloader_iter), total=len(self.eval_loader), desc='predict rutgers')
             for batch_index, batch in pbar:
                 outputs = batch
                 images, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0]
@@ -158,7 +174,9 @@ class Evaluator(object):
                             mutually_exclusive = (set(previous_gids) - set(current_gids))
                             for gid in mutually_exclusive:
                                 pbar.set_postfix_str('finalized {}'.format(len(self.finalized_gids)))
-                                self.finalize_image(gid)
+                                seen.add(gid)
+                                writer.submit(self.finalize_image, gid)
+                                # self.finalize_image(gid)
 
                         for gid, output in zip(current_gids, [output1_to_save[b, :, :, :], output2_to_save[b, :, :, :]]):
                             if gid not in self.stitcher_dict.keys():
@@ -167,13 +185,21 @@ class Evaluator(object):
                                      self.num_classes),
                                     device='numpy')
                             slice_ = outputs['tr'].data[0][b]['space_slice']
-                            self.stitcher_dict[gid].add(slice_, output)
+
+                            from watch.utils import util_kwimage
+                            weights = util_kwimage.upweight_center_mask(output.shape[0:2])[..., None]
+                            self.stitcher_dict[gid].add(slice_, output, weight=weights)
+
+        writer.wait_until_finished()
 
         if self.write_probs:
             # Finalize any remaining images
             for gid in Prog(list(self.stitcher_dict.keys()), desc='finish finalization'):
-                self.finalize_image(gid)
+                # self.finalize_image(gid)
+                writer.submit(self.finalize_image, gid)
                 pbar.set_postfix_str('finalized {}'.format(len(self.finalized_gids)))
+
+        writer.wait_until_finished()
 
         # export predictions to a new kwcoco file
         self.output_coco_dataset._invalidate_hashid()
@@ -225,6 +251,9 @@ def make_predict_config(cmdline=False, **kwargs):
 
     parser.add_argument("--batch_size", default=1, type=int, help="prediction batch size")
     parser.add_argument("--num_workers", default=0, type=str, help="data loader workers, can be set to auto")
+
+    parser.add_argument("--compress", default='DEFLATE', type=str, help="type of gdal compression to use")
+    parser.add_argument("--blocksize", default=256, type=str, help="gdal COG blocksize")
     # parser.add_argument("--thresh", type=float, default=0.01)
 
     parser.set_defaults(**kwargs)
@@ -299,7 +328,7 @@ def main(cmdline=True, **kwargs):
     num_channels = len(channels.split('|'))
     config['training']['num_channels'] = num_channels
     dataset = SequenceDataset(sampler, window_dims, input_dims, channels,
-                              training=False)
+                              training=False, window_overlap=0.3)
     print(dataset.__len__())
 
     from watch.utils.lightning_ext import util_globals
@@ -370,13 +399,20 @@ def main(cmdline=True, **kwargs):
     output_coco_dataset.reroot(absolute=True)
     output_coco_dataset.fpath = os.fspath(output_coco_fpath)
 
+    imwrite_kw = {
+        'compress': args.compress,
+        'blocksize': args.blocksize,
+    }
+
     evaler = Evaluator(
         model,
         eval_dataloader,
         output_coco_dataset=output_coco_dataset,
         config=config,
         device=device,
+        num_workers=num_workers,
         output_feat_dpath=output_feat_dpath,
+        imwrite_kw=imwrite_kw,
     )
     self = evaler  # NOQA
     evaler.forward()

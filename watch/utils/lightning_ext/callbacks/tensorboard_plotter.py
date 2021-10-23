@@ -47,7 +47,21 @@ class TensorboardPlotter(pl.callbacks.Callback):
         train_dpath = trainer.logger.log_dir
 
         func = _dump_measures
-        args = (train_dpath,)
+
+        model = trainer.model
+        # TODO: get step number
+        if hasattr(model, 'get_cfgstr'):
+            model_cfgstr = model.get_cfgstr()
+        else:
+            from watch.utils.slugify_ext import smart_truncate
+            model_config = {
+                'type': str(model.__class__),
+                'hp': smart_truncate(ub.repr2(model.hparams, compact=1, nl=0), max_length=8),
+            }
+            model_cfgstr = smart_truncate(ub.repr2(
+                model_config, compact=1, nl=0), max_length=64)
+
+        args = (train_dpath, model_cfgstr)
 
         proc_name = 'dump_tensorboard'
 
@@ -124,7 +138,7 @@ def read_tensorboard_scalars(train_dpath, verbose=1, cache=1):
     return datas
 
 
-def _dump_measures(train_dpath, smoothing=0.0, ignore_outliers=True):
+def _dump_measures(train_dpath, title='?name?', smoothing=0.0, ignore_outliers=True):
     """
     This is its own function in case we need to modify formatting
     """
@@ -137,8 +151,9 @@ def _dump_measures(train_dpath, smoothing=0.0, ignore_outliers=True):
     with BackendContext('agg'):
         import seaborn as sns
         sns.set()
-        meta = tb_data.get('meta', {})
-        nice = meta.get('name', '?name?')
+        # meta = tb_data.get('meta', {})
+        # nice = meta.get('name', '?name?')
+        nice = title
         fig = kwplot.figure(fnum=1)
         fig.clf()
         ax = fig.gca()

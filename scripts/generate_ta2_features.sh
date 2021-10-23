@@ -50,6 +50,9 @@ COMBO_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_data.kwcoco.json
 COMBO_TRAIN_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_train_data.kwcoco.json
 COMBO_VALI_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_data.kwcoco.json
 
+COMBO_TRAIN_S2_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_train_s2_data.kwcoco.json
+COMBO_VALI_S2_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_s2_data.kwcoco.json
+
 BASE_TRAIN_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/base_train_data.kwcoco.json
 BASE_VALI_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/base_vali_data.kwcoco.json
 
@@ -82,20 +85,40 @@ COMBO_COCO_FPATH           = $COMBO_COCO_FPATH
 =====================================================
 "
 
+base_split(){
+    __doc__='
+    source ~/code/watch/scripts/generate_ta2_features.sh
+    '
+    python -m watch stats $BASE_COCO_FPATH
+
+    # Split out train and validation data (TODO: add test when we can)
+    kwcoco subset --src $BASE_COCO_FPATH \
+            --dst $BASE_VALI_COCO_FPATH \
+            --select_videos '.name | startswith("KR_")'
+
+    kwcoco subset --src $COMBO_COCO_FPATH \
+            --dst $BASE_TRAIN_COCO_FPATH \
+            --select_videos '.name | startswith("KR_") | not'
+}
+
+
 
 uky_prediction(){
+    __doc__='
+    source ~/code/watch/scripts/generate_ta2_features.sh
+    '
     # --------------
     # UKY Prediction
     # --------------
 
     # Predict with UKY Invariants (one model for S2 and L8)
     python -m watch.tasks.invariants.predict \
-        --sensor S2 \
+        --sensor="S2" \
         --input_kwcoco $BASE_COCO_FPATH \
         --output_kwcoco $UKY_S2_COCO_FPATH \
         --ckpt_path $UKY_S2_MODEL_FPATH  \
-        --device=1 \
-        --num_workers=6
+        --device=cuda \
+        --num_workers="8"
 
         #--gpus 1 \
 
@@ -105,7 +128,7 @@ uky_prediction(){
         --output_kwcoco $UKY_L8_COCO_FPATH \
         --ckpt_path $UKY_L8_MODEL_FPATH \
         --device=cuda \
-        --num_workers=avail
+        --num_workers="8"
 
         #--gpus 1 \
 
@@ -119,14 +142,19 @@ uky_prediction(){
 
 
 rutgers_prediction(){
+    __doc__='
+    source ~/code/watch/scripts/generate_ta2_features.sh
+    '
     # Generate Rutgers Features
+    export CUDA_VISIBLE_DEVICES="0"
     python -m watch.tasks.rutgers_material_seg.predict \
         --test_dataset=$BASE_COCO_FPATH \
         --checkpoint_fpath=$RUTGERS_MATERIAL_MODEL_FPATH  \
         --default_config_key=iarpa \
         --pred_dataset=$RUTGERS_MATERIAL_COCO_FPATH \
-        --num_workers=avail/2 \
-        --batch_size=32 --gpus "0"
+        --num_workers="8" \
+        --batch_size=32 --gpus "0" \
+        --compress=RAW --blocksize=128
 }
 
 
@@ -142,7 +170,7 @@ dzyne_prediction(){
         --dataset=$BASE_COCO_FPATH \
         --deployed=$DZYNE_LANDCOVER_MODEL_FPATH  \
         --device=0 \
-        --num_workers=avail \
+        --num_workers="16" \
         --output=$DZYNE_LANDCOVER_COCO_FPATH
           
     #\
@@ -178,9 +206,16 @@ predict_all_ta2_features(){
     # Combine TA2 Team Features into a single file
     kwcoco stats $BASE_COCO_FPATH $UKY_INVARIANTS_COCO_FPATH $RUTGERS_MATERIAL_COCO_FPATH $DZYNE_LANDCOVER_COCO_FPATH
 
+    kwcoco validate $BASE_COCO_FPATH
+    kwcoco validate $UKY_INVARIANTS_COCO_FPATH
+    kwcoco validate $RUTGERS_MATERIAL_COCO_FPATH
+    kwcoco validate $DZYNE_LANDCOVER_COCO_FPATH
+
     python ~/code/watch/watch/cli/coco_combine_features.py \
         --src $BASE_COCO_FPATH $UKY_INVARIANTS_COCO_FPATH $RUTGERS_MATERIAL_COCO_FPATH $DZYNE_LANDCOVER_COCO_FPATH \
         --dst $COMBO_COCO_FPATH
+
+    kwcoco validate $COMBO_COCO_FPATH
 
     # Ensure "Video Space" is 10 GSD
     # Might not need to do that?
@@ -213,20 +248,19 @@ predict_all_ta2_features(){
     kwcoco subset --src $COMBO_COCO_FPATH \
             --dst $COMBO_TRAIN_COCO_FPATH \
             --select_videos '.name | startswith("KR_") | not'
-}
+
+    kwcoco validate $COMBO_VALI_COCO_FPATH
+    kwcoco validate $COMBO_TRAIN_COCO_FPATH
 
 
-base_split(){
-    python -m watch stats $BASE_COCO_FPATH
+    # Also split out S2
+    kwcoco subset --src $COMBO_TRAIN_COCO_FPATH \
+            --dst $COMBO_TRAIN_S2_COCO_FPATH \
+            --select_images '.sensor_coarse == "S2"'
 
-    # Split out train and validation data (TODO: add test when we can)
-    kwcoco subset --src $BASE_COCO_FPATH \
-            --dst $BASE_VALI_COCO_FPATH \
-            --select_videos '.name | startswith("KR_")'
-
-    kwcoco subset --src $COMBO_COCO_FPATH \
-            --dst $BASE_TRAIN_COCO_FPATH \
-            --select_videos '.name | startswith("KR_") | not'
+    kwcoco subset --src $COMBO_VALI_COCO_FPATH \
+            --dst $COMBO_VALI_S2_COCO_FPATH \
+            --select_images '.sensor_coarse == "S2"'
 }
 
 
@@ -317,6 +351,32 @@ spot_check(){
     python -m watch coco_show_auxiliary --src $COMBO_COCO_FPATH --channels2 matseg_4
 
     kwcoco validate $COMBO_COCO_FPATH
+
+    # Optional: visualize the combo data before and after propogation
+    CHANNELS="red|green|blue,inv_sort1|inv_augment1|inv_shared1,matseg_0|matseg_1|matseg_2,grassland|built_up|bare_ground"
+    CHANNELS="matseg_3|matseg_4|matseg_5,med_low_density_built_up|inland_water|alluvial_deposits,inv_shared2|inv_shared3|inv_shared4"
+    CHANNELS="inv_shared2|inv_shared3|inv_shared4"
+    VIZ_DPATH=$KWCOCO_BUNDLE_DPATH/_viz_teamfeats
+    python -m watch.cli.coco_visualize_videos \
+        --src $COMBO_COCO_FPATH --space=video --num_workers=6 \
+        --viz_dpath $VIZ_DPATH \
+        --num_frames=1 \
+        --zoom_to_tracks=True \
+        --channels $CHANNELS
+
+    # Split bands up into a bash array
+    mapfile -td \, _BANDS < <(printf "%s\0" "$CHANNELS")
+
+    items=$(jq -r '.videos[] | .name' $COMBO_COCO_FPATH)
+    for item in ${items[@]}; do
+        for bandname in ${_BANDS[@]}; do
+            echo "_BANDS = $_BANDS"
+            BAND_DPATH="$VIZ_DPATH/${item}/_anns/${bandname}/"
+            GIF_FPATH="$VIZ_DPATH/${item}_anns_${bandname}.gif"
+            python -m watch.cli.gifify --frames_per_second .7 \
+                --input "$BAND_DPATH" --output "$GIF_FPATH"
+        done
+    done
 
     # Print stats
     kwcoco stats \
