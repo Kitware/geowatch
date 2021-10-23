@@ -52,6 +52,7 @@ class Evaluator(object):
                  device=None,
                  config : dict = None,
                  output_feat_dpath : pathlib.Path = None,
+                 imwrite_kw={},
                  num_workers=0):
         """Evaluator class
 
@@ -73,6 +74,7 @@ class Evaluator(object):
         self.output_feat_dpath = output_feat_dpath
         self.stitcher_dict = {}
         self.finalized_gids = set()
+        self.imwrite_kw = imwrite_kw
 
         # Hack together a channel code
         self.chan_code = '|'.join(['matseg_{}'.format(i) for i in range(self.num_classes)])
@@ -86,10 +88,8 @@ class Evaluator(object):
 
         save_path = self.output_feat_dpath / f'{gid}.tiff'
         save_path = os.fspath(save_path)
-        kwimage.imwrite(save_path, recon,
-                        backend='gdal', space=None,
-                        compress='DEFLATE',
-                        blocksize=128)
+        kwimage.imwrite(save_path, recon, backend='gdal', space=None,
+                        **self.imwrite_kw)
 
         aux_height, aux_width = recon.shape[0:2]
         img = self.output_coco_dataset.index.imgs[gid]
@@ -123,6 +123,8 @@ class Evaluator(object):
 
         dataloader_iter = iter(self.eval_loader)
         writer = util_parallel.BlockingJobQueue(max_workers=self.num_workers)
+
+        seen = set()
 
         with torch.no_grad():
             # Prog = ub.ProgIter
@@ -172,6 +174,7 @@ class Evaluator(object):
                             mutually_exclusive = (set(previous_gids) - set(current_gids))
                             for gid in mutually_exclusive:
                                 pbar.set_postfix_str('finalized {}'.format(len(self.finalized_gids)))
+                                seen.add(gid)
                                 writer.submit(self.finalize_image, gid)
                                 # self.finalize_image(gid)
 
@@ -186,6 +189,8 @@ class Evaluator(object):
                             from watch.utils import util_kwimage
                             weights = util_kwimage.upweight_center_mask(output.shape[0:2])[..., None]
                             self.stitcher_dict[gid].add(slice_, output, weight=weights)
+
+        writer.wait_until_finished()
 
         if self.write_probs:
             # Finalize any remaining images
@@ -394,6 +399,11 @@ def main(cmdline=True, **kwargs):
     output_coco_dataset.reroot(absolute=True)
     output_coco_dataset.fpath = os.fspath(output_coco_fpath)
 
+    imwrite_kw = {
+        'compress': args.compress,
+        'blocksize': args.blocksize,
+    }
+
     evaler = Evaluator(
         model,
         eval_dataloader,
@@ -402,6 +412,7 @@ def main(cmdline=True, **kwargs):
         device=device,
         num_workers=num_workers,
         output_feat_dpath=output_feat_dpath,
+        imwrite_kw=imwrite_kw,
     )
     self = evaler  # NOQA
     evaler.forward()
