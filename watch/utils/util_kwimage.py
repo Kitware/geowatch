@@ -357,3 +357,70 @@ def upweight_center_mask(shape):
     weights = kwimage.ensure_float01(weights)
     weights = np.maximum(weights, 0.001)
     return weights
+
+
+def ensure_false_color(canvas, method='ortho'):
+    """
+    Given a canvas with more than 3 colors, (or 2 colors) do
+    something to get it into a colorized space.
+
+    TODO:
+        - [ ] I have no idea how well this works. Probably better methods exist. Find them.
+
+    Example:
+        >>> demo_img = kwimage.ensure_float01(kwimage.grab_test_image('astro'))
+        >>> canvas = demo_img @ np.random.rand(3, 2)
+        >>> rgb_canvas2 = ensure_false_color(canvas)
+        >>> canvas = np.tile(demo_img, (1, 1, 10))
+        >>> rgb_canvas10 = ensure_false_color(canvas)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(rgb_canvas2, pnum=(1, 2, 1))
+        >>> kwplot.imshow(rgb_canvas10, pnum=(1, 2, 2))
+    """
+    import kwarray
+    import numpy as np
+    import kwimage
+    canvas = kwarray.atleast_nd(canvas, 3)
+
+    if canvas.shape[2] in {1, 3}:
+        rgb_canvas = canvas
+    # elif canvas.shape[2] == 2:
+    #     # Use LAB to colorize
+    #     L_part = np.ones_like(canvas[..., 0:1]) * 50
+    #     a_min = -86.1875
+    #     a_max = 98.234375
+    #     b_min = -107.859375
+    #     b_max = 94.46875
+    #     a_part = (canvas[..., 0:1] - a_min) / (a_max - a_min)
+    #     b_part = (canvas[..., 1:2] - b_min) / (b_max - b_min)
+    #     lab_canvas = np.concatenate([L_part, a_part, b_part], axis=2)
+    #     rgb_canvas = kwimage.convert_colorspace(lab_canvas, src_space='lab', dst_space='rgb')
+    else:
+
+        if method == 'ortho':
+            rng = kwarray.ensure_rng(canvas.shape[2])
+            seedmat = rng.rand(canvas.shape[2], 3).T
+            h, tau = np.linalg.qr(seedmat, mode='raw')
+            false_colored = (canvas @ h)
+            rgb_canvas = kwimage.normalize(false_colored)
+        elif method == 'PCA':
+            import sklearn
+            ndim = canvas.ndim
+            dims = canvas.shape[0:2]
+            if ndim == 2:
+                in_channels = 1
+            else:
+                in_channels = canvas.shape[2]
+
+            if in_channels > 1:
+                model = sklearn.decomposition.PCA(1)
+                X = canvas.reshape(-1, in_channels)
+                X_ = model.fit_transform(X)
+                gray = X_.reshape(dims)
+                viz = kwimage.make_heatmask(gray, with_alpha=1)[:, :, 0:3]
+            else:
+                gray = canvas.reshape(dims)
+                viz = gray
+            return viz
+    return rgb_canvas

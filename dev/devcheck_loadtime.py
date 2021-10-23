@@ -29,15 +29,6 @@ def check_loadtime():
             --test_dataset=$BASE_COCO_FPATH \
             --checkpoint_fpath=$RUTGERS_MATERIAL_MODEL_FPATH  \
             --default_config_key=iarpa \
-            --pred_dataset=$KWCOCO_BUNDLE_DPATH/rutgers_imwrite_test_RAW256/data.kwcoco.json \
-            --num_workers="avail/2" \
-            --batch_size=32 --gpus "0" \
-            --compress=RAW --blocksize=256
-
-        python -m watch.tasks.rutgers_material_seg.predict \
-            --test_dataset=$BASE_COCO_FPATH \
-            --checkpoint_fpath=$RUTGERS_MATERIAL_MODEL_FPATH  \
-            --default_config_key=iarpa \
             --pred_dataset=$KWCOCO_BUNDLE_DPATH/rutgers_imwrite_test_DEFLATE128/data.kwcoco.json \
             --num_workers="avail/2" \
             --batch_size=32 --gpus "0" \
@@ -51,15 +42,6 @@ def check_loadtime():
             --num_workers="avail/2" \
             --batch_size=32 --gpus "0" \
             --compress=DEFLATE --blocksize=64
-
-        python -m watch.tasks.rutgers_material_seg.predict \
-            --test_dataset=$BASE_COCO_FPATH \
-            --checkpoint_fpath=$RUTGERS_MATERIAL_MODEL_FPATH  \
-            --default_config_key=iarpa \
-            --pred_dataset=$KWCOCO_BUNDLE_DPATH/rutgers_imwrite_test_DEFLATE256/data.kwcoco.json \
-            --num_workers="avail/2" \
-            --batch_size=32 --gpus "0" \
-            --compress=DEFLATE --blocksize=256
 
         python -m watch.tasks.rutgers_material_seg.predict \
             --test_dataset=$BASE_COCO_FPATH \
@@ -83,16 +65,32 @@ def check_loadtime():
             --test_dataset=$BASE_COCO_FPATH \
             --checkpoint_fpath=$RUTGERS_MATERIAL_MODEL_FPATH  \
             --default_config_key=iarpa \
+            --pred_dataset=$KWCOCO_BUNDLE_DPATH/rutgers_imwrite_test_RAW256/data.kwcoco.json \
+            --num_workers="avail/2" \
+            --batch_size=32 --gpus "0" \
+            --compress=RAW --blocksize=256
+
+        python -m watch.tasks.rutgers_material_seg.predict \
+            --test_dataset=$BASE_COCO_FPATH \
+            --checkpoint_fpath=$RUTGERS_MATERIAL_MODEL_FPATH  \
+            --default_config_key=iarpa \
+            --pred_dataset=$KWCOCO_BUNDLE_DPATH/rutgers_imwrite_test_DEFLATE256/data.kwcoco.json \
+            --num_workers="avail/2" \
+            --batch_size=32 --gpus "0" \
+            --compress=DEFLATE --blocksize=256
+
+        python -m watch.tasks.rutgers_material_seg.predict \
+            --test_dataset=$BASE_COCO_FPATH \
+            --checkpoint_fpath=$RUTGERS_MATERIAL_MODEL_FPATH  \
+            --default_config_key=iarpa \
             --pred_dataset=$KWCOCO_BUNDLE_DPATH/rutgers_imwrite_test_LZW256/data.kwcoco.json \
             --num_workers="avail/2" \
             --batch_size=32 --gpus "0" \
             --compress=LZW --blocksize=256
         ''')
-
     import watch
     from watch.tasks.fusion.datamodules.kwcoco_video_data import KWCocoVideoDataset
     import kwcoco
-    import numpy as np
     import timerit
     import ndsampler
     import os
@@ -118,9 +116,14 @@ def check_loadtime():
     ]
 
     @ub.memoize
+    def memo_coco_dset(coco_fpath):
+        coco_dset = kwcoco.CocoDataset(coco_fpath)
+        return coco_dset
+
+    @ub.memoize
     def memo_torch_dset(coco_fpath, chip_size, time_steps):
         with ub.CaptureStdout():
-            coco_dset = kwcoco.CocoDataset(coco_fpath)
+            coco_dset = memo_coco_dset(coco_fpath)
             sampler = ndsampler.CocoSampler(coco_dset)
             torch_dset = KWCocoVideoDataset(
                 sampler=sampler, channels=channels, neg_to_pos_ratio=0.0,
@@ -131,31 +134,106 @@ def check_loadtime():
 
     channels = 'matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7|matseg_8|matseg_9'
 
+    disk_stat_rows = []
+    import xdev
+    from osgeo import gdal
+    import pandas as pd
+    import kwarray
+    for coco_fpath in coco_fpaths:
+        data_key = coco_fpath.parent.name
+        coco_dset = memo_coco_dset(coco_fpath)
+        candidate_gids = coco_dset.images().lookup('id')
+
+        # Find images that have the requested channels
+        sample_gids = []
+        for gid in candidate_gids:
+            coco_img = coco_dset._coco_image(gid)
+            if (coco_img.channels & channels).numel():
+                sample_gids.append(gid)
+
+        sample_gids = sample_gids[::max(1, len(sample_gids) // num_samples)]
+        sample_fpaths = []
+        for gid in sample_gids:
+            coco_img = watch.utils.kwcoco_extensions.CocoImage(coco_dset.imgs[gid], coco_dset)
+            delayed = coco_img.delay(channels)
+            for p, v in ub.IndexableWalker(delayed.__json__()):
+                if p[-1] == 'fpath':
+                    fpath = v
+                    sample_fpaths.append(fpath)
+
+        file_bytes = []
+        for fpath in sample_fpaths:
+            gdal_ds = gdal.Open(fpath, gdal.GA_ReadOnly)
+            structure = gdal_ds.GetMetadata("IMAGE_STRUCTURE")
+            compression = structure.get("COMPRESSION", None)
+            if compression is None:
+                compression = "RAW"
+            main_band = gdal_ds.GetRasterBand(1)
+            blocksize = main_band.GetBlockSize()[0]
+            print('compression = {!r}'.format(compression))
+            print('blocksize = {!r}'.format(blocksize))
+            from ndsampler.utils.validate_cog import validate as _validate_cog
+            warn, err, details = _validate_cog(fpath)
+            # print('err = {!r}'.format(err))
+            # print('details = {}'.format(ub.repr2(details, nl=1)))
+            # print('warn = {}'.format(ub.repr2(warn, nl=1)))
+            assert not err
+            num_bytes = os.stat(fpath).st_size
+            file_bytes.append(num_bytes)
+
+        disk_stats = kwarray.stats_dict(file_bytes)
+        disk_stats = ub.map_keys(lambda x: x + '_bytes', disk_stats)
+        disk_stats_str = ub.map_keys(lambda x: x + '_str', ub.dict_diff(disk_stats, {'shape_bytes'}))
+        disk_stats_str = ub.map_vals(xdev.byte_str, disk_stats_str)
+        disk_stats_row = {
+            'compress': compression,
+            'blocksize': blocksize,
+            **disk_stats,
+            **disk_stats_str,
+        }
+        coco_dset.disk_stats_row = disk_stats_row
+        disk_stat_rows.append(disk_stats_row)
+    disk_df = pd.DataFrame(disk_stat_rows)
+    disk_df = disk_df.sort_values('max_bytes')
+    disk_df['total_ave_bytes_str'] = (disk_df.mean_bytes * coco_dset.n_images).apply(xdev.byte_str)
+    print(disk_df)
+
+    import kwplot
+    kwplot.autompl()
+    sns = kwplot.autosns()
+
+    disk_piv = disk_df.pivot(['compress'], ['blocksize'], ['mean_bytes'])
+    fig = kwplot.figure(fnum=9001)
+    # fig.set_size_inches(8.69, 4.93)
+    ax = fig.gca()
+    annot = disk_piv.applymap(lambda x: '{:0.2f}'.format(x))
+    disk_annot = disk_piv.applymap(xdev.byte_str)
+    sns.heatmap(disk_piv,
+                annot=disk_annot,
+                ax=ax, fmt='s',
+                # norm=LogNorm(vmin=1, vmax=24),
+                annot_kws={'size': 8},
+                cbar_kws={'label': 'bytes', 'pad': 0.001})
+
+    # ----
     sample_grid = ub.named_product({
         'chip_size': [32, 64, 96],
-        'time_steps': [1, 3, 5, 7],
+        # 'chip_size': [32, 96],
+        # 'time_steps': [1, 3, 5, 7],
+        'time_steps': [1, 2, 3, 5, 7, 11, 13, 17, 19],
     })
 
-    rows = []
+    sample_time_rows = []
     for sample_kw in sample_grid:
         sample_key = ub.repr2(sample_kw, compact=1)
 
         for coco_fpath in coco_fpaths:
             data_key = coco_fpath.parent.name
-
-            # watch.utils.kwcoco_extensions.CocoImage(coco_dset.imgs[2], coco_dset).channels
             chip_size = sample_kw['chip_size']
             time_steps = sample_kw['time_steps']
-            memo_torch_dset(coco_fpath, chip_size, time_steps)
+            torch_dset = memo_torch_dset(coco_fpath, chip_size, time_steps)
+            coco_dset = torch_dset.sampler.dset
 
-            candidate_gids = coco_dset.images().lookup('id')
-            sample_gids = []
-            for gid in candidate_gids:
-                coco_img = watch.utils.kwcoco_extensions.CocoImage(coco_dset.imgs[gid], coco_dset)
-                if (coco_img.channels & channels).numel():
-                    sample_gids.append(gid)
-
-            sample_gids = sample_gids[::max(1, len(sample_gids) // num_samples)]
             total = len(torch_dset)
             indexes = list(range(0, total, total // num_samples))
 
@@ -163,21 +241,7 @@ def check_loadtime():
             for timer in ti.reset(key):
                 with timer:
                     for index in indexes:
-                        # tr = torch_dset.new_sample_grid['targets'][index].copy()
-                        # tr['gids'] = sample_gids[0:2]
-                        # torch_dset[tr]
                         torch_dset[index]
-
-            file_bytes = []
-            for gid in sample_gids:
-                coco_img = watch.utils.kwcoco_extensions.CocoImage(coco_dset.imgs[gid], coco_dset)
-                delayed = coco_img.delay(channels)
-                for p, v in ub.IndexableWalker(delayed.__json__()):
-                    if p[-1] == 'fpath':
-                        fpath = v
-                        num_bytes = os.stat(fpath).st_size
-                        file_bytes.append(num_bytes)
-            disk_bytes = np.mean(file_bytes)
 
             data_kw = {}
             if 'DEFLATE' in data_key:
@@ -198,48 +262,38 @@ def check_loadtime():
             else:
                 data_kw['blocksize'] = 256
 
-            rows.append({
+            # Double check we are measureing what we think we are measuring
+            common = ub.dict_isect(coco_dset.disk_stats_row, data_kw)
+            assert common == data_kw
+
+            sample_time_rows.append({
                 'key': key,
                 'sample_key': sample_key,
                 'data_key': data_key,
+                'mean_bytes': coco_dset.disk_stats_row['mean_bytes'],
                 'min': ti.min(),
                 'mean': ti.mean(),
-                'disk_bytes': disk_bytes,
                 **sample_kw,
                 **data_kw,
             })
 
-    for row in rows:
+    for row in sample_time_rows:
         num_pixels = row['time_steps'] * (row['chip_size'] ** 2)
         row['num_pixels'] = num_pixels
-        data_key = row['data_key']
-        data_kw = {}
-        if 'DEFLATE' in data_key:
-            data_kw['compress'] = 'DEFLATE'
-        elif 'LZW' in data_key:
-            data_kw['compress'] = 'LZW'
-        elif 'RAW' in data_key:
-            data_kw['compress'] = 'RAW'
-        else:
-            data_kw['compress'] = 'DEFLATE'
-        row.update(data_kw)
 
     import pandas as pd
-    df = pd.DataFrame(rows)
-    df = df[df.data_key != 'drop1-S2-L8-aligned']
-    print(df.sort_values('mean'))
+    df = pd.DataFrame(sample_time_rows)
+    # df = df[df.data_key != 'drop1-S2-L8-aligned']
+    # print(df.sort_values('mean'))
+    # df.set_index(['compress', 'blocksize'])
+    # print(df.set_index(['chip_size', 'time_steps', 'num_pixels']).to_string())
 
     piv = df.pivot(['compress', 'blocksize'], ['chip_size', 'time_steps', 'num_pixels'], ['mean'])
+    piv = piv.droplevel(0, axis=1)
 
-    df.set_index(['compress', 'blocksize'])
-    print(df.set_index(['chip_size', 'time_steps', 'num_pixels']).to_string())
-
-    z = df.melt(id_vars=['compress', 'blocksize', 'time_steps', 'chip_size'], value_vars=['mean'], var_name='var', value_name='val')
-    z.pivot(['compress', 'blocksize'], ['chip_size', 'time_steps'], ['val'])
-    z.pivot(
-    import kwplot
-    kwplot.autompl()
-    sns = kwplot.autosns()
+    # z = df.melt(id_vars=['compress', 'blocksize', 'time_steps', 'chip_size'], value_vars=['mean'], var_name='var', value_name='val')
+    # z.pivot(['compress', 'blocksize'], ['chip_size', 'time_steps'], ['val'])
+    # z.pivot(
     # from matplotlib.colors import LogNorm
     fig = kwplot.figure(fnum=1)
     # fig.set_size_inches(8.69, 4.93)
@@ -251,15 +305,18 @@ def check_loadtime():
                 # norm=LogNorm(vmin=1, vmax=24),
                 annot_kws={'size': 8},
                 cbar_kws={'label': 'seconds', 'pad': 0.001})
+    ax.set_title('Load times based on COG and Sampler settings')
     ax.figure.subplots_adjust(bottom=0.2)
 
     fig = kwplot.figure(fnum=2)
     ax = fig.gca()
-    sns.lineplot(ax=ax, data=df, x='num_pixels', y='mean', hue='compress', style='blocksize')
+    ax.cla()
+    sns.lineplot(ax=ax, data=df, x='time_steps', y='mean', hue='compress', size='chip_size', style='blocksize')
 
     fig = kwplot.figure(fnum=3)
     ax = fig.gca()
-    sns.lineplot(ax=ax, data=df, x='compress', y='disk_bytes', hue='blocksize')
+    ax.cla()
+    sns.lineplot(ax=ax, data=df, x='compress', y='mean_bytes', hue='blocksize')
     # hue='compress', style='blocksize')
 
     fig = kwplot.figure(fnum=4)

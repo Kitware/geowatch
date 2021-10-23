@@ -189,53 +189,6 @@ def video_track_info(coco_dset, vidid):
 _CLI = CocoVisualizeConfig
 
 
-def ensure_false_color(canvas):
-    """
-    Given a canvas with more than 3 colors, (or 2 colors) do
-    something to get it into a colorized space.
-
-    I have no idea how well this works. Probably better methods exist.
-
-    Example:
-        >>> from watch.cli.coco_visualize_videos import *  # NOQA
-        >>> import numpy as np
-        >>> demo_img = kwimage.ensure_float01(kwimage.grab_test_image('astro'))
-        >>> canvas = demo_img @ np.random.rand(3, 2)
-        >>> rgb_canvas2 = ensure_false_color(canvas)
-        >>> canvas = np.tile(demo_img, (1, 1, 10))
-        >>> rgb_canvas10 = ensure_false_color(canvas)
-        >>> # xdoctest: +REQUIRES(--show)
-        >>> import kwplot
-        >>> kwplot.autompl()
-        >>> kwplot.imshow(rgb_canvas2, pnum=(1, 2, 1))
-        >>> kwplot.imshow(rgb_canvas10, pnum=(1, 2, 2))
-    """
-    import kwarray
-    import numpy as np
-    canvas = kwarray.atleast_nd(canvas, 3)
-
-    if canvas.shape[2] in {1, 3}:
-        rgb_canvas = canvas
-    # elif canvas.shape[2] == 2:
-    #     # Use LAB to colorize
-    #     L_part = np.ones_like(canvas[..., 0:1]) * 50
-    #     a_min = -86.1875
-    #     a_max = 98.234375
-    #     b_min = -107.859375
-    #     b_max = 94.46875
-    #     a_part = (canvas[..., 0:1] - a_min) / (a_max - a_min)
-    #     b_part = (canvas[..., 1:2] - b_min) / (b_max - b_min)
-    #     lab_canvas = np.concatenate([L_part, a_part, b_part], axis=2)
-    #     rgb_canvas = kwimage.convert_colorspace(lab_canvas, src_space='lab', dst_space='rgb')
-    else:
-        rng = kwarray.ensure_rng(canvas.shape[2])
-        seedmat = rng.rand(canvas.shape[2], 3).T
-        h, tau = np.linalg.qr(seedmat, mode='raw')
-        false_colored = (canvas @ h)
-        rgb_canvas = kwimage.normalize(false_colored)
-    return rgb_canvas
-
-
 def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                img : dict,
                                anns : list,
@@ -308,11 +261,12 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         chan = delayed.take_channels(chan_group)
 
         # spec = str(chan.channels.spec)
+
         import xdev
         with xdev.embed_on_exception_context:
             canvas = chan.finalize()
             canvas = normalize_intensity(canvas)
-            canvas = ensure_false_color(canvas)
+            canvas = util_kwimage.ensure_false_color(canvas)
 
         if len(canvas.shape) > 2 and canvas.shape[2] > 4:
             # hack for wv
