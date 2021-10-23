@@ -69,20 +69,22 @@ S2_CHANNEL_ALIAS = {band['name']: band['common_name']
                     for band in util_bands.SENTINEL2 if 'common_name' in band}
 # ...except for TCI, which is not a true band, but often included anyway
 # and this channel code is more specific to kwcoco
-S2_CHANNEL_ALIAS.update({'TCI': 'r|g|b'})
+S2_CHANNEL_ALIAS.update({'TCI': 'tci:3'})
 
 
 def _determine_s2_channels(asset_dict):
     asset_href = asset_dict['href']
     eo_band_names = [eob['name'] for eob in asset_dict.get('eo:bands', ())]
 
-    if len(eo_band_names) > 0:
-        return '|'.join((S2_CHANNEL_ALIAS.get(eobn, eobn)
-                         for eobn in eo_band_names))
+    if re.search(r'TCI\.(tiff?|jp2)$', asset_href, re.I):
+        return S2_CHANNEL_ALIAS.get('TCI', 'tci:3')
     elif re.search(r'cloudmask\.(tiff?|jp2)$', asset_href, re.I):
         return 'cloudmask'
     elif re.search(r'SR_AEROSOL\.(tiff?|jp2)$', asset_href, re.I):
         return 'sr_aerosol_mask'
+    elif len(eo_band_names) > 0:
+        return '|'.join((S2_CHANNEL_ALIAS.get(eobn, eobn)
+                         for eobn in eo_band_names))
     else:
         return None
 
