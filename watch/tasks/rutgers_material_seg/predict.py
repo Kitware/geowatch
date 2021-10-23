@@ -323,7 +323,7 @@ def main(cmdline=True, **kwargs):
     num_channels = len(channels.split('|'))
     config['training']['num_channels'] = num_channels
     dataset = SequenceDataset(sampler, window_dims, input_dims, channels,
-                              training=False)
+                              training=False, window_overlap=0.3)
     print(dataset.__len__())
 
     from watch.utils.lightning_ext import util_globals

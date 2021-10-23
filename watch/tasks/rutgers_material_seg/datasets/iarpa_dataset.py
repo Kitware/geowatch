@@ -15,7 +15,7 @@ from netharn.data.batch_samplers import SubsetSampler
 
 class SequenceDataset(torch.utils.data.Dataset):
     def __init__(self, sampler, window_dims, input_dims=None, channels=None,
-                 rng=None):
+                 rng=None, window_overlap=0.0):
         super().__init__()
         if input_dims is None:
             input_dims = window_dims[-2:]
@@ -29,7 +29,8 @@ class SequenceDataset(torch.utils.data.Dataset):
         # Build a simple space-time-grid
         sample_grid_spec = {
             'task': 'video_detection',
-            'window_dims': window_dims
+            'window_dims': window_dims,
+            'window_overlap': window_overlap,
         }
         # print(sample_grid_spec)
         self.sample_grid = sampler.new_sample_grid(**sample_grid_spec)

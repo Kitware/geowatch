@@ -721,6 +721,16 @@ class KWCocoVideoDataset(data.Dataset):
         self.with_change = True
         self.with_class = True
 
+        # Hacks: combinable channels can be visualized as RGB images.
+        # The only reason this is a hack is because of the hardcoded names
+        # otherwise it is a cool feature.
+        self.default_combinable_channels = [
+            ub.oset(['red', 'green', 'blue']),
+            ub.oset(['Dred', 'Dgreen', 'Dblue']),
+            ub.oset(['r', 'g', 'b']),
+            ub.oset(['B04', 'B03', 'B02']),  # for onera
+        ]
+
     def __len__(self):
         return self.length
 
@@ -1377,16 +1387,7 @@ class KWCocoVideoDataset(data.Dataset):
         """
         classes = self.classes
 
-        # Hacks: combinable channels can be visualized as RGB images.
-        # The only reason this is a hack is because of the hardcoded names
-        # otherwise it is a cool feature.
-        default_combinable_channels = [
-            ub.oset(['red', 'green', 'blue']),
-            ub.oset(['Dred', 'Dgreen', 'Dblue']),
-            ub.oset(['r', 'g', 'b']),
-            ub.oset(['B04', 'B03', 'B02']),  # for onera
-        ]
-        combinable_channels = default_combinable_channels
+        combinable_channels = self.default_combinable_channels
         if combinable_extra is not None:
             combinable_channels += list(map(ub.oset, combinable_extra))
 
