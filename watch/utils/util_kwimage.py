@@ -344,15 +344,14 @@ def upweight_center_mask(shape):
         >>> kwplot.show_if_requested()
     """
     import kwimage
-    from watch.utils import util_kwimage
-    shape, sigma = util_kwimage._auto_kernel_sigma(kernel=shape)
+    shape, sigma = _auto_kernel_sigma(kernel=shape)
     sigma_x, sigma_y = sigma
     weights = kwimage.gaussian_patch(shape, sigma=(sigma_x, sigma_y))
     weights = weights / weights.max()
     # weights = kwimage.ensure_uint255(weights)
     kernel = np.maximum(np.array(shape) // 8, 3)
     kernel = kernel + (1 - (kernel % 2))
-    weights = util_kwimage.morphology(
+    weights = morphology(
         weights, kernel=kernel, mode='dilate', element='rect', iterations=1)
     weights = kwimage.ensure_float01(weights)
     weights = np.maximum(weights, 0.001)
@@ -368,6 +367,8 @@ def ensure_false_color(canvas, method='ortho'):
         - [ ] I have no idea how well this works. Probably better methods exist. Find them.
 
     Example:
+        >>> import kwimage
+        >>> import numpy as np
         >>> demo_img = kwimage.ensure_float01(kwimage.grab_test_image('astro'))
         >>> canvas = demo_img @ np.random.rand(3, 2)
         >>> rgb_canvas2 = ensure_false_color(canvas)
