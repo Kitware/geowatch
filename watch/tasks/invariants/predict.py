@@ -146,7 +146,7 @@ def _write_results_fn(features_to_write, save_path, file_name):
         name = file_name[:last_us_idx] + '_invariants_' + key + '.tif'
         fpath = os.path.join(save_path, name)
         kwimage.imwrite(fpath, feat, space=None, backend='gdal',
-                        compress='DEFLATE')
+                        compress='RAW', blocksize=64)
 
 
 if __name__ == '__main__':
