@@ -112,6 +112,7 @@ uky_prediction(){
     # --------------
 
     # Predict with UKY Invariants (one model for S2 and L8)
+    export CUDA_VISIBLE_DEVICES="0"
     python -m watch.tasks.invariants.predict \
         --sensor="S2" \
         --input_kwcoco $BASE_COCO_FPATH \
@@ -122,7 +123,7 @@ uky_prediction(){
 
         #--gpus 1 \
 
-    export CUDA_VISIBLE_DEVICES="1"
+    export CUDA_VISIBLE_DEVICES="0"
     python -m watch.tasks.invariants.predict \
         --sensor L8 \
         --input_kwcoco $BASE_COCO_FPATH \
