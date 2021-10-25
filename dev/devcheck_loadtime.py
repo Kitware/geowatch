@@ -1,4 +1,5 @@
-def check_loadtime():
+
+def setup_data_real():
     import ubelt as ub
     ub.codeblock(
         r'''
@@ -90,21 +91,9 @@ def check_loadtime():
         ''')
     import watch
     from watch.tasks.fusion.datamodules.kwcoco_video_data import KWCocoVideoDataset
-    import kwcoco
-    import timerit
-    import ndsampler
-    import os
+    import ubelt as ub
     dvc_dpath = watch.utils.util_data.find_smart_dvc_dpath()
-    coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/combined_data.kwcoco.json'
     bundle_dpath = dvc_dpath / 'drop1-S2-L8-aligned'
-
-    coco_fpath = bundle_dpath / 'combo_data.kwcoco.json'
-
-    coco_fpath = bundle_dpath / 'rutgers_imwrite_test_RAW128/data.kwcoco.json'
-
-    num_samples = 10
-    ti = timerit.Timerit(5, bestof=1, verbose=3)
-
     coco_fpaths = [
         bundle_dpath / 'rutgers_imwrite_test_RAW64/data.kwcoco.json',
         # bundle_dpath / 'rutgers_imwrite_test_RAW128/data.kwcoco.json',
@@ -116,6 +105,76 @@ def check_loadtime():
         # bundle_dpath / 'rutgers_imwrite_test_LZW256/data.kwcoco.json',
         # bundle_dpath / 'rutgers_imwrite_test_DEFLATE256/data.kwcoco.json',
     ]
+    return coco_fpaths
+
+
+def setup_data_demo():
+    import kwcoco
+    import kwarray
+    import ubelt as ub
+    from kwarray import distributions
+
+    size_distri = distributions.Uniform(600, 2000)
+    size_distri = distributions.Uniform(600, 2000)
+
+    w_distri = distributions.Uniform.coerce((400, 600))
+    h_distri = distributions.Uniform.coerce((400, 600))
+    # image_size = (w_distri, h_distri)
+    image_size = (600, 600)
+
+    channels = kwcoco.ChannelSpec.coerce(9)
+    coco_fpaths = []
+
+    imwrite_grid = list(ub.named_product({
+        'blocksize': [32, 64, 128, 256],
+        'compress': ['DEFLATE', 'RAW'],
+        'interleave': ['PIXEL', 'BAND'],
+    }))
+    coco_fpaths = []
+    for imwrite_kw in imwrite_grid:
+        dset = kwcoco.CocoDataset.demo(
+            'vidshapes2', num_frames=5, image_size=image_size,
+            channels='a|b|c|d|e,f|g|h,i,j,k,l,m,n',
+            render=imwrite_kw, use_cache=0)
+        print('imwrite_kw = {!r}'.format(imwrite_kw))
+        # x = dset.imgs[1]['auxiliary'][0]['file_name']
+        _ = ub.cmd('gdalinfo ' + dset.imgs[1]['auxiliary'][0]['file_name'], verbose=3)
+        coco_fpaths.append(dset.fpath)
+
+    _ = ub.cmd('gdalinfo ' + dset.imgs[1]['auxiliary'][0]['file_name'], verbose=3)
+    return coco_fpaths
+
+
+def check_loadtime():
+    import watch
+    from watch.tasks.fusion.datamodules.kwcoco_video_data import KWCocoVideoDataset
+    import kwcoco
+    import timerit
+    import ubelt as ub
+    import ndsampler
+    import os
+    # dvc_dpath = watch.utils.util_data.find_smart_dvc_dpath()
+    # coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/combined_data.kwcoco.json'
+    # bundle_dpath = dvc_dpath / 'drop1-S2-L8-aligned'
+    # coco_fpath = bundle_dpath / 'combo_data.kwcoco.json'
+    # coco_fpath = bundle_dpath / 'rutgers_imwrite_test_RAW128/data.kwcoco.json'
+
+    num_samples = 10
+    ti = timerit.Timerit(5, bestof=1, verbose=3)
+
+    coco_fpaths = setup_data_demo()
+
+    # coco_fpaths = [
+    #     bundle_dpath / 'rutgers_imwrite_test_RAW64/data.kwcoco.json',
+    #     # bundle_dpath / 'rutgers_imwrite_test_RAW128/data.kwcoco.json',
+    #     bundle_dpath / 'rutgers_imwrite_test_LZW64/data.kwcoco.json',
+    #     # bundle_dpath / 'rutgers_imwrite_test_LZW128/data.kwcoco.json',
+    #     bundle_dpath / 'rutgers_imwrite_test_DEFLATE64/data.kwcoco.json',
+    #     # bundle_dpath / 'rutgers_imwrite_test_DEFLATE128/data.kwcoco.json',
+    #     # bundle_dpath / 'rutgers_imwrite_test_RAW256/data.kwcoco.json',
+    #     # bundle_dpath / 'rutgers_imwrite_test_LZW256/data.kwcoco.json',
+    #     # bundle_dpath / 'rutgers_imwrite_test_DEFLATE256/data.kwcoco.json',
+    # ]
 
     @ub.memoize
     def memo_coco_dset(coco_fpath):
@@ -134,14 +193,18 @@ def check_loadtime():
             )
         return torch_dset
 
-    channels = 'matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7|matseg_8|matseg_9'
+    # channels = 'matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7|matseg_8|matseg_9'
+    # channels = 'B1|B8|B8a|B11'
+    channels = 'a|b|e'
 
     disk_stat_rows = []
     import xdev
     from osgeo import gdal
     import pandas as pd
     import kwarray
+    import pathlib
     for coco_fpath in coco_fpaths:
+        coco_fpath = pathlib.Path(coco_fpath)
         data_key = coco_fpath.parent.name
         coco_dset = memo_coco_dset(coco_fpath)
         candidate_gids = coco_dset.images().lookup('id')
@@ -168,6 +231,9 @@ def check_loadtime():
             gdal_ds = gdal.Open(fpath, gdal.GA_ReadOnly)
             structure = gdal_ds.GetMetadata("IMAGE_STRUCTURE")
             compression = structure.get("COMPRESSION", None)
+            interleave = structure.get("INTERLEAVE", None)
+            if interleave is None:
+                interleave = "PIXEL"
             if compression is None:
                 compression = "RAW"
             main_band = gdal_ds.GetRasterBand(1)
@@ -191,6 +257,7 @@ def check_loadtime():
         disk_stats_row = {
             'data_key': data_key,
             'compress': compression,
+            'interleave': interleave,
             'blocksize': blocksize,
             **disk_stats,
             **disk_stats_str,
@@ -230,12 +297,13 @@ def check_loadtime():
             1,
             # 2,
             3,
-            # 5,
-            7,
+            5,
+            # 7,
             # 11,
-            13,
+            # 13,
             # 17,
-            19],
+            # 19
+        ],
     }))
 
     sample_time_rows = []
@@ -243,6 +311,7 @@ def check_loadtime():
         sample_key = ub.repr2(sample_kw, compact=1)
 
         for coco_fpath in coco_fpaths:
+            coco_fpath = pathlib.Path(coco_fpath)
             data_key = coco_fpath.parent.name
             chip_size = sample_kw['chip_size']
             time_steps = sample_kw['time_steps']
@@ -259,27 +328,31 @@ def check_loadtime():
                         torch_dset[index]
 
             data_kw = {}
-            if 'DEFLATE' in data_key:
-                data_kw['compress'] = 'DEFLATE'
-            elif 'LZW' in data_key:
-                data_kw['compress'] = 'LZW'
-            elif 'RAW' in data_key:
-                data_kw['compress'] = 'RAW'
-            else:
-                data_kw['compress'] = 'DEFLATE'
+            # if 'DEFLATE' in data_key:
+            #     data_kw['compress'] = 'DEFLATE'
+            # elif 'LZW' in data_key:
+            #     data_kw['compress'] = 'LZW'
+            # elif 'RAW' in data_key:
+            #     data_kw['compress'] = 'RAW'
+            # else:
+            #     data_kw['compress'] = 'DEFLATE'
 
-            if '128' in data_key:
-                data_kw['blocksize'] = 128
-            elif '256' in data_key:
-                data_kw['blocksize'] = 256
-            elif '64' in data_key:
-                data_kw['blocksize'] = 64
-            else:
-                data_kw['blocksize'] = 256
+            # if '128' in data_key:
+            #     data_kw['blocksize'] = 128
+            # elif '256' in data_key:
+            #     data_kw['blocksize'] = 256
+            # elif '64' in data_key:
+            #     data_kw['blocksize'] = 64
+            # else:
+            #     data_kw['blocksize'] = 256
+
+            data_kw['compress'] = coco_dset.disk_stats_row['compress']
+            data_kw['interleave'] = coco_dset.disk_stats_row['interleave']
+            data_kw['blocksize'] = coco_dset.disk_stats_row['blocksize']
 
             # Double check we are measureing what we think we are measuring
-            common = ub.dict_isect(coco_dset.disk_stats_row, data_kw)
-            assert common == data_kw
+            # common = ub.dict_isect(coco_dset.disk_stats_row, data_kw)
+            # assert common == data_kw
 
             sample_time_rows.append({
                 'key': key,
@@ -308,7 +381,7 @@ def check_loadtime():
     # z.pivot(
     df = df.rename({'mean': 'mean_seconds'}, axis=1)
     from matplotlib.colors import LogNorm
-    piv = df.pivot(['compress', 'blocksize'], ['time_steps', 'chip_size', 'num_pixels'], ['mean_seconds'])
+    piv = df.pivot(['compress', 'blocksize', 'interleave'], ['time_steps', 'chip_size', 'num_pixels'], ['mean_seconds'])
     piv = piv.droplevel(0, axis=1)
 
     piv = piv.sort_index(axis=1)
