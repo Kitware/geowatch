@@ -4,6 +4,7 @@ def test_init_from_pretrained_state():
     import ubelt as ub
     from os.path import join
     from watch.tasks.fusion.fit import fit_model  # NOQA
+    import kwcoco
     # args = None
     # cmdline = False
     gpus = None
@@ -12,9 +13,8 @@ def test_init_from_pretrained_state():
     ub.delete(results_path)
     ub.ensuredir(results_path)
     package_fpath = join(test_dpath, 'my_test_package.pt')
-    import kwcoco
     # train_dset = kwcoco.CocoDataset.demo('special:vidshapes4-multispectral', num_frames=5, gsize=(128, 128))
-    test_dset = kwcoco.CocoDataset.demo('special:vidshapes2-multispectral', num_frames=5, gsize=(128, 128))
+    test_dset = kwcoco.CocoDataset.demo('special:vidshapes2-multispectral', num_frames=3, gsize=(128, 128))
     fit_kwargs = {
          'train_dataset': test_dset.fpath,
          'datamodule': 'KWCocoVideoDataModule',
@@ -26,7 +26,7 @@ def test_init_from_pretrained_state():
          'max_steps': 1,
          'learning_rate': 1e-5,
          'diff_inputs': False,
-         'num_workers': 0,
+         'num_workers': 1,
          'gpus': gpus,
     }
     package_fpath = fit_model(**fit_kwargs)

@@ -137,6 +137,7 @@ def ffmpeg_animate_frames(frame_fpaths, output_fpath, in_framerate=1, verbose=3,
     try:
         temp_dpath = ub.ensure_app_cache_dir('gifify', 'temp')
         temp_fpath = join(temp_dpath, 'temp_list_{}.txt'.format(str(uuid.uuid4())))
+        print('temp_fpath = {!r}'.format(temp_fpath))
         lines = ["file '{}'".format(abspath(fpath)) for fpath in frame_fpaths]
         text = '\n'.join(lines)
         print(text)
@@ -196,7 +197,7 @@ def ffmpeg_animate_frames(frame_fpaths, output_fpath, in_framerate=1, verbose=3,
             input_options +
             ['-i {IN}'] +
             output_options +
-            ['{OUT}']
+            ["'{OUT}'"]
         )
 
         command = cmd_fmt.format(**fmtkw)
@@ -210,7 +211,8 @@ def ffmpeg_animate_frames(frame_fpaths, output_fpath, in_framerate=1, verbose=3,
             print('finished')
 
     finally:
-        ub.delete(temp_dpath)
+        pass
+        # ub.delete(temp_dpath)
 
     if info['ret'] != 0:
         # if not verbose:

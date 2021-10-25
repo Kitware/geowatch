@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import kwcoco
 import kwimage
 import kwarray
@@ -23,6 +24,8 @@ except Exception:
 def binary_confusion_measures(tn, fp, fn, tp):
     """
     Metrics derived from a binary confusion matrix
+
+    TODO: just use kwcoco.metrics instead (or pycm)
 
     Example:
         >>> from watch.tasks.fusion.evaluate import *  # NOQA
@@ -208,9 +211,23 @@ def single_image_segmentation_metrics(true_coco, pred_coco, gid1, gid2):
 
     # Create a truth "panoptic segmentation" style mask
     true_canvas = np.zeros(shape, dtype=np.uint8)
+    weight_canvas = np.ones(shape, dtype=np.float32)
+
     true_dets = true_coco.annots(gid=gid1).detections
-    for true_sseg in true_dets.data['segmentations']:
-        true_canvas = true_sseg.fill(true_canvas, value=1)
+
+    from watch.tasks.fusion import heuristics
+    ignore_classes = heuristics.IGNORE_CLASSNAMES
+    background_classes = heuristics.BACKGROUND_CLASSES
+
+    true_cidxs = true_dets.data['class_idxs']
+    true_ssegs = true_dets.data['segmentations']
+
+    for true_sseg, true_cidx in zip(true_ssegs, true_cidxs):
+        catname = true_dets.classes.idx_to_node[true_cidx]
+        if catname in ignore_classes:
+            weight_canvas = true_sseg.fill(weight_canvas, value=0)
+        elif catname not in background_classes:
+            true_canvas = true_sseg.fill(true_canvas, value=1)
 
     # Create a pred "panoptic segmentation" style mask
     pred_canvas = np.zeros(shape, dtype=np.uint8)
@@ -226,12 +243,15 @@ def single_image_segmentation_metrics(true_coco, pred_coco, gid1, gid2):
     # FIXME: for now this is just binary change
     y_true = true_canvas.ravel()
     y_pred = pred_canvas.ravel()
-    mat = skm.confusion_matrix(y_true, y_pred, labels=np.array([0, 1]))
+    sample_weight = weight_canvas.ravel()
+    mat = skm.confusion_matrix(y_true, y_pred, labels=np.array([0, 1]),
+                               sample_weight=sample_weight)
 
     info = {
         'mat': mat,
         'pred_canvas': pred_canvas,
         'true_canvas': true_canvas,
+        'weight_canvas': weight_canvas,
     }
     tn, fp, fn, tp = mat.ravel()
     row = binary_confusion_measures(tn, fp, fn, tp)
@@ -248,14 +268,18 @@ def single_image_segmentation_metrics(true_coco, pred_coco, gid1, gid2):
             pred_img = pred_coco.index.imgs[pred_gid]
             pred_coco_img = CocoImage(pred_img, pred_coco)
 
-            change_prob = pred_coco_img.delay('change_prob', space='image').finalize()[..., 0]
+            # pred_channel = 'change'
+            pred_channel = 'salient'
+
+            change_prob = pred_coco_img.delay(pred_channel, space='image').finalize()[..., 0]
             invalid_mask = np.isnan(change_prob)
             change_prob[invalid_mask] = 0
+            weight_canvas[invalid_mask] = 0
 
             bin_cfns = BinaryConfusionVectors(kwarray.DataFrameArray({
                 'is_true': true_canvas.ravel(),
                 'pred_score': change_prob.ravel(),
-                'weight': (1 - invalid_mask).ravel().astype(np.float32),
+                'weight': weight_canvas.ravel().astype(np.float32),
             }))
             change_measures = bin_cfns.measures()
             row.update(ub.dict_isect(change_measures.summary(), {'ap', 'auc', 'max_f1'}))
@@ -454,6 +478,16 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto'):
         >>> print('eval_dpath = {!r}'.format(eval_dpath))
         >>> evaluate_segmentations(true_coco, pred_coco, eval_dpath)
     """
+    # Extract metadata about the predictions to persist
+    meta = []
+    for item in pred_coco.dataset['info']:
+        if item.get('type', None) == 'process':
+            proc_name = item.get('properties', {}).get('name', None)
+            if proc_name == 'watch.tasks.fusion.predict':
+                package_fpath = item['properties']['args'].get('package_fpath')
+                if 'title' not in item:
+                    item['title'] = pathlib.Path(package_fpath).stem
+                meta.append(item)
 
     required_marked = 'auto'  # parametarize
     if required_marked == 'auto':
@@ -568,17 +602,23 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto'):
         if eval_dpath is not None:
             curve_dpath = pathlib.Path(eval_dpath) / 'curves'
             curve_dpath.mkdir(exist_ok=True, parents=True)
+            combo_measures['meta'] = meta
+            title = ''
+            for item in meta:
+                title = item.get('title', title)
             measure_info = combo_measures.__json__()
             with open(curve_dpath / 'measures.json', 'w') as file:
+                measure_info['meta'] = meta
                 json.dump(measure_info, file)
             if draw:
                 print('combo_measures = {!r}'.format(combo_measures))
                 import kwplot
-                kwplot.autompl()
-                fig = kwplot.figure(doclf=True)
-                combo_measures.summary_plot(fnum=1)
-                fig = kwplot.autoplt().gcf()
-                fig.savefig(str(curve_dpath / 'summary.png'))
+                # kwplot.autompl()
+                with kwplot.BackendContext('agg'):
+                    fig = kwplot.figure(doclf=True)
+                    combo_measures.summary_plot(fnum=1, title=title)
+                    fig = kwplot.autoplt().gcf()
+                    fig.savefig(str(curve_dpath / 'summary.png'))
 
     df = pd.DataFrame(rows)
     print(df)
@@ -603,7 +643,25 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto'):
     return df
 
 
-def main():
+def _redraw_measures(eval_dpath):
+    """
+    """
+    curve_dpath = pathlib.Path(eval_dpath) / 'curves'
+    measures_fpath = curve_dpath / 'measures.json'
+    with open(measures_fpath, 'r') as file:
+        state = json.load(file)
+        combo_measures = Measures.from_json(state)
+        title = ''
+        for item in combo_measures.get('meta', []):
+            title = item.get('title', title)
+        import kwplot
+        with kwplot.BackendContext('agg'):
+            combo_measures.summary_plot(fnum=1, title=title)
+            fig = kwplot.autoplt().gcf()
+            fig.savefig(str(curve_dpath / 'summary_redo.png'))
+
+
+def make_evaluate_config(cmdline=False, **kwargs):
     from watch.utils.configargparse_ext import ArgumentParser
     parser = ArgumentParser(
         add_config_file_help=False,
@@ -619,8 +677,14 @@ def main():
     parser.add_argument('--pred_dataset', help='path to the predicted dataset')
     parser.add_argument('--eval_dpath', help='path to dump results')
     parser.add_argument('--draw', default='auto', help='flag to draw or not')
-    args, _ = parser.parse_known_args()
+    parser.set_defaults(**kwargs)
+    default_args = None if cmdline else []
+    args, _ = parser.parse_known_args(default_args)
+    return args
 
+
+def main(cmdline=True, **kwargs):
+    args = make_evaluate_config(cmdline=cmdline, **kwargs)
     true_coco = kwcoco.CocoDataset.coerce(args.true_dataset)
     pred_coco = kwcoco.CocoDataset.coerce(args.pred_dataset)
     eval_dpath = args.eval_dpath

@@ -101,7 +101,7 @@ stages:
         - ls -al
         - conda env create -f conda_env.yml --prefix ".cache/conda/envs/loose-watch-env"
         - conda activate ".cache/conda/envs/loose-watch-env"
-        - pip install -e .
+        - .cache/conda/envs/loose-watch-env/bin/python -m pip install -e .
 
     script:
         - ./run_tests.py --network watch tests scripts

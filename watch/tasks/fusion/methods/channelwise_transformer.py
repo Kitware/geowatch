@@ -5,6 +5,7 @@ import kwcoco
 import ubelt as ub
 import torch
 import torchmetrics
+import pathlib
 
 import numpy as np
 import netharn as nh
@@ -85,6 +86,11 @@ class MultimodalTransformer(pl.LightningModule):
             >>> parent_parser.parse_known_args()
         """
         parser = parent_parser.add_argument_group("MultimodalTransformer")
+        parser.add_argument('--name', default='unnamed_model', help=ub.paragraph(
+            '''
+            Specify a name for the experiment. (Unsure if the Model is the place for this)
+            '''))
+
         parser.add_argument("--optimizer", default='RAdam', type=str, help='Optimizer name supported by the netharn API')
         parser.add_argument("--learning_rate", default=1e-3, type=float)
         parser.add_argument("--weight_decay", default=0., type=float)
@@ -107,7 +113,7 @@ class MultimodalTransformer(pl.LightningModule):
                 '''))
         parser.add_argument("--token_norm", default='auto', type=str,
                             choices=['auto', 'group', 'batch'])
-        parser.add_argument("--arch_name", default='smt_it_stm_p8', type=str,
+        parser.add_argument("--arch_name", default='smt_it_joint_p8', type=str,
                             choices=available_encoders)
         parser.add_argument("--dropout", default=0.1, type=float)
         parser.add_argument("--global_class_weight", default=1.0, type=float)
@@ -131,11 +137,19 @@ class MultimodalTransformer(pl.LightningModule):
                 Can be:
                 'exact' - the original O(n^2) method.
                 'performer' - a linear approximation.
+                'reformer' - a LSH approximation.
                 '''))
         return parent_parser
 
+    def get_cfgstr(self):
+        cfgstr = f'{self.name}_{self.arch_name}'
+        return cfgstr
+
+        # model_cfgstr
+        pass
+
     def __init__(self,
-                 arch_name='smt_it_stm_p8',
+                 arch_name='smt_it_joint_p8',
                  dropout=0.0,
                  optimizer='RAdam',
                  learning_rate=1e-3,
@@ -159,10 +173,14 @@ class MultimodalTransformer(pl.LightningModule):
                  saliency_loss='focal',
                  tokenizer='rearrange',
                  token_norm='auto',
+                 name='unnamed_expt',
                  classes=10):
 
         super().__init__()
         self.save_hyperparameters()
+        self.name = name
+
+        self.arch_name = arch_name
 
         # HACK:
         if input_stats is not None and 'input_stats' in input_stats:
@@ -322,8 +340,21 @@ class MultimodalTransformer(pl.LightningModule):
             "f1": torchmetrics.F1(),
         })
 
+        self.input_channels.numel()
+
         in_features_raw = self.hparams.window_size * self.hparams.window_size
-        in_features_pos = (2 * 4 * 4)  # positional encoding feature
+
+        # TODO:
+        #     - [ ] Dynamic / Learned embedding
+        encode_t = utils.SinePositionalEncoding(5, 1, size=8)
+        encode_m = utils.SinePositionalEncoding(5, 2, size=8)
+        encode_h = utils.SinePositionalEncoding(5, 3, size=8)
+        encode_w = utils.SinePositionalEncoding(5, 4, size=8)
+        self.add_encoding = transforms.Compose([
+            encode_t, encode_m, encode_h, encode_w,
+        ])
+        in_features_pos = sum(p.size for p in self.add_encoding.transforms)
+
         in_features = in_features_pos + in_features_raw
 
         # TODO:
@@ -351,16 +382,6 @@ class MultimodalTransformer(pl.LightningModule):
         else:
             raise KeyError(tokenizer)
         self.stream_tokenizers = stream_tokenizers
-
-        # TODO:
-        #     - [ ] Dynamic / Learned embedding
-        encode_t = utils.SinePositionalEncoding(5, 1, sine_pairs=4)
-        encode_m = utils.SinePositionalEncoding(5, 2, sine_pairs=4)
-        encode_h = utils.SinePositionalEncoding(5, 3, sine_pairs=4)
-        encode_w = utils.SinePositionalEncoding(5, 4, sine_pairs=4)
-        self.add_encoding = transforms.Compose([
-            encode_t, encode_m, encode_h, encode_w,
-        ])
 
         # 'https://rwightman.github.io/pytorch-image-models/models/vision-transformer/'
         if arch_name in transformer.encoder_configs:
@@ -477,6 +498,7 @@ class MultimodalTransformer(pl.LightningModule):
             optimizer, T_max=self.trainer.max_epochs)
         return [optimizer], [scheduler]
 
+    @profile
     def forward(self, images):
         """
         Example:
@@ -576,7 +598,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     train_dataset=coco_dset,
             >>>     chip_size=128, batch_size=1, time_steps=3,
             >>>     channels=channels,
-            >>>     normalize_inputs=True, neg_to_pos_ratio=0, num_workers='avail//2',
+            >>>     normalize_inputs=True, neg_to_pos_ratio=0, num_workers='avail/2',
             >>> )
             >>> datamodule.setup('fit')
             >>> torch_dset = datamodule.torch_datasets['train']
@@ -592,7 +614,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     # Backbone
             >>>     arch_name='smt_it_joint_p8',
             >>>     #arch_name='smt_it_stm_p8',
-            >>>     attention_impl='performer',
+            >>>     attention_impl='reformer',
             >>>     #arch_name='deit',
             >>>     # ===========
             >>>     # Change Loss
@@ -710,8 +732,8 @@ class MultimodalTransformer(pl.LightningModule):
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datamodules
             >>> datamodule = datamodules.KWCocoVideoDataModule(
-            >>>     train_dataset='special:vidshapes8-multispectral',
-            >>>     num_workers=4, chip_size=128,
+            >>>     train_dataset='special:vidshapes1-multispectral',
+            >>>     num_workers=0, chip_size=128,
             >>>     normalize_inputs=True, neg_to_pos_ratio=0,
             >>> )
             >>> datamodule.setup('fit')
@@ -757,6 +779,41 @@ class MultimodalTransformer(pl.LightningModule):
             kwplot.imshow(self.draw_item(item), fnum=3)
 
             kwplot.imshow(item['frames'][1]['change'].cpu().numpy(), fnum=4)
+
+        Ignore:
+            model = self
+            model = self.to(0)
+
+            for item in batch:
+                for frame in item['frames']:
+                    modes = frame['modes']
+                    for key in modes.keys():
+                        modes[key] = modes[key].to(0)
+            out = model.forward_step(batch)
+
+            batch2 = [ub.dict_diff(item, {'tr', 'index', 'video_name', 'video_id'})  for item in batch[0:1]]
+            for item in batch2:
+                item['frames'] = [
+                    ub.dict_diff(frame, {
+                        'gid', 'date_captured', 'sensor_coarse',
+                        'change', 'ignore', 'class_idxs',
+                    })
+                    for frame in item['frames']
+                ]
+
+            traced = torch.jit.trace_module(model, {'forward_step': (batch2,)}, strict=False)
+
+            traced = torch.jit.trace_module(model, {'forward': (images,)}, strict=False)
+
+            import timerit
+            ti = timerit.Timerit(5, bestof=1, verbose=2)
+            for timer in ti.reset('time'):
+                model.forward(images)
+            for timer in ti.reset('time'):
+                traced.forward(images)
+
+            # traced = torch.jit.trace(model.forward, batch)
+            traced = torch.jit.trace_module(model, {'forward_step': batch2})
         """
         outputs = {}
 
@@ -778,23 +835,27 @@ class MultimodalTransformer(pl.LightningModule):
             frame_ims = []
             frame_ignores = []
             for frame in item['frames']:
-                assert len(frame['modes']) == 1, 'only handle one mode for now'
-                mode_key, mode_val = ub.peek(frame['modes'].items())
-                mode_val = mode_val.float()
-                # self.input_norms = None
-                if self.input_norms is not None:
-                    mode_norm = self.input_norms[mode_key]
-                    mode_val = mode_norm(mode_val)
-                frame_ims.append(mode_val)
-                frame_ignores.append(frame['ignore'])
+                assert len(self.input_norms) == 1, 'only handle one mode for now'
+                for mode_key in self.input_norms.keys():
+                    mode_val = frame['modes'][mode_key]
+                    mode_val = mode_val.float()
+                    # self.input_norms = None
+                    if self.input_norms is not None:
+                        mode_norm = self.input_norms[mode_key]
+                        mode_val = mode_norm(mode_val)
+                    frame_ims.append(mode_val)
+
+                if with_loss:
+                    frame_ignores.append(frame['ignore'])
 
             # Because we are nt collating we need to add a batch dimension
-            # ignores = torch.stack(frame_ignores)[None, ...]
+            # if with_loss:
+            #     ignores = torch.stack(frame_ignores)[None, ...]
             images = torch.stack(frame_ims)[None, ...]
 
             B, T, C, H, W = images.shape
 
-            logits = self(images)
+            logits = self.forward(images)
 
             # TODO: it may be faster to compute loss at the downsampled
             # resolution.
@@ -1129,52 +1190,86 @@ class MultimodalTransformer(pl.LightningModule):
 
         # shallow copy of self, to apply attribute hacks to
         model = copy.copy(self)
+
+        backup_attributes = {}
+        # Remove attributes we don't want to pickle before we serialize
+        # then restore them
+        unsaved_attributes = [
+            'trainer',
+            'train_dataloader',
+            'val_dataloader',
+            'test_dataloader',
+        ]
+        for key in unsaved_attributes:
+            val = getattr(model, key)
+            if val is not None:
+                backup_attributes[key] = val
+
+        train_dpath_hint = getattr(model, 'train_dpath_hint', None)
         if model.trainer is not None:
+            if train_dpath_hint is None:
+                train_dpath_hint = model.trainer.log_dir
             datamodule = model.trainer.datamodule
             if datamodule is not None:
                 model.datamodule_hparams = datamodule.hparams
-        model.trainer = None
-        model.train_dataloader = None
-        model.val_dataloader = None
-        model.test_dataloader = None
 
-        arch_name = "model.pkl"
-        module_name = 'watch_tasks_fusion'
-        """
-        exp = torch.package.PackageExporter(package_path, verbose=True)
-        """
-        with torch.package.PackageExporter(package_path) as exp:
-            # TODO: this is not a problem yet, but some package types (mainly
-            # binaries) will need to be excluded and added as mocks
-            exp.extern("**", exclude=["watch.tasks.fusion.**"])
-            exp.intern("watch.tasks.fusion.**", allow_empty=False)
+        metadata_fpaths = []
+        if train_dpath_hint is not None:
+            train_dpath_hint = pathlib.Path(train_dpath_hint)
+            metadata_fpaths += list(train_dpath_hint.glob('hparams.yaml'))
+            metadata_fpaths += list(train_dpath_hint.glob('fit_config.yaml'))
 
-            # Attempt to standardize some form of package metadata that can
-            # allow for model importing with fewer hard-coding requirements
-            package_header = {
-                'version': '0.1.0',
-                'arch_name': arch_name,
-                'module_name': module_name,
-            }
+        try:
+            for key in backup_attributes.keys():
+                setattr(model, key, None)
 
-            # old encoding (keep for a while)
-            exp.save_pickle(
-                'kitware_package_header', 'kitware_package_header.pkl',
-                package_header
-            )
+            arch_name = "model.pkl"
+            module_name = 'watch_tasks_fusion'
+            """
+            exp = torch.package.PackageExporter(package_path, verbose=True)
+            """
+            with torch.package.PackageExporter(package_path) as exp:
+                # TODO: this is not a problem yet, but some package types (mainly
+                # binaries) will need to be excluded and added as mocks
+                exp.extern("**", exclude=["watch.tasks.fusion.**"])
+                exp.intern("watch.tasks.fusion.**", allow_empty=False)
 
-            # new encoding
-            exp.save_text(
-                'kitware_package_header', 'kitware_package_header.json',
-                json.dumps(package_header)
-            )
+                # Attempt to standardize some form of package metadata that can
+                # allow for model importing with fewer hard-coding requirements
+                package_header = {
+                    'version': '0.1.0',
+                    'arch_name': arch_name,
+                    'module_name': module_name,
+                }
 
-            # move to this?
-            exp.save_text(
-                'package_header', 'package_header.json',
-                json.dumps(package_header)
-            )
-            exp.save_pickle(module_name, arch_name, model)
+                # old encoding (keep for a while)
+                exp.save_pickle(
+                    'kitware_package_header', 'kitware_package_header.pkl',
+                    package_header
+                )
+
+                # new encoding
+                exp.save_text(
+                    'kitware_package_header', 'kitware_package_header.json',
+                    json.dumps(package_header)
+                )
+
+                # move to this?
+                exp.save_text(
+                    'package_header', 'package_header.json',
+                    json.dumps(package_header)
+                )
+                exp.save_pickle(module_name, arch_name, model)
+
+                # Save metadata
+                for meta_fpath in metadata_fpaths:
+                    with open(meta_fpath, 'r') as file:
+                        text = file.read()
+                    exp.save_text('package_header', meta_fpath.name, text)
+        finally:
+            # restore attributes
+            for key, val in backup_attributes.items():
+                setattr(model, key, val)
 
 
 def _class_weights_from_freq(total_freq, mode='median-idf'):

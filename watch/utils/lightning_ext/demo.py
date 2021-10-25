@@ -10,6 +10,7 @@ class LightningToyNet2d(pl.LightningModule):
 
     def __init__(self, num_train=100, num_val=10, batch_size=4):
         super().__init__()
+        self.save_hyperparameters()
         self.num_train = num_train
         self.num_val = num_val
         self.batch_size = batch_size
@@ -17,6 +18,9 @@ class LightningToyNet2d(pl.LightningModule):
 
     def forward(self, x):
         return self.model(x)
+
+    def get_cfgstr(self):
+        return 'This is for BatchPlotter'
 
     def forward_step(self, batch, batch_idx):
         if self.trainer is None:

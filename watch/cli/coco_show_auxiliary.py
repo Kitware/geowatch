@@ -38,7 +38,9 @@ def main(cmdline=True, **kwargs):
     print('Read src = {!r}'.format(src))
     dset = kwcoco.CocoDataset.coerce(src)
 
-    gid = ub.peek(dset.index.imgs.keys())
+    gid = config['gid']
+    if gid is None:
+        gid = ub.peek(dset.index.imgs.keys())
 
     try:
         import xdev
@@ -61,6 +63,69 @@ def do_plots_for_gid(dset, gid, config):
     plot_auxiliary_images(dset, img)
     print('Plot Overlay')
     overlay_auxiliary_images(dset, gid, config)
+
+
+def test_auxiliary_values(dset):
+    """
+    import kwcoco
+    dset = kwcoco.CocoDataset('/home/joncrall/data/dvc-repos/smart_watch_dvc/drop1-S2-L8-aligned/rutgers_material_seg.kwcoco.json')
+    """
+    import numpy as np
+    import torch.utils.data
+
+    class SimpleCocoLoader(torch.utils.data.Dataset):
+        def __init__(self, dset):
+            self.dset = dset
+            self.gids = list(self.dset.imgs.keys())
+
+        def __len__(self):
+            return len(self.gids)
+
+        def __getitem__(self, idx):
+            from watch.utils import kwcoco_extensions
+            gid = self.gids[idx]
+
+            img = self.dset.index.imgs[gid]
+            coco_img = kwcoco_extensions.CocoImage(img, self.dset)
+
+            channels = coco_img.channels.fuse()
+            channels = 'matseg_0|matseg_1'
+            delayed = coco_img.delay(channels=channels)
+            data = delayed.finalize()
+
+            # cropped = delayed.delayed_crop((slice(-256, None), slice(-256, None)))
+            # data = cropped.finalize()
+
+            item = {
+                'data': data,
+                'gid': gid,
+                'idx': idx,
+            }
+            return item
+
+    self = SimpleCocoLoader(dset)
+    loader = torch.utils.data.DataLoader(self, num_workers=8, shuffle=False,
+                                         collate_fn=ub.identity)
+    data_iter = iter(loader)
+    import kwarray
+    import pandas as pd
+    # item = next(data_iter)
+    for batch in data_iter:
+        for item in batch:
+            data = item['data']
+            gid = item['gid']
+            stats = ub.dict_diff(kwarray.stats_dict(data, axis=(0, 1)), {'shape'})
+            stats = pd.DataFrame(stats)
+            print(stats.T)
+            nans = np.isnan(data)
+            nans_per_c = nans.sum(axis=(0, 1))
+            num_pixels = np.prod(nans.shape[0:2])
+            percent_nans = nans_per_c / num_pixels
+            print('data.shape = {!r}'.format(data.shape))
+            # nans_per_hw = nans.sum(axis=2)
+            # print('job.gid = {!r}'.format(job.gid))
+            print('gid = {!r}'.format(gid))
+            print('percent_nans = {!r}'.format(percent_nans))
 
 
 def plot_auxiliary_images(dset, img, fnum=1):
@@ -115,6 +180,7 @@ def plot_auxiliary_images(dset, img, fnum=1):
 
 def overlay_auxiliary_images(dset, gid, config, fnum=2):
     import kwplot
+    import numpy as np
 
     img = dset.index.imgs[gid]
 
@@ -143,10 +209,12 @@ def overlay_auxiliary_images(dset, gid, config, fnum=2):
 
     delayed_frame = dset.delayed_load(gid, channels=channel1)
     raw1 = delayed_frame.finalize()
+    raw1 = np.nan_to_num(raw1)
     norm1 = kwimage.normalize_intensity(raw1)
 
     delayed_frame = dset.delayed_load(gid, channels=channel2)
     raw2 = delayed_frame.finalize()
+    raw2 = np.nan_to_num(raw2)
 
     # import matplotlib.cm  # NOQA
     # import matplotlib as mpl

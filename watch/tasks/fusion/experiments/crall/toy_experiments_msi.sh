@@ -54,14 +54,19 @@ DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_NAME/runs/$EXPERIMENT_NAME
 
 # Specify the expected input / output files
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package.pt 
-PRED_FPATH=$DEFAULT_ROOT_DIR/pred/pred.kwcoco.json
-EVAL_DPATH=$DEFAULT_ROOT_DIR/pred/eval
+
+SUGGESTIONS="$(python -m watch.tasks.fusion.organize suggest_paths \
+    --package_fpath=$PACKAGE_FPATH \
+    --test_dataset=$TEST_FPATH)"
+PRED_DATASET="$(echo "$SUGGESTIONS" | jq -r .pred_dataset)"
+EVAL_DATASET="$(echo "$SUGGESTIONS" | jq -r .eval_dpath)"
 
 TRAIN_CONFIG_FPATH=$WORKDIR/$DATASET_NAME/configs/train_$EXPERIMENT_NAME.yml 
 PRED_CONFIG_FPATH=$WORKDIR/$DATASET_NAME/configs/predict_$EXPERIMENT_NAME.yml 
 
 # Configure training hyperparameters
 python -m watch.tasks.fusion.fit \
+    --name="$EXPERIMENT_NAME" \
     --channels="$CHANNELS" \
     --method=MultimodalTransformer \
     --arch_name=$ARCH \
@@ -70,10 +75,14 @@ python -m watch.tasks.fusion.fit \
     --weight_decay=1e-5 \
     --dropout=0.1 \
     --time_steps=4 \
-    --chip_size=128 \
-    --batch_size=1 \
-    --max_epochs=2 \
-    --max_steps=100 \
+    --chip_size=64 \
+    --batch_size=2 \
+    --tokenizer=dwcnn \
+    --global_saliency_weight=1.0 \
+    --global_change_weight=1.0 \
+    --global_class_weight=1.0 \
+    --time_sampling=hard \
+    --time_span=1y \
     --gpus=1 \
     --accumulate_grad_batches=1 \
     --dump=$TRAIN_CONFIG_FPATH
@@ -89,6 +98,7 @@ python -m watch.tasks.fusion.predict \
 # Fit 
 python -m watch.tasks.fusion.fit \
            --config=$TRAIN_CONFIG_FPATH \
+      --num_workers=4 \
     --default_root_dir=$DEFAULT_ROOT_DIR \
        --package_fpath=$PACKAGE_FPATH \
         --train_dataset=$TRAIN_FPATH \
