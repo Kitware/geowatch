@@ -446,7 +446,7 @@ def normalize_sensors(coco_dset):
     return coco_dset
 
 
-def normalize(coco_dset, track_fn, overwrite):
+def normalize(coco_dset, track_fn, overwrite, verbose=True):
     '''
     Driver function to apply all normalizations
 
@@ -502,10 +502,18 @@ def normalize(coco_dset, track_fn, overwrite):
     '''
     def _normalize_annots(coco_dset, overwrite):
         coco_dset = dedupe_annots(coco_dset)
+        if verbose:
+            print('finished deuplication, annotations:', coco_dset.n_annots)
         coco_dset = add_geos(coco_dset, overwrite)
+        if verbose:
+            print('Added geo, annotations:', coco_dset.n_annots)
         coco_dset = remove_small_annots(coco_dset)
+        if verbose:
+            print('Removed small anns, annotations:', coco_dset.n_annots)
         return coco_dset
 
+    if verbose:
+        print('statring notmalization, annotations:', coco_dset.n_annots)
     if len(coco_dset.anns) > 0:
         coco_dset = _normalize_annots(coco_dset, overwrite)
     coco_dset = ensure_videos(coco_dset)
@@ -520,6 +528,8 @@ def normalize(coco_dset, track_fn, overwrite):
     coco_dset = add_track_index(coco_dset)
     coco_dset = normalize_phases(coco_dset)
     coco_dset = normalize_sensors(coco_dset)
+    if verbose:
+        print('Finished normalization, annotations:', coco_dset.n_annots)
 
     # HACK, ensure coco_dset.index is up to date
     coco_dset._build_index()
