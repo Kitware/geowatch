@@ -31,7 +31,6 @@ basic_left_right_split(){
     python -m watch.cli.coco_spatial_crop \
             --src $KWCOCO_BUNDLE_DPATH/data.kwcoco.json --dst $RIGHT_COCO_FPATH \
             --suffix=_right
-    
 
 }
 
