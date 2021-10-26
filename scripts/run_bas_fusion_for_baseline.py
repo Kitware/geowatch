@@ -8,6 +8,7 @@ import json
 
 from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress  # noqa: 501
 from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress  # noqa: 501
+from watch.cli.add_sites_to_region import add_sites_to_region
 
 
 def main():
@@ -158,14 +159,22 @@ def run_bas_fusion_for_baseline(
 
     # 4. Compute tracks
     print("* Computing tracks *")
+    site_models_outdir = os.path.join(ingress_dir, 'site_models')
     subprocess.run(['python', '-m', 'watch.cli.kwcoco_to_geojson',
                     '--in_file', bas_fusion_kwcoco_path,
-                    '--out_dir', ingress_dir,
+                    '--out_dir', site_models_outdir,
                     '--track_fn', track_fn],  # noqa: 501
                    check=True)
 
     # 5. Update region model with computed sites
-    # TODO
+    # ** NOTE ** This is a destructive operation as the region file
+    # ** gets modified in place (locally or on S3)
+    print("* Updating region *")
+    add_sites_to_region(input_region_path,
+                        input_region_path,
+                        site_models_dir=site_models_outdir,
+                        aws_profile=aws_profile,
+                        dryrun=dryrun)
 
     # 6. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
