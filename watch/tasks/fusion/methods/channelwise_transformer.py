@@ -85,6 +85,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> parent_parser.print_help()
             >>> parent_parser.parse_known_args()
         """
+        from scriptconfig.smartcast import smartcast
         parser = parent_parser.add_argument_group("MultimodalTransformer")
         parser.add_argument('--name', default='unnamed_model', help=ub.paragraph(
             '''
@@ -130,6 +131,7 @@ class MultimodalTransformer(pl.LightningModule):
 
         # parser.add_argument("--input_scale", default=2000.0, type=float)
         parser.add_argument("--window_size", default=8, type=int)
+        parser.add_argument("--squash_modes", default=False, type=smartcast)
         parser.add_argument(
             "--attention_impl", default='exact', type=str, help=ub.paragraph(
                 '''
@@ -174,6 +176,7 @@ class MultimodalTransformer(pl.LightningModule):
                  tokenizer='rearrange',
                  token_norm='auto',
                  name='unnamed_expt',
+                 squash_modes=False,
                  classes=10):
 
         super().__init__()
@@ -181,6 +184,7 @@ class MultimodalTransformer(pl.LightningModule):
         self.name = name
 
         self.arch_name = arch_name
+        self.squash_modes = squash_modes
 
         # HACK:
         if input_stats is not None and 'input_stats' in input_stats:
@@ -337,12 +341,16 @@ class MultimodalTransformer(pl.LightningModule):
         self.saliency_metrics = nn.ModuleDict({
             # "acc": torchmetrics.Accuracy(),
             # "iou": torchmetrics.IoU(2),
-            "f1": torchmetrics.F1(),
+            # "f1": torchmetrics.F1(),
+            "f1_micro": torchmetrics.F1(threshold=0.5, average='micro'),
+            "f1_macro": torchmetrics.F1(threshold=0.5, average='macro', num_classes=self.saliency_num_classes),
         })
 
         self.input_channels.numel()
 
         in_features_raw = self.hparams.window_size * self.hparams.window_size
+        if self.squash_modes:
+            in_features_raw = in_features_raw * num_channels
 
         # TODO:
         #     - [ ] Dynamic / Learned embedding
@@ -356,6 +364,9 @@ class MultimodalTransformer(pl.LightningModule):
         in_features_pos = sum(p.size for p in self.add_encoding.transforms)
 
         in_features = in_features_pos + in_features_raw
+        self.in_features = in_features
+        self.in_features_pos = in_features_pos
+        self.in_features_raw = in_features_raw
 
         # TODO:
         #     - [X] Classifier MLP, skip connections
@@ -369,6 +380,7 @@ class MultimodalTransformer(pl.LightningModule):
                 # import netharn as nh
                 tokenize = Rearrange(
                     "b t c (h hs) (w ws) -> b t c h w (ws hs)",
+                    c=num_chan,
                     hs=self.hparams.window_size,
                     ws=self.hparams.window_size)
                 stream_tokenizers[stream_key] = tokenize
@@ -533,6 +545,10 @@ class MultimodalTransformer(pl.LightningModule):
         assert len(self.stream_tokenizers) == 1
         tokenize = ub.peek(self.stream_tokenizers.values())
         raw_patch_tokens = tokenize(images)
+
+        if self.squash_modes:
+            raw_patch_tokens = einops.rearrange(raw_patch_tokens, "b t c h w f -> b t 1 h w (c f)")
+
         # Add positional encodings for time, mode, and space.
         patch_tokens = self.add_encoding(raw_patch_tokens)
 
@@ -540,12 +556,16 @@ class MultimodalTransformer(pl.LightningModule):
         # Rather than just ignoring the first output?
         patch_feats = self.encoder(patch_tokens)
 
-        # Final channel-wise fusion
-        chan_last = self.move_channels_last(patch_feats)
+        if not self.squash_modes:
+            # Final channel-wise fusion
+            chan_last = self.move_channels_last(patch_feats)
 
-        # Latent channels are now marginalized away
-        spacetime_fused_features = self.channel_fuser(chan_last)[..., 0]
-        # spacetime_fused_features = einops.reduce(similarity, "b t c h w -> b t h w", "mean")
+            # Latent channels are now marginalized away
+            spacetime_fused_features = self.channel_fuser(chan_last)[..., 0]
+            # spacetime_fused_features = einops.reduce(similarity, "b t c h w -> b t h w", "mean")
+        else:
+            assert patch_feats.shape[2] == 1
+            spacetime_fused_features = patch_feats[:, :, 0, ...]
 
         # if 0:
         #     # TODO: add DotProduct back in?
@@ -586,7 +606,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> import kwcoco
             >>> from os.path import join
             >>> import os
-            >>> if 0:
+            >>> if 1:
             >>>     dvc_dpath = find_smart_dvc_dpath()
             >>>     coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/data.kwcoco.json')
             >>>     channels='swir16|swir22|blue|green|red|nir'
@@ -602,6 +622,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> )
             >>> datamodule.setup('fit')
             >>> torch_dset = datamodule.torch_datasets['train']
+            >>> torch_dset.disable_augmenter = True
             >>> input_stats = datamodule.input_stats
             >>> input_channels = datamodule.input_channels
             >>> classes = datamodule.classes
@@ -614,11 +635,14 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     # Backbone
             >>>     arch_name='smt_it_joint_p8',
             >>>     #arch_name='smt_it_stm_p8',
-            >>>     attention_impl='reformer',
+            >>>     attention_impl='performer',
             >>>     #arch_name='deit',
+            >>>     change_loss='dicefocal',
+            >>>     #class_loss='cce',
+            >>>     class_loss='focal',
+            >>>     saliency_loss='dicefocal',
             >>>     # ===========
             >>>     # Change Loss
-            >>>     change_loss='dicefocal',
             >>>     global_change_weight=1.00,
             >>>     positive_change_weight=1.0,
             >>>     negative_change_weight=0.05,
@@ -626,31 +650,31 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     # Class Loss
             >>>     global_class_weight=1.00,
             >>>     global_saliency_weight=1.00,
-            >>>     #class_loss='cce',
-            >>>     class_loss='focal',
             >>>     class_weights='auto',
             >>>     # ===========
             >>>     # Domain Metadata (Look Ma, not hard coded!)
             >>>     input_stats=input_stats,
             >>>     classes=classes,
             >>>     input_channels=input_channels,
-            >>>     tokenizer='dwcnn',
+            >>>     #tokenizer='dwcnn',
+            >>>     tokenizer='rearrange',
+            >>>     squash_modes=True,
             >>>     )
             >>> self.datamodule = datamodule
+            >>> self.di = datamodule
             >>> # Run one visualization
             >>> loader = datamodule.train_dataloader()
             >>> batch = next(iter(loader))
             >>> # Show batch before we do anything
             >>> import kwplot
             >>> kwplot.autompl(force='Qt5Agg')
-            >>> canvas = datamodule.draw_batch(batch, max_channels=1, overlay_on_image=0)
+            >>> canvas = datamodule.draw_batch(batch, max_channels=3, overlay_on_image=0)
             >>> kwplot.imshow(canvas)
             >>> device = 0
             >>> self.overfit(batch)
 
         nh.initializers.KaimingNormal()(self)
         nh.initializers.Orthogonal()(self)
-
         """
         import kwplot
         from watch.utils.slugify_ext import smart_truncate
@@ -661,7 +685,7 @@ class MultimodalTransformer(pl.LightningModule):
 
         sns = kwplot.autosns()
         datamodule = self.datamodule
-        device = 1
+        device = 0
         self = self.to(device)
         # loader = datamodule.train_dataloader()
         # batch = next(iter(loader))
@@ -676,7 +700,7 @@ class MultimodalTransformer(pl.LightningModule):
         loss_records = []
         loss_records = [g[0] for g in ub.group_items(loss_records, lambda x: x['step']).values()]
         step = 0
-        frame_idx = 0
+        _frame_idx = 0
         # dpath = ub.ensuredir('_overfit_viz09')
 
         optim_cls, optim_kw = nh.api.Optimizer.coerce(
@@ -687,13 +711,14 @@ class MultimodalTransformer(pl.LightningModule):
         #optim = torch.optim.AdamW(self.parameters(), lr=1e-4)
         optim = torch_optimizer.RAdam(self.parameters(), lr=3e-3, weight_decay=1e-5)
 
-        fig = kwplot.figure(fnum=1, doclf=True)
+        fnum = 2
+        fig = kwplot.figure(fnum=fnum, doclf=True)
         fig.set_size_inches(15, 6)
         fig.subplots_adjust(left=0.05, top=0.9)
-        for frame_idx in xdev.InteractiveIter(list(range(frame_idx + 1, 1000))):
-            # for frame_idx in list(range(frame_idx, 1000)):
+        for _frame_idx in xdev.InteractiveIter(list(range(_frame_idx + 1, 1000))):
+            # for _frame_idx in list(range(_frame_idx, 1000)):
             num_steps = 20
-            for i in ub.ProgIter(range(num_steps), desc='overfit'):
+            for _i in ub.ProgIter(range(num_steps), desc='overfit'):
                 optim.zero_grad()
                 outputs = self.training_step(batch)
                 outputs['item_losses']
@@ -705,8 +730,8 @@ class MultimodalTransformer(pl.LightningModule):
                 optim.step()
                 step += 1
             canvas = datamodule.draw_batch(batch, outputs=outputs, max_channels=1, overlay_on_image=0, max_items=4)
-            kwplot.imshow(canvas, pnum=(1, 2, 1), fnum=1)
-            fig = kwplot.figure(fnum=1, pnum=(1, 2, 2))
+            kwplot.imshow(canvas, pnum=(1, 2, 1), fnum=fnum)
+            fig = kwplot.figure(fnum=fnum, pnum=(1, 2, 2))
             #kwplot.imshow(canvas, pnum=(1, 2, 1))
             import pandas as pd
             ax = sns.lineplot(data=pd.DataFrame(loss_records), x='step', y='val', hue='part')
@@ -714,7 +739,7 @@ class MultimodalTransformer(pl.LightningModule):
             fig.suptitle(smart_truncate(str(optim).replace('\n', ''), max_length=64))
             img = render_figure_to_image(fig)
             img = kwimage.convert_colorspace(img, src_space='bgr', dst_space='rgb')
-            # fpath = join(dpath, 'frame_{:04d}.png'.format(frame_idx))
+            # fpath = join(dpath, 'frame_{:04d}.png'.format(_frame_idx))
             #kwimage.imwrite(fpath, img)
             xdev.InteractiveIter.draw()
         # TODO: can we get this batch to update in real time?

@@ -570,7 +570,7 @@ class CocoStitchingManager(object):
 
     def __init__(self, result_dataset, short_code=None, chan_code=None, stiching_space='video',
                  device='numpy', thresh=0.5, write_probs=True,
-                 write_preds=True, num_bands='auto', prob_compress='LZW',
+                 write_preds=True, num_bands='auto', prob_compress='RAW',
                  polygon_categories=None):
         self.short_code = short_code
         self.result_dataset = result_dataset
@@ -766,7 +766,7 @@ class CocoStitchingManager(object):
             total_prob += final_probs.sum()
             kwimage.imwrite(
                 str(new_fpath), final_probs, space=None, backend='gdal',
-                compress=self.prob_compress,
+                compress=self.prob_compress, blocksize=64,
             )
 
         if self.write_preds:

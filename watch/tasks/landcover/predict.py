@@ -158,7 +158,7 @@ def _write_worker(pred_filename, pred):
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', UserWarning)
         kwimage.imwrite(str(pred_filename), pred, backend='gdal',
-                        compress='deflate')
+                        compress='RAW', blocksize=64)
 
 
 def get_output_file(output):

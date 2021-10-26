@@ -729,6 +729,8 @@ class KWCocoVideoDataset(data.Dataset):
             ub.oset(['Dred', 'Dgreen', 'Dblue']),
             ub.oset(['r', 'g', 'b']),
             ub.oset(['B04', 'B03', 'B02']),  # for onera
+            ub.oset(['matset_1', 'matset_2', 'matset_3']),  # hack
+            ub.oset(['snow_or_ice_field', 'built_up', 'grassland']),  # hack
         ]
 
     def __len__(self):
@@ -1447,7 +1449,7 @@ class KWCocoVideoDataset(data.Dataset):
                         norm_signal = raw_signal.copy()
                     # norm_signal = kwimage.normalize(raw_signal).copy()
                     norm_signal = np.nan_to_num(norm_signal)
-                    norm_signal = ensure_false_color(norm_signal)
+                    norm_signal = util_kwimage.ensure_false_color(norm_signal)
                     norm_signal = kwimage.atleast_3channels(norm_signal)
                     row['norm_signal'] = norm_signal
                 chan_rows.append(row)
@@ -1935,47 +1937,3 @@ def lookup_track_info(coco_dset, tid):
         'track_gids': track_gids,
     }
     return track_info
-
-
-def ensure_false_color(canvas):
-    """
-    Given a canvas with more than 3 colors, (or 2 colors) do
-    something to get it into a colorized space.
-
-    I have no idea how well this works. Probably better methods exist.
-
-    Example:
-        >>> demo_img = kwimage.ensure_float01(kwimage.grab_test_image('astro'))
-        >>> canvas = demo_img @ np.random.rand(3, 2)
-        >>> rgb_canvas2 = ensure_false_color(canvas)
-        >>> canvas = np.tile(demo_img, (1, 1, 10))
-        >>> rgb_canvas10 = ensure_false_color(canvas)
-        >>> import kwplot
-        >>> kwplot.autompl()
-        >>> kwplot.imshow(rgb_canvas2, pnum=(1, 2, 1))
-        >>> kwplot.imshow(rgb_canvas10, pnum=(1, 2, 2))
-    """
-    import kwarray
-    import numpy as np
-    canvas = kwarray.atleast_nd(canvas, 3)
-
-    if canvas.shape[2] in {1, 3}:
-        rgb_canvas = canvas
-    # elif canvas.shape[2] == 2:
-    #     # Use LAB to colorize
-    #     L_part = np.ones_like(canvas[..., 0:1]) * 50
-    #     a_min = -86.1875
-    #     a_max = 98.234375
-    #     b_min = -107.859375
-    #     b_max = 94.46875
-    #     a_part = (canvas[..., 0:1] - a_min) / (a_max - a_min)
-    #     b_part = (canvas[..., 1:2] - b_min) / (b_max - b_min)
-    #     lab_canvas = np.concatenate([L_part, a_part, b_part], axis=2)
-    #     rgb_canvas = kwimage.convert_colorspace(lab_canvas, src_space='lab', dst_space='rgb')
-    else:
-        rng = kwarray.ensure_rng(canvas.shape[2])
-        seedmat = rng.rand(canvas.shape[2], 3).T
-        h, tau = np.linalg.qr(seedmat, mode='raw')
-        false_colored = (canvas @ h)
-        rgb_canvas = kwimage.normalize(false_colored)
-    return rgb_canvas
