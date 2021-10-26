@@ -6,7 +6,7 @@ DVC_DPATH=${DVC_DPATH:-$HOME/data/dvc-repos/smart_watch_dvc}
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop1_October2021
 ARCH=smt_it_joint_p8
-EXPERIMENT_NAME=Saliency_${ARCH}_raw_performer_s32_t11_v004
+EXPERIMENT_NAME=Saliency_${ARCH}_raw_performer_s64_t11_v005
 
 KWCOCO_BUNDLE_DPATH=${KWCOCO_BUNDLE_DPATH:-$DVC_DPATH/drop1-S2-L8-aligned}
 
@@ -18,12 +18,14 @@ KWCOCO_BUNDLE_DPATH=${KWCOCO_BUNDLE_DPATH:-$DVC_DPATH/drop1-S2-L8-aligned}
 #        --dst $KWCOCO_BUNDLE_DPATH/combo_vali_s2_data.kwcoco.json \
 #        --select_images '.sensor_coarse == "S2"'
 
+
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_train_data.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_data.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_data.kwcoco.json
 
 python -m watch stats $TRAIN_FPATH
 CHANNELS="blue|green|red|nir|swir16|swir22"
+CHANNELS="inland_water|snow_or_ice_field|built_up|grassland|matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7|matseg_8|inv_shared1|inv_shared2|inv_shared3|blue|green|red|nir|swir16|swir22"
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
@@ -37,7 +39,7 @@ python -m watch.tasks.fusion.fit \
     --arch_name=$ARCH \
     --chip_size=64 \
     --chip_overlap=0.0 \
-    --time_steps=13 \
+    --time_steps=11 \
     --time_span=3y \
     --time_sampling=soft+distribute \
     --batch_size=8 \
