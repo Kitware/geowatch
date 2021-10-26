@@ -143,6 +143,27 @@ uky_prediction(){
 }
 
 
+HACKED_S2_MOEL_uky_prediction(){
+    __doc__='
+    source ~/code/watch/scripts/generate_ta2_features.sh
+    '
+    # --------------
+    # UKY Prediction
+    # --------------
+
+    # Hack to use the same model to predict on all bands
+    export CUDA_VISIBLE_DEVICES="0"
+    python -m watch.tasks.invariants.predict \
+        --sensor="all" \
+        --bands="S2" \
+        --input_kwcoco $BASE_COCO_FPATH \
+        --output_kwcoco $UKY_INVARIANTS_COCO_FPATH \
+        --ckpt_path $UKY_S2_MODEL_FPATH  \
+        --device=cuda \
+        --num_workers="16"
+}
+
+
 rutgers_prediction(){
     __doc__='
     source ~/code/watch/scripts/generate_ta2_features.sh
@@ -357,14 +378,13 @@ spot_check(){
 
     # Optional: visualize the combo data before and after propogation
     CHANNELS="red|green|blue,inv_sort1|inv_augment1|inv_shared1,matseg_0|matseg_1|matseg_2,grassland|built_up|bare_ground"
-    CHANNELS="matseg_3|matseg_4|matseg_5,med_low_density_built_up|inland_water|alluvial_deposits,inv_shared2|inv_shared3|inv_shared4"
-    CHANNELS="inv_shared2|inv_shared3|inv_shared4"
+    CHANNELS="matseg_3|matseg_4|matseg_5,inv_shared2|inv_shared3|inv_shared4"
+    #CHANNELS="inv_shared2|inv_shared3|inv_shared4"
     VIZ_DPATH=$KWCOCO_BUNDLE_DPATH/_viz_teamfeats
     python -m watch.cli.coco_visualize_videos \
         --src $COMBO_COCO_FPATH --space=video --num_workers=6 \
         --viz_dpath $VIZ_DPATH \
-        --num_frames=1 \
-        --zoom_to_tracks=True \
+        --num_frames=10 \
         --channels $CHANNELS
 
     # Split bands up into a bash array

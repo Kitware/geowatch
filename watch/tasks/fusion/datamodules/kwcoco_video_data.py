@@ -729,6 +729,8 @@ class KWCocoVideoDataset(data.Dataset):
             ub.oset(['Dred', 'Dgreen', 'Dblue']),
             ub.oset(['r', 'g', 'b']),
             ub.oset(['B04', 'B03', 'B02']),  # for onera
+            ub.oset(['matset_1', 'matset_2', 'matset_3']),  # hack
+            ub.oset(['snow_or_ice_field', 'built_up', 'grassland']),  # hack
         ]
 
     def __len__(self):
