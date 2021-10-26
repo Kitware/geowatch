@@ -308,6 +308,9 @@ def apply_tracks(coco_dset, track_fn, overwrite):
             # could maybe use coco_dset.union, but it doesn't reuse IDs
             # TODO an ensure_annotations to do this properly
             # coco_dset.anns.update(sub_dset.anns)
+            for cat in sub_dset.cats.values():
+                cat.pop('id')
+                coco_dset.ensure_category(**cat)
 
             coco_dset.remove_annotations(
                 set(sub_dset.anns).intersection(coco_dset.anns))
