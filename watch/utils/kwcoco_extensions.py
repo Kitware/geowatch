@@ -149,9 +149,146 @@ def _check_unique_channel_names_in_image(coco_img):
                     inter_aux_duplicates))
 
 
+def coco_list_asset_infos(dset):
+    """
+    Get a list of filename and channels for each coco image
+    """
+    asset_infos = []
+    for gid in dset.images():
+        coco_img = dset._coco_image(gid)
+        asset_objs = list(coco_img.iter_asset_objs())
+        for asset_idx, obj in enumerate(asset_objs):
+            fname = obj.get('file_name', None)
+            if fname is not None:
+                fpath = join(coco_img.dset.bundle_dpath, fname)
+                file_info = {
+                    'fpath': fpath,
+                    'channels': obj['channels'],
+                }
+                asset_infos.append(file_info)
+    return asset_infos
+
+
+def check_geotiff_formats(dset):
+    # Enumerate assests on disk
+    infos = []
+    asset_infos = coco_list_asset_infos(dset)
+    for file_info in ub.ProgIter(asset_infos):
+        fpath = file_info['fpath']
+        info = geotiff_format_info(fpath)
+        info.update(file_info)
+        infos.append(info)
+
+    ub.varied_values([ub.dict_diff(d, {'fpath', 'filelist'}) for d in infos])
+
+
+def rewrite_geotiffs(dset):
+    import tempfile
+    import pathlib
+    blocksize = 96
+    compress = 'NONE'
+    asset_infos = coco_list_asset_infos(dset)
+
+    for file_info in ub.ProgIter(asset_infos):
+        fpath = file_info['fpath']
+        if fpath.endswith(kwimage.im_io.JPG_EXTENSIONS):
+            print('Skipping jpeg')
+            # dont touch jpegs
+            continue
+
+        orig_fpath = pathlib.Path(fpath)
+
+        info = geotiff_format_info(fpath)
+        if info['blocksize'][0] != blocksize or info['compress'] != compress:
+
+            tmpdir = orig_fpath.parent / '.tmp_gdal_workspace'
+            tmpdir.mkdir(exist_ok=True, parents=True)
+            workdir = tmpdir / 'work'
+            bakdir = tmpdir / 'backup'
+            workdir.mkdir(exist_ok=True)
+            bakdir.mkdir(exist_ok=True)
+
+            tmpfile = tempfile.NamedTemporaryFile(suffix=orig_fpath.name, dir=workdir, delete=False)
+            tmp_fpath = tmpfile.name
+
+            options = [
+                '-co BLOCKSIZE={}'.format(blocksize),
+                '-co COMPRESS={}'.format(compress),
+                '-of COG',
+                '-overwrite',
+            ]
+            if not info['has_geotransform']:
+                options += [
+                    '-to SRC_METHOD=NO_GEOTRANSFORM'
+                ]
+            options += [
+                fpath,
+                tmp_fpath,
+            ]
+            command = 'gdalwarp ' + ' '.join(options)
+            cmdinfo = ub.cmd(command)
+            if cmdinfo['ret'] != 0:
+                print('cmdinfo = {}'.format(ub.repr2(cmdinfo, nl=1)))
+                raise Exception('Command Errored')
+
+            # Backup the original file
+            import shutil
+            shutil.move(fpath, bakdir)
+
+            # Move the rewritten file into its place
+            shutil.move(tmp_fpath, fpath)
+
+            # info2 = geotiff_format_info(tmp_fpath)
+
+
+def geotiff_format_info(fpath):
+    from osgeo import gdal
+    gdal_ds = gdal.Open(fpath, gdal.GA_ReadOnly)
+    filelist = gdal_ds.GetFileList()
+
+    aff_wld_crs = gdal_ds.GetSpatialRef()
+    has_geotransform = aff_wld_crs is not None
+
+    filename = gdal_ds.GetDescription()
+    main_band = gdal_ds.GetRasterBand(1)
+    block_size = main_band.GetBlockSize()
+
+    num_bands = gdal_ds.RasterCount
+    width = gdal_ds.RasterXSize
+    height = gdal_ds.RasterYSize
+
+    ovr_count = main_band.GetOverviewCount()
+    ifd_offset = int(main_band.GetMetadataItem('IFD_OFFSET', 'TIFF'))
+    block_offset = main_band.GetMetadataItem('BLOCK_OFFSET_0_0', 'TIFF')
+    structure = gdal_ds.GetMetadata("IMAGE_STRUCTURE")
+    compress = structure.get("COMPRESSION", 'NONE')
+    interleave = structure.get("INTERLEAVE", None)
+
+    has_external_overview = (filename + '.ovr' in filelist)
+
+    format_info = {
+        'fpath': fpath,
+        'filelist': filelist,
+        'blocksize': block_size,
+        'ovr_count': ovr_count,
+        'ifd_offset': ifd_offset,
+        'block_offset': block_offset,
+        'compress': compress,
+        'interleave': interleave,
+        'has_external_overview': has_external_overview,
+        'num_bands': num_bands,
+        'has_geotransform': has_geotransform,
+        'width': width,
+        'height': height,
+    }
+    return format_info
+
+
 def transfer_geo_metadata(dset, gid):
     """
     Transfer geo-metadata from source geotiffs to predicted feature images
+
+    THIS FUNCITON MODIFIES THE IMAGE DATA ON DISK! BE CAREFUL!
 
     Example:
         # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -190,19 +327,39 @@ def transfer_geo_metadata(dset, gid):
                 '''))
 
         from osgeo import gdal
+        # from osgeo import osr
+        import affine
         # Choose an object to register to (not sure if it matters which one)
         # choose arbitrary one for now.
         geo_asset_idx, (geo_obj, geo_info) = ub.peek(assets_with_geo_info.items())
         geo_fname = geo_obj.get('file_name', None)
         geo_fpath = join(coco_img.dset.bundle_dpath, geo_fname)
 
+        if geo_info['is_rpc']:
+            raise NotImplementedError(
+                'Not sure how to do this if the target has RPC information')
+
         geo_ds = gdal.Open(geo_fpath)
+        geo_ds.GetProjection()
 
         warp_img_from_georef = kwimage.Affine.coerce(
             geo_obj.get('warp_aux_to_img', None))
+
         warp_georef_from_img = warp_img_from_georef.inv()
 
-        geo_info['wld_crs_info']
+        warp_wld_from_georef = kwimage.Affine.coerce(
+            geo_info['pxl_to_wld'])
+
+        warp_wld_from_img = warp_wld_from_georef @ warp_georef_from_img
+
+        georef_crs_info = geo_info['wld_crs_info']
+        georef_crs = georef_crs_info['type']
+
+        # georef_crs_info['axis_mapping']
+        # osr.OAMS_AUTHORITY_COMPLIANT
+        # aux_wld_crs = osr.SpatialReference()
+        # aux_wld_crs.ImportFromEPSG(4326)  # 4326 is the EPSG id WGS84 of lat/lon crs
+        # aux_wld_crs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
 
         for asset_idx, obj in assets_without_geo_info.items():
             fname = obj.get('file_name', None)
@@ -210,28 +367,37 @@ def transfer_geo_metadata(dset, gid):
 
             warp_img_from_aux = kwimage.Affine.coerce(
                 obj.get('warp_aux_to_img', None))
-            warp_aux_from_img = warp_img_from_aux.inv()
 
-            warp_georef_from_aux = (
-                warp_georef_from_img @ warp_img_from_aux)
+            warp_wld_from_aux = (
+                warp_wld_from_img @ warp_img_from_aux)
 
-            warp_aux_from_georef = (
-                warp_aux_from_img @ warp_img_from_georef)
+            # Convert to gdal-style
+            a, b, c, d, e, f = warp_wld_from_aux.matrix.ravel()[0:6]
+            aff = affine.Affine(a, b, c, d, e, f)
+            aff_geo_transform = aff.to_gdal()
 
-            dst_ds = gdal.Open(fpath)
+            dst_ds = gdal.Open(fpath, gdal.GA_Update)
+            if dst_ds is None:
+                raise Exception('error handling gdal')
+            ret = dst_ds.SetGeoTransform(aff_geo_transform)
+            assert ret == 0
+            ret = dst_ds.SetSpatialRef(georef_crs)
+            assert ret == 0
+            dst_ds.FlushCache()
+            dst_ds = None
 
         # Matt's transfer metadata code
         """
-        src_ds = gdal.Open(toafile)
-        if src_ds is None:
+        geo_ds = gdal.Open(toafile)
+        if geo_ds is None:
             log.error('Could not open image')
             sys.exit(1)
-        transform = src_ds.GetGeoTransform()
-        proj = src_ds.GetProjection()
+        transform = geo_ds.GetGeoTransform()
+        proj = geo_ds.GetProjection()
         dst_ds = gdal.Open(boafile, gdal.GA_Update)
         dst_ds.SetGeoTransform(transform)
         dst_ds.SetProjection(proj)
-        src_ds, dst_ds = None, None
+        geo_ds, dst_ds = None, None
         """
 
 

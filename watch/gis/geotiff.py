@@ -273,34 +273,6 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
     aff_wld_from_pxl = np.vstack([np.array(aff.column_vectors).T, [0, 0, 1]])
     aff_pxl_from_wld = np.linalg.inv(aff_wld_from_pxl)
 
-    def axis_mapping_int_to_text(axis_mapping_int):
-        """
-        References:
-            https://gdal.org/tutorials/osr_api_tut.html#crs-and-axis-order
-
-        Notes:
-            * OAMS_TRADITIONAL_GIS_ORDER means that for geographic CRS with
-                lat/long order, the data will still be long/lat ordered.
-                Similarly for a projected CRS with northing/easting order, the
-                data will still be easting/northing ordered
-
-            * OAMS_AUTHORITY_COMPLIANT means that the data axis will be
-                identical to the CRS axis. This is the default value when
-                instantiating OGRSpatialReference
-
-            * OAMS_CUSTOM means that the data axis are customly defined with
-                SetDataAxisToSRSAxisMapping
-        """
-        if axis_mapping_int == osr.OAMS_TRADITIONAL_GIS_ORDER:
-            axis_mapping = 'OAMS_TRADITIONAL_GIS_ORDER'
-        elif axis_mapping_int == osr.OAMS_AUTHORITY_COMPLIANT:
-            axis_mapping = 'OAMS_AUTHORITY_COMPLIANT'
-        elif axis_mapping_int == osr.OAMS_CUSTOM:
-            axis_mapping = 'OAMS_CUSTOM'
-        else:
-            raise KeyError(axis_mapping_int)
-        return axis_mapping
-
     is_rpc = not (force_affine or rpc_transform is None)
 
     if is_rpc:
@@ -473,6 +445,61 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         maxx, maxy = info['utm_corners'].data.min(axis=0)
         info['approx_meter_gsd'] = gsd
     return info
+
+
+def axis_mapping_int_to_text(axis_mapping_int):
+    """
+    References:
+        https://gdal.org/tutorials/osr_api_tut.html#crs-and-axis-order
+
+    Notes:
+        * OAMS_TRADITIONAL_GIS_ORDER means that for geographic CRS with
+            lat/long order, the data will still be long/lat ordered.
+            Similarly for a projected CRS with northing/easting order, the
+            data will still be easting/northing ordered
+
+        * OAMS_AUTHORITY_COMPLIANT means that the data axis will be
+            identical to the CRS axis. This is the default value when
+            instantiating OGRSpatialReference
+
+        * OAMS_CUSTOM means that the data axis are customly defined with
+            SetDataAxisToSRSAxisMapping
+    """
+    from osgeo import osr
+    if axis_mapping_int == osr.OAMS_TRADITIONAL_GIS_ORDER:
+        axis_mapping = 'OAMS_TRADITIONAL_GIS_ORDER'
+    elif axis_mapping_int == osr.OAMS_AUTHORITY_COMPLIANT:
+        axis_mapping = 'OAMS_AUTHORITY_COMPLIANT'
+    elif axis_mapping_int == osr.OAMS_CUSTOM:
+        axis_mapping = 'OAMS_CUSTOM'
+    else:
+        raise KeyError(axis_mapping_int)
+    return axis_mapping
+
+
+def new_spatial_reference(axis_mapping='OAMS_AUTHORITY_COMPLIANT'):
+    """
+    Creates a new spatial reference
+
+    Args:
+        axis_mapping (int | str) : can be
+            OAMS_TRADITIONAL_GIS_ORDER, OAMS_AUTHORITY_COMPLIANT, or
+            OAMS_CUSTOM or the integer gdal code.
+
+    References:
+        https://gdal.org/tutorials/osr_api_tut.html#crs-and-axis-order
+    """
+    raise NotImplementedError
+    from osgeo import osr
+    if isinstance(axis_mapping, int):
+        axis_mapping_int = axis_mapping
+    else:
+        assert axis_mapping in {
+            'OAMS_TRADITIONAL_GIS_ORDER',
+            'OAMS_AUTHORITY_COMPLIANT',
+            'OAMS_CUSTOM',
+        }
+        axis_mapping_int = getattr(osr, axis_mapping)
 
 
 @ub.memoize
