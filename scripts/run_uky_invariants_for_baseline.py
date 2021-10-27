@@ -190,7 +190,7 @@ def run_uky_invariants_for_baseline(input_path,
                     '--device', 'cuda',
                     '--input_kwcoco', ta1_cropped_watch_kwcoco_path,
                     '--output_kwcoco', ta1_uky_l8_features_kwcoco_path,
-                    '--bands', 'coastal,lwir11,lwir12,blue,green,red,nir,swir16,swir22,pan,cirrus'],  # noqa: 501
+                    '--bands', 'coastal|lwir11|lwir12|blue|green|red|nir|swir16|swir22|pan|cirrus'],  # noqa: 501
                    check=True)
 
     # 7. Generate S2 features
@@ -203,7 +203,7 @@ def run_uky_invariants_for_baseline(input_path,
                     '--device', 'cuda',
                     '--input_kwcoco', ta1_cropped_watch_kwcoco_path,
                     '--output_kwcoco', ta1_uky_s2_features_kwcoco_path,
-                    '--bands', 'coastal,blue,green,red,B05,B06,B07,nir,B09,cirrus,swir16,swir22,B8A'],  # noqa: 501
+                    '--bands', 'coastal|blue|green|red|B05|B06|B07|nir|B09|cirrus|swir16|swir22|B8A'],  # noqa: 501
                    check=True)
 
     # 8. Combine features
