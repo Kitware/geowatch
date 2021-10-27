@@ -86,54 +86,54 @@ class MultimodalTransformer(pl.LightningModule):
             >>> parent_parser.parse_known_args()
         """
         from scriptconfig.smartcast import smartcast
-        parser = parent_parser.add_argument_group("MultimodalTransformer")
+        parser = parent_parser.add_argument_group('MultimodalTransformer')
         parser.add_argument('--name', default='unnamed_model', help=ub.paragraph(
             '''
             Specify a name for the experiment. (Unsure if the Model is the place for this)
             '''))
 
-        parser.add_argument("--optimizer", default='RAdam', type=str, help='Optimizer name supported by the netharn API')
-        parser.add_argument("--learning_rate", default=1e-3, type=float)
-        parser.add_argument("--weight_decay", default=0., type=float)
+        parser.add_argument('--optimizer', default='RAdam', type=str, help='Optimizer name supported by the netharn API')
+        parser.add_argument('--learning_rate', default=1e-3, type=float)
+        parser.add_argument('--weight_decay', default=0., type=float)
 
-        parser.add_argument("--positive_change_weight", default=1.0, type=float)
-        parser.add_argument("--negative_change_weight", default=1.0, type=float)
-        parser.add_argument("--class_weights", default='auto', type=str, help='class weighting strategy')
-        parser.add_argument("--saliency_weights", default='auto', type=str, help='class weighting strategy')
+        parser.add_argument('--positive_change_weight', default=1.0, type=float)
+        parser.add_argument('--negative_change_weight', default=1.0, type=float)
+        parser.add_argument('--class_weights', default='auto', type=str, help='class weighting strategy')
+        parser.add_argument('--saliency_weights', default='auto', type=str, help='class weighting strategy')
 
         # Model names define the transformer encoder used by the method
         available_encoders = list(transformer.encoder_configs.keys()) + ['deit']
 
         parser.add_argument(
-            "--tokenizer", default='rearrange', type=str,
+            '--tokenizer', default='rearrange', type=str,
             choices=['dwcnn', 'rearrange'], help=ub.paragraph(
                 '''
                 How image patches aare broken into tokens.
                 rearrange just shuffles raw pixels. dwcnn is a is a mobile
                 convolutional stem.
                 '''))
-        parser.add_argument("--token_norm", default='auto', type=str,
+        parser.add_argument('--token_norm', default='auto', type=str,
                             choices=['auto', 'group', 'batch'])
-        parser.add_argument("--arch_name", default='smt_it_joint_p8', type=str,
+        parser.add_argument('--arch_name', default='smt_it_joint_p8', type=str,
                             choices=available_encoders)
-        parser.add_argument("--dropout", default=0.1, type=float)
-        parser.add_argument("--global_class_weight", default=1.0, type=float)
-        parser.add_argument("--global_change_weight", default=1.0, type=float)
-        parser.add_argument("--global_saliency_weight", default=0.0, type=float)
+        parser.add_argument('--dropout', default=0.1, type=float)
+        parser.add_argument('--global_class_weight', default=1.0, type=float)
+        parser.add_argument('--global_change_weight', default=1.0, type=float)
+        parser.add_argument('--global_saliency_weight', default=0.0, type=float)
 
-        parser.add_argument("--change_loss", default='cce')
-        parser.add_argument("--class_loss", default='focal')
-        parser.add_argument("--saliency_loss", default='focal', help='saliency is trained to match any "positive/foreground/salient" class')
+        parser.add_argument('--change_loss', default='cce')
+        parser.add_argument('--class_loss', default='focal')
+        parser.add_argument('--saliency_loss', default='focal', help='saliency is trained to match any "positive/foreground/salient" class')
 
-        parser.add_argument("--change_head_hidden", default=2, type=int, help='number of hidden layers in the change head')
-        parser.add_argument("--class_head_hidden", default=2, type=int, help='number of hidden layers in the category head')
-        parser.add_argument("--saliency_head_hidden", default=2, type=int, help='number of hidden layers in the saliency head')
+        parser.add_argument('--change_head_hidden', default=2, type=int, help='number of hidden layers in the change head')
+        parser.add_argument('--class_head_hidden', default=2, type=int, help='number of hidden layers in the category head')
+        parser.add_argument('--saliency_head_hidden', default=2, type=int, help='number of hidden layers in the saliency head')
 
         # parser.add_argument("--input_scale", default=2000.0, type=float)
-        parser.add_argument("--window_size", default=8, type=int)
-        parser.add_argument("--squash_modes", default=False, type=smartcast)
+        parser.add_argument('--window_size', default=8, type=int)
+        parser.add_argument('--squash_modes', default=False, type=smartcast)
         parser.add_argument(
-            "--attention_impl", default='exact', type=str, help=ub.paragraph(
+            '--attention_impl', default='exact', type=str, help=ub.paragraph(
                 '''
                 Implementation for attention computation.
                 Can be:
@@ -328,22 +328,22 @@ class MultimodalTransformer(pl.LightningModule):
         self.class_metrics = nn.ModuleDict({
             # "acc": torchmetrics.Accuracy(),
             # "iou": torchmetrics.IoU(2),
-            "f1_micro": torchmetrics.F1(threshold=0.5, average='micro'),
-            "f1_macro": torchmetrics.F1(threshold=0.5, average='macro', num_classes=self.num_classes),
+            'f1_micro': torchmetrics.F1(threshold=0.5, average='micro'),
+            'f1_macro': torchmetrics.F1(threshold=0.5, average='macro', num_classes=self.num_classes),
         })
 
         self.change_metrics = nn.ModuleDict({
             # "acc": torchmetrics.Accuracy(),
             # "iou": torchmetrics.IoU(2),
-            "f1": torchmetrics.F1(),
+            'f1': torchmetrics.F1(),
         })
 
         self.saliency_metrics = nn.ModuleDict({
             # "acc": torchmetrics.Accuracy(),
             # "iou": torchmetrics.IoU(2),
             # "f1": torchmetrics.F1(),
-            "f1_micro": torchmetrics.F1(threshold=0.5, average='micro'),
-            "f1_macro": torchmetrics.F1(threshold=0.5, average='macro', num_classes=self.saliency_num_classes),
+            'f1_micro': torchmetrics.F1(threshold=0.5, average='micro'),
+            'f1_macro': torchmetrics.F1(threshold=0.5, average='macro', num_classes=self.saliency_num_classes),
         })
 
         self.input_channels.numel()
@@ -379,7 +379,7 @@ class MultimodalTransformer(pl.LightningModule):
                 # Construct tokenize on a per-stream basis
                 # import netharn as nh
                 tokenize = Rearrange(
-                    "b t c (h hs) (w ws) -> b t c h w (ws hs)",
+                    'b t c (h hs) (w ws) -> b t c h w (ws hs)',
                     c=num_chan,
                     hs=self.hparams.window_size,
                     ws=self.hparams.window_size)
@@ -425,7 +425,7 @@ class MultimodalTransformer(pl.LightningModule):
 
         feat_dim = self.encoder.out_features
 
-        self.move_channels_last = Rearrange("b t c h w f -> b t h w f c")
+        self.move_channels_last = Rearrange('b t c h w f -> b t h w f c')
 
         # A simple linear layer that learns to combine channels
         self.channel_fuser = nh.layers.MultiLayerPerceptronNd(
@@ -547,7 +547,7 @@ class MultimodalTransformer(pl.LightningModule):
         raw_patch_tokens = tokenize(images)
 
         if self.squash_modes:
-            raw_patch_tokens = einops.rearrange(raw_patch_tokens, "b t c h w f -> b t 1 h w (c f)")
+            raw_patch_tokens = einops.rearrange(raw_patch_tokens, 'b t c h w f -> b t 1 h w (c f)')
 
         # Add positional encodings for time, mode, and space.
         patch_tokens = self.add_encoding(raw_patch_tokens)
@@ -889,7 +889,7 @@ class MultimodalTransformer(pl.LightningModule):
             for logit_key, logit_val in logits.items():
                 _tmp = einops.rearrange(logit_val, 'b t h w c -> b (t c) h w')
                 _tmp2 = nn.functional.interpolate(
-                    _tmp, [H, W], mode="bilinear", align_corners=True)
+                    _tmp, [H, W], mode='bilinear', align_corners=True)
                 resampled = einops.rearrange(_tmp2, 'b (t c) h w -> b t h w c', c=logit_val.shape[4])
                 resampled_logits[logit_key] = resampled
 
@@ -1099,7 +1099,7 @@ class MultimodalTransformer(pl.LightningModule):
         #
         # TODO: is there any way to introspect what these variables could be?
 
-        arch_name = "model.pkl"
+        arch_name = 'model.pkl'
         module_name = 'watch_tasks_fusion'
 
         imp = torch.package.PackageImporter(package_path)
@@ -1248,7 +1248,7 @@ class MultimodalTransformer(pl.LightningModule):
             for key in backup_attributes.keys():
                 setattr(model, key, None)
 
-            arch_name = "model.pkl"
+            arch_name = 'model.pkl'
             module_name = 'watch_tasks_fusion'
             """
             exp = torch.package.PackageExporter(package_path, verbose=True)
@@ -1256,8 +1256,8 @@ class MultimodalTransformer(pl.LightningModule):
             with torch.package.PackageExporter(package_path) as exp:
                 # TODO: this is not a problem yet, but some package types (mainly
                 # binaries) will need to be excluded and added as mocks
-                exp.extern("**", exclude=["watch.tasks.fusion.**"])
-                exp.intern("watch.tasks.fusion.**", allow_empty=False)
+                exp.extern('**', exclude=['watch.tasks.fusion.**'])
+                exp.intern('watch.tasks.fusion.**', allow_empty=False)
 
                 # Attempt to standardize some form of package metadata that can
                 # allow for model importing with fewer hard-coding requirements
@@ -1532,7 +1532,7 @@ class DWCNNTokenizer(nn.Module):
         self(inputs)
         """
         b, t, c, h, w = inputs.shape
-        inputs2d = einops.rearrange(inputs, "b t c h w -> (b t) c h w")
+        inputs2d = einops.rearrange(inputs, 'b t c h w -> (b t) c h w')
         tokens2d = self.stem(inputs2d)
-        tokens = einops.rearrange(tokens2d, "(b t) (c ef) h w -> b t c h w ef", b=b, t=t, ef=self.expand_factor)
+        tokens = einops.rearrange(tokens2d, '(b t) (c ef) h w -> b t c h w ef', b=b, t=t, ef=self.expand_factor)
         return tokens

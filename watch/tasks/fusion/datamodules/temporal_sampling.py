@@ -956,7 +956,7 @@ def show_affinity_sample_process(chosen, info, fnum=1):
         ax.plot(np.arange(xmax), probs)
         xpos = x + xmax * 0.0 if x < (xmax / 2) else x - xmax * 0.0
         ypos = y + ymax * 0.3 if y < (ymax / 2) else y - ymax * 0.3
-        ax.annotate('chosen', (x, y), xytext=(xpos, ypos), color='black', arrowprops=dict(color='orange', arrowstyle="->"))
+        ax.annotate('chosen', (x, y), xytext=(xpos, ypos), color='black', arrowprops=dict(color='orange', arrowstyle='->'))
         ax.plot([x, x], [0, ymax], color='orange')
         #ax.annotate('chosen', (x, y), color='black')
         ax.set_title('Sample {}'.format(step_idx))

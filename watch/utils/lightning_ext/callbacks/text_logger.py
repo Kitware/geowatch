@@ -33,14 +33,14 @@ class TextLogger(pl.callbacks.Callback):
     #     self._log('setup state _log')
     #     self._log('trainer.default_root_dir = {!r}'.format(trainer.default_root_dir))
 
-    def teardown(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", stage: Optional[str] = None) -> None:
+    def teardown(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', stage: Optional[str] = None) -> None:
         self._log('teardown state _log')
 
     # def on_init_start(self, trainer: "pl.Trainer") -> None:
     #     # self._log('on_init_start')
     #     pass
 
-    def on_init_end(self, trainer: "pl.Trainer") -> None:
+    def on_init_end(self, trainer: 'pl.Trainer') -> None:
         import pathlib
         self.log_dir = pathlib.Path(trainer.log_dir)
         self.log_fpath = self.log_dir / 'text_logs.log'
@@ -51,52 +51,52 @@ class TextLogger(pl.callbacks.Callback):
         if self.args is not None:
             self._log('args_dict = {}'.format(ub.repr2(self.args.__dict__, nl=1, sort=0)))
 
-    def on_fit_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+    def on_fit_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         self._log('on_fit_start')
 
-    def on_fit_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+    def on_fit_end(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         self._log('on_fit_end')
 
-    def on_train_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+    def on_train_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         self._log('on_train_start')
 
-    def on_train_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+    def on_train_end(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         self._log('on_train_end')
 
-    def on_save_checkpoint(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", checkpoint: Dict[str, Any]) -> dict:
+    def on_save_checkpoint(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', checkpoint: Dict[str, Any]) -> dict:
         self._log('on_save_checkpoint - checkpoint = {}'.format(ub.repr2(checkpoint.keys(), nl=1)))
 
-    def on_load_checkpoint(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", callback_state: Dict[str, Any]) -> None:
+    def on_load_checkpoint(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', callback_state: Dict[str, Any]) -> None:
         self._log('on_load_checkpoint - callback_state = {}'.format(ub.repr2(callback_state.keys(), nl=1)))
 
-    def on_sanity_check_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+    def on_sanity_check_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         self._log('on_sanity_check_start')
 
-    def on_sanity_check_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+    def on_sanity_check_end(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         self._log('on_sanity_check_end')
 
-    def on_keyboard_interrupt(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+    def on_keyboard_interrupt(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         self._log('on_keyboard_interrupt')
         self._log('KEYBOARD INTERUPT')
         self._log('trainer.default_root_dir = {!r}'.format(trainer.default_root_dir))
         self._log('trainer.log_dir = {!r}'.format(trainer.log_dir))
 
-    def on_epoch_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+    def on_epoch_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         self._log.debug('on_epoch_start')
 
-    def on_epoch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+    def on_epoch_end(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         self._log.debug('on_epoch_end')
 
-    def on_train_epoch_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+    def on_train_epoch_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         self._log.debug('on_train_epoch_start')
 
-    def on_train_epoch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+    def on_train_epoch_end(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         self._log.debug('on_train_epoch_end')
 
-    def on_validation_epoch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+    def on_validation_epoch_end(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         self._log.debug('on_validation_epoch_end')
 
-    def on_validation_epoch_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+    def on_validation_epoch_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         self._log.debug('on_validation_epoch_start')
 
 

@@ -1324,12 +1324,12 @@ class ORIG_CocoImage(ub.NiceRepr):
 
 
 class TrackidGenerator(ub.NiceRepr):
-    '''
+    """
     Keep track of which trackids have been used and generate new ones on demand
 
     TODO merge this into kwcoco as something like CocoDataset.next_trackid()?
     Or expose whatever mechanism is already generating new aids, gids, etc
-    '''
+    """
 
     def update_generator(self):
         used_trackids = self.dset.index.trackid_to_aids.keys()

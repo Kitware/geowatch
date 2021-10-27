@@ -217,38 +217,38 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         """
         from scriptconfig.smartcast import smartcast
         from functools import partial
-        parser = parent_parser.add_argument_group("kwcoco_video_data")
-        parser.add_argument("--train_dataset", default=None, help='path to the train kwcoco file')
-        parser.add_argument("--vali_dataset", default=None, help='path to the validation kwcoco file')
-        parser.add_argument("--test_dataset", default=None, help='path to the test kwcoco file')
-        parser.add_argument("--time_steps", default=2, type=smartcast)
-        parser.add_argument("--chip_size", default=128, type=smartcast)
-        parser.add_argument("--time_overlap", default=0.0, type=smartcast, help='fraction of time steps to overlap')
-        parser.add_argument("--chip_overlap", default=0.1, type=smartcast, help='fraction of space steps to overlap')
-        parser.add_argument("--neg_to_pos_ratio", default=1.0, type=float, help='maximum ratio of samples with no annotations to samples with annots')
-        parser.add_argument("--time_sampling", default='contiguous', type=str, help=ub.paragraph(
+        parser = parent_parser.add_argument_group('kwcoco_video_data')
+        parser.add_argument('--train_dataset', default=None, help='path to the train kwcoco file')
+        parser.add_argument('--vali_dataset', default=None, help='path to the validation kwcoco file')
+        parser.add_argument('--test_dataset', default=None, help='path to the test kwcoco file')
+        parser.add_argument('--time_steps', default=2, type=smartcast)
+        parser.add_argument('--chip_size', default=128, type=smartcast)
+        parser.add_argument('--time_overlap', default=0.0, type=smartcast, help='fraction of time steps to overlap')
+        parser.add_argument('--chip_overlap', default=0.1, type=smartcast, help='fraction of space steps to overlap')
+        parser.add_argument('--neg_to_pos_ratio', default=1.0, type=float, help='maximum ratio of samples with no annotations to samples with annots')
+        parser.add_argument('--time_sampling', default='contiguous', type=str, help=ub.paragraph(
             '''
             Strategy for expanding the time window across non-contiguous frames.
             Can be auto, contiguous, hard+distribute, or dilate_affinity
             '''))
-        parser.add_argument("--exclude_sensors", type=partial(smartcast, astype=list), help='comma delimited list of sensors to avoid, such as S2 or L8')
-        parser.add_argument("--channels", default=None, type=str, help='channels to use should be ChannelSpec coercable')
-        parser.add_argument("--batch_size", default=4, type=int)
-        parser.add_argument("--time_span", default='2y', type=str, help='how long a time window should roughly span by default')
+        parser.add_argument('--exclude_sensors', type=partial(smartcast, astype=list), help='comma delimited list of sensors to avoid, such as S2 or L8')
+        parser.add_argument('--channels', default=None, type=str, help='channels to use should be ChannelSpec coercable')
+        parser.add_argument('--batch_size', default=4, type=int)
+        parser.add_argument('--time_span', default='2y', type=str, help='how long a time window should roughly span by default')
 
         parser.add_argument(
-            "--normalize_inputs", default=True, type=smartcast, help=ub.paragraph(
+            '--normalize_inputs', default=True, type=smartcast, help=ub.paragraph(
                 '''
                 if True, computes the mean/std for this dataset on each mode
                 so this can be passed to the model.
                 '''))
 
         parser.add_argument(
-            "--match_histograms", default=True, type=smartcast, help=ub.paragraph(
+            '--match_histograms', default=True, type=smartcast, help=ub.paragraph(
                 '''
                 '''))
         parser.add_argument(
-            "--diff_inputs", default=False, type=smartcast, help=ub.paragraph(
+            '--diff_inputs', default=False, type=smartcast, help=ub.paragraph(
                 '''
                 if True, also includes a difference between consecutive frames
                 in the inputs produced.
@@ -256,7 +256,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
         # Backend infastructure-based arguments
         parser.add_argument(
-            "--num_workers", default=4, type=str, help=ub.paragraph(
+            '--num_workers', default=4, type=str, help=ub.paragraph(
                 '''
                 number of background workers. Can be auto or an avail
                 expression
@@ -283,13 +283,13 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         if self.verbose:
             print('Setup DataModule: stage = {!r}'.format(stage))
 
-        util_globals.configure_hacks(**{
+        util_globals.configure_global_attributes(**{
             'num_workers': self.num_workers,
             'torch_sharing_strategy': self.torch_sharing_strategy,
             'torch_start_method': self.torch_start_method,
         })
 
-        if stage == "fit" or stage is None:
+        if stage == 'fit' or stage is None:
             train_data = self.train_kwcoco
             if isinstance(train_data, pathlib.Path):
                 train_data = str(train_data.expanduser())
@@ -367,7 +367,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 self.torch_datasets['vali'] = vali_dataset
                 ub.inject_method(self, lambda self: self._make_dataloader('vali', shuffle=False), 'val_dataloader')
 
-        if stage == "test" or stage is None:
+        if stage == 'test' or stage is None:
             test_data = self.test_kwcoco
             if isinstance(test_data, pathlib.Path):
                 test_data = str(test_data.expanduser())
@@ -592,7 +592,7 @@ class KWCocoVideoDataset(data.Dataset):
         sampler,
         sample_shape,
         channels=None,
-        mode="fit",
+        mode='fit',
         window_overlap=0,
         neg_to_pos_ratio=1.0,
         time_sampling='auto',
@@ -653,8 +653,8 @@ class KWCocoVideoDataset(data.Dataset):
                 time_span=time_span,
             )
 
-            n_pos = len(new_sample_grid["positives_indexes"])
-            n_neg = len(new_sample_grid["negatives_indexes"])
+            n_pos = len(new_sample_grid['positives_indexes'])
+            n_neg = len(new_sample_grid['negatives_indexes'])
 
             max_neg = min(int(max(0, (neg_to_pos_ratio * n_pos))), n_neg)
             if n_neg > max_neg:
@@ -664,7 +664,7 @@ class KWCocoVideoDataset(data.Dataset):
             # and when we select one we will really just randomly select from
             # within the pool
             if max_neg > 0:
-                negative_pool = list(util_iter.chunks(new_sample_grid["negatives_indexes"], nchunks=max_neg))
+                negative_pool = list(util_iter.chunks(new_sample_grid['negatives_indexes'], nchunks=max_neg))
                 self.negative_pool = negative_pool
                 neg_pool_chunksizes = set(map(len, self.negative_pool))
                 print('neg_pool_chunksizes = {!r}'.format(neg_pool_chunksizes))
@@ -915,7 +915,7 @@ class KWCocoVideoDataset(data.Dataset):
             tr_['gids'] = list(ub.take(valid_gids, time_sampler.sample(tr_['main_idx'])))
 
         if self.channels:
-            tr_["channels"] = self.sample_channels
+            tr_['channels'] = self.sample_channels
 
         if self.inference_only:
             with_annots = []
@@ -1166,11 +1166,11 @@ class KWCocoVideoDataset(data.Dataset):
 
         item = {
             # TODO: breakup modes into different items
-            "index": index,
-            "frames": frame_items,
-            "video_id": sample['tr']['vidid'],
-            "video_name": video['name'],
-            "tr": tr_subset
+            'index': index,
+            'frames': frame_items,
+            'video_id': sample['tr']['vidid'],
+            'video_name': video['name'],
+            'tr': tr_subset
         }
         return item
 

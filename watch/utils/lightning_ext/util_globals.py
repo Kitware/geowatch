@@ -3,7 +3,7 @@ Utilities for handling global resources
 """
 
 
-def configure_hacks(**config):
+def configure_global_attributes(**config):
     """
     Configures hacks to fix global settings in external modules
 

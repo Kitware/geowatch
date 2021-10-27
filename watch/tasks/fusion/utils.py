@@ -197,7 +197,7 @@ def add_auxiliary(dset, gid, fname, channels, aux_height, aux_width, warp_aux_to
 
     if extra_info is not None:
         assert isinstance(extra_info, dict)
-        aux = {**extra_info, **aux}
+        aux = ub.dict_union(extra_info, aux)
 
     # Save the data to disk
     # kwimage.imwrite(fpath, data)
