@@ -181,9 +181,9 @@ def run_bas_fusion_for_baseline(
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
     baseline_framework_kwcoco_egress(bas_fusion_kwcoco_path,
+                                     local_region_path,
                                      output_path,
                                      outbucket,
-                                     local_region_path,
                                      aws_profile=None,
                                      dryrun=False,
                                      newline=False)

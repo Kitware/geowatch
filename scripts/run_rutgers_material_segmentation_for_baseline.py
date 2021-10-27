@@ -152,9 +152,9 @@ def run_rutgers_material_segmentation_for_baseline(
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
     baseline_framework_kwcoco_egress(rutgers_matseg_features_kwcoco_path,
+                                     local_region_path,
                                      output_path,
                                      outbucket,
-                                     local_region_path,
                                      aws_profile=None,
                                      dryrun=False,
                                      newline=False)

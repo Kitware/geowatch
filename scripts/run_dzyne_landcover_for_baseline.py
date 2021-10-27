@@ -148,9 +148,9 @@ def run_dzyne_landcover_for_baseline(input_path,
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
     baseline_framework_kwcoco_egress(dzyne_landcover_features_kwcoco_path,
+                                     local_region_path,
                                      output_path,
                                      outbucket,
-                                     local_region_path,
                                      aws_profile=None,
                                      dryrun=False,
                                      newline=False)
