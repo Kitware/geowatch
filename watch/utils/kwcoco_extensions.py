@@ -17,6 +17,9 @@ from os.path import join
 import numbers
 from kwimage.transform import Affine
 
+# Was originally defined in this file, moved to kwcoco proper
+from kwcoco.coco_image import CocoImage
+
 try:
     from xdev import profile
 except Exception:
@@ -45,14 +48,11 @@ def populate_watch_fields(dset, target_gsd=10.0, overwrite=False, default_gsd=No
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from watch.utils.kwcoco_extensions import *  # NOQA
         >>> import kwcoco
-        >>> # root_dpath = ub.expandpath('~/data/dvc-repos/smart_watch_dvc/extern/onera_2018')
-        >>> # coco_fpath = join(root_dpath, 'onera_all.kwcoco.json')
-        >>> fpath = ub.expandpath('~/data/dvc-repos/smart_watch_dvc/drop0_aligned/data.kwcoco.json')
+        >>> dvc_dpath = watch.utils.util_data.find_smart_dvc_dpath()
+        >>> fpath = dvc_dpath / 'drop0_aligned/data.kwcoco.json')
         >>> dset = kwcoco.CocoDataset(fpath)
         >>> target_gsd = 5.0
         >>> populate_watch_fields(dset, target_gsd)
-        >>> # dset.dump(dset.fpath, newlines=True)
-
         >>> print('dset.index.videos = {}'.format(ub.repr2(dset.index.videos, nl=-1)))
         >>> print('dset.index.imgs[1] = ' + ub.repr2(dset.index.imgs[1], nl=1))
 
@@ -87,6 +87,138 @@ def populate_watch_fields(dset, target_gsd=10.0, overwrite=False, default_gsd=No
 
     # serialize intermediate objects
     dset._ensure_json_serializable()
+
+
+def check_unique_channel_names(dset, gids=None, verbose=0):
+    """
+    Check each image has unique channel names
+
+    TODO:
+        - [ ] move to kwcoco proper
+
+    Example:
+        >>> from watch.utils.kwcoco_extensions import *  # NOQA
+        >>> import kwcoco
+        >>> # TODO: make a demo dataset with some sort of gsd metadata
+        >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
+        >>> check_unique_channel_names(dset)
+        >>> # Make some duplicate channels to test
+        >>> obj = dset.images().objs[0]
+        >>> obj['auxiliary'][0]['channels'] = 'B1|B1'
+        >>> obj = dset.images().objs[1]
+        >>> obj['auxiliary'][0]['channels'] = 'B1|B1'
+        >>> obj = dset.images().objs[2]
+        >>> obj['auxiliary'][1]['channels'] = 'B1'
+        >>> import pytest
+        >>> with pytest.raises(AssertionError):
+        >>>     check_unique_channel_names(dset)
+
+    """
+    images = dset.images(gids=gids)
+    errors = []
+    for img in images.objs:
+        coco_img = dset._coco_image(img['id'])
+        try:
+            _check_unique_channel_names_in_image(coco_img)
+        except AssertionError as ex:
+            if verbose:
+                print('ERROR: ex = {}'.format(ub.repr2(ex, nl=1)))
+            errors.append(ex)
+
+    if errors:
+        error_summary = ub.dict_hist(map(str, errors))
+        raise AssertionError(ub.repr2(error_summary))
+
+
+def _check_unique_channel_names_in_image(coco_img):
+    import kwcoco
+    seen = set()
+    for obj in coco_img.iter_asset_objs():
+        chans = kwcoco.FusedChannelSpec.coerce(obj['channels'])
+        chan_list : list = chans.normalize().parsed
+        intra_aux_duplicate = ub.find_duplicates(chan_list)
+        if intra_aux_duplicate:
+            raise AssertionError(
+                'Image has internal duplicate bands: {}'.format(
+                    intra_aux_duplicate))
+
+        inter_aux_duplicates = seen & set(chan_list)
+        if inter_aux_duplicates:
+            raise AssertionError(
+                'Image has inter-auxiliary duplicate bands: {}'.format(
+                    inter_aux_duplicates))
+
+
+def transfer_geo_metadata(dset, gid):
+    """
+    Transfer geo-metadata from source geotiffs to predicted feature images
+
+    Example:
+        # xdoctest: +REQUIRES(env:DVC_DPATH)
+        from watch.utils.kwcoco_extensions import *  # NOQA
+        from watch.utils.util_data import find_smart_dvc_dpath
+        import kwcoco
+        dvc_dpath = find_smart_dvc_dpath()
+        coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/combo_data.kwcoco.json'
+        dset = kwcoco.CocoDataset(coco_fpath)
+        gid = dset.images().peek()['id']
+    """
+    import watch
+    coco_img = dset._coco_image(gid)
+
+    asset_objs = list(coco_img.iter_asset_objs())
+
+    assets_with_geo_info = {}
+    assets_without_geo_info = {}
+    for asset_idx, obj in enumerate(asset_objs):
+        fname = obj.get('file_name', None)
+        if fname is not None:
+            fpath = join(coco_img.dset.bundle_dpath, fname)
+            try:
+                info = watch.gis.geotiff.geotiff_metadata(fpath)
+            except Exception:
+                assets_without_geo_info[asset_idx] = obj
+            else:
+                assets_with_geo_info[asset_idx] = (obj, info)
+
+    if assets_without_geo_info:
+        if not assets_with_geo_info:
+            raise ValueError(ub.paragraph(
+                '''
+                There are images without geo data, but no other data within
+                this image has transferable geo-data
+                '''))
+
+        from osgeo import gdal
+        # Choose an object to register to (not sure if it matters which one)
+        # choose arbitrary one for now.
+        geo_asset_idx, (geo_obj, geo_info) = ub.peek(assets_with_geo_info.items())
+        geo_fname = geo_obj.get('file_name', None)
+        geo_fpath = join(coco_img.dset.bundle_dpath, geo_fname)
+
+        geo_ds = gdal.Open(geo_fpath)
+
+        geo_info['wld_crs_info']
+
+        for asset_idx, obj in assets_without_geo_info.items():
+            fname = obj.get('file_name', None)
+            fpath = join(coco_img.dset.bundle_dpath, fname)
+
+            dst_ds = gdal.Open(fpath)
+
+        # Matt's transfer metadata code
+        """
+        src_ds = gdal.Open(toafile)
+        if src_ds is None:
+            log.error('Could not open image')
+            sys.exit(1)
+        transform = src_ds.GetGeoTransform()
+        proj = src_ds.GetProjection()
+        dst_ds = gdal.Open(boafile, gdal.GA_Update)
+        dst_ds.SetGeoTransform(transform)
+        dst_ds.SetProjection(proj)
+        src_ds, dst_ds = None, None
+        """
 
 
 def coco_populate_geo_video_stats(dset, vidid, target_gsd='max-resolution'):
@@ -129,7 +261,7 @@ def coco_populate_geo_video_stats(dset, vidid, target_gsd='max-resolution'):
         >>> from watch.utils.util_data import find_smart_dvc_dpath
         >>> import kwcoco
         >>> dvc_dpath = find_smart_dvc_dpath()
-        >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
+        >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/combo_data.kwcoco.json'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
         >>> target_gsd = 10.0
         >>> vidid = 2
@@ -158,6 +290,8 @@ def coco_populate_geo_video_stats(dset, vidid, target_gsd='max-resolution'):
     # common resolution.
     video = dset.index.videos[vidid]
     gids = dset.index.vidid_to_gids[vidid]
+
+    check_unique_channel_names(gids=gids)
 
     frame_infos = {}
 
@@ -739,7 +873,10 @@ def coco_channel_stats(dset):
     return info
 
 
-class CocoImage(ub.NiceRepr):
+
+
+# DEPRECATED
+class ORIG_CocoImage(ub.NiceRepr):
     """
     An object-oriented representation of a coco image.
 
@@ -753,7 +890,7 @@ class CocoImage(ub.NiceRepr):
     vectorized interface to multiple objects.
 
     TODO:
-        - [ ] This will eventually move to kwcoco itself
+        - [x] This will eventually move to kwcoco itself
 
     Example:
         >>> from watch.utils.kwcoco_extensions import *  # NOQA

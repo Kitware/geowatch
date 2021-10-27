@@ -123,13 +123,15 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         exclude_sensors=['L8'],  # NOQA
         channels=None,
         batch_size=4,
-        num_workers=4,
         preprocessing_step=None,
         tfms_channel_subset=None,
         normalize_inputs=False,
         match_histograms=False,
         diff_inputs=False,
         verbose=1,
+        num_workers=4,
+        torch_sharing_strategy='auto',
+        torch_start_method='auto',
     ):
         """
         Args:
@@ -161,7 +163,6 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.neg_to_pos_ratio = neg_to_pos_ratio
         self.channels = channels
         self.batch_size = batch_size
-        self.num_workers = util_globals.coerce_num_workers(num_workers)
         self.preprocessing_step = preprocessing_step
         self.normalize_inputs = normalize_inputs
         self.time_sampling = time_sampling
@@ -169,6 +170,10 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.diff_inputs = diff_inputs
         self.time_span = time_span
         self.match_histograms = match_histograms
+
+        self.num_workers = util_globals.coerce_num_workers(num_workers)
+        self.torch_start_method = torch_start_method
+        self.torch_sharing_strategy = torch_sharing_strategy
 
         self.input_stats = None
         self.dataset_stats = None
@@ -229,7 +234,6 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         parser.add_argument("--exclude_sensors", type=partial(smartcast, astype=list), help='comma delimited list of sensors to avoid, such as S2 or L8')
         parser.add_argument("--channels", default=None, type=str, help='channels to use should be ChannelSpec coercable')
         parser.add_argument("--batch_size", default=4, type=int)
-        parser.add_argument("--num_workers", default=4, type=str, help='number of background workers. Can be auto or an avail expression')
         parser.add_argument("--time_span", default='2y', type=str, help='how long a time window should roughly span by default')
 
         parser.add_argument(
@@ -249,11 +253,42 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 if True, also includes a difference between consecutive frames
                 in the inputs produced.
                 '''))
+
+        # Backend infastructure-based arguments
+        parser.add_argument(
+            "--num_workers", default=4, type=str, help=ub.paragraph(
+                '''
+                number of background workers. Can be auto or an avail
+                expression
+                '''
+            ))
+
+        parser.add_argument(
+            '--torch_sharing_strategy', default='default', help=ub.paragraph(
+                '''
+                Torch multiprocessing sharing strategy.
+                Can be default, file_descriptor, file_system
+                '''))
+
+        parser.add_argument(
+            '--torch_start_method', default='default', help=ub.paragraph(
+                '''
+                Torch multiprocessing sharing strategy.
+                Can be fork, spawn, forkserver
+                '''))
+
         return parent_parser
 
     def setup(self, stage):
         if self.verbose:
             print('Setup DataModule: stage = {!r}'.format(stage))
+
+        util_globals.configure_hacks(**{
+            'num_workers': self.num_workers,
+            'torch_sharing_strategy': self.torch_sharing_strategy,
+            'torch_start_method': self.torch_start_method,
+        })
+
         if stage == "fit" or stage is None:
             train_data = self.train_kwcoco
             if isinstance(train_data, pathlib.Path):
@@ -359,8 +394,6 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         print('self.torch_datasets = {}'.format(ub.repr2(self.torch_datasets, nl=1)))
 
     def _make_dataloader(self, stage, shuffle=False):
-        if self.num_workers > 0:
-            util_globals.request_nofile_limits()
         return data.DataLoader(
             self.torch_datasets[stage],
             batch_size=self.batch_size,
@@ -1223,8 +1256,7 @@ class KWCocoVideoDataset(data.Dataset):
 
         # Hack: disable augmentation if we are doing that
         self.disable_augmenter = True
-        if num_workers > 0:
-            util_globals.request_nofile_limits()
+
         loader = torch.utils.data.DataLoader(
             stats_subset,
             collate_fn=ub.identity, num_workers=num_workers, shuffle=True,
@@ -1699,8 +1731,6 @@ class KWCocoVideoDataset(data.Dataset):
             >>> loader = self.make_loader(batch_size=2)
             >>> batch = next(iter(loader))
         """
-        if num_workers > 0:
-            util_globals.request_nofile_limits()
         loader = torch.utils.data.DataLoader(
             self, batch_size=batch_size, num_workers=num_workers,
             shuffle=shuffle, pin_memory=pin_memory, collate_fn=ub.identity)

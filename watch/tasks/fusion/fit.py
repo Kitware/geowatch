@@ -143,22 +143,10 @@ def make_fit_config(cmdline=False, **kwargs):
     # dump some config to stdout or disk
     config_parser = parser.add_argument_group("Other")
 
-    config_parser.add_argument('--profile', action='store_true', help=ub.paragraph(
+    parser.add_argument('--profile', action='store_true', help=ub.paragraph(
         '''
         Fit does nothing with this flag. This just allows for `@xdev.profile`
-        profiling.
-        '''))
-
-    config_parser.add_argument('--torch_sharing_strategy', default='default', help=ub.paragraph(
-        '''
-        Torch multiprocessing sharing strategy.
-        Can be default, file_descriptor, file_system
-        '''))
-
-    config_parser.add_argument('--torch_start_method', default='default', help=ub.paragraph(
-        '''
-        Torch multiprocessing sharing strategy.
-        Can be fork, spawn, forkserver
+        profiling which checks sys.argv separately.
         '''))
 
     config_parser.add_argument('--init', default='noop', help=ub.paragraph(
@@ -319,6 +307,10 @@ def make_fit_config(cmdline=False, **kwargs):
 @profile
 def make_lightning_modules(args=None, cmdline=False, **kwargs):
     """
+
+    CommandLine:
+        xdoctest -m /home/joncrall/code/watch/watch/tasks/fusion/fit.py make_lightning_modules
+
     Example:
         >>> from watch.tasks.fusion.fit import *  # NOQA
         >>> args = None
@@ -336,13 +328,6 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     args_dict = args.__dict__
     print("{train_name}\n====================".format(**args_dict))
     print('args_dict = {}'.format(ub.repr2(args_dict, nl=1, sort=0)))
-
-    from watch.utils.lightning_ext import util_globals
-    util_globals.configure_hacks(
-        num_workers=args.num_workers,
-        torch_sharing_strategy=args.torch_sharing_strategy,
-        torch_start_method=args.torch_start_method,
-    )
 
     pathlib.Path(args.workdir).mkdir(exist_ok=True, parents=True)
 
