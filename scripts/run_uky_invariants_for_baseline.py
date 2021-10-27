@@ -220,13 +220,12 @@ def run_uky_invariants_for_baseline(input_path,
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
     baseline_framework_kwcoco_egress(ta1_uky_combined_features_kwcoco_path,
+                                     local_region_path,
                                      output_path,
                                      outbucket,
-                                     local_region_path,
                                      aws_profile=None,
                                      dryrun=False,
-                                     newline=False,
-                                     jobs=1)
+                                     newline=False)
 
 
 if __name__ == "__main__":
