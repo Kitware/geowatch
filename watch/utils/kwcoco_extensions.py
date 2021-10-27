@@ -212,6 +212,9 @@ def transfer_geo_metadata(dset, gid):
                 obj.get('warp_aux_to_img', None))
             warp_aux_from_img = warp_img_from_aux.inv()
 
+            warp_georef_from_aux = (
+                warp_georef_from_img @ warp_img_from_aux)
+
             warp_aux_from_georef = (
                 warp_aux_from_img @ warp_img_from_georef)
 

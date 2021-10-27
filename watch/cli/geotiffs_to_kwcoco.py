@@ -143,7 +143,7 @@ def make_coco_img_from_geotiff(tiff_fpath, name=None, force_affine=True,
     # TODO support RPC
     info.update(**watch.gis.geotiff.geotiff_crs_info(tiff_fpath, force_affine=force_affine))
 
-    warp_pxl_to_wld = kwimage.Affine.coerce(info['pxl_to_wld'])
+    warp_pxl_from_wld = kwimage.Affine.coerce(info['pxl_to_wld'])
     height, width = info['img_shape']
     file_meta = info['filename_meta']
     channels = file_meta.get('channels', None)
@@ -181,7 +181,7 @@ def make_coco_img_from_geotiff(tiff_fpath, name=None, force_affine=True,
         'channels': channels,
         'num_bands': info['num_bands'],
         'approx_meter_gsd': info['approx_meter_gsd'],
-        'warp_pxl_to_wld': warp_pxl_to_wld,
+        'warp_pxl_to_wld': warp_pxl_from_wld,
         'utm_corners': info['utm_corners'].data.tolist(),
         'wld_crs_info': wld_crs_info,
         'utm_crs_info': utm_crs_info,
@@ -218,9 +218,9 @@ def make_coco_img_from_auxiliary_dicts(auxiliary, name):
     # Choose a base image canvas and the relationship between auxiliary images
     idx = ub.argmax(auxiliary, lambda x: (x['width'] * x['height']))
     base = auxiliary[idx]
-    warp_img_to_wld = base['warp_pxl_to_wld']
-    warp_wld_to_img = warp_img_to_wld.inv()
-    img['warp_img_to_wld'] = warp_img_to_wld.concise()
+    warp_wld_from_img = base['warp_pxl_to_wld']
+    warp_img_from_wld = warp_wld_from_img.inv()
+    img['warp_img_to_wld'] = warp_wld_from_img.concise()
     img.update(ub.dict_isect(base, {'utm_corners', 'wld_crs_info', 'utm_crs_info'}))
 
     # img[' = aux.pop('utm_corners')
@@ -231,8 +231,9 @@ def make_coco_img_from_auxiliary_dicts(auxiliary, name):
         aux.pop('utm_corners')
         aux.pop('utm_crs_info')
         aux.pop('wld_crs_info')
-        warp_aux_to_img = warp_wld_to_img @ aux.pop('warp_pxl_to_wld')
-        aux['warp_aux_to_img'] = warp_aux_to_img.concise()
+        warp_wld_from_aux = aux.pop('warp_pxl_to_wld')
+        warp_img_from_aux = warp_img_from_wld @ warp_wld_from_aux
+        aux['warp_aux_to_img'] = warp_img_from_aux.concise()
 
     img['width'] = base['width']
     img['height'] = base['height']
