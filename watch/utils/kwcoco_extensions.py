@@ -1524,3 +1524,100 @@ class TrackidGenerator(ub.NiceRepr):
 
     def __next__(self):
         return next(self.generator)
+
+
+def _demo_kwcoco_with_heatmaps(num_videos=1):
+    """
+    Return a dummy kwcoco file with special metdata
+
+    Ignore:
+        from watch.utils.kwcoco_extensions import _demo_kwcoco_with_heatmaps
+        coco_dset = _demo_kwcoco_with_heatmaps()
+        key = 'salient'
+        for vidid in coco_dset.videos():
+            frames = []
+            for gid in coco_dset.images(vidid=vidid):
+                delayed = coco_dset._coco_image(gid).delay(channels=key, space='video')
+                final = delayed.finalize()
+                frames.append(final)
+            vid_stack = kwimage.stack_images_grid(frames, axis=1, pad=5, bg_value=1)
+            kwplot.imshow(vid_stack)
+    """
+    import pathlib
+    import kwarray
+    import kwcoco
+    from kwcoco.demo import perterb
+
+    coco_dset = kwcoco.CocoDataset.demo(
+        'vidshapes', num_videos=1, num_frames=20,
+        multispectral=True, image_size=(128, 128))
+
+    perterb_config = {
+        'box_noise': 0.5,
+        'n_fp': 3,
+        # 'with_probs': 1,
+    }
+    perterb.perterb_coco(coco_dset, **perterb_config)
+
+    asset_dpath = pathlib.Path(coco_dset.assets_dpath)
+    dummy_heatmap_dpath = asset_dpath / 'dummy_heatmaps'
+    dummy_heatmap_dpath.mkdir(exist_ok=1, parents=True)
+
+    rng = 1018933676  # random seed
+    rng = kwarray.ensure_rng(rng)
+
+    channels = 'notsalient|salient'
+    channels = kwcoco.FusedChannelSpec.coerce(channels)
+    chan_codes = channels.normalize().as_list()
+
+    aux_width = 64
+    aux_height = 64
+    dims = (aux_width, aux_height)
+    for img in coco_dset.index.imgs.values():
+
+        warp_img_from_aux = kwimage.Affine.scale((
+            img['width'] / aux_width, img['height'] / aux_height))
+        warp_aux_from_img = warp_img_from_aux.inv()
+
+        # Grab perterbed detections from this image
+        img_dets = coco_dset.annots(gid=img['id']).detections
+
+        # Transfom dets into aux space
+        aux_dets = img_dets.warp(warp_aux_from_img)
+
+        # Hack: use dets to draw some randomish heatmaps
+        sseg = aux_dets.data['segmentations']
+        chan_datas = []
+        for code in chan_codes:
+            chan_data = np.zeros(dims, dtype=np.float32)
+            for poly in sseg.data:
+                poly.fill(chan_data, 1)
+
+            # Add lots of noise to the data
+            chan_data += (rng.randn(*dims) * 0.1)
+            chan_data + chan_data.clip(0, 1)
+            chan_data = kwimage.gaussian_blur(chan_data, sigma=1.2)
+            chan_data = chan_data.clip(0, 1)
+            mask = rng.randn(*dims)
+            chan_data = chan_data * ((kwimage.fourier_mask(chan_data, mask)[..., 0]) + .5)
+            chan_data += (rng.randn(*dims) * 0.1)
+            chan_data = chan_data.clip(0, 1)
+            chan_datas.append(chan_data)
+        hwc_probs = np.stack(chan_datas, axis=2)
+
+        # TODO do something with __WIP_add_auxiliary to make this clear and
+        # concise
+        heatmap_fpath = dummy_heatmap_dpath / 'dummy_heatmap_{}.tif'.format(img['id'])
+        kwimage.imwrite(heatmap_fpath, hwc_probs, backend='gdal', compress='NONE',
+                        blocksize=96)
+        aux_height, aux_width = hwc_probs.shape[0:2]
+
+        auxlist = img['auxiliary']
+        auxlist.append({
+            'file_name': heatmap_fpath,
+            'width': aux_width,
+            'height': aux_height,
+            'channels': channels.spec,
+            'warp_aux_to_img': warp_img_from_aux.concise(),
+        })
+    return coco_dset
