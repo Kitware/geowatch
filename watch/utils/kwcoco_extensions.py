@@ -198,11 +198,22 @@ def transfer_geo_metadata(dset, gid):
 
         geo_ds = gdal.Open(geo_fpath)
 
+        warp_img_from_georef = kwimage.Affine.coerce(
+            geo_obj.get('warp_aux_to_img', None))
+        warp_georef_from_img = warp_img_from_georef.inv()
+
         geo_info['wld_crs_info']
 
         for asset_idx, obj in assets_without_geo_info.items():
             fname = obj.get('file_name', None)
             fpath = join(coco_img.dset.bundle_dpath, fname)
+
+            warp_img_from_aux = kwimage.Affine.coerce(
+                obj.get('warp_aux_to_img', None))
+            warp_aux_from_img = warp_img_from_aux.inv()
+
+            warp_aux_from_georef = (
+                warp_aux_from_img @ warp_img_from_georef)
 
             dst_ds = gdal.Open(fpath)
 

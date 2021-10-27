@@ -270,8 +270,8 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
             info['GCPGeoTransformGSD'] = (pixelSizeX, pixelSizeY)
 
     aff = affine.Affine.from_gdal(*aff_geo_transform)
-    aff_pxl_to_wld = np.vstack([np.array(aff.column_vectors).T, [0, 0, 1]])
-    aff_wld_to_pxl = np.linalg.inv(aff_pxl_to_wld)
+    aff_wld_from_pxl = np.vstack([np.array(aff.column_vectors).T, [0, 0, 1]])
+    aff_pxl_from_wld = np.linalg.inv(aff_wld_from_pxl)
 
     def axis_mapping_int_to_text(axis_mapping_int):
         """
@@ -331,15 +331,15 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
     wgs84_axis_mapping_int = wgs84_crs.GetAxisMappingStrategy()
     wgs84_axis_mapping = axis_mapping_int_to_text(wgs84_axis_mapping_int)
 
-    wld_to_wgs84 = osr.CoordinateTransformation(wld_crs, wgs84_crs)
-    wgs84_to_wld = osr.CoordinateTransformation(wgs84_crs, wld_crs)
+    wgs84_from_wld = osr.CoordinateTransformation(wld_crs, wgs84_crs)
+    wld_from_wgs84 = osr.CoordinateTransformation(wgs84_crs, wld_crs)
 
     if is_rpc:
-        wld_to_pxl = rpc_transform.warp_world_to_pixel
-        pxl_to_wld = rpc_transform.warp_pixel_to_world
+        pxl_from_wld = rpc_transform.warp_pixel_from_world
+        wld_from_pxl = rpc_transform.warp_world_from_pixel
     else:
-        pxl_to_wld = aff_pxl_to_wld
-        wld_to_pxl = aff_wld_to_pxl
+        wld_from_pxl = aff_wld_from_pxl
+        pxl_from_wld = aff_pxl_from_wld
 
     shape = (ref.RasterYSize, ref.RasterXSize)
 
@@ -352,9 +352,9 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         [ref.RasterXSize, 0],
     ])
     pxl_corners = kwimage.Coords(xy_corners)
-    wld_corners = pxl_corners.warp(pxl_to_wld)
+    wld_corners = pxl_corners.warp(wld_from_pxl)
 
-    wgs84_corners = wld_corners.warp(wld_to_wgs84)
+    wgs84_corners = wld_corners.warp(wgs84_from_wld)
     lat1 = wgs84_corners.data[:, 0].min()
     lat2 = wgs84_corners.data[:, 0].max()
     lon1 = wgs84_corners.data[:, 1].min()
@@ -377,9 +377,9 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         utm_axis_mapping_int = utm_crs.GetAxisMappingStrategy()
         utm_axis_mapping = axis_mapping_int_to_text(utm_axis_mapping_int)
 
-        wld_to_utm = osr.CoordinateTransformation(wld_crs, utm_crs)
-        utm_to_wld = osr.CoordinateTransformation(utm_crs, wld_crs)
-        utm_corners = wld_corners.warp(wld_to_utm)
+        utm_from_wld = osr.CoordinateTransformation(wld_crs, utm_crs)
+        wld_from_utm = osr.CoordinateTransformation(utm_crs, wld_crs)
+        utm_corners = wld_corners.warp(utm_from_wld)
 
         min_utm = utm_corners.data.min(axis=0)
         max_utm = utm_corners.data.max(axis=0)
@@ -389,8 +389,8 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
     else:
         meter_per_pxl = None
         meter_extent = None
-        wld_to_utm = None
-        utm_to_wld = None
+        utm_from_wld = None
+        wld_from_utm = None
         utm_crs = None
         utm_axis_mapping = None
 
@@ -442,13 +442,17 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         'wld_corners': wld_corners,
         'wgs84_corners': wgs84_corners,
 
-        'pxl_to_wld': pxl_to_wld,
-        'wgs84_to_wld': wgs84_to_wld,
-        'utm_to_wld': utm_to_wld,
+        # TODO: we changed the internal names to the "_from_" varaint but we
+        # are keeping the "_to_" variant in this interface for now In the
+        # future we should change things over to the "_from_" variant, which
+        # is easier to reason about when chaining transforms.
+        'pxl_to_wld': wld_from_pxl,
+        'wgs84_to_wld': wld_from_wgs84,
+        'utm_to_wld': wld_from_utm,
 
-        'wld_to_pxl': wld_to_pxl,
-        'wld_to_wgs84': wld_to_wgs84,
-        'wld_to_utm': wld_to_utm,
+        'wld_to_pxl': pxl_from_wld,
+        'wld_to_wgs84': wgs84_from_wld,
+        'wld_to_utm': utm_from_wld,
 
         'utm_crs_info': utm_crs_info,
         'wld_crs_info': wld_crs_info,
