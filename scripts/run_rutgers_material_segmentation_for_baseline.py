@@ -52,6 +52,10 @@ def main():
                         default=1,
                         required=False,
                         help="Number of jobs to run in parallel")
+    parser.add_argument("--force_zero_num_workers",
+                        action='store_true',
+                        default=False,
+                        help="Force predict scripts to use --num_workers=0")
 
     run_rutgers_material_segmentation_for_baseline(**vars(parser.parse_args()))
 
@@ -114,7 +118,8 @@ def run_rutgers_material_segmentation_for_baseline(
         aws_profile=None,
         dryrun=False,
         newline=False,
-        jobs=1):
+        jobs=1,
+        force_zero_num_workers=False):
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = '/tmp/ingress'
@@ -143,7 +148,7 @@ def run_rutgers_material_segmentation_for_baseline(
                     '--checkpoint_fpath', matseg_model_path,
                     '--default_config_key', 'iarpa',
                     '--pred_dataset', rutgers_matseg_features_kwcoco_path,
-                    '--num_workers', str(jobs),
+                    '--num_workers', '0' if force_zero_num_workers else str(jobs),  # noqa: 501
                     '--batch_size', '16'],
                    check=True)
 

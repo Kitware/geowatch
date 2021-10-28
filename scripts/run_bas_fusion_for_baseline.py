@@ -57,6 +57,10 @@ def main():
                         default=1,
                         required=False,
                         help="Number of jobs to run in parallel")
+    parser.add_argument("--force_zero_num_workers",
+                        action='store_true',
+                        default=False,
+                        help="Force predict scripts to use --num_workers=0")
 
     run_bas_fusion_for_baseline(**vars(parser.parse_args()))
 
@@ -120,7 +124,8 @@ def run_bas_fusion_for_baseline(
         aws_profile=None,
         dryrun=False,
         newline=False,
-        jobs=1):
+        jobs=1,
+        force_zero_num_workers=False):
     # 1. Ingress data
     print("* Running baseline framework kwcoco ingress *")
     ingress_dir = '/tmp/ingress'
@@ -147,13 +152,13 @@ def run_bas_fusion_for_baseline(
     subprocess.run(['python', '-m', 'watch.tasks.fusion.predict',
                     '--write_preds', 'False',
                     '--write_probs', 'True',
-                    '--write_change', 'False',
-                    '--write_saliency', 'True',
-                    '--write_class', 'False',
+                    '--with_change', 'False',
+                    '--with_saliency', 'True',
+                    '--with_class', 'False',
                     '--test_dataset', ingress_kwcoco_path,
                     '--package_fpath', bas_fusion_model_path,
                     '--pred_dataset', bas_fusion_kwcoco_path,
-                    '--num_workers', str(jobs),
+                    '--num_workers', '0' if force_zero_num_workers else str(jobs),  # noqa: 501
                     '--batch_size', '8',
                     '--gpus', '0'], check=True)
 
