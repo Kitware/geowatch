@@ -6,15 +6,14 @@ from pathlib import Path
 import click
 import kwcoco
 import kwimage
-from torch.utils.data import ConcatDataset, DataLoader
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from . import detector
-from .datasets import L8asWV3Dataset, S2asWV3Dataset, S2Dataset
-from .utils import setup_logging
-
-from watch.utils.lightning_ext import util_globals
 from watch.utils import util_parallel
+from watch.utils.lightning_ext import util_globals
+from . import detector
+from .model_info import lookup_model_info
+from .utils import setup_logging
 
 log = logging.getLogger(__name__)
 
@@ -44,42 +43,11 @@ def predict(dataset, deployed, output, num_workers=0, device='auto'):
 
     num_workers = util_globals.coerce_num_workers(num_workers)
 
-    if weights_filename.stem == 'visnav_osm':
-        #
-        # This model was trained on 8-band WV3 data with 15 segmentation classes
-        #
-        ptdataset = ConcatDataset([
-            L8asWV3Dataset(coco_dset_filename),
-            S2asWV3Dataset(coco_dset_filename)
-        ])
-        model_outputs = [
-            'rice_field', 'cropland', 'water', 'inland_water', 'river_or_stream',
-            'sebkha', 'snow_or_ice_field', 'bare_ground', 'sand_dune', 'built_up',
-            'grassland', 'brush', 'forest', 'wetland', 'road'
-        ]
-        assert len(model_outputs) == 15
-        model = detector.load_model(weights_filename, num_outputs=15,
-                                    num_channels=8, device=device)
+    model_info = lookup_model_info(weights_filename)
+    ptdataset = model_info.create_dataset(coco_dset_filename)
+    model = model_info.load_model(weights_filename, device)
 
-    elif weights_filename.stem == 'visnav_sentinel2':
-        #
-        # This model was trained on 13-band Sentinel 2 data with 22 segmentation classes
-        #
-        ptdataset = S2Dataset(coco_dset_filename)
-        model_outputs = [
-            'forest_deciduous', 'forest_evergreen', 'brush', 'grassland', 'bare_ground',
-            'built_up', 'cropland', 'rice_field', 'marsh', 'swamp',
-            'inland_water', 'snow_or_ice_field', 'reef', 'sand_dune', 'sebkha',
-            'ocean<10m', 'ocean>10m', 'lake', 'river', 'beach',
-            'alluvial_deposits', 'med_low_density_built_up'
-        ]
-        assert len(model_outputs) == 22
-        model = detector.load_model(weights_filename, num_outputs=22,
-                                    num_channels=13, device=device)
-    else:
-        raise Exception('unknown weights file')
-
-    log.info('Using {}'.format(type(ptdataset)))
+    log.info('Using {}'.format(type(model_info).__name__))
 
     output_dset = kwcoco.CocoDataset(coco_dset_filename).copy()
 
@@ -95,7 +63,7 @@ def predict(dataset, deployed, output, num_workers=0, device='auto'):
     for img_info in tqdm(dataloader_iter, miniters=1):
         try:
             pred_filename, pred = _predict_single(
-                img_info, model=model, model_outputs=model_outputs,
+                img_info, model=model, model_outputs=model_info.model_outputs,
                 output_dset=output_dset,
                 output_dir=output_dset_filename.parent)
 
