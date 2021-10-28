@@ -4,7 +4,7 @@ from collections import defaultdict
 import kwarray
 import kwimage
 import numpy as np
-
+import kwcoco
 
 def _score(poly, probs):
     # Compute a score for the polygon
@@ -18,6 +18,9 @@ def _score(poly, probs):
     rel_mask = rel_poly.to_mask((h, w)).data
     # Slice out the corresponding region of probabilities
     rel_probs = probs[y:y + h, x:x + w]
+    # hacking to solve a bug: sometimes shape of rel_probs is x,y,1
+    if len(rel_probs.shape) == 3:
+        rel_probs = rel_probs[:,:,0]
     total = rel_mask.sum()
     score = 0 if total == 0 else (rel_mask * rel_probs).sum() / total
     return score
@@ -85,10 +88,19 @@ def time_aggregated_polys(coco_dset,
     if not set(key).isdisjoint(set(bg_key)):
         raise ValueError('cannot have a key in foreground and background')
     _all_keys = set(key + bg_key)
-    if all(
-            _all_keys.disjoint(
-                kwcoco_extensions.CocoImage(img, coco_dset).channels)
-            for img in coco_dset.imgs.values()):
+    #if all(
+    #        _all_keys.isdisjoint(
+    #            kwcoco_extensions.CocoImage(img, coco_dset).channels)
+    #        for img in coco_dset.imgs.values()):
+    #    raise ValueError(f'{coco_dset.tag} has no keys {key} or {bg_key}')
+    has_requested_chans_list = []
+    for img in coco_dset.imgs.values():
+        coco_img = kwcoco_extensions.CocoImage(img, coco_dset)
+        chan_codes = coco_img.channels.normalize().fuse().as_set()
+        flag = bool(_all_keys & chan_codes)
+        has_requested_chans_list.append(flag)
+
+    if not all(has_requested_chans_list):
         raise ValueError(f'{coco_dset.tag} has no keys {key} or {bg_key}')
 
     # record fg and bg keys across frames, and partial sums of fg and bg
@@ -99,26 +111,35 @@ def time_aggregated_polys(coco_dset,
 
         coco_img = coco_dset.coco_image(img['id'])
         zeros = np.zeros_like(
-            coco_img.delay(coco_img.channels[0], space='video').finalize())
-        fg_img_probs = zeros
-        bg_img_probs = zeros
+            coco_img.delay(coco_img.channels.fuse()[0], space='video').finalize()).astype('float32')
+        fg_img_probs = zeros.copy()
+        bg_img_probs = zeros.copy()
 
         for k in key:
-            if k in coco_img.channels:
-                img_probs = coco_img.delay(key, space='video').finalize()
+            k2 = kwcoco.FusedChannelSpec.coerce(k)
+            common = kwcoco.FusedChannelSpec.coerce(coco_img.channels.fuse()).intersection(k2)
+            if len(k2) == len(common):
+                img_probs = coco_img.delay(k, space='video').finalize()
                 fg_img_probs += img_probs
                 running_dct[k].update(img_probs)
             else:
-                running_dct[k].update(zeros)
+                # not sure if it is correct to assign zeros for images without predictions,
+                # commenting out for now
+                # running_dct[k].update(zeros)
+                pass
         running_dct['fg'].update(fg_img_probs)
 
         for k in bg_key:
-            if k in coco_img.channels:
-                img_probs = coco_img.delay(key, space='video').finalize()
+            k2 = kwcoco.FusedChannelSpec.coerce(k)
+            common = kwcoco.FusedChannelSpec.coerce(coco_img.channels.fuse()).intersection(k2)
+            if len(k2) == len(common):
+                img_probs = coco_img.delay(k, space='video').finalize()
                 bg_img_probs += img_probs
                 running_dct[k].update(img_probs)
             else:
-                running_dct[k].update(zeros)
+                # commenting out for now
+                #running_dct[k].update(zeros)
+                pass
         running_dct['bg'].update(bg_img_probs)
 
     # turn heatmaps into scores and polygons
@@ -154,11 +175,13 @@ def time_aggregated_polys(coco_dset,
             cand_scores = []
             for k in cand_keys:
                 if k in coco_img.channels:
-                    img_probs = coco_img.delay(key, space='video').finalize()
+                    img_probs = coco_img.delay(k, space='video').finalize()
                     cand_scores.append(_score(vid_poly, img_probs))
                 else:
                     cand_scores.append(0)
-            cat_name = np.max(cand_keys, cand_scores)
+            
+            #cat_name = np.max(cand_keys, where=cand_scores)
+            cat_name = cand_keys[np.argmax(cand_scores)]
             cid = coco_dset.ensure_category(cat_name)
 
             vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
