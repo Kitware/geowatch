@@ -284,11 +284,69 @@ def geotiff_format_info(fpath):
     return format_info
 
 
+def hack_seed_geometadata_in_dset(dset):
+    """
+    dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
+    """
+    import kwarray
+    from kwarray.distributions import Uniform
+    # stay away from edges and poles
+    rng = kwarray.ensure_rng(None)
+    max_lat = 90 - 10
+    max_lon = 180 - 10
+    lat_distri = Uniform(-max_lat, max_lat, rng=rng)
+    lon_distri = Uniform(-max_lon, max_lon, rng=rng)
+
+    for vidid in dset.videos():
+        img = dset.images(vidid=vidid).peek()
+        coco_img = dset._coco_image(img['id'])
+        obj = coco_img.primary_asset()
+        fpath = join(dset.bundle_dpath, obj['file_name'])
+        print('fpath = {!r}'.format(fpath))
+
+        format_info = geotiff_format_info(fpath)
+        if not format_info['has_geotransform']:
+            lon = lon_distri.sample()
+            lat = lat_distri.sample()
+            from watch.gis import spatial_reference as watch_crs
+            epsg_int = watch_crs.utm_epsg_from_latlon(lat, lon)
+
+            from osgeo import osr
+            wgs84_crs = osr.SpatialReference()
+            wgs84_crs.ImportFromEPSG(4326)
+            wgs84_crs.SetAxisMappingStrategy(osr.OAMS_AUTHORITY_COMPLIANT)
+
+            utm_crs = osr.SpatialReference()
+            utm_crs.ImportFromEPSG(4326)
+            utm_from_wgs84 = osr.CoordinateTransformation(wgs84_crs, utm_crs)
+
+            utm_x, utm_y, _ = utm_from_wgs84.TransformPoint(lat, lon, 1.0)
+            print('utm_y = {!r}'.format(utm_y))
+            print('utm_x = {!r}'.format(utm_x))
+
+            w = rng.randint(10, 300)
+            h = rng.randint(10, 300)
+            ulx, uly, lrx, lry = kwimage.Boxes([[utm_x, utm_y, w, h]], 'cxywh').to_ltrb().data[0]
+
+            command = f'gdal_edit.py -a_ullr {ulx} {uly} {lrx} {lry} -a_srs EPSG:{epsg_int} {fpath}'
+            cmdinfo = ub.cmd(command, shell=True)
+            print(cmdinfo['out'])
+            print(cmdinfo['err'])
+            assert cmdinfo['ret'] == 0
+
+
+def ensure_transfered_geo_data(dset):
+    for gid in ub.ProgIter(list(dset.images())):
+        transfer_geo_metadata(dset, gid)
+
+
 def transfer_geo_metadata(dset, gid):
     """
     Transfer geo-metadata from source geotiffs to predicted feature images
 
     THIS FUNCITON MODIFIES THE IMAGE DATA ON DISK! BE CAREFUL!
+
+    ASSUMES THAT EVERYTHING IS ALREADY ALIGNED
 
     Example:
         # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -299,14 +357,21 @@ def transfer_geo_metadata(dset, gid):
         coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/combo_data.kwcoco.json'
         dset = kwcoco.CocoDataset(coco_fpath)
         gid = dset.images().peek()['id']
+
+    Example:
+        >>> from watch.utils.kwcoco_extensions import *  # NOQA
+        >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
+        >>> hack_seed_geometadata_in_dset(dset)
+        >>> transfer_geo_metadata(dset, gid)
+        >>> gid = 2
     """
     import watch
     coco_img = dset._coco_image(gid)
 
-    asset_objs = list(coco_img.iter_asset_objs())
-
     assets_with_geo_info = {}
     assets_without_geo_info = {}
+
+    asset_objs = list(coco_img.iter_asset_objs())
     for asset_idx, obj in enumerate(asset_objs):
         fname = obj.get('file_name', None)
         if fname is not None:
@@ -318,13 +383,39 @@ def transfer_geo_metadata(dset, gid):
             else:
                 assets_with_geo_info[asset_idx] = (obj, info)
 
+    warp_vid_from_geoimg = kwimage.Affine.eye()
+
     if assets_without_geo_info:
         if not assets_with_geo_info:
-            raise ValueError(ub.paragraph(
-                '''
-                There are images without geo data, but no other data within
-                this image has transferable geo-data
-                '''))
+            class Found(Exception):
+                pass
+            try:
+                # If an asset in our local image has no data, we can
+                # check to see if anyone in the vide has data.
+                # Check if anything in the video has geo-data
+                vidid = coco_img.img['video_id']
+                for other_gid in dset.images(vidid=vidid):
+                    if other_gid != gid:
+                        other_coco_img = dset._coco_image(other_gid)
+                        for obj in other_coco_img.iter_asset_objs():
+                            fname = obj.get('file_name', None)
+                            if fname is not None:
+                                fpath = join(coco_img.dset.bundle_dpath, fname)
+                                try:
+                                    info = watch.gis.geotiff.geotiff_metadata(fpath)
+                                except Exception:
+                                    continue
+                                else:
+                                    raise Found
+            except Found:
+                assets_with_geo_info[-1] = (obj, info)
+                warp_vid_from_geoimg = kwimage.Affine.coerce(other_coco_img.img['warp_img_to_vid'])
+            else:
+                raise ValueError(ub.paragraph(
+                    '''
+                    There are images without geo data, but no other data within
+                    this image has transferable geo-data
+                    '''))
 
         from osgeo import gdal
         # from osgeo import osr
@@ -342,18 +433,24 @@ def transfer_geo_metadata(dset, gid):
         geo_ds = gdal.Open(geo_fpath)
         geo_ds.GetProjection()
 
-        warp_img_from_georef = kwimage.Affine.coerce(
+        warp_geoimg_from_geoaux = kwimage.Affine.coerce(
             geo_obj.get('warp_aux_to_img', None))
-
-        warp_georef_from_img = warp_img_from_georef.inv()
-
-        warp_wld_from_georef = kwimage.Affine.coerce(
-            geo_info['pxl_to_wld'])
-
-        warp_wld_from_img = warp_wld_from_georef @ warp_georef_from_img
+        warp_wld_from_geoaux = kwimage.Affine.coerce(geo_info['pxl_to_wld'])
 
         georef_crs_info = geo_info['wld_crs_info']
         georef_crs = georef_crs_info['type']
+
+        img = coco_img.img
+        warp_vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
+
+        # In case our reference is from another frame in the video
+        warp_geoimg_from_vid = warp_vid_from_geoimg.inv()
+        warp_geoaux_from_geoimg = warp_geoimg_from_geoaux.inv()
+        warp_wld_from_img = (
+            warp_wld_from_geoaux @
+            warp_geoaux_from_geoimg @
+            warp_geoimg_from_vid @
+            warp_vid_from_img)
 
         # georef_crs_info['axis_mapping']
         # osr.OAMS_AUTHORITY_COMPLIANT
@@ -1053,8 +1150,6 @@ def coco_channel_stats(dset):
     return info
 
 
-
-
 # DEPRECATED
 class ORIG_CocoImage(ub.NiceRepr):
     """
@@ -1541,6 +1636,8 @@ def _demo_kwcoco_with_heatmaps(num_videos=1):
                 final = delayed.finalize()
                 frames.append(final)
             vid_stack = kwimage.stack_images_grid(frames, axis=1, pad=5, bg_value=1)
+
+            import kwplot
             kwplot.imshow(vid_stack)
     """
     import pathlib
@@ -1620,4 +1717,9 @@ def _demo_kwcoco_with_heatmaps(num_videos=1):
             'channels': channels.spec,
             'warp_aux_to_img': warp_img_from_aux.concise(),
         })
+
+    # Hack in geographic info
+    hack_seed_geometadata_in_dset(coco_dset)
+    for gid in coco_dset.images():
+        transfer_geo_metadata(coco_dset, gid)
     return coco_dset

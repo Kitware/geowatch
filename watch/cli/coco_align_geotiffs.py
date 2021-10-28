@@ -1588,6 +1588,23 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
     compress = 'RAW'
     blocksize = 64
 
+    # prefix_template = (
+    #     '''
+    #     gdalwarp
+    #     -multi
+    #     --config GDAL_CACHEMAX 500 -wm 500
+    #     --debug off
+    #     -te {xmin} {ymin} {xmax} {ymax}
+    #     -te_srs epsg:4326
+    #     -t_srs epsg:4326
+    #     -co TILED=YES
+    #     -co BLOCKXSIZE={blocksize}
+    #     -co BLOCKYSIZE={blocksize}
+    #     -co COMPRESS={compress}
+    #     -overwrite
+    #     ''')
+
+    # Use the new COG output driver
     prefix_template = (
         '''
         gdalwarp
@@ -1597,14 +1614,14 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
         -te {xmin} {ymin} {xmax} {ymax}
         -te_srs epsg:4326
         -t_srs epsg:4326
-        -co TILED=YES
-        -co BLOCKXSIZE={blocksize}
-        -co BLOCKYSIZE={blocksize}
+        -of COG
+        -co BLOCKSIZE={blocksize}
+        -co COMPRESS={compress}
         -overwrite
         ''')
 
-    if compress != 'RAW':
-        prefix_template = prefix_template + '-co COMPRESS={}'.format(compress)
+    if compress == 'RAW':
+        compress = 'NONE'
 
     if align_method == 'pixel_crop':
         align_method = 'pixel_crop'
@@ -1656,7 +1673,8 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
             xmin=lonmin,
             ymax=latmax,
             xmax=lonmax,
-
+            blocksize=blocksize,
+            compress=compress,
             dem_fpath=dem_fpath,
             SRC=src_gpath, DST=dst_gpath,
         )
@@ -1670,6 +1688,7 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
             ymax=latmax,
             xmax=lonmax,
             blocksize=blocksize,
+            compress=compress,
             SRC=src_gpath, DST=dst_gpath,
         )
     else:
