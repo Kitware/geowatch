@@ -75,6 +75,8 @@ import dateutil.parser
 import datetime
 import pathlib
 from os.path import join, exists
+from watch.cli.coco_visualize_videos import _write_ann_visualizations2
+from watch.utils import util_gis
 
 
 class CocoAlignGeotiffConfig(scfg.Config):
@@ -248,18 +250,13 @@ def main(**kw):
     print('output_bundle_dpath = {!r}'.format(output_bundle_dpath))
     print('dst_fpath = {!r}'.format(dst_fpath))
 
-    # from pympler.tracker import SummaryTracker
-    # tracker = SummaryTracker()
-
     if regions == 'annots':
         pass
     elif exists(regions):
-        region_df = read_geojson(regions)
+        region_df = util_gis.read_geojson(regions)
         print('region_df = {!r}'.format(region_df))
     else:
         raise KeyError(regions)
-
-    # tracker.print_diff()
 
     # Load the dataset and extract geotiff metadata from each image.
     dset = kwcoco.CocoDataset.coerce(src_fpath)
@@ -294,10 +291,8 @@ def main(**kw):
     new_dset.dataset['info'] = [
         process_info,
     ]
-    # tracker.print_diff()
     to_extract = cube.query_image_overlaps2(region_df)
 
-    # tracker.print_diff()
     for image_overlaps in ub.ProgIter(to_extract, desc='extract ROI videos', verbose=3):
         # tracker.print_diff()
         video_name = image_overlaps['video_name']
@@ -318,238 +313,6 @@ def main(**kw):
     new_dset.dump(new_dset.fpath, newlines=True)
     print('finished')
     return new_dset
-
-
-def demo_regions_geojson_text():
-    geojson_text = ub.codeblock(
-        '''
-        {
-            "type": "FeatureCollection",
-            "features": [
-                {
-                    "type": "Feature",
-                    "properties": {"type": "region", "region_model_id": "US_Jacksonville_R01", "version": "1.0.1", "mgrs": "17RMP", "start_date": "2009-05-09", "end_date": "2020-01-26" },
-                    "geometry": {"type": "Polygon", "coordinates": [[[-81.6953, 30.3652], [-81.6942, 30.2984], [-81.5975, 30.2992], [-81.5968, 30.3667], [-81.6953, 30.3652]]]}
-                },
-                {
-                    "type": "Feature",
-                    "properties": {"type": "site", "site_id": "17RMP_US_Jacksonville_R01_0000", "start_date": "2016-02-14", "end_date": "2017-11-01"},
-                    "geometry": {"type": "Polygon", "coordinates": [[[-81.6364, 30.3209], [-81.6364, 30.3236], [-81.6397, 30.3236], [-81.6397, 30.3209], [-81.6364, 30.3209]]]}
-                },
-                {
-                    "type": "Feature",
-                    "properties": {"type": "site", "site_id": "17RMP_US_Jacksonville_R01_0001", "start_date": "2016-07-13", "end_date": "2020-01-26" },
-                    "geometry": {"type": "Polygon", "coordinates": [[[-81.6085, 30.3568], [-81.6085, 30.3600], [-81.6120, 30.3600], [-81.6120, 30.3568], [-81.6085, 30.3568]]]}
-                }
-            ]
-        }
-        ''')
-    return geojson_text
-
-
-def read_geojson(file, default_axis_mapping='OAMS_TRADITIONAL_GIS_ORDER'):
-    """
-    Args:
-        file (str | file): path or file object containing geojson data.
-
-        axis_mapping (str, default='OAMS_TRADITIONAL_GIS_ORDER'):
-            The axis-ordering of the geojson file on disk.  This is assumed to
-            be traditional ordering by default according to the geojson spec.
-
-    Returns:
-        GeoDataFrame : a dataframe with geo info. This will ALWAYS return
-        with an OAMS_AUTHORITY_COMPLIANT wgs84 crs (i.e. lat,lon) even
-        though the on disk order is should be OAMS_TRADITIONAL_GIS_ORDER.
-
-    Example:
-        >>> import io
-        >>> from watch.cli.coco_align_geotiffs import *  # NOQA
-        >>> geojson_text = demo_regions_geojson_text()
-        >>> file = io.StringIO()
-        >>> file.write(geojson_text)
-        >>> file.seek(0)
-        >>> region_df = read_geojson(file)
-    """
-    import geopandas as gpd
-    valid_axis_mappings = {
-        'OAMS_TRADITIONAL_GIS_ORDER',
-        'OAMS_AUTHORITY_COMPLIANT',
-    }
-    if default_axis_mapping not in valid_axis_mappings:
-        raise Exception
-
-    # Read custom ROI regions
-    region_df = gpd.read_file(file)
-
-    if default_axis_mapping == 'OAMS_TRADITIONAL_GIS_ORDER':
-        # For whatever reason geopandas reads in geojson (which is supposed to
-        # be traditional order long/lat) with a authority compliant wgs84
-        # lat/long crs
-        region_df['geometry'] = region_df['geometry'].apply(
-            shapely_flip_xy)
-    elif default_axis_mapping == 'OAMS_AUTHORITY_COMPLIANT':
-        pass
-    else:
-        raise KeyError(default_axis_mapping)
-
-    # TODO: can we construct a pyproj.CRS from wgs84, but with traditional
-    # order?
-
-    # import pyproj
-    # wgs84 = pyproj.CRS.from_epsg(4326)
-    # z = pyproj.Transformer.from_crs(4326, 4326, always_xy=True)
-    # crs1 = region_df.crs
-    # pyproj.CRS.from_dict(crs1.to_json_dict())
-    # z = region_df.crs
-    # z.to_json_dict()
-    return region_df
-
-
-def geopandas_pairwise_overlaps(gdf1, gdf2, predicate='intersects'):
-    """
-    Find pairwise relationships between each geometries
-
-    Args:
-        gdf1 (GeoDataFrame): query geo data
-        gdf2 (GeoDataFrame): database geo data (builds spatial index)
-        predicate (str, default='intersects'): a DE-9IM [1] predicate.
-           (e.g. if intersection finds intersections between geometries)
-
-    References:
-        ..[1] https://en.wikipedia.org/wiki/DE-9IM
-
-    TODO:
-        - [ ] This can move to watch.utils
-
-    Returns:
-        dict: mapping from indexes in gdf1 to overlapping indexes in gdf2
-
-    Example:
-        >>> from watch.cli.coco_align_geotiffs import *  # NOQA
-        >>> import geopandas as gpd
-        >>> gpd.GeoDataFrame()
-        >>> gdf1 = gpd.read_file(
-        >>>     gpd.datasets.get_path('naturalearth_lowres')
-        >>> )
-        >>> gdf2 = gpd.read_file(
-        >>>     gpd.datasets.get_path('naturalearth_cities')
-        >>> )
-        >>> mapping = geopandas_pairwise_overlaps(gdf1, gdf2)
-
-    Benchmark:
-        import timerit
-        ti = timerit.Timerit(10, bestof=3, verbose=2)
-        for timer in ti.reset('with sindex O(N * log(M))'):
-            with timer:
-                fast_mapping = geopandas_pairwise_overlaps(gdf1, gdf2)
-        for timer in ti.reset('without sindex O(N * M)'):
-            with timer:
-                from collections import defaultdict
-                slow_mapping = defaultdict(list)
-                for idx1, geom1 in enumerate(gdf1.geometry):
-                    slow_mapping[idx1] = []
-                    for idx2, geom2 in enumerate(gdf2.geometry):
-                        if geom1.intersects(geom2):
-                            slow_mapping[idx1].append(idx2)
-        # check they are the same
-        assert set(slow_mapping) == set(fast_mapping)
-        for idx1 in slow_mapping:
-            slow_idx2s = slow_mapping[idx1]
-            fast_idx2s = fast_mapping[idx1]
-            assert sorted(fast_idx2s) == sorted(slow_idx2s)
-    """
-    # Construct the spatial index (requires pygeos and/or rtree)
-    sindex2 = gdf2.sindex
-    # For each query polygon, lookup intersecting polygons in the spatial index
-    idx1_to_idxs2 = {}
-    for idx1, row1 in gdf1.iterrows():
-        idxs2 = sindex2.query(row1.geometry, predicate=predicate)
-        # Record result indexes that "match" given the geometric predicate
-        idx1_to_idxs2[idx1] = idxs2
-    return idx1_to_idxs2
-
-
-def latlon_text(lat, lon, precision=6):
-    """
-    Make a lat,lon string suitable for a filename.
-
-    Pads with leading zeros so file names will align nicely at the same level
-    of prcision.
-
-    Args:
-        lat (float): degrees latitude
-
-        lon (float): degrees longitude
-
-        precision (float, default=6):
-            Number of trailing decimal places. As rule of thumb set this to:
-                6 - for ~10cm accuracy,
-                5 - for ~1m accuracy,
-                2 - for ~1km accuracy,
-
-    TODO:
-        - [ ] This can move to watch.utils
-
-    Notes:
-        1 degree of latitude is *very* roughly the order of 100km, so the
-        default precision of 6 localizes down to ~0.1 meters, which will
-        usually be sufficient for satellite applications, but be mindful of
-        using this text in applications that require more precision. Note 1
-        degree of longitude will vary, but will always be at least as precise
-        as 1 degree of latitude.
-
-    Example:
-        >>> lat = 90
-        >>> lon = 180
-        >>> print(latlon_text(lat, lon))
-        N90.000000E180.000000
-
-        >>> lat = 0
-        >>> lon = 0
-        >>> print(latlon_text(lat, lon))
-        N00.000000E000.000000
-
-    Example:
-        >>> print(latlon_text(80.123, 170.123))
-        >>> print(latlon_text(10.123, 80.123))
-        >>> print(latlon_text(0.123, 0.123))
-        N80.123000E170.123000
-        N10.123000E080.123000
-        N00.123000E000.123000
-
-        >>> print(latlon_text(80.123, 170.123, precision=2))
-        >>> print(latlon_text(10.123, 80.123, precision=2))
-        >>> print(latlon_text(0.123, 0.123, precision=2))
-        N80.12E170.12
-        N10.12E080.12
-        N00.12E000.12
-
-        >>> print(latlon_text(80.123, 170.123, precision=5))
-        >>> print(latlon_text(10.123, 80.123, precision=5))
-        >>> print(latlon_text(0.123, 0.123, precision=5))
-        N80.12300E170.12300
-        N10.12300E080.12300
-        N00.12300E000.12300
-    """
-    def _build_float_precision_fmt(num_leading, num_trailing):
-        num2 = num_trailing
-        # 2 extra for radix and leading sign
-        num1 = num_leading + num_trailing + 2
-        fmtparts = ['{:+0', str(num1), '.', str(num2), 'F}']
-        fmtstr = ''.join(fmtparts)
-        return fmtstr
-
-    assert -90 <= lat <= 90, 'invalid lat'
-    assert -180 <= lon <= 180, 'invalid lon'
-
-    # Ensure latitude had 2 leading places and longitude has 3
-    latfmt = _build_float_precision_fmt(2, precision)
-    lonfmt = _build_float_precision_fmt(3, precision)
-
-    lat_str = latfmt.format(lat).replace('+', 'N').replace('-', 'S')
-    lon_str = lonfmt.format(lon).replace('+', 'E').replace('-', 'W')
-    text = lat_str + lon_str
-    return text
 
 
 class SimpleDataCube(object):
@@ -622,7 +385,10 @@ class SimpleDataCube(object):
                 'features': [
                     {
                         'type': 'Feature',
-                        'properties': {'type': 'region', 'region_model_id': 'demo_region', 'version': '1.0.1', 'mgrs': None, 'start_date': None, 'end_date': None},
+                        'properties': {
+                            'type': 'region', 'region_model_id': 'demo_region',
+                            'version': '1.0.1', 'mgrs': None,
+                            'start_date': None, 'end_date': None},
                         'geometry': img_poly.scale(0.2, about='center').swap_axes().to_geojson(),
                     },
                 ]
@@ -653,14 +419,12 @@ class SimpleDataCube(object):
             >>> cube, region_df = SimpleDataCube.demo(with_region=True)
             >>> to_extract = cube.query_image_overlaps2(region_df)
         """
-        import gc
-        gc.collect()
         # New maybe faster and safer way of finding overlaps?
-        ridx_to_gidsx = geopandas_pairwise_overlaps(region_df, cube.img_geos_df)
+        ridx_to_gidsx = util_gis.geopandas_pairwise_overlaps(region_df, cube.img_geos_df)
         print('ridx_to_gidsx = {}'.format(ub.repr2(ridx_to_gidsx, nl=1)))
 
         # TODO: maybe check for self-overlap?
-        # ridx_to_ridx = geopandas_pairwise_overlaps(region_df, region_df)
+        # ridx_to_ridx = util_gis.geopandas_pairwise_overlaps(region_df, region_df)
 
         to_extract = []
         for ridx, gidxs in ridx_to_gidsx.items():
@@ -669,8 +433,8 @@ class SimpleDataCube(object):
             space_region = kwimage.Polygon.from_shapely(region_row.geometry)
             space_box = space_region.bounding_box().to_ltrb()
             latmin, lonmin, latmax, lonmax = space_box.data[0]
-            min_pt = latlon_text(latmin, lonmin)
-            max_pt = latlon_text(latmax, lonmax)
+            min_pt = util_gis.latlon_text(latmin, lonmin)
+            max_pt = util_gis.latlon_text(latmax, lonmax)
             space_str = '{}_{}'.format(min_pt, max_pt)
 
             if region_row.get('type', None) == 'region':
@@ -726,7 +490,6 @@ class SimpleDataCube(object):
                         'properties': region_props,
                     }
                     to_extract.append(image_overlaps)
-        gc.collect()
         return to_extract
 
     def extract_overlaps(cube, image_overlaps, extract_dpath,
@@ -834,7 +597,6 @@ class SimpleDataCube(object):
         # Internal threading might be beneficial as well
         # aux_workers = 6
         img_workers = max_workers
-        # // aux_workers
 
         # parallelize over images
         print('img_workers = {!r}'.format(img_workers))
@@ -883,8 +645,8 @@ class SimpleDataCube(object):
             if visualize:
                 new_img = new_dset.imgs[new_gid]
                 new_anns = new_dset.annots(gid=new_gid).objs
-                _write_ann_visualizations(new_dset, new_img, new_anns,
-                                          sub_bundle_dpath)
+                _write_ann_visualizations2(new_dset, new_img, new_anns,
+                                           sub_bundle_dpath)
 
         if True:
             for new_gid in sub_new_gids:
@@ -1114,56 +876,6 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
     return new_img, new_anns
 
 
-def _write_ann_visualizations(new_dset, new_img, new_anns, sub_bundle_dpath):
-    """
-    Helper for :func:`SimpleDataCube.extract_overlaps`.
-
-    TODO:
-        refactor because this is also used in coco_visualize_videos
-    """
-    # See if we can look at what we made
-    from watch.utils.util_norm import normalize_intensity
-    sensor_coarse = new_img.get('sensor_coarse', 'unknown')
-    align_method = new_img.get('align_method', 'unknown')
-    name = new_img.get('name', 'unknown')
-
-    new_delayed = new_dset.delayed_load(new_img['id'])
-    if hasattr(new_delayed, 'components'):
-        components = new_delayed.components
-    else:
-        components = [new_delayed]
-
-    for chan in components:
-        spec = chan.channels.spec
-
-        view_img_dpath = ub.ensuredir(
-            (sub_bundle_dpath, sensor_coarse,
-             '_view_img_' + align_method))
-
-        view_ann_dpath = ub.ensuredir(
-            (sub_bundle_dpath, sensor_coarse,
-             '_view_ann_' + align_method))
-
-        view_img_fpath = ub.augpath(name, dpath=view_img_dpath) + '_' + str(spec) + '.view_img.jpg'
-        view_ann_fpath = ub.augpath(name, dpath=view_ann_dpath) + '_' + str(spec) + '.view_ann.jpg'
-
-        if not exists(view_img_fpath) and not exists(view_ann_fpath):
-            canvas = chan.finalize()
-
-            # canvas = kwimage.imread(dst_gpath)
-            canvas = normalize_intensity(canvas)
-            if len(canvas.shape) > 2 and canvas.shape[2] > 4:
-                # hack for wv
-                canvas = canvas[..., 0]
-            canvas = kwimage.ensure_float01(canvas)
-
-            kwimage.imwrite(view_img_fpath, kwimage.ensure_uint255(canvas))
-
-            dets = kwimage.Detections.from_coco_annots(new_anns, dset=new_dset)
-            ann_canvas = dets.draw_on(canvas)
-            kwimage.imwrite(view_ann_fpath, kwimage.ensure_uint255(ann_canvas))
-
-
 def update_coco_geotiff_metadata(dset, serializable=True, max_workers=0):
     """
     if serializable is True, then we should only update with information
@@ -1279,15 +991,11 @@ def single_geotiff_metadata(bundle_dpath, img, serializable=False):
     if fname is not None:
         src_gpath = join(bundle_dpath, fname)
         assert exists(src_gpath)
-        # img_iter.ensure_newline()
-        # print('src_gpath = {!r}'.format(src_gpath))
         img_info = watch.gis.geotiff.geotiff_metadata(src_gpath, **metakw)
 
         if serializable:
             raise NotImplementedError
         else:
-            # info['datetime_acquisition'] = img['datetime_acquisition']
-            # info['gpath'] = src_gpath
             img_info = ub.dict_isect(img_info, keys_of_interest)
             geotiff_metadata = img_info
 
@@ -1377,39 +1085,6 @@ def find_roi_regions(dset):
     return sh_rois, kw_rois
 
 
-def find_covered_regions(dset):
-    """
-    Find the intersection of all image bounding boxes in world space
-    to see what spatial regions are covered by the imagery.
-    """
-    from shapely import ops
-    gid_to_poly = {}
-    for gid, img in dset.imgs.items():
-        info  = img['geotiff_metadata']
-        kw_img_poly = kwimage.Polygon(exterior=info['wgs84_corners'])
-        sh_img_poly = kw_img_poly.to_shapely()
-        gid_to_poly[gid] = sh_img_poly
-
-    # df_input = [
-    #     {'gid': gid, 'bounds': poly, 'name': dset.imgs[gid].get('name', None),
-    #      'video_id': dset.imgs[gid].get('video_id', None) }
-    #     for gid, poly in gid_to_poly.items()
-    # ]
-    # img_geos = gpd.GeoDataFrame(df_input, geometry='bounds', crs='epsg:4326')
-
-    # Can merge like this, but we lose membership info
-    # coverage_df = gpd.GeoDataFrame(img_geos.unary_union)
-
-    coverage_rois_ = ops.unary_union(gid_to_poly.values())
-    if hasattr(coverage_rois_, 'geoms'):
-        # Iteration over shapely objects was deprecated, test for geoms
-        # attribute instead.
-        coverage_rois = list(coverage_rois_.geoms)
-    else:
-        coverage_rois = [coverage_rois_]
-    return coverage_rois
-
-
 def _flip(x, y):
     return (y, x)
 
@@ -1422,102 +1097,6 @@ def shapely_flip_xy(geom):
 def shapely_bounding_box(geom):
     import shapely
     return shapely.geometry.box(*geom.bounds)
-
-
-def flip_xy(poly):
-    """
-    TODO:
-        - [ ] This is unused in this file and thus should move to the dev
-        folder or somewhere else for to keep useful scratch work.
-    """
-    if hasattr(poly, 'reorder_axes'):
-        new_poly = poly.reorder_axes((1, 0))
-    else:
-        kw_poly = kwimage.Polygon.from_shapely(poly)
-        kw_poly.data['exterior'].data = kw_poly.data['exterior'].data[:, ::-1]
-        sh_poly_ = kw_poly.to_shapely()
-        new_poly = sh_poly_
-    return new_poly
-
-
-def coco_geopandas_images(dset):
-    """
-    TODO:
-        - [ ] This is unused in this file and thus should move to the dev
-        folder or somewhere else for to keep useful scratch work.
-    """
-    import geopandas as gpd
-    df_input = []
-    for gid, img in dset.imgs.items():
-        info  = img['geotiff_metadata']
-        kw_img_poly = kwimage.Polygon(exterior=info['wgs84_corners'])
-        sh_img_poly = kw_img_poly.to_shapely()
-        df_input.append({
-            'gid': gid,
-            'name': img.get('name', None),
-            'video_id': img.get('video_id', None),
-            'bounds': sh_img_poly,
-        })
-    img_geos_df = gpd.GeoDataFrame(df_input, geometry='bounds', crs='epsg:4326')
-    return img_geos_df
-
-
-def visualize_rois(dset, kw_all_box_rois):
-    """
-    matplotlib visualization of image and annotation regions on a world map
-
-    Developer function, unused in the script
-
-    TODO:
-        - [ ] This is unused in this file and thus should move to the dev
-        folder or somewhere else for to keep useful scratch work.
-    """
-    import geopandas as gpd
-    sh_coverage_rois = find_covered_regions(dset)
-    sh_coverage_rois_trad = [flip_xy(p) for p in sh_coverage_rois]
-    kw_coverage_rois_trad = list(map(kwimage.Polygon.from_shapely, sh_coverage_rois_trad))
-    print('kw_coverage_rois_trad = {}'.format(ub.repr2(kw_coverage_rois_trad, nl=1)))
-    cov_poly_crs = 'epsg:4326'
-    cov_poly_gdf = gpd.GeoDataFrame({'cov_rois': sh_coverage_rois_trad},
-                                    geometry='cov_rois', crs=cov_poly_crs)
-
-    sh_all_box_rois = [p.to_shapely()for p in kw_all_box_rois]
-    sh_all_box_rois_trad = [flip_xy(p) for p in sh_all_box_rois]
-    kw_all_box_rois_trad = list(map(kwimage.Polygon.from_shapely, sh_all_box_rois_trad))
-    roi_poly_crs = 'epsg:4326'
-    roi_poly_gdf = gpd.GeoDataFrame({'roi_polys': sh_all_box_rois_trad},
-                                    geometry='roi_polys', crs=roi_poly_crs)
-    print('kw_all_box_rois_trad = {}'.format(ub.repr2(kw_all_box_rois_trad, nl=1)))
-
-    if True:
-        import kwplot
-        kwplot.autompl()
-
-        wld_map_gdf = gpd.read_file(
-            gpd.datasets.get_path('naturalearth_lowres')
-        )
-        ax = wld_map_gdf.plot()
-
-        cov_centroids = cov_poly_gdf.geometry.centroid
-        cov_poly_gdf.plot(ax=ax, facecolor='none', edgecolor='green', alpha=0.5)
-        cov_centroids.plot(ax=ax, marker='o', facecolor='green', alpha=0.5)
-        # img_centroids = img_poly_gdf.geometry.centroid
-        # img_poly_gdf.plot(ax=ax, facecolor='none', edgecolor='red', alpha=0.5)
-        # img_centroids.plot(ax=ax, marker='o', facecolor='red', alpha=0.5)
-
-        roi_centroids = roi_poly_gdf.geometry.centroid
-        roi_poly_gdf.plot(ax=ax, facecolor='none', edgecolor='orange', alpha=0.5)
-        roi_centroids.plot(ax=ax, marker='o', facecolor='orange', alpha=0.5)
-
-        kw_zoom_roi = kw_all_box_rois_trad[1]
-        kw_zoom_roi = kw_coverage_rois_trad[2]
-        kw_zoom_roi = kw_all_box_rois_trad[3]
-
-        bb = kw_zoom_roi.bounding_box()
-
-        min_x, min_y, max_x, max_y = bb.scale(1.5, about='center').to_ltrb().data[0]
-        ax.set_xlim(min_x, max_x)
-        ax.set_ylim(min_y, max_y)
 
 
 def _fix_geojson_poly(geo):
@@ -1588,21 +1167,7 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
     compress = 'RAW'
     blocksize = 64
 
-    # prefix_template = (
-    #     '''
-    #     gdalwarp
-    #     -multi
-    #     --config GDAL_CACHEMAX 500 -wm 500
-    #     --debug off
-    #     -te {xmin} {ymin} {xmax} {ymax}
-    #     -te_srs epsg:4326
-    #     -t_srs epsg:4326
-    #     -co TILED=YES
-    #     -co BLOCKXSIZE={blocksize}
-    #     -co BLOCKYSIZE={blocksize}
-    #     -co COMPRESS={compress}
-    #     -overwrite
-    #     ''')
+    # NUM_THREADS=2
 
     # Use the new COG output driver
     prefix_template = (
@@ -1615,6 +1180,7 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
         -te_srs epsg:4326
         -t_srs epsg:4326
         -of COG
+        -co OVERVIEWS=NONE
         -co BLOCKSIZE={blocksize}
         -co COMPRESS={compress}
         -overwrite
@@ -1625,7 +1191,7 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
 
     if align_method == 'pixel_crop':
         align_method = 'pixel_crop'
-        from ndsampler.utils.util_gdal import LazyGDalFrameFile
+        from kwcoco.util.util_delayed_poc import LazyGDalFrameFile
         imdata = LazyGDalFrameFile(src_gpath)
         info = obj['geotiff_metadata']
         space_region_pxl = space_region.warp(info['wgs84_to_wld']).warp(info['wld_to_pxl'])

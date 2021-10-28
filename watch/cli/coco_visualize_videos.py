@@ -262,11 +262,9 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
         # spec = str(chan.channels.spec)
 
-        import xdev
-        with xdev.embed_on_exception_context:
-            canvas = chan.finalize()
-            canvas = normalize_intensity(canvas)
-            canvas = util_kwimage.ensure_false_color(canvas)
+        canvas = chan.finalize()
+        canvas = normalize_intensity(canvas)
+        canvas = util_kwimage.ensure_false_color(canvas)
 
         if len(canvas.shape) > 2 and canvas.shape[2] > 4:
             # hack for wv

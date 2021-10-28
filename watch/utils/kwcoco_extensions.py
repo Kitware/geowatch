@@ -199,12 +199,11 @@ def rewrite_geotiffs(dset):
         orig_fpath = pathlib.Path(fpath)
 
         info = geotiff_format_info(fpath)
-        if info['blocksize'][0] != blocksize or info['compress'] != compress:
-
+        if (info['blocksize'][0] != blocksize or info['compress'] != compress) or True:
             tmpdir = orig_fpath.parent / '.tmp_gdal_workspace'
             tmpdir.mkdir(exist_ok=True, parents=True)
             workdir = tmpdir / 'work'
-            bakdir = tmpdir / 'backup'
+            bakdir = tmpdir / 'backup_v2'
             workdir.mkdir(exist_ok=True)
             bakdir.mkdir(exist_ok=True)
 

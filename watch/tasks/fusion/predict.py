@@ -750,7 +750,7 @@ class CocoStitchingManager(object):
             #
             # Save probabilities (or feature maps) as a new auxiliary image
             bundle_dpath = self.result_dataset.bundle_dpath
-            new_fname = img.get('name', str(img['id'])) + f'_{self.suffix_code}.tiff'  # FIXME
+            new_fname = img.get('name', str(img['id'])) + f'_{self.suffix_code}.tif'  # FIXME
             new_fpath = join(self.prob_dpath, new_fname)
             assert final_probs.shape[2] == (self.chan_code.count('|') + 1)
             img.get('auxiliary', []).append({
