@@ -166,7 +166,7 @@ def run_uky_invariants_for_baseline(input_path,
                     '--src', ta1_kwcoco_path,
                     '--dst', ta1_cropped_kwcoco_path,
                     '--regions', local_region_path,
-                    '--repc_align_method', 'affine_warp'], check=True)
+                    '--rpc_align_method', 'affine_warp'], check=True)
 
     # 5. Add WATCH specific fields to cropped KWCOCO dataset
     print("* Adding WATCH fields to cropped KWCOCO dataset *")
