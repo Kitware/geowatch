@@ -49,7 +49,7 @@ def predict(dataset, deployed, output, num_workers=0, device='auto'):
 
     log.info('Using {}'.format(type(model_info).__name__))
 
-    output_dset = kwcoco.CocoDataset(coco_dset_filename).copy()
+    output_dset = kwcoco.CocoDataset(coco_dset_filename)
 
     dataloader = DataLoader(ptdataset, num_workers=num_workers,
                             batch_size=None, collate_fn=lambda x: x)
@@ -78,7 +78,6 @@ def predict(dataset, deployed, output, num_workers=0, device='auto'):
 
     writer.wait_until_finished()
 
-    # self.dset.dump(str(self.output_dset_filename)+'_orig.json', indent=2)
     output_dset.dump(str(output_dset_filename), indent=2)
     log.info('output written to {}'.format(output_dset_filename))
 

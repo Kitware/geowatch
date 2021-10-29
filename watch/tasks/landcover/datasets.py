@@ -25,7 +25,10 @@ class _CocoTorchDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         gid = self.gids[idx]
         img_info = deepcopy(self.dset.imgs[gid])
-        img_info['imgdata'] = self._load(gid)
+        try:
+            img_info['imgdata'] = self._load(gid)
+        except Exception as ex:
+            raise Exception('Unable to load image {}'.format(gid)) from ex
         return img_info
 
     def _include(self, gid):
@@ -64,9 +67,19 @@ class _CocoTorchDataset(torch.utils.data.Dataset):
                     return self._try_load_channel(gid, chan)
                 except Exception as e:
                     ex = e
-            raise Exception('Unable to load any channels {}: {}'.format(channels, str(ex))) from ex
+            raise Exception('Unable to load any channels {} from image {}: {}'.format(channels, gid, str(ex))) from ex
         else:
-            return self.dset.load_image(gid, channels)
+            try:
+                return self.dset.load_image(gid, channels)
+            except Exception as ex:
+                img = self.dset.imgs[gid]
+                actual_channels = img.get('channels', [aux.get('channels') for aux in img.get('auxiliary', [])])
+                raise Exception(
+                    'Unable to load {} from {} image with channels {}'.format(
+                        channels,
+                        img['sensor_coarse'],
+                        actual_channels
+                    )) from ex
 
 
 class L8asWV3Dataset(_CocoTorchDataset):
@@ -124,9 +137,36 @@ class S2Dataset(_CocoTorchDataset):
 
     def _load(self, gid):
         all_channels = [
-            'coastal', 'blue', 'green', 'red', 'B05',
-            'B06', 'B07', 'nir', 'B8A', 'B09',
-            'cirrus', 'swir16', 'swir22',
+            'coastal',
+            'blue',
+            'green',
+            'red',
+            'B05',
+            'B06', 'B07', 'nir',
+            ('B8A', 'B09'),  # some images don't have B8A.  Use B09 as closest substitute
+            'B09',
+            'cirrus',
+            'swir16',
+            ('swir22', 'swir16')
+        ]
+
+        return self._load_channels_stacked(gid, all_channels)
+
+
+class S2L8CommonChannelsDataset(_CocoTorchDataset):
+    """
+    Load the channels tha S2 and L8 have in common as a stack.
+    """
+
+    def _include(self, gid):
+        return self.dset.imgs[gid]['sensor_coarse'] in ('S2', 'L8')
+
+    def _load(self, gid):
+        all_channels = [
+            'blue', 'green', 'red',
+            ('B8A', 'B09', 'nir'),
+            'swir16',
+            ('swir22', 'swir16')
         ]
 
         return self._load_channels_stacked(gid, all_channels)

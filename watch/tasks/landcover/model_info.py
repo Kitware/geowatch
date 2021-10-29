@@ -8,7 +8,7 @@ import torch.utils.data
 from torch.utils.data import ConcatDataset
 
 from . import detector
-from .datasets import L8asWV3Dataset, S2asWV3Dataset, S2Dataset
+from .datasets import L8asWV3Dataset, S2asWV3Dataset, S2Dataset, S2L8CommonChannelsDataset
 
 log = logging.getLogger(__name__)
 
@@ -90,9 +90,35 @@ class S2ModelInfo(ModelInfo):
                                    device=device)
 
 
+class S2SubsetRemapModelInfo(ModelInfo):
+    """
+    This model was trained on the 6 bands that Sentinel 2
+    and Landsat 8 have in common and 8 segmentation classes.
+    """
+
+    def create_dataset(self, coco_dset):
+        return S2L8CommonChannelsDataset(coco_dset)
+
+    @property
+    def model_outputs(self):
+        return [
+            'forest', 'brush', 'bare_ground',
+            'built_up', 'cropland', 'wetland',
+            'water', 'snow_or_ice_field'
+        ]
+
+    def load_model(self, weights_filename, device):
+        assert len(self.model_outputs) == 8
+        return detector.load_model(weights_filename,
+                                   num_outputs=8,
+                                   num_channels=6,
+                                   device=device)
+
+
 __mapping = {
     'visnav_osm': WV3ModelInfo,
-    'visnav_sentinel2': S2ModelInfo
+    'visnav_sentinel2': S2ModelInfo,
+    'visnav_remap_s2_subset': S2SubsetRemapModelInfo
 }
 
 
