@@ -201,7 +201,7 @@ def time_aggregated_polys(coco_dset,
     return coco_dset
 
 
-def time_aggregated_polys_bas(coco_dset, thresh=0.25, morph_kernel=3):
+def time_aggregated_polys_bas(coco_dset, thresh=0.15, morph_kernel=3):
     '''
     Wrapper for BAS that looks for change heatmaps.
     '''
