@@ -14,7 +14,7 @@ class kwcoco_dataset(torch.utils.data.Dataset):
         'coastal', 'lwir11', 'lwir12', 'blue', 'green', 'red', 'nir', 'swir16', 'swir22', 'pan', 'cirrus'
     ]
 
-    def __init__(self, coco_dset, sensor='S2', bands=['all'], patch_size=64):
+    def __init__(self, coco_dset, sensor='S2', bands=['all'], patch_size=64, mode='train'):
         # initialize dataset
         self.dset = kwcoco.CocoDataset.coerce(coco_dset)
         self.images = self.dset.images()
@@ -73,6 +73,8 @@ class kwcoco_dataset(torch.utils.data.Dataset):
                 A.RandomBrightnessContrast(brightness_by_max=False, always_apply=True)
         ])
 
+        self.mode = mode
+
     def __len__(self,):
         return len(self.dset_ids)
 
@@ -94,6 +96,10 @@ class kwcoco_dataset(torch.utils.data.Dataset):
         return image_id, image_info, image
 
     def __getitem__(self, idx):
+        if self.mode == 'test':
+            # hack
+            return self.get_img(idx)
+
         # get image1 id and the video it is associated with
         img1_id = self.dset_ids[idx]
         video = [ y for y in self.videos if img1_id in self.dset.index.vidid_to_gids[y] ][0]
@@ -111,6 +117,8 @@ class kwcoco_dataset(torch.utils.data.Dataset):
         # load images
         img1 = self.dset.delayed_load(img1_id, channels=self.channels, space='video').finalize().astype(np.float32)
         img2 = self.dset.delayed_load(img2_id, channels=self.channels, space='video').finalize().astype(np.float32)
+        img1 = np.nan_to_num(img1)
+        img2 = np.nan_to_num(img2)
 
         # normalize
         if img1.std() != 0.0:

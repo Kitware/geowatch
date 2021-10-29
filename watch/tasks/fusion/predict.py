@@ -8,13 +8,15 @@ TODO:
 import torch  # NOQA
 import pathlib
 import ubelt as ub
+import numpy as np
 from os.path import join
 from os.path import relpath
 import kwimage
 import kwarray
 from watch.tasks.fusion import datamodules
 from watch.tasks.fusion import utils
-from watch.tasks.fusion import postprocess
+from watch.tasks.fusion import heuristics
+from watch.tasks.tracking import from_heatmap
 from watch.utils import util_path
 
 
@@ -35,29 +37,32 @@ def make_predict_config(cmdline=False, **kwargs):
         args_for_setting_config_path=['--config'],
         args_for_writing_out_config_file=['--dump'],
     )
-    parser.add_argument("--datamodule", default='KWCocoVideoDataModule')
-    parser.add_argument("--pred_dataset", default=None, dest='pred_dataset')
+    parser.add_argument('--datamodule', default='KWCocoVideoDataModule')
+    parser.add_argument('--pred_dataset', default=None, dest='pred_dataset')
 
-    parser.add_argument("--pred_dpath", dest='pred_dpath', type=pathlib.Path, help='path to dump results')
+    parser.add_argument('--pred_dpath', dest='pred_dpath', type=pathlib.Path, help='path to dump results')
 
-    parser.add_argument("--tag", default='change_prob')
-    parser.add_argument("--package_fpath", type=pathlib.Path)
-    parser.add_argument("--gpus", default=None, help="todo: hook up to lightning")
-    parser.add_argument("--thresh", type=float, default=0.01)
+    parser.add_argument('--package_fpath', type=pathlib.Path)
+    parser.add_argument('--gpus', default=None, help='todo: hook up to lightning')
+    parser.add_argument('--thresh', type=smartcast, default=0.01)
+
+    parser.add_argument('--with_change', type=smartcast, default='auto')
+    parser.add_argument('--with_class', type=smartcast, default='auto')
+    parser.add_argument('--with_saliency', type=smartcast, default='auto')
 
     parser.add_argument(
-        "--write_preds", default=True, type=smartcast, help=ub.paragraph(
+        '--write_preds', default=True, type=smartcast, help=ub.paragraph(
             '''
             If True, convert probability maps into raw "hard" predictions and
             write them as annotations to the prediction kwcoco file.
             '''))
 
     parser.add_argument(
-        "--write_probs", default=True, type=smartcast, help=ub.paragraph(
+        '--write_probs', default=True, type=smartcast, help=ub.paragraph(
             '''
             If True, write raw "soft" probability maps into the kwcoco file as
-            a new auxiliary channel.  The channel name is currently denoted by
-            the tag parameter, but this may change in the future.
+            a new auxiliary channel.  The channel name is currently hard-coded
+            based on expected output heads. This may change in the future.
             '''))
 
     parser.set_defaults(**kwargs)
@@ -73,12 +78,21 @@ def make_predict_config(cmdline=False, **kwargs):
     # for dataset, method, and trainer
     # Note: Adds '--test_dataset' to argparse (
     # may want to modify behavior to only expose non-training params)
+    overloadable_datamodule_keys = [
+        'chip_size',
+        'time_steps',
+        'channels',
+        'time_sampling',
+    ]
     parser = datamodule_class.add_argparse_args(parser)
+    datamodule_defaults = {k: parser.get_default(k) for k in overloadable_datamodule_keys}
     parser.set_defaults(**{'batch_size': 1})
+    parser.set_defaults(**{k: 'auto' for k in overloadable_datamodule_keys})
 
     # parse and pass to main
     parser.set_defaults(**kwargs)
     args, _ = parser.parse_known_args(default_args)
+    args.datamodule_defaults = datamodule_defaults
     assert args.batch_size == 1
     return args
 
@@ -108,6 +122,9 @@ def predict(cmdline=False, **kwargs):
         ...     'max_epochs': 1,
         ...     'time_steps': 2,
         ...     'chip_size': 64,
+        ...     'global_change_weight': 1.0,
+        ...     'global_class_weight': 1.0,
+        ...     'global_saliency_weight': 1.0,
         ...     'max_steps': 1,
         ...     'learning_rate': 1e-5,
         ...     'num_workers': 0,
@@ -132,15 +149,18 @@ def predict(cmdline=False, **kwargs):
         >>>     # a change predictoion, depending on the temporal sampling.
         >>>     images = dset.images(dset.index.vidid_to_gids[1])
         >>>     pred_chans = [[a['channels'] for a in aux] for aux in images.lookup('auxiliary')]
-        >>>     assert any('change_prob' in cs for cs in pred_chans), 'some frames should have change'
-        >>>     assert not all('change_prob' in cs for cs in pred_chans), 'some frames should not have change'
+        >>>     assert any('change' in cs for cs in pred_chans), 'some frames should have change'
+        >>>     assert not all('change' in cs for cs in pred_chans), 'some frames should not have change'
         >>>     # Test number of annots in each frame
-        >>>     num_annots = list(map(len, images.annots))
-        >>>     assert num_annots[0] == 0, 'first frame should have none'
+        >>>     frame_to_cathist = {
+        >>>         img['frame_index']: ub.dict_hist(annots.cnames, labels=result_dataset.object_categories())
+        >>>         for img, annots in zip(images.objs, images.annots)
+        >>>     }
+        >>>     assert frame_to_cathist[0]['change'] == 0, 'first frame should have no change polygons'
         >>>     # This test may fail with very low probability, so warn
         >>>     import warnings
-        >>>     if sum(num_annots[1:]) == 0:
-        >>>         warnings.warn('should be predictions elsewhere')
+        >>>     if sum(d['change'] for d in frame_to_cathist.values()) == 0:
+        >>>         warnings.warn('should have some change predictions elsewhere')
     """
     args = make_predict_config(cmdline=cmdline, **kwargs)
     print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=2)))
@@ -148,6 +168,11 @@ def predict(cmdline=False, **kwargs):
     try:
         # Ideally we have a package, everything is defined there
         method = utils.load_model_from_package(args.package_fpath)
+        # fix einops bug
+        for name, mod in method.named_modules():
+            if 'Rearrange' in mod.__class__.__name__:
+                mod._recipe = mod.recipe()
+
     except Exception:
         # If we have a checkpoint path we can load it if we make assumptions
         # init method from checkpoint.
@@ -182,22 +207,41 @@ def predict(cmdline=False, **kwargs):
         datamodule_class.__init__,
     )
 
-    # TODO: default to this, but allow the user to overwrite
     if hasattr(method, 'datamodule_hparams'):
-        datamodule_vars['chip_size'] = method.datamodule_hparams['chip_size']
-        datamodule_vars['time_steps'] = method.datamodule_hparams['time_steps']
-        datamodule_vars['channels'] = method.datamodule_hparams['channels']
+        given = ub.dict_isect(datamodule_vars, args.datamodule_defaults)
+        print('given = {}'.format(ub.repr2(given, nl=1)))
+        needs_update = {k for k, v in given.items() if v == 'auto'}
+        traintime_vals = ub.dict_isect(method.datamodule_hparams, args.datamodule_defaults)
+        overloads = ub.dict_isect(method.datamodule_hparams, needs_update)
+        discarded = ub.dict_diff(traintime_vals, needs_update)
+        print('overloads = {}'.format(ub.repr2(overloads, nl=1)))
+        print('deviation from train settings = {}'.format(ub.repr2(discarded, nl=1)))
+        datamodule_vars.update(overloads)
+        # datamodule_vars[k] = args.datamodule_defaults[k]
     else:
-        print('Warning have to make assumptions')
-        # datamodule_vars['chip_size'] = method.datamodule_hparams['chip_size']
-        # datamodule_vars['time_steps'] = method.datamodule_hparams['time_steps']
-        datamodule_vars['channels'] = list(method.input_norms.keys())[0]
-        # method.datamodule_hparams['channels']
+        print('Warning have to make assumptions. Might not always work')
+        if hasattr(method, 'input_channels'):
+            # note input_channels are sometimes different than the channels the
+            # datamodule expects. Depending on special keys and such.
+            datamodule_vars['channels'] = method.input_channels.spec
+        else:
+            datamodule_vars['channels'] = list(method.input_norms.keys())[0]
 
     datamodule = datamodule_class(
         **datamodule_vars
     )
-    datamodule.setup("test")
+    datamodule.setup('test')
+
+    if ub.argflag('--debug-timesample'):
+        import kwplot
+        plt = kwplot.autoplt()
+        # TODO Could
+        test_torch_dset = datamodule.torch_datasets['test']
+        vidid_to_time_sampler = test_torch_dset.new_sample_grid['vidid_to_time_sampler']
+        vidid = ub.peek(vidid_to_time_sampler.keys())
+        time_sampler = vidid_to_time_sampler[vidid]
+        time_sampler.show_summary()
+        plt.show()
 
     test_coco_dataset = datamodule.coco_datasets['test']
     test_torch_dataset = datamodule.torch_datasets['test']
@@ -211,7 +255,6 @@ def predict(cmdline=False, **kwargs):
     result_dataset.clear_annotations()
     # Change all paths to be absolute paths
     result_dataset.reroot(absolute=True)
-    result_dataset.ensure_category("change")
     # Set the filepath for the prediction coco file
     # (modifies the bundle_dpath)
     if args.pred_dataset is None:
@@ -249,21 +292,83 @@ def predict(cmdline=False, **kwargs):
     print('Predict on device = {!r}'.format(device))
     method = method.to(device)
 
-    stitch_manager = CocoStitchingManager(
-        result_dataset,
-        stiching_space='video',
-        device='numpy',  # could be torch on-device stitching
-        chan_code=args.tag,
-        thresh=args.thresh,
-        write_probs=args.write_probs,
-        write_preds=args.write_preds,
-    )
+    stitch_managers = {}
+
+    if args.with_change == 'auto':
+        args.with_change = getattr(method, 'global_change_weight', 1.0)
+    if args.with_class == 'auto':
+        args.with_class = getattr(method, 'global_class_weight', 1.0)
+    if args.with_saliency == 'auto':
+        args.with_saliency = getattr(method, 'global_saliency_weight', 0.0)
+
+    # could be torch on-device stitching
+    stitch_device = 'numpy'
+
+    if args.with_change:
+        stitch_managers['change'] = CocoStitchingManager(
+            result_dataset,
+            stiching_space='video',
+            device=stitch_device,
+            chan_code='change',
+            thresh=args.thresh,
+            write_probs=args.write_probs,
+            write_preds=args.write_preds,
+            num_bands=1,
+        )
+        result_dataset.ensure_category('change')
+
+    if args.with_class:
+        if hasattr(method, 'foreground_classes'):
+            foreground_classes = method.foreground_classes
+        else:
+            not_foreground = (heuristics.BACKGROUND_CLASSES | heuristics.IGNORE_CLASSNAMES)
+            foreground_classes = ub.oset(method.classes) - not_foreground
+            # hueristics.B
+            # raise NotImplementedError('old model, need to hack in fg classes')
+
+        class_chan_code = '|'.join(list(method.classes))
+        stitch_managers['class'] = CocoStitchingManager(
+            result_dataset,
+            stiching_space='video',
+            device=stitch_device,
+            chan_code=class_chan_code,
+            thresh=args.thresh,
+            write_probs=args.write_probs,
+            write_preds=args.write_preds,
+            polygon_categories=foreground_classes,
+            num_bands=len(method.classes),
+        )
+
+    if args.with_saliency:
+        stitch_managers['saliency'] = CocoStitchingManager(
+            result_dataset,
+            stiching_space='video',
+            device=stitch_device,
+            chan_code='not_salient|salient',
+            thresh=args.thresh,
+            write_probs=args.write_probs,
+            write_preds=args.write_preds,
+            polygon_categories=['salient'],
+            num_bands=2,
+        )
 
     result_infos = []
     total_info = {'n_anns': 0, 'n_imgs': 0, 'total_prob': 0}
 
-    def finalize_ready(gid):
-        info = stitch_manager.finalize_image(gid)
+    expected_outputs = set(stitch_managers.keys())
+    got_outputs = None
+    writable_outputs = None
+
+    print('Expected outputs: ' + str(expected_outputs))
+
+    head_key_mapping = {
+        'saliency_probs': 'saliency',
+        'class_probs': 'class',
+        'change_probs': 'change',
+    }
+
+    def finalize_ready(head_stitcher, gid):
+        info = head_stitcher.finalize_image(gid)
         stats = running_stats.summarize(axis=None, keepdims=False)
         total_info['n_anns'] += info['n_anns']
         total_info['total_prob'] += info['total_prob']
@@ -273,19 +378,15 @@ def predict(cmdline=False, **kwargs):
             ub.dict_isect(stats, {'mean', 'max', 'min', 'std'}),
             ub.dict_isect(total_info, {'n_imgs', 'n_anns', 'total_prob'}),
         )
-        # TODO: once compact=True is available in ub 0.9.6, the rest can be
-        # removed
-        report_info_str = ub.repr2(
-            report_info, precision=4, compact=True, with_dtype=False, nl=0, nobr=1,
-            sk=True, sv=True, kvsep='=', itemsep='')
+        report_info_str = ub.repr2(report_info, precision=4, compact=True)
         prog.set_extra(' {} - '.format(report_info_str))
-        # prog.ensure_newline()
+        prog.ensure_newline()
         result_infos.append(info)
 
-    import kwarray
-    running_stats = kwarray.RunningStats()  # for inspecting probability
+    running_stats = kwarray.RunningStats()  # check if probs are non-zero
 
     prog = ub.ProgIter(test_dataloader, desc='predicting', verbose=1)
+    prog.set_extra(' <will populate stats after first video>')
     for batch in prog:
         # Move data onto the prediction device
         for item in batch:
@@ -296,40 +397,49 @@ def predict(cmdline=False, **kwargs):
 
         # Predict on the batch
         outputs = method.forward_step(batch, with_loss=False)
+        outputs = {head_key_mapping.get(k, k): v for k, v in outputs.items()}
 
-        # TODO: we will eventually output more than "binary_predictions"
-        if 'binary_predictions' in outputs:
-            batch_bin_probs = outputs['binary_predictions']
-
-        if 'change_probs' in outputs:
-            batch_bin_probs = outputs['change_probs']
+        if got_outputs is None:
+            got_outputs = list(outputs.keys())
+            prog.ensure_newline()
+            writable_outputs = set(got_outputs) & expected_outputs
+            print('got_outputs = {!r}'.format(got_outputs))
+            print('writable_outputs = {!r}'.format(writable_outputs))
 
         # For each item in the batch, process the results
-        for bx, item in enumerate(batch):
+        for head_key in writable_outputs:
+            head_stitcher = stitch_managers[head_key]
+            head_probs = outputs[head_key]
+            for bx, item in enumerate(batch):
+                # TODO: if the predictions are downsampled wrt to the input images,
+                # we need to determine what that transform is so we can correctly
+                # warp the predictions back into image space.
+                bin_probs = head_probs[bx].detach().cpu().numpy()
 
-            # TODO: if the predictions are downsampled wrt to the input images,
-            # we need to determine what that transform is so we can correctly
-            # warp the predictions back into image space.
-            bin_probs = batch_bin_probs[bx].detach().cpu().numpy()
+                # Get the spatio-temporal subregion that this prediction belongs to
+                in_gids = [frame['gid'] for frame in item['frames']]
 
-            # Get the spatio-temporal subregion that this prediction belongs to
-            in_gids = [frame['gid'] for frame in item['frames']]
-            space_slice = tuple(item['tr']['space_slice'])
-            # NOTE: the returned tr space slice seems bugged?
-            # tuple(item['tr']['space_slice'])
+                if head_key == 'change':
+                    # HACK: FIXME: WE ARE HARD CODING THAT CHANGE IS GIVEN TO
+                    # ALL FRAMES EXECPT THE FIRST IN MULTIPLE PLACES.
+                    out_gids = in_gids[1:]
+                else:
+                    out_gids = in_gids
 
-            # Update the stitcher with this windowed prediction
-            for gid, probs in zip(in_gids[1:], bin_probs):
-                running_stats.update(probs)
-                stitch_manager.accumulate_image(gid, space_slice, probs)
+                space_slice = tuple(item['tr']['space_slice'])
+                # Update the stitcher with this windowed prediction
+                for gid, probs in zip(out_gids, bin_probs):
+                    running_stats.update(probs.mean())
+                    head_stitcher.accumulate_image(gid, space_slice, probs)
 
             # Free up space for any images that have been completed
-            for gid in stitch_manager.ready_image_ids():
-                finalize_ready(gid)
+            for gid in head_stitcher.ready_image_ids():
+                finalize_ready(head_stitcher, gid)
 
     # Prediction is completed, finalize all remaining images.
-    for gid in stitch_manager.managed_image_ids():
-        finalize_ready(gid)
+    for head_key, head_stitcher in stitch_managers.items():
+        for gid in head_stitcher.managed_image_ids():
+            finalize_ready(head_stitcher, gid)
 
     # prog.set_extra('found {}'.format(nanns))
     # print('Predicted total nanns = {!r}'.format(nanns))
@@ -355,6 +465,9 @@ class CocoStitchingManager(object):
             The CocoDataset that is being predicted on. This will be modified
             when an image prediction is finalized.
 
+        short_code (str):
+            short identifier used for directory names.
+
         chan_code (str):
             If saving the stitched features, this is the channel code to use.
 
@@ -368,6 +481,13 @@ class CocoStitchingManager(object):
             if making hard decisions, determines the threshold for converting a
             soft mask into a hard mask, which can be converted into a polygon.
 
+        prob_compress (str):
+            Compression algorithm to use when writing probabilities to disk.
+            Can be any GDAL compression code, e.g LZW, DEFLATE, RAW, etc.
+
+        polygon_categories (List[str] | None):
+            These are the list of channels that should be transformed into
+            polygons. If not set, all are used.
 
     TODO:
         - [ ] Handle the case where the input space is related to the output
@@ -387,13 +507,23 @@ class CocoStitchingManager(object):
               the code that adds soft predictions to the kwcoco file?
     """
 
-    def __init__(self, result_dataset, chan_code=None, stiching_space='video',
+    def __init__(self, result_dataset, short_code=None, chan_code=None, stiching_space='video',
                  device='numpy', thresh=0.5, write_probs=True,
-                 write_preds=True):
+                 write_preds=True, num_bands='auto', prob_compress='LZW',
+                 polygon_categories=None):
+        self.short_code = short_code
         self.result_dataset = result_dataset
         self.device = device
         self.chan_code = chan_code
         self.thresh = thresh
+        self.num_bands = num_bands
+        self.prob_compress = prob_compress
+        self.polygon_categories = polygon_categories
+
+        self.suffix_code = (
+            self.chan_code if '|' not in self.chan_code else
+            ub.hash_data(self.chan_code)[0:16]
+        )
 
         self.stiching_space = stiching_space
         if stiching_space != 'video':
@@ -410,9 +540,18 @@ class CocoStitchingManager(object):
         self.write_probs = write_probs
         self.write_preds = write_preds
 
+        if self.write_preds:
+            from kwcoco import channel_spec
+            chan_spec = channel_spec.FusedChannelSpec.coerce(chan_code)
+            if self.polygon_categories is None:
+                self.polygon_categories = chan_spec.parsed
+            # Determine the indexes that we will use for polygon extraction
+            _idx_lut = {c: idx for idx, c in enumerate(chan_spec.parsed)}
+            self.polygon_idxs = [_idx_lut[c] for c in self.polygon_categories]
+
         if self.write_probs:
             bundle_dpath = self.result_dataset.bundle_dpath
-            prob_subdir = f'_assets/{self.chan_code}'
+            prob_subdir = f'_assets/{self.short_code}'
             self.prob_dpath = join(bundle_dpath, prob_subdir)
             ub.ensuredir(self.prob_dpath)
 
@@ -429,21 +568,32 @@ class CocoStitchingManager(object):
 
             data (ndarray | Tensor): the feature or probability data
         """
+        data = kwarray.atleast_nd(data, 3)
         dset = self.result_dataset
         if self.stiching_space == 'video':
             vidid = dset.index.imgs[gid]['video_id']
             # Create the stitcher if it does not exist
             if gid not in self.image_stitchers:
                 video = dset.index.videos[vidid]
-                space_dims = (video['height'], video['width'])
+                if self.num_bands == 'auto':
+                    if len(data.shape) == 3:
+                        self.num_bands = data.shape[2]
+                    else:
+                        raise NotImplementedError
+                stitch_dims = (video['height'], video['width'], self.num_bands)
                 self.image_stitchers[gid] = kwarray.Stitcher(
-                    space_dims, device=self.device)
+                    stitch_dims, device=self.device)
 
             if self._last_vidid is not None and vidid != self._last_vidid:
                 # We assume sequential video iteration, thus when we see a new
                 # video, we know the images from the previous video are ready.
                 video_gids = set(dset.index.vidid_to_gids[self._last_vidid])
                 ready_gids = video_gids & set(self.image_stitchers)
+
+                # TODO
+                # do something clever to know if frames are ready early?
+                # might be tricky in general if we run over multiple
+                # times per image with different frame samplings.
                 self._ready_gids.update(ready_gids)
 
             self._last_vidid = vidid
@@ -486,7 +636,26 @@ class CocoStitchingManager(object):
         stitcher = self.image_stitchers.pop(gid)
 
         # Get the final stitched feature for this image
-        change_probs = stitcher.finalize()
+        final_probs = stitcher.finalize()
+        final_probs = kwarray.atleast_nd(final_probs, 3)
+        final_probs = np.nan_to_num(final_probs)
+
+        final_weights = kwarray.atleast_nd(stitcher.weights, 3)
+        is_predicted_pixel = final_weights.any(axis=2).astype('uint8')
+
+        # NOTE: could find and record the valid prediction regions.
+        # Given a (rectilinear) non-convex multipolygon where we are guarenteed
+        # that all of the angles in the polygon are right angles, what is an
+        # efficient algorithm to decompose it into a minimal set of disjoint
+        # rectangles?
+        # https://stackoverflow.com/questions/5919298/algorithm-for-finding-the-fewest-rectangles-to-cover-a-set-of-rectangles-without/6634668#6634668
+        # Or... just write out a polygon... KISS
+        _mask = kwimage.Mask(is_predicted_pixel, 'c_mask')
+        _poly = _mask.to_multi_polygon()
+        predicted_region = _poly.to_geojson()
+        # Mark that we made a prediction on this image.
+        img['prediction_region'] = predicted_region
+        img['has_predictions'] = ub.dict_union(img.get('has_predictions', {}), {self.chan_code: True})
 
         # Get spatial relationship between the image and the video
         vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
@@ -495,20 +664,6 @@ class CocoStitchingManager(object):
         n_anns = 0
         total_prob = 0
 
-        # TODO: find and record the valid prediction regions
-        # Given a (rectilinear) non-convex multipolygon where we are guarenteed
-        # that all of the angles in the polygon are right angles, what is an
-        # efficient algorithm to decompose it into a minimal set of disjoint
-        # rectangles?
-        # https://stackoverflow.com/questions/5919298/algorithm-for-finding-the-fewest-rectangles-to-cover-a-set-of-rectangles-without/6634668#6634668
-        # Or... just write out a polygon... KISS
-        import numpy as np
-        is_predicted_pixel = (stitcher.weights > 0).astype(np.uint8)
-        predicted_region = kwimage.Mask(is_predicted_pixel, 'c_mask').to_multi_polygon().to_geojson()
-        # Mark that we made a prediction on this image.
-        img['prediction_region'] = predicted_region
-        img['has_predictions'] = True
-
         if self.write_probs:
             # This currently exists as an example to demonstrate how a
             # prediction script can write a pre-fusion TA-2 feature to disk and
@@ -516,23 +671,23 @@ class CocoStitchingManager(object):
             #
             # Save probabilities (or feature maps) as a new auxiliary image
             bundle_dpath = self.result_dataset.bundle_dpath
-            new_feature = kwarray.atleast_nd(change_probs, 3)
-            new_fname = img.get('name', str(img['id'])) + f'_{self.chan_code}.tiff'  # FIXME
+            new_fname = img.get('name', str(img['id'])) + f'_{self.suffix_code}.tiff'  # FIXME
             new_fpath = join(self.prob_dpath, new_fname)
+            assert final_probs.shape[2] == (self.chan_code.count('|') + 1)
             img.get('auxiliary', []).append({
                 'file_name': relpath(new_fpath, bundle_dpath),
                 'channels': self.chan_code,
-                'height': new_feature.shape[0],
-                'width': new_feature.shape[1],
-                'num_bands': new_feature.shape[2],
+                'height': final_probs.shape[0],
+                'width': final_probs.shape[1],
+                'num_bands': final_probs.shape[2],
                 'warp_aux_to_img': img_from_vid.concise(),
             })
 
             # Save the prediction to disk
-            total_prob += new_feature.sum()
+            total_prob += final_probs.sum()
             kwimage.imwrite(
-                str(new_fpath), new_feature, space=None, backend='gdal',
-                compress='LZW'
+                str(new_fpath), final_probs, space=None, backend='gdal',
+                compress=self.prob_compress,
             )
 
         if self.write_preds:
@@ -541,32 +696,36 @@ class CocoStitchingManager(object):
 
             # HACK: We happen to know this is the category atm.
             # Should have a better way to determine it via metadata
-            change_cid = self.result_dataset.index.name_to_cat['change']['id']
 
-            # Threshold scores
-            thresh = self.thresh
-            # Convert to polygons
-            scored_polys = list(postprocess.mask_to_scored_polygons(
-                change_probs, thresh))
-            n_anns = len(scored_polys)
-            for vid_poly, score in scored_polys:
-                # Transform the video polygon into image space
-                img_poly = vid_poly.warp(img_from_vid)
-                bbox = list(img_poly.bounding_box().to_coco())[0]
-                # Add the polygon as an annotation on the image
-                self.result_dataset.add_annotation(
-                    image_id=gid, category_id=change_cid,
-                    bbox=bbox, segmentation=img_poly, score=score)
+            for catname, band_idx in zip(self.polygon_categories, self.polygon_idxs):
+                cid = self.result_dataset.ensure_category(catname)
 
-        return {
+                band_probs = final_probs[..., band_idx]
+                # Threshold scores (todo: could be per class)
+                thresh = self.thresh
+                # Convert to polygons
+                scored_polys = list(from_heatmap.mask_to_scored_polygons(
+                    band_probs, thresh))
+                n_anns = len(scored_polys)
+                for vid_poly, score in scored_polys:
+                    # Transform the video polygon into image space
+                    img_poly = vid_poly.warp(img_from_vid)
+                    bbox = list(img_poly.bounding_box().to_coco())[0]
+                    # Add the polygon as an annotation on the image
+                    self.result_dataset.add_annotation(
+                        image_id=gid, category_id=cid,
+                        bbox=bbox, segmentation=img_poly, score=score)
+
+        info = {
             'n_anns': n_anns,
             'total_prob': total_prob,
         }
+        return info
 
 
 def main(cmdline=True, **kwargs):
     predict(cmdline=cmdline, **kwargs)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

@@ -16,9 +16,13 @@ def millify(n):
     return '{:.2f}{}'.format(n / 10**(3 * millidx), millnames[millidx])
 
 
-def load_model_from_package(package_path, module_name="watch_tasks_fusion", arch_name="model.pkl"):
+def load_model_from_package(package_path):
     """
-    DEPRECATE IN FAVOR OF A MODEL METHOD?
+    Loads a kitware-flavor torch package (requires that the
+    kitware_package_header exists)
+
+    Old:
+        DEPRECATE IN FAVOR OF A MODEL METHOD? NO.
 
     Notes:
         * I don't like that we need to know module_name and arch_name a-priori
@@ -26,6 +30,7 @@ def load_model_from_package(package_path, module_name="watch_tasks_fusion", arch
           the model instance.
     """
     from torch import package
+    import json
     # imp = package.PackageImporter(package_path)
     import pathlib
     if not isinstance(package_path, (str, pathlib.Path)):
@@ -34,8 +39,12 @@ def load_model_from_package(package_path, module_name="watch_tasks_fusion", arch
     imp = package.PackageImporter(package_path)
     # Assume this standardized header information exists that tells us the
     # name of the resource corresponding to the model
-    package_header = imp.load_pickle(
-        'kitware_package_header', 'kitware_package_header.pkl')
+    try:
+        package_header = json.loads(imp.load_text(
+            'kitware_package_header', 'kitware_package_header.json'))
+    except Exception:
+        package_header = imp.load_pickle(
+            'kitware_package_header', 'kitware_package_header.pkl')
     arch_name = package_header['arch_name']
     module_name = package_header['module_name']
 

@@ -1,41 +1,4 @@
-
-def mask_to_scored_polygons(probs, thresh):
-    """
-    Example:
-        >>> from watch.tasks.fusion.postprocess import *  # NOQA
-        >>> import kwimage
-        >>> probs = kwimage.Heatmap.random(dims=(64, 64), rng=0).data['class_probs'][0]
-        >>> thresh = 0.5
-        >>> poly1, score1 = list(mask_to_scored_polygons(probs, thresh))[0]
-        >>> # xdoctest: +IGNORE_WANT
-        >>> import kwplot
-        >>> kwplot.autompl()
-        >>> kwplot.imshow(probs > 0.5)
-    """
-    import kwimage
-    import numpy as np
-    # Threshold scores
-    hard_mask = probs > thresh
-    # Convert to polygons
-    polygons = kwimage.Mask(hard_mask, 'c_mask').to_multi_polygon()
-    for poly in polygons:
-        # Compute a score for the polygon
-        # First compute the valid bounds of the polygon
-        # And create a mask for only the valid region of the polygon
-        box = poly.bounding_box().quantize().to_xywh()
-        # Ensure w/h are positive
-        box.data[:, 2:4] = np.maximum(box.data[:, 2:4], 1)
-        x, y, w, h = box.data[0]
-        rel_poly = poly.translate((-x, -y))
-        rel_mask = rel_poly.to_mask((h, w)).data
-        # Slice out the corresponding region of probabilities
-        rel_probs = probs[y:y + h, x:x + w]
-        total = rel_mask.sum()
-        score = 0 if total == 0 else (rel_mask * rel_probs).sum() / total
-        yield poly, score
-
-
-def accumulate_temporal_predictions_simple_v1(result_dataset):
+def accumulate_temporal_predictions_simple_v1(pred_fpath='/home/local/KHQ/usman.rafique/data/dvc-repos/smart_watch_dvc/training/horologic/usman.rafique/Drop1_TeamFeat_Holdout/runs/DirectCD_smt_it_joint_p8_teamfeat_v010/pred/pred.kwcoco.json'):
     """
     find $HOME/remote/yardrat/smart_watch_dvc/training/yardrat/jon.crall/ -iname "package_*.pt"
 
@@ -47,9 +10,23 @@ def accumulate_temporal_predictions_simple_v1(result_dataset):
 
 
 
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+    TEST_DATASET=$DVC_DPATH/drop1-S2-L8-aligned/vali_data.kwcoco.json
+    PACKAGE_FPATH=$DVC_DPATH/models/fusion/package_DirectCD_smt_it_joint_p8_raw9common_v5_tune_from_onera_epoch=2-step=2147.pt
+    PRED_DATASET=./tmp_preds/tmp_pred.kwcoco.json
+    python -m watch.tasks.fusion.predict \
+        --test_dataset="$TEST_DATASET" \
+        --package_fpath="$PACKAGE_FPATH" \
+        --pred_dataset="$PRED_DATASET" \
+        --write_probs=True \
+        --write_preds=False --gpus=1
+
+
+
+
     DVC_DPATH=$HOME/remote/yardrat/smart_watch_dvc
     TEST_DATASET=$DVC_DPATH/drop1-S2-L8-aligned/vali_data.kwcoco.json
-    PACKAGE_FPATH=$DVC_DPATH/training/yardrat/jon.crall/Drop1RawHoldout/runs/DirectCD_smt_it_joint_p8_raw9common_v5_tune_from_onera/lightning_logs/version_0/checkpoints/epoch=2-step=2147.ckpt
+    PACKAGE_FPATH=$DVC_DPATH/training/yardrat/jon.crall/Drop1RawHoldout/runs/DirectCD_smt_it_joint_p8_raw9common_v5_tune_from_onera/lightning_logs/version_0/checkpoints/epoch=2-step=2147.pt
 
     SUGGESTIONS="$(python -m watch.tasks.fusion.organize suggest_paths \
         --package_fpath=$PACKAGE_FPATH \
@@ -94,50 +71,17 @@ def accumulate_temporal_predictions_simple_v1(result_dataset):
 
     Drop1RawLeftRight/runs/DirectCD_smt_it_joint_p8_raw7common_v4/lightning_logs/version_2/checkpoints/epoch=2-step=1241-v3.ckpt
     """
-    from watch.utils import kwcoco_extensions
-    from watch.utils import util_kwimage
-    key = 'change_prob'
+    import kwcoco
+    import ubelt as ub
+    from watch.tasks.tracking.from_heatmap import time_aggregated_polys
+    from watch.tasks.tracking.normalize import apply_tracks
+
+    # This pred_fpath is the file is written using the model package on DVC:
+    # data/dvc-repos/smart_watch_dvc/models/fusion/checkpoint_DirectCD_smt_it_joint_p8_raw9common_v5_tune_from_onera_epoch=2-step=2147.ckpt
+    result_dataset = kwcoco.CocoDataset.coerce(ub.expandpath(pred_fpath))
     dset = result_dataset
 
-    import kwarray
-    import ubelt as ub
-
-    for vidid, video in dset.index.videos.items():
-        print('video', ub.dict_isect(video, ['width', 'height']))
-        running = kwarray.RunningStats()
-        gids = dset.index.vidid_to_gids[vidid]
-        for gid in gids:
-            img = dset.index.imgs[gid]
-            coco_img = kwcoco_extensions.CocoImage(img, dset)
-            if key in coco_img.channels:
-                img_probs = coco_img.delay(key, space='video').finalize()
-                running.update(img_probs)
-
-        probs = running.summarize(axis=2, keepdims=False)['mean']
-
-        thresh = 0.15
-        hard_probs = util_kwimage.morphology(probs > thresh, 'close', 3)
-        modulated_probs = probs * hard_probs
-
-        scored_polys = list(mask_to_scored_polygons(modulated_probs, thresh))
-
-        # Add each polygon to every images as a track
-        import kwimage
-        change_cid = dset.index.name_to_cat['change']['id']
-        for track_id, (vid_poly, score) in enumerate(scored_polys, start=1):
-            for gid in gids:
-                img = dset.index.imgs[gid]
-                vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
-                img_from_vid = vid_from_img.inv()
-
-                # Transform the video polygon into image space
-                img_poly = vid_poly.warp(img_from_vid)
-                bbox = list(img_poly.bounding_box().to_coco())[0]
-                # Add the polygon as an annotation on the image
-                dset.add_annotation(
-                    image_id=gid, category_id=change_cid,
-                    bbox=bbox, segmentation=img_poly, score=score,
-                    track_id=track_id)
+    dset = apply_tracks(dset, time_aggregated_polys, overwrite=True)
 
     import ubelt as ub
     new_fpath = ub.augpath(dset.fpath, suffix='_timeagg_v1')
@@ -209,3 +153,7 @@ def _checkkalman():
 
     # X2, P2 = kalman.update(X1, P=P1, z=Z1, R=R)
     # pass
+
+
+if __name__ == '__main__':
+    accumulate_temporal_predictions_simple_v1()

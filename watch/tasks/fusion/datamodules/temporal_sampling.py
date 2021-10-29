@@ -230,7 +230,7 @@ def debug_video_information(dset, video_id):
             # kwplot.imshow(track_viz)
 
 
-def dilated_template_sample(unixtimes, time_window):
+def dilated_template_sample(unixtimes, time_window, time_span='2y'):
     """
     Args:
         unixtimes (ndarray):
@@ -387,28 +387,101 @@ def dilated_template_sample(unixtimes, time_window):
                 datetime.timedelta(days=0).total_seconds(),
             ])
         else:
-            num_years = 2
-            min_time = -datetime.timedelta(days=365).total_seconds() * num_years
-            max_time = datetime.timedelta(days=365).total_seconds() * num_years
+            if isinstance(time_span, str):
+                # TODO: better coercion function
+                if time_span.endswith('y'):
+                    time_span = datetime.timedelta(days=365 * int(time_span[:-1])).total_seconds()
+                elif time_span.endswith('d'):
+                    time_span = datetime.timedelta(days=1 * int(time_span[:-1])).total_seconds()
+                else:
+                    import pytimeparse  #
+                    pytimeparse.parse(time_span)
+            min_time = -datetime.timedelta(seconds=time_span).total_seconds()
+            max_time = datetime.timedelta(seconds=time_span).total_seconds()
             template_deltas = np.linspace(min_time, max_time, time_window).round().astype(int)
             # Always include a delta of 0
             template_deltas[np.abs(template_deltas).argmin()] = 0
     else:
         template_deltas = time_window
 
-    # num_frames = len(template_deltas)
-
-    # unixtimes = np.arange(20)
-    # template_deltas = np.array([-5, -3, 0, 3, 5])
-
     unixtimes = guess_missing_unixtimes(unixtimes)
+
+    # unixtimes = unixtimes / (60 * 60 * 24)
+    # template_deltas = template_deltas / (60 * 60 * 24)
+
     rel_unixtimes = unixtimes - unixtimes[0]
     temporal_sampling = rel_unixtimes[:, None] + template_deltas[None, :]
 
-    # Wraparound
+    # Wraparound (this is a bit of a hack)
+
+    hackit = 1
+    if hackit:
+        wraparound = 1
+        last_time = rel_unixtimes[-1] + 1
+        is_oob_left = temporal_sampling < 0
+        is_oob_right = temporal_sampling >= last_time
+        is_oob = (is_oob_right | is_oob_left)
+        is_ib = ~is_oob
+
+        tmp = temporal_sampling.copy()
+        tmp[is_oob] = np.nan
+        # filter warn
+        max_ib = np.nanmax(tmp, axis=1)
+        min_ib = np.nanmin(tmp, axis=1)
+
+        row_oob_flag = is_oob.any(axis=1)
+
+        # TODO: rewrite this with reasonable logic for fixing oob samples
+        # This is horrible logic, I'd be ashamed, but it works.
+        for rx in np.where(row_oob_flag)[0]:
+            is_bad = is_oob[rx]
+            mx = max_ib[rx]
+            mn = min_ib[rx]
+            row = temporal_sampling[rx].copy()
+            valid_data = row[is_ib[rx]]
+            if not len(valid_data):
+                wraparound = 1
+                temporal_sampling[rx, :] = 0.0
+            else:
+                step = (mx - mn) / len(valid_data)
+                if step <= 0:
+                    wraparound = 1
+                else:
+                    avail_after = last_time - mx
+                    avail_before = mn
+
+                    if avail_after > 0:
+                        avail_after_steps = avail_after / step
+                    else:
+                        avail_after_steps = 0
+
+                    if avail_before > 0:
+                        avail_before_steps = avail_before / step
+                    else:
+                        avail_before_steps = 0
+
+                    need = is_bad.sum()
+                    before_oob = is_oob_left[rx]
+                    after_oob = is_oob_right[rx]
+
+                    take_after = min(before_oob.sum(), int(avail_after_steps))
+                    take_before = min(after_oob.sum(), int(avail_before_steps))
+
+                    extra_after = np.linspace(mx, mx + take_after * step, take_after)
+                    extra_before = np.linspace(mn - take_before * step, mn, take_before)
+
+                    extra = np.hstack([extra_before, extra_after])
+
+                    bad_idxs = np.where(is_bad)[0]
+                    use = min(min(len(bad_idxs), need), len(extra))
+                    row[bad_idxs[:use]] = extra[:use]
+                    temporal_sampling[rx] = row
+        # temporal_sampling = temporal_sampling % ( + 1)
+
+    print('last_time = {!r}'.format(last_time))
     wraparound = 1
     if wraparound:
-        temporal_sampling = temporal_sampling % (rel_unixtimes[-1] + 1)
+        temporal_sampling = temporal_sampling % last_time
 
     losses = np.abs(temporal_sampling[:, :, None] - rel_unixtimes[None, None, :])
     losses[losses == 0] = -np.inf
@@ -418,23 +491,6 @@ def dilated_template_sample(unixtimes, time_window):
         # sample without duplicates.
         sample_idxs = np.array(kwarray.mincost_assignment(loss_for_row)[0]).T[1]
         all_rows.append(sorted(sample_idxs))
-    # else:
-    #     # Seems to work correctly?
-    #     all_rows = []
-    #     for idx in range(len(temporal_sampling)):
-    #         ideal_sample_for_row = temporal_sampling[idx]
-    #         loss_for_row = np.abs(ideal_sample_for_row[:, None] - rel_unixtimes[None, :])
-    #         loss_for_row[loss_for_row == 0] = -np.inf
-    #         if 1:
-    #             sample_idxs = np.array(kwarray.mincost_assignment(loss_for_row)[0]).T[1]
-    #         else:
-    #             candidiates = np.array([zz.argsort()[0:num_frames] for zz in loss_for_row]).T
-    #             # candidates =
-    #             # np.array([zz.argsort()[0:5] for zz in loss_for_row]).T
-    #             # kwarray.argmaxima(-loss_for_row, axis=1, num=num_frames).T
-    #             # candidiates = kwarray.argmaxima(-loss_for_row, axis=1, num=num_frames).T
-    #             sample_idxs = sorted(it.islice(ub.unique(candidiates.ravel()), num_frames))
-    #         all_rows.append(sorted(sample_idxs))
 
     sample_idxs = np.vstack(all_rows)
     # sample_idxs = util_kwarray.unique_rows(sample_idxs, ordered=True)
@@ -462,7 +518,7 @@ def guess_missing_unixtimes(unixtimes):
     return unixtimes
 
 
-def soft_frame_affinity(unixtimes, sensors=None):
+def soft_frame_affinity(unixtimes, sensors=None, time_span='2y'):
     """
     Produce a pairwise affinity weights between frames based on a dilated time
     heuristic.
@@ -550,6 +606,9 @@ def soft_frame_affinity(unixtimes, sensors=None):
         future_weights = (future_weights / future_weights.max())
         future_weights = future_weights * 0.8 + 0.2
 
+        # TODO:
+        # incorporate the time_span?
+
         weights['daylight'] = daylight_weights
         weights['season'] = season_weights
         weights['future'] = future_weights
@@ -608,9 +667,9 @@ def soft_frame_affinity(unixtimes, sensors=None):
     return weights
 
 
-def hard_frame_affinity(unixtimes, sensors, time_window, blur=False):
+def hard_frame_affinity(unixtimes, sensors, time_window, time_span='2y', blur=False):
     # Hard affinity
-    sample_idxs = dilated_template_sample(unixtimes, time_window)
+    sample_idxs = dilated_template_sample(unixtimes, time_window, time_span=time_span)
     affinity = kwarray.one_hot_embedding(
         sample_idxs, len(unixtimes), dim=1).sum(axis=2)
     affinity[np.eye(len(affinity), dtype=bool)] = 0
@@ -1003,7 +1062,7 @@ class TimeWindowSampler:
         >>> self = TimeWindowSampler.from_coco_video(
         >>>     dset, vidid,
         >>>     time_window=5,
-        >>>     affinity_type='hard',
+        >>>     affinity_type='hard', time_span='1y',
         >>>     update_rule='distribute')
         >>> self.determenistic = False
         >>> self.show_summary(samples_per_frame=3, fnum=1)
@@ -1013,7 +1072,7 @@ class TimeWindowSampler:
 
     def __init__(self, unixtimes, sensors, time_window,
                  affinity_type='hard', update_rule='distribute',
-                 determenistic=False, gamma=1, name='?'):
+                 determenistic=False, gamma=1, time_span='2y', name='?'):
         self.sensors = sensors
         self.unixtimes = unixtimes
         self.time_window = time_window
@@ -1023,6 +1082,7 @@ class TimeWindowSampler:
         self.gamma = gamma
         self.name = name
         self.num_frames = len(unixtimes)
+        self.time_span = time_span
 
         self.compute_affinity()
 
@@ -1063,16 +1123,17 @@ class TimeWindowSampler:
         """
         if self.affinity_type == 'soft':
             # Soft affinity
-            self.affinity = soft_frame_affinity(self.unixtimes, self.sensors)['final']
+            self.affinity = soft_frame_affinity(self.unixtimes, self.sensors, self.time_span)['final']
         elif self.affinity_type == 'hard':
             # Hard affinity
             self.affinity = hard_frame_affinity(self.unixtimes, self.sensors,
-                                                time_window=self.time_window)
+                                                time_window=self.time_window,
+                                                blur=False, time_span=self.time_span)
         elif self.affinity_type == 'hardish':
             # Hardish affinity
             self.affinity = hard_frame_affinity(self.unixtimes, self.sensors,
                                                 time_window=self.time_window,
-                                                blur=True)
+                                                blur=True, time_span=self.time_span)
         elif self.affinity_type == 'contiguous':
             time_slider = kwarray.SlidingWindow(
                 (len(self.unixtimes),), (self.time_window,), stride=(1,), keepbound=True,
@@ -1109,7 +1170,7 @@ class TimeWindowSampler:
             >>> self = TimeWindowSampler.from_coco_video(
             >>>     dset, vidid,
             >>>     time_window=5,
-            >>>     affinity_type='soft',
+            >>>     affinity_type='hard',
             >>>     update_rule='distribute')
             >>> self.determenistic = True
             >>> self.show_procedure(fnum=1)

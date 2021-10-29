@@ -62,6 +62,7 @@ rtree >= 0.9.7
 pygeos >= 0.10.1
 rgd-client >= 0.2.5, != 0.2.3
 geojson >= 2.5.0
+mgrs >= 1.4.2
 
 # Machine learning
 scikit_learn >= 0.24.2

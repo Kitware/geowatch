@@ -1,4 +1,5 @@
 #### Simple classifier on raw bands
+# ~/code/watch/scripts/generate_ta2_features.sh
 
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc 
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/drop1-S2-L8-aligned

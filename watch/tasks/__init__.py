@@ -48,6 +48,7 @@ __getattr__ = lazy_import(
         'semantics',
         'template',
         'uky_temporal_prediction',
+        'tracking',
     },
     submod_attrs={},
 )
@@ -58,4 +59,4 @@ def __dir__():
 
 
 __all__ = ['fusion', 'invariants', 'landcover', 'materials', 'reflectance',
-           'semantics', 'template', 'uky_temporal_prediction']
+           'semantics', 'template', 'uky_temporal_prediction', 'tracking']

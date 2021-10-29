@@ -9,10 +9,13 @@ from argparse import ArgumentParser, RawTextHelpFormatter
 import os
 import kwimage
 from tqdm import tqdm
+import ubelt as ub
 
 # local imports
 from .model import pretext
 from .iarpa_dataset import kwcoco_dataset
+from watch.utils import util_parallel
+from watch.utils.lightning_ext import util_globals
 
 
 def main(args):
@@ -30,15 +33,33 @@ def main(args):
         overrides['num_channels'] = (
             checkpoint['state_dict']['encoder.inc.conv.conv.0.weight'].shape[1]
         )
+        print('overrides = {}'.format(ub.repr2(overrides, nl=1)))
         checkpoint[cls.CHECKPOINT_HYPER_PARAMS_KEY].update(overrides)
         model = cls._load_model_state(checkpoint, strict=True)
     else:
         model = pretext.load_from_checkpoint(
             args.ckpt_path, train_dataset=None, vali_dataset=None)
 
-    model.eval().to(args.device)
+    try:
+        device = int(args.device)
+    except Exception:
+        device = args.device
+
+    model.eval().to(device)
     print('Initiating dataset')
-    dataset = kwcoco_dataset(args.input_kwcoco, args.sensor, args.bands)
+    dataset = kwcoco_dataset(args.input_kwcoco, args.sensor, args.bands, mode='test')
+
+    num_workers = util_globals.coerce_num_workers(args.num_workers)
+    print('num_workers = {!r}'.format(num_workers))
+
+    loader = torch.utils.data.DataLoader(
+        dataset, num_workers=num_workers, collate_fn=ub.identity, batch_size=1)
+    num_batches = len(loader)
+    # Start background processes
+    loader_iter = iter(loader)
+
+    # Build a task queue for background write results workers
+    queue = util_parallel.BlockingJobQueue(max_workers=num_workers)
 
     if len(args.tasks) == 1 and args.tasks[0].lower() == 'all':
         feature_types = model.TASK_NAMES
@@ -54,52 +75,78 @@ def main(args):
         root, _ = os.path.split(args.input_kwcoco)
 
     with torch.set_grad_enabled(False):
-        for idx in tqdm(range(len(dataset))):
-            image_id, image_info, image  = dataset.get_img(idx, args.device)
+        for batch in tqdm(loader_iter, total=num_batches):
+            for item in batch:
+                image_id, image_info, image = item
 
-            aux_base = image_info['auxiliary'][0]
-            path, file_name = os.path.split(aux_base['file_name'])
+                image = image.to(device)
+                # image_id, image_info, image  = dataset.get_img(idx, args.device)
 
-            if args.data_save_folder is not None:
-                save_path = args.data_save_folder
-            else:
-                save_path = os.path.join(root, 'uky_invariants', path)
+                aux_base = image_info['auxiliary'][0]
+                path, file_name = os.path.split(aux_base['file_name'])
 
-            if not os.path.exists(save_path):
-                os.makedirs(save_path, exist_ok=True)
+                if args.data_save_folder is not None:
+                    save_path = args.data_save_folder
+                else:
+                    save_path = os.path.join(root, 'uky_invariants', path)
 
-            features = model.predict(image)
+                if args.data_save_folder is not None:
+                    save_path = args.data_save_folder
+                else:
+                    save_path = os.path.join(root, 'uky_invariants', path)
 
-            # Predictions are saved in 'video space', so warp_aux_to_img is the inverse of warp_img_to_vid
-            warp_img_to_vid = kwimage.Affine.coerce(image_info.get('warp_img_to_vid', None))
-            warp_aux_to_img = warp_img_to_vid.inv().concise()
+                if not os.path.exists(save_path):
+                    os.makedirs(save_path, exist_ok=True)
 
-            for key in feature_types:
-                feat = features[key].squeeze()
-                feat = feat.permute(1, 2, 0).detach().cpu().numpy()
+                features = model.predict(image)
+
+                if not os.path.exists(save_path):
+                    os.makedirs(save_path, exist_ok=True)
+
+                # Predictions are saved in 'video space', so warp_aux_to_img is the inverse of warp_img_to_vid
+                warp_img_to_vid = kwimage.Affine.coerce(image_info.get('warp_img_to_vid', None))
+                warp_aux_to_img = warp_img_to_vid.inv().concise()
+
                 last_us_idx = file_name.rfind('_')
-                name = file_name[:last_us_idx] + '_invariants_' + key + '.tif'
-                kwimage.imwrite(os.path.join(save_path, name), feat, space=None,
-                                backend='gdal', compress='DEFLATE')
+                features_to_write = {}
+                for key in feature_types:
+                    feat = features[key].detach().squeeze()
+                    feat = feat.permute(1, 2, 0).cpu().numpy()
+                    features_to_write[key] = feat
+                    name = file_name[:last_us_idx] + '_invariants_' + key + '.tif'
+                    # kwimage.imwrite(os.path.join(save_path, name), feat, space=None,
+                    #                 backend='gdal', compress='DEFLATE')
 
-                info = {}
-                info['file_name'] = os.path.join('uky_invariants', path, name)
-                info['height'] = feat.shape[0]
-                info['width'] = feat.shape[1]
-                info['num_bands'] = feat.shape[2]
-                info['channels'] = '|'.join(['inv_' + key + f'{i}' for i in range(1, feat.shape[2] + 1)])
-                info['warp_aux_to_img'] = warp_aux_to_img
+                    info = {}
+                    info['file_name'] = os.path.join('uky_invariants', path, name)
+                    info['height'] = feat.shape[0]
+                    info['width'] = feat.shape[1]
+                    info['num_bands'] = feat.shape[2]
+                    info['channels'] = '|'.join(['inv_' + key + f'{i}' for i in range(1, feat.shape[2] + 1)])
+                    info['warp_aux_to_img'] = warp_aux_to_img
+                    dataset.dset.index.imgs[image_id]['auxiliary'].append(info)
 
-                dataset.dset.index.imgs[image_id]['auxiliary'].append(info)
+                queue.submit(_write_results_fn, features_to_write, save_path, file_name)
 
     if args.output_kwcoco is None:
         args.output_kwcoco = os.path.join(root, 'uky_invariants.kwcoco.json')
+
+    queue.wait_until_finished()
 
     dataset.dset.fpath = args.output_kwcoco
     print('Write to dset.fpath = {!r}'.format(dataset.dset.fpath))
     dataset.dset.dump(dataset.dset.fpath, newlines=True)
 
     print('Done')
+
+
+def _write_results_fn(features_to_write, save_path, file_name):
+    last_us_idx = file_name.rfind('_')
+    for key, feat in features_to_write.items():
+        name = file_name[:last_us_idx] + '_invariants_' + key + '.tif'
+        fpath = os.path.join(save_path, name)
+        kwimage.imwrite(fpath, feat, space=None, backend='gdal',
+                        compress='DEFLATE')
 
 
 if __name__ == '__main__':
@@ -115,9 +162,10 @@ if __name__ == '__main__':
 
     # pytorch lightning checkpoint
     parser.add_argument('--ckpt_path', type=str, required=True)
+    parser.add_argument('--num_workers', type=str, default=0, help='number of background data loading workers')
 
     # data flags - make sure these match the trained checkpoint
-    parser.add_argument('--sensor', type=str, help='Sensor to generate features from. Currently must choose from S2, LS, or L8. Make sure this matches the sensor used to train the model in ckpt_path.', default='S2')
+    parser.add_argument('--sensor', type=str, help='Sensor to generate features from. Currently must choose from S2 or L8. Make sure this matches the sensor used to train the model in ckpt_path.', default='S2')
     parser.add_argument('--bands', type=list, help='Bands to use in evaluation. Choose from \'all\' or create list of acceptable bands. Make sure this matches the bands used to train the model in ckpt_path.', default=['all'])
 
     # output flags
@@ -125,7 +173,6 @@ if __name__ == '__main__':
     parser.add_argument('--input_kwcoco', type=str, help='Path to kwcoco dataset with images to generate feature for', required=True)
     parser.add_argument('--output_kwcoco', type=str, help='Path to write an output kwcoco file. Output file will be a copy of input_kwcoco with addition feature fields generated by predict.py. If None, output_kwcoco will update input kwcoco.', default=None)
     parser.add_argument('--tasks', nargs='+', help=f'specify which tasks to choose from ({", ".join(pretext.TASK_NAMES)}, shared, or all.\nEx: --tasks {pretext.TASK_NAMES[0]} {pretext.TASK_NAMES[1]}', default=['all'])
-
     parser.set_defaults(
         terminate_on_nan=True
         )

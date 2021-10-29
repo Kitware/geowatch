@@ -169,6 +169,7 @@ def overlay_auxiliary_images(dset, gid, config, fnum=2):
     ax2.set_title(f'overlaid {channel2}')
     # kwplot.imshow(norm1)
 
+
 _SubConfig = ShowAuxiliaryConfig
 
 if __name__ == '__main__':
