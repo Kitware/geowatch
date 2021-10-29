@@ -507,7 +507,7 @@ def normalize(coco_dset, track_fn, overwrite):
     def _normalize_annots(coco_dset, overwrite):
         coco_dset = dedupe_annots(coco_dset)
         coco_dset = add_geos(coco_dset, overwrite)
-        coco_dset = remove_small_annots(coco_dset, min_area_px=0, min_geo_precision=None)
+        coco_dset = remove_small_annots(coco_dset)
 
         return coco_dset
 
@@ -518,8 +518,9 @@ def normalize(coco_dset, track_fn, overwrite):
     # apply tracks; ensuring we process newly added annots
     n_existing_annots = coco_dset.n_annots
     coco_dset = apply_tracks(coco_dset, track_fn, overwrite)
-    if coco_dset.n_annots > n_existing_annots:
-        coco_dset = _normalize_annots(coco_dset, overwrite=False)
+
+    # normalize and add geo segmentations
+    coco_dset = _normalize_annots(coco_dset, overwrite=False)
 
     coco_dset._build_index()
     coco_dset = dedupe_tracks(coco_dset)
