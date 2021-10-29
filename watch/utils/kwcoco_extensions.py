@@ -94,7 +94,7 @@ def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None, overwrite=Fal
     coco_dset._ensure_json_serializable()
 
 
-def coco_populate_geo_heuristics(coco_dset, overwrite=False, default_gsd=None, workers=0):
+def coco_populate_geo_heuristics(coco_dset, overwrite=False, default_gsd=None, workers=0, **kw):
     """
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -109,13 +109,14 @@ def coco_populate_geo_heuristics(coco_dset, overwrite=False, default_gsd=None, w
     executor = ub.JobPool('thread', max_workers=workers)
     for gid in ub.ProgIter(coco_dset.index.imgs.keys(), total=len(coco_dset.index.imgs), desc='populate imgs'):
         executor.submit(coco_populate_geo_img_heuristics, coco_dset, gid,
-                        overwrite=overwrite, default_gsd=default_gsd)
+                        overwrite=overwrite, default_gsd=default_gsd, **kw)
     for job in ub.ProgIter(executor.as_completed(), total=len(executor), desc='populate imgs'):
         job.result()
 
 
 def coco_populate_geo_img_heuristics(coco_dset, gid, overwrite=False,
-                                     default_gsd=None, **kw):
+                                     default_gsd=None,
+                                     keep_geotiff_metadata=False, **kw):
     """
     Note: this will not overwrite existing channel info unless specified
 
@@ -141,51 +142,41 @@ def coco_populate_geo_img_heuristics(coco_dset, gid, overwrite=False,
         >>> dset2 = kwcoco.CocoDataset.demo('shapes8')
         >>> coco_populate_geo_img_heuristics(dset2, gid, overwrite=True)
     """
-    from shapely import ops
-    import shapely
     bundle_dpath = coco_dset.bundle_dpath
     img = coco_dset.imgs[gid]
     coco_img = coco_dset._coco_image(gid)
-    asset_objs = list(coco_img.iter_asset_objs())
 
-    geos_crs_info = {
-        'axis_mapping': 'OAMS_TRADITIONAL_GIS_ORDER',
-        'auth': ('EPSG', '4326')
-    }
+    primary_obj = coco_img.primary_asset()
+    asset_objs = list(coco_img.iter_asset_objs())
 
     # Note: for non-geotiffs we could use the transformation provided with them
     # to determine their geo-properties.
     asset_errors = []
-    geos_corners = []
     for obj in asset_objs:
-
         errors = _populate_canvas_obj(bundle_dpath, obj, overwrite=overwrite,
-                                      default_gsd=default_gsd)
-
-        corners_geojson = obj.pop('geos_corners', None)
-        if corners_geojson is not None:
-            assert corners_geojson['properties']['crs_info'] == geos_crs_info
-            obj_geos = shapely.geometry.shape(corners_geojson)
-            geos_corners.append(obj_geos)
+                                      default_gsd=default_gsd,
+                                      keep_geotiff_metadata=keep_geotiff_metadata)
         asset_errors.append(errors)
 
     if all(asset_errors):
         info = ub.dict_isect(img, {'name', 'file_name', 'id'})
         warnings.warn(f'img {info} has issues introspecting')
 
-    if not geos_corners:
-        print('None of the assets had geo information')
+    if keep_geotiff_metadata:
+        img['geotiff_metadata'] = primary_obj['geotiff_metadata']
+
+    if 'geos_corners' in primary_obj:
+        # FIXME: we are assuming this maps perfectly onto the image
+        # which is should for the SMART data, but perhaps in the future
+        # this will not be safe?
+        img['geos_corners'] = primary_obj['geos_corners']
     else:
-        combo = ops.cascaded_union(geos_corners)
-        geos_corners_img = kwimage.Polygon.coerce(combo.convex_hull).to_multi_polygon().to_geojson()
-        geos_corners_img['properties'] = {'crs_info': geos_crs_info}
-        img['geos_corners'] = geos_corners_img
-        img['geos_crs_info'] = geos_crs_info
+        print('None of the assets had geo information')
 
 
 @profile
 def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
-                         default_gsd=None):
+                         default_gsd=None, keep_geotiff_metadata=False):
     """
     obj can be an img or aux
     """
@@ -216,7 +207,13 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
 
         if 'warp' in overwrite or warp_to_wld is None or approx_meter_gsd is None:
             try:
-                info = watch.gis.geotiff.geotiff_metadata(fpath)
+                dem_hint = obj.get('dem_hint', 'use')
+                metakw = {}
+                if dem_hint == 'ignore':
+                    metakw['elevation'] = 0
+                info = watch.gis.geotiff.geotiff_metadata(fpath, **metakw)
+                if keep_geotiff_metadata:
+                    obj['geotiff_metadata'] = info
                 height, width = info['img_shape'][0:2]
 
                 obj['height'] = height
@@ -302,6 +299,78 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
                     '''))
             obj['channels'] = channels
         return errors
+
+
+# def single_geotiff_metadata(bundle_dpath, img, serializable=False):
+#     import watch
+#     from os.path import exists
+#     import dateutil
+#     geotiff_metadata = None
+#     aux_metadata = []
+
+#     img['datetime_acquisition'] = (
+#         dateutil.parser.parse(img['date_captured'])
+#     )
+
+#     # if an image specified its "dem_hint" as ignore, then we set the
+#     # elevation to 0. NOTE: this convention might be generalized and
+#     # replaced in the future. I.e. in the future the dem_hint might simply
+#     # specify the constant elevation to use, or perhaps something else.
+#     dem_hint = img.get('dem_hint', 'use')
+#     metakw = {}
+#     if dem_hint == 'ignore':
+#         metakw['elevation'] = 0
+
+#     # only need rpc info, wgs84_corners, and and warps
+#     keys_of_interest = {
+#         'rpc_transform',
+#         'is_rpc',
+#         'wgs84_to_wld',
+#         'wgs84_corners',
+#         'wld_to_pxl',
+#     }
+
+#     fname = img.get('file_name', None)
+#     if fname is not None:
+#         src_gpath = join(bundle_dpath, fname)
+#         assert exists(src_gpath)
+#         img_info = watch.gis.geotiff.geotiff_metadata(src_gpath, **metakw)
+
+#         if serializable:
+#             raise NotImplementedError
+#         else:
+#             img_info = ub.dict_isect(img_info, keys_of_interest)
+#             geotiff_metadata = img_info
+
+#     for aux in img.get('auxiliary', []):
+#         aux_fpath = join(bundle_dpath, aux['file_name'])
+#         assert exists(aux_fpath)
+#         aux_info = watch.gis.geotiff.geotiff_metadata(aux_fpath, **metakw)
+#         aux_info = ub.dict_isect(aux_info, keys_of_interest)
+#         if serializable:
+#             raise NotImplementedError
+#         else:
+#             aux_metadata.append(aux_info)
+#             aux['geotiff_metadata'] = aux_info
+
+#     if fname is None:
+#         # need to choose one of the auxiliary images as the "main" image.
+#         # We are assuming that there is one auxiliary image that exactly
+#         # corresponds.
+#         candidates = []
+#         for aux in img.get('auxiliary', []):
+#             if aux['width'] == img['width'] and aux['height'] == img['height']:
+#                 candidates.append(aux)
+
+#         if not candidates:
+#             raise AssertionError(
+#                 'Assumed at least one auxiliary image has identity '
+#                 'transform, but this seems to not be the case')
+#         aux = ub.peek(candidates)
+#         geotiff_metadata = aux['geotiff_metadata']
+
+#     img['geotiff_metadata'] = geotiff_metadata
+#     return geotiff_metadata, aux_metadata
 
 
 def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution'):
@@ -1205,127 +1274,6 @@ class TrackidGenerator(ub.NiceRepr):
         return next(self.generator)
 
 
-def single_geotiff_metadata(bundle_dpath, img, serializable=False):
-    import watch
-    from os.path import exists
-    import dateutil
-    geotiff_metadata = None
-    aux_metadata = []
-
-    img['datetime_acquisition'] = (
-        dateutil.parser.parse(img['date_captured'])
-    )
-
-    # if an image specified its "dem_hint" as ignore, then we set the
-    # elevation to 0. NOTE: this convention might be generalized and
-    # replaced in the future. I.e. in the future the dem_hint might simply
-    # specify the constant elevation to use, or perhaps something else.
-    dem_hint = img.get('dem_hint', 'use')
-    metakw = {}
-    if dem_hint == 'ignore':
-        metakw['elevation'] = 0
-
-    # only need rpc info, wgs84_corners, and and warps
-    keys_of_interest = {
-        'rpc_transform',
-        'is_rpc',
-        'wgs84_to_wld',
-        'wgs84_corners',
-        'wld_to_pxl',
-    }
-
-    HACK_METADATA = 0
-    if HACK_METADATA:
-        # HACK: See if we can construct the keys from the metadata
-        # in the coco file instead of reading the geotiff
-        hack_keys = {
-            'utm_corners',
-            'warp_img_to_wld',
-            'utm_crs_info',
-            'wld_crs_info',
-        }
-        have_hacks = ub.dict_isect(img, hack_keys)
-        if len(have_hacks) == len(hack_keys):
-            print('have hacks: {}'.format(img['sensor_coarse']))
-            from osgeo import osr
-
-            def _make_osgeo_crs(crs_info):
-                from osgeo import osr
-                axis_mapping_int = getattr(osr, crs_info['axis_mapping'])
-                auth = crs_info['auth']
-                assert len(auth) == 2
-                assert auth[0] == 'EPSG'
-                crs = osr.SpatialReference()
-                crs.ImportFromEPSG(int(auth[1]))
-                crs.SetAxisMappingStrategy(axis_mapping_int)
-                return crs
-
-            wgs84_crs = osr.SpatialReference()
-            wgs84_crs.ImportFromEPSG(4326)  # 4326 is the EPSG id WGS84 of lat/lon crs
-
-            wld_to_pxl = kwimage.Affine.coerce(img['warp_img_to_wld']).inv()
-            utm_crs = _make_osgeo_crs(have_hacks['utm_crs_info'])
-            wld_crs = _make_osgeo_crs(have_hacks['wld_crs_info'])
-            utm_to_wgs84 = osr.CoordinateTransformation(utm_crs, wgs84_crs)
-            wgs84_to_wld = osr.CoordinateTransformation(wgs84_crs, wld_crs)
-            utm_corners = kwimage.Coords(np.array(have_hacks['utm_corners']))
-            wgs84_corners = utm_corners.warp(utm_to_wgs84)
-
-            hack_info = {
-                'rpc_transform': None,
-                'is_rpc': False,
-                'wgs84_to_wld': wgs84_to_wld,
-                'wgs84_corners': wgs84_corners,
-                'wld_to_pxl': wld_to_pxl,
-            }
-            geotiff_metadata = hack_info
-            return geotiff_metadata
-        else:
-            print('missing hacks: {}'.format(img['sensor_coarse']))
-
-    fname = img.get('file_name', None)
-    if fname is not None:
-        src_gpath = join(bundle_dpath, fname)
-        assert exists(src_gpath)
-        img_info = watch.gis.geotiff.geotiff_metadata(src_gpath, **metakw)
-
-        if serializable:
-            raise NotImplementedError
-        else:
-            img_info = ub.dict_isect(img_info, keys_of_interest)
-            geotiff_metadata = img_info
-
-    for aux in img.get('auxiliary', []):
-        aux_fpath = join(bundle_dpath, aux['file_name'])
-        assert exists(aux_fpath)
-        aux_info = watch.gis.geotiff.geotiff_metadata(aux_fpath, **metakw)
-        aux_info = ub.dict_isect(aux_info, keys_of_interest)
-        if serializable:
-            raise NotImplementedError
-        else:
-            aux_metadata.append(aux_info)
-            aux['geotiff_metadata'] = aux_info
-
-    if fname is None:
-        # need to choose one of the auxiliary images as the "main" image.
-        # We are assuming that there is one auxiliary image that exactly
-        # corresponds.
-        candidates = []
-        for aux in img.get('auxiliary', []):
-            if aux['width'] == img['width'] and aux['height'] == img['height']:
-                candidates.append(aux)
-
-        if not candidates:
-            raise AssertionError(
-                'Assumed at least one auxiliary image has identity '
-                'transform, but this seems to not be the case')
-        aux = ub.peek(candidates)
-        geotiff_metadata = aux['geotiff_metadata']
-
-    img['geotiff_metadata'] = geotiff_metadata
-    return geotiff_metadata, aux_metadata
-
-
 def warp_annot_segmentations_to_geos(coco_dset):
     """
     Warps annotation segmentations in image pixel space into geos-space
@@ -1413,49 +1361,38 @@ def visualize_rois(coco_dset, zoom=None):
         >>> visualize_rois(coco_dset)
     """
     import geopandas as gpd
-    import shapely
-    cov_poly_gdf = find_covered_regions(coco_dset)
+    cov_image_gdf = covered_image_geo_regions(coco_dset)
+    annot_gdf = covered_annot_geo_regions(coco_dset)
 
-    sseg_geos_list = coco_dset.annots().lookup('segmentation_geos', None)
-    sseg_geos_list = [s for s in sseg_geos_list if s is not None]
-    # Dedup
-    sseg_geos_list = list(ub.unique(sseg_geos_list, key=ub.hash_data))
+    import kwplot
+    kwplot.autompl()
 
-    sh_all_box_rois_trad = [shapely.geometry.shape(d) for d in sseg_geos_list]
-    roi_poly_crs = 'epsg:4326'
-    roi_poly_gdf = gpd.GeoDataFrame({'roi_polys': sh_all_box_rois_trad},
-                                    geometry='roi_polys', crs=roi_poly_crs)
+    wld_map_gdf = gpd.read_file(
+        gpd.datasets.get_path('naturalearth_lowres')
+    )
+    ax = wld_map_gdf.plot()
 
-    if True:
-        import kwplot
-        kwplot.autompl()
+    cov_centroids = cov_image_gdf.geometry.centroid
+    cov_image_gdf.plot(ax=ax, facecolor='none', edgecolor='green', alpha=0.5)
+    cov_centroids.plot(ax=ax, marker='o', facecolor='green', alpha=0.5)
+    # img_centroids = img_poly_gdf.geometry.centroid
+    # img_poly_gdf.plot(ax=ax, facecolor='none', edgecolor='red', alpha=0.5)
+    # img_centroids.plot(ax=ax, marker='o', facecolor='red', alpha=0.5)
 
-        wld_map_gdf = gpd.read_file(
-            gpd.datasets.get_path('naturalearth_lowres')
-        )
-        ax = wld_map_gdf.plot()
+    annot_centroids = annot_gdf.geometry.centroid
+    annot_gdf.plot(ax=ax, facecolor='none', edgecolor='orange', alpha=0.5)
+    annot_centroids.plot(ax=ax, marker='o', facecolor='orange', alpha=0.5)
 
-        cov_centroids = cov_poly_gdf.geometry.centroid
-        cov_poly_gdf.plot(ax=ax, facecolor='none', edgecolor='green', alpha=0.5)
-        cov_centroids.plot(ax=ax, marker='o', facecolor='green', alpha=0.5)
-        # img_centroids = img_poly_gdf.geometry.centroid
-        # img_poly_gdf.plot(ax=ax, facecolor='none', edgecolor='red', alpha=0.5)
-        # img_centroids.plot(ax=ax, marker='o', facecolor='red', alpha=0.5)
-
-        roi_centroids = roi_poly_gdf.geometry.centroid
-        roi_poly_gdf.plot(ax=ax, facecolor='none', edgecolor='orange', alpha=0.5)
-        roi_centroids.plot(ax=ax, marker='o', facecolor='orange', alpha=0.5)
-
-        if zoom is not None:
-            sh_zoom_roi = sh_coverage_rois_trad[zoom]
-            kw_zoom_roi = kwimage.Polygon.from_shapely(sh_zoom_roi)
-            bb = kw_zoom_roi.bounding_box()
-            min_x, min_y, max_x, max_y = bb.scale(1.5, about='center').to_ltrb().data[0]
-            ax.set_xlim(min_x, max_x)
-            ax.set_ylim(min_y, max_y)
+    if zoom is not None:
+        sh_zoom_roi = cov_image_gdf.geometry.iloc[0]
+        kw_zoom_roi = kwimage.Polygon.from_shapely(sh_zoom_roi)
+        bb = kw_zoom_roi.bounding_box()
+        min_x, min_y, max_x, max_y = bb.scale(1.5, about='center').to_ltrb().data[0]
+        ax.set_xlim(min_x, max_x)
+        ax.set_ylim(min_y, max_y)
 
 
-def find_covered_regions(coco_dset):
+def covered_image_geo_regions(coco_dset):
     """
     Find the intersection of all image bounding boxes in world space
     to see what spatial regions are covered by the imagery.
@@ -1466,7 +1403,7 @@ def find_covered_regions(coco_dset):
         >>> coco_dset = demo_kwcoco_with_heatmaps(num_frames=1, num_videos=1)
         >>> coco_populate_geo_heuristics(coco_dset, overwrite=True)
         >>> img = coco_dset.imgs[1]
-        >>> cov_poly_gdf = find_covered_regions(coco_dset)
+        >>> cov_image_gdf = covered_image_geo_regions(coco_dset)
     """
     import geopandas as gpd
     from shapely import ops
@@ -1499,9 +1436,71 @@ def find_covered_regions(coco_dset):
 
     # geopandas uses traditional crs mappings
     cov_poly_crs = 'epsg:4326'
-    cov_poly_gdf = gpd.GeoDataFrame({'cov_rois': coverage_rois},
-                                    geometry='cov_rois', crs=cov_poly_crs)
-    return cov_poly_gdf
+    cov_image_gdf = gpd.GeoDataFrame(
+        {'geometry': coverage_rois},
+        geometry='geometry', crs=cov_poly_crs)
+    return cov_image_gdf
+
+
+def covered_annot_geo_regions(coco_dset, merge=False):
+    """
+    Given a dataset find spatial regions of interest that contain annotations
+    """
+    import shapely
+    import geopandas as gpd
+    from shapely import ops
+    aid_to_poly = {}
+    for aid, ann in coco_dset.anns.items():
+        ann_goes = ann['segmentation_geos']
+        # TODO: assert the segmentation_geos CRS is (geojson - WGS84-traditional)
+        if ann_goes is not None:
+            sh_poly = shapely.geometry.shape(ann_goes)
+            aid_to_poly[aid] = sh_poly
+
+    annot_crs = 'epsg:4326'
+    if merge:
+        gid_to_rois = {}
+        for gid, aids in coco_dset.index.gid_to_aids.items():
+            if len(aids):
+                sh_annot_polys = ub.dict_subset(aid_to_poly, aids)
+                sh_annot_polys_ = [p.buffer(0) for p in sh_annot_polys.values()]
+                sh_annot_polys_ = [p.buffer(0.000001) for p in sh_annot_polys_]
+
+                # What CRS should we be doing this in? Is WGS84 OK?
+                # Should we switch to UTM?
+                img_rois_ = ops.cascaded_union(sh_annot_polys_)
+                try:
+                    img_rois = list(img_rois_)
+                except Exception:
+                    img_rois = [img_rois_]
+
+                kw_img_rois = [
+                    kwimage.Polygon.from_shapely(p.convex_hull).bounding_box().to_polygons()[0]
+                    for p in img_rois]
+                sh_img_rois = [p.to_shapely() for p in kw_img_rois]
+                gid_to_rois[gid] = sh_img_rois
+
+        # TODO: if there are only midly overlapping regions, we should likely split
+        # them up. We can also group by UTM coordinates to reduce computation.
+        sh_rois_ = ops.cascaded_union([
+            p.buffer(0) for rois in gid_to_rois.values()
+            for p in rois
+        ])
+        try:
+            sh_rois = list(sh_rois_.geoms)
+        except Exception:
+            sh_rois = [sh_rois_]
+        # geopandas uses traditional crs mappings
+        cov_annot_gdf = gpd.GeoDataFrame(
+            {'geometry': sh_rois},
+            geometry='geometry', crs=annot_crs)
+    else:
+        sh_polys = list(aid_to_poly.values())
+        aids = list(aid_to_poly.keys())
+        cov_annot_gdf = gpd.GeoDataFrame(
+            {'geometry': sh_polys, 'aids': aids},
+            geometry='geometry', crs=annot_crs)
+    return cov_annot_gdf
 
 
 def flip_xy(poly):

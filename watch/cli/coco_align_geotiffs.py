@@ -223,8 +223,10 @@ def main(cmdline=True, **kw):
         >>> }
         >>> cmdline = False
         >>> new_dset = main(cmdline, **kw)
+
+        df1 = covered_annot_geo_regions(coco_dset)
+        df2 = covered_image_geo_regions(coco_dset)
     """
-    import geopandas as gpd
     config = CocoAlignGeotiffConfig(default=kw, cmdline=cmdline)
 
     # Store that this dataset is a result of a process.
@@ -272,6 +274,7 @@ def main(cmdline=True, **kw):
     print('output_bundle_dpath = {!r}'.format(output_bundle_dpath))
     print('dst_fpath = {!r}'.format(dst_fpath))
 
+    region_df = None
     if regions in {'annots', 'images'}:
         pass
     elif exists(regions):
@@ -281,29 +284,26 @@ def main(cmdline=True, **kw):
 
     # Load the dataset and extract geotiff metadata from each image.
     coco_dset = kwcoco.CocoDataset.coerce(src_fpath)
-    update_coco_geotiff_metadata(coco_dset, serializable=False,
-                                 max_workers=max_workers)
-
-    # print('coco_dset.dataset = {}'.format(ub.repr2(coco_dset.dataset, nl=3)))
+    kwcoco_extensions.coco_populate_geo_heuristics(
+        coco_dset, overwrite={'warp'}, workers=max_workers,
+        keep_geotiff_metadata=True,
+    )
+    # update_coco_geotiff_metadata(coco_dset, serializable=False,
+    #                              max_workers=max_workers)
 
     # Construct the "data cube"
     cube = SimpleDataCube(coco_dset)
 
+    # Find the clustered ROI regions
     if regions == 'images':
-        coverage_rois = kwcoco_extensions.find_covered_regions(coco_dset)
-        region_df = gpd.GeoDataFrame([
-            {'geometry': geos, 'start_date': None, 'end_date': None}
-            for geos in coverage_rois
-        ], geometry='geometry', crs='epsg:4326')
+        region_df = kwcoco_extensions.covered_image_geo_regions(coco_dset)
     elif regions == 'annots':
-        # Find the clustered ROI regions
-        sh_all_rois, kw_all_rois = find_roi_regions(coco_dset)
-        region_df = gpd.GeoDataFrame([
-            {'geometry': geos, 'start_date': None, 'end_date': None}
-            for geos in sh_all_rois
-        ], geometry='geometry', crs='epsg:4326')
+        region_df = kwcoco_extensions.covered_annot_geo_regions(coco_dset)
+    else:
+        assert region_df is not None, 'must have been given regions some other way'
 
-    print('region_df = {!r}'.format(region_df))
+    print('query region_df = {!r}'.format(region_df))
+    print('cube.img_geos_df = {!r}'.format(cube.img_geos_df))
 
     # Exapnd the ROI by the context factor and convert to a bounding box
     region_df['geometry'] = region_df['geometry'].apply(shapely_bounding_box)
@@ -357,28 +357,43 @@ class SimpleDataCube(object):
     def __init__(cube, coco_dset):
         # old way: gid_to_poly is old and should be deprecated
         import geopandas as gpd
+        import shapely
         gid_to_poly = {}
+
+        expxected_geos_crs_info = {
+            'axis_mapping': 'OAMS_TRADITIONAL_GIS_ORDER',
+            'auth': ('EPSG', '4326')
+        }
 
         # new way: put data in the cube into a geopandas data frame
         df_input = []
         for gid, img in coco_dset.imgs.items():
-            info = img['geotiff_metadata']
-            kw_img_poly = kwimage.Polygon(exterior=info['wgs84_corners'])
-            sh_img_poly = kw_img_poly.to_shapely()
+            sh_img_poly = shapely.geometry.shape(img['geos_corners'])
+            properties = img['geos_corners'].get('properties', {})
+            crs_info = properties.get('crs_info', None)
+            if crs_info is not None:
+                assert crs_info == expxected_geos_crs_info
+            # pass
+            # info = img['geotiff_metadata']
+            # kw_img_poly = kwimage.Polygon(exterior=info['wgs84_corners'])
+            # sh_img_poly = kw_img_poly.to_shapely()
             # Create a data frame with space-time regions
             df_input.append({
                 'gid': gid,
                 'name': img.get('name', None),
                 'video_id': img.get('video_id', None),
                 'geometry': sh_img_poly,
+                'properties': properties,
             })
             # Maintain old way for now
             gid_to_poly[gid] = sh_img_poly
 
+        img_geos_df = gpd.GeoDataFrame(
+            df_input, geometry='geometry', crs='epsg:4326')
+
         cube.coco_dset = coco_dset
         cube.gid_to_poly = gid_to_poly
-        cube.img_geos_df = gpd.GeoDataFrame(
-            df_input, geometry='geometry', crs='epsg:4326')
+        cube.img_geos_df = img_geos_df
 
     @classmethod
     def demo(SimpleDataCube, num_imgs=1, with_region=False):
@@ -403,7 +418,11 @@ class SimpleDataCube(object):
         coco_dset.add_annotation(
             image_id=gid, bbox=[0, 0, 0, 0], segmentation_geos=sseg_geos)
 
-        update_coco_geotiff_metadata(coco_dset, serializable=False, max_workers=0)
+        # update_coco_geotiff_metadata(coco_dset, serializable=False, max_workers=0)
+        kwcoco_extensions.coco_populate_geo_heuristics(
+            coco_dset, overwrite={'warp'}, workers=0,
+            keep_geotiff_metadata=True,
+        )
 
         cube = SimpleDataCube(coco_dset)
         if with_region:
@@ -481,7 +500,8 @@ class SimpleDataCube(object):
                 query_end_date = region_row.get('end_date', None)
 
                 cand_gids = cube.img_geos_df.iloc[gidxs].gid
-                cand_datetimes = cube.coco_dset.images(cand_gids).lookup('datetime_acquisition')
+                cand_datecaptured = cube.coco_dset.images(cand_gids).lookup('date_captured')
+                cand_datetimes = [dateutil.parser.parse(c) for c in cand_datecaptured]
 
                 if 0 and query_start_date is not None:
                     query_start_datetime = dateutil.parser.parse(query_start_date)
@@ -909,96 +929,39 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
     return new_img, new_anns
 
 
-def update_coco_geotiff_metadata(coco_dset, serializable=True, max_workers=0):
-    """
-    if serializable is True, then we should only update with information
-    that can be coerced to json.
-    """
-    if serializable:
-        raise NotImplementedError('we dont do this yet')
+# def update_coco_geotiff_metadata(coco_dset, serializable=True, max_workers=0):
+#     """
+#     if serializable is True, then we should only update with information
+#     that can be coerced to json.
+#     """
+#     if serializable:
+#         raise NotImplementedError('we dont do this yet')
 
-    bundle_dpath = coco_dset.bundle_dpath
+#     bundle_dpath = coco_dset.bundle_dpath
 
-    pool = ub.JobPool(mode='thread', max_workers=max_workers)
+#     pool = ub.JobPool(mode='thread', max_workers=max_workers)
 
-    img_iter = ub.ProgIter(coco_dset.imgs.values(),
-                           total=len(coco_dset.imgs),
-                           desc='submit update meta jobs',
-                           verbose=1, freq=1, adjust=False)
-    for img in img_iter:
-        job = pool.submit(kwcoco_extensions.single_geotiff_metadata,
-                          bundle_dpath, img, serializable=serializable)
-        job.img = img
+#     img_iter = ub.ProgIter(coco_dset.imgs.values(),
+#                            total=len(coco_dset.imgs),
+#                            desc='submit update meta jobs',
+#                            verbose=1, freq=1, adjust=False)
+#     for img in img_iter:
+#         job = pool.submit(kwcoco_extensions.single_geotiff_metadata,
+#                           bundle_dpath, img, serializable=serializable)
+#         job.img = img
 
-    for job in ub.ProgIter(pool.as_completed(),
-                           total=len(pool),
-                           desc='collect update meta jobs',
-                           verbose=1, freq=1, adjust=False):
-        geotiff_metadata, aux_metadata = job.result()
-        img = job.img
-        # # todo: can be parallelized
-        # geotiff_metadata, aux_metadata = single_geotiff_metadata(
-        #     bundle_dpath, img, serializable=serializable)
-        img['geotiff_metadata'] = geotiff_metadata
-        for aux, aux_info in zip(img.get('auxiliary', []), aux_metadata):
-            aux['geotiff_metadata'] = aux_info
-
-
-def find_roi_regions(coco_dset):
-    """
-    Given a dataset find spatial regions of interest that contain annotations
-    """
-    from shapely import ops
-    aid_to_poly = {}
-    for aid, ann in coco_dset.anns.items():
-        geo = _fix_geojson_poly(ann['segmentation_geos'])
-        # wgs84 = pyproj.CRS.from_epsg(4326)
-        # wgs84_traditional = pyproj.CRS.from_epsg(4326)
-        # from pyproj import CRS
-        # geopandas.GeoDataFrame.from_dict(geo, crs)
-        # latlon = np.array(geo['coordinates'][0])[:, ::-1]
-        # kw_poly = kwimage.structs.Polygon(exterior=latlon)
-        # Geojson is lon/lat, so swap to wgs84 lat/lon
-        # kw_poly = kwimage.structs.MultiPolygon.from_geojson(geo).swap_axes()
-
-        # TODO: Figure out what CRS we have here explicitly
-        kw_poly = kwimage.structs.MultiPolygon.from_geojson(geo)
-        aid_to_poly[aid] = kw_poly.to_shapely()
-
-    gid_to_rois = {}
-    for gid, aids in coco_dset.index.gid_to_aids.items():
-        if len(aids):
-            sh_annot_polys = ub.dict_subset(aid_to_poly, aids)
-            sh_annot_polys_ = [p.buffer(0) for p in sh_annot_polys.values()]
-            sh_annot_polys_ = [p.buffer(0.000001) for p in sh_annot_polys_]
-
-            # What CRS should we be doing this in? Is WGS84 OK?
-            # Should we switch to UTM?
-            img_rois_ = ops.cascaded_union(sh_annot_polys_)
-            try:
-                img_rois = list(img_rois_)
-            except Exception:
-                img_rois = [img_rois_]
-
-            kw_img_rois = [
-                kwimage.Polygon.from_shapely(p.convex_hull).bounding_box().to_polygons()[0]
-                for p in img_rois]
-            sh_img_rois = [p.to_shapely() for p in kw_img_rois]
-            gid_to_rois[gid] = sh_img_rois
-
-    # TODO: if there are only midly overlapping regions, we should likely split
-    # them up. We can also group by UTM coordinates to reduce computation.
-    sh_rois_ = ops.cascaded_union([
-        p.buffer(0) for rois in gid_to_rois.values()
-        for p in rois
-    ])
-    try:
-        sh_rois = list(sh_rois_.geoms)
-    except Exception:
-        sh_rois = [sh_rois_]
-
-    kw_rois = list(map(kwimage.Polygon.from_shapely, sh_rois))
-    return sh_rois, kw_rois
+#     for job in ub.ProgIter(pool.as_completed(),
+#                            total=len(pool),
+#                            desc='collect update meta jobs',
+#                            verbose=1, freq=1, adjust=False):
+#         geotiff_metadata, aux_metadata = job.result()
+#         img = job.img
+#         # # todo: can be parallelized
+#         # geotiff_metadata, aux_metadata = single_geotiff_metadata(
+#         #     bundle_dpath, img, serializable=serializable)
+#         img['geotiff_metadata'] = geotiff_metadata
+#         for aux, aux_info in zip(img.get('auxiliary', []), aux_metadata):
+#             aux['geotiff_metadata'] = aux_info
 
 
 def _flip(x, y):
