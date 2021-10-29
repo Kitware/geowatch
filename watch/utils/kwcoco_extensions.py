@@ -89,6 +89,12 @@ def populate_watch_fields(dset, target_gsd=10.0, overwrite=False, default_gsd=No
     dset._ensure_json_serializable()
 
 
+def coco_populate_geo_heuristics(dset, overwrite=False, default_gsd=None):
+    for gid in ub.ProgIter(dset.index.imgs.keys(), total=len(dset.index.imgs), desc='populate imgs'):
+        coco_populate_geo_img_heuristics(dset, gid, overwrite=overwrite,
+                                         default_gsd=default_gsd)
+
+
 def check_unique_channel_names(dset, gids=None, verbose=0):
     """
     Check each image has unique channel names
@@ -301,7 +307,7 @@ def hack_seed_geometadata_in_dset(dset):
         coco_img = dset._coco_image(img['id'])
         obj = coco_img.primary_asset()
         fpath = join(dset.bundle_dpath, obj['file_name'])
-        print('fpath = {!r}'.format(fpath))
+        # print('fpath = {!r}'.format(fpath))
 
         format_info = geotiff_format_info(fpath)
         if not format_info['has_geotransform']:
@@ -719,6 +725,16 @@ def coco_populate_geo_img_heuristics(dset, gid, overwrite=False,
 
     Example:
         >>> from watch.utils.kwcoco_extensions import *  # NOQA
+        >>> from watch.utils.kwcoco_extensions import _demo_kwcoco_with_heatmaps
+        >>> dset = coco_dset = _demo_kwcoco_with_heatmaps()
+        >>> gid = 1
+        >>> overwrite = {'warp', 'band'}
+        >>> default_gsd = None
+        >>> kw = {}
+        >>> coco_populate_geo_img_heuristics(coco_dset, gid)
+
+    Example:
+        >>> from watch.utils.kwcoco_extensions import *  # NOQA
         >>> import kwcoco
         >>> ###
         >>> gid = 1
@@ -731,20 +747,35 @@ def coco_populate_geo_img_heuristics(dset, gid, overwrite=False,
     """
     bundle_dpath = dset.bundle_dpath
     img = dset.imgs[gid]
-
-    asset_objs = list(CocoImage(img).iter_asset_objs())
+    coco_img = dset._coco_image(gid)
+    asset_objs = list(coco_img.iter_asset_objs())
 
     # Note: for non-geotiffs we could use the transformation provided with them
     # to determine their geo-properties.
     asset_errors = []
+    geos_corners = []
     for obj in asset_objs:
+
         errors = _populate_canvas_obj(bundle_dpath, obj, overwrite=overwrite,
                                       default_gsd=default_gsd)
+
+        obj_geos = kwimage.Polygon.from_geojson(obj['geos_corners']).to_shapely()
+        obj.pop('geos_corners')
+        geos_corners.append(obj_geos)
         asset_errors.append(errors)
 
     if all(asset_errors):
         info = ub.dict_isect(img, {'name', 'file_name', 'id'})
         warnings.warn(f'img {info} has issues introspecting')
+
+    from shapely import ops
+    combo = ops.cascaded_union(geos_corners)
+    geos_corners_img = kwimage.Polygon.coerce(combo.convex_hull).to_multi_polygon().to_geojson()
+    img['geos_corners'] = geos_corners_img
+    img['geos_crs_info'] =  {
+        'axis_mapping': 'OAMS_TRADITIONAL_GIS_ORDER',
+        'auth': ('EPSG', '4326')
+    }
 
 
 @profile
@@ -761,8 +792,9 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
     approx_meter_gsd = obj.get('approx_meter_gsd', None)
 
     valid_overwrites = {'warp', 'band', 'channels'}
+    default_overwrites = {'warp', 'band'}
     if overwrite is True:
-        overwrite = valid_overwrites
+        overwrite = default_overwrites
     elif overwrite is False:
         overwrite = {}
     else:
@@ -800,9 +832,17 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
                 obj_to_wld = Affine.coerce(hack_aff)
                 # cv2.getAffineTransform(utm_corners, pxl_corners)
 
+                wgs84_crs_info = ub.dict_diff(info['wgs84_crs_info'], {'type'})
+                if wgs84_crs_info['axis_mapping'] == 'OAMS_AUTHORITY_COMPLIANT':
+                    geos_corners = kwimage.Polygon.coerce(info['wgs84_corners']).swap_axes().to_geojson()
+                else:
+                    geos_corners = kwimage.Polygon.coerce(info['wgs84_corners']).to_geojson()
+
                 wld_crs_info = ub.dict_diff(info['wld_crs_info'], {'type'})
                 utm_crs_info = ub.dict_diff(info['utm_crs_info'], {'type'})
                 obj.update({
+                    'geos_corners': geos_corners,  # always in geojson
+                    'wgs84_corners': info['wgs84_corners'].data.tolist(),
                     'utm_corners': info['utm_corners'].data.tolist(),
                     'wld_crs_info': wld_crs_info,
                     'utm_crs_info': utm_crs_info,
@@ -826,7 +866,15 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
                 obj['warp_to_wld'] = Affine.coerce(obj_to_wld).__json__()
 
         if 'band' in overwrite or num_bands is None:
-            num_bands = _introspect_num_bands(fpath)
+            try:
+                num_bands = _introspect_num_bands(fpath)
+            except Exception:
+                channels = obj.get('channels', None)
+                if channels is not None:
+                    import kwcoco
+                    num_bands = kwcoco.ChannelSpec(channels).numel()
+                else:
+                    raise
             obj['num_bands'] = num_bands
 
         if 'channels' in overwrite or channels is None:
@@ -1149,454 +1197,6 @@ def coco_channel_stats(dset):
     return info
 
 
-# DEPRECATED
-class ORIG_CocoImage(ub.NiceRepr):
-    """
-    An object-oriented representation of a coco image.
-
-    It provides helper methods that are specific to a single image.
-
-    This operates directly on a single coco image dictionary, but it can
-    optionally be connected to a parent dataset, which allows it to use
-    CocoDataset methods to query about relationships and resolve pointers.
-
-    This is different than the Images class in coco_object1d, which is just a
-    vectorized interface to multiple objects.
-
-    TODO:
-        - [x] This will eventually move to kwcoco itself
-
-    Example:
-        >>> from watch.utils.kwcoco_extensions import *  # NOQA
-        >>> import kwcoco
-        >>> dset1 = kwcoco.CocoDataset.demo('shapes8')
-        >>> dset2 = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
-
-        >>> self = CocoImage(dset1.imgs[1], dset1)
-        >>> print('self = {!r}'.format(self))
-        >>> print('self.channels = {}'.format(ub.repr2(self.channels, nl=1)))
-
-        >>> self = CocoImage(dset2.imgs[1], dset2)
-        >>> print('self.channels = {}'.format(ub.repr2(self.channels, nl=1)))
-        >>> self.primary_asset()
-
-
-    Example:
-        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> # Run the following tests on real watch data if DVC is available
-        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
-        >>> import os
-        >>> import pathlib
-        >>> import kwcoco
-        >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
-        >>> dvc_dpath = pathlib.Path(os.environ.get('DVC_DPATH', _default))
-        >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/combo_data.kwcoco.json'
-        >>> #
-        >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
-        >>> self = CocoImage(coco_dset.dataset['images'][0], coco_dset)
-        >>> print('self = {!r}'.format(self))
-        >>> stats = self.stats()
-        >>> print('stats = {}'.format(ub.repr2(stats, nl=1)))
-
-        >>> delayed = self.delay()
-        >>> print('delayed = {!r}'.format(delayed))
-
-        delayed.components[-1]
-        delayed.components[-2]
-
-        # delayed.matseg_11
-        delayed.take_channels('matseg_1')
-        big = delayed.take_channels("coastal|blue|green|red|nir|swir16|cirrus|inv_sort1|inv_sort2|inv_sort3|inv_sort4|inv_sort5|inv_sort6|inv_sort7|inv_sort8|inv_augment1|inv_augment2|inv_augment3|inv_augment4|inv_augment5|inv_augment6|inv_augment7|inv_augment8|inv_overlap1|inv_overlap2|inv_overlap3|inv_overlap4|inv_overlap5|inv_overlap6|inv_overlap7|inv_overlap8|inv_shared1|inv_shared2|inv_shared3|inv_shared4|inv_shared5|inv_shared6|inv_shared7|inv_shared8|inv_shared9|inv_shared10|inv_shared11|inv_shared12|inv_shared13|inv_shared14|inv_shared15|inv_shared16|inv_shared17|inv_shared18|inv_shared19|inv_shared20|inv_shared21|inv_shared22|inv_shared23|inv_shared24|inv_shared25|inv_shared26|inv_shared27|inv_shared28|inv_shared29|inv_shared30|inv_shared31|inv_shared32|inv_shared33|inv_shared34|inv_shared35|inv_shared36|inv_shared37|inv_shared38|inv_shared39|inv_shared40|inv_shared41|inv_shared42|inv_shared43|inv_shared44|inv_shared45|inv_shared46|inv_shared47|inv_shared48|inv_shared49|inv_shared50|inv_shared51|inv_shared52|inv_shared53|inv_shared54|inv_shared55|inv_shared56|inv_shared57|inv_shared58|inv_shared59|inv_shared60|inv_shared61|inv_shared62|inv_shared63|inv_shared64|matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7|matseg_8|matseg_9|matseg_10|matseg_11|matseg_12|matseg_13|matseg_14|matseg_15|matseg_16|matseg_17|matseg_18|matseg_19")
-
-        import ndsampler
-        sampler = ndsampler.CocoSampler(coco_dset)
-        sample_grid = sampler.new_sample_grid('video_detection', (3, 128, 128))
-
-        pos_grid = sample_grid['positives']
-
-        tr = pos_grid[len(pos_grid) // 2]
-        all_chan = '|'.join(ub.flatten(self.channels.parse().values()))
-        tr['channels'] = all_chan
-        tr['use_experimental_loader'] = 1
-        sample = sampler.load_sample(tr, padkw=dict(constant_values=np.nan))
-        sample['im'].shape
-
-        rng = kwarray.ensure_rng(132)
-        aff = kwimage.Affine.coerce(offset=rng.randint(-128, 128, size=2), rng=rng)
-        space_box = kwimage.Boxes.from_slice(tr['space_slice'])
-        space_box = space_box.warp(aff).quantize().astype(int)
-        tr_ = ub.dict_union(tr, {'space_slice': space_box.to_slices()[0]})
-        tr_['as_xarray'] = 1
-        sample = sampler.load_sample(tr_, padkw=dict(constant_values=np.nan))
-        im_xarray = sample['im']
-        chan_mean = im_xarray.mean(dim=['t', 'y', 'x'])
-        print(chan_mean.to_pandas().to_string())
-
-
-    import kwcoco
-    import kwarray
-    import ndsampler
-
-    # Seed random number generators
-    rng = kwarray.ensure_rng(132)
-
-    kwcoco.CocoDataset.demo('vidshapes8')
-
-    sampler = ndsampler.CocoSampler(coco_dset)
-    sample_grid = sampler.new_sample_grid('video_detection', (3, 128, 128))
-    tr = sample_grid['positives'][0]
-
-    tr_ = tr.copy()
-    aff = kwimage.Affine.coerce(offset=rng.randint(-128, 128, size=2))
-    space_box = kwimage.Boxes.from_slice(tr['space_slice']).warp(aff).quantize()
-    tr_['space_slice'] = space_box.astype(int).to_slices()[0]
-    print('tr_ = {}'.format(ub.repr2(tr_, nl=1)))
-
-
-    sample = sampler.load_sample(tr_, padkw=dict(constant_values=np.nan))
-    print(sample['im'].shape)
-
-    # Out of bounds demo (these slices DO NOT wrap around)
-    tr_['space_slice'] = (slice(-128, 0), slice(-128, 0))
-    sample = sampler.load_sample(tr_, padkw=dict(constant_values=np.nan))
-    sample['im'].shape
-
-    print(ub.repr2(sample['tr'], nl=1))
-
-
-
-    """
-
-    def __init__(self, img, dset=None):
-        self.img = img
-        self.dset = dset
-
-    @classmethod
-    def from_gid(cls, dset, gid):
-        img = dset.index.imgs[gid]
-        self = cls(img, dset=dset)
-        return self
-
-    def __nice__(self):
-        """
-        Example:
-            >>> import kwcoco
-            >>> from watch.utils.kwcoco_extensions import *  # NOQA
-            >>> with ub.CaptureStdout() as cap:
-            ...     dset = kwcoco.CocoDataset.demo('shapes8')
-            >>> self = CocoImage(dset.dataset['images'][0], dset)
-            >>> print('self = {!r}'.format(self))
-
-            >>> dset = kwcoco.CocoDataset.demo()
-            >>> self = CocoImage(dset.dataset['images'][0], dset)
-            >>> print('self = {!r}'.format(self))
-        """
-        from watch.utils.slugify_ext import smart_truncate
-        from functools import partial
-        stats = self.stats()
-        stats = ub.map_vals(str, stats)
-        stats = ub.map_vals(
-            partial(smart_truncate, max_length=32, trunc_loc=0.5),
-            stats)
-        return ub.repr2(stats, compact=1, nl=0, sort=0)
-
-    def stats(self):
-        """
-        Example:
-            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-            >>> # Run the following tests on real watch data if DVC is available
-            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
-            >>> import os
-            >>> from os.path import join
-            >>> import ndsampler
-            >>> import kwcoco
-            >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
-            >>> dvc_dpath = os.environ.get('DVC_DPATH', _default)
-            >>> coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/combo_data.kwcoco.json')
-            >>> #
-            >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
-            >>> self = CocoImage(coco_dset.dataset['images'][0], coco_dset)
-            >>> print('self = {!r}'.format(self))
-            >>> stats = self.stats()
-            >>> print('self = {!r}'.format(self))
-            >>> print('self.stats() = {}'.format(ub.repr2(stats, nl=1)))
-        """
-        key_attrname = [
-            ('wh', 'dsize'),
-            ('n_chan', 'num_channels'),
-            ('channels', 'channels'),
-        ]
-        stats = {}
-        for key, attrname in key_attrname:
-            try:
-                stats[key] = getattr(self, attrname)
-            except Exception as ex:
-                stats[key] = repr(ex)
-        return stats
-
-    def __getitem__(self, key):
-        return self.img[key]
-
-    def keys(self):
-        return self.img.keys()
-
-    def get(self, key, default=ub.NoParam):
-        """
-        Duck type some of the dict interface
-        """
-        if default is ub.NoParam:
-            return self.img.get(key)
-        else:
-            return self.img.get(key, default)
-
-    @property
-    def channels(self):
-        from kwcoco.channel_spec import FusedChannelSpec
-        from kwcoco.channel_spec import ChannelSpec
-        img_parts = []
-        for obj in self.iter_asset_objs():
-            obj_parts = obj.get('channels', None)
-            obj_chan = FusedChannelSpec.coerce(obj_parts).normalize()
-            img_parts.append(obj_chan.spec)
-        spec = ChannelSpec(','.join(img_parts))
-        return spec
-
-    @property
-    def num_channels(self):
-        return self.channels.numel()
-        # return sum(map(len, self.channels.streams()))
-
-    @property
-    def dsize(self):
-        width = self.img.get('width', None)
-        height = self.img.get('height', None)
-        return width, height
-
-    def primary_asset(self, requires=[]):
-        """
-        Compute a "main" image asset.
-
-        Args:
-            requires (List[str]):
-                list of attribute that must be non-None to consider an object
-                as the primary one.
-
-        TODO:
-            - [ ] Add in primary heuristics
-        """
-        img = self.img
-        has_base_image = img.get('file_name', None) is not None
-        candidates = []
-
-        if has_base_image:
-            obj = img
-            if all(k in obj for k in requires):
-                # Return the base image if we can
-                return obj
-
-        # Choose "best" auxiliary image based on a hueristic.
-        eye = kwimage.Affine.eye().matrix
-        for obj in img.get('auxiliary', []):
-            # Take frobenius norm to get "distance" between transform and
-            # the identity. We want to find the auxiliary closest to the
-            # identity transform.
-            warp_aux_to_img = kwimage.Affine.coerce(obj.get('warp_aux_to_img', None))
-            fro_dist = np.linalg.norm(warp_aux_to_img.matrix - eye, ord='fro')
-
-            if all(k in obj for k in requires):
-                candidates.append({
-                    'area': obj['width'] * obj['height'],
-                    'fro_dist': fro_dist,
-                    'obj': obj,
-                })
-
-        if len(candidates) == 0:
-            return None
-
-        idx = ub.argmin(
-            candidates, key=lambda val: (val['fro_dist'], -val['area'])
-        )
-        obj = candidates[idx]['obj']
-        return obj
-
-    def iter_asset_objs(self):
-        """
-        Iterate through base + auxiliary dicts that have file paths
-        """
-        img = self.img
-        has_base_image = img.get('file_name', None) is not None
-        if has_base_image:
-            obj = img
-            # cant remove auxiliary otherwise inplace modification doesnt work
-            # obj = ub.dict_diff(img, {'auxiliary'})
-            yield obj
-        for obj in img.get('auxiliary', []):
-            yield obj
-
-    def delay(self, channels=None, space='image', bundle_dpath=None):
-        """
-        Experimental method
-
-        Args:
-            gid (int): image id to load
-
-            channels (FusedChannelSpec): specific channels to load.
-                if unspecified, all channels are loaded.
-
-            space (str):
-                can either be "image" for loading in image space, or
-                "video" for loading in video space.
-
-        TODO:
-            - [ ] Currently can only take all or none of the channels from each
-                base-image / auxiliary dict. For instance if the main image is
-                r|g|b you can't just select g|b at the moment.
-
-            - [ ] The order of the channels in the delayed load should
-                match the requested channel order.
-
-            - [ ] TODO: add nans to bands that don't exist or throw an error
-
-        Example:
-            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
-            >>> import kwcoco
-            >>> from os.path import join
-            >>> import os
-            >>> import pathlib
-            >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
-            >>> dvc_dpath = pathlib.Path(os.environ.get('DVC_DPATH', _default))
-            >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/combo_data.kwcoco.json'
-            >>> dset = kwcoco.CocoDataset(os.fspath(coco_fpath))
-            >>> self = CocoImage(ub.peek(dset.imgs.values()), dset)
-
-        Example:
-            >>> from watch.utils.kwcoco_extensions import *  # NOQA
-            >>> import kwcoco
-            >>> gid = 1
-            >>> #
-            >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
-            >>> self = CocoImage(dset.imgs[gid], dset)
-            >>> delayed = self.delay()
-            >>> print('delayed = {!r}'.format(delayed))
-            >>> print('delayed.finalize() = {!r}'.format(delayed.finalize()))
-            >>> print('delayed.finalize() = {!r}'.format(delayed.finalize(as_xarray=True)))
-            >>> #
-            >>> dset = kwcoco.CocoDataset.demo('shapes8')
-            >>> delayed = dset.delayed_load(gid)
-            >>> print('delayed = {!r}'.format(delayed))
-            >>> print('delayed.finalize() = {!r}'.format(delayed.finalize()))
-            >>> print('delayed.finalize() = {!r}'.format(delayed.finalize(as_xarray=True)))
-
-            >>> crop = delayed.delayed_crop((slice(0, 3), slice(0, 3)))
-            >>> crop.finalize()
-            >>> crop.finalize(as_xarray=True)
-
-            >>> # TODO: should only select the "red" channel
-            >>> dset = kwcoco.CocoDataset.demo('shapes8')
-            >>> delayed = CocoImage(dset.imgs[gid], dset).delay(channels='r')
-
-            >>> import kwcoco
-            >>> gid = 1
-            >>> #
-            >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
-            >>> delayed = dset.delayed_load(gid, channels='B1|B2', space='image')
-            >>> print('delayed = {!r}'.format(delayed))
-            >>> print('delayed.finalize() = {!r}'.format(delayed.finalize(as_xarray=True)))
-            >>> delayed = dset.delayed_load(gid, channels='B1|B2|B11', space='image')
-            >>> print('delayed = {!r}'.format(delayed))
-            >>> print('delayed.finalize() = {!r}'.format(delayed.finalize(as_xarray=True)))
-            >>> delayed = dset.delayed_load(gid, channels='B8|B1', space='video')
-            >>> print('delayed = {!r}'.format(delayed))
-            >>> print('delayed.finalize() = {!r}'.format(delayed.finalize(as_xarray=True)))
-
-            >>> delayed = dset.delayed_load(gid, channels='B8|foo|bar|B1', space='video')
-            >>> print('delayed = {!r}'.format(delayed))
-            >>> print('delayed.finalize() = {!r}'.format(delayed.finalize(as_xarray=True)))
-        """
-        from kwcoco.util.util_delayed_poc import DelayedLoad, DelayedChannelConcat
-        from kwimage.transform import Affine
-        from kwcoco.channel_spec import FusedChannelSpec
-        if bundle_dpath is None:
-            bundle_dpath = self.dset.bundle_dpath
-
-        img = self.img
-        requested = channels
-        if requested is not None:
-            requested = FusedChannelSpec.coerce(requested).normalize()
-
-        def _delay_load_imglike(obj):
-            info = {}
-            fname = obj.get('file_name', None)
-            channels_ = obj.get('channels', None)
-            if channels_ is not None:
-                channels_ = FusedChannelSpec.coerce(channels_).normalize()
-            info['channels'] = channels_
-            width = obj.get('width', None)
-            height = obj.get('height', None)
-            if height is not None and width is not None:
-                info['dsize'] = dsize = (width, height)
-            else:
-                info['dsize'] = None
-            if fname is not None:
-                info['fpath'] = fpath = join(bundle_dpath, fname)
-                info['chan'] = DelayedLoad(fpath, channels=channels_, dsize=dsize)
-            return info
-
-        # obj = img
-        info = img_info = _delay_load_imglike(img)
-
-        chan_list = []
-        if info.get('chan', None) is not None:
-            include_flag = requested is None
-            if not include_flag:
-                if requested.intersection(info['channels']):
-                    include_flag = True
-            if include_flag:
-                chan_list.append(info.get('chan', None))
-
-        for aux in img.get('auxiliary', []):
-            info = _delay_load_imglike(aux)
-            aux_to_img = Affine.coerce(aux.get('warp_aux_to_img', None))
-            chan = info['chan']
-
-            include_flag = requested is None
-            if not include_flag:
-                if requested.intersection(info['channels']):
-                    include_flag = True
-            if include_flag:
-                chan = chan.delayed_warp(
-                    aux_to_img, dsize=img_info['dsize'])
-                chan_list.append(chan)
-
-        if len(chan_list) == 0:
-            raise ValueError('no data')
-        else:
-            delayed = DelayedChannelConcat(chan_list)
-
-        # Reorder channels in the requested order
-        if requested is not None:
-            delayed = delayed.take_channels(requested)
-
-        if hasattr(delayed, 'components'):
-            if len(delayed.components) == 1:
-                delayed = delayed.components[0]
-
-        if space == 'image':
-            pass
-        elif space == 'video':
-            vidid = img['video_id']
-            video = self.dset.index.videos[vidid]
-            width = video.get('width', img.get('width', None))
-            height = video.get('height', img.get('height', None))
-            video_dsize = (width, height)
-            img_to_vid = Affine.coerce(img.get('warp_img_to_vid', None))
-            delayed = delayed.delayed_warp(img_to_vid, dsize=video_dsize)
-        else:
-            raise KeyError('space = {}'.format(space))
-        return delayed
-
-
 class TrackidGenerator(ub.NiceRepr):
     """
     Keep track of which trackids have been used and generate new ones on demand
@@ -1618,6 +1218,127 @@ class TrackidGenerator(ub.NiceRepr):
 
     def __next__(self):
         return next(self.generator)
+
+
+def single_geotiff_metadata(bundle_dpath, img, serializable=False):
+    import watch
+    from os.path import exists
+    import dateutil
+    geotiff_metadata = None
+    aux_metadata = []
+
+    img['datetime_acquisition'] = (
+        dateutil.parser.parse(img['date_captured'])
+    )
+
+    # if an image specified its "dem_hint" as ignore, then we set the
+    # elevation to 0. NOTE: this convention might be generalized and
+    # replaced in the future. I.e. in the future the dem_hint might simply
+    # specify the constant elevation to use, or perhaps something else.
+    dem_hint = img.get('dem_hint', 'use')
+    metakw = {}
+    if dem_hint == 'ignore':
+        metakw['elevation'] = 0
+
+    # only need rpc info, wgs84_corners, and and warps
+    keys_of_interest = {
+        'rpc_transform',
+        'is_rpc',
+        'wgs84_to_wld',
+        'wgs84_corners',
+        'wld_to_pxl',
+    }
+
+    HACK_METADATA = 0
+    if HACK_METADATA:
+        # HACK: See if we can construct the keys from the metadata
+        # in the coco file instead of reading the geotiff
+        hack_keys = {
+            'utm_corners',
+            'warp_img_to_wld',
+            'utm_crs_info',
+            'wld_crs_info',
+        }
+        have_hacks = ub.dict_isect(img, hack_keys)
+        if len(have_hacks) == len(hack_keys):
+            print('have hacks: {}'.format(img['sensor_coarse']))
+            from osgeo import osr
+
+            def _make_osgeo_crs(crs_info):
+                from osgeo import osr
+                axis_mapping_int = getattr(osr, crs_info['axis_mapping'])
+                auth = crs_info['auth']
+                assert len(auth) == 2
+                assert auth[0] == 'EPSG'
+                crs = osr.SpatialReference()
+                crs.ImportFromEPSG(int(auth[1]))
+                crs.SetAxisMappingStrategy(axis_mapping_int)
+                return crs
+
+            wgs84_crs = osr.SpatialReference()
+            wgs84_crs.ImportFromEPSG(4326)  # 4326 is the EPSG id WGS84 of lat/lon crs
+
+            wld_to_pxl = kwimage.Affine.coerce(img['warp_img_to_wld']).inv()
+            utm_crs = _make_osgeo_crs(have_hacks['utm_crs_info'])
+            wld_crs = _make_osgeo_crs(have_hacks['wld_crs_info'])
+            utm_to_wgs84 = osr.CoordinateTransformation(utm_crs, wgs84_crs)
+            wgs84_to_wld = osr.CoordinateTransformation(wgs84_crs, wld_crs)
+            utm_corners = kwimage.Coords(np.array(have_hacks['utm_corners']))
+            wgs84_corners = utm_corners.warp(utm_to_wgs84)
+
+            hack_info = {
+                'rpc_transform': None,
+                'is_rpc': False,
+                'wgs84_to_wld': wgs84_to_wld,
+                'wgs84_corners': wgs84_corners,
+                'wld_to_pxl': wld_to_pxl,
+            }
+            geotiff_metadata = hack_info
+            return geotiff_metadata
+        else:
+            print('missing hacks: {}'.format(img['sensor_coarse']))
+
+    fname = img.get('file_name', None)
+    if fname is not None:
+        src_gpath = join(bundle_dpath, fname)
+        assert exists(src_gpath)
+        img_info = watch.gis.geotiff.geotiff_metadata(src_gpath, **metakw)
+
+        if serializable:
+            raise NotImplementedError
+        else:
+            img_info = ub.dict_isect(img_info, keys_of_interest)
+            geotiff_metadata = img_info
+
+    for aux in img.get('auxiliary', []):
+        aux_fpath = join(bundle_dpath, aux['file_name'])
+        assert exists(aux_fpath)
+        aux_info = watch.gis.geotiff.geotiff_metadata(aux_fpath, **metakw)
+        aux_info = ub.dict_isect(aux_info, keys_of_interest)
+        if serializable:
+            raise NotImplementedError
+        else:
+            aux_metadata.append(aux_info)
+            aux['geotiff_metadata'] = aux_info
+
+    if fname is None:
+        # need to choose one of the auxiliary images as the "main" image.
+        # We are assuming that there is one auxiliary image that exactly
+        # corresponds.
+        candidates = []
+        for aux in img.get('auxiliary', []):
+            if aux['width'] == img['width'] and aux['height'] == img['height']:
+                candidates.append(aux)
+
+        if not candidates:
+            raise AssertionError(
+                'Assumed at least one auxiliary image has identity '
+                'transform, but this seems to not be the case')
+        aux = ub.peek(candidates)
+        geotiff_metadata = aux['geotiff_metadata']
+
+    img['geotiff_metadata'] = geotiff_metadata
+    return geotiff_metadata, aux_metadata
 
 
 def _demo_kwcoco_with_heatmaps(num_videos=1):
@@ -1645,7 +1366,7 @@ def _demo_kwcoco_with_heatmaps(num_videos=1):
     from kwcoco.demo import perterb
 
     coco_dset = kwcoco.CocoDataset.demo(
-        'vidshapes', num_videos=1, num_frames=20,
+        'vidshapes', num_videos=num_videos, num_frames=20,
         multispectral=True, image_size=(128, 128))
 
     perterb_config = {
@@ -1717,8 +1438,209 @@ def _demo_kwcoco_with_heatmaps(num_videos=1):
             'warp_aux_to_img': warp_img_from_aux.concise(),
         })
 
+    import datetime
+    from kwarray.distributions import Uniform
+    min_time = datetime.datetime(year=1970, month=1, day=1)
+    max_time = datetime.datetime(year=2101, month=1, day=1)
+    time_distri = Uniform(min_time.timestamp(), max_time.timestamp())
+
+    # Hack in other metadata
+    for vidid in coco_dset.videos():
+        vid_gids = list(coco_dset.images(vidid=vidid))
+        time_pool = sorted(time_distri.sample(len(vid_gids)))
+        for gid, timestamp in zip(vid_gids, time_pool):
+            ts = datetime.datetime.fromtimestamp(timestamp)
+            img = coco_dset.index.imgs[gid]
+            img['date_captured'] = ts.isoformat()
+
     # Hack in geographic info
     hack_seed_geometadata_in_dset(coco_dset)
     for gid in coco_dset.images():
         transfer_geo_metadata(coco_dset, gid)
+
+    warp_annot_segmentations_to_geos(coco_dset)
     return coco_dset
+
+
+def warp_annot_segmentations_to_geos(coco_dset):
+    import watch
+    # hack in segmentation_geos
+    for gid in coco_dset.images():
+        coco_img = coco_dset._coco_image(gid)
+        asset = coco_img.primary_asset()
+        fpath = join(coco_dset.bundle_dpath, asset['file_name'])
+        geo_meta = watch.gis.geotiff.geotiff_metadata(fpath)
+        warp_wld_from_aux = geo_meta['pxl_to_wld']
+        warp_img_from_aux = kwimage.Affine.coerce(asset.get('warp_aux_to_img', None))
+
+        warp_wgs84_from_wld = geo_meta['wld_to_wgs84']  # Could be a general CoordinateTransform!
+        wgs84_crs_info = geo_meta['wgs84_crs_info']
+        need_flip_to_lonlat = wgs84_crs_info['axis_mapping'] == 'OAMS_AUTHORITY_COMPLIANT'
+
+        warp_aux_from_img = warp_img_from_aux.inv()
+        warp_wld_from_img = warp_wld_from_aux @ warp_aux_from_img
+        for aid in coco_dset.annots(gid=gid):
+            ann = coco_dset.index.anns[aid]
+            sseg_img = kwimage.Segmentation.coerce(ann['segmentation'])
+            sseg_wld = sseg_img.warp(warp_wld_from_img)
+            sseg_wgs84 = sseg_wld.warp(warp_wgs84_from_wld)
+            if need_flip_to_lonlat:
+                sseg_wgs84_lonlat = sseg_wgs84.swap_axes()
+            else:
+                sseg_wgs84_lonlat = sseg_wgs84.copy()
+            ann['segmentation_geos'] = sseg_wgs84_lonlat.to_geojson()
+
+
+def coco_geopandas_images(dset):
+    """
+    TODO:
+        - [ ] This is unused in this file and thus should move to the dev
+        folder or somewhere else for to keep useful scratch work.
+    """
+    import geopandas as gpd
+    df_input = []
+    for gid, img in dset.imgs.items():
+        info  = img['geotiff_metadata']
+        kw_img_poly = kwimage.Polygon(exterior=info['wgs84_corners'])
+        sh_img_poly = kw_img_poly.to_shapely()
+        df_input.append({
+            'gid': gid,
+            'name': img.get('name', None),
+            'video_id': img.get('video_id', None),
+            'bounds': sh_img_poly,
+        })
+    img_geos_df = gpd.GeoDataFrame(df_input, geometry='bounds', crs='epsg:4326')
+    return img_geos_df
+
+
+def visualize_rois(dset):
+    """
+    matplotlib visualization of image and annotation regions on a world map
+
+    Developer function, unused in the script
+
+    TODO:
+        - [ ] This is unused in this file and thus should move to the dev
+        folder or somewhere else for to keep useful scratch work.
+
+    Example:
+        >>> from watch.utils.kwcoco_extensions import *  # NOQA
+        >>> from watch.utils.kwcoco_extensions import _demo_kwcoco_with_heatmaps
+        >>> dset = _demo_kwcoco_with_heatmaps(num_videos=5)
+        >>> coco_populate_geo_heuristics(dset, overwrite=True)
+        >>> visualize_rois(dset)
+    """
+    import geopandas as gpd
+    import shapely
+    sh_coverage_rois_trad = find_covered_regions(dset)
+    # sh_coverage_rois_trad = [flip_xy(p) for p in sh_coverage_rois]
+    kw_coverage_rois_trad = list(map(kwimage.Polygon.from_shapely, sh_coverage_rois_trad))
+    print('kw_coverage_rois_trad = {}'.format(ub.repr2(kw_coverage_rois_trad, nl=1)))
+    cov_poly_crs = 'epsg:4326'
+    cov_poly_gdf = gpd.GeoDataFrame({'cov_rois': sh_coverage_rois_trad},
+                                    geometry='cov_rois', crs=cov_poly_crs)
+
+    sseg_geos_list = dset.annots().lookup('segmentation_geos')
+    sh_all_box_rois_trad = [shapely.geometry.shape(d) for d in sseg_geos_list]
+    # sh_all_box_rois = [p.to_shapely()for p in kw_all_box_rois]
+    # sh_all_box_rois_trad = [flip_xy(p) for p in sh_all_box_rois]
+    kw_all_box_rois_trad = list(map(kwimage.MultiPolygon.from_shapely, sh_all_box_rois_trad))
+    roi_poly_crs = 'epsg:4326'
+    roi_poly_gdf = gpd.GeoDataFrame({'roi_polys': sh_all_box_rois_trad},
+                                    geometry='roi_polys', crs=roi_poly_crs)
+    print('kw_all_box_rois_trad = {}'.format(ub.repr2(kw_all_box_rois_trad, nl=1)))
+
+    if True:
+        import kwplot
+        kwplot.autompl()
+
+        wld_map_gdf = gpd.read_file(
+            gpd.datasets.get_path('naturalearth_lowres')
+        )
+        ax = wld_map_gdf.plot()
+
+        cov_centroids = cov_poly_gdf.geometry.centroid
+        cov_poly_gdf.plot(ax=ax, facecolor='none', edgecolor='green', alpha=0.5)
+        cov_centroids.plot(ax=ax, marker='o', facecolor='green', alpha=0.5)
+        # img_centroids = img_poly_gdf.geometry.centroid
+        # img_poly_gdf.plot(ax=ax, facecolor='none', edgecolor='red', alpha=0.5)
+        # img_centroids.plot(ax=ax, marker='o', facecolor='red', alpha=0.5)
+
+        roi_centroids = roi_poly_gdf.geometry.centroid
+        roi_poly_gdf.plot(ax=ax, facecolor='none', edgecolor='orange', alpha=0.5)
+        roi_centroids.plot(ax=ax, marker='o', facecolor='orange', alpha=0.5)
+
+        if 0:
+            # kw_zoom_roi = kw_all_box_rois_trad[1]
+            kw_zoom_roi = kw_coverage_rois_trad[0]
+            # kw_zoom_roi = kw_all_box_rois_trad[3]
+            bb = kw_zoom_roi.bounding_box()
+            min_x, min_y, max_x, max_y = bb.scale(1.5, about='center').to_ltrb().data[0]
+            ax.set_xlim(min_x, max_x)
+            ax.set_ylim(min_y, max_y)
+
+
+def find_covered_regions(coco_dset):
+    """
+    Find the intersection of all image bounding boxes in world space
+    to see what spatial regions are covered by the imagery.
+
+    Example:
+        >>> from watch.utils.kwcoco_extensions import *  # NOQA
+        >>> from watch.utils.kwcoco_extensions import _demo_kwcoco_with_heatmaps
+        >>> coco_dset = _demo_kwcoco_with_heatmaps()
+        >>> coco_populate_geo_heuristics(coco_dset, overwrite=True)
+        >>> img = coco_dset.imgs[1]
+        >>> find_covered_regions(coco_dset)
+    """
+    from shapely import ops
+    import shapely
+    # import watch
+    gid_to_poly = {}
+    for gid, img in coco_dset.imgs.items():
+        # info  = img['geotiff_metadata']
+        sh_img_poly = shapely.geometry.shape(img['geos_corners'])
+        # wgs84_latlon = img['geos_corners']
+        # coco_img = coco_dset._coco_image(gid)
+        # asset = coco_img.primary_asset()
+        # fpath = join(coco_dset.bundle_dpath, asset['file_name'])
+        # geo_meta = watch.gis.geotiff.geotiff_metadata(fpath)
+        # kw_img_poly = kwimage.Polygon(exterior=wgs84_latlon)
+        # kw_img_poly = kwimage.Polygon.coerce(wgs84_latlon)
+        # sh_img_poly = kw_img_poly.to_shapely()
+        gid_to_poly[gid] = sh_img_poly
+
+    # df_input = [
+    #     {'gid': gid, 'bounds': poly, 'name': coco_dset.imgs[gid].get('name', None),
+    #      'video_id': coco_dset.imgs[gid].get('video_id', None) }
+    #     for gid, poly in gid_to_poly.items()
+    # ]
+    # img_geos = gpd.GeoDataFrame(df_input, geometry='bounds', crs='epsg:4326')
+
+    # Can merge like this, but we lose membership info
+    # coverage_df = gpd.GeoDataFrame(img_geos.unary_union)
+
+    coverage_rois_ = ops.unary_union(gid_to_poly.values())
+    if hasattr(coverage_rois_, 'geoms'):
+        # Iteration over shapely objects was deprecated, test for geoms
+        # attribute instead.
+        coverage_rois = list(coverage_rois_.geoms)
+    else:
+        coverage_rois = [coverage_rois_]
+    return coverage_rois
+
+
+def flip_xy(poly):
+    """
+    TODO:
+        - [ ] This is unused in this file and thus should move to the dev
+        folder or somewhere else for to keep useful scratch work.
+    """
+    if hasattr(poly, 'reorder_axes'):
+        new_poly = poly.reorder_axes((1, 0))
+    else:
+        kw_poly = kwimage.Polygon.from_shapely(poly)
+        kw_poly.data['exterior'].data = kw_poly.data['exterior'].data[:, ::-1]
+        sh_poly_ = kw_poly.to_shapely()
+        new_poly = sh_poly_
+    return new_poly
