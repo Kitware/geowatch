@@ -6,6 +6,7 @@ import kwimage
 import numpy as np
 import kwcoco
 
+
 def _score(poly, probs):
     # Compute a score for the polygon
     # First compute the valid bounds of the polygon
@@ -20,7 +21,7 @@ def _score(poly, probs):
     rel_probs = probs[y:y + h, x:x + w]
     # hacking to solve a bug: sometimes shape of rel_probs is x,y,1
     if len(rel_probs.shape) == 3:
-        rel_probs = rel_probs[:,:,0]
+        rel_probs = rel_probs[:, :, 0]
     total = rel_mask.sum()
     score = 0 if total == 0 else (rel_mask * rel_probs).sum() / total
     return score
@@ -178,7 +179,7 @@ def time_aggregated_polys(coco_dset,
                     cand_scores.append(_score(vid_poly, img_probs))
                 else:
                     cand_scores.append(0)
-            
+
             #cat_name = np.max(cand_keys, where=cand_scores)
             cat_name = cand_keys[np.argmax(cand_scores)]
             cid = coco_dset.ensure_category(cat_name)
@@ -200,7 +201,7 @@ def time_aggregated_polys(coco_dset,
     return coco_dset
 
 
-def time_aggregated_polys_bas(coco_dset, thresh=0.15, morph_kernel=3):
+def time_aggregated_polys_bas(coco_dset, thresh=0.25, morph_kernel=3):
     '''
     Wrapper for BAS that looks for change heatmaps.
     '''
