@@ -207,7 +207,8 @@ def main(cmdline=True, **kw):
 
     Example:
         >>> from watch.cli.coco_align_geotiffs import *  # NOQA
-        >>> coco_dset = kwcoco_extensions._demo_kwcoco_with_heatmaps(num_videos=2, num_frames=2)
+        >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
+        >>> coco_dset = demo_kwcoco_with_heatmaps(num_videos=2, num_frames=2)
         >>> # Create arguments to the script
         >>> dpath = ub.ensure_app_cache_dir('smart_watch/test/coco_align_geotiff2')
         >>> dst = ub.ensuredir((dpath, 'align_bundle2'))

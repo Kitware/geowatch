@@ -59,11 +59,11 @@ def main(**kwargs):
 
 
 def filter_band_files(fpaths, band_list, with_tci=True):
-    '''
+    """
     band_list is any subset of util_bands.ALL_BANDS
 
     with_tci: include true color thumbnail
-    '''
+    """
     band_names = set(b['name'] for b in band_list)
     if with_tci:
         band_names.add('TCI')

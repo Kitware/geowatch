@@ -382,18 +382,18 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         wgs84_wkt = wgs84_crs.ExportToWkt()
 
         utm_crs_info = {
-            'auth': memo_from_wkt(utm_wkt),
+            'auth': memo_auth_from_wkt(utm_wkt),
             'axis_mapping': utm_axis_mapping,
         }
 
         wld_crs_info = {
-            'auth': memo_from_wkt(wld_wkt),
+            'auth': memo_auth_from_wkt(wld_wkt),
             'axis_mapping': wld_axis_mapping,
             'type': wld_crs_type,
         }
 
         wgs84_crs_info = {
-            'auth': memo_from_wkt(wgs84_wkt),
+            'auth': memo_auth_from_wkt(wgs84_wkt),
             'axis_mapping': wgs84_axis_mapping,
         }
 
@@ -445,6 +445,37 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         maxx, maxy = info['utm_corners'].data.min(axis=0)
         info['approx_meter_gsd'] = gsd
     return info
+
+
+def make_crs_info_object(osr_crs):
+    """
+    Args:
+        osr_crs (osr.SpatialReference): an osr object from gdal
+
+    Example:
+        >>> from watch.gis.geotiff import *  # NOQA
+        >>> osr_crs = osr.SpatialReference()
+        >>> osr_crs.ImportFromEPSG(4326)
+        >>> crs_info = make_crs_info_object(osr_crs)
+        >>> print('crs_info = {}'.format(ub.repr2(crs_info, nl=1)))
+        >>> osr_crs = osr.SpatialReference()
+        >>> osr_crs.ImportFromEPSG(4326)
+        >>> osr_crs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+        >>> crs_info = make_crs_info_object(osr_crs)
+        >>> print('crs_info = {}'.format(ub.repr2(crs_info, nl=1)))
+        >>> osr_crs.ImportFromEPSG(32744)
+        >>> crs_info = make_crs_info_object(osr_crs)
+        >>> print('crs_info = {}'.format(ub.repr2(crs_info, nl=1)))
+    """
+    wkt = osr_crs.ExportToWkt()
+    auth = memo_auth_from_wkt(wkt)
+    axis_mapping_int = osr_crs.GetAxisMappingStrategy()
+    axis_mapping_text = axis_mapping_int_to_text(axis_mapping_int)
+    crs_info = {
+        'auth': auth,
+        'axis_mapping': axis_mapping_text,
+    }
+    return crs_info
 
 
 def axis_mapping_int_to_text(axis_mapping_int):
@@ -503,7 +534,7 @@ def new_spatial_reference(axis_mapping='OAMS_AUTHORITY_COMPLIANT'):
 
 
 @ub.memoize
-def memo_from_wkt(wkt):
+def memo_auth_from_wkt(wkt):
     """
     This benchmarks as an expensive operation, memoize it.
     """
