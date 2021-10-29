@@ -116,9 +116,9 @@ def main(cmdline=True, **kwargs):
     missing_hist = ub.ddict(lambda: 0)
     channel_specs = []
     # Check which images have which features (did we miss any?)
-    for gid, dst_img in ub.ProgIter(dst_dset.index.imgs.items(),
-                                    total=dst_dset.n_images,
-                                    desc='checking features'):
+    for _gid, dst_img in ub.ProgIter(dst_dset.index.imgs.items(),
+                                     total=dst_dset.n_images,
+                                     desc='checking features'):
         img_channels = set()
         for aux in dst_img.get('auxiliary'):
             img_channels.add(aux['channels'])

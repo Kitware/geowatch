@@ -3,9 +3,6 @@ import os
 from pathlib import Path
 from glob import glob
 
-import fels
-from rgd_client.rgdc import RasterDownload
-
 
 def grab_sentinel2_product(index=0, overwrite=False):
     """
@@ -34,7 +31,7 @@ def grab_sentinel2_product(index=0, overwrite=False):
     SeeAlso:
         watch.util.util_rgdc.bands_sentinel2
     """
-
+    from rgd_client.rgdc import RasterDownload
     urls = [
         'http://storage.googleapis.com/gcp-public-data-sentinel-2/tiles/52/S/DG/S2A_MSIL1C_20181101T020821_N0206_R103_T52SDG_20181101T040328.SAFE',
         'http://storage.googleapis.com/gcp-public-data-sentinel-2/tiles/52/S/DG/S2A_MSIL1C_20181104T021841_N0206_R003_T52SDG_20181104T055443.SAFE',
@@ -53,17 +50,22 @@ def grab_sentinel2_product(index=0, overwrite=False):
         os.path.isdir(os.path.join(scene_dpath, os.path.basename(url)))
         and not os.listdir(os.path.join(scene_dpath, os.path.basename(url))))
 
+    try:
+        from fels.sentinel2 import get_sentinel2_image
+    except ImportError:
+        from fels import get_sentinel2_image
+
     if not was_failed_download:
         # This is really slow even if the data is cached with default fels
         # This PR: https://github.com/vascobnunes/fetchLandsatSentinelFromGoogleCloud/pull/58
-        # can help speed it up, but it is not accepted yet
+        # can help speed it up.
 
         # Download the scene
-        assert fels.get_sentinel2_image(url,
-                                        scene_dpath,
-                                        # overwrite=was_failed_download,
-                                        overwrite=True,  # makes this really slow
-                                        reject_old=True)
+        assert get_sentinel2_image(url,
+                                   scene_dpath,
+                                   # overwrite=was_failed_download,
+                                   overwrite=True,  # makes this really slow
+                                   reject_old=True)
 
     # Build a rgdc object to return the scene
     root = os.path.join(scene_dpath, url.split('/')[-1])

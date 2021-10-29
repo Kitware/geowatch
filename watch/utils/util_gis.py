@@ -185,18 +185,40 @@ def read_geojson(file, default_axis_mapping='OAMS_TRADITIONAL_GIS_ORDER'):
             be traditional ordering by default according to the geojson spec.
 
     Returns:
-        GeoDataFrame : a dataframe with geo info. This will ALWAYS return
-        with an OAMS_AUTHORITY_COMPLIANT wgs84 crs (i.e. lat,lon) even
-        though the on disk order is should be OAMS_TRADITIONAL_GIS_ORDER.
+        GeoDataFrame : a dataframe with geo info.
+            Note: geopandas always stores data in traditional XY, although its
+            CRS does seem to hold axis order info?
+
+        # OLD: This will ALWAYS return
+        # with an OAMS_AUTHORITY_COMPLIANT wgs84 crs (i.e. lat,lon) even
+        # though the on disk order is should be OAMS_TRADITIONAL_GIS_ORDER.
+
+    References:
+        https://geopandas.org/docs/user_guide/projections.html#the-axis-order-of-a-crs
 
     Example:
         >>> import io
-        >>> from watch.cli.coco_align_geotiffs import *  # NOQA
+        >>> from watch.utils.util_gis import *  # NOQA
         >>> geojson_text = demo_regions_geojson_text()
         >>> file = io.StringIO()
         >>> file.write(geojson_text)
         >>> file.seek(0)
         >>> region_df = read_geojson(file)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> import geopandas as gpd
+        >>> kwplot.autompl()
+        >>> wld_map_gdf = gpd.read_file(
+        >>>     gpd.datasets.get_path('naturalearth_lowres')
+        >>> ).to_crs('crs84')
+        >>> ax = wld_map_gdf.plot()
+        >>> region_df.plot(ax=ax, edgecolor='orange', alpha=0.8)
+        >>> # https://gis.stackexchange.com/questions/372564/userwarning-when-trying-to-get-centroid-from-a-polygon-geopandas
+        >>> centroid = region_df.to_crs('+proj=cea').centroid.to_crs(region_df.crs)
+        >>> centroid.plot(ax=ax, edgecolor='orange', alpha=0.8)
+
+        print('region_df.crs = {!r}'.format(region_df.crs))
+        print('wld_map_gdf.crs = {!r}'.format(wld_map_gdf.crs))
     """
     import geopandas as gpd
     valid_axis_mappings = {
@@ -209,16 +231,16 @@ def read_geojson(file, default_axis_mapping='OAMS_TRADITIONAL_GIS_ORDER'):
     # Read custom ROI regions
     region_df = gpd.read_file(file)
 
-    if default_axis_mapping == 'OAMS_TRADITIONAL_GIS_ORDER':
-        # For whatever reason geopandas reads in geojson (which is supposed to
-        # be traditional order long/lat) with a authority compliant wgs84
-        # lat/long crs
-        region_df['geometry'] = region_df['geometry'].apply(
-            shapely_flip_xy)
-    elif default_axis_mapping == 'OAMS_AUTHORITY_COMPLIANT':
-        pass
-    else:
-        raise KeyError(default_axis_mapping)
+    # if default_axis_mapping == 'OAMS_TRADITIONAL_GIS_ORDER':
+    #     # For whatever reason geopandas reads in geojson (which is supposed to
+    #     # be traditional order long/lat) with a authority compliant wgs84
+    #     # lat/long crs
+    #     region_df['geometry'] = region_df['geometry'].apply(
+    #         shapely_flip_xy)
+    # elif default_axis_mapping == 'OAMS_AUTHORITY_COMPLIANT':
+    #     pass
+    # else:
+    #     raise KeyError(default_axis_mapping)
 
     # TODO: can we construct a pyproj.CRS from wgs84, but with traditional
     # order?
@@ -230,6 +252,9 @@ def read_geojson(file, default_axis_mapping='OAMS_TRADITIONAL_GIS_ORDER'):
     # pyproj.CRS.from_dict(crs1.to_json_dict())
     # z = region_df.crs
     # z.to_json_dict()
+
+    # Use a CRS that actually reflects the underlying data
+    region_df = region_df.to_crs('crs84')
     return region_df
 
 

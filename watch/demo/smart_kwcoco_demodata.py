@@ -29,7 +29,7 @@ def demo_smart_raw_kwcoco():
     """
     cache_dpath = ub.ensure_app_cache_dir('watch/demo/kwcoco')
     raw_coco_fpath = join(cache_dpath, 'demo_smart_raw.kwcoco.json')
-    stamp = ub.CacheStamp('raw_stamp', dpath=cache_dpath, depends=['v1'],
+    stamp = ub.CacheStamp('raw_stamp', dpath=cache_dpath, depends=['v2'],
                           product=raw_coco_fpath)
     if stamp.expired():
         s2_demo_paths1 = sentinel2_demodata.grab_sentinel2_product(index=0)
@@ -115,7 +115,7 @@ def demo_smart_aligned_kwcoco():
     cache_dpath = ub.ensure_app_cache_dir('watch/demo/kwcoco')
     aligned_kwcoco_dpath = join(cache_dpath, 'demo_aligned')
     aligned_coco_fpath = join(aligned_kwcoco_dpath, 'data.kwcoco.json')
-    stamp = ub.CacheStamp('aligned_stamp', dpath=cache_dpath, depends=['v1'],
+    stamp = ub.CacheStamp('aligned_stamp', dpath=cache_dpath, depends=['v2'],
                           product=[aligned_coco_fpath])
     if stamp.expired():
         raw_coco_dset = demo_smart_raw_kwcoco()
@@ -141,7 +141,6 @@ def demo_kwcoco_with_heatmaps(num_videos=1, num_frames=20):
 
     Example:
         >>> from watch.demo.smart_kwcoco_demodata import *  # NOQA
-        >>> from watch.utils.kwcoco_extensions import demo_kwcoco_with_heatmaps
         >>> coco_dset = demo_kwcoco_with_heatmaps()
 
         key = 'salient'
@@ -210,7 +209,7 @@ def demo_kwcoco_with_heatmaps(num_videos=1, num_frames=20):
         # Hack: use dets to draw some randomish heatmaps
         sseg = aux_dets.data['segmentations']
         chan_datas = []
-        for code in chan_codes:
+        for _code in chan_codes:
             chan_data = np.zeros(dims, dtype=np.float32)
             for poly in sseg.data:
                 poly.fill(chan_data, 1)

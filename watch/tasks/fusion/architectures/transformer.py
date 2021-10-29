@@ -366,7 +366,7 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
         embedding_size,
         n_heads,
         dropout=0.,
-        default_shape=['batch', 'time', 'mode', 'height', 'width', 'feature'],
+        default_shape=('batch', 'time', 'mode', 'height', 'width', 'feature'),
         feature_axis='feature',
         batch_axis='batch',
         attention_impl='exact'
@@ -565,7 +565,7 @@ class FusionEncoder(nn.Module):
     """
 
     def __init__(self, axes,
-                 default_shape=['batch', 'sequence', 'feature'],
+                 default_shape=('batch', 'sequence', 'feature'),
                  feature_axis='feature',
                  batch_axis='batch',
                  embedding_size=128,

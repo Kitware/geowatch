@@ -115,6 +115,25 @@ def custom_lint(dpath : str = '.', mode : str = 'lint', index=None, interact=Non
         'E26 ': 'Fix spacing after comment hash for inline comments.',
         # 'E265': 'Fix spacing after comment hash for block comments.',
         # 'E266': 'Fix too many leading # for block comments.',
+
+        'C408': ' Unncessary dict call, rewrite as literal',
+        'C409': ' Unncessary tuple call, rewrite as literal',
+
+        'N804': ' first argument of classmethod should be named cls',
+        'B006': 'Do not use mutable data structures for argument defaults.  They are created during function definition time. All calls to the function reuse this one instance of that data structure, persisting changes between them.',
+
+        'B007': 'Loop control variable not used within the loop body. If this is intended, start the name with an underscore.',
+        'B009': 'Do not call getattr with a constant attribute value, it is not any safer than normal property access.',
+        'C401': 'Unnecessary generator - rewrite as a set comprehension.',
+        'C414': 'Unnecessary list call within sorted().',
+        'C416': 'Unnecessary list comprehension - rewrite using list().',
+        'EXE001': 'Shebang is present but the file is not executable.',
+        'N807': 'function name should not start and end with __',
+        'N812': 'lowercase imported as non lowercase',
+        'N814': 'camelcase imported as constant',
+        'N817': 'camelcase imported as acronym',
+        'N818': 'exception name be named with an Error suffix',
+
     }
 
     modifiers = {

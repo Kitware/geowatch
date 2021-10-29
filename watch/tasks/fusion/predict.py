@@ -182,7 +182,7 @@ def predict(cmdline=False, **kwargs):
         # Ideally we have a package, everything is defined there
         method = utils.load_model_from_package(args.package_fpath)
         # fix einops bug
-        for name, mod in method.named_modules():
+        for _name, mod in method.named_modules():
             if 'Rearrange' in mod.__class__.__name__:
                 mod._recipe = mod.recipe()
 
@@ -479,7 +479,7 @@ def predict(cmdline=False, **kwargs):
         writer_queue.wait_until_finished()  # hack to avoid race condition
 
         # Prediction is completed, finalize all remaining images.
-        for head_key, head_stitcher in stitch_managers.items():
+        for _head_key, head_stitcher in stitch_managers.items():
             for gid in head_stitcher.managed_image_ids():
                 # finalize_ready(head_stitcher, gid)
                 writer_queue.submit(head_stitcher.finalize_image, gid)

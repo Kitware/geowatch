@@ -453,6 +453,7 @@ def make_crs_info_object(osr_crs):
         osr_crs (osr.SpatialReference): an osr object from gdal
 
     Example:
+        >>> from osgeo import osr
         >>> from watch.gis.geotiff import *  # NOQA
         >>> osr_crs = osr.SpatialReference()
         >>> osr_crs.ImportFromEPSG(4326)
@@ -508,29 +509,29 @@ def axis_mapping_int_to_text(axis_mapping_int):
     return axis_mapping
 
 
-def new_spatial_reference(axis_mapping='OAMS_AUTHORITY_COMPLIANT'):
-    """
-    Creates a new spatial reference
+# def new_spatial_reference(axis_mapping='OAMS_AUTHORITY_COMPLIANT'):
+#     """
+#     Creates a new spatial reference
 
-    Args:
-        axis_mapping (int | str) : can be
-            OAMS_TRADITIONAL_GIS_ORDER, OAMS_AUTHORITY_COMPLIANT, or
-            OAMS_CUSTOM or the integer gdal code.
+#     Args:
+#         axis_mapping (int | str) : can be
+#             OAMS_TRADITIONAL_GIS_ORDER, OAMS_AUTHORITY_COMPLIANT, or
+#             OAMS_CUSTOM or the integer gdal code.
 
-    References:
-        https://gdal.org/tutorials/osr_api_tut.html#crs-and-axis-order
-    """
-    raise NotImplementedError
-    from osgeo import osr
-    if isinstance(axis_mapping, int):
-        axis_mapping_int = axis_mapping
-    else:
-        assert axis_mapping in {
-            'OAMS_TRADITIONAL_GIS_ORDER',
-            'OAMS_AUTHORITY_COMPLIANT',
-            'OAMS_CUSTOM',
-        }
-        axis_mapping_int = getattr(osr, axis_mapping)
+#     References:
+#         https://gdal.org/tutorials/osr_api_tut.html#crs-and-axis-order
+#     """
+#     raise NotImplementedError
+#     from osgeo import osr
+#     if isinstance(axis_mapping, int):
+#         axis_mapping_int = axis_mapping
+#     else:
+#         assert axis_mapping in {
+#             'OAMS_TRADITIONAL_GIS_ORDER',
+#             'OAMS_AUTHORITY_COMPLIANT',
+#             'OAMS_CUSTOM',
+#         }
+#         axis_mapping_int = getattr(osr, axis_mapping)
 
 
 @ub.memoize

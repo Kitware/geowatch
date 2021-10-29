@@ -1062,7 +1062,7 @@ class MultimodalTransformer(pl.LightningModule):
                 self.log(f'{stage}_loss', total_loss, prog_bar=True)
 
             # Detach the itemized losses
-            for path, val in ub.IndexableWalker(item_losses):
+            for _path, val in ub.IndexableWalker(item_losses):
                 if isinstance(val, torch.Tensor):
                     val.detach_()
 

@@ -71,7 +71,7 @@ def main(**kwargs):
         >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
         >>> print('dset = {!r}'.format(dset))
         >>> target_gsd = 13.0
-        >>> populate_watch_fields(dset, target_gsd, default_gsd=1)
+        >>> main(src=dset, target_gsd=target_gsd, default_gsd=1)
         >>> print('dset.index.imgs[1] = ' + ub.repr2(dset.index.imgs[1], nl=2))
         >>> print('dset.index.videos = {}'.format(ub.repr2(dset.index.videos, nl=1)))
 
@@ -88,7 +88,7 @@ def main(**kwargs):
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
     print('read dataset')
-    dset = kwcoco.CocoDataset(config['src'])
+    dset = kwcoco.CocoDataset.coerce(config['src'])
 
     hard_coded_colors = {
         'No Activity': 'tomato',
@@ -112,7 +112,6 @@ def main(**kwargs):
     print('dset.index.videos = {}'.format(ub.repr2(dset.index.videos, nl=2, precision=4)))
 
     if config['edit_geotiff_metadata']:
-        from watch.utils import kwcoco_extensions
         kwcoco_extensions.ensure_transfered_geo_data(dset)
 
     for gid, img in dset.index.imgs.items():

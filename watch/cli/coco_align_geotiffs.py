@@ -217,12 +217,30 @@ def main(cmdline=True, **kw):
         >>>     'src': coco_dset,
         >>>     'dst': dst,
         >>>     'regions': 'annots',
-        >>>     'max_workers': 2,
-        >>>     'aux_workers': 2,
+        >>>     'max_workers': 0,
+        >>>     'aux_workers': 0,
         >>>     'visualize': 1,
         >>> }
         >>> cmdline = False
         >>> new_dset = main(cmdline, **kw)
+        >>> coco_img = new_dset.coco_image(2)
+        >>> # Check our output is in the CRS we think it is
+        >>> asset = coco_img.primary_asset()
+        >>> parent_fpath = asset['parent_file_name']
+        >>> crop_fpath = join(new_dset.bundle_dpath, asset['file_name'])
+        >>> print(ub.cmd(['gdalinfo', parent_fpath])['out'])
+        >>> print(ub.cmd(['gdalinfo', crop_fpath])['out'])
+
+
+        >>> # Test that the input dataset visualizes ok
+        >>> from watch.cli import coco_visualize_videos
+        >>> coco_visualize_videos.main(cmdline=False, **{
+        >>>     'src': coco_dset,
+        >>>     'viz_dpath': ub.ensuredir((dpath, 'viz_input_align_bundle2')),
+        >>> })
+
+        print(ub.cmd(['gdalinfo', parent_fpath])['out'])
+        print(ub.cmd(['gdalinfo', crop_fpath])['out'])
 
         df1 = covered_annot_geo_regions(coco_dset)
         df2 = covered_image_geo_regions(coco_dset)
@@ -298,12 +316,12 @@ def main(cmdline=True, **kw):
     if regions == 'images':
         region_df = kwcoco_extensions.covered_image_geo_regions(coco_dset)
     elif regions == 'annots':
-        region_df = kwcoco_extensions.covered_annot_geo_regions(coco_dset)
+        region_df = kwcoco_extensions.covered_annot_geo_regions(coco_dset, merge=True)
     else:
         assert region_df is not None, 'must have been given regions some other way'
 
-    print('query region_df = {!r}'.format(region_df))
-    print('cube.img_geos_df = {!r}'.format(cube.img_geos_df))
+    print('query region_df =\n{}'.format(region_df))
+    print('cube.img_geos_df =\n{}'.format(cube.img_geos_df))
 
     # Exapnd the ROI by the context factor and convert to a bounding box
     region_df['geometry'] = region_df['geometry'].apply(shapely_bounding_box)
@@ -427,7 +445,6 @@ class SimpleDataCube(object):
         cube = SimpleDataCube(coco_dset)
         if with_region:
             img_poly = kwimage.Polygon(exterior=cube.coco_dset.imgs[1]['geotiff_metadata']['wgs84_corners'])
-            img_poly.swap_axes().to_geojson()
             region_geojson =  {
                 'type': 'FeatureCollection',
                 'features': [
@@ -442,7 +459,6 @@ class SimpleDataCube(object):
                 ]
             }
             region_df = gpd.GeoDataFrame.from_features(region_geojson)
-            region_df['geometry'] = region_df['geometry'].apply(shapely_flip_xy)
             return cube, region_df
         return cube
 
@@ -480,7 +496,10 @@ class SimpleDataCube(object):
 
             space_region = kwimage.Polygon.from_shapely(region_row.geometry)
             space_box = space_region.bounding_box().to_ltrb()
-            latmin, lonmin, latmax, lonmax = space_box.data[0]
+
+            # Data is from geo-pandas so this should be traditional order
+            lonmin, latmin, lonmax, latmax = space_box.data[0]
+
             min_pt = util_gis.latlon_text(latmin, lonmin)
             max_pt = util_gis.latlon_text(latmax, lonmax)
             space_str = '{}_{}'.format(min_pt, max_pt)
@@ -529,6 +548,8 @@ class SimpleDataCube(object):
 
                     region_props = ub.dict_diff(
                         region_row.to_dict(), {'geometry'})
+                    from kwcoco.util.util_json import ensure_json_serializable
+                    region_props = ensure_json_serializable(region_props)
 
                     image_overlaps = {
                         'date_to_gids': date_to_gids,
@@ -594,6 +615,7 @@ class SimpleDataCube(object):
             >>>                       new_dset=new_dset, visualize=visualize,
             >>>                       max_workers=max_workers)
         """
+        from kwcoco.util.util_json import ensure_json_serializable
         # import watch
         coco_dset = cube.coco_dset
 
@@ -623,6 +645,7 @@ class SimpleDataCube(object):
             'name': video_name,
             'properties': video_props,
         }
+        new_video = ensure_json_serializable(new_video)
 
         new_vidid = new_dset.add_video(**new_video)
 
@@ -670,6 +693,7 @@ class SimpleDataCube(object):
                 frame_index = frame_index + 1
 
         sub_new_gids = []
+        sub_new_aids = []
         Prog = ub.ProgIter
         # import tqdm
         # Prog = tqdm.tqdm
@@ -689,9 +713,11 @@ class SimpleDataCube(object):
             for ann in new_anns:
                 ann.pop('id', None)  # quick hack fix
                 ann['image_id'] = new_gid
-                new_dset.add_annotation(**ann)
+                new_aid = new_dset.add_annotation(**ann)
+                sub_new_aids.append(new_aid)
 
         if True:
+            from kwcoco.util import util_json
             for new_gid in sub_new_gids:
                 # Fix json serializability
                 new_img = new_dset.index.imgs[new_gid]
@@ -704,13 +730,40 @@ class SimpleDataCube(object):
                     if 'wld_to_pxl' in obj:
                         obj['wld_to_pxl'] = kwimage.Affine.coerce(obj['wld_to_pxl']).concise()
                     obj.pop('wgs84_to_wld', None)
-                from kwcoco.util import util_json
                 unserializable = list(util_json.find_json_unserializable(new_img))
                 if unserializable:
-                    raise AssertionError('unserializable = {}'.format(ub.repr2(unserializable, nl=1)))
+                    raise AssertionError('unserializable(gid={}) = {}'.format(new_gid, ub.repr2(unserializable, nl=0)))
 
         kwcoco_extensions.populate_watch_fields(
             new_dset, target_gsd=target_gsd, vidids=[new_vidid], conform=False)
+
+        if True:
+            for new_gid in sub_new_gids:
+                # Fix json serializability
+                new_img = new_dset.index.imgs[new_gid]
+                new_objs = [new_img] + new_img.get('auxiliary', [])
+                unserializable = list(util_json.find_json_unserializable(new_img))
+                if unserializable:
+                    print('new_img = {}'.format(ub.repr2(new_img, nl=1)))
+                    raise AssertionError('unserializable(gid={}) = {}'.format(new_gid, ub.repr2(unserializable, nl=0)))
+
+            for new_aid in sub_new_aids:
+                new_ann = new_dset.index.anns[new_aid]
+                unserializable = list(util_json.find_json_unserializable(new_ann))
+                if unserializable:
+                    print('new_ann = {}'.format(ub.repr2(new_ann, nl=1)))
+                    raise AssertionError('unserializable(aid={}) = {}'.format(new_aid, ub.repr2(unserializable, nl=1)))
+
+            for new_vidid in [new_vidid]:
+                new_video = new_dset.index.videos[new_vidid]
+                unserializable = list(util_json.find_json_unserializable(new_video))
+                if unserializable:
+                    print('new_video = {}'.format(ub.repr2(new_video, nl=1)))
+                    raise AssertionError('unserializable(vidid={}) = {}'.format(new_vidid, ub.repr2(unserializable, nl=1)))
+
+        # unserializable = list(util_json.find_json_unserializable(new_dset.dataset))
+        # if unserializable:
+        #     raise AssertionError('unserializable = {}'.format(ub.repr2(unserializable, nl=1)))
 
         if visualize:
             for new_gid in sub_new_gids:
@@ -718,7 +771,7 @@ class SimpleDataCube(object):
                 new_anns = new_dset.annots(gid=new_gid).objs
                 sub_bundle_dpath_ = pathlib.Path(sub_bundle_dpath)
                 _write_ann_visualizations2(new_dset, new_img, new_anns,
-                                           sub_bundle_dpath_, space='video')
+                                           sub_bundle_dpath_, space='image')
 
         if write_subsets:
             print('Writing data subset')
@@ -964,15 +1017,6 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
 #             aux['geotiff_metadata'] = aux_info
 
 
-def _flip(x, y):
-    return (y, x)
-
-
-def shapely_flip_xy(geom):
-    from shapely import ops
-    return ops.transform(_flip, geom)
-
-
 def shapely_bounding_box(geom):
     import shapely
     return shapely.geometry.box(*geom.bounds)
@@ -1022,8 +1066,10 @@ def _fix_geojson_poly(geo):
 
 def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
                space_box, align_method, is_multi_image, keep):
-    # NOTE: https://github.com/dwtkns/gdal-cheat-sheet
-    latmin, lonmin, latmax, lonmax = space_box.data[0]
+    # # NOTE: https://github.com/dwtkns/gdal-cheat-sheet
+    # latmin, lonmin, latmax, lonmax = space_box.data[0]
+    # Data is from geo-pandas so this should be traditional order
+    lonmin, latmin, lonmax, latmax = space_box.data[0]
 
     if is_multi_image:
         multi_dpath = ub.ensuredir((dst_dpath, name))
@@ -1047,6 +1093,9 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
     compress = 'RAW'
     blocksize = 64
     # NUM_THREADS=2
+
+    # te_srs = spatial reference of query points
+    # t_srs = target spatial reference for output image
 
     # Use the new COG output driver
     prefix_template = (

@@ -581,10 +581,12 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
         if base_wld_crs_info != wld_crs_info:
             import warnings
             warnings.warn(ub.paragraph(
-                '''
+                r'''
                 Video alignment is warping images with different World
                 Coordinate Reference Systems, but still treating them as the
                 same. FIXME
+                base_wld_crs_info={!r:base_wld_crs_info},
+                wld_crs_info={!r:wld_crs_info}
                 '''))
 
 
@@ -656,7 +658,7 @@ def coco_list_asset_infos(coco_dset):
     for gid in coco_dset.images():
         coco_img = coco_dset._coco_image(gid)
         asset_objs = list(coco_img.iter_asset_objs())
-        for asset_idx, obj in enumerate(asset_objs):
+        for _asset_idx, obj in enumerate(asset_objs):
             fname = obj.get('file_name', None)
             if fname is not None:
                 fpath = join(coco_img.dset.bundle_dpath, fname)
@@ -811,8 +813,8 @@ def transfer_geo_metadata(coco_dset, gid):
         >>> from watch.demo.smart_kwcoco_demodata import hack_seed_geometadata_in_dset
         >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
         >>> hack_seed_geometadata_in_dset(coco_dset, force=True, rng=0)
-        >>> transfer_geo_metadata(coco_dset, gid)
         >>> gid = 2
+        >>> transfer_geo_metadata(coco_dset, gid)
         >>> fpath = join(coco_dset.bundle_dpath, coco_dset._coco_image(gid).primary_asset()['file_name'])
         >>> _ = ub.cmd('gdalinfo ' + fpath, verbose=1)
     """
@@ -902,13 +904,7 @@ def transfer_geo_metadata(coco_dset, gid):
             warp_geoimg_from_vid @
             warp_vid_from_img)
 
-        # georef_crs_info['axis_mapping']
-        # osr.OAMS_AUTHORITY_COMPLIANT
-        # aux_wld_crs = osr.SpatialReference()
-        # aux_wld_crs.ImportFromEPSG(4326)  # 4326 is the EPSG id WGS84 of lat/lon crs
-        # aux_wld_crs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-
-        for asset_idx, obj in assets_without_geo_info.items():
+        for _asset_idx, obj in assets_without_geo_info.items():
             fname = obj.get('file_name', None)
             fpath = join(coco_img.dset.bundle_dpath, fname)
 
@@ -1230,7 +1226,7 @@ def coco_channel_stats(coco_dset):
         >>> print(ub.repr2(info, nl=1))
     """
     channel_col = []
-    for gid, img in coco_dset.index.imgs.items():
+    for _gid, img in coco_dset.index.imgs.items():
         channels = []
         for obj in CocoImage(img).iter_asset_objs():
             channels.append(obj.get('channels', 'unknown-chan'))
@@ -1411,10 +1407,12 @@ def covered_image_geo_regions(coco_dset):
     # import watch
     gid_to_poly = {}
     for gid, img in coco_dset.imgs.items():
-        geos_crs_info = img['geos_crs_info']
-        assert geos_crs_info['axis_mapping'] == 'OAMS_TRADITIONAL_GIS_ORDER'
-        assert geos_crs_info['auth'] == ('EPSG', '4326')
-        sh_img_poly = shapely.geometry.shape(img['geos_corners'])
+        geos_corners = img['geos_corners']
+        geos_crs_info = geos_corners.get('properties').get('crs_info', None)
+        if geos_crs_info is not None:
+            assert geos_crs_info['axis_mapping'] == 'OAMS_TRADITIONAL_GIS_ORDER'
+            assert geos_crs_info['auth'] == ('EPSG', '4326')
+        sh_img_poly = shapely.geometry.shape(geos_corners)
         gid_to_poly[gid] = sh_img_poly
 
     # df_input = [
@@ -1435,7 +1433,7 @@ def covered_image_geo_regions(coco_dset):
         coverage_rois = [coverage_rois_]
 
     # geopandas uses traditional crs mappings
-    cov_poly_crs = 'epsg:4326'
+    cov_poly_crs = 'crs84'
     cov_image_gdf = gpd.GeoDataFrame(
         {'geometry': coverage_rois},
         geometry='geometry', crs=cov_poly_crs)
@@ -1457,7 +1455,8 @@ def covered_annot_geo_regions(coco_dset, merge=False):
             sh_poly = shapely.geometry.shape(ann_goes)
             aid_to_poly[aid] = sh_poly
 
-    annot_crs = 'epsg:4326'
+    # annot_crs = 'epsg:4326'
+    annot_crs = 'crs84'
     if merge:
         gid_to_rois = {}
         for gid, aids in coco_dset.index.gid_to_aids.items():
