@@ -148,6 +148,7 @@ def latlon_text(lat, lon, precision=6):
 
 
 def demo_regions_geojson_text():
+    import ubelt as ub
     geojson_text = ub.codeblock(
         '''
         {

@@ -26,7 +26,7 @@ except Exception:
     profile = ub.identity
 
 
-def populate_watch_fields(dset, target_gsd=10.0, overwrite=False, default_gsd=None):
+def populate_watch_fields(dset, target_gsd=10.0, vidids=None, overwrite=False, default_gsd=None, conform=True):
     """
     Aggregate populate function for fields useful to WATCH.
 
@@ -76,13 +76,18 @@ def populate_watch_fields(dset, target_gsd=10.0, overwrite=False, default_gsd=No
         >>> print('dset.index.videos = {}'.format(ub.repr2(dset.index.videos, nl=1)))
     """
     # Load your KW-COCO dataset (conform populates information like image size)
-    dset.conform(pycocotools_info=False)
+    if conform:
+        dset.conform(pycocotools_info=False)
 
-    for gid in ub.ProgIter(dset.index.imgs.keys(), total=len(dset.index.imgs), desc='populate imgs'):
+    if vidids is None:
+        vidids = dset.index.videos.keys()
+    gids = list(ub.flatten(dset.images(vidid=vidid) for vidid in vidids))
+
+    for gid in ub.ProgIter(gids, total=len(gids), desc='populate imgs'):
         coco_populate_geo_img_heuristics(dset, gid, overwrite=overwrite,
                                          default_gsd=default_gsd)
 
-    for vidid in ub.ProgIter(dset.index.videos.keys(), total=len(dset.index.videos), desc='populate videos'):
+    for vidid in ub.ProgIter(vidids, total=len(vidids), desc='populate videos'):
         coco_populate_geo_video_stats(dset, vidid, target_gsd=target_gsd)
 
     # serialize intermediate objects
@@ -297,8 +302,8 @@ def hack_seed_geometadata_in_dset(dset):
     from kwarray.distributions import Uniform
     # stay away from edges and poles
     rng = kwarray.ensure_rng(None)
-    max_lat = 90 - 10
-    max_lon = 180 - 10
+    max_lat = 90 - 40
+    max_lon = 180 - 80
     lat_distri = Uniform(-max_lat, max_lat, rng=rng)
     lon_distri = Uniform(-max_lon, max_lon, rng=rng)
 
@@ -311,12 +316,12 @@ def hack_seed_geometadata_in_dset(dset):
 
         format_info = geotiff_format_info(fpath)
         if not format_info['has_geotransform']:
+            from watch.gis import spatial_reference as watch_crs
+            from osgeo import osr
             lon = lon_distri.sample()
             lat = lat_distri.sample()
-            from watch.gis import spatial_reference as watch_crs
             epsg_int = watch_crs.utm_epsg_from_latlon(lat, lon)
 
-            from osgeo import osr
             wgs84_crs = osr.SpatialReference()
             wgs84_crs.ImportFromEPSG(4326)
             wgs84_crs.SetAxisMappingStrategy(osr.OAMS_AUTHORITY_COMPLIANT)
@@ -326,18 +331,48 @@ def hack_seed_geometadata_in_dset(dset):
             utm_from_wgs84 = osr.CoordinateTransformation(wgs84_crs, utm_crs)
 
             utm_x, utm_y, _ = utm_from_wgs84.TransformPoint(lat, lon, 1.0)
-            print('utm_y = {!r}'.format(utm_y))
-            print('utm_x = {!r}'.format(utm_x))
+
+            """
+            import sympy as sym
+            radius, dist, lat1, lat2, lon1, lon2 = sym.symbols('radius, dist, lat1, lat2, lon1, lon2')
+            haversine_expr = 2 * radius * sym.asin(sym.sqrt(
+                sym.sin((lat2 - lat1) / 2) ** 2 + sym.cos(lat1) * sym.cos(lat2) * sym.sin((lon2 - lon1) / 2) ** 2
+            ))
+            sym.solve(sym.Eq(haversine_expr, dist), lon2)
+            # sym.solve(sym.Eq(haversine_expr, dist), lat2)
+            """
 
             w = rng.randint(10, 300)
             h = np.clip((rng.randn() + 1), 0.9, 1.1) * w  # stay more or less squareish
-            ulx, uly, lrx, lry = kwimage.Boxes([[utm_x, utm_y, w, h]], 'cxywh').to_ltrb().data[0]
 
+            # import haversine
+            # haversine.haversine((ulx, uly), (lrx, uly))
+            # haversine.haversine((ulx, uly), (ulx, lry))
+            # Inverse haversine
+            from numpy import sqrt, cos, sin
+            from numpy import arcsin as asin
+            from numpy import pi
+            ulx, uly, lrx, lry = kwimage.Boxes([[utm_x, utm_y, w, h]], 'cxywh').to_ltrb().data[0]
+            lon1 = ulx
+            lon2 = lrx
+            lat1 = uly
+            lat2 = lry
+            # Make the box squareish
+            radius = 6356.752
+            dist = 2 * radius * asin(sqrt(sin(lat1 / 2 - lat2 / 2) ** 2 + sin(lon1 / 2 - lon2 / 2)**2 * cos(lat1) * cos(lat2)))
+            possible_solutions = [
+                lon1 - 2 * asin(sqrt(2) * sqrt((-cos(dist / radius) + cos(lat1 - lat2)) / (cos(lat1) * cos(lat2))) / 2),
+                lon1 + 2 * asin(sqrt(2) * sqrt((-cos(dist / radius) + cos(lat1 - lat2)) / (cos(lat1) * cos(lat2))) / 2),
+                lon1 + 2 * asin(sqrt(2) * sqrt((-cos(dist / radius) + cos(lat1 - lat2)) / (cos(lat1) * cos(lat2))) / 2) - 2 * pi,
+                lon1 - 2 * asin(sqrt(2) * sqrt(-(cos(dist / radius) - cos(lat1 - lat2)) / (cos(lat1) * cos(lat2))) / 2) - 2 * pi]
+            valid_solutions = [cand for cand in possible_solutions if cand > lon1]
+            lrx = valid_solutions[0]
             command = f'gdal_edit.py -a_ullr {ulx} {uly} {lrx} {lry} -a_srs EPSG:{epsg_int} {fpath}'
             cmdinfo = ub.cmd(command, shell=True)
-            print(cmdinfo['out'])
-            print(cmdinfo['err'])
-            assert cmdinfo['ret'] == 0
+            if cmdinfo['ret'] != 0:
+                print(cmdinfo['out'])
+                print(cmdinfo['err'])
+                assert cmdinfo['ret'] == 0
 
 
 def ensure_transfered_geo_data(dset):
@@ -573,7 +608,7 @@ def coco_populate_geo_video_stats(dset, vidid, target_gsd='max-resolution'):
     video = dset.index.videos[vidid]
     gids = dset.index.vidid_to_gids[vidid]
 
-    check_unique_channel_names(gids=gids)
+    check_unique_channel_names(dset, gids=gids)
 
     frame_infos = {}
 
@@ -745,6 +780,7 @@ def coco_populate_geo_img_heuristics(dset, gid, overwrite=False,
         >>> dset2 = kwcoco.CocoDataset.demo('shapes8')
         >>> coco_populate_geo_img_heuristics(dset2, gid, overwrite=True)
     """
+    from shapely import ops
     bundle_dpath = dset.bundle_dpath
     img = dset.imgs[gid]
     coco_img = dset._coco_image(gid)
@@ -768,7 +804,6 @@ def coco_populate_geo_img_heuristics(dset, gid, overwrite=False,
         info = ub.dict_isect(img, {'name', 'file_name', 'id'})
         warnings.warn(f'img {info} has issues introspecting')
 
-    from shapely import ops
     combo = ops.cascaded_union(geos_corners)
     geos_corners_img = kwimage.Polygon.coerce(combo.convex_hull).to_multi_polygon().to_geojson()
     img['geos_corners'] = geos_corners_img
@@ -784,6 +819,8 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
     """
     obj can be an img or aux
     """
+    import watch
+    import kwcoco
     sensor_coarse = obj.get('sensor_coarse', None)
     num_bands = obj.get('num_bands', None)
     channels = obj.get('channels', None)
@@ -809,7 +846,6 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
 
         if 'warp' in overwrite or warp_to_wld is None or approx_meter_gsd is None:
             try:
-                import watch
                 info = watch.gis.geotiff.geotiff_metadata(fpath)
                 height, width = info['img_shape'][0:2]
 
@@ -871,7 +907,6 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
             except Exception:
                 channels = obj.get('channels', None)
                 if channels is not None:
-                    import kwcoco
                     num_bands = kwcoco.ChannelSpec(channels).numel()
                 else:
                     raise
@@ -1343,7 +1378,7 @@ def single_geotiff_metadata(bundle_dpath, img, serializable=False):
     return geotiff_metadata, aux_metadata
 
 
-def _demo_kwcoco_with_heatmaps(num_videos=1):
+def _demo_kwcoco_with_heatmaps(num_videos=1, num_frames=20):
     """
     Return a dummy kwcoco file with special metdata
 
@@ -1378,7 +1413,7 @@ def _demo_kwcoco_with_heatmaps(num_videos=1):
     image_size = (512, 512)
 
     coco_dset = kwcoco.CocoDataset.demo(
-        'vidshapes', num_videos=num_videos, num_frames=20,
+        'vidshapes', num_videos=num_videos, num_frames=num_frames,
         multispectral=True, image_size=image_size)
 
     # from kwcoco.demo import perterb
@@ -1543,7 +1578,7 @@ def visualize_rois(dset):
     sh_coverage_rois_trad = find_covered_regions(dset)
     # sh_coverage_rois_trad = [flip_xy(p) for p in sh_coverage_rois]
     kw_coverage_rois_trad = list(map(kwimage.Polygon.from_shapely, sh_coverage_rois_trad))
-    print('kw_coverage_rois_trad = {}'.format(ub.repr2(kw_coverage_rois_trad, nl=1)))
+    # print('kw_coverage_rois_trad = {}'.format(ub.repr2(kw_coverage_rois_trad, nl=1)))
     cov_poly_crs = 'epsg:4326'
     cov_poly_gdf = gpd.GeoDataFrame({'cov_rois': sh_coverage_rois_trad},
                                     geometry='cov_rois', crs=cov_poly_crs)

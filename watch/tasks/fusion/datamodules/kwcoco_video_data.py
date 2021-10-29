@@ -130,8 +130,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         diff_inputs=False,
         verbose=1,
         num_workers=4,
-        torch_sharing_strategy='auto',
-        torch_start_method='auto',
+        torch_sharing_strategy='default',
+        torch_start_method='default',
     ):
         """
         Args:

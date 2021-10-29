@@ -147,6 +147,7 @@ class CocoAlignGeotiffConfig(scfg.Config):
             '''
         )),
 
+        'target_gsd': scfg.Value(10, help=ub.paragraph('initial gsd to use')),
     }
 
 
@@ -206,7 +207,7 @@ def main(cmdline=True, **kw):
 
     Example:
         >>> from watch.cli.coco_align_geotiffs import *  # NOQA
-        >>> coco_dset = kwcoco_extensions._demo_kwcoco_with_heatmaps(num_videos=5)
+        >>> coco_dset = kwcoco_extensions._demo_kwcoco_with_heatmaps(num_videos=2, num_frames=2)
         >>> # Create arguments to the script
         >>> dpath = ub.ensure_app_cache_dir('smart_watch/test/coco_align_geotiff2')
         >>> dst = ub.ensuredir((dpath, 'align_bundle2'))
@@ -217,7 +218,7 @@ def main(cmdline=True, **kw):
         >>>     'regions': 'annots',
         >>>     'max_workers': 2,
         >>>     'aux_workers': 2,
-        >>>     'visualize': 0,
+        >>>     'visualize': 1,
         >>> }
         >>> cmdline = False
         >>> new_dset = main(cmdline, **kw)
@@ -256,6 +257,7 @@ def main(cmdline=True, **kw):
     max_workers = config['max_workers']
     aux_workers = config['aux_workers']
     keep = config['keep']
+    target_gsd = config['target_gsd']
 
     dst = pathlib.Path(ub.expandpath(dst))
     # TODO: handle this coercion of directories or bundles in kwcoco itself
@@ -269,11 +271,10 @@ def main(cmdline=True, **kw):
     print('output_bundle_dpath = {!r}'.format(output_bundle_dpath))
     print('dst_fpath = {!r}'.format(dst_fpath))
 
-    if regions == 'annots':
+    if regions in {'annots', 'images'}:
         pass
     elif exists(regions):
         region_df = util_gis.read_geojson(regions)
-        print('region_df = {!r}'.format(region_df))
     else:
         raise KeyError(regions)
 
@@ -287,13 +288,21 @@ def main(cmdline=True, **kw):
     # Construct the "data cube"
     cube = SimpleDataCube(coco_dset)
 
-    if regions == 'annots':
+    if regions == 'images':
+        coverage_rois = kwcoco_extensions.find_covered_regions(coco_dset)
+        region_df = gpd.GeoDataFrame([
+            {'geometry': geos, 'start_date': None, 'end_date': None}
+            for geos in coverage_rois
+        ], geometry='geometry', crs='epsg:4326')
+    elif regions == 'annots':
         # Find the clustered ROI regions
         sh_all_rois, kw_all_rois = find_roi_regions(coco_dset)
         region_df = gpd.GeoDataFrame([
             {'geometry': geos, 'start_date': None, 'end_date': None}
             for geos in sh_all_rois
         ], geometry='geometry', crs='epsg:4326')
+
+    print('region_df = {!r}'.format(region_df))
 
     # Exapnd the ROI by the context factor and convert to a bounding box
     region_df['geometry'] = region_df['geometry'].apply(shapely_bounding_box)
@@ -324,7 +333,7 @@ def main(cmdline=True, **kw):
             image_overlaps, extract_dpath, rpc_align_method=rpc_align_method,
             new_dset=new_dset, visualize=visualize,
             write_subsets=write_subsets, max_workers=max_workers,
-            aux_workers=aux_workers, keep=keep)
+            aux_workers=aux_workers, keep=keep, target_gsd=target_gsd)
 
     new_dset.fpath = dst_fpath
     print('Dumping new_dset.fpath = {!r}'.format(new_dset.fpath))
@@ -514,7 +523,7 @@ class SimpleDataCube(object):
     def extract_overlaps(cube, image_overlaps, extract_dpath,
                          rpc_align_method='orthorectify', new_dset=None,
                          write_subsets=True, visualize=True, max_workers=0,
-                         aux_workers=0, keep='none'):
+                         aux_workers=0, keep='none', target_gsd=10):
         """
         Given a region of interest, extract an aligned temporal sequence
         of data to a specified directory.
@@ -661,14 +670,6 @@ class SimpleDataCube(object):
                 ann['image_id'] = new_gid
                 new_dset.add_annotation(**ann)
 
-            if visualize:
-                new_img = new_dset.imgs[new_gid]
-                new_anns = new_dset.annots(gid=new_gid).objs
-                import pathlib
-                sub_bundle_dpath_ = pathlib.Path(sub_bundle_dpath)
-                _write_ann_visualizations2(new_dset, new_img, new_anns,
-                                           sub_bundle_dpath_, space='image')
-
         if True:
             for new_gid in sub_new_gids:
                 # Fix json serializability
@@ -686,6 +687,17 @@ class SimpleDataCube(object):
                 unserializable = list(util_json.find_json_unserializable(new_img))
                 if unserializable:
                     raise AssertionError('unserializable = {}'.format(ub.repr2(unserializable, nl=1)))
+
+        kwcoco_extensions.populate_watch_fields(
+            new_dset, target_gsd=target_gsd, vidids=[new_vidid], conform=False)
+
+        if visualize:
+            for new_gid in sub_new_gids:
+                new_img = new_dset.imgs[new_gid]
+                new_anns = new_dset.annots(gid=new_gid).objs
+                sub_bundle_dpath_ = pathlib.Path(sub_bundle_dpath)
+                _write_ann_visualizations2(new_dset, new_img, new_anns,
+                                           sub_bundle_dpath_, space='video')
 
         if write_subsets:
             print('Writing data subset')
@@ -946,7 +958,10 @@ def find_roi_regions(coco_dset):
         # latlon = np.array(geo['coordinates'][0])[:, ::-1]
         # kw_poly = kwimage.structs.Polygon(exterior=latlon)
         # Geojson is lon/lat, so swap to wgs84 lat/lon
-        kw_poly = kwimage.structs.MultiPolygon.from_geojson(geo).swap_axes()
+        # kw_poly = kwimage.structs.MultiPolygon.from_geojson(geo).swap_axes()
+
+        # TODO: Figure out what CRS we have here explicitly
+        kw_poly = kwimage.structs.MultiPolygon.from_geojson(geo)
         aid_to_poly[aid] = kw_poly.to_shapely()
 
     gid_to_rois = {}
