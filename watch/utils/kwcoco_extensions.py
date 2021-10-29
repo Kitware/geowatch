@@ -330,7 +330,7 @@ def hack_seed_geometadata_in_dset(dset):
             print('utm_x = {!r}'.format(utm_x))
 
             w = rng.randint(10, 300)
-            h = rng.randint(10, 300)
+            h = np.clip((rng.randn() + 1), 0.9, 1.1) * w  # stay more or less squareish
             ulx, uly, lrx, lry = kwimage.Boxes([[utm_x, utm_y, w, h]], 'cxywh').to_ltrb().data[0]
 
             command = f'gdal_edit.py -a_ullr {ulx} {uly} {lrx} {lry} -a_srs EPSG:{epsg_int} {fpath}'
@@ -1331,6 +1331,8 @@ def single_geotiff_metadata(bundle_dpath, img, serializable=False):
                 candidates.append(aux)
 
         if not candidates:
+            import xdev
+            xdev.embed()
             raise AssertionError(
                 'Assumed at least one auxiliary image has identity '
                 'transform, but this seems to not be the case')
@@ -1363,32 +1365,40 @@ def _demo_kwcoco_with_heatmaps(num_videos=1):
     import pathlib
     import kwarray
     import kwcoco
-    from kwcoco.demo import perterb
+    import datetime
+    from kwarray.distributions import Uniform
+    from kwarray.distributions import DiscreteUniform  # NOQA
+
+    rng = 101893676  # random seed
+    rng = kwarray.ensure_rng(rng)
+
+    # img_w = DiscreteUniform(256, 512, rng=rng)
+    # img_h = DiscreteUniform(256, 512, rng=rng)
+    # image_size = (img_w, img_h)
+    image_size = (512, 512)
 
     coco_dset = kwcoco.CocoDataset.demo(
         'vidshapes', num_videos=num_videos, num_frames=20,
-        multispectral=True, image_size=(128, 128))
+        multispectral=True, image_size=image_size)
 
-    perterb_config = {
-        'box_noise': 0.5,
-        'n_fp': 3,
-        # 'with_probs': 1,
-    }
-    perterb.perterb_coco(coco_dset, **perterb_config)
+    # from kwcoco.demo import perterb
+    # perterb_config = {
+    #     'box_noise': 0.5,
+    #     'n_fp': 3,
+    #     # 'with_probs': 1,
+    # }
+    # perterb.perterb_coco(coco_dset, **perterb_config)
 
     asset_dpath = pathlib.Path(coco_dset.assets_dpath)
     dummy_heatmap_dpath = asset_dpath / 'dummy_heatmaps'
     dummy_heatmap_dpath.mkdir(exist_ok=1, parents=True)
 
-    rng = 1018933676  # random seed
-    rng = kwarray.ensure_rng(rng)
-
     channels = 'notsalient|salient'
     channels = kwcoco.FusedChannelSpec.coerce(channels)
     chan_codes = channels.normalize().as_list()
 
-    aux_width = 64
-    aux_height = 64
+    aux_width = 128
+    aux_height = 128
     dims = (aux_width, aux_height)
     for img in coco_dset.index.imgs.values():
 
@@ -1431,15 +1441,13 @@ def _demo_kwcoco_with_heatmaps(num_videos=1):
 
         auxlist = img['auxiliary']
         auxlist.append({
-            'file_name': heatmap_fpath,
+            'file_name': str(heatmap_fpath),
             'width': aux_width,
             'height': aux_height,
             'channels': channels.spec,
             'warp_aux_to_img': warp_img_from_aux.concise(),
         })
 
-    import datetime
-    from kwarray.distributions import Uniform
     min_time = datetime.datetime(year=1970, month=1, day=1)
     max_time = datetime.datetime(year=2101, month=1, day=1)
     time_distri = Uniform(min_time.timestamp(), max_time.timestamp())

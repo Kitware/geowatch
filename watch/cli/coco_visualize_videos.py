@@ -231,13 +231,20 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
     img_view_dpath = sub_dpath / '_imgs'
     ann_view_dpath = sub_dpath / '_anns'
-    dets = kwimage.Detections.from_coco_annots(anns, dset=coco_dset)
+    # print('anns = {}'.format(ub.repr2(anns, nl=1)))
+
+    try:
+        dets = kwimage.Detections.from_coco_annots(anns, dset=coco_dset)
+    except Exception:
+        # hack
+        anns = [ub.dict_diff(ann, ['keypoints']) for ann in anns]
+        dets = kwimage.Detections.from_coco_annots(anns, dset=coco_dset)
 
     if space == 'video':
         vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
         dets = dets.warp(vid_from_img)
 
-    print('vid_crop_box = {!r}'.format(vid_crop_box))
+    # print('vid_crop_box = {!r}'.format(vid_crop_box))
     if vid_crop_box is not None:
         # Ensure the crop box is in the proper space
         if space == 'image':

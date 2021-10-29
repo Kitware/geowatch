@@ -131,7 +131,7 @@ class CocoAlignGeotiffConfig(scfg.Config):
             '''
         )),
 
-        'visualize': scfg.Value(True, help=ub.paragraph(
+        'visualize': scfg.Value(False, help=ub.paragraph(
             '''
             if True, normalize and draw image / annotation sequences when
             extracting.
@@ -206,7 +206,7 @@ def main(cmdline=True, **kw):
 
     Example:
         >>> from watch.cli.coco_align_geotiffs import *  # NOQA
-        >>> coco_dset = kwcoco_extensions._demo_kwcoco_with_heatmaps(num_videos=3)
+        >>> coco_dset = kwcoco_extensions._demo_kwcoco_with_heatmaps(num_videos=5)
         >>> # Create arguments to the script
         >>> dpath = ub.ensure_app_cache_dir('smart_watch/test/coco_align_geotiff2')
         >>> dst = ub.ensuredir((dpath, 'align_bundle2'))
@@ -215,8 +215,9 @@ def main(cmdline=True, **kw):
         >>>     'src': coco_dset,
         >>>     'dst': dst,
         >>>     'regions': 'annots',
-        >>>     'max_workers': 0,
-        >>>     'aux_workers': 0,
+        >>>     'max_workers': 2,
+        >>>     'aux_workers': 2,
+        >>>     'visualize': 0,
         >>> }
         >>> cmdline = False
         >>> new_dset = main(cmdline, **kw)
@@ -281,7 +282,7 @@ def main(cmdline=True, **kw):
     update_coco_geotiff_metadata(coco_dset, serializable=False,
                                  max_workers=max_workers)
 
-    print('coco_dset.dataset = {}'.format(ub.repr2(coco_dset.dataset, nl=3)))
+    # print('coco_dset.dataset = {}'.format(ub.repr2(coco_dset.dataset, nl=3)))
 
     # Construct the "data cube"
     cube = SimpleDataCube(coco_dset)
@@ -617,8 +618,8 @@ class SimpleDataCube(object):
         img_workers = max_workers
 
         # parallelize over images
-        print('img_workers = {!r}'.format(img_workers))
-        print('aux_workers = {!r}'.format(aux_workers))
+        # print('img_workers = {!r}'.format(img_workers))
+        # print('aux_workers = {!r}'.format(aux_workers))
         pool = ub.JobPool(mode='thread', max_workers=img_workers)
 
         for date in ub.ProgIter(dates, desc='submit extract jobs', verbose=1):
@@ -663,8 +664,10 @@ class SimpleDataCube(object):
             if visualize:
                 new_img = new_dset.imgs[new_gid]
                 new_anns = new_dset.annots(gid=new_gid).objs
+                import pathlib
+                sub_bundle_dpath_ = pathlib.Path(sub_bundle_dpath)
                 _write_ann_visualizations2(new_dset, new_img, new_anns,
-                                           sub_bundle_dpath)
+                                           sub_bundle_dpath_, space='image')
 
         if True:
             for new_gid in sub_new_gids:
@@ -680,7 +683,9 @@ class SimpleDataCube(object):
                         obj['wld_to_pxl'] = kwimage.Affine.coerce(obj['wld_to_pxl']).concise()
                     obj.pop('wgs84_to_wld', None)
                 from kwcoco.util import util_json
-                assert not list(util_json.find_json_unserializable(new_img))
+                unserializable = list(util_json.find_json_unserializable(new_img))
+                if unserializable:
+                    raise AssertionError('unserializable = {}'.format(ub.repr2(unserializable, nl=1)))
 
         if write_subsets:
             print('Writing data subset')
