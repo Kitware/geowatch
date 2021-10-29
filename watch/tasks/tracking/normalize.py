@@ -316,7 +316,6 @@ def apply_tracks(coco_dset, track_fn, overwrite):
                 set(sub_dset.anns).intersection(coco_dset.anns))
             coco_dset.add_annotations(sub_dset.anns.values())
 
-
     # then cleanup leftover untracked annots
     annots = coco_dset.annots()
     coco_dset.remove_annotations(
@@ -509,7 +508,7 @@ def normalize(coco_dset, track_fn, overwrite):
         coco_dset = dedupe_annots(coco_dset)
         coco_dset = add_geos(coco_dset, overwrite)
         coco_dset = remove_small_annots(coco_dset, min_area_px=0, min_geo_precision=None)
-        
+
         return coco_dset
 
     if len(coco_dset.anns) > 0:
