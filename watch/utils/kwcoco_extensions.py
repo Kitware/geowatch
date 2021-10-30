@@ -585,8 +585,8 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
                 Video alignment is warping images with different World
                 Coordinate Reference Systems, but still treating them as the
                 same. FIXME
-                base_wld_crs_info={base_wld_crs_info:!r},
-                wld_crs_info={wld_crs_info:!r}
+                base_wld_crs_info={base_wld_crs_info!r},
+                wld_crs_info={wld_crs_info!r}
                 '''))
 
 

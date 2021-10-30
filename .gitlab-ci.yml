@@ -278,11 +278,17 @@ build_docker_and_upload_strict:
             cd $HOME/watch
             git checkout dev/flow15
 
+            # STRICT VARIANT
             ./dev/make_strict_req.sh
             conda env create -f conda_env_strict.yml --prefix ".cache/conda/envs/strict-watch-env"
             conda activate ".cache/conda/envs/strict-watch-env"
             pip install -e .
             ./run_tests.py --network watch tests scripts
+
+            # LOOSE VARIANT
+            conda env create -f conda_env.yml --prefix ".cache/conda/envs/loose-watch-env"
+            conda activate ".cache/conda/envs/loose-watch-env"
+            .cache/conda/envs/loose-watch-env/bin/python -m pip install -e .
 
 
 
