@@ -98,6 +98,9 @@ setup(
     long_description=README,
     include_package_data=True,
     package_data={
+        'watch.tasks.depth': [
+            'config.json'
+        ],
         'watch.rc': [
             'site-model.schema.json'
             'region-model.schema.json'
