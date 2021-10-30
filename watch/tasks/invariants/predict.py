@@ -18,7 +18,7 @@ from watch.utils import util_parallel
 from watch.utils.lightning_ext import util_globals
 
 
-def main(args):
+def predict(args):
     print('Loading checkpoint')
 
     if True:
@@ -59,7 +59,8 @@ def main(args):
     loader_iter = iter(loader)
 
     # Build a task queue for background write results workers
-    queue = util_parallel.BlockingJobQueue(max_workers=num_workers)
+    # queue = util_parallel.BlockingJobQueue(max_workers=num_workers)
+    queue = util_parallel.BlockingJobQueue(max_workers=0)
 
     if len(args.tasks) == 1 and args.tasks[0].lower() == 'all':
         feature_types = model.TASK_NAMES
@@ -80,15 +81,9 @@ def main(args):
                 image_id, image_info, image = item
 
                 image = image.to(device)
-                # image_id, image_info, image  = dataset.get_img(idx, args.device)
 
                 aux_base = image_info['auxiliary'][0]
                 path, file_name = os.path.split(aux_base['file_name'])
-
-                if args.data_save_folder is not None:
-                    save_path = args.data_save_folder
-                else:
-                    save_path = os.path.join(root, 'uky_invariants', path)
 
                 if args.data_save_folder is not None:
                     save_path = args.data_save_folder
@@ -99,9 +94,6 @@ def main(args):
                     os.makedirs(save_path, exist_ok=True)
 
                 features = model.predict(image)
-
-                if not os.path.exists(save_path):
-                    os.makedirs(save_path, exist_ok=True)
 
                 # Predictions are saved in 'video space', so warp_aux_to_img is the inverse of warp_img_to_vid
                 warp_img_to_vid = kwimage.Affine.coerce(image_info.get('warp_img_to_vid', None))
@@ -146,18 +138,12 @@ def _write_results_fn(features_to_write, save_path, file_name):
         name = file_name[:last_us_idx] + '_invariants_' + key + '.tif'
         fpath = os.path.join(save_path, name)
         kwimage.imwrite(fpath, feat, space=None, backend='gdal',
-                        compress='DEFLATE')
+                        compress='RAW', blocksize=64)
 
 
-if __name__ == '__main__':
-    """
-    CommandLine:
-        python -m watch.tasks.template.predict --help
-
-        python -m watch.tasks.template.predict \
-            --input_kwcoco=path/to/data.kwcoco.json
-    """
+def main():
     parser = ArgumentParser(description='', formatter_class=RawTextHelpFormatter)
+    from scriptconfig.smartcast import smartcast
     parser.add_argument('--device', type=str, default='cuda')
 
     # pytorch lightning checkpoint
@@ -165,8 +151,8 @@ if __name__ == '__main__':
     parser.add_argument('--num_workers', type=str, default=0, help='number of background data loading workers')
 
     # data flags - make sure these match the trained checkpoint
-    parser.add_argument('--sensor', type=str, help='Sensor to generate features from. Currently must choose from S2 or L8. Make sure this matches the sensor used to train the model in ckpt_path.', default='S2')
-    parser.add_argument('--bands', type=list, help='Bands to use in evaluation. Choose from \'all\' or create list of acceptable bands. Make sure this matches the bands used to train the model in ckpt_path.', default=['all'])
+    parser.add_argument('--sensor', type=smartcast, help='Sensor to generate features from. Currently must choose from S2 or L8. Make sure this matches the sensor used to train the model in ckpt_path.', default='S2')
+    parser.add_argument('--bands', type=str, help='pipe (|) separated Bands to use in evaluation. Choose from \'all\' or create list of acceptable bands. Use S2 to use S2 bands, Use L8 to use L8 bands. Make sure this matches the bands used to train the model in ckpt_path. NOTE: this should be saved as metadata in the checkpoint/torch package', default='all')
 
     # output flags
     parser.add_argument('--data_save_folder', help='Path to store generated feature tifs, data will end up within a folder named \'uky_invariants\'. If not specified, data is saved in the folder uky_invariants within the overall data folder.', type=str)
@@ -186,5 +172,16 @@ if __name__ == '__main__':
     elif args.ckpt_path is None:
         args.ckpt_path = 'invariants_logs'
 
-    torch.autograd.set_detect_anomaly(True)
-    main(args)
+    # torch.autograd.set_detect_anomaly(True)
+    predict(args)
+
+
+if __name__ == '__main__':
+    """
+    CommandLine:
+        python -m watch.tasks.template.predict --help
+
+        python -m watch.tasks.template.predict \
+            --input_kwcoco=path/to/data.kwcoco.json
+    """
+    main()

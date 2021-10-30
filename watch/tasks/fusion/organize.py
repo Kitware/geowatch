@@ -34,6 +34,7 @@ def suggest_paths(test_dataset=None, package_fpath=None, pred_root=None):
         >>> suggest_paths(test_dataset, package_fpath)
     """
     import pathlib
+    import json
 
     suggestions = {}
 
@@ -61,7 +62,8 @@ def suggest_paths(test_dataset=None, package_fpath=None, pred_root=None):
 
         suggestions['eval_dpath'] = str(pred_dpath / 'eval')
 
-    import json
+    # TODO: make this return a dict, and handle jsonification
+    # in the CLI main
     return json.dumps(suggestions)
 
 

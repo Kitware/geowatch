@@ -13,25 +13,29 @@ class kwcoco_dataset(torch.utils.data.Dataset):
     L8_channel_names = [
         'coastal', 'lwir11', 'lwir12', 'blue', 'green', 'red', 'nir', 'swir16', 'swir22', 'pan', 'cirrus'
     ]
+    common_channel_names = [
+        'coastal', 'blue', 'green', 'red', 'nir', 'swir16', 'swir22', 'cirrus'
+    ]
 
-    def __init__(self, coco_dset, sensor='S2', bands=['all'], patch_size=64, mode='train'):
+    def __init__(self, coco_dset, sensor='S2', bands='all', patch_size=64, mode='train'):
         # initialize dataset
         self.dset = kwcoco.CocoDataset.coerce(coco_dset)
         self.images = self.dset.images()
 
         # handle if there are multiple sensors
-        if 'sensor_coarse' in self.images._id_to_obj[self.images._ids[0]].keys():
-            # get available sensors
-            avail_sensors = set(self.images.lookup('sensor_coarse'))
-            # invalid sensor
-            if sensor is None or sensor not in avail_sensors:
-                raise ValueError(f'sensor must be specified. Options are {", ".join(avail_sensors)}')
-            # filter images by desired sensor
+        if sensor != 'all':
+            if 'sensor_coarse' in self.images._id_to_obj[self.images._ids[0]].keys():
+                # get available sensors
+                avail_sensors = set(self.images.lookup('sensor_coarse'))
+                # invalid sensor
+                if sensor is None or sensor not in avail_sensors:
+                    raise ValueError(f'sensor must be specified. Options are {", ".join(avail_sensors)}')
+                # filter images by desired sensor
+                else:
+                    self.images = self.images.compress([x == sensor for x in self.images.lookup('sensor_coarse')])
+                    assert(self.images)
             else:
-                self.images = self.images.compress([x == sensor for x in self.images.lookup('sensor_coarse')])
-                assert(self.images)
-        else:
-            avail_sensors = None
+                avail_sensors = None
 
         # get image ids and videos
         self.dset_ids = self.images.gids
@@ -43,18 +47,29 @@ class kwcoco_dataset(torch.utils.data.Dataset):
             all_channels.remove('r|g|b')
         self.channels = []
         # no channels selected
-        if len(bands) < 1:
-            raise ValueError(f'bands must be specified. Options are {", ".join(all_channels)}, or all')
-        # all channels selected
-        elif len(bands) == 1 and bands[0].lower() == 'all':
-            self.channels = all_channels
-        # subset of channels selected
-        else:
-            for band in bands:
-                if band in all_channels:
-                    self.channels.append(band)
-                else:
-                    raise ValueError(f'\'{band}\' not recognized as an available band. Options are {", ".join(all_channels)}, or all')
+
+        if bands == 'all':
+            bands = '|'.join(all_channels)
+        elif bands == 'S2':
+            bands = '|'.join(self.S2_channel_names)
+        elif bands == 'L8':
+            bands = '|'.join(self.L8_channel_names)
+        elif bands == 'common':
+            bands = '|'.join(self.L8_channel_names)
+
+        self.channels = kwcoco.FusedChannelSpec.coerce(bands)
+        # if len(bands) < 1:
+        #     raise ValueError(f'bands must be specified. Options are {", ".join(all_channels)}, or all')
+        # # all channels selected
+        # elif len(bands) == 1 and bands[0].lower() == 'all':
+        #     self.channels = all_channels
+        # # subset of channels selected
+        # else:
+        #     for band in bands:
+        #         if band in all_channels:
+        #             self.channels.append(band)
+        #         else:
+        #             raise ValueError(f'\'{band}\' not recognized as an available band. Options are {", ".join(all_channels)}, or all')
 
         # define augmentations
         self.transforms = A.Compose([
@@ -84,14 +99,16 @@ class kwcoco_dataset(torch.utils.data.Dataset):
         delayed = self.dset.delayed_load(
             image_id, channels=self.channels, space='video')
         image = delayed.finalize()
+        real_mean = np.nanmean(image)
+        real_std = np.nanstd(image)
         image = np.nan_to_num(image)
         image = image.astype(np.float32)
         image = torch.tensor(image)
+        # normalize
+        if real_std != 0.0:
+            image = (image - real_mean) / real_std
         if device:
             image = image.to(device)
-        # normalize
-        if image.std() != 0.0:
-            image = (image - image.mean()) / image.std()
         image = image.permute(2, 0, 1).unsqueeze(0)
         return image_id, image_info, image
 

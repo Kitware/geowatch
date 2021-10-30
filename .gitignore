@@ -70,7 +70,7 @@ target/
 .ipynb_checkpoints
 
 # Pytorch Lightning logs/models
-lightning_logs/
+#lightning_logs/
 
 # pyenv
 .python-version

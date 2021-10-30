@@ -34,8 +34,10 @@ def benchmark_models():
         # 'T': [2, 3, 5, 9],
         # 'T': [2, 5, 9],
         # 'T': [2, 5, 9],
-        'T': [2],
-        'M': [3, 5, 7, 11, 13, 32, 64, 128, 256],
+        # 'T': [2],
+        'T': [2, 9, 17],
+        # 'M': [3, 5, 7, 11, 13, 32, 64, 128, 256],
+        'M': [3, 5, 7, 11, 13, 32, 64],
     }))
 
     encoder_info = transformer.encoder_configs.copy()
@@ -64,20 +66,25 @@ def benchmark_models():
     df = df[df['n_heads'] >= 8]
 
     chosen_arch = [
-        'smt_it_stm_p8', 'smt_it_joint_p8', 'smt_it_hwtm_p8',
-        'smt_it_joint_n12',
+        # 'smt_it_stm_p8',
+        'smt_it_joint_p8',
+        # 'smt_it_hwtm_p8',
+        # 'smt_it_joint_n12',
     ]
     # chosen_arch = df_subset.index.values.tolist()
 
     # all_arch_names = list(transformer.encoder_configs.keys())
-
-    model_grid = list(ub.named_product({
+    model_basis = {
         'arch_name': chosen_arch,
+        'squash_modes': [True, False],
+        'window_size': [8, 4],
         'attention_impl': [
-            # 'exact',
+            'exact',
             'performer'
+            # 'reformer'
         ],
-    }))
+    }
+    model_grid = list(ub.named_product(model_basis))
     import itertools as it
     bench_grid = list(it.product(model_grid, input_grid))
 
@@ -136,6 +143,9 @@ def benchmark_models():
         except RuntimeError:
             errored = True
             pass
+        except AssertionError:
+            errored = True
+            pass
 
         self = None
         images = None
@@ -162,10 +172,45 @@ def benchmark_models():
 
     df_subset = df[df.arch_name.apply(lambda x: 'joint' in x)]
 
-    for k, subdf in df.groupby(['arch_name', 'attention_impl']):
+    import kwplot
+    kwplot.autompl()
+    sns = kwplot.autosns()
+    from matplotlib.colors import LogNorm
+
+    fnum = 0
+
+    grouper = list(model_basis.keys())
+    for k, subdf in df.groupby(grouper):
+        fnum += 1
         print('')
         print('k = {!r}'.format(k))
-        print(subdf.pivot(['S', 'T'], ['M', 'num_params'], ['max_mem_alloc_str']))
+        piv = subdf.pivot(['S', 'T'], ['M', 'num_params'], ['max_mem_alloc_str'])
+        print(piv)
+
+        fig = kwplot.figure(fnum=fnum)
+        fig.set_size_inches(8.69, 4.93)
+        ax = fig.gca()
+
+        piv = piv.droplevel((0, 2), axis=1)
+        d = piv.applymap(lambda x: float(x.split(' ')[0]) if isinstance(x, str) else x)
+
+        arch_cfg = transformer.encoder_configs[k[0]]
+        cfg = ub.dzip(grouper, k)
+        cfg.update(ub.dict_isect(arch_cfg, {'n_layers', 'n_heats', 'embedding_size'}))
+        title = ub.repr2(cfg, compact=1, sort=0)
+
+        sns.heatmap(d,
+                    annot=piv,
+                    ax=ax, fmt='s',
+                    norm=LogNorm(vmin=1, vmax=24),
+                    annot_kws={'size': 8},
+                    cbar_kws={'label': 'memory', 'pad': 0.001})
+        # ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
+        ax.figure.subplots_adjust(bottom=0.2)
+        ax.set_title(title)
+        ax.set_xlabel('Number of Modes (M)')
+        ax.set_ylabel('Space (S) Time (S) dims')
+    # ax.figure
 
     # import timerit
     # ti = timerit.Timerit(3, bestof=1, verbose=2)

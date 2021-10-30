@@ -1,4 +1,5 @@
 import ubelt as ub
+# from collections import deque
 
 
 class BlockingJobQueue(object):
@@ -10,6 +11,9 @@ class BlockingJobQueue(object):
         self.max_workers = max_workers
         self.executor = ub.Executor(mode=mode, max_workers=max_workers)
         self.jobs = []
+
+    def has_room(self):
+        return len(self.jobs) >= max(1, self.max_workers)
 
     def _wait_for_room(self):
         # Wait until the pool has available workers
@@ -31,3 +35,4 @@ class BlockingJobQueue(object):
         self._wait_for_room()
         job = self.executor.submit(func, *args, **kwargs)
         self.jobs.append(job)
+        return job

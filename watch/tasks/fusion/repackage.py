@@ -12,8 +12,15 @@ def repackage(checkpoint_fpath):
         >>> import ubelt as ub
         >>> checkpoint_fpath = ub.expandpath(
         ...     '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/checkpoint_DirectCD_smt_it_joint_p8_raw9common_v5_tune_from_onera_epoch=2-step=2147.ckpt')
+
+    checkpoint_fpath = '/home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=53-step=28457.ckpt'
+
+
     """
     import torch
+    import ubelt as ub
+    import pathlib
+    import yaml
     # For now there is only one model, but in the future we will need
     # some sort of modal switch to package the correct metadata
     from watch.tasks.fusion import methods
@@ -35,12 +42,33 @@ def repackage(checkpoint_fpath):
     method = methods.MultimodalTransformer(**hparams)
     state_dict = checkpoint['state_dict']
     method.load_state_dict(state_dict)
-    import ubelt as ub
-    import pathlib
+
+    train_dpath_hint = None
+    if checkpoint_fpath.endswith('.ckpt'):
+        path_ = pathlib.Path(checkpoint_fpath)
+        if path_.parent.stem == 'checkpoints':
+            train_dpath_hint = path_.parent.parent
+            method.train_dpath_hint = train_dpath_hint
+
     x = ub.augpath(checkpoint_fpath, ext='.pt')
     x = pathlib.Path(x)
-    package_fpath = str(x.parent / x.name.replace('checkpoint_', 'package_'))
+    package_name = x.name
+    # package_name = x.name.replace('checkpoint_', 'package_')
+
+    if train_dpath_hint is not None:
+        candidates = list(train_dpath_hint.glob('fit_config.yaml'))
+        if len(candidates) == 1:
+            meta_fpath = candidates[0]
+            with open(meta_fpath, 'r') as file:
+                data = yaml.safe_load(file)
+            # Hack to put experiment name in package name
+            expt_name = pathlib.Path(data['default_root_dir']).name
+            if expt_name not in package_name:
+                package_name = expt_name + '_' + package_name
+
+    package_fpath = str(x.parent / package_name)
     method.save_package(str(package_fpath))
+
     return package_fpath
 
 
@@ -48,6 +76,18 @@ if __name__ == '__main__':
     """
     CommandLine:
         python ~/code/watch/watch/tasks/fusion/repackage.py /home/joncrall/data/dvc-repos/smart_watch_dvc/training/toothbrush/joncrall/Drop1_Raw_Holdout/runs/ActivityClf_smt_it_joint_p8_raw_v019/lightning_logs/version_0/checkpoints/epoch=9-step=2299.ckpt
+
+        python -m watch.tasks.fusion.repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=53-step=28457.ckpt
+
+        python -m watch.tasks.fusion.repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=98-step=52172.ckpt
+
+        python -m watch.tasks.fusion.repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=21-step=11593.ckpt
+
+        python -m watch.tasks.fusion.repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=31-step=16863.ckpt
+        python -m watch.tasks.fusion.repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=43-step=23187.ckpt
+
+        python -m watch.tasks.fusion.repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_raw_v001/lightning_logs/version_1/checkpoints/epoch=145-step=76941.ckpt
+
 
     """
     import fire

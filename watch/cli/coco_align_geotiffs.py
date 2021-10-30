@@ -985,6 +985,9 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
             # We need to overwrite because we changed the bounds
             # Note: if band info is not popluated above, this
             # might write bad data based on hueristics
+            # TODO:
+            # We need to remove all spatial metadata from the base image that a
+            # crop would invalidate, otherwise we will propogate bad info.
             _populate_canvas_obj(bundle_dpath, dst,
                                  overwrite={'warp'}, with_wgs=True)
 
@@ -1582,6 +1585,9 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
     if obj.get('num_bands', None):
         dst['num_bands'] = obj['num_bands']
 
+    compress = 'RAW'
+    blocksize = 64
+
     prefix_template = (
         '''
         gdalwarp
@@ -1592,10 +1598,13 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
         -te_srs epsg:4326
         -t_srs epsg:4326
         -co TILED=YES
-        -co BLOCKXSIZE=256
-        -co BLOCKYSIZE=256
+        -co BLOCKXSIZE={blocksize}
+        -co BLOCKYSIZE={blocksize}
         -overwrite
         ''')
+
+    if compress != 'RAW':
+        prefix_template = prefix_template + '-co COMPRESS={}'.format(compress)
 
     if align_method == 'pixel_crop':
         align_method = 'pixel_crop'
@@ -1607,7 +1616,8 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
         sl = tuple([slice(pxl_ymin, pxl_ymax), slice(pxl_xmin, pxl_xmax)])
         subim, transform = kwimage.padded_slice(
             imdata, sl, return_info=True)
-        kwimage.imwrite(dst_gpath, subim, space=None, backend='gdal')
+        kwimage.imwrite(dst_gpath, subim, space=None, backend='gdal',
+                        blocksize=blocksize, compress=compress)
         dst['img_shape'] = subim.shape
         dst['transform'] = transform
         # TODO: do this with a gdal command so the tiff metdata is preserved
@@ -1659,6 +1669,7 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
             xmin=lonmin,
             ymax=latmax,
             xmax=lonmax,
+            blocksize=blocksize,
             SRC=src_gpath, DST=dst_gpath,
         )
     else:

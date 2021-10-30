@@ -31,7 +31,6 @@ basic_left_right_split(){
     python -m watch.cli.coco_spatial_crop \
             --src $KWCOCO_BUNDLE_DPATH/data.kwcoco.json --dst $RIGHT_COCO_FPATH \
             --suffix=_right
-    
 
 }
 
@@ -103,6 +102,8 @@ TIME_STEPS=2
 #ARCH=smt_it_stm_s12
 CHANNELS="coastal|blue|green|red|nir|swir16"
 
+# TODO: get experiment name from organize script
+NAME="DirectCD_{arch_name}_raw7common_v5"
 EXPERIMENT_NAME=DirectCD_${ARCH}_raw7common_v5
 DATASET_NAME=Drop1RawLeftRight
 

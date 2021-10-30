@@ -8,6 +8,13 @@ import kwimage
 millnames = ['', ' K', ' M', ' B', ' T']
 
 
+try:
+    import xdev
+    profile = xdev.profile
+except Exception:
+    profile = ub.identity
+
+
 def millify(n):
     n = float(n)
     millidx = max(0, min(len(millnames) - 1,
@@ -48,7 +55,22 @@ def load_model_from_package(package_path):
     arch_name = package_header['arch_name']
     module_name = package_header['module_name']
 
-    return imp.load_pickle(module_name, arch_name)
+    model = imp.load_pickle(module_name, arch_name)
+
+    try:
+        fit_config_text = imp.load_text('package_header', 'fit_config.yaml')
+    except Exception:
+        pass
+    else:
+        import io
+        import yaml
+        file = io.StringIO()
+        file.write(fit_config_text)
+        file.seek(0)
+        fit_config = yaml.safe_load(file)
+        model.fit_config = fit_config
+
+    return model
 
 
 class Lambda(nn.Module):
@@ -82,19 +104,20 @@ class SinePositionalEncoding(nn.Module):
         >>> from watch.tasks.fusion.utils import *  # NOQA
         >>> dest_dim = 3
         >>> dim_to_encode = 2
-        >>> sine_pairs = 4
-        >>> self = SinePositionalEncoding(dest_dim, dim_to_encode, sine_pairs=sine_pairs)
+        >>> size = 8
+        >>> self = SinePositionalEncoding(dest_dim, dim_to_encode, size=size)
         >>> x = torch.rand(3, 5, 7, 11, 13)
         >>> y = self(x)
     """
 
-    def __init__(self, dest_dim, dim_to_encode, sine_pairs=2):
+    def __init__(self, dest_dim, dim_to_encode, size=4):
         super().__init__()
         self.dest_dim = dest_dim
         self.dim_to_encode = dim_to_encode
-        self.sine_pairs = sine_pairs
+        self.size = size
         assert self.dest_dim != self.dim_to_encode
 
+    @profile
     def forward(self, x):
         expanded_shape = list(x.shape)
         expanded_shape[self.dest_dim] = -1
@@ -103,12 +126,14 @@ class SinePositionalEncoding(nn.Module):
         expand_dims[self.dim_to_encode] = slice(0, None)
         expand_dims[self.dest_dim] = slice(0, None)
 
-        def scale(d):
-            return 1 / 10000 ** (d)
-
+        sf = 10000
         parts = []
-        for idx in range(2 * self.sine_pairs):
-            theta = torch.arange(x.shape[self.dim_to_encode]) * scale(idx / (2 * self.sine_pairs))
+        num = x.shape[self.dim_to_encode]
+        base = torch.arange(num, device=x.device)
+        for idx in range(self.size):
+            exponent = (idx / self.size)
+            modulator = (1 / (sf ** exponent))
+            theta = base * modulator
             if idx % 2 == 0:
                 part = torch.sin(theta)
             else:
