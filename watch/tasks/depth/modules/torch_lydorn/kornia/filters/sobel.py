@@ -1,4 +1,4 @@
-import kornia
+import kornia  # NOQA
 
 import torch
 

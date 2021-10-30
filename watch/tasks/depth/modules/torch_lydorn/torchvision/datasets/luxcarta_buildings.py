@@ -7,7 +7,7 @@ import numpy as np
 import rasterio
 import rasterio.rio.insp
 import fiona
-from pyproj import Proj, transform, CRS
+from pyproj import Proj, transform
 
 import torch_lydorn.torch.utils.data
 
@@ -177,8 +177,7 @@ class LuxcartaBuildings(torch_lydorn.torch.utils.data.Dataset):
                     if len(patch_gt_polygons) == 0:
                         # Do not save patches empty of polygons # TODO: keep empty patches?
                         break
-                    patch_image = image[patch_boundingbox[0]:patch_boundingbox[2],
-                                  patch_boundingbox[1]:patch_boundingbox[3], :]
+                    patch_image = image[patch_boundingbox[0]:patch_boundingbox[2], patch_boundingbox[1]:patch_boundingbox[3], :]
                     sample = {
                         "dirname": metadata["dirname"],
                         "image": patch_image,
@@ -334,19 +333,19 @@ def main():
 
     # --- Transforms: --- #
     # --- pre-processing transform (done once then saved on disk):
-    train_pre_transform = data_transforms.get_offline_transform(config,
+    train_pre_transform = data_transforms.get_offline_transform(config,  # NOQA
                                                                 augmentations=config["data_aug_params"]["enable"])
-    eval_pre_transform = data_transforms.get_offline_transform(config, augmentations=False)
+    eval_pre_transform = data_transforms.get_offline_transform(config, augmentations=False)  # NOQA
     # --- Online transform done on the host (CPU):
     train_online_cpu_transform = data_transforms.get_online_cpu_transform(config,
                                                                           augmentations=config["data_aug_params"][
                                                                               "enable"])
-    eval_online_cpu_transform = data_transforms.get_online_cpu_transform(config, augmentations=False)
+    eval_online_cpu_transform = data_transforms.get_online_cpu_transform(config, augmentations=False)  # NOQA
     # --- Online transform performed on the device (GPU):
-    train_online_cuda_transform = data_transforms.get_online_cuda_transform(config,
+    train_online_cuda_transform = data_transforms.get_online_cuda_transform(config,  # NOQA
                                                                             augmentations=config["data_aug_params"][
                                                                                 "enable"])
-    eval_online_cuda_transform = data_transforms.get_online_cuda_transform(config, augmentations=False)
+    eval_online_cuda_transform = data_transforms.get_online_cuda_transform(config, augmentations=False)  # NOQA
     # --- --- #
 
     data_patch_size = config["dataset_params"]["data_patch_size"] if config["data_aug_params"]["enable"] else config["dataset_params"]["input_patch_size"]

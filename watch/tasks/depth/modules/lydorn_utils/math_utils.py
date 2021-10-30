@@ -78,6 +78,7 @@ class RunningDecayingAverage(object):
     """
     Updates average with val*(1 - decay) + avg*decay
     """
+
     def __init__(self, decay, init_val=0):
         assert 0 < decay < 1
         self.decay = decay
@@ -89,14 +90,15 @@ class RunningDecayingAverage(object):
 
     def update(self, val):
         self.val = val
-        self.avg = (1 - self.decay)*val + self.decay*self.avg
+        self.avg = (1 - self.decay) * val + self.decay * self.avg
 
     def get_avg(self):
         return self.avg
 
 
 class DispFieldMapsPatchCreator:
-    def __init__(self, global_shape, patch_res, map_count, modes, gauss_mu_range, gauss_sig_scaling):
+    def __init__(self, global_shape, patch_res, map_count,
+                 modes, gauss_mu_range, gauss_sig_scaling):
         self.global_shape = global_shape
         self.patch_res = patch_res
         self.map_count = map_count
@@ -124,7 +126,7 @@ class DispFieldMapsPatchCreator:
 
         patch_boundingbox = self.patch_boundingboxes[self.current_patch_index]
         patch_disp_maps = self.disp_maps[:, patch_boundingbox[0]:patch_boundingbox[2],
-                          patch_boundingbox[1]:patch_boundingbox[3], :]
+                                         patch_boundingbox[1]:patch_boundingbox[3], :]
         return patch_disp_maps
 
 
@@ -149,7 +151,10 @@ def compute_crossfield_uv(c0c2):
 
 
 def to_homogeneous(array):
-    new_array = np.ones((array.shape[0], array.shape[1] + 1), dtype=array.dtype)
+    new_array = np.ones(
+        (array.shape[0],
+         array.shape[1] + 1),
+        dtype=array.dtype)
     new_array[..., :-1] = array
     return new_array
 
@@ -173,7 +178,8 @@ def crop_center(array, out_shape):
     assert len(out_shape) == 2, "out_shape should be of length 2"
     in_shape = np.array(array.shape[:2])
     start = in_shape // 2 - (out_shape // 2)
-    out_array = array[start[0]:start[0] + out_shape[0], start[1]:start[1] + out_shape[1], ...]
+    out_array = array[start[0]:start[0] + out_shape[0],
+                      start[1]:start[1] + out_shape[1], ...]
     return out_array
 
 
@@ -198,8 +204,13 @@ def multivariate_gaussian(pos, mu, sigma):
     # print((pos - mu).shape)
     # print(sigma_inv.shape)
     try:
-        fac = np.einsum('...k,kl,...l->...', pos - mu, sigma_inv, pos - mu, optimize=True)
-    except:
+        fac = np.einsum(
+            '...k,kl,...l->...',
+            pos - mu,
+            sigma_inv,
+            pos - mu,
+            optimize=True)
+    except BaseException:
         fac = np.einsum('...k,kl,...l->...', pos - mu, sigma_inv, pos - mu)
     # print(fac.shape)
 
@@ -209,7 +220,8 @@ def multivariate_gaussian(pos, mu, sigma):
     return np.exp(-fac / 2) / N
 
 
-def create_multivariate_gaussian_mixture_map(shape, mode_count, mu_range, sig_scaling):
+def create_multivariate_gaussian_mixture_map(
+        shape, mode_count, mu_range, sig_scaling):
     shape = np.array(shape)
     # print("Starting to create multivariate Gaussian mixture")
     # main_start = time.time()
@@ -219,12 +231,29 @@ def create_multivariate_gaussian_mixture_map(shape, mode_count, mu_range, sig_sc
     dtype = np.float32
 
     mu_scale = mu_range[1] - mu_range[0]
-    row = np.linspace(mu_range[0], mu_range[1], mu_scale * shape[0] / downsample_factor, dtype=dtype)
-    col = np.linspace(mu_range[0], mu_range[1], mu_scale * shape[1] / downsample_factor, dtype=dtype)
+    row = np.linspace(
+        mu_range[0],
+        mu_range[1],
+        mu_scale *
+        shape[0] /
+        downsample_factor,
+        dtype=dtype)
+    col = np.linspace(
+        mu_range[0],
+        mu_range[1],
+        mu_scale *
+        shape[1] /
+        downsample_factor,
+        dtype=dtype)
     rr, cc = np.meshgrid(row, col, indexing='ij')
     grid = np.stack([rr, cc], axis=2)
 
-    mus = np.random.uniform(mu_range[0], mu_range[1], (mode_count, dim_count, 2)).astype(dtype)
+    mus = np.random.uniform(
+        mu_range[0],
+        mu_range[1],
+        (mode_count,
+         dim_count,
+         2)).astype(dtype)
     # gams = np.random.rand(mode_count, dim_count, 2, 2).astype(dtype)
     signs = np.random.choice([1, -1], size=(mode_count, dim_count))
 
@@ -255,10 +284,12 @@ def create_multivariate_gaussian_mixture_map(shape, mode_count, mu_range, sig_sc
     gaussian_mixture = np.zeros_like(grid)
     for mode_index in range(mode_count):
         for dim in range(dim_count):
-            sig = (sig_scaling[1] - sig_scaling[0]) * sklearn.datasets.make_spd_matrix(2) + sig_scaling[0]
+            sig = (sig_scaling[1] - sig_scaling[0]) * \
+                sklearn.datasets.make_spd_matrix(2) + sig_scaling[0]
             # sig = (sig_scaling[1] - sig_scaling[0]) * np.dot(gams[mode_index, dim], np.transpose(gams[mode_index, dim])) + sig_scaling[0]
             sig = sig.astype(dtype)
-            multivariate_gaussian_grid = signs[mode_index, dim] * multivariate_gaussian(grid, mus[mode_index, dim], sig)
+            multivariate_gaussian_grid = signs[mode_index, dim] * \
+                multivariate_gaussian(grid, mus[mode_index, dim], sig)
             gaussian_mixture[:, :, dim] += multivariate_gaussian_grid
 
     # end = time.time()
@@ -272,7 +303,9 @@ def create_multivariate_gaussian_mixture_map(shape, mode_count, mu_range, sig_sc
     gaussian_mixture[:, :, 1] = stretch(gaussian_mixture[:, :, 1])
 
     # Crop
-    gaussian_mixture = crop_center(gaussian_mixture, shape // downsample_factor)
+    gaussian_mixture = crop_center(
+        gaussian_mixture,
+        shape // downsample_factor)
 
     # plot_field_map(gaussian_mixture)
 
@@ -280,13 +313,14 @@ def create_multivariate_gaussian_mixture_map(shape, mode_count, mu_range, sig_sc
     # gaussian_mixture = skimage.transform.rescale(gaussian_mixture, downsample_factor)
     gaussian_mixture = skimage.transform.resize(gaussian_mixture, shape)
 
-    main_end = time.time()
+    main_end = time.time()  # NOQA
     # print("Finished multivariate Gaussian mixture in {}s".format(main_end - main_start))
 
     return gaussian_mixture
 
 
-def create_displacement_field_maps(shape, map_count, modes, gauss_mu_range, gauss_sig_scaling, seed=None):
+def create_displacement_field_maps(
+        shape, map_count, modes, gauss_mu_range, gauss_sig_scaling, seed=None):
     if seed is not None:
         np.random.seed(seed)
     disp_field_maps_list = []
@@ -349,7 +383,6 @@ if CV2:
         h_4pt = convert_h_mat_to_4pt(h_mat)
         return h_4pt
 
-
     def convert_h_mat_to_4pt(h_mat):
         src_4pt = np.array([[
             [-1, -1],
@@ -359,7 +392,6 @@ if CV2:
         ]], dtype=np.float64)
         h_4pt = cv2.perspectiveTransform(src_4pt, h_mat)
         return h_4pt
-
 
     def convert_h_4pt_to_mat(h_4pt):
         src_4pt = np.array([
@@ -372,7 +404,6 @@ if CV2:
         h_mat = cv2.getPerspectiveTransform(src_4pt, h_4pt)
         return h_mat
 
-
     def field_map_to_image(field_map):
         mag, ang = cv2.cartToPolar(field_map[..., 0], field_map[..., 1])
         hsv = np.zeros((field_map.shape[0], field_map.shape[1], 3))
@@ -384,19 +415,18 @@ if CV2:
         return rgb
 else:
     def find_homography_4pt(src, dst):
-        print("cv2 is not available, the find_homography_4pt(src, dst) function cannot work!")
-
+        print(
+            "cv2 is not available, the find_homography_4pt(src, dst) function cannot work!")
 
     def convert_h_mat_to_4pt(h_mat):
         print("cv2 is not available, the convert_h_mat_to_4pt(h_mat) function cannot work!")
 
-
     def convert_h_4pt_to_mat(h_4pt):
         print("cv2 is not available, the convert_h_4pt_to_mat(h_4pt) function cannot work!")
 
-
     def field_map_to_image(field_map):
-        print("cv2 is not available, the field_map_to_image(field_map) function cannot work!")
+        print(
+            "cv2 is not available, the field_map_to_image(field_map) function cannot work!")
 
 
 def circular_diff(a1, a2, range_max):
@@ -440,7 +470,9 @@ def region_growing_1d(array, max_range, max_skew):
         skew = scipy.stats.skew(region)
         return region[-1] - region[0] < max_range and abs(skew) < max_skew
 
-    assert len(array.shape) == 1, "array should be 1d, not {}".format(array.shape)
+    assert len(
+        array.shape) == 1, "array should be 1d, not {}".format(
+        array.shape)
     p = np.argsort(array)
     sorted_array = array[p]
 
@@ -465,7 +497,8 @@ def region_growing_1d(array, max_range, max_skew):
 
 
 def bilinear_interpolate(im, pos):
-    # From https://gist.github.com/peteflorence/a1da2c759ca1ac2b74af9a83f69ce20e
+    # From
+    # https://gist.github.com/peteflorence/a1da2c759ca1ac2b74af9a83f69ce20e
     x = pos[..., 1]
     y = pos[..., 0]
 
@@ -508,7 +541,8 @@ def main():
     # d = circular_diff(a1, a2, range_max)
     # print(d)
 
-    array = np.concatenate([np.arange(1, 1.01, 0.001), np.arange(0, np.pi / 2, np.pi / 100)])
+    array = np.concatenate(
+        [np.arange(1, 1.01, 0.001), np.arange(0, np.pi / 2, np.pi / 100)])
     print(array)
     labels = region_growing_1d(array, max_range=np.pi / 10, max_skew=1)
     print(labels)

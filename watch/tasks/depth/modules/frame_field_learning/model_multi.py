@@ -1,11 +1,10 @@
 import torch
-import torch.nn.functional as F
+# import torch.nn.functional as F
 from segmentation_models_pytorch.base.modules import Flatten, Activation
 
 from torchvision.models.segmentation._utils import _SimpleSegmentationModel
 from frame_field_learning import tta_utils
 
-import pdb
 
 def get_out_channels(module):
     if hasattr(module, "out_channels"):
@@ -17,13 +16,13 @@ def get_out_channels(module):
         last_child = children[-i]
         out_channels = get_out_channels(last_child)
         i += 1
-    # If we get out of the loop but out_channels is None, 
+    # If we get out of the loop but out_channels is None,
     # then the prev child of the parent module will be checked, etc.
     return out_channels
 
+
 # Need to change this later
 def get_encoder(module, x):
-
     x1 = module.conv1(x)
     x2 = module.conv2(x1)
     x3 = module.conv3(x2)
@@ -31,6 +30,7 @@ def get_encoder(module, x):
     x5 = module.conv5(x4)
 
     return [x, x1, x2, x3, x4, x5]
+
 
 def get_encoder_channels(module):
     c1 = get_out_channels(module.conv1)
@@ -41,12 +41,13 @@ def get_encoder_channels(module):
 
     return [3, c1, c2, c3, c4, c5]
 
+
 class Multi_FrameFieldModel(torch.nn.Module):
     def __init__(self, config: dict, backbone, train_transform=None, eval_transform=None):
         """
 
         :param config:
-        :param backbone: A _SimpleSegmentationModel network, 
+        :param backbone: A _SimpleSegmentationModel network,
                          its output features will be used to compute seg and framefield.
         :param train_transform: transform applied to the inputs when self.training is True
         :param eval_transform: transform applied to the inputs when self.training is False
@@ -120,19 +121,19 @@ class Multi_FrameFieldModel(torch.nn.Module):
 
             self.depth_module = torch.nn.Sequential(
 
-                    torch.nn.Conv2d(backbone_out_features, backbone_out_features*2, 3, padding=1, bias=False),
+                    torch.nn.Conv2d(backbone_out_features, backbone_out_features * 2, 3, padding=1, bias=False),
                     torch.nn.ReLU(),
 
-                    torch.nn.Conv2d(backbone_out_features*2, backbone_out_features*2, 3, padding=1, bias=False),
-                    torch.nn.BatchNorm2d(backbone_out_features*2, momentum=bn_momentum),
+                    torch.nn.Conv2d(backbone_out_features * 2, backbone_out_features * 2, 3, padding=1, bias=False),
+                    torch.nn.BatchNorm2d(backbone_out_features * 2, momentum=bn_momentum),
                     torch.nn.ReLU(),
 
-                    torch.nn.Conv2d(backbone_out_features*2, backbone_out_features*2, 3, padding=1, bias=False),
-                    torch.nn.BatchNorm2d(backbone_out_features*2, momentum=bn_momentum),
+                    torch.nn.Conv2d(backbone_out_features * 2, backbone_out_features * 2, 3, padding=1, bias=False),
+                    torch.nn.BatchNorm2d(backbone_out_features * 2, momentum=bn_momentum),
                     torch.nn.ReLU(),
 
                     # This is original
-                    torch.nn.Conv2d(backbone_out_features*2, depth_channels, 1, bias=True),
+                    torch.nn.Conv2d(backbone_out_features * 2, depth_channels, 1, bias=True),
                     # torch.nn.ReLU(),
 
                     # torch.nn.Conv2d(backbone_out_features*2, backbone_out_features*2, 3, padding=1, bias=False),
@@ -144,41 +145,40 @@ class Multi_FrameFieldModel(torch.nn.Module):
                     # torch.nn.ReLU(),
             )
 
-            
-            shadow_channels = 1
+            # shadow_channels = 1
 
             self.shadow_module = torch.nn.Sequential(
-                    torch.nn.Conv2d(backbone_out_features, backbone_out_features*2, 3, padding=1, bias=True),
+                    torch.nn.Conv2d(backbone_out_features, backbone_out_features * 2, 3, padding=1, bias=True),
                     torch.nn.ReLU(),
 
-                    torch.nn.Conv2d(backbone_out_features*2, backbone_out_features*2, 3, padding=1, bias=False),
-                    torch.nn.BatchNorm2d(backbone_out_features*2, momentum=bn_momentum),
+                    torch.nn.Conv2d(backbone_out_features * 2, backbone_out_features * 2, 3, padding=1, bias=False),
+                    torch.nn.BatchNorm2d(backbone_out_features * 2, momentum=bn_momentum),
                     torch.nn.ReLU(),
 
-                    torch.nn.Conv2d(backbone_out_features*2, backbone_out_features*2, 3, padding=1, bias=False),
-                    torch.nn.BatchNorm2d(backbone_out_features*2, momentum=bn_momentum),
+                    torch.nn.Conv2d(backbone_out_features * 2, backbone_out_features * 2, 3, padding=1, bias=False),
+                    torch.nn.BatchNorm2d(backbone_out_features * 2, momentum=bn_momentum),
                     torch.nn.ReLU(),
 
-                    torch.nn.Conv2d(backbone_out_features*2, depth_channels, 1, bias=True),
+                    torch.nn.Conv2d(backbone_out_features * 2, depth_channels, 1, bias=True),
                     torch.nn.Sigmoid(),
                     # torch.nn.Tanh(),
             )
 
-            facade_channels = 1
+            # facade_channels = 1
 
             self.facade_module = torch.nn.Sequential(
-                    torch.nn.Conv2d(backbone_out_features, backbone_out_features*2, 3, padding=1, bias=True),
+                    torch.nn.Conv2d(backbone_out_features, backbone_out_features * 2, 3, padding=1, bias=True),
                     torch.nn.ReLU(),
 
-                    torch.nn.Conv2d(backbone_out_features*2, backbone_out_features*2, 3, padding=1, bias=False),
-                    torch.nn.BatchNorm2d(backbone_out_features*2, momentum=bn_momentum),
+                    torch.nn.Conv2d(backbone_out_features * 2, backbone_out_features * 2, 3, padding=1, bias=False),
+                    torch.nn.BatchNorm2d(backbone_out_features * 2, momentum=bn_momentum),
                     torch.nn.ReLU(),
 
-                    torch.nn.Conv2d(backbone_out_features*2, backbone_out_features*2, 3, padding=1, bias=False),
-                    torch.nn.BatchNorm2d(backbone_out_features*2, momentum=bn_momentum),
+                    torch.nn.Conv2d(backbone_out_features * 2, backbone_out_features * 2, 3, padding=1, bias=False),
+                    torch.nn.BatchNorm2d(backbone_out_features * 2, momentum=bn_momentum),
                     torch.nn.ReLU(),
 
-                    torch.nn.Conv2d(backbone_out_features*2, depth_channels, 1, bias=True),
+                    torch.nn.Conv2d(backbone_out_features * 2, depth_channels, 1, bias=True),
                     torch.nn.Sigmoid(),
                     # torch.nn.Tanh(),
             )
@@ -211,7 +211,6 @@ class Multi_FrameFieldModel(torch.nn.Module):
             # --- Output a cross-field of the image --- #
             crossfield = 2 * self.crossfield_module(backbone_features)  # Outputs c_0, c_2 values in [-2, 2]
             outputs["crossfield"] = crossfield
-
 
         # Add the entry in the config file later
         if True:
@@ -313,4 +312,3 @@ class ScaleHead(torch.nn.Module):
             )
         )
         return scale
-

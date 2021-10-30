@@ -1,10 +1,7 @@
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw
 import numpy as np
 import shapely.geometry
 import shapely.affinity
-from scipy.ndimage.morphology import distance_transform_edt
-
-from functools import partial
 
 from . import functional
 
@@ -34,7 +31,7 @@ def init_angle_field(polygons, shape, line_width=1):
         assert type(polygons[0]) == shapely.geometry.Polygon, "polygon should be a shapely.geometry.Polygon"
 
     im = Image.new("L", (shape[1], shape[0]))
-    im_px_access = im.load()
+    im_px_access = im.load()  # NOQA
     draw = ImageDraw.Draw(im)
 
     for polygon in polygons:

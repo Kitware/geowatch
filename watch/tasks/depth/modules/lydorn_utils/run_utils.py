@@ -699,7 +699,7 @@ def _merge_dictionaries(dict1, dict2):
     return dict2
 
 
-def load_defaults_in_config(config: dict, filepath_key: str="defaults_filepath", depth: int=0) -> dict:
+def load_defaults_in_config(config: dict, filepath_key: str = "defaults_filepath", depth: int = 0) -> dict:
     """
     Searches in the config dict for keys equal to "defaults_filepath".
     When one is found, read the json at the defaults_filepath and add the defaults for the current params.
@@ -743,10 +743,10 @@ def load_defaults_in_config(config: dict, filepath_key: str="defaults_filepath",
     if filepath_key in config and isinstance(config[filepath_key], str):
         defaults = python_utils.load_json(config[filepath_key])
         if defaults:
-            tabs = "\t"*depth
+            tabs = "\t" * depth
             print_utils.print_info(f"{tabs}INFO: Loading defaults from {config[filepath_key]}")
             # Recursively process defaults
-            defaults = load_defaults_in_config(defaults, filepath_key=filepath_key, depth=depth+1)
+            defaults = load_defaults_in_config(defaults, filepath_key=filepath_key, depth=depth + 1)
             # Copy defaults in config if the key is not already there
             config = _merge_dictionaries(defaults, config)
             # for default_name, default_value in defaults.items():
@@ -761,6 +761,6 @@ def load_defaults_in_config(config: dict, filepath_key: str="defaults_filepath",
     # Check items of all other keys
     for key, item in config.items():
         if type(item) == dict:
-            config[key] = load_defaults_in_config(item, filepath_key=filepath_key, depth=depth+1)
+            config[key] = load_defaults_in_config(item, filepath_key=filepath_key, depth=depth + 1)
 
     return config

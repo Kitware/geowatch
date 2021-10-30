@@ -1,6 +1,6 @@
 # import gdal here first otherwise the import fails due to conflict with rasterio
 # TODO fix
-from osgeo import gdal
+from osgeo import gdal  # NOQA
 import json
 import logging
 import warnings
@@ -26,8 +26,6 @@ from ..landcover.predict import get_output_file
 from ..landcover.utils import setup_logging
 
 log = logging.getLogger(__name__)
-
-CONFIG_FILE = Path(__file__).parent.joinpath('config.json')
 
 
 @click.command()
@@ -155,8 +153,9 @@ def _write_output(img_info, image, output_dir):
 
 
 def _load_config():
-    with open(CONFIG_FILE, 'r') as fp:
-        return json.load(fp)
+    from importlib import resources as importlib_resources
+    fp = importlib_resources.open_text('watch.tasks.depth', 'config.json')
+    return json.load(fp)
 
 
 if __name__ == '__main__':

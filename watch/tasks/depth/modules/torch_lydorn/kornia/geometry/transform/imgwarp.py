@@ -6,7 +6,7 @@ __all__ = [
 ]
 
 
-def get_affine_grid(tensor: torch.Tensor, angle: torch.Tensor, offset: torch.Tensor, scale: torch.Tensor=None) -> torch.Tensor:
+def get_affine_grid(tensor: torch.Tensor, angle: torch.Tensor, offset: torch.Tensor, scale: torch.Tensor = None) -> torch.Tensor:
     r"""Get rotation sample grid to rotate the image anti-clockwise.
     """
     assert len(tensor.shape) == 4, "tensor should have shape (N, C, H, W)"
