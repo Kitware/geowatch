@@ -270,6 +270,7 @@ build_docker_and_upload_strict:
             docker login gitlab.kitware.com:4567
 
             docker pull registry.smartgitlab.com/kitware/watch/miniconda3
+            docker run -v -it registry.smartgitlab.com/kitware/watch/miniconda3 bash
             docker run -v $PWD:/io:ro -it registry.smartgitlab.com/kitware/watch/miniconda3 bash
             cd $HOME
             git clone /io ./watch
