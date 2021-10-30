@@ -55,7 +55,7 @@ def grab_sentinel2_product(index=0, overwrite=False):
     except ImportError:
         from fels import get_sentinel2_image
 
-    if not was_failed_download:
+    if was_failed_download:
         # This is really slow even if the data is cached with default fels
         # This PR: https://github.com/vascobnunes/fetchLandsatSentinelFromGoogleCloud/pull/58
         # can help speed it up.
