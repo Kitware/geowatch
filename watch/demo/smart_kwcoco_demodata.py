@@ -53,7 +53,15 @@ def demo_smart_raw_kwcoco():
         rng = kwarray.ensure_rng(542370, api='python')
 
         # Add only the TCI for the first S2 image
-        cands = [fname for fname in s2_demo_paths1.images if fname.name.endswith('TCI.jp2')]
+        cands = [fname for fname in s2_demo_paths1.images
+                 if fname.name.endswith('TCI.jp2')]
+        if len(cands) != 1:
+            raise AssertionError(ub.paragraph(
+                '''
+                Should only have 1 candidate. Got {len(cands)}.
+                cands={cands}.
+                '''))
+
         assert len(cands) == 1
         fname = cands[0]
         fpath = str(s2_demo_paths1.path / fname)

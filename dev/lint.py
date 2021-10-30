@@ -118,6 +118,7 @@ def custom_lint(dpath : str = '.', mode : str = 'lint', index=None, interact=Non
 
         'C408': ' Unncessary dict call, rewrite as literal',
         'C409': ' Unncessary tuple call, rewrite as literal',
+        'C405': ' Unnecessary list literal - rewrite as a set literal.',
 
         'N804': ' first argument of classmethod should be named cls',
         'B006': 'Do not use mutable data structures for argument defaults.  They are created during function definition time. All calls to the function reuse this one instance of that data structure, persisting changes between them.',
@@ -128,6 +129,7 @@ def custom_lint(dpath : str = '.', mode : str = 'lint', index=None, interact=Non
         'C414': 'Unnecessary list call within sorted().',
         'C416': 'Unnecessary list comprehension - rewrite using list().',
         'EXE001': 'Shebang is present but the file is not executable.',
+        'EXE002': 'The file is executable but no shebang is present.',
         'N807': 'function name should not start and end with __',
         'N812': 'lowercase imported as non lowercase',
         'N814': 'camelcase imported as constant',
