@@ -59,6 +59,27 @@ def parse_conda_reqs(fpath, blocklist=set()):
 #     pass
 
 
+def make_upgrade_strict_line():
+    """
+    import sys, ubelt
+    sys.path.append(ubelt.expandpath('~/code/watch/dev'))
+    from make_reqs_from_conda import *  # NOQA
+    """
+    defined_req_lines = parse_conda_reqs('conda_env.yml')
+
+    def normalize_name(name):
+        return name.lower().replace('-', '_')
+
+    name_to_conda_line = {
+        normalize_name(line.split(' ')[0].split('>')[0]): line
+        for line in defined_req_lines
+    }
+    declared_deps = list(name_to_conda_line.keys())
+    deps = list(ub.oset(declared_deps) - {'gdal', 'opencv-python-headless'})
+
+    print('pip install ' + ' '.join(deps) + ' -U')
+
+
 def trace_all_deps(defined_req_lines):
     """
     TODO: make this work.

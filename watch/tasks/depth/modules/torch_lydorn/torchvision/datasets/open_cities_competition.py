@@ -228,7 +228,7 @@ class BuildingDataset(Dataset):
 
         for i in (0, 1):
             res = sorted(local_poly, key=lambda x: x[i])
-            box += list((res[0][i], res[-1][i]))
+            box += [res[0][i], res[-1][i]]
 
         if padded:
             toplx, toply = (box[0] + box[1]) / 2 - self.crop_size / 2, (box[2] + box[3]) / 2 - self.crop_size / 2

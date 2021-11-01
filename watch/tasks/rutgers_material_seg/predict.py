@@ -86,7 +86,7 @@ class Evaluator(object):
         recon = stitcher.finalize()
         self.stitcher_dict.pop(gid)
 
-        save_path = self.output_feat_dpath / f'{gid}.tiff'
+        save_path = self.output_feat_dpath / f'{gid}.tif'
         save_path = os.fspath(save_path)
         kwimage.imwrite(save_path, recon, backend='gdal', space=None,
                         **self.imwrite_kw)

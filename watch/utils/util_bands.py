@@ -1,4 +1,4 @@
-'''
+"""
 Collected information about satellite bands from https://github.com/stac-extensions/eo/
 
 This should be mostly independent of the data source used.
@@ -69,7 +69,7 @@ References:
     https://gisgeography.com/sentinel-2-bands-combinations/
     https://earth.esa.int/eogateway/missions/worldview-3
     https://www.usgs.gov/faqs/what-are-band-designations-landsat-satellites?qt-news_science_products=0#qt-news_science_products
-'''
+"""
 
 
 def dicts_contain(d_list, dsub_list):
@@ -336,22 +336,22 @@ References:
     https://github.com/stac-extensions/eo/blob/main/json-schema/schema.json#L151
 '''
 EO_COMMONNAMES = {
-    "coastal": [],
-    "blue": [],
-    "green": [],
-    "red": [],
-    "rededge": ['red-edge'],
-    "yellow": [],
-    "pan": ['panchromatic'],
-    "nir": ['near-ir1', 'near-ir2'],
-    "nir08": [],
-    "nir09": [],
-    "cirrus": [],
-    "swir16": [],
-    "swir22": [],
-    "lwir": [],
-    "lwir11": [],
-    "lwir12": []
+    'coastal': [],
+    'blue': [],
+    'green': [],
+    'red': [],
+    'rededge': ['red-edge'],
+    'yellow': [],
+    'pan': ['panchromatic'],
+    'nir': ['near-ir1', 'near-ir2'],
+    'nir08': [],
+    'nir09': [],
+    'cirrus': [],
+    'swir16': [],
+    'swir22': [],
+    'lwir': [],
+    'lwir11': [],
+    'lwir12': []
 }
 
 
@@ -365,16 +365,16 @@ Example:
     >>> assert GROUND.issubset(set(EO_COMMONNAMES.keys()))
 '''
 GROUND = {
-    "coastal",
-    "blue",
-    "green",
-    "red",
-    "rededge",
-    "yellow",
-    "pan",
-    "nir",
-    "nir08",
-    "nir09",
+    'coastal',
+    'blue',
+    'green',
+    'red',
+    'rededge',
+    'yellow',
+    'pan',
+    'nir',
+    'nir08',
+    'nir09',
 }
 
 '''
@@ -455,14 +455,14 @@ def specialized_index_bands(bands=None, coco_img=None, symbolic=False):
     if bands is not None:
         allbands = np.stack(list(ub.take(bands, ['blue', 'green', 'red', 'swir16', 'swir22', 'nir'])))
         allbands = kwimage.normalize_intensity(allbands)
-        ρBlue, ρGreen, ρRed, ρSWIR1, ρSWIR2, ρNIR = allbands
+        Blue, Green, Red, SWIR1, SWIR2, NIR = allbands
 
     # Raw bands
     elif symbolic:
         # Sympy can help explore different forms of these equations.
         import sympy as sym
-        ρBlue, ρGreen, ρRed, ρSWIR1, ρSWIR2, ρNIR = sym.symbols(
-            'ρBlue, ρGreen, ρRed, ρSWIR1, ρSWIR2, ρNIR')
+        Blue, Green, Red, SWIR1, SWIR2, NIR = sym.symbols(
+            'Blue, Green, Red, SWIR1, SWIR2, NIR')
     else:
         delayed = coco_img.delay()
         rgbir123 = delayed.take_channels('blue|green|red|swir16|swir22|nir')
@@ -470,19 +470,19 @@ def specialized_index_bands(bands=None, coco_img=None, symbolic=False):
 
         chw = kwimage.normalize_intensity(chw)
 
-        ρBlue = chw[0]    # NOQA
-        ρGreen = chw[1]  # NOQA
-        ρRed = chw[2]      # NOQA
-        ρSWIR1 = chw[3]  # NOQA
-        ρSWIR2 = chw[4]  # NOQA
-        ρNIR = chw[5]      # NOQA
+        Blue = chw[0]    # NOQA
+        Green = chw[1]  # NOQA
+        Red = chw[2]      # NOQA
+        SWIR1 = chw[3]  # NOQA
+        SWIR2 = chw[4]  # NOQA
+        NIR = chw[5]      # NOQA
 
-    Blue = ρBlue     # NOQA
-    Grn = ρGreen   # NOQA
-    Red = ρRed      # NOQA
-    SWIR2 = ρSWIR1   # NOQA
-    SWIR1 = ρSWIR2  # NOQA
-    NIR = ρNIR     # NOQA
+    Blue = Blue     # NOQA
+    Grn = Green   # NOQA
+    Red = Red      # NOQA
+    SWIR2 = SWIR1   # NOQA
+    SWIR1 = SWIR2  # NOQA
+    NIR = NIR     # NOQA
 
     def hist_cut(band, fill_value=0, k=1, minmax='std'):
         if minmax == 'std':
@@ -607,34 +607,34 @@ def specialized_index_bands(bands=None, coco_img=None, symbolic=False):
     ASI = HistCut(ASI, fillV, 6, [0, 1])
 
     # # The Artificial surface Factor (AF)
-    # AF = (((ρSWIR1 + ρNIR) / 2) - ρBlue) / (((ρSWIR1 + ρNIR) / 2) + ρBlue) + 1
+    # AF = (((SWIR1 + NIR) / 2) - Blue) / (((SWIR1 + NIR) / 2) + Blue) + 1
 
     # # %%%%% Vegetation Suppressing Factor (VSF).
     # # % EVI is better in general cases, but its adjustment for mountain shadows (with vegetation) is not as good as NDVI.
     # # EVI = G * ((NIR - Red) / (NIR + C1 * Red - C2 * Blue + L))
     # # https://en.wikipedia.org/wiki/Enhanced_vegetation_index
     # # Enhanced vegetation index
-    # EVI = G * (ρNIR - ρRed) / (ρNIR + C1 * ρRed - C2 * ρBlue + L)
+    # EVI = G * (NIR - Red) / (NIR + C1 * Red - C2 * Blue + L)
     # EVI = hist_cut(EVI, fillV)
 
     # # Normalized Difference Vegetation Index
     # # https://gisgeography.com/ndvi-normalized-difference-vegetation-index/
-    # NDVI = (ρNIR - ρRed) / (ρNIR + ρRed)
+    # NDVI = (NIR - Red) / (NIR + Red)
 
     # # bare soil index
     # # https://www.geo.university/pages/blog?p=spectral-indices-with-multispectral-satellite-data#:~:text=Bare%20Soil%20Index%20(BSI)%20is,used%20in%20a%20normalized%20manner.
-    # BSI = ((ρSWIR1 + ρRed) - (ρNIR + ρBlue)) / ((ρSWIR1 + ρRed) + (ρNIR + ρBlue))
+    # BSI = ((SWIR1 + Red) - (NIR + Blue)) / ((SWIR1 + Red) + (NIR + Blue))
     # BSI  = hist_cut( BSI, fillV, 6, minmax=[-1, 1])
     # BSI_Norm = minmax_norm(BSI, valid_mask)
 
     # # Modified Bare Soil Index
-    # MBI = ((ρSWIR1 - ρSWIR2 - ρNIR) / (ρSWIR1 + ρSWIR2 + ρNIR)) + 0.5
+    # MBI = ((SWIR1 - SWIR2 - NIR) / (SWIR1 + SWIR2 + NIR)) + 0.5
     # MBI = hist_cut(MBI, fillV, minmax=[-0.5, 1.5])
 
     # # Note that BSI, MBI, and MNDWI need to be normalized when calculation EBSI
     # # and EMBI to avoid unmeaningful values caused by the negative values in
     # # BSI/MBI/MNDW
-    # MNDWI = (ρGreen - ρSWIR1) / (ρGreen + ρSWIR1)
+    # MNDWI = (Green - SWIR1) / (Green + SWIR1)
     # MNDWI  = hist_cut( MNDWI, fillV, 6, minmax=[-1, 1])
     # MNDWI_Norm = minmax_norm(MNDWI, valid_mask)
 
@@ -659,7 +659,7 @@ def specialized_index_bands(bands=None, coco_img=None, symbolic=False):
 
     # # Therefore, we design a modulation factor to depress the dark bare land
     # # and enhance dark artificial surfaces simultaneous
-    # MF = ((ρBlue + ρGreen) - (ρNIR + ρSWIR1)) / ((ρBlue + ρGreen) + (ρNIR + ρSWIR1)) + 1
+    # MF = ((Blue + Green) - (NIR + SWIR1)) / ((Blue + Green) + (NIR + SWIR1)) + 1
     # MF  = hist_cut( MF, fillV, 6, minmax=[-1, 1])
 
     # ASI = (AF * SDF * VDF * MF) + 1

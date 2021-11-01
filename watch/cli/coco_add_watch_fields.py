@@ -11,7 +11,7 @@ import ubelt as ub
 import scriptconfig as scfg
 import numpy as np
 import kwimage
-from watch.utils.kwcoco_extensions import populate_watch_fields
+from watch.utils import kwcoco_extensions
 
 
 class AddWatchFieldsConfig(scfg.Config):
@@ -27,6 +27,8 @@ class AddWatchFieldsConfig(scfg.Config):
         'target_gsd': scfg.Value(10.0, help='compute transforms for a target gsd'),
 
         'overwrite': scfg.Value(False, help='if True overwrites introspectable fields'),
+
+        'edit_geotiff_metadata': scfg.Value(False, help='if True MODIFIES THE UNDERLYING IMAGES to ensure geodata is propogated'),
 
         'default_gsd': scfg.Value(None, help='if specified, assumed any images without geo-metadata have this GSD')
     }
@@ -69,7 +71,7 @@ def main(**kwargs):
         >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
         >>> print('dset = {!r}'.format(dset))
         >>> target_gsd = 13.0
-        >>> populate_watch_fields(dset, target_gsd, default_gsd=1)
+        >>> main(src=dset, target_gsd=target_gsd, default_gsd=1)
         >>> print('dset.index.imgs[1] = ' + ub.repr2(dset.index.imgs[1], nl=2))
         >>> print('dset.index.videos = {}'.format(ub.repr2(dset.index.videos, nl=1)))
 
@@ -86,7 +88,7 @@ def main(**kwargs):
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
     print('read dataset')
-    dset = kwcoco.CocoDataset(config['src'])
+    dset = kwcoco.CocoDataset.coerce(config['src'])
 
     hard_coded_colors = {
         'No Activity': 'tomato',
@@ -104,9 +106,13 @@ def main(**kwargs):
     target_gsd = config['target_gsd']
     overwrite = config['overwrite']
     default_gsd = config['default_gsd']
-    populate_watch_fields(dset, target_gsd=target_gsd, overwrite=overwrite,
-                          default_gsd=default_gsd)
+    kwcoco_extensions.populate_watch_fields(
+        dset, target_gsd=target_gsd, overwrite=overwrite,
+        default_gsd=default_gsd)
     print('dset.index.videos = {}'.format(ub.repr2(dset.index.videos, nl=2, precision=4)))
+
+    if config['edit_geotiff_metadata']:
+        kwcoco_extensions.ensure_transfered_geo_data(dset)
 
     for gid, img in dset.index.imgs.items():
         offset =  np.asarray(kwimage.Affine.coerce(img['warp_img_to_vid']))[:, 2]

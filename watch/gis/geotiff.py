@@ -270,36 +270,8 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
             info['GCPGeoTransformGSD'] = (pixelSizeX, pixelSizeY)
 
     aff = affine.Affine.from_gdal(*aff_geo_transform)
-    aff_pxl_to_wld = np.vstack([np.array(aff.column_vectors).T, [0, 0, 1]])
-    aff_wld_to_pxl = np.linalg.inv(aff_pxl_to_wld)
-
-    def axis_mapping_int_to_text(axis_mapping_int):
-        """
-        References:
-            https://gdal.org/tutorials/osr_api_tut.html#crs-and-axis-order
-
-        Notes:
-            * OAMS_TRADITIONAL_GIS_ORDER means that for geographic CRS with
-                lat/long order, the data will still be long/lat ordered.
-                Similarly for a projected CRS with northing/easting order, the
-                data will still be easting/northing ordered
-
-            * OAMS_AUTHORITY_COMPLIANT means that the data axis will be
-                identical to the CRS axis. This is the default value when
-                instantiating OGRSpatialReference
-
-            * OAMS_CUSTOM means that the data axis are customly defined with
-                SetDataAxisToSRSAxisMapping
-        """
-        if axis_mapping_int == osr.OAMS_TRADITIONAL_GIS_ORDER:
-            axis_mapping = 'OAMS_TRADITIONAL_GIS_ORDER'
-        elif axis_mapping_int == osr.OAMS_AUTHORITY_COMPLIANT:
-            axis_mapping = 'OAMS_AUTHORITY_COMPLIANT'
-        elif axis_mapping_int == osr.OAMS_CUSTOM:
-            axis_mapping = 'OAMS_CUSTOM'
-        else:
-            raise KeyError(axis_mapping_int)
-        return axis_mapping
+    aff_wld_from_pxl = np.vstack([np.array(aff.column_vectors).T, [0, 0, 1]])
+    aff_pxl_from_wld = np.linalg.inv(aff_wld_from_pxl)
 
     is_rpc = not (force_affine or rpc_transform is None)
 
@@ -331,15 +303,15 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
     wgs84_axis_mapping_int = wgs84_crs.GetAxisMappingStrategy()
     wgs84_axis_mapping = axis_mapping_int_to_text(wgs84_axis_mapping_int)
 
-    wld_to_wgs84 = osr.CoordinateTransformation(wld_crs, wgs84_crs)
-    wgs84_to_wld = osr.CoordinateTransformation(wgs84_crs, wld_crs)
+    wgs84_from_wld = osr.CoordinateTransformation(wld_crs, wgs84_crs)
+    wld_from_wgs84 = osr.CoordinateTransformation(wgs84_crs, wld_crs)
 
     if is_rpc:
-        wld_to_pxl = rpc_transform.warp_world_to_pixel
-        pxl_to_wld = rpc_transform.warp_pixel_to_world
+        pxl_from_wld = rpc_transform.warp_pixel_from_world
+        wld_from_pxl = rpc_transform.warp_world_from_pixel
     else:
-        pxl_to_wld = aff_pxl_to_wld
-        wld_to_pxl = aff_wld_to_pxl
+        wld_from_pxl = aff_wld_from_pxl
+        pxl_from_wld = aff_pxl_from_wld
 
     shape = (ref.RasterYSize, ref.RasterXSize)
 
@@ -352,9 +324,9 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         [ref.RasterXSize, 0],
     ])
     pxl_corners = kwimage.Coords(xy_corners)
-    wld_corners = pxl_corners.warp(pxl_to_wld)
+    wld_corners = pxl_corners.warp(wld_from_pxl)
 
-    wgs84_corners = wld_corners.warp(wld_to_wgs84)
+    wgs84_corners = wld_corners.warp(wgs84_from_wld)
     lat1 = wgs84_corners.data[:, 0].min()
     lat2 = wgs84_corners.data[:, 0].max()
     lon1 = wgs84_corners.data[:, 1].min()
@@ -377,9 +349,9 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         utm_axis_mapping_int = utm_crs.GetAxisMappingStrategy()
         utm_axis_mapping = axis_mapping_int_to_text(utm_axis_mapping_int)
 
-        wld_to_utm = osr.CoordinateTransformation(wld_crs, utm_crs)
-        utm_to_wld = osr.CoordinateTransformation(utm_crs, wld_crs)
-        utm_corners = wld_corners.warp(wld_to_utm)
+        utm_from_wld = osr.CoordinateTransformation(wld_crs, utm_crs)
+        wld_from_utm = osr.CoordinateTransformation(utm_crs, wld_crs)
+        utm_corners = wld_corners.warp(utm_from_wld)
 
         min_utm = utm_corners.data.min(axis=0)
         max_utm = utm_corners.data.max(axis=0)
@@ -389,8 +361,8 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
     else:
         meter_per_pxl = None
         meter_extent = None
-        wld_to_utm = None
-        utm_to_wld = None
+        utm_from_wld = None
+        wld_from_utm = None
         utm_crs = None
         utm_axis_mapping = None
 
@@ -410,18 +382,18 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         wgs84_wkt = wgs84_crs.ExportToWkt()
 
         utm_crs_info = {
-            'auth': memo_from_wkt(utm_wkt),
+            'auth': memo_auth_from_wkt(utm_wkt),
             'axis_mapping': utm_axis_mapping,
         }
 
         wld_crs_info = {
-            'auth': memo_from_wkt(wld_wkt),
+            'auth': memo_auth_from_wkt(wld_wkt),
             'axis_mapping': wld_axis_mapping,
             'type': wld_crs_type,
         }
 
         wgs84_crs_info = {
-            'auth': memo_from_wkt(wgs84_wkt),
+            'auth': memo_auth_from_wkt(wgs84_wkt),
             'axis_mapping': wgs84_axis_mapping,
         }
 
@@ -442,13 +414,17 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         'wld_corners': wld_corners,
         'wgs84_corners': wgs84_corners,
 
-        'pxl_to_wld': pxl_to_wld,
-        'wgs84_to_wld': wgs84_to_wld,
-        'utm_to_wld': utm_to_wld,
+        # TODO: we changed the internal names to the "_from_" varaint but we
+        # are keeping the "_to_" variant in this interface for now In the
+        # future we should change things over to the "_from_" variant, which
+        # is easier to reason about when chaining transforms.
+        'pxl_to_wld': wld_from_pxl,
+        'wgs84_to_wld': wld_from_wgs84,
+        'utm_to_wld': wld_from_utm,
 
-        'wld_to_pxl': wld_to_pxl,
-        'wld_to_wgs84': wld_to_wgs84,
-        'wld_to_utm': wld_to_utm,
+        'wld_to_pxl': pxl_from_wld,
+        'wld_to_wgs84': wgs84_from_wld,
+        'wld_to_utm': utm_from_wld,
 
         'utm_crs_info': utm_crs_info,
         'wld_crs_info': wld_crs_info,
@@ -471,8 +447,95 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
     return info
 
 
+def make_crs_info_object(osr_crs):
+    """
+    Args:
+        osr_crs (osr.SpatialReference): an osr object from gdal
+
+    Example:
+        >>> from osgeo import osr
+        >>> from watch.gis.geotiff import *  # NOQA
+        >>> osr_crs = osr.SpatialReference()
+        >>> osr_crs.ImportFromEPSG(4326)
+        >>> crs_info = make_crs_info_object(osr_crs)
+        >>> print('crs_info = {}'.format(ub.repr2(crs_info, nl=1)))
+        >>> osr_crs = osr.SpatialReference()
+        >>> osr_crs.ImportFromEPSG(4326)
+        >>> osr_crs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+        >>> crs_info = make_crs_info_object(osr_crs)
+        >>> print('crs_info = {}'.format(ub.repr2(crs_info, nl=1)))
+        >>> osr_crs.ImportFromEPSG(32744)
+        >>> crs_info = make_crs_info_object(osr_crs)
+        >>> print('crs_info = {}'.format(ub.repr2(crs_info, nl=1)))
+    """
+    wkt = osr_crs.ExportToWkt()
+    auth = memo_auth_from_wkt(wkt)
+    axis_mapping_int = osr_crs.GetAxisMappingStrategy()
+    axis_mapping_text = axis_mapping_int_to_text(axis_mapping_int)
+    crs_info = {
+        'auth': auth,
+        'axis_mapping': axis_mapping_text,
+    }
+    return crs_info
+
+
+def axis_mapping_int_to_text(axis_mapping_int):
+    """
+    References:
+        https://gdal.org/tutorials/osr_api_tut.html#crs-and-axis-order
+
+    Notes:
+        * OAMS_TRADITIONAL_GIS_ORDER means that for geographic CRS with
+            lat/long order, the data will still be long/lat ordered.
+            Similarly for a projected CRS with northing/easting order, the
+            data will still be easting/northing ordered
+
+        * OAMS_AUTHORITY_COMPLIANT means that the data axis will be
+            identical to the CRS axis. This is the default value when
+            instantiating OGRSpatialReference
+
+        * OAMS_CUSTOM means that the data axis are customly defined with
+            SetDataAxisToSRSAxisMapping
+    """
+    from osgeo import osr
+    if axis_mapping_int == osr.OAMS_TRADITIONAL_GIS_ORDER:
+        axis_mapping = 'OAMS_TRADITIONAL_GIS_ORDER'
+    elif axis_mapping_int == osr.OAMS_AUTHORITY_COMPLIANT:
+        axis_mapping = 'OAMS_AUTHORITY_COMPLIANT'
+    elif axis_mapping_int == osr.OAMS_CUSTOM:
+        axis_mapping = 'OAMS_CUSTOM'
+    else:
+        raise KeyError(axis_mapping_int)
+    return axis_mapping
+
+
+# def new_spatial_reference(axis_mapping='OAMS_AUTHORITY_COMPLIANT'):
+#     """
+#     Creates a new spatial reference
+
+#     Args:
+#         axis_mapping (int | str) : can be
+#             OAMS_TRADITIONAL_GIS_ORDER, OAMS_AUTHORITY_COMPLIANT, or
+#             OAMS_CUSTOM or the integer gdal code.
+
+#     References:
+#         https://gdal.org/tutorials/osr_api_tut.html#crs-and-axis-order
+#     """
+#     raise NotImplementedError
+#     from osgeo import osr
+#     if isinstance(axis_mapping, int):
+#         axis_mapping_int = axis_mapping
+#     else:
+#         assert axis_mapping in {
+#             'OAMS_TRADITIONAL_GIS_ORDER',
+#             'OAMS_AUTHORITY_COMPLIANT',
+#             'OAMS_CUSTOM',
+#         }
+#         axis_mapping_int = getattr(osr, axis_mapping)
+
+
 @ub.memoize
-def memo_from_wkt(wkt):
+def memo_auth_from_wkt(wkt):
     """
     This benchmarks as an expensive operation, memoize it.
     """

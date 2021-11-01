@@ -87,7 +87,7 @@ def debug_video_information(dset, video_id):
     nancx = len(classes) + 1
     track_phase_mat = []
     # bg_cid = classes.node_to_cid['No Activity']
-    for tid, track_infos in tid_to_infos.items():
+    for _tid, track_infos in tid_to_infos.items():
         track_phase = np.full(len(video_frame_idxs), fill_value=nancx)
         at_idxs = np.array([row['frame_idx'] for row in track_infos])
         track_cxs = np.array([row['cx'] for row in track_infos])
@@ -105,7 +105,7 @@ def debug_video_information(dset, video_id):
 
         utils.category_tree_ensure_color(classes)
         color_lut = np.zeros((nancx + 1, 3))
-        for node, node_data in classes.graph.nodes.items():
+        for _node, node_data in classes.graph.nodes.items():
             cx = classes.id_to_idx[node_data['id']]
             color_lut[cx] = node_data['color']
         color_lut[nancx] = (0, 0, 0)
@@ -956,7 +956,7 @@ def show_affinity_sample_process(chosen, info, fnum=1):
         ax.plot(np.arange(xmax), probs)
         xpos = x + xmax * 0.0 if x < (xmax / 2) else x - xmax * 0.0
         ypos = y + ymax * 0.3 if y < (ymax / 2) else y - ymax * 0.3
-        ax.annotate('chosen', (x, y), xytext=(xpos, ypos), color='black', arrowprops=dict(color='orange', arrowstyle="->"))
+        ax.annotate('chosen', (x, y), xytext=(xpos, ypos), color='black', arrowprops=dict(color='orange', arrowstyle='->'))
         ax.plot([x, x], [0, ymax], color='orange')
         #ax.annotate('chosen', (x, y), color='black')
         ax.set_title('Sample {}'.format(step_idx))

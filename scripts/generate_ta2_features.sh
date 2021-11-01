@@ -377,14 +377,14 @@ spot_check(){
     kwcoco validate $COMBO_COCO_FPATH
 
     # Optional: visualize the combo data before and after propogation
-    CHANNELS="red|green|blue,inv_sort1|inv_augment1|inv_shared1,matseg_0|matseg_1|matseg_2,grassland|built_up|bare_ground"
-    CHANNELS="matseg_3|matseg_4|matseg_5,inv_shared2|inv_shared3|inv_shared4"
     #CHANNELS="inv_shared2|inv_shared3|inv_shared4"
+    #--num_frames=10 \
+
+    CHANNELS="red|green|blue,inv_sort1|inv_augment1|inv_shared1,matseg_0|matseg_1|matseg_2,grassland|built_up|bare_ground,matseg_3|matseg_4|matseg_5,inv_shared2|inv_shared3|inv_shared4"
     VIZ_DPATH=$KWCOCO_BUNDLE_DPATH/_viz_teamfeats
     python -m watch.cli.coco_visualize_videos \
         --src $COMBO_COCO_FPATH --space=video --num_workers=6 \
         --viz_dpath $VIZ_DPATH \
-        --num_frames=10 \
         --channels $CHANNELS
 
     # Split bands up into a bash array

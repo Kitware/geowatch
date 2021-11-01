@@ -84,6 +84,7 @@ def grabdata_girder(api_url, resource_id, name=None, dpath=None, hash_prefix=Non
     }
 
     # Determine what type of resource the requested id is for.
+    resoure_type = None
     for resoure_type, get_info in get_info_methods.items():
         try:
             resource_info = get_info(resource_id)
@@ -149,7 +150,7 @@ def grabdata_girder(api_url, resource_id, name=None, dpath=None, hash_prefix=Non
     else:
         raise KeyError(resoure_type)
 
-    cache_name = resoure_type + '_' + name + '.hash'
+    cache_name = resoure_type + '_' + name + '.tmp.hash'
     stamp = ub.CacheStamp(cache_name, dpath=dpath, depends=depends)
     if stamp.expired() or not exists(dl_path):
         dl_method(resource_id, dl_path)

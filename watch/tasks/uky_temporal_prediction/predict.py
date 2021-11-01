@@ -65,7 +65,7 @@ def extract_features(checkpoint,
         if name is None:
             name = 'timefeat_{:06d}'.format(gid)
         # Construct the filepath we will save the features to
-        feature_fpath = os.path.join(output_folder, name + '.tiff')
+        feature_fpath = os.path.join(output_folder, name + '.tif')
 
         # TODO: ensure the correct channels and scale wrt to the model are used
         delayed_image = output_dset.delayed_load(gid)

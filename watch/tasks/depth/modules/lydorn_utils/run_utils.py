@@ -10,7 +10,7 @@ from . import print_utils
 from . import python_utils
 
 # Stolen from Docker:
-NAME_SET = set([
+NAME_SET = {
     # Muhammad ibn Jābir al-Ḥarrānī al-Battānī was a founding father of astronomy. https://en.wikipedia.org/wiki/Mu%E1%B8%A5ammad_ibn_J%C4%81bir_al-%E1%B8%A4arr%C4%81n%C4%AB_al-Batt%C4%81n%C4%AB
     "albattani",
 
@@ -531,7 +531,7 @@ NAME_SET = set([
 
     # Nikolay Yegorovich Zhukovsky (Russian: Никола́й Его́рович Жуко́вский, January 17 1847 – March 17, 1921) was a Russian scientist, mathematician and engineer, and a founding father of modern aero- and hydrodynamics. Whereas contemporary scientists scoffed at the idea of human flight, Zhukovsky was the first to undertake the study of airflow. He is often called the Father of Russian Aviation. https://en.wikipedia.org/wiki/Nikolay_Yegorovich_Zhukovsky
     "zhukovsky",
-])
+}
 
 
 def setup_run_dir(runs_dirpath, run_name=None, new_run=False, check_exists=False):

@@ -366,7 +366,7 @@ class ChannelwiseTransformerEncoderLayer(nn.Module):
         embedding_size,
         n_heads,
         dropout=0.,
-        default_shape=['batch', 'time', 'mode', 'height', 'width', 'feature'],
+        default_shape=('batch', 'time', 'mode', 'height', 'width', 'feature'),
         feature_axis='feature',
         batch_axis='batch',
         attention_impl='exact'
@@ -565,9 +565,9 @@ class FusionEncoder(nn.Module):
     """
 
     def __init__(self, axes,
-                 default_shape=["batch", "sequence", "feature"],
-                 feature_axis="feature",
-                 batch_axis="batch",
+                 default_shape=('batch', 'sequence', 'feature'),
+                 feature_axis='feature',
+                 batch_axis='batch',
                  embedding_size=128,
                  n_layers=4,
                  n_heads=8,
@@ -614,15 +614,15 @@ def _build_global_configs():
     """
     # dont define tons of functions, use a configuration dictionary
     _smt_axes_basis = dict(
-        joint=[("time", "mode", "height", "width")],
-        stm=[("height", "width"), ("time",), ("mode",)],
-        sm=[("height", "width"), ("mode",)],
-        st=[("height", "width"), ("time",)],
-        tm=[("time",), ("mode",)],
-        s=[("height", "width")],
-        t=[("time",)],
-        hwtm=[("height",), ("width",), ("time",), ("mode",)],
-        m=[("mode",)],
+        joint=[('time', 'mode', 'height', 'width')],
+        stm=[('height', 'width'), ('time',), ('mode',)],
+        sm=[('height', 'width'), ('mode',)],
+        st=[('height', 'width'), ('time',)],
+        tm=[('time',), ('mode',)],
+        s=[('height', 'width')],
+        t=[('time',)],
+        hwtm=[('height',), ('width',), ('time',), ('mode',)],
+        m=[('mode',)],
     )
 
     _encoder_size_basis = {
@@ -640,9 +640,9 @@ def _build_global_configs():
 
     # space-mode-time transformer params
     _smt_value = dict(
-        default_shape=["batch", "time", "mode", "height", "width", "feature"],
-        feature_axis="feature",
-        batch_axis="batch",
+        default_shape=['batch', 'time', 'mode', 'height', 'width', 'feature'],
+        feature_axis='feature',
+        batch_axis='batch',
     )
 
     encoder_configs = {}
@@ -654,14 +654,14 @@ def _build_global_configs():
 
     # space-mode transformer params
     _sm_value = dict(
-        default_shape=["batch", "mode", "height", "width", "feature"],
-        feature_axis="feature",
-        batch_axis="batch",
+        default_shape=['batch', 'mode', 'height', 'width', 'feature'],
+        feature_axis='feature',
+        batch_axis='batch',
     )
 
     _sm_axes_basis = {
-        'joint': [("mode", "height", "width")],
-        'sm': [("height", "width"), ("mode",)],
+        'joint': [('mode', 'height', 'width')],
+        'sm': [('height', 'width'), ('mode',)],
     }
 
     for axes_code, axes_value in _sm_axes_basis.items():

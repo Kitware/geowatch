@@ -29,7 +29,7 @@ def demo_smart_raw_kwcoco():
     """
     cache_dpath = ub.ensure_app_cache_dir('watch/demo/kwcoco')
     raw_coco_fpath = join(cache_dpath, 'demo_smart_raw.kwcoco.json')
-    stamp = ub.CacheStamp('raw_stamp', dpath=cache_dpath, depends=['v1'],
+    stamp = ub.CacheStamp('raw_stamp', dpath=cache_dpath, depends=['v2'],
                           product=raw_coco_fpath)
     if stamp.expired():
         s2_demo_paths1 = sentinel2_demodata.grab_sentinel2_product(index=0)
@@ -53,7 +53,15 @@ def demo_smart_raw_kwcoco():
         rng = kwarray.ensure_rng(542370, api='python')
 
         # Add only the TCI for the first S2 image
-        cands = [fname for fname in s2_demo_paths1.images if fname.name.endswith('TCI.jp2')]
+        cands = [fname for fname in s2_demo_paths1.images
+                 if fname.name.endswith('TCI.jp2')]
+        if len(cands) != 1:
+            raise AssertionError(ub.paragraph(
+                '''
+                Should only have 1 candidate. Got {len(cands)}.
+                cands={cands}.
+                '''))
+
         assert len(cands) == 1
         fname = cands[0]
         fpath = str(s2_demo_paths1.path / fname)
@@ -115,7 +123,7 @@ def demo_smart_aligned_kwcoco():
     cache_dpath = ub.ensure_app_cache_dir('watch/demo/kwcoco')
     aligned_kwcoco_dpath = join(cache_dpath, 'demo_aligned')
     aligned_coco_fpath = join(aligned_kwcoco_dpath, 'data.kwcoco.json')
-    stamp = ub.CacheStamp('aligned_stamp', dpath=cache_dpath, depends=['v1'],
+    stamp = ub.CacheStamp('aligned_stamp', dpath=cache_dpath, depends=['v2'],
                           product=[aligned_coco_fpath])
     if stamp.expired():
         raw_coco_dset = demo_smart_raw_kwcoco()
@@ -130,3 +138,256 @@ def demo_smart_aligned_kwcoco():
 
     aligned_coco_dset = kwcoco.CocoDataset(aligned_coco_fpath)
     return aligned_coco_dset
+
+
+def demo_kwcoco_with_heatmaps(num_videos=1, num_frames=20):
+    """
+    Return a dummy kwcoco file with special metdata
+
+    TODO:
+        rename
+
+    Example:
+        >>> from watch.demo.smart_kwcoco_demodata import *  # NOQA
+        >>> coco_dset = demo_kwcoco_with_heatmaps()
+
+        key = 'salient'
+        for vidid in coco_dset.videos():
+            frames = []
+            for gid in coco_dset.images(vidid=vidid):
+                delayed = coco_dset._coco_image(gid).delay(channels=key, space='video')
+                final = delayed.finalize()
+                frames.append(final)
+            vid_stack = kwimage.stack_images_grid(frames, axis=1, pad=5, bg_value=1)
+
+            import kwplot
+            kwplot.imshow(vid_stack)
+    """
+    import numpy as np
+    import pathlib
+    import kwarray
+    import kwcoco
+    import datetime
+    from kwarray.distributions import Uniform
+    from kwarray.distributions import DiscreteUniform  # NOQA
+
+    rng = 101893676  # random seed
+    rng = kwarray.ensure_rng(rng)
+
+    # img_w = DiscreteUniform(256, 512, rng=rng)
+    # img_h = DiscreteUniform(256, 512, rng=rng)
+    # image_size = (img_w, img_h)
+    image_size = (512, 512)
+
+    coco_dset = kwcoco.CocoDataset.demo(
+        'vidshapes', num_videos=num_videos, num_frames=num_frames,
+        multispectral=True, image_size=image_size)
+
+    # from kwcoco.demo import perterb
+    # perterb_config = {
+    #     'box_noise': 0.5,
+    #     'n_fp': 3,
+    #     # 'with_probs': 1,
+    # }
+    # perterb.perterb_coco(coco_dset, **perterb_config)
+
+    asset_dpath = pathlib.Path(coco_dset.assets_dpath)
+    dummy_heatmap_dpath = asset_dpath / 'dummy_heatmaps'
+    dummy_heatmap_dpath.mkdir(exist_ok=1, parents=True)
+
+    channels = 'notsalient|salient'
+    channels = kwcoco.FusedChannelSpec.coerce(channels)
+    chan_codes = channels.normalize().as_list()
+
+    aux_width = 128
+    aux_height = 128
+    dims = (aux_width, aux_height)
+    for img in coco_dset.index.imgs.values():
+
+        warp_img_from_aux = kwimage.Affine.scale((
+            img['width'] / aux_width, img['height'] / aux_height))
+        warp_aux_from_img = warp_img_from_aux.inv()
+
+        # Grab perterbed detections from this image
+        img_dets = coco_dset.annots(gid=img['id']).detections
+
+        # Transfom dets into aux space
+        aux_dets = img_dets.warp(warp_aux_from_img)
+
+        # Hack: use dets to draw some randomish heatmaps
+        sseg = aux_dets.data['segmentations']
+        chan_datas = []
+        for _code in chan_codes:
+            chan_data = np.zeros(dims, dtype=np.float32)
+            for poly in sseg.data:
+                poly.fill(chan_data, 1)
+
+            # Add lots of noise to the data
+            chan_data += (rng.randn(*dims) * 0.1)
+            chan_data + chan_data.clip(0, 1)
+            chan_data = kwimage.gaussian_blur(chan_data, sigma=1.2)
+            chan_data = chan_data.clip(0, 1)
+            mask = rng.randn(*dims)
+            chan_data = chan_data * ((kwimage.fourier_mask(chan_data, mask)[..., 0]) + .5)
+            chan_data += (rng.randn(*dims) * 0.1)
+            chan_data = chan_data.clip(0, 1)
+            chan_datas.append(chan_data)
+        hwc_probs = np.stack(chan_datas, axis=2)
+
+        # TODO do something with __WIP_add_auxiliary to make this clear and
+        # concise
+        heatmap_fpath = dummy_heatmap_dpath / 'dummy_heatmap_{}.tif'.format(img['id'])
+        kwimage.imwrite(heatmap_fpath, hwc_probs, backend='gdal', compress='NONE',
+                        blocksize=96)
+        aux_height, aux_width = hwc_probs.shape[0:2]
+
+        auxlist = img['auxiliary']
+        auxlist.append({
+            'file_name': str(heatmap_fpath),
+            'width': aux_width,
+            'height': aux_height,
+            'channels': channels.spec,
+            'warp_aux_to_img': warp_img_from_aux.concise(),
+        })
+
+    min_time = datetime.datetime(year=1970, month=1, day=1)
+    max_time = datetime.datetime(year=2101, month=1, day=1)
+    time_distri = Uniform(min_time.timestamp(), max_time.timestamp())
+
+    # Hack in other metadata
+    for vidid in coco_dset.videos():
+        vid_gids = list(coco_dset.images(vidid=vidid))
+        time_pool = sorted(time_distri.sample(len(vid_gids)))
+        for gid, timestamp in zip(vid_gids, time_pool):
+            ts = datetime.datetime.fromtimestamp(timestamp)
+            img = coco_dset.index.imgs[gid]
+            img['date_captured'] = ts.isoformat()
+
+    # Hack in geographic info
+    hack_seed_geometadata_in_dset(coco_dset, force=True, rng=rng)
+
+    from watch.utils import kwcoco_extensions
+
+    # Do a consistent transfer of the hacked seeded geodat to the other images
+    kwcoco_extensions.ensure_transfered_geo_data(coco_dset)
+
+    kwcoco_extensions.warp_annot_segmentations_to_geos(coco_dset)
+    return coco_dset
+
+
+def hack_seed_geometadata_in_dset(coco_dset, force=False, rng=None):
+    """
+    Add random geo coordinates to one asset in each video
+
+    Example:
+        >>> from watch.demo.smart_kwcoco_demodata import *  # NOQA
+        >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes5-multispectral')
+        >>> modified = hack_seed_geometadata_in_dset(coco_dset, force=True)
+        >>> fpath = modified[0]
+        >>> print(ub.cmd('gdalinfo ' + fpath)['out'])
+    """
+    import kwarray
+    from watch.utils import kwcoco_extensions
+    rng = kwarray.ensure_rng(rng)
+    modified = []
+    for vidid in coco_dset.videos():
+        img = coco_dset.images(vidid=vidid).peek()
+        coco_img = coco_dset._coco_image(img['id'])
+        obj = coco_img.primary_asset()
+        fpath = join(coco_dset.bundle_dpath, obj['file_name'])
+        # print('fpath = {!r}'.format(fpath))
+
+        format_info = kwcoco_extensions.geotiff_format_info(fpath)
+        if force or not format_info['has_geotransform']:
+
+            utm_box, utm_crs_info = _random_utm_box(rng=rng)
+
+            auth = utm_crs_info['auth']
+            assert auth[0] == 'EPSG'
+            epsg_int = int(auth[1])
+
+            ulx, uly, lrx, lry = utm_box.to_ltrb().data[0]
+
+            command = f'gdal_edit.py -a_ullr {ulx} {uly} {lrx} {lry} -a_srs EPSG:{epsg_int} {fpath}'
+            cmdinfo = ub.cmd(command, shell=True)
+            if cmdinfo['ret'] != 0:
+                print(cmdinfo['out'])
+                print(cmdinfo['err'])
+                assert cmdinfo['ret'] == 0
+            modified.append(fpath)
+    return modified
+
+
+def _random_utm_box(rng=None):
+    """
+    rng = None
+
+    Example:
+        >>> from watch.demo.smart_kwcoco_demodata import _random_utm_box
+        >>> _random_utm_box()
+    """
+    import numpy as np
+    from kwarray.distributions import Uniform
+    import kwarray
+    from watch.gis import spatial_reference as watch_crs
+    from osgeo import osr
+    import watch
+    # stay away from edges and poles
+    rng = kwarray.ensure_rng(rng)
+    max_lat = 90 - 40
+    max_lon = 180 - 80
+    lat_distri = Uniform(-max_lat, max_lat, rng=rng)
+    lon_distri = Uniform(-max_lon, max_lon, rng=rng)
+
+    lon = lon_distri.sample()
+    lat = lat_distri.sample()
+    utm_epsg_int = watch_crs.utm_epsg_from_latlon(lat, lon)
+
+    wgs84_crs = osr.SpatialReference()
+    wgs84_crs.ImportFromEPSG(4326)
+    wgs84_crs.SetAxisMappingStrategy(osr.OAMS_AUTHORITY_COMPLIANT)
+
+    utm_crs = osr.SpatialReference()
+    utm_crs.ImportFromEPSG(utm_epsg_int)
+    utm_from_wgs84 = osr.CoordinateTransformation(wgs84_crs, utm_crs)
+
+    utm_crs_info = watch.gis.geotiff.make_crs_info_object(utm_crs)
+
+    utm_x, utm_y, _ = utm_from_wgs84.TransformPoint(lat, lon, 1.0)
+    # keep the aspect ratio more or less squareish
+    w = rng.randint(10, 150)
+    h = np.clip((rng.randn() + 1), 0.9, 1.1) * w
+
+    """
+    import sympy as sym
+    radius, dist, lat1, lat2, lon1, lon2 = sym.symbols('radius, dist, lat1, lat2, lon1, lon2')
+    haversine_expr = 2 * radius * sym.asin(sym.sqrt(
+        sym.sin((lat2 - lat1) / 2) ** 2 + sym.cos(lat1) * sym.cos(lat2) * sym.sin((lon2 - lon1) / 2) ** 2
+    ))
+    sym.solve(sym.Eq(haversine_expr, dist), lon2)
+    # sym.solve(sym.Eq(haversine_expr, dist), lat2)
+    # import haversine
+    # haversine.haversine((ulx, uly), (lrx, uly))
+    # haversine.haversine((ulx, uly), (ulx, lry))
+    # Inverse haversine
+    from numpy import sqrt, cos, sin
+    from numpy import arcsin as asin
+    from numpy import pi
+    ulx, uly, lrx, lry = kwimage.Boxes([[utm_x, utm_y, w, h]], 'cxywh').to_ltrb().data[0]
+    lon1 = ulx
+    lon2 = lrx
+    lat1 = uly
+    lat2 = lry
+    # Make the box squareish
+    radius = 6356.752
+    dist = 2 * radius * asin(sqrt(sin(lat1 / 2 - lat2 / 2) ** 2 + sin(lon1 / 2 - lon2 / 2)**2 * cos(lat1) * cos(lat2)))
+    possible_solutions = [
+        lon1 - 2 * asin(sqrt(2) * sqrt((-cos(dist / radius) + cos(lat1 - lat2)) / (cos(lat1) * cos(lat2))) / 2),
+        lon1 + 2 * asin(sqrt(2) * sqrt((-cos(dist / radius) + cos(lat1 - lat2)) / (cos(lat1) * cos(lat2))) / 2),
+        lon1 + 2 * asin(sqrt(2) * sqrt((-cos(dist / radius) + cos(lat1 - lat2)) / (cos(lat1) * cos(lat2))) / 2) - 2 * pi,
+        lon1 - 2 * asin(sqrt(2) * sqrt(-(cos(dist / radius) - cos(lat1 - lat2)) / (cos(lat1) * cos(lat2))) / 2) - 2 * pi]
+    valid_solutions = [cand for cand in possible_solutions if cand > lon1]
+    lrx = valid_solutions[0]
+    """
+    utm_box = kwimage.Boxes([[utm_x, utm_y, w, h]], 'cxywh')
+    return utm_box, utm_crs_info

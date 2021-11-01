@@ -267,34 +267,51 @@ build_docker_and_upload_strict:
             # Commands to help developers debug pipelines on their local machine
             # Grab the base docker image, (forwarding your ssh credentials), clone
             # the watch repo, create the environment, and run the tests. 
-            #
             docker login gitlab.kitware.com:4567
 
-            -v $PWD:/io
-
             docker pull registry.smartgitlab.com/kitware/watch/miniconda3
-
-            docker run -v ~/.ssh:/tmp/.ssh:ro -it registry.smartgitlab.com/kitware/watch/miniconda3 bash
-            #docker run -it gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3 bash
-            cp -R /tmp/.ssh /root/.ssh
-            chmod 700 /root/.ssh
-            chmod 600 /root/.ssh/id_*
-            chmod 644 /root/.ssh/*.pub
-
+            docker run -v -it registry.smartgitlab.com/kitware/watch/miniconda3 bash
             docker run -v $PWD:/io:ro -it registry.smartgitlab.com/kitware/watch/miniconda3 bash
             cd $HOME
             git clone /io ./watch
             cd watch
-            #git clone git@gitlab.kitware.com:smart/watch.git
 
             cd $HOME/watch
-            git checkout dev/add_ci
+            git checkout dev/flow15
 
-            sed 's/>=/==/g' conda_env.yml > conda_env_strict.yml
-            conda env create -f conda_env_strict.yml --prefix "./strict-watch-env"
+            # STRICT VARIANT
+            ./dev/make_strict_req.sh
+            conda env create -f conda_env_strict.yml --prefix ".cache/conda/envs/strict-watch-env"
+            conda activate ".cache/conda/envs/strict-watch-env"
+            pip install -e .
+            ./run_tests.py --network watch tests scripts
 
-            ls -al
-            conda activate "./strict-watch-env"
+            # LOOSE VARIANT
+            conda env create -f conda_env.yml --prefix ".cache/conda/envs/loose-watch-env"
+            conda activate ".cache/conda/envs/loose-watch-env"
+            .cache/conda/envs/loose-watch-env/bin/python -m pip install -e .
+            ./run_tests.py --network watch tests scripts
+
+
+
+
+
+
+
+
+
+            #docker run -v ~/.ssh:/tmp/.ssh:ro -it registry.smartgitlab.com/kitware/watch/miniconda3 bash
+            ##docker run -it gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3 bash
+            #cp -R /tmp/.ssh /root/.ssh
+            #chmod 700 /root/.ssh
+            #chmod 600 /root/.ssh/id_*
+            #chmod 644 /root/.ssh/*.pub
+            #git clone git@gitlab.kitware.com:smart/watch.git
+            #sed 's/>=/==/g' conda_env.yml > conda_env_strict.yml
+            #conda env create -f conda_env_strict.yml --prefix "./strict-watch-env"
+            -v $PWD:/io
+            #ls -al
+            #conda activate "./strict-watch-env"
 
             ./run_tests.py watch tests scripts
 

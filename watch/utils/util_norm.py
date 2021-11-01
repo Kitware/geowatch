@@ -126,7 +126,7 @@ def normalize_intensity(imdata, return_info=False, nodata=None, axis=None):
 
 
 def thumbnail(in_path, sat=None, max_dim=1000):
-    '''
+    """
     Create a small, true-color [1] thumbnail from a satellite image.
 
     Args:
@@ -140,7 +140,7 @@ def thumbnail(in_path, sat=None, max_dim=1000):
 
     References:
         [1] https://github.com/sentinel-hub/custom-scripts/tree/master
-    '''
+    """
     # workaround for
     # https://rasterio.readthedocs.io/en/latest/faq.html#why-can-t-rasterio-find-proj-db-rasterio-from-pypi-versions-1-2-0
     with TemporaryEnvironment({'PROJ_LIB': None}):

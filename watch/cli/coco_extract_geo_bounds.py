@@ -57,8 +57,6 @@ def main(**kwargs):
         with open(dst_fpath, 'w') as file:
             json.dump(geojson, file, indent=' ' * 4)
     return dst_fpath
-    # json.dumps(regions)
-    # print('regions = {}'.format(ub.repr2(regions, nl=2)))
 
 
 def find_spacetime_cluster_regions(dset, mode='annots', breakup_times=False):

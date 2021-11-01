@@ -105,7 +105,7 @@ class RPCTransform(object):
         >>>     [20000,     0],
         >>>     [20000, 20000],
         >>> ])
-        >>> wld_pts = self.warp_pixel_to_world(pxl_pts)
+        >>> wld_pts = self.warp_world_from_pixel(pxl_pts)
         >>> print('wld_pts =\n{}'.format(ub.repr2(wld_pts, nl=1, precision=2)))
         wld_pts =
         np.array([[128.87,  37.8 ],
@@ -114,7 +114,7 @@ class RPCTransform(object):
                   [129.  ,  37.71]]...)
 
         >>> wld_pts = np.array([[self.rpcs.long_off, self.rpcs.lat_off]])
-        >>> pxl_pts = self.warp_world_to_pixel(wld_pts)
+        >>> pxl_pts = self.warp_pixel_from_world(wld_pts)
         >>> print('pxl_pts = {}'.format(ub.repr2(pxl_pts, nl=1, precision=2)))
         pxl_pts = np.array([[17576.2 , 10690.73]]...)
     """
@@ -266,7 +266,18 @@ class RPCTransform(object):
             xs, ys, zs = pts_in.T
         return xs, ys, zs
 
-    def warp_world_to_pixel(self, pts_in, return_elevation=False):
+    # def warp_world_to_pixel(self, pts_in, return_elevation=False):
+    #     # DEPRECATE
+    #     # Old "_to_" variant
+    #     return self.warp_pixel_from_world(
+    #         pts_in, return_elevation=return_elevation)
+
+    # def warp_pixel_to_world(self, pts_in, return_elevation=False):
+    #     # DEPRECATE
+    #     # Old "_to_" variant
+    #     return self.warp_world_from_pixel(pts_in)
+
+    def warp_pixel_from_world(self, pts_in, return_elevation=False):
         """
         Args:
             pts_in (ndarray):
@@ -294,7 +305,7 @@ class RPCTransform(object):
             pts_out = np.concatenate([x_out, y_out], axis=1)
         return pts_out
 
-    def warp_pixel_to_world(self, pts_in, return_elevation=False):
+    def warp_world_from_pixel(self, pts_in, return_elevation=False):
         r"""
         Args:
             pts_in (ndarray):
@@ -317,7 +328,7 @@ class RPCTransform(object):
             >>>     [20000,     0],
             >>>     [20000, 20000],
             >>> ])
-            >>> wld_pts = self.warp_pixel_to_world(pxl_pts)
+            >>> wld_pts = self.warp_world_from_pixel(pxl_pts)
             >>> print('wld_pts =\n{}'.format(ub.repr2(wld_pts, nl=1, precision=2)))
             >>> #
             >>> import osgeo
@@ -334,11 +345,11 @@ class RPCTransform(object):
             >>>     [ref.RasterXSize,               0],
             >>> ])
             >>> self = RPCTransform.from_gdal(rpc_info, elevation='gtop30')
-            >>> wld_pts = self.warp_pixel_to_world(pxl_pts)
+            >>> wld_pts = self.warp_world_from_pixel(pxl_pts)
             >>> kwimage.Polygon(exterior=wld_pts).draw(color='purple', alpha=0.5)
             >>> #
             >>> self = RPCTransform.from_gdal(rpc_info, elevation='open-elevation')
-            >>> self.warp_pixel_to_world(pxl_pts)
+            >>> self.warp_world_from_pixel(pxl_pts)
         """
         from rasterio._transform import _rpc_transform
 
