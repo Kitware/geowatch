@@ -1060,7 +1060,7 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
 
     if is_multi_image:
         multi_dpath = ub.ensuredir((dst_dpath, name))
-        dst_gpath = join(multi_dpath, name + '_' + obj['channels'] + '.tif')
+        dst_gpath = join(multi_dpath, name + '_' + chan_code + '.tif')
     else:
         dst_gpath = join(dst_dpath, name + '.tif')
 
