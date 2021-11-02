@@ -15,10 +15,11 @@ from watch.gis.sensors.sentinel2 import s2_grid_tiles_for_geometry
 
 
 # TODO: Fully specify or re-use something already in WATCH module?
-S2_L1C_RE = re.compile(r'S2[AB]_MSIL1C_.*')
-L8_L1_RE = re.compile(r'^L[COTEM]08_L1(TP|GT|GS)_\d{3}\d{3}_\d{4}\d{2}\d{2}_\d{4}\d{2}\d{2}_\d{2}_(RT|T1|T2)')
+S2_L1C_RE = re.compile(r'S2[AB]_MSI.*')
+S2_L1C_GRANULE_RE = re.compile(r'S2[AB]_.*_L(1C|2A)')
+L8_L1_RE = re.compile(r'^L[COTEM]08_L(1(TP|GT|GS)|2SP)_\d{3}\d{3}_\d{4}\d{2}\d{2}_\d{4}\d{2}\d{2}_\d{2}_(RT|T1|T2)')
 GRANULE_DIR_RE = re.compile(r'(.*)/GRANULE/(.*)')
-BAND_NAME_RE = re.compile(r'.*_(B[0-9A-Z]+|S[EO][AZ][0-9]?|cloudmask)\.(tiff?|vrt)$', re.I)
+BAND_NAME_RE = re.compile(r'.*(B[0-9A-Z]+|S[EO][AZ][0-9]?|[SV][ZA]A|cloudmask|QA_PIXEL|QA_RADSAT)\.(tiff?|vrt)$', re.I)
 
 
 def main():
@@ -52,10 +53,21 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
             # Get base directory for assets
             item_base_dir = None
             for link in item.links:
-                if link.rel == 'original':
+                if link.rel == 'self':
                     item_base_dir = os.path.dirname(link.get_href())
                     break
 
+            if item_base_dir is None:
+                raise RuntimeError("Couldn't determine STAC item basedir")
+
+            s2_l1c_items[item_base_dir] = item
+        elif re.match(S2_L1C_GRANULE_RE, item.id):
+            # Get base directory for assets
+            item_base_dir = None
+            for link in item.links:
+                if link.rel == 'self':
+                    item_base_dir = os.path.dirname(link.get_href())
+                    break
             if item_base_dir is None:
                 raise RuntimeError("Couldn't determine STAC item basedir")
 
@@ -64,7 +76,7 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
             # Get base directory for assets
             item_base_dir = None
             for link in item.links:
-                if link.rel == 'original':
+                if link.rel == 'self':
                     item_base_dir = os.path.dirname(link.get_href())
                     break
 
@@ -80,9 +92,13 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
     if len(s2_l1c_item_dirs) > 0:
         scenes, baseline_scenes = s2_coregister_all_tiles(
             list(s2_l1c_item_dirs),
-            outdir)
+            outdir,
+            granuledirs_input=True)
     else:
         scenes, baseline_scenes = {}, {}
+
+    print(scenes)
+    print(baseline_scenes)
 
     l8_scenes = {}
     for l8_l1_item_dir, l8_l1_item in l8_l1_items.items():
@@ -115,6 +131,7 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
             asset_path_basedir = os.path.join(
                 outdir, "T{}".format(l8_scene),
                 "{}_T{}".format(l8_scene_image_base, l8_scene))
+            print(asset_path_basedir)
             asset_paths = glob.glob(
                 os.path.join(asset_path_basedir, "*.tif"))
 
@@ -205,7 +222,8 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
             if match is not None:
                 scene_image_base_dir, granule_id = match.groups()
             else:
-                raise RuntimeError("Unexpected scene output path returned")
+                scene_image_base_dir = scene_image
+                granule_id = os.path.basename(scene_image_base_dir)
 
             scene_image_item_id = s2_l1c_items[scene_image_base_dir].id
             original_item_ids.add(scene_image_item_id)

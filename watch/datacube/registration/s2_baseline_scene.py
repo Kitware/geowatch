@@ -93,7 +93,7 @@ def find_baseline_scene(xmls, return_paths=False):
         tmp_dict['granuledir'] = path_to_xml
 
         # MGRS tile id from granule id without T
-        tmp_dict['mgrs_tile_id'] = granule_id.split('_')[1][1:]
+        tmp_dict['mgrs_tile_id'] = granule_id.split('_')[3][1:]
 
         # Reading XML file
         tree = ET.parse(pfname_xml)
