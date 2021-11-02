@@ -1051,7 +1051,7 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
     # latmin, lonmin, latmax, lonmax = space_box.data[0]
     # Data is from geo-pandas so this should be traditional order
     lonmin, latmin, lonmax, latmax = space_box.data[0]
-    chan_code = obj['channels']
+    chan_code = obj.get('channels', '')
 
     if len(chan_code) > 8:
         # Hack to prevent long names for docker (limit is 242 chars)
