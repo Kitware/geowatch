@@ -643,6 +643,7 @@ class CocoStitchingManager(object):
                     else:
                         raise NotImplementedError
                 stitch_dims = (video['height'], video['width'], self.num_bands)
+
                 self.image_stitchers[gid] = kwarray.Stitcher(
                     stitch_dims, device=self.device)
 
@@ -665,7 +666,17 @@ class CocoStitchingManager(object):
         stitcher: kwarray.Stitcher = self.image_stitchers[gid]
 
         weights = util_kwimage.upweight_center_mask(data.shape[0:2])[..., None]
-        stitcher.add(space_slice, data, weight=weights)
+
+        if stitcher.shape[0] < space_slice[0].stop or stitcher.shape[1] < space_slice[1].stop:
+            # HACK: for the case where the "video" is smaller than the network
+            # prediction window.
+            assert space_slice[0].start == 0, 'logic not validated for other cases'
+            assert space_slice[1].start == 0, 'logic not validated for other cases'
+            data_slice, _ = kwarray.embed_slice(space_slice[0:2], stitcher.shape)
+            stitcher.add(data_slice, data[data_slice], weight=weights[data_slice])
+        else:
+            # Normal case
+            stitcher.add(space_slice, data, weight=weights)
 
     def managed_image_ids(self):
         """

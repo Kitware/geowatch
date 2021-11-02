@@ -26,8 +26,8 @@ Notes:
         --dst $OUTPUT_COCO_FPATH \
         --regions $REGION_FPATH \
         --rpc_align_method orthorectify \
-        --max_workers=4 \
-        --aux_workers=8 \
+        --max_workers=10 \
+        --aux_workers=2 \
         --context_factor=1 \
         --visualize=True \
         --keep img

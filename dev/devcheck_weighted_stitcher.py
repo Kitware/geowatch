@@ -71,3 +71,7 @@ def _demo_weighted_stitcher():
 
         kwplot.imshow(unweighted_stiched_pred, fnum=1, pnum=pnum_(), title=f'Unweighted stitched preds: overlap={overlap}')
         kwplot.imshow(weighted_stiched_pred, fnum=1, pnum=pnum_(), title=f'Weighted stitched preds: overlap={overlap}')
+
+
+def _devcheck_undersized_sticher():
+    pass
