@@ -20,6 +20,10 @@ class CocoVisualizeConfig(scfg.Config):
 
         python -m watch.cli.coco_visualize_videos --src $COCO_FPATH --viz_dpath ./viz_out --channels="red|green|blue" --space="video"
 
+        COCO_FPATH=/home/joncrall/data/dvc-repos/smart_watch_dvc/drop1-S2-L8-WV-aligned/KR_R001/subdata.kwcoco.json
+        COCO_FPATH=/home/joncrall/data/dvc-repos/smart_watch_dvc/drop1-S2-L8-WV-aligned/data.kwcoco.json
+        python -m watch.cli.coco_visualize_videos --src $COCO_FPATH --space="video"
+
         # Also note you can make an animated gif
         python -m watch.cli.gifify -i "./viz_out/US_Jacksonville_R01/_anns/red|green|blue/" -o US_Jacksonville_R01_anns.gif
 
@@ -145,8 +149,6 @@ def main(cmdline=True, **kwargs):
                                 channels=channels, vid_crop_box=vid_crop_box)
 
         else:
-            # gids = gids[0:3] + gids[len(gids) // 2 - 2:len(gids) // 2 + 1] + gids[-3:]
-            # time_sl]
             for gid in gids:
                 img = coco_dset.index.imgs[gid]
                 anns = coco_dset.annots(gid=gid).objs
@@ -195,7 +197,8 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                sub_dpath : str,
                                space : str,
                                channels=None,
-                               vid_crop_box=None):
+                               vid_crop_box=None,
+                               request_grouped_bands='default'):
     """
     TODO:
         refactor because similar code is also used in coco_align_geotiffs
@@ -227,7 +230,37 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         chan_groups = channels.streams()
     else:
         coco_img = CocoImage(img)
-        chan_groups = coco_img.channels.streams()
+        channels = coco_img.channels
+        print('---')
+        if request_grouped_bands == 'default':
+            # Use false color for special groups
+            request_grouped_bands = [
+                'red|green|blue',
+                'r|g|b',
+                # 'nir|swir16|swir22',
+            ]
+        for cand in request_grouped_bands:
+            cand = kwcoco.FusedChannelSpec.coerce(cand)
+            has_cand = (channels & cand).numel() == cand.numel()
+            if has_cand:
+                channels = channels - cand
+                # todo: nicer way to join streams
+                channels = kwcoco.ChannelSpec.coerce(channels.spec + ',' + cand.spec)
+
+        initial_groups = channels.streams()
+        chan_groups = []
+        for group in initial_groups:
+            if group.numel() > 3:
+                # For large group, just take the first 3 channels
+                if group.numel() > 8:
+                    group = group.normalize()[0:3]
+                    chan_groups.append(group)
+                else:
+                    # For smaller groups split them into singles
+                    for part in group:
+                        chan_groups.append(kwcoco.FusedChannelSpec.coerce(part))
+            else:
+                chan_groups.append(group)
 
     img_view_dpath = sub_dpath / '_imgs'
     ann_view_dpath = sub_dpath / '_anns'
@@ -265,11 +298,27 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
     for chan_group in chan_groups:
         chan_group = chan_group.spec
-        chan = delayed.take_channels(chan_group)
 
         # spec = str(chan.channels.spec)
+        img_chan_dpath = img_view_dpath / chan_group
+        ann_chan_dpath = ann_view_dpath / chan_group
+        ann_chan_dpath.mkdir(parents=True, exist_ok=1)
+        img_chan_dpath.mkdir(parents=True, exist_ok=1)
+        suffix = '_'.join([chan_group, sensor_coarse, align_method])
+        view_img_fpath = ub.augpath(name, dpath=img_chan_dpath) + '_' + suffix + '.view_img.jpg'
+        view_ann_fpath = ub.augpath(name, dpath=ann_chan_dpath) + '_' + suffix + '.view_ann.jpg'
 
-        canvas = chan.finalize()
+        chan = delayed.take_channels(chan_group)
+        try:
+            canvas = chan.finalize()
+        except Exception:
+            if sensor_coarse in {'L8', 'S2'}:
+                bundle_dpath = coco_dset.bundle_dpath
+                _hack_check_and_fix_broken(bundle_dpath, img)
+                canvas = chan.finalize()
+            else:
+                raise
+
         canvas = normalize_intensity(canvas)
         canvas = util_kwimage.ensure_false_color(canvas)
 
@@ -277,17 +326,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             # hack for wv
             canvas = canvas[..., 0]
 
-        img_chan_dpath = img_view_dpath / chan_group
-        ann_chan_dpath = ann_view_dpath / chan_group
-
-        ann_chan_dpath.mkdir(parents=True, exist_ok=1)
-        img_chan_dpath.mkdir(parents=True, exist_ok=1)
-
         canvas = kwimage.ensure_float01(canvas)
-
-        suffix = '_'.join([chan_group, sensor_coarse, align_method])
-
-        view_img_fpath = ub.augpath(name, dpath=img_chan_dpath) + '_' + suffix + '.view_img.jpg'
 
         chan_header_info = header_info.copy()
         chan_header_info.append(chan_group)
@@ -299,7 +338,6 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                                    stack=True)
         kwimage.imwrite(view_img_fpath, img_canvas)
 
-        view_ann_fpath = ub.augpath(name, dpath=ann_chan_dpath) + '_' + suffix + '.view_ann.jpg'
         try:
             ann_canvas = dets.draw_on(canvas, color='classes')
         except Exception:
@@ -310,6 +348,179 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                                    text=header_text,
                                                    stack=True)
         kwimage.imwrite(view_ann_fpath, ann_canvas)
+
+
+class GdalErrorHandler(object):
+    """
+    References:
+        https://gdal.org/api/python_gotchas.html#exceptions-raised-in-custom-error-handlers-do-not-get-caught
+
+    SeeAlso:
+        'Error',
+        'ErrorReset',
+        'GARIO_ERROR',
+        'GetErrorCounter',
+        'GetLastErrorMsg',
+        'GetLastErrorNo',
+        'GetLastErrorType',
+        'OF_VERBOSE_ERROR',
+        'PopErrorHandler',
+        'PushErrorHandler',
+        'SetCurrentErrorHandlerCatchDebug',
+        'SetErrorHandler',
+        'VSIErrorReset',
+        'VSIGetLastErrorMsg',
+        'VSIGetLastErrorNo'
+    """
+    def __init__(self):
+        self.err_level = None
+        self.err_no = None
+        self.err_msg = None
+        self.was_using_exceptions = None
+        self.reset()
+
+    def handler(self, err_level, err_no, err_msg):
+        self.err_level = err_level
+        self.err_no = err_no
+        self.err_msg = err_msg
+
+    def reset(self):
+        from osgeo import gdal
+        self.err_level = gdal.CE_None
+        self.err_no = 0
+        self.err_msg = ''
+
+    def __enter__(self):
+        from osgeo import gdal
+        self.was_using_exceptions = gdal.GetUseExceptions()
+        gdal.UseExceptions()
+        gdal.PushErrorHandler(self.handler)
+
+    def __exit__(self, a, b, c):
+        from osgeo import gdal
+        if not self.was_using_exceptions:
+            gdal.DontUseExceptions()
+        gdal.PopErrorHandler()
+
+
+def _hack_check_and_fix_broken(bundle_dpath, img):
+    print('HACK CHECK AND FIXING!!!!')
+    from os.path import join
+    from osgeo import gdal
+    from kwcoco.coco_image import CocoImage
+    coco_img = CocoImage(img)
+
+    err = GdalErrorHandler()
+    bad_bands = []
+    with err:
+        for obj in coco_img.iter_asset_objs():
+            fpath = join(bundle_dpath, obj['file_name'])
+            gdal_ds = gdal.Open(fpath, gdal.GA_ReadOnly)
+            if err.err_level == gdal.CE_Warning:
+                err.reset()
+                bad_bands.append(obj['channels'])
+
+            # print('err.err_level = {!r}'.format(err.err_level))
+            # for band_idx in range(gdal_ds.RasterCount):
+            #     band = gdal_ds.GetRasterBand(band_idx + 1)
+            #     print('band_idx = {!r}'.format(band_idx))
+            #     print('band = {!r}'.format(band))
+            gdal_ds = None  # NOQA
+
+    for chan_group in bad_bands:
+        print('BAD chan_group = {!r}'.format(chan_group))
+        _hack_check_and_fix_broken(bundle_dpath, img, chan_group)
+
+
+def _hack_fix_align_warp(bundle_dpath, img, chan_group):
+    print('HACK FIXING!!!!')
+    import kwimage
+    from os.path import join, exists
+    # HACK IT: TODO: make the align script to consistency checks
+    found = None
+
+    from kwcoco.coco_image import CocoImage
+    coco_img = CocoImage(img)
+
+    for obj in coco_img.iter_asset_objs():
+        if obj['channels'] == chan_group:
+            found = obj
+            break
+
+    if found is None:
+        import xdev
+        xdev.embed()
+
+    parent_fpath = join(bundle_dpath, found['parent_file_name'])
+    if not exists(parent_fpath):
+        # SUPER HACK
+        parent_fpath = join(bundle_dpath, '..', found['parent_file_name'])
+
+    if not exists(parent_fpath):
+        raise Exception('cannot fix, cannot find parent')
+
+    bad_fpath = join(bundle_dpath, found['file_name'])
+    corner = kwimage.Polygon.coerce(found['geos_corners'])
+    lonmax, latmax = corner.data['exterior'].data.max(axis=0)
+    lonmin, latmin = corner.data['exterior'].data.min(axis=0)
+
+    import watch
+    candidate_utm_codes = [
+        watch.gis.spatial_reference.utm_epsg_from_latlon(latmin, lonmin),
+        watch.gis.spatial_reference.utm_epsg_from_latlon(latmax, lonmax),
+        watch.gis.spatial_reference.utm_epsg_from_latlon(latmax, lonmin),
+        watch.gis.spatial_reference.utm_epsg_from_latlon(latmin, lonmax),
+        watch.gis.spatial_reference.utm_epsg_from_latlon(
+            ((latmin + latmax) / 2), ((lonmin + lonmax) / 2)),
+    ]
+    utm_epsg_zone = ub.argmax(ub.dict_hist(candidate_utm_codes))
+
+    compress = 'NONE'
+    blocksize = 64
+    crop_coordinate_srs = 'epsg:4326'
+    target_srs = 'epsg:{}'.format(utm_epsg_zone)
+    src_gpath = parent_fpath
+    # dst_gpath = './tmp.tif'
+    dst_gpath = bad_fpath
+
+    # Use the new COG output driver
+    prefix_template = (
+        '''
+        gdalwarp
+        -multi
+        --config GDAL_CACHEMAX 500 -wm 500
+        --debug off
+        -te {xmin} {ymin} {xmax} {ymax}
+        -te_srs {crop_coordinate_srs}
+        -t_srs {target_srs}
+        -of COG
+        -co OVERVIEWS=NONE
+        -co BLOCKSIZE={blocksize}
+        -co COMPRESS={compress}
+        -co NUM_THREADS=2
+        -overwrite
+        ''')
+
+    template_kw = {
+        'crop_coordinate_srs': crop_coordinate_srs,
+        'target_srs': target_srs,
+        'ymin': latmin,
+        'xmin': lonmin,
+        'ymax': latmax,
+        'xmax': lonmax,
+        'blocksize': blocksize,
+        'compress': compress,
+        'SRC': src_gpath,
+        'DST': dst_gpath,
+    }
+    template = ub.paragraph(
+        prefix_template +
+        '{SRC} {DST}')
+    command = template.format(**template_kw)
+    cmd_info = ub.cmd(command, verbose=0)  # NOQA
+    if cmd_info['ret'] != 0:
+        print('\n\nCOMMAND FAILED: {!r}'.format(command))
+        raise Exception(cmd_info['err'])
 
 
 if __name__ == '__main__':

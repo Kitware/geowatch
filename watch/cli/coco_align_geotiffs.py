@@ -29,7 +29,7 @@ Notes:
         --max_workers=10 \
         --aux_workers=2 \
         --context_factor=1 \
-        --visualize=True \
+        --visualize=False \
         --keep img
 
 
@@ -764,30 +764,19 @@ class SimpleDataCube(object):
         #     raise AssertionError('unserializable = {}'.format(ub.repr2(unserializable, nl=1)))
 
         if visualize:
-            for new_gid in sub_new_gids:
+            for new_gid in ub.ProgIter(sub_new_gids, desc='visualizing'):
                 new_img = new_dset.imgs[new_gid]
                 new_anns = new_dset.annots(gid=new_gid).objs
-                sub_bundle_dpath_ = pathlib.Path(sub_bundle_dpath)
-
-                coco_img = new_dset.coco_image(new_gid)
-                have_chans = coco_img.channels
+                viz_dpath = pathlib.Path(sub_bundle_dpath) / '_viz'
                 # Use false color for special groups
                 request_grouped_bands = [
                     'red|green|blue',
                     'nir|swir16|swir22',
                 ]
-                for cand in request_grouped_bands:
-                    cand = kwcoco.FusedChannelSpec.coerce(cand)
-                    has_cand = (have_chans & cand).numel() == cand.numel()
-                    if has_cand:
-                        have_chans = have_chans - cand
-                        # todo: nicer way to join streams
-                        have_chans = kwcoco.ChannelSpec.coerce(have_chans.spec + ',' + cand.spec)
-
                 _write_ann_visualizations2(
                     coco_dset=new_dset, img=new_img, anns=new_anns,
-                    sub_dpath=sub_bundle_dpath_, space='video',
-                    channels=have_chans)
+                    sub_dpath=viz_dpath, space='video',
+                    request_grouped_bands=request_grouped_bands)
 
         if write_subsets:
             print('Writing data subset')
