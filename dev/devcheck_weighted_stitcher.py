@@ -74,4 +74,41 @@ def _demo_weighted_stitcher():
 
 
 def _devcheck_undersized_sticher():
-    pass
+    import kwarray
+    import numpy as np
+    import ubelt as ub
+    args_grid = list(ub.named_product({
+        'stitch_dims': [
+            (22, 16, 5),
+            (512, 512, 5),
+            (64, 64, 5),
+        ],
+
+        'space_slice': [
+            (slice(0, 128), slice(0, 128)),
+            (slice(10, 138), slice(10, 138)),
+            (slice(10, 138), slice(-10, 118)),
+            (slice(128, 256), slice(128, 256)),
+        ]
+
+    }))
+
+    for args in args_grid:
+        stitch_dims = args['stitch_dims']
+        space_slice = args['space_slice']
+
+        data = np.random.rand(128, 128, 5)
+        weights = np.random.rand(128, 128, 1)
+        stitcher = kwarray.Stitcher(stitch_dims)
+
+        # By embedding the space slice in the stitcher dimensions we can get a
+        # slice corresponding to the valid region in the stitcher, and the extra
+        # padding encode the valid region of the data we are trying to stitch into.
+        stitcher_slice, padding = kwarray.embed_slice(space_slice[0:2], stitcher.shape)
+        output_slice = (
+            slice(padding[0][0], data.shape[0] - padding[0][1]),
+            slice(padding[1][0], data.shape[1] - padding[1][1]),
+        )
+        subdata = data[output_slice]
+        subweights = weights[output_slice]
+        stitcher.add(stitcher_slice, subdata, weight=subweights)

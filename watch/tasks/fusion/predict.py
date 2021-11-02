@@ -668,12 +668,17 @@ class CocoStitchingManager(object):
         weights = util_kwimage.upweight_center_mask(data.shape[0:2])[..., None]
 
         if stitcher.shape[0] < space_slice[0].stop or stitcher.shape[1] < space_slice[1].stop:
-            # HACK: for the case where the "video" is smaller than the network
-            # prediction window.
-            assert space_slice[0].start == 0, 'logic not validated for other cases'
-            assert space_slice[1].start == 0, 'logic not validated for other cases'
-            data_slice, _ = kwarray.embed_slice(space_slice[0:2], stitcher.shape)
-            stitcher.add(data_slice, data[data_slice], weight=weights[data_slice])
+            # By embedding the space slice in the stitcher dimensions we can get a
+            # slice corresponding to the valid region in the stitcher, and the extra
+            # padding encode the valid region of the data we are trying to stitch into.
+            stitcher_slice, padding = kwarray.embed_slice(space_slice[0:2], stitcher.shape)
+            output_slice = (
+                slice(padding[0][0], data.shape[0] - padding[0][1]),
+                slice(padding[1][0], data.shape[1] - padding[1][1]),
+            )
+            subdata = data[output_slice]
+            subweights = weights[output_slice]
+            stitcher.add(stitcher_slice, subdata, weight=subweights)
         else:
             # Normal case
             stitcher.add(space_slice, data, weight=weights)
