@@ -159,8 +159,8 @@ def grabdata_girder(api_url, resource_id, name=None, dpath=None, hash_prefix=Non
     stamp = ub.CacheStamp(cache_name, dpath=dpath, depends=depends)
     if stamp.expired() or not exists(dl_path):
         lock_fpath = join(dpath, cache_name + '.lock')
-        # Ensure that multiple processes / threads dont download the same data
 
+        # Ensure that multiple processes / threads dont download the same data
         from multiprocessing import current_process
         curr_proc = current_process().name
 

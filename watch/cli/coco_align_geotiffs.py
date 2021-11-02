@@ -426,9 +426,17 @@ class SimpleDataCube(object):
                     {
                         'type': 'Feature',
                         'properties': {
-                            'type': 'region', 'region_model_id': 'demo_region',
-                            'version': '1.0.1', 'mgrs': None,
-                            'start_date': None, 'end_date': None},
+                            'type': 'region',
+                            'region_id': 'demo_region',
+                            'version': '2.1.0',
+                            'mgrs': None,
+                            'start_date': None,
+                            'end_date': None,
+                            'originator': 'foobar',
+                            'comments': None,
+                            'model_content': 'annotation',
+                            'sites': [],
+                        },
                         'geometry': img_poly.scale(0.2, about='center').swap_axes().to_geojson(),
                     },
                 ]
@@ -458,10 +466,10 @@ class SimpleDataCube(object):
             >>> cube, region_df = SimpleDataCube.demo(with_region=True)
             >>> to_extract = cube.query_image_overlaps2(region_df)
         """
+        from kwcoco.util.util_json import ensure_json_serializable
         # New maybe faster and safer way of finding overlaps?
         ridx_to_gidsx = util_gis.geopandas_pairwise_overlaps(region_df, cube.img_geos_df)
         print('ridx_to_gidsx = {}'.format(ub.repr2(ridx_to_gidsx, nl=1)))
-
         # TODO: maybe check for self-overlap?
         # ridx_to_ridx = util_gis.geopandas_pairwise_overlaps(region_df, region_df)
 
@@ -481,7 +489,8 @@ class SimpleDataCube(object):
 
             if region_row.get('type', None) == 'region':
                 # Special case where we are extracting a region with a name
-                video_name = region_row.get('region_model_id', space_str)
+                video_name = region_row.get('region_model_id', space_str)  # V1 spec
+                video_name = region_row.get('region_id', video_name)  # V2 spec
             else:
                 video_name = space_str
 
@@ -523,8 +532,19 @@ class SimpleDataCube(object):
 
                     region_props = ub.dict_diff(
                         region_row.to_dict(), {'geometry'})
-                    from kwcoco.util.util_json import ensure_json_serializable
                     region_props = ensure_json_serializable(region_props)
+
+                    # Try and find a good UTM zone for this region
+                    import watch
+                    candidate_utm_codes = [
+                        watch.gis.spatial_reference.utm_epsg_from_latlon(latmin, lonmin),
+                        watch.gis.spatial_reference.utm_epsg_from_latlon(latmax, lonmax),
+                        watch.gis.spatial_reference.utm_epsg_from_latlon(latmax, lonmin),
+                        watch.gis.spatial_reference.utm_epsg_from_latlon(latmin, lonmax),
+                        watch.gis.spatial_reference.utm_epsg_from_latlon(
+                            ((latmin + latmax) / 2), ((lonmin + lonmax) / 2)),
+                    ]
+                    utm_epsg_zone = ub.argmax(ub.dict_hist(candidate_utm_codes))
 
                     image_overlaps = {
                         'date_to_gids': date_to_gids,
@@ -533,6 +553,7 @@ class SimpleDataCube(object):
                         'space_box': space_box,
                         'video_name': video_name,
                         'properties': region_props,
+                        'utm_epsg_zone': utm_epsg_zone,
                     }
                     to_extract.append(image_overlaps)
         return to_extract
@@ -600,6 +621,7 @@ class SimpleDataCube(object):
         space_region = image_overlaps['space_region']
         video_name = image_overlaps['video_name']
         video_props = image_overlaps['properties']
+        utm_epsg_zone = image_overlaps['utm_epsg_zone']
 
         if new_dset is None:
             new_dset = kwcoco.CocoDataset()
@@ -658,11 +680,12 @@ class SimpleDataCube(object):
                 img = coco_dset.imgs[gid]
                 anns = [coco_dset.index.anns[aid] for aid in
                         coco_dset.index.gid_to_aids[gid]]
-                job = pool.submit(extract_image_job, img, anns, bundle_dpath,
-                                  date, num, frame_index, new_vidid,
-                                  rpc_align_method, sub_bundle_dpath,
-                                  space_str, space_region, space_box,
-                                  start_gid, start_aid, aux_workers, (keep == 'img'))
+                job = pool.submit(
+                    extract_image_job,
+                    img, anns, bundle_dpath, date, num, frame_index, new_vidid,
+                    rpc_align_method, sub_bundle_dpath, space_str,
+                    space_region, space_box, start_gid, start_aid, aux_workers,
+                    (keep == 'img'), utm_epsg_zone=utm_epsg_zone)
                 start_gid = start_gid + 1
                 start_aid = start_aid + len(anns)
                 frame_index = frame_index + 1
@@ -745,8 +768,26 @@ class SimpleDataCube(object):
                 new_img = new_dset.imgs[new_gid]
                 new_anns = new_dset.annots(gid=new_gid).objs
                 sub_bundle_dpath_ = pathlib.Path(sub_bundle_dpath)
-                _write_ann_visualizations2(new_dset, new_img, new_anns,
-                                           sub_bundle_dpath_, space='image')
+
+                coco_img = new_dset.coco_image(new_gid)
+                have_chans = coco_img.channels
+                # Use false color for special groups
+                request_grouped_bands = [
+                    'red|green|blue',
+                    'nir|swir16|swir22',
+                ]
+                for cand in request_grouped_bands:
+                    cand = kwcoco.FusedChannelSpec.coerce(cand)
+                    has_cand = (have_chans & cand).numel() == cand.numel()
+                    if has_cand:
+                        have_chans = have_chans - cand
+                        # todo: nicer way to join streams
+                        have_chans = kwcoco.ChannelSpec.coerce(have_chans.spec + ',' + cand.spec)
+
+                _write_ann_visualizations2(
+                    coco_dset=new_dset, img=new_img, anns=new_anns,
+                    sub_dpath=sub_bundle_dpath_, space='video',
+                    channels=have_chans)
 
         if write_subsets:
             print('Writing data subset')
@@ -762,7 +803,7 @@ class SimpleDataCube(object):
 def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
                       new_vidid, rpc_align_method, sub_bundle_dpath, space_str,
                       space_region, space_box, start_gid, start_aid,
-                      aux_workers=0, keep=False):
+                      aux_workers=0, keep=False, utm_epsg_zone=None):
     """
     Threaded worker function for :func:`SimpleDataCube.extract_overlaps`.
     """
@@ -812,7 +853,7 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
         job = executor.submit(
             _aligncrop, obj, bundle_dpath, name, sensor_coarse,
             dst_dpath, space_region, space_box, align_method,
-            is_multi_image, keep)
+            is_multi_image, keep, utm_epsg_zone=utm_epsg_zone)
         job_list.append(job)
 
     dst_list = []
@@ -1005,11 +1046,17 @@ def _fix_geojson_poly(geo):
 
 
 def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
-               space_box, align_method, is_multi_image, keep):
+               space_box, align_method, is_multi_image, keep, utm_epsg_zone=None):
     # # NOTE: https://github.com/dwtkns/gdal-cheat-sheet
     # latmin, lonmin, latmax, lonmax = space_box.data[0]
     # Data is from geo-pandas so this should be traditional order
     lonmin, latmin, lonmax, latmax = space_box.data[0]
+    chan_code = obj['channels']
+
+    if len(chan_code) > 8:
+        # Hack to prevent long names for docker (limit is 242 chars)
+        num_bands = kwcoco.FusedChannelSpec.coerce(chan_code).numel()
+        chan_code = '{}:{}'.format(ub.hash_data(chan_code, base='abc')[0:8], num_bands)
 
     if is_multi_image:
         multi_dpath = ub.ensuredir((dst_dpath, name))
@@ -1030,12 +1077,20 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
         dst['num_bands'] = obj['num_bands']
 
     # TODO: parametarize
-    compress = 'RAW'
+    compress = 'NONE'
     blocksize = 64
     # NUM_THREADS=2
 
-    # te_srs = spatial reference of query points
+    # Coordinate Reference System of the "target" destination image
     # t_srs = target spatial reference for output image
+    if utm_epsg_zone is None:
+        target_srs = 'epsg:4326'
+    else:
+        target_srs = 'epsg:{}'.format(utm_epsg_zone)
+
+    # Coordinate Reference System of the "te" crop coordinates
+    # te_srs = spatial reference of query points
+    crop_coordinate_srs = 'epsg:4326'
 
     # Use the new COG output driver
     prefix_template = (
@@ -1045,14 +1100,28 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
         --config GDAL_CACHEMAX 500 -wm 500
         --debug off
         -te {xmin} {ymin} {xmax} {ymax}
-        -te_srs epsg:4326
-        -t_srs epsg:4326
+        -te_srs {crop_coordinate_srs}
+        -t_srs {target_srs}
         -of COG
         -co OVERVIEWS=NONE
         -co BLOCKSIZE={blocksize}
         -co COMPRESS={compress}
+        -co NUM_THREADS=2
         -overwrite
         ''')
+
+    template_kw = {
+        'crop_coordinate_srs': crop_coordinate_srs,
+        'target_srs': target_srs,
+        'ymin': latmin,
+        'xmin': lonmin,
+        'ymax': latmax,
+        'xmax': lonmax,
+        'blocksize': blocksize,
+        'compress': compress,
+        'SRC': src_gpath,
+        'DST': dst_gpath,
+    }
 
     if compress == 'RAW':
         compress = 'NONE'
@@ -1094,37 +1163,20 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
                 -to RPC_DEM={dem_fpath}
                 {SRC} {DST}
                 ''')
+            template_kw['dem_fpath'] = dem_fpath
         else:
-            dem_fpath = None
             template = ub.paragraph(
                 prefix_template +
                 '''
                 -rpc -et 0
                 {SRC} {DST}
                 ''')
-        command = template.format(
-            ymin=latmin,
-            xmin=lonmin,
-            ymax=latmax,
-            xmax=lonmax,
-            blocksize=blocksize,
-            compress=compress,
-            dem_fpath=dem_fpath,
-            SRC=src_gpath, DST=dst_gpath,
-        )
+        command = template.format(**template_kw)
     elif align_method == 'affine_warp':
         template = ub.paragraph(
             prefix_template +
             '{SRC} {DST}')
-        command = template.format(
-            ymin=latmin,
-            xmin=lonmin,
-            ymax=latmax,
-            xmax=lonmax,
-            blocksize=blocksize,
-            compress=compress,
-            SRC=src_gpath, DST=dst_gpath,
-        )
+        command = template.format(**template_kw)
     else:
         raise KeyError(align_method)
 

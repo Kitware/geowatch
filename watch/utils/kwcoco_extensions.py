@@ -107,10 +107,10 @@ def coco_populate_geo_heuristics(coco_dset, overwrite=False, default_gsd=None, w
         >>> coco_populate_geo_heuristics(coco_dset, overwrite=True, workers=4)
     """
     executor = ub.JobPool('thread', max_workers=workers)
-    for gid in ub.ProgIter(coco_dset.index.imgs.keys(), total=len(coco_dset.index.imgs), desc='populate imgs'):
+    for gid in ub.ProgIter(coco_dset.index.imgs.keys(), total=len(coco_dset.index.imgs), desc='submit populate imgs'):
         executor.submit(coco_populate_geo_img_heuristics, coco_dset, gid,
                         overwrite=overwrite, default_gsd=default_gsd, **kw)
-    for job in ub.ProgIter(executor.as_completed(), total=len(executor), desc='populate imgs'):
+    for job in ub.ProgIter(executor.as_completed(), total=len(executor), desc='collect populate imgs'):
         job.result()
 
 
