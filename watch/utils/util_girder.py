@@ -164,11 +164,12 @@ def grabdata_girder(api_url, resource_id, name=None, dpath=None, hash_prefix=Non
         from multiprocessing import current_process
         curr_proc = current_process().name
 
-        # Use a different thread-lock on a per-process basis
-        if curr_proc not in PER_PROCESS_THREAD_LOCKS:
-            PER_PROCESS_THREAD_LOCKS[curr_proc] = threading.Lock()
+        # Use a different thread-lock on a per-process / per-stamp basis
+        lock_key = (curr_proc, lock_fpath)
+        if lock_key not in PER_PROCESS_THREAD_LOCKS:
+            PER_PROCESS_THREAD_LOCKS[lock_key] = threading.Lock()
+        thread_lock = PER_PROCESS_THREAD_LOCKS[lock_key]
 
-        thread_lock = PER_PROCESS_THREAD_LOCKS[curr_proc]
         process_lock = fasteners.InterProcessLock(lock_fpath)  #
         with thread_lock:
             with process_lock:

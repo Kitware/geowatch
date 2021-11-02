@@ -41,18 +41,40 @@ def coco_watch_stats(dset):
         >>> dset = smart_kwcoco_demodata.demo_smart_aligned_kwcoco()
         >>> coco_watch_stats(dset)
     """
+    from kwcoco.util import util_truncate
+    import dateutil
+    num_videos = len(dset.index.videos)
+    print('num_videos = {!r}'.format(num_videos))
     print('Per-video stats summary')
     for vidid, gids in dset.index.vidid_to_gids.items():
         avail_sensors = dset.images(gids).lookup('sensor_coarse', None)
         sensor_freq = ub.dict_hist(avail_sensors)
         video = dset.index.videos[vidid]
-        print('video = {}'.format(ub.repr2(video, nl=1)))
+        video = ub.dict_diff(video, ['regions'])
+        video_str = ub.repr2(video, nl=-1, sort=False)
+        video_str = util_truncate.smart_truncate(
+            video_str, max_length=512, trunc_loc=0.9)
+        print('video = {}'.format(video_str))
+
+        frame_dates = dset.images(gids).lookup('date_captured', None)
+        frame_dt = sorted([dateutil.parser.parse(d) for d in frame_dates if d])
+        if frame_dt:
+            date_range = (min(frame_dt).isoformat(), max(frame_dt).isoformat())
+        else:
+            date_range = None
+
         video_info = ub.dict_union({
             'name': video['name'],
             'vidid': vidid,
             'sensor_freq': sensor_freq,
+            'num_frames': len(gids),
+            'date_range': date_range,
         }, video)
-        print('video_info = {}'.format(ub.repr2(video_info, nl=-1, sort=False)))
+        video_info.pop('regions', None)
+        vid_info_str = ub.repr2(video_info, nl=-1, sort=False)
+        vid_info_str = util_truncate.smart_truncate(
+            vid_info_str, max_length=512, trunc_loc=0.9)
+        print('video_info = {}'.format(vid_info_str))
 
     print('MSI channel stats')
     info = kwcoco_extensions.coco_channel_stats(dset)

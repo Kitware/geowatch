@@ -2,67 +2,40 @@
 Given the raw data in kwcoco format, this script will extract orthorectified
 regions around areas of intere/t across time.
 
+
 Notes:
 
-    # Given the output from geojson_to_kwcoco this script extracts
-    # orthorectified regions.
+    # Example invocation to create the full drop1 aligned dataset
 
-    # https://data.kitware.com/#collection/602457272fa25629b95d1718/folder/602c3e9e2fa25629b97e5b5e
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 
-    python -m watch.cli.coco_align_geotiffs \
-            --src ~/data/dvc-repos/smart_watch_dvc/drop0/drop0.kwcoco.json \
-            --dst ~/data/dvc-repos/smart_watch_dvc/drop0_aligned_v2 \
-            --context_factor=1.5
+    # Combine the region models
+    REGION_FPATH=$DVC_DPATH/drop1/all_regions.geojson
 
-    # Archive the data and upload to data.kitware.com
-    cd $HOME/data/dvc-repos/smart_watch_dvc/
-    7z a ~/data/dvc-repos/smart_watch_dvc/drop0_aligned_v2.zip \
-            ~/data/dvc-repos/smart_watch_dvc/drop0_aligned_v2
+    python -m watch.cli.merge_region_models \
+        --src $DVC_DPATH/drop1/region_models/*.geojson \
+        --dst $REGION_FPATH
 
-    stamp=$(date +"%Y-%m-%d")
-    # resolve links (7z cant handl)
-    rsync -avpL drop0_aligned_v2 drop0_aligned_v2_$stamp
-    7z a drop0_aligned_v2_$stamp.zip drop0_aligned_v2_$stamp
-
-    source $HOME/internal/secrets
-    cd $HOME/data/dvc-repos/smart_watch_dvc/
-    girder-client --api-url https://data.kitware.com/api/v1 upload \
-            602c3e9e2fa25629b97e5b5e drop0_aligned_v2_$stamp.zip
+    INPUT_COCO_FPATH=$DVC_DPATH/drop1/data.kwcoco.json
+    OUTPUT_COCO_FPATH=$DVC_DPATH/drop1-S2-L8-WV-aligned/data.kwcoco.json
+    python -m kwcoco stats $INPUT_COCO_FPATH
+    python -m watch stats $INPUT_COCO_FPATH
 
     python -m watch.cli.coco_align_geotiffs \
-            --src ~/data/dvc-repos/smart_watch_dvc/drop0/drop0-msi.kwcoco.json \
-            --dst ~/data/dvc-repos/smart_watch_dvc/drop0_aligned_msi \
-            --context_factor=1.5
+        --src $INPUT_COCO_FPATH \
+        --dst $OUTPUT_COCO_FPATH \
+        --regions $REGION_FPATH \
+        --rpc_align_method orthorectify \
+        --max_workers=4 \
+        --aux_workers=8 \
+        --context_factor=1 \
+        --visualize=True \
+        --keep img
 
 
-    python -m watch.cli.coco_align_geotiffs \
-            --src ~/data/dvc-repos/smart_watch_dvc/drop0/drop0-msi.kwcoco.json \
-            --dst ~/data/dvc-repos/smart_watch_dvc/drop0_aligned_msi_big \
-            --context_factor=3.5
-
-
-Test:
-
-    There was a bug in KR-WV, run the script only on that region to test if we
-    have fixed it.
-
-    kwcoco stats ~/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-WV/data.kwcoco.json
-
-    jq .images ~/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-WV/data.kwcoco.json
-
-    kwcoco subset ~/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-WV/data.kwcoco.json --gids=1129,1130 --dst ~/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-WV/subtmp.kwcoco.json
-
-    python -m watch.cli.coco_align_geotiffs \
-            --src ~/remote/namek/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-WV/subtmp.kwcoco.json \
-            --dst ~/remote/namek/data/dvc-repos/smart_watch_dvc/drop0_aligned_WV_Fix \
-            --rpc_align_method pixel_crop \
-            --context_factor=3.5
-
-           # --src ~/data/dvc-repos/smart_watch_dvc/drop0/KR-Pyeongchang-WV/data.kwcoco.json \
-
-    TODO:
-        - [ ] Add method for extracting "negative ROIs" that are nearby
-            "positive ROIs".
+TODO:
+    - [ ] Add method for extracting "negative ROIs" that are nearby
+        "positive ROIs".
 """
 import kwcoco
 import kwimage
@@ -148,6 +121,9 @@ class CocoAlignGeotiffConfig(scfg.Config):
         )),
 
         'target_gsd': scfg.Value(10, help=ub.paragraph('initial gsd to use')),
+
+        'edit_geotiff_metadata': scfg.Value(
+            False, help='if True MODIFIES THE UNDERLYING IMAGES to ensure geodata is propogated'),
     }
 
 
@@ -306,8 +282,8 @@ def main(cmdline=True, **kw):
         coco_dset, overwrite={'warp'}, workers=max_workers,
         keep_geotiff_metadata=True,
     )
-    # update_coco_geotiff_metadata(coco_dset, serializable=False,
-    #                              max_workers=max_workers)
+    if config['edit_geotiff_metadata']:
+        kwcoco_extensions.ensure_transfered_geo_data(coco_dset)
 
     # Construct the "data cube"
     cube = SimpleDataCube(coco_dset)
@@ -436,7 +412,6 @@ class SimpleDataCube(object):
         coco_dset.add_annotation(
             image_id=gid, bbox=[0, 0, 0, 0], segmentation_geos=sseg_geos)
 
-        # update_coco_geotiff_metadata(coco_dset, serializable=False, max_workers=0)
         kwcoco_extensions.coco_populate_geo_heuristics(
             coco_dset, overwrite={'warp'}, workers=0,
             keep_geotiff_metadata=True,
@@ -980,41 +955,6 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
         new_anns.append(ann)
 
     return new_img, new_anns
-
-
-# def update_coco_geotiff_metadata(coco_dset, serializable=True, max_workers=0):
-#     """
-#     if serializable is True, then we should only update with information
-#     that can be coerced to json.
-#     """
-#     if serializable:
-#         raise NotImplementedError('we dont do this yet')
-
-#     bundle_dpath = coco_dset.bundle_dpath
-
-#     pool = ub.JobPool(mode='thread', max_workers=max_workers)
-
-#     img_iter = ub.ProgIter(coco_dset.imgs.values(),
-#                            total=len(coco_dset.imgs),
-#                            desc='submit update meta jobs',
-#                            verbose=1, freq=1, adjust=False)
-#     for img in img_iter:
-#         job = pool.submit(kwcoco_extensions.single_geotiff_metadata,
-#                           bundle_dpath, img, serializable=serializable)
-#         job.img = img
-
-#     for job in ub.ProgIter(pool.as_completed(),
-#                            total=len(pool),
-#                            desc='collect update meta jobs',
-#                            verbose=1, freq=1, adjust=False):
-#         geotiff_metadata, aux_metadata = job.result()
-#         img = job.img
-#         # # todo: can be parallelized
-#         # geotiff_metadata, aux_metadata = single_geotiff_metadata(
-#         #     bundle_dpath, img, serializable=serializable)
-#         img['geotiff_metadata'] = geotiff_metadata
-#         for aux, aux_info in zip(img.get('auxiliary', []), aux_metadata):
-#             aux['geotiff_metadata'] = aux_info
 
 
 def shapely_bounding_box(geom):
