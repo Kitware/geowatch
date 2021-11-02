@@ -5,6 +5,7 @@ from watch.cli.baseline_framework_ingress import baseline_framework_ingress
 from watch.cli.baseline_framework_egress import baseline_framework_egress
 from watch.cli.s2_coreg import run_s2_coreg_l1c
 from watch.cli.run_brdf import run_brdf
+from watch.cli.ortho_wv import ortho_wv
 
 
 def main():
@@ -58,6 +59,7 @@ def run_coreg_for_baseline(input_path,
                            requester_pays=False,
                            newline=False,
                            jobs=1):
+    print("* Running ingress *")
     ingress_catalog = baseline_framework_ingress(
         input_path,
         '/tmp/ingress',
@@ -66,17 +68,27 @@ def run_coreg_for_baseline(input_path,
         requester_pays,
         jobs)
 
+    print("* Running coregistration *")
     coreg_catalog = run_s2_coreg_l1c(
         ingress_catalog,
         '/tmp/coreg')
 
+    print("* Running BRDF correction *")
     brdf_catalog = run_brdf(
         coreg_catalog,
         '/tmp/brdf',
         jobs=1)
 
-    te_output = baseline_framework_egress(
+    print("* Orthorectifying WV data *")
+    wv_updated_catalog = ortho_wv(
         brdf_catalog,
+        '/tmp/orth_wv',
+        jobs=1,
+        as_cog=True)
+
+    print("* Running egress *")
+    te_output = baseline_framework_egress(
+        wv_updated_catalog,
         output_path,
         outbucket,
         aws_profile,
