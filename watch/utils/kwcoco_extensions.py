@@ -26,7 +26,7 @@ except Exception:
     profile = ub.identity
 
 
-def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None, overwrite=False, default_gsd=None, conform=True):
+def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None, overwrite=False, default_gsd=None, conform=True, workers=0):
     """
     Aggregate populate function for fields useful to WATCH.
 
@@ -83,9 +83,12 @@ def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None, overwrite=Fal
         vidids = coco_dset.index.videos.keys()
     gids = list(ub.flatten(coco_dset.images(vidid=vidid) for vidid in vidids))
 
-    for gid in ub.ProgIter(gids, total=len(gids), desc='populate imgs'):
-        coco_populate_geo_img_heuristics(coco_dset, gid, overwrite=overwrite,
-                                         default_gsd=default_gsd)
+    # for gid in ub.ProgIter(gids, total=len(gids), desc='populate imgs'):
+    #     coco_populate_geo_img_heuristics(coco_dset, gid, overwrite=overwrite,
+    #                                      default_gsd=default_gsd)
+    coco_populate_geo_heuristics(
+        coco_dset, gids=gids, overwrite=overwrite, default_gsd=default_gsd,
+        workers=workers)
 
     for vidid in ub.ProgIter(vidids, total=len(vidids), desc='populate videos'):
         coco_populate_geo_video_stats(coco_dset, vidid, target_gsd=target_gsd)
@@ -94,7 +97,7 @@ def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None, overwrite=Fal
     coco_dset._ensure_json_serializable()
 
 
-def coco_populate_geo_heuristics(coco_dset, overwrite=False, default_gsd=None, workers=0, **kw):
+def coco_populate_geo_heuristics(coco_dset, gids=None, overwrite=False, default_gsd=None, workers=0, **kw):
     """
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -106,8 +109,10 @@ def coco_populate_geo_heuristics(coco_dset, overwrite=False, default_gsd=None, w
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
         >>> coco_populate_geo_heuristics(coco_dset, overwrite=True, workers=4)
     """
+    if gids is None:
+        gids = list(coco_dset.index.imgs.keys())
     executor = ub.JobPool('thread', max_workers=workers)
-    for gid in ub.ProgIter(coco_dset.index.imgs.keys(), total=len(coco_dset.index.imgs), desc='submit populate imgs'):
+    for gid in ub.ProgIter(gids, desc='submit populate imgs'):
         executor.submit(coco_populate_geo_img_heuristics, coco_dset, gid,
                         overwrite=overwrite, default_gsd=default_gsd, **kw)
     for job in ub.ProgIter(executor.as_completed(), total=len(executor), desc='collect populate imgs'):
@@ -255,6 +260,8 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
                     'wld_crs_info': wld_crs_info,
                     'utm_crs_info': utm_crs_info,
                 })
+
+                obj['is_rpc'] = info['is_rpc']
 
                 if with_wgs:
                     obj.update({

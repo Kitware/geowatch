@@ -30,7 +30,9 @@ class AddWatchFieldsConfig(scfg.Config):
 
         'edit_geotiff_metadata': scfg.Value(False, help='if True MODIFIES THE UNDERLYING IMAGES to ensure geodata is propogated'),
 
-        'default_gsd': scfg.Value(None, help='if specified, assumed any images without geo-metadata have this GSD')
+        'default_gsd': scfg.Value(None, help='if specified, assumed any images without geo-metadata have this GSD'),
+
+        'workers': scfg.Value(0, help='number of io threads')
     }
 
 
@@ -106,9 +108,10 @@ def main(**kwargs):
     target_gsd = config['target_gsd']
     overwrite = config['overwrite']
     default_gsd = config['default_gsd']
+    workers = config['workers']
     kwcoco_extensions.populate_watch_fields(
         dset, target_gsd=target_gsd, overwrite=overwrite,
-        default_gsd=default_gsd)
+        default_gsd=default_gsd, workers=workers)
     print('dset.index.videos = {}'.format(ub.repr2(dset.index.videos, nl=2, precision=4)))
 
     if config['edit_geotiff_metadata']:

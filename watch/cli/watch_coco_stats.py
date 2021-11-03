@@ -50,10 +50,10 @@ def coco_watch_stats(dset):
         avail_sensors = dset.images(gids).lookup('sensor_coarse', None)
         sensor_freq = ub.dict_hist(avail_sensors)
         video = dset.index.videos[vidid]
-        video = ub.dict_diff(video, ['regions'])
+        video = ub.dict_diff(video, ['regions', 'properties'])
         video_str = ub.repr2(video, nl=-1, sort=False)
         video_str = util_truncate.smart_truncate(
-            video_str, max_length=512, trunc_loc=0.9)
+            video_str, max_length=512, trunc_loc=0.7)
         print('video = {}'.format(video_str))
 
         frame_dates = dset.images(gids).lookup('date_captured', None)
@@ -71,9 +71,10 @@ def coco_watch_stats(dset):
             'date_range': date_range,
         }, video)
         video_info.pop('regions', None)
+        video_info.pop('properties', None)
         vid_info_str = ub.repr2(video_info, nl=-1, sort=False)
         vid_info_str = util_truncate.smart_truncate(
-            vid_info_str, max_length=512, trunc_loc=0.9)
+            vid_info_str, max_length=512, trunc_loc=0.6)
         print('video_info = {}'.format(vid_info_str))
 
     print('MSI channel stats')

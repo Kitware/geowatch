@@ -1,4 +1,4 @@
-"""
+r"""
 Given the raw data in kwcoco format, this script will extract orthorectified
 regions around areas of intere/t across time.
 
@@ -8,21 +8,29 @@ Notes:
     # Example invocation to create the full drop1 aligned dataset
 
     DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+    INPUT_COCO_FPATH=$DVC_DPATH/drop1/data.kwcoco.json
+    OUTPUT_COCO_FPATH=$DVC_DPATH/drop1-S2-L8-WV-aligned/data.kwcoco.json
+    REGION_FPATH=$DVC_DPATH/drop1/all_regions.geojson
+    VIZ_DPATH=$DVC_DPATH/drop1-S2-L8-WV-aligned/_viz_video
+
+    # Quick stats about input datasets
+    python -m kwcoco stats $INPUT_COCO_FPATH
+    python -m watch stats $INPUT_COCO_FPATH
 
     # Combine the region models
-    REGION_FPATH=$DVC_DPATH/drop1/all_regions.geojson
-
     python -m watch.cli.merge_region_models \
         --src $DVC_DPATH/drop1/region_models/*.geojson \
         --dst $REGION_FPATH
 
-    INPUT_COCO_FPATH=$DVC_DPATH/drop1/data.kwcoco.json
-    OUTPUT_COCO_FPATH=$DVC_DPATH/drop1-S2-L8-WV-aligned/data.kwcoco.json
-    python -m kwcoco stats $INPUT_COCO_FPATH
-    python -m watch stats $INPUT_COCO_FPATH
-
-    python -m watch.cli.coco_align_geotiffs \
+    python -m watch.cli.coco_add_watch_fields \
         --src $INPUT_COCO_FPATH \
+        --dst $INPUT_COCO_FPATH.prepped \
+        --workers 16 \
+        --target_gsd=10
+
+    # Execute alignment / crop script
+    python -m watch.cli.coco_align_geotiffs \
+        --src $INPUT_COCO_FPATH.prepped \
         --dst $OUTPUT_COCO_FPATH \
         --regions $REGION_FPATH \
         --rpc_align_method orthorectify \
@@ -30,7 +38,46 @@ Notes:
         --aux_workers=2 \
         --context_factor=1 \
         --visualize=False \
+        --skip_geo_preprop True \
         --keep img
+
+    # Make an animated gif for specified bands (use "," to separate)
+    # Requires a CD
+    CHANNELS="red|green|blue"
+    mapfile -td \, _BANDS < <(printf "%s\0" "$CHANNELS")
+    items=$(jq -r '.videos[] | .name' $OUTPUT_COCO_FPATH)
+    for item in ${items[@]}; do
+        echo "item = $item"
+        for bandname in ${_BANDS[@]}; do
+            echo "_BANDS = $_BANDS"
+            BAND_DPATH="$VIZ_DPATH/${item}/_anns/${bandname}/"
+            GIF_FPATH="$VIZ_DPATH/${item}_anns_${bandname}.gif"
+            python -m watch.cli.gifify --frames_per_second .7 \
+                --input "$BAND_DPATH" --output "$GIF_FPATH"
+        done
+    done
+
+    # Propagation actually touches the images, so this is necessary
+    # Propagate annotations forward in time
+    watch-cli propagate_labels \
+        --src $OUTPUT_COCO_FPATH \
+        --dst $OUTPUT_COCO_FPATH.tmp \
+        --ext $DVC_DPATH/drop1/annots.kwcoco.json \
+        --viz_dpath None \
+        --verbose 1 \
+        --validate 1 \
+        --crop 1 \
+        --max_workers None
+
+
+    python -m watch.cli.coco_align_geotiffs \
+
+    # Output stats
+    python -m kwcoco stats $OUTPUT_COCO_FPATH
+    python -m watch stats $OUTPUT_COCO_FPATH
+    python -m watch.cli.coco_visualize_videos \
+        --src $OUTPUT_COCO_FPATH \
+        --space="video"
 
 
 TODO:
@@ -119,6 +166,8 @@ class CocoAlignGeotiffConfig(scfg.Config):
             "roi": only add new ROIs
             '''
         )),
+
+        'skip_geo_preprop': scfg.Value(False),
 
         'target_gsd': scfg.Value(10, help=ub.paragraph('initial gsd to use')),
 
@@ -278,10 +327,12 @@ def main(cmdline=True, **kw):
 
     # Load the dataset and extract geotiff metadata from each image.
     coco_dset = kwcoco.CocoDataset.coerce(src_fpath)
-    kwcoco_extensions.coco_populate_geo_heuristics(
-        coco_dset, overwrite={'warp'}, workers=max_workers,
-        keep_geotiff_metadata=True,
-    )
+
+    if not config['skip_geo_preprop']:
+        kwcoco_extensions.coco_populate_geo_heuristics(
+            coco_dset, overwrite={'warp'}, workers=max_workers,
+            keep_geotiff_metadata=True,
+        )
     if config['edit_geotiff_metadata']:
         kwcoco_extensions.ensure_transfered_geo_data(coco_dset)
 
@@ -352,12 +403,14 @@ class SimpleDataCube(object):
         # old way: gid_to_poly is old and should be deprecated
         import geopandas as gpd
         import shapely
+        from kwcoco.util import ensure_json_serializable
         gid_to_poly = {}
 
         expxected_geos_crs_info = {
             'axis_mapping': 'OAMS_TRADITIONAL_GIS_ORDER',
             'auth': ('EPSG', '4326')
         }
+        expxected_geos_crs_info = ensure_json_serializable(expxected_geos_crs_info)
 
         # new way: put data in the cube into a geopandas data frame
         df_input = []
@@ -367,10 +420,7 @@ class SimpleDataCube(object):
             crs_info = properties.get('crs_info', None)
             if crs_info is not None:
                 assert crs_info == expxected_geos_crs_info
-            # pass
-            # info = img['geotiff_metadata']
-            # kw_img_poly = kwimage.Polygon(exterior=info['wgs84_corners'])
-            # sh_img_poly = kw_img_poly.to_shapely()
+
             # Create a data frame with space-time regions
             df_input.append({
                 'gid': gid,
@@ -419,7 +469,6 @@ class SimpleDataCube(object):
 
         cube = SimpleDataCube(coco_dset)
         if with_region:
-            img_poly = kwimage.Polygon(exterior=cube.coco_dset.imgs[1]['geotiff_metadata']['wgs84_corners'])
             region_geojson =  {
                 'type': 'FeatureCollection',
                 'features': [
@@ -437,7 +486,7 @@ class SimpleDataCube(object):
                             'model_content': 'annotation',
                             'sites': [],
                         },
-                        'geometry': img_poly.scale(0.2, about='center').swap_axes().to_geojson(),
+                        'geometry': img_poly.scale(0.2, about='center').to_geojson(),
                     },
                 ]
             }
@@ -813,19 +862,20 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
         objs.append(ub.dict_diff(img, {'auxiliary'}))
     objs.extend(auxiliary)
 
-    is_rpcs = [obj['geotiff_metadata']['is_rpc'] for obj in objs]
-    if not ub.allsame(is_rpcs):
+    is_rpc = False
+    for obj in objs:
         # TODO fix this, probably WV from smart-stac and smart-imagery mixed?
-        print(objs)
-        print(is_rpcs)
-        is_rpc = False
-    else:
-        is_rpc = ub.peek(is_rpcs)
+        # is_rpcs = [obj['geotiff_metadata']['is_rpc'] for obj in objs]
+        # is_rpc = ub.allsame(is_rpcs)
+        if 'is_rpc' in obj:
+            if obj['is_rpc']:
+                is_rpc = True
+        else:
+            if obj['geotiff_metadata']['is_rpc']:
+                is_rpc = True
 
     if is_rpc and rpc_align_method != 'affine_warp':
         align_method = rpc_align_method
-        if align_method == 'pixel_crop':
-            align_method = 'pixel_crop'
     else:
         align_method = 'affine_warp'
 
@@ -1036,6 +1086,7 @@ def _fix_geojson_poly(geo):
 
 def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
                space_box, align_method, is_multi_image, keep, utm_epsg_zone=None):
+    import watch
     # # NOTE: https://github.com/dwtkns/gdal-cheat-sheet
     # latmin, lonmin, latmax, lonmax = space_box.data[0]
     # Data is from geo-pandas so this should be traditional order
@@ -1116,10 +1167,10 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
         compress = 'NONE'
 
     if align_method == 'pixel_crop':
-        align_method = 'pixel_crop'
         from kwcoco.util.util_delayed_poc import LazyGDalFrameFile
         imdata = LazyGDalFrameFile(src_gpath)
-        info = obj['geotiff_metadata']
+        info = watch.gis.geotiff.geotiff_crs_info(src_gpath)
+        # info = obj['geotiff_metadata']
         space_region_pxl = space_region.warp(info['wgs84_to_wld']).warp(info['wld_to_pxl'])
         pxl_xmin, pxl_ymin, pxl_xmax, pxl_ymax = space_region_pxl.bounding_box().to_ltrb().quantize().data[0]
         sl = tuple([slice(pxl_ymin, pxl_ymax), slice(pxl_xmin, pxl_xmax)])
@@ -1130,12 +1181,12 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
         dst['img_shape'] = subim.shape
         dst['transform'] = transform
         # TODO: do this with a gdal command so the tiff metdata is preserved
-
     elif align_method == 'orthorectify':
         # HACK TO FIND an appropirate DEM file
         # from watch.gis import elevation
         # dems = elevation.girder_gtop30_elevation_dem()
-        info = obj['geotiff_metadata']
+        # info = obj['geotiff_metadata']
+        info = watch.gis.geotiff.geotiff_crs_info(src_gpath)
         rpcs = info['rpc_transform']
         dems = rpcs.elevation
 

@@ -22,7 +22,7 @@ class CocoVisualizeConfig(scfg.Config):
 
         COCO_FPATH=/home/joncrall/data/dvc-repos/smart_watch_dvc/drop1-S2-L8-WV-aligned/KR_R001/subdata.kwcoco.json
         COCO_FPATH=/home/joncrall/data/dvc-repos/smart_watch_dvc/drop1-S2-L8-WV-aligned/data.kwcoco.json
-        python -m watch.cli.coco_visualize_videos --src $COCO_FPATH --space="video"
+        python -m watch.cli.coco_visualize_videos --src $COCO_FPATH --space="image"
 
         # Also note you can make an animated gif
         python -m watch.cli.gifify -i "./viz_out/US_Jacksonville_R01/_anns/red|green|blue/" -o US_Jacksonville_R01_anns.gif
