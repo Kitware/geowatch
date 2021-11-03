@@ -276,6 +276,7 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
                     obj['warp_to_wld'] = Affine.eye().__json__()
                 else:
                     # FIXME: This might not be the best way to report errors
+                    # raise
                     errors.append('no_crs_info: {!r}'.format(ex))
             else:
                 obj['approx_meter_gsd'] = approx_meter_gsd

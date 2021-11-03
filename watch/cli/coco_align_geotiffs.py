@@ -791,10 +791,11 @@ class SimpleDataCube(object):
                 if unserializable:
                     raise AssertionError('unserializable(gid={}) = {}'.format(new_gid, ub.repr2(unserializable, nl=0)))
 
-        kwcoco_extensions.populate_watch_fields(
-            new_dset, target_gsd=target_gsd, vidids=[new_vidid], conform=False)
+        kwcoco_extensions.coco_populate_geo_video_stats(
+            new_dset, target_gsd=target_gsd, vidid=new_vidid)
 
-        if True:
+        # Enable if serialization is breaking
+        if False:
             for new_gid in sub_new_gids:
                 # Fix json serializability
                 new_img = new_dset.index.imgs[new_gid]
@@ -839,7 +840,9 @@ class SimpleDataCube(object):
 
         if write_subsets:
             print('Writing data subset')
-            new_dset._check_json_serializable()
+            if 0:
+                # Enable if json serialization is breaking
+                new_dset._check_json_serializable()
 
             sub_dset = new_dset.subset(sub_new_gids, copy=True)
             sub_dset.fpath = join(sub_bundle_dpath, 'subdata.kwcoco.json')
@@ -1179,16 +1182,16 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
         compress = 'NONE'
 
     if align_method == 'orthorectify':
-        # HACK TO FIND an appropirate DEM file
-        # from watch.gis import elevation
-        # dems = elevation.girder_gtop30_elevation_dem()
-        # info = obj['geotiff_metadata']
-        info = watch.gis.geotiff.geotiff_crs_info(src_gpath)
+        if 'geotiff_metadata' in obj:
+            info = obj['geotiff_metadata']
+        else:
+            info = watch.gis.geotiff.geotiff_crs_info(src_gpath)
         rpcs = info['rpc_transform']
         # No RPCS exist, use affine-warp instead
         if rpcs is None:
             align_method = 'affine_warp'
         else:
+            # HACK TO FIND an appropirate DEM file
             dems = rpcs.elevation
 
     if align_method == 'pixel_crop':

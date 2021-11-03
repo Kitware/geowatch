@@ -181,8 +181,11 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
     info = {}
     ref = _coerce_gdal_dataset(gpath_or_ref)
 
-    tags = ref.GetMetadataDomainList()
-    if 'RPC' in tags:
+    # tags = ref.GetMetadataDomainList()  # 7.5% of the execution time
+    rpc_info = ref.GetMetadata(domain='RPC')  # 5% of execution time
+
+    # if 'RPC' in tags:
+    if len(rpc_info):
         rpc_info = ref.GetMetadata(domain='RPC')
         rpc_transform = watch_crs.RPCTransform.from_gdal(
             rpc_info, elevation=elevation)
@@ -199,7 +202,7 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         raise AssertionError('ref has no attribute GetSpatialRef, gdal version issue?')
         aff_wld_crs = None
     else:
-        aff_wld_crs = ref.GetSpatialRef()
+        aff_wld_crs = ref.GetSpatialRef()  # 20% of the execution time
     aff_proj = ref.GetProjection()
 
     gcps = ref.GetGCPs()
@@ -217,7 +220,8 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         aff_wld_crs_type = 'gcp'  # mark the aff_wld crs as coming from the gcp
         if len(gcps) == 0 or aff_wld_crs is None:
             if rpc_transform is not None:
-                raise AssertionError('I dont think this should be possible')
+                # raise AssertionError('I dont think this should be possible')
+                # Oh but it is, tests hit it.
                 aff_wld_crs = osr.SpatialReference()
                 aff_wld_crs.ImportFromEPSG(4326)  # 4326 is the EPSG id WGS84 of lat/lon crs
                 # Set traditional because our rpc transform returns x,y
@@ -307,7 +311,7 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
     wgs84_axis_mapping = axis_mapping_int_to_text(wgs84_axis_mapping_int)
 
     wgs84_from_wld = osr.CoordinateTransformation(wld_crs, wgs84_crs)
-    wld_from_wgs84 = osr.CoordinateTransformation(wgs84_crs, wld_crs)
+    wld_from_wgs84 = osr.CoordinateTransformation(wgs84_crs, wld_crs)  # 10% of the execution time
 
     if is_rpc:
         pxl_from_wld = rpc_transform.warp_pixel_from_world
@@ -327,7 +331,7 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         [ref.RasterXSize, 0],
     ])
     pxl_corners = kwimage.Coords(xy_corners)
-    wld_corners = pxl_corners.warp(wld_from_pxl)
+    wld_corners = pxl_corners.warp(wld_from_pxl)  # 10% of the execution time
 
     wgs84_corners = wld_corners.warp(wgs84_from_wld)
     min_lat, min_lon = wgs84_corners.data[:, 0:2].min(axis=0)
@@ -354,9 +358,9 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         utm_axis_mapping_int = utm_crs.GetAxisMappingStrategy()
         utm_axis_mapping = axis_mapping_int_to_text(utm_axis_mapping_int)
 
-        utm_from_wld = osr.CoordinateTransformation(wld_crs, utm_crs)
+        utm_from_wld = osr.CoordinateTransformation(wld_crs, utm_crs)  # 4% time
         # wld_from_utm = osr.CoordinateTransformation(utm_crs, wld_crs)
-        utm_corners = wld_corners.warp(utm_from_wld)
+        utm_corners = wld_corners.warp(utm_from_wld)  # 2% time
 
         min_utm = utm_corners.data.min(axis=0)
         max_utm = utm_corners.data.max(axis=0)
