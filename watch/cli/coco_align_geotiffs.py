@@ -1136,6 +1136,11 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
     if obj.get('num_bands', None):
         dst['num_bands'] = obj['num_bands']
 
+    already_exists = exists(dst_gpath)
+    needs_recompute = not (already_exists and keep)
+    if not needs_recompute:
+        return dst
+
     # TODO: parametarize
     compress = 'NONE'
     blocksize = 64
@@ -1200,6 +1205,7 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
             dems = rpcs.elevation
 
     if align_method == 'pixel_crop':
+        raise NotImplementedError('no longer supported')
         info = watch.gis.geotiff.geotiff_crs_info(src_gpath)
         if 1:
             # IMPL1
@@ -1215,6 +1221,7 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
             kwimage.imwrite(dst_gpath, subim, space=None, backend='gdal',
                             blocksize=blocksize, compress=compress)
         else:
+            raise Exception
             # IMPL2
             template = (
                 '''
@@ -1271,12 +1278,13 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
     else:
         raise KeyError(align_method)
 
-    if not (exists(dst_gpath) and keep):
+    if needs_recompute:
+        # TODO: write to a temporay location and then do an atomic move
+        # of the file in order to prevent leaving corrupted data on disk
         cmd_info = ub.cmd(command, verbose=0)  # NOQA
         if cmd_info['ret'] != 0:
             print('\n\nCOMMAND FAILED: {!r}'.format(command))
             raise Exception(cmd_info['err'])
-        # cmd_info = ub.cmd(command, verbose=1)  # NOQA
 
     if not exists(dst_gpath):
         raise Exception('THE DESTINATION PATH WAS NOT COMPUTED')
