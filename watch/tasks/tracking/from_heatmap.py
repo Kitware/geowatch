@@ -48,11 +48,59 @@ def mask_to_scored_polygons(probs, thresh):
         yield poly, _score(poly, probs)
 
 
+def get_poly_overlap(poly, prob_map, threshold):
+    # Get overlap of a polygon with a heatmap
+    # ToDo: this is inefficient, replace with ratserization of
+    # a smaller region around the bbox of poly
+    prob_map = prob_map[:,:,0]
+    hard_prob = prob_map > threshold
+    poly_mask = poly.to_mask(prob_map.shape).numpy().data
+
+    overlap = (hard_prob*poly_mask).sum()
+    total_poly_area = poly_mask.sum()
+
+    return overlap/total_poly_area
+
+
+def get_poly_time_ind(scored_polys, threshold, dset, vidid, key, reverse=False):
+    gids = dset.index.vidid_to_gids[vidid]
+    number_images = len(gids)
+
+    poly_started = set()
+    poly_start_ind = [0 for gid in gids]
+    if isinstance(key, list):
+        key = key[0]
+
+    if reverse:
+        gids = list(reversed(gids))
+    for image_ind, gid in enumerate(gids):
+        img = dset.index.imgs[gid]
+        coco_img = kwcoco_extensions.CocoImage(img, dset)
+        if key in coco_img.channels:
+            img_probs = coco_img.delay(key, space='video').finalize()
+
+            for poly_ind, (p, score) in enumerate(scored_polys):
+                if p not in poly_started:
+                    overlap = get_poly_overlap(p, img_probs, threshold=threshold)
+                    if overlap > 0.5:
+                        poly_started.add(p)
+                        poly_start_ind[poly_ind] = image_ind
+        else:
+            print('image', gid, 'does not have predictions')
+
+    if reverse:
+            poly_start_ind = [len(gids) - i for i in poly_start_ind]
+
+    return poly_start_ind
+
+
 def time_aggregated_polys(coco_dset,
                           thresh=0.15,
                           morph_kernel=3,
                           key='salient',
-                          bg_key=None):
+                          bg_key=None,
+                          time_filtering=False
+                         ):
     '''
     Track function.
 
@@ -159,49 +207,63 @@ def time_aggregated_polys(coco_dset,
         mask_to_scored_polygons(probs(running_dct['fg']), thresh))
 
     print('time aggregation: number of polygons:', len(scored_polys))
+
+    if time_filtering:
+        vidid = list(coco_dset.index.videos)[0]
+        poly_start_ind = get_poly_time_ind(scored_polys, thresh, coco_dset, vidid, key)
+        poly_end_ind = get_poly_time_ind(scored_polys, thresh, coco_dset, vidid, key, reverse=True)
+
     # Add each polygon to every images as a track
     new_trackids = kwcoco_extensions.TrackidGenerator(coco_dset)
 
     for vid_poly, score in scored_polys:
         track_id = next(new_trackids)
-        for gid, img in coco_dset.imgs.items():
+        for image_ind, (gid, img) in enumerate(coco_dset.imgs.items()):
 
-            # assign category (key) from max score
-            coco_img = kwcoco_extensions.CocoImage(img, coco_dset)
-            if score > thresh or len(bg_key) == 0:
-                cand_keys = key
+            save_this_polygon = False
+            if time_filtering:
+                if (image_ind > poly_start_ind[image_ind] and image_ind < poly_end_ind[image_ind]):
+                    save_this_polygon = True
             else:
-                cand_keys = bg_key
-            cand_scores = []
-            for k in cand_keys:
-                if k in coco_img.channels:
-                    img_probs = coco_img.delay(k, space='video').finalize()
-                    cand_scores.append(_score(vid_poly, img_probs))
+                save_this_polygon = True
+
+            if save_this_polygon:
+                # assign category (key) from max score
+                coco_img = kwcoco_extensions.CocoImage(img, coco_dset)
+                if score > thresh or len(bg_key) == 0:
+                    cand_keys = key
                 else:
-                    cand_scores.append(0)
+                    cand_keys = bg_key
+                cand_scores = []
+                for k in cand_keys:
+                    if k in coco_img.channels:
+                        img_probs = coco_img.delay(k, space='video').finalize()
+                        cand_scores.append(_score(vid_poly, img_probs))
+                    else:
+                        cand_scores.append(0)
 
-            #cat_name = np.max(cand_keys, where=cand_scores)
-            cat_name = cand_keys[np.argmax(cand_scores)]
-            cid = coco_dset.ensure_category(cat_name)
+                #cat_name = np.max(cand_keys, where=cand_scores)
+                cat_name = cand_keys[np.argmax(cand_scores)]
+                cid = coco_dset.ensure_category(cat_name)
 
-            vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
-            img_from_vid = vid_from_img.inv()
+                vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
+                img_from_vid = vid_from_img.inv()
 
-            # Transform the video polygon into image space
-            img_poly = vid_poly.warp(img_from_vid)
-            bbox = list(img_poly.bounding_box().to_coco())[0]
-            # Add the polygon as an annotation on the image
-            coco_dset.add_annotation(image_id=gid,
-                                     category_id=cid,
-                                     bbox=bbox,
-                                     segmentation=img_poly,
-                                     score=score,
-                                     track_id=track_id)
+                # Transform the video polygon into image space
+                img_poly = vid_poly.warp(img_from_vid)
+                bbox = list(img_poly.bounding_box().to_coco())[0]
+                # Add the polygon as an annotation on the image
+                coco_dset.add_annotation(image_id=gid,
+                                         category_id=cid,
+                                         bbox=bbox,
+                                         segmentation=img_poly,
+                                         score=score,
+                                         track_id=track_id)
 
     return coco_dset
 
 
-def time_aggregated_polys_bas(coco_dset, thresh=0.15, morph_kernel=3):
+def time_aggregated_polys_bas(coco_dset, thresh=0.3, morph_kernel=3, time_filtering=True):
     '''
     Wrapper for BAS that looks for change heatmaps.
     '''
@@ -209,7 +271,7 @@ def time_aggregated_polys_bas(coco_dset, thresh=0.15, morph_kernel=3):
     for change_key in change_keys:
         try:
             return time_aggregated_polys(coco_dset, thresh, morph_kernel,
-                                         change_key)
+                                         change_key, time_filtering=time_filtering)
         except ValueError:
             pass
 
@@ -218,9 +280,10 @@ def time_aggregated_polys_bas(coco_dset, thresh=0.15, morph_kernel=3):
 
 
 def time_aggregated_polys_sc(coco_dset,
-                             thresh=0.15,
+                             thresh=0.2,
                              morph_kernel=3,
-                             bg_thresh=True):
+                             bg_thresh=True,
+                             time_filtering=True):
     '''
     Wrapper for Site Characterization that looks for phase heatmaps.
 
@@ -238,7 +301,8 @@ def time_aggregated_polys_sc(coco_dset,
                                          'Active Construction',
                                          'Post Construction'
                                      ],
-                                     bg_key=['No Activity'])
+                                     bg_key=['No Activity'],
+                                     time_filtering=time_filtering)
     else:
         return time_aggregated_polys(coco_dset,
                                      thresh,
@@ -247,4 +311,5 @@ def time_aggregated_polys_sc(coco_dset,
                                          'Site Preparation',
                                          'Active Construction',
                                          'Post Construction', 'No Activity'
-                                     ])
+                                     ],
+                                     time_filtering=time_filtering)
