@@ -201,6 +201,15 @@ def apply_harmonization_item_map(stac_item,
         # Replace asset href with harmonized version
         stac_item.assets[asset_name].href = band_outpath
 
+    stac_item.set_self_href(os.path.join(
+        item_outdir,
+        "{}.json".format(stac_item.id)))
+
+    # Roughly keeping track of what WATCH processes have been
+    # run on this particular item
+    stac_item.properties.setdefault(
+        'watch:process_history', []).append('mtra_harmonization')
+
     return stac_item
 
 
@@ -315,6 +324,14 @@ def run_mtra(stac_catalog,
     print("* Computing harmonization model")
     slope_map, intercept_map = compute_harmonization(
         preprocessed_stac_items, outdir)
+
+    # Precompute different GSD slope & intercept map files to avoid
+    # having difference processes try to do it at the same time.
+    # TODO: Use a lock instead
+    _ensure_map_at_res(slope_map, 10.0, 10.0)
+    _ensure_map_at_res(intercept_map, 20.0, 20.0)
+    _ensure_map_at_res(slope_map, 10.0, 10.0)
+    _ensure_map_at_res(intercept_map, 20.0, 20.0)
 
     print("* Applying harmonization model to select items")
     output_stac_catalog = apply_harmonization(
