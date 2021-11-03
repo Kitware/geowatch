@@ -181,9 +181,6 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
     info = {}
     ref = _coerce_gdal_dataset(gpath_or_ref)
 
-    wgs84_crs = osr.SpatialReference()
-    wgs84_crs.ImportFromEPSG(4326)  # 4326 is the EPSG id WGS84 of lat/lon crs
-
     tags = ref.GetMetadataDomainList()
     if 'RPC' in tags:
         rpc_info = ref.GetMetadata(domain='RPC')
@@ -199,6 +196,7 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
     if not hasattr(ref, 'GetSpatialRef'):
         import warnings
         warnings.warn('ref has no attribute GetSpatialRef, gdal version issue?')
+        raise AssertionError('ref has no attribute GetSpatialRef, gdal version issue?')
         aff_wld_crs = None
     else:
         aff_wld_crs = ref.GetSpatialRef()
@@ -219,6 +217,7 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         aff_wld_crs_type = 'gcp'  # mark the aff_wld crs as coming from the gcp
         if len(gcps) == 0 or aff_wld_crs is None:
             if rpc_transform is not None:
+                raise AssertionError('I dont think this should be possible')
                 aff_wld_crs = osr.SpatialReference()
                 aff_wld_crs.ImportFromEPSG(4326)  # 4326 is the EPSG id WGS84 of lat/lon crs
                 # Set traditional because our rpc transform returns x,y
@@ -238,6 +237,8 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         if aff_wld_crs is None:
             aff_wld_crs = osr.SpatialReference()
             aff_wld_crs.ImportFromWkt(aff_proj)
+            aff_wld_crs_type = 'unknown?affine-projection-maybe?'
+            raise NotImplementedError('can this ever happen?')
         else:
             # mark the aff_wld crs as coming from the dataset
             # is there a better name for this?
@@ -300,6 +301,8 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         wld_axis_mapping_int = aff_wld_crs.GetAxisMappingStrategy()
         wld_axis_mapping = axis_mapping_int_to_text(wld_axis_mapping_int)
 
+    wgs84_crs = osr.SpatialReference()
+    wgs84_crs.ImportFromEPSG(4326)  # 4326 is the EPSG id WGS84 of lat/lon crs
     wgs84_axis_mapping_int = wgs84_crs.GetAxisMappingStrategy()
     wgs84_axis_mapping = axis_mapping_int_to_text(wgs84_axis_mapping_int)
 
@@ -327,13 +330,16 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
     wld_corners = pxl_corners.warp(wld_from_pxl)
 
     wgs84_corners = wld_corners.warp(wgs84_from_wld)
-    lat1 = wgs84_corners.data[:, 0].min()
-    lat2 = wgs84_corners.data[:, 0].max()
-    lon1 = wgs84_corners.data[:, 1].min()
-    lon2 = wgs84_corners.data[:, 1].max()
+    min_lat, min_lon = wgs84_corners.data[:, 0:2].min(axis=0)
+    max_lat, max_lon = wgs84_corners.data[:, 0:2].max(axis=0)
 
-    min_lon, max_lon = sorted([lon1, lon2])
-    min_lat, max_lat = sorted([lat1, lat2])
+    # lat1 = wgs84_corners.data[:, 0].min()
+    # lat2 = wgs84_corners.data[:, 0].max()
+    # lon1 = wgs84_corners.data[:, 1].min()
+    # lon2 = wgs84_corners.data[:, 1].max()
+
+    # min_lon, max_lon = sorted([lon1, lon2])
+    # min_lat, max_lat = sorted([lat1, lat2])
 
     assert watch_crs.check_latlons(
         wgs84_corners.data[:, 0], wgs84_corners.data[:, 1]), (
@@ -342,15 +348,14 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
 
     WITH_UTM_INFO = True
     if WITH_UTM_INFO:
-        lat, lon = min_lat, min_lon
-        epsg_int = watch_crs.utm_epsg_from_latlon(lat, lon)
+        epsg_int = watch_crs.utm_epsg_from_latlon(min_lat, min_lon)
         utm_crs = osr.SpatialReference()
         utm_crs.ImportFromEPSG(epsg_int)
         utm_axis_mapping_int = utm_crs.GetAxisMappingStrategy()
         utm_axis_mapping = axis_mapping_int_to_text(utm_axis_mapping_int)
 
         utm_from_wld = osr.CoordinateTransformation(wld_crs, utm_crs)
-        wld_from_utm = osr.CoordinateTransformation(utm_crs, wld_crs)
+        # wld_from_utm = osr.CoordinateTransformation(utm_crs, wld_crs)
         utm_corners = wld_corners.warp(utm_from_wld)
 
         min_utm = utm_corners.data.min(axis=0)
@@ -362,7 +367,7 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         meter_per_pxl = None
         meter_extent = None
         utm_from_wld = None
-        wld_from_utm = None
+        # wld_from_utm = None
         utm_crs = None
         utm_axis_mapping = None
 
@@ -420,7 +425,9 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         # is easier to reason about when chaining transforms.
         'pxl_to_wld': wld_from_pxl,
         'wgs84_to_wld': wld_from_wgs84,
-        'utm_to_wld': wld_from_utm,
+
+        # 'utm_to_wld': wld_from_utm,  # unused, and 10% overhead
+
 
         'wld_to_pxl': pxl_from_wld,
         'wld_to_wgs84': wgs84_from_wld,
@@ -736,24 +743,27 @@ def geotiff_filepath_info(gpath, fast=True):
     # TODO: handle landsat and sentinel2 bundles
     info['is_dg_bundle'] = dg_bundle is not None
 
-    def _is_rgb(gpath):
-        # fallback for 'channels'
-        # often, a gtiff is a TCI that was postprocessed in some way that destroys
-        # the original naming convention
-        #
-        # this opens the image to check for that case as a fallback
-        from osgeo import gdal
-        info = gdal.Info(gpath, format='json')
-        if len(info['bands']) == 3:
-            # TODO sometimes colorInterpretation is stripped, but it's still RGB
-            # should this return True for any gpath with 3 bands?
-            if [b['colorInterpretation'] for b in info['bands']] == ['Red', 'Green', 'Blue']:
-                return True
-        return False
+    if 0:
+        # This is slow, and I don't think it is ever hit
 
-    if 'channels' not in meta:
-        if isfile(gpath) and _is_rgb(gpath):
-            meta['channels'] = 'r|g|b'
+        def _is_rgb(gpath):
+            # fallback for 'channels'
+            # often, a gtiff is a TCI that was postprocessed in some way that destroys
+            # the original naming convention
+            #
+            # this opens the image to check for that case as a fallback
+            from osgeo import gdal
+            info = gdal.Info(gpath, format='json')
+            if len(info['bands']) == 3:
+                # TODO sometimes colorInterpretation is stripped, but it's still RGB
+                # should this return True for any gpath with 3 bands?
+                if [b['colorInterpretation'] for b in info['bands']] == ['Red', 'Green', 'Blue']:
+                    return True
+            return False
+
+        if 'channels' not in meta:
+            if isfile(gpath) and _is_rgb(gpath):
+                meta['channels'] = 'r|g|b'
 
     return info
 
@@ -767,6 +777,7 @@ def _parser_lut(pattern):
     return parse.Parser(pattern)
 
 
+@profile
 def parse_sentinel2_product_id(parts):
     """
     Try to parse the Sentinel-2 pre-2016 and post-2016 safedir formats.

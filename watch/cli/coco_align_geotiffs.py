@@ -34,12 +34,12 @@ Notes:
         --dst $OUTPUT_COCO_FPATH \
         --regions $REGION_FPATH \
         --rpc_align_method orthorectify \
-        --max_workers=10 \
-        --aux_workers=2 \
+        --max_workers=0 \
+        --aux_workers=0 \
         --context_factor=1 \
         --visualize=False \
         --skip_geo_preprop True \
-        --keep img
+        --keep img --profile
 
     # Make an animated gif for specified bands (use "," to separate)
     # Requires a CD
@@ -97,6 +97,13 @@ from os.path import join, exists
 from watch.cli.coco_visualize_videos import _write_ann_visualizations2
 from watch.utils import util_gis
 from watch.utils import kwcoco_extensions  # NOQA
+
+
+try:
+    import xdev
+    profile = xdev.profile
+except Exception:
+    profile = ub.identity
 
 
 class CocoAlignGeotiffConfig(scfg.Config):
@@ -176,6 +183,7 @@ class CocoAlignGeotiffConfig(scfg.Config):
     }
 
 
+@profile
 def main(cmdline=True, **kw):
     """
     Main function for coco_align_geotiffs.
@@ -494,6 +502,7 @@ class SimpleDataCube(object):
             return cube, region_df
         return cube
 
+    @profile
     def query_image_overlaps2(cube, region_df):
         """
         Find the images that overlap with a each space-time region
@@ -607,6 +616,7 @@ class SimpleDataCube(object):
                     to_extract.append(image_overlaps)
         return to_extract
 
+    @profile
     def extract_overlaps(cube, image_overlaps, extract_dpath,
                          rpc_align_method='orthorectify', new_dset=None,
                          write_subsets=True, visualize=True, max_workers=0,
@@ -838,6 +848,7 @@ class SimpleDataCube(object):
         return new_dset
 
 
+@profile
 def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
                       new_vidid, rpc_align_method, sub_bundle_dpath, space_str,
                       space_region, space_box, start_gid, start_aid,
@@ -1084,6 +1095,7 @@ def _fix_geojson_poly(geo):
     return fixed
 
 
+@profile
 def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
                space_box, align_method, is_multi_image, keep, utm_epsg_zone=None):
     import watch
@@ -1166,35 +1178,66 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
     if compress == 'RAW':
         compress = 'NONE'
 
-    if align_method == 'pixel_crop':
-        from kwcoco.util.util_delayed_poc import LazyGDalFrameFile
-        imdata = LazyGDalFrameFile(src_gpath)
-        info = watch.gis.geotiff.geotiff_crs_info(src_gpath)
-        # info = obj['geotiff_metadata']
-        space_region_pxl = space_region.warp(info['wgs84_to_wld']).warp(info['wld_to_pxl'])
-        pxl_xmin, pxl_ymin, pxl_xmax, pxl_ymax = space_region_pxl.bounding_box().to_ltrb().quantize().data[0]
-        sl = tuple([slice(pxl_ymin, pxl_ymax), slice(pxl_xmin, pxl_xmax)])
-        subim, transform = kwimage.padded_slice(
-            imdata, sl, return_info=True)
-        kwimage.imwrite(dst_gpath, subim, space=None, backend='gdal',
-                        blocksize=blocksize, compress=compress)
-        dst['img_shape'] = subim.shape
-        dst['transform'] = transform
-        # TODO: do this with a gdal command so the tiff metdata is preserved
-    elif align_method == 'orthorectify':
+    if align_method == 'orthorectify':
         # HACK TO FIND an appropirate DEM file
         # from watch.gis import elevation
         # dems = elevation.girder_gtop30_elevation_dem()
         # info = obj['geotiff_metadata']
         info = watch.gis.geotiff.geotiff_crs_info(src_gpath)
         rpcs = info['rpc_transform']
-        dems = rpcs.elevation
+        # No RPCS exist, use affine-warp instead
+        if rpcs is None:
+            align_method = 'affine_warp'
+        else:
+            dems = rpcs.elevation
 
-        # TODO: reproject to utm
-        # https://gis.stackexchange.com/questions/193094/can-gdalwarp-reproject-from-espg4326-wgs84-to-utm
-        # '+proj=utm +zone=12 +datum=WGS84 +units=m +no_defs'
+    if align_method == 'pixel_crop':
+        info = watch.gis.geotiff.geotiff_crs_info(src_gpath)
+        if 1:
+            # IMPL1
+            # info = obj['geotiff_metadata']
+            from kwcoco.util.util_delayed_poc import LazyGDalFrameFile
+            imdata = LazyGDalFrameFile(src_gpath)
+            space_region_pxl = space_region.warp(info['wgs84_to_wld']).warp(info['wld_to_pxl'])
+            pxl_xmin, pxl_ymin, pxl_xmax, pxl_ymax = space_region_pxl.bounding_box().to_ltrb().quantize().data[0]
+            sl = tuple([slice(pxl_ymin, pxl_ymax), slice(pxl_xmin, pxl_xmax)])
+            subim, transform = kwimage.padded_slice(
+                imdata, sl, return_info=True)
+            # TODO: do this with a gdal command so the tiff metdata is preserved
+            kwimage.imwrite(dst_gpath, subim, space=None, backend='gdal',
+                            blocksize=blocksize, compress=compress)
+        else:
+            # IMPL2
+            template = (
+                '''
+                gdal_translate
+                --config GDAL_CACHEMAX 500 -wm 500
+                --debug off
+                -srcwin {xoff} {yoff} {xsize} {ysize}
+                -a_srs {target_srs}
+                -of COG
+                -co OVERVIEWS=NONE
+                -co BLOCKSIZE={blocksize}
+                -co COMPRESS={compress}
+                -co NUM_THREADS=2
+                -overwrite
+                {SRC} {DST}
+                ''')
+            space_region_pxl = space_region.warp(info['wgs84_to_wld']).warp(info['wld_to_pxl'])
+            xoff, yoff, xsize, ysize = space_region_pxl.bounding_box().to_xywh().quantize().data[0]
+            template_kw.update({
+                'xoff': xoff,
+                'yoff': yoff,
+                'xsize': xsize,
+                'ysize': ysize,
+            })
+            command = template.format(**template_kw)
 
+        dst['img_shape'] = subim.shape
+        dst['transform'] = transform
+    elif align_method == 'orthorectify':
         if hasattr(dems, 'find_reference_fpath'):
+            # TODO: get a better DEM path for this image if possible
             dem_fpath, dem_info = dems.find_reference_fpath(latmin, lonmin)
             template = ub.paragraph(
                 prefix_template +

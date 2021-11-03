@@ -270,12 +270,13 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
                     })
 
                 approx_meter_gsd = info['approx_meter_gsd']
-            except Exception:
+            except Exception as ex:
                 if default_gsd is not None:
                     obj['approx_meter_gsd'] = default_gsd
                     obj['warp_to_wld'] = Affine.eye().__json__()
                 else:
-                    errors.append('no_crs_info')
+                    # FIXME: This might not be the best way to report errors
+                    errors.append('no_crs_info: {!r}'.format(ex))
             else:
                 obj['approx_meter_gsd'] = approx_meter_gsd
                 obj['warp_to_wld'] = Affine.coerce(obj_to_wld).__json__()
@@ -380,6 +381,7 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
 #     return geotiff_metadata, aux_metadata
 
 
+@profile
 def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution'):
     """
     Create a "video-space" for all images in a video sequence at a specified
@@ -796,6 +798,7 @@ def ensure_transfered_geo_data(coco_dset):
         transfer_geo_metadata(coco_dset, gid)
 
 
+@profile
 def transfer_geo_metadata(coco_dset, gid):
     """
     Transfer geo-metadata from source geotiffs to predicted feature images
@@ -974,6 +977,7 @@ def _make_coco_img_from_geotiff(tiff_fpath, name=None):
     return obj
 
 
+@profile
 def fit_affine_matrix(xy1_man, xy2_man):
     """
     Sympy:
@@ -1277,6 +1281,7 @@ class TrackidGenerator(ub.NiceRepr):
         return next(self.generator)
 
 
+@profile
 def warp_annot_segmentations_to_geos(coco_dset):
     """
     Warps annotation segmentations in image pixel space into geos-space
