@@ -427,7 +427,12 @@ class SimpleDataCube(object):
             properties = img['geos_corners'].get('properties', {})
             crs_info = properties.get('crs_info', None)
             if crs_info is not None:
-                assert crs_info == expxected_geos_crs_info
+                crs_info = ensure_json_serializable(crs_info)
+                if crs_info != expxected_geos_crs_info:
+                    raise AssertionError(ub.paragraph(
+                        '''
+                        got={}, but expected={}
+                        ''').format(crs_info, expxected_geos_crs_info))
 
             # Create a data frame with space-time regions
             df_input.append({
@@ -494,7 +499,7 @@ class SimpleDataCube(object):
                             'model_content': 'annotation',
                             'sites': [],
                         },
-                        'geometry': img_poly.scale(0.2, about='center').to_geojson(),
+                        'geometry': img_poly.scale(0.2, about='center').swap_axes().to_geojson(),
                     },
                 ]
             }
