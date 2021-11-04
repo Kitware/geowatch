@@ -91,6 +91,7 @@ def main(**kwargs):
 
     print('read dataset')
     dset = kwcoco.CocoDataset.coerce(config['src'])
+    print('dset = {!r}'.format(dset))
 
     hard_coded_colors = {
         'No Activity': 'tomato',

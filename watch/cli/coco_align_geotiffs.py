@@ -634,8 +634,8 @@ class SimpleDataCube(object):
                 if len(cand_gids) == 0:
                     print('WARNING: No temporal matches to {}'.format(video_name))
                 else:
-                    date_to_gids = ub.group_items(cand_gids, cand_datetimes)
-                    dates = sorted(date_to_gids)
+                    datetime_to_gids = ub.group_items(cand_gids, cand_datetimes)
+                    dates = sorted(datetime_to_gids)
                     print('Found {} overlaps for {} from {} to {}'.format(
                         len(cand_gids),
                         video_name,
@@ -660,7 +660,7 @@ class SimpleDataCube(object):
                     utm_epsg_zone = ub.argmax(ub.dict_hist(candidate_utm_codes))
 
                     image_overlaps = {
-                        'date_to_gids': date_to_gids,
+                        'datetime_to_gids': datetime_to_gids,
                         'space_region': space_region,
                         'space_str': space_str,
                         'space_box': space_box,
@@ -729,7 +729,7 @@ class SimpleDataCube(object):
         # import watch
         coco_dset = cube.coco_dset
 
-        date_to_gids = image_overlaps['date_to_gids']
+        datetime_to_gids = image_overlaps['datetime_to_gids']
         space_str = image_overlaps['space_str']
         space_box = image_overlaps['space_box']
         space_region = image_overlaps['space_region']
@@ -750,7 +750,7 @@ class SimpleDataCube(object):
             return new_dset.union(sub_dset)
 
         latmin, lonmin, latmax, lonmax = space_box.data[0]
-        dates = sorted(date_to_gids)
+        datetimes = sorted(datetime_to_gids)
 
         new_video = {
             'name': video_name,
@@ -771,23 +771,13 @@ class SimpleDataCube(object):
         start_aid = new_dset._next_ids.get('annotations')
         frame_index = 0
 
-        # Hueristic to choose if we parallize the inner or outer loop
-        # num_imgs_to_warp = sum(map(len, date_to_gids.values()))
-        # if num_imgs_to_warp <= max_workers:
-        #     img_workers = 0
-        #     aux_workers = max_workers
-        # else:
-        # Internal threading might be beneficial as well
-        # aux_workers = 6
         img_workers = max_workers
 
         # parallelize over images
-        # print('img_workers = {!r}'.format(img_workers))
-        # print('aux_workers = {!r}'.format(aux_workers))
         pool = ub.JobPool(mode='thread', max_workers=img_workers)
 
-        for date in ub.ProgIter(dates, desc='submit extract jobs', verbose=1):
-            gids = date_to_gids[date]
+        for datetime_ in ub.ProgIter(datetimes, desc='submit extract jobs', verbose=1):
+            gids = datetime_to_gids[datetime_]
             # TODO: Is there any other consideration we should make when
             # multiple images have the same timestamp?
             for num, gid in enumerate(gids):
@@ -796,7 +786,7 @@ class SimpleDataCube(object):
                         coco_dset.index.gid_to_aids[gid]]
                 job = pool.submit(
                     extract_image_job,
-                    img, anns, bundle_dpath, date, num, frame_index, new_vidid,
+                    img, anns, bundle_dpath, datetime_, num, frame_index, new_vidid,
                     rpc_align_method, sub_bundle_dpath, space_str,
                     space_region, space_box, start_gid, start_aid, aux_workers,
                     (keep == 'img'), utm_epsg_zone=utm_epsg_zone)
@@ -807,8 +797,6 @@ class SimpleDataCube(object):
         sub_new_gids = []
         sub_new_aids = []
         Prog = ub.ProgIter
-        # import tqdm
-        # Prog = tqdm.tqdm
         for job in Prog(pool.as_completed(), total=len(pool),
                         desc='collect extract jobs'):
             new_img, new_anns = job.result()
@@ -917,7 +905,9 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
     from watch.utils.kwcoco_extensions import _populate_canvas_obj
     from watch.utils.kwcoco_extensions import _recompute_auxiliary_transforms
 
-    iso_time = datetime.date.isoformat(date.date())
+    # iso_time = datetime.date.isoformat(date.date())
+    # iso_time = date.isoformat()
+    iso_time = date.isoformat(sep='T', timespec='seconds')
     sensor_coarse = img.get('sensor_coarse', 'unknown')
 
     # Construct a name for the subregion to extract.

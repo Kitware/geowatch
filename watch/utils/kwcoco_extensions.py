@@ -80,8 +80,10 @@ def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None, overwrite=Fal
         coco_dset.conform(pycocotools_info=False)
 
     if vidids is None:
-        vidids = coco_dset.index.videos.keys()
-    gids = list(ub.flatten(coco_dset.images(vidid=vidid) for vidid in vidids))
+        vidids = list(coco_dset.index.videos.keys())
+        gids = list(coco_dset.index.imgs.keys())
+    else:
+        gids = list(ub.flatten(coco_dset.images(vidid=vidid) for vidid in vidids))
 
     # for gid in ub.ProgIter(gids, total=len(gids), desc='populate imgs'):
     #     coco_populate_geo_img_heuristics(coco_dset, gid, overwrite=overwrite,
