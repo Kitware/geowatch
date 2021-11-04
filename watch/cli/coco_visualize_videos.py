@@ -103,10 +103,13 @@ def main(cmdline=True, **kwargs):
     """
     import kwcoco
     import pathlib
+    from watch.utils.lightning_ext import util_globals
     config = CocoVisualizeConfig(default=kwargs, cmdline=cmdline)
     space = config['space']
     channels = config['channels']
     print('config = {}'.format(ub.repr2(dict(config), nl=2)))
+
+    num_workers = util_globals.coerce_num_workers(config['num_workers'])
 
     coco_dset = kwcoco.CocoDataset.coerce(config['src'])
     print('coco_dset.fpath = {!r}'.format(coco_dset.fpath))
@@ -122,7 +125,7 @@ def main(cmdline=True, **kwargs):
         coco_dset.index.videos.items(), total=len(coco_dset.index.videos),
         desc='viz videos', verbose=3)
 
-    pool = ub.JobPool(mode='thread', max_workers=config['num_workers'])
+    pool = ub.JobPool(mode='thread', max_workers=num_workers)
 
     config['zoom_to_tracks']
 
