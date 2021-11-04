@@ -196,6 +196,8 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
 
     valid_overwrites = {'warp', 'band', 'channels'}
     default_overwrites = {'warp', 'band'}
+    if isinstance(overwrite, str):
+        overwrite = set(overwrite.split(','))
     if overwrite is True:
         overwrite = default_overwrites
     elif overwrite is False:
