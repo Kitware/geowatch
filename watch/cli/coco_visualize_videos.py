@@ -110,6 +110,7 @@ def main(cmdline=True, **kwargs):
     print('config = {}'.format(ub.repr2(dict(config), nl=2)))
 
     num_workers = util_globals.coerce_num_workers(config['num_workers'])
+    print('num_workers = {!r}'.format(num_workers))
 
     coco_dset = kwcoco.CocoDataset.coerce(config['src'])
     print('coco_dset.fpath = {!r}'.format(coco_dset.fpath))
