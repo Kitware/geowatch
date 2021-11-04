@@ -118,12 +118,13 @@ def main(**kwargs):
         kwcoco_extensions.ensure_transfered_geo_data(dset)
 
     for gid, img in dset.index.imgs.items():
-        offset =  np.asarray(kwimage.Affine.coerce(img['warp_img_to_vid']))[:, 2]
-        if np.any(np.abs(offset) > 100):
-            print('img = {}'.format(ub.repr2(img, nl=-1)))
-            print('warning there is a large offset')
-            print('offset = {!r}'.format(offset))
-            print('{}, {}'.format(gid, img['warp_img_to_vid']))
+        if img.get('video_id', None) is not None:
+            offset =  np.asarray(kwimage.Affine.coerce(img['warp_img_to_vid']))[:, 2]
+            if np.any(np.abs(offset) > 100):
+                print('img = {}'.format(ub.repr2(img, nl=-1)))
+                print('warning there is a large offset')
+                print('offset = {!r}'.format(offset))
+                print('{}, {}'.format(gid, img['warp_img_to_vid']))
 
     if config['dst'] is not None:
         print('write dataset')
