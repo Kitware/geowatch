@@ -1191,6 +1191,10 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
     if not needs_recompute:
         return dst
 
+    # Write to a temporary file and then rename the file to the final
+    # Destination so ctrl+c doesn't break everything
+    tmp_dst_gpath = ub.augpath(dst_gpath, prefix='.tmp.')
+
     # TODO: parametarize
     compress = 'NONE'
     blocksize = 64
@@ -1235,7 +1239,7 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
         'blocksize': blocksize,
         'compress': compress,
         'SRC': src_gpath,
-        'DST': dst_gpath,
+        'DST': tmp_dst_gpath,
     }
 
     if compress == 'RAW':
@@ -1268,7 +1272,7 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
             subim, transform = kwimage.padded_slice(
                 imdata, sl, return_info=True)
             # TODO: do this with a gdal command so the tiff metdata is preserved
-            kwimage.imwrite(dst_gpath, subim, space=None, backend='gdal',
+            kwimage.imwrite(tmp_dst_gpath, subim, space=None, backend='gdal',
                             blocksize=blocksize, compress=compress)
         else:
             raise Exception
@@ -1335,6 +1339,8 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
         if cmd_info['ret'] != 0:
             print('\n\nCOMMAND FAILED: {!r}'.format(command))
             raise Exception(cmd_info['err'])
+
+    os.rename(tmp_dst_gpath, dst_gpath)
 
     if not exists(dst_gpath):
         raise Exception('THE DESTINATION PATH WAS NOT COMPUTED')
