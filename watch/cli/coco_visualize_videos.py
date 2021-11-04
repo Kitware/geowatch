@@ -201,6 +201,7 @@ def main(cmdline=True, **kwargs):
             draw_anns=config['draw_anns'],
             num_workers=config['num_workers'],
             zoom_to_tracks=config['zoom_to_tracks'],
+            frames_per_second=0.7,
         )
         pass
 
@@ -362,7 +363,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             chan = util_delayed_poc.DelayedChannelConcat([delayed]).take_channels(chan_group)
 
         canvas = chan.finalize()
-        canvas = normalize_intensity(canvas)
+        canvas = normalize_intensity(canvas, nodata=0)
         canvas = util_kwimage.ensure_false_color(canvas)
 
         if len(canvas.shape) > 2 and canvas.shape[2] > 4:
