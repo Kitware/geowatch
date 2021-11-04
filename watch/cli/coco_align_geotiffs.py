@@ -41,6 +41,10 @@ Notes:
         --skip_geo_preprop True \
         --keep img
 
+    python -m watch.cli.coco_visualize_videos \
+        --src $OUTPUT_COCO_FPATH \
+        --space="video"
+
     # Make an animated gif for specified bands (use "," to separate)
     python -m watch.cli.animate_visualizations \
             --viz_dpath $VIZ_DPATH \

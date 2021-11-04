@@ -1,27 +1,32 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
-Example:
+KWCoco video visualization script
 
-    python -m kwcoco toydata --key=vidshapes3-msi-frames7 --dst=toy.kwcoco.json
+CommandLine:
+    # A demo of this script on toydata is as follows
 
-    python -m watch.cli.coco_visualize_videos --src=toy.kwcoco.json --viz_dpath=_toyviz --animate=True
+    TEMP_DPATH=$(mktemp -d)
+    echo "TEMP_DPATH = $TEMP_DPATH"
+    cd $TEMP_DPATH
 
-
+    KWCOCO_BUNDLE_DPATH=$TEMP_DPATH/toy_bundle
+    KWCOCO_FPATH=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json
+    VIZ_DPATH=$KWCOCO_BUNDLE_DPATH/_viz
+    python -m kwcoco toydata --key=vidshapes3-msi-frames7 --dst=$KWCOCO_FPATH
+    python -m watch.cli.coco_visualize_videos --src=$KWCOCO_FPATH --viz_dpath=$VIZ_DPATH --animate=True
+    python -m watch.cli.coco_visualize_videos --src=$KWCOCO_FPATH --viz_dpath=$VIZ_DPATH --zoom_to_tracks=True --start_frame=1 --num_frames=2 --animate=True
 """
-
-import kwimage
-import ubelt as ub
 import kwcoco
+import kwimage
+import pathlib
 import scriptconfig as scfg
+import ubelt as ub
 
 
 class CocoVisualizeConfig(scfg.Config):
     """
     Visualizes annotations on kwcoco video frames on each band
-
-    TODO:
-        - [X] Could parameterize which bands are displayed if that is useful
-        - [ ] Could finalize by creating an animation if we need these for slides
-        - [X] Could parallelize with ub.JobPool
 
     CommandLine:
         # Point to your kwcoco file
@@ -36,6 +41,10 @@ class CocoVisualizeConfig(scfg.Config):
 
         # Also note you can make an animated gif
         python -m watch.cli.gifify -i "./viz_out/US_Jacksonville_R01/_anns/red|green|blue/" -o US_Jacksonville_R01_anns.gif
+
+        # NEW: as of 2021-11-04 : helper animation script
+
+        python -m watch.cli.animate_visualizations --viz_dpath ./viz_out
 
     """
     default = {
@@ -59,8 +68,8 @@ class CocoVisualizeConfig(scfg.Config):
         'animate': scfg.Value(False, help='if True, make an animated gif from the output'),
 
         # 'channels': scfg.Value(None, type=str, help='only viz these channels'),
-
-        # 'num_frames': scfg.Value('inf', type=str, help='show the first N frames from each video'),
+        'num_frames': scfg.Value(None, type=str, help='show the first N frames from each video, if None, all are shown'),
+        'start_frame': scfg.Value(0, type=str, help='If specified each video will start on this frame'),
 
         # TODO: better support for this
         # TODO: use the kwcoco_video_data, has good logic for this
@@ -101,8 +110,6 @@ def main(cmdline=True, **kwargs):
             'src': src,
         }
     """
-    import kwcoco
-    import pathlib
     from watch.utils.lightning_ext import util_globals
     config = CocoVisualizeConfig(default=kwargs, cmdline=cmdline)
     space = config['space']
@@ -128,15 +135,11 @@ def main(cmdline=True, **kwargs):
 
     pool = ub.JobPool(mode='thread', max_workers=num_workers)
 
-    config['zoom_to_tracks']
-
     # TODO:
-    # from scriptconfig.smartcast import smartcast
-    # num = smartcast(config['num_frames'])
-    # if isinstance(num, int):
-    #     time_sl = slice(0, num)
-    # else:
-    #     time_sl = slice(None)
+    from scriptconfig.smartcast import smartcast
+    num_frames = smartcast(config['num_frames'])
+    start_frame = smartcast(config['start_frame'])
+    end_frame = None if num_frames is None else start_frame + num_frames
 
     video_names = []
     for vidid, video in prog:
@@ -160,16 +163,20 @@ def main(cmdline=True, **kwargs):
                 vid_crop_box = vid_crop_box.to_xywh()
                 vid_crop_box = vid_crop_box.quantize()
 
-                for gid in gids:
+                gid_subset = gids[start_frame:end_frame]
+                for gid in gid_subset:
                     img = coco_dset.index.imgs[gid]
                     anns = coco_dset.annots(gid=gid).objs
 
+                    _header_hack = f'tid={tid} gid={gid}'
                     pool.submit(_write_ann_visualizations2,
                                 coco_dset, img, anns, track_dpath, space=space,
-                                channels=channels, vid_crop_box=vid_crop_box)
+                                channels=channels, vid_crop_box=vid_crop_box,
+                                _header_hack=_header_hack)
 
         else:
-            for gid in gids:
+            gid_subset = gids[start_frame:end_frame]
+            for gid in gid_subset:
                 img = coco_dset.index.imgs[gid]
                 anns = coco_dset.annots(gid=gid).objs
 
@@ -177,7 +184,7 @@ def main(cmdline=True, **kwargs):
                             coco_dset, img, anns, sub_dpath, space=space,
                             channels=channels,
                             draw_imgs=config['draw_imgs'],
-                            draw_anns=config['draw_anns'])
+                            draw_anns=config['draw_anns'], _header_hack=None)
 
         for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):
             job.result()
@@ -193,6 +200,7 @@ def main(cmdline=True, **kwargs):
             draw_imgs=config['draw_imgs'],
             draw_anns=config['draw_anns'],
             num_workers=config['num_workers'],
+            zoom_to_tracks=config['zoom_to_tracks'],
         )
         pass
 
@@ -234,10 +242,10 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                vid_crop_box=None,
                                request_grouped_bands='default',
                                draw_imgs=True,
-                               draw_anns=True):
+                               draw_anns=True, _header_hack=None):
     """
-    TODO:
-        refactor because similar code is also used in coco_align_geotiffs
+    Dumps an intensity normalized "space-aligned" kwcoco image visualization
+    (with or without annotation overlays) for specific bands to disk.
     """
     # See if we can look at what we made
     from kwcoco import channel_spec
@@ -251,11 +259,18 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
     vidname = coco_dset.index.videos[img['video_id']]['name']
     date_captured = img.get('date_captured', '')
-
-    header_info = []
-    header_info.append(vidname)
-    if date_captured:
-        header_info.append(date_captured + ' ' + sensor_coarse)
+    gid = img.get('id', None)
+    if _header_hack is None:
+        _header_hack = f'gid={gid}'
+    header_line_infos = [
+        [vidname, _header_hack],
+        [sensor_coarse, date_captured],
+    ]
+    header_lines = []
+    for line_info in header_line_infos:
+        header_line = ' '.join([p for p in line_info if p])
+        if header_line:
+            header_lines.append(header_line)
 
     delayed = coco_dset.delayed_load(img['id'], space=space)
 
@@ -267,7 +282,6 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     else:
         coco_img = CocoImage(img)
         channels = coco_img.channels
-        print('---')
         if request_grouped_bands == 'default':
             # Use false color for special groups
             request_grouped_bands = [
@@ -300,7 +314,6 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
     img_view_dpath = sub_dpath / '_imgs'
     ann_view_dpath = sub_dpath / '_anns'
-    # print('anns = {}'.format(ub.repr2(anns, nl=1)))
 
     try:
         dets = kwimage.Detections.from_coco_annots(anns, dset=coco_dset)
@@ -313,7 +326,6 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
         dets = dets.warp(vid_from_img)
 
-    # print('vid_crop_box = {!r}'.format(vid_crop_box))
     if vid_crop_box is not None:
         # Ensure the crop box is in the proper space
         if space == 'image':
@@ -328,8 +340,6 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             -crop_box.tl_x.ravel()[0],
             -crop_box.tl_y.ravel()[0])
         dets = dets.translate(ann_shift)
-        # overlap = dets.boxes.iooas(vid_crop_box)
-        # print('overlap = {!r}'.format(overlap.max()))
         delayed = delayed.crop(crop_box.to_slices()[0])
 
     for chan_group in chan_groups:
@@ -351,18 +361,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             from kwcoco.util import util_delayed_poc
             chan = util_delayed_poc.DelayedChannelConcat([delayed]).take_channels(chan_group)
 
-        try:
-            canvas = chan.finalize()
-        except Exception:
-            raise Exception
-            if 0:
-                if sensor_coarse in {'L8', 'S2'}:
-                    bundle_dpath = coco_dset.bundle_dpath
-                    _hack_check_and_fix_broken(bundle_dpath, img)
-                    canvas = chan.finalize()
-                else:
-                    raise
-
+        canvas = chan.finalize()
         canvas = normalize_intensity(canvas)
         canvas = util_kwimage.ensure_false_color(canvas)
 
@@ -372,15 +371,16 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
         canvas = kwimage.ensure_float01(canvas)
 
-        chan_header_info = header_info.copy()
-        chan_header_info.append(chan_group)
-        header_text = '\n'.join(chan_header_info)
+        chan_header_lines = header_lines.copy()
+        chan_header_lines.append(chan_group)
+        header_text = '\n'.join(chan_header_lines)
 
         if draw_imgs:
             img_canvas = kwimage.ensure_uint255(canvas)
             img_canvas = util_kwimage.draw_header_text(image=img_canvas,
                                                        text=header_text,
-                                                       stack=True)
+                                                       stack=True,
+                                                       fit='shrink')
             kwimage.imwrite(view_img_fpath, img_canvas)
 
         if draw_anns:
@@ -392,184 +392,9 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
             ann_canvas = util_kwimage.draw_header_text(image=ann_canvas,
                                                        text=header_text,
-                                                       stack=True)
+                                                       stack=True,
+                                                       fit='shrink')
             kwimage.imwrite(view_ann_fpath, ann_canvas)
-
-
-class GdalErrorHandler(object):
-    """
-    References:
-        https://gdal.org/api/python_gotchas.html#exceptions-raised-in-custom-error-handlers-do-not-get-caught
-
-    SeeAlso:
-        'Error',
-        'ErrorReset',
-        'GARIO_ERROR',
-        'GetErrorCounter',
-        'GetLastErrorMsg',
-        'GetLastErrorNo',
-        'GetLastErrorType',
-        'OF_VERBOSE_ERROR',
-        'PopErrorHandler',
-        'PushErrorHandler',
-        'SetCurrentErrorHandlerCatchDebug',
-        'SetErrorHandler',
-        'VSIErrorReset',
-        'VSIGetLastErrorMsg',
-        'VSIGetLastErrorNo'
-    """
-    def __init__(self):
-        self.err_level = None
-        self.err_no = None
-        self.err_msg = None
-        self.was_using_exceptions = None
-        self.reset()
-
-    def handler(self, err_level, err_no, err_msg):
-        self.err_level = err_level
-        self.err_no = err_no
-        self.err_msg = err_msg
-
-    def reset(self):
-        from osgeo import gdal
-        self.err_level = gdal.CE_None
-        self.err_no = 0
-        self.err_msg = ''
-
-    def __enter__(self):
-        from osgeo import gdal
-        self.was_using_exceptions = gdal.GetUseExceptions()
-        gdal.UseExceptions()
-        gdal.PushErrorHandler(self.handler)
-
-    def __exit__(self, a, b, c):
-        from osgeo import gdal
-        if not self.was_using_exceptions:
-            gdal.DontUseExceptions()
-        gdal.PopErrorHandler()
-
-
-def _hack_check_and_fix_broken(bundle_dpath, img):
-    """
-    NOTE: this should be an option elsewhere, perhaps in the align script
-    """
-    print('HACK CHECK AND FIXING!!!!')
-    from os.path import join
-    from osgeo import gdal
-    from kwcoco.coco_image import CocoImage
-    coco_img = CocoImage(img)
-
-    err = GdalErrorHandler()
-    bad_bands = []
-    with err:
-        for obj in coco_img.iter_asset_objs():
-            fpath = join(bundle_dpath, obj['file_name'])
-            gdal_ds = gdal.Open(fpath, gdal.GA_ReadOnly)
-            if err.err_level == gdal.CE_Warning:
-                err.reset()
-                bad_bands.append(obj['channels'])
-
-            # print('err.err_level = {!r}'.format(err.err_level))
-            # for band_idx in range(gdal_ds.RasterCount):
-            #     band = gdal_ds.GetRasterBand(band_idx + 1)
-            #     print('band_idx = {!r}'.format(band_idx))
-            #     print('band = {!r}'.format(band))
-            gdal_ds = None  # NOQA
-
-    for chan_group in bad_bands:
-        print('BAD chan_group = {!r}'.format(chan_group))
-        _hack_check_and_fix_broken(bundle_dpath, img, chan_group)
-
-
-def _hack_fix_align_warp(bundle_dpath, img, chan_group):
-    print('HACK FIXING!!!!')
-    import kwimage
-    from os.path import join, exists
-    # HACK IT: TODO: make the align script to consistency checks
-    found = None
-
-    from kwcoco.coco_image import CocoImage
-    coco_img = CocoImage(img)
-
-    for obj in coco_img.iter_asset_objs():
-        if obj['channels'] == chan_group:
-            found = obj
-            break
-
-    if found is None:
-        import xdev
-        xdev.embed()
-
-    parent_fpath = join(bundle_dpath, found['parent_file_name'])
-    if not exists(parent_fpath):
-        # SUPER HACK
-        parent_fpath = join(bundle_dpath, '..', found['parent_file_name'])
-
-    if not exists(parent_fpath):
-        raise Exception('cannot fix, cannot find parent')
-
-    bad_fpath = join(bundle_dpath, found['file_name'])
-    corner = kwimage.Polygon.coerce(found['geos_corners'])
-    lonmax, latmax = corner.data['exterior'].data.max(axis=0)
-    lonmin, latmin = corner.data['exterior'].data.min(axis=0)
-
-    import watch
-    candidate_utm_codes = [
-        watch.gis.spatial_reference.utm_epsg_from_latlon(latmin, lonmin),
-        watch.gis.spatial_reference.utm_epsg_from_latlon(latmax, lonmax),
-        watch.gis.spatial_reference.utm_epsg_from_latlon(latmax, lonmin),
-        watch.gis.spatial_reference.utm_epsg_from_latlon(latmin, lonmax),
-        watch.gis.spatial_reference.utm_epsg_from_latlon(
-            ((latmin + latmax) / 2), ((lonmin + lonmax) / 2)),
-    ]
-    utm_epsg_zone = ub.argmax(ub.dict_hist(candidate_utm_codes))
-
-    compress = 'NONE'
-    blocksize = 64
-    crop_coordinate_srs = 'epsg:4326'
-    target_srs = 'epsg:{}'.format(utm_epsg_zone)
-    src_gpath = parent_fpath
-    # dst_gpath = './tmp.tif'
-    dst_gpath = bad_fpath
-
-    # Use the new COG output driver
-    prefix_template = (
-        '''
-        gdalwarp
-        -multi
-        --config GDAL_CACHEMAX 500 -wm 500
-        --debug off
-        -te {xmin} {ymin} {xmax} {ymax}
-        -te_srs {crop_coordinate_srs}
-        -t_srs {target_srs}
-        -of COG
-        -co OVERVIEWS=NONE
-        -co BLOCKSIZE={blocksize}
-        -co COMPRESS={compress}
-        -co NUM_THREADS=2
-        -overwrite
-        ''')
-
-    template_kw = {
-        'crop_coordinate_srs': crop_coordinate_srs,
-        'target_srs': target_srs,
-        'ymin': latmin,
-        'xmin': lonmin,
-        'ymax': latmax,
-        'xmax': lonmax,
-        'blocksize': blocksize,
-        'compress': compress,
-        'SRC': src_gpath,
-        'DST': dst_gpath,
-    }
-    template = ub.paragraph(
-        prefix_template +
-        '{SRC} {DST}')
-    command = template.format(**template_kw)
-    cmd_info = ub.cmd(command, verbose=0)  # NOQA
-    if cmd_info['ret'] != 0:
-        print('\n\nCOMMAND FAILED: {!r}'.format(command))
-        raise Exception(cmd_info['err'])
 
 
 if __name__ == '__main__':

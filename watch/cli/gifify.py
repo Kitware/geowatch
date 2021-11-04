@@ -129,6 +129,8 @@ def ffmpeg_animate_frames(frame_fpaths, output_fpath, in_framerate=1, verbose=3,
     """
     from os.path import join, abspath
     import uuid
+    import os
+    output_fpath = os.fspath(output_fpath)
 
     ffmpeg_exe = ub.find_exe('ffmpeg')
     if ffmpeg_exe is None:

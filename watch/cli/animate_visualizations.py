@@ -26,13 +26,17 @@ __notes__ = r"""
 
 def animate_visualizations(viz_dpath, channels=None, video_names=None,
                            frames_per_second=0.7, draw_anns=True,
-                           draw_imgs=True, num_workers=0, verbose=0):
+                           draw_imgs=True, num_workers=0, zoom_to_tracks=False,
+                           verbose=0):
     r"""
     Helper that roughly does the same thing as this bash script:
 
     Args:
         viz_dpath (str): the path where visualizations were dumped with the
             coco_visualize_videos script.
+
+        zoom_to_tracks (bool):
+            if specified uses "track" based-logic find paths to animate
 
     Example:
         >>> # xdoctest: +SKIP
@@ -87,22 +91,50 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
         types.append('_imgs')
     if draw_anns:
         types.append('_anns')
+
+    verbose_worker = verbose and num_workers <= 1
+
+    # We make heavy reliance on a known directory structure here.
+    # In general I don't like this, but this is not a system-critical part
+    # so we can leave refactoring as a todo.
     for type_ in types:
         for video_dpath in video_dpaths:
-            type_dpath = video_dpath / type_
-            if channels is None:
-                channel_dpaths = [p for p in type_dpath.glob('*') if p.is_dir()]
+            video_name = video_dpath.name
+
+            if zoom_to_tracks:
+                track_subdpath = video_dpath / '_tracks'
+                track_dpaths = list(track_subdpath.glob('*'))
+                for track_dpath in track_dpaths:
+                    track_name = track_dpath.name
+                    type_dpath = track_dpath / type_
+                    if channels is None:
+                        channel_dpaths = [p for p in type_dpath.glob('*') if p.is_dir()]
+                    else:
+                        channel_dpaths = [type_dpath / c.spec for c in channels.streams()]
+
+                    for chan_dpath in channel_dpaths:
+                        frame_fpaths = sorted(chan_dpath.glob('*'))
+                        gif_fname = '{}{}_{}.gif'.format(track_name, type_, chan_dpath.name)
+                        gif_fpath = track_subdpath / gif_fname
+                        pool.submit(
+                            gifify.ffmpeg_animate_frames, frame_fpaths,
+                            gif_fpath, in_framerate=frames_per_second,
+                            verbose=verbose_worker)
+
             else:
-                channel_dpaths = [type_dpath / c.spec for c in channels.streams()]
+                type_dpath = video_dpath / type_
+                if channels is None:
+                    channel_dpaths = [p for p in type_dpath.glob('*') if p.is_dir()]
+                else:
+                    channel_dpaths = [type_dpath / c.spec for c in channels.streams()]
 
-            for chan_dpath in channel_dpaths:
-                frame_fpaths = sorted(chan_dpath.glob('*'))
-                gif_fpath = str(video_dpath) + type_ + '_' + chan_dpath.name + '.gif'
-
-                pool.submit(
-                    gifify.ffmpeg_animate_frames, frame_fpaths, gif_fpath,
-                    in_framerate=frames_per_second,
-                    verbose=verbose and num_workers <= 1)
+                for chan_dpath in channel_dpaths:
+                    frame_fpaths = sorted(chan_dpath.glob('*'))
+                    gif_fname = '{}{}_{}.gif'.format(video_name, type_, chan_dpath.name)
+                    gif_fpath = video_dpath / gif_fname
+                    pool.submit(
+                        gifify.ffmpeg_animate_frames, frame_fpaths, gif_fpath,
+                        in_framerate=frames_per_second, verbose=verbose_worker)
 
     for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='collect animate jobs'):
         job.result()
