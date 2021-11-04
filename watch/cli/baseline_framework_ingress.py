@@ -167,7 +167,8 @@ def baseline_framework_ingress(input_path,
             with open(path) as f:
                 input_json = json.load(f)
             return input_json['stac'].get('features', [])
-        except json.decoder.JSONDecodeError:
+        # Excepting KeyError here in case of a single line STAC item input
+        except (json.decoder.JSONDecodeError, KeyError):
             # Support for simple newline separated STAC items
             with open(path) as f:
                 return [json.loads(line) for line in f]
