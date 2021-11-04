@@ -1,3 +1,13 @@
+"""
+Example:
+
+    python -m kwcoco toydata --key=vidshapes3-msi-frames7 --dst=toy.kwcoco.json
+
+    python -m watch.cli.coco_visualize_videos --src=toy.kwcoco.json --viz_dpath=_toyviz --animate=True
+
+
+"""
+
 import kwimage
 import ubelt as ub
 import kwcoco
@@ -46,14 +56,15 @@ class CocoVisualizeConfig(scfg.Config):
         'draw_imgs': scfg.Value(True),
         'draw_anns': scfg.Value(True),
 
+        'animate': scfg.Value(False, help='if True, make an animated gif from the output'),
+
         # 'channels': scfg.Value(None, type=str, help='only viz these channels'),
 
         # 'num_frames': scfg.Value('inf', type=str, help='show the first N frames from each video'),
 
-
         # TODO: better support for this
         # TODO: use the kwcoco_video_data, has good logic for this
-        'zoom_to_tracks': scfg.Value(False, type=str, help='if True, zoom to tracked annotations'),
+        'zoom_to_tracks': scfg.Value(False, type=str, help='if True, zoom to tracked annotations. Experimental, might not work perfectly yet.'),
     }
 
 
@@ -123,9 +134,11 @@ def main(cmdline=True, **kwargs):
     # else:
     #     time_sl = slice(None)
 
+    video_names = []
     for vidid, video in prog:
         sub_dpath = viz_dpath / video['name']
         sub_dpath.mkdir(parents=True, exist_ok=1)
+        video_names.append(video['name'])
 
         gids = coco_dset.index.vidid_to_gids[vidid]
         if config['zoom_to_tracks']:
@@ -166,6 +179,17 @@ def main(cmdline=True, **kwargs):
             job.result()
 
         pool.jobs.clear()
+
+    if config['animate']:
+        from watch.cli import animate_visualizations
+        animate_visualizations.animate_visualizations(
+            viz_dpath=viz_dpath,
+            channels=channels,
+            video_names=video_names,
+            draw_imgs=config['draw_imgs'],
+            draw_anns=config['draw_anns'],
+        )
+        pass
 
 
 def video_track_info(coco_dset, vidid):
@@ -325,12 +349,14 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         try:
             canvas = chan.finalize()
         except Exception:
-            if sensor_coarse in {'L8', 'S2'}:
-                bundle_dpath = coco_dset.bundle_dpath
-                _hack_check_and_fix_broken(bundle_dpath, img)
-                canvas = chan.finalize()
-            else:
-                raise
+            raise Exception
+            if 0:
+                if sensor_coarse in {'L8', 'S2'}:
+                    bundle_dpath = coco_dset.bundle_dpath
+                    _hack_check_and_fix_broken(bundle_dpath, img)
+                    canvas = chan.finalize()
+                else:
+                    raise
 
         canvas = normalize_intensity(canvas)
         canvas = util_kwimage.ensure_false_color(canvas)
@@ -419,6 +445,9 @@ class GdalErrorHandler(object):
 
 
 def _hack_check_and_fix_broken(bundle_dpath, img):
+    """
+    NOTE: this should be an option elsewhere, perhaps in the align script
+    """
     print('HACK CHECK AND FIXING!!!!')
     from os.path import join
     from osgeo import gdal

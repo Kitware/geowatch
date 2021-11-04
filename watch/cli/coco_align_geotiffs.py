@@ -42,20 +42,11 @@ Notes:
         --keep img
 
     # Make an animated gif for specified bands (use "," to separate)
-    # Requires a CD
-    CHANNELS="red|green|blue"
-    mapfile -td \, _BANDS < <(printf "%s\0" "$CHANNELS")
-    items=$(jq -r '.videos[] | .name' $OUTPUT_COCO_FPATH)
-    for item in ${items[@]}; do
-        echo "item = $item"
-        for bandname in ${_BANDS[@]}; do
-            echo "_BANDS = $_BANDS"
-            BAND_DPATH="$VIZ_DPATH/${item}/_anns/${bandname}/"
-            GIF_FPATH="$VIZ_DPATH/${item}_anns_${bandname}.gif"
-            python -m watch.cli.gifify --frames_per_second .7 \
-                --input "$BAND_DPATH" --output "$GIF_FPATH"
-        done
-    done
+    python -m watch.cli.animate_visualizations \
+            --viz_dpath $VIZ_DPATH \
+            --draw_imgs=False \
+            --draw_anns=True \
+            --channels "red|green|blue"
 
     # Propagation actually touches the images, so this is necessary
     # Propagate annotations forward in time
@@ -131,7 +122,6 @@ import scriptconfig as scfg
 import socket
 import ubelt as ub
 import dateutil.parser
-import datetime
 import pathlib
 from os.path import join, exists
 from watch.cli.coco_visualize_videos import _write_ann_visualizations2
