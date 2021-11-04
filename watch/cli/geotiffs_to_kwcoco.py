@@ -303,7 +303,7 @@ def find_geotiffs(geotiff_dpath, workers=0, strict=False):
     if loose_files:
         # Handle loose files (try grouping them by spacetime)
         groups = ub.ddict(list)
-        for fpath in loose_files:
+        for fpath in ub.ProgIter(loose_files, desc='process loose files'):
             info = watch.gis.geotiff.geotiff_filepath_info(fpath)
             file_meta = info['filename_meta']
             file_meta.get('tile_number', None)
