@@ -303,15 +303,15 @@ def find_geotiffs(geotiff_dpath, workers=0, strict=False):
     if loose_files:
         # Handle loose files (try grouping them by spacetime)
         groups = ub.ddict(list)
+
+        # jobs = ub.JobPool(mode='thread', max_workers=workers)
         for fpath in ub.ProgIter(loose_files, desc='process loose files'):
-            info = watch.gis.geotiff.geotiff_filepath_info(fpath)
+            info = watch.gis.geotiff.geotiff_filepath_info(fpath, fast=True)
             file_meta = info['filename_meta']
             file_meta.get('tile_number', None)
             date_captured = next(iter(ub.dict_isect(file_meta, ['sense_start_time', 'acquisition_date']).values()), None)
             tile_num = next(iter(ub.dict_isect(file_meta, ['tile_number']).values()), None)
-            import xdev
-            with xdev.embed_on_exception_context:
-                groupid = (file_meta['product_guess'], tile_num, date_captured)
+            groupid = (file_meta['product_guess'], tile_num, date_captured)
             img = make_coco_img_from_geotiff(fpath, with_info=True)
             info = img.pop('info')
             img['date_captured'] = info['filename_meta']['date_captured']
