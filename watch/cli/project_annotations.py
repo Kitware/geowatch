@@ -96,14 +96,12 @@ def main(cmdline=False, **kwargs):
         >>>     'site_models': dvc_dpath / 'drop1/site_models',
         >>> }
     """
-    from watch.utils import kwcoco_extensions
     from shapely.ops import cascaded_union
     import pandas as pd
     from watch.utils import util_gis
     import geopandas as gpd  # NOQA
     config = ProjectAnnotationsConfig(default=kwargs, cmdline=cmdline)
-    # print('config = {}'.format(ub.repr2(dict(config), nl=1)))
-    # main(**kwargs)
+    print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
     # Load the coco dataset with all of the images
     coco_dset = kwcoco.CocoDataset.coerce(config['src'])
