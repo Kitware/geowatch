@@ -600,6 +600,7 @@ def geotiff_filepath_info(gpath, fast=True):
         >>>     'S2A_MSIL1C_20151021T022702_N0204_R003_T52SDG_20151021T022701.SAFE/GRANULE/L1C_T52SDG_A001716_20151021T022701/IMG_DATA/T52SDG_20151021T022702_TCI.jp2',
         >>>     'LC08_L2SP_217076_20190107_20211008_02_T1_T23KPQ_B1.tif',
         >>>     'S2B_MSI_L2A_T23KPQ_20190114_20211008_SR_B01.tif',
+        >>>     'S2A_MSI_L2A_T39RVK_20180803_20211102_SR_SOZ4.tif',
         >>> ]
         >>> gpath = inputs[-1]
         >>> print('gpath = {!r}'.format(gpath))
@@ -800,6 +801,7 @@ def parse_sentinel2_product_id(parts):
     Example:
 
         parts = ['S2B_MSI_L2A_T23KPQ_20190114_20211008_SR_B01.tif']
+        parts = ['S2A_MSI_L2A_T39RVK_20180803_20211102_SR_SOZ4.tif']
         parse_sentinel2_product_id(parts)
 
     """
@@ -946,7 +948,7 @@ def parse_sentinel2_product_id(parts):
                 meta['mission_id'] = 'S2'
 
     # This is another guess based on a file that failed to ingest
-    s2_format_guess2 = '{MMM:.3}_MSI_{XXX:.3}_{Txxxxx:.6}_{SENSE_YYYYMMDD:.8}_{PROC_YYYYMMDD:.8}_{correction_code}_{band:.3}.{ext}'
+    s2_format_guess2 = '{MMM:.3}_MSI_{XXX:.3}_{Txxxxx:.6}_{SENSE_YYYYMMDD:.8}_{PROC_YYYYMMDD:.8}_{correction_code}_{band}.{ext}'
     s2_parser2 = _parser_lut(s2_format_guess2)
     result = s2_parser2.parse(parts[-1])
     if result:
