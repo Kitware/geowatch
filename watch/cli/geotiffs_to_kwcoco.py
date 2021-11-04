@@ -309,7 +309,9 @@ def find_geotiffs(geotiff_dpath, workers=0, strict=False):
             file_meta.get('tile_number', None)
             date_captured = next(iter(ub.dict_isect(file_meta, ['sense_start_time', 'acquisition_date']).values()), None)
             tile_num = next(iter(ub.dict_isect(file_meta, ['tile_number']).values()), None)
-            groupid = (file_meta['product_guess'], tile_num, date_captured)
+            import xdev
+            with xdev.embed_on_exception_context:
+                groupid = (file_meta['product_guess'], tile_num, date_captured)
             img = make_coco_img_from_geotiff(fpath, with_info=True)
             info = img.pop('info')
             img['date_captured'] = info['filename_meta']['date_captured']
