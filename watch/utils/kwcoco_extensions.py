@@ -1325,6 +1325,44 @@ def warp_annot_segmentations_to_geos(coco_dset):
             }
 
 
+def warp_annot_segmentations_from_geos(coco_dset):
+    # Warp segmentation from geos
+    import watch
+    from os.path import join
+    for gid in coco_dset.images():
+        coco_img = coco_dset._coco_image(gid)
+        asset = coco_img.primary_asset()
+        fpath = join(coco_dset.bundle_dpath, asset['file_name'])
+        geo_meta = watch.gis.geotiff.geotiff_metadata(fpath)
+        warp_wld_from_aux = kwimage.Affine.coerce(geo_meta['pxl_to_wld'])
+        warp_img_from_aux = kwimage.Affine.coerce(asset.get('warp_aux_to_img', None))
+
+        warp_wld_from_wgs84 = geo_meta['wgs84_to_wld']  # Could be a general CoordinateTransform!
+        # warp_wgs84_from_wld = geo_meta['wld_to_wgs84']  # Could be a general CoordinateTransform!
+        wgs84_crs_info = geo_meta['wgs84_crs_info']
+        wgs84_axis_mapping = wgs84_crs_info['axis_mapping']
+        assert wgs84_crs_info['auth'] == ('EPSG', '4326')
+
+        warp_aux_from_wld = warp_wld_from_aux.inv()
+        warp_img_from_wld = warp_img_from_aux @ warp_aux_from_wld
+
+        for aid in coco_dset.annots(gid=gid):
+            ann = coco_dset.index.anns[aid]
+            sseg_geos = kwimage.MultiPolygon.from_geojson(ann['segmentation_geos'])
+            # TODO: check crs properties (probably always crs84)
+            ann['segmentation_geos']
+            if wgs84_axis_mapping == 'OAMS_AUTHORITY_COMPLIANT':
+                sseg_wgs84 = sseg_geos.swap_axes()
+            elif wgs84_axis_mapping == 'OAMS_TRADITIONAL_GIS_ORDER':
+                sseg_wgs84 = sseg_geos
+            else:
+                raise NotImplementedError(wgs84_axis_mapping)
+            sseg_wld = sseg_wgs84.warp(warp_wld_from_wgs84)
+            sseg_img = sseg_wld.warp(warp_img_from_wld)
+            ann['segmentation'] = sseg_img.to_coco(style='new')
+            ann['bbox'] = list(sseg_img.bounding_box().quantize().to_coco())[0]
+
+
 # def coco_geopandas_images(coco_dset):
 #     """
 #     TODO:
@@ -1381,14 +1419,17 @@ def visualize_rois(coco_dset, zoom=None):
     )
     ax = wld_map_gdf.plot()
 
-    cov_centroids = cov_image_gdf.geometry.centroid
+    def safe_centroids(gdf):
+        return gdf.to_crs('+proj=cea').centroid.to_crs(gdf.crs)
+
+    cov_centroids = safe_centroids(cov_image_gdf)
     cov_image_gdf.plot(ax=ax, facecolor='none', edgecolor='green', alpha=0.5)
     cov_centroids.plot(ax=ax, marker='o', facecolor='green', alpha=0.5)
     # img_centroids = img_poly_gdf.geometry.centroid
     # img_poly_gdf.plot(ax=ax, facecolor='none', edgecolor='red', alpha=0.5)
     # img_centroids.plot(ax=ax, marker='o', facecolor='red', alpha=0.5)
 
-    annot_centroids = annot_gdf.geometry.centroid
+    annot_centroids = safe_centroids(annot_gdf)
     annot_gdf.plot(ax=ax, facecolor='none', edgecolor='orange', alpha=0.5)
     annot_centroids.plot(ax=ax, marker='o', facecolor='orange', alpha=0.5)
 
@@ -1401,7 +1442,7 @@ def visualize_rois(coco_dset, zoom=None):
         ax.set_ylim(min_y, max_y)
 
 
-def covered_image_geo_regions(coco_dset):
+def covered_image_geo_regions(coco_dset, merge=False):
     """
     Find the intersection of all image bounding boxes in world space
     to see what spatial regions are covered by the imagery.
@@ -1418,38 +1459,56 @@ def covered_image_geo_regions(coco_dset):
     from shapely import ops
     import shapely
     # import watch
-    gid_to_poly = {}
+    rows = []
     for gid, img in coco_dset.imgs.items():
-        geos_corners = img['geos_corners']
+        if 'geos_corners' in img:
+            geos_corners = img['geos_corners']
+        else:
+            coco_img = coco_dset.coco_image(img['id'])
+            asset = coco_img.primary_asset()
+            geos_corners = asset['geos_corners']
         geos_crs_info = geos_corners.get('properties').get('crs_info', None)
         if geos_crs_info is not None:
             assert geos_crs_info['axis_mapping'] == 'OAMS_TRADITIONAL_GIS_ORDER'
-            assert geos_crs_info['auth'] == ('EPSG', '4326')
+            assert list(geos_crs_info['auth']) == ['EPSG', '4326']
         sh_img_poly = shapely.geometry.shape(geos_corners)
-        gid_to_poly[gid] = sh_img_poly
+        rows.append({
+            'geometry': sh_img_poly,
+            'date_captured': img.get('date_captured', None),
+            'name': img.get('name', None),
+            'height': img.get('height', None),
+            'width': img.get('width', None),
+            'video_id': img.get('video_id', None),
+            'image_id': gid,
+            'frame_index': img.get('frame_index', None),
+        })
 
-    # df_input = [
-    #     {'gid': gid, 'bounds': poly, 'name': coco_dset.imgs[gid].get('name', None),
-    #      'video_id': coco_dset.imgs[gid].get('video_id', None) }
-    #     for gid, poly in gid_to_poly.items()
-    # ]
-    # img_geos = gpd.GeoDataFrame(df_input, geometry='bounds', crs='epsg:4326')
-
-    # Can merge like this, but we lose membership info
-    # coverage_df = gpd.GeoDataFrame(img_geos.unary_union)
-    coverage_rois_ = ops.unary_union(gid_to_poly.values())
-    if hasattr(coverage_rois_, 'geoms'):
-        # Iteration over shapely objects was deprecated, test for geoms
-        # attribute instead.
-        coverage_rois = list(coverage_rois_.geoms)
-    else:
-        coverage_rois = [coverage_rois_]
-
-    # geopandas uses traditional crs mappings
     cov_poly_crs = 'crs84'
-    cov_image_gdf = gpd.GeoDataFrame(
-        {'geometry': coverage_rois},
-        geometry='geometry', crs=cov_poly_crs)
+    if merge:
+        # df_input = [
+        #     {'gid': gid, 'bounds': poly, 'name': coco_dset.imgs[gid].get('name', None),
+        #      'video_id': coco_dset.imgs[gid].get('video_id', None) }
+        #     for gid, poly in gid_to_poly.items()
+        # ]
+        # img_geos = gpd.GeoDataFrame(df_input, geometry='bounds', crs='epsg:4326')
+
+        # Can merge like this, but we lose membership info
+        # coverage_df = gpd.GeoDataFrame(img_geos.unary_union)
+        coverage_rois_ = ops.unary_union([row['geometry'] for row in rows])
+        if hasattr(coverage_rois_, 'geoms'):
+            # Iteration over shapely objects was deprecated, test for geoms
+            # attribute instead.
+            coverage_rois = list(coverage_rois_.geoms)
+        else:
+            coverage_rois = [coverage_rois_]
+        # geopandas uses traditional crs mappings
+        cov_image_gdf = gpd.GeoDataFrame(
+            {'geometry': coverage_rois},
+            geometry='geometry', crs=cov_poly_crs)
+    else:
+        cov_image_gdf = gpd.GeoDataFrame(rows, geometry='geometry',
+                                         crs=cov_poly_crs)
+
     return cov_image_gdf
 
 
@@ -1529,3 +1588,21 @@ def flip_xy(poly):
         sh_poly_ = kw_poly.to_shapely()
         new_poly = sh_poly_
     return new_poly
+
+
+def category_category_colors(coco_dset):
+    """
+    Ensures that each category in a CategoryTree has a color
+
+    TODO:
+        - [ ] Add to CategoryTree
+    """
+    cats = coco_dset.dataset['categories']
+    # backup_colors = iter(kwimage.Color.distinct(len(cats)))
+    for cat in cats:
+        color = cat.get('color', None)
+        if color is None:
+            # color = next(backup_colors)
+            # cat['color'] = kwimage.Color(color).as01()
+            color = kwimage.Color.random()
+            cat['color'] = color.as01()

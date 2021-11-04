@@ -34,12 +34,12 @@ Notes:
         --dst $OUTPUT_COCO_FPATH \
         --regions $REGION_FPATH \
         --rpc_align_method orthorectify \
-        --max_workers=0 \
-        --aux_workers=0 \
+        --max_workers=10 \
+        --aux_workers=2 \
         --context_factor=1 \
         --visualize=False \
         --skip_geo_preprop True \
-        --keep img --profile
+        --keep img
 
     # Make an animated gif for specified bands (use "," to separate)
     # Requires a CD
@@ -78,6 +78,46 @@ Notes:
     python -m watch.cli.coco_visualize_videos \
         --src $OUTPUT_COCO_FPATH \
         --space="video"
+
+
+Notes:
+
+    # Example invocation to create the full drop1 aligned dataset
+
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+    INPUT_COCO_FPATH=$DVC_DPATH/drop1/data.kwcoco.json
+    OUTPUT_COCO_FPATH=$DVC_DPATH/drop1-WV-only-aligned/data.kwcoco.json
+    REGION_FPATH=$DVC_DPATH/drop1/all_regions.geojson
+    VIZ_DPATH=$OUTPUT_COCO_FPATH/_viz_video
+
+    # Quick stats about input datasets
+    python -m kwcoco stats $INPUT_COCO_FPATH
+    python -m watch stats $INPUT_COCO_FPATH
+
+    # Combine the region models
+    python -m watch.cli.merge_region_models \
+        --src $DVC_DPATH/drop1/region_models/*.geojson \
+        --dst $REGION_FPATH
+
+    python -m watch.cli.coco_add_watch_fields \
+        --src $INPUT_COCO_FPATH \
+        --dst $INPUT_COCO_FPATH.prepped \
+        --workers 16 \
+        --target_gsd=10
+
+    # Execute alignment / crop script
+    python -m watch.cli.coco_align_geotiffs \
+        --src $INPUT_COCO_FPATH.prepped \
+        --dst $OUTPUT_COCO_FPATH \
+        --regions $REGION_FPATH \
+        --rpc_align_method orthorectify \
+        --max_workers=10 \
+        --aux_workers=2 \
+        --context_factor=1 \
+        --visualize=False \
+        --skip_geo_preprop True \
+        --sensor_filter=WV \
+        --keep img
 
 
 TODO:
@@ -174,9 +214,11 @@ class CocoAlignGeotiffConfig(scfg.Config):
             '''
         )),
 
-        'skip_geo_preprop': scfg.Value(False),
+        'skip_geo_preprop': scfg.Value(False, help='makes init faster if it already has all important fields'),
 
-        'target_gsd': scfg.Value(10, help=ub.paragraph('initial gsd to use')),
+        'sensor_filter': scfg.Value(None, help='if specified can be comma separated valid sensors'),
+
+        'target_gsd': scfg.Value(10, help=ub.paragraph('initial gsd to use for the output video files')),
 
         'edit_geotiff_metadata': scfg.Value(
             False, help='if True MODIFIES THE UNDERLYING IMAGES to ensure geodata is propogated'),
@@ -336,6 +378,14 @@ def main(cmdline=True, **kw):
     # Load the dataset and extract geotiff metadata from each image.
     coco_dset = kwcoco.CocoDataset.coerce(src_fpath)
 
+    if config['sensor_filter'] is not None:
+        valid_sensors = config['sensor_filter'].split(',')
+        valid_images = coco_dset.images()
+        have_sensors = valid_images.lookup('sensor_coarse')
+        flags = [s in valid_sensors for s in have_sensors]
+        valid_images = valid_images.compress(flags)
+        coco_dset = coco_dset.subset(list(valid_images))
+
     if not config['skip_geo_preprop']:
         kwcoco_extensions.coco_populate_geo_heuristics(
             coco_dset, overwrite={'warp'}, workers=max_workers,
@@ -349,7 +399,7 @@ def main(cmdline=True, **kw):
 
     # Find the clustered ROI regions
     if regions == 'images':
-        region_df = kwcoco_extensions.covered_image_geo_regions(coco_dset)
+        region_df = kwcoco_extensions.covered_image_geo_regions(coco_dset, merge=True)
     elif regions == 'annots':
         region_df = kwcoco_extensions.covered_annot_geo_regions(coco_dset, merge=True)
     else:

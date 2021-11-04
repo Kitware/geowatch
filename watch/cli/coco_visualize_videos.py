@@ -43,6 +43,9 @@ class CocoVisualizeConfig(scfg.Config):
 
         'channels': scfg.Value(None, type=str, help='only viz these channels'),
 
+        'draw_imgs': scfg.Value(True),
+        'draw_anns': scfg.Value(True),
+
         # 'channels': scfg.Value(None, type=str, help='only viz these channels'),
 
         # 'num_frames': scfg.Value('inf', type=str, help='show the first N frames from each video'),
@@ -155,7 +158,9 @@ def main(cmdline=True, **kwargs):
 
                 pool.submit(_write_ann_visualizations2,
                             coco_dset, img, anns, sub_dpath, space=space,
-                            channels=channels)
+                            channels=channels,
+                            draw_imgs=config['draw_imgs'],
+                            draw_anns=config['draw_anns'])
 
         for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):
             job.result()
@@ -198,7 +203,9 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                space : str,
                                channels=None,
                                vid_crop_box=None,
-                               request_grouped_bands='default'):
+                               request_grouped_bands='default',
+                               draw_imgs=True,
+                               draw_anns=True):
     """
     TODO:
         refactor because similar code is also used in coco_align_geotiffs
@@ -308,7 +315,13 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         view_img_fpath = ub.augpath(name, dpath=img_chan_dpath) + '_' + suffix + '.view_img.jpg'
         view_ann_fpath = ub.augpath(name, dpath=ann_chan_dpath) + '_' + suffix + '.view_ann.jpg'
 
-        chan = delayed.take_channels(chan_group)
+        try:
+            chan = delayed.take_channels(chan_group)
+        except KeyError:
+            # hack
+            from kwcoco.util import util_delayed_poc
+            chan = util_delayed_poc.DelayedChannelConcat([delayed]).take_channels(chan_group)
+
         try:
             canvas = chan.finalize()
         except Exception:
@@ -332,22 +345,24 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         chan_header_info.append(chan_group)
         header_text = '\n'.join(chan_header_info)
 
-        img_canvas = kwimage.ensure_uint255(canvas)
-        img_canvas = util_kwimage.draw_header_text(image=img_canvas,
-                                                   text=header_text,
-                                                   stack=True)
-        kwimage.imwrite(view_img_fpath, img_canvas)
+        if draw_imgs:
+            img_canvas = kwimage.ensure_uint255(canvas)
+            img_canvas = util_kwimage.draw_header_text(image=img_canvas,
+                                                       text=header_text,
+                                                       stack=True)
+            kwimage.imwrite(view_img_fpath, img_canvas)
 
-        try:
-            ann_canvas = dets.draw_on(canvas, color='classes')
-        except Exception:
-            ann_canvas = dets.draw_on(canvas)
-        ann_canvas = kwimage.ensure_uint255(ann_canvas)
+        if draw_anns:
+            try:
+                ann_canvas = dets.draw_on(canvas, color='classes')
+            except Exception:
+                ann_canvas = dets.draw_on(canvas)
+            ann_canvas = kwimage.ensure_uint255(ann_canvas)
 
-        ann_canvas = util_kwimage.draw_header_text(image=ann_canvas,
-                                                   text=header_text,
-                                                   stack=True)
-        kwimage.imwrite(view_ann_fpath, ann_canvas)
+            ann_canvas = util_kwimage.draw_header_text(image=ann_canvas,
+                                                       text=header_text,
+                                                       stack=True)
+            kwimage.imwrite(view_ann_fpath, ann_canvas)
 
 
 class GdalErrorHandler(object):
