@@ -18,41 +18,45 @@ SENTINEL_PLATFORMS = {'sentinel-2b', 'sentinel-2a'}
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Ingress data from T&E baseline framework input file")
+        description='Ingress data from T&E baseline framework input file')
 
     parser.add_argument('input_path',
                         type=str,
-                        help="Path to input T&E Baseline Framework JSON")
-    parser.add_argument("-o", "--outdir",
+                        help='Path to input T&E Baseline Framework JSON')
+    parser.add_argument('-o', '--outdir',
                         type=str,
                         required=True,
-                        help="Output directory for ingressed assets an output "
-                             "STAC Catalog")
-    parser.add_argument("--aws_profile",
+                        help='Output directory for ingressed assets an output '
+                             'STAC Catalog')
+    parser.add_argument('--aws_profile',
                         required=False,
                         type=str,
-                        help="AWS Profile to use for AWS S3 CLI commands")
-    parser.add_argument("-d", "--dryrun",
+                        help='AWS Profile to use for AWS S3 CLI commands')
+    parser.add_argument('-d', '--dryrun',
                         action='store_true',
                         default=False,
-                        help="Run AWS CLI commands with --dryrun flag")
-    parser.add_argument("-r", "--requester_pays",
+                        help='Run AWS CLI commands with --dryrun flag')
+    parser.add_argument('-r', '--requester_pays',
                         action='store_true',
                         default=False,
-                        help="Run AWS CLI commands with "
-                             "`--requestor_payer requester` flag")
-    parser.add_argument("-j", "--jobs",
+                        help='Run AWS CLI commands with '
+                             '`--requestor_payer requester` flag')
+    parser.add_argument('-j', '--jobs',
                         type=int,
                         default=1,
                         required=False,
-                        help="Number of jobs to run in parallel")
+                        help='Number of jobs to run in parallel')
 
-    baseline_framework_ingress(**vars(parser.parse_args()))
+    parser.add_argument('--relative', default=False,
+                        action='store_true', help='if true use relative paths')
 
+    ns = parser.parse_args()
+    ingress_kwargs = vars(ns)
+    baseline_framework_ingress(**ingress_kwargs)
     return 0
 
 
-def _item_map(feature, outdir, aws_base_command, dryrun):
+def _item_map(feature, outdir, aws_base_command, dryrun, relative=False):
     # Adding a reference back to the original STAC
     # item if not already present
     self_link = None
@@ -80,20 +84,22 @@ def _item_map(feature, outdir, aws_base_command, dryrun):
     for asset_name, asset in assets.items():
         asset_basename = os.path.basename(asset['href'])
 
-        feature_output_dir = os.path.join(
-            outdir, feature['id'])
+        feature_output_dir = os.path.join(outdir, feature['id'])
 
-        asset_outpath = os.path.join(
-            feature_output_dir, asset_basename)
+        asset_outpath = os.path.join(feature_output_dir, asset_basename)
+
+        local_asset_href = os.path.abspath(asset_outpath)
+        if relative:
+            local_asset_href = os.path.relpath(asset_outpath, outdir)
 
         asset_href = asset['href']
 
         try:
             if('productmetadata' not in assets
                and feature['properties']['platform'] in SENTINEL_PLATFORMS
-               and asset_name == "metadata"):
+               and asset_name == 'metadata'):
                 asset_outpath = os.path.join(
-                    feature_output_dir, "MTD_TL.xml")
+                    feature_output_dir, 'MTD_TL.xml')
 
                 new_asset = download_mtd_msil1c(
                     feature['properties']['sentinel:product_id'],
@@ -109,18 +115,18 @@ def _item_map(feature, outdir, aws_base_command, dryrun):
             os.makedirs(feature_output_dir, exist_ok=True)
 
         if os.path.isfile(asset_outpath):
-            print("Asset already exists at outpath '{}', "
-                  "not redownloading".format(asset_outpath))
+            print('Asset already exists at outpath {!r}, '
+                  'not redownloading'.format(asset_outpath))
             # Update feature asset href to point to local outpath
-            asset['href'] = asset_outpath
+            asset['href'] = local_asset_href
         else:
             success = download_file(
                 asset_href, asset_outpath, aws_base_command, dryrun)
             if success:
-                asset['href'] = asset_outpath
+                asset['href'] = local_asset_href
             else:
-                print("Warning unrecognized scheme for asset href: '{}', "
-                      "skipping!".format(asset_href))
+                print('Warning unrecognized scheme for asset href: {!r}, '
+                      'skipping!'.format(asset_href))
                 continue
 
     for new_asset_name, new_asset in new_assets.items():
@@ -128,9 +134,15 @@ def _item_map(feature, outdir, aws_base_command, dryrun):
 
     item = pystac.Item.from_dict(feature)
     item.set_collection(None)  # Clear the collection if present
-    item.set_self_href(
-        os.path.join(outdir, feature['id'], feature['id'] + '.json'))
 
+    item_href = os.path.join(outdir, feature['id'], feature['id'] + '.json')
+    # Transform to absolute
+    item_href = os.path.abspath(item_href)
+    if relative:
+        # Transform to relative if requested
+        item_href = os.path.relpath(item_href, outdir)
+
+    item.set_self_href(item_href)
     return item
 
 
@@ -139,16 +151,24 @@ def baseline_framework_ingress(input_path,
                                aws_profile=None,
                                dryrun=False,
                                requester_pays=False,
+                               relative=False,
                                jobs=1):
     os.makedirs(outdir, exist_ok=True)
+
+    if relative:
+        catalog_type = pystac.CatalogType.RELATIVE_PUBLISHED
+    else:
+        catalog_type = pystac.CatalogType.ABSOLUTE_PUBLISHED
 
     catalog_outpath = os.path.join(outdir, 'catalog.json')
     catalog = pystac.Catalog('Baseline Framework ingress catalog',
                              'STAC catalog of SMART search results',
-                             href=catalog_outpath)
+                             href=catalog_outpath, catalog_type=catalog_type)
+
     catalog.set_root(catalog)
 
-    input_path = input_path
+    if relative:
+        catalog.make_all_asset_hrefs_relative()
 
     if aws_profile is not None:
         aws_base_command =\
@@ -186,15 +206,15 @@ def baseline_framework_ingress(input_path,
     executor = ubelt.Executor(mode='process' if jobs > 1 else 'serial',
                               max_workers=jobs)
 
-    jobs = [executor.submit(_item_map, feature,
-                            outdir, aws_base_command, dryrun)
+    jobs = [executor.submit(_item_map, feature, outdir, aws_base_command,
+                            dryrun, relative)
             for feature in input_stac_items]
 
     for mapped_item in (job.result() for job in as_completed(jobs)):
         catalog.add_item(mapped_item)
 
-    catalog.save(catalog_type=pystac.CatalogType.ABSOLUTE_PUBLISHED)
-
+    catalog.save(catalog_type=catalog_type)
+    print('wrote catalog_outpath = {!r}'.format(catalog_outpath))
     return catalog
 
 
@@ -204,12 +224,11 @@ def download_file(href, outpath, aws_base_command, dryrun):
 
     if scheme == 's3':
         command = [*aws_base_command, href, outpath]
-
-        print("Running: {}".format(' '.join(command)))
+        print('Running: {}'.format(' '.join(command)))
         # TODO: Manually check return code / output
         subprocess.run(command, check=True)
     elif scheme in {'https', 'http'}:
-        print("Downloading: '{}' to '{}'".format(
+        print('Downloading: {!r} to {!r}'.format(
             href, outpath))
         if not dryrun:
             download_http_file(href, outpath)
@@ -232,9 +251,9 @@ def download_mtd_msil1c(product_id,
                         outdir,
                         aws_base_command,
                         dryrun):
-    # "The metadata of the product, which tile is part of, are available in
+    # The metadata of the product, which tile is part of, are available in
     # parallel folder (productInfo.json contains the name of the product).
-    # This can be found in products/[year]/[month]/[day]/[product name]."
+    # This can be found in products/[year]/[month]/[day]/[product name].
     # (https://roda.sentinel-hub.com/sentinel-s2-l1c/readme.html)
     dt = datetime.strptime(product_id.split('_')[2], '%Y%m%dT%H%M%S')
 
@@ -249,7 +268,7 @@ def download_mtd_msil1c(product_id,
         success = download_file(
             mtd_msil1c_href, mtd_msil1c_outpath, aws_base_command, dryrun)
     except subprocess.CalledProcessError:
-        print("* Warning * Failed to download MTD_MSIL1C.xml")
+        print('* Warning * Failed to download MTD_MSIL1C.xml')
         return None
 
     if success:
@@ -260,10 +279,10 @@ def download_mtd_msil1c(product_id,
             'roles': ['metadata']
         }
     else:
-        print("Warning unrecognized scheme for asset href: '{}', "
-              "skipping!".format(mtd_msil1c_href))
+        print('Warning unrecognized scheme for asset href: {!r}, '
+              'skipping!'.format(mtd_msil1c_href))
         return None
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     sys.exit(main())
