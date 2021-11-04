@@ -188,6 +188,7 @@ def main(cmdline=True, **kwargs):
             video_names=video_names,
             draw_imgs=config['draw_imgs'],
             draw_anns=config['draw_anns'],
+            num_workers=config['num_workers'],
         )
         pass
 

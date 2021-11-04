@@ -26,7 +26,7 @@ __notes__ = r"""
 
 def animate_visualizations(viz_dpath, channels=None, video_names=None,
                            frames_per_second=0.7, draw_anns=True,
-                           draw_imgs=True, verbose=0):
+                           draw_imgs=True, num_workers=0, verbose=0):
     r"""
     Helper that roughly does the same thing as this bash script:
 
@@ -62,9 +62,12 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
         >>> channels = None
         >>> video_names = None
         >>> frame_per_second = 0.7
+        >>> from watch.cli.animate_visualizations import *  # NOQA
+        >>> animate_visualizations(viz_dpath, verbose=1, num_workers=0)
     """
     import pathlib
     from watch.cli import gifify
+    import ubelt as ub
     import kwcoco
 
     if channels is not None:
@@ -76,6 +79,8 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
         video_dpaths = [p for p in viz_dpath.glob('*') if p.is_dir()]
     else:
         video_dpaths = [viz_dpath / n for n in video_names]
+
+    pool = ub.JobPool(mode='thread', max_workers=num_workers)
 
     types = []
     if draw_imgs:
@@ -94,9 +99,13 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
                 frame_fpaths = sorted(chan_dpath.glob('*'))
                 gif_fpath = str(video_dpath) + type_ + '_' + chan_dpath.name + '.gif'
 
-                gifify.ffmpeg_animate_frames(
-                    frame_fpaths, gif_fpath, in_framerate=frames_per_second,
-                    verbose=verbose)
+                pool.submit(
+                    gifify.ffmpeg_animate_frames, frame_fpaths, gif_fpath,
+                    in_framerate=frames_per_second,
+                    verbose=verbose and num_workers <= 1)
+
+    for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='collect animate jobs'):
+        job.result()
 
 
 if __name__ == '__main__':
