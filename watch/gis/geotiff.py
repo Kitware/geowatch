@@ -704,6 +704,8 @@ def geotiff_filepath_info(gpath, fast=True):
             sensor_candidates.append(meta['mission_id'])
             if meta.get('suffix', None) == 'TCI':
                 sensor_candidates.append('S2-TrueColor')
+            meta['product_guess'] = 'sentinel2'
+            meta['guess_heuristic'] = 'sentinel2_parse'
 
     dg_bundle = None
     if not sensor_candidates or not fast:
@@ -723,7 +725,7 @@ def geotiff_filepath_info(gpath, fast=True):
                 wv2_meta['num'] = result.named['num']
                 wv2_meta['part2'] = result.named['part2']
                 wv2_meta['product_guess'] = 'worldview'
-                meta['guess_heuristic'] = 'WV_heuristic1'
+                wv2_meta['guess_heuristic'] = 'WV_heuristic1'
                 meta.update(wv2_meta)
             except InvalidFormat:
                 pass
