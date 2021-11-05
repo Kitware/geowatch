@@ -1,6 +1,7 @@
 """
 The SMART WATCH module
 """
+import os
 
 
 __devnotes__ = """
@@ -10,12 +11,16 @@ mkinit -m watch --lazy --noattr
 mkinit -m watch --lazy --noattr -w
 """
 
-# Some imports need to happen in a specific order, otherwise we get crashes
-# This is very annoying
-from pyproj import CRS
-from osgeo import gdal
 
-__version__ = '0.1.0'
+DISABLE_IMPORT_ORDER_HACK = os.environ.get('DISABLE_IMPORT_ORDER_HACK', '0')
+
+if DISABLE_IMPORT_ORDER_HACK != '1':
+    # Some imports need to happen in a specific order, otherwise we get crashes
+    # This is very annoying
+    from pyproj import CRS  # NOQA
+    from osgeo import gdal  # NOQA
+
+__version__ = '0.1.5'
 
 
 def lazy_import(module_name, submodules, submod_attrs):
