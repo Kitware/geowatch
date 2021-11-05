@@ -14,7 +14,6 @@ import kwcoco
 
 import watch
 from watch.utils import util_bands
-from watch.utils import util_raster
 from watch.utils import kwcoco_extensions
 
 
@@ -124,6 +123,7 @@ def _determine_wv_channels(asset_dict):
         channels = _code(util_bands.WORLDVIEW2_MS8)
     else:
         raise Exception('unknown channel signature for WV')
+    return channels
 
 
 def make_coco_img_from_stac_asset(asset_dict,
@@ -295,8 +295,10 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
 
     output_dset = kwcoco.CocoDataset()
     output_dset.fpath = outpath
+
     # TODO: Should make this name the MGRS tile
-    for kwcoco_img in (job.result() for job in as_completed(jobs)):
+    for job in ub.ProgIter(as_completed(jobs), total=len(jobs), desc='collect convert stac-to-kwcoco jobs'):
+        kwcoco_img = job.result()
         if kwcoco_img is not None:
             output_dset.add_image(**kwcoco_img)
 

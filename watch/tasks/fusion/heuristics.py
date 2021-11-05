@@ -45,3 +45,14 @@ HUERISTIC_STATUS_DATA = [
     {'name': 'negative_unbounded', 'color': 'deeppink'},
     {'name': 'ignore', 'color': 'purple'},
 ]
+
+
+CATEGORIES = [
+    {'name': 'No Activity', 'color': 'tomato'},
+    {'name': 'Site Preparation', 'color': 'gold'},
+    {'name': 'Active Construction', 'color': 'lime'},
+    {'name': 'Post Construction', 'color': 'darkturquoise'},
+    {'name': 'Unknown', 'color': 'blueviolet'},
+    {'name': 'ignore', 'color': 'slategray'},
+    {'name': 'negative', 'color': 'orangered'},
+]

@@ -363,7 +363,12 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             chan = util_delayed_poc.DelayedChannelConcat([delayed]).take_channels(chan_group)
 
         canvas = chan.finalize()
-        canvas = normalize_intensity(canvas, nodata=0)
+        canvas = normalize_intensity(canvas, nodata=0, params={
+            'high': 0.90,
+            'mid': 0.5,
+            'low': 0.01,
+            'mode': 'linear',
+        })
         canvas = util_kwimage.ensure_false_color(canvas)
 
         if len(canvas.shape) > 2 and canvas.shape[2] > 4:

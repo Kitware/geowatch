@@ -1,14 +1,13 @@
 # -*- coding: utf-8 -*-
-import os
-# import json
 import dateutil
 import kwcoco
 import kwimage
-from watch.utils import kwcoco_extensions
 import ubelt as ub
-# import pathlib
 import numpy as np
 import scriptconfig as scfg
+from watch.utils import kwcoco_extensions
+from watch.utils import util_kwplot
+from watch.utils import util_path
 
 
 class ProjectAnnotationsConfig(scfg.Config):
@@ -46,15 +45,22 @@ class ProjectAnnotationsConfig(scfg.Config):
             use this to print details
             ''')),
 
-        'validate': scfg.Value(1, help=ub.paragraph(
+        'clear_existing': scfg.Value(1, help=ub.paragraph(
             '''
-            Validate spatial and temporal AOI of each site after propagating
+            if True, clears existing annotations before projecting the new ones.
             ''')),
 
-        'crop': scfg.Value(1, help=ub.paragraph(
-            '''
-            Crop propagated annotations to the valid data mask of the new image
-            ''')),
+        'propogate': scfg.Value(True, help='if True does forward propogation in time'),
+
+        # Do we need these?
+        # 'validate': scfg.Value(1, help=ub.paragraph(
+        #     '''
+        #     Validate spatial and temporal AOI of each site after propagating
+        #     ''')),
+        # 'crop': scfg.Value(1, help=ub.paragraph(
+        #     '''
+        #     Crop propagated annotations to the valid data mask of the new image
+        #     ''')),
 
         'max_workers': scfg.Value(None, help=ub.paragraph(
             '''
@@ -64,25 +70,12 @@ class ProjectAnnotationsConfig(scfg.Config):
     }
 
 
-def coerce_patterned_paths(data, expected_extension=None):
-    from os.path import isdir, isfile, join
-    import glob
-    data = os.fspath(data)
-    globpat = None
-    if '*' in data:
-        globpat = data
-    else:
-        if isfile(data):
-            paths = [data]
-        elif isdir(data):
-            globpat = join(data, '*' + expected_extension)
-    if globpat is not None:
-        paths = list(glob.glob(globpat, recursive=True))
-    return paths
-
-
 def main(cmdline=False, **kwargs):
     """
+    CommandLine:
+        python -m watch.cli.project_annotations \
+            --src
+
     Ignore:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from watch.cli.project_annotations import *  # NOQA
@@ -102,6 +95,14 @@ def main(cmdline=False, **kwargs):
     import geopandas as gpd  # NOQA
     config = ProjectAnnotationsConfig(default=kwargs, cmdline=cmdline)
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
+
+    PROPOGATE_ANNOTATIONS = config['propogate']
+    ASSUME_CONSISTENT_REGION_IDS = True
+    PROJECT_ENDSTATE = True
+
+    output_fpath = config['dst']
+    if output_fpath is None:
+        raise AssertionError
 
     # Load the coco dataset with all of the images
     coco_dset = kwcoco.CocoDataset.coerce(config['src'])
@@ -125,7 +126,7 @@ def main(cmdline=False, **kwargs):
 
     # Read the external CRS84 annotations from the site models
     sites = []
-    site_geojson_fpaths = coerce_patterned_paths(config['site_models'], '.geojson')
+    site_geojson_fpaths = util_path.coerce_patterned_paths(config['site_models'], '.geojson')
     for fpath in ub.ProgIter(site_geojson_fpaths, desc='load geojson annots'):
         gdf = util_gis.read_geojson(fpath)
         sites.append(gdf)
@@ -135,40 +136,35 @@ def main(cmdline=False, **kwargs):
 
     region_id_to_sites = ub.group_items(sites, lambda x: x.iloc[0]['region_id'])
 
-    ASSUME_CONSISTENT_REGION_IDS = True
-    PROPOGATE_ANNOTATIONS = True
-    PROJECT_ENDSTATE = True
-
+    # Ensure colors and categories
     from watch.tasks.fusion import heuristics
-    hueristic_status_data = heuristics.HUERISTIC_STATUS_DATA
-
     status_to_color = {d['name']: kwimage.Color(d['color']).as01()
-                       for d in hueristic_status_data}
-    # region_status_labels = {site_gdf.iloc[0]['status'] for site_gdf in region_sites}
-    # for status in region_status_labels:
-    #     if status not in status_to_color:
-    #         hueristic_status_data.append({
-    #             'name': status,
-    #             'color': kwimage.Color.random().as01(),
-    #         })
-    status_to_color = {d['name']: kwimage.Color(d['color']).as01()
-                       for d in hueristic_status_data}
-
+                       for d in heuristics.HUERISTIC_STATUS_DATA}
     coco_dset.ensure_category('negative')
     coco_dset.ensure_category('ignore')
+    print(coco_dset.dataset['categories'])
+    for cat in heuristics.CATEGORIES:
+        coco_dset.ensure_category(**cat)
+        real_cat = coco_dset.index.name_to_cat[cat['name']]
+        if real_cat.get('color', None) is None:
+            real_cat['color'] = cat['color']
     kwcoco_extensions.category_category_colors(coco_dset)
-    propogated_annotations = []
-    all_drawable_infos = []
+    print(coco_dset.dataset['categories'])
 
+    all_drawable_infos = []  # helper if we are going to draw
+
+    propogated_annotations = []
     for region_id, region_sites in region_id_to_sites.items():
 
         # Find the video associated with this region
         # If this assumption is not valid, we could refactor to loop through
         # each site, do the geospatial lookup, etc...
         # but this is faster if we know regions are consistent
-
         if ASSUME_CONSISTENT_REGION_IDS:
-            video = coco_dset.index.name_to_video[region_id]
+            try:
+                video = coco_dset.index.name_to_video[region_id]
+            except KeyError:
+                continue
             video_id = video['id']
             video_name = video['name']
         else:
@@ -177,13 +173,14 @@ def main(cmdline=False, **kwargs):
                 # determine which video it the site belongs to
                 video_overlaps = util_gis.geopandas_pairwise_overlaps(site_gdf, videos_gdf)
                 overlapping_video_indexes = set(np.hstack(list(video_overlaps.values())))
-                assert len(overlapping_video_indexes) == 1, 'should only belong to one video'
-                overlapping_video_index = ub.peek(overlapping_video_indexes)
-                video_id = videos_gdf.iloc[overlapping_video_index]['video_id']
-                video_name = coco_dset.index.videos[video_id]['name']
-                assert site_gdf.iloc[0].region_id == video_name, 'sanity check'
-                assert site_gdf.iloc[0].region_id == region_id, 'sanity check'
-                video_ids.append(video_id)
+                if len(overlapping_video_indexes) > 0:
+                    assert len(overlapping_video_indexes) == 1, 'should only belong to one video'
+                    overlapping_video_index = ub.peek(overlapping_video_indexes)
+                    video_id = videos_gdf.iloc[overlapping_video_index]['video_id']
+                    video_name = coco_dset.index.videos[video_id]['name']
+                    assert site_gdf.iloc[0].region_id == video_name, 'sanity check'
+                    assert site_gdf.iloc[0].region_id == region_id, 'sanity check'
+                    video_ids.append(video_id)
             assert ub.allsame(video_ids)
             video_id = video_ids[0]
 
@@ -226,7 +223,12 @@ def main(cmdline=False, **kwargs):
 
             # Determine the first image each site-observation will be
             # associated with and then propogate them forward as necessary.
-            found_idxs = np.searchsorted(region_image_dates, observation_dates, 'left')
+            try:
+                found_idxs = np.searchsorted(region_image_dates, observation_dates, 'left')
+            except TypeError:
+                # handle  can't compare offset-naive and offset-aware datetimes
+                found_idxs = np.searchsorted(region_image_dates, observation_dates, 'left')
+                pass
             image_idxs_per_observation = np.split(region_image_indexes, found_idxs)[1:]
 
             # Create annotations on each frame we are associated with
@@ -253,9 +255,9 @@ def main(cmdline=False, **kwargs):
 
                 propogated_on = []
                 category_colors = []
-                site_catnames = [c.strip() for c in catname.split(',')]
-                # cats = [coco_dset.index.name_to_cat[c] for c in site_catnames]
 
+                # Handle multi-category per-row logic
+                site_catnames = [c.strip() for c in catname.split(',')]
                 row_summary = {
                     'track_id': track_id,
                     'site_row_datetime': site_row_datetime,
@@ -277,15 +279,17 @@ def main(cmdline=False, **kwargs):
                     if PROPOGATE_ANNOTATIONS or img_datetime == site_row_datetime:
                         hack = 0
                         for catname, poly in zip(site_catnames, site_polygons):
+                            # TODO: use heuristic module
                             if catname == 'Post Construction':
+                                # Don't project end-states of we dont want to
                                 if not PROJECT_ENDSTATE:
                                     continue
                             if hack == 0:
                                 propogated_on.append(img_datetime)
                                 hack = 1
                             cid = coco_dset.ensure_category(catname)
-                            category_colors.append(coco_dset.index.cats[cid]['color'])
-
+                            cat = coco_dset.index.cats[cid]
+                            category_colors.append(cat['color'])
                             img['date_captured']
                             ann = {
                                 'image_id': gid,
@@ -308,16 +312,19 @@ def main(cmdline=False, **kwargs):
             'region_image_dates': region_image_dates,
         })
 
-    coco_dset.clear_annotations()
+    if config['clear_existing']:
+        coco_dset.clear_annotations()
+
     for ann in propogated_annotations:
         coco_dset.add_annotation(**ann)
     kwcoco_extensions.warp_annot_segmentations_from_geos(coco_dset)
 
-    coco_dset.fpath = ub.augpath(coco_dset.fpath, prefix='prop_')
+    coco_dset.fpath = output_fpath
     print('dump coco_dset.fpath = {!r}'.format(coco_dset.fpath))
     coco_dset.dump(coco_dset.fpath)
 
     if 0:
+        # TODO: hookup visualization logic in a sane way
         import kwplot
         kwplot.autoplt()
         for fnum, info in enumerate(all_drawable_infos):
@@ -330,10 +337,14 @@ def main(cmdline=False, **kwargs):
 
 
 def coerce_datetime(data):
-    if data is not None:
-        return dateutil.parser.parse(data)
-    else:
+    import datetime
+    if data is None:
         return data
+    else:
+        dt = dateutil.parser.parse(data)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=datetime.timezone.utc)
+    return dt
 
 
 def plot_image_and_site_times(coco_dset, region_image_dates, drawable_region_sites, region_id):
@@ -387,8 +398,8 @@ def plot_image_and_site_times(coco_dset, region_image_dates, drawable_region_sit
 
     cat_to_color = {cat['name']: cat['color'] for cat in coco_dset.cats.values()}
 
-    phantom_legend(status_to_color, ax=ax, legend_id=1, loc=0)
-    phantom_legend(cat_to_color, ax=ax, legend_id=3, loc=3)
+    util_kwplot.phantom_legend(status_to_color, ax=ax, legend_id=1, loc=0)
+    util_kwplot.phantom_legend(cat_to_color, ax=ax, legend_id=3, loc=3)
 
     ax.set_xlabel('Time')
     ax.set_ylabel('Site Index')
@@ -397,16 +408,16 @@ def plot_image_and_site_times(coco_dset, region_image_dates, drawable_region_sit
 
 
 def draw_geospace(dvc_dpath, sites):
-    region_fpaths = coerce_patterned_paths(dvc_dpath / 'drop1/region_models', '.geojson')
     from watch.utils import util_gis
+    import geopandas as gpd
+    import kwplot
+    kwplot.autompl()
+    region_fpaths = util_path.coerce_patterned_paths(dvc_dpath / 'drop1/region_models', '.geojson')
     regions = []
     for fpath in ub.ProgIter(region_fpaths, desc='load geojson annots'):
         gdf = util_gis.read_geojson(fpath)
         regions.append(gdf)
 
-    import geopandas as gpd
-    import kwplot
-    kwplot.autompl()
     wld_map_gdf = gpd.read_file(
         gpd.datasets.get_path('naturalearth_lowres')
     )
@@ -423,40 +434,9 @@ def draw_geospace(dvc_dpath, sites):
         gdf.plot(ax=ax, facecolor='none', edgecolor='red', alpha=0.5)
 
 
-def phantom_legend(label_to_color, mode='line', ax=None, legend_id=None, loc=0):
-    import kwplot
-    import kwimage
-    plt = kwplot.autoplt()
-
-    if ax is None:
-        ax = plt.gca()
-
-    _phantom_legends = getattr(ax, '_phantom_legends', None)
-    if _phantom_legends is None:
-        _phantom_legends = ax._phantom_legends = ub.ddict(dict)
-
-    phantom = _phantom_legends[legend_id]
-    handles = phantom['handles'] = []
-    handles.clear()
-
-    alpha = 1.0
-    for label, color in label_to_color.items():
-        color = kwimage.Color(color).as01()
-        if mode == 'line':
-            phantom_actor = plt.Line2D(
-                (0, 0), (1, 1), color=color, label=label, alpha=alpha)
-        elif mode == 'circle':
-            phantom_actor = plt.Circle(
-                (0, 0), 1, fc=color, label=label, alpha=alpha)
-        else:
-            raise KeyError
-        handles.append(phantom_actor)
-
-    legend_artist = ax.legend(handles=handles, loc=loc)
-    phantom['artist'] = legend_artist
-
-    # Re-add other legends
-    for _phantom in _phantom_legends.values():
-        artist = _phantom['artist']
-        if artist is not legend_artist:
-            ax.add_artist(artist)
+if __name__ == '__main__':
+    """
+    CommandLine:
+        python ~/code/watch/watch/cli/project_annotations.py
+    """
+    main(cmdline=True)

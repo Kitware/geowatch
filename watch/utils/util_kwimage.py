@@ -80,14 +80,10 @@ def draw_header_text(image, text, fit=False, color='red', halign='center',
         # TODO: allow a shrink-to-fit only option
         try:
             # needs new kwimage to work
-            print('hereb')
-            print('halign = {!r}'.format(halign))
-            print('fit = {!r}'.format(fit))
             header = kwimage.draw_text_on_image(
                 None, text, org=None,
                 valign='top', halign=halign, color=color)
         except Exception:
-            print('herea')
             header = kwimage.draw_text_on_image(
                 None, text, org=(1, 1),
                 valign='top', halign='left', color=color)
@@ -95,6 +91,10 @@ def draw_header_text(image, text, fit=False, color='red', halign='center',
         if fit == 'shrink':
             if header.shape[1] > width:
                 header = kwimage.imresize(header, dsize=(width, None))
+            elif header.shape[1] < width:
+                header = np.pad(header, [(0, 0), ((width - header.shape[1]) // 2, 0), (0, 0)])
+            else:
+                pass
         else:
             header = kwimage.imresize(header, dsize=(width, None))
     else:
