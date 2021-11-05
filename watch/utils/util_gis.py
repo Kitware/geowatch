@@ -258,7 +258,8 @@ def read_geojson(file, default_axis_mapping='OAMS_TRADITIONAL_GIS_ORDER'):
 @ub.memoize
 def _get_crs84():
     from pyproj import CRS
-    return CRS.from_user_input('crs84')
+    crs84 = CRS.from_user_input('crs84')
+    return crs84
 
 
 def _flip(x, y):
