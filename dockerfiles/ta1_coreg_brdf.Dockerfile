@@ -96,6 +96,7 @@ RUN pip install awscli
 COPY . /watch
 
 COPY ./matlab_binaries/main_BRDF_SingleBand /opt/bin/
+COPY ./matlab_binaries/mainMTRA_HLS /opt/bin/
 
 RUN conda activate watch && \
     pip install --no-deps -e /watch
