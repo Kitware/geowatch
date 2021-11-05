@@ -39,12 +39,12 @@ def main():
                         action='store_true',
                         help='Additionally pan-sharpen any MSI images')
 
-    ortho_wv(**vars(parser.parse_args()))
+    wv_ortho(**vars(parser.parse_args()))
 
     return 0
 
 
-def ortho_wv(stac_catalog, outdir, jobs=1, te_dems=False, pansharpen=False):
+def wv_ortho(stac_catalog, outdir, jobs=1, te_dems=False, pansharpen=False):
     '''
     Performs the following steps.
 
@@ -59,7 +59,7 @@ def ortho_wv(stac_catalog, outdir, jobs=1, te_dems=False, pansharpen=False):
         >>> 
         >>> # xdoctest: +REQUIRES(env:API_KEY)
         >>> from pystac_client import Client
-        >>> from watch.cli.ortho_wv import *
+        >>> from watch.cli.wv_ortho import *
         >>> catalog = Client.open('https://api.smart-stac.com/', headers={
         >>>                           "x-api-key": os.environ['API_KEY']})
         >>> ids = ['21OCT13071603-P1BS-014507674010_01_P002',
@@ -98,7 +98,7 @@ def ortho_wv(stac_catalog, outdir, jobs=1, te_dems=False, pansharpen=False):
         >>>  
         >>> out_dir = os.path.abspath('wv/out/')
         >>> os.makedirs(out_dir, exist_ok=True)
-        >>> out_catalog = ortho_wv(catalog, out_dir, jobs=10,
+        >>> out_catalog = wv_ortho(catalog, out_dir, jobs=10,
         >>>                        te_dems=False, pansharpen=True)
 
 

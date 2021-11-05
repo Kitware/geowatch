@@ -9,7 +9,7 @@ import pystac
 
 from watch.utils.util_stac import parallel_map_items
 from watch.datacube.registration.wv_to_s2 import wv_to_s2_coregister
-from watch.cli.ortho_wv import maps, associate_msi_pan
+from watch.cli.wv_ortho import maps, associate_msi_pan
 
 
 def main():
@@ -36,7 +36,7 @@ def main():
                         required=False,
                         help="Number of jobs to run in parallel")
 
-    coreg_wv(**vars(parser.parse_args()))
+    wv_coreg(**vars(parser.parse_args()))
 
     return 0
 
@@ -51,7 +51,7 @@ def _sanitize_catalog(stac_catalog):
     return catalog
 
 
-def coreg_wv(wv_catalog, s2_catalog, outdir, jobs=1):
+def wv_coreg(wv_catalog, s2_catalog, outdir, jobs=1):
     '''
     Returns an updated wv_catalog coregistered to the baseline images in the
     already-coregistered s2_catalog.
@@ -100,7 +100,7 @@ def _coreg_map(stac_item, outdir, baseline_s2_items, item_pairs_dct):
     print("* Coregistering WV item: '{}'".format(stac_item.id))
 
     is_ortho = (stac_item.properties['nitf:image_preprocessing_level'] == '2G'
-                or any('ortho_wv' in i
+                or any('wv_ortho' in i
                        for i in stac_item.properties['watch:process_history']))
     if stac_item.properties['constellation'] == 'worldview' and is_ortho:
 
