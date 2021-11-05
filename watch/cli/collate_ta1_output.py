@@ -131,6 +131,28 @@ def _load_input(path):
             return [json.loads(line) for line in f]
 
 
+def _remap_quality_mask(quality_mask_path, outdir):
+    # FMask cloudmask values are associated with the following classes:
+    # 0 => clear land pixel
+    # 1 => clear water pixel
+    # 2 => cloud shadow
+    # 3 => snow
+    # 4 => cloud
+    # 255 => no observation
+    #
+    # Remapping to Landsat QA standard
+    output_path = os.path.join(outdir, 'out_qa.tif')
+    subprocess.run(['gdal_calc.py',
+                    '-A', quality_mask_path,
+                    '--outfile', output_path,
+                    '--overwrite',
+                    '--calc',
+                    '64*(A==0)+128*(A==1)+16*(A==2)+32*(A==3)+8*(A==4)+255*(A==255)',  # noqa
+                    '--NoDataValue', '255'], check=True)
+
+    return output_path
+
+
 def collate_item(stac_item_dict,
                  aws_base_command,
                  output_bucket,
@@ -148,7 +170,9 @@ def collate_item(stac_item_dict,
     output_stac_collection_id = 'ta1-{}-{}'.format(
         PLATFORM_SHORTHAND[platform], performer_code)
 
-    if platform in SUPPORTED_LS_PLATFORMS:
+    if 'watch:original_item_id' in stac_item.properties:
+        original_id = stac_item.properties['watch:original_item_id']
+    elif platform in SUPPORTED_LS_PLATFORMS:
         original_id = stac_item.properties.get(
             'landsat:scene_id', stac_item.id)
     elif platform in SUPPORTED_S2_PLATFORMS:
@@ -160,6 +184,8 @@ def collate_item(stac_item_dict,
                 'nitf:auxiliary_image_identifier').split()
         else:
             original_id = stac_item.id
+
+    output_item_id = "{}_{}".format(original_id, performer_code)
 
     item_datetime = parse(stac_item.properties['datetime'])
     # NOTE ** Assumes that we're compliant with the MGRS STAC
@@ -174,7 +200,7 @@ def collate_item(stac_item_dict,
         "{:0>4}".format(item_datetime.year),
         "{:0>2}".format(item_datetime.month),
         "{:0>2}".format(item_datetime.day),
-        "{}_{}".format(original_id, performer_code)))
+        output_item_id))
 
     eval_name = 'eval-{}'.format(eval_num)
     ssh_outdir = '/'.join(
@@ -210,6 +236,7 @@ def collate_item(stac_item_dict,
     else:
         original_stac_item_uri = ''
 
+    output_stac_item.id = output_item_id
     output_stac_item.properties['smart:performer'] = performer_code
     output_stac_item.properties['smart:evaluation'] = eval_num
     output_stac_item.properties['smart:source'] = original_stac_item_uri
@@ -229,7 +256,7 @@ def generic_collate_item(asset_name_map,
     output_assets = {}
     for asset_name, asset in stac_item.assets.items():
         # Don't output asset if not included in map
-        asset_suffix = L8_ASSET_NAME_MAP.get(asset_name)
+        asset_suffix = asset_name_map.get(asset_name)
 
         if asset_suffix is None:
             continue
@@ -253,10 +280,22 @@ def generic_collate_item(asset_name_map,
                 original_id, performer_code, asset_suffix)))
 
         # Copy assets up to S3
-        subprocess.run([*aws_base_command,
-                        asset.href, stac_asset_outpath], check=True)
-        subprocess.run([*aws_base_command,
-                        asset.href, ssh_asset_outpath], check=True)
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            asset_href = asset.href
+
+            if asset_suffix == 'QA':
+                # Remap QA band
+                print("* Remapping QA band ..")
+                local_qa_path = os.path.join(tmpdirname, 'orig_qa.tif')
+                subprocess.run([*aws_base_command,
+                                asset_href, local_qa_path], check=True)
+
+                asset_href = _remap_quality_mask(local_qa_path, tmpdirname)
+
+            subprocess.run([*aws_base_command,
+                            asset_href, stac_asset_outpath], check=True)
+            subprocess.run([*aws_base_command,
+                            asset_href, ssh_asset_outpath], check=True)
 
     stac_item.assets = output_assets
 
@@ -300,12 +339,19 @@ def collate_wv_item(stac_item,
         output_assets = {}
         for band_i, asset_suffix in enumerate(output_bands, start=1):
             with tempfile.NamedTemporaryFile(suffix='.tif') as temporary_file:
-                # Extract band as a seperate image
-                subprocess.run(['gdal_calc.py',
-                                '--calc', 'A',
-                                '--outfile', temporary_file.name,
-                                '-A', temp_src_file.name,
-                                '--A_band', str(band_i)], check=True)
+                if len(output_bands) > 1:
+                    # Extract band as a seperate image
+                    output_band_path = temporary_file.name
+                    subprocess.run(['gdal_calc.py',
+                                    '--calc', 'A',
+                                    '--outfile', output_band_path,
+                                    '-A', temp_src_file.name,
+                                    '--A_band', str(band_i),
+                                    '--overwrite'], check=True)
+                else:
+                    # Only a single band output file, don't need to
+                    # split our input image in this case
+                    output_band_path = temp_src_file.name
 
                 stac_asset_outpath_basename = "{}_{}_{}.tif".format(
                     original_id, performer_code, asset_suffix)
@@ -327,10 +373,10 @@ def collate_wv_item(stac_item,
 
                 # Copy assets up to S3
                 subprocess.run([*aws_base_command,
-                                temporary_file.name, stac_asset_outpath],
+                                output_band_path, stac_asset_outpath],
                                check=True)
                 subprocess.run([*aws_base_command,
-                                temporary_file.name, ssh_asset_outpath],
+                                output_band_path, ssh_asset_outpath],
                                check=True)
 
     stac_item.assets = output_assets
@@ -396,7 +442,12 @@ def collate_ta1_output(input_path,
             href=collection_output_path)
 
         for stac_item in stac_items:
+            prior_self_href = stac_item.get_self_href()
             output_collection.add_item(stac_item)
+            # Reset item's self href as `pystac.Collection.add_item`
+            # changes it
+            stac_item.set_self_href(prior_self_href)
+
             with tempfile.NamedTemporaryFile() as temporary_file:
                 with open(temporary_file.name, 'w') as f:
                     json.dump(stac_item.to_dict(), f, indent=2)
@@ -410,6 +461,10 @@ def collate_ta1_output(input_path,
         with tempfile.NamedTemporaryFile() as temporary_file:
             with open(temporary_file.name, 'w') as f:
                 json.dump(output_collection.to_dict(), f, indent=2)
+
+            subprocess.run([*aws_base_command,
+                            temporary_file.name,
+                            collection_output_path], check=True)
 
 
 if __name__ == "__main__":
