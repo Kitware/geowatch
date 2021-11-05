@@ -303,8 +303,10 @@ def find_geotiffs(geotiff_dpath, workers=0, strict=False):
     if loose_files:
         # Handle loose files (try grouping them by spacetime)
         groups = ub.ddict(list)
-        for fpath in loose_files:
-            info = watch.gis.geotiff.geotiff_filepath_info(fpath)
+
+        # jobs = ub.JobPool(mode='thread', max_workers=workers)
+        for fpath in ub.ProgIter(loose_files, desc='process loose files'):
+            info = watch.gis.geotiff.geotiff_filepath_info(fpath, fast=True)
             file_meta = info['filename_meta']
             file_meta.get('tile_number', None)
             date_captured = next(iter(ub.dict_isect(file_meta, ['sense_start_time', 'acquisition_date']).values()), None)

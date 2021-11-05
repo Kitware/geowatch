@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+"""
+DEPRECATE: Use project_annotations instead
+"""
 import os
 import json
 import dateutil
@@ -519,7 +522,7 @@ def main(cmdline=False, **kwargs):
     propagated_ds.fpath = config['dst']
 
     # TODO multithreading breaks this, don't know why
-    PROJ_LIB = os.environ['PROJ_LIB']
+    PROJ_LIB = os.environ.get('PROJ_LIB', None)
 
     # run job for each video
     max_workers = config['max_workers']
@@ -550,7 +553,8 @@ def main(cmdline=False, **kwargs):
                 fpath = viz_dpath / fname
                 save_visualizations(canvas_chunk, fpath)
 
-    os.environ['PROJ_LIB'] = PROJ_LIB
+    if PROJ_LIB is not None:
+        os.environ['PROJ_LIB'] = PROJ_LIB
 
     # save the propagated dataset
     print('Save: propagated_ds.fpath = {!r}'.format(propagated_ds.fpath))

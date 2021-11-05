@@ -1,3 +1,4 @@
+import ubelt as ub
 
 
 def geopandas_pairwise_overlaps(gdf1, gdf2, predicate='intersects'):
@@ -231,17 +232,6 @@ def read_geojson(file, default_axis_mapping='OAMS_TRADITIONAL_GIS_ORDER'):
     # Read custom ROI regions
     region_df = gpd.read_file(file)
 
-    # if default_axis_mapping == 'OAMS_TRADITIONAL_GIS_ORDER':
-    #     # For whatever reason geopandas reads in geojson (which is supposed to
-    #     # be traditional order long/lat) with a authority compliant wgs84
-    #     # lat/long crs
-    #     region_df['geometry'] = region_df['geometry'].apply(
-    #         shapely_flip_xy)
-    # elif default_axis_mapping == 'OAMS_AUTHORITY_COMPLIANT':
-    #     pass
-    # else:
-    #     raise KeyError(default_axis_mapping)
-
     # TODO: can we construct a pyproj.CRS from wgs84, but with traditional
     # order?
 
@@ -254,8 +244,22 @@ def read_geojson(file, default_axis_mapping='OAMS_TRADITIONAL_GIS_ORDER'):
     # z.to_json_dict()
 
     # Use a CRS that actually reflects the underlying data
-    region_df = region_df.to_crs('crs84')
+    if default_axis_mapping == 'OAMS_TRADITIONAL_GIS_ORDER':
+        crs84 = _get_crs84()
+        # this is much faster and the only reason this is ok is because the
+        # input is xy-wgs84 so the transform (which is slow) would be a noop
+        region_df._crs = crs84
+        # region_df = region_df.to_crs(crs84)
+    else:
+        raise NotImplementedError('geopandas only deals with traditional lon/lat')
     return region_df
+
+
+@ub.memoize
+def _get_crs84():
+    from pyproj import CRS
+    crs84 = CRS.from_user_input('crs84')
+    return crs84
 
 
 def _flip(x, y):

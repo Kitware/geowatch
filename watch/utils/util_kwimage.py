@@ -44,6 +44,7 @@ def draw_header_text(image, text, fit=False, color='red', halign='center',
         >>> from watch.utils.util_kwimage import *  # NOQA
         >>> import kwimage
         >>> image = kwimage.grab_test_image()
+        >>> tiny_image = kwimage.imresize(image, dsize=(64, 64))
         >>> canvases = []
         >>> canvases += [draw_header_text(image=image, text='unfit long header ' * 5, fit=False)]
         >>> canvases += [draw_header_text(image=image, text='shrunk long header ' * 5, fit='shrink')]
@@ -51,6 +52,7 @@ def draw_header_text(image, text, fit=False, color='red', halign='center',
         >>> canvases += [draw_header_text(image=image, text='center header', fit=False, halign='center')]
         >>> canvases += [draw_header_text(image=image, text='right header', fit=False, halign='right')]
         >>> canvases += [draw_header_text(image=image, text='shrunk header', fit='shrink', halign='left')]
+        >>> canvases += [draw_header_text(image=tiny_image, text='shrunk header-center', fit='shrink', halign='center')]
         >>> canvases += [draw_header_text(image=image, text='fit header', fit=True, halign='left')]
         >>> canvases += [draw_header_text(image={'width': 200}, text='header only', fit=True, halign='left')]
         >>> # xdoctest: +REQUIRES(--show)
@@ -74,17 +76,34 @@ def draw_header_text(image, text, fit=False, color='red', halign='center',
     else:
         width = image.shape[1]
 
+    if stack:
+        h, w = image.shape[0:2]
+        min_pixels = 32
+        if w < min_pixels or h < min_pixels:
+            image = kwimage.imresize(image, min_dim=min_pixels)
+        width = image.shape[1]
+
     if fit:
         # TODO: allow a shrink-to-fit only option
-        header = kwimage.draw_text_on_image(
-            None, text, org=(1, 1),
-            valign='top', halign='left', color=color)
-        # header = cv2.copyMakeBorder(header, 3, 3, 3, 3,
-        #                             cv2.BORDER_CONSTANT)
+        try:
+            # needs new kwimage to work
+            header = kwimage.draw_text_on_image(
+                None, text, org=None,
+                valign='top', halign=halign, color=color)
+        except Exception:
+            header = kwimage.draw_text_on_image(
+                None, text, org=(1, 1),
+                valign='top', halign='left', color=color)
 
         if fit == 'shrink':
             if header.shape[1] > width:
+                # print('header.shape = {!r}'.format(header.shape))
+                # print('width = {!r}'.format(width))
                 header = kwimage.imresize(header, dsize=(width, None))
+            elif header.shape[1] < width:
+                header = np.pad(header, [(0, 0), ((width - header.shape[1]) // 2, 0), (0, 0)])
+            else:
+                pass
         else:
             header = kwimage.imresize(header, dsize=(width, None))
     else:

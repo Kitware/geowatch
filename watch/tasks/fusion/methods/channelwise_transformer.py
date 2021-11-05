@@ -1088,42 +1088,19 @@ class MultimodalTransformer(pl.LightningModule):
     @classmethod
     def load_package(cls, package_path, verbose=1):
         """
-        DEPRECATE IN FAVOR OF A KITWARE UTILITY
+        DEPRECATE IN FAVOR OF watch.tasks.fusion.utils.load_model_from_package
 
         TODO:
-            - [ ] We should be able to load the model without having access
-                  to this class. What is the right way to do that?
+            - [ ] Make the logic that defines the save_package and load_package
+                methods with appropriate package header data a lightning
+                abstraction.
         """
-        import torch.package
-        import json
-        #
-        # TODO: is there any way to introspect what these variables could be?
-
-        arch_name = 'model.pkl'
-        module_name = 'watch_tasks_fusion'
-
-        imp = torch.package.PackageImporter(package_path)
-
-        # Assume this standardized header information exists that tells us the
-        # name of the resource corresponding to the model
-        try:
-            package_header = json.loads(imp.load_text(
-                'kitware_package_header', 'kitware_package_header.json'))
-        except Exception:
-            package_header = imp.load_pickle(
-                'kitware_package_header', 'kitware_package_header.pkl')
-        arch_name = package_header['arch_name']
-        module_name = package_header['module_name']
-
-        # from timm.models import efficientnet_blocks
-        # from timm.models import efficientnet_blocks  # NOQA
-        # efficientnet_blocks.DepthwiseSeparableConv
-
-        # pkg_root = imp.file_structure()
-        # print(pkg_root)
-        # pkg_data = pkg_root.children['.data']
-
-        self = imp.load_pickle(module_name, arch_name)
+        # NOTE: there is no gaurentee that this loads an instance of THIS
+        # model, the model is defined by the package and the tool that loads it
+        # is agnostic to the model contained in said package.
+        # This classmethod existing is a convinience more than anything else
+        from watch.tasks.fusion.utils import load_model_from_package
+        self = load_model_from_package(package_path)
         return self
 
     def save_package(self, package_path, verbose=1):
@@ -1209,12 +1186,13 @@ class MultimodalTransformer(pl.LightningModule):
         Ignore:
             7z l $HOME/.cache/watch/tests/package/my_package.pt
         """
-        import copy
+        # import copy
         import json
         import torch.package
 
         # shallow copy of self, to apply attribute hacks to
-        model = copy.copy(self)
+        # model = copy.copy(self)
+        model = self
 
         backup_attributes = {}
         # Remove attributes we don't want to pickle before we serialize
@@ -1224,6 +1202,7 @@ class MultimodalTransformer(pl.LightningModule):
             'train_dataloader',
             'val_dataloader',
             'test_dataloader',
+            '_load_state_dict_pre_hooks',  # lightning 1.5
         ]
         for key in unsaved_attributes:
             val = getattr(model, key)
@@ -1267,17 +1246,18 @@ class MultimodalTransformer(pl.LightningModule):
                     'module_name': module_name,
                 }
 
-                # old encoding (keep for a while)
-                exp.save_pickle(
-                    'kitware_package_header', 'kitware_package_header.pkl',
-                    package_header
-                )
+                if 0:
+                    # old encoding (keep for a while)
+                    exp.save_pickle(
+                        'kitware_package_header', 'kitware_package_header.pkl',
+                        package_header
+                    )
 
-                # new encoding
-                exp.save_text(
-                    'kitware_package_header', 'kitware_package_header.json',
-                    json.dumps(package_header)
-                )
+                    # new encoding
+                    exp.save_text(
+                        'kitware_package_header', 'kitware_package_header.json',
+                        json.dumps(package_header)
+                    )
 
                 # move to this?
                 exp.save_text(

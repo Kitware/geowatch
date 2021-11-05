@@ -37,20 +37,28 @@ def hack_resolve_sensor_candidate(dset):
         img['sensor_coarse'] = ub.peek(coarsend)
 
 
+def pystac_Catalog_coerce(data) -> pystac.Catalog:
+    if isinstance(data, str):
+        catalog = pystac.read_file(href=data)
+    elif isinstance(data, dict):
+        catalog = pystac.Catalog.from_dict(data)
+    elif isinstance(data, pystac.Catalog):
+        catalog = data
+    else:
+        raise TypeError(type(data))
+    return catalog
+
+
 def convert(out_file, cat, ignore_dem=True):
     from watch.gis import geotiff
     import watch.cli.geotiffs_to_kwcoco as gtk
     dset = kwcoco.CocoDataset()
 
-    if isinstance(cat, str):
-        catalog = pystac.read_file(href=cat)
-    elif isinstance(cat, dict):
-        catalog = pystac.Catalog.from_dict(cat)
-    else:
-        catalog = cat
+    catalog = pystac_Catalog_coerce(cat)
 
     # index = 0
     for item in catalog.get_items():
+        print('item = {!r}'.format(item))
         meta = item.to_dict()
         date = meta['properties']['datetime']
         images = []
@@ -71,10 +79,11 @@ def convert(out_file, cat, ignore_dem=True):
         dset.add_image(**img)
 
     hack_resolve_sensor_candidate(dset)
-    dataset = json.dumps(dset.dataset, indent=2)
+    dset.fpath = out_file
     with open(out_file, 'w') as f:
-        f.write(dataset)
-    return dataset
+        json.dump(dset.dataset, f, indent=2)
+
+    return dset
 
 
 def main(args):
