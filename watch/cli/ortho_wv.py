@@ -116,8 +116,8 @@ def ortho_wv(stac_catalog, outdir, jobs=1, te_dems=False, pansharpen=False):
     orthorectified_catalog = parallel_map_items(
         catalog,
         _ortho_map,
-        max_workers=10,  # jobs,
-        mode='process',  # if jobs > 1 else 'serial',
+        max_workers=jobs,
+        mode='process' if jobs > 1 else 'serial',
         extra_kwargs=dict(outdir=outdir, te_dems=te_dems))
 
     if pansharpen:
@@ -234,13 +234,14 @@ def orthorectify(stac_item, outdir, te_dems, to_utm=False):
         -multi
         --config GDAL_CACHEMAX 500 -wm 500
         --debug off -of COG
+        -co BLOCKSIZE=64
+        -co COMPRESS=NONE
         -t_srs EPSG:{epsg} -et 0
         -rpc -to RPC_DEM={dem_fpath}
         -overwrite
+        -srcnodata 0 -dstnodata 0
         {in_fpath} {out_fpath}
         ''')
-        #-co BLOCKSIZE=64
-        #-co COMPRESS=NONE
     cmd = ub.cmd(cmd_str, check=True, verbose=1)  # noqa
     item = deepcopy(stac_item)
     item.assets['data'].href = out_fpath
