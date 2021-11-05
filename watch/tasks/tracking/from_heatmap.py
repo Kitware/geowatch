@@ -49,49 +49,87 @@ def mask_to_scored_polygons(probs, thresh):
 
 
 def get_poly_overlap(poly, prob_map, threshold):
-    # Get overlap of a polygon with a heatmap
-    # ToDo: this is inefficient, replace with ratserization of
-    # a smaller region around the bbox of poly
-    prob_map = prob_map[:,:,0]
+    """
+    Get overlap of a polygon with a heatmap
+    ToDo: this is inefficient, replace with ratserization of
+    a smaller region around the bbox of poly
+    """
+    prob_map = prob_map[:, :, 0]
     hard_prob = prob_map > threshold
     poly_mask = poly.to_mask(prob_map.shape).numpy().data
 
-    overlap = (hard_prob*poly_mask).sum()
+    overlap = (hard_prob * poly_mask).sum()
     total_poly_area = poly_mask.sum()
 
     return overlap/total_poly_area
 
 
+def get_poly_response(poly, dset, gid, key):
+    """
+    Find average respons of a heatmap within a polygon
+    """
+    img = dset.index.imgs[gid]
+    coco_img = kwcoco_extensions.CocoImage(img, dset)
+    try:
+        if key[0] in coco_img.channels:
+            img_probs = coco_img.delay(key[0], space='video').finalize()
+    except:
+        import xdev; xdev.embed()
+    prob_map = img_probs[:,:,0]
+
+    poly_mask = poly.to_mask(prob_map.shape).numpy().data
+
+    response = (poly_mask*prob_map).mean()
+    return response
+
+
 def get_poly_time_ind(scored_polys, threshold, dset, vidid, key, reverse=False):
     gids = dset.index.vidid_to_gids[vidid]
-    number_images = len(gids)
 
     poly_started = set()
     poly_start_ind = [0 for gid in gids]
-    if isinstance(key, list):
-        key = key[0]
+    if isinstance(key, str):
+        key = [key]
 
     if reverse:
         gids = list(reversed(gids))
+
+    print('key', key)
     for image_ind, gid in enumerate(gids):
         img = dset.index.imgs[gid]
         coco_img = kwcoco_extensions.CocoImage(img, dset)
-        if key in coco_img.channels:
-            img_probs = coco_img.delay(key, space='video').finalize()
+        zeros = np.zeros_like(
+        coco_img.delay(coco_img.channels.fuse()[0], space='video').finalize()).astype('float32')
+        fg_img_probs = zeros.copy()
+        for k in key:
+            k2 = kwcoco.FusedChannelSpec.coerce(k)
+            common = kwcoco.FusedChannelSpec.coerce(coco_img.channels.fuse()).intersection(k2)
+            if len(k2) == len(common):
+                img_probs = coco_img.delay(k, space='video').finalize()
+                fg_img_probs += img_probs
+                #if key in coco_img.channels:
+                #img_probs = coco_img.delay(key, space='video').finalize()
 
-            for poly_ind, (p, score) in enumerate(scored_polys):
-                if p not in poly_started:
-                    overlap = get_poly_overlap(p, img_probs, threshold=threshold)
-                    if overlap > 0.5:
-                        poly_started.add(p)
-                        poly_start_ind[poly_ind] = image_ind
-        else:
-            print('image', gid, 'does not have predictions')
+                for poly_ind, (p, score) in enumerate(scored_polys):
+                    if p not in poly_started:
+                        overlap = get_poly_overlap(p, fg_img_probs, threshold=threshold)
+                        if overlap > 0.5:
+                            poly_started.add(p)
+                            poly_start_ind[poly_ind] = image_ind
+            else:
+                print('image', gid, 'does not have predictions')
 
     if reverse:
-            poly_start_ind = [len(gids) - i for i in poly_start_ind]
+        poly_start_ind = [len(gids) - i for i in poly_start_ind]
 
     return poly_start_ind
+
+
+def filter_polys_response(polys, responses, response_thresh=0.001):
+    response_aggregate = np.asarray(responses).mean(axis=1)
+    for i, (poly, score) in enumerate(polys):
+        if response_aggregate[i] > response_thresh:
+            yield poly, score
 
 
 def time_aggregated_polys(coco_dset,
@@ -99,8 +137,9 @@ def time_aggregated_polys(coco_dset,
                           morph_kernel=3,
                           key='salient',
                           bg_key=None,
-                          time_filtering=False
-                         ):
+                          time_filtering=False,
+                          response_filtering=False
+                          ):
     '''
     Track function.
 
@@ -208,6 +247,18 @@ def time_aggregated_polys(coco_dset,
 
     print('time aggregation: number of polygons:', len(scored_polys))
 
+    if response_filtering:
+        # get polygon responses
+        responses = [[] for (p, score) in scored_polys]
+        for track_id, (vid_poly, score) in enumerate(scored_polys, start=1):
+            vidid = list(coco_dset.index.videos)[0]
+            gids = coco_dset.index.vidid_to_gids[vidid]
+            for image_ind, gid in enumerate(gids):
+                response = get_poly_response(vid_poly, coco_dset, gid, key)
+                responses[track_id-1].append(response)
+        scored_polys = list(filter_polys_response(scored_polys, responses, response_thresh=0.0002)) #0.0005
+        print('after filtering based on per-polygon response', len(scored_polys))
+
     if time_filtering:
         vidid = list(coco_dset.index.videos)[0]
         poly_start_ind = get_poly_time_ind(scored_polys, thresh, coco_dset, vidid, key)
@@ -263,7 +314,11 @@ def time_aggregated_polys(coco_dset,
     return coco_dset
 
 
-def time_aggregated_polys_bas(coco_dset, thresh=0.3, morph_kernel=3, time_filtering=True):
+def time_aggregated_polys_bas(coco_dset,
+                              thresh=0.3,
+                              morph_kernel=3,
+                              time_filtering=False,
+                              response_filtering=True):
     '''
     Wrapper for BAS that looks for change heatmaps.
     '''
@@ -271,7 +326,7 @@ def time_aggregated_polys_bas(coco_dset, thresh=0.3, morph_kernel=3, time_filter
     for change_key in change_keys:
         try:
             return time_aggregated_polys(coco_dset, thresh, morph_kernel,
-                                         change_key, time_filtering=time_filtering)
+                                         change_key, time_filtering=time_filtering, response_filtering=response_filtering)
         except ValueError:
             pass
 
@@ -283,7 +338,7 @@ def time_aggregated_polys_sc(coco_dset,
                              thresh=0.2,
                              morph_kernel=3,
                              bg_thresh=True,
-                             time_filtering=True):
+                             time_filtering=False):
     '''
     Wrapper for Site Characterization that looks for phase heatmaps.
 
