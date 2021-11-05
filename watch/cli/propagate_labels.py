@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+"""
+DEPRECATE: Use project_annotations instead
+"""
 import os
 import json
 import dateutil
