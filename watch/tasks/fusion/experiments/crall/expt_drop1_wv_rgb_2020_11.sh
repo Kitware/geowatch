@@ -5,40 +5,34 @@ DVC_DPATH=${DVC_DPATH:-$HOME/data/dvc-repos/smart_watch_dvc}
 
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop1_November2021
-ARCH=smt_it_joint_p8
+#ARCH=smt_it_joint_p8
+ARCH=deit
 
-KWCOCO_BUNDLE_DPATH=${KWCOCO_BUNDLE_DPATH:-$DVC_DPATH/drop1-S2-L8-WV-aligned}
+KWCOCO_BUNDLE_DPATH=${KWCOCO_BUNDLE_DPATH:-$DVC_DPATH/Drop1-Aligned-L1}
 echo "KWCOCO_BUNDLE_DPATH = $KWCOCO_BUNDLE_DPATH"
 
-TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/train_data.kwcoco.json
-VALI_FPATH=$KWCOCO_BUNDLE_DPATH/vali_data.kwcoco.json
-TEST_FPATH=$KWCOCO_BUNDLE_DPATH/vali_data.kwcoco.json
+
+kwcoco subset --src $KWCOCO_BUNDLE_DPATH/train_data.kwcoco.json \
+        --dst $KWCOCO_BUNDLE_DPATH/train_data_nowv.kwcoco.json \
+        --select_images '.sensor_coarse != "WV"'
+
+kwcoco subset --src $KWCOCO_BUNDLE_DPATH/vali_data.kwcoco.json \
+        --dst $KWCOCO_BUNDLE_DPATH/vali_data_nowv.kwcoco.json \
+        --select_images '.sensor_coarse != "WV"'
+
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/train_data_nowv.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/vali_data_nowv.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/vali_data_nowv.kwcoco.json
 
 
 prep_and_inspect(){
     python -m watch.cli.coco_visualize_videos \
        --src $KWCOCO_BUNDLE_DPATH/prop_data.kwcoco.json \
        --channels "red|green|blue" \
-       --draw_imgs=False 
+       --draw_imgs=False  --animate=True
 
     BASE_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/prop_data.kwcoco.json
     VIZ_DPATH=$KWCOCO_BUNDLE_DPATH/_viz
-
-    # Make an animated gif for specified bands (use "," to separate)
-    # Requires a CD
-    CHANNELS="red|green|blue"
-    mapfile -td \, _BANDS < <(printf "%s\0" "$CHANNELS")
-    items=$(jq -r '.videos[] | .name' $BASE_COCO_FPATH)
-    for item in ${items[@]}; do
-        echo "item = $item"
-        for bandname in ${_BANDS[@]}; do
-            echo "_BANDS = $_BANDS"
-            BAND_DPATH="$VIZ_DPATH/${item}/_anns/${bandname}/"
-            GIF_FPATH="$VIZ_DPATH/${item}_anns_${bandname}.gif"
-            python -m watch.cli.gifify --frames_per_second .7 \
-                --input "$BAND_DPATH" --output "$GIF_FPATH"
-        done
-    done
 
     python -m watch stats $KWCOCO_BUNDLE_DPATH/prop_data.kwcoco.json
 

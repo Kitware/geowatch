@@ -489,8 +489,8 @@ class SimpleDataCube(object):
             # Maintain old way for now
             gid_to_poly[gid] = sh_img_poly
 
-        img_geos_df = gpd.GeoDataFrame(
-            df_input, geometry='geometry', crs='epsg:4326')
+        img_geos_df = gpd.GeoDataFrame(df_input, geometry='geometry',
+                                       crs='EPSG:4326')
 
         cube.coco_dset = coco_dset
         cube.gid_to_poly = gid_to_poly

@@ -10,6 +10,11 @@ mkinit -m watch --lazy --noattr
 mkinit -m watch --lazy --noattr -w
 """
 
+# Some imports need to happen in a specific order, otherwise we get crashes
+# This is very annoying
+from pyproj import CRS
+from osgeo import gdal
+
 __version__ = '0.1.0'
 
 

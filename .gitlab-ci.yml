@@ -360,3 +360,6 @@ build_docker_and_upload_strict:
 
             gitlab-runner exec docker test_full_loose/conda-linux  \
                 --docker-volumes "$HOME/.ssh:/root/.ssh:ro"
+
+            python -c "from osgeo import gdal; from pyproj import CRS; print(CRS.from_user_input('epsg:4236'))"
+            python -c "from pyproj import CRS; from osgeo import gdal; print(CRS.from_user_input('epsg:4236'))"
