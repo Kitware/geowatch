@@ -187,6 +187,11 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
             processed_item.id = new_id
             processed_item.assets = processed_assets
 
+            # Adding mgrs extension information
+            processed_item.properties['mgrs:utm_zone'] = l8_scene[0:2]
+            processed_item.properties['mgrs:latitude_band'] = l8_scene[2]
+            processed_item.properties['mgrs:grid_square'] = l8_scene[3:5]
+
             # Adding WATCH specific metadata to the STAC item
             # properties; we could formalize this at some point by
             # specifying a proper STAC extension, but I don't think
@@ -285,6 +290,11 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
             processed_item = original_item.clone()
             processed_item.id = new_id
             processed_item.assets = processed_assets
+
+            # Adding mgrs extension information
+            processed_item.properties['mgrs:utm_zone'] = scene[0:2]
+            processed_item.properties['mgrs:latitude_band'] = scene[2]
+            processed_item.properties['mgrs:grid_square'] = scene[3:5]
 
             # Adding WATCH specific metadata to the STAC item
             # properties; we could formalize this at some point by
