@@ -270,14 +270,21 @@ build_docker_and_upload_strict:
             docker login gitlab.kitware.com:4567
 
             docker pull registry.smartgitlab.com/kitware/watch/miniconda3
-            docker run -v -it registry.smartgitlab.com/kitware/watch/miniconda3 bash
-            docker run -v $PWD:/io:ro -it registry.smartgitlab.com/kitware/watch/miniconda3 bash
+            docker run -v $PWD:/io:ro -v $HOME/.cache/pip:/pip_cache -it registry.smartgitlab.com/kitware/watch/miniconda3 bash
+            # Will need to chmod things afterwords
+            export PIP_CACHE_DIR=/pip_cache
+            echo $PIP_CACHE_DIR
+            chmod -R o+rw $PIP_CACHE_DIR
+            chmod -R o+rw $PIP_CACHE_DIR
+            chmod -R g+rw $PIP_CACHE_DIR
+            USER=$(whoami)
+            chown -R $USER $PIP_CACHE_DIR
             cd $HOME
             git clone /io ./watch
             cd watch
 
             cd $HOME/watch
-            git checkout dev/flow15
+            git checkout dev/flow16
 
             # STRICT VARIANT
             ./dev/make_strict_req.sh
@@ -300,6 +307,7 @@ build_docker_and_upload_strict:
 
 
 
+            #docker run -v -it registry.smartgitlab.com/kitware/watch/miniconda3 bash
             #docker run -v ~/.ssh:/tmp/.ssh:ro -it registry.smartgitlab.com/kitware/watch/miniconda3 bash
             ##docker run -it gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3 bash
             #cp -R /tmp/.ssh /root/.ssh

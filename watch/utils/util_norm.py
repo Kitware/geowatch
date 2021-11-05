@@ -268,7 +268,6 @@ def normalize_intensity(imdata, return_info=False, nodata=None, axis=None,
         imdata_valid = imdata
 
     normalizer = find_robust_normalizers(imdata_valid, params=params)
-    # print('normalizer = {!r}'.format(normalizer))
 
     if normalizer['type'] is None:
         imdata_normalized = imdata.astype(dtype)
