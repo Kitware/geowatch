@@ -73,6 +73,10 @@ def _item_map(feature, outdir, aws_base_command, dryrun, relative=False):
              'href': self_link['href'],
              'type': 'application/json'})
 
+    # Should only be added the first time the item is ingressed
+    if 'watch:original_item_id' not in feature['properties']:
+        feature['properties']['watch:original_item_id'] = feature['id']
+
     assets = feature.get('assets', {})
 
     # HTML index page for certain Landsat items, not needed here
