@@ -227,8 +227,15 @@ def main(cmdline=False, **kwargs):
                 found_idxs = np.searchsorted(region_image_dates, observation_dates, 'left')
             except TypeError:
                 # handle  can't compare offset-naive and offset-aware datetimes
+                import datetime
+                region_image_dates = [
+                    dt if dt.tzinfo is not None else dt.replace(tzinfo=datetime.timezone.utc)
+                    for dt in region_image_dates]
+                observation_dates = [
+                    dt if dt.tzinfo is not None else dt.replace(tzinfo=datetime.timezone.utc)
+                    for dt in observation_dates]
                 found_idxs = np.searchsorted(region_image_dates, observation_dates, 'left')
-                pass
+
             image_idxs_per_observation = np.split(region_image_indexes, found_idxs)[1:]
 
             # Create annotations on each frame we are associated with

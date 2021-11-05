@@ -76,6 +76,13 @@ def draw_header_text(image, text, fit=False, color='red', halign='center',
     else:
         width = image.shape[1]
 
+    if stack:
+        h, w = image.shape[0:2]
+        min_pixels = 32
+        if w < min_pixels or h < min_pixels:
+            image = kwimage.imresize(image, min_dim=min_pixels)
+        width = image.shape[1]
+
     if fit:
         # TODO: allow a shrink-to-fit only option
         try:
@@ -90,6 +97,8 @@ def draw_header_text(image, text, fit=False, color='red', halign='center',
 
         if fit == 'shrink':
             if header.shape[1] > width:
+                # print('header.shape = {!r}'.format(header.shape))
+                # print('width = {!r}'.format(width))
                 header = kwimage.imresize(header, dsize=(width, None))
             elif header.shape[1] < width:
                 header = np.pad(header, [(0, 0), ((width - header.shape[1]) // 2, 0), (0, 0)])

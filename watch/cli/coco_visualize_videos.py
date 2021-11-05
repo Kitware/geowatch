@@ -168,11 +168,11 @@ def main(cmdline=True, **kwargs):
                     img = coco_dset.index.imgs[gid]
                     anns = coco_dset.annots(gid=gid).objs
 
-                    _header_hack = f'tid={tid} gid={gid}'
+                    _header_extra = f'tid={tid}'
                     pool.submit(_write_ann_visualizations2,
                                 coco_dset, img, anns, track_dpath, space=space,
                                 channels=channels, vid_crop_box=vid_crop_box,
-                                _header_hack=_header_hack)
+                                _header_extra=_header_extra)
 
         else:
             gid_subset = gids[start_frame:end_frame]
@@ -184,7 +184,7 @@ def main(cmdline=True, **kwargs):
                             coco_dset, img, anns, sub_dpath, space=space,
                             channels=channels,
                             draw_imgs=config['draw_imgs'],
-                            draw_anns=config['draw_anns'], _header_hack=None)
+                            draw_anns=config['draw_anns'], _header_extra=None)
 
         for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):
             job.result()
@@ -243,7 +243,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                vid_crop_box=None,
                                request_grouped_bands='default',
                                draw_imgs=True,
-                               draw_anns=True, _header_hack=None):
+                               draw_anns=True, _header_extra=None):
     """
     Dumps an intensity normalized "space-aligned" kwcoco image visualization
     (with or without annotation overlays) for specific bands to disk.
@@ -260,11 +260,10 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
     vidname = coco_dset.index.videos[img['video_id']]['name']
     date_captured = img.get('date_captured', '')
+    frame_index = img.get('frame_index', None)
     gid = img.get('id', None)
-    if _header_hack is None:
-        _header_hack = f'gid={gid}'
     header_line_infos = [
-        [vidname, _header_hack],
+        [vidname, f'gid={gid}, frame={frame_index}', _header_extra],
         [sensor_coarse, date_captured],
     ]
     header_lines = []
