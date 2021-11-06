@@ -8,6 +8,7 @@ from copy import deepcopy
 import functools
 import shutil
 import pystac
+
 from osgeo_utils.gdal_pansharpen import gdal_pansharpen
 
 import watch
@@ -35,6 +36,10 @@ def main():
     parser.add_argument("--te_dems",
                         action='store_true',
                         help='Use IARPA T&E DEMs instead of GTOP30 DEMs')
+    parser.add_argument("--drop_empty",
+                        action='store_true',
+                        help='Remove empty items from the catalog after '
+                        'orthorectification')
     parser.add_argument("--pansharpen",
                         action='store_true',
                         help='Additionally pan-sharpen any MSI images')
@@ -44,7 +49,12 @@ def main():
     return 0
 
 
-def wv_ortho(stac_catalog, outdir, jobs=1, te_dems=False, pansharpen=False):
+def wv_ortho(stac_catalog,
+             outdir,
+             jobs=1,
+             te_dems=False,
+             drop_empty=False,
+             pansharpen=False):
     '''
     Performs the following steps.
 
@@ -79,6 +89,8 @@ def wv_ortho(stac_catalog, outdir, jobs=1, te_dems=False, pansharpen=False):
         >>> # https://api.smart-stac.com/collections/worldview-nitf
         >>> for item in items:
         >>>     item.set_collection(None)
+        >>>     item.set_parent(None)
+        >>>     item.set_root(None)
         >>> catalog_dct = catalog.to_dict()
         >>> catalog_dct['links'] = []
         >>> catalog = pystac.Catalog.from_dict(catalog_dct)
@@ -87,7 +99,7 @@ def wv_ortho(stac_catalog, outdir, jobs=1, te_dems=False, pansharpen=False):
         >>> def download(asset_name, asset):
         >>>     fpath = os.path.join(in_dir, os.path.basename(asset.href))
         >>>     if not os.path.isfile(fpath):
-        >>>         os.system(f'aws s3 cp {asset.href} {fpath}'
+        >>>         os.system(f'aws s3 cp {asset.href} {fpath} '
         >>>                    '--profile iarpa')
         >>>     asset.href = fpath
         >>>     return asset
@@ -98,7 +110,7 @@ def wv_ortho(stac_catalog, outdir, jobs=1, te_dems=False, pansharpen=False):
         >>>  
         >>> out_dir = os.path.abspath('wv/out/')
         >>> os.makedirs(out_dir, exist_ok=True)
-        >>> out_catalog = wv_ortho(catalog, out_dir, jobs=10,
+        >>> out_catalog = wv_ortho(catalog, out_dir, jobs=10, drop_empty=True,
         >>>                        te_dems=False, pansharpen=True)
 
 
@@ -118,7 +130,9 @@ def wv_ortho(stac_catalog, outdir, jobs=1, te_dems=False, pansharpen=False):
         _ortho_map,
         max_workers=jobs,
         mode='process' if jobs > 1 else 'serial',
-        extra_kwargs=dict(outdir=outdir, te_dems=te_dems))
+        extra_kwargs=dict(outdir=outdir,
+                          te_dems=te_dems,
+                          drop_empty=drop_empty))
 
     if pansharpen:
         pansharpened_catalog = parallel_map_items(
@@ -175,15 +189,17 @@ def maps(_item_map):
         kwargs['outdir'] = item_outdir
         output_stac_item = _item_map(*args, **kwargs)
 
-        output_stac_item.set_self_href(
-            os.path.join(item_outdir, "{}.json".format(output_stac_item.id)))
+        if output_stac_item is not None:
+            output_stac_item.set_self_href(
+                os.path.join(item_outdir,
+                             "{}.json".format(output_stac_item.id)))
 
-        # Roughly keeping track of what WATCH processes have been
-        # run on this particular item
-        output_stac_item.properties.setdefault('watch:process_history',
-                                               []).append(':'.join(
-                                                   (__file__,
-                                                    _item_map.__name__)))
+            # Roughly keeping track of what WATCH processes have been
+            # run on this particular item
+            output_stac_item.properties.setdefault('watch:process_history',
+                                                   []).append(':'.join(
+                                                       (__file__,
+                                                        _item_map.__name__)))
 
         return output_stac_item
 
@@ -191,14 +207,31 @@ def maps(_item_map):
 
 
 @maps
-def _ortho_map(stac_item, outdir, *args, **kwargs):
+def _ortho_map(stac_item, outdir, drop_empty=False, *args, **kwargs):
+    def is_empty(fpath):
+        '''
+        Check for a failed gdalwarp resulting in an image of all zeros
+
+        This is expensive.
+        '''
+        import rasterio
+        try:
+            with rasterio.open(fpath) as f:
+                return len(np.unique(f.read().flat)) <= 1
+        except rasterio.RasterioIOError:
+            return True
 
     print("* Orthorectifying WV item: '{}'".format(stac_item.id))
 
     if stac_item.properties[
             'constellation'] == 'worldview' and stac_item.properties[
                 'nitf:image_preprocessing_level'] == '1R':
+
         output_stac_item = orthorectify(stac_item, outdir, *args, **kwargs)
+
+        if drop_empty and is_empty(output_stac_item.assets['data'].href):
+            output_stac_item = None
+            print("** WV item is empty after orthorectification, dropping!")
     else:
         print("** Not a 1R WorldView item, skipping!")
         output_stac_item = stac_item
@@ -242,7 +275,7 @@ def orthorectify(stac_item, outdir, te_dems, to_utm=False):
         -srcnodata 0 -dstnodata 0
         {in_fpath} {out_fpath}
         ''')
-    cmd = ub.cmd(cmd_str, check=True, verbose=1)  # noqa
+    cmd = ub.cmd(cmd_str, check=True, verbose=0)  # noqa
     item = deepcopy(stac_item)
     item.assets['data'].href = out_fpath
     return item
@@ -414,7 +447,7 @@ def pansharpen(stac_item_pan, stac_item_msi, outdir, as_rgb=False):
         ]
 
     if 1:
-        cmd = ub.cmd(cmd_str, check=True, verbose=1)  # noqa
+        cmd = ub.cmd(cmd_str, check=True, verbose=0)  # noqa
     else:
         gdal_pansharpen(**kwargs)
 
