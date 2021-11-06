@@ -27,7 +27,7 @@ python wv_to_s2.py vhr_pan.tif T52SDG_20180602T021639_B04.tif output_folder/
 NOTE: running MS and PAN separately might result in misalignment between MS and PAN VHR
 """
 
-import gdal, osr
+from osgeo import gdal, osr
 import os, shutil
 import glob
 import time
