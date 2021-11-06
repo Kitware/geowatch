@@ -115,6 +115,32 @@ Notes:
         --keep img
 
 
+Ignore:
+    # Input Args
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+    TA1_KWCOCO_FPATH=$DVC_DPATH/TA1-Processed/data.kwcoco.json
+    ALIGNED_KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop1-Aligned-TA1-2021-11
+    ALIGNED_KWCOCO_FPATH=$ALIGNED_KWCOCO_BUNDLE_DPATH/data.kwcoco.json
+
+    dvc unprotect $ALIGNED_KWCOCO_BUNDLE_DPATH/*/*.kwcoco.json
+
+    python -m watch.cli.coco_align_geotiffs \
+        --src $TA1_KWCOCO_FPATH \
+        --dst $ALIGNED_KWCOCO_BUNDLE_DPATH/aligned.kwcoco.json \
+        --regions $DVC_DPATH/drop1/region_models/LT_R001.geojson \
+        --rpc_align_method orthorectify \
+        --max_workers=10 \
+        --aux_workers=2 \
+        --skip_geo_preprop True \
+        --keep img \
+        --target_gsd=10 && \
+    python -m watch.cli.coco_visualize_videos \
+        --src $ALIGNED_KWCOCO_BUNDLE_DPATH/aligned.kwcoco.json \
+        --viz_dpath $ALIGNED_KWCOCO_BUNDLE_DPATH/_aligned_viz \
+        --channels "red|green|blue" \
+        --num_workers=10
+
+
 TODO:
     - [ ] Add method for extracting "negative ROIs" that are nearby
         "positive ROIs".
@@ -366,6 +392,7 @@ def main(cmdline=True, **kw):
         pass
     elif exists(regions):
         region_df = util_gis.read_geojson(regions)
+        region_df = region_df[region_df['type'] == 'region']
     else:
         raise KeyError(regions)
 
@@ -774,16 +801,49 @@ class SimpleDataCube(object):
             gids = datetime_to_gids[datetime_]
             # TODO: Is there any other consideration we should make when
             # multiple images have the same timestamp?
-            for num, gid in enumerate(gids):
+            if len(gids) > 1:
+                conflict_imges = coco_dset.images(gids)
+                sensors = list(conflict_imges.lookup('sensor_coarse', None))
+                groups = []
+                for sensor_name, sensor_gids in ub.group_items(conflict_imges, sensors).items():
+                    # sensor_images = coco_dset.images(sensor_gids)
+                    scores = []
+                    for gid in sensor_gids:
+                        coco_img = coco_dset.coco_image(gid)
+                        primary_asset = coco_img.primary_asset()
+                        fpath = join(coco_dset.bundle_dpath, primary_asset['file_name'])
+                        # primary_chan = primary_asset.get('channels', None)
+                        # print('primary_chan = {!r}'.format(primary_chan))
+                        # print('fpath = {!r}'.format(fpath))
+                        info = ub.cmd(f'gdalinfo -stats {fpath}')
+                        # Hack
+                        valid_percent = float(info['out'].split('STATISTICS_VALID_PERCENT')[-1].split('=')[-1].split('\n')[0] or '0')
+                        scores.append(valid_percent)
+                    sensor_gids = [t[1] for t in sorted(zip(scores, sensor_gids))]
+                    groups.append((sensor_gids[0], sensor_gids[1:]))
+
+                    # # [obj.get('utm_crs_info', None) for obj in sensor_images.objs]
+                    # for obj in sensor_images.objs:
+                    # [ub.dict_diff(obj, {'auxiliary'}) for obj in sensor_images.objs]
+            else:
+                main_gid = gids[0]
+                groups = [(main_gid, [])]
+
+            for num, (main_gid, other_gids) in enumerate(groups):
                 img = coco_dset.imgs[gid]
+                other_imgs = [coco_dset.imgs[x] for x in other_gids]
+
+                # There is an issue of merging annotations here
                 anns = [coco_dset.index.anns[aid] for aid in
                         coco_dset.index.gid_to_aids[gid]]
+
                 job = pool.submit(
                     extract_image_job,
                     img, anns, bundle_dpath, datetime_, num, frame_index, new_vidid,
                     rpc_align_method, sub_bundle_dpath, space_str,
                     space_region, space_box, start_gid, start_aid, aux_workers,
-                    (keep == 'img'), utm_epsg_zone=utm_epsg_zone)
+                    (keep == 'img'), utm_epsg_zone=utm_epsg_zone,
+                    other_imgs=other_imgs)
                 start_gid = start_gid + 1
                 start_aid = start_aid + len(anns)
                 frame_index = frame_index + 1
@@ -892,7 +952,8 @@ class SimpleDataCube(object):
 def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
                       new_vidid, rpc_align_method, sub_bundle_dpath, space_str,
                       space_region, space_box, start_gid, start_aid,
-                      aux_workers=0, keep=False, utm_epsg_zone=None):
+                      aux_workers=0, keep=False, utm_epsg_zone=None,
+                      other_imgs=None):
     """
     Threaded worker function for :func:`SimpleDataCube.extract_overlaps`.
     """
@@ -907,13 +968,25 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
     # Construct a name for the subregion to extract.
     name = 'crop_{}_{}_{}_{}'.format(iso_time, space_str, sensor_coarse, num)
 
-    auxiliary = img.get('auxiliary', [])
-
-    objs = []
+    from kwcoco.coco_image import CocoImage
+    coco_img = CocoImage(img)
     has_base_image = img.get('file_name', None) is not None
-    if has_base_image:
-        objs.append(ub.dict_diff(img, {'auxiliary'}))
-    objs.extend(auxiliary)
+    objs = [ub.dict_diff(obj, {'auxiliary'}) for obj in coco_img.iter_asset_objs()]
+
+    channels_to_objs = ub.ddict(list)
+    for obj in objs:
+        key = obj['channels']
+        assert key not in channels_to_objs
+        channels_to_objs[key].append(obj)
+
+    for other_img in other_imgs:
+        coco_other_img = CocoImage(other_img)
+        other_objs = [ub.dict_diff(obj, {'auxiliary'}) for obj in coco_other_img.iter_asset_objs()]
+        for other_obj in other_objs:
+            key = other_obj['channels']
+            channels_to_objs[key].append(other_obj)
+    obj_groups = list(channels_to_objs.values())
+    is_multi_image = len(obj_groups) > 1
 
     is_rpc = False
     for obj in objs:
@@ -934,16 +1007,14 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
 
     dst_dpath = ub.ensuredir((sub_bundle_dpath, sensor_coarse, align_method))
 
-    is_multi_image = len(objs) > 1
-
     job_list = []
 
     # Turn off internal threading because we refactored this to thread over all
     # images instead
     executor = ub.Executor(mode='thread', max_workers=aux_workers)
-    for obj in ub.ProgIter(objs, desc='submit warp auxiliaries', verbose=0):
+    for obj_group in ub.ProgIter(obj_groups, desc='submit warp auxiliaries', verbose=0):
         job = executor.submit(
-            _aligncrop, obj, bundle_dpath, name, sensor_coarse,
+            _aligncrop, obj_group, bundle_dpath, name, sensor_coarse,
             dst_dpath, space_region, space_box, align_method,
             is_multi_image, keep, utm_epsg_zone=utm_epsg_zone)
         job_list.append(job)
@@ -987,9 +1058,12 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
         aux_dst = dst_list
 
     # Hack because heurstics break when fnames change
-    for old_aux, new_aux in zip(auxiliary, aux_dst):
+    for old_aux_group, new_aux in zip(obj_groups, aux_dst):
         # new_aux['channels'] = old_aux['channels']
-        new_aux['parent_file_name'] = old_aux['file_name']
+        if len(old_aux_group) > 1:
+            new_aux['parent_file_name'] = [g['file_name'] for g in old_aux_group]
+        else:
+            new_aux['parent_file_name'] = old_aux_group[0]['file_name']
 
     if len(aux_dst):
         new_img['auxiliary'] = aux_dst
@@ -1138,14 +1212,15 @@ def _fix_geojson_poly(geo):
 
 
 @profile
-def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
+def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
                space_box, align_method, is_multi_image, keep, utm_epsg_zone=None):
     import watch
     # # NOTE: https://github.com/dwtkns/gdal-cheat-sheet
     # latmin, lonmin, latmax, lonmax = space_box.data[0]
     # Data is from geo-pandas so this should be traditional order
     lonmin, latmin, lonmax, latmax = space_box.data[0]
-    chan_code = obj.get('channels', '')
+    first_obj = obj_group[0]
+    chan_code = obj_group[0].get('channels', '')
 
     if len(chan_code) > 8:
         # Hack to prevent long names for docker (limit is 242 chars)
@@ -1158,17 +1233,17 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
     else:
         dst_gpath = join(dst_dpath, name + '.tif')
 
-    fname = obj.get('file_name', None)
-    assert fname is not None
-    src_gpath = join(bundle_dpath, fname)
+    input_gnames = [obj.get('file_name', None) for obj in obj_group]
+    assert all(n is not None for n in input_gnames)
+    input_gpaths = [join(bundle_dpath, n) for n in input_gnames]
 
     dst = {
         'file_name': dst_gpath,
     }
-    if obj.get('channels', None):
-        dst['channels'] = obj['channels']
-    if obj.get('num_bands', None):
-        dst['num_bands'] = obj['num_bands']
+    if first_obj.get('channels', None):
+        dst['channels'] = first_obj['channels']
+    if first_obj.get('num_bands', None):
+        dst['num_bands'] = first_obj['num_bands']
 
     already_exists = exists(dst_gpath)
     needs_recompute = not (already_exists and keep)
@@ -1202,6 +1277,7 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
         -multi
         --config GDAL_CACHEMAX 500 -wm 500
         --debug off
+        -srcnodata {NODATA_VALUE}
         -te {xmin} {ymin} {xmax} {ymax}
         -te_srs {crop_coordinate_srs}
         -t_srs {target_srs}
@@ -1222,18 +1298,21 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
         'xmax': lonmax,
         'blocksize': blocksize,
         'compress': compress,
-        'SRC': src_gpath,
+        'SRC': ' '.join(input_gpaths),
         'DST': tmp_dst_gpath,
+
+        # TODO: Use cloudmask
+        'NODATA_VALUE': 0,  # TODO: determine if possible
     }
 
     if compress == 'RAW':
         compress = 'NONE'
 
     if align_method == 'orthorectify':
-        if 'geotiff_metadata' in obj:
-            info = obj['geotiff_metadata']
+        if 'geotiff_metadata' in first_obj:
+            info = first_obj['geotiff_metadata']
         else:
-            info = watch.gis.geotiff.geotiff_crs_info(src_gpath)
+            info = watch.gis.geotiff.geotiff_crs_info(input_gpaths[0])
         rpcs = info['rpc_transform']
         # No RPCS exist, use affine-warp instead
         if rpcs is None:
@@ -1244,12 +1323,13 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
 
     if align_method == 'pixel_crop':
         raise NotImplementedError('no longer supported')
-        info = watch.gis.geotiff.geotiff_crs_info(src_gpath)
-        if 1:
+        info = watch.gis.geotiff.geotiff_crs_info(input_gpaths[0])
+        if 0:
             # IMPL1
-            # info = obj['geotiff_metadata']
+            # info = first_obj['geotiff_metadata']
+            assert len(input_gpaths) == 1, 'cant work with groups yet'
             from kwcoco.util.util_delayed_poc import LazyGDalFrameFile
-            imdata = LazyGDalFrameFile(src_gpath)
+            imdata = LazyGDalFrameFile(input_gpaths[0])
             space_region_pxl = space_region.warp(info['wgs84_to_wld']).warp(info['wld_to_pxl'])
             pxl_xmin, pxl_ymin, pxl_xmax, pxl_ymax = space_region_pxl.bounding_box().to_ltrb().quantize().data[0]
             sl = tuple([slice(pxl_ymin, pxl_ymax), slice(pxl_xmin, pxl_xmax)])

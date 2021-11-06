@@ -8,9 +8,9 @@ DATASET_CODE=Drop1_November2021
 #ARCH=smt_it_joint_p8
 ARCH=deit
 
+DVC_DPATH=${DVC_DPATH:-$HOME/data/dvc-repos/smart_watch_dvc}
 KWCOCO_BUNDLE_DPATH=${KWCOCO_BUNDLE_DPATH:-$DVC_DPATH/Drop1-Aligned-L1}
 echo "KWCOCO_BUNDLE_DPATH = $KWCOCO_BUNDLE_DPATH"
-
 
 kwcoco subset --src $KWCOCO_BUNDLE_DPATH/train_data.kwcoco.json \
         --dst $KWCOCO_BUNDLE_DPATH/train_data_nowv.kwcoco.json \
