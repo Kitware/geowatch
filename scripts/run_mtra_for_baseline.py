@@ -1,6 +1,10 @@
 import argparse
 import sys
 
+# Import hack to fix somehow broken import of `from
+# watch.utils.util_raster import GdalOpen` in run_mtra
+from osgeo import gdal, osr  # noqa
+
 from watch.cli.baseline_framework_ingress import baseline_framework_ingress
 from watch.cli.baseline_framework_egress import baseline_framework_egress
 from watch.cli.run_mtra import run_mtra
