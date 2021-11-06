@@ -132,13 +132,23 @@ Ignore:
         --max_workers=10 \
         --aux_workers=2 \
         --skip_geo_preprop True \
-        --keep img \
-        --target_gsd=10 && \
+        --max_frames 1000 \
+        --target_gsd=10 --visualize="red|green|blue"
+
+    jq ".images[23].auxiliary[0].parent_file_name" /home/joncrall/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-TA1-2021-11/aligned.kwcoco.json
+    jq ".images[24].auxiliary[0].parent_file_name" /home/joncrall/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-TA1-2021-11/aligned.kwcoco.json
+
+    jq ".images[23].id" /home/joncrall/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-TA1-2021-11/aligned.kwcoco.json
+    jq ".images[24].id" /home/joncrall/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-TA1-2021-11/aligned.kwcoco.json
+
+    jq ".images[11].id" /home/joncrall/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-TA1-2021-11/aligned.kwcoco.json
+
+    rm -rf $ALIGNED_KWCOCO_BUNDLE_DPATH/_aligned_viz
     python -m watch.cli.coco_visualize_videos \
         --src $ALIGNED_KWCOCO_BUNDLE_DPATH/aligned.kwcoco.json \
         --viz_dpath $ALIGNED_KWCOCO_BUNDLE_DPATH/_aligned_viz \
         --channels "red|green|blue" \
-        --num_workers=10
+        --num_workers=10 --animate=True
 
 
 TODO:
@@ -242,6 +252,8 @@ class CocoAlignGeotiffConfig(scfg.Config):
 
         'edit_geotiff_metadata': scfg.Value(
             False, help='if True MODIFIES THE UNDERLYING IMAGES to ensure geodata is propogated'),
+
+        'max_frames': scfg.Value(None),
     }
 
 
@@ -374,6 +386,7 @@ def main(cmdline=True, **kw):
     aux_workers = config['aux_workers']
     keep = config['keep']
     target_gsd = config['target_gsd']
+    max_frames = config['max_frames']
 
     dst = pathlib.Path(ub.expandpath(dst))
     # TODO: handle this coercion of directories or bundles in kwcoco itself
@@ -458,7 +471,8 @@ def main(cmdline=True, **kw):
             image_overlaps, extract_dpath, rpc_align_method=rpc_align_method,
             new_dset=new_dset, visualize=visualize,
             write_subsets=write_subsets, max_workers=max_workers,
-            aux_workers=aux_workers, keep=keep, target_gsd=target_gsd)
+            aux_workers=aux_workers, keep=keep, target_gsd=target_gsd,
+            max_frames=max_frames)
 
     new_dset.fpath = dst_fpath
     print('Dumping new_dset.fpath = {!r}'.format(new_dset.fpath))
@@ -696,7 +710,8 @@ class SimpleDataCube(object):
     def extract_overlaps(cube, image_overlaps, extract_dpath,
                          rpc_align_method='orthorectify', new_dset=None,
                          write_subsets=True, visualize=True, max_workers=0,
-                         aux_workers=0, keep='none', target_gsd=10):
+                         aux_workers=0, keep='none', target_gsd=10,
+                         max_frames=None):
         """
         Given a region of interest, extract an aligned temporal sequence
         of data to a specified directory.
@@ -797,17 +812,25 @@ class SimpleDataCube(object):
         # parallelize over images
         pool = ub.JobPool(mode='thread', max_workers=img_workers)
 
+        frame_count = 0
         for datetime_ in ub.ProgIter(datetimes, desc='submit extract jobs', verbose=1):
+            if max_frames is not None:
+                if frame_count > max_frames:
+                    break
+                frame_count += 1
             gids = datetime_to_gids[datetime_]
             # TODO: Is there any other consideration we should make when
             # multiple images have the same timestamp?
-            if len(gids) > 1:
+            if len(gids) == 1:
+                main_gid = gids[0]
+                groups = [(main_gid, [])]
+            else:
                 conflict_imges = coco_dset.images(gids)
                 sensors = list(conflict_imges.lookup('sensor_coarse', None))
                 groups = []
                 for sensor_name, sensor_gids in ub.group_items(conflict_imges, sensors).items():
                     # sensor_images = coco_dset.images(sensor_gids)
-                    scores = []
+                    rows = []
                     for gid in sensor_gids:
                         coco_img = coco_dset.coco_image(gid)
                         primary_asset = coco_img.primary_asset()
@@ -817,25 +840,43 @@ class SimpleDataCube(object):
                         # print('fpath = {!r}'.format(fpath))
                         info = ub.cmd(f'gdalinfo -stats {fpath}')
                         # Hack
-                        valid_percent = float(info['out'].split('STATISTICS_VALID_PERCENT')[-1].split('=')[-1].split('\n')[0] or '0')
-                        scores.append(valid_percent)
-                    sensor_gids = [t[1] for t in sorted(zip(scores, sensor_gids))]
-                    groups.append((sensor_gids[0], sensor_gids[1:]))
-
+                        primary_utmzone = info['out'].split('EPSG",')[-1].split(']')[0]
+                        same_utm = str(utm_epsg_zone) == str(primary_utmzone)
+                        # TOODO: how do we get the amount of overlap with the query region? WRT to the valid data polygons?
+                        valid_percent = (float(info['out'].split('STATISTICS_VALID_PERCENT')[-1].split('=')[-1].split('\n')[0] or '0')) / 100
+                        score = valid_percent + (same_utm * 10)
+                        rows.append({
+                            'score': score,
+                            'gid': gid,
+                            'same_utm': same_utm,
+                            'fpath': fpath,
+                        })
+                    import pandas as pd
+                    df = pd.DataFrame(rows)
+                    print('\n\n')
+                    print(df)
+                    final_gids = [r['gid'] for r in sorted(rows, key=lambda r: r['score'], reverse=False)]
+                    # hack
+                    # final_gids = final_gids[:1]
+                    # final_gids = final_gids[1:2]
+                    # print('final_gids = {!r}'.format(final_gids))
+                    groups.append((final_gids[0], final_gids[1:]))
                     # # [obj.get('utm_crs_info', None) for obj in sensor_images.objs]
                     # for obj in sensor_images.objs:
                     # [ub.dict_diff(obj, {'auxiliary'}) for obj in sensor_images.objs]
-            else:
-                main_gid = gids[0]
-                groups = [(main_gid, [])]
 
             for num, (main_gid, other_gids) in enumerate(groups):
-                img = coco_dset.imgs[gid]
+                img = coco_dset.imgs[main_gid]
                 other_imgs = [coco_dset.imgs[x] for x in other_gids]
 
                 # There is an issue of merging annotations here
                 anns = [coco_dset.index.anns[aid] for aid in
-                        coco_dset.index.gid_to_aids[gid]]
+                        coco_dset.index.gid_to_aids[main_gid]]
+                if 0:
+                    # do we do this? Rectification step?
+                    for other_gid in other_gids:
+                        anns += [coco_dset.index.anns[aid] for aid in
+                                 coco_dset.index.gid_to_aids[other_gid]]
 
                 job = pool.submit(
                     extract_image_job,
@@ -930,8 +971,13 @@ class SimpleDataCube(object):
                     'red|green|blue',
                     'nir|swir16|swir22',
                 ]
+                if isinstance(visualize, str):
+                    channels = visualize
+                else:
+                    channels = None
                 _write_ann_visualizations2(
                     coco_dset=new_dset, img=new_img, anns=new_anns,
+                    channels=channels,
                     sub_dpath=viz_dpath, space='video',
                     request_grouped_bands=request_grouped_bands)
 
@@ -1270,6 +1316,22 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     # te_srs = spatial reference of query points
     crop_coordinate_srs = 'epsg:4326'
 
+    if 0:
+        # Perhaps we have a bug?
+        warp_inputs = ' '.join(input_gpaths)
+    else:
+        if len(input_gpaths) > 1:
+            # I Don't know why gdalmerge wont take multiple files in nicely,
+            # this is a hack to work around it.
+            # I get a: Attempt to create 0x0 dataset is illegal,sizes must be larger than zero.
+            import tempfile
+            tmpfile = tempfile.NamedTemporaryFile()
+            temp_out_name = tmpfile.name
+            info = ub.cmd('gdal_merge.py -n 0 -o ' + temp_out_name + ' ' + (' '.join(input_gpaths)), check=True)
+            warp_inputs = temp_out_name
+        else:
+            warp_inputs = input_gpaths[0]
+
     # Use the new COG output driver
     prefix_template = (
         '''
@@ -1277,10 +1339,10 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
         -multi
         --config GDAL_CACHEMAX 500 -wm 500
         --debug off
-        -srcnodata {NODATA_VALUE}
         -te {xmin} {ymin} {xmax} {ymax}
         -te_srs {crop_coordinate_srs}
         -t_srs {target_srs}
+        -srcnodata {NODATA_VALUE}
         -of COG
         -co OVERVIEWS=NONE
         -co BLOCKSIZE={blocksize}
@@ -1288,6 +1350,7 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
         -co NUM_THREADS=2
         -overwrite
         ''')
+    # TODO
 
     template_kw = {
         'crop_coordinate_srs': crop_coordinate_srs,
@@ -1298,7 +1361,7 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
         'xmax': lonmax,
         'blocksize': blocksize,
         'compress': compress,
-        'SRC': ' '.join(input_gpaths),
+        'SRC': warp_inputs,
         'DST': tmp_dst_gpath,
 
         # TODO: Use cloudmask
@@ -1402,6 +1465,8 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
         cmd_info = ub.cmd(command, verbose=0)  # NOQA
         if cmd_info['ret'] != 0:
             print('\n\nCOMMAND FAILED: {!r}'.format(command))
+            print(cmd_info['out'])
+            print(cmd_info['err'])
             raise Exception(cmd_info['err'])
 
     os.rename(tmp_dst_gpath, dst_gpath)
