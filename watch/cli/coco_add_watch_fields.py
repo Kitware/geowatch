@@ -93,17 +93,9 @@ def main(**kwargs):
     dset = kwcoco.CocoDataset.coerce(config['src'])
     print('dset = {!r}'.format(dset))
 
-    hard_coded_colors = {
-        'No Activity': 'tomato',
-        'Site Preparation': 'gold',
-        'Active Construction': 'lime',
-        'Post Construction': 'darkturquoise',
-        'Unknown': 'blueviolet',
-    }
-
-    for cat in dset.cats.values():
-        if cat['name'] in hard_coded_colors:
-            cat['color'] = hard_coded_colors[cat['name']]
+    # hack in colors
+    from watch import heuristics
+    heuristics.ensure_heuristic_colors(dset)
 
     print('start populate')
     target_gsd = config['target_gsd']

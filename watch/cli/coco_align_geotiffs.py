@@ -825,10 +825,14 @@ class SimpleDataCube(object):
                 main_gid = gids[0]
                 groups = [(main_gid, [])]
             else:
+                # We got multiple images for the same timestamp.  Im not sure
+                # if this is necessary but thig logic attempts to sort them
+                # such that the "best" image to use is first.  Ideally gdalwarp
+                # would take care of this but I'm not sure it does.
                 conflict_imges = coco_dset.images(gids)
                 sensors = list(conflict_imges.lookup('sensor_coarse', None))
                 groups = []
-                for sensor_name, sensor_gids in ub.group_items(conflict_imges, sensors).items():
+                for _sensor_name, sensor_gids in ub.group_items(conflict_imges, sensors).items():
                     # sensor_images = coco_dset.images(sensor_gids)
                     rows = []
                     for gid in sensor_gids:
@@ -851,10 +855,11 @@ class SimpleDataCube(object):
                             'same_utm': same_utm,
                             'fpath': fpath,
                         })
-                    import pandas as pd
-                    df = pd.DataFrame(rows)
-                    print('\n\n')
-                    print(df)
+                    if 0:
+                        import pandas as pd
+                        df = pd.DataFrame(rows)
+                        print('\n\n')
+                        print(df)
                     final_gids = [r['gid'] for r in sorted(rows, key=lambda r: r['score'], reverse=False)]
                     # hack
                     # final_gids = final_gids[:1]

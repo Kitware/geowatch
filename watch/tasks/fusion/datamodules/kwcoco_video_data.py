@@ -1115,9 +1115,9 @@ class KWCocoVideoDataset(data.Dataset):
                         poly.fill(frame_class_ohe[cidx], value=1)
 
                 # Dilate the truth map
-                for cidx, class_map in enumerate(frame_class_ohe):
-                    class_map = util_kwimage.morphology(class_map, 'dilate', kernel=5)
-                    frame_cidxs[class_map > 0] = cidx
+                # for cidx, class_map in enumerate(frame_class_ohe):
+                #     class_map = util_kwimage.morphology(class_map, 'dilate', kernel=5)
+                #     frame_cidxs[class_map > 0] = cidx
 
                 # convert annotations into a change detection task suitable for
                 # the network.

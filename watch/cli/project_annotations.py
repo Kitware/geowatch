@@ -45,7 +45,7 @@ class ProjectAnnotationsConfig(scfg.Config):
             use this to print details
             ''')),
 
-        'clear_existing': scfg.Value(1, help=ub.paragraph(
+        'clear_existing': scfg.Value(True, help=ub.paragraph(
             '''
             if True, clears existing annotations before projecting the new ones.
             ''')),
@@ -140,14 +140,13 @@ def main(cmdline=False, **kwargs):
     from watch.tasks.fusion import heuristics
     status_to_color = {d['name']: kwimage.Color(d['color']).as01()
                        for d in heuristics.HUERISTIC_STATUS_DATA}
-    coco_dset.ensure_category('negative')
-    coco_dset.ensure_category('ignore')
     print(coco_dset.dataset['categories'])
     for cat in heuristics.CATEGORIES:
         coco_dset.ensure_category(**cat)
-        real_cat = coco_dset.index.name_to_cat[cat['name']]
-        if real_cat.get('color', None) is None:
-            real_cat['color'] = cat['color']
+    # hack in heuristic colors
+    from watch import heuristics
+    heuristics.ensure_heuristic_colors(coco_dset)
+    # handle any other colors
     kwcoco_extensions.category_category_colors(coco_dset)
     print(coco_dset.dataset['categories'])
 
@@ -249,8 +248,23 @@ def main(cmdline=False, **kwargs):
 
                 catname = site_row['current_phase']
                 if catname is None:
-                    if 'ignore' == status:
+                    if status == 'ignore':
                         catname = 'ignore'
+                    elif status == 'positive_excluded':
+                        # This is positive, but is not "big" enough
+                        catname = 'ignore'
+                    elif status == 'positive_unbounded':
+                        # Start or end date might not be defined.
+                        catname = 'ignore'
+                    elif status == 'positive_pending':
+                        # Does not have phase labels
+                        catname = 'ignore'
+                    elif status == 'positive_partial':
+                        # Might have phase labels
+                        catname = 'ignore'
+                    elif status == 'positive_annotated':
+                        # Has phase labels
+                        assert catname is not None
                     elif 'positive' in status:
                         catname = 'ignore'
                     elif 'negative' == status:
