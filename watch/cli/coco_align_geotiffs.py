@@ -388,6 +388,10 @@ def main(cmdline=True, **kw):
     target_gsd = config['target_gsd']
     max_frames = config['max_frames']
 
+    from watch.utils.lightning_ext import util_globals
+    max_workers = util_globals.coerce_num_workers(config['max_workers'])
+    aux_workers = util_globals.coerce_num_workers(config['aux_workers'])
+
     dst = pathlib.Path(ub.expandpath(dst))
     # TODO: handle this coercion of directories or bundles in kwcoco itself
     if 'json' in dst.name.split('.'):
@@ -853,9 +857,9 @@ class SimpleDataCube(object):
                             'score': score,
                             'gid': gid,
                             'same_utm': same_utm,
-                            'fpath': fpath,
+                            'fname': pathlib.Path(fpath).name,
                         })
-                    if 0:
+                    if 1:
                         import pandas as pd
                         df = pd.DataFrame(rows)
                         print('\n\n')
@@ -882,6 +886,9 @@ class SimpleDataCube(object):
                     for other_gid in other_gids:
                         anns += [coco_dset.index.anns[aid] for aid in
                                  coco_dset.index.gid_to_aids[other_gid]]
+
+                if not len(other_gids):
+                    continue
 
                 job = pool.submit(
                     extract_image_job,
@@ -1104,7 +1111,10 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
         base_dst = dst_list[0]
         new_img.update(base_dst)
         aux_dst = dst_list[1:]
-        assert len(aux_dst) == 0, 'cant have aux and base yet'
+        if len(aux_dst) != 0:
+            import xdev
+            xdev.embed()
+            raise AssertionError('cant have aux and base yet')
     else:
         aux_dst = dst_list
 
@@ -1321,7 +1331,18 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     # te_srs = spatial reference of query points
     crop_coordinate_srs = 'epsg:4326'
 
-    if 0:
+    duplicates = ub.find_duplicates(input_gpaths)
+    if duplicates:
+        import warnings
+        warnings.warn(ub.paragraph(
+            '''
+            Input to _aligncrop contained duplicate filepaths, the same image
+            might be registered in your base kwcoco file twice
+            '''))
+        # print('!!WARNING!! duplicates = {}'.format(ub.repr2(duplicates, nl=1)))
+        input_gpaths = list(ub.oset(input_gpaths))
+
+    if 1:
         # Perhaps we have a bug?
         warp_inputs = ' '.join(input_gpaths)
     else:
@@ -1467,6 +1488,8 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     if needs_recompute:
         # TODO: write to a temporay location and then do an atomic move
         # of the file in order to prevent leaving corrupted data on disk
+        if 1:
+            print('SUBMIT: command = {!r}'.format(command))
         cmd_info = ub.cmd(command, verbose=0)  # NOQA
         if cmd_info['ret'] != 0:
             print('\n\nCOMMAND FAILED: {!r}'.format(command))

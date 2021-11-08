@@ -95,13 +95,15 @@ def main(**kwargs):
 
     # hack in colors
     from watch import heuristics
+    from watch.utils.lightning_ext import util_globals
     heuristics.ensure_heuristic_colors(dset)
 
     print('start populate')
     target_gsd = config['target_gsd']
     overwrite = config['overwrite']
     default_gsd = config['default_gsd']
-    workers = config['workers']
+    workers = util_globals.coerce_num_workers(config['workers'])
+
     kwcoco_extensions.populate_watch_fields(
         dset, target_gsd=target_gsd, overwrite=overwrite,
         default_gsd=default_gsd, workers=workers)
@@ -115,7 +117,7 @@ def main(**kwargs):
             offset =  np.asarray(kwimage.Affine.coerce(img['warp_img_to_vid']))[:, 2]
             if np.any(np.abs(offset) > 100):
                 print('img = {}'.format(ub.repr2(img, nl=-1)))
-                print('warning there is a large offset')
+                print('warning there is a large offset (this is ok if we are not expecting this dataset to be aligned)')
                 print('offset = {!r}'.format(offset))
                 print('{}, {}'.format(gid, img['warp_img_to_vid']))
 
