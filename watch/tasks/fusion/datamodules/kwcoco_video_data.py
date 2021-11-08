@@ -1942,6 +1942,9 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
 
 
 def lookup_track_info(coco_dset, tid):
+    """
+    Find the spatio-temporal extent of a track
+    """
     track_aids = coco_dset.index.trackid_to_aids[tid]
     vidspace_boxes = []
     track_gids = []
@@ -1969,7 +1972,7 @@ def lookup_track_info(coco_dset, tid):
     return track_info
 
 
-def make_trackbased_spatial_samples(coco_dset):
+def make_track_based_spatial_samples(coco_dset):
     """
     Ignore:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -1977,7 +1980,7 @@ def make_trackbased_spatial_samples(coco_dset):
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> from watch.utils.util_data import find_smart_dvc_dpath
         >>> dvc_dpath = find_smart_dvc_dpath()
-        >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
+        >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1/data.kwcoco.json'
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
     """
     tid_list = list(coco_dset.index.trackid_to_aids.keys())
