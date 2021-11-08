@@ -864,7 +864,7 @@ class SimpleDataCube(object):
                         df = pd.DataFrame(rows)
                         print('\n\n')
                         print(df)
-                    final_gids = [r['gid'] for r in sorted(rows, key=lambda r: r['score'], reverse=False)]
+                    final_gids = [r['gid'] for r in sorted(rows, key=lambda r: r['score'], reverse=True)]
                     # hack
                     # final_gids = final_gids[:1]
                     # final_gids = final_gids[1:2]
@@ -882,13 +882,14 @@ class SimpleDataCube(object):
                 anns = [coco_dset.index.anns[aid] for aid in
                         coco_dset.index.gid_to_aids[main_gid]]
                 if 0:
-                    # do we do this? Rectification step?
+                    # FIXME: do we do this? Rectification step?
                     for other_gid in other_gids:
                         anns += [coco_dset.index.anns[aid] for aid in
                                  coco_dset.index.gid_to_aids[other_gid]]
 
-                if not len(other_gids):
-                    continue
+                # if len(other_gids) == 0:
+                #     # Hack: only look at weird cases
+                #     continue
 
                 job = pool.submit(
                     extract_image_job,
@@ -1277,9 +1278,6 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
                space_box, align_method, is_multi_image, keep, utm_epsg_zone=None):
     import watch
     # # NOTE: https://github.com/dwtkns/gdal-cheat-sheet
-    # latmin, lonmin, latmax, lonmax = space_box.data[0]
-    # Data is from geo-pandas so this should be traditional order
-    lonmin, latmin, lonmax, latmax = space_box.data[0]
     first_obj = obj_group[0]
     chan_code = obj_group[0].get('channels', '')
 
@@ -1311,25 +1309,18 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     if not needs_recompute:
         return dst
 
-    # Write to a temporary file and then rename the file to the final
-    # Destination so ctrl+c doesn't break everything
-    tmp_dst_gpath = ub.augpath(dst_gpath, prefix='.tmp.')
+    if align_method == 'pixel_crop':
+        raise NotImplementedError('no longer supported')
 
-    # TODO: parametarize
-    compress = 'NONE'
-    blocksize = 64
-    # NUM_THREADS=2
-
-    # Coordinate Reference System of the "target" destination image
-    # t_srs = target spatial reference for output image
-    if utm_epsg_zone is None:
-        target_srs = 'epsg:4326'
+    if align_method == 'orthorectify':
+        if 'geotiff_metadata' in first_obj:
+            info = first_obj['geotiff_metadata']
+        else:
+            info = watch.gis.geotiff.geotiff_crs_info(input_gpaths[0])
+        # No RPCS exist, use affine-warp instead
+        rpcs = info['rpc_transform']
     else:
-        target_srs = 'epsg:{}'.format(utm_epsg_zone)
-
-    # Coordinate Reference System of the "te" crop coordinates
-    # te_srs = spatial reference of query points
-    crop_coordinate_srs = 'epsg:4326'
+        rpcs = None
 
     duplicates = ub.find_duplicates(input_gpaths)
     if duplicates:
@@ -1342,21 +1333,77 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
         # print('!!WARNING!! duplicates = {}'.format(ub.repr2(duplicates, nl=1)))
         input_gpaths = list(ub.oset(input_gpaths))
 
-    if 1:
-        # Perhaps we have a bug?
-        warp_inputs = ' '.join(input_gpaths)
+    # Write to a temporary file and then rename the file to the final
+    # Destination so ctrl+c doesn't break everything
+    tmp_dst_gpath = ub.augpath(dst_gpath, prefix='.tmp.')
+
+    # When trying to get a gdalmerge to take multiple inputs I got a Attempt to
+    # create 0x0 dataset is illegal,sizes must be larger than zero.  This new
+    # method will call gdalwarp on each image individually and then merge them
+    # all in a final step.
+    out_fpath = tmp_dst_gpath
+    if len(input_gpaths) > 1:
+        in_fpaths = input_gpaths
+        gdal_multi_warp(in_fpaths, out_fpath, space_box, utm_epsg_zone, rpcs=rpcs)
     else:
-        if len(input_gpaths) > 1:
-            # I Don't know why gdalmerge wont take multiple files in nicely,
-            # this is a hack to work around it.
-            # I get a: Attempt to create 0x0 dataset is illegal,sizes must be larger than zero.
-            import tempfile
-            tmpfile = tempfile.NamedTemporaryFile()
-            temp_out_name = tmpfile.name
-            info = ub.cmd('gdal_merge.py -n 0 -o ' + temp_out_name + ' ' + (' '.join(input_gpaths)), check=True)
-            warp_inputs = temp_out_name
-        else:
-            warp_inputs = input_gpaths[0]
+        in_fpath = input_gpaths[0]
+        gdal_single_warp(in_fpath, out_fpath, space_box, utm_epsg_zone, rpcs=rpcs)
+
+    os.rename(tmp_dst_gpath, dst_gpath)
+
+    return dst
+
+
+def gdal_multi_warp(in_fpaths, out_fpath, space_box, utm_epsg_zone, rpcs=None):
+    # Warp then merge
+    import tempfile
+
+    # Write to a temporary file and then rename the file to the final
+    # Destination so ctrl+c doesn't break everything
+    tmp_out_fpath = ub.augpath(out_fpath, prefix='.tmp.')
+
+    tempfiles = []  # hold references
+    warped_gpaths = []
+    for in_fpath in in_fpaths:
+        tmpfile = tempfile.NamedTemporaryFile(suffix='.tif')
+        tempfiles.append(tempfiles)
+        tmp_out = tmpfile.name
+        gdal_single_warp(in_fpath, tmp_out, space_box, utm_epsg_zone,
+                         rpcs=rpcs)
+        warped_gpaths.append(tmp_out)
+
+    # Last image is copied over earlier ones, but we expect first image to be
+    # the primary one, so reverse order
+    warped_gpaths = warped_gpaths[::-1]
+    merge_cmd = ['gdal_merge.py', '-n' '0' '-o', tmp_out_fpath, warped_gpaths]
+    cmd_info = ub.cmd(merge_cmd, check=True)
+    if cmd_info['ret'] != 0:
+        print('\n\nCOMMAND FAILED: {!r}'.format(' '.join(merge_cmd)))
+        print(cmd_info['out'])
+        print(cmd_info['err'])
+        raise Exception(cmd_info['err'])
+    os.rename(tmp_out_fpath, out_fpath)
+
+
+def gdal_single_warp(in_fpath, out_fpath, space_box, utm_epsg_zone, rpcs=None):
+    # Data is from geo-pandas so this should be traditional order
+    lonmin, latmin, lonmax, latmax = space_box.data[0]
+
+    # Coordinate Reference System of the "te" crop coordinates
+    # te_srs = spatial reference of query points
+    crop_coordinate_srs = 'epsg:4326'
+
+    # TODO: parametarize
+    compress = 'NONE'
+    blocksize = 64
+    # NUM_THREADS=2
+
+    # Coordinate Reference System of the "target" destination image
+    # t_srs = target spatial reference for output image
+    if utm_epsg_zone is None:
+        target_srs = 'epsg:4326'
+    else:
+        target_srs = 'epsg:{}'.format(utm_epsg_zone)
 
     # Use the new COG output driver
     prefix_template = (
@@ -1376,7 +1423,6 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
         -co NUM_THREADS=2
         -overwrite
         ''')
-    # TODO
 
     template_kw = {
         'crop_coordinate_srs': crop_coordinate_srs,
@@ -1387,77 +1433,20 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
         'xmax': lonmax,
         'blocksize': blocksize,
         'compress': compress,
-        'SRC': warp_inputs,
-        'DST': tmp_dst_gpath,
+        'SRC': in_fpath,
+        'DST': out_fpath,
 
         # TODO: Use cloudmask
         'NODATA_VALUE': 0,  # TODO: determine if possible
     }
 
-    if compress == 'RAW':
-        compress = 'NONE'
-
-    if align_method == 'orthorectify':
-        if 'geotiff_metadata' in first_obj:
-            info = first_obj['geotiff_metadata']
-        else:
-            info = watch.gis.geotiff.geotiff_crs_info(input_gpaths[0])
-        rpcs = info['rpc_transform']
-        # No RPCS exist, use affine-warp instead
-        if rpcs is None:
-            align_method = 'affine_warp'
-        else:
-            # HACK TO FIND an appropirate DEM file
-            dems = rpcs.elevation
-
-    if align_method == 'pixel_crop':
-        raise NotImplementedError('no longer supported')
-        info = watch.gis.geotiff.geotiff_crs_info(input_gpaths[0])
-        if 0:
-            # IMPL1
-            # info = first_obj['geotiff_metadata']
-            assert len(input_gpaths) == 1, 'cant work with groups yet'
-            from kwcoco.util.util_delayed_poc import LazyGDalFrameFile
-            imdata = LazyGDalFrameFile(input_gpaths[0])
-            space_region_pxl = space_region.warp(info['wgs84_to_wld']).warp(info['wld_to_pxl'])
-            pxl_xmin, pxl_ymin, pxl_xmax, pxl_ymax = space_region_pxl.bounding_box().to_ltrb().quantize().data[0]
-            sl = tuple([slice(pxl_ymin, pxl_ymax), slice(pxl_xmin, pxl_xmax)])
-            subim, transform = kwimage.padded_slice(
-                imdata, sl, return_info=True)
-            # TODO: do this with a gdal command so the tiff metdata is preserved
-            kwimage.imwrite(tmp_dst_gpath, subim, space=None, backend='gdal',
-                            blocksize=blocksize, compress=compress)
-        else:
-            raise Exception
-            # IMPL2
-            template = (
-                '''
-                gdal_translate
-                --config GDAL_CACHEMAX 500 -wm 500
-                --debug off
-                -srcwin {xoff} {yoff} {xsize} {ysize}
-                -a_srs {target_srs}
-                -of COG
-                -co OVERVIEWS=NONE
-                -co BLOCKSIZE={blocksize}
-                -co COMPRESS={compress}
-                -co NUM_THREADS=2
-                -overwrite
-                {SRC} {DST}
-                ''')
-            space_region_pxl = space_region.warp(info['wgs84_to_wld']).warp(info['wld_to_pxl'])
-            xoff, yoff, xsize, ysize = space_region_pxl.bounding_box().to_xywh().quantize().data[0]
-            template_kw.update({
-                'xoff': xoff,
-                'yoff': yoff,
-                'xsize': xsize,
-                'ysize': ysize,
-            })
-            command = template.format(**template_kw)
-
-        dst['img_shape'] = subim.shape
-        dst['transform'] = transform
-    elif align_method == 'orthorectify':
+    # HACK TO FIND an appropirate DEM file
+    if rpcs is None:
+        template = ub.paragraph(
+            prefix_template +
+            '{SRC} {DST}')
+    else:
+        dems = rpcs.elevation
         if hasattr(dems, 'find_reference_fpath'):
             # TODO: get a better DEM path for this image if possible
             dem_fpath, dem_info = dems.find_reference_fpath(latmin, lonmin)
@@ -1470,39 +1459,24 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
                 ''')
             template_kw['dem_fpath'] = dem_fpath
         else:
+            dem_fpath = None
             template = ub.paragraph(
                 prefix_template +
                 '''
                 -rpc -et 0
                 {SRC} {DST}
                 ''')
-        command = template.format(**template_kw)
-    elif align_method == 'affine_warp':
-        template = ub.paragraph(
-            prefix_template +
-            '{SRC} {DST}')
-        command = template.format(**template_kw)
-    else:
-        raise KeyError(align_method)
 
-    if needs_recompute:
-        # TODO: write to a temporay location and then do an atomic move
-        # of the file in order to prevent leaving corrupted data on disk
-        if 1:
-            print('SUBMIT: command = {!r}'.format(command))
-        cmd_info = ub.cmd(command, verbose=0)  # NOQA
-        if cmd_info['ret'] != 0:
-            print('\n\nCOMMAND FAILED: {!r}'.format(command))
-            print(cmd_info['out'])
-            print(cmd_info['err'])
-            raise Exception(cmd_info['err'])
+    if compress == 'RAW':
+        compress = 'NONE'
 
-    os.rename(tmp_dst_gpath, dst_gpath)
-
-    if not exists(dst_gpath):
-        raise Exception('THE DESTINATION PATH WAS NOT COMPUTED')
-
-    return dst
+    command = template.format(**template_kw)
+    cmd_info = ub.cmd(command, verbose=0)  # NOQA
+    if cmd_info['ret'] != 0:
+        print('\n\nCOMMAND FAILED: {!r}'.format(command))
+        print(cmd_info['out'])
+        print(cmd_info['err'])
+        raise Exception(cmd_info['err'])
 
 
 _CLI = CocoAlignGeotiffConfig
