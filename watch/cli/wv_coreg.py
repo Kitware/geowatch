@@ -3,6 +3,9 @@ import os
 import sys
 import shapely.geometry
 from copy import deepcopy
+from osgeo import gdal, osr
+from tempfile import NamedTemporaryFile
+import ubelt as ub
 import pystac
 
 from watch.utils.util_stac import parallel_map_items
@@ -101,6 +104,7 @@ def wv_coreg(wv_catalog, outdir, jobs=1, drop_empty=False, s2_catalog=None):
         >>>     item.set_collection(None)
         >>>     item.set_parent(None)
         >>>     item.set_root(None)
+        >>>     # item.set_self_href(None)
         >>> catalog_dct = catalog.to_dict()
         >>> catalog_dct['links'] = []
         >>> catalog = pystac.Catalog.from_dict(catalog_dct)
@@ -108,7 +112,8 @@ def wv_coreg(wv_catalog, outdir, jobs=1, drop_empty=False, s2_catalog=None):
         >>> os.makedirs(in_dir, exist_ok=True)
         >>> def download(asset_name, asset):
         >>>     fpath = os.path.join(in_dir, os.path.basename(asset.href))
-        >>>     if not os.path.isfile(fpath):
+        >>>     if (not os.path.isfile(fpath)
+        >>>         and asset.href.startswith('s3://')):
         >>>         os.system(f'aws s3 cp {asset.href} {fpath} '
         >>>                    '--profile iarpa --request-payer')
         >>>     asset.href = fpath
@@ -121,7 +126,8 @@ def wv_coreg(wv_catalog, outdir, jobs=1, drop_empty=False, s2_catalog=None):
         >>> ortho_dir = os.path.abspath('wv/out/')
         >>> os.makedirs(ortho_dir, exist_ok=True)
         >>> ortho_catalog = os.path.join(ortho_dir, 'catalog.json')
-        >>> if not os.path.isfile(ortho_catalog):  # caching
+        >>> # TODO fix 'original' link
+        >>> if 1 or not os.path.isfile(ortho_catalog):  # caching
         >>>     ortho_catalog = wv_ortho(catalog, ortho_dir, jobs=16,
         >>>                            te_dems=False, pansharpen=True)
         >>> 
@@ -234,7 +240,7 @@ def _coreg_map(stac_item, outdir, baseline_s2_items, item_pairs_dct,
             out_ps_fpath, vrt_ps_fpath = build_fpaths(ps_fpath)
             fpaths['data_pansharpened'] = out_ps_fpath, vrt_ps_fpath
 
-            copy_coreg(ps_fpath, vrt_msi_fpath, out_ps_fpath, vrt_ps_fpath)
+            copy_coreg(ps_fpath, msi_fpath, vrt_msi_fpath, out_ps_fpath, vrt_ps_fpath)
 
         # Update assets and error checking - coreg could have failed due to
         # not enough GCPs found
@@ -306,13 +312,83 @@ def best_match(s2_items, wv_item):
                intersection(wv_shp).area)
 
 
-def copy_coreg(in_fpath, vrt_fpath, out_fpath, out_vrt_fpath):
+def copy_coreg(in_fpath, orig_fpath, vrt_fpath, out_fpath, out_vrt_fpath):
     '''
     wv_to_s2_coregister operates on up to 2 images. But we could have a third-
     the pansharpened MSI. If this exists, its extent is a strict subset of the
-    originals', so "copy over" the coreg transform by rewriting a coreg VRT.
+    originals', so copy over the coreg transform from a reference image.
     '''
     backup_vrt_fpath = vrt_fpath.replace('_coreg', '')
+
+    if os.path.isfile(orig_fpath) and os.path.isfile(vrt_fpath):
+        # coreg succeeded
+        wv_ds = gdal.Open(in_fpath)
+        wv_proj = wv_ds.GetProjectionRef()
+        proj_ref = osr.SpatialReference()
+        proj_ref.ImportFromWkt(wv_proj)  # Well known format
+        proj4 = proj_ref.ExportToProj4()
+
+        xsize = wv_ds.RasterXSize
+        ysize = wv_ds.RasterYSize
+
+        wv_gt = wv_ds.GetGeoTransform()
+        wv_xres = wv_gt[1]
+        wv_yres = abs(wv_gt[5])
+
+        x_min = wv_gt[0]
+        y_max = wv_gt[3]
+        x_max = wv_gt[0] + wv_gt[1] * xsize
+        y_min = wv_gt[3] + wv_gt[5] * ysize
+
+        orig_gt = gdal.Open(orig_fpath).GetGeoTransform()
+
+        # get GCPs in CRS of input image
+        gcps = gdal.Open(vrt_fpath).GetGCPs()
+        for gcp in gcps:
+            x_geo = orig_gt[0] + orig_gt[1] * gcp.GCPPixel
+            y_geo = orig_gt[3] + orig_gt[5] * gcp.GCPLine
+
+            gcp.GCPPixel = (x_geo - wv_gt[0]) / wv_gt[1]
+            gcp.GCPLine = (y_geo - wv_gt[3]) / wv_gt[5]
+
+        # GCPs might be too long to fit in a shell command, so read them from
+        # a text file
+        with NamedTemporaryFile(mode='w+') as gcp_file:
+
+            with open(gcp_file.name, 'w') as f:
+                f.writelines([
+                    f'-gcp {gcp.GCPPixel:.5f} {gcp.GCPLine:.5f} '
+                    f'{gcp.GCPX:.5f} {gcp.GCPY:.5f} 0 '
+                    for gcp in gcps
+                ])
+                f.seek(0)
+
+            com_gdal_translate_prefix = ub.paragraph(f'''
+                gdal_translate -of VRT --optfile {gcp_file.name}
+                -r cubic -a_srs "{proj4}" -a_nodata 0
+                ''')
+
+            com_gdalwarp_prefix = ub.paragraph(f'''
+                gdalwarp -overwrite -of GTiff -order 3 -et 0.05 -r cubic
+                -co "COMPRESS=DEFLATE"
+                -tr {wv_xres} {wv_yres} -te {x_min} {y_min} {x_max} {y_max}
+                -t_srs "{proj4}" -srcnodata 0 -dstnodata 0
+                ''')
+
+            os.system(
+                f'{com_gdal_translate_prefix} {in_fpath} {out_vrt_fpath}')
+            os.system(f'{com_gdalwarp_prefix} {out_vrt_fpath} {out_fpath}')
+
+    elif os.path.isfile(backup_vrt_fpath):
+        # coreg failed
+        os.system(f'gdal_translate -of VRT {in_fpath} '
+                  f'{out_vrt_fpath.replace("_coreg", "")}')
+
+    else:
+        # coreg crashed
+        # raise ValueError(f'No coreg result for {vrt_fpath}')
+        pass
+
     pass
 
 

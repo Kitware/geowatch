@@ -457,13 +457,13 @@ def pansharpen(stac_item_pan, stac_item_msi, outdir, as_rgb=False):
             shutil.copy(asset.href, outdir)
             asset.href = os.path.join(outdir, os.path.basename(asset.href))
 
-    item.assets['pansharpened'] = item.assets['data'].clone()
-    item.assets['pansharpened'].href = out_fpath
-    item.assets['pansharpened'].extra_fields['eo:bands'] = eo_bands
-    item.assets['pansharpened'].extra_fields[
-        'pansharpened_to_item'] = stac_item_pan.id
-    item.assets['pansharpened'].extra_fields[
-        'pansharpened_to_gsd'] = stac_item_pan.properties['gsd']
+    item.assets['data_pansharpened'] = item.assets['data'].clone()
+    item.assets['data_pansharpened'].href = out_fpath
+    item.assets['data_pansharpened'].extra_fields['eo:bands'] = eo_bands
+    item.assets['data_pansharpened'].extra_fields[
+        'data_pansharpened_to_item'] = stac_item_pan.id
+    item.assets['data_pansharpened'].extra_fields[
+        'data_pansharpened_to_gsd'] = stac_item_pan.properties['gsd']
 
     return item
 
