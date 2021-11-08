@@ -1102,30 +1102,28 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
 
     new_gid = start_gid
 
+    assert len(dst_list) == len(obj_groups)
+    # Hack because heurstics break when fnames change
+    for old_aux_group, new_aux in zip(obj_groups, dst_list):
+        # new_aux['channels'] = old_aux['channels']
+        if len(old_aux_group) > 1:
+            new_aux['parent_file_name'] = [g['file_name'] for g in old_aux_group]
+        else:
+            new_aux['parent_file_name'] = old_aux_group[0]['file_name']
+
     new_img = {
         'id': new_gid,
         'name': name,
         'align_method': align_method,
     }
 
-    if has_base_image:
+    if has_base_image and len(dst_list) == 1:
         base_dst = dst_list[0]
         new_img.update(base_dst)
-        aux_dst = dst_list[1:]
-        if len(aux_dst) != 0:
-            import xdev
-            xdev.embed()
-            raise AssertionError('cant have aux and base yet')
+        aux_dst = []
+        # dst_list[1:]
     else:
         aux_dst = dst_list
-
-    # Hack because heurstics break when fnames change
-    for old_aux_group, new_aux in zip(obj_groups, aux_dst):
-        # new_aux['channels'] = old_aux['channels']
-        if len(old_aux_group) > 1:
-            new_aux['parent_file_name'] = [g['file_name'] for g in old_aux_group]
-        else:
-            new_aux['parent_file_name'] = old_aux_group[0]['file_name']
 
     if len(aux_dst):
         new_img['auxiliary'] = aux_dst
@@ -1328,7 +1326,7 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
         warnings.warn(ub.paragraph(
             '''
             Input to _aligncrop contained duplicate filepaths, the same image
-            might be registered in your base kwcoco file twice
+            might be registered in the base kwcoco file multiple times.
             '''))
         # print('!!WARNING!! duplicates = {}'.format(ub.repr2(duplicates, nl=1)))
         input_gpaths = list(ub.oset(input_gpaths))
@@ -1375,10 +1373,11 @@ def gdal_multi_warp(in_fpaths, out_fpath, space_box, utm_epsg_zone, rpcs=None):
     # Last image is copied over earlier ones, but we expect first image to be
     # the primary one, so reverse order
     warped_gpaths = warped_gpaths[::-1]
-    merge_cmd = ['gdal_merge.py', '-n' '0' '-o', tmp_out_fpath, warped_gpaths]
-    cmd_info = ub.cmd(merge_cmd, check=True)
+    merge_cmd_parts = ['gdal_merge.py', '-n', '0', '-o', tmp_out_fpath] + warped_gpaths
+    merge_cmd = ' '.join(merge_cmd_parts)
+    cmd_info = ub.cmd(merge_cmd_parts, check=True)
     if cmd_info['ret'] != 0:
-        print('\n\nCOMMAND FAILED: {!r}'.format(' '.join(merge_cmd)))
+        print('\n\nCOMMAND FAILED: {!r}'.format(merge_cmd))
         print(cmd_info['out'])
         print(cmd_info['err'])
         raise Exception(cmd_info['err'])
