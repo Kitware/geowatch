@@ -69,8 +69,9 @@ def wv_coreg(wv_catalog, outdir, jobs=1, drop_empty=False, s2_catalog=None):
     the MSI item.
 
     Example:
+        >>> #
         >>> # create a dummy catalog of 10 WV PAN-MSI pairs and 1 S2 item
-        >>> 
+        >>> #
         >>> # xdoctest: +REQUIRES(env:API_KEY)
         >>> from pystac_client import Client
         >>> from watch.cli.wv_ortho import wv_ortho
@@ -120,9 +121,9 @@ def wv_coreg(wv_catalog, outdir, jobs=1, drop_empty=False, s2_catalog=None):
         >>>     return asset
         >>> catalog.add_items(items)
         >>> catalog = catalog.map_assets(download)
-        >>>  
+        >>> #
         >>> # run orthorectification and pansharpening
-        >>>  
+        >>> #
         >>> ortho_dir = os.path.abspath('wv/out/')
         >>> os.makedirs(ortho_dir, exist_ok=True)
         >>> ortho_catalog = os.path.join(ortho_dir, 'catalog.json')
@@ -130,9 +131,9 @@ def wv_coreg(wv_catalog, outdir, jobs=1, drop_empty=False, s2_catalog=None):
         >>> if 1 or not os.path.isfile(ortho_catalog):  # caching
         >>>     ortho_catalog = wv_ortho(catalog, ortho_dir, jobs=16,
         >>>                            te_dems=False, pansharpen=True)
-        >>> 
+        >>> #
         >>> # run coregistration
-        >>> 
+        >>> #
         >>> coreg_dir = os.path.abspath('wv/coreg/')
         >>> os.makedirs(coreg_dir, exist_ok=True)
         >>> coreg_catalog = wv_coreg(ortho_catalog, coreg_dir, jobs=1,

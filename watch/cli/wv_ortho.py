@@ -65,8 +65,9 @@ def wv_ortho(stac_catalog,
     - For each MSI WV image, if a matching PAN image is available,
       adds a pansharpened image as a new Asset in the MSI Item.
     Example:
+        >>> #
         >>> # create a dummy catalog of 10 local items
-        >>> 
+        >>> #
         >>> # xdoctest: +REQUIRES(env:API_KEY)
         >>> from pystac_client import Client
         >>> from watch.cli.wv_ortho import *
@@ -105,9 +106,9 @@ def wv_ortho(stac_catalog,
         >>>     return asset
         >>> catalog.add_items(items)
         >>> catalog = catalog.map_assets(download)
-        >>>  
+        >>> #
         >>> # run orthorectification and pansharpening
-        >>>  
+        >>> #
         >>> out_dir = os.path.abspath('wv/out/')
         >>> os.makedirs(out_dir, exist_ok=True)
         >>> out_catalog = wv_ortho(catalog, out_dir, jobs=10, drop_empty=True,
