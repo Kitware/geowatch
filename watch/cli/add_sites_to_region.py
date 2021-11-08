@@ -121,7 +121,7 @@ def add_sites_to_region(input_region_path,
                                check=True)
     else:
         with open(output_region_path, 'w') as f:
-            print(json.dumps(region, indent=2), file=f)
+            json.dump(region, f, indent=2)
 
     return region
 

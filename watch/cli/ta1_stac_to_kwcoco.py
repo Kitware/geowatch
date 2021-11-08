@@ -297,7 +297,9 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
     output_dset.fpath = outpath
 
     # TODO: Should make this name the MGRS tile
-    for job in ub.ProgIter(as_completed(jobs), total=len(jobs), desc='collect convert stac-to-kwcoco jobs'):
+    for job in ub.ProgIter(as_completed(jobs),
+                           total=len(jobs),
+                           desc='collect jobs'):
         kwcoco_img = job.result()
         if kwcoco_img is not None:
             output_dset.add_image(**kwcoco_img)
@@ -319,7 +321,7 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
             output_dset, video_id, target_gsd=10.0)
 
     with open(outpath, 'w') as f:
-        f.write(json.dumps(output_dset.dataset, indent=2))
+        json.dump(output_dset.dataset, f, indent=2)
 
     return output_dset
 
