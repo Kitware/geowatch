@@ -461,9 +461,9 @@ def pansharpen(stac_item_pan, stac_item_msi, outdir, as_rgb=False):
     item.assets['data_pansharpened'].href = out_fpath
     item.assets['data_pansharpened'].extra_fields['eo:bands'] = eo_bands
     item.assets['data_pansharpened'].extra_fields[
-        'data_pansharpened_to_item'] = stac_item_pan.id
+        'pansharpened_to_item'] = stac_item_pan.id
     item.assets['data_pansharpened'].extra_fields[
-        'data_pansharpened_to_gsd'] = stac_item_pan.properties['gsd']
+        'pansharpened_to_gsd'] = stac_item_pan.properties['gsd']
 
     return item
 
