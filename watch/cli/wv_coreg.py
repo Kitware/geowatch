@@ -370,7 +370,7 @@ def copy_coreg(in_fpath, orig_fpath, vrt_fpath, out_fpath, out_vrt_fpath):
 
             com_gdalwarp_prefix = ub.paragraph(f'''
                 gdalwarp -overwrite -of GTiff -order 3 -et 0.05 -r cubic
-                -co "COMPRESS=DEFLATE"
+                -co "COMPRESS=DEFLATE" -co "BIGTIFF=YES"
                 -tr {wv_xres} {wv_yres} -te {x_min} {y_min} {x_max} {y_max}
                 -t_srs "{proj4}" -srcnodata 0 -dstnodata 0
                 ''')
