@@ -13,6 +13,7 @@ from osgeo_utils.gdal_pansharpen import gdal_pansharpen
 
 import watch
 from watch.utils.util_stac import parallel_map_items
+from watch.utils.util_raster import gdalwarp_performance_opts
 
 
 def main():
@@ -265,15 +266,14 @@ def orthorectify(stac_item, outdir, te_dems, to_utm=False):
 
     cmd_str = ub.paragraph(f'''
         gdalwarp
-        -multi
-        --config GDAL_CACHEMAX 500 -wm 500
         --debug off -of COG
         -co BLOCKSIZE=64
-        -co COMPRESS=NONE
+        -co COMPRESS=DEFLATE
         -t_srs EPSG:{epsg} -et 0
         -rpc -to RPC_DEM={dem_fpath}
         -overwrite
         -srcnodata 0 -dstnodata 0
+        {gdalwarp_performance_opts}
         {in_fpath} {out_fpath}
         ''')
     cmd = ub.cmd(cmd_str, check=True, verbose=0)  # noqa
@@ -397,6 +397,8 @@ def pansharpen(stac_item_pan, stac_item_msi, outdir, as_rgb=False):
         -of COG
         -co BLOCKSIZE=64
         -co COMPRESS=NONE
+        --config GDAL_CACHEMAX 20%
+        -co NUM_THREADS=ALL_CPUS
         {pan_fpath} {msi_fpath} {out_fpath}
         ''')
     # -r nearest? (instead of cubic)
@@ -409,7 +411,8 @@ def pansharpen(stac_item_pan, stac_item_msi, outdir, as_rgb=False):
         'driver_name': 'COG',
         'creation_options': {
             'BLOCKSIZE': 64,
-            'COMPRESS': 'NONE'
+            'COMPRESS': 'NONE',
+            'NUM_THREADS': 'ALL_CPUS'
         },
     }
 

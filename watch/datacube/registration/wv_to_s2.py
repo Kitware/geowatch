@@ -34,6 +34,26 @@ import sys
 import numpy as np
 from skimage.registration import phase_cross_correlation
 
+from watch.utils.util_raster import gdalwarp_performance_opts
+import ubelt as ub
+
+
+def gdal_translate_prefix(optfile, proj4):
+    return ub.paragraph(f'''
+        gdal_translate -of VRT --optfile {optfile}
+        -r cubic -a_srs "{proj4}" -a_nodata 0
+        ''')
+
+
+def gdalwarp_prefix(xres, yres, x_min, y_min, x_max, y_max, proj4):
+    return ub.paragraph(f'''
+        gdalwarp -overwrite -of GTiff -order 3 -et 0.05 -r cubic
+        -co "COMPRESS=DEFLATE" -co "BIGTIFF=YES"
+        -tr {xres} {yres} -te {x_min} {y_min} {x_max} {y_max}
+        -t_srs "{proj4}" -srcnodata 0 -dstnodata 0
+        {gdalwarp_performance_opts}
+        ''')
+
 
 def print_usage():
     print("Usage: wv_to_s2.py path_to_input_wv {path_to_input_pan} path_to_baseline_s2 output_folder")
@@ -242,11 +262,8 @@ def wv_to_s2_coregister(path_to_input_wv, path_to_baseline_s2, output_folder, pa
         f_gcp_pan.close()
 
     if num_gcp > 5:
-        com_gdal_translate_prefix = f'gdal_translate -of VRT --optfile {os.path.join(output_folder, fname_gcp_ms)} ' \
-                                    f'-r cubic -a_srs "{proj4}" -a_nodata 0 '
-        com_gdalwarp_prefix = f'gdalwarp -overwrite -of GTiff -order 3 -et 0.05 -r cubic -co "COMPRESS=DEFLATE" ' \
-                              f'-tr {wv_xres} {wv_yres} -te {x_min} {y_min} {x_max} {y_max} ' \
-                              f'-t_srs "{proj4}" -srcnodata 0 -dstnodata 0 '
+        com_gdal_translate_prefix = gdal_translate_prefix(optfile=os.path.join(output_folder, fname_gcp_ms), proj4=proj4)
+        com_gdalwarp_prefix = gdalwarp_prefix(wv_xres, wv_yres, x_min, y_min, x_max, y_max, proj4)
 
         fname_vrt = f'{fname_wv[:-4]}_coreg.vrt'
         fname_out = f'{fname_wv[:-4]}_coreg.tif'
@@ -255,8 +272,7 @@ def wv_to_s2_coregister(path_to_input_wv, path_to_baseline_s2, output_folder, pa
 
         if (pan_to_coreg):
             fname_pan = os.path.basename(path_to_input_wv_pan)
-            com_gdal_translate_prefix = f'gdal_translate -of VRT --optfile {os.path.join(output_folder, fname_gcp_pan)} ' \
-                                         f'-r cubic -a_srs "{proj4}" -a_nodata 0 '
+
             # Parameters for PAN - we keep the same extent
             pan_xsize = pan_ds.RasterXSize
             pan_ysize = pan_ds.RasterYSize
@@ -274,9 +290,9 @@ def wv_to_s2_coregister(path_to_input_wv, path_to_baseline_s2, output_folder, pa
             pan_x_max = pan_lr_x
             pan_y_max = pan_ul_y
 
-            com_gdalwarp_prefix = f'gdalwarp -overwrite -of GTiff -order 3 -et 0.05 -r cubic -co "COMPRESS=DEFLATE" ' \
-                                  f'-tr {pan_xres} {pan_yres} -te {pan_x_min} {pan_y_min} {pan_x_max} {pan_y_max} ' \
-                                  f'-t_srs "{proj4}" -srcnodata 0 -dstnodata 0 '
+            com_gdal_translate_prefix = gdal_translate_prefix(optfile=os.path.join(output_folder, fname_gcp_pan), proj4=proj4)
+            com_gdalwarp_prefix = gdalwarp_prefix(pan_xres, pan_yres, pan_x_min, pan_y_min, pan_x_max, pan_y_max, proj4)
+
             fname_pan_vrt = f'{fname_pan[:-4]}_coreg.vrt'
             fname_pan_out = f'{fname_pan[:-4]}_coreg.tif'
             os.system(f'{com_gdal_translate_prefix} {path_to_input_wv_pan} {os.path.join(output_folder, fname_pan_vrt)}')

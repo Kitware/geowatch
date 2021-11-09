@@ -5,11 +5,12 @@ import shapely.geometry
 from copy import deepcopy
 from osgeo import gdal, osr
 from tempfile import NamedTemporaryFile
-import ubelt as ub
 import pystac
 
 from watch.utils.util_stac import parallel_map_items
-from watch.datacube.registration.wv_to_s2 import wv_to_s2_coregister
+from watch.datacube.registration.wv_to_s2 import (wv_to_s2_coregister,
+                                                  gdal_translate_prefix,
+                                                  gdalwarp_prefix)
 from watch.cli.wv_ortho import maps, associate_msi_pan
 
 
@@ -241,7 +242,8 @@ def _coreg_map(stac_item, outdir, baseline_s2_items, item_pairs_dct,
             out_ps_fpath, vrt_ps_fpath = build_fpaths(ps_fpath)
             fpaths['data_pansharpened'] = out_ps_fpath, vrt_ps_fpath
 
-            copy_coreg(ps_fpath, msi_fpath, vrt_msi_fpath, out_ps_fpath, vrt_ps_fpath)
+            copy_coreg(ps_fpath, msi_fpath, vrt_msi_fpath, out_ps_fpath,
+                       vrt_ps_fpath)
 
         # Update assets and error checking - coreg could have failed due to
         # not enough GCPs found
@@ -359,22 +361,15 @@ def copy_coreg(in_fpath, orig_fpath, vrt_fpath, out_fpath, out_vrt_fpath):
             with open(gcp_file.name, 'w') as f:
                 f.writelines([
                     f'-gcp {gcp.GCPPixel:.5f} {gcp.GCPLine:.5f} '
-                    f'{gcp.GCPX:.5f} {gcp.GCPY:.5f} 0 '
-                    for gcp in gcps
+                    f'{gcp.GCPX:.5f} {gcp.GCPY:.5f} 0 ' for gcp in gcps
                 ])
                 f.seek(0)
 
-            com_gdal_translate_prefix = ub.paragraph(f'''
-                gdal_translate -of VRT --optfile {gcp_file.name}
-                -r cubic -a_srs "{proj4}" -a_nodata 0
-                ''')
+            com_gdal_translate_prefix = gdal_translate_prefix(
+                gcp_file.name, proj4)
 
-            com_gdalwarp_prefix = ub.paragraph(f'''
-                gdalwarp -overwrite -of GTiff -order 3 -et 0.05 -r cubic
-                -co "COMPRESS=DEFLATE" -co "BIGTIFF=YES"
-                -tr {wv_xres} {wv_yres} -te {x_min} {y_min} {x_max} {y_max}
-                -t_srs "{proj4}" -srcnodata 0 -dstnodata 0
-                ''')
+            com_gdalwarp_prefix = gdalwarp_prefix(wv_xres, wv_yres, x_min,
+                                                  y_min, x_max, y_max, proj4)
 
             os.system(
                 f'{com_gdal_translate_prefix} {in_fpath} {out_vrt_fpath}')
