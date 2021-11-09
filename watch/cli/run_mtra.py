@@ -245,13 +245,26 @@ def apply_harmonization(
     return output_catalog
 
 
+def _item_has_cloudmask(stac_item):
+    # Ensure that the STAC item has a cloudmask (needed by MTRA)
+    for asset_name, asset in stac_item.assets.items():
+        asset_dict = asset.to_dict()
+        if('roles' in asset_dict and
+           'cloudmask' in asset_dict['roles']):
+            return True
+
+    return False
+
+
 def select_best_pairs(stac_items, num_pairs):
     landsat_items =\
         [item for item in stac_items
-         if item.properties.get('platform') in SUPPORTED_LS_PLATFORMS]
+         if(item.properties.get('platform') in SUPPORTED_LS_PLATFORMS and
+            _item_has_cloudmask(item))]
     sentinel_items =\
         [item for item in stac_items
-         if item.properties.get('platform') in SUPPORTED_S2_PLATFORMS]
+         if(item.properties.get('platform') in SUPPORTED_S2_PLATFORMS and
+            _item_has_cloudmask(item))]
 
     potential_pairs = []
     for ls_item, s2_item in itertools.product(landsat_items, sentinel_items):
