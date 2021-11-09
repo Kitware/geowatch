@@ -1751,9 +1751,6 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> dvc_dpath = find_smart_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
-        >>> # Create a sliding window object for each specific image (because they may
-        >>> # have different sizes, technically we could memoize this)
-        >>> import kwarray
         >>> window_overlap = 0.0
         >>> window_dims = (2, 128, 128)
         >>> keepbound = False
@@ -1763,14 +1760,28 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> positives = list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
         _ = xdev.profile_now(sample_video_spacetime_targets)(dset, window_dims, window_overlap)
 
+        >>> import os
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> from watch.utils.util_data import find_smart_dvc_dpath
+        >>> dvc_dpath = find_smart_dvc_dpath()
+        >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1/vali_data_wv.kwcoco.json'
+        >>> dset = kwcoco.CocoDataset(coco_fpath)
+        >>> window_overlap = 0.0
+        >>> window_dims = (2, 128, 128)
+        >>> keepbound = False
+        >>> exclude_sensors = None
+        >>> sample_grid = sample_video_spacetime_targets(dset, window_dims, window_overlap)
+        >>> time_sampling = 'hard+distribute'
+        >>> time_span = '2y'
+        >>> use_annot_info = True
+        >>> time_sampling = 'hard+distribute'
+        >>> positives = list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
+
     Example:
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> import ndsampler
         >>> import kwcoco
         >>> dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=30)
-        >>> # Create a sliding window object for each specific image (because they may
-        >>> # have different sizes, technically we could memoize this)
-        >>> import kwarray
         >>> window_overlap = 0.0
         >>> window_dims = (3, 96, 96)
         >>> keepbound = False
@@ -1911,6 +1922,18 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                     else:
                         # Hack: exclude all annotated regions from negative sampling
                         negative_idxs.append(len(targets))
+
+                # Reselect the keyframes if we are overlaping a nodata region?
+                # Or do that on the fly?
+                if 1 or False:
+                    for gid in gids:
+                        coco_img = dset.coco_image(gid)
+                        coco_img.channels
+                        part = coco_img.delay(space='video')
+                        cropped = part.crop(space_region)
+                        arr = cropped.finalize(as_xarray=True)
+                        if np.all(arr == 0):
+                            print("BLACK REGION")
 
                 targets.append({
                     'main_idx': main_idx,

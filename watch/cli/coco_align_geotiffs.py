@@ -163,6 +163,7 @@ import socket
 import ubelt as ub
 import dateutil.parser
 import pathlib
+import warnings
 from os.path import join, exists
 from watch.cli.coco_visualize_videos import _write_ann_visualizations2
 from watch.utils import util_gis
@@ -373,7 +374,7 @@ def main(cmdline=True, **kw):
             'timestamp': ub.timestamp(),
         }
     }
-    print('process_info = {}'.format(ub.repr2(process_info, nl=2)))
+    print('process_info = {}'.format(ub.repr2(process_info, nl=3)))
 
     src_fpath = config['src']
     dst = config['dst']
@@ -389,6 +390,8 @@ def main(cmdline=True, **kw):
     max_frames = config['max_frames']
 
     from watch.utils.lightning_ext import util_globals
+    from watch.utils import util_path
+    import pandas as pd
     max_workers = util_globals.coerce_num_workers(config['max_workers'])
     aux_workers = util_globals.coerce_num_workers(config['aux_workers'])
 
@@ -407,11 +410,20 @@ def main(cmdline=True, **kw):
     region_df = None
     if regions in {'annots', 'images'}:
         pass
-    elif exists(regions):
-        region_df = util_gis.read_geojson(regions)
-        region_df = region_df[region_df['type'] == 'region']
     else:
-        raise KeyError(regions)
+        # TODO: FIXME: I dont understand why this doesnt work
+        # when I pass the glob path to all the regions
+        # I need to use the merged region script. Very strange.
+        paths = util_path.coerce_patterned_paths(regions)
+        print('paths = {!r}'.format(paths))
+        if len(paths) == 0:
+            raise KeyError(regions)
+        parts = []
+        for fpath in paths:
+            df = util_gis.read_geojson(fpath)
+            df = df[df['type'] == 'region']
+            parts.append(df)
+        region_df = pd.concat(parts)
 
     # Load the dataset and extract geotiff metadata from each image.
     coco_dset = kwcoco.CocoDataset.coerce(src_fpath)
@@ -864,6 +876,7 @@ class SimpleDataCube(object):
                         df = pd.DataFrame(rows)
                         print('\n\n')
                         print(df)
+                    # Order the "main" image first here.
                     final_gids = [r['gid'] for r in sorted(rows, key=lambda r: r['score'], reverse=True)]
                     # hack
                     # final_gids = final_gids[:1]
@@ -1032,10 +1045,25 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
     has_base_image = img.get('file_name', None) is not None
     objs = [ub.dict_diff(obj, {'auxiliary'}) for obj in coco_img.iter_asset_objs()]
 
+    if 0:
+        for obj in objs:
+            print(ub.repr2(ub.dict_diff(obj, {
+                'warp_aux_to_img', 'geos_corners',
+                'wgs84_corners', 'wld_crs_info', 'utm_crs_info', 'warp_to_wld',
+                'utm_corners',
+            })))
+
     channels_to_objs = ub.ddict(list)
     for obj in objs:
         key = obj['channels']
-        assert key not in channels_to_objs
+        if key in channels_to_objs:
+            warnings.warn(ub.paragraph(
+                '''
+                It seems multiple auxiliary items in the parent image might
+                contain the same channel.  This script will try to work around
+                this, but that is not a valid kwcoco assumption.
+                '''))
+        # assert key not in channels_to_objs
         channels_to_objs[key].append(obj)
 
     for other_img in other_imgs:
@@ -1322,7 +1350,6 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
 
     duplicates = ub.find_duplicates(input_gpaths)
     if duplicates:
-        import warnings
         warnings.warn(ub.paragraph(
             '''
             Input to _aligncrop contained duplicate filepaths, the same image
@@ -1385,6 +1412,10 @@ def gdal_multi_warp(in_fpaths, out_fpath, space_box, utm_epsg_zone, rpcs=None):
 
 
 def gdal_single_warp(in_fpath, out_fpath, space_box, utm_epsg_zone, rpcs=None):
+    """
+    TODO:
+        - [ ] This should be a kwgeo function.
+    """
     # Data is from geo-pandas so this should be traditional order
     lonmin, latmin, lonmax, latmax = space_box.data[0]
 

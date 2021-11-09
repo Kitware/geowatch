@@ -226,3 +226,78 @@ python -m watch.tasks.fusion.fit \
          --vali_dataset=$VALI_FPATH \
          --test_dataset=$TEST_FPATH \
          --num_sanity_val_steps=0 
+
+
+
+##########################
+DVC_DPATH=${DVC_DPATH:-$HOME/data/dvc-repos/smart_watch_dvc}
+KWCOCO_BUNDLE_DPATH=${KWCOCO_BUNDLE_DPATH:-$DVC_DPATH/Drop1-Aligned-L1}
+
+prep_wv_expt(){
+    kwcoco subset --src $KWCOCO_BUNDLE_DPATH/train_data.kwcoco.json \
+            --dst $KWCOCO_BUNDLE_DPATH/train_data_wv.kwcoco.json \
+            --select_images '.sensor_coarse == "WV"'
+
+    kwcoco subset --src $KWCOCO_BUNDLE_DPATH/vali_data.kwcoco.json \
+            --dst $KWCOCO_BUNDLE_DPATH/vali_data_wv.kwcoco.json \
+            --select_images '.sensor_coarse == "WV"'
+
+    python -m watch visualize --src $KWCOCO_BUNDLE_DPATH/train_data_wv.kwcoco.json --viz_dpath $KWCOCO_BUNDLE_DPATH/_train_wv_viz
+    python -m watch visualize --src $KWCOCO_BUNDLE_DPATH/vali_data_wv.kwcoco.json --viz_dpath $KWCOCO_BUNDLE_DPATH/_vali_wv_viz
+}
+
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/train_data_wv.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/vali_data_wv.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/vali_data_wv.kwcoco.json
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop1_November2021
+ARCH=deit
+DVC_DPATH=${DVC_DPATH:-$HOME/data/dvc-repos/smart_watch_dvc}
+KWCOCO_BUNDLE_DPATH=${KWCOCO_BUNDLE_DPATH:-$DVC_DPATH/Drop1-Aligned-L1}
+CHANNELS="red|green|blue"
+EXPERIMENT_NAME=Saliency_${ARCH}_toothbrush_wv_s64_t3_v15
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
+#export CUDA_VISIBLE_DEVICES="1"
+python -m watch.tasks.fusion.fit \
+    --channels=${CHANNELS} \
+    --name=$EXPERIMENT_NAME \
+    --method="MultimodalTransformer" \
+    --arch_name=$ARCH \
+    --chip_size=64 \
+    --chip_overlap=0.0 \
+    --time_steps=3 \
+    --time_span=1y \
+    --diff_inputs=False \
+    --optimizer=AdamW \
+    --match_histograms=False \
+    --time_sampling=soft+distribute \
+    --attention_impl=exact \
+    --squash_modes=True \
+    --neg_to_pos_ratio=2.0 \
+    --global_class_weight=1.0 \
+    --global_change_weight=0.0 \
+    --global_saliency_weight=0.0001 \
+    --negative_change_weight=0.05 \
+    --change_loss='focal' \
+    --saliency_loss='focal' \
+    --class_loss='dicefocal' \
+    --normalize_inputs=1024 \
+    --max_epochs=140 \
+    --patience=140 \
+    --num_workers=5 \
+    --gpus=1  \
+    --batch_size=16 \
+    --accumulate_grad_batches=1 \
+    --learning_rate=1e-4 \
+    --weight_decay=1e-5 \
+    --dropout=0.1 \
+    --eval_after_fit=True \
+    --window_size=4 \
+    --default_root_dir=$DEFAULT_ROOT_DIR \
+    --num_draw=8 \
+       --package_fpath=$PACKAGE_FPATH \
+        --train_dataset=$TRAIN_FPATH \
+         --vali_dataset=$VALI_FPATH \
+         --test_dataset=$TEST_FPATH \
+         --num_sanity_val_steps=0 

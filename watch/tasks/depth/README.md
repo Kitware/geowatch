@@ -23,9 +23,14 @@ Usage:
 
 4. Run the prediction:
     ```
-    python -m watch.tasks.depth.predict \
-      --dataset /dvc/drop1/data.kwcoco.json \
-      --output /output/depth1.kwcoco.json \ 
-      --deployed /dvc/models/depth/weights_v1.pt
-    ```
+    # DVC_DPATH=/dvc
 
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc/
+    KWCOCO_BUNDLE=$DVC_DPATH/Drop1-Aligned-L1
+    KWCOCO_FPATH=$KWCOCO_BUNDLE/data.kwcoco.json
+
+    python -m watch.tasks.depth.predict \
+        --dataset  $KWCOCO_BUNDLE/data.kwcoco.json \
+        --output   $KWCOCO_BUNDLE/dzyne_depth/depth1.kwcoco.json \ 
+        --deployed $DVC_DPATH/models/depth/weights_v1.pt
+    ```

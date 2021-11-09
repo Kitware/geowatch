@@ -255,13 +255,13 @@ def main(cmdline=False, **kwargs):
                         catname = 'ignore'
                     elif status == 'positive_unbounded':
                         # Start or end date might not be defined.
-                        catname = 'ignore'
+                        catname = 'positive'
                     elif status == 'positive_pending':
                         # Does not have phase labels
-                        catname = 'ignore'
+                        catname = 'positive'
                     elif status == 'positive_partial':
                         # Might have phase labels
-                        catname = 'ignore'
+                        catname = 'positive'
                     elif status == 'positive_annotated':
                         # Has phase labels
                         assert catname is not None
@@ -315,6 +315,7 @@ def main(cmdline=False, **kwargs):
                             ann = {
                                 'image_id': gid,
                                 'segmentation_geos': poly,
+                                'status': status,
                                 'category_id': cid,
                                 'track_id': track_id,
                             }

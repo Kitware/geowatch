@@ -21,6 +21,7 @@ import kwcoco
 import kwimage
 import pathlib
 import scriptconfig as scfg
+import numpy as np
 import ubelt as ub
 
 
@@ -74,6 +75,8 @@ class CocoVisualizeConfig(scfg.Config):
         # TODO: better support for this
         # TODO: use the kwcoco_video_data, has good logic for this
         'zoom_to_tracks': scfg.Value(False, type=str, help='if True, zoom to tracked annotations. Experimental, might not work perfectly yet.'),
+
+        'norm_over_time': scfg.Value(False, help='if True, normalize data over time'),
     }
 
 
@@ -148,6 +151,58 @@ def main(cmdline=True, **kwargs):
         video_names.append(video['name'])
 
         gids = coco_dset.index.vidid_to_gids[vidid]
+
+        norm_over_time = config['norm_over_time']
+        print('norm_over_time = {!r}'.format(norm_over_time))
+        if not norm_over_time:
+            chan_to_normalizer = None
+        else:
+            coco_images = [coco_dset.coco_image(gid) for gid in gids]
+
+            # quick and dirty:
+            # Find the first image for each visualization channel
+            # to use as the normalizer.
+            # Probably better to use multiple images from the sequence
+            # to do normalization
+            if channels is None:
+                requested_channels = kwcoco.ChannelSpec.coerce(channels).fuse().as_set()
+            else:
+                requested_channels = set()
+                for coco_img in coco_images:
+                    code = coco_img.channels.fuse().as_set()
+                    requested_channels.update(code)
+
+            chan_to_ref_imgs = {}
+            for code in requested_channels:
+                chan_to_ref_imgs[code] = []
+
+            _remain = requested_channels.copy()
+            for coco_img in coco_images:
+                imghas = coco_img.channels.fuse().as_set()
+                common = imghas & _remain
+                for c in common:
+                    chan_to_ref_imgs[c].append(coco_img)
+
+            from watch.utils import util_kwarray
+            chan_to_normalizer = {}
+            for chan, coco_imgs in chan_to_ref_imgs.items():
+                s = max(1, len(coco_imgs) // 10)
+                obs = []
+                for coco_img in coco_imgs[::s]:
+                    rawdata = coco_img.delay(channels=chan).finalize()
+                    mask = rawdata != 0
+                    obs.append(rawdata[mask].ravel())
+                allobs = np.hstack(obs)
+                normalizer = util_kwarray.find_robust_normalizers(allobs, params={
+                    'high': 0.90,
+                    'mid': 0.5,
+                    'low': 0.01,
+                    # 'mode': 'linear',
+                    'mode': 'sigmoid',
+                })
+                chan_to_normalizer[chan] = normalizer
+            print('chan_to_normalizer = {}'.format(ub.repr2(chan_to_normalizer, nl=1)))
+
         if config['zoom_to_tracks']:
             assert space == 'video'
             tid_to_info = video_track_info(coco_dset, vidid)
@@ -172,7 +227,8 @@ def main(cmdline=True, **kwargs):
                     pool.submit(_write_ann_visualizations2,
                                 coco_dset, img, anns, track_dpath, space=space,
                                 channels=channels, vid_crop_box=vid_crop_box,
-                                _header_extra=_header_extra)
+                                _header_extra=_header_extra,
+                                chan_to_normalizer=chan_to_normalizer)
 
         else:
             gid_subset = gids[start_frame:end_frame]
@@ -184,7 +240,8 @@ def main(cmdline=True, **kwargs):
                             coco_dset, img, anns, sub_dpath, space=space,
                             channels=channels,
                             draw_imgs=config['draw_imgs'],
-                            draw_anns=config['draw_anns'], _header_extra=None)
+                            draw_anns=config['draw_anns'], _header_extra=None,
+                            chan_to_normalizer=chan_to_normalizer)
 
         for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):
             job.result()
@@ -243,7 +300,8 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                vid_crop_box=None,
                                request_grouped_bands='default',
                                draw_imgs=True,
-                               draw_anns=True, _header_extra=None):
+                               draw_anns=True, _header_extra=None,
+                               chan_to_normalizer=None):
     """
     Dumps an intensity normalized "space-aligned" kwcoco image visualization
     (with or without annotation overlays) for specific bands to disk.
@@ -342,8 +400,9 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         dets = dets.translate(ann_shift)
         delayed = delayed.crop(crop_box.to_slices()[0])
 
-    for chan_group in chan_groups:
-        chan_group = chan_group.spec
+    for chan_group_obj in chan_groups:
+        chan_list = chan_group_obj.parsed
+        chan_group = chan_group_obj.spec
 
         # spec = str(chan.channels.spec)
         img_chan_dpath = img_view_dpath / chan_group
@@ -362,12 +421,28 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             chan = util_delayed_poc.DelayedChannelConcat([delayed]).take_channels(chan_group)
 
         canvas = chan.finalize()
-        canvas = normalize_intensity(canvas, nodata=0, params={
-            'high': 0.90,
-            'mid': 0.5,
-            'low': 0.01,
-            'mode': 'linear',
-        })
+        # import kwarray
+        # kwarray.atleast_nd(canvas, 3)
+
+        if chan_to_normalizer is None:
+            canvas = normalize_intensity(canvas, nodata=0, params={
+                'high': 0.90,
+                'mid': 0.5,
+                'low': 0.01,
+                'mode': 'linear',
+            })
+        else:
+            from watch.utils import util_kwarray
+            import numpy as np
+            new_parts = []
+            for cx, c in enumerate(chan_list):
+                normalizer = chan_to_normalizer[c]
+                data = canvas[..., cx]
+                mask = (data != 0)
+                p = util_kwarray.apply_normalizer(data, normalizer, mask=mask)
+                new_parts.append(p)
+            canvas = np.stack(new_parts, axis=2)
+
         canvas = util_kwimage.ensure_false_color(canvas)
 
         if len(canvas.shape) > 2 and canvas.shape[2] > 4:

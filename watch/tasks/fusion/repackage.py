@@ -20,12 +20,14 @@ def repackage(checkpoint_fpath):
     import torch
     import ubelt as ub
     import pathlib
+    import os
     import yaml
     # For now there is only one model, but in the future we will need
     # some sort of modal switch to package the correct metadata
     from watch.tasks.fusion import methods
     # If we have a checkpoint path we can load it if we make assumptions
     # init method from checkpoint.
+    checkpoint_fpath = os.fspath(checkpoint_fpath)
     checkpoint = torch.load(checkpoint_fpath)
     print(list(checkpoint.keys()))
     hparams = checkpoint['hyper_parameters']
@@ -72,6 +74,53 @@ def repackage(checkpoint_fpath):
     return package_fpath
 
 
+def gather_checkpoints():
+    """
+    Hack function to move all checkpoints into a directory for evaluation
+    """
+    from watch.utils import util_data
+    dvc_dpath = util_data.find_smart_dvc_dpath()
+    train_base = dvc_dpath / 'training'
+    dataset_names = [
+        'Drop1_October2021',
+        'Drop1_November2021',
+    ]
+    user_machine_dpaths = list(train_base.glob('*/*'))
+
+    all_checkpoint_paths = []
+    for um_dpath in user_machine_dpaths:
+        for dset_name in dataset_names:
+            dset_dpath = um_dpath / dset_name
+            lightning_log_dpaths = list((dset_dpath / 'runs').glob('*/lightning_logs'))
+            for ll_dpath in lightning_log_dpaths:
+                for checkpoint_fpath in list((ll_dpath).glob('*/checkpoints/*.ckpt')):
+                    parts = checkpoint_fpath.name.split('-')
+                    if int(parts[0].split('epoch=')[1]) > 10 and parts[-1].startswith('step='):
+                        print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
+                        all_checkpoint_paths.append(checkpoint_fpath)
+
+    unevaled_dpath = dvc_dpath / 'models/fusion/unevaluated'
+    unevaled_dpath.mkdir(exist_ok=True, parents=True)
+
+    import ubelt as ub
+    import shutil
+    for p in ub.ProgIter(all_checkpoint_paths):
+        package_fpath = repackage(p)
+        package_fpath = pathlib.Path(package_fpath)
+        name = package_fpath.name.split('_epoch')[0]
+        name_dpath = unevaled_dpath / name
+        name_dpath.mkdir(exist_ok=True, parents=True)
+        shutil.copy(package_fpath, name_dpath)
+
+
+    import os
+    for r, ds, fs in os.walk(train_base):
+        if r.endswith('/lightning_logs'):
+            print('r = {!r}'.format(r))
+            break
+        pass
+
+
 if __name__ == '__main__':
     """
     CommandLine:
@@ -87,6 +136,11 @@ if __name__ == '__main__':
         python -m watch.tasks.fusion.repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=43-step=23187.ckpt
 
         python -m watch.tasks.fusion.repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_raw_v001/lightning_logs/version_1/checkpoints/epoch=145-step=76941.ckpt
+
+
+        DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+        ls $DVC_DPATH/training/*/*/Drop1_October2021/runs/*/lightning_logs
+
 
 
     """

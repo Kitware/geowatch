@@ -56,6 +56,7 @@ CATEGORIES = [
     {'name': 'Unknown', 'color': 'blueviolet'},
     {'name': 'ignore', 'color': 'slategray'},
     {'name': 'negative', 'color': 'orangered'},
+    {'name': 'positive', 'color': 'olive'},
 ]
 
 
