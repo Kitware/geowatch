@@ -449,6 +449,24 @@ def normalize_phases(coco_dset):
     '''
     Convert internal representation of phases to their IARPA standards
     as well as inserting a baseline guess for activity classification
+
+    Example:
+        >>> # test baseline guess
+        >>> from watch.tasks.tracking.normalize import normalize_phases
+        >>> from watch.demo.smart_kwcoco_demodata import \
+        >>>     demo_kwcoco_with_heatmaps
+        >>> dset = demo_kwcoco_with_heatmaps()
+        >>> dset.cats[1]['name'] = 'salient'
+        >>> dset.remove_categories([2,3])
+        >>> assert dset.cats == {1: {'id': 1, 'name': 'salient'}}
+        >>> # HACK, this shouldn't be needed?
+        >>> # TODO file bug report
+        >>> dset._build_index()
+        >>> dset = normalize_phases(dset)
+        >>> assert dset.categories(dset.annots().category_id).name == \
+        >>>     ((['Site Preparation'] * 10) +
+        >>>      (['Active Construction'] * 9) +
+        >>>       ['Post Construction'])
     '''
     # TODO: were these used by some toydata? They aren't in the real files.
     # TODO: if we are hardcoding names we should have some constants file
@@ -492,18 +510,22 @@ def normalize_phases(coco_dset):
                            [ix_to_cid[int(ix)] for ix in np.round(interp)])
             # else, predict site prep for the first half of the track and then
             # active construction for the second half
+            # with post construction on the last frame
             else:
-                print('Only got change IDs, assigning baseline activity labels')
-                gids_first_half, _ = np.array_split(
+                print(
+                    'Only got change IDs, assigning baseline activity labels')
+                gids_first_half, gids_second_half = np.array_split(
                     np.array(
                         coco_dset.index._set_sorted_by_frame_index(
                             coco_dset.annots(trackid=trackid).gids)), 2)
                 siteprep_cid = coco_dset.name_to_cat['Site Preparation']['id']
                 active_cid = coco_dset.name_to_cat['Active Construction']['id']
-                annots.set('category_id', [
-                    siteprep_cid if gid in gids_first_half else active_cid
-                    for gid in annots.gids
-                ])
+                post_cid = coco_dset.name_to_cat['Post Construction']['id']
+                gids = np.array(annots.gids)
+                cids = np.where([g in gids_first_half for g in gids],
+                                siteprep_cid, active_cid)
+                cids = np.where(gids == gids_second_half[-1], post_cid, cids)
+                annots.set('category_id', cids)
 
     return coco_dset
 
