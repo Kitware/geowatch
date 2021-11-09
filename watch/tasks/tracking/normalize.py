@@ -169,6 +169,54 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
 
     Sources:
         [1] https://pypi.org/project/geojson/#default-and-custom-precision
+
+    Example:
+        >>> import kwimage
+        >>> from copy import deepcopy
+        >>> from watch.tasks.tracking.normalize import remove_small_annots
+        >>> from watch.demo.smart_kwcoco_demodata import \
+        >>>     demo_kwcoco_with_heatmaps
+        >>> dset = demo_kwcoco_with_heatmaps()
+        >>> # This dset has 1 video with all images the same size
+        >>> # For testing, resize one of the images so there is a meaningful
+        >>> # difference between img space and vid space
+        >>> scale_factor = 0.5
+        >>> aff = kwimage.Affine.coerce({'scale': scale_factor})
+        >>> img = dset.imgs[1]
+        >>> img['width'] *= scale_factor
+        >>> img['height'] *= scale_factor
+        >>> img['warp_img_to_vid']['scale'] = 1/scale_factor
+        >>> for aux in img['auxiliary']:
+        >>>     aux['warp_aux_to_img']['scale'] = aux['warp_aux_to_img'].get(
+        >>>         'scale', 1) * scale_factor
+        >>> annots = dset.annots(gid=img['id'])
+        >>> old_annots = deepcopy(annots)
+        >>> dets = annots.detections.warp(aff)
+        >>> # TODO this doesn't handle keypoints, and is rather brittle, is
+        >>> # there a way to simply do something like:
+        >>> #    annots.detections = annot.detections.warp(w)
+        >>> annots.set('bbox', dets.boxes.to_coco(style='new'))
+        >>> annots.set('segmentation', dets.data['segmentations'].to_coco(
+        >>>     style='new'))
+        >>> # test that scaling worked
+        >>> assert np.all(annots.boxes.area < old_annots.boxes.area)
+        >>> assert np.all(annots.boxes.warp(aff.inv()).area ==
+        >>>     old_annots.boxes.area)
+        >>> # test that remove_small_annots no-ops with no threshold
+        >>> # (ie there are no invalid annots here)
+        >>> assert dset.n_annots == remove_small_annots(deepcopy(dset),
+        >>>     min_area_px=0, min_geo_precision=None).n_annots
+        >>> # test that annots can be removed
+        >>> assert remove_small_annots(deepcopy(dset), min_area_px=1e99,
+        >>>     min_geo_precision=None).n_annots == 0
+        >>> # test that annotations are filtered in video space
+        >>> # pick a threshold above the img annot size and below the vid
+        >>> # annot size; annot should not be removed
+        >>> thresh = annots.boxes.area[0] + 1
+        >>> assert annots.aids[0] in remove_small_annots(deepcopy(dset),
+        >>>     min_area_px=thresh, min_geo_precision=None).annots(
+        >>>         gid=img['id']).aids
+        >>> # TODO test min_geo_precision
     '''
     def remove_annotations(coco_dset, remove_fn):
         # TODO merge into kwcoco?
@@ -178,21 +226,49 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
             coco_dset.remove_annotations(list(empty_aids))
         return coco_dset
 
+    def as_video(annots, coco_dset):
+        # gets bboxes and polygons in video space
+        # TODO are there vectorized versions of these functions?
+        # ideally, annots.detections.warp(list_of_affines)
+
+        # separate into lists
+        boxes = annots.detections.boxes
+        box_fmt = boxes.format
+        boxes = [kwimage.Boxes([box], box_fmt) for box in boxes.data]
+        polys = annots.detections.data['segmentations'].to_polygon_list()
+        warps = [
+            kwimage.Affine.coerce(aff)
+            for aff in coco_dset.images(annots.gids).get(
+                'warp_img_to_vid', None)
+        ]
+
+        # apply warping
+        boxes = [b.warp(w) for b, w in zip(boxes, warps)]
+        polys = [p.warp(w) for p, w in zip(polys, warps)]
+
+        # put them back together
+        boxes = kwimage.Boxes(np.concatenate([box.data for box in boxes]),
+                              box_fmt)
+        polys = kwimage.PolygonList(polys)
+
+        return boxes, polys
+
     #
     # 1.
     #
 
     def are_invalid(annots):
-        def _is_valid(poly):
+        def _is_invalid(poly):
             try:
-                return poly.to_shapely().is_valid
+                # TODO split out polys with invalid subsets
+                # ex. https://gis.stackexchange.com/a/321804
+                shp_poly = poly.to_shapely().buffer(0)
+                return shp_poly.area == 0 or not shp_poly.is_valid
             except ValueError:
-                return False
+                return True
 
-        return list(
-            map(lambda area, poly: area == 0 or not _is_valid(poly),
-                annots.detections.data['boxes'].area.sum(axis=1),
-                annots.detections.data['segmentations'].to_polygon_list()))
+        _, polys = as_video(annots, coco_dset)
+        return list(map(_is_invalid, polys))
 
     coco_dset = remove_annotations(coco_dset, are_invalid)
 
@@ -203,8 +279,8 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
     if min_area_px is not None and min_area_px > 0:
 
         def are_small(annots):
-            return annots.detections.data['boxes'].area.sum(
-                axis=1) < min_area_px
+            boxes, _ = as_video(annots, coco_dset)
+            return boxes.area.sum(axis=1) < min_area_px
 
         coco_dset = remove_annotations(coco_dset, are_small)
 
