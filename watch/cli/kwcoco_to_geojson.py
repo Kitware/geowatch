@@ -310,6 +310,8 @@ def main(args):
     parser = argparse.ArgumentParser(
         description="Convert KWCOCO to IARPA GeoJSON")
     parser.add_argument("--in_file", help="Input KWCOCO to convert")
+    parser.add_argument("--in_file_gt", default=None, help="GT KWCOCO file used for visualizations")
+    parser.add_argument("--in_file_sc", default=None, help="KWCOCO file with SC prediction heatmaps")
     parser.add_argument(
         "--out_dir",
         help="Output directory where GeoJSON files will be written")
@@ -328,6 +330,16 @@ def main(args):
     # Read the kwcoco file
     coco_dset = kwcoco.CocoDataset(args.in_file)
 
+    if args.in_file_gt is not None:
+        gt_dset = kwcoco.CocoDataset(args.in_file_gt)
+    else:
+        gt_dset = None
+
+    if args.in_file_sc is not None:
+        coco_dset_sc = kwcoco.CocoDataset(args.in_file_sc)
+    else:
+        coco_dset_sc = None
+
     # Normalize
     if args.track_fn is None:
         # no-op function
@@ -337,7 +349,9 @@ def main(args):
 
     coco_dset = watch.tasks.tracking.normalize.normalize(coco_dset,
                                                          track_fn=track_fn,
-                                                         overwrite=False)
+                                                         overwrite=False,
+                                                         gt_dset=gt_dset,
+                                                         coco_dset_sc=coco_dset_sc)
 
     # Convert kwcoco to sites
     sites = convert_kwcoco_to_iarpa(coco_dset, args.region_id)
