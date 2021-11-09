@@ -83,7 +83,34 @@ def get_poly_response(poly, dset, gid, key):
     return response
 
 
+def get_poly_response_sc(poly, dset, gid, key):
+    """
+    Find average respons of a heatmap within a polygon
+    """
+    img = dset.index.imgs[gid]
+    coco_img = kwcoco_extensions.CocoImage(img, dset)
+    zeros = np.zeros_like(coco_img.delay(coco_img.channels.fuse()[0], space='video').finalize()).astype('float32')
+    fg_img_probs = zeros.copy()
+    for k in key:
+        k2 = kwcoco.FusedChannelSpec.coerce(k)
+        common = kwcoco.FusedChannelSpec.coerce(coco_img.channels.fuse()).intersection(k2)
+        if len(k2) == len(common):
+            img_probs = coco_img.delay(k, space='video').finalize()
+            fg_img_probs += img_probs
+
+    prob_map = fg_img_probs[:, :, 0]
+
+    poly_mask = poly.to_mask(prob_map.shape).numpy().data
+
+    response = (poly_mask * prob_map).mean()
+    return response
+
+
 def get_poly_time_ind(scored_polys, threshold, dset, vidid, key, reverse=False):
+    """
+    Given a set of polygons, compute index of the first match of a polygon
+    with a mask; mask is computed by comparing heatmaps with threshold.
+    """
     gids = dset.index.vidid_to_gids[vidid]
 
     poly_started = set()
@@ -94,7 +121,6 @@ def get_poly_time_ind(scored_polys, threshold, dset, vidid, key, reverse=False):
     if reverse:
         gids = list(reversed(gids))
 
-    print('key', key)
     for image_ind, gid in enumerate(gids):
         img = dset.index.imgs[gid]
         coco_img = kwcoco_extensions.CocoImage(img, dset)
@@ -138,7 +164,8 @@ def time_aggregated_polys(coco_dset,
                           key='salient',
                           bg_key=None,
                           time_filtering=False,
-                          response_filtering=False
+                          response_filtering=False,
+                          return_only_polys=False
                           ):
     '''
     Track function.
@@ -255,7 +282,8 @@ def time_aggregated_polys(coco_dset,
             gids = coco_dset.index.vidid_to_gids[vidid]
             for image_ind, gid in enumerate(gids):
                 response = get_poly_response(vid_poly, coco_dset, gid, key)
-                responses[track_id-1].append(response)
+                #response = get_poly_response_sc(vid_poly, coco_dset, gid, key)
+                responses[track_id - 1].append(response)
         scored_polys = list(filter_polys_response(scored_polys, responses, response_thresh=0.0002)) #0.0005
         print('after filtering based on per-polygon response', len(scored_polys))
 
@@ -263,6 +291,11 @@ def time_aggregated_polys(coco_dset,
         vidid = list(coco_dset.index.videos)[0]
         poly_start_ind = get_poly_time_ind(scored_polys, thresh, coco_dset, vidid, key)
         poly_end_ind = get_poly_time_ind(scored_polys, thresh, coco_dset, vidid, key, reverse=True)
+
+    if return_only_polys:
+        if time_filtering:
+            return coco_dset, scored_polys, poly_start_ind, poly_end_ind
+        return coco_dset, scored_polys
 
     # Add each polygon to every images as a track
     new_trackids = kwcoco_extensions.TrackidGenerator(coco_dset)
@@ -313,12 +346,80 @@ def time_aggregated_polys(coco_dset,
 
     return coco_dset
 
+def get_poly_labels_from_SC(coco_dset, scored_polys, coco_dset_sc, thresh, key, bg_key=None, time_filtering=False, poly_start_ind=None, poly_end_ind=None):
+    # for backwards compatibility
+    if isinstance(key, str):
+        key = [key]
+    if bg_key is None:
+        bg_key = []
+    elif isinstance(bg_key, str):
+        bg_key = [bg_key]
+
+    # error checking
+    if len(key) < 1:
+        raise ValueError('must have at least one key')
+    if (len(key) > len(set(key)) or len(bg_key) > len(set(bg_key))):
+        raise ValueError('keys are duplicated')
+    if not set(key).isdisjoint(set(bg_key)):
+        raise ValueError('cannot have a key in foreground and background')
+    _all_keys = set(key + bg_key)
+
+    # Add each polygon to every images as a track
+    new_trackids = kwcoco_extensions.TrackidGenerator(coco_dset)
+
+    for vid_poly, score in scored_polys:
+        track_id = next(new_trackids)
+        # import xdev; xdev.embed()
+        for image_ind, (gid, img) in enumerate(coco_dset_sc.imgs.items()):
+
+            save_this_polygon = False
+            if time_filtering:
+                if (image_ind > poly_start_ind[image_ind] and image_ind < poly_end_ind[image_ind]):
+                    save_this_polygon = True
+            else:
+                save_this_polygon = True
+
+            if save_this_polygon:
+                # assign category (key) from max score
+                coco_img = kwcoco_extensions.CocoImage(img, coco_dset_sc)
+                if score > thresh or len(bg_key) == 0:
+                    cand_keys = key
+                else:
+                    cand_keys = bg_key
+                cand_scores = []
+                for k in cand_keys:
+                    if k in coco_img.channels:
+                        img_probs = coco_img.delay(k, space='video').finalize()
+                        cand_scores.append(_score(vid_poly, img_probs))
+                    else:
+                        cand_scores.append(0)
+
+                #cat_name = np.max(cand_keys, where=cand_scores)
+                cat_name = cand_keys[np.argmax(cand_scores)]
+                cid = coco_dset.ensure_category(cat_name)
+
+                vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
+                img_from_vid = vid_from_img.inv()
+
+                # Transform the video polygon into image space
+                img_poly = vid_poly.warp(img_from_vid)
+                bbox = list(img_poly.bounding_box().to_coco())[0]
+                # Add the polygon as an annotation on the image
+                coco_dset.add_annotation(image_id=gid,
+                                         category_id=cid,
+                                         bbox=bbox,
+                                         segmentation=img_poly,
+                                         score=score,
+                                         track_id=track_id)
+
+    return coco_dset
 
 def time_aggregated_polys_bas(coco_dset,
-                              thresh=0.3,
+                              thresh=0.2,
                               morph_kernel=3,
                               time_filtering=False,
-                              response_filtering=True):
+                              response_filtering=False,
+                              coco_dset_sc=None):
     '''
     Wrapper for BAS that looks for change heatmaps.
     '''
@@ -335,10 +436,12 @@ def time_aggregated_polys_bas(coco_dset,
 
 
 def time_aggregated_polys_sc(coco_dset,
-                             thresh=0.2,
+                             thresh=0.1,
                              morph_kernel=3,
                              bg_thresh=True,
-                             time_filtering=False):
+                             time_filtering=False,
+                             response_filtering=False,
+                             coco_dset_sc=None):
     '''
     Wrapper for Site Characterization that looks for phase heatmaps.
 
@@ -368,3 +471,48 @@ def time_aggregated_polys_sc(coco_dset,
                                          'Post Construction', 'No Activity'
                                      ],
                                      time_filtering=time_filtering)
+
+
+def time_aggregated_polys_hybrid(coco_dset,
+                                 coco_dset_sc,
+                                 thresh=0.3,
+                                 morph_kernel=3,
+                                 time_filtering=True,
+                                 response_filtering=True):
+    '''
+    This method uses predictions from a BAS model to generate polygons.
+    Predicted heatmaps from a Site Charachterization model are used to assign
+    activity label to every polygon.
+    coco_dset: KWCOCO file with BAS predictions
+    coco_dset_sc: KWCOCO file with site characterization predictions
+
+    '''
+    return_tuple = time_aggregated_polys(coco_dset,
+                                         thresh,
+                                         morph_kernel,
+                                         key=['salient'],
+                                         time_filtering=time_filtering,
+                                         response_filtering=response_filtering,
+                                         return_only_polys=True)
+    if time_filtering:
+        coco_dset, scored_polys, poly_start_ind, poly_end_ind = return_tuple
+    else:
+        coco_dset, scored_polys = return_tuple
+        poly_start_ind = None
+        poly_end_ind = None
+
+    coco_dset = get_poly_labels_from_SC(coco_dset,
+                                        scored_polys,
+                                        coco_dset_sc,
+                                        thresh,
+                                        key=[
+                                            'Site Preparation',
+                                            'Active Construction',
+                                            'Post Construction'
+                                        ],
+                                        bg_key=['No Activity'],
+                                        time_filtering=time_filtering,
+                                        poly_start_ind=poly_start_ind,
+                                        poly_end_ind=poly_end_ind)
+
+    return coco_dset
