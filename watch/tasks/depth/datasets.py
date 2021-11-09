@@ -3,12 +3,12 @@ from torchvision import transforms
 
 from .demo_transform import Normalize, ToTensor, ToNumpy
 from .dzyne_img_util import normalizeRGB
-from ..landcover.datasets import CocoTorchDataset
+from ..landcover.datasets import _CocoTorchDataset
 
 WV_CHANNELS = "coastal|blue|green|yellow|red|red-edge|near-ir1|near-ir2"
 
 
-class WVRgbDataset(CocoTorchDataset):
+class WVRgbDataset(_CocoTorchDataset):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
