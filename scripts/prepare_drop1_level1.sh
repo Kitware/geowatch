@@ -25,7 +25,7 @@ python -m watch.cli.merge_region_models \
 # (makes running the align script faster)
 python -m watch add_fields \
     --src $UNSTRUCTURED_KWCOCO_BUNDLE/data.kwcoco.json \
-    --dst $UNSTRUCTURED_KWCOCO_BUNDLE/data.kwcoco.json --overwrite=warp --workers=avail
+    --dst $UNSTRUCTURED_KWCOCO_BUNDLE/data.feilded.kwcoco.json --overwrite=warp --workers=avail
 
 
 REGION_FPATH="$UNSTRUCTURED_KWCOCO_BUNDLE/all_regions.geojson" 
@@ -40,12 +40,9 @@ python -m watch align \
     --src $UNSTRUCTURED_KWCOCO_BUNDLE/data.kwcoco.json \
     --dst $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json \
     --regions "$REGION_FPATH" \
-    --rpc_align_method orthorectify \
-    --context_factor=1 \
-    --skip_geo_preprop True \
     --keep img \
-    --max_workers="avail/2" \
-    --aux_workers=2 
+    --workers="avail/2" 
+    --aux_workers="2" 
 
 
 python -m watch project \

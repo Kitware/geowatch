@@ -208,8 +208,9 @@ class CocoAlignGeotiffConfig(scfg.Config):
 
         'dst': scfg.Value(None, help='bundle directory or kwcoco json file for the output'),
 
-        'max_workers': scfg.Value(4, help='number of parallel procs'),
-        'aux_workers': scfg.Value(4, help='additional inner threads for aux imgs'),
+        'workers': scfg.Value(4, help='number of parallel procs'),
+        'max_workers': scfg.Value(None, help='DEPRECATED USE workers'),
+        'aux_workers': scfg.Value(0, help='additional inner threads for aux imgs'),
 
         'context_factor': scfg.Value(1.0, help=ub.paragraph(
             '''
@@ -408,8 +409,17 @@ def main(cmdline=True, **kw):
     from watch.utils.lightning_ext import util_globals
     from watch.utils import util_path
     import pandas as pd
-    max_workers = util_globals.coerce_num_workers(config['max_workers'])
+    if config['max_workers'] is not None:
+        max_workers = util_globals.coerce_num_workers(config['max_workers'])
+    else:
+        max_workers = util_globals.coerce_num_workers(config['workers'])
+
+    # if config['aux_workers'] == 'auto':
+    #     aux_workers = 2 if max_workers > 0 else 0
+    # else:
     aux_workers = util_globals.coerce_num_workers(config['aux_workers'])
+    print('max_workers = {!r}'.format(max_workers))
+    print('aux_workers = {!r}'.format(aux_workers))
 
     dst = pathlib.Path(ub.expandpath(dst))
     # TODO: handle this coercion of directories or bundles in kwcoco itself

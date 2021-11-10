@@ -103,6 +103,7 @@ def main(**kwargs):
     overwrite = config['overwrite']
     default_gsd = config['default_gsd']
     workers = util_globals.coerce_num_workers(config['workers'])
+    print('workers = {!r}'.format(workers))
 
     kwcoco_extensions.populate_watch_fields(
         dset, target_gsd=target_gsd, overwrite=overwrite,
