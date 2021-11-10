@@ -421,7 +421,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
         if len(chan_pname) > 10:
             # Hack to prevent long names for docker (limit is 242 chars)
-            num_bands = kwcoco.FusedChannelSpec.coerce(chan_code).numel()
+            num_bands = kwcoco.FusedChannelSpec.coerce(chan_group).numel()
             chan_pname2 = '{}_{}'.format(ub.hash_data(chan_pname, base='abc')[0:8], num_bands)
         else:
             chan_pname2 = chan_pname

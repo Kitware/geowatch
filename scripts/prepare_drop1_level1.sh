@@ -39,7 +39,8 @@ python -m watch align \
     --dst $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json \
     --regions "$REGION_FPATH" \
     --keep img \
-    --workers="avail/2" 
+    --exclude_sensors=WV \
+    --workers="avail/2" \
     --aux_workers="2" 
 
 python -m watch project \

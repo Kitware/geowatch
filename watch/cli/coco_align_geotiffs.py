@@ -126,7 +126,7 @@ Notes:
         --context_factor=1 \
         --visualize=False \
         --skip_geo_preprop True \
-        --sensor_filter=WV \
+        --include_sensors=WV \
         --keep img
 
 
@@ -265,7 +265,8 @@ class CocoAlignGeotiffConfig(scfg.Config):
         'skip_geo_preprop': scfg.Value(False, help='DEPRECATED use geo_preop instead'),
         'geo_preprop': scfg.Value('auto', help='force if we check geo properties or not'),
 
-        'sensor_filter': scfg.Value(None, help='if specified can be comma separated valid sensors'),
+        'include_sensors': scfg.Value(None, help='if specified can be comma separated valid sensors'),
+        'exclude_sensors': scfg.Value(None, help='if specified can be comma separated invalid sensors'),
 
         'target_gsd': scfg.Value(10, help=ub.paragraph('initial gsd to use for the output video files')),
 
@@ -455,11 +456,19 @@ def main(cmdline=True, **kw):
     # Load the dataset and extract geotiff metadata from each image.
     coco_dset = kwcoco.CocoDataset.coerce(src_fpath)
 
-    if config['sensor_filter'] is not None:
-        valid_sensors = config['sensor_filter'].split(',')
+    if config['include_sensors'] is not None:
+        valid_sensors = set(config['include_sensors'].split(','))
         valid_images = coco_dset.images()
         have_sensors = valid_images.lookup('sensor_coarse')
         flags = [s in valid_sensors for s in have_sensors]
+        valid_images = valid_images.compress(flags)
+        coco_dset = coco_dset.subset(list(valid_images))
+
+    if config['exclude_sensors'] is not None:
+        invalid_sensors = set(config['exclude_sensors'].split(','))
+        valid_images = coco_dset.images()
+        have_sensors = valid_images.lookup('sensor_coarse')
+        flags = [s not in invalid_sensors for s in have_sensors]
         valid_images = valid_images.compress(flags)
         coco_dset = coco_dset.subset(list(valid_images))
 
