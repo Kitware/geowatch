@@ -13,7 +13,7 @@ mkinit -m watch --lazy --noattr -w
 
 AUTO_WATCH_HACK_IMPORT_ORDER = [
     'pyproj',
-    'osgeo',
+    'gdal',
     # 'geopandas',
 ]
 
@@ -21,7 +21,7 @@ WATCH_HACK_IMPORT_ORDER = os.environ.get('WATCH_HACK_IMPORT_ORDER', 'auto')
 
 
 def _imoprt_hack(modname):
-    if modname == 'osgeo':
+    if modname == 'gdal':
         from osgeo import gdal as module
     elif modname == 'pyproj':
         import pyproj as module
@@ -34,6 +34,10 @@ def _imoprt_hack(modname):
         import fiona as module
     elif modname == 'pygeos':
         import pygeos as module
+    elif modname == 'torch':
+        import torch as module
+    elif modname == 'numpy':
+        import numpy as module
     else:
         raise KeyError(modname)
     return module
