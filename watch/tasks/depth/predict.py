@@ -74,7 +74,9 @@ def predict(dataset, deployed, output):
             # get clean img_info
             img_info = dataset.dset.imgs[gid]
             info = _write_output(img_info, pred, output_dir=output_data_dir)
-            output_dset.imgs[gid]['auxiliary'].append(info)
+            aux = output_dset.imgs[gid].get('auxiliary', [])
+            aux.append(info)
+            output_dset.imgs[gid]['auxiliary'] = aux
 
         except KeyboardInterrupt:
             log.info('interrupted')
