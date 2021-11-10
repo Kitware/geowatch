@@ -100,18 +100,20 @@ def wv_coreg(wv_catalog, outdir, jobs=1, drop_empty=False, s2_catalog=None):
         >>> s2_item.properties['watch:s2_coreg_l1c:is_baseline'] = True
         >>> s2_item.properties['watch:process_history'] = ['s2_coreg_l1c']
         >>> items.append(s2_item)
-        >>> # remove inaccessible URI
-        >>> # https://api.smart-stac.com/collections/worldview-nitf
-        >>> for item in items:
-        >>>     item.set_collection(None)
-        >>>     item.set_parent(None)
-        >>>     item.set_root(None)
-        >>>     # item.set_self_href(None)
         >>> catalog_dct = catalog.to_dict()
         >>> catalog_dct['links'] = []
         >>> catalog = pystac.Catalog.from_dict(catalog_dct)
         >>> in_dir = os.path.abspath('wv/in/')
+        >>> catalog_fpath = os.path.join(in_dir, 'catalog.json')
+        >>> catalog.set_self_href(catalog_fpath)
         >>> os.makedirs(in_dir, exist_ok=True)
+        >>> # remove inaccessible URI
+        >>> # https://api.smart-stac.com/collections/worldview-nitf
+        >>> for item in items:
+        >>>     item.set_self_href(os.path.join(in_dir, item.id + '.json'))
+        >>>     item.set_collection(None)
+        >>>     item.set_parent(catalog)
+        >>>     item.set_root(catalog)
         >>> def download(asset_name, asset):
         >>>     fpath = os.path.join(in_dir, os.path.basename(asset.href))
         >>>     if (not os.path.isfile(fpath)
@@ -122,14 +124,14 @@ def wv_coreg(wv_catalog, outdir, jobs=1, drop_empty=False, s2_catalog=None):
         >>>     return asset
         >>> catalog.add_items(items)
         >>> catalog = catalog.map_assets(download)
+        >>> catalog.save(catalog_type=pystac.CatalogType.ABSOLUTE_PUBLISHED)
         >>> #
         >>> # run orthorectification and pansharpening
         >>> #
         >>> ortho_dir = os.path.abspath('wv/out/')
         >>> os.makedirs(ortho_dir, exist_ok=True)
         >>> ortho_catalog = os.path.join(ortho_dir, 'catalog.json')
-        >>> # TODO fix 'original' link
-        >>> if 1 or not os.path.isfile(ortho_catalog):  # caching
+        >>> if not os.path.isfile(ortho_catalog):  # caching
         >>>     ortho_catalog = wv_ortho(catalog, ortho_dir, jobs=16,
         >>>                            te_dems=False, pansharpen=True)
         >>> #
