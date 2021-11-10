@@ -34,7 +34,7 @@ python -m watch add_fields \
 # TODO: FIXME: I dont understand why this doesnt work
 # when I pass the glob path to all the regions
 # I need to use the merged region script. Very strange.
-WATCH_HACK_IMPORT_ORDER=geopandas,gdal python -X faulthandler -m watch align \
+WATCH_HACK_IMPORT_ORDER=geopandas,pyproj,gdal python -X faulthandler -m watch align \
     --src $UNSTRUCTURED_KWCOCO_BUNDLE/data.fielded.kwcoco.json \
     --dst $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json \
     --regions "$REGION_FPATH" \
@@ -48,6 +48,11 @@ python -m watch project \
     --src $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json \
     --dst $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json.prop 
 mv $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json.prop $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json
+
+
+kwcoco subset --src $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json \
+        --dst $ALIGNED_KWCOCO_BUNDLE/data_nowv.kwcoco.json \
+        --select_images '.sensor_coarse != "WV"'
 
 
 # Split out train and validation data 
@@ -93,5 +98,24 @@ inspect(){
     python -m watch visualize --src $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json --channels "red|green|blue"
     python -m watch visualize --src $ALIGNED_KWCOCO_BUNDLE/vali_data_wv.kwcoco.json --channels "red|green|blue" --viz_dpath=$ALIGNED_KWCOCO_BUNDLE/_viz_wv_vali
     python -m watch visualize --src $ALIGNED_KWCOCO_BUNDLE/vali_data_nowv.kwcoco.json --channels "red|green|blue" --viz_dpath=$ALIGNED_KWCOCO_BUNDLE/_viz_nowv_vali
+    python -m watch.cli.animate_visualizations --channels "red|green|blue" --viz_dpath=$ALIGNED_KWCOCO_BUNDLE/_viz_nowv_vali
 
+}
+
+teamfeatures(){
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+    ALIGNED_KWCOCO_BUNDLE=$DVC_DPATH/Drop1-Aligned-L1
+    BASE_COCO_FPATH=$ALIGNED_KWCOCO_BUNDLE/data_nowv.kwcoco.json
+    RUTGERS_MATERIAL_MODEL_FPATH="$DVC_DPATH/models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_2021101T16277.pth"
+    DZYNE_LANDCOVER_MODEL_FPATH="$DVC_DPATH/models/landcover/visnav_remap_s2_subset.pt"
+
+    export CUDA_VISIBLE_DEVICES="1"
+    python -m watch.tasks.rutgers_material_seg.predict \
+        --test_dataset=$BASE_COCO_FPATH \
+        --checkpoint_fpath=$RUTGERS_MATERIAL_MODEL_FPATH  \
+        --default_config_key=iarpa \
+        --pred_dataset=$ALIGNED_KWCOCO_BUNDLE/data_nowv_rutgers_mat_seg.kwcoco.json \
+        --num_workers="8" \
+        --batch_size=32 --gpus "0" \
+        --compress=RAW --blocksize=64
 }

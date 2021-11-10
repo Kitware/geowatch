@@ -101,6 +101,7 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
     # so we can leave refactoring as a todo.
     for type_ in types:
         for video_dpath in video_dpaths:
+            print('video_dpath = {!r}'.format(video_dpath))
             video_name = video_dpath.name
 
             if zoom_to_tracks:
@@ -131,10 +132,14 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
                 if channels is None:
                     channel_dpaths = [p for p in type_dpath.glob('*') if p.is_dir()]
                 else:
-                    channel_dpaths = [type_dpath / c.spec for c in channels.streams()]
-
+                    # channel_dpaths = [type_dpath / c.spec for c in channels.streams()]
+                    def sanatize_chan_pnams(cs):
+                        return cs.replace('|', '_').replace(':', '-')
+                    channel_dpaths = [type_dpath / sanatize_chan_pnams(c.spec) for c in channels.streams()]
+                print('channel_dpaths = {!r}'.format(channel_dpaths))
                 for chan_dpath in channel_dpaths:
                     frame_fpaths = sorted(chan_dpath.glob('*'))
+                    print(len(frame_fpaths))
                     gif_fname = '{}{}_{}.gif'.format(video_name, type_, chan_dpath.name)
                     gif_fpath = video_dpath / gif_fname
                     pool.submit(

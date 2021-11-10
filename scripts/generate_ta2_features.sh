@@ -33,7 +33,7 @@ BASE_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json
 # Current
 UKY_S2_MODEL_FPATH=${UKY_S2_MODEL_FPATH:-$DVC_DPATH/models/uky_features_21-10-01/S2_model/drop1-S2-L8-aligned/checkpoints/S2_drop1-S2-L8-aligned.cpkt}
 UKY_L8_MODEL_FPATH=${UKY_L8_MODEL_FPATH:-$DVC_DPATH/models/uky_features_21-10-01/L8_model/drop1-S2-L8-aligned/checkpoints/L8_drop1-S2-L8-aligned.cpkt}
-RUTGERS_MATERIAL_MODEL_FPATH="$DVC_DPATH/models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_2021-10-01-16:27:07.pth"
+RUTGERS_MATERIAL_MODEL_FPATH="$DVC_DPATH/models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_20211001T162707.pth"
 DZYNE_LANDCOVER_MODEL_FPATH="$DVC_DPATH/models/landcover/visnav_remap_s2_subset.pt"
 
 
