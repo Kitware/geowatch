@@ -483,12 +483,6 @@ def main(cmdline=True, **kw):
             coco_dset, overwrite={'warp'}, workers=max_workers,
             keep_geotiff_metadata=True,
         )
-
-    if not config['skip_geo_preprop']:
-        kwcoco_extensions.coco_populate_geo_heuristics(
-            coco_dset, overwrite={'warp'}, workers=max_workers,
-            keep_geotiff_metadata=True,
-        )
     if config['edit_geotiff_metadata']:
         kwcoco_extensions.ensure_transfered_geo_data(coco_dset)
 
@@ -1082,7 +1076,7 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
 
     # iso_time = datetime.date.isoformat(date.date())
     # iso_time = date.isoformat()
-    iso_time = util_time.isoformat(sep='T', timespec='seconds')
+    iso_time = util_time.isoformat(date, sep='T', timespec='seconds')
     sensor_coarse = img.get('sensor_coarse', 'unknown')
 
     # Construct a name for the subregion to extract.
