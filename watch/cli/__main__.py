@@ -48,6 +48,7 @@ def main(cmdline=True, **kw):
         'coco_visualize_videos': ['visualize'],
         'coco_align_geotiffs': ['align'],
         'project_annotations': ['project'],
+        'coco_add_watch_fields': ['add_fields']
     }
 
     for cli_module in cli_modules:

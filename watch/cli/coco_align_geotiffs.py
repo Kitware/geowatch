@@ -260,7 +260,8 @@ class CocoAlignGeotiffConfig(scfg.Config):
             '''
         )),
 
-        'skip_geo_preprop': scfg.Value(False, help='makes init faster if it already has all important fields'),
+        'skip_geo_preprop': scfg.Value(False, help='DEPRECATED use geo_preop instead'),
+        'geo_preprop': scfg.Value('auto', help='force if we check geo properties or not'),
 
         'sensor_filter': scfg.Value(None, help='if specified can be comma separated valid sensors'),
 
@@ -450,6 +451,18 @@ def main(cmdline=True, **kw):
         flags = [s in valid_sensors for s in have_sensors]
         valid_images = valid_images.compress(flags)
         coco_dset = coco_dset.subset(list(valid_images))
+
+    geo_preprop = config['geo_preprop']
+    if config['skip_geo_preprop']:
+        geo_preprop = False
+    if geo_preprop == 'auto':
+        geo_preprop = ('geos_corners' not in coco_dset.dataset['images'][0])
+
+    if geo_preprop:
+        kwcoco_extensions.coco_populate_geo_heuristics(
+            coco_dset, overwrite={'warp'}, workers=max_workers,
+            keep_geotiff_metadata=True,
+        )
 
     if not config['skip_geo_preprop']:
         kwcoco_extensions.coco_populate_geo_heuristics(

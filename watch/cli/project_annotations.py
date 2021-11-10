@@ -5,8 +5,14 @@ CommandLine:
     # Update a dataset with new annotations
 
     DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-    python -m watch project_annotations \
+    python -m watch add_fields \
         --src $DVC_DPATH/drop1-S2-L8-aligned/data.kwcoco.json \
+        --dst $DVC_DPATH/drop1-S2-L8-aligned/data.fielded.kwcoco.json \
+        --overwrite=warp --workers 10
+
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+    python -m watch project_annotations \
+        --src $DVC_DPATH/drop1-S2-L8-aligned/data.fielded.kwcoco.json \
         --dst $DVC_DPATH/drop1-S2-L8-aligned/data-updated-20211110.kwcoco.json \
         --site_models="$DVC_DPATH/drop1/site_models/*.geojson"
 """
@@ -65,6 +71,8 @@ class ProjectAnnotationsConfig(scfg.Config):
 
         'geo_preprop': scfg.Value('auto', help='force if we check geo properties or not'),
 
+        'geospace_lookup': scfg.Value('auto', help='if False assumes region-ids can be used to lookup association'),
+
         'workers': scfg.Value(0, help='number of workers for geo-preprop if done'),
 
         # Do we need these?
@@ -117,6 +125,7 @@ def main(cmdline=False, **kwargs):
     site_geojson_fpaths = util_path.coerce_patterned_paths(config['site_models'], '.geojson')
 
     geo_preprop = config['geo_preprop']
+    geospace_lookup = config['geospace_lookup']
     if geo_preprop == 'auto':
         geo_preprop = ('geos_corners' not in coco_dset.dataset['images'][0])
 
@@ -138,7 +147,7 @@ def main(cmdline=False, **kwargs):
 
     propogate = config['propogate']
     propogated_annotations, all_drawable_infos = assign_sites_to_images(
-        coco_dset, sites, propogate)
+        coco_dset, sites, propogate, geospace_lookup=geospace_lookup)
 
     for ann in propogated_annotations:
         coco_dset.add_annotation(**ann)
@@ -161,7 +170,7 @@ def main(cmdline=False, **kwargs):
                                       drawable_region_sites, region_id)
 
 
-def assign_sites_to_images(coco_dset, sites, propogate):
+def assign_sites_to_images(coco_dset, sites, propogate, geospace_lookup='auto'):
     """
     Given a coco dataset (with geo information) and a list of geojson sites,
     determines which images each site-annotations should go on.
@@ -186,7 +195,6 @@ def assign_sites_to_images(coco_dset, sites, propogate):
         vidid_to_imgdf[vidid] = subdf
     videos_gdf = pd.concat(video_gdfs)
 
-    ASSUME_CONSISTENT_REGION_IDS = True
     PROJECT_ENDSTATE = True
 
     region_id_to_sites = ub.group_items(sites, lambda x: x.iloc[0]['region_id'])
@@ -232,6 +240,13 @@ def assign_sites_to_images(coco_dset, sites, propogate):
 
     all_drawable_infos = []  # helper if we are going to draw
 
+    if geospace_lookup == 'auto':
+        print('geospace_lookup = {!r}'.format(geospace_lookup))
+        coco_video_names = set(coco_dset.index.name_to_video.keys())
+        region_ids = set(region_id_to_sites.keys())
+        geospace_lookup = not coco_video_names.issubset(region_ids)
+        print('geospace_lookup = {!r}'.format(geospace_lookup))
+
     propogated_annotations = []
     for region_id, region_sites in region_id_to_sites.items():
 
@@ -239,13 +254,14 @@ def assign_sites_to_images(coco_dset, sites, propogate):
         # If this assumption is not valid, we could refactor to loop through
         # each site, do the geospatial lookup, etc...
         # but this is faster if we know regions are consistent
-        if ASSUME_CONSISTENT_REGION_IDS:
+        if not geospace_lookup:
             try:
                 video = coco_dset.index.name_to_video[region_id]
             except KeyError:
+                print('No region-id match for region_id={}'.format(region_id))
                 continue
             video_id = video['id']
-            video_name = video['name']
+            # video_name = video['name']
         else:
             video_ids = []
             for site_gdf in region_sites:
@@ -256,11 +272,14 @@ def assign_sites_to_images(coco_dset, sites, propogate):
                     assert len(overlapping_video_indexes) == 1, 'should only belong to one video'
                     overlapping_video_index = ub.peek(overlapping_video_indexes)
                     video_id = videos_gdf.iloc[overlapping_video_index]['video_id']
-                    video_name = coco_dset.index.videos[video_id]['name']
-                    assert site_gdf.iloc[0].region_id == video_name, 'sanity check'
-                    assert site_gdf.iloc[0].region_id == region_id, 'sanity check'
+                    # video_name = coco_dset.index.videos[video_id]['name']
+                    # assert site_gdf.iloc[0].region_id == video_name, 'sanity check'
+                    # assert site_gdf.iloc[0].region_id == region_id, 'sanity check'
                     video_ids.append(video_id)
             assert ub.allsame(video_ids)
+            if len(video_ids) == 0:
+                print('No geo-space match for region_id={}'.format(region_id))
+                continue
             video_id = video_ids[0]
 
         # Grab the images data frame for that video
@@ -338,7 +357,6 @@ def assign_sites_to_images(coco_dset, sites, propogate):
                     elif status == 'positive_pending':
                         # Does not have phase labels
                         catname = 'positive'
-                        raise Exception
                     elif status == 'positive_partial':
                         # Might have phase labels
                         catname = 'positive'
