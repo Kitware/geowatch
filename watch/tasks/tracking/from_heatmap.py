@@ -37,27 +37,6 @@ def mask_to_scored_polygons(probs, thresh):
         >>> import kwimage
         >>> probs = kwimage.Heatmap.random(dims=(64, 64), rng=0).data['class_probs'][0]
         >>> thresh = 0.5
-        >>> poly1, score1 = list(mask_to_scored_polygons(probs, thresh))[0]
-        >>> # xdoctest: +IGNORE_WANT
-        >>> import kwplot
-        >>> kwplot.autompl()
-        >>> kwplot.imshow(probs > 0.5)
-    """
-    # Threshold scores
-    hard_mask = probs > thresh
-    # Convert to polygons
-    polygons = kwimage.Mask(hard_mask, 'c_mask').to_multi_polygon()
-    for poly in polygons:
-        yield poly, _score(poly, probs)
-
-
-def mask_to_scored_polygons_v2(probs, thresh):
-    """
-    Example:
-        >>> from watch.tasks.tracking.from_heatmap import *  # NOQA
-        >>> import kwimage
-        >>> probs = kwimage.Heatmap.random(dims=(64, 64), rng=0).data['class_probs'][0]
-        >>> thresh = 0.5
         >>> poly1, score1 = list(mask_to_scored_polygons_v2(probs, thresh))[0]
         >>> # xdoctest: +IGNORE_WANT
         >>> import kwplot
@@ -294,7 +273,7 @@ def time_aggregated_polys(coco_dset,
     # to generalize this, have to get scored_polys from all keys
     # and associate them somehow
     scored_polys = list(
-        mask_to_scored_polygons_v2(probs(running_dct['fg']), thresh))
+        mask_to_scored_polygons(probs(running_dct['fg']), thresh))
 
     print('time aggregation: number of polygons:', len(scored_polys))
 

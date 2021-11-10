@@ -612,7 +612,7 @@ def normalize(coco_dset, track_fn, overwrite, gt_dset=None, coco_dset_sc=None):
     def _normalize_annots(coco_dset, overwrite):
         coco_dset = dedupe_annots(coco_dset)
         coco_dset = add_geos(coco_dset, overwrite)
-        coco_dset = remove_small_annots(coco_dset, min_area_px=50)
+        coco_dset = remove_small_annots(coco_dset, min_area_px=200)
         coco_dset._build_index()
 
         return coco_dset
@@ -640,7 +640,7 @@ def normalize(coco_dset, track_fn, overwrite, gt_dset=None, coco_dset_sc=None):
 
     if gt_dset is not None:
         # visualize predicted sites with true sites
-        out_dir = './_assets/1_bas_th_0.3'
+        out_dir = './_assets/3_bas_th_0.3_small200'
         from visualize import visualize_videos
         visualize_videos(coco_dset, gt_dset, out_dir)
 
