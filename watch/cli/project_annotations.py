@@ -132,7 +132,9 @@ def main(cmdline=False, **kwargs):
     geo_preprop = config['geo_preprop']
     geospace_lookup = config['geospace_lookup']
     if geo_preprop == 'auto':
-        geo_preprop = ('geos_corners' not in coco_dset.dataset['images'][0])
+        coco_img = coco_dset.coco_image(ub.peek(coco_dset.index.imgs.keys()))
+        geo_preprop = not any('geos_corners' in obj for obj in coco_img.iter_asset_objs())
+        print('auto-choose geo_preprop = {!r}'.format(geo_preprop))
 
     if geo_preprop:
         kwcoco_extensions.coco_populate_geo_heuristics(
