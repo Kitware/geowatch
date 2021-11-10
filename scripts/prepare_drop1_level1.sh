@@ -34,12 +34,12 @@ python -m watch add_fields \
 # TODO: FIXME: I dont understand why this doesnt work
 # when I pass the glob path to all the regions
 # I need to use the merged region script. Very strange.
-python -m watch align \
+DISABLE_IMPORT_ORDER_HACK=1 python -X faulthandler -m watch align \
     --src $UNSTRUCTURED_KWCOCO_BUNDLE/data.fielded.kwcoco.json \
     --dst $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json \
     --regions "$REGION_FPATH" \
     --keep img \
-    --exclude_sensors=WV \
+    --geo_preprop=False \
     --workers="avail/2" \
     --aux_workers="2" 
 

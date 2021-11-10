@@ -1543,7 +1543,7 @@ def covered_annot_geo_regions(coco_dset, merge=False):
 
                 # What CRS should we be doing this in? Is WGS84 OK?
                 # Should we switch to UTM?
-                img_rois_ = ops.cascaded_union(sh_annot_polys_)
+                img_rois_ = ops.unary_union(sh_annot_polys_)
                 try:
                     img_rois = list(img_rois_)
                 except Exception:
@@ -1557,7 +1557,7 @@ def covered_annot_geo_regions(coco_dset, merge=False):
 
         # TODO: if there are only midly overlapping regions, we should likely split
         # them up. We can also group by UTM coordinates to reduce computation.
-        sh_rois_ = ops.cascaded_union([
+        sh_rois_ = ops.unary_union([
             p.buffer(0) for rois in gid_to_rois.values()
             for p in rois
         ])

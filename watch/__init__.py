@@ -11,14 +11,53 @@ mkinit -m watch --lazy --noattr
 mkinit -m watch --lazy --noattr -w
 """
 
+AUTO_WATCH_HACK_IMPORT_ORDER = [
+    'pyproj',
+    'osgeo',
+    # 'geopandas',
+]
 
-DISABLE_IMPORT_ORDER_HACK = os.environ.get('DISABLE_IMPORT_ORDER_HACK', '0')
+WATCH_HACK_IMPORT_ORDER = os.environ.get('WATCH_HACK_IMPORT_ORDER', 'auto')
 
-if DISABLE_IMPORT_ORDER_HACK != '1':
-    # Some imports need to happen in a specific order, otherwise we get crashes
-    # This is very annoying
-    from pyproj import CRS  # NOQA
-    from osgeo import gdal  # NOQA
+
+def _imoprt_hack(modname):
+    if modname == 'osgeo':
+        from osgeo import gdal as module
+    elif modname == 'pyproj':
+        import pyproj as module
+        from pyproj import CRS  # NOQA
+    elif modname == 'geopandas':
+        import geopandas as module
+    elif modname == 'rasterio':
+        import rasterio as module
+    elif modname == 'fiona':
+        import fiona as module
+    elif modname == 'pygeos':
+        import pygeos as module
+    else:
+        raise KeyError(modname)
+    return module
+
+
+def _execute_import_order_hacks(WATCH_HACK_IMPORT_ORDER):
+    if WATCH_HACK_IMPORT_ORDER == 'auto':
+        # Some imports need to happen in a specific order, otherwise we get crashes
+        # This is very annoying
+        # This is the "known" best order for importing
+        watch_hack_import_order = AUTO_WATCH_HACK_IMPORT_ORDER
+    elif WATCH_HACK_IMPORT_ORDER.lower() in {'0', 'false', 'no', ''}:
+        watch_hack_import_order = None
+    else:
+        watch_hack_import_order = WATCH_HACK_IMPORT_ORDER.split(',')
+
+    if watch_hack_import_order is not None:
+        for modname in watch_hack_import_order:
+            _imoprt_hack(modname)
+
+
+if WATCH_HACK_IMPORT_ORDER:
+    _execute_import_order_hacks(WATCH_HACK_IMPORT_ORDER)
+
 
 __version__ = '0.1.5'
 

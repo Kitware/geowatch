@@ -246,7 +246,6 @@ def assign_sites_to_images(coco_dset, sites, propogate, geospace_lookup='auto'):
     all_drawable_infos = []  # helper if we are going to draw
 
     if geospace_lookup == 'auto':
-        print('geospace_lookup = {!r}'.format(geospace_lookup))
         coco_video_names = set(coco_dset.index.name_to_video.keys())
         region_ids = set(region_id_to_sites.keys())
         geospace_lookup = not coco_video_names.issubset(region_ids)
