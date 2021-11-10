@@ -295,7 +295,7 @@ def time_aggregated_polys(coco_dset,
     # to generalize this, have to get scored_polys from all keys
     # and associate them somehow
     scored_polys = list(
-        mask_to_scored_polygons_v2(probs(running_dct['fg']), thresh))
+        mask_to_scored_polygons(probs(running_dct['fg']), thresh))
 
     print('time aggregation: number of polygons:', len(scored_polys))
 

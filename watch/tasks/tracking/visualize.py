@@ -92,9 +92,8 @@ def render_pred_gt(pred_canvas, gt_canvas):
     return out_canvas
 
 
-def visualize_videos(pred_dset, true_dset, out_dir='./_assets'):
+def visualize_videos(pred_dset, true_dset, out_dir='./_assets', hide_axis=False):
     os.makedirs(out_dir, exist_ok=True)
-    val_vid_ids = [6, 7]
 
     for vidid, _ in pred_dset.index.videos.items():
         gids = pred_dset.index.vidid_to_gids[vidid]
@@ -111,17 +110,19 @@ def visualize_videos(pred_dset, true_dset, out_dir='./_assets'):
             coded_canvas = render_pred_gt(pred_canvas, gt_canvas)
             plt.imshow(coded_canvas, interpolation='nearest')
             plt.title('image:'+str(gid_list[j]))
-            ax = plt.gca()
-            ax.axes.xaxis.set_visible(False)
-            ax.axes.yaxis.set_visible(False)
+            if hide_axis:
+                ax = plt.gca()
+                ax.axes.xaxis.set_visible(False)
+                ax.axes.yaxis.set_visible(False)
 
             # RGB
             plt.subplot(2, n_images_to_visualize, j+1+n_images_to_visualize)
             rgb = get_rgb(pred_dset, gids[gid_list[j]])
             plt.imshow(rgb)
-            ax = plt.gca()
-            ax.axes.xaxis.set_visible(False)
-            ax.axes.yaxis.set_visible(False)
+            if hide_axis:
+                ax = plt.gca()
+                ax.axes.xaxis.set_visible(False)
+                ax.axes.yaxis.set_visible(False)
 
         fname = out_dir+'/video_'+str(vidid)+'_tracks.jpg'
         plt.tight_layout()
