@@ -1,10 +1,14 @@
 # -*- coding: utf-8 -*-
 r"""
+Assigns geospace annotation to image pixels and frames
 
 CommandLine:
     # Update a dataset with new annotations
-
     DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+
+    # You dont need to run this, but if you plan on running the project
+    # annotations script multiple times, preloading this work will make it
+    # faster
     python -m watch add_fields \
         --src $DVC_DPATH/drop1-S2-L8-aligned/data.kwcoco.json \
         --dst $DVC_DPATH/drop1-S2-L8-aligned/data.fielded.kwcoco.json \

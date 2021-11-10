@@ -79,6 +79,7 @@ def gather_checkpoints():
     Hack function to move all checkpoints into a directory for evaluation
     """
     from watch.utils import util_data
+    import pathlib
     dvc_dpath = util_data.find_smart_dvc_dpath()
     train_base = dvc_dpath / 'training'
     dataset_names = [
@@ -111,7 +112,6 @@ def gather_checkpoints():
         name_dpath = unevaled_dpath / name
         name_dpath.mkdir(exist_ok=True, parents=True)
         shutil.copy(package_fpath, name_dpath)
-
 
     import os
     for r, ds, fs in os.walk(train_base):
