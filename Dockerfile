@@ -69,11 +69,17 @@ else \
     (cd /watch && conda env create -f conda_env.yml); \
 fi
 
+RUN pip install awscli
+
+RUN conda activate watch && \
+    pip uninstall -y python-fmask && \
+    pip install git+https://git@github.com/ubarsc/python-fmask.git#egg=python-fmask
+
 COPY . /watch
 
 RUN conda activate watch && \
     pip install --no-deps -e /watch
 
-RUN pip install awscli
+ENV PATH $PATH:/opt/bin
 
 # docker build --build-arg BUILD_STRICT=1 .
