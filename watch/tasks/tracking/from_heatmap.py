@@ -5,6 +5,7 @@ import kwarray
 import kwimage
 import numpy as np
 import kwcoco
+from rasterio import features
 
 
 def _score(poly, probs):
@@ -15,6 +16,8 @@ def _score(poly, probs):
     # Ensure w/h are positive
     box.data[:, 2:4] = np.maximum(box.data[:, 2:4], 1)
     x, y, w, h = box.data[0]
+    y = max(y, 0)
+    x = max(x, 0)
     rel_poly = poly.translate((-x, -y))
     rel_mask = rel_poly.to_mask((h, w)).data
     # Slice out the corresponding region of probabilities
@@ -44,6 +47,27 @@ def mask_to_scored_polygons(probs, thresh):
     hard_mask = probs > thresh
     # Convert to polygons
     polygons = kwimage.Mask(hard_mask, 'c_mask').to_multi_polygon()
+    for poly in polygons:
+        yield poly, _score(poly, probs)
+
+
+def mask_to_scored_polygons_v2(probs, thresh):
+    """
+    Example:
+        >>> from watch.tasks.tracking.from_heatmap import *  # NOQA
+        >>> import kwimage
+        >>> probs = kwimage.Heatmap.random(dims=(64, 64), rng=0).data['class_probs'][0]
+        >>> thresh = 0.5
+        >>> poly1, score1 = list(mask_to_scored_polygons_v2(probs, thresh))[0]
+        >>> # xdoctest: +IGNORE_WANT
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(probs > 0.5)
+    """
+    # Threshold scores
+    binary_mask = probs > thresh
+    shapes = list(features.shapes(binary_mask.astype(np.int16)))
+    polygons = [kwimage.Polygon.from_geojson(s).translate((-0.5, -0.5)) for s, v in shapes if v]
     for poly in polygons:
         yield poly, _score(poly, probs)
 
@@ -270,7 +294,7 @@ def time_aggregated_polys(coco_dset,
     # to generalize this, have to get scored_polys from all keys
     # and associate them somehow
     scored_polys = list(
-        mask_to_scored_polygons(probs(running_dct['fg']), thresh))
+        mask_to_scored_polygons_v2(probs(running_dct['fg']), thresh))
 
     print('time aggregation: number of polygons:', len(scored_polys))
 
@@ -415,9 +439,9 @@ def get_poly_labels_from_SC(coco_dset, scored_polys, coco_dset_sc, thresh, key, 
     return coco_dset
 
 def time_aggregated_polys_bas(coco_dset,
-                              thresh=0.2,
+                              thresh=0.3,
                               morph_kernel=3,
-                              time_filtering=False,
+                              time_filtering=True,
                               response_filtering=False,
                               coco_dset_sc=None):
     '''

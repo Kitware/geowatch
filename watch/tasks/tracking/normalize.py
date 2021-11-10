@@ -370,6 +370,8 @@ def apply_tracks(coco_dset, track_fn, overwrite, coco_dset_sc=None):
         sub_dset = coco_dset.subset(gids=gids).copy()  # copy necessary?
         if coco_dset_sc is not None:
             sub_dset_sc = coco_dset_sc.subset(gids=gids).copy()
+        else:
+            sub_dset_sc = None
         if overwrite:
             sub_dset = track_fn(sub_dset, coco_dset_sc=sub_dset_sc)
         else:
@@ -614,7 +616,7 @@ def normalize(coco_dset, track_fn, overwrite, gt_dset=None, coco_dset_sc=None):
     def _normalize_annots(coco_dset, overwrite):
         coco_dset = dedupe_annots(coco_dset)
         coco_dset = add_geos(coco_dset, overwrite)
-        coco_dset = remove_small_annots(coco_dset, min_area_px=1)
+        coco_dset = remove_small_annots(coco_dset, min_area_px=50)
         coco_dset._build_index()
 
         return coco_dset
