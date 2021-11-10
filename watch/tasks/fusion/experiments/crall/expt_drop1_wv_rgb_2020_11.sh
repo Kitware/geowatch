@@ -234,6 +234,10 @@ DVC_DPATH=${DVC_DPATH:-$HOME/data/dvc-repos/smart_watch_dvc}
 KWCOCO_BUNDLE_DPATH=${KWCOCO_BUNDLE_DPATH:-$DVC_DPATH/Drop1-Aligned-L1}
 
 prep_wv_expt(){
+
+    cd $KWCOCO_BUNDLE_DPATH
+    python -m kwcoco stats train_data_nowv.kwcoco.json vali_data_nowv.kwcoco.json train_data_wv.kwcoco.json vali_data_wv.kwcoco.json
+
     kwcoco subset --src $KWCOCO_BUNDLE_DPATH/train_data.kwcoco.json \
             --dst $KWCOCO_BUNDLE_DPATH/train_data_wv.kwcoco.json \
             --select_images '.sensor_coarse == "WV"'
@@ -258,7 +262,7 @@ CHANNELS="red|green|blue"
 EXPERIMENT_NAME=Saliency_${ARCH}_toothbrush_wv_s64_t3_v15
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
-#export CUDA_VISIBLE_DEVICES="1"
+export CUDA_VISIBLE_DEVICES="1"
 python -m watch.tasks.fusion.fit \
     --channels=${CHANNELS} \
     --name=$EXPERIMENT_NAME \

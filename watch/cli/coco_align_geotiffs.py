@@ -2,6 +2,21 @@ r"""
 Given the raw data in kwcoco format, this script will extract orthorectified
 regions around areas of intere/t across time.
 
+The align script works by making two geopandas data frames of geo-boundaries,
+one for regions and one for all images (as defined by their geotiff metadata).
+I then use the util_gis.geopandas_pairwise_overlaps to efficiently find which
+regions intersect which images. Images that intersect a region are grouped
+together (the same image might belong to multiple regions). Then within each
+region group, the script finds all images that have the same datetime metadata
+and groups those together. Finally, images with the "same-exact" bands are
+grouped together. For each band-group I use gdal-warp to crop to the region,
+which creates a set of temporary files, and then finally gdalmerge is used to
+combine those different crops into a single image.
+
+The main corner case in the above process is when one image has "r|g|b" but
+another image has "r|g|b|yellow", there is no logic to split those channels out
+at the moment.
+
 
 Notes:
 

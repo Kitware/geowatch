@@ -17,9 +17,9 @@ from einops.layers.torch import Rearrange
 from kwcoco import channel_spec
 from torchvision import transforms
 from torch.optim import lr_scheduler
+from watch import heuristics
 from watch.tasks.fusion import utils
 from watch.tasks.fusion.architectures import transformer
-from watch.tasks.fusion import heuristics
 
 try:
     import xdev

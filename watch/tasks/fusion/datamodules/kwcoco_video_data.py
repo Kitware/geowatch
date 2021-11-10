@@ -12,7 +12,7 @@ import ubelt as ub
 from kwcoco import channel_spec
 from torch.utils import data
 from watch.tasks.fusion import utils
-from watch.tasks.fusion import heuristics
+from watch import heuristics
 from watch.utils import kwcoco_extensions
 from watch.utils import util_bands
 from watch.utils import util_iter
@@ -851,11 +851,42 @@ class KWCocoVideoDataset(data.Dataset):
             >>> kwplot.imshow(canvas)
             >>> kwplot.show_if_requested()
 
-            kwplot.imshow(self.draw_item(self[4], max_channels=10, overlay_on_image=0))
+        Example:
+            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+            >>> # Run the following tests on real watch data if DVC is available
+            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+            >>> import ndsampler
+            >>> import kwcoco
+            >>> from watch.utils.util_data import find_smart_dvc_dpath
+            >>> dvc_dpath = find_smart_dvc_dpath()
+            >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1/vali_data_wv.kwcoco.json'
+            >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+            >>> sampler = ndsampler.CocoSampler(coco_dset)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=(5, 128, 128), channels='red|green|blue|nir')
+            >>> index = 5
+            >>> item = self[index]
+            >>> canvas = self.draw_item(item)
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas)
+            >>> kwplot.show_if_requested()
+
+        Ignore:
+            import kwplot
+            kwplot.autompl()
+            import xdev
+            sample_indices = list(range(len(self)))
+            for index in xdev.InteractiveIter(sample_indices):
+                item = self[index]
+                canvas = self.draw_item(item)
+                kwplot.imshow(canvas)
+                xdev.InteractiveIter.draw()
         """
 
         if isinstance(index, dict):
             tr = index
+            index = 'given-as-dictionary'
         else:
             if self.mode == 'test':
                 tr = self.new_sample_grid['targets'][index]
@@ -927,6 +958,49 @@ class KWCocoVideoDataset(data.Dataset):
             tr_, with_annots=with_annots,
             padkw={'constant_values': np.nan}
         )
+
+        ALLOW_RESAMPLE = True
+        if ALLOW_RESAMPLE:
+            # If any image is junk allow for a resample
+            is_frame_bad = np.isnan(sample['im']).all(axis=(1, 2, 3))
+            if np.any(is_frame_bad):
+                gids = np.array(tr_['gids'])
+                good_gids = gids[~is_frame_bad].tolist()
+                vidid = tr_['video_id']
+                time_sampler = self.new_sample_grid['vidid_to_time_sampler'][vidid]
+                video_gids = time_sampler.video_gids
+                bad_gids = gids[is_frame_bad].tolist()
+                new_bad_gids = bad_gids
+                iter_idx = 0
+                while len(new_bad_gids):
+                    print('resampling: {}'.format(index))
+                    include_idxs = np.where(kwarray.isect_flags(time_sampler.video_gids, good_gids))[0]
+                    exclude_idxs = np.where(kwarray.isect_flags(time_sampler.video_gids, bad_gids))[0]
+                    chosen, info = time_sampler.sample(include=include_idxs, exclude=exclude_idxs, error_level=1, return_info=True)
+                    new_idxs = np.setdiff1d(chosen, include_idxs)
+                    new_gids = video_gids[new_idxs]
+
+                    tr_test = tr_.copy()
+                    tr_test['gids'] = new_gids
+                    test_sample = sampler.load_sample(
+                        tr_test, with_annots=False, padkw={'constant_values': np.nan}
+                    )
+                    new_is_frame_bad = np.isnan(test_sample['im']).all(axis=(1, 2, 3))
+                    new_good_gids = new_gids[~new_is_frame_bad].tolist()
+                    new_bad_gids = new_gids[new_is_frame_bad].tolist()
+                    bad_gids.extend(new_bad_gids)
+                    good_gids.extend(new_good_gids)
+                    iter_idx += 1
+                    if iter_idx > 100:
+                        raise Exception('Something is wrong')
+
+                resampled_gids = ub.oset(video_gids) & good_gids
+                tr_['gids'] = resampled_gids
+                # finalize resample sample
+                sample = sampler.load_sample(
+                    tr_, with_annots=with_annots,
+                    padkw={'constant_values': np.nan}
+                )
 
         if self.special_inputs or self.diff_inputs:
             import xarray as xr
@@ -1325,7 +1399,7 @@ class KWCocoVideoDataset(data.Dataset):
     @profile
     def draw_item(self, item, item_output=None, combinable_extra=None,
                   max_channels=5, max_dim=256, norm_over_time=0,
-                  overlay_on_image=True):
+                  overlay_on_image=False):
         """
         Visualize an item produced by this DataSet.
 
@@ -1848,6 +1922,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
             dset, video_id, gids=video_gids, time_window=window_time_dims,
             affinity_type=affinity_type, update_rule=update_rule,
             name=video_info['name'], time_span=time_span)
+        time_sampler.video_gids = np.array(video_gids)
         time_sampler.determenistic = True
 
         if use_annot_info:
@@ -1925,7 +2000,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
 
                 # Reselect the keyframes if we are overlaping a nodata region?
                 # Or do that on the fly?
-                if 1 or False:
+                if False:
                     for gid in gids:
                         coco_img = dset.coco_image(gid)
                         coco_img.channels
