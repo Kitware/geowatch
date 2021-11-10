@@ -7,11 +7,11 @@ from osgeo import gdal, osr
 from tempfile import NamedTemporaryFile
 import pystac
 
-from watch.utils.util_stac import parallel_map_items
+from watch.utils.util_stac import parallel_map_items, maps
 from watch.datacube.registration.wv_to_s2 import (wv_to_s2_coregister,
                                                   gdal_translate_prefix,
                                                   gdalwarp_prefix)
-from watch.cli.wv_ortho import maps, associate_msi_pan
+from watch.cli.wv_ortho import associate_msi_pan
 
 
 def main():

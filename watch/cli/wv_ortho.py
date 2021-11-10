@@ -12,7 +12,7 @@ import pystac
 from osgeo_utils.gdal_pansharpen import gdal_pansharpen
 
 import watch
-from watch.utils.util_stac import parallel_map_items
+from watch.utils.util_stac import parallel_map_items, maps
 from watch.utils.util_raster import gdalwarp_performance_opts
 
 
@@ -154,58 +154,6 @@ def wv_ortho(stac_catalog,
     output_catalog.save(catalog_type=pystac.CatalogType.ABSOLUTE_PUBLISHED)
 
     return output_catalog
-
-
-def maps(_item_map):
-    '''
-    General-purpose wrapper for stac _item_maps.
-    '''
-    @functools.wraps(_item_map)
-    def wrapper(*args, **kwargs):
-
-        # TODO some magic to get around this with the inspect module
-        # maybe just use inheritance?
-        try:
-            stac_item = args[0]
-            outdir = kwargs['outdir']
-        except (IndexError, KeyError):
-            raise ValueError(
-                f'must call {_item_map.__name__} with arg "stac_item",'
-                'kwarg "outdir"')
-
-        # This assumes we're not changing the stac_item ID in any of
-        # the mapping functions
-        item_outdir = os.path.join(outdir, stac_item.id)
-        os.makedirs(item_outdir, exist_ok=True)
-
-        # Adding a reference back to the original STAC
-        # item if not already present
-        if len(stac_item.get_links('original')) == 0:
-            stac_item.links.append(
-                pystac.Link.from_dict({
-                    'rel': 'original',
-                    'href': stac_item.get_self_href(),
-                    'type': 'application/json'
-                }))
-
-        kwargs['outdir'] = item_outdir
-        output_stac_item = _item_map(*args, **kwargs)
-
-        if output_stac_item is not None:
-            output_stac_item.set_self_href(
-                os.path.join(item_outdir,
-                             "{}.json".format(output_stac_item.id)))
-
-            # Roughly keeping track of what WATCH processes have been
-            # run on this particular item
-            output_stac_item.properties.setdefault('watch:process_history',
-                                                   []).append(':'.join(
-                                                       (__file__,
-                                                        _item_map.__name__)))
-
-        return output_stac_item
-
-    return wrapper
 
 
 @maps
@@ -397,7 +345,7 @@ def pansharpen(stac_item_pan, stac_item_msi, outdir, as_rgb=False):
         -of COG
         -co BLOCKSIZE=64
         -co COMPRESS=NONE
-        --config GDAL_CACHEMAX 20%
+        --config GDAL_CACHEMAX 10%
         -co NUM_THREADS=ALL_CPUS
         {pan_fpath} {msi_fpath} {out_fpath}
         ''')
