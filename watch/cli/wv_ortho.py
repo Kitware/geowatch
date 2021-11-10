@@ -5,45 +5,58 @@ import shapely.geometry
 import ubelt as ub
 import numpy as np
 from copy import deepcopy
-import functools
 import shutil
 import pystac
 
 from osgeo_utils.gdal_pansharpen import gdal_pansharpen
 
 import watch
-from watch.utils.util_stac import parallel_map_items, maps
+from watch.utils.util_stac import parallel_map_items, maps, associate_msi_pan
 from watch.utils.util_raster import gdalwarp_performance_opts
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Orthorectify WorldView images to a DEM")
+        description='Orthorectify WorldView images to a DEM, '
+                    'and merge matching PAN and MSI items.')
 
     parser.add_argument('stac_catalog',
                         type=str,
-                        help="Path to input STAC catalog")
-    parser.add_argument("-o",
-                        "--outdir",
+                        help='Path to input STAC catalog')
+    parser.add_argument('-o',
+                        '--outdir',
                         type=str,
-                        help="Output directory for orthorectified images and "
-                        "updated STAC catalog")
-    parser.add_argument("-j",
-                        "--jobs",
+                        help='Output directory for orthorectified images and '
+                        'updated STAC catalog')
+    parser.add_argument('-j',
+                        '--jobs',
                         type=int,
                         default=1,
                         required=False,
-                        help="Number of jobs to run in parallel")
-    parser.add_argument("--te_dems",
+                        help='Number of jobs to run in parallel')
+    parser.add_argument('--te_dems',
                         action='store_true',
                         help='Use IARPA T&E DEMs instead of GTOP30 DEMs')
-    parser.add_argument("--drop_empty",
+    parser.add_argument('--drop_empty',
                         action='store_true',
                         help='Remove empty items from the catalog after '
                         'orthorectification')
-    parser.add_argument("--pansharpen",
+    parser.add_argument('--as_vrt',
                         action='store_true',
-                        help='Additionally pan-sharpen any MSI images')
+                        help='use VRT instead of COG as ortho output format')
+    parser.add_argument('--as_utm',
+                        action='store_true',
+                        help='Use UTM instead of WGS84 as ortho output CRS')
+    parser.add_argument('--skip_ortho',
+                        action='store_true',
+                        help='Skip orthorectification.')
+    parser.add_argument('--pansharpen',
+                        action='store_true',
+                        help='Additionally pan-sharpen any MSI images.')
+    parser.add_argument('--as_rgb',
+                        action='store_true',
+                        help='Create pansharpened image as 3-band RGB instead '
+                        'of all MSI bands')
 
     wv_ortho(**vars(parser.parse_args()))
 
@@ -55,7 +68,11 @@ def wv_ortho(stac_catalog,
              jobs=1,
              te_dems=False,
              drop_empty=False,
-             pansharpen=False):
+             as_vrt=False,
+             as_utm=False,
+             skip_ortho=False,
+             pansharpen=False,
+             as_rgb=False):
     '''
     Performs the following steps.
 
@@ -98,6 +115,8 @@ def wv_ortho(stac_catalog,
         >>> catalog = pystac.Catalog.from_dict(catalog_dct)
         >>> in_dir = os.path.abspath('wv/in/')
         >>> os.makedirs(in_dir, exist_ok=True)
+        >>> for item in items:
+        >>>     item.set_self_href(os.path.join(in_dir, item.id + '.json'))
         >>> def download(asset_name, asset):
         >>>     fpath = os.path.join(in_dir, os.path.basename(asset.href))
         >>>     if not os.path.isfile(fpath):
@@ -126,15 +145,19 @@ def wv_ortho(stac_catalog,
 
     os.makedirs(outdir, exist_ok=True)
 
-    # output_catalog = catalog.map_items(_item_map)
-    orthorectified_catalog = parallel_map_items(
-        catalog,
-        _ortho_map,
-        max_workers=jobs,
-        mode='process' if jobs > 1 else 'serial',
-        extra_kwargs=dict(outdir=outdir,
-                          te_dems=te_dems,
-                          drop_empty=drop_empty))
+    if skip_ortho:
+        orthorectified_catalog = catalog
+    else:
+        orthorectified_catalog = parallel_map_items(
+            catalog,
+            _ortho_map,
+            max_workers=jobs,
+            mode='process' if jobs > 1 else 'serial',
+            extra_kwargs=dict(outdir=outdir,
+                              te_dems=te_dems,
+                              drop_empty=drop_empty,
+                              as_vrt=as_vrt,
+                              as_utm=as_utm))
 
     if pansharpen:
         pansharpened_catalog = parallel_map_items(
@@ -144,7 +167,8 @@ def wv_ortho(stac_catalog,
             mode='process' if jobs > 1 else 'serial',
             extra_kwargs=dict(
                 outdir=outdir,
-                item_pairs_dct=associate_msi_pan(orthorectified_catalog)))
+                item_pairs_dct=associate_msi_pan(orthorectified_catalog),
+                as_rgb=as_rgb))
     else:
         pansharpened_catalog = orthorectified_catalog
 
@@ -189,12 +213,16 @@ def _ortho_map(stac_item, outdir, drop_empty=False, *args, **kwargs):
     return output_stac_item
 
 
-def orthorectify(stac_item, outdir, te_dems, to_utm=False):
-    # TODO how to keep GCPs in output?
-    # TODO how to notate nonconstant GSD in STAC metadata?
+def orthorectify(stac_item, outdir, te_dems, as_vrt, as_utm):
     in_fpath = stac_item.assets['data'].href
-    out_fpath = os.path.splitext(
-        os.path.join(outdir, os.path.basename(in_fpath)))[0] + '.tif'
+    if as_vrt:
+        out_fpath = os.path.splitext(
+            os.path.join(outdir, os.path.basename(in_fpath)))[0] + '.vif'
+        cmd_str_out = '-of VRT'
+    else:
+        out_fpath = os.path.splitext(
+            os.path.join(outdir, os.path.basename(in_fpath)))[0] + '.tif'
+        cmd_str_out = '-of COG -co BLOCKSIZE=64 -co COMPRESS=DEFLATE'
 
     lon, lat = np.concatenate(
         shapely.geometry.asShape(stac_item.geometry).centroid.xy)
@@ -207,16 +235,15 @@ def orthorectify(stac_item, outdir, te_dems, to_utm=False):
     # TODO: is this necessary for epsg=utm?
     # https://gis.stackexchange.com/questions/193094/can-gdalwarp-reproject-from-espg4326-wgs84-to-utm
     # '+proj=utm +zone=12 +datum=WGS84 +units=m +no_defs'
-    if to_utm:
+    if as_utm:
         epsg = watch.gis.spatial_reference.utm_epsg_from_latlon(lat, lon)
     else:
         epsg = 4326
 
     cmd_str = ub.paragraph(f'''
         gdalwarp
-        --debug off -of COG
-        -co BLOCKSIZE=64
-        -co COMPRESS=DEFLATE
+        --debug off
+        {cmd_str_out}
         -t_srs EPSG:{epsg} -et 0
         -rpc -to RPC_DEM={dem_fpath}
         -overwrite
@@ -230,93 +257,14 @@ def orthorectify(stac_item, outdir, te_dems, to_utm=False):
     return item
 
 
-def associate_msi_pan(stac_catalog):
-    '''
-    Returns a dict {msi_item.id: pan_item}, where pan_item can be
-    nonunique.
-
-    '''
-
-    # more efficient way to do this if collections are preserved during
-    # intermediate steps:
-    # search = catalog.search(collections=['worldview-nitf'])
-    # items = list(search.get_items()
-    items_dct = {
-        i.id: i
-        for i in stac_catalog.get_all_items()
-        if i.properties['constellation'] == 'worldview'
-    }
-
-    if 0:
-
-        # more robust way of matching PAN->MSI items one-to-many
-
-        import pandas as pd
-        from parse import parse
-
-        df = pd.DataFrame.from_records(
-            [item.properties for item in items_dct.values()])
-        df['id'] = list(items_dct.keys())
-
-        def _part(_id):
-            result = parse('{}_P{part:3d}', _id)
-            if result is not None:
-                return result['part']
-            else:
-                return -1
-
-        df['part'] = list(map(_part, df['id']))
-
-        def _vnir_source(source):
-            if source in {
-                    'DigitalGlobe Acquired Image',
-                    'DigitalGlobe Acquired Imagery'
-            }:
-                return -1
-            for s in source.split(', '):
-                try:
-                    p = parse('{instr:l}: {rest}', s)
-                    assert p['instr'] in {'SWIR', 'VNIR', 'CAVIS'}, source
-                    if p['instr'] == 'VNIR':
-                        return p['rest']
-                except KeyError:
-                    print(s, p)
-            return -1
-
-        df['vnir_source'] = list(map(_vnir_source, df['nitf:source']))
-
-        df['geometry'] = [items_dct[i].geometry for i in df['id']]
-
-        raise NotImplementedError
-
-    else:
-
-        # hacky way of matching up items by ID. Only works for pairs of 1 PAN
-        # and 1 MSI, and only some sensors.
-        # this matches up 40152/52563 items in the catalog.
-        #
-        # There are 29000 PAN items, so it matches about 2/3 of PAN.
-        # The rest, besides different naming schemes, may be accounted for
-        # by the fact that PAN and MSI taken during the same collect
-        # can have different spatial tiling.
-        mp_dct = {}
-        for _id in items_dct:
-            code = _id[14]
-            if code != 'P':
-                pid = _id[:14] + 'P' + _id[15:]
-                if pid in items_dct:
-                    mp_dct[_id] = items_dct[pid]
-        return mp_dct
-
-
 @maps
-def _pan_map(stac_item, outdir, item_pairs_dct):
+def _pan_map(stac_item, outdir, item_pairs_dct, as_rgb):
 
     print("* Pansharpening WV item: '{}'".format(stac_item.id))
 
     if stac_item.id in item_pairs_dct:
         output_stac_item = pansharpen(item_pairs_dct[stac_item.id], stac_item,
-                                      outdir)
+                                      outdir, as_rgb)
     else:
         print("** Not a WV MSI image or no paired PAN image, skipping!")
         output_stac_item = stac_item
@@ -324,7 +272,7 @@ def _pan_map(stac_item, outdir, item_pairs_dct):
     return output_stac_item
 
 
-def pansharpen(stac_item_pan, stac_item_msi, outdir, as_rgb=False):
+def pansharpen(stac_item_pan, stac_item_msi, outdir, as_rgb):
     '''
     Returns a modified copy of stac_item_msi with a new asset containing
     the pansharpened image.

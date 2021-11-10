@@ -178,3 +178,83 @@ def maps(_item_map=None, history_entry=None):
         return output_stac_item
 
     return wrapper
+
+
+def associate_msi_pan(stac_catalog):
+    '''
+    Match up WorldView multispectral and panchromatic items.
+
+    Returns a dict {msi_item.id: pan_item}, where pan_item can be
+    nonunique.
+    '''
+
+    # more efficient way to do this if collections are preserved during
+    # intermediate steps:
+    # search = catalog.search(collections=['worldview-nitf'])
+    # items = list(search.get_items()
+    items_dct = {
+        i.id: i
+        for i in stac_catalog.get_all_items()
+        if i.properties['constellation'] == 'worldview'
+    }
+
+    if 0:
+
+        # more robust way of matching PAN->MSI items one-to-many
+
+        import pandas as pd
+        from parse import parse
+
+        df = pd.DataFrame.from_records(
+            [item.properties for item in items_dct.values()])
+        df['id'] = list(items_dct.keys())
+
+        def _part(_id):
+            result = parse('{}_P{part:3d}', _id)
+            if result is not None:
+                return result['part']
+            else:
+                return -1
+
+        df['part'] = list(map(_part, df['id']))
+
+        def _vnir_source(source):
+            if source in {
+                    'DigitalGlobe Acquired Image',
+                    'DigitalGlobe Acquired Imagery'
+            }:
+                return -1
+            for s in source.split(', '):
+                try:
+                    p = parse('{instr:l}: {rest}', s)
+                    assert p['instr'] in {'SWIR', 'VNIR', 'CAVIS'}, source
+                    if p['instr'] == 'VNIR':
+                        return p['rest']
+                except KeyError:
+                    print(s, p)
+            return -1
+
+        df['vnir_source'] = list(map(_vnir_source, df['nitf:source']))
+
+        df['geometry'] = [items_dct[i].geometry for i in df['id']]
+
+        raise NotImplementedError
+
+    else:
+
+        # hacky way of matching up items by ID. Only works for pairs of 1 PAN
+        # and 1 MSI, and only some sensors.
+        # this matches up 40152/52563 items in the catalog.
+        #
+        # There are 29000 PAN items, so it matches about 2/3 of PAN.
+        # The rest, besides different naming schemes, may be accounted for
+        # by the fact that PAN and MSI taken during the same collect
+        # can have different spatial tiling.
+        mp_dct = {}
+        for _id in items_dct:
+            code = _id[14]
+            if code != 'P':
+                pid = _id[:14] + 'P' + _id[15:]
+                if pid in items_dct:
+                    mp_dct[_id] = items_dct[pid]
+        return mp_dct
