@@ -225,18 +225,16 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
             empty_aids = np.array(annots.aids)[np.array(remove_fn(annots))]
             coco_dset.remove_annotations(list(empty_aids))
             print('removing small:', list(empty_aids))
-            print('after removing small', set(coco_dset.annots().get('track_id', None)))
+            print('after removing small',
+                  set(coco_dset.annots().get('track_id', None)))
         return coco_dset
 
-    def as_video(annots, coco_dset):
-        # gets bboxes and polygons in video space
+    def polys_in_video(annots, coco_dset):
+        # gets polygons in video space
         # TODO are there vectorized versions of these functions?
         # ideally, annots.detections.warp(list_of_affines)
 
         # separate into lists
-        boxes = annots.detections.boxes
-        box_fmt = boxes.format
-        boxes = [kwimage.Boxes([box], box_fmt) for box in boxes.data]
         polys = annots.detections.data['segmentations'].to_polygon_list()
         warps = [
             kwimage.Affine.coerce(aff)
@@ -245,15 +243,12 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
         ]
 
         # apply warping
-        boxes = [b.warp(w) for b, w in zip(boxes, warps)]
         polys = [p.warp(w) for p, w in zip(polys, warps)]
 
         # put them back together
-        boxes = kwimage.Boxes(np.concatenate([box.data for box in boxes]),
-                              box_fmt)
         polys = kwimage.PolygonList(polys)
 
-        return boxes, polys
+        return polys
 
     #
     # 1.
@@ -269,8 +264,7 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
             except ValueError:
                 return True
 
-        _, polys = as_video(annots, coco_dset)
-        return list(map(_is_invalid, polys))
+        return list(map(_is_invalid, polys_in_video(annots, coco_dset)))
 
     coco_dset = remove_annotations(coco_dset, are_invalid)
 
@@ -281,8 +275,10 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
     if min_area_px is not None and min_area_px > 0:
 
         def are_small(annots):
-            boxes, _ = as_video(annots, coco_dset)
-            return boxes.area.sum(axis=1) < min_area_px
+            return np.array([
+                poly.to_shapely().area
+                for poly in polys_in_video(annots, coco_dset)
+            ]) < min_area_px
 
         coco_dset = remove_annotations(coco_dset, are_small)
 
