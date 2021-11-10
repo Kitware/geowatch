@@ -3,6 +3,7 @@ import os
 import sys
 from glob import glob
 import tempfile
+import re
 
 import pystac
 
@@ -44,12 +45,12 @@ def _item_map(stac_item, outdir, sensor_mapping):
 
     data_asset_hrefs = []
     for asset_name, asset in stac_item.assets.items():
-        if((asset.roles is None
-            or 'data' not in asset.roles)
-           and asset_name != 'data'):
-            continue
-        else:
+        if((asset.roles is not None and 'data' in asset.roles) or
+           asset_name == 'data' or
+           re.search(r'\.(tiff?|jp2)$', asset.href, re.I) is not None):
             data_asset_hrefs.append(asset.href)
+        else:
+            continue
 
     if len(data_asset_hrefs) == 0:
         print("* Warning * Couldn't find any data assets for "
