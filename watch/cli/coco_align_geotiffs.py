@@ -1346,20 +1346,18 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     first_obj = obj_group[0]
     chan_code = obj_group[0].get('channels', '')
 
-    PATH_SAFE = True
-    if PATH_SAFE:
-        # Ensure chan codes dont break thing
-        chan_code = chan_code.replace('|', '_')
-        chan_code = chan_code.replace(':', '-')
-
-    if len(chan_code) > 8:
+    # Ensure chan codes dont break thing
+    def sanatize_chan_pnams(cs):
+        return cs.replace('|', '_').replace(':', '-')
+    chan_pname = sanatize_chan_pnams(chan_code)
+    if len(chan_pname) > 10:
         # Hack to prevent long names for docker (limit is 242 chars)
         num_bands = kwcoco.FusedChannelSpec.coerce(chan_code).numel()
-        chan_code = '{}:{}'.format(ub.hash_data(chan_code, base='abc')[0:8], num_bands)
+        chan_pname = '{}_{}'.format(ub.hash_data(chan_pname, base='abc')[0:8], num_bands)
 
     if is_multi_image:
         multi_dpath = ub.ensuredir((dst_dpath, name))
-        dst_gpath = join(multi_dpath, name + '_' + chan_code + '.tif')
+        dst_gpath = join(multi_dpath, name + '_' + chan_pname + '.tif')
     else:
         dst_gpath = join(dst_dpath, name + '.tif')
 

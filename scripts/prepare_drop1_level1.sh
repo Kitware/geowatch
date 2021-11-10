@@ -19,10 +19,10 @@ dvc unprotect $UNSTRUCTURED_KWCOCO_BUNDLE/data.kwcoco.json
 dvc unprotect $ALIGNED_KWCOCO_BUNDLE/*/*.json
 dvc unprotect $ALIGNED_KWCOCO_BUNDLE/*.json
 
-# Combine all regions into a single geojson file
-python -m watch.cli.merge_region_models \
-    --src $UNSTRUCTURED_KWCOCO_BUNDLE/region_models/*.geojson \
-    --dst $UNSTRUCTURED_KWCOCO_BUNDLE/all_regions.geojson
+# Combine all regions into a single geojson file (exists in DVC)
+#python -m watch.cli.merge_region_models \
+#    --src $UNSTRUCTURED_KWCOCO_BUNDLE/region_models/*.geojson \
+#    --dst $UNSTRUCTURED_KWCOCO_BUNDLE/all_regions.geojson
 
 # Ensure unstructure drop1 data has geo-info in the kwcoco file 
 # (makes running the align script faster)

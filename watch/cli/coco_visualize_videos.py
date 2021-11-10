@@ -57,7 +57,8 @@ class CocoVisualizeConfig(scfg.Config):
             writes them adjacent to the input kwcoco file
             ''')),
 
-        'num_workers': scfg.Value(0, help='number of parallel draw jobs'),
+        'workers': scfg.Value(4, help='number of parallel procs'),
+        'max_workers': scfg.Value(None, help='DEPRECATED USE workers'),
 
         'space': scfg.Value('video', help='can be image or video space'),
 
@@ -119,8 +120,11 @@ def main(cmdline=True, **kwargs):
     channels = config['channels']
     print('config = {}'.format(ub.repr2(dict(config), nl=2)))
 
-    num_workers = util_globals.coerce_num_workers(config['num_workers'])
-    print('num_workers = {!r}'.format(num_workers))
+    if config['max_workers'] is not None:
+        max_workers = util_globals.coerce_num_workers(config['max_workers'])
+    else:
+        max_workers = util_globals.coerce_num_workers(config['workers'])
+    print('max_workers = {!r}'.format(max_workers))
 
     coco_dset = kwcoco.CocoDataset.coerce(config['src'])
     print('coco_dset.fpath = {!r}'.format(coco_dset.fpath))
@@ -136,7 +140,7 @@ def main(cmdline=True, **kwargs):
         coco_dset.index.videos.items(), total=len(coco_dset.index.videos),
         desc='viz videos', verbose=3)
 
-    pool = ub.JobPool(mode='thread', max_workers=num_workers)
+    pool = ub.JobPool(mode='thread', max_workers=max_workers)
 
     # TODO:
     from scriptconfig.smartcast import smartcast
@@ -256,7 +260,7 @@ def main(cmdline=True, **kwargs):
             video_names=video_names,
             draw_imgs=config['draw_imgs'],
             draw_anns=config['draw_anns'],
-            num_workers=config['num_workers'],
+            workers=max_workers,
             zoom_to_tracks=config['zoom_to_tracks'],
             frames_per_second=0.7,
         )
@@ -404,12 +408,24 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         chan_list = chan_group_obj.parsed
         chan_group = chan_group_obj.spec
 
+        # sanatize channel paths (todo: kwcoco helper for this)
+        def sanatize_chan_pnams(cs):
+            return cs.replace('|', '_').replace(':', '-')
+        chan_pname = sanatize_chan_pnams(chan_group)
+
         # spec = str(chan.channels.spec)
-        img_chan_dpath = img_view_dpath / chan_group
-        ann_chan_dpath = ann_view_dpath / chan_group
+        img_chan_dpath = img_view_dpath / chan_pname
+        ann_chan_dpath = ann_view_dpath / chan_pname
         ann_chan_dpath.mkdir(parents=True, exist_ok=1)
         img_chan_dpath.mkdir(parents=True, exist_ok=1)
-        suffix = '_'.join([chan_group, sensor_coarse, align_method])
+
+        if len(chan_pname) > 10:
+            # Hack to prevent long names for docker (limit is 242 chars)
+            num_bands = kwcoco.FusedChannelSpec.coerce(chan_code).numel()
+            chan_pname2 = '{}_{}'.format(ub.hash_data(chan_pname, base='abc')[0:8], num_bands)
+        else:
+            chan_pname2 = chan_pname
+        suffix = '_'.join([chan_pname2, sensor_coarse, align_method])
         view_img_fpath = ub.augpath(name, dpath=img_chan_dpath) + '_' + suffix + '.view_img.jpg'
         view_ann_fpath = ub.augpath(name, dpath=ann_chan_dpath) + '_' + suffix + '.view_ann.jpg'
 
