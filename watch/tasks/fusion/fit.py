@@ -141,24 +141,12 @@ def make_fit_config(cmdline=False, **kwargs):
 
     # Setup scriptconfig-like special arguments to set a config via a file or
     # dump some config to stdout or disk
-    config_parser = parser.add_argument_group("Other")
+    config_parser = parser.add_argument_group('Other')
 
-    config_parser.add_argument('--profile', action='store_true', help=ub.paragraph(
+    parser.add_argument('--profile', action='store_true', help=ub.paragraph(
         '''
         Fit does nothing with this flag. This just allows for `@xdev.profile`
-        profiling.
-        '''))
-
-    config_parser.add_argument('--torch_sharing_strategy', default='default', help=ub.paragraph(
-        '''
-        Torch multiprocessing sharing strategy.
-        Can be default, file_descriptor, file_system
-        '''))
-
-    config_parser.add_argument('--torch_start_method', default='default', help=ub.paragraph(
-        '''
-        Torch multiprocessing sharing strategy.
-        Can be fork, spawn, forkserver
+        profiling which checks sys.argv separately.
         '''))
 
     config_parser.add_argument('--init', default='noop', help=ub.paragraph(
@@ -172,7 +160,7 @@ def make_fit_config(cmdline=False, **kwargs):
         packaged state.
         '''))
 
-    callback_parser = parser.add_argument_group("Callbacks")
+    callback_parser = parser.add_argument_group('Callbacks')
 
     # our extension callbacks have arg parsers
     pl_ext.callbacks.BatchPlotter.add_argparse_args(callback_parser)
@@ -182,7 +170,7 @@ def make_fit_config(cmdline=False, **kwargs):
         '''Number of epochs with no improvement before early stopping'''))
 
     # Setup common fields and modal switches
-    modal_parser = parser.add_argument_group("Modal")
+    modal_parser = parser.add_argument_group('Modal')
 
     modal_parser.add_argument(
         '--datamodule', choices=available_datamodules, default='KWCocoVideoDataModule',
@@ -226,7 +214,7 @@ def make_fit_config(cmdline=False, **kwargs):
                 default_workdir = (smart_dvc_dpath / 'experiments' /
                                    user_info['user'] / user_info['hostname'])
 
-    common_parser = parser.add_argument_group("Common")
+    common_parser = parser.add_argument_group('Common')
     common_parser.add_argument(
         '--workdir', default=str(default_workdir),
         help=ub.paragraph(
@@ -309,7 +297,7 @@ def make_fit_config(cmdline=False, **kwargs):
 
     # Construct a netharn-like training directory based on relevant hyperparams
     args.train_hashid = ub.hash_data(ub.map_vals(str, learning_config))[0:16]
-    args.train_name = "{method}-{train_hashid}".format(**args.__dict__)
+    args.train_name = '{method}-{train_hashid}'.format(**args.__dict__)
 
     if args.default_root_dir is None:
         args.default_root_dir = pathlib.Path(args.workdir) / args.train_name
@@ -319,6 +307,10 @@ def make_fit_config(cmdline=False, **kwargs):
 @profile
 def make_lightning_modules(args=None, cmdline=False, **kwargs):
     """
+
+    CommandLine:
+        xdoctest -m /home/joncrall/code/watch/watch/tasks/fusion/fit.py make_lightning_modules
+
     Example:
         >>> from watch.tasks.fusion.fit import *  # NOQA
         >>> args = None
@@ -334,15 +326,8 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     args, parser = make_fit_config(args=args, cmdline=cmdline, **kwargs)
 
     args_dict = args.__dict__
-    print("{train_name}\n====================".format(**args_dict))
+    print('{train_name}\n===================='.format(**args_dict))
     print('args_dict = {}'.format(ub.repr2(args_dict, nl=1, sort=0)))
-
-    from watch.utils.lightning_ext import util_globals
-    util_globals.configure_hacks(
-        num_workers=args.num_workers,
-        torch_sharing_strategy=args.torch_sharing_strategy,
-        torch_start_method=args.torch_start_method,
-    )
 
     pathlib.Path(args.workdir).mkdir(exist_ok=True, parents=True)
 
@@ -355,25 +340,25 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     datamodule_vars = ub.compatible(args.__dict__, datamodule_class.__init__)
     # datamodule_vars["preprocessing_step"] = model.preprocessing_step
     datamodule = datamodule_class(**datamodule_vars)
-    datamodule.setup("fit")
+    datamodule.setup('fit')
 
     # init method from args
     method_var_dict = args.__dict__
 
     # TODO: need a better way to indicate that a method needs parameters from a
     # datamodule, and maybe the reverse too
-    if hasattr(datamodule_class, "bce_weight"):
-        method_var_dict["pos_weight"] = getattr(datamodule_class, "bce_weight")
+    if hasattr(datamodule_class, 'bce_weight'):
+        method_var_dict['pos_weight'] = getattr(datamodule_class, 'bce_weight')
 
     method_var_dict = ub.compatible(method_var_dict, method_class.__init__)
 
-    if hasattr(datamodule, "input_stats"):
+    if hasattr(datamodule, 'input_stats'):
         print('datamodule.input_stats = {}'.format(
             ub.repr2(datamodule.input_stats, nl=2, sort=0)))
-        method_var_dict["input_stats"] = datamodule.input_stats
-        method_var_dict["input_channels"] = datamodule.input_channels
+        method_var_dict['input_stats'] = datamodule.input_stats
+        method_var_dict['input_channels'] = datamodule.input_channels
 
-    method_var_dict["classes"] = datamodule.classes
+    method_var_dict['classes'] = datamodule.classes
     # Note: Changed name from method to model
     model = method_class(**method_var_dict)
 
@@ -616,12 +601,12 @@ def main(**kwargs):
 
     import logging
     # configure logging at the root level of lightning
-    logging.getLogger("pytorch_lightning").setLevel(logging.DEBUG)
+    logging.getLogger('pytorch_lightning').setLevel(logging.DEBUG)
 
     fit_model(cmdline=True, **kwargs)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     if ub.argflag('--warntb'):
         import xdev
         xdev.make_warnings_print_tracebacks()

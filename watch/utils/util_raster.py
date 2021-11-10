@@ -25,7 +25,7 @@ from watch.gis.spatial_reference import utm_epsg_from_latlon
 
 
 def mask(raster, nodata=0, save=True, convex_hull=False, as_poly=True):
-    '''
+    """
     Compute a raster's valid data mask in pixel coordinates.
 
     Note that this is the rasterio mask, which for multi-band rasters is the
@@ -68,7 +68,7 @@ def mask(raster, nodata=0, save=True, convex_hull=False, as_poly=True):
         >>> mask_poly = mask(path, as_poly=True)
         >>> import shapely
         >>> assert isinstance(mask_poly, shapely.geometry.Polygon)
-    '''
+    """
     # workaround for
     # https://rasterio.readthedocs.io/en/latest/faq.html#why-can-t-rasterio-find-proj-db-rasterio-from-pypi-versions-1-2-0
     with TemporaryEnvironment({'PROJ_LIB': None}):
@@ -114,7 +114,7 @@ def mask(raster, nodata=0, save=True, convex_hull=False, as_poly=True):
 
 
 def crop_to(pxl_polys, raster, bounds_policy, intersect_policy='crop'):
-    '''
+    """
     Crop pxl_polys to raster in one of several ways.
 
     Computation is independent per pxl_poly, but vectorized for speed.
@@ -169,7 +169,7 @@ def crop_to(pxl_polys, raster, bounds_policy, intersect_policy='crop'):
         >>> assert cropped.bounds == (924, 14, 2000, 2000)
 
 
-    '''
+    """
     assert bounds_policy in {'none', 'bounds', 'valid'}, bounds_policy
     assert intersect_policy in {'keep', 'crop', 'discard'}, intersect_policy
 
@@ -222,7 +222,7 @@ def crop_to(pxl_polys, raster, bounds_policy, intersect_policy='crop'):
 
 @dataclass
 class ResampledRaster(ExitStack):
-    '''
+    """
     Context manager to rescale a raster on the fly using rasterio
 
     This changes the number of pixels in the raster while maintaining its geographic bounds, that is, it changes the raster's GSD.
@@ -272,7 +272,7 @@ class ResampledRaster(ExitStack):
         https://rasterio.readthedocs.io/en/latest/topics/reading.html
         https://rasterio.readthedocs.io/en/latest/topics/profiles.html
         [1] https://rasterio.readthedocs.io/en/latest/api/rasterio.enums.html#rasterio.enums.Resampling
-    '''
+    """
     raster: Union[str, rasterio.DatasetReader]
     scale: float = 2
     read: bool = True
@@ -330,7 +330,7 @@ class ResampledRaster(ExitStack):
 
 @dataclass
 class GdalOpen:
-    '''
+    """
     A simple context manager for friendlier gdal use.
 
     Example:
@@ -348,7 +348,7 @@ class GdalOpen:
         >>> with GdalOpen(path) as dataset:
         >>>     print(dataset.GetDescription())  # do stuff
 
-    '''
+    """
     path: str
 
     def __enter__(self):
@@ -362,7 +362,7 @@ class GdalOpen:
 
 
 def reroot_vrt(old_path, new_path, keep_old=True):
-    '''
+    """
     Copy a VRT file, fixing relative paths to its component images
 
     Example:
@@ -379,7 +379,7 @@ def reroot_vrt(old_path, new_path, keep_old=True):
         >>> gdal.BuildVRT(tmp_path, sorted(bands))
         >>> # now move it somewhere more convenient
         >>> reroot_vrt(tmp_path, './bands.vrt', keep_old=False)
-    '''
+    """
     if os.path.abspath(old_path) == os.path.abspath(new_path):
         return
 
@@ -414,7 +414,7 @@ def reroot_vrt(old_path, new_path, keep_old=True):
 
 
 def make_vrt(in_paths, out_path, mode, relative_to_path=None, **kwargs):
-    '''
+    """
     Stack multiple band files in the same directory into a single VRT
 
     Args:
@@ -454,7 +454,7 @@ def make_vrt(in_paths, out_path, mode, relative_to_path=None, **kwargs):
     References:
         [1] https://gdal.org/programs/gdalbuildvrt.html
         [2] https://gdal.org/python/osgeo.gdal-module.html#BuildVRTOptions
-    '''
+    """
 
     if mode == 'stacked':
         kwargs['separate'] = True
@@ -514,7 +514,7 @@ def make_vrt(in_paths, out_path, mode, relative_to_path=None, **kwargs):
 
 
 def scenes_to_vrt(scenes, vrt_root, relative_to_path):
-    '''
+    """
     Search for band files from compatible scenes and stack them in a single mosaicked VRT
 
     A simple wrapper around watch.utils.util_raster.make_vrt that performs both
@@ -542,7 +542,7 @@ def scenes_to_vrt(scenes, vrt_root, relative_to_path):
         >>> #
         >>> # clean up
         >>> os.remove(out_path)
-    '''
+    """
     # first make VRTs for individual tiles
     # TODO use https://rasterio.readthedocs.io/en/latest/topics/memory-files.html
     # for these intermediate files?
@@ -568,7 +568,7 @@ def scenes_to_vrt(scenes, vrt_root, relative_to_path):
 
 
 def reproject_crop(in_path, aoi, code=None, out_path=None, vrt_root=None):
-    '''
+    """
     Crop an image to an AOI and reproject to its UTM CRS (or another CRS)
 
     Unfortunately, this cannot be done in a single step in scenes_to_vrt
@@ -617,7 +617,7 @@ def reproject_crop(in_path, aoi, code=None, out_path=None, vrt_root=None):
         >>> #
         >>> # clean up
         >>> os.remove(out_path)
-    '''
+    """
     if out_path is None:
         root, name = os.path.split(in_path)
         if vrt_root is None:

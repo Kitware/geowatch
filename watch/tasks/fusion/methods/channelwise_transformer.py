@@ -85,53 +85,55 @@ class MultimodalTransformer(pl.LightningModule):
             >>> parent_parser.print_help()
             >>> parent_parser.parse_known_args()
         """
-        parser = parent_parser.add_argument_group("MultimodalTransformer")
+        from scriptconfig.smartcast import smartcast
+        parser = parent_parser.add_argument_group('MultimodalTransformer')
         parser.add_argument('--name', default='unnamed_model', help=ub.paragraph(
             '''
             Specify a name for the experiment. (Unsure if the Model is the place for this)
             '''))
 
-        parser.add_argument("--optimizer", default='RAdam', type=str, help='Optimizer name supported by the netharn API')
-        parser.add_argument("--learning_rate", default=1e-3, type=float)
-        parser.add_argument("--weight_decay", default=0., type=float)
+        parser.add_argument('--optimizer', default='RAdam', type=str, help='Optimizer name supported by the netharn API')
+        parser.add_argument('--learning_rate', default=1e-3, type=float)
+        parser.add_argument('--weight_decay', default=0., type=float)
 
-        parser.add_argument("--positive_change_weight", default=1.0, type=float)
-        parser.add_argument("--negative_change_weight", default=1.0, type=float)
-        parser.add_argument("--class_weights", default='auto', type=str, help='class weighting strategy')
-        parser.add_argument("--saliency_weights", default='auto', type=str, help='class weighting strategy')
+        parser.add_argument('--positive_change_weight', default=1.0, type=float)
+        parser.add_argument('--negative_change_weight', default=1.0, type=float)
+        parser.add_argument('--class_weights', default='auto', type=str, help='class weighting strategy')
+        parser.add_argument('--saliency_weights', default='auto', type=str, help='class weighting strategy')
 
         # Model names define the transformer encoder used by the method
         available_encoders = list(transformer.encoder_configs.keys()) + ['deit']
 
         parser.add_argument(
-            "--tokenizer", default='rearrange', type=str,
+            '--tokenizer', default='rearrange', type=str,
             choices=['dwcnn', 'rearrange'], help=ub.paragraph(
                 '''
                 How image patches aare broken into tokens.
                 rearrange just shuffles raw pixels. dwcnn is a is a mobile
                 convolutional stem.
                 '''))
-        parser.add_argument("--token_norm", default='auto', type=str,
+        parser.add_argument('--token_norm', default='auto', type=str,
                             choices=['auto', 'group', 'batch'])
-        parser.add_argument("--arch_name", default='smt_it_joint_p8', type=str,
+        parser.add_argument('--arch_name', default='smt_it_joint_p8', type=str,
                             choices=available_encoders)
-        parser.add_argument("--dropout", default=0.1, type=float)
-        parser.add_argument("--global_class_weight", default=1.0, type=float)
-        parser.add_argument("--global_change_weight", default=1.0, type=float)
-        parser.add_argument("--global_saliency_weight", default=0.0, type=float)
+        parser.add_argument('--dropout', default=0.1, type=float)
+        parser.add_argument('--global_class_weight', default=1.0, type=float)
+        parser.add_argument('--global_change_weight', default=1.0, type=float)
+        parser.add_argument('--global_saliency_weight', default=0.0, type=float)
 
-        parser.add_argument("--change_loss", default='cce')
-        parser.add_argument("--class_loss", default='focal')
-        parser.add_argument("--saliency_loss", default='focal', help='saliency is trained to match any "positive/foreground/salient" class')
+        parser.add_argument('--change_loss', default='cce')
+        parser.add_argument('--class_loss', default='focal')
+        parser.add_argument('--saliency_loss', default='focal', help='saliency is trained to match any "positive/foreground/salient" class')
 
-        parser.add_argument("--change_head_hidden", default=2, type=int, help='number of hidden layers in the change head')
-        parser.add_argument("--class_head_hidden", default=2, type=int, help='number of hidden layers in the category head')
-        parser.add_argument("--saliency_head_hidden", default=2, type=int, help='number of hidden layers in the saliency head')
+        parser.add_argument('--change_head_hidden', default=2, type=int, help='number of hidden layers in the change head')
+        parser.add_argument('--class_head_hidden', default=2, type=int, help='number of hidden layers in the category head')
+        parser.add_argument('--saliency_head_hidden', default=2, type=int, help='number of hidden layers in the saliency head')
 
         # parser.add_argument("--input_scale", default=2000.0, type=float)
-        parser.add_argument("--window_size", default=8, type=int)
+        parser.add_argument('--window_size', default=8, type=int)
+        parser.add_argument('--squash_modes', default=False, type=smartcast)
         parser.add_argument(
-            "--attention_impl", default='exact', type=str, help=ub.paragraph(
+            '--attention_impl', default='exact', type=str, help=ub.paragraph(
                 '''
                 Implementation for attention computation.
                 Can be:
@@ -174,6 +176,7 @@ class MultimodalTransformer(pl.LightningModule):
                  tokenizer='rearrange',
                  token_norm='auto',
                  name='unnamed_expt',
+                 squash_modes=False,
                  classes=10):
 
         super().__init__()
@@ -181,6 +184,7 @@ class MultimodalTransformer(pl.LightningModule):
         self.name = name
 
         self.arch_name = arch_name
+        self.squash_modes = squash_modes
 
         # HACK:
         if input_stats is not None and 'input_stats' in input_stats:
@@ -324,25 +328,29 @@ class MultimodalTransformer(pl.LightningModule):
         self.class_metrics = nn.ModuleDict({
             # "acc": torchmetrics.Accuracy(),
             # "iou": torchmetrics.IoU(2),
-            "f1_micro": torchmetrics.F1(threshold=0.5, average='micro'),
-            "f1_macro": torchmetrics.F1(threshold=0.5, average='macro', num_classes=self.num_classes),
+            'f1_micro': torchmetrics.F1(threshold=0.5, average='micro'),
+            'f1_macro': torchmetrics.F1(threshold=0.5, average='macro', num_classes=self.num_classes),
         })
 
         self.change_metrics = nn.ModuleDict({
             # "acc": torchmetrics.Accuracy(),
             # "iou": torchmetrics.IoU(2),
-            "f1": torchmetrics.F1(),
+            'f1': torchmetrics.F1(),
         })
 
         self.saliency_metrics = nn.ModuleDict({
             # "acc": torchmetrics.Accuracy(),
             # "iou": torchmetrics.IoU(2),
-            "f1": torchmetrics.F1(),
+            # "f1": torchmetrics.F1(),
+            'f1_micro': torchmetrics.F1(threshold=0.5, average='micro'),
+            'f1_macro': torchmetrics.F1(threshold=0.5, average='macro', num_classes=self.saliency_num_classes),
         })
 
         self.input_channels.numel()
 
         in_features_raw = self.hparams.window_size * self.hparams.window_size
+        if self.squash_modes:
+            in_features_raw = in_features_raw * num_channels
 
         # TODO:
         #     - [ ] Dynamic / Learned embedding
@@ -356,6 +364,9 @@ class MultimodalTransformer(pl.LightningModule):
         in_features_pos = sum(p.size for p in self.add_encoding.transforms)
 
         in_features = in_features_pos + in_features_raw
+        self.in_features = in_features
+        self.in_features_pos = in_features_pos
+        self.in_features_raw = in_features_raw
 
         # TODO:
         #     - [X] Classifier MLP, skip connections
@@ -368,7 +379,8 @@ class MultimodalTransformer(pl.LightningModule):
                 # Construct tokenize on a per-stream basis
                 # import netharn as nh
                 tokenize = Rearrange(
-                    "b t c (h hs) (w ws) -> b t c h w (ws hs)",
+                    'b t c (h hs) (w ws) -> b t c h w (ws hs)',
+                    c=num_chan,
                     hs=self.hparams.window_size,
                     ws=self.hparams.window_size)
                 stream_tokenizers[stream_key] = tokenize
@@ -413,7 +425,7 @@ class MultimodalTransformer(pl.LightningModule):
 
         feat_dim = self.encoder.out_features
 
-        self.move_channels_last = Rearrange("b t c h w f -> b t h w f c")
+        self.move_channels_last = Rearrange('b t c h w f -> b t h w f c')
 
         # A simple linear layer that learns to combine channels
         self.channel_fuser = nh.layers.MultiLayerPerceptronNd(
@@ -533,6 +545,10 @@ class MultimodalTransformer(pl.LightningModule):
         assert len(self.stream_tokenizers) == 1
         tokenize = ub.peek(self.stream_tokenizers.values())
         raw_patch_tokens = tokenize(images)
+
+        if self.squash_modes:
+            raw_patch_tokens = einops.rearrange(raw_patch_tokens, 'b t c h w f -> b t 1 h w (c f)')
+
         # Add positional encodings for time, mode, and space.
         patch_tokens = self.add_encoding(raw_patch_tokens)
 
@@ -540,12 +556,16 @@ class MultimodalTransformer(pl.LightningModule):
         # Rather than just ignoring the first output?
         patch_feats = self.encoder(patch_tokens)
 
-        # Final channel-wise fusion
-        chan_last = self.move_channels_last(patch_feats)
+        if not self.squash_modes:
+            # Final channel-wise fusion
+            chan_last = self.move_channels_last(patch_feats)
 
-        # Latent channels are now marginalized away
-        spacetime_fused_features = self.channel_fuser(chan_last)[..., 0]
-        # spacetime_fused_features = einops.reduce(similarity, "b t c h w -> b t h w", "mean")
+            # Latent channels are now marginalized away
+            spacetime_fused_features = self.channel_fuser(chan_last)[..., 0]
+            # spacetime_fused_features = einops.reduce(similarity, "b t c h w -> b t h w", "mean")
+        else:
+            assert patch_feats.shape[2] == 1
+            spacetime_fused_features = patch_feats[:, :, 0, ...]
 
         # if 0:
         #     # TODO: add DotProduct back in?
@@ -586,7 +606,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> import kwcoco
             >>> from os.path import join
             >>> import os
-            >>> if 0:
+            >>> if 1:
             >>>     dvc_dpath = find_smart_dvc_dpath()
             >>>     coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/data.kwcoco.json')
             >>>     channels='swir16|swir22|blue|green|red|nir'
@@ -602,6 +622,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> )
             >>> datamodule.setup('fit')
             >>> torch_dset = datamodule.torch_datasets['train']
+            >>> torch_dset.disable_augmenter = True
             >>> input_stats = datamodule.input_stats
             >>> input_channels = datamodule.input_channels
             >>> classes = datamodule.classes
@@ -614,11 +635,14 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     # Backbone
             >>>     arch_name='smt_it_joint_p8',
             >>>     #arch_name='smt_it_stm_p8',
-            >>>     attention_impl='reformer',
+            >>>     attention_impl='performer',
             >>>     #arch_name='deit',
+            >>>     change_loss='dicefocal',
+            >>>     #class_loss='cce',
+            >>>     class_loss='focal',
+            >>>     saliency_loss='dicefocal',
             >>>     # ===========
             >>>     # Change Loss
-            >>>     change_loss='dicefocal',
             >>>     global_change_weight=1.00,
             >>>     positive_change_weight=1.0,
             >>>     negative_change_weight=0.05,
@@ -626,31 +650,31 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     # Class Loss
             >>>     global_class_weight=1.00,
             >>>     global_saliency_weight=1.00,
-            >>>     #class_loss='cce',
-            >>>     class_loss='focal',
             >>>     class_weights='auto',
             >>>     # ===========
             >>>     # Domain Metadata (Look Ma, not hard coded!)
             >>>     input_stats=input_stats,
             >>>     classes=classes,
             >>>     input_channels=input_channels,
-            >>>     tokenizer='dwcnn',
+            >>>     #tokenizer='dwcnn',
+            >>>     tokenizer='rearrange',
+            >>>     squash_modes=True,
             >>>     )
             >>> self.datamodule = datamodule
+            >>> self.di = datamodule
             >>> # Run one visualization
             >>> loader = datamodule.train_dataloader()
             >>> batch = next(iter(loader))
             >>> # Show batch before we do anything
             >>> import kwplot
             >>> kwplot.autompl(force='Qt5Agg')
-            >>> canvas = datamodule.draw_batch(batch, max_channels=1, overlay_on_image=0)
+            >>> canvas = datamodule.draw_batch(batch, max_channels=3, overlay_on_image=0)
             >>> kwplot.imshow(canvas)
             >>> device = 0
             >>> self.overfit(batch)
 
         nh.initializers.KaimingNormal()(self)
         nh.initializers.Orthogonal()(self)
-
         """
         import kwplot
         from watch.utils.slugify_ext import smart_truncate
@@ -661,7 +685,7 @@ class MultimodalTransformer(pl.LightningModule):
 
         sns = kwplot.autosns()
         datamodule = self.datamodule
-        device = 1
+        device = 0
         self = self.to(device)
         # loader = datamodule.train_dataloader()
         # batch = next(iter(loader))
@@ -676,7 +700,7 @@ class MultimodalTransformer(pl.LightningModule):
         loss_records = []
         loss_records = [g[0] for g in ub.group_items(loss_records, lambda x: x['step']).values()]
         step = 0
-        frame_idx = 0
+        _frame_idx = 0
         # dpath = ub.ensuredir('_overfit_viz09')
 
         optim_cls, optim_kw = nh.api.Optimizer.coerce(
@@ -687,13 +711,14 @@ class MultimodalTransformer(pl.LightningModule):
         #optim = torch.optim.AdamW(self.parameters(), lr=1e-4)
         optim = torch_optimizer.RAdam(self.parameters(), lr=3e-3, weight_decay=1e-5)
 
-        fig = kwplot.figure(fnum=1, doclf=True)
+        fnum = 2
+        fig = kwplot.figure(fnum=fnum, doclf=True)
         fig.set_size_inches(15, 6)
         fig.subplots_adjust(left=0.05, top=0.9)
-        for frame_idx in xdev.InteractiveIter(list(range(frame_idx + 1, 1000))):
-            # for frame_idx in list(range(frame_idx, 1000)):
+        for _frame_idx in xdev.InteractiveIter(list(range(_frame_idx + 1, 1000))):
+            # for _frame_idx in list(range(_frame_idx, 1000)):
             num_steps = 20
-            for i in ub.ProgIter(range(num_steps), desc='overfit'):
+            for _i in ub.ProgIter(range(num_steps), desc='overfit'):
                 optim.zero_grad()
                 outputs = self.training_step(batch)
                 outputs['item_losses']
@@ -705,8 +730,8 @@ class MultimodalTransformer(pl.LightningModule):
                 optim.step()
                 step += 1
             canvas = datamodule.draw_batch(batch, outputs=outputs, max_channels=1, overlay_on_image=0, max_items=4)
-            kwplot.imshow(canvas, pnum=(1, 2, 1), fnum=1)
-            fig = kwplot.figure(fnum=1, pnum=(1, 2, 2))
+            kwplot.imshow(canvas, pnum=(1, 2, 1), fnum=fnum)
+            fig = kwplot.figure(fnum=fnum, pnum=(1, 2, 2))
             #kwplot.imshow(canvas, pnum=(1, 2, 1))
             import pandas as pd
             ax = sns.lineplot(data=pd.DataFrame(loss_records), x='step', y='val', hue='part')
@@ -714,7 +739,7 @@ class MultimodalTransformer(pl.LightningModule):
             fig.suptitle(smart_truncate(str(optim).replace('\n', ''), max_length=64))
             img = render_figure_to_image(fig)
             img = kwimage.convert_colorspace(img, src_space='bgr', dst_space='rgb')
-            # fpath = join(dpath, 'frame_{:04d}.png'.format(frame_idx))
+            # fpath = join(dpath, 'frame_{:04d}.png'.format(_frame_idx))
             #kwimage.imwrite(fpath, img)
             xdev.InteractiveIter.draw()
         # TODO: can we get this batch to update in real time?
@@ -864,7 +889,7 @@ class MultimodalTransformer(pl.LightningModule):
             for logit_key, logit_val in logits.items():
                 _tmp = einops.rearrange(logit_val, 'b t h w c -> b (t c) h w')
                 _tmp2 = nn.functional.interpolate(
-                    _tmp, [H, W], mode="bilinear", align_corners=True)
+                    _tmp, [H, W], mode='bilinear', align_corners=True)
                 resampled = einops.rearrange(_tmp2, 'b (t c) h w -> b t h w c', c=logit_val.shape[4])
                 resampled_logits[logit_key] = resampled
 
@@ -1037,7 +1062,7 @@ class MultimodalTransformer(pl.LightningModule):
                 self.log(f'{stage}_loss', total_loss, prog_bar=True)
 
             # Detach the itemized losses
-            for path, val in ub.IndexableWalker(item_losses):
+            for _path, val in ub.IndexableWalker(item_losses):
                 if isinstance(val, torch.Tensor):
                     val.detach_()
 
@@ -1063,42 +1088,19 @@ class MultimodalTransformer(pl.LightningModule):
     @classmethod
     def load_package(cls, package_path, verbose=1):
         """
-        DEPRECATE IN FAVOR OF A KITWARE UTILITY
+        DEPRECATE IN FAVOR OF watch.tasks.fusion.utils.load_model_from_package
 
         TODO:
-            - [ ] We should be able to load the model without having access
-                  to this class. What is the right way to do that?
+            - [ ] Make the logic that defines the save_package and load_package
+                methods with appropriate package header data a lightning
+                abstraction.
         """
-        import torch.package
-        import json
-        #
-        # TODO: is there any way to introspect what these variables could be?
-
-        arch_name = "model.pkl"
-        module_name = 'watch_tasks_fusion'
-
-        imp = torch.package.PackageImporter(package_path)
-
-        # Assume this standardized header information exists that tells us the
-        # name of the resource corresponding to the model
-        try:
-            package_header = json.loads(imp.load_text(
-                'kitware_package_header', 'kitware_package_header.json'))
-        except Exception:
-            package_header = imp.load_pickle(
-                'kitware_package_header', 'kitware_package_header.pkl')
-        arch_name = package_header['arch_name']
-        module_name = package_header['module_name']
-
-        # from timm.models import efficientnet_blocks
-        # from timm.models import efficientnet_blocks  # NOQA
-        # efficientnet_blocks.DepthwiseSeparableConv
-
-        # pkg_root = imp.file_structure()
-        # print(pkg_root)
-        # pkg_data = pkg_root.children['.data']
-
-        self = imp.load_pickle(module_name, arch_name)
+        # NOTE: there is no gaurentee that this loads an instance of THIS
+        # model, the model is defined by the package and the tool that loads it
+        # is agnostic to the model contained in said package.
+        # This classmethod existing is a convinience more than anything else
+        from watch.tasks.fusion.utils import load_model_from_package
+        self = load_model_from_package(package_path)
         return self
 
     def save_package(self, package_path, verbose=1):
@@ -1184,12 +1186,13 @@ class MultimodalTransformer(pl.LightningModule):
         Ignore:
             7z l $HOME/.cache/watch/tests/package/my_package.pt
         """
-        import copy
+        # import copy
         import json
         import torch.package
 
         # shallow copy of self, to apply attribute hacks to
-        model = copy.copy(self)
+        # model = copy.copy(self)
+        model = self
 
         backup_attributes = {}
         # Remove attributes we don't want to pickle before we serialize
@@ -1199,6 +1202,7 @@ class MultimodalTransformer(pl.LightningModule):
             'train_dataloader',
             'val_dataloader',
             'test_dataloader',
+            '_load_state_dict_pre_hooks',  # lightning 1.5
         ]
         for key in unsaved_attributes:
             val = getattr(model, key)
@@ -1223,7 +1227,7 @@ class MultimodalTransformer(pl.LightningModule):
             for key in backup_attributes.keys():
                 setattr(model, key, None)
 
-            arch_name = "model.pkl"
+            arch_name = 'model.pkl'
             module_name = 'watch_tasks_fusion'
             """
             exp = torch.package.PackageExporter(package_path, verbose=True)
@@ -1231,8 +1235,8 @@ class MultimodalTransformer(pl.LightningModule):
             with torch.package.PackageExporter(package_path) as exp:
                 # TODO: this is not a problem yet, but some package types (mainly
                 # binaries) will need to be excluded and added as mocks
-                exp.extern("**", exclude=["watch.tasks.fusion.**"])
-                exp.intern("watch.tasks.fusion.**", allow_empty=False)
+                exp.extern('**', exclude=['watch.tasks.fusion.**'])
+                exp.intern('watch.tasks.fusion.**', allow_empty=False)
 
                 # Attempt to standardize some form of package metadata that can
                 # allow for model importing with fewer hard-coding requirements
@@ -1242,17 +1246,18 @@ class MultimodalTransformer(pl.LightningModule):
                     'module_name': module_name,
                 }
 
-                # old encoding (keep for a while)
-                exp.save_pickle(
-                    'kitware_package_header', 'kitware_package_header.pkl',
-                    package_header
-                )
+                if 0:
+                    # old encoding (keep for a while)
+                    exp.save_pickle(
+                        'kitware_package_header', 'kitware_package_header.pkl',
+                        package_header
+                    )
 
-                # new encoding
-                exp.save_text(
-                    'kitware_package_header', 'kitware_package_header.json',
-                    json.dumps(package_header)
-                )
+                    # new encoding
+                    exp.save_text(
+                        'kitware_package_header', 'kitware_package_header.json',
+                        json.dumps(package_header)
+                    )
 
                 # move to this?
                 exp.save_text(
@@ -1507,7 +1512,7 @@ class DWCNNTokenizer(nn.Module):
         self(inputs)
         """
         b, t, c, h, w = inputs.shape
-        inputs2d = einops.rearrange(inputs, "b t c h w -> (b t) c h w")
+        inputs2d = einops.rearrange(inputs, 'b t c h w -> (b t) c h w')
         tokens2d = self.stem(inputs2d)
-        tokens = einops.rearrange(tokens2d, "(b t) (c ef) h w -> b t c h w ef", b=b, t=t, ef=self.expand_factor)
+        tokens = einops.rearrange(tokens2d, '(b t) (c ef) h w -> b t c h w ef', b=b, t=t, ef=self.expand_factor)
         return tokens

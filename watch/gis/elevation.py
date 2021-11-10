@@ -111,7 +111,7 @@ def _query_open_elevation(lat, lon, cache=True, attempts=10, verbose=0):
                        appname='smart_watch/elevation_query', verbose=verbose)
     body = cacher.tryload()
     if body is None:
-        for i in range(attempts):
+        for _i in range(attempts):
             result = requests.get(query_url)
             if result.status_code != 200:
                 if verbose:

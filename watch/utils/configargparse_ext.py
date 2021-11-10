@@ -89,7 +89,7 @@ class ArgumentParser(configargparse.ArgumentParser):
             a.is_positional_arg = not a.option_strings
 
         if ignore_help_args:
-            args = [arg for arg in args if arg not in ("-h", "--help")]
+            args = [arg for arg in args if arg not in ('-h', '--help')]
 
         # maps a string describing the source (eg. env var) to a settings dict
         # to keep track of where values came from (used by print_values()).
@@ -145,7 +145,7 @@ class ArgumentParser(configargparse.ArgumentParser):
         supports_help_arg = any(
             a for a in self._actions if isinstance(a, argparse._HelpAction))
         skip_config_file_parsing = supports_help_arg and (
-            "-h" in args or "--help" in args)
+            '-h' in args or '--help' in args)
 
         # prepare for reading config file(s)
         known_config_keys = {config_key: action for action in self._actions
@@ -155,7 +155,7 @@ class ArgumentParser(configargparse.ArgumentParser):
         config_streams = []
         if config_file_contents is not None:
             stream = StringIO(config_file_contents)
-            stream.name = "method arg"
+            stream.name = 'method arg'
             config_streams = [stream]
         elif not skip_config_file_parsing:
             config_streams = self._open_config_files(args)
@@ -167,7 +167,7 @@ class ArgumentParser(configargparse.ArgumentParser):
             except ConfigFileParserException as e:
                 self.error(e)
             finally:
-                if hasattr(stream, "close"):
+                if hasattr(stream, 'close'):
                     stream.close()
 
             # add each config item to the commandline unless it's there already
@@ -189,7 +189,7 @@ class ArgumentParser(configargparse.ArgumentParser):
                 if not discard_this_key:
                     config_args += self.convert_item_to_command_line_arg(
                         action, key, value)
-                    source_key = "%s|%s" % (_CONFIG_FILE_SOURCE_KEY, stream.name)
+                    source_key = '%s|%s' % (_CONFIG_FILE_SOURCE_KEY, stream.name)
                     if source_key not in self._source_to_settings:
                         self._source_to_settings[source_key] = OrderedDict()
                     self._source_to_settings[source_key][key] = (action, value)
@@ -228,7 +228,7 @@ class ArgumentParser(configargparse.ArgumentParser):
         # check if the user specified this arg on the commandline
         if not ignore_write_args:
             output_file_paths = [getattr(namespace, a.dest, None) for a in self._actions
-                                 if getattr(a, "is_write_out_config_file_arg", False)]
+                                 if getattr(a, 'is_write_out_config_file_arg', False)]
             output_file_paths = [a for a in output_file_paths if a is not None]
             for a in output_file_paths:
                 import pathlib

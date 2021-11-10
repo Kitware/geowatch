@@ -1,17 +1,32 @@
-import kwimage
-import ubelt as ub
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+KWCoco video visualization script
+
+CommandLine:
+    # A demo of this script on toydata is as follows
+
+    TEMP_DPATH=$(mktemp -d)
+    echo "TEMP_DPATH = $TEMP_DPATH"
+    cd $TEMP_DPATH
+
+    KWCOCO_BUNDLE_DPATH=$TEMP_DPATH/toy_bundle
+    KWCOCO_FPATH=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json
+    VIZ_DPATH=$KWCOCO_BUNDLE_DPATH/_viz
+    python -m kwcoco toydata --key=vidshapes3-msi-frames7 --dst=$KWCOCO_FPATH
+    python -m watch.cli.coco_visualize_videos --src=$KWCOCO_FPATH --viz_dpath=$VIZ_DPATH --animate=True
+    python -m watch.cli.coco_visualize_videos --src=$KWCOCO_FPATH --viz_dpath=$VIZ_DPATH --zoom_to_tracks=True --start_frame=1 --num_frames=2 --animate=True
+"""
 import kwcoco
+import kwimage
+import pathlib
 import scriptconfig as scfg
+import ubelt as ub
 
 
 class CocoVisualizeConfig(scfg.Config):
     """
     Visualizes annotations on kwcoco video frames on each band
-
-    TODO:
-        - [X] Could parameterize which bands are displayed if that is useful
-        - [ ] Could finalize by creating an animation if we need these for slides
-        - [X] Could parallelize with ub.JobPool
 
     CommandLine:
         # Point to your kwcoco file
@@ -20,8 +35,16 @@ class CocoVisualizeConfig(scfg.Config):
 
         python -m watch.cli.coco_visualize_videos --src $COCO_FPATH --viz_dpath ./viz_out --channels="red|green|blue" --space="video"
 
+        COCO_FPATH=/home/joncrall/data/dvc-repos/smart_watch_dvc/drop1-S2-L8-WV-aligned/KR_R001/subdata.kwcoco.json
+        COCO_FPATH=/home/joncrall/data/dvc-repos/smart_watch_dvc/drop1-S2-L8-WV-aligned/data.kwcoco.json
+        python -m watch.cli.coco_visualize_videos --src $COCO_FPATH --space="image"
+
         # Also note you can make an animated gif
         python -m watch.cli.gifify -i "./viz_out/US_Jacksonville_R01/_anns/red|green|blue/" -o US_Jacksonville_R01_anns.gif
+
+        # NEW: as of 2021-11-04 : helper animation script
+
+        python -m watch.cli.animate_visualizations --viz_dpath ./viz_out
 
     """
     default = {
@@ -39,14 +62,18 @@ class CocoVisualizeConfig(scfg.Config):
 
         'channels': scfg.Value(None, type=str, help='only viz these channels'),
 
+        'draw_imgs': scfg.Value(True),
+        'draw_anns': scfg.Value(True),
+
+        'animate': scfg.Value(False, help='if True, make an animated gif from the output'),
+
         # 'channels': scfg.Value(None, type=str, help='only viz these channels'),
-
-        # 'num_frames': scfg.Value('inf', type=str, help='show the first N frames from each video'),
-
+        'num_frames': scfg.Value(None, type=str, help='show the first N frames from each video, if None, all are shown'),
+        'start_frame': scfg.Value(0, type=str, help='If specified each video will start on this frame'),
 
         # TODO: better support for this
         # TODO: use the kwcoco_video_data, has good logic for this
-        'zoom_to_tracks': scfg.Value(False, type=str, help='if True, zoom to tracked annotations'),
+        'zoom_to_tracks': scfg.Value(False, type=str, help='if True, zoom to tracked annotations. Experimental, might not work perfectly yet.'),
     }
 
 
@@ -83,12 +110,14 @@ def main(cmdline=True, **kwargs):
             'src': src,
         }
     """
-    import kwcoco
-    import pathlib
+    from watch.utils.lightning_ext import util_globals
     config = CocoVisualizeConfig(default=kwargs, cmdline=cmdline)
     space = config['space']
     channels = config['channels']
     print('config = {}'.format(ub.repr2(dict(config), nl=2)))
+
+    num_workers = util_globals.coerce_num_workers(config['num_workers'])
+    print('num_workers = {!r}'.format(num_workers))
 
     coco_dset = kwcoco.CocoDataset.coerce(config['src'])
     print('coco_dset.fpath = {!r}'.format(coco_dset.fpath))
@@ -104,21 +133,19 @@ def main(cmdline=True, **kwargs):
         coco_dset.index.videos.items(), total=len(coco_dset.index.videos),
         desc='viz videos', verbose=3)
 
-    pool = ub.JobPool(mode='thread', max_workers=config['num_workers'])
-
-    config['zoom_to_tracks']
+    pool = ub.JobPool(mode='thread', max_workers=num_workers)
 
     # TODO:
-    # from scriptconfig.smartcast import smartcast
-    # num = smartcast(config['num_frames'])
-    # if isinstance(num, int):
-    #     time_sl = slice(0, num)
-    # else:
-    #     time_sl = slice(None)
+    from scriptconfig.smartcast import smartcast
+    num_frames = smartcast(config['num_frames'])
+    start_frame = smartcast(config['start_frame'])
+    end_frame = None if num_frames is None else start_frame + num_frames
 
+    video_names = []
     for vidid, video in prog:
         sub_dpath = viz_dpath / video['name']
         sub_dpath.mkdir(parents=True, exist_ok=1)
+        video_names.append(video['name'])
 
         gids = coco_dset.index.vidid_to_gids[vidid]
         if config['zoom_to_tracks']:
@@ -136,29 +163,47 @@ def main(cmdline=True, **kwargs):
                 vid_crop_box = vid_crop_box.to_xywh()
                 vid_crop_box = vid_crop_box.quantize()
 
-                for gid in gids:
+                gid_subset = gids[start_frame:end_frame]
+                for gid in gid_subset:
                     img = coco_dset.index.imgs[gid]
                     anns = coco_dset.annots(gid=gid).objs
 
+                    _header_extra = f'tid={tid}'
                     pool.submit(_write_ann_visualizations2,
                                 coco_dset, img, anns, track_dpath, space=space,
-                                channels=channels, vid_crop_box=vid_crop_box)
+                                channels=channels, vid_crop_box=vid_crop_box,
+                                _header_extra=_header_extra)
 
         else:
-            # gids = gids[0:3] + gids[len(gids) // 2 - 2:len(gids) // 2 + 1] + gids[-3:]
-            # time_sl]
-            for gid in gids:
+            gid_subset = gids[start_frame:end_frame]
+            for gid in gid_subset:
                 img = coco_dset.index.imgs[gid]
                 anns = coco_dset.annots(gid=gid).objs
 
                 pool.submit(_write_ann_visualizations2,
                             coco_dset, img, anns, sub_dpath, space=space,
-                            channels=channels)
+                            channels=channels,
+                            draw_imgs=config['draw_imgs'],
+                            draw_anns=config['draw_anns'], _header_extra=None)
 
         for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):
             job.result()
 
         pool.jobs.clear()
+
+    if config['animate']:
+        from watch.cli import animate_visualizations
+        animate_visualizations.animate_visualizations(
+            viz_dpath=viz_dpath,
+            channels=channels,
+            video_names=video_names,
+            draw_imgs=config['draw_imgs'],
+            draw_anns=config['draw_anns'],
+            num_workers=config['num_workers'],
+            zoom_to_tracks=config['zoom_to_tracks'],
+            frames_per_second=0.7,
+        )
+        pass
 
 
 def video_track_info(coco_dset, vidid):
@@ -189,63 +234,19 @@ def video_track_info(coco_dset, vidid):
 _CLI = CocoVisualizeConfig
 
 
-def ensure_false_color(canvas):
-    """
-    Given a canvas with more than 3 colors, (or 2 colors) do
-    something to get it into a colorized space.
-
-    I have no idea how well this works. Probably better methods exist.
-
-    Example:
-        >>> from watch.cli.coco_visualize_videos import *  # NOQA
-        >>> import numpy as np
-        >>> demo_img = kwimage.ensure_float01(kwimage.grab_test_image('astro'))
-        >>> canvas = demo_img @ np.random.rand(3, 2)
-        >>> rgb_canvas2 = ensure_false_color(canvas)
-        >>> canvas = np.tile(demo_img, (1, 1, 10))
-        >>> rgb_canvas10 = ensure_false_color(canvas)
-        >>> # xdoctest: +REQUIRES(--show)
-        >>> import kwplot
-        >>> kwplot.autompl()
-        >>> kwplot.imshow(rgb_canvas2, pnum=(1, 2, 1))
-        >>> kwplot.imshow(rgb_canvas10, pnum=(1, 2, 2))
-    """
-    import kwarray
-    import numpy as np
-    canvas = kwarray.atleast_nd(canvas, 3)
-
-    if canvas.shape[2] in {1, 3}:
-        rgb_canvas = canvas
-    # elif canvas.shape[2] == 2:
-    #     # Use LAB to colorize
-    #     L_part = np.ones_like(canvas[..., 0:1]) * 50
-    #     a_min = -86.1875
-    #     a_max = 98.234375
-    #     b_min = -107.859375
-    #     b_max = 94.46875
-    #     a_part = (canvas[..., 0:1] - a_min) / (a_max - a_min)
-    #     b_part = (canvas[..., 1:2] - b_min) / (b_max - b_min)
-    #     lab_canvas = np.concatenate([L_part, a_part, b_part], axis=2)
-    #     rgb_canvas = kwimage.convert_colorspace(lab_canvas, src_space='lab', dst_space='rgb')
-    else:
-        rng = kwarray.ensure_rng(canvas.shape[2])
-        seedmat = rng.rand(canvas.shape[2], 3).T
-        h, tau = np.linalg.qr(seedmat, mode='raw')
-        false_colored = (canvas @ h)
-        rgb_canvas = kwimage.normalize(false_colored)
-    return rgb_canvas
-
-
 def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                img : dict,
                                anns : list,
                                sub_dpath : str,
                                space : str,
                                channels=None,
-                               vid_crop_box=None):
+                               vid_crop_box=None,
+                               request_grouped_bands='default',
+                               draw_imgs=True,
+                               draw_anns=True, _header_extra=None):
     """
-    TODO:
-        refactor because similar code is also used in coco_align_geotiffs
+    Dumps an intensity normalized "space-aligned" kwcoco image visualization
+    (with or without annotation overlays) for specific bands to disk.
     """
     # See if we can look at what we made
     from kwcoco import channel_spec
@@ -259,11 +260,17 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
     vidname = coco_dset.index.videos[img['video_id']]['name']
     date_captured = img.get('date_captured', '')
-
-    header_info = []
-    header_info.append(vidname)
-    if date_captured:
-        header_info.append(date_captured + ' ' + sensor_coarse)
+    frame_index = img.get('frame_index', None)
+    gid = img.get('id', None)
+    header_line_infos = [
+        [vidname, f'gid={gid}, frame={frame_index}', _header_extra],
+        [sensor_coarse, date_captured],
+    ]
+    header_lines = []
+    for line_info in header_line_infos:
+        header_line = ' '.join([p for p in line_info if p])
+        if header_line:
+            header_lines.append(header_line)
 
     delayed = coco_dset.delayed_load(img['id'], space=space)
 
@@ -274,17 +281,51 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         chan_groups = channels.streams()
     else:
         coco_img = CocoImage(img)
-        chan_groups = coco_img.channels.streams()
+        channels = coco_img.channels
+        if request_grouped_bands == 'default':
+            # Use false color for special groups
+            request_grouped_bands = [
+                'red|green|blue',
+                'r|g|b',
+                # 'nir|swir16|swir22',
+            ]
+        for cand in request_grouped_bands:
+            cand = kwcoco.FusedChannelSpec.coerce(cand)
+            has_cand = (channels & cand).numel() == cand.numel()
+            if has_cand:
+                channels = channels - cand
+                # todo: nicer way to join streams
+                channels = kwcoco.ChannelSpec.coerce(channels.spec + ',' + cand.spec)
+
+        initial_groups = channels.streams()
+        chan_groups = []
+        for group in initial_groups:
+            if group.numel() > 3:
+                # For large group, just take the first 3 channels
+                if group.numel() > 8:
+                    group = group.normalize()[0:3]
+                    chan_groups.append(group)
+                else:
+                    # For smaller groups split them into singles
+                    for part in group:
+                        chan_groups.append(kwcoco.FusedChannelSpec.coerce(part))
+            else:
+                chan_groups.append(group)
 
     img_view_dpath = sub_dpath / '_imgs'
     ann_view_dpath = sub_dpath / '_anns'
-    dets = kwimage.Detections.from_coco_annots(anns, dset=coco_dset)
+
+    try:
+        dets = kwimage.Detections.from_coco_annots(anns, dset=coco_dset)
+    except Exception:
+        # hack
+        anns = [ub.dict_diff(ann, ['keypoints']) for ann in anns]
+        dets = kwimage.Detections.from_coco_annots(anns, dset=coco_dset)
 
     if space == 'video':
         vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
         dets = dets.warp(vid_from_img)
 
-    print('vid_crop_box = {!r}'.format(vid_crop_box))
     if vid_crop_box is not None:
         # Ensure the crop box is in the proper space
         if space == 'image':
@@ -299,58 +340,66 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             -crop_box.tl_x.ravel()[0],
             -crop_box.tl_y.ravel()[0])
         dets = dets.translate(ann_shift)
-        # overlap = dets.boxes.iooas(vid_crop_box)
-        # print('overlap = {!r}'.format(overlap.max()))
         delayed = delayed.crop(crop_box.to_slices()[0])
 
     for chan_group in chan_groups:
         chan_group = chan_group.spec
-        chan = delayed.take_channels(chan_group)
 
         # spec = str(chan.channels.spec)
-        import xdev
-        with xdev.embed_on_exception_context:
-            canvas = chan.finalize()
-            canvas = normalize_intensity(canvas)
-            canvas = ensure_false_color(canvas)
+        img_chan_dpath = img_view_dpath / chan_group
+        ann_chan_dpath = ann_view_dpath / chan_group
+        ann_chan_dpath.mkdir(parents=True, exist_ok=1)
+        img_chan_dpath.mkdir(parents=True, exist_ok=1)
+        suffix = '_'.join([chan_group, sensor_coarse, align_method])
+        view_img_fpath = ub.augpath(name, dpath=img_chan_dpath) + '_' + suffix + '.view_img.jpg'
+        view_ann_fpath = ub.augpath(name, dpath=ann_chan_dpath) + '_' + suffix + '.view_ann.jpg'
+
+        try:
+            chan = delayed.take_channels(chan_group)
+        except KeyError:
+            # hack
+            from kwcoco.util import util_delayed_poc
+            chan = util_delayed_poc.DelayedChannelConcat([delayed]).take_channels(chan_group)
+
+        canvas = chan.finalize()
+        canvas = normalize_intensity(canvas, nodata=0, params={
+            'high': 0.90,
+            'mid': 0.5,
+            'low': 0.01,
+            'mode': 'linear',
+        })
+        canvas = util_kwimage.ensure_false_color(canvas)
 
         if len(canvas.shape) > 2 and canvas.shape[2] > 4:
             # hack for wv
             canvas = canvas[..., 0]
 
-        img_chan_dpath = img_view_dpath / chan_group
-        ann_chan_dpath = ann_view_dpath / chan_group
-
-        ann_chan_dpath.mkdir(parents=True, exist_ok=1)
-        img_chan_dpath.mkdir(parents=True, exist_ok=1)
-
         canvas = kwimage.ensure_float01(canvas)
 
-        suffix = '_'.join([chan_group, sensor_coarse, align_method])
+        chan_header_lines = header_lines.copy()
+        chan_header_lines.append(chan_group)
+        header_text = '\n'.join(chan_header_lines)
 
-        view_img_fpath = ub.augpath(name, dpath=img_chan_dpath) + '_' + suffix + '.view_img.jpg'
+        if draw_imgs:
+            img_canvas = kwimage.ensure_uint255(canvas)
+            img_canvas = util_kwimage.draw_header_text(image=img_canvas,
+                                                       text=header_text,
+                                                       stack=True,
+                                                       fit='shrink')
+            kwimage.imwrite(view_img_fpath, img_canvas)
 
-        chan_header_info = header_info.copy()
-        chan_header_info.append(chan_group)
-        header_text = '\n'.join(chan_header_info)
+        if draw_anns:
+            try:
+                ann_canvas = dets.draw_on(canvas, color='classes')
+            except Exception:
+                ann_canvas = dets.draw_on(canvas)
+            ann_canvas = kwimage.ensure_uint255(ann_canvas)
 
-        img_canvas = kwimage.ensure_uint255(canvas)
-        img_canvas = util_kwimage.draw_header_text(image=img_canvas,
-                                                   text=header_text,
-                                                   stack=True)
-        kwimage.imwrite(view_img_fpath, img_canvas)
-
-        view_ann_fpath = ub.augpath(name, dpath=ann_chan_dpath) + '_' + suffix + '.view_ann.jpg'
-        try:
-            ann_canvas = dets.draw_on(canvas, color='classes')
-        except Exception:
-            ann_canvas = dets.draw_on(canvas)
-        ann_canvas = kwimage.ensure_uint255(ann_canvas)
-
-        ann_canvas = util_kwimage.draw_header_text(image=ann_canvas,
-                                                   text=header_text,
-                                                   stack=True)
-        kwimage.imwrite(view_ann_fpath, ann_canvas)
+            ann_canvas = util_kwimage.draw_header_text(image=ann_canvas,
+                                                       text=header_text,
+                                                       stack=True,
+                                                       fit='shrink')
+            kwimage.imwrite(view_ann_fpath, ann_canvas)
 
 
 if __name__ == '__main__':

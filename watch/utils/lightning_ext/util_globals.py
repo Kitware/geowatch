@@ -3,7 +3,7 @@ Utilities for handling global resources
 """
 
 
-def configure_hacks(**config):
+def configure_global_attributes(**config):
     """
     Configures hacks to fix global settings in external modules
 
@@ -30,6 +30,7 @@ def configure_hacks(**config):
     if num_workers is not None and num_workers > 0:
         import cv2
         cv2.setNumThreads(0)
+        request_nofile_limits()
 
     key = 'torch_sharing_strategy'
     value = config.get(key, None)

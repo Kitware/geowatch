@@ -27,8 +27,8 @@ def parse_docstring_args(cls):
         # Try cls instead
         arg_infos = list(docscrape_google.parse_google_args(cls.__doc__))
 
-    ignore_arg_names = ["self", "args", "kwargs"]
-    if hasattr(cls, "get_deprecated_arg_names"):
+    ignore_arg_names = ['self', 'args', 'kwargs']
+    if hasattr(cls, 'get_deprecated_arg_names'):
         ignore_arg_names += cls.get_deprecated_arg_names()
 
     # Get symbols from cls or init function.
@@ -73,7 +73,7 @@ def parse_docstring_args(cls):
 
         arg_kwargs = {}
         if bool in arg_types:
-            arg_kwargs.update(nargs="?", const=True)
+            arg_kwargs.update(nargs='?', const=True)
             # if the only arg type is bool
             if len(arg_types) == 1:
                 use_type = str_to_bool
@@ -90,7 +90,7 @@ def parse_docstring_args(cls):
             else:
                 use_type = arg_types[0]
 
-        if name == "gpus" or name == "tpu_cores":
+        if name == 'gpus' or name == 'tpu_cores':
             use_type = _gpus_allowed_type
 
         # hack for types in (int, float)
@@ -98,7 +98,7 @@ def parse_docstring_args(cls):
             use_type = _int_or_float_type
 
         # hack for track_grad_norm
-        if name == "track_grad_norm":
+        if name == 'track_grad_norm':
             use_type = float
 
         arg_info['use_type'] = use_type

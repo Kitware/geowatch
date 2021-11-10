@@ -11,7 +11,7 @@ import ubelt as ub
 import scriptconfig as scfg
 import numpy as np
 import kwimage
-from watch.utils.kwcoco_extensions import populate_watch_fields
+from watch.utils import kwcoco_extensions
 
 
 class AddWatchFieldsConfig(scfg.Config):
@@ -28,7 +28,11 @@ class AddWatchFieldsConfig(scfg.Config):
 
         'overwrite': scfg.Value(False, help='if True overwrites introspectable fields'),
 
-        'default_gsd': scfg.Value(None, help='if specified, assumed any images without geo-metadata have this GSD')
+        'edit_geotiff_metadata': scfg.Value(False, help='if True MODIFIES THE UNDERLYING IMAGES to ensure geodata is propogated'),
+
+        'default_gsd': scfg.Value(None, help='if specified, assumed any images without geo-metadata have this GSD'),
+
+        'workers': scfg.Value(0, help='number of io threads')
     }
 
 
@@ -69,7 +73,7 @@ def main(**kwargs):
         >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
         >>> print('dset = {!r}'.format(dset))
         >>> target_gsd = 13.0
-        >>> populate_watch_fields(dset, target_gsd, default_gsd=1)
+        >>> main(src=dset, target_gsd=target_gsd, default_gsd=1)
         >>> print('dset.index.imgs[1] = ' + ub.repr2(dset.index.imgs[1], nl=2))
         >>> print('dset.index.videos = {}'.format(ub.repr2(dset.index.videos, nl=1)))
 
@@ -86,7 +90,8 @@ def main(**kwargs):
     print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
     print('read dataset')
-    dset = kwcoco.CocoDataset(config['src'])
+    dset = kwcoco.CocoDataset.coerce(config['src'])
+    print('dset = {!r}'.format(dset))
 
     hard_coded_colors = {
         'No Activity': 'tomato',
@@ -104,17 +109,23 @@ def main(**kwargs):
     target_gsd = config['target_gsd']
     overwrite = config['overwrite']
     default_gsd = config['default_gsd']
-    populate_watch_fields(dset, target_gsd=target_gsd, overwrite=overwrite,
-                          default_gsd=default_gsd)
+    workers = config['workers']
+    kwcoco_extensions.populate_watch_fields(
+        dset, target_gsd=target_gsd, overwrite=overwrite,
+        default_gsd=default_gsd, workers=workers)
     print('dset.index.videos = {}'.format(ub.repr2(dset.index.videos, nl=2, precision=4)))
 
+    if config['edit_geotiff_metadata']:
+        kwcoco_extensions.ensure_transfered_geo_data(dset)
+
     for gid, img in dset.index.imgs.items():
-        offset =  np.asarray(kwimage.Affine.coerce(img['warp_img_to_vid']))[:, 2]
-        if np.any(np.abs(offset) > 100):
-            print('img = {}'.format(ub.repr2(img, nl=-1)))
-            print('warning there is a large offset')
-            print('offset = {!r}'.format(offset))
-            print('{}, {}'.format(gid, img['warp_img_to_vid']))
+        if img.get('video_id', None) is not None:
+            offset =  np.asarray(kwimage.Affine.coerce(img['warp_img_to_vid']))[:, 2]
+            if np.any(np.abs(offset) > 100):
+                print('img = {}'.format(ub.repr2(img, nl=-1)))
+                print('warning there is a large offset')
+                print('offset = {!r}'.format(offset))
+                print('{}, {}'.format(gid, img['warp_img_to_vid']))
 
     if config['dst'] is not None:
         print('write dataset')

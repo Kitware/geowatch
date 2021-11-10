@@ -26,6 +26,6 @@ Usage:
     python -m watch.tasks.landcover.predict \
       --dataset /dvc/drop1-S2-L8-aligned/data.kwcoco.json \
       --output /output/landcover.kwcoco.json \ 
-      --deployed weights/visnav_sentinel2.pt
+      --deployed /dvc/models/landcover/visnav_remap_s2_subset.pt
     ```
 

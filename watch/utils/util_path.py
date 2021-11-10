@@ -60,3 +60,20 @@ def tree(path):
             yield join(r, f)
         for d in ds:
             yield join(r, d)
+
+
+def coerce_patterned_paths(data, expected_extension=None):
+    from os.path import isdir, isfile, join
+    import glob
+    data = os.fspath(data)
+    globpat = None
+    if '*' in data:
+        globpat = data
+    else:
+        if isfile(data):
+            paths = [data]
+        elif isdir(data):
+            globpat = join(data, '*' + expected_extension)
+    if globpat is not None:
+        paths = list(glob.glob(globpat, recursive=True))
+    return paths

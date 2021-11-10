@@ -25,16 +25,12 @@ def millify(n):
 
 def load_model_from_package(package_path):
     """
-    Loads a kitware-flavor torch package (requires that the
-    kitware_package_header exists)
-
-    Old:
-        DEPRECATE IN FAVOR OF A MODEL METHOD? NO.
+    Loads a kitware-flavor torch package (requires a package_header exists)
 
     Notes:
         * I don't like that we need to know module_name and arch_name a-priori
           given a path to a package, I just want to be able to construct
-          the model instance.
+          the model instance. The package header solves this.
     """
     from torch import package
     import json
@@ -48,10 +44,16 @@ def load_model_from_package(package_path):
     # name of the resource corresponding to the model
     try:
         package_header = json.loads(imp.load_text(
-            'kitware_package_header', 'kitware_package_header.json'))
+            'package_header', 'package_header.json'))
     except Exception:
-        package_header = imp.load_pickle(
-            'kitware_package_header', 'kitware_package_header.pkl')
+        print('warning: no standard package header')
+        try:
+            package_header = json.loads(imp.load_text(
+                'kitware_package_header', 'kitware_package_header.json'))
+        except Exception:
+            package_header = imp.load_pickle(
+                'kitware_package_header', 'kitware_package_header.pkl')
+        print('warning: old package header?')
     arch_name = package_header['arch_name']
     module_name = package_header['module_name']
 
@@ -197,7 +199,7 @@ def add_auxiliary(dset, gid, fname, channels, aux_height, aux_width, warp_aux_to
 
     if extra_info is not None:
         assert isinstance(extra_info, dict)
-        aux = {**extra_info, **aux}
+        aux = ub.dict_union(extra_info, aux)
 
     # Save the data to disk
     # kwimage.imwrite(fpath, data)

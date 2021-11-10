@@ -148,6 +148,8 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
         possible culprits:
             mask_to_scored_polygons?
             cropping in propagate_labels?
+
+        >>> # xdoctest: +SKIP
         >>> d = kwcoco.CocoDataset('pred_KR_R01.kwcoco_timeagg_v1.json')
         >>> sum(are_invalid(d.annots())), d.n_annots
         6686, 13136

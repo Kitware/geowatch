@@ -182,7 +182,7 @@ def predict(cmdline=False, **kwargs):
         # Ideally we have a package, everything is defined there
         method = utils.load_model_from_package(args.package_fpath)
         # fix einops bug
-        for name, mod in method.named_modules():
+        for _name, mod in method.named_modules():
             if 'Rearrange' in mod.__class__.__name__:
                 mod._recipe = mod.recipe()
 
@@ -479,7 +479,7 @@ def predict(cmdline=False, **kwargs):
         writer_queue.wait_until_finished()  # hack to avoid race condition
 
         # Prediction is completed, finalize all remaining images.
-        for head_key, head_stitcher in stitch_managers.items():
+        for _head_key, head_stitcher in stitch_managers.items():
             for gid in head_stitcher.managed_image_ids():
                 # finalize_ready(head_stitcher, gid)
                 writer_queue.submit(head_stitcher.finalize_image, gid)
@@ -570,7 +570,7 @@ class CocoStitchingManager(object):
 
     def __init__(self, result_dataset, short_code=None, chan_code=None, stiching_space='video',
                  device='numpy', thresh=0.5, write_probs=True,
-                 write_preds=True, num_bands='auto', prob_compress='LZW',
+                 write_preds=True, num_bands='auto', prob_compress='RAW',
                  polygon_categories=None):
         self.short_code = short_code
         self.result_dataset = result_dataset
@@ -643,6 +643,7 @@ class CocoStitchingManager(object):
                     else:
                         raise NotImplementedError
                 stitch_dims = (video['height'], video['width'], self.num_bands)
+
                 self.image_stitchers[gid] = kwarray.Stitcher(
                     stitch_dims, device=self.device)
 
@@ -665,7 +666,22 @@ class CocoStitchingManager(object):
         stitcher: kwarray.Stitcher = self.image_stitchers[gid]
 
         weights = util_kwimage.upweight_center_mask(data.shape[0:2])[..., None]
-        stitcher.add(space_slice, data, weight=weights)
+
+        if stitcher.shape[0] < space_slice[0].stop or stitcher.shape[1] < space_slice[1].stop:
+            # By embedding the space slice in the stitcher dimensions we can get a
+            # slice corresponding to the valid region in the stitcher, and the extra
+            # padding encode the valid region of the data we are trying to stitch into.
+            stitcher_slice, padding = kwarray.embed_slice(space_slice[0:2], stitcher.shape)
+            output_slice = (
+                slice(padding[0][0], data.shape[0] - padding[0][1]),
+                slice(padding[1][0], data.shape[1] - padding[1][1]),
+            )
+            subdata = data[output_slice]
+            subweights = weights[output_slice]
+            stitcher.add(stitcher_slice, subdata, weight=subweights)
+        else:
+            # Normal case
+            stitcher.add(space_slice, data, weight=weights)
 
     def managed_image_ids(self):
         """
@@ -750,7 +766,7 @@ class CocoStitchingManager(object):
             #
             # Save probabilities (or feature maps) as a new auxiliary image
             bundle_dpath = self.result_dataset.bundle_dpath
-            new_fname = img.get('name', str(img['id'])) + f'_{self.suffix_code}.tiff'  # FIXME
+            new_fname = img.get('name', str(img['id'])) + f'_{self.suffix_code}.tif'  # FIXME
             new_fpath = join(self.prob_dpath, new_fname)
             assert final_probs.shape[2] == (self.chan_code.count('|') + 1)
             img.get('auxiliary', []).append({
@@ -766,7 +782,7 @@ class CocoStitchingManager(object):
             total_prob += final_probs.sum()
             kwimage.imwrite(
                 str(new_fpath), final_probs, space=None, backend='gdal',
-                compress=self.prob_compress,
+                compress=self.prob_compress, blocksize=64,
             )
 
         if self.write_preds:

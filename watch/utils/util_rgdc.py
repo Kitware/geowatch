@@ -3,7 +3,7 @@ from dateutil.parser import isoparse
 
 
 def group_tiles(query, timediff_sec=300):
-    '''
+    """
     Given a RGDC search query result, nest results so that scenes
     that can be merged are grouped together
 
@@ -23,7 +23,7 @@ def group_tiles(query, timediff_sec=300):
         >>> # query == [scene1, scene2, scene3, scene4]
         >>> query = group_tiles(query)
         >>> # query == [[scene1], [scene2, scene3], [scene4]]
-    '''
+    """
     # ensure we're only working with one satellite at a time
     query = sorted(query, key=lambda q: isoparse(q['acquisition_date']))
     sensors, ixs = np.unique([q['instrumentation'] for q in query],
@@ -32,9 +32,9 @@ def group_tiles(query, timediff_sec=300):
     to_process = np.split(query, ixs[1:])
 
     def _path_row(q):
-        '''
+        """
         Returns LS path and row as strings. eg ('115', '034')
-        '''
+        """
         path_row = q['subentry_name'].split('_')[2]
         path, row = path_row[:3], path_row[3:]
         return path, row
@@ -62,7 +62,7 @@ def group_tiles(query, timediff_sec=300):
 
 
 def bands_landsat(entry):
-    '''
+    """
     Get only the band files from a Landsat RasterMetaEntry downloaded from RGD.
 
     Args:
@@ -70,12 +70,12 @@ def bands_landsat(entry):
 
     Returns:
         list of pathlib paths to band files
-    '''
+    """
     return [str(p) for p in entry.images if 'BQA' not in p.stem]
 
 
 def bands_sentinel2(entry):
-    '''
+    """
     Get only the band files from a Sentinel-2 RasterMetaEntry downloaded from RGD.
 
     Args:
@@ -83,5 +83,5 @@ def bands_sentinel2(entry):
 
     Returns:
         list of pathlib paths to band files
-    '''
+    """
     return [str(p) for p in entry.images if p.match('*_B*.jp2')]

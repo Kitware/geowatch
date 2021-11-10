@@ -39,7 +39,7 @@ def parallel_map_items(catalog,
             output_item_links.append(pystac.Link(
                 'item', mapped, pystac.MediaType.JSON))
         else:
-            for i in mapped:
+            for _i in mapped:
                 output_item_links.append(pystac.Link(
                     'item', mapped, pystac.MediaType.JSON))
 

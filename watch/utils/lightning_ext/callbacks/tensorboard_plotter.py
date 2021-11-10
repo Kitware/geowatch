@@ -130,7 +130,7 @@ def read_tensorboard_scalars(train_dpath, verbose=1, cache=1):
                     subdatas['wall'].append(float(e.wall_time))
 
         # Order all information by its wall time
-        for key, subdatas in datas.items():
+        for _key, subdatas in datas.items():
             sortx = ub.argsort(subdatas['wall'])
             for d, vals in subdatas.items():
                 subdatas[d] = list(ub.take(vals, sortx))

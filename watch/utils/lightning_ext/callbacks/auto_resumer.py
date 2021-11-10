@@ -66,7 +66,7 @@ class AutoResumer(pl.callbacks.Callback):
     #     argparse_ext.add_arginfos_to_parser(parent_parser, arg_infos)
     #     return parent_parser
 
-    def on_init_start(self, trainer: "pl.Trainer") -> None:
+    def on_init_start(self, trainer: 'pl.Trainer') -> None:
         train_dpath = trainer.default_root_dir
         prev_states = self.recent_checkpoints(train_dpath)
         print('There are {} existing checkpoints'.format(len(prev_states)))

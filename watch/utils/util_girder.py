@@ -1,7 +1,12 @@
 import ubelt as ub
 import os
+import fasteners
+import threading
 from os.path import exists
 from os.path import join
+
+
+PER_PROCESS_THREAD_LOCKS = {}
 
 
 def grabdata_girder(api_url, resource_id, name=None, dpath=None, hash_prefix=None,
@@ -84,7 +89,8 @@ def grabdata_girder(api_url, resource_id, name=None, dpath=None, hash_prefix=Non
     }
 
     # Determine what type of resource the requested id is for.
-    for resoure_type, get_info in get_info_methods.items():
+    resource_type = None
+    for resource_type, get_info in get_info_methods.items():
         try:
             resource_info = get_info(resource_id)
         except girder_client.HttpError as ex:
@@ -104,7 +110,7 @@ def grabdata_girder(api_url, resource_id, name=None, dpath=None, hash_prefix=Non
     if resource_info is None:
         raise Exception('Unable to determine type of resource')
 
-    if resoure_type == 'file':
+    if resource_type == 'file':
         file_info = resource_info
         if name is None:
             name = file_info['name']
@@ -117,7 +123,7 @@ def grabdata_girder(api_url, resource_id, name=None, dpath=None, hash_prefix=Non
                     hash_prefix, hash_value))
 
         depends = file_info['sha512']
-    elif resoure_type == 'item':
+    elif resource_type == 'item':
         raise NotImplementedError(
             'The current implementation of downloading items is '
             'not consistent. Download the file instead')
@@ -134,7 +140,7 @@ def grabdata_girder(api_url, resource_id, name=None, dpath=None, hash_prefix=Non
         )
         if hash_prefix:
             raise ValueError('Cannot specify a hash_prefix for an item')
-    elif resoure_type == 'folder':
+    elif resource_type == 'folder':
         folder_info = resource_info
         dl_method = client.downloadFolderRecursive
         if name is None:
@@ -147,11 +153,27 @@ def grabdata_girder(api_url, resource_id, name=None, dpath=None, hash_prefix=Non
         if hash_prefix:
             raise ValueError('Cannot specify a hash_prefix for a folder')
     else:
-        raise KeyError(resoure_type)
+        raise KeyError(resource_type)
 
-    cache_name = resoure_type + '_' + name + '.hash'
+    cache_name = resource_type + '_' + name + '.tmp.hash'
     stamp = ub.CacheStamp(cache_name, dpath=dpath, depends=depends)
     if stamp.expired() or not exists(dl_path):
-        dl_method(resource_id, dl_path)
-        stamp.renew()
+        lock_fpath = join(dpath, cache_name + '.lock')
+
+        # Ensure that multiple processes / threads dont download the same data
+        from multiprocessing import current_process
+        curr_proc = current_process().name
+
+        # Use a different thread-lock on a per-process / per-stamp basis
+        lock_key = (curr_proc, lock_fpath)
+        if lock_key not in PER_PROCESS_THREAD_LOCKS:
+            PER_PROCESS_THREAD_LOCKS[lock_key] = threading.Lock()
+        thread_lock = PER_PROCESS_THREAD_LOCKS[lock_key]
+
+        process_lock = fasteners.InterProcessLock(lock_fpath)  #
+        with thread_lock:
+            with process_lock:
+                if stamp.expired() or not exists(dl_path):
+                    dl_method(resource_id, dl_path)
+                    stamp.renew()
     return dl_path

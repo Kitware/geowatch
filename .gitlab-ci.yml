@@ -143,6 +143,10 @@ stages:
         - conda activate ".cache/conda/envs/strict-watch-env"
         - pip install -e .
     script:
+        # Run a few quick checks first
+        # 
+        - python -c "from pyproj import CRS ; print(CRS.from_user_input('crs84'))"
+        - python -c "from pyproj import CRS ; print(CRS.from_user_input('epsg:4326'))"
         - ./run_tests.py --network watch tests scripts
 
     after_script:
@@ -267,34 +271,55 @@ build_docker_and_upload_strict:
             # Commands to help developers debug pipelines on their local machine
             # Grab the base docker image, (forwarding your ssh credentials), clone
             # the watch repo, create the environment, and run the tests. 
-            #
             docker login gitlab.kitware.com:4567
 
-            -v $PWD:/io
-
             docker pull registry.smartgitlab.com/kitware/watch/miniconda3
-
-            docker run -v ~/.ssh:/tmp/.ssh:ro -it registry.smartgitlab.com/kitware/watch/miniconda3 bash
-            #docker run -it gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3 bash
-            cp -R /tmp/.ssh /root/.ssh
-            chmod 700 /root/.ssh
-            chmod 600 /root/.ssh/id_*
-            chmod 644 /root/.ssh/*.pub
-
-            docker run -v $PWD:/io:ro -it registry.smartgitlab.com/kitware/watch/miniconda3 bash
+            docker run -v $PWD:/io:ro -v $HOME/.cache/pip:/pip_cache -it registry.smartgitlab.com/kitware/watch/miniconda3 bash
+            # Will need to chmod things afterwords
+            export PIP_CACHE_DIR=/pip_cache
+            echo $PIP_CACHE_DIR
+            chmod -R o+rw $PIP_CACHE_DIR
+            chmod -R o+rw $PIP_CACHE_DIR
+            chmod -R g+rw $PIP_CACHE_DIR
+            USER=$(whoami)
+            chown -R $USER $PIP_CACHE_DIR
             cd $HOME
             git clone /io ./watch
-            cd watch
-            #git clone git@gitlab.kitware.com:smart/watch.git
 
             cd $HOME/watch
-            git checkout dev/add_ci
+            git checkout dev/flow16
 
-            sed 's/>=/==/g' conda_env.yml > conda_env_strict.yml
-            conda env create -f conda_env_strict.yml --prefix "./strict-watch-env"
+            # STRICT VARIANT
+            ./dev/make_strict_req.sh
+            conda env create -f conda_env_strict.yml --prefix ".cache/conda/envs/strict-watch-env"
+            conda activate ".cache/conda/envs/strict-watch-env"
+            pip install -e .
+            ./run_tests.py --network watch tests scripts
 
-            ls -al
-            conda activate "./strict-watch-env"
+            # LOOSE VARIANT
+            python -c "from pyproj import CRS ; print(CRS.from_user_input('crs84'))"
+            conda env create -f conda_env.yml --prefix ".cache/conda/envs/loose-watch-env"
+            conda activate ".cache/conda/envs/loose-watch-env"
+            .cache/conda/envs/loose-watch-env/bin/python -m pip install -e .
+            ./run_tests.py --network watch tests scripts
+
+
+
+
+
+            #docker run -v -it registry.smartgitlab.com/kitware/watch/miniconda3 bash
+            #docker run -v ~/.ssh:/tmp/.ssh:ro -it registry.smartgitlab.com/kitware/watch/miniconda3 bash
+            ##docker run -it gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3 bash
+            #cp -R /tmp/.ssh /root/.ssh
+            #chmod 700 /root/.ssh
+            #chmod 600 /root/.ssh/id_*
+            #chmod 644 /root/.ssh/*.pub
+            #git clone git@gitlab.kitware.com:smart/watch.git
+            #sed 's/>=/==/g' conda_env.yml > conda_env_strict.yml
+            #conda env create -f conda_env_strict.yml --prefix "./strict-watch-env"
+            -v $PWD:/io
+            #ls -al
+            #conda activate "./strict-watch-env"
 
             ./run_tests.py watch tests scripts
 
@@ -335,3 +360,6 @@ build_docker_and_upload_strict:
 
             gitlab-runner exec docker test_full_loose/conda-linux  \
                 --docker-volumes "$HOME/.ssh:/root/.ssh:ro"
+
+            python -c "from osgeo import gdal; from pyproj import CRS; print(CRS.from_user_input('epsg:4236'))"
+            python -c "from pyproj import CRS; from osgeo import gdal; print(CRS.from_user_input('epsg:4236'))"

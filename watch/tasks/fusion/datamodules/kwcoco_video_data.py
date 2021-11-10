@@ -123,13 +123,15 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         exclude_sensors=['L8'],  # NOQA
         channels=None,
         batch_size=4,
-        num_workers=4,
         preprocessing_step=None,
         tfms_channel_subset=None,
         normalize_inputs=False,
         match_histograms=False,
         diff_inputs=False,
         verbose=1,
+        num_workers=4,
+        torch_sharing_strategy='default',
+        torch_start_method='default',
     ):
         """
         Args:
@@ -161,7 +163,6 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.neg_to_pos_ratio = neg_to_pos_ratio
         self.channels = channels
         self.batch_size = batch_size
-        self.num_workers = util_globals.coerce_num_workers(num_workers)
         self.preprocessing_step = preprocessing_step
         self.normalize_inputs = normalize_inputs
         self.time_sampling = time_sampling
@@ -169,6 +170,10 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.diff_inputs = diff_inputs
         self.time_span = time_span
         self.match_histograms = match_histograms
+
+        self.num_workers = util_globals.coerce_num_workers(num_workers)
+        self.torch_start_method = torch_start_method
+        self.torch_sharing_strategy = torch_sharing_strategy
 
         self.input_stats = None
         self.dataset_stats = None
@@ -212,49 +217,79 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         """
         from scriptconfig.smartcast import smartcast
         from functools import partial
-        parser = parent_parser.add_argument_group("kwcoco_video_data")
-        parser.add_argument("--train_dataset", default=None, help='path to the train kwcoco file')
-        parser.add_argument("--vali_dataset", default=None, help='path to the validation kwcoco file')
-        parser.add_argument("--test_dataset", default=None, help='path to the test kwcoco file')
-        parser.add_argument("--time_steps", default=2, type=smartcast)
-        parser.add_argument("--chip_size", default=128, type=smartcast)
-        parser.add_argument("--time_overlap", default=0.0, type=smartcast, help='fraction of time steps to overlap')
-        parser.add_argument("--chip_overlap", default=0.1, type=smartcast, help='fraction of space steps to overlap')
-        parser.add_argument("--neg_to_pos_ratio", default=1.0, type=float, help='maximum ratio of samples with no annotations to samples with annots')
-        parser.add_argument("--time_sampling", default='contiguous', type=str, help=ub.paragraph(
+        parser = parent_parser.add_argument_group('kwcoco_video_data')
+        parser.add_argument('--train_dataset', default=None, help='path to the train kwcoco file')
+        parser.add_argument('--vali_dataset', default=None, help='path to the validation kwcoco file')
+        parser.add_argument('--test_dataset', default=None, help='path to the test kwcoco file')
+        parser.add_argument('--time_steps', default=2, type=smartcast)
+        parser.add_argument('--chip_size', default=128, type=smartcast)
+        parser.add_argument('--time_overlap', default=0.0, type=smartcast, help='fraction of time steps to overlap')
+        parser.add_argument('--chip_overlap', default=0.1, type=smartcast, help='fraction of space steps to overlap')
+        parser.add_argument('--neg_to_pos_ratio', default=1.0, type=float, help='maximum ratio of samples with no annotations to samples with annots')
+        parser.add_argument('--time_sampling', default='contiguous', type=str, help=ub.paragraph(
             '''
             Strategy for expanding the time window across non-contiguous frames.
             Can be auto, contiguous, hard+distribute, or dilate_affinity
             '''))
-        parser.add_argument("--exclude_sensors", type=partial(smartcast, astype=list), help='comma delimited list of sensors to avoid, such as S2 or L8')
-        parser.add_argument("--channels", default=None, type=str, help='channels to use should be ChannelSpec coercable')
-        parser.add_argument("--batch_size", default=4, type=int)
-        parser.add_argument("--num_workers", default=4, type=str, help='number of background workers. Can be auto or an avail expression')
-        parser.add_argument("--time_span", default='2y', type=str, help='how long a time window should roughly span by default')
+        parser.add_argument('--exclude_sensors', type=partial(smartcast, astype=list), help='comma delimited list of sensors to avoid, such as S2 or L8')
+        parser.add_argument('--channels', default=None, type=str, help='channels to use should be ChannelSpec coercable')
+        parser.add_argument('--batch_size', default=4, type=int)
+        parser.add_argument('--time_span', default='2y', type=str, help='how long a time window should roughly span by default')
 
         parser.add_argument(
-            "--normalize_inputs", default=True, type=smartcast, help=ub.paragraph(
+            '--normalize_inputs', default=True, type=smartcast, help=ub.paragraph(
                 '''
                 if True, computes the mean/std for this dataset on each mode
                 so this can be passed to the model.
                 '''))
 
         parser.add_argument(
-            "--match_histograms", default=True, type=smartcast, help=ub.paragraph(
+            '--match_histograms', default=True, type=smartcast, help=ub.paragraph(
                 '''
                 '''))
         parser.add_argument(
-            "--diff_inputs", default=False, type=smartcast, help=ub.paragraph(
+            '--diff_inputs', default=False, type=smartcast, help=ub.paragraph(
                 '''
                 if True, also includes a difference between consecutive frames
                 in the inputs produced.
                 '''))
+
+        # Backend infastructure-based arguments
+        parser.add_argument(
+            '--num_workers', default=4, type=str, help=ub.paragraph(
+                '''
+                number of background workers. Can be auto or an avail
+                expression
+                '''
+            ))
+
+        parser.add_argument(
+            '--torch_sharing_strategy', default='default', help=ub.paragraph(
+                '''
+                Torch multiprocessing sharing strategy.
+                Can be default, file_descriptor, file_system
+                '''))
+
+        parser.add_argument(
+            '--torch_start_method', default='default', help=ub.paragraph(
+                '''
+                Torch multiprocessing sharing strategy.
+                Can be fork, spawn, forkserver
+                '''))
+
         return parent_parser
 
     def setup(self, stage):
         if self.verbose:
             print('Setup DataModule: stage = {!r}'.format(stage))
-        if stage == "fit" or stage is None:
+
+        util_globals.configure_global_attributes(**{
+            'num_workers': self.num_workers,
+            'torch_sharing_strategy': self.torch_sharing_strategy,
+            'torch_start_method': self.torch_start_method,
+        })
+
+        if stage == 'fit' or stage is None:
             train_data = self.train_kwcoco
             if isinstance(train_data, pathlib.Path):
                 train_data = str(train_data.expanduser())
@@ -332,7 +367,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 self.torch_datasets['vali'] = vali_dataset
                 ub.inject_method(self, lambda self: self._make_dataloader('vali', shuffle=False), 'val_dataloader')
 
-        if stage == "test" or stage is None:
+        if stage == 'test' or stage is None:
             test_data = self.test_kwcoco
             if isinstance(test_data, pathlib.Path):
                 test_data = str(test_data.expanduser())
@@ -359,8 +394,6 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         print('self.torch_datasets = {}'.format(ub.repr2(self.torch_datasets, nl=1)))
 
     def _make_dataloader(self, stage, shuffle=False):
-        if self.num_workers > 0:
-            util_globals.request_nofile_limits()
         return data.DataLoader(
             self.torch_datasets[stage],
             batch_size=self.batch_size,
@@ -559,7 +592,7 @@ class KWCocoVideoDataset(data.Dataset):
         sampler,
         sample_shape,
         channels=None,
-        mode="fit",
+        mode='fit',
         window_overlap=0,
         neg_to_pos_ratio=1.0,
         time_sampling='auto',
@@ -620,8 +653,8 @@ class KWCocoVideoDataset(data.Dataset):
                 time_span=time_span,
             )
 
-            n_pos = len(new_sample_grid["positives_indexes"])
-            n_neg = len(new_sample_grid["negatives_indexes"])
+            n_pos = len(new_sample_grid['positives_indexes'])
+            n_neg = len(new_sample_grid['negatives_indexes'])
 
             max_neg = min(int(max(0, (neg_to_pos_ratio * n_pos))), n_neg)
             if n_neg > max_neg:
@@ -631,7 +664,7 @@ class KWCocoVideoDataset(data.Dataset):
             # and when we select one we will really just randomly select from
             # within the pool
             if max_neg > 0:
-                negative_pool = list(util_iter.chunks(new_sample_grid["negatives_indexes"], nchunks=max_neg))
+                negative_pool = list(util_iter.chunks(new_sample_grid['negatives_indexes'], nchunks=max_neg))
                 self.negative_pool = negative_pool
                 neg_pool_chunksizes = set(map(len, self.negative_pool))
                 print('neg_pool_chunksizes = {!r}'.format(neg_pool_chunksizes))
@@ -729,6 +762,8 @@ class KWCocoVideoDataset(data.Dataset):
             ub.oset(['Dred', 'Dgreen', 'Dblue']),
             ub.oset(['r', 'g', 'b']),
             ub.oset(['B04', 'B03', 'B02']),  # for onera
+            ub.oset(['matset_1', 'matset_2', 'matset_3']),  # hack
+            ub.oset(['snow_or_ice_field', 'built_up', 'grassland']),  # hack
         ]
 
     def __len__(self):
@@ -880,7 +915,7 @@ class KWCocoVideoDataset(data.Dataset):
             tr_['gids'] = list(ub.take(valid_gids, time_sampler.sample(tr_['main_idx'])))
 
         if self.channels:
-            tr_["channels"] = self.sample_channels
+            tr_['channels'] = self.sample_channels
 
         if self.inference_only:
             with_annots = []
@@ -1131,11 +1166,11 @@ class KWCocoVideoDataset(data.Dataset):
 
         item = {
             # TODO: breakup modes into different items
-            "index": index,
-            "frames": frame_items,
-            "video_id": sample['tr']['vidid'],
-            "video_name": video['name'],
-            "tr": tr_subset
+            'index': index,
+            'frames': frame_items,
+            'video_id': sample['tr']['vidid'],
+            'video_name': video['name'],
+            'tr': tr_subset
         }
         return item
 
@@ -1221,8 +1256,7 @@ class KWCocoVideoDataset(data.Dataset):
 
         # Hack: disable augmentation if we are doing that
         self.disable_augmenter = True
-        if num_workers > 0:
-            util_globals.request_nofile_limits()
+
         loader = torch.utils.data.DataLoader(
             stats_subset,
             collate_fn=ub.identity, num_workers=num_workers, shuffle=True,
@@ -1447,7 +1481,7 @@ class KWCocoVideoDataset(data.Dataset):
                         norm_signal = raw_signal.copy()
                     # norm_signal = kwimage.normalize(raw_signal).copy()
                     norm_signal = np.nan_to_num(norm_signal)
-                    norm_signal = ensure_false_color(norm_signal)
+                    norm_signal = util_kwimage.ensure_false_color(norm_signal)
                     norm_signal = kwimage.atleast_3channels(norm_signal)
                     row['norm_signal'] = norm_signal
                 chan_rows.append(row)
@@ -1697,8 +1731,6 @@ class KWCocoVideoDataset(data.Dataset):
             >>> loader = self.make_loader(batch_size=2)
             >>> batch = next(iter(loader))
         """
-        if num_workers > 0:
-            util_globals.request_nofile_limits()
         loader = torch.utils.data.DataLoader(
             self, batch_size=batch_size, num_workers=num_workers,
             shuffle=shuffle, pin_memory=pin_memory, collate_fn=ub.identity)
@@ -1937,45 +1969,63 @@ def lookup_track_info(coco_dset, tid):
     return track_info
 
 
-def ensure_false_color(canvas):
+def make_trackbased_spatial_samples(coco_dset):
     """
-    Given a canvas with more than 3 colors, (or 2 colors) do
-    something to get it into a colorized space.
-
-    I have no idea how well this works. Probably better methods exist.
-
-    Example:
-        >>> demo_img = kwimage.ensure_float01(kwimage.grab_test_image('astro'))
-        >>> canvas = demo_img @ np.random.rand(3, 2)
-        >>> rgb_canvas2 = ensure_false_color(canvas)
-        >>> canvas = np.tile(demo_img, (1, 1, 10))
-        >>> rgb_canvas10 = ensure_false_color(canvas)
-        >>> import kwplot
-        >>> kwplot.autompl()
-        >>> kwplot.imshow(rgb_canvas2, pnum=(1, 2, 1))
-        >>> kwplot.imshow(rgb_canvas10, pnum=(1, 2, 2))
+    Ignore:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> import os
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> from watch.utils.util_data import find_smart_dvc_dpath
+        >>> dvc_dpath = find_smart_dvc_dpath()
+        >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
+        >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
     """
-    import kwarray
-    import numpy as np
-    canvas = kwarray.atleast_nd(canvas, 3)
+    tid_list = list(coco_dset.index.trackid_to_aids.keys())
+    tid_to_trackinfo = {}
+    for tid in tid_list:
+        track_info = lookup_track_info(coco_dset, tid)
+        gid = track_info['track_gids'][0]
+        vidid = coco_dset.index.imgs[gid]['video_id']
+        track_info['vidid'] = vidid
+        tid_to_trackinfo[tid] = track_info
 
-    if canvas.shape[2] in {1, 3}:
-        rgb_canvas = canvas
-    # elif canvas.shape[2] == 2:
-    #     # Use LAB to colorize
-    #     L_part = np.ones_like(canvas[..., 0:1]) * 50
-    #     a_min = -86.1875
-    #     a_max = 98.234375
-    #     b_min = -107.859375
-    #     b_max = 94.46875
-    #     a_part = (canvas[..., 0:1] - a_min) / (a_max - a_min)
-    #     b_part = (canvas[..., 1:2] - b_min) / (b_max - b_min)
-    #     lab_canvas = np.concatenate([L_part, a_part, b_part], axis=2)
-    #     rgb_canvas = kwimage.convert_colorspace(lab_canvas, src_space='lab', dst_space='rgb')
-    else:
-        rng = kwarray.ensure_rng(canvas.shape[2])
-        seedmat = rng.rand(canvas.shape[2], 3).T
-        h, tau = np.linalg.qr(seedmat, mode='raw')
-        false_colored = (canvas @ h)
-        rgb_canvas = kwimage.normalize(false_colored)
-    return rgb_canvas
+    vidid_to_tracks = ub.group_items(tid_to_trackinfo.values(), key=lambda x: x['vidid'])
+
+    window_space_dims = [96, 96]
+
+    for vidid, trackinfos in vidid_to_tracks.items():
+        positive_boxes = []
+        for track_info in trackinfos:
+            boxes = track_info['full_vid_box']
+            positive_boxes.append(boxes.to_cxywh())
+        positives = kwimage.Boxes.concatenate(positive_boxes)
+        positives_samples = positives.to_cxywh()
+        positives_samples.data[:, 2] = window_space_dims[0]
+        positives_samples.data[:, 3] = window_space_dims[1]
+        print('positive_boxes = {}'.format(ub.repr2(positive_boxes, nl=1)))
+
+        video = coco_dset.index.videos[vidid]
+        full_dims = [video['height'], video['width']]
+        window_overlap = 0.0
+        keepbound = 0
+
+        window_dims_ = full_dims if window_space_dims == 'full' else window_space_dims
+        slider = kwarray.SlidingWindow(full_dims, window_dims_,
+                                       overlap=window_overlap,
+                                       keepbound=keepbound,
+                                       allow_overshoot=True)
+
+        sliding_boxes = kwimage.Boxes.concatenate(list(map(kwimage.Boxes.from_slice, slider)))
+        ious = sliding_boxes.ious(positives)
+        overlaps = ious.sum(axis=1)
+        negative_boxes = sliding_boxes.compress(overlaps == 0)
+
+        if 1:
+            import kwplot
+            kwplot.autompl()
+            fig = kwplot.figure(fnum=vidid)
+            ax = fig.gca()
+            ax.set_title(video['name'])
+            negative_boxes.draw(setlim=1, color='red', fill=True)
+            positives.draw(color='limegreen')
+            positives_samples.draw(color='green')

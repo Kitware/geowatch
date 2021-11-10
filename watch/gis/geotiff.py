@@ -181,11 +181,11 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
     info = {}
     ref = _coerce_gdal_dataset(gpath_or_ref)
 
-    wgs84_crs = osr.SpatialReference()
-    wgs84_crs.ImportFromEPSG(4326)  # 4326 is the EPSG id WGS84 of lat/lon crs
+    # tags = ref.GetMetadataDomainList()  # 7.5% of the execution time
+    rpc_info = ref.GetMetadata(domain='RPC')  # 5% of execution time
 
-    tags = ref.GetMetadataDomainList()
-    if 'RPC' in tags:
+    # if 'RPC' in tags:
+    if len(rpc_info):
         rpc_info = ref.GetMetadata(domain='RPC')
         rpc_transform = watch_crs.RPCTransform.from_gdal(
             rpc_info, elevation=elevation)
@@ -199,9 +199,10 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
     if not hasattr(ref, 'GetSpatialRef'):
         import warnings
         warnings.warn('ref has no attribute GetSpatialRef, gdal version issue?')
+        raise AssertionError('ref has no attribute GetSpatialRef, gdal version issue?')
         aff_wld_crs = None
     else:
-        aff_wld_crs = ref.GetSpatialRef()
+        aff_wld_crs = ref.GetSpatialRef()  # 20% of the execution time
     aff_proj = ref.GetProjection()
 
     gcps = ref.GetGCPs()
@@ -219,6 +220,8 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         aff_wld_crs_type = 'gcp'  # mark the aff_wld crs as coming from the gcp
         if len(gcps) == 0 or aff_wld_crs is None:
             if rpc_transform is not None:
+                # raise AssertionError('I dont think this should be possible')
+                # Oh but it is, tests hit it.
                 aff_wld_crs = osr.SpatialReference()
                 aff_wld_crs.ImportFromEPSG(4326)  # 4326 is the EPSG id WGS84 of lat/lon crs
                 # Set traditional because our rpc transform returns x,y
@@ -238,6 +241,8 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         if aff_wld_crs is None:
             aff_wld_crs = osr.SpatialReference()
             aff_wld_crs.ImportFromWkt(aff_proj)
+            aff_wld_crs_type = 'unknown?affine-projection-maybe?'
+            raise NotImplementedError('can this ever happen?')
         else:
             # mark the aff_wld crs as coming from the dataset
             # is there a better name for this?
@@ -270,36 +275,8 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
             info['GCPGeoTransformGSD'] = (pixelSizeX, pixelSizeY)
 
     aff = affine.Affine.from_gdal(*aff_geo_transform)
-    aff_pxl_to_wld = np.vstack([np.array(aff.column_vectors).T, [0, 0, 1]])
-    aff_wld_to_pxl = np.linalg.inv(aff_pxl_to_wld)
-
-    def axis_mapping_int_to_text(axis_mapping_int):
-        """
-        References:
-            https://gdal.org/tutorials/osr_api_tut.html#crs-and-axis-order
-
-        Notes:
-            * OAMS_TRADITIONAL_GIS_ORDER means that for geographic CRS with
-                lat/long order, the data will still be long/lat ordered.
-                Similarly for a projected CRS with northing/easting order, the
-                data will still be easting/northing ordered
-
-            * OAMS_AUTHORITY_COMPLIANT means that the data axis will be
-                identical to the CRS axis. This is the default value when
-                instantiating OGRSpatialReference
-
-            * OAMS_CUSTOM means that the data axis are customly defined with
-                SetDataAxisToSRSAxisMapping
-        """
-        if axis_mapping_int == osr.OAMS_TRADITIONAL_GIS_ORDER:
-            axis_mapping = 'OAMS_TRADITIONAL_GIS_ORDER'
-        elif axis_mapping_int == osr.OAMS_AUTHORITY_COMPLIANT:
-            axis_mapping = 'OAMS_AUTHORITY_COMPLIANT'
-        elif axis_mapping_int == osr.OAMS_CUSTOM:
-            axis_mapping = 'OAMS_CUSTOM'
-        else:
-            raise KeyError(axis_mapping_int)
-        return axis_mapping
+    aff_wld_from_pxl = np.vstack([np.array(aff.column_vectors).T, [0, 0, 1]])
+    aff_pxl_from_wld = np.linalg.inv(aff_wld_from_pxl)
 
     is_rpc = not (force_affine or rpc_transform is None)
 
@@ -328,18 +305,20 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         wld_axis_mapping_int = aff_wld_crs.GetAxisMappingStrategy()
         wld_axis_mapping = axis_mapping_int_to_text(wld_axis_mapping_int)
 
+    wgs84_crs = osr.SpatialReference()
+    wgs84_crs.ImportFromEPSG(4326)  # 4326 is the EPSG id WGS84 of lat/lon crs
     wgs84_axis_mapping_int = wgs84_crs.GetAxisMappingStrategy()
     wgs84_axis_mapping = axis_mapping_int_to_text(wgs84_axis_mapping_int)
 
-    wld_to_wgs84 = osr.CoordinateTransformation(wld_crs, wgs84_crs)
-    wgs84_to_wld = osr.CoordinateTransformation(wgs84_crs, wld_crs)
+    wgs84_from_wld = osr.CoordinateTransformation(wld_crs, wgs84_crs)
+    wld_from_wgs84 = osr.CoordinateTransformation(wgs84_crs, wld_crs)  # 10% of the execution time
 
     if is_rpc:
-        wld_to_pxl = rpc_transform.warp_world_to_pixel
-        pxl_to_wld = rpc_transform.warp_pixel_to_world
+        pxl_from_wld = rpc_transform.warp_pixel_from_world
+        wld_from_pxl = rpc_transform.warp_world_from_pixel
     else:
-        pxl_to_wld = aff_pxl_to_wld
-        wld_to_pxl = aff_wld_to_pxl
+        wld_from_pxl = aff_wld_from_pxl
+        pxl_from_wld = aff_pxl_from_wld
 
     shape = (ref.RasterYSize, ref.RasterXSize)
 
@@ -352,16 +331,19 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         [ref.RasterXSize, 0],
     ])
     pxl_corners = kwimage.Coords(xy_corners)
-    wld_corners = pxl_corners.warp(pxl_to_wld)
+    wld_corners = pxl_corners.warp(wld_from_pxl)  # 10% of the execution time
 
-    wgs84_corners = wld_corners.warp(wld_to_wgs84)
-    lat1 = wgs84_corners.data[:, 0].min()
-    lat2 = wgs84_corners.data[:, 0].max()
-    lon1 = wgs84_corners.data[:, 1].min()
-    lon2 = wgs84_corners.data[:, 1].max()
+    wgs84_corners = wld_corners.warp(wgs84_from_wld)
+    min_lat, min_lon = wgs84_corners.data[:, 0:2].min(axis=0)
+    max_lat, max_lon = wgs84_corners.data[:, 0:2].max(axis=0)
 
-    min_lon, max_lon = sorted([lon1, lon2])
-    min_lat, max_lat = sorted([lat1, lat2])
+    # lat1 = wgs84_corners.data[:, 0].min()
+    # lat2 = wgs84_corners.data[:, 0].max()
+    # lon1 = wgs84_corners.data[:, 1].min()
+    # lon2 = wgs84_corners.data[:, 1].max()
+
+    # min_lon, max_lon = sorted([lon1, lon2])
+    # min_lat, max_lat = sorted([lat1, lat2])
 
     assert watch_crs.check_latlons(
         wgs84_corners.data[:, 0], wgs84_corners.data[:, 1]), (
@@ -370,16 +352,15 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
 
     WITH_UTM_INFO = True
     if WITH_UTM_INFO:
-        lat, lon = min_lat, min_lon
-        epsg_int = watch_crs.utm_epsg_from_latlon(lat, lon)
+        epsg_int = watch_crs.utm_epsg_from_latlon(min_lat, min_lon)
         utm_crs = osr.SpatialReference()
         utm_crs.ImportFromEPSG(epsg_int)
         utm_axis_mapping_int = utm_crs.GetAxisMappingStrategy()
         utm_axis_mapping = axis_mapping_int_to_text(utm_axis_mapping_int)
 
-        wld_to_utm = osr.CoordinateTransformation(wld_crs, utm_crs)
-        utm_to_wld = osr.CoordinateTransformation(utm_crs, wld_crs)
-        utm_corners = wld_corners.warp(wld_to_utm)
+        utm_from_wld = osr.CoordinateTransformation(wld_crs, utm_crs)  # 4% time
+        # wld_from_utm = osr.CoordinateTransformation(utm_crs, wld_crs)
+        utm_corners = wld_corners.warp(utm_from_wld)  # 2% time
 
         min_utm = utm_corners.data.min(axis=0)
         max_utm = utm_corners.data.max(axis=0)
@@ -389,8 +370,8 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
     else:
         meter_per_pxl = None
         meter_extent = None
-        wld_to_utm = None
-        utm_to_wld = None
+        utm_from_wld = None
+        # wld_from_utm = None
         utm_crs = None
         utm_axis_mapping = None
 
@@ -410,18 +391,18 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         wgs84_wkt = wgs84_crs.ExportToWkt()
 
         utm_crs_info = {
-            'auth': memo_from_wkt(utm_wkt),
+            'auth': memo_auth_from_wkt(utm_wkt),
             'axis_mapping': utm_axis_mapping,
         }
 
         wld_crs_info = {
-            'auth': memo_from_wkt(wld_wkt),
+            'auth': memo_auth_from_wkt(wld_wkt),
             'axis_mapping': wld_axis_mapping,
             'type': wld_crs_type,
         }
 
         wgs84_crs_info = {
-            'auth': memo_from_wkt(wgs84_wkt),
+            'auth': memo_auth_from_wkt(wgs84_wkt),
             'axis_mapping': wgs84_axis_mapping,
         }
 
@@ -442,13 +423,19 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         'wld_corners': wld_corners,
         'wgs84_corners': wgs84_corners,
 
-        'pxl_to_wld': pxl_to_wld,
-        'wgs84_to_wld': wgs84_to_wld,
-        'utm_to_wld': utm_to_wld,
+        # TODO: we changed the internal names to the "_from_" varaint but we
+        # are keeping the "_to_" variant in this interface for now In the
+        # future we should change things over to the "_from_" variant, which
+        # is easier to reason about when chaining transforms.
+        'pxl_to_wld': wld_from_pxl,
+        'wgs84_to_wld': wld_from_wgs84,
 
-        'wld_to_pxl': wld_to_pxl,
-        'wld_to_wgs84': wld_to_wgs84,
-        'wld_to_utm': wld_to_utm,
+        # 'utm_to_wld': wld_from_utm,  # unused, and 10% overhead
+
+
+        'wld_to_pxl': pxl_from_wld,
+        'wld_to_wgs84': wgs84_from_wld,
+        'wld_to_utm': utm_from_wld,
 
         'utm_crs_info': utm_crs_info,
         'wld_crs_info': wld_crs_info,
@@ -471,8 +458,95 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
     return info
 
 
+def make_crs_info_object(osr_crs):
+    """
+    Args:
+        osr_crs (osr.SpatialReference): an osr object from gdal
+
+    Example:
+        >>> from osgeo import osr
+        >>> from watch.gis.geotiff import *  # NOQA
+        >>> osr_crs = osr.SpatialReference()
+        >>> osr_crs.ImportFromEPSG(4326)
+        >>> crs_info = make_crs_info_object(osr_crs)
+        >>> print('crs_info = {}'.format(ub.repr2(crs_info, nl=1)))
+        >>> osr_crs = osr.SpatialReference()
+        >>> osr_crs.ImportFromEPSG(4326)
+        >>> osr_crs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+        >>> crs_info = make_crs_info_object(osr_crs)
+        >>> print('crs_info = {}'.format(ub.repr2(crs_info, nl=1)))
+        >>> osr_crs.ImportFromEPSG(32744)
+        >>> crs_info = make_crs_info_object(osr_crs)
+        >>> print('crs_info = {}'.format(ub.repr2(crs_info, nl=1)))
+    """
+    wkt = osr_crs.ExportToWkt()
+    auth = memo_auth_from_wkt(wkt)
+    axis_mapping_int = osr_crs.GetAxisMappingStrategy()
+    axis_mapping_text = axis_mapping_int_to_text(axis_mapping_int)
+    crs_info = {
+        'auth': auth,
+        'axis_mapping': axis_mapping_text,
+    }
+    return crs_info
+
+
+def axis_mapping_int_to_text(axis_mapping_int):
+    """
+    References:
+        https://gdal.org/tutorials/osr_api_tut.html#crs-and-axis-order
+
+    Notes:
+        * OAMS_TRADITIONAL_GIS_ORDER means that for geographic CRS with
+            lat/long order, the data will still be long/lat ordered.
+            Similarly for a projected CRS with northing/easting order, the
+            data will still be easting/northing ordered
+
+        * OAMS_AUTHORITY_COMPLIANT means that the data axis will be
+            identical to the CRS axis. This is the default value when
+            instantiating OGRSpatialReference
+
+        * OAMS_CUSTOM means that the data axis are customly defined with
+            SetDataAxisToSRSAxisMapping
+    """
+    from osgeo import osr
+    if axis_mapping_int == osr.OAMS_TRADITIONAL_GIS_ORDER:
+        axis_mapping = 'OAMS_TRADITIONAL_GIS_ORDER'
+    elif axis_mapping_int == osr.OAMS_AUTHORITY_COMPLIANT:
+        axis_mapping = 'OAMS_AUTHORITY_COMPLIANT'
+    elif axis_mapping_int == osr.OAMS_CUSTOM:
+        axis_mapping = 'OAMS_CUSTOM'
+    else:
+        raise KeyError(axis_mapping_int)
+    return axis_mapping
+
+
+# def new_spatial_reference(axis_mapping='OAMS_AUTHORITY_COMPLIANT'):
+#     """
+#     Creates a new spatial reference
+
+#     Args:
+#         axis_mapping (int | str) : can be
+#             OAMS_TRADITIONAL_GIS_ORDER, OAMS_AUTHORITY_COMPLIANT, or
+#             OAMS_CUSTOM or the integer gdal code.
+
+#     References:
+#         https://gdal.org/tutorials/osr_api_tut.html#crs-and-axis-order
+#     """
+#     raise NotImplementedError
+#     from osgeo import osr
+#     if isinstance(axis_mapping, int):
+#         axis_mapping_int = axis_mapping
+#     else:
+#         assert axis_mapping in {
+#             'OAMS_TRADITIONAL_GIS_ORDER',
+#             'OAMS_AUTHORITY_COMPLIANT',
+#             'OAMS_CUSTOM',
+#         }
+#         axis_mapping_int = getattr(osr, axis_mapping)
+
+
 @ub.memoize
-def memo_from_wkt(wkt):
+def memo_auth_from_wkt(wkt):
     """
     This benchmarks as an expensive operation, memoize it.
     """
@@ -526,6 +600,7 @@ def geotiff_filepath_info(gpath, fast=True):
         >>>     'S2A_MSIL1C_20151021T022702_N0204_R003_T52SDG_20151021T022701.SAFE/GRANULE/L1C_T52SDG_A001716_20151021T022701/IMG_DATA/T52SDG_20151021T022702_TCI.jp2',
         >>>     'LC08_L2SP_217076_20190107_20211008_02_T1_T23KPQ_B1.tif',
         >>>     'S2B_MSI_L2A_T23KPQ_20190114_20211008_SR_B01.tif',
+        >>>     'S2A_MSI_L2A_T39RVK_20180803_20211102_SR_SOZ4.tif',
         >>> ]
         >>> gpath = inputs[-1]
         >>> print('gpath = {!r}'.format(gpath))
@@ -630,6 +705,8 @@ def geotiff_filepath_info(gpath, fast=True):
             sensor_candidates.append(meta['mission_id'])
             if meta.get('suffix', None) == 'TCI':
                 sensor_candidates.append('S2-TrueColor')
+            meta['product_guess'] = 'sentinel2'
+            meta['guess_heuristic'] = 'sentinel2_parse'
 
     dg_bundle = None
     if not sensor_candidates or not fast:
@@ -649,7 +726,7 @@ def geotiff_filepath_info(gpath, fast=True):
                 wv2_meta['num'] = result.named['num']
                 wv2_meta['part2'] = result.named['part2']
                 wv2_meta['product_guess'] = 'worldview'
-                meta['guess_heuristic'] = 'WV_heuristic1'
+                wv2_meta['guess_heuristic'] = 'WV_heuristic1'
                 meta.update(wv2_meta)
             except InvalidFormat:
                 pass
@@ -673,24 +750,27 @@ def geotiff_filepath_info(gpath, fast=True):
     # TODO: handle landsat and sentinel2 bundles
     info['is_dg_bundle'] = dg_bundle is not None
 
-    def _is_rgb(gpath):
-        # fallback for 'channels'
-        # often, a gtiff is a TCI that was postprocessed in some way that destroys
-        # the original naming convention
-        #
-        # this opens the image to check for that case as a fallback
-        from osgeo import gdal
-        info = gdal.Info(gpath, format='json')
-        if len(info['bands']) == 3:
-            # TODO sometimes colorInterpretation is stripped, but it's still RGB
-            # should this return True for any gpath with 3 bands?
-            if [b['colorInterpretation'] for b in info['bands']] == ['Red', 'Green', 'Blue']:
-                return True
-        return False
+    if 0:
+        # This is slow, and I don't think it is ever hit
 
-    if 'channels' not in meta:
-        if isfile(gpath) and _is_rgb(gpath):
-            meta['channels'] = 'r|g|b'
+        def _is_rgb(gpath):
+            # fallback for 'channels'
+            # often, a gtiff is a TCI that was postprocessed in some way that destroys
+            # the original naming convention
+            #
+            # this opens the image to check for that case as a fallback
+            from osgeo import gdal
+            info = gdal.Info(gpath, format='json')
+            if len(info['bands']) == 3:
+                # TODO sometimes colorInterpretation is stripped, but it's still RGB
+                # should this return True for any gpath with 3 bands?
+                if [b['colorInterpretation'] for b in info['bands']] == ['Red', 'Green', 'Blue']:
+                    return True
+            return False
+
+        if 'channels' not in meta:
+            if isfile(gpath) and _is_rgb(gpath):
+                meta['channels'] = 'r|g|b'
 
     return info
 
@@ -704,6 +784,7 @@ def _parser_lut(pattern):
     return parse.Parser(pattern)
 
 
+@profile
 def parse_sentinel2_product_id(parts):
     """
     Try to parse the Sentinel-2 pre-2016 and post-2016 safedir formats.
@@ -720,6 +801,7 @@ def parse_sentinel2_product_id(parts):
     Example:
 
         parts = ['S2B_MSI_L2A_T23KPQ_20190114_20211008_SR_B01.tif']
+        parts = ['S2A_MSI_L2A_T39RVK_20180803_20211102_SR_SOZ4.tif']
         parse_sentinel2_product_id(parts)
 
     """
@@ -866,7 +948,7 @@ def parse_sentinel2_product_id(parts):
                 meta['mission_id'] = 'S2'
 
     # This is another guess based on a file that failed to ingest
-    s2_format_guess2 = '{MMM:.3}_MSI_{XXX:.3}_{Txxxxx:.6}_{SENSE_YYYYMMDD:.8}_{PROC_YYYYMMDD:.8}_{correction_code}_{band:.3}.{ext}'
+    s2_format_guess2 = '{MMM:.3}_MSI_{XXX:.3}_{Txxxxx:.6}_{SENSE_YYYYMMDD:.8}_{PROC_YYYYMMDD:.8}_{correction_code}_{band}.{ext}'
     s2_parser2 = _parser_lut(s2_format_guess2)
     result = s2_parser2.parse(parts[-1])
     if result:

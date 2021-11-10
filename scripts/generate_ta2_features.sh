@@ -31,7 +31,7 @@ BASE_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json
 
 
 # Gen2
-UKY_S2_MODEL_FPATH=${UKY_L8_MODEL_FPATH:-$DVC_DPATH/models/uky_features_21-10-01/S2_model/drop1-S2-L8-aligned/checkpoints/S2_drop1-S2-L8-aligned.cpkt}
+UKY_S2_MODEL_FPATH=${UKY_S2_MODEL_FPATH:-$DVC_DPATH/models/uky_features_21-10-01/S2_model/drop1-S2-L8-aligned/checkpoints/S2_drop1-S2-L8-aligned.cpkt}
 UKY_L8_MODEL_FPATH=${UKY_L8_MODEL_FPATH:-$DVC_DPATH/models/uky_features_21-10-01/L8_model/drop1-S2-L8-aligned/checkpoints/L8_drop1-S2-L8-aligned.cpkt}
 RUTGERS_MATERIAL_MODEL_FPATH="$DVC_DPATH/models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_2021-10-01-16:27:07.pth"
 DZYNE_LANDCOVER_MODEL_FPATH="$DVC_DPATH/models/landcover/visnav_sentinel2.pt"
@@ -112,6 +112,7 @@ uky_prediction(){
     # --------------
 
     # Predict with UKY Invariants (one model for S2 and L8)
+    export CUDA_VISIBLE_DEVICES="0"
     python -m watch.tasks.invariants.predict \
         --sensor="S2" \
         --input_kwcoco $BASE_COCO_FPATH \
@@ -122,6 +123,7 @@ uky_prediction(){
 
         #--gpus 1 \
 
+    export CUDA_VISIBLE_DEVICES="0"
     python -m watch.tasks.invariants.predict \
         --sensor L8 \
         --input_kwcoco $BASE_COCO_FPATH \
@@ -141,6 +143,27 @@ uky_prediction(){
 }
 
 
+HACKED_S2_MOEL_uky_prediction(){
+    __doc__='
+    source ~/code/watch/scripts/generate_ta2_features.sh
+    '
+    # --------------
+    # UKY Prediction
+    # --------------
+
+    # Hack to use the same model to predict on all bands
+    export CUDA_VISIBLE_DEVICES="0"
+    python -m watch.tasks.invariants.predict \
+        --sensor="all" \
+        --bands="S2" \
+        --input_kwcoco $BASE_COCO_FPATH \
+        --output_kwcoco $UKY_INVARIANTS_COCO_FPATH \
+        --ckpt_path $UKY_S2_MODEL_FPATH  \
+        --device=cuda \
+        --num_workers="16"
+}
+
+
 rutgers_prediction(){
     __doc__='
     source ~/code/watch/scripts/generate_ta2_features.sh
@@ -154,7 +177,7 @@ rutgers_prediction(){
         --pred_dataset=$RUTGERS_MATERIAL_COCO_FPATH \
         --num_workers="8" \
         --batch_size=32 --gpus "0" \
-        --compress=RAW --blocksize=128
+        --compress=RAW --blocksize=64
 }
 
 
@@ -166,6 +189,7 @@ dzyne_prediction(){
 
     # 88 in 40 seconds
     # 44 in 40 seconds
+    export CUDA_VISIBLE_DEVICES="1"
     python -m watch.tasks.landcover.predict \
         --dataset=$BASE_COCO_FPATH \
         --deployed=$DZYNE_LANDCOVER_MODEL_FPATH  \
@@ -353,15 +377,14 @@ spot_check(){
     kwcoco validate $COMBO_COCO_FPATH
 
     # Optional: visualize the combo data before and after propogation
-    CHANNELS="red|green|blue,inv_sort1|inv_augment1|inv_shared1,matseg_0|matseg_1|matseg_2,grassland|built_up|bare_ground"
-    CHANNELS="matseg_3|matseg_4|matseg_5,med_low_density_built_up|inland_water|alluvial_deposits,inv_shared2|inv_shared3|inv_shared4"
-    CHANNELS="inv_shared2|inv_shared3|inv_shared4"
+    #CHANNELS="inv_shared2|inv_shared3|inv_shared4"
+    #--num_frames=10 \
+
+    CHANNELS="red|green|blue,inv_sort1|inv_augment1|inv_shared1,matseg_0|matseg_1|matseg_2,grassland|built_up|bare_ground,matseg_3|matseg_4|matseg_5,inv_shared2|inv_shared3|inv_shared4"
     VIZ_DPATH=$KWCOCO_BUNDLE_DPATH/_viz_teamfeats
     python -m watch.cli.coco_visualize_videos \
         --src $COMBO_COCO_FPATH --space=video --num_workers=6 \
         --viz_dpath $VIZ_DPATH \
-        --num_frames=1 \
-        --zoom_to_tracks=True \
         --channels $CHANNELS
 
     # Split bands up into a bash array

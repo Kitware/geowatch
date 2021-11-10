@@ -85,7 +85,7 @@ class Packager(pl.callbacks.Callback):
         argparse_ext.add_arginfos_to_parser(parent_parser, arg_infos)
         return parent_parser
 
-    def on_init_end(self, trainer: "pl.Trainer") -> None:
+    def on_init_end(self, trainer: 'pl.Trainer') -> None:
         """
         Finalize initialization step.
         Resolve the paths where files will be written.
@@ -100,7 +100,7 @@ class Packager(pl.callbacks.Callback):
         trainer.package_fpath = self.package_fpath
         print('will save trainer.package_fpath = {!r}'.format(trainer.package_fpath))
 
-    def on_fit_start(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+    def on_fit_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         """
         TODO:
             - [ ] Write out the uninitialized topology
@@ -114,7 +114,7 @@ class Packager(pl.callbacks.Callback):
                                      trainer.global_step))
             self._save_package(pl_module, package_fpath)
 
-    def on_fit_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+    def on_fit_end(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         """
         Create the final package (or a list of candidate packages) for
         evaluation and deployment.
@@ -131,7 +131,7 @@ class Packager(pl.callbacks.Callback):
         ub.symlink(package_fpath, final_package_fpath, overwrite=True, verbose=3)
         print('final_package_fpath = {!r}'.format(final_package_fpath))
 
-    def on_save_checkpoint(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", checkpoint: Dict[str, Any]) -> dict:
+    def on_save_checkpoint(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', checkpoint: Dict[str, Any]) -> dict:
         """
         TODO:
             - [ ] Do we create a package for every checkpoint?
@@ -139,7 +139,7 @@ class Packager(pl.callbacks.Callback):
         # package_fpath = self._make_package_fpath(trainer)
         # self._save_package(pl_module, package_fpath)
 
-    def on_keyboard_interrupt(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+    def on_keyboard_interrupt(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         """
         Saving a package on keyboard interrupt is useful for manual early
         stopping.
@@ -179,7 +179,7 @@ def default_save_package(model, package_path, verbose=1):
     model.train_dataloader = None
     model.val_dataloader = None
     model.test_dataloader = None
-    model_name = "model.pkl"
+    model_name = 'model.pkl'
     module_name = 'default_save_module_name'
     if verbose:
         print('Packaging package_path = {!r}'.format(package_path))
@@ -187,7 +187,7 @@ def default_save_package(model, package_path, verbose=1):
     with torch.package.PackageExporter(package_path) as exp:
         # TODO: this is not a problem yet, but some package types (mainly binaries) will need to be excluded and added as mocks
         # exp.extern("**", exclude=["watch.tasks.fusion.**"])
-        exp.extern("**")
+        exp.extern('**')
         # exclude=["watch.tasks.fusion.**"])
         # exp.intern("watch.tasks.fusion.**")
         exp.save_pickle(module_name, model_name, model)

@@ -710,12 +710,12 @@ def main(**kw):
                 manual_subpolys = []
                 for wgs_trad_poly in geo_polys.swap_axes().data:
                     pts_lonlat = wgs_trad_poly.data['exterior'].data
-                    pts_out = rpc_tf.warp_world_to_pixel(pts_lonlat, return_elevation=False)
+                    pts_out = rpc_tf.warp_pixel_from_world(pts_lonlat, return_elevation=False)
                     pts_xy = pts_out
 
                     zs = np.full((len(pts_lonlat), 1), fill_value=0)
                     pts_lonlatz = np.hstack([pts_lonlat, zs])
-                    pts_out = rpc_tf.warp_world_to_pixel(pts_lonlatz, return_elevation=True)
+                    pts_out = rpc_tf.warp_pixel_from_world(pts_lonlatz, return_elevation=True)
                     pts_xy = pts_out[:, 0:2]
 
                     poly3 = kwimage.Polygon(exterior=pts_xy)

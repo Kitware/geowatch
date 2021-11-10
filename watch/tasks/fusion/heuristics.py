@@ -33,3 +33,26 @@ BACKGROUND_CLASSES = {
 
 #     'ignore': {'ignore', 'Unknown', 'clouds'},
 # }
+
+
+HUERISTIC_STATUS_DATA = [
+    {'name': 'positive_annotated', 'color': 'olive'},
+    {'name': 'positive_partial', 'color': 'limegreen'},
+    {'name': 'positive_pending', 'color': 'seagreen'},
+    {'name': 'positive_excluded', 'color': 'darkgreen'},
+    {'name': 'positive_unbounded', 'color': 'steelblue'},
+    {'name': 'negative', 'color': 'orangered'},
+    {'name': 'negative_unbounded', 'color': 'deeppink'},
+    {'name': 'ignore', 'color': 'purple'},
+]
+
+
+CATEGORIES = [
+    {'name': 'No Activity', 'color': 'tomato'},
+    {'name': 'Site Preparation', 'color': 'gold'},
+    {'name': 'Active Construction', 'color': 'lime'},
+    {'name': 'Post Construction', 'color': 'darkturquoise'},
+    {'name': 'Unknown', 'color': 'blueviolet'},
+    {'name': 'ignore', 'color': 'slategray'},
+    {'name': 'negative', 'color': 'orangered'},
+]

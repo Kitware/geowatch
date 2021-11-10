@@ -44,6 +44,7 @@ def draw_header_text(image, text, fit=False, color='red', halign='center',
         >>> from watch.utils.util_kwimage import *  # NOQA
         >>> import kwimage
         >>> image = kwimage.grab_test_image()
+        >>> tiny_image = kwimage.imresize(image, dsize=(64, 64))
         >>> canvases = []
         >>> canvases += [draw_header_text(image=image, text='unfit long header ' * 5, fit=False)]
         >>> canvases += [draw_header_text(image=image, text='shrunk long header ' * 5, fit='shrink')]
@@ -51,6 +52,7 @@ def draw_header_text(image, text, fit=False, color='red', halign='center',
         >>> canvases += [draw_header_text(image=image, text='center header', fit=False, halign='center')]
         >>> canvases += [draw_header_text(image=image, text='right header', fit=False, halign='right')]
         >>> canvases += [draw_header_text(image=image, text='shrunk header', fit='shrink', halign='left')]
+        >>> canvases += [draw_header_text(image=tiny_image, text='shrunk header-center', fit='shrink', halign='center')]
         >>> canvases += [draw_header_text(image=image, text='fit header', fit=True, halign='left')]
         >>> canvases += [draw_header_text(image={'width': 200}, text='header only', fit=True, halign='left')]
         >>> # xdoctest: +REQUIRES(--show)
@@ -74,17 +76,34 @@ def draw_header_text(image, text, fit=False, color='red', halign='center',
     else:
         width = image.shape[1]
 
+    if stack:
+        h, w = image.shape[0:2]
+        min_pixels = 32
+        if w < min_pixels or h < min_pixels:
+            image = kwimage.imresize(image, min_dim=min_pixels)
+        width = image.shape[1]
+
     if fit:
         # TODO: allow a shrink-to-fit only option
-        header = kwimage.draw_text_on_image(
-            None, text, org=(1, 1),
-            valign='top', halign='left', color=color)
-        # header = cv2.copyMakeBorder(header, 3, 3, 3, 3,
-        #                             cv2.BORDER_CONSTANT)
+        try:
+            # needs new kwimage to work
+            header = kwimage.draw_text_on_image(
+                None, text, org=None,
+                valign='top', halign=halign, color=color)
+        except Exception:
+            header = kwimage.draw_text_on_image(
+                None, text, org=(1, 1),
+                valign='top', halign='left', color=color)
 
         if fit == 'shrink':
             if header.shape[1] > width:
+                # print('header.shape = {!r}'.format(header.shape))
+                # print('width = {!r}'.format(width))
                 header = kwimage.imresize(header, dsize=(width, None))
+            elif header.shape[1] < width:
+                header = np.pad(header, [(0, 0), ((width - header.shape[1]) // 2, 0), (0, 0)])
+            else:
+                pass
         else:
             header = kwimage.imresize(header, dsize=(width, None))
     else:
@@ -344,16 +363,84 @@ def upweight_center_mask(shape):
         >>> kwplot.show_if_requested()
     """
     import kwimage
-    from watch.utils import util_kwimage
-    shape, sigma = util_kwimage._auto_kernel_sigma(kernel=shape)
+    shape, sigma = _auto_kernel_sigma(kernel=shape)
     sigma_x, sigma_y = sigma
     weights = kwimage.gaussian_patch(shape, sigma=(sigma_x, sigma_y))
     weights = weights / weights.max()
     # weights = kwimage.ensure_uint255(weights)
     kernel = np.maximum(np.array(shape) // 8, 3)
     kernel = kernel + (1 - (kernel % 2))
-    weights = util_kwimage.morphology(
+    weights = morphology(
         weights, kernel=kernel, mode='dilate', element='rect', iterations=1)
     weights = kwimage.ensure_float01(weights)
     weights = np.maximum(weights, 0.001)
     return weights
+
+
+def ensure_false_color(canvas, method='ortho'):
+    """
+    Given a canvas with more than 3 colors, (or 2 colors) do
+    something to get it into a colorized space.
+
+    TODO:
+        - [ ] I have no idea how well this works. Probably better methods exist. Find them.
+
+    Example:
+        >>> import kwimage
+        >>> import numpy as np
+        >>> demo_img = kwimage.ensure_float01(kwimage.grab_test_image('astro'))
+        >>> canvas = demo_img @ np.random.rand(3, 2)
+        >>> rgb_canvas2 = ensure_false_color(canvas)
+        >>> canvas = np.tile(demo_img, (1, 1, 10))
+        >>> rgb_canvas10 = ensure_false_color(canvas)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(rgb_canvas2, pnum=(1, 2, 1))
+        >>> kwplot.imshow(rgb_canvas10, pnum=(1, 2, 2))
+    """
+    import kwarray
+    import numpy as np
+    import kwimage
+    canvas = kwarray.atleast_nd(canvas, 3)
+
+    if canvas.shape[2] in {1, 3}:
+        rgb_canvas = canvas
+    # elif canvas.shape[2] == 2:
+    #     # Use LAB to colorize
+    #     L_part = np.ones_like(canvas[..., 0:1]) * 50
+    #     a_min = -86.1875
+    #     a_max = 98.234375
+    #     b_min = -107.859375
+    #     b_max = 94.46875
+    #     a_part = (canvas[..., 0:1] - a_min) / (a_max - a_min)
+    #     b_part = (canvas[..., 1:2] - b_min) / (b_max - b_min)
+    #     lab_canvas = np.concatenate([L_part, a_part, b_part], axis=2)
+    #     rgb_canvas = kwimage.convert_colorspace(lab_canvas, src_space='lab', dst_space='rgb')
+    else:
+
+        if method == 'ortho':
+            rng = kwarray.ensure_rng(canvas.shape[2])
+            seedmat = rng.rand(canvas.shape[2], 3).T
+            h, tau = np.linalg.qr(seedmat, mode='raw')
+            false_colored = (canvas @ h)
+            rgb_canvas = kwimage.normalize(false_colored)
+        elif method == 'PCA':
+            import sklearn
+            ndim = canvas.ndim
+            dims = canvas.shape[0:2]
+            if ndim == 2:
+                in_channels = 1
+            else:
+                in_channels = canvas.shape[2]
+
+            if in_channels > 1:
+                model = sklearn.decomposition.PCA(1)
+                X = canvas.reshape(-1, in_channels)
+                X_ = model.fit_transform(X)
+                gray = X_.reshape(dims)
+                viz = kwimage.make_heatmask(gray, with_alpha=1)[:, :, 0:3]
+            else:
+                gray = canvas.reshape(dims)
+                viz = gray
+            return viz
+    return rgb_canvas
