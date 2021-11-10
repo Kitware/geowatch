@@ -219,7 +219,7 @@ def orthorectify(stac_item, outdir, te_dems, as_vrt, as_utm):
     in_fpath = stac_item.assets['data'].href
     if as_vrt:
         out_fpath = os.path.splitext(
-            os.path.join(outdir, os.path.basename(in_fpath)))[0] + '.vif'
+            os.path.join(outdir, os.path.basename(in_fpath)))[0] + '.vrt'
         cmd_str_out = '-of VRT'
     else:
         out_fpath = os.path.splitext(
