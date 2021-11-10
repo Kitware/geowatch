@@ -90,6 +90,7 @@ setup(
         'console_scripts': [
             'watch_hello_world=watch.cli.hello_world:main',
             'watch-cli = watch.cli.__main__:main',
+            'smartwatch= watch.cli.__main__:main',
         ],
     },
     install_requires=REQUIREMENTS,

@@ -126,10 +126,26 @@ teamfeatures(){
         --device=0 \
         --num_workers="16" \
         --output=$ALIGNED_KWCOCO_BUNDLE/data_nowv_dzyne_landcover.kwcoco.json
+
     
     python ~/code/watch/watch/cli/coco_combine_features.py \
         --src $BASE_COCO_FPATH \
               $ALIGNED_KWCOCO_BUNDLE/data_nowv_rutgers_mat_seg.kwcoco.json \
               $ALIGNED_KWCOCO_BUNDLE/data_nowv_dzyne_landcover.kwcoco.json \
         --dst $ALIGNED_KWCOCO_BUNDLE/combo_nowv.kwcoco.json
+
+    python -m watch stats $ALIGNED_KWCOCO_BUNDLE/combo_nowv.kwcoco.json
+
+    python -m watch visualize --src $ALIGNED_KWCOCO_BUNDLE/combo_nowv.kwcoco.json --channels="matseg_0|matseg_1|matseg_2,matseg_3|matseg_4|matseg_5" --workers=8
+    python -m watch visualize --src $ALIGNED_KWCOCO_BUNDLE/combo_nowv.kwcoco.json --channels="bare_ground|forest|brush,built_up|cropland|wetland,snow_or_ice_field|forest|water" --workers=8
+
+    # Split out train and validation data 
+    # (TODO: add test when we get enough data)
+    kwcoco subset --src $ALIGNED_KWCOCO_BUNDLE/combo_nowv.kwcoco.json \
+            --dst $ALIGNED_KWCOCO_BUNDLE/train_combo11.kwcoco.json \
+            --select_videos '.name | startswith("KR_R002") | not'
+
+    kwcoco subset --src $ALIGNED_KWCOCO_BUNDLE/combo_nowv.kwcoco.json \
+            --dst $ALIGNED_KWCOCO_BUNDLE/vali_combo11.kwcoco.json \
+            --select_videos '.name | startswith("KR_R002")'
 }

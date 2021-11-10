@@ -6,6 +6,7 @@ place to store hard-coded heuristics so we are explicit about where we are
 cutting corners or using magic numbers. The idea is that  this will make it
 easier for us to go back and make the code robust.
 """
+import ubelt as ub
 
 
 # Might need to split this up into a finger-grained structure
@@ -66,3 +67,10 @@ def ensure_heuristic_colors(coco_dset):
         if cat is not None:
             if cat.get('color', None) is None:
                 cat['color'] = hcat['color']
+
+
+HUERISTIC_COMBINABLE_CHANNELS = [
+    ub.oset(['B04', 'B03', 'B02']),  # for onera
+    ub.oset(['matset_1', 'matset_2', 'matset_3']),  # hack
+    ub.oset(['snow_or_ice_field', 'built_up', 'grassland']),  # hack
+]
