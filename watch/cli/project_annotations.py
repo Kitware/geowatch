@@ -29,6 +29,7 @@ import scriptconfig as scfg
 from watch.utils import kwcoco_extensions
 from watch.utils import util_kwplot
 from watch.utils import util_path
+from watch.utils import util_time
 
 
 class ProjectAnnotationsConfig(scfg.Config):
@@ -251,6 +252,13 @@ def assign_sites_to_images(coco_dset, sites, propogate, geospace_lookup='auto'):
         geospace_lookup = not coco_video_names.issubset(region_ids)
         print('geospace_lookup = {!r}'.format(geospace_lookup))
 
+    def coerce_datetime2(data):
+        """ Is this a monad 🦋 ? """
+        if data is None:
+            return data
+        else:
+            return util_time.coerce_datetime(data)
+
     propogated_annotations = []
     for region_id, region_sites in region_id_to_sites.items():
 
@@ -307,14 +315,14 @@ def assign_sites_to_images(coco_dset, sites, propogate, geospace_lookup='auto'):
             track_id = site_summary_row['site_id']
             status = site_summary_row['status']
 
-            start_date = coerce_datetime(site_summary_row['start_date'])
-            end_date = coerce_datetime(site_summary_row['end_date'])
+            start_date = coerce_datetime2(site_summary_row['start_date'])
+            end_date = coerce_datetime2(site_summary_row['end_date'])
 
             flags = ~site_rows['observation_date'].isnull()
             valid_site_rows = site_rows[flags]
 
             observation_dates = np.array([
-                coerce_datetime(x) for x in valid_site_rows['observation_date']
+                coerce_datetime2(x) for x in valid_site_rows['observation_date']
             ])
 
             if start_date is not None and observation_dates[0] != start_date:
@@ -328,13 +336,10 @@ def assign_sites_to_images(coco_dset, sites, propogate, geospace_lookup='auto'):
                 found_idxs = np.searchsorted(region_image_dates, observation_dates, 'left')
             except TypeError:
                 # handle  can't compare offset-naive and offset-aware datetimes
-                import datetime
-                region_image_dates = [
-                    dt if dt.tzinfo is not None else dt.replace(tzinfo=datetime.timezone.utc)
-                    for dt in region_image_dates]
-                observation_dates = [
-                    dt if dt.tzinfo is not None else dt.replace(tzinfo=datetime.timezone.utc)
-                    for dt in observation_dates]
+                region_image_dates = [util_time.ensure_timezone(dt)
+                                      for dt in region_image_dates]
+                observation_dates = [util_time.ensure_timezone(dt)
+                                     for dt in observation_dates]
                 found_idxs = np.searchsorted(region_image_dates, observation_dates, 'left')
 
             image_idxs_per_observation = np.split(region_image_indexes, found_idxs)[1:]
@@ -345,7 +350,7 @@ def assign_sites_to_images(coco_dset, sites, propogate, geospace_lookup='auto'):
             for gxs, site_row in zip(image_idxs_per_observation, site_rows.to_dict(orient='records')):
                 site_row['geometry']
                 gids = region_gids[gxs]
-                site_row_datetime = coerce_datetime(site_row['observation_date'])
+                site_row_datetime = coerce_datetime2(site_row['observation_date'])
                 assert site_row_datetime is not None
 
                 catname = site_row['current_phase']
@@ -400,7 +405,7 @@ def assign_sites_to_images(coco_dset, sites, propogate, geospace_lookup='auto'):
 
                 for gid in gids:
                     img = coco_dset.imgs[gid]
-                    img_datetime = coerce_datetime(img['date_captured'])
+                    img_datetime = util_time.coerce_datetime(img['date_captured'])
                     if propogate or img_datetime == site_row_datetime:
                         hack = 0
                         for catname, poly in zip(site_catnames, site_polygons):
@@ -440,17 +445,6 @@ def assign_sites_to_images(coco_dset, sites, propogate, geospace_lookup='auto'):
         })
 
     return propogated_annotations, all_drawable_infos
-
-
-def coerce_datetime(data):
-    import datetime
-    if data is None:
-        return data
-    else:
-        dt = dateutil.parser.parse(data)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=datetime.timezone.utc)
-    return dt
 
 
 def plot_image_and_site_times(coco_dset, region_image_dates, drawable_region_sites, region_id):

@@ -182,6 +182,7 @@ import warnings
 from os.path import join, exists
 from watch.cli.coco_visualize_videos import _write_ann_visualizations2
 from watch.utils import util_gis
+from watch.utils import util_time
 from watch.utils import kwcoco_extensions  # NOQA
 
 
@@ -1072,7 +1073,7 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
 
     # iso_time = datetime.date.isoformat(date.date())
     # iso_time = date.isoformat()
-    iso_time = date.isoformat(sep='T', timespec='seconds')
+    iso_time = util_time.isoformat(sep='T', timespec='seconds')
     sensor_coarse = img.get('sensor_coarse', 'unknown')
 
     # Construct a name for the subregion to extract.
@@ -1344,6 +1345,12 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     # # NOTE: https://github.com/dwtkns/gdal-cheat-sheet
     first_obj = obj_group[0]
     chan_code = obj_group[0].get('channels', '')
+
+    PATH_SAFE = True
+    if PATH_SAFE:
+        # Ensure chan codes dont break thing
+        chan_code = chan_code.replace('|', '_')
+        chan_code = chan_code.replace(':', '-')
 
     if len(chan_code) > 8:
         # Hack to prevent long names for docker (limit is 242 chars)

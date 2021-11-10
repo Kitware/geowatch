@@ -11,6 +11,9 @@ DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 UNSTRUCTURED_KWCOCO_BUNDLE=$DVC_DPATH/drop1
 ALIGNED_KWCOCO_BUNDLE=$DVC_DPATH/Drop1-Aligned-L1
 
+REGION_FPATH="$UNSTRUCTURED_KWCOCO_BUNDLE/all_regions.geojson" 
+#REGION_FPATH="$UNSTRUCTURED_KWCOCO_BUNDLE/region_models/NZ_R001.geojson" 
+
 # Unprotect DVC files that will get updated
 dvc unprotect $UNSTRUCTURED_KWCOCO_BUNDLE/data.kwcoco.json
 dvc unprotect $ALIGNED_KWCOCO_BUNDLE/*/*.json
@@ -25,25 +28,19 @@ python -m watch.cli.merge_region_models \
 # (makes running the align script faster)
 python -m watch add_fields \
     --src $UNSTRUCTURED_KWCOCO_BUNDLE/data.kwcoco.json \
-    --dst $UNSTRUCTURED_KWCOCO_BUNDLE/data.feilded.kwcoco.json --overwrite=warp --workers=avail
+    --dst $UNSTRUCTURED_KWCOCO_BUNDLE/data.fielded.kwcoco.json --overwrite=warp --workers=avail
 
-
-REGION_FPATH="$UNSTRUCTURED_KWCOCO_BUNDLE/all_regions.geojson" 
-#REGION_FPATH="$UNSTRUCTURED_KWCOCO_BUNDLE/region_models/NZ_R001.geojson" 
-
-
-# Align and orthorectify the data
+# Align and orthorectify the data to the chosen regions 
 # TODO: FIXME: I dont understand why this doesnt work
 # when I pass the glob path to all the regions
 # I need to use the merged region script. Very strange.
 python -m watch align \
-    --src $UNSTRUCTURED_KWCOCO_BUNDLE/data.kwcoco.json \
+    --src $UNSTRUCTURED_KWCOCO_BUNDLE/data.fielded.kwcoco.json \
     --dst $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json \
     --regions "$REGION_FPATH" \
     --keep img \
     --workers="avail/2" 
     --aux_workers="2" 
-
 
 python -m watch project \
     --site_models="$DVC_DPATH/drop1/site_models/*.geojson" \
