@@ -119,7 +119,7 @@ teamfeatures(){
         --batch_size=32 --gpus "0" \
         --compress=RAW --blocksize=64
 
-    export CUDA_VISIBLE_DEVICES="0"
+    export CUDA_VISIBLE_DEVICES="2"
     python -m watch.tasks.landcover.predict \
         --dataset=$BASE_COCO_FPATH \
         --deployed=$DZYNE_LANDCOVER_MODEL_FPATH  \
@@ -148,4 +148,18 @@ teamfeatures(){
     kwcoco subset --src $ALIGNED_KWCOCO_BUNDLE/combo_nowv.kwcoco.json \
             --dst $ALIGNED_KWCOCO_BUNDLE/vali_combo11.kwcoco.json \
             --select_videos '.name | startswith("KR_R002")'
+
+    echo "ALIGNED_KWCOCO_BUNDLE = $ALIGNED_KWCOCO_BUNDLE"
+    python -m watch add_fields --src $ALIGNED_KWCOCO_BUNDLE/vali_combo11.kwcoco.json --dst=$ALIGNED_KWCOCO_BUNDLE/vali_combo11.kwcoco.json --overwrite=warp
+    python -m watch add_fields --src $ALIGNED_KWCOCO_BUNDLE/train_combo11.kwcoco.json --dst=$ALIGNED_KWCOCO_BUNDLE/train_combo11.kwcoco.json --overwrite=warp
+
+    python -m watch project \
+        --site_models="$DVC_DPATH/drop1/site_models/*.geojson" \
+        --src $ALIGNED_KWCOCO_BUNDLE/vali_combo11.kwcoco.json \
+        --dst $ALIGNED_KWCOCO_BUNDLE/vali_combo11.kwcoco.json.prop 
+
+    python -m watch project \
+        --site_models="$DVC_DPATH/drop1/site_models/*.geojson" \
+        --src $ALIGNED_KWCOCO_BUNDLE/train_combo11.kwcoco.json \
+        --dst $ALIGNED_KWCOCO_BUNDLE/train_combo11.kwcoco.json.prop 
 }

@@ -1335,7 +1335,7 @@ def warp_annot_segmentations_from_geos(coco_dset):
     from os.path import join
     for gid in coco_dset.images():
         coco_img = coco_dset._coco_image(gid)
-        asset = coco_img.primary_asset()
+        asset = coco_img.primary_asset(requires=['geos_corners'])
         fpath = join(coco_dset.bundle_dpath, asset['file_name'])
         geo_meta = watch.gis.geotiff.geotiff_metadata(fpath)
         warp_wld_from_aux = kwimage.Affine.coerce(geo_meta['pxl_to_wld'])
@@ -1469,7 +1469,7 @@ def covered_image_geo_regions(coco_dset, merge=False):
             geos_corners = img['geos_corners']
         else:
             coco_img = coco_dset.coco_image(img['id'])
-            asset = coco_img.primary_asset()
+            asset = coco_img.primary_asset(requires=['geos_corners'])
             geos_corners = asset['geos_corners']
         geos_crs_info = geos_corners.get('properties').get('crs_info', None)
         if geos_crs_info is not None:

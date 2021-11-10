@@ -1953,7 +1953,10 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                         'aid': aid,
                     })
 
-            unique_tlbr = util_kwarray.unique_rows(np.array(all_vid_tlbr))
+            if len(all_vid_tlbr):
+                unique_tlbr = util_kwarray.unique_rows(np.array(all_vid_tlbr))
+            else:
+                unique_tlbr = []
             for idx, tlbr_box in enumerate(unique_tlbr):
                 qtree.insert(idx, tlbr_box)
                 qtree.idx_to_tlbr[idx] = tlbr_box
