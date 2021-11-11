@@ -37,7 +37,7 @@ def mask_to_scored_polygons(probs, thresh):
         >>> import kwimage
         >>> probs = kwimage.Heatmap.random(dims=(64, 64), rng=0).data['class_probs'][0]
         >>> thresh = 0.5
-        >>> poly1, score1 = list(mask_to_scored_polygons_v2(probs, thresh))[0]
+        >>> poly1, score1 = list(mask_to_scored_polygons(probs, thresh))[0]
         >>> # xdoctest: +IGNORE_WANT
         >>> import kwplot
         >>> kwplot.autompl()
