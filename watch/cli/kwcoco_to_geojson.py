@@ -287,8 +287,8 @@ def track_to_site(coco_dset,
         '''
         Feature containing metadata about the site
         '''
-        geometry = _combined_geometries([
-            _single_geometry(feat['geometry']) for feat in features])
+        geometry = _combined_geometries(
+            [_single_geometry(feat['geometry']) for feat in features])
 
         centroid_latlon = np.array(geometry.centroid)[::-1]
 
@@ -330,7 +330,7 @@ def track_to_site(coco_dset,
         return geojson.FeatureCollection([site_feature()] + features)
 
 
-def convert_kwcoco_to_iarpa(coco_dset, region_id=None):
+def convert_kwcoco_to_iarpa(coco_dset, region_id=None, as_summary=False):
     """
     Convert a kwcoco coco_dset to the IARPA JSON format
 
@@ -368,9 +368,10 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id=None):
 
         sub_dset = coco_dset.subset(gids=coco_dset.index.vidid_to_gids[vidid])
 
-        for trackid in sub_dset.index.trackid_to_aids:
+        for site_idx, trackid in enumerate(sub_dset.index.trackid_to_aids):
 
-            site = track_to_site(sub_dset, trackid, _region_id)
+            site = track_to_site(sub_dset, trackid, _region_id, site_idx,
+                                 as_summary)
             sites.append(site)
 
     return sites
@@ -409,6 +410,12 @@ def main(args):
                 will be appended to them
             - TODO different normalization pipeline
         '''))
+    parser.add_argument("--write_in_file",
+                        action="store_true",
+                        help=ub.paragraph('''
+        If set, write the normalized and tracked kwcoco in_file back to disk
+        so you can skip the --track_fn next time this is run on it.
+        '''))
     args = parser.parse_args(args)
 
     # Read the kwcoco file
@@ -437,16 +444,50 @@ def main(args):
         overwrite=False,
         gt_dset=gt_dset,
         coco_dset_sc=coco_dset_sc)
+    
+    if args.write_in_file:
+        coco_dset.dump(args.in_file, indent=2)
 
     # Convert kwcoco to sites
-    sites = convert_kwcoco_to_iarpa(coco_dset, args.region_id)
+    sites = convert_kwcoco_to_iarpa(coco_dset,
+                                    args.region_id,
+                                    as_summary=(not args.bas_mode))
 
-    # Write sites to disk
+    verbose = 1
     os.makedirs(args.out_dir, exist_ok=True)
     for site in sites:
-        with open(os.path.join(args.out_dir, site['id'] + '.geojson'),
-                  'w') as f:
-            geojson.dump(site, f, indent=2)
+        site_feature = site['features'][0]
+
+        if args.bas_mode:
+            #  write sites to region models on disk
+            assert site_feature['type'] == 'site_summary'
+            region_fpath = os.path.join(args.out_dir,
+                                        site_feature['region_id'] + '.geojson')
+            if os.path.isfile(region_fpath):
+                with open(region_fpath, 'r') as f:
+                    region = geojson.load(f)
+                if verbose:
+                    print(f'writing site {site_feature["site_id"]} to existing'
+                          f' region {region_fpath}')
+            else:
+                region = geojson.FeatureCollection([])
+                if verbose:
+                    print(f'writing site {site_feature["site_id"]} to new '
+                          f'region {region_fpath}')
+            region['features'].append(site)
+            with open(region_fpath, 'w') as f:
+                geojson.dump(region, f, indent=2)
+
+        else:
+            # Write sites to disk
+            assert site_feature['type'] == 'site'
+            site_fpath = os.path.join(args.out_dir,
+                                      site_feature['site_id'] + '.geojson')
+            if verbose:
+                print(f'writing site {site_feature["site_id"]} to new '
+                      f'site {site_fpath}')
+            with open(os.path.join(site_fpath), 'w') as f:
+                geojson.dump(site, f, indent=2)
     return 0
 
 
