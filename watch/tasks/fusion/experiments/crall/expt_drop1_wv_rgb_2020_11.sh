@@ -378,6 +378,7 @@ python -m watch.tasks.fusion.fit \
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 KWCOCO_BUNDLE_DPATH=${KWCOCO_BUNDLE_DPATH:-$DVC_DPATH/Drop1-Aligned-L1}
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/train_combo11.kwcoco.json
+#python -m kwcoco stats $TRAIN_FPATH
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/vali_combo11.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/vali_combo11.kwcoco.json
 #python -m watch stats $VALI_FPATH

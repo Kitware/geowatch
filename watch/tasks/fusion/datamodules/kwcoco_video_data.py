@@ -1186,9 +1186,9 @@ class KWCocoVideoDataset(data.Dataset):
                         poly.fill(frame_class_ohe[cidx], value=1)
 
                 # Dilate the truth map
-                # for cidx, class_map in enumerate(frame_class_ohe):
-                #     class_map = util_kwimage.morphology(class_map, 'dilate', kernel=5)
-                #     frame_cidxs[class_map > 0] = cidx
+                for cidx, class_map in enumerate(frame_class_ohe):
+                    # class_map = util_kwimage.morphology(class_map, 'dilate', kernel=5)
+                    frame_cidxs[class_map > 0] = cidx
 
                 # convert annotations into a change detection task suitable for
                 # the network.
@@ -1259,7 +1259,7 @@ class KWCocoVideoDataset(data.Dataset):
             ('hashid', self.sampler.dset._build_hashid()),
             ('channels', self.input_channels.__json__()),
             # ('sample_shape', self.sample_shape),
-            ('depends_version', 6),  # bump if `compute_dataset_stats` changes
+            ('depends_version', 7),  # bump if `compute_dataset_stats` changes
         ])
         workdir = None
         cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends)
@@ -1293,7 +1293,9 @@ class KWCocoVideoDataset(data.Dataset):
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (2, 256, 256)
             >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=None)
-            >>> self.compute_dataset_stats()
+            >>> stats = self.compute_dataset_stats()
+            >>> assert stats['class_freq']['star'] > 0 or stats['class_freq']['superstar'] > 0 or stats['class_freq']['eff'] > 0
+            >>> assert stats['class_freq']['background'] > 0
 
         CommandLine:
             DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.datamodules.kwcoco_video_data KWCocoVideoDataset.compute_dataset_stats:1
@@ -1316,8 +1318,8 @@ class KWCocoVideoDataset(data.Dataset):
             >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, neg_to_pos_ratio=1.0)
             >>> item = self[100]
             >>> #self.compute_dataset_stats(num=10)
-            >>> num_workers = 14
-            >>> num = 1000
+            >>> num_workers = 0
+            >>> num = 100
             >>> batch_size = 6
             >>> self.compute_dataset_stats(num=num, num_workers=num_workers, batch_size=batch_size)
         """
@@ -1351,6 +1353,7 @@ class KWCocoVideoDataset(data.Dataset):
                 for frame_item in item['frames']:
 
                     class_idxs = frame_item['class_idxs']
+                    # print(np.unique(class_idxs))
                     item_freq = np.histogram(class_idxs.ravel(), bins=bins)[0]
                     total_freq += item_freq
 
