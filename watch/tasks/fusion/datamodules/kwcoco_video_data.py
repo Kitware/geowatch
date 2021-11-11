@@ -62,7 +62,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         >>>     chip_size=chip_size,
         >>>     neg_to_pos_ratio=0,
         >>> )
-        >>> self.setup("fit")
+        >>> self.setup('fit')
         >>> dl = self.train_dataloader()
         >>> dataset = dl.dataset
         >>> batch = next(iter(dl))
@@ -97,7 +97,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         >>>     chip_size=chip_size,
         >>>     normalize_inputs=True,
         >>> )
-        >>> self.setup("fit")
+        >>> self.setup('fit')
         >>> dl = self.train_dataloader()
         >>> batch = next(iter(dl))
         >>> expect_shape = (batch_size, time_steps, len(chan_spec), chip_size, chip_size)
@@ -172,6 +172,15 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.time_span = time_span
         self.match_histograms = match_histograms
         self.resample_invalid_frames = resample_invalid_frames
+
+        self.common_dataset_kwargs = dict(
+                channels=self.channels,
+                time_sampling=self.time_sampling,
+                diff_inputs=self.diff_inputs,
+                exclude_sensors=self.exclude_sensors,
+                match_histograms=self.match_histograms,
+                resample_invalid_frames=self.resample_invalid_frames,
+        )
 
         self.num_workers = util_globals.coerce_num_workers(num_workers)
         self.torch_start_method = torch_start_method
@@ -292,17 +301,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             'torch_start_method': self.torch_start_method,
         })
 
-        self.common_dataset_kwargs = dict(
-                channels=self.channels,
-                time_sampling=self.time_sampling,
-                diff_inputs=self.diff_inputs,
-                exclude_sensors=self.exclude_sensors,
-                match_histograms=self.match_histograms,
-                resample_invalid_frames=self.resample_invalid_frames,
-
-        )
-
-        if stage == 'train' or stage is None:
+        if stage == 'fit' or stage is None:
             train_data = self.train_kwcoco
             if isinstance(train_data, pathlib.Path):
                 train_data = str(train_data.expanduser())
@@ -317,7 +316,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             train_dataset = KWCocoVideoDataset(
                 coco_train_sampler,
                 sample_shape=(self.time_steps, self.chip_size, self.chip_size),
-                mode='train',
+                mode='fit',
                 # window_overlap=(self.time_overlap, self.chip_overlap, self.chip_overlap),
                 window_overlap=self.chip_overlap,  # FIXME
                 neg_to_pos_ratio=self.neg_to_pos_ratio,
@@ -417,7 +416,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             >>> from watch.tasks.fusion import datamodules
             >>> self = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset='special:vidshapes8-multispectral', num_workers=0)
-            >>> self.setup('train')
+            >>> self.setup('fit')
             >>> loader = self.train_dataloader()
             >>> batch = next(iter(loader))
             >>> item = batch[0]
@@ -563,7 +562,7 @@ class KWCocoVideoDataset(data.Dataset):
         >>>     sample_shape=(5, 128, 128),
         >>>     window_overlap=0,
         >>>     channels="blue|green|red|nir|swir16",
-        >>>     neg_to_pos_ratio=0, time_sampling='auto', diff_inputs=1, mode='train', match_histograms=True,
+        >>>     neg_to_pos_ratio=0, time_sampling='auto', diff_inputs=1, mode='fit', match_histograms=True,
         >>> )
         >>> item = self[0]
         >>> canvas = self.draw_item(item)
@@ -590,7 +589,7 @@ class KWCocoVideoDataset(data.Dataset):
         sampler,
         sample_shape,
         channels=None,
-        mode='train',
+        mode='fit',
         window_overlap=0,
         neg_to_pos_ratio=1.0,
         time_sampling='auto',
@@ -911,7 +910,7 @@ class KWCocoVideoDataset(data.Dataset):
         sampler = self.sampler
         tr_['as_xarray'] = False
         tr_['use_experimental_loader'] = 1
-        if not self.disable_augmenter and self.mode == 'train':
+        if not self.disable_augmenter and self.mode == 'fit':
             # do_shift = np.random.rand() > 0.5
             do_shift = True
 
@@ -1104,7 +1103,7 @@ class KWCocoVideoDataset(data.Dataset):
         # TODO: make a nice "augmenter" pipeline
         do_hflip = False
         do_vflip = False
-        if not self.disable_augmenter and self.mode == 'train':
+        if not self.disable_augmenter and self.mode == 'fit':
             def make_hflipper(width):
                 def hflip(pt):
                     new = np.hstack([width - pt[:, 0:1], pt[:, 1:2]])
@@ -2011,7 +2010,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                         cropped = part.crop(space_region)
                         arr = cropped.finalize(as_xarray=True)
                         if np.all(arr == 0):
-                            print("BLACK REGION")
+                            print('BLACK REGION')
 
                 targets.append({
                     'main_idx': main_idx,

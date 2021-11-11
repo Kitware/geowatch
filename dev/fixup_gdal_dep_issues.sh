@@ -13,7 +13,7 @@ pip install shapely
 GEOS_CONFIG=/path/to/geos-config
 
 SITE_PACKAGE_DPATH=$(python -c "import distutils.sysconfig; print(distutils.sysconfig.get_python_lib())")
-find $SITE_PACKAGE_DPATH -iname "*libgeos*"
+find $SITE_PACKAGE_DPATH -iname "*libgeos_c*" | sort
 find $SITE_PACKAGE_DPATH -iname "*geos-config*"
 find . -iname "*geos-config*"
 
