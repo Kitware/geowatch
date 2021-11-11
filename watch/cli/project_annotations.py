@@ -182,7 +182,7 @@ def assign_sites_to_images(coco_dset, sites, propogate, geospace_lookup='auto'):
     Given a coco dataset (with geo information) and a list of geojson sites,
     determines which images each site-annotations should go on.
     """
-    from shapely.ops import cascaded_union
+    from shapely.ops import unary_union
     import pandas as pd
     from watch.utils import util_gis
     # Create a geopandas data frame that contains the CRS84 extent of all images
@@ -196,7 +196,7 @@ def assign_sites_to_images(coco_dset, sites, propogate, geospace_lookup='auto'):
         subdf = subdf.sort_values('frame_index')
         video_gdf = subdf.dissolve()
         video_gdf = video_gdf.drop(['date_captured', 'name', 'image_id', 'frame_index', 'height', 'width'], axis=1)
-        combined = cascaded_union(list(subdf.geometry.values))
+        combined = unary_union(list(subdf.geometry.values))
         video_gdf['geometry'].iloc[0] = combined
         video_gdfs.append(video_gdf)
         vidid_to_imgdf[vidid] = subdf
