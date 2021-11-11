@@ -67,10 +67,43 @@ def suggest_paths(test_dataset=None, package_fpath=None, pred_root=None):
     return json.dumps(suggestions)
 
 
+def make_nice_dirs():
+    from watch.utils import util_data
+    import ubelt as ub
+    import pathlib  # NOQA
+    dvc_dpath = util_data.find_smart_dvc_dpath()
+    train_base = dvc_dpath / 'training'
+    dataset_names = [
+        'Drop1_October2021',
+        'Drop1_November2021',
+    ]
+    user_machine_dpaths = list(train_base.glob('*/*'))
+    # all_checkpoint_paths = []
+    for um_dpath in user_machine_dpaths:
+        for dset_name in dataset_names:
+            dset_dpath = um_dpath / dset_name
+            runs_dpath = (dset_dpath / 'runs')
+            nice_root_dpath = (dset_dpath / 'nice')
+            nice_root_dpath.mkdir(exist_ok=True,)
+
+            for nice_link in nice_root_dpath.glob('*'):
+                if ub.util_links.islink(nice_link):
+                    if not nice_link.exists():
+                        nice_link.unlink()
+
+            lightning_log_dpaths = list(runs_dpath.glob('*/lightning_logs'))
+            for ll_dpath in lightning_log_dpaths:
+                dname = ll_dpath.parent.name
+                nice_dpath = nice_root_dpath / dname
+                version_dpaths = sorted(ll_dpath.glob('*'))
+                version_dpath = version_dpaths[-1]
+                ub.symlink(version_dpath, nice_dpath, verbose=1)
+
+
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/tasks/fusion/organize.py
+        python ~/code/watch/watch/tasks/fusion/organize.py make_nice_dirs
     """
     import fire
     fire.Fire()
