@@ -441,39 +441,22 @@ def time_aggregated_polys_bas(coco_dset,
 def time_aggregated_polys_sc(coco_dset,
                              thresh=0.1,
                              morph_kernel=3,
-                             bg_thresh=True,
                              time_filtering=False,
                              response_filtering=False,
                              coco_dset_sc=None):
     '''
     Wrapper for Site Characterization that looks for phase heatmaps.
-
-    Args:
-        bg_thresh: If True, treat No Activity as background and other classes as foreground,
-            using thresh to switch between them. Else, all classes are foreground.
-            TODO enable using a different thresh here than in mask_to_scored_polygons
     '''
-    if bg_thresh:
-        return time_aggregated_polys(coco_dset,
-                                     thresh,
-                                     morph_kernel,
-                                     key=[
-                                         'Site Preparation',
-                                         'Active Construction',
-                                         'Post Construction'
-                                     ],
-                                     bg_key=['No Activity'],
-                                     time_filtering=time_filtering)
-    else:
-        return time_aggregated_polys(coco_dset,
-                                     thresh,
-                                     morph_kernel,
-                                     key=[
-                                         'Site Preparation',
-                                         'Active Construction',
-                                         'Post Construction', 'No Activity'
-                                     ],
-                                     time_filtering=time_filtering)
+    return time_aggregated_polys(coco_dset,
+                                 thresh,
+                                 morph_kernel,
+                                 key=[
+                                     'Site Preparation',
+                                     'Active Construction',
+                                     'Post Construction'
+                                 ],
+                                 bg_key=['No Activity'],
+                                 time_filtering=time_filtering)
 
 
 def time_aggregated_polys_hybrid(coco_dset,
