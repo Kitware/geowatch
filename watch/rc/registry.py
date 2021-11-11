@@ -1,5 +1,9 @@
 """
 A registry of resource files bundled with the watch package
+
+Schemas are taken from
+https://smartgitlab.com/infrastructure/docs/-/tree/main/pages/schemas
+commit fe4343521d05e433d4ccfcf080d9bcf46c9d2e83
 """
 
 
@@ -29,6 +33,21 @@ def load_region_model_schema():
     """
     import json
     from importlib import resources as importlib_resources
-    file = importlib_resources.open_text('watch.rc', 'region-model.schema.json')
+    file = importlib_resources.open_text('watch.rc',
+                                         'region-model.schema.json')
+    data = json.load(file)
+    return data
+
+
+def load_job_schema():
+    """
+    Exapmle:
+        >>> from watch.rc.registry import *  # NOQA
+        >>> data = load_job_schema()
+        >>> print('data = {!r}'.format(data))
+    """
+    import json
+    from importlib import resources as importlib_resources
+    file = importlib_resources.open_text('watch.rc', 'job.schema.json')
     data = json.load(file)
     return data
