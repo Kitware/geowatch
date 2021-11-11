@@ -40,7 +40,7 @@ class FocalLoss(_Loss):
 
     Example:
         >>> import torch
-        >>> from monai.losses import FocalLoss
+        >>> #from monai.losses import FocalLoss
         >>> from torch.nn import BCEWithLogitsLoss
         >>> shape = B, N, *DIMS = 2, 3, 5, 7, 11
         >>> input = torch.rand(*shape)
@@ -97,7 +97,7 @@ class FocalLoss(_Loss):
 
         Example:
             >>> import torch
-            >>> from monai.losses import FocalLoss
+            >>> #from monai.losses import FocalLoss
             >>> pred = torch.tensor([[1, 0], [0, 1], [1, 0]], dtype=torch.float32)
             >>> grnd = torch.tensor([[0], [1], [0]], dtype=torch.int64)
             >>> fl = FocalLoss(to_onehot_y=True)
@@ -295,16 +295,15 @@ class DiceLoss(_Loss):
             ValueError: When ``self.reduction`` is not one of ["mean", "sum", "none"].
 
         Example:
-            >>> from monai.losses.dice import *  # NOQA
+            >>> #from monai.losses.dice import *  # NOQA
             >>> import torch
-            >>> from monai.losses.dice import DiceLoss
+            >>> #from monai.losses.dice import DiceLoss
             >>> B, C, H, W = 7, 5, 3, 2
             >>> input = torch.rand(B, C, H, W)
             >>> target_idx = torch.randint(low=0, high=C - 1, size=(B, H, W)).long()
             >>> target = one_hot(target_idx[:, None, ...], num_classes=C)
             >>> self = DiceLoss(reduction='none')
             >>> loss = self(input, target)
-            >>> assert np.broadcast_shapes(loss.shape, input.shape) == input.shape
         """
         if self.sigmoid:
             input = torch.sigmoid(input)

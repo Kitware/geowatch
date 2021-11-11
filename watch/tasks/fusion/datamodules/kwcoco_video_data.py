@@ -132,6 +132,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         num_workers=4,
         torch_sharing_strategy='default',
         torch_start_method='default',
+        resample_invalid_frames=True,
     ):
         """
         Args:
@@ -170,6 +171,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.diff_inputs = diff_inputs
         self.time_span = time_span
         self.match_histograms = match_histograms
+        self.resample_invalid_frames = resample_invalid_frames
 
         self.num_workers = util_globals.coerce_num_workers(num_workers)
         self.torch_start_method = torch_start_method
@@ -235,6 +237,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         parser.add_argument('--channels', default=None, type=str, help='channels to use should be ChannelSpec coercable')
         parser.add_argument('--batch_size', default=4, type=int)
         parser.add_argument('--time_span', default='2y', type=str, help='how long a time window should roughly span by default')
+        parser.add_argument('--resample_invalid_frames', default=True, help='if True, will attempt to resample any frame without valid data')
 
         parser.add_argument(
             '--normalize_inputs', default=True, type=smartcast, help=ub.paragraph(
@@ -289,7 +292,17 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             'torch_start_method': self.torch_start_method,
         })
 
-        if stage == 'fit' or stage is None:
+        self.common_dataset_kwargs = dict(
+                channels=self.channels,
+                time_sampling=self.time_sampling,
+                diff_inputs=self.diff_inputs,
+                exclude_sensors=self.exclude_sensors,
+                match_histograms=self.match_histograms,
+                resample_invalid_frames=self.resample_invalid_frames,
+
+        )
+
+        if stage == 'train' or stage is None:
             train_data = self.train_kwcoco
             if isinstance(train_data, pathlib.Path):
                 train_data = str(train_data.expanduser())
@@ -304,14 +317,11 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             train_dataset = KWCocoVideoDataset(
                 coco_train_sampler,
                 sample_shape=(self.time_steps, self.chip_size, self.chip_size),
+                mode='train',
                 # window_overlap=(self.time_overlap, self.chip_overlap, self.chip_overlap),
                 window_overlap=self.chip_overlap,  # FIXME
-                channels=self.channels,
                 neg_to_pos_ratio=self.neg_to_pos_ratio,
-                time_sampling=self.time_sampling,
-                diff_inputs=self.diff_inputs,
-                exclude_sensors=self.exclude_sensors,
-                match_histograms=self.match_histograms,
+                **self.common_dataset_kwargs,
             )
 
             # Unfortunately lightning seems to only enable / disables
@@ -353,17 +363,10 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 vali_dataset = KWCocoVideoDataset(
                     vali_coco_sampler,
                     sample_shape=(self.time_steps, self.chip_size, self.chip_size),
-                    # window_overlap=(self.time_overlap, self.chip_overlap, self.chip_overlap),
-                    # window_overlap=self.chip_overlap,  # FIXME
-                    window_overlap=0,
-                    channels=self.channels,
-                    time_sampling=self.time_sampling,
                     mode='vali',
+                    window_overlap=0,
                     neg_to_pos_ratio=0,
-                    diff_inputs=self.diff_inputs,
-                    exclude_sensors=self.exclude_sensors,
-                    match_histograms=self.match_histograms,
-                )
+                    **self.common_dataset_kwargs)
                 self.torch_datasets['vali'] = vali_dataset
                 ub.inject_method(self, lambda self: self._make_dataloader('vali', shuffle=False), 'val_dataloader')
 
@@ -380,13 +383,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 test_coco_sampler,
                 sample_shape=(self.time_steps, self.chip_size, self.chip_size),
                 window_overlap=self.chip_overlap,  # FIXME
-                # window_overlap=0,
-                # (self.time_overlap, self.chip_overlap, self.chip_overlap),
-                channels=self.channels,
                 mode='test',
-                diff_inputs=self.diff_inputs,
-                exclude_sensors=self.exclude_sensors,
-                match_histograms=self.match_histograms,
+                **self.common_dataset_kwargs,
             )
 
             ub.inject_method(self, lambda self: self._make_dataloader('test', shuffle=False), 'test_dataloader')
@@ -419,7 +417,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             >>> from watch.tasks.fusion import datamodules
             >>> self = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset='special:vidshapes8-multispectral', num_workers=0)
-            >>> self.setup('fit')
+            >>> self.setup('train')
             >>> loader = self.train_dataloader()
             >>> batch = next(iter(loader))
             >>> item = batch[0]
@@ -592,7 +590,7 @@ class KWCocoVideoDataset(data.Dataset):
         sampler,
         sample_shape,
         channels=None,
-        mode='fit',
+        mode='train',
         window_overlap=0,
         neg_to_pos_ratio=1.0,
         time_sampling='auto',
@@ -600,6 +598,7 @@ class KWCocoVideoDataset(data.Dataset):
         time_span='2y',
         exclude_sensors=None,
         match_histograms=False,
+        resample_invalid_frames=True,
     ):
 
         # TODO: the set of "valid" background classnames should be defined
@@ -610,6 +609,7 @@ class KWCocoVideoDataset(data.Dataset):
         self._heuristic_ignore_classnames = heuristics.IGNORE_CLASSNAMES
 
         self.match_histograms = match_histograms
+        self.resample_invalid_frames = resample_invalid_frames
 
         if channels is None:
             # Hack to use all channels in the first image.
@@ -911,7 +911,7 @@ class KWCocoVideoDataset(data.Dataset):
         sampler = self.sampler
         tr_['as_xarray'] = False
         tr_['use_experimental_loader'] = 1
-        if not self.disable_augmenter and self.mode == 'fit':
+        if not self.disable_augmenter and self.mode == 'train':
             # do_shift = np.random.rand() > 0.5
             do_shift = True
 
@@ -956,7 +956,7 @@ class KWCocoVideoDataset(data.Dataset):
             padkw={'constant_values': np.nan}
         )
 
-        ALLOW_RESAMPLE = True
+        ALLOW_RESAMPLE = self.resample_invalid_frames
         if ALLOW_RESAMPLE:
             # If any image is junk allow for a resample
             is_frame_bad = np.isnan(sample['im']).all(axis=(1, 2, 3))
@@ -1104,7 +1104,7 @@ class KWCocoVideoDataset(data.Dataset):
         # TODO: make a nice "augmenter" pipeline
         do_hflip = False
         do_vflip = False
-        if not self.disable_augmenter and self.mode == 'fit':
+        if not self.disable_augmenter and self.mode == 'train':
             def make_hflipper(width):
                 def hflip(pt):
                     new = np.hstack([width - pt[:, 0:1], pt[:, 1:2]])

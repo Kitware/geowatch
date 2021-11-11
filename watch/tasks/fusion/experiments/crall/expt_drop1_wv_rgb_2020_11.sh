@@ -356,8 +356,8 @@ python -m watch.tasks.fusion.fit \
     --patience=140 \
     --num_workers=16 \
     --gpus=1  \
-    --batch_size=4 \
-    --accumulate_grad_batches=4 \
+    --batch_size=2 \
+    --accumulate_grad_batches=3 \
     --learning_rate=1e-4 \
     --weight_decay=1e-5 \
     --dropout=0.1 \
@@ -376,9 +376,9 @@ python -m watch.tasks.fusion.fit \
 DVC_DPATH=${DVC_DPATH:-$HOME/data/dvc-repos/smart_watch_dvc}
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 ARCH=deit
-CHANNELS="blue|green|red|nir|cirrus|swir16|swir22|matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7|matseg_8|matseg_9|matseg_10|matseg_11|matseg_12|matseg_13|matseg_14|matseg_15|matseg_16|matseg_17|matseg_18|matseg_19|matseg_20|matseg_21|matseg_22|matseg_23|matseg_24|matseg_25|matseg_26|matseg_27|matseg_28|matseg_29|matseg_30|matseg_31|matseg_32|matseg_33|matseg_34|matseg_35|matseg_36|matseg_37|matseg_38|matseg_39|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
+CHANNELS="matseg_16|matseg_17|matseg_18|matseg_19|matseg_20|matseg_21|matseg_22|matseg_23|matseg_24|matseg_25|matseg_26|matseg_27|matseg_28|matseg_29|matseg_30|matseg_31|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field|blue|green|red|nir|cirrus|swir16|swir22"
 DATASET_CODE=Drop1_November2021
-EXPERIMENT_NAME=Activity_${ARCH}_newanns_rutgers_dzyne_v1
+EXPERIMENT_NAME=Activity_${ARCH}_newanns_rutgers_dzyne_v3
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="1"
@@ -388,16 +388,18 @@ python -m watch.tasks.fusion.fit \
     --default_root_dir=$DEFAULT_ROOT_DIR \
     --method="MultimodalTransformer" \
     --arch_name=$ARCH \
+    --num_workers=16 \
+    --neg_to_pos_ratio=1.0 \
     --config $WORKDIR/configs/namek_common_activity11.yaml 
 
 
 # NAMEK Try2
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
-ARCH=smt_it_joint_s12
-CHANNELS="blue|green|red|nir|cirrus|swir16|swir22|matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7|matseg_8|matseg_9|matseg_10|matseg_11|matseg_12|matseg_13|matseg_14|matseg_15|matseg_16|matseg_17|matseg_18|matseg_19|matseg_20|matseg_21|matseg_22|matseg_23|matseg_24|matseg_25|matseg_26|matseg_27|matseg_28|matseg_29|matseg_30|matseg_31|matseg_32|matseg_33|matseg_34|matseg_35|matseg_36|matseg_37|matseg_38|matseg_39|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
+ARCH=deit
+CHANNELS="matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7|matseg_8|matseg_9|matseg_10|matseg_11|matseg_12|matseg_13|matseg_14|matseg_15|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field|blue|green|red|nir|cirrus|swir16|swir22"
 DATASET_CODE=Drop1_November2021
-EXPERIMENT_NAME=Activity_${ARCH}_newanns_rutgers_dzyne_v2
+EXPERIMENT_NAME=Activity_${ARCH}_newanns_rutgers_dzyne_v4
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="0"
@@ -408,7 +410,9 @@ python -m watch.tasks.fusion.fit \
     --method="MultimodalTransformer" \
     --chip_size=64 \
     --time_steps=5 \
+    --num_workers=16 \
     --global_saliency_weight=0.0 \
+    --neg_to_pos_ratio=1.0 \
     --arch_name=$ARCH \
     --optimizer=RAdam \
     --config $WORKDIR/configs/namek_common_activity11.yaml 
@@ -565,8 +569,8 @@ python -m watch.tasks.fusion.fit \
     --default_root_dir=$DEFAULT_ROOT_DIR \
     --method="MultimodalTransformer" \
     --arch_name=$ARCH \
-    --chip_size=64 \
     --chip_overlap=0.0 \
+    --chip_size=64 \
     --time_steps=3 \
     --time_span=1y \
     --diff_inputs=False \
@@ -621,47 +625,6 @@ python -m watch.tasks.fusion.fit \
     --method="MultimodalTransformer" \
     --arch_name=$ARCH 
 
-
-DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
-DATASET_CODE=Drop1_November2021
-ARCH=smt_it_joint_s24
-CHANNELS="forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field|blue|green|red|nir|cirrus|swir16|swir22"
-EXPERIMENT_NAME=Activity_${ARCH}_newanns_dzyne_v6
-DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
-export CUDA_VISIBLE_DEVICES="2"
-python -m watch.tasks.fusion.fit \
-    --config $WORKDIR/configs/horologic_common_activity11.yaml  \
-    --channels=${CHANNELS} \
-    --name=$EXPERIMENT_NAME \
-    --default_root_dir=$DEFAULT_ROOT_DIR \
-    --method="MultimodalTransformer" \
-    --arch_name=$ARCH 
-
-
-DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
-DATASET_CODE=Drop1_November2021
-ARCH=smt_it_joint_s24
-CHANNELS="brush|bare_ground|built_up|matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7|blue|green|red|nir|cirrus|swir16|swir22"
-EXPERIMENT_NAME=Activity_${ARCH}_newanns_hybrid_v7
-DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
-PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
-export CUDA_VISIBLE_DEVICES="1"
-python -m watch.tasks.fusion.fit \
-    --config $WORKDIR/configs/horologic_common_activity11.yaml  \
-    --channels=${CHANNELS} \
-    --name=$EXPERIMENT_NAME \
-    --chip_size=64 \
-    --time_steps=11 \
-    --batch_size=1 \
-    --optimizer=AdamW \
-    --accumulate_grad_batches=8 \
-    --default_root_dir=$DEFAULT_ROOT_DIR \
-    --method="MultimodalTransformer" \
-    --arch_name=$ARCH 
-
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop1_November2021
@@ -681,6 +644,82 @@ python -m watch.tasks.fusion.fit \
     --batch_size=1 \
     --optimizer=RAdam \
     --accumulate_grad_batches=16 \
+    --default_root_dir=$DEFAULT_ROOT_DIR \
+    --method="MultimodalTransformer" \
+    --arch_name=$ARCH 
+
+
+#DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+#WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+#DATASET_CODE=Drop1_November2021
+#ARCH=smt_it_joint_s24
+#CHANNELS="brush|bare_ground|built_up|matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7|blue|green|red|nir|cirrus|swir16|swir22"
+#EXPERIMENT_NAME=Activity_${ARCH}_newanns_hybrid_v7
+#DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+#PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
+#export CUDA_VISIBLE_DEVICES="1"
+#python -m watch.tasks.fusion.fit \
+#    --config $WORKDIR/configs/horologic_common_activity11.yaml  \
+#    --channels=${CHANNELS} \
+#    --name=$EXPERIMENT_NAME \
+#    --chip_size=64 \
+#    --time_steps=11 \
+#    --batch_size=1 \
+#    --optimizer=AdamW \
+#    --accumulate_grad_batches=8 \
+#    --default_root_dir=$DEFAULT_ROOT_DIR \
+#    --method="MultimodalTransformer" \
+#    --arch_name=$ARCH 
+
+
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop1_November2021
+ARCH=smt_it_joint_m24
+CHANNELS="matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field|blue|green|red|nir|cirrus|swir16|swir22"
+EXPERIMENT_NAME=Activity_${ARCH}_newanns_hybrid_v9
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
+export CUDA_VISIBLE_DEVICES="0"
+python -m watch.tasks.fusion.fit \
+    --config $WORKDIR/configs/horologic_common_activity11.yaml  \
+    --channels=${CHANNELS} \
+    --name=$EXPERIMENT_NAME \
+    --optimizer=AdamW \
+    --time_span=2y \
+    --chip_size=64 \
+    --batch_size=1 \
+    --accumulate_grad_batches=3 \
+    --time_steps=5 \
+    --default_root_dir=$DEFAULT_ROOT_DIR \
+    --method="MultimodalTransformer" \
+    --arch_name=$ARCH 
+
+
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop1_November2021
+ARCH=smt_it_joint_m24
+CHANNELS="matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field|blue|green|red|nir|cirrus|swir16|swir22"
+EXPERIMENT_NAME=Activity_${ARCH}_newanns_hybrid_v10
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
+export CUDA_VISIBLE_DEVICES="1"
+python -m watch.tasks.fusion.fit \
+    --config $WORKDIR/configs/horologic_common_activity11.yaml  \
+    --channels=${CHANNELS} \
+    --name=$EXPERIMENT_NAME \
+    --optimizer=RAdam \
+    --time_span=2y \
+    --chip_size=64 \
+    --batch_size=1 \
+    --neg_to_pos_ratio=0.5 \
+    --global_class_weight=1.0 \
+    --global_change_weight=0.000001 \
+    --global_saliency_weight=0.0001 \
+    --learning_rate=1e-3 \
+    --accumulate_grad_batches=3 \
+    --time_steps=5 \
     --default_root_dir=$DEFAULT_ROOT_DIR \
     --method="MultimodalTransformer" \
     --arch_name=$ARCH 
