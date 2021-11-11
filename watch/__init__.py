@@ -17,6 +17,11 @@ AUTO_WATCH_HACK_IMPORT_ORDER = [
     # 'geopandas',
 ]
 
+WATCH_AUTOHACK_IMPORT_VARIANTS = {
+    'variant1': ['pyproj', 'gdal'],   # CI machine
+    'variant2': ['geopandas'],        # align-crs on horologic
+}
+
 WATCH_HACK_IMPORT_ORDER = os.environ.get('WATCH_HACK_IMPORT_ORDER', 'auto')
 
 
@@ -49,6 +54,8 @@ def _execute_import_order_hacks(WATCH_HACK_IMPORT_ORDER):
         # This is very annoying
         # This is the "known" best order for importing
         watch_hack_import_order = AUTO_WATCH_HACK_IMPORT_ORDER
+    elif WATCH_HACK_IMPORT_ORDER in WATCH_AUTOHACK_IMPORT_VARIANTS:
+        watch_hack_import_order = WATCH_AUTOHACK_IMPORT_VARIANTS[WATCH_HACK_IMPORT_ORDER]
     elif WATCH_HACK_IMPORT_ORDER.lower() in {'0', 'false', 'no', ''}:
         watch_hack_import_order = None
     else:

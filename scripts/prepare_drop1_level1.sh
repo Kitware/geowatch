@@ -34,7 +34,7 @@ python -m watch add_fields \
 # TODO: FIXME: I dont understand why this doesnt work
 # when I pass the glob path to all the regions
 # I need to use the merged region script. Very strange.
-WATCH_HACK_IMPORT_ORDER=numpy,geopandas,pyproj,osgeo python -X faulthandler -m watch align \
+WATCH_HACK_IMPORT_ORDER=geopandas,gdal python -X faulthandler -m watch align \
     --src $UNSTRUCTURED_KWCOCO_BUNDLE/data.fielded.kwcoco.json \
     --dst $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json \
     --regions "$REGION_FPATH" \
