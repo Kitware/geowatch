@@ -78,7 +78,7 @@ def _combined_geometries(geometry_list):
     return shapely.ops.unary_union(geometry_list).buffer(0)
 
 
-def geojson_feature(img, anns, coco_dset):
+def geojson_feature(img, anns, coco_dset, with_properties=True):
     '''
     Group kwcoco annotations in the same track (site) and image
     into one Feature in an IARPA site model
@@ -88,44 +88,59 @@ def geojson_feature(img, anns, coco_dset):
         assert isinstance(seg_geo, dict)
         return _single_geometry(seg_geo)
 
-    # grab source and date for single_properties per-img instead of per-ann
-
-    try:
-        # pick the image that is actually copied to the evaluation framework
+    def per_image_properties(img):
+        '''
+        Properties defined per-img instead of per-ann, to reduce duplicate
+        computation.
+        '''
+        # pick the image that is actually copied to the metrics framework
         source = None
         for aux in img.get('auxiliary', []):
             basename = os.path.basename(aux['file_name'])
             if basename.endswith('blue.tif'):
                 source = basename
         if source is None:
-            # Pick a reasonable source image, we don't have a spec for this yet
-            candidate_keys = [
-                'parent_name', 'parent_file_name', 'name', 'file_name'
-            ]
-            candidate_sources = list(filter(None, map(img.get,
-                                                      candidate_keys)))
-            source = candidate_sources[0]
-    except IndexError:
-        raise Exception(f'cannot determine source of gid {img["gid"]}')
+            try:
+                # Pick reasonable source image, we don't have a spec for this
+                candidate_keys = [
+                    'parent_name', 'parent_file_name', 'name', 'file_name'
+                ]
+                source = next(filter(None, map(img.get, candidate_keys)))
+            except StopIteration:
+                raise Exception(f'can\'t determine source of gid {img["gid"]}')
 
-    date = dateutil.parser.parse(img['date_captured']).date()
+        date = dateutil.parser.parse(img['date_captured']).date().isoformat()
+
+        return {
+            'source': source,
+            'observation_date': date,
+            'is_occluded': False,  # HACK
+            'sensor_name': img['sensor_coarse']
+        }
+
+    if with_properties:
+        image_properties_dct = {
+            gid: per_image_properties(coco_dset.imgs[gid])
+            for gid in {ann['image_id']
+                        for ann in anns}
+        }
 
     def single_properties(ann):
 
         current_phase = coco_dset.cats[ann['category_id']]['name']
 
         return {
+            'type': 'observation',
             'current_phase': current_phase,
-            'is_occluded': False,  # HACK
             'is_site_boundary': True,  # HACK
-            'source': source,
-            'observation_date': date.isoformat(),
-            'sensor_name': img['sensor_coarse'],
-            'score': ann.get('score', 1.0)
+            'score': ann.get('score', 1.0),
+            'misc_info': {},
+            **image_properties_dct[ann['image_id']]
         }
 
     geometry_list = list(map(single_geometry, anns))
-    properties_list = list(map(single_properties, anns))
+    if with_properties:
+        properties_list = list(map(single_properties, anns))
 
     def combined_geometries(geometry_list):
         '''
@@ -165,7 +180,7 @@ def geojson_feature(img, anns, coco_dset):
             properties[key] = sep.join(value)
 
         # identical properties
-        for key in ['source', 'observation_date', 'sensor_name']:
+        for key in ['type', 'source', 'observation_date', 'sensor_name']:
             values = properties_list[key]
             assert len(set(values)) == 1
             properties[key] = str(values[0])
@@ -176,14 +191,26 @@ def geojson_feature(img, anns, coco_dset):
             weights=[geom.area for geom in geometry_list])
         return properties
 
+        # currently unused
+        # dict_union will tkae the first val for each key
+        properties['misc_info'] = ub.dict_union(properties_list['misc_info'])
+
+    if with_properties:
+        properties = combined_properties(properties_list, geometry_list)
+    else:
+        properties = {}
+
     return geojson.Feature(geometry=combined_geometries(geometry_list),
-                           properties=combined_properties(
-                               properties_list, geometry_list))
+                           properties=properties)
 
 
-def track_to_site(coco_dset, trackid, region_id):
+def track_to_site(coco_dset,
+                  trackid,
+                  region_id,
+                  site_idx=None,
+                  as_summary=False):
     '''
-    Turn a kwcoco track into an IARPA site model
+    Turn a kwcoco track into an IARPA site model or site summary
     '''
 
     # get annotations in this track, sort them, and group them into features
@@ -198,66 +225,109 @@ def track_to_site(coco_dset, trackid, region_id):
         # if track_index is missing, assume they're already sorted
         gids, anns = annots.gids, annots.objs
     features = [
-        geojson_feature(coco_dset.imgs[gid], _anns, coco_dset)
+        geojson_feature(coco_dset.imgs[gid],
+                        _anns,
+                        coco_dset,
+                        with_properties=(not as_summary))
         for gid, _anns in ub.group_items(anns, gids).items()
     ]
 
-    # add prediction field to each feature
-    # > A “Polygon” should define the foreign members “current_phase”,
-    # > “predicted_next_phase”, and “predicted_next_phase_date”.
-    # TODO we need to figure out how to link individual polygons across frames
-    # within a track when we have >1 polygon per track_index (from MultiPolygon
-    # or multiple annotations) to handle splitting/merging.
-    # This is because this prediction foreign field is defined wrt the CURRENT
-    # polygon, not per-observation.
-    for ix, feat in enumerate(features):
+    def predict_phase_changes():
+        '''
+        add prediction field to each feature
+        > A “Polygon” should define the foreign members “current_phase”,
+        > “predicted_next_phase”, and “predicted_next_phase_date”.
+        TODO we need to figure out how to link individual polygons across frames
+        within a track when we have >1 polygon per track_index (from MultiPolygon
+        or multiple annotations) to handle splitting/merging.
+        This is because this prediction foreign field is defined wrt the CURRENT
+        polygon, not per-observation.
+        '''
+        for ix, feat in enumerate(features):
 
-        current_phase = feat['properties']['current_phase']
-        sep = ','
-        n_polys = current_phase.count(sep)
-        prediction = {
-            'predicted_phase': None,
-            'predicted_phase_start_date': None,
+            current_phase = feat['properties']['current_phase']
+            sep = ','
+            n_polys = len(current_phase.split(sep))
+            prediction = {
+                'predicted_phase': None,
+                'predicted_phase_start_date': None,
+            }
+            for future_feat in features[ix + 1:]:
+                future_phase = future_feat['properties']['current_phase']
+                future_date = future_feat['properties']['observation_date']
+                # HACK need to let these vary between polys in an observation
+                if future_phase != current_phase:
+                    current_phases = current_phase.split(sep)
+                    future_phases = future_phase.split(sep)
+                    n_diff = len(current_phases) - len(future_phases)
+                    if n_diff > 0:
+                        predicted_phase = sep.join(
+                            future_phases +
+                            current_phases[len(future_phases):])
+                    else:
+                        predicted_phase = sep.join(
+                            future_phases[:len(current_phases)])
+                    prediction = {
+                        'predicted_phase':
+                        predicted_phase,
+                        'predicted_phase_start_date':
+                        sep.join([future_date] * n_polys),
+                    }
+                    break
+
+            feat['properties'].update(prediction)
+
+    if not as_summary:
+        predict_phase_changes()
+
+    if site_idx is None:
+        site_idx = trackid
+
+    def site_feature():
+        '''
+        Feature containing metadata about the site
+        '''
+        geometry = _combined_geometries([
+            _single_geometry(feat['geometry']) for feat in features])
+
+        centroid_latlon = np.array(geometry.centroid)[::-1]
+
+        # these are strings, but sorting should be correct in isoformat
+        dates = sorted(feat['properties']['observation_date']
+                       for feat in features)
+
+        site_id = '_'.join((region_id, str(site_idx).zfill(4)))
+
+        properties = {
+            'site_id': site_id,
+            'version': watch.__version__,
+            'mgrs': MGRS().toMGRS(*centroid_latlon, MGRSPrecision=0),
+            'status': 'positive_annotated',
+            'model_content': 'proposed',
+            'score': 1.0,  # TODO does this matter?
+            'start_date': min(dates),
+            'end_date': max(dates),
+            'originator': 'kitware',
+            'validated': 'False'  # TODO needed?
         }
-        for future_feat in features[ix + 1:]:
-            future_phase = future_feat['properties']['current_phase']
-            future_date = future_feat['properties']['observation_date']
-            # HACK need to let these vary between polys in an observation
-            if future_phase != current_phase:
-                current_phases = current_phase.split(sep)
-                future_phases = future_phase.split(sep)
-                n_diff = len(current_phases) - len(future_phases)
-                if n_diff > 0:
-                    predicted_phase = sep.join(
-                        future_phases + current_phases[len(future_phases):])
-                else:
-                    predicted_phase = sep.join(
-                        future_phases[:len(current_phases)])
-                prediction = {
-                    'predicted_phase':
-                    predicted_phase,
-                    'predicted_phase_start_date':
-                    sep.join([future_date] * n_polys),
-                }
-                break
 
-        feat['properties'].update(prediction)
+        if as_summary:
+            properties.update(**{
+                'type': 'site_summary',
+            })
+        else:
+            properties.update(**{
+                'type': 'site',
+                'region_id': region_id,
+                'misc_info': {}
+            })
 
-    # add other top-level fields
+        return geojson.Feature(geometry=geometry, properties=properties)
 
-    centroid_latlon = np.array(
-        _combined_geometries([
-            _single_geometry(feat['geometry']) for feat in features
-        ]).centroid)[::-1]
-
-    return geojson.FeatureCollection(
-        features,
-        id='_'.join((region_id, str(trackid).zfill(4))),
-        version=watch.__version__,
-        mgrs=MGRS().toMGRS(*centroid_latlon, MGRSPrecision=0),
-        status='positive_annotated',
-        score=1.0,  # TODO does this matter?
-    )
+    if as_summary:
+        return site_feature()
+    else:
+        return geojson.FeatureCollection([site_feature()] + features)
 
 
 def convert_kwcoco_to_iarpa(coco_dset, region_id=None):
@@ -310,8 +380,12 @@ def main(args):
     parser = argparse.ArgumentParser(
         description="Convert KWCOCO to IARPA GeoJSON")
     parser.add_argument("--in_file", help="Input KWCOCO to convert")
-    parser.add_argument("--in_file_gt", default=None, help="GT KWCOCO file used for visualizations")
-    parser.add_argument("--in_file_sc", default=None, help="KWCOCO file with SC prediction heatmaps")
+    parser.add_argument("--in_file_gt",
+                        default=None,
+                        help="GT KWCOCO file used for visualizations")
+    parser.add_argument("--in_file_sc",
+                        default=None,
+                        help="KWCOCO file with SC prediction heatmaps")
     parser.add_argument(
         "--out_dir",
         help="Output directory where GeoJSON files will be written")
@@ -324,6 +398,16 @@ def main(args):
                         help=ub.paragraph('''
         Function to add tracks. If None, use existing tracks.
         Example: 'watch.tasks.tracking.from_heatmap.time_aggregated_polys'
+        '''))
+    parser.add_argument("--bas_mode",
+                        action='store_true',
+                        help=ub.paragraph('''
+        In BAS mode, the following changes occur:
+            - output will be site summaries instead of sites
+            - existing region files will be searched for in out_dir, or
+                generated from in_file if not found, and site summaries
+                will be appended to them
+            - TODO different normalization pipeline
         '''))
     args = parser.parse_args(args)
 
@@ -347,11 +431,12 @@ def main(args):
     else:
         track_fn = eval(args.track_fn)
 
-    coco_dset = watch.tasks.tracking.normalize.normalize(coco_dset,
-                                                         track_fn=track_fn,
-                                                         overwrite=False,
-                                                         gt_dset=gt_dset,
-                                                         coco_dset_sc=coco_dset_sc)
+    coco_dset = watch.tasks.tracking.normalize.normalize(
+        coco_dset,
+        track_fn=track_fn,
+        overwrite=False,
+        gt_dset=gt_dset,
+        coco_dset_sc=coco_dset_sc)
 
     # Convert kwcoco to sites
     sites = convert_kwcoco_to_iarpa(coco_dset, args.region_id)
