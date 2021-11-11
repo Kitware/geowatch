@@ -118,4 +118,18 @@ teamfeatures(){
         --num_workers="8" \
         --batch_size=32 --gpus "0" \
         --compress=RAW --blocksize=64
+
+    export CUDA_VISIBLE_DEVICES="0"
+    python -m watch.tasks.landcover.predict \
+        --dataset=$BASE_COCO_FPATH \
+        --deployed=$DZYNE_LANDCOVER_MODEL_FPATH  \
+        --device=0 \
+        --num_workers="16" \
+        --output=$ALIGNED_KWCOCO_BUNDLE/data_nowv_dzyne_landcover.kwcoco.json
+    
+    python ~/code/watch/watch/cli/coco_combine_features.py \
+        --src $BASE_COCO_FPATH \
+              $ALIGNED_KWCOCO_BUNDLE/data_nowv_rutgers_mat_seg.kwcoco.json \
+              $ALIGNED_KWCOCO_BUNDLE/data_nowv_dzyne_landcover.kwcoco.json \
+        --dst $ALIGNED_KWCOCO_BUNDLE/combo_nowv.kwcoco.json
 }
