@@ -341,10 +341,10 @@ def time_aggregated_polys(coco_dset,
 
                     #cat_name = np.max(cand_keys, where=cand_scores)
                     cat_name = cand_keys[np.argmax(cand_scores)]
+                    cid = coco_dset.ensure_category(cat_name)
                 else:
                     cid = coco_dset.ensure_category(key[0])
-                
-                cid = coco_dset.ensure_category(cat_name)
+
 
                 vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
                 img_from_vid = vid_from_img.inv()
@@ -433,7 +433,7 @@ def get_poly_labels_from_SC(coco_dset, scored_polys, coco_dset_sc, thresh, key, 
 def time_aggregated_polys_bas(coco_dset,
                               thresh=0.3,
                               morph_kernel=3,
-                              time_filtering=True,
+                              time_filtering=False,
                               response_filtering=False):
     '''
     Wrapper for BAS that looks for change heatmaps.
@@ -474,8 +474,8 @@ def time_aggregated_polys_hybrid(coco_dset,
                                  coco_dset_sc,
                                  thresh=0.3,
                                  morph_kernel=3,
-                                 time_filtering=True,
-                                 response_filtering=True):
+                                 time_filtering=False,
+                                 response_filtering=False):
     '''
     This method uses predictions from a BAS model to generate polygons.
     Predicted heatmaps from a Site Charachterization model are used to assign
