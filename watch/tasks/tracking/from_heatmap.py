@@ -383,14 +383,14 @@ def get_poly_labels_from_SC(coco_dset, scored_polys, coco_dset_sc, thresh, key, 
     # Add each polygon to every images as a track
     new_trackids = kwcoco_extensions.TrackidGenerator(coco_dset)
 
-    for vid_poly, score in scored_polys:
+    for poly_ind, (vid_poly, score) in enumerate(scored_polys):
         track_id = next(new_trackids)
         # import xdev; xdev.embed()
         for image_ind, (gid, img) in enumerate(coco_dset_sc.imgs.items()):
 
             save_this_polygon = False
             if time_filtering:
-                if (image_ind > poly_start_ind[image_ind] and image_ind < poly_end_ind[image_ind]):
+                if (image_ind > poly_start_ind[poly_ind] and image_ind < poly_end_ind[poly_ind]):
                     save_this_polygon = True
             else:
                 save_this_polygon = True
@@ -433,7 +433,7 @@ def get_poly_labels_from_SC(coco_dset, scored_polys, coco_dset_sc, thresh, key, 
 def time_aggregated_polys_bas(coco_dset,
                               thresh=0.3,
                               morph_kernel=3,
-                              time_filtering=False,
+                              time_filtering=True,
                               response_filtering=False):
     '''
     Wrapper for BAS that looks for change heatmaps.
@@ -474,7 +474,7 @@ def time_aggregated_polys_hybrid(coco_dset,
                                  coco_dset_sc,
                                  thresh=0.3,
                                  morph_kernel=3,
-                                 time_filtering=False,
+                                 time_filtering=True,
                                  response_filtering=False):
     '''
     This method uses predictions from a BAS model to generate polygons.
