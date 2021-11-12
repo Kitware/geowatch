@@ -421,8 +421,7 @@ def time_aggregated_polys_bas(coco_dset,
                               thresh=0.3,
                               morph_kernel=3,
                               time_filtering=True,
-                              response_filtering=False,
-                              coco_dset_sc=None):
+                              response_filtering=False):
     '''
     Wrapper for BAS that looks for change heatmaps.
     '''
@@ -442,8 +441,7 @@ def time_aggregated_polys_sc(coco_dset,
                              thresh=0.1,
                              morph_kernel=3,
                              time_filtering=False,
-                             response_filtering=False,
-                             coco_dset_sc=None):
+                             response_filtering=False):
     '''
     Wrapper for Site Characterization that looks for phase heatmaps.
     '''
