@@ -100,6 +100,48 @@ def make_nice_dirs():
                 ub.symlink(version_dpath, nice_dpath, verbose=1)
 
 
+def make_eval_symlinks():
+    """
+    """
+    from watch.utils import util_data
+    import ubelt as ub
+    import pathlib  # NOQA
+    dvc_dpath = util_data.find_smart_dvc_dpath()
+
+    # HACK: HARD CODED
+    model_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
+    eval_link_base = model_dpath / 'eval_links'
+    eval_link_base.mkdir(exist_ok=True)
+
+    eval_dpaths = list(model_dpath.glob('*/*/*/eval'))
+    for eval_dpath in eval_dpaths:
+        # Hack: find a better way to get info needed to make a nice folder name
+        eval_link_name = 'eval_' + eval_dpath.parent.name + '_' + eval_dpath.parent.parent.name
+        eval_nice_dpath = eval_link_base / eval_link_name
+        ub.symlink(eval_dpath, eval_nice_dpath)
+
+
+def make_pred_symlinks():
+    """
+    """
+    from watch.utils import util_data
+    import ubelt as ub
+    import pathlib  # NOQA
+    dvc_dpath = util_data.find_smart_dvc_dpath()
+
+    # HACK: HARD CODED
+    model_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
+    link_base = model_dpath / 'pred_links'
+    link_base.mkdir(exist_ok=True)
+
+    dpaths = list(model_dpath.glob('*/pred_*/*'))
+    for dpath in dpaths:
+        # Hack: find a better way to get info needed to make a nice folder name
+        link_name = 'pred_' + dpath.name + '_' + dpath.parent.name
+        nice_dpath = link_base / link_name
+        ub.symlink(dpath, nice_dpath)
+
+
 if __name__ == '__main__':
     """
     CommandLine:

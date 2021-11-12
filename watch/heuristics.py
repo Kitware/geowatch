@@ -12,7 +12,7 @@ import ubelt as ub
 # Might need to split this up into a finger-grained structure
 IGNORE_CLASSNAMES = {
     'clouds', 'occluded',
-    'ignore', 'unknown',
+    'ignore', 'unknown', 'Unknown',
 
 }
 

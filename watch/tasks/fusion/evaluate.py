@@ -10,7 +10,6 @@ import pathlib
 import ubelt as ub
 from watch.tasks.fusion import utils
 from watch.utils import util_kwimage
-from watch.utils.kwcoco_extensions import CocoImage
 from kwcoco.metrics.confusion_vectors import BinaryConfusionVectors
 from kwcoco.metrics.confusion_vectors import Measures
 
@@ -212,6 +211,7 @@ def single_image_segmentation_metrics(true_coco, pred_coco, gid1, gid2):
     # Create a truth "panoptic segmentation" style mask
     true_canvas = np.zeros(shape, dtype=np.uint8)
     weight_canvas = np.ones(shape, dtype=np.float32)
+    catname_to_true = {}
 
     true_dets = true_coco.annots(gid=gid1).detections
 
@@ -228,6 +228,25 @@ def single_image_segmentation_metrics(true_coco, pred_coco, gid1, gid2):
             weight_canvas = true_sseg.fill(weight_canvas, value=0)
         elif catname not in background_classes:
             true_canvas = true_sseg.fill(true_canvas, value=1)
+            if catname not in catname_to_true:
+                catname_to_true[catname] = np.zeros(shape, dtype=np.float32)
+            catname_to_true[catname] = true_sseg.fill(catname_to_true[catname], value=1)
+
+    if 1:
+        from watch import heuristics
+        predicted_classes = []
+        true_classes = list(true_coco.object_categories())
+        pred_gid = gid2
+        pred_coco_img = pred_coco.coco_image(pred_gid)
+        for stream in pred_coco_img.channels.streams():
+            have = stream.intersection(true_classes)
+            predicted_classes.extend(have.parsed)
+        classes_of_interest = ub.oset(predicted_classes) - (
+            heuristics.BACKGROUND_CLASSES | heuristics.IGNORE_CLASSNAMES |
+            {'Unknown'})
+        for catname in classes_of_interest:
+            if catname not in catname_to_true:
+                catname_to_true[catname] = np.zeros(shape, dtype=np.float32)
 
     # Create a pred "panoptic segmentation" style mask
     pred_canvas = np.zeros(shape, dtype=np.uint8)
@@ -264,13 +283,41 @@ def single_image_segmentation_metrics(true_coco, pred_coco, gid1, gid2):
     TRY_SOFT = 1
     if TRY_SOFT:
         try:
-            pred_gid = gid2
-            pred_img = pred_coco.index.imgs[pred_gid]
-            pred_coco_img = CocoImage(pred_img, pred_coco)
+            if 1:
+                # handle multiclass case
+                pred_chan_of_interest = '|'.join(classes_of_interest)
+                delayed_probs = pred_coco_img.delay(pred_chan_of_interest)
+                class_probs = delayed_probs.finalize(as_xarray=True)
+                cx_to_binvecs = {}
+                for cx, cname in enumerate(classes_of_interest):
+                    is_true = catname_to_true[cname]
+                    score = class_probs.loc[:, :, cname].data.copy()
+                    invalid_mask = np.isnan(score)
+                    weights = weight_canvas.copy()
+                    weights[invalid_mask] = 0
+                    score[invalid_mask] = 0
+                    # pred_score.data.ravel()
+                    bin_data = {
+                        # is_true denotes if the true class of the item is the
+                        # category of interest.
+                        'is_true': is_true.ravel(),
+                        'pred_score': score.ravel(),
+                        'weight': weights.ravel(),
+                    }
+                    bin_data = kwarray.DataFrameArray(bin_data)
+                    bin_cfsn = BinaryConfusionVectors(bin_data, cx, classes_of_interest)
+                    cx_to_binvecs[cname] = bin_cfsn
+                from kwcoco.metrics.confusion_vectors import OneVsRestConfusionVectors
+                ovr_cfns = OneVsRestConfusionVectors(cx_to_binvecs, classes_of_interest)
+                ovr_measures = ovr_cfns.measures()
+                info.update({
+                    # TODO: data for visualization
+                    'ovr_measures': ovr_measures,
+                })
 
+            # TODO: consolidate this with above class-specific code
             # pred_channel = 'change'
             pred_channel = 'salient'
-
             change_prob = pred_coco_img.delay(pred_channel, space='image').finalize()[..., 0]
             invalid_mask = np.isnan(change_prob)
             change_prob[invalid_mask] = 0
@@ -363,7 +410,7 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, plot_dpath):
 
         TRY_IMREAD = 1
         if TRY_IMREAD:
-            true_coco_img = CocoImage(true_img, true_coco)
+            true_coco_img = true_coco.coco_image(true_img['id'])
             avali_chans = {p2 for p1 in true_coco_img.channels.spec.split(',') for p2 in p1.split('|')}
             chosen_viz_channs = None
             if len(avali_chans & {'red', 'green', 'blue'}) == 3:
@@ -509,7 +556,80 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto'):
         plot_dpath = pathlib.Path(eval_dpath) / 'plots'
         plot_dpath.mkdir(exist_ok=True, parents=True)
 
-    combo_measures = None
+    class MeasureCombiner:
+        def __init__(self, precision=5):
+            self.measures = None
+            self.precision = precision
+            self.queue = []
+
+        def submit(self, other):
+            self.queue.append(other)
+
+        def combine(self):
+            # Reduce measures over the chunk
+            if self.measures is None:
+                to_combine = self.queue
+            else:
+                to_combine = [self.measures] + self.queue
+
+            if len(to_combine) == 0:
+                pass
+            if len(to_combine) == 1:
+                self.measures = to_combine[0]
+            else:
+                self.measures = Measures.combine(
+                    to_combine, precision=self.precision)
+            self.queue = []
+
+        def finalize(self):
+            if self.queue:
+                self.combine()
+            if self.measures is None:
+                return False
+            else:
+                self.measures.reconstruct()
+                return self.measures
+
+    class OneVersusRestMeasureCombiner:
+        def __init__(self, precision=5):
+            self.catname_to_combiner = {}
+            self.precision = precision
+
+        def submit(self, other):
+            for catname, other_m in other['perclass'].items():
+                if catname not in self.catname_to_combiner:
+                    combiner = MeasureCombiner(precision=self.precision)
+                    self.catname_to_combiner[catname] = combiner
+                self.catname_to_combiner[catname].submit(other_m)
+
+        def combine(self):
+            for combiner in self.catname_to_combiner.values():
+                combiner.combine()
+
+        def finalize(self):
+            from kwcoco.metrics.confusion_vectors import PerClass_Measures
+            import warnings
+            catname_to_measures = {}
+            for catname, combiner in self.catname_to_combiner.items():
+                catname_to_measures[catname] = combiner.finalize()
+            perclass = PerClass_Measures(catname_to_measures)
+            # TODO: consolidate in kwcoco
+            with warnings.catch_warnings():
+                warnings.filterwarnings('ignore', message='Mean of empty slice')
+                mAUC = np.nanmean([item['trunc_auc'] for item in perclass.values()])
+                mAP = np.nanmean([item['ap'] for item in perclass.values()])
+            compatible_format = {
+                'perclass': perclass,
+                'mAUC': mAUC,
+                'mAP': mAP,
+            }
+            return compatible_format
+
+    measure_combiner = MeasureCombiner(precision=combo_precision)
+    ovr_measure_combiner = OneVersusRestMeasureCombiner(precision=combo_precision)
+    # ovr_measure_combiner.submit(ovr_measures)
+    # ovr_measure_combiner.combine()
+    # ovr_measure_combiner.finalize()
 
     total_images = 0
 
@@ -545,27 +665,25 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto'):
         for chunk in ub.chunks(pairs, chunk_size):
             chunk_info = []
 
-            chunk_measures = []
-            if combo_measures is not None:
-                chunk_measures.append(combo_measures)
-
             for gid1, gid2 in chunk:
                 info = single_image_segmentation_metrics(
                     true_coco, pred_coco, gid1, gid2)
                 rows.append(info['row'])
 
+                ovr_measures = info.get('ovr_measures', None)
                 measures = info.get('change_measures', None)
                 if measures is not None:
-                    chunk_measures.append(measures)
+                    measure_combiner.submit(measures)
+                if ovr_measures is not None:
+                    ovr_measure_combiner.submit(ovr_measures)
 
                 if draw:
                     chunk_info.append(info)
                 prog.update()
 
-            if chunk_measures:
-                # Reduce measures over the chunk
-                combo_measures = Measures.combine(
-                    chunk_measures, precision=combo_precision)
+            # Reduce measures over the chunk
+            measure_combiner.combine()
+            ovr_measure_combiner.combine()
 
             if draw:
                 dump_chunked_confusion(
@@ -575,29 +693,35 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto'):
     gids1 = image_matches['match_gids1']
     gids2 = image_matches['match_gids2']
 
-    chunk_measures = []
-    if combo_measures is not None:
-        chunk_measures.append(combo_measures)
     for gid1, gid2 in zip(gids1, gids2):
         info = single_image_segmentation_metrics(
             true_coco, pred_coco, gid1, gid2)
+        ovr_measures = info.get('ovr_measures', None)
+        measures = info.get('change_measures', None)
+        if measures is not None:
+            measure_combiner.submit(measures)
+        if ovr_measures is not None:
+            ovr_measure_combiner.submit(ovr_measures)
         rows.append(info['row'])
         if draw:
             chunk_info = [info]
             dump_chunked_confusion(
                 true_coco, pred_coco, chunk_info, plot_dpath)
         prog.update()
-    if chunk_measures:
-        if len(chunk_measures) == 1:
-            combo_measures = chunk_measures[0]
-        else:
-            combo_measures = Measures.combine(
-                chunk_measures, precision=combo_precision)
+        if len(measure_combiner.queue) > chunk_size:
+            measure_combiner.combine()
+        if len(ovr_measure_combiner.queue) > chunk_size:
+            ovr_measure_combiner.combine()
+
+    # Reduce measures over the chunk
+    combo_measures = measure_combiner.finalize()
+    ovr_combo_measures = ovr_measure_combiner.finalize()
+    import xdev
+    xdev.embed()
 
     prog.end()
 
     if combo_measures is not None:
-        combo_measures.reconstruct()
 
         if eval_dpath is not None:
             curve_dpath = pathlib.Path(eval_dpath) / 'curves'

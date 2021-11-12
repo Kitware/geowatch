@@ -31,7 +31,11 @@ def gather_candidate_models():
         subfolder_infos = [package_metadata(package_fpath)
                            for package_fpath in package_fpaths]
         subfolder_infos = sorted(subfolder_infos, key=lambda x: x['epoch'], reverse=True)
-        packages_to_eval.append(subfolder_infos[0])
+        for info in subfolder_infos:
+            if 'rutgers_v5' in info['name']:
+                break
+            packages_to_eval.append(info)
+            break
 
     tmux_schedule_dpath = dvc_dpath / '_tmp_tmux_schedule'
     tmux_schedule_dpath.mkdir(exist_ok=True)
@@ -76,11 +80,14 @@ def gather_candidate_models():
             r'''
             python -m watch.tasks.fusion.predict \
                 --write_probs=True \
-                --write_class=True \
+                --write_preds=False \
+                --with_class=True \
+                --with_saliency=False \
+                --with_change=False \
                 --package_fpath={package_fpath} \
                 --pred_dataset={pred_dataset} \
                 --test_dataset={test_dataset} \
-                --num_workers=16 \
+                --num_workers=5 \
                 --gpus=0 \
                 --batch_size=1
             ''').format(**suggestions).replace(str(dvc_dpath), '$DVC_DPATH')
@@ -95,7 +102,6 @@ def gather_candidate_models():
 
         script['commands'].append(pred_command)
         script['commands'].append(eval_command)
-        print(pred_command)
 
     import stat
     import os
@@ -104,6 +110,7 @@ def gather_candidate_models():
         text = '\n\n'.join(queue['commands'])
         with open(fpath, 'w') as file:
             file.write(text)
+        print(text)
         os.chmod(fpath, stat.S_IXUSR | stat.S_IXGRP | stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP)
 
     # Start the jobs in a detatched temux session
