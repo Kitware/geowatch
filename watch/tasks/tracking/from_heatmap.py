@@ -189,6 +189,95 @@ def filter_polys_response(polys, responses, response_thresh=0.001):
             yield poly, score
 
 
+def _validate_keys(key, bg_key):
+    # for backwards compatibility
+    if isinstance(key, str):
+        key = [key]
+    if bg_key is None:
+        bg_key = []
+    elif isinstance(bg_key, str):
+        bg_key = [bg_key]
+
+    # error checking
+    if len(key) < 1:
+        raise ValueError('must have at least one key')
+    if (len(key) > len(set(key)) or len(bg_key) > len(set(bg_key))):
+        raise ValueError('keys are duplicated')
+    if not set(key).isdisjoint(set(bg_key)):
+        raise ValueError('cannot have a key in foreground and background')
+    return key, bg_key
+
+
+def vidpolys_to_tracks(coco_dset,
+                       scored_polys,
+                       thresh,
+                       key,
+                       bg_key,
+                       coco_dset_sc=None,
+                       poly_start_ind=None,
+                       poly_end_ind=None):
+    '''
+    Take a set of scored single polygons (vidpolys) and add them to each frame
+    of coco_dset as tracks using the categories/heatmaps from coco_dset_sc.
+    '''
+    key, bg_key = _validate_keys(key, bg_key)
+    if coco_dset_sc is None:
+        coco_dset_sc = coco_dset
+    if poly_start_ind is None:
+        poly_start_ind = {}
+    if poly_end_ind is None:
+        poly_end_ind = {}
+
+    new_trackids = kwcoco_extensions.TrackidGenerator(coco_dset)
+
+    for poly_ind, (vid_poly, score) in enumerate(scored_polys):
+        track_id = next(new_trackids)
+        for image_ind, (gid, img) in enumerate(coco_dset_sc.imgs.items()):
+
+            save_this_polygon = (
+                image_ind > poly_start_ind.get(poly_ind, -1)
+                and image_ind < poly_end_ind.get(poly_ind, int(1e99)))
+
+            if save_this_polygon:
+                # assign category (key) from max score
+                coco_img = kwcoco_extensions.CocoImage(img, coco_dset_sc)
+                if score > thresh or len(bg_key) == 0:
+                    cand_keys = key
+                else:
+                    cand_keys = bg_key
+
+                if len(cand_keys) > 1:
+                    cand_scores = []
+                    for k in cand_keys:
+                        if k in coco_img.channels:
+                            img_probs = coco_img.delay(
+                                k, space='video').finalize()
+                            cand_scores.append(_score(vid_poly, img_probs))
+                        else:
+                            cand_scores.append(0)
+
+                    cat_name = cand_keys[np.argmax(cand_scores)]
+                else:
+                    cat_name = cand_keys[0]
+
+                cid = coco_dset.ensure_category(cat_name)
+
+                vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
+                img_from_vid = vid_from_img.inv()
+
+                # Transform the video polygon into image space
+                img_poly = vid_poly.warp(img_from_vid)
+                bbox = list(img_poly.bounding_box().to_coco())[0]
+                # Add the polygon as an annotation on the image
+                coco_dset.add_annotation(image_id=gid,
+                                         category_id=cid,
+                                         bbox=bbox,
+                                         segmentation=img_poly,
+                                         score=score,
+                                         track_id=track_id)
+    return coco_dset
+
+
 def time_aggregated_polys(coco_dset,
                           thresh=0.15,
                           morph_kernel=3,
@@ -196,8 +285,7 @@ def time_aggregated_polys(coco_dset,
                           bg_key=None,
                           time_filtering=False,
                           response_filtering=False,
-                          return_only_polys=False
-                          ):
+                          return_only_polys=False):
     '''
     Track function.
 
@@ -216,28 +304,8 @@ def time_aggregated_polys(coco_dset,
 
         morph_kernel (int): height/width in px of close-kernel
     '''
-
-    # for backwards compatibility
-    if isinstance(key, str):
-        key = [key]
-    if bg_key is None:
-        bg_key = []
-    elif isinstance(bg_key, str):
-        bg_key = [bg_key]
-
-    # error checking
-    if len(key) < 1:
-        raise ValueError('must have at least one key')
-    if (len(key) > len(set(key)) or len(bg_key) > len(set(bg_key))):
-        raise ValueError('keys are duplicated')
-    if not set(key).isdisjoint(set(bg_key)):
-        raise ValueError('cannot have a key in foreground and background')
+    key, bg_key = _validate_keys(key, bg_key)
     _all_keys = set(key + bg_key)
-    #if all(
-    #        _all_keys.isdisjoint(
-    #            kwcoco_extensions.CocoImage(img, coco_dset).channels)
-    #        for img in coco_dset.imgs.values()):
-    #    raise ValueError(f'{coco_dset.tag} has no keys {key} or {bg_key}')
     has_requested_chans_list = []
     for img in coco_dset.imgs.values():
         coco_img = kwcoco_extensions.CocoImage(img, coco_dset)
@@ -256,13 +324,15 @@ def time_aggregated_polys(coco_dset,
 
         coco_img = coco_dset.coco_image(img['id'])
         zeros = np.zeros_like(
-            coco_img.delay(coco_img.channels.fuse()[0], space='video').finalize()).astype('float32')
+            coco_img.delay(coco_img.channels.fuse()[0],
+                           space='video').finalize()).astype('float32')
         fg_img_probs = zeros.copy()
         bg_img_probs = zeros.copy()
 
         for k in key:
             k2 = kwcoco.FusedChannelSpec.coerce(k)
-            common = kwcoco.FusedChannelSpec.coerce(coco_img.channels.fuse()).intersection(k2)
+            common = kwcoco.FusedChannelSpec.coerce(
+                coco_img.channels.fuse()).intersection(k2)
             if len(k2) == len(common):
                 img_probs = coco_img.delay(k, space='video').finalize()
                 fg_img_probs += img_probs
@@ -276,7 +346,8 @@ def time_aggregated_polys(coco_dset,
 
         for k in bg_key:
             k2 = kwcoco.FusedChannelSpec.coerce(k)
-            common = kwcoco.FusedChannelSpec.coerce(coco_img.channels.fuse()).intersection(k2)
+            common = kwcoco.FusedChannelSpec.coerce(
+                coco_img.channels.fuse()).intersection(k2)
             if len(k2) == len(common):
                 img_probs = coco_img.delay(k, space='video').finalize()
                 bg_img_probs += img_probs
@@ -316,141 +387,43 @@ def time_aggregated_polys(coco_dset,
             gids = coco_dset.index.vidid_to_gids[vidid]
             for image_ind, gid in enumerate(gids):
                 response = get_poly_response(vid_poly, coco_dset, gid, key)
-                #response = get_poly_response_sc(vid_poly, coco_dset, gid, key)
+                # response = get_poly_response_sc(vid_poly, coco_dset, gid, key)
                 responses[track_id - 1].append(response)
-        scored_polys = list(filter_polys_response(scored_polys, responses, response_thresh=0.0002)) #0.0005
-        print('after filtering based on per-polygon response', len(scored_polys))
+        scored_polys = list(
+            filter_polys_response(scored_polys,
+                                  responses,
+                                  response_thresh=0.0002))  # 0.0005
+        print('after filtering based on per-polygon response',
+              len(scored_polys))
 
     if time_filtering:
         vidid = list(coco_dset.index.videos)[0]
-        poly_start_ind = get_poly_time_ind(scored_polys, thresh, coco_dset, vidid, key)
-        poly_end_ind = get_poly_time_ind(scored_polys, thresh, coco_dset, vidid, key, reverse=True)
+        poly_start_ind = get_poly_time_ind(scored_polys, thresh, coco_dset,
+                                           vidid, key)
+        poly_end_ind = get_poly_time_ind(scored_polys,
+                                         thresh,
+                                         coco_dset,
+                                         vidid,
+                                         key,
+                                         reverse=True)
+    else:
+        poly_start_ind = None
+        poly_end_ind = None
 
     if return_only_polys:
         if time_filtering:
             return coco_dset, scored_polys, poly_start_ind, poly_end_ind
         return coco_dset, scored_polys
 
-    # Add each polygon to every images as a track
-    new_trackids = kwcoco_extensions.TrackidGenerator(coco_dset)
-
-    for poly_ind, (vid_poly, score) in enumerate(scored_polys):
-        track_id = next(new_trackids)
-        for image_ind, (gid, img) in enumerate(coco_dset.imgs.items()):
-
-            if time_filtering:
-                save_this_polygon = (image_ind > poly_start_ind[poly_ind]
-                                     and image_ind < poly_end_ind[poly_ind])
-            else:
-                save_this_polygon = True
-
-            if save_this_polygon:
-                # assign category (key) from max score
-                coco_img = kwcoco_extensions.CocoImage(img, coco_dset)
-                if score > thresh or len(bg_key) == 0:
-                    cand_keys = key
-                else:
-                    cand_keys = bg_key
-
-                if len(cand_keys) > 1:
-                    cand_scores = []
-                    for k in cand_keys:
-                        if k in coco_img.channels:
-                            img_probs = coco_img.delay(k, space='video').finalize()
-                            cand_scores.append(_score(vid_poly, img_probs))
-                        else:
-                            cand_scores.append(0)
-
-                    #cat_name = np.max(cand_keys, where=cand_scores)
-                    cat_name = cand_keys[np.argmax(cand_scores)]
-                else:
-                    cid = coco_dset.ensure_category(key[0])
-                
-                cid = coco_dset.ensure_category(cat_name)
-
-                vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
-                img_from_vid = vid_from_img.inv()
-
-                # Transform the video polygon into image space
-                img_poly = vid_poly.warp(img_from_vid)
-                bbox = list(img_poly.bounding_box().to_coco())[0]
-                # Add the polygon as an annotation on the image
-                coco_dset.add_annotation(image_id=gid,
-                                         category_id=cid,
-                                         bbox=bbox,
-                                         segmentation=img_poly,
-                                         score=score,
-                                         track_id=track_id)
-
+    coco_dset = vidpolys_to_tracks(coco_dset, scored_polys, poly_start_ind,
+                                   poly_end_ind)
     return coco_dset
 
-def get_poly_labels_from_SC(coco_dset, scored_polys, coco_dset_sc, thresh, key, bg_key=None, time_filtering=False, poly_start_ind=None, poly_end_ind=None):
-    # for backwards compatibility
-    if isinstance(key, str):
-        key = [key]
-    if bg_key is None:
-        bg_key = []
-    elif isinstance(bg_key, str):
-        bg_key = [bg_key]
 
-    # error checking
-    if len(key) < 1:
-        raise ValueError('must have at least one key')
-    if (len(key) > len(set(key)) or len(bg_key) > len(set(bg_key))):
-        raise ValueError('keys are duplicated')
-    if not set(key).isdisjoint(set(bg_key)):
-        raise ValueError('cannot have a key in foreground and background')
-    _all_keys = set(key + bg_key)
+def get_poly_labels_from_SC(*args, **kwargs):
+    # alias for backwards compatibility, remove this later
+    return vidpolys_to_tracks(*args, **kwargs)
 
-    # Add each polygon to every images as a track
-    new_trackids = kwcoco_extensions.TrackidGenerator(coco_dset)
-
-    for vid_poly, score in scored_polys:
-        track_id = next(new_trackids)
-        # import xdev; xdev.embed()
-        for image_ind, (gid, img) in enumerate(coco_dset_sc.imgs.items()):
-
-            save_this_polygon = False
-            if time_filtering:
-                if (image_ind > poly_start_ind[image_ind] and image_ind < poly_end_ind[image_ind]):
-                    save_this_polygon = True
-            else:
-                save_this_polygon = True
-
-            if save_this_polygon:
-                # assign category (key) from max score
-                coco_img = kwcoco_extensions.CocoImage(img, coco_dset_sc)
-                if score > thresh or len(bg_key) == 0:
-                    cand_keys = key
-                else:
-                    cand_keys = bg_key
-                cand_scores = []
-                for k in cand_keys:
-                    if k in coco_img.channels:
-                        img_probs = coco_img.delay(k, space='video').finalize()
-                        cand_scores.append(_score(vid_poly, img_probs))
-                    else:
-                        cand_scores.append(0)
-
-                #cat_name = np.max(cand_keys, where=cand_scores)
-                cat_name = cand_keys[np.argmax(cand_scores)]
-                cid = coco_dset.ensure_category(cat_name)
-
-                vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
-                img_from_vid = vid_from_img.inv()
-
-                # Transform the video polygon into image space
-                img_poly = vid_poly.warp(img_from_vid)
-                bbox = list(img_poly.bounding_box().to_coco())[0]
-                # Add the polygon as an annotation on the image
-                coco_dset.add_annotation(image_id=gid,
-                                         category_id=cid,
-                                         bbox=bbox,
-                                         segmentation=img_poly,
-                                         score=score,
-                                         track_id=track_id)
-
-    return coco_dset
 
 def time_aggregated_polys_bas(coco_dset,
                               thresh=0.3,
@@ -463,8 +436,12 @@ def time_aggregated_polys_bas(coco_dset,
     change_keys = ['salient', 'change_prob', 'change']
     for change_key in change_keys:
         try:
-            return time_aggregated_polys(coco_dset, thresh, morph_kernel,
-                                         change_key, time_filtering=time_filtering, response_filtering=response_filtering)
+            return time_aggregated_polys(coco_dset,
+                                         thresh,
+                                         morph_kernel,
+                                         change_key,
+                                         time_filtering=time_filtering,
+                                         response_filtering=response_filtering)
         except ValueError:
             pass
 
@@ -489,7 +466,8 @@ def time_aggregated_polys_sc(coco_dset,
                                      'Post Construction'
                                  ],
                                  bg_key=['No Activity'],
-                                 time_filtering=time_filtering)
+                                 time_filtering=time_filtering,
+                                 response_filtering=response_filtering)
 
 
 def time_aggregated_polys_hybrid(coco_dset,
@@ -530,7 +508,6 @@ def time_aggregated_polys_hybrid(coco_dset,
                                             'Post Construction'
                                         ],
                                         bg_key=['No Activity'],
-                                        time_filtering=time_filtering,
                                         poly_start_ind=poly_start_ind,
                                         poly_end_ind=poly_end_ind)
 

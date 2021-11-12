@@ -374,7 +374,10 @@ def apply_tracks(coco_dset, track_fn, overwrite, coco_dset_sc=None):
         else:
             sub_dset_sc = None
         if overwrite:
-            sub_dset = track_fn(sub_dset, coco_dset_sc=sub_dset_sc)
+            if coco_dset_sc is not None:
+                sub_dset = track_fn(sub_dset, coco_dset_sc=sub_dset_sc)
+            else:
+                sub_dset = track_fn(sub_dset)
         else:
             existing_tracks = tracks(sub_dset.annots())
             _are_trackless = are_trackless(sub_dset.annots())
@@ -391,19 +394,20 @@ def apply_tracks(coco_dset, track_fn, overwrite, coco_dset_sc=None):
                         np.where(_are_trackless, tracks(annots),
                                  existing_tracks))
 
-            # could maybe use coco_dset.union, but it doesn't reuse IDs
-            # TODO an ensure_annotations to do this properly
-            # coco_dset.anns.update(sub_dset.anns)
-            for cat in sub_dset.cats.values():
-                cat.pop('id')
-                coco_dset.ensure_category(**cat)
 
-            print('applied tracks 1 video: track ids', set(coco_dset.annots().get('track_id', None)))
-            coco_dset.remove_annotations(
-                set(sub_dset.anns).intersection(coco_dset.anns))
-            print('removed anns: track ids', set(coco_dset.annots().get('track_id', None)))
-            coco_dset.add_annotations(sub_dset.anns.values())
-            print('a video added tracks: track ids', set(coco_dset.annots().get('track_id', None)))
+        # could maybe use coco_dset.union, but it doesn't reuse IDs
+        # TODO an ensure_annotations to do this properly
+        # coco_dset.anns.update(sub_dset.anns)
+        for cat in sub_dset.cats.values():
+            cat.pop('id')
+            coco_dset.ensure_category(**cat)
+
+        print('applied tracks 1 video: track ids', set(coco_dset.annots().get('track_id', None)))
+        coco_dset.remove_annotations(
+            set(sub_dset.anns).intersection(coco_dset.anns))
+        print('removed anns: track ids', set(coco_dset.annots().get('track_id', None)))
+        coco_dset.add_annotations(sub_dset.anns.values())
+        print('a video added tracks: track ids', set(coco_dset.annots().get('track_id', None)))
 
         # break
 
