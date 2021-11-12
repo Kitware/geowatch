@@ -2,6 +2,21 @@ r"""
 Given the raw data in kwcoco format, this script will extract orthorectified
 regions around areas of intere/t across time.
 
+The align script works by making two geopandas data frames of geo-boundaries,
+one for regions and one for all images (as defined by their geotiff metadata).
+I then use the util_gis.geopandas_pairwise_overlaps to efficiently find which
+regions intersect which images. Images that intersect a region are grouped
+together (the same image might belong to multiple regions). Then within each
+region group, the script finds all images that have the same datetime metadata
+and groups those together. Finally, images with the "same-exact" bands are
+grouped together. For each band-group I use gdal-warp to crop to the region,
+which creates a set of temporary files, and then finally gdalmerge is used to
+combine those different crops into a single image.
+
+The main corner case in the above process is when one image has "r|g|b" but
+another image has "r|g|b|yellow", there is no logic to split those channels out
+at the moment.
+
 
 Notes:
 
@@ -111,8 +126,44 @@ Notes:
         --context_factor=1 \
         --visualize=False \
         --skip_geo_preprop True \
-        --sensor_filter=WV \
+        --include_sensors=WV \
         --keep img
+
+
+Ignore:
+    # Input Args
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+    TA1_KWCOCO_FPATH=$DVC_DPATH/TA1-Processed/data.kwcoco.json
+    ALIGNED_KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop1-Aligned-TA1-2021-11
+    ALIGNED_KWCOCO_FPATH=$ALIGNED_KWCOCO_BUNDLE_DPATH/data.kwcoco.json
+
+    dvc unprotect $ALIGNED_KWCOCO_BUNDLE_DPATH/*/*.kwcoco.json
+
+    python -m watch.cli.coco_align_geotiffs \
+        --src $TA1_KWCOCO_FPATH \
+        --dst $ALIGNED_KWCOCO_BUNDLE_DPATH/aligned.kwcoco.json \
+        --regions $DVC_DPATH/drop1/region_models/LT_R001.geojson \
+        --rpc_align_method orthorectify \
+        --max_workers=10 \
+        --aux_workers=2 \
+        --skip_geo_preprop True \
+        --max_frames 1000 \
+        --target_gsd=10 --visualize="red|green|blue"
+
+    jq ".images[23].auxiliary[0].parent_file_name" /home/joncrall/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-TA1-2021-11/aligned.kwcoco.json
+    jq ".images[24].auxiliary[0].parent_file_name" /home/joncrall/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-TA1-2021-11/aligned.kwcoco.json
+
+    jq ".images[23].id" /home/joncrall/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-TA1-2021-11/aligned.kwcoco.json
+    jq ".images[24].id" /home/joncrall/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-TA1-2021-11/aligned.kwcoco.json
+
+    jq ".images[11].id" /home/joncrall/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-TA1-2021-11/aligned.kwcoco.json
+
+    rm -rf $ALIGNED_KWCOCO_BUNDLE_DPATH/_aligned_viz
+    python -m watch.cli.coco_visualize_videos \
+        --src $ALIGNED_KWCOCO_BUNDLE_DPATH/aligned.kwcoco.json \
+        --viz_dpath $ALIGNED_KWCOCO_BUNDLE_DPATH/_aligned_viz \
+        --channels "red|green|blue" \
+        --num_workers=10 --animate=True
 
 
 TODO:
@@ -127,9 +178,11 @@ import socket
 import ubelt as ub
 import dateutil.parser
 import pathlib
+import warnings
 from os.path import join, exists
 from watch.cli.coco_visualize_videos import _write_ann_visualizations2
 from watch.utils import util_gis
+from watch.utils import util_time
 from watch.utils import kwcoco_extensions  # NOQA
 
 
@@ -156,8 +209,9 @@ class CocoAlignGeotiffConfig(scfg.Config):
 
         'dst': scfg.Value(None, help='bundle directory or kwcoco json file for the output'),
 
-        'max_workers': scfg.Value(4, help='number of parallel procs'),
-        'aux_workers': scfg.Value(4, help='additional inner threads for aux imgs'),
+        'workers': scfg.Value(4, help='number of parallel procs'),
+        'max_workers': scfg.Value(None, help='DEPRECATED USE workers'),
+        'aux_workers': scfg.Value(0, help='additional inner threads for aux imgs'),
 
         'context_factor': scfg.Value(1.0, help=ub.paragraph(
             '''
@@ -208,14 +262,18 @@ class CocoAlignGeotiffConfig(scfg.Config):
             '''
         )),
 
-        'skip_geo_preprop': scfg.Value(False, help='makes init faster if it already has all important fields'),
+        'skip_geo_preprop': scfg.Value(False, help='DEPRECATED use geo_preop instead'),
+        'geo_preprop': scfg.Value('auto', help='force if we check geo properties or not'),
 
-        'sensor_filter': scfg.Value(None, help='if specified can be comma separated valid sensors'),
+        'include_sensors': scfg.Value(None, help='if specified can be comma separated valid sensors'),
+        'exclude_sensors': scfg.Value(None, help='if specified can be comma separated invalid sensors'),
 
         'target_gsd': scfg.Value(10, help=ub.paragraph('initial gsd to use for the output video files')),
 
         'edit_geotiff_metadata': scfg.Value(
             False, help='if True MODIFIES THE UNDERLYING IMAGES to ensure geodata is propogated'),
+
+        'max_frames': scfg.Value(None),
     }
 
 
@@ -335,7 +393,7 @@ def main(cmdline=True, **kw):
             'timestamp': ub.timestamp(),
         }
     }
-    print('process_info = {}'.format(ub.repr2(process_info, nl=2)))
+    print('process_info = {}'.format(ub.repr2(process_info, nl=3)))
 
     src_fpath = config['src']
     dst = config['dst']
@@ -348,6 +406,22 @@ def main(cmdline=True, **kw):
     aux_workers = config['aux_workers']
     keep = config['keep']
     target_gsd = config['target_gsd']
+    max_frames = config['max_frames']
+
+    from watch.utils.lightning_ext import util_globals
+    from watch.utils import util_path
+    import pandas as pd
+    if config['max_workers'] is not None:
+        max_workers = util_globals.coerce_num_workers(config['max_workers'])
+    else:
+        max_workers = util_globals.coerce_num_workers(config['workers'])
+
+    # if config['aux_workers'] == 'auto':
+    #     aux_workers = 2 if max_workers > 0 else 0
+    # else:
+    aux_workers = util_globals.coerce_num_workers(config['aux_workers'])
+    print('max_workers = {!r}'.format(max_workers))
+    print('aux_workers = {!r}'.format(aux_workers))
 
     dst = pathlib.Path(ub.expandpath(dst))
     # TODO: handle this coercion of directories or bundles in kwcoco itself
@@ -364,23 +438,49 @@ def main(cmdline=True, **kw):
     region_df = None
     if regions in {'annots', 'images'}:
         pass
-    elif exists(regions):
-        region_df = util_gis.read_geojson(regions)
     else:
-        raise KeyError(regions)
+        # TODO: FIXME: I dont understand why this doesnt work
+        # when I pass the glob path to all the regions
+        # I need to use the merged region script. Very strange.
+        paths = util_path.coerce_patterned_paths(regions)
+        print('paths = {!r}'.format(paths))
+        if len(paths) == 0:
+            raise KeyError(regions)
+        parts = []
+        for fpath in paths:
+            df = util_gis.read_geojson(fpath)
+            df = df[df['type'] == 'region']
+            parts.append(df)
+        region_df = pd.concat(parts)
 
     # Load the dataset and extract geotiff metadata from each image.
     coco_dset = kwcoco.CocoDataset.coerce(src_fpath)
 
-    if config['sensor_filter'] is not None:
-        valid_sensors = config['sensor_filter'].split(',')
+    if config['include_sensors'] is not None:
+        valid_sensors = set(config['include_sensors'].split(','))
         valid_images = coco_dset.images()
         have_sensors = valid_images.lookup('sensor_coarse')
         flags = [s in valid_sensors for s in have_sensors]
         valid_images = valid_images.compress(flags)
         coco_dset = coco_dset.subset(list(valid_images))
 
-    if not config['skip_geo_preprop']:
+    if config['exclude_sensors'] is not None:
+        invalid_sensors = set(config['exclude_sensors'].split(','))
+        valid_images = coco_dset.images()
+        have_sensors = valid_images.lookup('sensor_coarse')
+        flags = [s not in invalid_sensors for s in have_sensors]
+        valid_images = valid_images.compress(flags)
+        coco_dset = coco_dset.subset(list(valid_images))
+
+    geo_preprop = config['geo_preprop']
+    if config['skip_geo_preprop']:
+        geo_preprop = False
+    if geo_preprop == 'auto':
+        coco_img = coco_dset.coco_image(ub.peek(coco_dset.index.imgs.keys()))
+        geo_preprop = not any('geos_corners' in obj for obj in coco_img.iter_asset_objs())
+        print('auto-choose geo_preprop = {!r}'.format(geo_preprop))
+
+    if geo_preprop:
         kwcoco_extensions.coco_populate_geo_heuristics(
             coco_dset, overwrite={'warp'}, workers=max_workers,
             keep_geotiff_metadata=True,
@@ -431,7 +531,8 @@ def main(cmdline=True, **kw):
             image_overlaps, extract_dpath, rpc_align_method=rpc_align_method,
             new_dset=new_dset, visualize=visualize,
             write_subsets=write_subsets, max_workers=max_workers,
-            aux_workers=aux_workers, keep=keep, target_gsd=target_gsd)
+            aux_workers=aux_workers, keep=keep, target_gsd=target_gsd,
+            max_frames=max_frames)
 
     new_dset.fpath = dst_fpath
     print('Dumping new_dset.fpath = {!r}'.format(new_dset.fpath))
@@ -669,7 +770,8 @@ class SimpleDataCube(object):
     def extract_overlaps(cube, image_overlaps, extract_dpath,
                          rpc_align_method='orthorectify', new_dset=None,
                          write_subsets=True, visualize=True, max_workers=0,
-                         aux_workers=0, keep='none', target_gsd=10):
+                         aux_workers=0, keep='none', target_gsd=10,
+                         max_frames=None):
         """
         Given a region of interest, extract an aligned temporal sequence
         of data to a specified directory.
@@ -770,20 +872,89 @@ class SimpleDataCube(object):
         # parallelize over images
         pool = ub.JobPool(mode='thread', max_workers=img_workers)
 
+        frame_count = 0
         for datetime_ in ub.ProgIter(datetimes, desc='submit extract jobs', verbose=1):
+            if max_frames is not None:
+                if frame_count > max_frames:
+                    break
+                frame_count += 1
             gids = datetime_to_gids[datetime_]
             # TODO: Is there any other consideration we should make when
             # multiple images have the same timestamp?
-            for num, gid in enumerate(gids):
-                img = coco_dset.imgs[gid]
+            if len(gids) == 1:
+                main_gid = gids[0]
+                groups = [(main_gid, [])]
+            else:
+                # We got multiple images for the same timestamp.  Im not sure
+                # if this is necessary but thig logic attempts to sort them
+                # such that the "best" image to use is first.  Ideally gdalwarp
+                # would take care of this but I'm not sure it does.
+                conflict_imges = coco_dset.images(gids)
+                sensors = list(conflict_imges.lookup('sensor_coarse', None))
+                groups = []
+                for _sensor_name, sensor_gids in ub.group_items(conflict_imges, sensors).items():
+                    # sensor_images = coco_dset.images(sensor_gids)
+                    rows = []
+                    for gid in sensor_gids:
+                        coco_img = coco_dset.coco_image(gid)
+                        primary_asset = coco_img.primary_asset()
+                        fpath = join(coco_dset.bundle_dpath, primary_asset['file_name'])
+                        # primary_chan = primary_asset.get('channels', None)
+                        # print('primary_chan = {!r}'.format(primary_chan))
+                        # print('fpath = {!r}'.format(fpath))
+                        info = ub.cmd(f'gdalinfo -stats {fpath}')
+                        # Hack
+                        primary_utmzone = info['out'].split('EPSG",')[-1].split(']')[0]
+                        same_utm = str(utm_epsg_zone) == str(primary_utmzone)
+                        # TOODO: how do we get the amount of overlap with the query region? WRT to the valid data polygons?
+                        valid_percent = (float(info['out'].split('STATISTICS_VALID_PERCENT')[-1].split('=')[-1].split('\n')[0] or '0')) / 100
+                        score = valid_percent + (same_utm * 10)
+                        rows.append({
+                            'score': score,
+                            'gid': gid,
+                            'same_utm': same_utm,
+                            'fname': pathlib.Path(fpath).name,
+                        })
+                    if 1:
+                        import pandas as pd
+                        df = pd.DataFrame(rows)
+                        print('\n\n')
+                        print(df)
+                    # Order the "main" image first here.
+                    final_gids = [r['gid'] for r in sorted(rows, key=lambda r: r['score'], reverse=True)]
+                    # hack
+                    # final_gids = final_gids[:1]
+                    # final_gids = final_gids[1:2]
+                    # print('final_gids = {!r}'.format(final_gids))
+                    groups.append((final_gids[0], final_gids[1:]))
+                    # # [obj.get('utm_crs_info', None) for obj in sensor_images.objs]
+                    # for obj in sensor_images.objs:
+                    # [ub.dict_diff(obj, {'auxiliary'}) for obj in sensor_images.objs]
+
+            for num, (main_gid, other_gids) in enumerate(groups):
+                img = coco_dset.imgs[main_gid]
+                other_imgs = [coco_dset.imgs[x] for x in other_gids]
+
+                # There is an issue of merging annotations here
                 anns = [coco_dset.index.anns[aid] for aid in
-                        coco_dset.index.gid_to_aids[gid]]
+                        coco_dset.index.gid_to_aids[main_gid]]
+                if 0:
+                    # FIXME: do we do this? Rectification step?
+                    for other_gid in other_gids:
+                        anns += [coco_dset.index.anns[aid] for aid in
+                                 coco_dset.index.gid_to_aids[other_gid]]
+
+                # if len(other_gids) == 0:
+                #     # Hack: only look at weird cases
+                #     continue
+
                 job = pool.submit(
                     extract_image_job,
                     img, anns, bundle_dpath, datetime_, num, frame_index, new_vidid,
                     rpc_align_method, sub_bundle_dpath, space_str,
                     space_region, space_box, start_gid, start_aid, aux_workers,
-                    (keep == 'img'), utm_epsg_zone=utm_epsg_zone)
+                    (keep == 'img'), utm_epsg_zone=utm_epsg_zone,
+                    other_imgs=other_imgs)
                 start_gid = start_gid + 1
                 start_aid = start_aid + len(anns)
                 frame_index = frame_index + 1
@@ -870,8 +1041,13 @@ class SimpleDataCube(object):
                     'red|green|blue',
                     'nir|swir16|swir22',
                 ]
+                if isinstance(visualize, str):
+                    channels = visualize
+                else:
+                    channels = None
                 _write_ann_visualizations2(
                     coco_dset=new_dset, img=new_img, anns=new_anns,
+                    channels=channels,
                     sub_dpath=viz_dpath, space='video',
                     request_grouped_bands=request_grouped_bands)
 
@@ -892,7 +1068,8 @@ class SimpleDataCube(object):
 def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
                       new_vidid, rpc_align_method, sub_bundle_dpath, space_str,
                       space_region, space_box, start_gid, start_aid,
-                      aux_workers=0, keep=False, utm_epsg_zone=None):
+                      aux_workers=0, keep=False, utm_epsg_zone=None,
+                      other_imgs=None):
     """
     Threaded worker function for :func:`SimpleDataCube.extract_overlaps`.
     """
@@ -901,19 +1078,46 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
 
     # iso_time = datetime.date.isoformat(date.date())
     # iso_time = date.isoformat()
-    iso_time = date.isoformat(sep='T', timespec='seconds')
+    iso_time = util_time.isoformat(date, sep='T', timespec='seconds')
     sensor_coarse = img.get('sensor_coarse', 'unknown')
 
     # Construct a name for the subregion to extract.
     name = 'crop_{}_{}_{}_{}'.format(iso_time, space_str, sensor_coarse, num)
 
-    auxiliary = img.get('auxiliary', [])
-
-    objs = []
+    from kwcoco.coco_image import CocoImage
+    coco_img = CocoImage(img)
     has_base_image = img.get('file_name', None) is not None
-    if has_base_image:
-        objs.append(ub.dict_diff(img, {'auxiliary'}))
-    objs.extend(auxiliary)
+    objs = [ub.dict_diff(obj, {'auxiliary'}) for obj in coco_img.iter_asset_objs()]
+
+    if 0:
+        for obj in objs:
+            print(ub.repr2(ub.dict_diff(obj, {
+                'warp_aux_to_img', 'geos_corners',
+                'wgs84_corners', 'wld_crs_info', 'utm_crs_info', 'warp_to_wld',
+                'utm_corners',
+            })))
+
+    channels_to_objs = ub.ddict(list)
+    for obj in objs:
+        key = obj['channels']
+        if key in channels_to_objs:
+            warnings.warn(ub.paragraph(
+                '''
+                It seems multiple auxiliary items in the parent image might
+                contain the same channel.  This script will try to work around
+                this, but that is not a valid kwcoco assumption.
+                '''))
+        # assert key not in channels_to_objs
+        channels_to_objs[key].append(obj)
+
+    for other_img in other_imgs:
+        coco_other_img = CocoImage(other_img)
+        other_objs = [ub.dict_diff(obj, {'auxiliary'}) for obj in coco_other_img.iter_asset_objs()]
+        for other_obj in other_objs:
+            key = other_obj['channels']
+            channels_to_objs[key].append(other_obj)
+    obj_groups = list(channels_to_objs.values())
+    is_multi_image = len(obj_groups) > 1
 
     is_rpc = False
     for obj in objs:
@@ -934,16 +1138,14 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
 
     dst_dpath = ub.ensuredir((sub_bundle_dpath, sensor_coarse, align_method))
 
-    is_multi_image = len(objs) > 1
-
     job_list = []
 
     # Turn off internal threading because we refactored this to thread over all
     # images instead
     executor = ub.Executor(mode='thread', max_workers=aux_workers)
-    for obj in ub.ProgIter(objs, desc='submit warp auxiliaries', verbose=0):
+    for obj_group in ub.ProgIter(obj_groups, desc='submit warp auxiliaries', verbose=0):
         job = executor.submit(
-            _aligncrop, obj, bundle_dpath, name, sensor_coarse,
+            _aligncrop, obj_group, bundle_dpath, name, sensor_coarse,
             dst_dpath, space_region, space_box, align_method,
             is_multi_image, keep, utm_epsg_zone=utm_epsg_zone)
         job_list.append(job)
@@ -972,24 +1174,28 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
 
     new_gid = start_gid
 
+    assert len(dst_list) == len(obj_groups)
+    # Hack because heurstics break when fnames change
+    for old_aux_group, new_aux in zip(obj_groups, dst_list):
+        # new_aux['channels'] = old_aux['channels']
+        if len(old_aux_group) > 1:
+            new_aux['parent_file_name'] = [g['file_name'] for g in old_aux_group]
+        else:
+            new_aux['parent_file_name'] = old_aux_group[0]['file_name']
+
     new_img = {
         'id': new_gid,
         'name': name,
         'align_method': align_method,
     }
 
-    if has_base_image:
+    if has_base_image and len(dst_list) == 1:
         base_dst = dst_list[0]
         new_img.update(base_dst)
-        aux_dst = dst_list[1:]
-        assert len(aux_dst) == 0, 'cant have aux and base yet'
+        aux_dst = []
+        # dst_list[1:]
     else:
         aux_dst = dst_list
-
-    # Hack because heurstics break when fnames change
-    for old_aux, new_aux in zip(auxiliary, aux_dst):
-        # new_aux['channels'] = old_aux['channels']
-        new_aux['parent_file_name'] = old_aux['file_name']
 
     if len(aux_dst):
         new_img['auxiliary'] = aux_dst
@@ -1138,46 +1344,132 @@ def _fix_geojson_poly(geo):
 
 
 @profile
-def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
+def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
                space_box, align_method, is_multi_image, keep, utm_epsg_zone=None):
     import watch
     # # NOTE: https://github.com/dwtkns/gdal-cheat-sheet
-    # latmin, lonmin, latmax, lonmax = space_box.data[0]
-    # Data is from geo-pandas so this should be traditional order
-    lonmin, latmin, lonmax, latmax = space_box.data[0]
-    chan_code = obj.get('channels', '')
+    first_obj = obj_group[0]
+    chan_code = obj_group[0].get('channels', '')
 
-    if len(chan_code) > 8:
+    # Ensure chan codes dont break thing
+    def sanatize_chan_pnams(cs):
+        return cs.replace('|', '_').replace(':', '-')
+    chan_pname = sanatize_chan_pnams(chan_code)
+    if len(chan_pname) > 10:
         # Hack to prevent long names for docker (limit is 242 chars)
         num_bands = kwcoco.FusedChannelSpec.coerce(chan_code).numel()
-        chan_code = '{}:{}'.format(ub.hash_data(chan_code, base='abc')[0:8], num_bands)
+        chan_pname = '{}_{}'.format(ub.hash_data(chan_pname, base='abc')[0:8], num_bands)
 
     if is_multi_image:
         multi_dpath = ub.ensuredir((dst_dpath, name))
-        dst_gpath = join(multi_dpath, name + '_' + chan_code + '.tif')
+        dst_gpath = join(multi_dpath, name + '_' + chan_pname + '.tif')
     else:
         dst_gpath = join(dst_dpath, name + '.tif')
 
-    fname = obj.get('file_name', None)
-    assert fname is not None
-    src_gpath = join(bundle_dpath, fname)
+    input_gnames = [obj.get('file_name', None) for obj in obj_group]
+    assert all(n is not None for n in input_gnames)
+    input_gpaths = [join(bundle_dpath, n) for n in input_gnames]
 
     dst = {
         'file_name': dst_gpath,
     }
-    if obj.get('channels', None):
-        dst['channels'] = obj['channels']
-    if obj.get('num_bands', None):
-        dst['num_bands'] = obj['num_bands']
+    if first_obj.get('channels', None):
+        dst['channels'] = first_obj['channels']
+    if first_obj.get('num_bands', None):
+        dst['num_bands'] = first_obj['num_bands']
 
     already_exists = exists(dst_gpath)
     needs_recompute = not (already_exists and keep)
     if not needs_recompute:
         return dst
 
+    if align_method == 'pixel_crop':
+        raise NotImplementedError('no longer supported')
+
+    if align_method == 'orthorectify':
+        if 'geotiff_metadata' in first_obj:
+            info = first_obj['geotiff_metadata']
+        else:
+            info = watch.gis.geotiff.geotiff_crs_info(input_gpaths[0])
+        # No RPCS exist, use affine-warp instead
+        rpcs = info['rpc_transform']
+    else:
+        rpcs = None
+
+    duplicates = ub.find_duplicates(input_gpaths)
+    if duplicates:
+        warnings.warn(ub.paragraph(
+            '''
+            Input to _aligncrop contained duplicate filepaths, the same image
+            might be registered in the base kwcoco file multiple times.
+            '''))
+        # print('!!WARNING!! duplicates = {}'.format(ub.repr2(duplicates, nl=1)))
+        input_gpaths = list(ub.oset(input_gpaths))
+
     # Write to a temporary file and then rename the file to the final
     # Destination so ctrl+c doesn't break everything
     tmp_dst_gpath = ub.augpath(dst_gpath, prefix='.tmp.')
+
+    # When trying to get a gdalmerge to take multiple inputs I got a Attempt to
+    # create 0x0 dataset is illegal,sizes must be larger than zero.  This new
+    # method will call gdalwarp on each image individually and then merge them
+    # all in a final step.
+    out_fpath = tmp_dst_gpath
+    if len(input_gpaths) > 1:
+        in_fpaths = input_gpaths
+        gdal_multi_warp(in_fpaths, out_fpath, space_box, utm_epsg_zone, rpcs=rpcs)
+    else:
+        in_fpath = input_gpaths[0]
+        gdal_single_warp(in_fpath, out_fpath, space_box, utm_epsg_zone, rpcs=rpcs)
+
+    os.rename(tmp_dst_gpath, dst_gpath)
+
+    return dst
+
+
+def gdal_multi_warp(in_fpaths, out_fpath, space_box, utm_epsg_zone, rpcs=None):
+    # Warp then merge
+    import tempfile
+
+    # Write to a temporary file and then rename the file to the final
+    # Destination so ctrl+c doesn't break everything
+    tmp_out_fpath = ub.augpath(out_fpath, prefix='.tmp.')
+
+    tempfiles = []  # hold references
+    warped_gpaths = []
+    for in_fpath in in_fpaths:
+        tmpfile = tempfile.NamedTemporaryFile(suffix='.tif')
+        tempfiles.append(tempfiles)
+        tmp_out = tmpfile.name
+        gdal_single_warp(in_fpath, tmp_out, space_box, utm_epsg_zone,
+                         rpcs=rpcs)
+        warped_gpaths.append(tmp_out)
+
+    # Last image is copied over earlier ones, but we expect first image to be
+    # the primary one, so reverse order
+    warped_gpaths = warped_gpaths[::-1]
+    merge_cmd_parts = ['gdal_merge.py', '-n', '0', '-o', tmp_out_fpath] + warped_gpaths
+    merge_cmd = ' '.join(merge_cmd_parts)
+    cmd_info = ub.cmd(merge_cmd_parts, check=True)
+    if cmd_info['ret'] != 0:
+        print('\n\nCOMMAND FAILED: {!r}'.format(merge_cmd))
+        print(cmd_info['out'])
+        print(cmd_info['err'])
+        raise Exception(cmd_info['err'])
+    os.rename(tmp_out_fpath, out_fpath)
+
+
+def gdal_single_warp(in_fpath, out_fpath, space_box, utm_epsg_zone, rpcs=None):
+    """
+    TODO:
+        - [ ] This should be a kwgeo function.
+    """
+    # Data is from geo-pandas so this should be traditional order
+    lonmin, latmin, lonmax, latmax = space_box.data[0]
+
+    # Coordinate Reference System of the "te" crop coordinates
+    # te_srs = spatial reference of query points
+    crop_coordinate_srs = 'epsg:4326'
 
     # TODO: parametarize
     compress = 'NONE'
@@ -1191,10 +1483,6 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
     else:
         target_srs = 'epsg:{}'.format(utm_epsg_zone)
 
-    # Coordinate Reference System of the "te" crop coordinates
-    # te_srs = spatial reference of query points
-    crop_coordinate_srs = 'epsg:4326'
-
     # Use the new COG output driver
     prefix_template = (
         '''
@@ -1205,6 +1493,7 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
         -te {xmin} {ymin} {xmax} {ymax}
         -te_srs {crop_coordinate_srs}
         -t_srs {target_srs}
+        -srcnodata {NODATA_VALUE}
         -of COG
         -co OVERVIEWS=NONE
         -co BLOCKSIZE={blocksize}
@@ -1222,73 +1511,20 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
         'xmax': lonmax,
         'blocksize': blocksize,
         'compress': compress,
-        'SRC': src_gpath,
-        'DST': tmp_dst_gpath,
+        'SRC': in_fpath,
+        'DST': out_fpath,
+
+        # TODO: Use cloudmask
+        'NODATA_VALUE': 0,  # TODO: determine if possible
     }
 
-    if compress == 'RAW':
-        compress = 'NONE'
-
-    if align_method == 'orthorectify':
-        if 'geotiff_metadata' in obj:
-            info = obj['geotiff_metadata']
-        else:
-            info = watch.gis.geotiff.geotiff_crs_info(src_gpath)
-        rpcs = info['rpc_transform']
-        # No RPCS exist, use affine-warp instead
-        if rpcs is None:
-            align_method = 'affine_warp'
-        else:
-            # HACK TO FIND an appropirate DEM file
-            dems = rpcs.elevation
-
-    if align_method == 'pixel_crop':
-        raise NotImplementedError('no longer supported')
-        info = watch.gis.geotiff.geotiff_crs_info(src_gpath)
-        if 1:
-            # IMPL1
-            # info = obj['geotiff_metadata']
-            from kwcoco.util.util_delayed_poc import LazyGDalFrameFile
-            imdata = LazyGDalFrameFile(src_gpath)
-            space_region_pxl = space_region.warp(info['wgs84_to_wld']).warp(info['wld_to_pxl'])
-            pxl_xmin, pxl_ymin, pxl_xmax, pxl_ymax = space_region_pxl.bounding_box().to_ltrb().quantize().data[0]
-            sl = tuple([slice(pxl_ymin, pxl_ymax), slice(pxl_xmin, pxl_xmax)])
-            subim, transform = kwimage.padded_slice(
-                imdata, sl, return_info=True)
-            # TODO: do this with a gdal command so the tiff metdata is preserved
-            kwimage.imwrite(tmp_dst_gpath, subim, space=None, backend='gdal',
-                            blocksize=blocksize, compress=compress)
-        else:
-            raise Exception
-            # IMPL2
-            template = (
-                '''
-                gdal_translate
-                --config GDAL_CACHEMAX 500 -wm 500
-                --debug off
-                -srcwin {xoff} {yoff} {xsize} {ysize}
-                -a_srs {target_srs}
-                -of COG
-                -co OVERVIEWS=NONE
-                -co BLOCKSIZE={blocksize}
-                -co COMPRESS={compress}
-                -co NUM_THREADS=2
-                -overwrite
-                {SRC} {DST}
-                ''')
-            space_region_pxl = space_region.warp(info['wgs84_to_wld']).warp(info['wld_to_pxl'])
-            xoff, yoff, xsize, ysize = space_region_pxl.bounding_box().to_xywh().quantize().data[0]
-            template_kw.update({
-                'xoff': xoff,
-                'yoff': yoff,
-                'xsize': xsize,
-                'ysize': ysize,
-            })
-            command = template.format(**template_kw)
-
-        dst['img_shape'] = subim.shape
-        dst['transform'] = transform
-    elif align_method == 'orthorectify':
+    # HACK TO FIND an appropirate DEM file
+    if rpcs is None:
+        template = ub.paragraph(
+            prefix_template +
+            '{SRC} {DST}')
+    else:
+        dems = rpcs.elevation
         if hasattr(dems, 'find_reference_fpath'):
             # TODO: get a better DEM path for this image if possible
             dem_fpath, dem_info = dems.find_reference_fpath(latmin, lonmin)
@@ -1301,35 +1537,24 @@ def _aligncrop(obj, bundle_dpath, name, sensor_coarse, dst_dpath, space_region,
                 ''')
             template_kw['dem_fpath'] = dem_fpath
         else:
+            dem_fpath = None
             template = ub.paragraph(
                 prefix_template +
                 '''
                 -rpc -et 0
                 {SRC} {DST}
                 ''')
-        command = template.format(**template_kw)
-    elif align_method == 'affine_warp':
-        template = ub.paragraph(
-            prefix_template +
-            '{SRC} {DST}')
-        command = template.format(**template_kw)
-    else:
-        raise KeyError(align_method)
 
-    if needs_recompute:
-        # TODO: write to a temporay location and then do an atomic move
-        # of the file in order to prevent leaving corrupted data on disk
-        cmd_info = ub.cmd(command, verbose=0)  # NOQA
-        if cmd_info['ret'] != 0:
-            print('\n\nCOMMAND FAILED: {!r}'.format(command))
-            raise Exception(cmd_info['err'])
+    if compress == 'RAW':
+        compress = 'NONE'
 
-    os.rename(tmp_dst_gpath, dst_gpath)
-
-    if not exists(dst_gpath):
-        raise Exception('THE DESTINATION PATH WAS NOT COMPUTED')
-
-    return dst
+    command = template.format(**template_kw)
+    cmd_info = ub.cmd(command, verbose=0)  # NOQA
+    if cmd_info['ret'] != 0:
+        print('\n\nCOMMAND FAILED: {!r}'.format(command))
+        print(cmd_info['out'])
+        print(cmd_info['err'])
+        raise Exception(cmd_info['err'])
 
 
 _CLI = CocoAlignGeotiffConfig

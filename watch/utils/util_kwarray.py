@@ -2,6 +2,8 @@
 Functions that may eventually be moved to kwarray
 """
 import numpy as np
+import math
+import ubelt as ub
 
 
 def cartesian_product(*arrays):
@@ -187,3 +189,181 @@ def unique_rows(arr, ordered=False):
         arr_flat_unique = arr_view_unique.view(arr.dtype)
         arr_unique = arr_flat_unique.reshape(-1, arr.shape[1])
     return arr_unique
+
+
+def find_robust_normalizers(data, params='auto'):
+    """
+    Finds robust normalization statistics for a single observation
+
+    Args:
+        data (ndarray): a 1D numpy array where invalid data has already been removed
+        params (str | dict): normalization params
+
+    Returns:
+        Dict[str, str | float]: normalization parameters
+
+    TODO:
+        - [ ] No Magic Numbers! Use first principles to deterimine defaults.
+        - [ ] Probably a lot of literature on the subject.
+        - [ ] Is this a kwarray function in general?
+        - [ ] https://arxiv.org/pdf/1707.09752.pdf
+        - [ ] https://www.tandfonline.com/doi/full/10.1080/02664763.2019.1671961
+        - [ ] https://www.rips-irsp.com/articles/10.5334/irsp.289/
+
+    Example:
+        >>> data = np.random.rand(100)
+        >>> norm_params1 = find_robust_normalizers(data, params='auto')
+        >>> norm_params2 = find_robust_normalizers(data, params={'low': 0, 'high': 1.0})
+        >>> norm_params3 = find_robust_normalizers(np.empty(0), params='auto')
+        >>> print('norm_params1 = {}'.format(ub.repr2(norm_params1, nl=1)))
+        >>> print('norm_params2 = {}'.format(ub.repr2(norm_params2, nl=1)))
+        >>> print('norm_params3 = {}'.format(ub.repr2(norm_params3, nl=1)))
+    """
+    if data.size == 0:
+        normalizer = {
+            'type': None,
+            'min_val': np.nan,
+            'max_val': np.nan,
+        }
+    else:
+        # should center the desired distribution to visualize on zero
+        # beta = np.median(imdata)
+        default_params = {
+            'extrema': 'custom-quantile',
+            'scaling': 'linear',
+            'low': 0.01,
+            'mid': 0.5,
+            'high': 0.9,
+        }
+        fense_extremes = None
+        if isinstance(params, str):
+            if params == 'auto':
+                params = {}
+            elif params == 'tukey':
+                params = {
+                    'extrema': 'tukey',
+                }
+            elif params == 'std':
+                pass
+            else:
+                raise KeyError(params)
+
+        # hack
+        params = ub.dict_union(default_params, params)
+
+        if params['extrema'] == 'tukey':
+            # TODO:
+            # https://github.com/derekbeaton/OuRS
+            # https://en.wikipedia.org/wiki/Feature_scaling
+            fense_extremes = _tukey_quantile_extreme_estimator(data)
+        elif params['extrema'] == 'custom-quantile':
+            fense_extremes = _custom_quantile_extreme_estimator(data, params)
+        else:
+            raise KeyError(params['extrema'])
+
+        min_val, mid_val, max_val = fense_extremes
+
+        beta = mid_val
+        # division factor
+        # from scipy.special import logit
+        # alpha = max(abs(old_min - beta), abs(old_max - beta)) / logit(0.998)
+        # This chooses alpha such the original min/max value will be pushed
+        # towards -1 / +1.
+        alpha = max(abs(min_val - beta), abs(max_val - beta)) / 6.212606
+
+        normalizer = {
+            'type': 'normalize',
+            'mode': params['scaling'],
+            'min_val': min_val,
+            'max_val': max_val,
+            'beta': beta,
+            'alpha': alpha,
+        }
+    return normalizer
+
+
+def _custom_quantile_extreme_estimator(data, params):
+    quant_low = params['low']
+    quant_mid = params['mid']
+    quant_high = params['high']
+    qvals = [0, quant_low, quant_mid, quant_high, 1]
+    quantile_vals = np.quantile(data, qvals)
+
+    (quant_low_abs, quant_low_val, quant_mid_val, quant_high_val,
+     quant_high_abs) = quantile_vals
+
+    # TODO: we could implement a hueristic where we do a numerical inspection
+    # of the intensity distribution. We could apply a normalization that is
+    # known to work for data with that sort of histogram distribution.
+    # This might involve fitting several parametarized distributions to the
+    # data and choosing the one with the best fit. (check how many modes there
+    # are).
+
+    # inner_range = quant_high_val - quant_low_val
+    # upper_inner_range = quant_high_val - quant_mid_val
+    # upper_lower_range = quant_mid_val - quant_low_val
+
+    # Compute amount of weight in each quantile
+    quant_center_amount = (quant_high_val - quant_low_val)
+    quant_low_amount = (quant_mid_val - quant_low_val)
+    quant_high_amount = (quant_high_val - quant_mid_val)
+
+    if math.isclose(quant_center_amount, 0):
+        high_weight = 0.5
+        low_weight = 0.5
+    else:
+        high_weight = quant_high_amount / quant_center_amount
+        low_weight = quant_low_amount / quant_center_amount
+
+    quant_high_residual = (1.0 - quant_high)
+    quant_low_residual = (quant_low - 0.0)
+    # todo: verify, having slight head fog, not 100% sure
+    low_pad_val = quant_low_residual * (low_weight * quant_center_amount)
+    high_pad_val = quant_high_residual * (high_weight * quant_center_amount)
+    min_val = max(quant_low_abs, quant_low_val - low_pad_val)
+    max_val = max(quant_high_abs, quant_high_val - high_pad_val)
+    mid_val = quant_mid_val
+    return (min_val, mid_val, max_val)
+
+
+def _tukey_quantile_extreme_estimator(data):
+    # Tukey method for outliers
+    # https://www.youtube.com/watch?v=zY1WFMAA-ec
+    q1, q2, q3 = np.quantile(data, [0.25, 0.5, 0.75])
+    iqr = q3 - q1
+    # One might wonder where the 1.5 in the above interval comes from -- Paul
+    # Velleman, a statistician at Cornell University, was a student of John
+    # Tukey, who invented this test for outliers. He wondered the same thing.
+    # When he asked Tukey, "Why 1.5?", Tukey answered, "Because 1 is too small
+    # and 2 is too large."
+    # Cite: http://mathcenter.oxford.emory.edu/site/math117/shapeCenterAndSpread/
+    fence_lower = q1 - 1.5 * iqr
+    fence_upper = q1 + 1.5 * iqr
+    return fence_lower, q2, fence_upper
+
+
+def apply_normalizer(data, normalizer, mask=None):
+    import kwarray
+    dtype = np.float32
+    result = data.astype(dtype).copy()
+
+    if normalizer['type'] is None:
+        data_normalized = result
+    else:
+        if mask is not None:
+            valid_data = result[mask]
+        else:
+            valid_data = result
+        data_normalized = kwarray.normalize(
+            valid_data.astype(dtype), mode=normalizer['mode'],
+            beta=normalizer['beta'], alpha=normalizer['alpha'],
+        )
+    if mask is not None:
+        mask_flat = mask.ravel()
+        result_flat = result.ravel()
+        result_flat[mask_flat] = data_normalized
+        # result[mask] =
+        # result = np.where(mask, data_normalized, data)
+    else:
+        result = data_normalized
+    return result

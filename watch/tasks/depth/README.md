@@ -23,9 +23,25 @@ Usage:
 
 4. Run the prediction:
     ```
-    python -m watch.tasks.depth.predict \
-      --dataset /dvc/drop1/data.kwcoco.json \
-      --output /output/depth1.kwcoco.json \ 
-      --deployed /dvc/models/depth/weights_v1.pt
-    ```
+    # DVC_DPATH=/dvc
 
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc/
+    KWCOCO_BUNDLE=$DVC_DPATH/Drop1-Aligned-L1
+    KWCOCO_FPATH=$KWCOCO_BUNDLE/vali_data_wv.kwcoco.json
+
+    python -m watch.tasks.depth.predict \
+        --dataset  $KWCOCO_BUNDLE/data.kwcoco.json \
+        --output   $KWCOCO_BUNDLE/dzyne_depth/depth1.kwcoco.json \
+        --deployed $DVC_DPATH/models/depth/weights_v1.pt
+
+    kwcoco subset --src $KWCOCO_BUNDLE/dzyne_depth/depth1.kwcoco.json \
+            --dst $KWCOCO_BUNDLE/dzyne_depth/depth1_wv.kwcoco.json \
+            --select_images '.sensor_coarse == "WV"' --channels='red|green|blue'
+
+    python -m watch stats $KWCOCO_BUNDLE/dzyne_depth/depth1_wv.kwcoco.json
+
+    # Visualize results
+    python -m watch visualize --src $KWCOCO_BUNDLE/dzyne_depth/depth1_wv.kwcoco.json \
+        --viz_dpath=$KWCOCO_BUNDLE/dzyne_depth/_vizdepth  \
+        --channels "depth" --draw_anns=False --animate=True
+    ```

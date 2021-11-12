@@ -17,9 +17,9 @@ from einops.layers.torch import Rearrange
 from kwcoco import channel_spec
 from torchvision import transforms
 from torch.optim import lr_scheduler
+from watch import heuristics
 from watch.tasks.fusion import utils
 from watch.tasks.fusion.architectures import transformer
-from watch.tasks.fusion import heuristics
 
 try:
     import xdev
@@ -1358,7 +1358,7 @@ def coerce_criterion(loss_code, weights):
     """
     Helps build a loss function
     """
-    import monai
+    # import monai
     if loss_code == 'cce':
         criterion = torch.nn.CrossEntropyLoss(
             weight=weights, reduction='mean')
@@ -1366,7 +1366,9 @@ def coerce_criterion(loss_code, weights):
         logit_shape = '(b t h w) c'
         target_shape = '(b t h w)'
     elif loss_code == 'focal':
-        criterion = monai.losses.FocalLoss(
+        from watch.utils.ext_monai import FocalLoss
+        # from monai.losses import FocalLoss
+        criterion = FocalLoss(
             reduction='mean', to_onehot_y=False, weight=weights)
 
         target_encoding = 'onehot'
@@ -1375,7 +1377,9 @@ def coerce_criterion(loss_code, weights):
 
     elif loss_code == 'dicefocal':
         # TODO: can we apply weights here?
-        criterion = monai.losses.DiceFocalLoss(
+        from watch.utils.ext_monai import DiceFocalLoss
+        # from monai.losses import DiceFocalLoss
+        criterion = DiceFocalLoss(
             # weight=torch.FloatTensor([self.negative_change_weight, self.positive_change_weight]),
             sigmoid=True,
             to_onehot_y=False,

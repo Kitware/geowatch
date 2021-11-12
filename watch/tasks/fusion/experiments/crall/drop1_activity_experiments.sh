@@ -187,9 +187,9 @@ KWCOCO_BUNDLE_DPATH=${KWCOCO_BUNDLE_DPATH:-$DVC_DPATH/drop1-S2-L8-aligned}
 #TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_train_data.kwcoco.json
 #VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_data.kwcoco.json
 #TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_data.kwcoco.json
-TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/train_data.kwcoco.json
-VALI_FPATH=$KWCOCO_BUNDLE_DPATH/vali_data.kwcoco.json
-TEST_FPATH=$KWCOCO_BUNDLE_DPATH/vali_data.kwcoco.json
+#TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/train_data.kwcoco.json
+#VALI_FPATH=$KWCOCO_BUNDLE_DPATH/vali_data.kwcoco.json
+#TEST_FPATH=$KWCOCO_BUNDLE_DPATH/vali_data.kwcoco.json
 
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 

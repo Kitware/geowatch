@@ -13,9 +13,9 @@ from os.path import join
 from os.path import relpath
 import kwimage
 import kwarray
+from watch import heuristics
 from watch.tasks.fusion import datamodules
 from watch.tasks.fusion import utils
-from watch.tasks.fusion import heuristics
 from watch.tasks.tracking import from_heatmap
 from watch.utils import util_path
 from watch.utils import util_parallel

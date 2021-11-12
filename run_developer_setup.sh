@@ -18,9 +18,10 @@ fi
 pip install -e .
 
 # Install more fragile dependencies
-pip install imgaug>=0.4.0
-pip install netharn>=0.5.16
-pip install GDAL>=3.3.1 --find-links https://girder.github.io/large_image_wheels
+# pip install imgaug>=0.4.0
+# pip install netharn>=0.5.16
+pip install GDAL>=3.3.1,!=3.4.0,!=3.3.3 --find-links https://girder.github.io/large_image_wheels -U
+pip install GDAL==3.3.1 --find-links https://girder.github.io/large_image_wheels -U
 
 pip install dvc[all]
 

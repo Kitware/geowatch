@@ -26,7 +26,7 @@ __notes__ = r"""
 
 def animate_visualizations(viz_dpath, channels=None, video_names=None,
                            frames_per_second=0.7, draw_anns=True,
-                           draw_imgs=True, num_workers=0, zoom_to_tracks=False,
+                           draw_imgs=True, workers=0, zoom_to_tracks=False,
                            verbose=0):
     r"""
     Helper that roughly does the same thing as this bash script:
@@ -67,7 +67,7 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
         >>> video_names = None
         >>> frame_per_second = 0.7
         >>> from watch.cli.animate_visualizations import *  # NOQA
-        >>> animate_visualizations(viz_dpath, verbose=1, num_workers=0)
+        >>> animate_visualizations(viz_dpath, verbose=1, workers=0)
     """
     import pathlib
     from watch.cli import gifify
@@ -75,11 +75,10 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
     import kwcoco
     from watch.utils.lightning_ext import util_globals
 
-    num_workers = util_globals.coerce_num_workers(num_workers)
-
     if channels is not None:
         channels = kwcoco.ChannelSpec.coerce(channels)
 
+    workers = util_globals.coerce_num_workers(workers)
     viz_dpath = pathlib.Path(viz_dpath)
 
     if video_names is None:
@@ -87,7 +86,7 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
     else:
         video_dpaths = [viz_dpath / n for n in video_names]
 
-    pool = ub.JobPool(mode='thread', max_workers=num_workers)
+    pool = ub.JobPool(mode='thread', max_workers=workers)
 
     types = []
     if draw_imgs:
@@ -95,13 +94,14 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
     if draw_anns:
         types.append('_anns')
 
-    verbose_worker = verbose and num_workers <= 1
+    verbose_worker = verbose and workers <= 1
 
     # We make heavy reliance on a known directory structure here.
     # In general I don't like this, but this is not a system-critical part
     # so we can leave refactoring as a todo.
     for type_ in types:
         for video_dpath in video_dpaths:
+            print('video_dpath = {!r}'.format(video_dpath))
             video_name = video_dpath.name
 
             if zoom_to_tracks:
@@ -110,10 +110,13 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
                 for track_dpath in track_dpaths:
                     track_name = track_dpath.name
                     type_dpath = track_dpath / type_
+
                     if channels is None:
                         channel_dpaths = [p for p in type_dpath.glob('*') if p.is_dir()]
                     else:
-                        channel_dpaths = [type_dpath / c.spec for c in channels.streams()]
+                        def sanatize_chan_pnams(cs):
+                            return cs.replace('|', '_').replace(':', '-')
+                        channel_dpaths = [type_dpath / sanatize_chan_pnams(c.spec) for c in channels.streams()]
 
                     for chan_dpath in channel_dpaths:
                         frame_fpaths = sorted(chan_dpath.glob('*'))
@@ -129,10 +132,14 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
                 if channels is None:
                     channel_dpaths = [p for p in type_dpath.glob('*') if p.is_dir()]
                 else:
-                    channel_dpaths = [type_dpath / c.spec for c in channels.streams()]
-
+                    # channel_dpaths = [type_dpath / c.spec for c in channels.streams()]
+                    def sanatize_chan_pnams(cs):
+                        return cs.replace('|', '_').replace(':', '-')
+                    channel_dpaths = [type_dpath / sanatize_chan_pnams(c.spec) for c in channels.streams()]
+                print('channel_dpaths = {!r}'.format(channel_dpaths))
                 for chan_dpath in channel_dpaths:
                     frame_fpaths = sorted(chan_dpath.glob('*'))
+                    print(len(frame_fpaths))
                     gif_fname = '{}{}_{}.gif'.format(video_name, type_, chan_dpath.name)
                     gif_fpath = video_dpath / gif_fname
                     pool.submit(
