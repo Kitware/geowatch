@@ -364,8 +364,13 @@ def apply_tracks(coco_dset, track_fn, overwrite, coco_dset_sc=None):
     # first, for each video, apply a track_fn from from_heatmap or from_polygon
     for gids in coco_dset.index.vidid_to_gids.values():
         sub_dset = coco_dset.subset(gids=gids).copy()  # copy necessary?
+        # HACK ensure tracks are not duplicated between videos
+        # (if they are, this is fixed in dedupe_tracks anyway)
+        sub_dset.index.trackid_to_aids.update(coco_dset.index.trackid_to_aids)
         if coco_dset_sc is not None:
             sub_dset_sc = coco_dset_sc.subset(gids=gids).copy()
+            sub_dset_sc.index.trackid_to_aids.update(
+                    coco_dset_sc.index.trackid_to_aids)
         else:
             sub_dset_sc = None
         if overwrite:
@@ -374,7 +379,10 @@ def apply_tracks(coco_dset, track_fn, overwrite, coco_dset_sc=None):
             existing_tracks = tracks(sub_dset.annots())
             _are_trackless = are_trackless(sub_dset.annots())
             if np.any(_are_trackless) or len(existing_tracks) == 0:
-                sub_dset = track_fn(sub_dset, coco_dset_sc=sub_dset_sc)
+                if coco_dset_sc is not None:
+                    sub_dset = track_fn(sub_dset, coco_dset_sc=sub_dset_sc)
+                else:
+                    sub_dset = track_fn(sub_dset)
                 annots = sub_dset.annots()
                 # if new annots were not created, rollover the old tracks
                 if len(annots) == len(existing_tracks):

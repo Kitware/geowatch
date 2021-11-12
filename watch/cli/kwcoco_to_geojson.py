@@ -78,6 +78,10 @@ def _combined_geometries(geometry_list):
     return shapely.ops.unary_union(geometry_list).buffer(0)
 
 
+def _normalize_date(date_str):
+    return dateutil.parser.parse(date_str).date().isoformat()
+
+
 def geojson_feature(img, anns, coco_dset, with_properties=True):
     '''
     Group kwcoco annotations in the same track (site) and image
@@ -109,11 +113,9 @@ def geojson_feature(img, anns, coco_dset, with_properties=True):
             except StopIteration:
                 raise Exception(f'can\'t determine source of gid {img["gid"]}')
 
-        date = dateutil.parser.parse(img['date_captured']).date().isoformat()
-
         return {
             'source': source,
-            'observation_date': date,
+            'observation_date': _normalize_date(img['date_captured']),
             'is_occluded': False,  # HACK
             'sensor_name': img['sensor_coarse']
         }
@@ -293,8 +295,9 @@ def track_to_site(coco_dset,
         centroid_latlon = np.array(geometry.centroid)[::-1]
 
         # these are strings, but sorting should be correct in isoformat
-        dates = sorted(feat['properties']['observation_date']
-                       for feat in features)
+        dates = sorted(
+            map(_normalize_date,
+                coco_dset.images(set(gids)).lookup('date_captured')))
 
         site_id = '_'.join((region_id, str(site_idx).zfill(4)))
 
@@ -314,6 +317,7 @@ def track_to_site(coco_dset,
         if as_summary:
             properties.update(**{
                 'type': 'site_summary',
+                'region_id': region_id,  # HACK to passthrough to main
             })
         else:
             properties.update(**{
@@ -378,6 +382,45 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id=None, as_summary=False):
 
 
 def main(args):
+    """
+    Example:
+        >>> from watch.cli.kwcoco_to_geojson import main
+        >>> from watch.demo import smart_kwcoco_demodata
+        >>> import kwcoco
+        >>> import ubelt as ub
+        >>> # run BAS on demodata in a new place
+        >>> coco_dset = smart_kwcoco_demodata.demo_smart_aligned_kwcoco()
+        >>> coco_dset.fpath = 'bas.kwcoco.json'
+        >>> coco_dset.dump(coco_dset.fpath, indent=2)
+        >>> region_id = 'dummy_region'
+        >>> regions_dir = 'regions/'
+        >>> bas_args = [
+        >>>     '--in_file', coco_dset.fpath,
+        >>>     '--out_dir', regions_dir,
+        >>>     '--track_fn', 'watch.tasks.tracking.from_polygon.mono',
+        >>>     '--bas_mode',
+        >>>     '--write_in_file'
+        >>> ]
+        >>> main(bas_args)
+        >>> # reload it with tracks
+        >>> coco_dset = kwcoco.CocoDataset(coco_dset.fpath)
+        >>> # run SC on the same dset
+        >>> sites_dir = 'sites/'
+        >>> sc_args = [
+        >>>     '--in_file', coco_dset.fpath,
+        >>>     '--out_dir', sites_dir,
+        >>> ]
+        >>> main(sc_args)
+        >>> # cleanup
+        >>> for pth in os.listdir(regions_dir):
+        >>>     os.remove(os.path.join(regions_dir, pth))
+        >>> os.removedirs(regions_dir)
+        >>> for pth in os.listdir(sites_dir):
+        >>>     os.remove(os.path.join(sites_dir, pth))
+        >>> os.removedirs(sites_dir)
+        >>> if not os.path.isabs(coco_dset.fpath):
+        >>>     os.remove(coco_dset.fpath)
+    """
     parser = argparse.ArgumentParser(
         description="Convert KWCOCO to IARPA GeoJSON")
     parser.add_argument("--in_file", help="Input KWCOCO to convert")
@@ -444,35 +487,36 @@ def main(args):
         overwrite=False,
         gt_dset=gt_dset,
         coco_dset_sc=coco_dset_sc)
-    
+
     if args.write_in_file:
         coco_dset.dump(args.in_file, indent=2)
 
     # Convert kwcoco to sites
     sites = convert_kwcoco_to_iarpa(coco_dset,
                                     args.region_id,
-                                    as_summary=(not args.bas_mode))
+                                    as_summary=args.bas_mode)
 
-    verbose = 1
+    verbose = 0
     os.makedirs(args.out_dir, exist_ok=True)
     for site in sites:
-        site_feature = site['features'][0]
 
         if args.bas_mode:
             #  write sites to region models on disk
-            assert site_feature['type'] == 'site_summary'
+            site_props = site['properties']
+            assert site_props['type'] == 'site_summary'
+            region_id = site_props.pop('region_id')
             region_fpath = os.path.join(args.out_dir,
-                                        site_feature['region_id'] + '.geojson')
+                                        region_id + '.geojson')
             if os.path.isfile(region_fpath):
                 with open(region_fpath, 'r') as f:
                     region = geojson.load(f)
                 if verbose:
-                    print(f'writing site {site_feature["site_id"]} to existing'
+                    print(f'writing site {site_props["site_id"]} to existing'
                           f' region {region_fpath}')
             else:
                 region = geojson.FeatureCollection([])
                 if verbose:
-                    print(f'writing site {site_feature["site_id"]} to new '
+                    print(f'writing site {site_props["site_id"]} to new '
                           f'region {region_fpath}')
             region['features'].append(site)
             with open(region_fpath, 'w') as f:
@@ -480,15 +524,15 @@ def main(args):
 
         else:
             # Write sites to disk
-            assert site_feature['type'] == 'site'
+            site_props = site['features'][0]['properties']
+            assert site_props['type'] == 'site'
             site_fpath = os.path.join(args.out_dir,
-                                      site_feature['site_id'] + '.geojson')
+                                      site_props['site_id'] + '.geojson')
             if verbose:
-                print(f'writing site {site_feature["site_id"]} to new '
+                print(f'writing site {site_props["site_id"]} to new '
                       f'site {site_fpath}')
             with open(os.path.join(site_fpath), 'w') as f:
                 geojson.dump(site, f, indent=2)
-    return 0
 
 
 if __name__ == '__main__':
