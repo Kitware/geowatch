@@ -86,6 +86,27 @@ kwcoco subset --src $ALIGNED_KWCOCO_BUNDLE/vali_data.kwcoco.json \
 
 
 
+update_dvc_files(){
+    
+    cd $ALIGNED_KWCOCO_BUNDLE
+    dvc add \
+        data.kwcoco.json \
+        data_nowv.kwcoco.json \
+        train_data.kwcoco.json \
+        vali_data.kwcoco.json \
+        train_data_wv.kwcoco.json \
+        vali_data_wv.kwcoco.json \
+        train_data_nowv.kwcoco.json \
+        vali_data_nowv.kwcoco.json \
+        */S2 \
+        */L8 \
+        */WV \
+        */subdata.kwcoco.json
+
+}
+
+
+
 inspect(){
 
     # Make sure everything looks good
@@ -99,11 +120,8 @@ inspect(){
     python -m watch visualize --src $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json --channels "red|green|blue"
     python -m watch visualize --src $ALIGNED_KWCOCO_BUNDLE/vali_data_wv.kwcoco.json --channels "red|green|blue" --viz_dpath=$ALIGNED_KWCOCO_BUNDLE/_viz_wv_vali
     python -m watch visualize --src $ALIGNED_KWCOCO_BUNDLE/vali_data_nowv.kwcoco.json --channels "red|green|blue" --viz_dpath=$ALIGNED_KWCOCO_BUNDLE/_viz_nowv_vali
-    python -m watch.cli.animate_visualizations --channels "red|green|blue" --viz_dpath=$ALIGNED_KWCOCO_BUNDLE/_viz_nowv_vali
-
-
-    python -m watch visualize --src subdata.kwcoco.json --channels "red|green|blue" --viz_dpath=./_viz --animate --workers=8
-
+    #python -m watch.cli.animate_visualizations --channels "red|green|blue" --viz_dpath=$ALIGNED_KWCOCO_BUNDLE/_viz_nowv_vali
+    #python -m watch visualize --src subdata.kwcoco.json --channels "red|green|blue" --viz_dpath=./_viz --animate=True --workers=8
 }
 
 teamfeatures(){

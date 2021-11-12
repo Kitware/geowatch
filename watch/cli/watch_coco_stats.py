@@ -79,6 +79,14 @@ def coco_watch_stats(dset):
         print('video_info = {}'.format(vid_info_str))
         all_sensor_entries.extend(all_sensor_entries)
 
+    # coco_dset = dset
+    # all_images = coco_dset.images()
+    # wv_images = all_images.compress([s == 'WV' for s in all_images.lookup('sensor_coarse')])
+    # coco_images = [coco_dset.coco_image(gid) for gid in wv_images]
+    # ub.dict_hist(['|'.join(sorted(coco_img.channels.fuse().parsed)) for coco_img in coco_images])
+    # ub.dict_hist([(coco_img.channels.fuse() & kwcoco.FusedChannelSpec.coerce('red|green|blue|panchromatic')).spec for coco_img in coco_images])
+    # all_images.lookup('sensor_coarse')
+
     sensor_hist = ub.dict_hist(all_sensor_entries)
     print('Sensor Histogram = {}'.format(ub.repr2(sensor_hist, nl=1)))
 

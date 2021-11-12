@@ -157,8 +157,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.train_kwcoco = train_dataset
         self.vali_kwcoco = vali_dataset
         self.test_kwcoco = test_dataset
-        self.time_steps = time_steps
-        self.chip_size = chip_size
+        self.time_steps = int(time_steps)
+        self.chip_size = int(chip_size)
         self.time_overlap = time_overlap
         self.chip_overlap = chip_overlap
         self.neg_to_pos_ratio = neg_to_pos_ratio
