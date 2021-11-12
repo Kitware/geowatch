@@ -316,10 +316,9 @@ def time_aggregated_polys(coco_dset,
         track_id = next(new_trackids)
         for image_ind, (gid, img) in enumerate(coco_dset.imgs.items()):
 
-            save_this_polygon = False
             if time_filtering:
-                if (image_ind > poly_start_ind[poly_ind] and image_ind < poly_end_ind[poly_ind]):
-                    save_this_polygon = True
+                save_this_polygon = (image_ind > poly_start_ind[poly_ind]
+                                     and image_ind < poly_end_ind[poly_ind])
             else:
                 save_this_polygon = True
 
@@ -331,7 +330,7 @@ def time_aggregated_polys(coco_dset,
                 else:
                     cand_keys = bg_key
 
-                if len(cand_keys) > 0:
+                if len(cand_keys) > 1:
                     cand_scores = []
                     for k in cand_keys:
                         if k in coco_img.channels:
@@ -342,9 +341,10 @@ def time_aggregated_polys(coco_dset,
 
                     #cat_name = np.max(cand_keys, where=cand_scores)
                     cat_name = cand_keys[np.argmax(cand_scores)]
-                    cid = coco_dset.ensure_category(cat_name)
                 else:
                     cid = coco_dset.ensure_category(key[0])
+                
+                cid = coco_dset.ensure_category(cat_name)
 
                 vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
                 img_from_vid = vid_from_img.inv()
