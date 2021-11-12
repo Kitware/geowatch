@@ -30,6 +30,12 @@ def _score(poly, probs):
     return score
 
 
+def filter_small_polys(scored_polys, min_area_px=80):
+    for poly, score in scored_polys:
+        if poly.to_shapely().area > min_area_px:
+            yield poly, score
+
+
 def mask_to_scored_polygons(probs, thresh):
     """
     Example:
@@ -117,7 +123,7 @@ def get_poly_time_ind(scored_polys, threshold, dset, vidid, key, reverse=False):
     gids = dset.index.vidid_to_gids[vidid]
 
     poly_started = set()
-    poly_start_ind = [0 for gid in gids]
+    poly_start_ind = [0 for (p, s) in scored_polys]
     if isinstance(key, str):
         key = [key]
 
@@ -263,7 +269,7 @@ def time_aggregated_polys(coco_dset,
     def probs(running):
         probs = running.summarize(axis=2, keepdims=False)['mean']
 
-        hard_probs = util_kwimage.morphology(probs > thresh, 'close',
+        hard_probs = util_kwimage.morphology(probs > thresh, 'dilate',
                                              morph_kernel)
         modulated_probs = probs * hard_probs
         return modulated_probs
@@ -276,6 +282,9 @@ def time_aggregated_polys(coco_dset,
         mask_to_scored_polygons(probs(running_dct['fg']), thresh))
 
     print('time aggregation: number of polygons:', len(scored_polys))
+
+    scored_polys = list(filter_small_polys(scored_polys))
+    print('removed small: remaining polygons:', len(scored_polys))
 
     if response_filtering:
         # get polygon responses
@@ -303,13 +312,13 @@ def time_aggregated_polys(coco_dset,
     # Add each polygon to every images as a track
     new_trackids = kwcoco_extensions.TrackidGenerator(coco_dset)
 
-    for vid_poly, score in scored_polys:
+    for poly_ind, (vid_poly, score) in enumerate(scored_polys):
         track_id = next(new_trackids)
         for image_ind, (gid, img) in enumerate(coco_dset.imgs.items()):
 
             save_this_polygon = False
             if time_filtering:
-                if (image_ind > poly_start_ind[image_ind] and image_ind < poly_end_ind[image_ind]):
+                if (image_ind > poly_start_ind[poly_ind] and image_ind < poly_end_ind[poly_ind]):
                     save_this_polygon = True
             else:
                 save_this_polygon = True
@@ -321,17 +330,21 @@ def time_aggregated_polys(coco_dset,
                     cand_keys = key
                 else:
                     cand_keys = bg_key
-                cand_scores = []
-                for k in cand_keys:
-                    if k in coco_img.channels:
-                        img_probs = coco_img.delay(k, space='video').finalize()
-                        cand_scores.append(_score(vid_poly, img_probs))
-                    else:
-                        cand_scores.append(0)
 
-                #cat_name = np.max(cand_keys, where=cand_scores)
-                cat_name = cand_keys[np.argmax(cand_scores)]
-                cid = coco_dset.ensure_category(cat_name)
+                if len(cand_keys) > 0:
+                    cand_scores = []
+                    for k in cand_keys:
+                        if k in coco_img.channels:
+                            img_probs = coco_img.delay(k, space='video').finalize()
+                            cand_scores.append(_score(vid_poly, img_probs))
+                        else:
+                            cand_scores.append(0)
+
+                    #cat_name = np.max(cand_keys, where=cand_scores)
+                    cat_name = cand_keys[np.argmax(cand_scores)]
+                    cid = coco_dset.ensure_category(cat_name)
+                else:
+                    cid = coco_dset.ensure_category(key[0])
 
                 vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
                 img_from_vid = vid_from_img.inv()
