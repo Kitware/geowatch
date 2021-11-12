@@ -397,6 +397,8 @@ def apply_tracks(coco_dset, track_fn, overwrite, coco_dset_sc=None):
             coco_dset.add_annotations(sub_dset.anns.values())
             print('a video added tracks: track ids', set(coco_dset.annots().get('track_id', None)))
 
+        # break
+
     # then cleanup leftover untracked annots
     annots = coco_dset.annots()
     coco_dset.remove_annotations(
@@ -612,8 +614,8 @@ def normalize(coco_dset, track_fn, overwrite, gt_dset=None, coco_dset_sc=None):
     def _normalize_annots(coco_dset, overwrite):
         coco_dset = dedupe_annots(coco_dset)
         coco_dset = add_geos(coco_dset, overwrite)
-        coco_dset = remove_small_annots(coco_dset, min_area_px=200)
-        coco_dset._build_index()
+        # coco_dset = remove_small_annots(coco_dset, min_area_px=200)
+        # coco_dset._build_index()
 
         return coco_dset
 
