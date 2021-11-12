@@ -94,11 +94,15 @@ inspect(){
     jq ".videos[] | .name" $ALIGNED_KWCOCO_BUNDLE/vali_data.kwcoco.json
 
     kwcoco stats $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json
+    smartwatch stats $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json
 
     python -m watch visualize --src $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json --channels "red|green|blue"
     python -m watch visualize --src $ALIGNED_KWCOCO_BUNDLE/vali_data_wv.kwcoco.json --channels "red|green|blue" --viz_dpath=$ALIGNED_KWCOCO_BUNDLE/_viz_wv_vali
     python -m watch visualize --src $ALIGNED_KWCOCO_BUNDLE/vali_data_nowv.kwcoco.json --channels "red|green|blue" --viz_dpath=$ALIGNED_KWCOCO_BUNDLE/_viz_nowv_vali
     python -m watch.cli.animate_visualizations --channels "red|green|blue" --viz_dpath=$ALIGNED_KWCOCO_BUNDLE/_viz_nowv_vali
+
+
+    python -m watch visualize --src subdata.kwcoco.json --channels "red|green|blue" --viz_dpath=./_viz --animate --workers=8
 
 }
 

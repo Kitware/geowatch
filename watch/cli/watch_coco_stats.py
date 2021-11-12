@@ -46,6 +46,7 @@ def coco_watch_stats(dset):
     num_videos = len(dset.index.videos)
     print('num_videos = {!r}'.format(num_videos))
     print('Per-video stats summary')
+    all_sensor_entries = []
     for vidid, gids in dset.index.vidid_to_gids.items():
         avail_sensors = dset.images(gids).lookup('sensor_coarse', None)
         sensor_freq = ub.dict_hist(avail_sensors)
@@ -76,6 +77,10 @@ def coco_watch_stats(dset):
         vid_info_str = util_truncate.smart_truncate(
             vid_info_str, max_length=512, trunc_loc=0.6)
         print('video_info = {}'.format(vid_info_str))
+        all_sensor_entries.extend(all_sensor_entries)
+
+    sensor_hist = ub.dict_hist(all_sensor_entries)
+    print('Sensor Histogram = {}'.format(ub.repr2(sensor_hist, nl=1)))
 
     print('MSI channel stats')
     info = kwcoco_extensions.coco_channel_stats(dset)
