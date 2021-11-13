@@ -212,7 +212,7 @@ def vidpolys_to_tracks(coco_dset,
                        scored_polys,
                        thresh,
                        key,
-                       bg_key,
+                       bg_key=None,
                        coco_dset_sc=None,
                        poly_start_ind=None,
                        poly_end_ind=None):
@@ -224,9 +224,9 @@ def vidpolys_to_tracks(coco_dset,
     if coco_dset_sc is None:
         coco_dset_sc = coco_dset
     if poly_start_ind is None:
-        poly_start_ind = {}
+        poly_start_ind = defaultdict(lambda: -1)
     if poly_end_ind is None:
-        poly_end_ind = {}
+        poly_end_ind = defaultdict(lambda: int(1e99))
 
     new_trackids = kwcoco_extensions.TrackidGenerator(coco_dset)
 
@@ -235,8 +235,7 @@ def vidpolys_to_tracks(coco_dset,
         for image_ind, (gid, img) in enumerate(coco_dset_sc.imgs.items()):
 
             save_this_polygon = (
-                image_ind > poly_start_ind.get(poly_ind, -1)
-                and image_ind < poly_end_ind.get(poly_ind, int(1e99)))
+                poly_start_ind[poly_ind] < image_ind < poly_end_ind[poly_ind])
 
             if save_this_polygon:
                 # assign category (key) from max score
@@ -314,7 +313,7 @@ def time_aggregated_polys(coco_dset,
         has_requested_chans_list.append(flag)
 
     if not all(has_requested_chans_list):
-        raise ValueError(f'{coco_dset.tag} has no keys {key} or {bg_key}')
+        raise KeyError(f'{coco_dset.tag} has no keys {key} or {bg_key}')
 
     # record fg and bg keys across frames, and partial sums of fg and bg
     # this guarantees RunningStats of equal length for all keys,
@@ -411,18 +410,11 @@ def time_aggregated_polys(coco_dset,
         poly_end_ind = None
 
     if return_only_polys:
-        if time_filtering:
-            return coco_dset, scored_polys, poly_start_ind, poly_end_ind
-        return coco_dset, scored_polys
+        return coco_dset, scored_polys, poly_start_ind, poly_end_ind
 
-    coco_dset = vidpolys_to_tracks(coco_dset, scored_polys, poly_start_ind,
-                                   poly_end_ind)
+    coco_dset = vidpolys_to_tracks(coco_dset, scored_polys, thresh, key,
+                                   bg_key, None, poly_start_ind, poly_end_ind)
     return coco_dset
-
-
-def get_poly_labels_from_SC(*args, **kwargs):
-    # alias for backwards compatibility, remove this later
-    return vidpolys_to_tracks(*args, **kwargs)
 
 
 def time_aggregated_polys_bas(coco_dset,
@@ -442,10 +434,10 @@ def time_aggregated_polys_bas(coco_dset,
                                          change_key,
                                          time_filtering=time_filtering,
                                          response_filtering=response_filtering)
-        except ValueError:
+        except KeyError:
             pass
 
-    raise ValueError(
+    raise KeyError(
         f'{coco_dset.tag} does not contain any image channel {change_keys}')
 
 
@@ -491,16 +483,11 @@ def time_aggregated_polys_hybrid(coco_dset,
                                          time_filtering=time_filtering,
                                          response_filtering=response_filtering,
                                          return_only_polys=True)
-    if time_filtering:
-        coco_dset, scored_polys, poly_start_ind, poly_end_ind = return_tuple
-    else:
-        coco_dset, scored_polys = return_tuple
-        poly_start_ind = None
-        poly_end_ind = None
+    coco_dset, scored_polys, poly_start_ind, poly_end_ind = return_tuple
 
+    get_poly_labels_from_SC = vidpolys_to_tracks
     coco_dset = get_poly_labels_from_SC(coco_dset,
                                         scored_polys,
-                                        coco_dset_sc,
                                         thresh,
                                         key=[
                                             'Site Preparation',
@@ -508,6 +495,7 @@ def time_aggregated_polys_hybrid(coco_dset,
                                             'Post Construction'
                                         ],
                                         bg_key=['No Activity'],
+                                        coco_dset_sc=coco_dset_sc,
                                         poly_start_ind=poly_start_ind,
                                         poly_end_ind=poly_end_ind)
 

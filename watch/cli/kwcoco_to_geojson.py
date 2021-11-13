@@ -384,6 +384,7 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id=None, as_summary=False):
 def main(args):
     """
     Example:
+        >>> # test BAS and default (SC) modes
         >>> from watch.cli.kwcoco_to_geojson import main
         >>> from watch.demo import smart_kwcoco_demodata
         >>> import kwcoco
@@ -420,6 +421,71 @@ def main(args):
         >>> os.removedirs(sites_dir)
         >>> if not os.path.isabs(coco_dset.fpath):
         >>>     os.remove(coco_dset.fpath)
+
+    Example:
+        >>> # test a more complicated track function
+        >>> from watch.cli.kwcoco_to_geojson import main
+        >>> from watch.demo import smart_kwcoco_demodata
+        >>> from watch.utils.kwcoco_extensions import CocoImage
+        >>> import kwcoco
+        >>> import ubelt as ub
+        >>> # make a new BAS dataset
+        >>> coco_dset = smart_kwcoco_demodata.demo_kwcoco_with_heatmaps(
+        >>>     num_videos=2)
+        >>> #coco_dset.images().set('sensor_coarse', 'S2')
+        >>> for img in coco_dset.imgs.values():
+        >>>     img['sensor_coarse'] = 'S2'
+        >>> coco_dset.remove_categories(coco_dset.cats.keys())
+        >>> coco_dset.fpath = 'bas.kwcoco.json'
+        >>> # TODO make serializable, check set() and main()
+        >>> coco_dset.dump(coco_dset.fpath, indent=2)
+        >>> regions_dir = 'regions/'
+        >>> bas_args = [
+        >>>     '--in_file', coco_dset.fpath,
+        >>>     '--out_dir', regions_dir,
+        >>>     '--track_fn', 'watch.tasks.tracking.from_heatmap.'
+        >>>                   'time_aggregated_polys_bas',
+        >>>     '--bas_mode',
+        >>>     # '--write_in_file'
+        >>> ]
+        >>> # run BAS on it
+        >>> main(bas_args)
+        >>> # reload it with tracks
+        >>> # coco_dset = kwcoco.CocoDataset(coco_dset.fpath)
+        >>> # make a new SC dataset
+        >>> coco_dset_sc = smart_kwcoco_demodata.demo_kwcoco_with_heatmaps(
+        >>>     num_videos=2)
+        >>> for img in coco_dset_sc.imgs.values():
+        >>>     img['sensor_coarse'] = 'S2'
+        >>> coco_dset_sc.remove_categories(coco_dset_sc.cats.keys())
+        >>> for img in coco_dset_sc.imgs.values():
+        >>>     for aux, key in zip(img['auxiliary'], ['Site Preparation',
+        >>>             'Active Construction', 'Post Construction']):
+        >>>         aux['channels'] = key
+        >>> coco_dset_sc.fpath = 'sc.kwcoco.json'
+        >>> coco_dset_sc.dump(coco_dset_sc.fpath, indent=2)
+        >>> # run SC on both of them
+        >>> sites_dir = 'sites/'
+        >>> sc_args = [
+        >>>     '--in_file', coco_dset.fpath,
+        >>>     '--out_dir', sites_dir,
+        >>>     '--track_fn', 'watch.tasks.tracking.from_heatmap.'
+        >>>                   'time_aggregated_polys_hybrid',
+        >>>     '--in_file_sc', coco_dset_sc.fpath
+        >>> ]
+        >>> main(sc_args)
+        >>> # cleanup
+        >>> for pth in os.listdir(regions_dir):
+        >>>     os.remove(os.path.join(regions_dir, pth))
+        >>> os.removedirs(regions_dir)
+        >>> for pth in os.listdir(sites_dir):
+        >>>     os.remove(os.path.join(sites_dir, pth))
+        >>> os.removedirs(sites_dir)
+        >>> if not os.path.isabs(coco_dset.fpath):
+        >>>     os.remove(coco_dset.fpath)
+        >>> if not os.path.isabs(coco_dset_sc.fpath):
+        >>>     os.remove(coco_dset.fpath)
+
     """
     parser = argparse.ArgumentParser(
         description="Convert KWCOCO to IARPA GeoJSON")
