@@ -78,6 +78,30 @@ class CocoVisualizeConfig(scfg.Config):
         'zoom_to_tracks': scfg.Value(False, type=str, help='if True, zoom to tracked annotations. Experimental, might not work perfectly yet.'),
 
         'norm_over_time': scfg.Value(False, help='if True, normalize data over time'),
+
+        'select_images': scfg.Value(
+            None, type=str, help=ub.paragraph(
+                '''
+                A json query (via the jq spec) that specifies which images
+                belong in the subset. Note, this is a passed as the body of
+                the following jq query format string to filter valid ids
+                '.images[] | select({select_images}) | .id'.
+
+                Examples for this argument are as follows:
+                '.id < 3' will select all image ids less than 3.
+                '.file_name | test(".*png")' will select only images with
+                file names that end with png.
+                '.file_name | test(".*png") | not' will select only images
+                with file names that do not end with png.
+                '.myattr == "foo"' will select only image dictionaries
+                where the value of myattr is "foo".
+                '.id < 3 and (.file_name | test(".*png"))' will select only
+                images with id less than 3 that are also pngs.
+                .myattr | in({"val1": 1, "val4": 1}) will take images
+                where myattr is either val1 or val4.
+
+                Requries the "jq" python library is installed.
+                ''')),
     }
 
 
@@ -148,6 +172,24 @@ def main(cmdline=True, **kwargs):
     start_frame = smartcast(config['start_frame'])
     end_frame = None if num_frames is None else start_frame + num_frames
 
+    valid_gids = None
+    if config['select_images'] is not None:
+        try:
+            import jq
+        except Exception:
+            print('The jq library is required to run a generic image query')
+            raise
+
+        try:
+            query_text = ".images[] | select({select_images}) | .id".format(**config)
+            query = jq.compile(query_text)
+            found_gids = query.input(coco_dset.dataset).all()
+            found_gids = set(found_gids)
+            valid_gids = found_gids
+        except Exception:
+            print('JQ Query Failed: {}'.format(query_text))
+            raise
+
     video_names = []
     for vidid, video in prog:
         sub_dpath = viz_dpath / video['name']
@@ -155,6 +197,8 @@ def main(cmdline=True, **kwargs):
         video_names.append(video['name'])
 
         gids = coco_dset.index.vidid_to_gids[vidid]
+        if valid_gids is not None:
+            gids = list(ub.oset(gids) & set(valid_gids))
 
         norm_over_time = config['norm_over_time']
         print('norm_over_time = {!r}'.format(norm_over_time))

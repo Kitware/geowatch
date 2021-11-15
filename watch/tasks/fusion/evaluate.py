@@ -7,10 +7,12 @@ import sklearn.metrics as skm
 import pandas as pd
 import numpy as np
 import pathlib
+import warnings
 import ubelt as ub
 from watch.tasks.fusion import utils
 from watch.utils import util_kwimage
 from kwcoco.metrics.confusion_vectors import BinaryConfusionVectors
+from kwcoco.metrics.confusion_vectors import PerClass_Measures
 from kwcoco.metrics.confusion_vectors import Measures
 
 try:
@@ -501,6 +503,75 @@ def header_text(text, max_dim=None, shrink=False):
     return header
 
 
+class MeasureCombiner:
+    def __init__(self, precision=5):
+        self.measures = None
+        self.precision = precision
+        self.queue = []
+
+    def submit(self, other):
+        self.queue.append(other)
+
+    def combine(self):
+        # Reduce measures over the chunk
+        if self.measures is None:
+            to_combine = self.queue
+        else:
+            to_combine = [self.measures] + self.queue
+
+        if len(to_combine) == 0:
+            pass
+        if len(to_combine) == 1:
+            self.measures = to_combine[0]
+        else:
+            self.measures = Measures.combine(
+                to_combine, precision=self.precision)
+        self.queue = []
+
+    def finalize(self):
+        if self.queue:
+            self.combine()
+        if self.measures is None:
+            return False
+        else:
+            self.measures.reconstruct()
+            return self.measures
+
+
+class OneVersusRestMeasureCombiner:
+    def __init__(self, precision=5):
+        self.catname_to_combiner = {}
+        self.precision = precision
+
+    def submit(self, other):
+        for catname, other_m in other['perclass'].items():
+            if catname not in self.catname_to_combiner:
+                combiner = MeasureCombiner(precision=self.precision)
+                self.catname_to_combiner[catname] = combiner
+            self.catname_to_combiner[catname].submit(other_m)
+
+    def combine(self):
+        for combiner in self.catname_to_combiner.values():
+            combiner.combine()
+
+    def finalize(self):
+        catname_to_measures = {}
+        for catname, combiner in self.catname_to_combiner.items():
+            catname_to_measures[catname] = combiner.finalize()
+        perclass = PerClass_Measures(catname_to_measures)
+        # TODO: consolidate in kwcoco
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', message='Mean of empty slice')
+            mAUC = np.nanmean([item['trunc_auc'] for item in perclass.values()])
+            mAP = np.nanmean([item['ap'] for item in perclass.values()])
+        compatible_format = {
+            'perclass': perclass,
+            'mAUC': mAUC,
+            'mAP': mAP,
+        }
+        return compatible_format
+
+
 @profile
 def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto'):
     """
@@ -516,6 +587,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto'):
         >>>     'n_fp': (0, 10),
         >>>     'n_fn': (0, 10),
         >>>     'with_probs': True,
+        >>>     'with_heatmaps': True,
         >>> }
         >>> # TODO: it would be nice to demo the soft metrics
         >>> # functionality by adding "change_prob" or "class_prob"
@@ -555,75 +627,6 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto'):
     else:
         plot_dpath = pathlib.Path(eval_dpath) / 'plots'
         plot_dpath.mkdir(exist_ok=True, parents=True)
-
-    class MeasureCombiner:
-        def __init__(self, precision=5):
-            self.measures = None
-            self.precision = precision
-            self.queue = []
-
-        def submit(self, other):
-            self.queue.append(other)
-
-        def combine(self):
-            # Reduce measures over the chunk
-            if self.measures is None:
-                to_combine = self.queue
-            else:
-                to_combine = [self.measures] + self.queue
-
-            if len(to_combine) == 0:
-                pass
-            if len(to_combine) == 1:
-                self.measures = to_combine[0]
-            else:
-                self.measures = Measures.combine(
-                    to_combine, precision=self.precision)
-            self.queue = []
-
-        def finalize(self):
-            if self.queue:
-                self.combine()
-            if self.measures is None:
-                return False
-            else:
-                self.measures.reconstruct()
-                return self.measures
-
-    class OneVersusRestMeasureCombiner:
-        def __init__(self, precision=5):
-            self.catname_to_combiner = {}
-            self.precision = precision
-
-        def submit(self, other):
-            for catname, other_m in other['perclass'].items():
-                if catname not in self.catname_to_combiner:
-                    combiner = MeasureCombiner(precision=self.precision)
-                    self.catname_to_combiner[catname] = combiner
-                self.catname_to_combiner[catname].submit(other_m)
-
-        def combine(self):
-            for combiner in self.catname_to_combiner.values():
-                combiner.combine()
-
-        def finalize(self):
-            from kwcoco.metrics.confusion_vectors import PerClass_Measures
-            import warnings
-            catname_to_measures = {}
-            for catname, combiner in self.catname_to_combiner.items():
-                catname_to_measures[catname] = combiner.finalize()
-            perclass = PerClass_Measures(catname_to_measures)
-            # TODO: consolidate in kwcoco
-            with warnings.catch_warnings():
-                warnings.filterwarnings('ignore', message='Mean of empty slice')
-                mAUC = np.nanmean([item['trunc_auc'] for item in perclass.values()])
-                mAP = np.nanmean([item['ap'] for item in perclass.values()])
-            compatible_format = {
-                'perclass': perclass,
-                'mAUC': mAUC,
-                'mAP': mAP,
-            }
-            return compatible_format
 
     measure_combiner = MeasureCombiner(precision=combo_precision)
     ovr_measure_combiner = OneVersusRestMeasureCombiner(precision=combo_precision)
@@ -716,8 +719,12 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto'):
     # Reduce measures over the chunk
     combo_measures = measure_combiner.finalize()
     ovr_combo_measures = ovr_measure_combiner.finalize()
-    import xdev
-    xdev.embed()
+
+    # Use the SingleResult container (TODO: better API)
+    from kwcoco.coco_evaluator import CocoSingleResult
+    result = CocoSingleResult(
+        combo_measures, ovr_combo_measures['perclass'], None, {'hack': meta})
+    # result.dump_figures('./foo')
 
     prog.end()
 
@@ -726,14 +733,24 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto'):
         if eval_dpath is not None:
             curve_dpath = pathlib.Path(eval_dpath) / 'curves'
             curve_dpath.mkdir(exist_ok=True, parents=True)
+
             combo_measures['meta'] = meta
             title = ''
             for item in meta:
                 title = item.get('title', title)
             measure_info = combo_measures.__json__()
-            with open(curve_dpath / 'measures.json', 'w') as file:
+            measures_fpath = curve_dpath / 'measures.json'
+
+            with open(measures_fpath, 'w') as file:
                 measure_info['meta'] = meta
                 json.dump(measure_info, file)
+
+            measures_fpath2 = curve_dpath / 'measures2.json'
+            curve_dpath2 = pathlib.Path(eval_dpath) / 'curves2'
+            curve_dpath2.mkdir(exist_ok=True, parents=True)
+            import os
+            result.dump(os.fspath(measures_fpath2))
+
             if draw:
                 print('combo_measures = {!r}'.format(combo_measures))
                 import kwplot
@@ -743,6 +760,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto'):
                     combo_measures.summary_plot(fnum=1, title=title)
                     fig = kwplot.autoplt().gcf()
                     fig.savefig(str(curve_dpath / 'summary.png'))
+
+                    result.dump_figures(curve_dpath2)
 
     df = pd.DataFrame(rows)
     print(df)

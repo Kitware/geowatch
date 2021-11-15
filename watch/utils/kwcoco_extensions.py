@@ -1168,6 +1168,9 @@ def __WIP_add_auxiliary(coco_dset, gid, fname, channels, data, warp_aux_to_img=N
             auxiliary channel and the base image. If unspecified
             it is assumed that a simple scaling will suffice.
 
+    NOTE:
+        See CocoImage.add_auxiliary_item for a maintained implementation
+
     Ignore:
         import kwcoco
         coco_dset = kwcoco.CocoDataset.demo('shapes8')
