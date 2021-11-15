@@ -222,9 +222,9 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
         # TODO merge into kwcoco?
         annots = coco_dset.annots()
         if len(annots) > 0:
-            empty_aids = np.array(annots.aids)[np.array(remove_fn(annots))]
-            coco_dset.remove_annotations(list(empty_aids))
-            print('removing small:', list(empty_aids))
+            empty_aids = annots.compress(remove_fn(annots)).aids
+            coco_dset.remove_annotations(empty_aids)
+            print('removing small:', empty_aids)
             print('after removing small',
                   set(coco_dset.annots().get('track_id', None)))
         return coco_dset
@@ -364,28 +364,26 @@ def apply_tracks(coco_dset, track_fn, overwrite, coco_dset_sc=None):
     # first, for each video, apply a track_fn from from_heatmap or from_polygon
     for gids in coco_dset.index.vidid_to_gids.values():
         sub_dset = coco_dset.subset(gids=gids).copy()  # copy necessary?
+        existing_aids = sub_dset.anns.copy().keys()
         # HACK ensure tracks are not duplicated between videos
         # (if they are, this is fixed in dedupe_tracks anyway)
         sub_dset.index.trackid_to_aids.update(coco_dset.index.trackid_to_aids)
+
         if coco_dset_sc is not None:
             sub_dset_sc = coco_dset_sc.subset(gids=gids).copy()
             sub_dset_sc.index.trackid_to_aids.update(
-                    coco_dset_sc.index.trackid_to_aids)
+                coco_dset_sc.index.trackid_to_aids)
+            kwargs = dict(coco_dset_sc=sub_dset)
         else:
-            sub_dset_sc = None
+            kwargs = dict()
+
         if overwrite:
-            if coco_dset_sc is not None:
-                sub_dset = track_fn(sub_dset, coco_dset_sc=sub_dset_sc)
-            else:
-                sub_dset = track_fn(sub_dset)
+            sub_dset = track_fn(sub_dset, **kwargs)
         else:
             existing_tracks = tracks(sub_dset.annots())
             _are_trackless = are_trackless(sub_dset.annots())
             if np.any(_are_trackless) or len(existing_tracks) == 0:
-                if coco_dset_sc is not None:
-                    sub_dset = track_fn(sub_dset, coco_dset_sc=sub_dset_sc)
-                else:
-                    sub_dset = track_fn(sub_dset)
+                sub_dset = track_fn(sub_dset, **kwargs)
                 annots = sub_dset.annots()
                 # if new annots were not created, rollover the old tracks
                 if len(annots) == len(existing_tracks):
@@ -394,6 +392,8 @@ def apply_tracks(coco_dset, track_fn, overwrite, coco_dset_sc=None):
                         np.where(_are_trackless, tracks(annots),
                                  existing_tracks))
 
+        coco_dset._build_index()
+        sub_dset._build_index()
 
         # could maybe use coco_dset.union, but it doesn't reuse IDs
         # TODO an ensure_annotations to do this properly
@@ -402,19 +402,23 @@ def apply_tracks(coco_dset, track_fn, overwrite, coco_dset_sc=None):
             cat.pop('id')
             coco_dset.ensure_category(**cat)
 
-        print('applied tracks 1 video: track ids', set(coco_dset.annots().get('track_id', None)))
-        coco_dset.remove_annotations(
-            set(sub_dset.anns).intersection(coco_dset.anns))
-        print('removed anns: track ids', set(coco_dset.annots().get('track_id', None)))
-        coco_dset.add_annotations(sub_dset.anns.values())
-        print('a video added tracks: track ids', set(coco_dset.annots().get('track_id', None)))
+        print('applied tracks 1 video: track ids',
+              set(coco_dset.annots().get('track_id', None)))
+        coco_dset.remove_annotations(existing_aids)
+        print('removed anns: track ids',
+              set(coco_dset.annots().get('track_id', None)))
+        anns_to_add = sub_dset.anns.copy().values()
+        for ann in anns_to_add:
+            ann.pop('id')
+            coco_dset.add_annotation(**ann)
+        print('a video added tracks: track ids',
+              set(coco_dset.annots().get('track_id', None)))
 
         # break
 
     # then cleanup leftover untracked annots
     annots = coco_dset.annots()
-    coco_dset.remove_annotations(
-        list(np.array(annots.aids)[are_trackless(annots)]))
+    coco_dset.remove_annotations(annots.compress(are_trackless(annots)).aids)
 
     return coco_dset
 
@@ -423,10 +427,6 @@ def dedupe_tracks(coco_dset):
     '''
     Assuming that videos are made of disjoint images, ensure that trackids
     are not shared by two tracks in different videos.
-
-    Also ensure each track's track_index is fully populated with strictly
-    increasing but not-necessarily-unique values (can have multiple track
-    entries per image)
     '''
     new_trackids = TrackidGenerator(coco_dset)
 
@@ -446,6 +446,11 @@ def dedupe_tracks(coco_dset):
 
 
 def add_track_index(coco_dset):
+    '''
+    Ensure each track's track_index is fully populated with strictly
+    increasing but not-necessarily-unique values (can have multiple track
+    entries per image)
+    '''
     for trackid in coco_dset.index.trackid_to_aids.keys():
         annots = coco_dset.annots(trackid=trackid)
 
@@ -636,12 +641,16 @@ def normalize(coco_dset, track_fn, overwrite, gt_dset=None, coco_dset_sc=None):
     coco_dset = ensure_videos(coco_dset)
 
     # apply tracks
-    coco_dset = apply_tracks(coco_dset, track_fn, overwrite, coco_dset_sc=coco_dset_sc)
+    coco_dset = apply_tracks(coco_dset,
+                             track_fn,
+                             overwrite,
+                             coco_dset_sc=coco_dset_sc)
 
     # normalize and add geo segmentations
     coco_dset = _normalize_annots(coco_dset, overwrite=False)
     coco_dset._build_index()
-    print('after normalizing: track ids', set(coco_dset.annots().get('track_id', None)))
+    print('after normalizing: track ids',
+          set(coco_dset.annots().get('track_id', None)))
 
     coco_dset._build_index()
     coco_dset = dedupe_tracks(coco_dset)
