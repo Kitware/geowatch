@@ -21,6 +21,12 @@ BACKGROUND_CLASSES = {
 }
 
 
+# These classes are used in BAS, but not in AC/SC
+UNDISTINGUISHED_CLASSES = {
+    'positive',
+}
+
+
 # # FIXME: Hard-coded category aliases.
 # # The correct way to handle these would be to have some information in the
 # # kwcoco category dictionary that specifies how the categories should be
