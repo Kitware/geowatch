@@ -50,7 +50,7 @@ json-schema can be found in ``watch/rc/site-model.schema.json``.
 
 References:
     .. [1] https://gitlab.kitware.com/computer-vision/kwcoco
-    .. [2] https://infrastructure.smartgitlab.com/docs/pages/api_documentation.html#site-model
+    .. [2] https://infrastructure.smartgitlab.com/docs/pages/api/site_model.html
     .. [3] https://smartgitlab.com/TE/annotations
 """
 import geojson
@@ -311,7 +311,7 @@ def track_to_site(coco_dset,
             'start_date': min(dates),
             'end_date': max(dates),
             'originator': 'kitware',
-            'validated': 'False'  # TODO needed?
+            'validated': 'False'
         }
 
         if as_summary:
@@ -349,10 +349,13 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id=None, as_summary=False):
 
     Example:
         >>> from watch.cli.kwcoco_to_geojson import *  # NOQA
+        >>> from watch.tasks.tracking.normalize import normalize
+        >>> from watch.tasks.tracking.from_polygon import mono
         >>> from watch.demo import smart_kwcoco_demodata
         >>> import ubelt as ub
         >>> coco_dset = smart_kwcoco_demodata.demo_smart_aligned_kwcoco()
-        >>> region_id = 'dummy_region'
+        >>> coco_dset = normalize(coco_dset, track_fn=mono, overwrite=False)
+        >>> region_id = 'KR_R001'
         >>> sites = convert_kwcoco_to_iarpa(coco_dset, region_id)
         >>> print('sites = {}'.format(ub.repr2(sites, nl=7, sort=0)))
         >>> import jsonschema
@@ -488,28 +491,31 @@ def main(args):
 
     """
     parser = argparse.ArgumentParser(
-        description="Convert KWCOCO to IARPA GeoJSON")
-    parser.add_argument("--in_file", help="Input KWCOCO to convert")
-    parser.add_argument("--in_file_gt",
+        description='Convert KWCOCO to IARPA GeoJSON')
+    parser.add_argument('--in_file', help='Input KWCOCO to convert')
+    parser.add_argument('--in_file_gt',
                         default=None,
-                        help="GT KWCOCO file used for visualizations")
-    parser.add_argument("--in_file_sc",
+                        help='GT KWCOCO file used for visualizations')
+    parser.add_argument('--in_file_sc',
                         default=None,
-                        help="KWCOCO file with SC prediction heatmaps")
+                        help='KWCOCO file with SC prediction heatmaps')
     parser.add_argument(
-        "--out_dir",
-        help="Output directory where GeoJSON files will be written")
-    parser.add_argument("--region_id",
+        '--out_dir',
+        help='Output directory where GeoJSON files will be written. '
+        'NOTE: in --bas_mode, writing to a region is not idempotent. '
+        'To regenerate a region, delete or edit the region file before '
+        'rerunning this script.')
+    parser.add_argument('--region_id',
                         help=ub.paragraph('''
         ID for region that sites belong to.
         If None, try to infer from kwcoco file.
         '''))
-    parser.add_argument("--track_fn",
+    parser.add_argument('--track_fn',
                         help=ub.paragraph('''
         Function to add tracks. If None, use existing tracks.
         Example: 'watch.tasks.tracking.from_heatmap.time_aggregated_polys'
         '''))
-    parser.add_argument("--bas_mode",
+    parser.add_argument('--bas_mode',
                         action='store_true',
                         help=ub.paragraph('''
         In BAS mode, the following changes occur:
@@ -519,8 +525,8 @@ def main(args):
                 will be appended to them
             - TODO different normalization pipeline
         '''))
-    parser.add_argument("--write_in_file",
-                        action="store_true",
+    parser.add_argument('--write_in_file',
+                        action='store_true',
                         help=ub.paragraph('''
         If set, write the normalized and tracked kwcoco in_file back to disk
         so you can skip the --track_fn next time this is run on it.
