@@ -1,19 +1,23 @@
 # -*- coding: utf-8 -*-
+import json
+import kwarray
 import kwcoco
 import kwimage
-import kwarray
-import json
-import sklearn.metrics as skm
-import pandas as pd
 import numpy as np
+import os
+import pandas as pd
 import pathlib
-import warnings
+import sklearn.metrics as skm
 import ubelt as ub
+import warnings
 from watch.tasks.fusion import utils
 from watch.utils import util_kwimage
+from kwcoco.coco_evaluator import CocoSingleResult
 from kwcoco.metrics.confusion_vectors import BinaryConfusionVectors
-from kwcoco.metrics.confusion_vectors import PerClass_Measures
-from kwcoco.metrics.confusion_vectors import Measures
+from kwcoco.metrics.confusion_measures import OneVersusRestMeasureCombiner
+from kwcoco.metrics.confusion_measures import MeasureCombiner
+# from kwcoco.metrics.confusion_measures import PerClass_Measures
+from kwcoco.metrics.confusion_measures import Measures
 
 try:
     from xdev import profile
@@ -49,7 +53,6 @@ def binary_confusion_measures(tn, fp, fn, tp):
     fn = np.atleast_1d(fn)
     tp = np.atleast_1d(tp)
 
-    import warnings
     with warnings.catch_warnings():
         # It is very possible that we will divide by zero in this func
         warnings.filterwarnings('ignore', message='invalid .* true_divide')
@@ -498,8 +501,8 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, plot_dpath):
     plot_canvas = kwimage.stack_images(
         [plot_canvas, legend_img], axis=1, overlap=-10)
 
-    header = header_text(plot_fname, max_dim=plot_canvas.shape[1],
-                         shrink=False)
+    header = kwimage.draw_header_text(
+        {'width': plot_canvas.shape[1]}, plot_fname)
     plot_canvas = kwimage.stack_images([header, plot_canvas], axis=0)
 
     plot_dpath = pathlib.Path(str(plot_dpath))
@@ -508,118 +511,10 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, plot_dpath):
 
 
 @profile
-def header_text(text, max_dim=None, shrink=False):
-    """
-    If shrink is true, shrinks the text to fit, otherwise text is
-    placed in the center at a constant size, but is not guarenteed
-    to fit.
-    """
-    import cv2
-    if shrink:
-        header = kwimage.draw_text_on_image(
-            None, text, org=(1, 1),
-            valign='top', halign='left', color='salmon')
-        header = cv2.copyMakeBorder(header, 3, 3, 3, 3,
-                                    cv2.BORDER_CONSTANT)
-        header = kwimage.imresize(header, dsize=(max_dim, None))
-    else:
-        header = kwimage.draw_text_on_image(
-            {'width': max_dim}, text, org=(max_dim // 2, 1),
-            valign='top', halign='center', color='salmon')
-    return header
-
-
-class MeasureCombiner:
-    def __init__(self, precision=5):
-        self.measures = None
-        self.precision = precision
-        self.queue = []
-
-    @property
-    def queue_size(self):
-        return len(self.queue)
-
-    def submit(self, other):
-        self.queue.append(other)
-
-    def combine(self):
-        # Reduce measures over the chunk
-        if self.measures is None:
-            to_combine = self.queue
-        else:
-            to_combine = [self.measures] + self.queue
-
-        if len(to_combine) == 0:
-            pass
-        if len(to_combine) == 1:
-            self.measures = to_combine[0]
-        else:
-            self.measures = Measures.combine(
-                to_combine, precision=self.precision)
-        self.queue = []
-
-    def finalize(self):
-        if self.queue:
-            self.combine()
-        if self.measures is None:
-            return False
-        else:
-            self.measures.reconstruct()
-            return self.measures
-
-
-class OneVersusRestMeasureCombiner:
-    def __init__(self, precision=5):
-        self.catname_to_combiner = {}
-        self.precision = precision
-        self.queue_size = 0
-
-    def submit(self, other):
-        self.queue_size += 1
-        for catname, other_m in other['perclass'].items():
-            if catname not in self.catname_to_combiner:
-                combiner = MeasureCombiner(precision=self.precision)
-                self.catname_to_combiner[catname] = combiner
-            self.catname_to_combiner[catname].submit(other_m)
-
-    def _summary(self):
-        for catname, combiner in self.catname_to_combiner.items():
-            # combiner summary
-            # combiner.measures
-            if combiner.measures is not None:
-                combiner.measures.reconstruct()
-            print('catname = {!r}'.format(catname))
-            print('combiner.measures = {}'.format(ub.repr2(combiner.measures, nl=1)))
-            for qx, measure in enumerate(combiner.queue):
-                measure.reconstruct()
-                print('  * queue[{}] = {}'.format(qx, ub.repr2(measure, nl=1)))
-
-    def combine(self):
-        for combiner in self.catname_to_combiner.values():
-            combiner.combine()
-        self.queue_size = 0
-
-    def finalize(self):
-        catname_to_measures = {}
-        for catname, combiner in self.catname_to_combiner.items():
-            catname_to_measures[catname] = combiner.finalize()
-        perclass = PerClass_Measures(catname_to_measures)
-        # TODO: consolidate in kwcoco
-        with warnings.catch_warnings():
-            warnings.filterwarnings('ignore', message='Mean of empty slice')
-            mAUC = np.nanmean([item['trunc_auc'] for item in perclass.values()])
-            mAP = np.nanmean([item['ap'] for item in perclass.values()])
-        compatible_format = {
-            'perclass': perclass,
-            'mAUC': mAUC,
-            'mAP': mAP,
-        }
-        return compatible_format
-
-
-@profile
 def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto'):
     """
+    CommandLine:
+        xdoctest -m /home/joncrall/code/watch/watch/tasks/fusion/evaluate.py evaluate_segmentations
 
     Example:
         >>> from watch.tasks.fusion.evaluate import *  # NOQA
@@ -643,7 +538,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto'):
         >>> evaluate_segmentations(true_coco, pred_coco, eval_dpath)
     """
     # Extract metadata about the predictions to persist
-    meta = []
+    meta = {}
+    meta['info'] = info = []
     for item in pred_coco.dataset['info']:
         if item.get('type', None) == 'process':
             proc_name = item.get('properties', {}).get('name', None)
@@ -651,7 +547,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto'):
                 package_fpath = item['properties']['args'].get('package_fpath')
                 if 'title' not in item:
                     item['title'] = pathlib.Path(package_fpath).stem
-                meta.append(item)
+                meta['title'] = item['title']
+                info.append(item)
 
     required_marked = 'auto'  # parametarize
     if required_marked == 'auto':
@@ -662,7 +559,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto'):
     video_matches, image_matches = associate_images(true_coco, pred_coco)
     rows = []
     chunk_size = 5
-    combo_precision = 17
+    thresh_bins = 256 * 256
 
     if draw == 'auto':
         draw = bool(eval_dpath is not None)
@@ -673,8 +570,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto'):
         plot_dpath = pathlib.Path(eval_dpath) / 'plots'
         plot_dpath.mkdir(exist_ok=True, parents=True)
 
-    measure_combiner = MeasureCombiner(precision=combo_precision)
-    ovr_measure_combiner = OneVersusRestMeasureCombiner(precision=combo_precision)
+    fg_measure_combiner = MeasureCombiner(thresh_bins=thresh_bins)
+    ovr_measure_combiner = OneVersusRestMeasureCombiner(thresh_bins=thresh_bins)
 
     # combiner = ovr_measure_combiner.catname_to_combiner['Site Preparation']
     # for x in combiner.queue:
@@ -742,9 +639,9 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto'):
                 rows.append(info['row'])
 
                 ovr_measures = info.get('ovr_measures', None)
-                measures = info.get('salient_measures', None)
-                if measures is not None:
-                    measure_combiner.submit(measures)
+                fg_measures = info.get('salient_measures', None)
+                if fg_measures is not None:
+                    fg_measure_combiner.submit(fg_measures)
                 if ovr_measures is not None:
                     ovr_measure_combiner.submit(ovr_measures)
 
@@ -753,8 +650,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto'):
                 prog.update()
 
             # Reduce measures over the chunk
-            if measure_combiner.queue_size > chunk_size:
-                measure_combiner.combine()
+            if fg_measure_combiner.queue_size > chunk_size:
+                fg_measure_combiner.combine()
             if ovr_measure_combiner.queue_size > chunk_size:
                 ovr_measure_combiner.combine()
 
@@ -762,7 +659,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto'):
                 dump_chunked_confusion(
                     true_coco, pred_coco, chunk_info, plot_dpath)
 
-    ovr_measure_combiner.catname_to_combiner['Site Preparation'].queue
+    # ovr_measure_combiner.catname_to_combiner['Site Preparation'].queue
 
     # Handle standalone images
     gids1 = image_matches['match_gids1']
@@ -772,9 +669,9 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto'):
         info = single_image_segmentation_metrics(
             true_coco, pred_coco, gid1, gid2)
         ovr_measures = info.get('ovr_measures', None)
-        measures = info.get('salient_measures', None)
-        if measures is not None:
-            measure_combiner.submit(measures)
+        fg_measures = info.get('salient_measures', None)
+        if fg_measures is not None:
+            fg_measure_combiner.submit(fg_measures)
         if ovr_measures is not None:
             ovr_measure_combiner.submit(ovr_measures)
         rows.append(info['row'])
@@ -784,61 +681,73 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto'):
                 true_coco, pred_coco, chunk_info, plot_dpath)
         prog.update()
         # Reduce measures over the chunk
-        if measure_combiner.queue_size > chunk_size:
-            measure_combiner.combine()
+        if fg_measure_combiner.queue_size > chunk_size:
+            fg_measure_combiner.combine()
         if ovr_measure_combiner.queue_size > chunk_size:
             ovr_measure_combiner.combine()
+
+    prog.end()
 
     # import xdev
     # xdev.embed()
 
     # Reduce measures over the chunk
-    combo_measures = measure_combiner.finalize()
+    print('Finalize fg measures')
+    fg_combo_measures = fg_measure_combiner.finalize()
+    print('Finalize ovr measures')
     ovr_combo_measure_dict = ovr_measure_combiner.finalize()
     ovr_combo_measures = ovr_combo_measure_dict['perclass']
 
+    # if 0:
+    #     m = Measures.combine(queue, thresh_bins=512 * 512).reconstruct()
+    #     print(m)
+    #     print(m.counts().pandas())
+    #     m = Measures.combine(queue, thresh_bins=None).reconstruct()
+    #     print(m)
+    #     print(m.counts().pandas())
+
+    if 0:
+        print(fg_combo_measures.counts().pandas())
+        for k, bm in ovr_combo_measures.items():
+            print(bm.counts().pandas())
+
     # Use the SingleResult container (TODO: better API)
-    from kwcoco.coco_evaluator import CocoSingleResult
     result = CocoSingleResult(
-        combo_measures, ovr_combo_measures, None, {'hack': meta})
-    # result.dump_figures('./foo')
+        fg_combo_measures, ovr_combo_measures, None, meta)
+    print('result = {}'.format(result))
 
-    prog.end()
-
-    if combo_measures is not None:
-
+    if fg_combo_measures is not None:
         if eval_dpath is not None:
             curve_dpath = pathlib.Path(eval_dpath) / 'curves'
             curve_dpath.mkdir(exist_ok=True, parents=True)
 
-            combo_measures['meta'] = meta
-            title = ''
-            for item in meta:
-                title = item.get('title', title)
-            measure_info = combo_measures.__json__()
+            fg_combo_measures['meta'] = meta
+            title = meta.get('title', '')
+            measure_info = fg_combo_measures.__json__()
             measures_fpath = curve_dpath / 'measures.json'
 
+            print('Dump measures_fpath={}'.format(measures_fpath))
             with open(measures_fpath, 'w') as file:
                 measure_info['meta'] = meta
                 json.dump(measure_info, file)
 
             measures_fpath2 = curve_dpath / 'measures2.json'
-            curve_dpath2 = pathlib.Path(eval_dpath) / 'curves2'
-            curve_dpath2.mkdir(exist_ok=True, parents=True)
-            import os
+            print('Dump measures_fpath2={}'.format(measures_fpath2))
             result.dump(os.fspath(measures_fpath2))
 
             if draw:
-                print('combo_measures = {!r}'.format(combo_measures))
                 import kwplot
                 # kwplot.autompl()
                 with kwplot.BackendContext('agg'):
                     fig = kwplot.figure(doclf=True)
-                    combo_measures.summary_plot(fnum=1, title=title)
-                    fig = kwplot.autoplt().gcf()
-                    fig.savefig(str(curve_dpath / 'summary.png'))
 
-                    result.dump_figures(curve_dpath2)
+                    print('Dump fg figures')
+                    fg_combo_measures.summary_plot(fnum=1, title=title)
+                    fig = kwplot.autoplt().gcf()
+                    fig.savefig(str(curve_dpath / 'fg_summary.png'))
+
+                    print('Dump ovr figures')
+                    result.dump_figures(curve_dpath, expt_title=title)
 
     df = pd.DataFrame(rows)
     print(df)
@@ -846,39 +755,43 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto'):
     summary = binary_confusion_measures(
         df.tn.sum(), df.fp.sum(), df.fn.sum(), df.tp.sum())
     summary = ub.map_vals(lambda x: x.item() if hasattr(x, 'item') else x, summary)
-    if combo_measures is not None:
+
+    if ovr_combo_measure_dict is not None:
         summary['mAP'] = ovr_combo_measure_dict['mAP']
         summary['mAUC'] = ovr_combo_measure_dict['mAUC']
-        summary['ap'] = combo_measures['ap']
-        summary['auc'] = combo_measures['auc']
-        summary['max_f1'] = combo_measures['max_f1']
+
+    if fg_combo_measures is not None:
+        summary['ap'] = fg_combo_measures['ap']
+        summary['auc'] = fg_combo_measures['auc']
+        summary['max_f1'] = fg_combo_measures['max_f1']
+
     print('summary = {}'.format(ub.repr2(
         summary, nl=1, precision=4, align=':', sort=0)))
-
-    if eval_dpath is not None:
-        eval_dpath = pathlib.Path(eval_dpath)
-        eval_dpath.mkdir(exist_ok=True, parents=True)
-        metrics_fpath = eval_dpath / 'metrics.json'
-        df.to_json(str(metrics_fpath))
-
     print('eval_dpath = {!r}'.format(eval_dpath))
     return df
 
 
 def _redraw_measures(eval_dpath):
     """
+    hack helper for developer, not critical
     """
     curve_dpath = pathlib.Path(eval_dpath) / 'curves'
     measures_fpath = curve_dpath / 'measures.json'
     with open(measures_fpath, 'r') as file:
         state = json.load(file)
-        combo_measures = Measures.from_json(state)
+        fg_combo_measures = Measures.from_json(state)
+        meta = fg_combo_measures.get('meta', [])
         title = ''
-        for item in combo_measures.get('meta', []):
-            title = item.get('title', title)
+        if meta is not None:
+            if isinstance(meta, list):
+                # Old
+                for item in meta:
+                    title = item.get('title', title)
+            else:
+                title = meta.get('title', title)
         import kwplot
         with kwplot.BackendContext('agg'):
-            combo_measures.summary_plot(fnum=1, title=title)
+            fg_combo_measures.summary_plot(fnum=1, title=title)
             fig = kwplot.autoplt().gcf()
             fig.savefig(str(curve_dpath / 'summary_redo.png'))
 

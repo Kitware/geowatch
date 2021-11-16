@@ -166,13 +166,12 @@ def main(cmdline=True, **kwargs):
 
     pool = ub.JobPool(mode='thread', max_workers=max_workers)
 
-    # TODO:
     from scriptconfig.smartcast import smartcast
     num_frames = smartcast(config['num_frames'])
     start_frame = smartcast(config['start_frame'])
     end_frame = None if num_frames is None else start_frame + num_frames
 
-    valid_gids = None
+    selected_gids = None
     if config['select_images'] is not None:
         try:
             import jq
@@ -183,9 +182,8 @@ def main(cmdline=True, **kwargs):
         try:
             query_text = ".images[] | select({select_images}) | .id".format(**config)
             query = jq.compile(query_text)
-            found_gids = query.input(coco_dset.dataset).all()
-            found_gids = set(found_gids)
-            valid_gids = found_gids
+            selected_gids = query.input(coco_dset.dataset).all()
+            selected_gids = set(selected_gids)
         except Exception:
             print('JQ Query Failed: {}'.format(query_text))
             raise
@@ -197,8 +195,8 @@ def main(cmdline=True, **kwargs):
         video_names.append(video['name'])
 
         gids = coco_dset.index.vidid_to_gids[vidid]
-        if valid_gids is not None:
-            gids = list(ub.oset(gids) & set(valid_gids))
+        if selected_gids is not None:
+            gids = list(ub.oset(gids) & set(selected_gids))
 
         norm_over_time = config['norm_over_time']
         print('norm_over_time = {!r}'.format(norm_over_time))

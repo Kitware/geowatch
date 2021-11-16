@@ -146,6 +146,8 @@ if __name__ == '__main__':
     """
     CommandLine:
         python ~/code/watch/watch/tasks/fusion/organize.py make_nice_dirs
+        python ~/code/watch/watch/tasks/fusion/organize.py make_eval_symlinks
+        python ~/code/watch/watch/tasks/fusion/organize.py make_pred_symlinks
     """
     import fire
     fire.Fire()
