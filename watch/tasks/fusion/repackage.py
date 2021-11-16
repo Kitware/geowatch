@@ -121,7 +121,8 @@ def gather_checkpoints():
         name = package_fpath.name.split('_epoch')[0]
         name_dpath = unevaled_dpath / name
         name_dpath.mkdir(exist_ok=True, parents=True)
-        shutil.copy(package_fpath, name_dpath)
+        if not name_dpath.exists():
+            shutil.copy(package_fpath, name_dpath)
 
     import os
     for r, ds, fs in os.walk(train_base):

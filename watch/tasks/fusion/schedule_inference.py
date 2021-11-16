@@ -40,12 +40,12 @@ def gather_candidate_models():
             if 'rutgers_v5' in info['name']:
                 break
             packages_to_eval.append(info)
-            break
+            # break
 
     tmux_schedule_dpath = dvc_dpath / '_tmp_tmux_schedule'
     tmux_schedule_dpath.mkdir(exist_ok=True)
 
-    GPUS = [0, 2, 3]
+    GPUS = [0, 1, 2, 3]
     parallel_job_ids = range(len(GPUS))
     parallel_queues = {
         queue_index: {
@@ -87,7 +87,7 @@ def gather_candidate_models():
                     --write_probs=True \
                     --write_preds=False \
                     --with_class=True \
-                    --with_saliency=False \
+                    --with_saliency=True \
                     --with_change=False \
                     --package_fpath={package_fpath} \
                     --pred_dataset={pred_dataset} \
@@ -122,8 +122,8 @@ def gather_candidate_models():
 
     # Start the jobs in a detatched temux session
     driver_lines = ['#!/bin/bash']
-    driver_lines = ['# Driver script to start the tmux-queue']
-    driver_lines = ['echo "submitting jobs"']
+    driver_lines += ['# Driver script to start the tmux-queue']
+    driver_lines += ['echo "submitting jobs"']
     import stat
     import os
     for queue in parallel_queues.values():
@@ -138,13 +138,17 @@ def gather_candidate_models():
             tmux send -t {name} "{command}" Enter
             ''').format(name=name, command=command)
         driver_lines.append(part)
-    driver_lines = ['echo "jobs submitted"']
+    driver_lines += ['echo "jobs submitted"']
 
     driver_text = '\n\n'.join(driver_lines)
-    driver_fpath = tmux_schedule_dpath / 'run_queues_{}'.format(stamp)
+    driver_fpath = tmux_schedule_dpath / 'run_queues_{}.sh'.format(stamp)
     with open(driver_fpath, 'w') as file:
         file.write(driver_text)
     os.chmod(driver_fpath, stat.S_IXUSR | stat.S_IXGRP | stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP)
+    print('driver_fpath = {!r}'.format(driver_fpath))
+
+    # RUN
+    ub.cmd('bash ' + str(driver_fpath), verbose=3, check=True)
 
     """
     # Now postprocess script:
