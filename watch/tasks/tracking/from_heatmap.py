@@ -467,7 +467,7 @@ def time_aggregated_polys_hybrid(coco_dset,
                                  thresh=0.3,
                                  morph_kernel=3,
                                  time_filtering=True,
-                                 response_filtering=True):
+                                 response_filtering=False):
     '''
     This method uses predictions from a BAS model to generate polygons.
     Predicted heatmaps from a Site Charachterization model are used to assign
