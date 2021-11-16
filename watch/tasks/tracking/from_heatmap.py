@@ -16,10 +16,9 @@ def _score(poly, probs):
     # Ensure w/h are positive
     box.data[:, 2:4] = np.maximum(box.data[:, 2:4], 1)
     x, y, w, h = box.data[0]
-    y = max(y, 0)
-    x = max(x, 0)
-    rel_poly = poly.translate((-x, -y))
-    rel_mask = rel_poly.to_mask((h, w)).data
+    rel_poly = poly.translate((0.5 - x, 0.5 - y))
+    rel_mask = np.zeros((h, w))
+    rel_mask = features.rasterize([rel_poly.to_geojson()], out_shape=(h, w))
     # Slice out the corresponding region of probabilities
     rel_probs = probs[y:y + h, x:x + w]
     # hacking to solve a bug: sometimes shape of rel_probs is x,y,1
@@ -74,7 +73,10 @@ def mask_to_scored_polygons_v2(probs, thresh):
     # Threshold scores
     binary_mask = probs > thresh
     shapes = list(features.shapes(binary_mask.astype(np.int16)))
-    polygons = [kwimage.Polygon.from_geojson(s).translate((-0.5, -0.5)) for s, v in shapes if v]
+    polygons = [
+        kwimage.Polygon.from_geojson(s).translate((-0.5, -0.5))
+        for s, v in shapes if v
+    ]
     for poly in polygons:
         yield poly, _score(poly, probs)
 
