@@ -847,6 +847,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto'):
         df.tn.sum(), df.fp.sum(), df.fn.sum(), df.tp.sum())
     summary = ub.map_vals(lambda x: x.item() if hasattr(x, 'item') else x, summary)
     if combo_measures is not None:
+        summary['mAP'] = ovr_combo_measure_dict['mAP']
+        summary['mAUC'] = ovr_combo_measure_dict['mAUC']
         summary['ap'] = combo_measures['ap']
         summary['auc'] = combo_measures['auc']
         summary['max_f1'] = combo_measures['max_f1']
