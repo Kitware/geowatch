@@ -34,8 +34,6 @@ def _score(poly, probs, mode='score', threshold=0):
         # Ensure w/h are positive
         box.data[:, 2:4] = np.maximum(box.data[:, 2:4], 1)
         x, y, w, h = box.data[0]
-        y = max(y, 0)
-        x = max(x, 0)
         rel_poly = poly.translate((0.5 - x, 0.5 - y))
         rel_mask = np.zeros((h, w))
         rel_mask = features.rasterize([rel_poly.to_geojson()],
