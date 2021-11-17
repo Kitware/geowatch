@@ -175,17 +175,43 @@ def gather_measures():
     import json
     import pandas as pd
     import numpy as np
-    dvc_dpath = watch.utils.util_data.find_smart_dvc_dpath()
-    model_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
+    import ubelt as ub
+    import pathlib
 
-    class_rows = []
-    mean_rows = []
-    for measure_fpath in list(model_dpath.glob('eval_links/*/curves/measures2.json')):
+    dvc_dpath = watch.utils.util_data.find_smart_dvc_dpath()
+    if True:
+        # Hack for pointing at a remote
+        dvc_dpath = ub.shrinkuser(dvc_dpath, home=ub.expandpath('$HOME/remote/horologic'))
+
+    model_dpath = pathlib.Path(dvc_dpath) / 'models/fusion/unevaluated-activity-2021-11-12'
+
+    measure_fpaths = list(model_dpath.glob('eval_links/*/curves/measures2.json'))
+
+    all_infos = []
+    for measure_fpath in ub.ProgIter(measure_fpaths):
         with open(measure_fpath, 'r') as file:
             info = json.load(file)
+        all_infos.append(info)
+
+    from kwcoco.coco_evaluator import CocoSingleResult
+    class_rows = []
+    mean_rows = []
+
+    all_results = []
+    for info in all_infos:
+        result = CocoSingleResult.from_json(info)
+        all_results.append(result)
 
         class_aps = []
         class_aucs = []
+
+        title = info['meta']['title']
+
+        # Hack to get the epoch/step/expt_name
+        epoch = int(title.split('epoch=')[1].split('-')[0])
+        step = int(title.split('step=')[1].split('-')[0])
+        expt_name = title.split('epoch=')[0]
+
         for catname, bin_measure in info['ovr_measures'].items():
             class_aps.append(bin_measure['ap'])
             class_aucs.append(bin_measure['auc'])
@@ -193,29 +219,63 @@ def gather_measures():
             row['AP'] = bin_measure['ap']
             row['AUC'] = bin_measure['auc']
             row['catname'] = catname
-            row['title'] = info['meta']['title']
+            row['title'] = title
+            row['expt_name'] = expt_name
+            row['epoch'] = epoch
+            row['step'] = step
             class_rows.append(row)
 
         row = {}
         row['mAP'] = np.nanmean(class_aps)
         row['mAUC'] = np.nanmean(class_aucs)
         row['catname'] = 'all'
-        row['title'] = info['meta']['title']
+        row['title'] = title
+        row['expt_name'] = expt_name
+        row['epoch'] = epoch
+        row['step'] = step
         mean_rows.append(row)
 
-    df = pd.DataFrame(mean_rows)
+    mean_df = pd.DataFrame(mean_rows)
     print('Sort by mAP')
-    print(df.sort_values('mAP').to_string())
+    print(mean_df.sort_values('mAP').to_string())
+
+    mean_df['title'].apply(lambda x: int(x.split('epoch=')[1].split('-')[0]))
 
     print('Sort by mAUC')
-    print(df.sort_values('mAUC').to_string())
+    print(mean_df.sort_values('mAUC').to_string())
 
-    df = pd.DataFrame(class_rows)
+    class_df = pd.DataFrame(class_rows)
     print('Sort by AP')
-    print(df.sort_values('AP').to_string())
+    print(class_df.sort_values('AP').to_string())
 
     print('Sort by AUC')
-    print(df.sort_values('AUC').to_string())
+    print(class_df.sort_values('AUC').to_string())
+
+    import kwplot
+    sns = kwplot.autosns()
+
+    kwplot.figure(fnum=1, doclf=True)
+    ax = sns.lineplot(data=mean_df, x='step', y='mAP', hue='expt_name', marker='o')
+    ax.set_title('Pixelwise mAP AC metrics: KR_R002')
+
+    kwplot.figure(fnum=2, doclf=True)
+    ax = sns.lineplot(data=mean_df, x='step', y='mAUC', hue='expt_name', marker='o')
+    ax.set_title('Pixelwise mAUC AC metrics: KR_R002')
+
+    sorted_results = sorted(all_results, key=lambda x: x.ovr_measures[catname]['ap'])[::-1]
+    catname = 'Active Construction'
+    colors = kwplot.Color.distinct(len(sorted_results))
+    for idx, result in enumerate(sorted_results):
+        color = colors[idx]
+        color = [kwplot.Color(color).as01()]
+        from kwcoco.metrics import drawing
+        measure = result.ovr_measures[catname]
+        measure['ap']
+
+        prefix = result.meta['title']
+        kw = {}
+        drawing.draw_prcurve(measure, prefix=prefix, color=color, **kw)
+        # measure.draw('pr')
 
 
 # def run_command_in_tmux_queue(command, name):

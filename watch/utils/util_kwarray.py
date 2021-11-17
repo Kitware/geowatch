@@ -354,10 +354,13 @@ def apply_normalizer(data, normalizer, mask=None):
             valid_data = result[mask]
         else:
             valid_data = result
-        data_normalized = kwarray.normalize(
-            valid_data.astype(dtype), mode=normalizer['mode'],
-            beta=normalizer['beta'], alpha=normalizer['alpha'],
-        )
+        if valid_data.size > 0:
+            data_normalized = kwarray.normalize(
+                valid_data.astype(dtype), mode=normalizer['mode'],
+                beta=normalizer['beta'], alpha=normalizer['alpha'],
+            )
+        else:
+            data_normalized = valid_data
     if mask is not None:
         mask_flat = mask.ravel()
         result_flat = result.ravel()
