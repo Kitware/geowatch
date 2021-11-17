@@ -79,6 +79,8 @@ class CocoVisualizeConfig(scfg.Config):
 
         'norm_over_time': scfg.Value(False, help='if True, normalize data over time'),
 
+        'extra_header': scfg.Value(None, help='extra text to include in the header'),
+
         'select_images': scfg.Value(
             None, type=str, help=ub.paragraph(
                 '''
@@ -199,7 +201,6 @@ def main(cmdline=True, **kwargs):
             gids = list(ub.oset(gids) & set(selected_gids))
 
         norm_over_time = config['norm_over_time']
-        print('norm_over_time = {!r}'.format(norm_over_time))
         if not norm_over_time:
             chan_to_normalizer = None
         else:
@@ -243,8 +244,8 @@ def main(cmdline=True, **kwargs):
                     'high': 0.90,
                     'mid': 0.5,
                     'low': 0.01,
-                    # 'mode': 'linear',
-                    'mode': 'sigmoid',
+                    'mode': 'linear',
+                    # 'mode': 'sigmoid',
                 })
                 chan_to_normalizer[chan] = normalizer
             print('chan_to_normalizer = {}'.format(ub.repr2(chan_to_normalizer, nl=1)))
@@ -269,7 +270,11 @@ def main(cmdline=True, **kwargs):
                     img = coco_dset.index.imgs[gid]
                     anns = coco_dset.annots(gid=gid).objs
 
-                    _header_extra = f'tid={tid}'
+                    if config['extra_header']:
+                        _header_extra = f'tid={tid}' + config['extra_header']
+                    else:
+                        _header_extra = f'tid={tid}'
+
                     pool.submit(_write_ann_visualizations2,
                                 coco_dset, img, anns, track_dpath, space=space,
                                 channels=channels, vid_crop_box=vid_crop_box,
@@ -282,11 +287,16 @@ def main(cmdline=True, **kwargs):
                 img = coco_dset.index.imgs[gid]
                 anns = coco_dset.annots(gid=gid).objs
 
+                if config['extra_header']:
+                    _header_extra = config['extra_header']
+                else:
+                    _header_extra = ''
+
                 pool.submit(_write_ann_visualizations2,
                             coco_dset, img, anns, sub_dpath, space=space,
                             channels=channels,
                             draw_imgs=config['draw_imgs'],
-                            draw_anns=config['draw_anns'], _header_extra=None,
+                            draw_anns=config['draw_anns'], _header_extra=_header_extra,
                             chan_to_normalizer=chan_to_normalizer)
 
         for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):

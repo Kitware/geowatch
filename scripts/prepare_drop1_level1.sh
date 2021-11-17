@@ -39,15 +39,13 @@ WATCH_HACK_IMPORT_ORDER=geopandas,pyproj,gdal python -X faulthandler -m watch al
     --dst $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json \
     --regions "$REGION_FPATH" \
     --keep img \
-    --geo_preprop=False \
     --workers="avail/2" \
     --aux_workers="2" 
 
 python -m watch project \
     --site_models="$DVC_DPATH/drop1/site_models/*.geojson" \
     --src $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json \
-    --dst $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json.prop 
-mv $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json.prop $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json
+    --dst $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json
 
 
 kwcoco subset --src $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json \
