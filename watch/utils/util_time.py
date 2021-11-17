@@ -11,6 +11,9 @@ def isoformat(dt, sep='T', timespec='seconds', pathsafe=True):
         dt (datetime.datetime): datetime to format
         pathsafe (bool):
 
+    References:
+        https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes
+
     Example:
         >>> from watch.utils.util_time import *  # NOQA
         >>> import datetime
@@ -28,6 +31,7 @@ def isoformat(dt, sep='T', timespec='seconds', pathsafe=True):
         >>> items.append(dt)
         >>> print('items = {!r}'.format(items))
         >>> for dt in items:
+        >>>     print('----')
         >>>     print('dt = {!r}'.format(dt))
         >>>     # ISO format is cool, but it doesnt give much control
         >>>     print(dt.isoformat())
@@ -40,7 +44,7 @@ def isoformat(dt, sep='T', timespec='seconds', pathsafe=True):
 
     date_fmt = '%Y%m%d'
     if timespec == 'seconds':
-        time_tmf = '%Y%m%d'
+        time_tmf = '%H%M%S'
     else:
         raise NotImplementedError(timespec)
 
