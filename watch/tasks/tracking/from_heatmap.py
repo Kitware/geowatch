@@ -86,6 +86,7 @@ def get_poly_overlap(poly, prob_map, threshold):
     Get overlap of a polygon with a heatmap
     ToDo: this is inefficient, replace with ratserization of
     a smaller region around the bbox of poly
+    TODO replace this with _score?
     """
     prob_map = prob_map[:, :, 0]
     hard_prob = prob_map > threshold
@@ -97,41 +98,29 @@ def get_poly_overlap(poly, prob_map, threshold):
     return overlap/total_poly_area
 
 
+def heatmap(dset, gid, key):
+    """
+    Find the total heatmap of key within gid
+    """
+    img = dset.index.imgs[gid]
+    coco_img = kwcoco_extensions.CocoImage(img, dset)
+    w, h = coco_img.delay(space='video').dsize
+    fg_img_probs = np.zeros((h, w))
+    common = kwcoco.FusedChannelSpec.coerce(
+        coco_img.channels.fuse()).intersection(
+            kwcoco.FusedChannelSpec.coerce(key))
+    assert len(key) == len(common), (dset, gid, key)
+    fg_img_probs += coco_img.delay(common,
+                                   space='video').finalize().sum(axis=-1)
+    return fg_img_probs
+    
+
 def get_poly_response(poly, dset, gid, key):
     """
-    Find average respons of a heatmap within a polygon
+    Find average response of a heatmap within a polygon
+    TODO replace this with _score?
     """
-    img = dset.index.imgs[gid]
-    coco_img = kwcoco_extensions.CocoImage(img, dset)
-    try:
-        if key[0] in coco_img.channels:
-            img_probs = coco_img.delay(key[0], space='video').finalize()
-    except:
-        import xdev; xdev.embed()
-    prob_map = img_probs[:,:,0]
-
-    poly_mask = poly.to_mask(prob_map.shape).numpy().data
-
-    response = (poly_mask*prob_map).mean()
-    return response
-
-
-def get_poly_response_sc(poly, dset, gid, key):
-    """
-    Find average respons of a heatmap within a polygon
-    """
-    img = dset.index.imgs[gid]
-    coco_img = kwcoco_extensions.CocoImage(img, dset)
-    zeros = np.zeros_like(coco_img.delay(coco_img.channels.fuse()[0], space='video').finalize()).astype('float32')
-    fg_img_probs = zeros.copy()
-    for k in key:
-        k2 = kwcoco.FusedChannelSpec.coerce(k)
-        common = kwcoco.FusedChannelSpec.coerce(coco_img.channels.fuse()).intersection(k2)
-        if len(k2) == len(common):
-            img_probs = coco_img.delay(k, space='video').finalize()
-            fg_img_probs += img_probs
-
-    prob_map = fg_img_probs[:, :, 0]
+    prob_map = heatmap(dset, gid, key)
 
     poly_mask = poly.to_mask(prob_map.shape).numpy().data
 
@@ -139,7 +128,12 @@ def get_poly_response_sc(poly, dset, gid, key):
     return response
 
 
-def get_poly_time_ind(scored_polys, threshold, dset, vidid, key, reverse=False):
+def get_poly_time_ind(scored_polys,
+                      threshold,
+                      dset,
+                      vidid,
+                      key,
+                      reverse=False):
     """
     Given a set of polygons, compute index of the first match of a polygon
     with a mask; mask is computed by comparing heatmaps with threshold.
@@ -155,28 +149,18 @@ def get_poly_time_ind(scored_polys, threshold, dset, vidid, key, reverse=False):
         gids = list(reversed(gids))
 
     for image_ind, gid in enumerate(gids):
-        img = dset.index.imgs[gid]
-        coco_img = kwcoco_extensions.CocoImage(img, dset)
-        zeros = np.zeros_like(
-        coco_img.delay(coco_img.channels.fuse()[0], space='video').finalize()).astype('float32')
-        fg_img_probs = zeros.copy()
-        for k in key:
-            k2 = kwcoco.FusedChannelSpec.coerce(k)
-            common = kwcoco.FusedChannelSpec.coerce(coco_img.channels.fuse()).intersection(k2)
-            if len(k2) == len(common):
-                img_probs = coco_img.delay(k, space='video').finalize()
-                fg_img_probs += img_probs
-                #if key in coco_img.channels:
-                #img_probs = coco_img.delay(key, space='video').finalize()
-
-                for poly_ind, (p, score) in enumerate(scored_polys):
-                    if p not in poly_started:
-                        overlap = get_poly_overlap(p, fg_img_probs, threshold=threshold)
-                        if overlap > 0.5:
-                            poly_started.add(p)
-                            poly_start_ind[poly_ind] = image_ind
-            else:
-                print('image', gid, 'does not have predictions')
+        try:
+            fg_img_probs = heatmap(dset, gid, key)
+            for poly_ind, (p, score) in enumerate(scored_polys):
+                if p not in poly_started:
+                    overlap = get_poly_overlap(p,
+                                               fg_img_probs,
+                                               threshold=threshold)
+                    if overlap > 0.5:
+                        poly_started.add(p)
+                        poly_start_ind[poly_ind] = image_ind
+        except AssertionError as e:
+            print(f'image {gid} does not have all predictions: {e}')
 
     if reverse:
         poly_start_ind = [len(gids) - i for i in poly_start_ind]
@@ -324,11 +308,9 @@ def time_aggregated_polys(coco_dset,
     for img in coco_dset.imgs.values():
 
         coco_img = coco_dset.coco_image(img['id'])
-        zeros = np.zeros_like(
-            coco_img.delay(coco_img.channels.fuse()[0],
-                           space='video').finalize()).astype('float32')
-        fg_img_probs = zeros.copy()
-        bg_img_probs = zeros.copy()
+        w, h = coco_img.delay(space='video').dsize
+        fg_img_probs = np.zeros((h, w, 1))
+        bg_img_probs = np.zeros((h, w, 1))
 
         for k in key:
             k2 = kwcoco.FusedChannelSpec.coerce(k)
@@ -339,8 +321,8 @@ def time_aggregated_polys(coco_dset,
                 fg_img_probs += img_probs
                 running_dct[k].update(img_probs)
             else:
-                # not sure if it is correct to assign zeros for images without predictions,
-                # commenting out for now
+                # not sure if it is correct to assign zeros for images without
+                # predictions, commenting out for now
                 # running_dct[k].update(zeros)
                 pass
         running_dct['fg'].update(fg_img_probs)
@@ -355,7 +337,7 @@ def time_aggregated_polys(coco_dset,
                 running_dct[k].update(img_probs)
             else:
                 # commenting out for now
-                #running_dct[k].update(zeros)
+                # running_dct[k].update(zeros)
                 pass
         running_dct['bg'].update(bg_img_probs)
 
@@ -382,14 +364,13 @@ def time_aggregated_polys(coco_dset,
 
     if response_filtering:
         # get polygon responses
-        responses = [[] for (p, score) in scored_polys]
+        responses = []
         for track_id, (vid_poly, score) in enumerate(scored_polys, start=1):
             vidid = list(coco_dset.index.videos)[0]
             gids = coco_dset.index.vidid_to_gids[vidid]
-            for image_ind, gid in enumerate(gids):
-                response = get_poly_response(vid_poly, coco_dset, gid, key)
-                # response = get_poly_response_sc(vid_poly, coco_dset, gid, key)
-                responses[track_id - 1].append(response)
+            response = [get_poly_response(vid_poly, coco_dset, gid, key)
+                        for gid in gids]
+            responses.append(response)
         scored_polys = list(
             filter_polys_response(scored_polys,
                                   responses,
