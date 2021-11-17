@@ -124,7 +124,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         channels=None,
         batch_size=4,
         preprocessing_step=None,
-        tfms_channel_subset=None,
+        tfms_channel_subset=None,  # DEPRECATE
         normalize_inputs=False,
         match_histograms=False,
         diff_inputs=False,
@@ -606,6 +606,7 @@ class KWCocoVideoDataset(data.Dataset):
         # into the kwcoco spec marking a class as some type of "background"
         self._hueristic_background_classnames = heuristics.BACKGROUND_CLASSES
         self._heuristic_ignore_classnames = heuristics.IGNORE_CLASSNAMES
+        self._heuristic_undistinguished_classnames = heuristics.UNDISTINGUISHED_CLASSES
 
         self.match_histograms = match_histograms
         self.resample_invalid_frames = resample_invalid_frames
