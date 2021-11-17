@@ -5,28 +5,59 @@ import kwarray
 import kwimage
 import numpy as np
 import kwcoco
+import ubelt as ub
 from rasterio import features
 
 
-def _score(poly, probs):
-    # Compute a score for the polygon
-    # First compute the valid bounds of the polygon
-    # And create a mask for only the valid region of the polygon
-    box = poly.bounding_box().quantize().to_xywh()
-    # Ensure w/h are positive
-    box.data[:, 2:4] = np.maximum(box.data[:, 2:4], 1)
-    x, y, w, h = box.data[0]
-    rel_poly = poly.translate((0.5 - x, 0.5 - y))
-    rel_mask = np.zeros((h, w))
-    rel_mask = features.rasterize([rel_poly.to_geojson()], out_shape=(h, w))
-    # Slice out the corresponding region of probabilities
-    rel_probs = probs[y:y + h, x:x + w]
-    # hacking to solve a bug: sometimes shape of rel_probs is x,y,1
-    if len(rel_probs.shape) == 3:
-        rel_probs = rel_probs[:, :, 0]
-    total = rel_mask.sum()
-    score = 0 if total == 0 else (rel_mask * rel_probs).sum() / total
-    return score
+def _score(poly, probs, mode='score', threshold=0):
+    '''
+    Args:
+        poly: kwimage.Polygon or MultiPolygon in pixel coords
+
+        probs: heatmap to compare poly against
+
+        mode: return value.
+            'score': fraction of probs contained in poly
+            'response': average value of probs in poly
+            'overlap': fraction of poly with probs > threshold
+
+        threshold: only used for mode='overlap'
+    '''
+    if 0:
+        # naive computation across the whole image
+        poly_mask = poly.to_mask(probs.shape).numpy().data
+        rel_mask, rel_probs = poly_mask, probs
+    else:
+        # First compute the valid bounds of the polygon
+        # And create a mask for only the valid region of the polygon
+        box = poly.bounding_box().quantize().to_xywh()
+        # Ensure w/h are positive
+        box.data[:, 2:4] = np.maximum(box.data[:, 2:4], 1)
+        x, y, w, h = box.data[0]
+        rel_poly = poly.translate((0.5 - x, 0.5 - y))
+        rel_mask = np.zeros((h, w))
+        rel_mask = features.rasterize([rel_poly.to_geojson()],
+                                      out_shape=(h, w))
+        # Slice out the corresponding region of probabilities
+        rel_probs = probs[y:y + h, x:x + w]
+        # hacking to solve a bug: sometimes shape of rel_probs is x,y,1
+        if len(rel_probs.shape) == 3:
+            rel_probs = rel_probs[:, :, 0]
+
+    if mode == 'response':
+        response = (rel_mask * rel_probs).mean()
+        return response
+    elif mode == 'score':
+        total = rel_mask.sum()
+        score = 0 if total == 0 else (rel_mask * rel_probs).sum() / total
+        return score
+    elif mode == 'overlap':
+        hard_prob = rel_probs > threshold
+        overlap = (hard_prob * rel_mask).sum()
+        total_poly_area = rel_mask.sum()
+        return overlap / total_poly_area
+    else:
+        raise ValueError(mode)
 
 
 def filter_small_polys(scored_polys, min_area_px=80):
@@ -81,26 +112,16 @@ def mask_to_scored_polygons_v2(probs, thresh):
         yield poly, _score(poly, probs)
 
 
-def get_poly_overlap(poly, prob_map, threshold):
-    """
-    Get overlap of a polygon with a heatmap
-    ToDo: this is inefficient, replace with ratserization of
-    a smaller region around the bbox of poly
-    TODO replace this with _score?
-    """
-    prob_map = prob_map[:, :, 0]
-    hard_prob = prob_map > threshold
-    poly_mask = poly.to_mask(prob_map.shape).numpy().data
-
-    overlap = (hard_prob * poly_mask).sum()
-    total_poly_area = poly_mask.sum()
-
-    return overlap/total_poly_area
-
-
-def heatmap(dset, gid, key):
+def heatmap(dset, gid, key, return_chan_probs=False):
     """
     Find the total heatmap of key within gid
+
+    Args:
+        dset: kwcoco.CocoDataset
+        gid: image id
+        key: List[str] list of channel names
+        return_chan_probs:
+            if True, also return a dict {k:heatmap(k) for k in keys}
     """
     img = dset.index.imgs[gid]
     coco_img = kwcoco_extensions.CocoImage(img, dset)
@@ -110,30 +131,32 @@ def heatmap(dset, gid, key):
         coco_img.channels.fuse()).intersection(
             kwcoco.FusedChannelSpec.coerce(key))
     assert len(key) == len(common), (dset, gid, key)
-    fg_img_probs += coco_img.delay(common,
-                                   space='video').finalize().sum(axis=-1)
-    return fg_img_probs
-    
 
-def get_poly_response(poly, dset, gid, key):
-    """
-    Find average response of a heatmap within a polygon
-    TODO replace this with _score?
-    """
-    prob_map = heatmap(dset, gid, key)
+    if len(key) == 0:  # for bg_key
+        if return_chan_probs:
+            return fg_img_probs, {}
+        else:
+            return fg_img_probs
 
-    poly_mask = poly.to_mask(prob_map.shape).numpy().data
+    key_img_probs = coco_img.delay(common, space='video').finalize()
+    fg_img_probs += key_img_probs.sum(axis=-1)
+    if return_chan_probs:
+        # some awkwardness here from non-invertible mapping from
+        # ChannelSpec to FusedChannelSpec
+        chan_probs = {}
+        idxs = common.component_indices()
+        for k in key:
+            codes = common.intersection(
+                kwcoco.FusedChannelSpec.coerce(k)).code_list()
+            chan_probs[k] = np.stack(
+                [key_img_probs[idxs[code]] for code in codes], axis=-1)
+        return fg_img_probs, chan_probs
+    else:
+        return fg_img_probs
 
-    response = (poly_mask * prob_map).mean()
-    return response
 
-
-def get_poly_time_ind(scored_polys,
-                      threshold,
-                      dset,
-                      vidid,
-                      key,
-                      reverse=False):
+def get_poly_time_ind(scored_polys, threshold, dset,
+                      vidid, key, reverse=False):
     """
     Given a set of polygons, compute index of the first match of a polygon
     with a mask; mask is computed by comparing heatmaps with threshold.
@@ -153,9 +176,8 @@ def get_poly_time_ind(scored_polys,
             fg_img_probs = heatmap(dset, gid, key)
             for poly_ind, (p, score) in enumerate(scored_polys):
                 if p not in poly_started:
-                    overlap = get_poly_overlap(p,
-                                               fg_img_probs,
-                                               threshold=threshold)
+                    overlap = _score(p, fg_img_probs, mode='overlap',
+                                     threshold=threshold)
                     if overlap > 0.5:
                         poly_started.add(p)
                         poly_start_ind[poly_ind] = image_ind
@@ -287,7 +309,7 @@ def time_aggregated_polys(coco_dset,
             class is max(foreground keys).
             else, class is max(background keys).
 
-        morph_kernel (int): height/width in px of close-kernel
+        morph_kernel (int): height/width in px of close or dilate kernel
     '''
     key, bg_key = _validate_keys(key, bg_key)
     _all_keys = set(key + bg_key)
@@ -305,41 +327,20 @@ def time_aggregated_polys(coco_dset,
     # this guarantees RunningStats of equal length for all keys,
     # even with partial/nonexistence
     running_dct = defaultdict(kwarray.RunningStats)
-    for img in coco_dset.imgs.values():
+    for gid in coco_dset.imgs:
 
-        coco_img = coco_dset.coco_image(img['id'])
-        w, h = coco_img.delay(space='video').dsize
-        fg_img_probs = np.zeros((h, w, 1))
-        bg_img_probs = np.zeros((h, w, 1))
-
+        # TODO change assertion behavior to allow partial failure here
+        fg_img_probs, fg_chan_probs = heatmap(coco_dset, gid, key,
+                                              return_chan_probs=True)
+        running_dct['fg'].update(fg_img_probs[:, :, np.newaxis])
         for k in key:
-            k2 = kwcoco.FusedChannelSpec.coerce(k)
-            common = kwcoco.FusedChannelSpec.coerce(
-                coco_img.channels.fuse()).intersection(k2)
-            if len(k2) == len(common):
-                img_probs = coco_img.delay(k, space='video').finalize()
-                fg_img_probs += img_probs
-                running_dct[k].update(img_probs)
-            else:
-                # not sure if it is correct to assign zeros for images without
-                # predictions, commenting out for now
-                # running_dct[k].update(zeros)
-                pass
-        running_dct['fg'].update(fg_img_probs)
+            running_dct[k].update(fg_chan_probs[k][:, :, np.newaxis])
 
+        bg_img_probs, bg_chan_probs = heatmap(coco_dset, gid, bg_key,
+                                              return_chan_probs=True)
+        running_dct['bg'].update(bg_img_probs[:, :, np.newaxis])
         for k in bg_key:
-            k2 = kwcoco.FusedChannelSpec.coerce(k)
-            common = kwcoco.FusedChannelSpec.coerce(
-                coco_img.channels.fuse()).intersection(k2)
-            if len(k2) == len(common):
-                img_probs = coco_img.delay(k, space='video').finalize()
-                bg_img_probs += img_probs
-                running_dct[k].update(img_probs)
-            else:
-                # commenting out for now
-                # running_dct[k].update(zeros)
-                pass
-        running_dct['bg'].update(bg_img_probs)
+            running_dct[k].update(fg_chan_probs[k][:, :, np.newaxis])
 
     # turn heatmaps into scores and polygons
     def probs(running):
@@ -362,13 +363,17 @@ def time_aggregated_polys(coco_dset,
     scored_polys = list(filter_small_polys(scored_polys))
     print('removed small: remaining polygons:', len(scored_polys))
 
+    @ub.memoize  # caching
+    def _heatmap(gid):
+        return heatmap(coco_dset, gid, key)
+
     if response_filtering:
         # get polygon responses
         responses = []
         for track_id, (vid_poly, score) in enumerate(scored_polys, start=1):
             vidid = list(coco_dset.index.videos)[0]
             gids = coco_dset.index.vidid_to_gids[vidid]
-            response = [get_poly_response(vid_poly, coco_dset, gid, key)
+            response = [_score(vid_poly, _heatmap(gid), mode='response')
                         for gid in gids]
             responses.append(response)
         scored_polys = list(
@@ -382,12 +387,8 @@ def time_aggregated_polys(coco_dset,
         vidid = list(coco_dset.index.videos)[0]
         poly_start_ind = get_poly_time_ind(scored_polys, thresh, coco_dset,
                                            vidid, key)
-        poly_end_ind = get_poly_time_ind(scored_polys,
-                                         thresh,
-                                         coco_dset,
-                                         vidid,
-                                         key,
-                                         reverse=True)
+        poly_end_ind = get_poly_time_ind(scored_polys, thresh, coco_dset,
+                                         vidid, key, reverse=True)
     else:
         poly_start_ind = None
         poly_end_ind = None
@@ -450,7 +451,7 @@ def time_aggregated_polys_hybrid(coco_dset,
                                  thresh=0.3,
                                  morph_kernel=3,
                                  time_filtering=True,
-                                 response_filtering=False):
+                                 response_filtering=True):
     '''
     This method uses predictions from a BAS model to generate polygons.
     Predicted heatmaps from a Site Charachterization model are used to assign
