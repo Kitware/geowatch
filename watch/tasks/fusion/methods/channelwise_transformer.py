@@ -660,6 +660,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     #tokenizer='dwcnn',
             >>>     tokenizer='rearrange',
             >>>     squash_modes=True,
+            >>>     normalize_perframe=True,
             >>>     window_size=8,
             >>>     )
             >>> self.datamodule = datamodule

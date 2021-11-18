@@ -126,6 +126,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         preprocessing_step=None,
         tfms_channel_subset=None,  # DEPRECATE
         normalize_inputs=False,
+        normalize_perframe=False,
         match_histograms=False,
         upweight_centers=True,
         diff_inputs=False,
@@ -174,6 +175,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.match_histograms = match_histograms
         self.resample_invalid_frames = resample_invalid_frames
         self.upweight_centers = upweight_centers
+        self.normalize_perframe = normalize_perframe
 
         self.common_dataset_kwargs = dict(
                 channels=self.channels,
@@ -183,6 +185,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 match_histograms=self.match_histograms,
                 upweight_centers=self.upweight_centers,
                 resample_invalid_frames=self.resample_invalid_frames,
+                normalize_perframe=self.normalize_perframe,
         )
 
         self.num_workers = util_globals.coerce_num_workers(num_workers)
@@ -609,6 +612,7 @@ class KWCocoVideoDataset(data.Dataset):
         match_histograms=False,
         resample_invalid_frames=True,
         upweight_centers=True,
+        normalize_perframe=False,
     ):
 
         # TODO: the set of "valid" background classnames should be defined
@@ -620,6 +624,7 @@ class KWCocoVideoDataset(data.Dataset):
         self._heuristic_undistinguished_classnames = heuristics.UNDISTINGUISHED_CLASSES
 
         self.match_histograms = match_histograms
+        self.normalize_perframe = normalize_perframe
         self.resample_invalid_frames = resample_invalid_frames
         self.upweight_centers = upweight_centers
 
@@ -870,11 +875,11 @@ class KWCocoVideoDataset(data.Dataset):
             >>> import kwcoco
             >>> from watch.utils.util_data import find_smart_dvc_dpath
             >>> dvc_dpath = find_smart_dvc_dpath()
-            >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1/vali_data_wv.kwcoco.json'
+            >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1/vali_data_nowv.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=(5, 128, 128), channels='red|green|blue|nir')
-            >>> index = 5
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=(5, 128, 128), channels='red|green|blue|nir', normalize_perframe=True)
+            >>> index = 3
             >>> item = self[index]
             >>> canvas = self.draw_item(item)
             >>> # xdoctest: +REQUIRES(--show)
@@ -1012,6 +1017,25 @@ class KWCocoVideoDataset(data.Dataset):
                     tr_, with_annots=with_annots,
                     padkw={'constant_values': np.nan}
                 )
+
+        if self.normalize_perframe:
+            from watch.utils.util_norm import normalize_intensity
+            im = sample['im']
+            # mask = ~np.isnan(im)
+            # mask[im == 0] = False
+            reorg = einops.rearrange(im, 't h w c -> (t c) h w')
+            to_restack = []
+            for item in reorg:
+                mask = (item != 0) & np.isfinite(item)
+                norm_item = normalize_intensity(item, params={
+                    'high': 0.90,
+                    'mid': 0.5,
+                    'low': 0.01,
+                    'mode': 'linear',
+                }, mask=mask)
+                to_restack.append(norm_item)
+            norm_im = einops.rearrange(np.stack(to_restack, axis=0), '(t c) h w -> t h w c', c=im.shape[3])
+            sample['im'] = norm_im
 
         if self.special_inputs or self.diff_inputs:
             import xarray as xr

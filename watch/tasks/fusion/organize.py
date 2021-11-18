@@ -76,6 +76,7 @@ def make_nice_dirs():
     dataset_names = [
         'Drop1_October2021',
         'Drop1_November2021',
+        'Drop1_2020-11-17',
     ]
     user_machine_dpaths = list(train_base.glob('*/*'))
     # all_checkpoint_paths = []
