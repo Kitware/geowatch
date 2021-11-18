@@ -48,6 +48,18 @@ S2_ASSET_NAME_MAP = {'image-B01': 'B01',
                      'image-B8A': 'B8A',
                      'image-cloudmask': 'QA'}
 
+# Maps Sentinel 2 STAC item asset names to the suffixes they should
+# use in the collated output for SSH scoring.  Note that this also
+# serves as a filter as any asset name not found here will be excluded
+# from the output
+S2_SSH_ASSET_NAME_MAP = {'image-B02': 'B02',
+                         'image-B03': 'B03',
+                         'image-B04': 'B04',
+                         'image-B8A': 'B05',
+                         'image-B11': 'B06',
+                         'image-B12': 'B07',
+                         'image-cloudmask': 'QA'}
+
 # Maps Landsat 8 STAC item asset names to the suffixes they should
 # use in the collated output.  Note that this also serves as a filter
 # as any asset name not found here will be excluded from the output
@@ -63,6 +75,18 @@ L8_ASSET_NAME_MAP = {'image-B1': 'B01',
                      'image-B10': 'B10',
                      'image-B11': 'B11',
                      'image-cloudmask': 'QA'}
+
+# Maps Landsat 8 STAC item asset names to the suffixes they should use
+# in the collated output for SSH scoring.  Note that this also serves
+# as a filter as any asset name not found here will be excluded from
+# the output
+L8_SSH_ASSET_NAME_MAP = {'image-B2': 'B02',
+                         'image-B3': 'B03',
+                         'image-B4': 'B04',
+                         'image-B5': 'B05',
+                         'image-B6': 'B06',
+                         'image-B7': 'B07',
+                         'image-cloudmask': 'QA'}
 
 # Helper map to take asset suffixes (if different) from maps above to
 # asset names as they should appear in the output STAC items
@@ -208,10 +232,12 @@ def collate_item(stac_item_dict,
 
     if platform in SUPPORTED_LS_PLATFORMS:
         platform_collation_fn = partial(generic_collate_item,
-                                        L8_ASSET_NAME_MAP)
+                                        L8_ASSET_NAME_MAP,
+                                        L8_SSH_ASSET_NAME_MAP)
     elif platform in SUPPORTED_S2_PLATFORMS:
         platform_collation_fn = partial(generic_collate_item,
-                                        S2_ASSET_NAME_MAP)
+                                        S2_ASSET_NAME_MAP,
+                                        S2_SSH_ASSET_NAME_MAP)
     elif platform in SUPPORTED_WV_PLATFORMS:
         platform_collation_fn = collate_wv_item
 
@@ -246,6 +272,7 @@ def collate_item(stac_item_dict,
 
 
 def generic_collate_item(asset_name_map,
+                         ssh_asset_name_map,
                          stac_item,
                          aws_base_command,
                          original_id,
@@ -275,10 +302,6 @@ def generic_collate_item(asset_name_map,
                                 stac_asset_outpath_basename)),
              'roles': ['data']})
 
-        ssh_asset_outpath = '/'.join(
-            (ssh_outdir, "{}_{}_SSH_{}.tif".format(
-                original_id, performer_code, asset_suffix)))
-
         # Copy assets up to S3
         with tempfile.TemporaryDirectory() as tmpdirname:
             asset_href = asset.href
@@ -294,8 +317,15 @@ def generic_collate_item(asset_name_map,
 
             subprocess.run([*aws_base_command,
                             asset_href, stac_asset_outpath], check=True)
-            subprocess.run([*aws_base_command,
-                            asset_href, ssh_asset_outpath], check=True)
+
+            ssh_asset_suffix = ssh_asset_name_map.get(asset_name)
+            if ssh_asset_suffix is not None:
+                ssh_asset_outpath = '/'.join(
+                    (ssh_outdir, "{}_{}_SSH_{}.tif".format(
+                        original_id, performer_code, ssh_asset_suffix)))
+
+                subprocess.run([*aws_base_command,
+                                asset_href, ssh_asset_outpath], check=True)
 
     stac_item.assets = output_assets
 
@@ -367,16 +397,9 @@ def collate_wv_item(stac_item,
                                         stac_asset_outpath_basename)),
                      'roles': ['data']})
 
-                ssh_asset_outpath = '/'.join((
-                    ssh_outdir, "{}_{}_SSH_{}.tif".format(
-                        original_id, performer_code, asset_suffix)))
-
                 # Copy assets up to S3
                 subprocess.run([*aws_base_command,
                                 output_band_path, stac_asset_outpath],
-                               check=True)
-                subprocess.run([*aws_base_command,
-                                output_band_path, ssh_asset_outpath],
                                check=True)
 
     stac_item.assets = output_assets
