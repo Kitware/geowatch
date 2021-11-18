@@ -127,6 +127,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         tfms_channel_subset=None,  # DEPRECATE
         normalize_inputs=False,
         match_histograms=False,
+        upweight_centers=True,
         diff_inputs=False,
         verbose=1,
         num_workers=4,
@@ -172,6 +173,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.time_span = time_span
         self.match_histograms = match_histograms
         self.resample_invalid_frames = resample_invalid_frames
+        self.upweight_centers = upweight_centers
 
         self.common_dataset_kwargs = dict(
                 channels=self.channels,
@@ -179,6 +181,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 diff_inputs=self.diff_inputs,
                 exclude_sensors=self.exclude_sensors,
                 match_histograms=self.match_histograms,
+                upweight_centers=self.upweight_centers,
                 resample_invalid_frames=self.resample_invalid_frames,
         )
 
@@ -258,6 +261,13 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         parser.add_argument(
             '--match_histograms', default=True, type=smartcast, help=ub.paragraph(
                 '''
+                undocumented
+                '''))
+
+        parser.add_argument(
+            '--upweight_centers', default=True, type=smartcast, help=ub.paragraph(
+                '''
+                undocumented
                 '''))
         parser.add_argument(
             '--diff_inputs', default=False, type=smartcast, help=ub.paragraph(
@@ -598,6 +608,7 @@ class KWCocoVideoDataset(data.Dataset):
         exclude_sensors=None,
         match_histograms=False,
         resample_invalid_frames=True,
+        upweight_centers=True,
     ):
 
         # TODO: the set of "valid" background classnames should be defined
@@ -610,6 +621,7 @@ class KWCocoVideoDataset(data.Dataset):
 
         self.match_histograms = match_histograms
         self.resample_invalid_frames = resample_invalid_frames
+        self.upweight_centers = upweight_centers
 
         if channels is None:
             # Hack to use all channels in the first image.
@@ -1133,6 +1145,7 @@ class KWCocoVideoDataset(data.Dataset):
             time_weights = kwimage.gaussian_patch((1, num_frames))[0]
             time_weights = time_weights / time_weights.max()
             space_weights = util_kwimage.upweight_center_mask(frame0.shape[0:2])
+            # time_weights[1:] = 0
 
         for time_idx, (frame, dets, gid) in enumerate(zip(raw_frame_list, raw_det_list, raw_gids)):
             img = self.sampler.dset.imgs[gid]
@@ -1178,7 +1191,7 @@ class KWCocoVideoDataset(data.Dataset):
 
                 # Ignore for saliency
                 saliency_ignore = np.full(space_shape, dtype=np.uint8,
-                                       fill_value=0)
+                                          fill_value=0)
 
                 # Ignore for class
                 frame_class_ignore = np.full(space_shape, dtype=np.uint8,
@@ -1210,7 +1223,11 @@ class KWCocoVideoDataset(data.Dataset):
                     # class_map = util_kwimage.morphology(class_map, 'dilate', kernel=5)
                     frame_cidxs[class_map > 0] = cidx
 
-                frame_weights = space_weights * time_weights[time_idx]
+                if self.upweight_centers:
+                    frame_weights = space_weights * time_weights[time_idx]
+                else:
+                    frame_weights = 1.0
+
                 saliency_weights = frame_weights * (1 - saliency_ignore)
                 class_weights = frame_weights * (1 - frame_class_ignore)
 

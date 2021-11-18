@@ -616,7 +616,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> coco_dset = kwcoco.CocoDataset.coerce(coco_fpath)
             >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset=coco_dset,
-            >>>     chip_size=128, batch_size=1, time_steps=3,
+            >>>     chip_size=160, batch_size=1, time_steps=5,
             >>>     channels=channels,
             >>>     normalize_inputs=True, neg_to_pos_ratio=0, num_workers='avail/2',
             >>> )
@@ -636,11 +636,12 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     arch_name='smt_it_joint_p8',
             >>>     #arch_name='smt_it_stm_p8',
             >>>     attention_impl='performer',
+            >>>     #attention_impl='exact',
             >>>     #arch_name='deit',
-            >>>     change_loss='dicefocal',
+            >>>     change_loss='focal',
             >>>     #class_loss='cce',
-            >>>     class_loss='focal',
-            >>>     saliency_loss='dicefocal',
+            >>>     class_loss='dicefocal',
+            >>>     saliency_loss='focal',
             >>>     # ===========
             >>>     # Change Loss
             >>>     global_change_weight=1.00,
@@ -659,17 +660,19 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     #tokenizer='dwcnn',
             >>>     tokenizer='rearrange',
             >>>     squash_modes=True,
+            >>>     window_size=8,
             >>>     )
             >>> self.datamodule = datamodule
             >>> self.di = datamodule
             >>> # Run one visualization
             >>> loader = datamodule.train_dataloader()
+            >>> # Load one batch and show it before we do anything
             >>> batch = next(iter(loader))
-            >>> # Show batch before we do anything
             >>> import kwplot
             >>> kwplot.autompl(force='Qt5Agg')
             >>> canvas = datamodule.draw_batch(batch, max_channels=3, overlay_on_image=0)
-            >>> kwplot.imshow(canvas)
+            >>> kwplot.imshow(canvas, fnum=1)
+            >>> # Run overfit
             >>> device = 0
             >>> self.overfit(batch)
 
@@ -704,7 +707,7 @@ class MultimodalTransformer(pl.LightningModule):
         # dpath = ub.ensuredir('_overfit_viz09')
 
         optim_cls, optim_kw = nh.api.Optimizer.coerce(
-            optim='RAdam', lr=1e-0, weight_decay=1e-9,
+            optim='RAdam', lr=1e-3, weight_decay=0,
             params=self.parameters())
 
         #optim = torch.optim.SGD(self.parameters(), lr=1e-4)
@@ -715,6 +718,7 @@ class MultimodalTransformer(pl.LightningModule):
         fig = kwplot.figure(fnum=fnum, doclf=True)
         fig.set_size_inches(15, 6)
         fig.subplots_adjust(left=0.05, top=0.9)
+        prev = None
         for _frame_idx in xdev.InteractiveIter(list(range(_frame_idx + 1, 1000))):
             # for _frame_idx in list(range(_frame_idx, 1000)):
             num_steps = 20
@@ -723,6 +727,11 @@ class MultimodalTransformer(pl.LightningModule):
                 outputs = self.training_step(batch)
                 outputs['item_losses']
                 loss = outputs['loss']
+                if torch.any(torch.isnan(loss)):
+                    print('loss = {!r}'.format(loss))
+                    print('prev = {!r}'.format(prev))
+                    raise Exception('prev = {!r}'.format(prev))
+                prev = loss
                 item_losses_ = nh.data.collate.default_collate(outputs['item_losses'])
                 item_losses = ub.map_vals(lambda x: sum(x).item(), item_losses_)
                 loss_records.extend([{'part': key, 'val': val, 'step': step} for key, val in item_losses.items()])
@@ -735,7 +744,7 @@ class MultimodalTransformer(pl.LightningModule):
             #kwplot.imshow(canvas, pnum=(1, 2, 1))
             import pandas as pd
             ax = sns.lineplot(data=pd.DataFrame(loss_records), x='step', y='val', hue='part')
-            ax.set_yscale('log')
+            ax.set_yscale('logit')
             fig.suptitle(smart_truncate(str(optim).replace('\n', ''), max_length=64))
             img = render_figure_to_image(fig)
             img = kwimage.convert_colorspace(img, src_space='bgr', dst_space='rgb')
@@ -777,70 +786,9 @@ class MultimodalTransformer(pl.LightningModule):
             >>> kwplot.autompl()
             >>> kwplot.imshow(canvas)
             >>> kwplot.show_if_requested()
-
-
-        Ignore:
-            python -m watch.cli.gifify \
-                    -i /home/local/KHQ/jon.crall/data/work/toy_change/_overfit_viz7/ \
-                    -o /home/local/KHQ/jon.crall/data/work/toy_change/_overfit_viz7.gif
-
-            nh.initializers.functional.apply_initializer(self, torch.nn.init.kaiming_normal, {})
-
-
-            # How to get data we need to step back into the dataloader
-            # to debug the batch
-            item = batch[0]
-
-            item['frames'][0]['class_idxs'].unique()
-            item['frames'][1]['class_idxs'].unique()
-            item['frames'][2]['class_idxs'].unique()
-
-            # print(item['frames'][0]['change'].unique())
-            print(item['frames'][1]['change'].unique())
-            print(item['frames'][2]['change'].unique())
-
-            tr = item['tr']
-            self = torch_dset
-            kwplot.imshow(self.draw_item(item), fnum=3)
-
-            kwplot.imshow(item['frames'][1]['change'].cpu().numpy(), fnum=4)
-
-        Ignore:
-            model = self
-            model = self.to(0)
-
-            for item in batch:
-                for frame in item['frames']:
-                    modes = frame['modes']
-                    for key in modes.keys():
-                        modes[key] = modes[key].to(0)
-            out = model.forward_step(batch)
-
-            batch2 = [ub.dict_diff(item, {'tr', 'index', 'video_name', 'video_id'})  for item in batch[0:1]]
-            for item in batch2:
-                item['frames'] = [
-                    ub.dict_diff(frame, {
-                        'gid', 'date_captured', 'sensor_coarse',
-                        'change', 'ignore', 'class_idxs',
-                    })
-                    for frame in item['frames']
-                ]
-
-            traced = torch.jit.trace_module(model, {'forward_step': (batch2,)}, strict=False)
-
-            traced = torch.jit.trace_module(model, {'forward': (images,)}, strict=False)
-
-            import timerit
-            ti = timerit.Timerit(5, bestof=1, verbose=2)
-            for timer in ti.reset('time'):
-                model.forward(images)
-            for timer in ti.reset('time'):
-                traced.forward(images)
-
-            # traced = torch.jit.trace(model.forward, batch)
-            traced = torch.jit.trace_module(model, {'forward_step': batch2})
         """
         outputs = {}
+        eps_f32 = 1e-9
 
         item_losses = []
 
@@ -858,7 +806,8 @@ class MultimodalTransformer(pl.LightningModule):
             # the heterogeneous inputs
 
             frame_ims = []
-            frame_ignores = []
+            frame_class_weights_list = []
+            frame_saliency_weights_list = []
             for frame in item['frames']:
                 assert len(self.input_norms) == 1, 'only handle one mode for now'
                 for mode_key in self.input_norms.keys():
@@ -871,11 +820,18 @@ class MultimodalTransformer(pl.LightningModule):
                     frame_ims.append(mode_val)
 
                 if with_loss:
-                    frame_ignores.append(frame['ignore'])
+                    frame_class_weights_list.append(frame['class_weights'])
+                    frame_saliency_weights_list.append(frame['saliency_weights'])
 
             # Because we are nt collating we need to add a batch dimension
-            # if with_loss:
-            #     ignores = torch.stack(frame_ignores)[None, ...]
+            if frame_class_weights_list:
+                frame_class_weights = torch.stack(frame_class_weights_list)[None, ...]
+                rt_frame_change_weights = torch.mul(frame_class_weights[:, 1:, ], frame_class_weights[:, :-1, ])
+                frame_change_weights = rt_frame_change_weights * rt_frame_change_weights
+
+            if frame_saliency_weights_list:
+                frame_saliency_weights = torch.stack(frame_saliency_weights_list)[None, ...]
+
             images = torch.stack(frame_ims)[None, ...]
 
             B, T, C, H, W = images.shape
@@ -942,6 +898,7 @@ class MultimodalTransformer(pl.LightningModule):
                 need_class_loss    = 1 or self.global_class_weight > 0
                 need_saliency_loss = 1 or self.global_saliency_weight > 0
 
+                # Change loss part
                 if need_change_loss:
                     change_pred_input = einops.rearrange(
                         change_logits,
@@ -957,23 +914,19 @@ class MultimodalTransformer(pl.LightningModule):
                         change_true_input = einops.rearrange(
                             change_true_ohe,
                             'b t h w c -> ' + self.change_criterion_target_shape).contiguous()
+                        change_weights = einops.rearrange(
+                            frame_change_weights[..., None],
+                            'b t h w c -> ' + self.change_criterion_target_shape).contiguous()
                     else:
                         raise KeyError(self.change_criterion_target_encoding)
 
-                    # TODO: it would be nice instead of having a valid mask, if we
-                    # had a pixelwise weighting of how much we care about each
-                    # pixel. This would let us upweight particular instances
-                    # and also ignore regions by setting the weights to zero.
-                    # mask = einops.rearrange(valids_, 'b t h w c -> ' + self.change_criterion_logit_shape, c=1)
-                    change_loss = self.change_criterion(
+                    unreduced_change_loss = self.change_criterion(
                         change_pred_input,
                         change_true_input
                     )
-                    # num_change_states = 2
-                    # true_change_ohe = kwarray.one_hot_embedding(true_changes.long(), num_change_states, dim=-1).float()
-                    # change_loss = self.change_criterion(change_logits, true_change_ohe).mean()
-                    # change_loss = self.change_criterion(change_logits, true_changes.float()).mean()
-                    item_loss_parts['change'] = self.global_change_weight * change_loss
+                    full_change_weight = torch.broadcast_to(change_weights, unreduced_change_loss.shape)
+                    weighted_change_loss = (full_change_weight * unreduced_change_loss).sum() / (full_change_weight.sum() + eps_f32)
+                    item_loss_parts['change'] = self.global_change_weight * weighted_change_loss
 
                 # Class loss part
                 if need_class_loss:
@@ -990,13 +943,19 @@ class MultimodalTransformer(pl.LightningModule):
                         class_true_input = einops.rearrange(
                             class_true_ohe,
                             'b t h w c -> ' + self.class_criterion_target_shape).contiguous()
+                        class_weights = einops.rearrange(
+                            frame_class_weights[..., None],
+                            'b t h w c -> ' + self.class_criterion_target_shape).contiguous()
                     else:
                         raise KeyError(self.class_criterion_target_encoding)
-                    class_loss = self.class_criterion(
+
+                    unreduced_class_loss = self.class_criterion(
                         class_pred_input,
                         class_true_input
                     )
-                    item_loss_parts['class'] = self.global_class_weight * class_loss
+                    full_class_weight = torch.broadcast_to(class_weights, unreduced_class_loss.shape)
+                    weighted_class_loss = (full_class_weight * unreduced_class_loss).sum() / (full_class_weight.sum() + eps_f32)
+                    item_loss_parts['class'] = self.global_class_weight * weighted_class_loss
 
                 # Saliency loss part
                 if need_saliency_loss:
@@ -1013,13 +972,18 @@ class MultimodalTransformer(pl.LightningModule):
                         saliency_true_input = einops.rearrange(
                             saliency_true_ohe,
                             'b t h w c -> ' + self.saliency_criterion_target_shape).contiguous()
+                        saliency_weights = einops.rearrange(
+                            frame_saliency_weights[..., None],
+                            'b t h w c -> ' + self.saliency_criterion_target_shape).contiguous()
                     else:
                         raise KeyError(self.saliency_criterion_target_encoding)
-                    saliency_loss = self.saliency_criterion(
+                    unreduced_saliency_loss = self.saliency_criterion(
                         saliency_pred_input,
                         saliency_true_input
                     )
-                    item_loss_parts['saliency'] = self.global_saliency_weight * saliency_loss
+                    full_saliency_weight = torch.broadcast_to(saliency_weights, unreduced_saliency_loss.shape)
+                    weighted_saliency_loss = (full_saliency_weight * unreduced_saliency_loss).sum() / (full_saliency_weight.sum() + eps_f32)
+                    item_loss_parts['saliency'] = self.global_saliency_weight * weighted_saliency_loss
 
                 item_losses.append(item_loss_parts)
 
@@ -1361,7 +1325,7 @@ def coerce_criterion(loss_code, weights):
     # import monai
     if loss_code == 'cce':
         criterion = torch.nn.CrossEntropyLoss(
-            weight=weights, reduction='mean')
+            weight=weights, reduction='none')
         target_encoding = 'index'
         logit_shape = '(b t h w) c'
         target_shape = '(b t h w)'
@@ -1369,7 +1333,7 @@ def coerce_criterion(loss_code, weights):
         from watch.utils.ext_monai import FocalLoss
         # from monai.losses import FocalLoss
         criterion = FocalLoss(
-            reduction='mean', to_onehot_y=False, weight=weights)
+            reduction='none', to_onehot_y=False, weight=weights)
 
         target_encoding = 'onehot'
         logit_shape = 'b c h w t'
@@ -1383,7 +1347,7 @@ def coerce_criterion(loss_code, weights):
             # weight=torch.FloatTensor([self.negative_change_weight, self.positive_change_weight]),
             sigmoid=True,
             to_onehot_y=False,
-            reduction='mean')
+            reduction='none')
         target_encoding = 'onehot'
         logit_shape = 'b c h w t'
         target_shape = 'b c h w t'
