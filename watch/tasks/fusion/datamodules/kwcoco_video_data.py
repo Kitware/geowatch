@@ -700,6 +700,8 @@ class KWCocoVideoDataset(data.Dataset):
             graph.add_node('ignore')
             self.ignore_classes = self._heuristic_ignore_classnames & set(graph.nodes)
 
+        self.undistinguished_classes = self._heuristic_undistinguished_classnames & set(graph.nodes)
+
         self.classes = kwcoco.CategoryTree(graph)
 
         bg_catname = ub.peek(sorted(self.background_classes))
@@ -1123,7 +1125,16 @@ class KWCocoVideoDataset(data.Dataset):
 
         prev_frame_cidxs = None
 
-        for frame, dets, gid in zip(raw_frame_list, raw_det_list, raw_gids):
+        if not self.inference_only:
+            num_frames = len(raw_frame_list)
+            frame0 = raw_frame_list[0]
+            # from watch.utils import util_kwimage
+            # Learn more from the center of the space-time patch
+            time_weights = kwimage.gaussian_patch((1, num_frames))[0]
+            time_weights = time_weights / time_weights.max()
+            space_weights = util_kwimage.upweight_center_mask(frame0.shape[0:2])
+
+        for time_idx, (frame, dets, gid) in enumerate(zip(raw_frame_list, raw_det_list, raw_gids)):
             img = self.sampler.dset.imgs[gid]
 
             frame = np.asarray(frame, dtype=np.float32)
@@ -1165,8 +1176,13 @@ class KWCocoVideoDataset(data.Dataset):
                 frame_class_ohe = np.full(ohe_shape, dtype=np.uint8,
                                           fill_value=0)
 
-                frame_ignore = np.full(space_shape, dtype=np.uint8,
+                # Ignore for saliency
+                saliency_ignore = np.full(space_shape, dtype=np.uint8,
                                        fill_value=0)
+
+                # Ignore for class
+                frame_class_ignore = np.full(space_shape, dtype=np.uint8,
+                                             fill_value=0)
 
                 # Rasterize frame targets
                 ann_polys = dets.data['segmentations'].to_polygon_list()
@@ -1181,14 +1197,22 @@ class KWCocoVideoDataset(data.Dataset):
                     if catname in self.background_classes:
                         pass
                     elif catname in self.ignore_classes:
-                        poly.fill(frame_ignore, value=1)
+                        poly.fill(saliency_ignore, value=1)
+                        poly.fill(frame_class_ignore, value=1)
                     else:
-                        poly.fill(frame_class_ohe[cidx], value=1)
+                        if catname in self.undistinguished_classes:
+                            poly.fill(frame_class_ohe[cidx], value=1)
+                        else:
+                            poly.fill(frame_class_ohe[cidx], value=1)
 
-                # Dilate the truth map
+                # Postprocess (Dilate?) the truth map
                 for cidx, class_map in enumerate(frame_class_ohe):
                     # class_map = util_kwimage.morphology(class_map, 'dilate', kernel=5)
                     frame_cidxs[class_map > 0] = cidx
+
+                frame_weights = space_weights * time_weights[time_idx]
+                saliency_weights = frame_weights * (1 - saliency_ignore)
+                class_weights = frame_weights * (1 - frame_class_ignore)
 
                 # convert annotations into a change detection task suitable for
                 # the network.
@@ -1220,7 +1244,9 @@ class KWCocoVideoDataset(data.Dataset):
                 frame_item.update({
                     'change': frame_change,
                     'class_idxs': torch.from_numpy(frame_cidxs),
-                    'ignore': torch.from_numpy(frame_ignore),
+                    'ignore': torch.from_numpy(saliency_ignore),
+                    'class_weights': torch.from_numpy(class_weights),
+                    'saliency_weights': torch.from_numpy(saliency_weights),
                 })
                 prev_frame_cidxs = frame_cidxs
             frame_items.append(frame_item)
