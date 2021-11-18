@@ -606,7 +606,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> import kwcoco
             >>> from os.path import join
             >>> import os
-            >>> if 1:
+            >>> if 0:
             >>>     dvc_dpath = find_smart_dvc_dpath()
             >>>     coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/data.kwcoco.json')
             >>>     channels='swir16|swir22|blue|green|red|nir'
