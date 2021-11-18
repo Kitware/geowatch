@@ -45,6 +45,8 @@ __getattr__ = lazy_import(
     submod_attrs={
         'registry': [
             'load_site_model_schema',
+            'load_region_model_schema',
+            'load_job_schema',
         ],
     },
 )
