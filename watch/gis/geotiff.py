@@ -7,6 +7,8 @@ import ubelt as ub
 from watch.gis import spatial_reference as watch_crs
 # from watch.utils.util_bands import LANDSAT7
 from watch.utils.util_bands import SENTINEL2, LANDSAT8
+import pathlib
+import os
 import parse
 from os.path import basename, isfile
 from dateutil.parser import isoparse
@@ -74,6 +76,8 @@ def _coerce_gdal_dataset(data):
     from osgeo import gdal
     if isinstance(data, str):
         ref = gdal.Open(data, gdal.GA_ReadOnly)
+    elif isinstance(data, pathlib.Path):
+        ref = gdal.Open(os.fspath(data), gdal.GA_ReadOnly)
     elif isinstance(data, gdal.Dataset):
         ref = data
     else:

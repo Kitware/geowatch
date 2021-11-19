@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Adds fields needed by ndsampler to correctly "watch" a region.
 
@@ -8,15 +9,14 @@ lower resolution) than an image GSD.
 """
 # import kwcoco
 import warnings
+import numpy as np
 import ubelt as ub
 import kwimage
 import itertools
-
-import numpy as np
-from os.path import join
 import numbers
-from kwimage.transform import Affine
 
+from os.path import join
+from watch.utils import util_raster
 # Was originally defined in this file, moved to kwcoco proper
 from kwcoco.coco_image import CocoImage
 
@@ -127,6 +127,9 @@ def coco_populate_geo_img_heuristics(coco_dset, gid, overwrite=False,
     """
     Note: this will not overwrite existing channel info unless specified
 
+    Commandline
+        xdoctest -m ~/code/watch/watch/utils/kwcoco_extensions.py --profile
+
     Example:
         >>> from watch.utils.kwcoco_extensions import *  # NOQA
         >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
@@ -136,6 +139,7 @@ def coco_populate_geo_img_heuristics(coco_dset, gid, overwrite=False,
         >>> default_gsd = None
         >>> kw = {}
         >>> coco_populate_geo_img_heuristics(coco_dset, gid)
+        >>> img = coco_dset.index.imgs[gid]
 
     Example:
         >>> from watch.utils.kwcoco_extensions import *  # NOQA
@@ -160,10 +164,9 @@ def coco_populate_geo_img_heuristics(coco_dset, gid, overwrite=False,
     # to determine their geo-properties.
     asset_errors = []
     for obj in asset_objs:
-        pass
-        errors = _populate_canvas_obj(bundle_dpath, obj, overwrite=overwrite,
-                                      default_gsd=default_gsd,
-                                      keep_geotiff_metadata=keep_geotiff_metadata)
+        errors = _populate_canvas_obj(
+            bundle_dpath, obj, overwrite=overwrite, default_gsd=default_gsd,
+            keep_geotiff_metadata=keep_geotiff_metadata)
         asset_errors.append(errors)
 
     if all(asset_errors):
@@ -223,22 +226,22 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
 
         valid_region_utm = obj.get('valid_region_utm', None)
         if valid_region_utm is None:
-            from watch.utils import util_raster
-            import numpy as np
-            _ = ub.cmd('gdalinfo -stats {}'.format(fpath), check=True)
-            sh_poly = util_raster.mask(fpath)
-            sh_poly = sh_poly.buffer(0).simplify(10)
+            # _ = ub.cmd('gdalinfo -stats {}'.format(fpath), check=True)
+            sh_poly = util_raster.mask(fpath, tolerance=10)
             kw_poly = kwimage.MultiPolygon.from_shapely(sh_poly)
+            # TODO: get a better heuristic here
             obj['valid_region'] = kw_poly.to_coco(style='new')
             if info is None:
                 info = watch.gis.geotiff.geotiff_metadata(fpath, **metakw)
-            wld_to_pxl = np.linalg.inv(info['wld_to_pxl'])
-            kw_poly_utm = kw_poly.warp(wld_to_pxl).warp(info['wld_to_utm'])
-            poly_utm = kw_poly_utm.to_geojson()
-            poly_utm['properties'] = {}
-            poly_utm['properties']['crs'] = obj['utm_crs_info']
-            obj['valid_region_utm'] = poly_utm
             obj['band_metas'] = info['band_metas']
+
+            if 'wld_to_pxl' in info:
+                wld_to_pxl = np.linalg.inv(info['wld_to_pxl'])
+                kw_poly_utm = kw_poly.warp(wld_to_pxl).warp(info['wld_to_utm'])
+                poly_utm = kw_poly_utm.to_geojson()
+                poly_utm['properties'] = {}
+                poly_utm['properties']['crs'] = info['utm_crs_info']
+                obj['valid_region_utm'] = poly_utm
 
         if 'warp' in overwrite or warp_to_wld is None or approx_meter_gsd is None:
             try:
@@ -253,18 +256,18 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
                 # print('info = {!r}'.format(info))
 
                 # WE NEED TO ACCOUNT FOR WLD_CRS TO USE THIS
-                # obj_to_wld = Affine.coerce(info['pxl_to_wld'])
+                # obj_to_wld = kwimage.Affine.coerce(info['pxl_to_wld'])
 
                 # FIXME: FOR NOW JUST USE THIS BIG HACK
                 xy1_man = info['pxl_corners'].data.astype(np.float64)
                 xy2_man = info['utm_corners'].data.astype(np.float64)
                 hack_aff = fit_affine_matrix(xy1_man, xy2_man)
-                hack_aff = Affine.coerce(hack_aff)
+                hack_aff = kwimage.Affine.coerce(hack_aff)
 
                 # crs_info['utm_corners'].warp(np.asarray(hack_aff.inv()))
                 # crs_info['pxl_corners'].warp(np.asarray(hack_aff))
 
-                obj_to_wld = Affine.coerce(hack_aff)
+                obj_to_wld = kwimage.Affine.coerce(hack_aff)
                 # cv2.getAffineTransform(utm_corners, pxl_corners)
 
                 wgs84_crs_info = ub.dict_diff(info['wgs84_crs_info'], {'type'})
@@ -300,14 +303,14 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
             except Exception as ex:
                 if default_gsd is not None:
                     obj['approx_meter_gsd'] = default_gsd
-                    obj['warp_to_wld'] = Affine.eye().__json__()
+                    obj['warp_to_wld'] = kwimage.Affine.eye().__json__()
                 else:
                     # FIXME: This might not be the best way to report errors
                     # raise
                     errors.append('no_crs_info: {!r}'.format(ex))
             else:
                 obj['approx_meter_gsd'] = approx_meter_gsd
-                obj['warp_to_wld'] = Affine.coerce(obj_to_wld).__json__()
+                obj['warp_to_wld'] = kwimage.Affine.coerce(obj_to_wld).__json__()
 
         if 'band' in overwrite or num_bands is None:
             try:
@@ -508,8 +511,8 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
                     metadata.
                     '''))
 
-            wld_from_aux = Affine.coerce(aux_chosen.get('warp_to_wld', None))
-            img_from_aux = Affine.coerce(aux_chosen['warp_aux_to_img'])
+            wld_from_aux = kwimage.Affine.coerce(aux_chosen.get('warp_to_wld', None))
+            img_from_aux = kwimage.Affine.coerce(aux_chosen['warp_aux_to_img'])
             aux_from_img = img_from_aux.inv()
             wld_from_img = wld_from_aux @ aux_from_img
             approx_meter_gsd = aux_chosen['approx_meter_gsd']
@@ -523,7 +526,7 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
                 The image may not have associated geo metadata.
                 '''))
 
-        wld_from_img = Affine.coerce(wld_from_img)
+        wld_from_img = kwimage.Affine.coerce(wld_from_img)
 
         asset_channels = []
         asset_gsds = []
@@ -590,11 +593,14 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
     )
     scale = base_info['to_target_scale_factor']
     base_wld_crs_info = base_info['wld_crs_info']
+    # if base_wld_crs_info is None:
+    #     import xdev
+    #     xdev.embed()
 
     # Can add an extra transform here if the video is not exactly in
     # any specific image space
     baseimg_from_wld = base_info['img_to_wld'].inv()
-    vid_from_wld = Affine.scale(scale) @ baseimg_from_wld
+    vid_from_wld = kwimage.Affine.scale(scale) @ baseimg_from_wld
     video['width'] = int(np.ceil(base_info['width'] * scale))
     video['height'] = int(np.ceil(base_info['height'] * scale))
 
@@ -871,6 +877,8 @@ def transfer_geo_metadata(coco_dset, gid):
             fpath = join(coco_img.dset.bundle_dpath, fname)
             try:
                 info = watch.gis.geotiff.geotiff_metadata(fpath)
+                if info.get('crs_error', None) is not None:
+                    raise Exception
             except Exception:
                 assets_without_geo_info[asset_idx] = obj
             else:
@@ -895,7 +903,10 @@ def transfer_geo_metadata(coco_dset, gid):
                             if fname is not None:
                                 fpath = join(coco_img.dset.bundle_dpath, fname)
                                 try:
+                                    # Try until we find an image with real CRS info
                                     info = watch.gis.geotiff.geotiff_metadata(fpath)
+                                    if info.get('crs_error', None) is not None:
+                                        raise Exception
                                 except Exception:
                                     continue
                                 else:

@@ -79,9 +79,9 @@ crop_to_regions(){
         --src $UNCROPPED_KWCOCO_FPATH \
         --dst $ALIGNED_KWCOCO_FPATH \
         --regions $REGION_FPATH \
-        --max_workers=10 \
-        --aux_workers=3 \
+        --workers=4 \
         --context_factor=1 \
+        --skip_geo_preprop=False \
         --visualize=0 \
         --keep none
 

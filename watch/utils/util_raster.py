@@ -1,19 +1,22 @@
-import os
-from copy import deepcopy
-from tempfile import NamedTemporaryFile
-from dataclasses import dataclass
-from typing import Union
-from contextlib import ExitStack
+# -*- coding: utf-8 -*-
+import kwimage
 import numpy as np
-from tempenv import TemporaryEnvironment
-from lxml import etree
+import os
+import pygeos
 import shapely as shp
 import shapely.geometry
 import shapely.ops
-from skimage.morphology import convex_hull_image
-import kwimage
-import pygeos
+import ubelt as ub
+import warnings
 
+from contextlib import ExitStack
+from copy import deepcopy
+from dataclasses import dataclass
+from lxml import etree
+from skimage.morphology import convex_hull_image
+from tempenv import TemporaryEnvironment
+from tempfile import NamedTemporaryFile
+from typing import Union
 from osgeo import gdal, osr
 
 import rasterio
@@ -23,8 +26,15 @@ from rasterio.enums import Resampling
 
 from watch.gis.spatial_reference import utm_epsg_from_latlon
 
+try:
+    from xdev import profile
+except Exception:
+    profile = ub.identity
 
-def mask(raster, nodata=0, save=True, convex_hull=False, as_poly=True):
+
+@profile
+def mask(raster, nodata=None, save=False, convex_hull=False, as_poly=True,
+         tolerance=None):
     """
     Compute a raster's valid data mask in pixel coordinates.
 
@@ -47,6 +57,8 @@ def mask(raster, nodata=0, save=True, convex_hull=False, as_poly=True):
         as_poly (bool): if True, return the mask as a shapely Polygon or
             MultiPolygon instead of a raster image, in (w, h) order (opposite
             of Python convention).
+
+        tolerance (int): if specified, simplifies the valid polygon.
 
     Returns:
         If as_poly, a shapely Polygon or MultiPolygon bounding the valid
@@ -78,49 +90,78 @@ def mask(raster, nodata=0, save=True, convex_hull=False, as_poly=True):
         >>> canvas = kw_poly.draw_on(canvas, color='green')
         >>> kw_poly.scale(1.1, about='center').draw(alpha=0.5, color='red', setlim=True)
         >>> kwplot.imshow(canvas)
+
+    Example:
+        >>> # Test how the "save" functionality modifies the data
+        >>> import kwimage
+        >>> from watch.utils.util_raster import *
+        >>> import pathlib
+        >>> dpath = pathlib.Path(ub.ensure_app_cache_dir('watch/tests/empty_raster'))
+        >>> raster = dpath / 'empty.tif'
+        >>> ub.delete(raster)
+        >>> kwimage.imwrite(raster, np.zeros((3, 3, 5)))
+        >>> info1 = ub.cmd('gdalinfo {}'.format(raster))
+        >>> nodata = 0
+        >>> mask_img = mask(raster, as_poly=False)
+        >>> print('mask_img = {!r}'.format(mask_img))
+        >>> info2 = ub.cmd('gdalinfo {}'.format(raster))
+        >>> mask_poly = mask(raster, as_poly=True)
+        >>> info3 = ub.cmd('gdalinfo {}'.format(raster))
+        >>> print(info1['out'])
+        >>> print(info2['out'])
+        >>> print(info3['out'])
     """
-    # workaround for
-    # https://rasterio.readthedocs.io/en/latest/faq.html#why-can-t-rasterio-find-proj-db-rasterio-from-pypi-versions-1-2-0
-    with TemporaryEnvironment({'PROJ_LIB': None}):
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category=rasterio.errors.NotGeoreferencedWarning)
+        # workaround for
+        # https://rasterio.readthedocs.io/en/latest/faq.html#why-can-t-rasterio-find-proj-db-rasterio-from-pypi-versions-1-2-0
+        # with TemporaryEnvironment({'PROJ_LIB': None}):
         img = rasterio.open(raster, 'r+')
-        if img.nodata is None and nodata is not None:
-            if save:
-                img.nodata = nodata
-                img.close()  # to apply changes
-                img = rasterio.open(raster, 'r')
-            else:
-                profile = img.profile
-                # TODO could optimize this with rasterio.shutil.copy
-                # or https://rasterio.readthedocs.io/en/latest/topics/windowed-rw.html#blocks
-                data = img.read()
-                img.close()
+        try:
+            if img.nodata is None and nodata is not None:
+                if save:
+                    img.nodata = nodata
+                    img.close()  # to apply changes
+                    img = rasterio.open(raster, 'r')
+                else:
+                    profile = img.profile
+                    # TODO could optimize this with rasterio.shutil.copy
+                    # or https://rasterio.readthedocs.io/en/latest/topics/windowed-rw.html#blocks
+                    data = img.read()
+                    img.close()
 
-                profile.update(nodata=nodata)
-                memfile = MemoryFile()
-                img = memfile.open(profile)
-                img.write(data)
+                    profile.update(nodata=nodata)
+                    memfile = MemoryFile()
+                    img = memfile.open(profile)
+                    img.write(data)
 
-        mask = img.dataset_mask()
-        img.close()
+            mask_img = img.dataset_mask()
+        finally:
+            img.close()
 
-    if convex_hull:
-        mask = convex_hull_image(mask).astype(np.uint8)
+        if convex_hull:
+            mask_img = convex_hull_image(mask_img).astype(np.uint8)
 
-    if not as_poly:
-        return mask
+        if not as_poly:
+            return mask_img
 
-    # mask has values 0 and 255
-    polys = [
-        shp.geometry.shape(poly) for poly, val in rasterio.features.shapes(mask)
-        if val == 255
-    ]
-    poly = shp.ops.unary_union(polys).buffer(0)
+        # mask has values 0 and 255
+        polys = [
+            shp.geometry.shape(poly)
+            for poly, val in rasterio.features.shapes(mask_img, connectivity=4)
+            if val == 255
+        ]
+        if tolerance is not None:
+            polys = [poly.buffer(0).simplify(tolerance) for poly in polys]
+        mask_poly = shp.ops.unary_union(polys).buffer(0)
+        if tolerance is not None:
+            mask_poly.simplify(tolerance)
 
-    # do this again to fix any weirdness from union
-    if convex_hull:
-        poly = poly.convex_hull
+        # do this again to fix any weirdness from union
+        if convex_hull:
+            mask_poly = mask_poly.convex_hull
 
-    return poly
+    return mask_poly
 
 
 def crop_to(pxl_polys, raster, bounds_policy, intersect_policy='crop'):
