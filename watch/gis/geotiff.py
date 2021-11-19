@@ -55,7 +55,10 @@ def geotiff_metadata(gpath, elevation='gtop30'):
         raise Exception(msg)
 
     infos['fname'] = geotiff_filepath_info(gpath)
-    infos['crs'] = geotiff_crs_info(ref, elevation=elevation)
+    try:
+        infos['crs'] = geotiff_crs_info(ref, elevation=elevation)
+    except Exception as ex:
+        infos['crs'] = {'crs_error': str(ex)}
     infos['header'] = geotiff_header_info(ref)
 
     # Combine sensor candidates
@@ -84,6 +87,17 @@ def _coerce_gdal_dataset(data):
 def geotiff_header_info(gpath_or_ref):
     """
     Extract relevant metadata information from a geotiff header.
+
+    Example:
+        >>> from watch.gis.geotiff import *  # NOQA
+        >>> from watch.demo.dummy_demodata import dummy_rpc_geotiff_fpath
+        >>> from watch.demo.landsat_demodata import grab_landsat_product
+        >>> gpath_or_ref = gpath = dummy_rpc_geotiff_fpath()
+        >>> info = geotiff_header_info(gpath)
+        >>> print('info = {}'.format(ub.repr2(info, nl=1)))
+        >>> gpath_or_ref = gpath = grab_landsat_product()['bands'][0]
+        >>> info = geotiff_header_info(gpath)
+        >>> print('info = {}'.format(ub.repr2(info, nl=1)))
     """
     ref = _coerce_gdal_dataset(gpath_or_ref)
     keys_of_interest = [
@@ -115,11 +129,15 @@ def geotiff_header_info(gpath_or_ref):
     band_metas = []
     for i in range(1, ref.RasterCount + 1):
         band = ref.GetRasterBand(i)
+        # band.ComputeBandStats()
+        if 0:
+            band.GetStatistics(0, 1)
         band_meta_domains = band.GetMetadataDomainList() or []
         all_domain_band_meta = {}
+        all_domain_band_meta['nodata'] = band.GetNoDataValue()
         for ns in band_meta_domains:
             band_meta = band.GetMetadata(ns)
-            band_meta = ub.dict_diff(band_meta, {'COMPRESSION'})
+            # band_meta = ub.dict_diff(band_meta, {'COMPRESSION'})
             for key, value in band_meta.items():
                 all_domain_band_meta['{}.{}'.format(ns, key)] = value
         band_metas.append(all_domain_band_meta)

@@ -33,19 +33,20 @@ def mask(raster, nodata=0, save=True, convex_hull=False, as_poly=True):
     mask, which is always per-band.
 
     Args:
-        raster: Path to a dataset (raster image file)
+        raster (str): Path to a dataset (raster image file)
 
-        nodata: if raster's nodata value is None, default to this
+        nodata (int): if raster's nodata value is None, default to this
 
-        save: if True and raster's nodata value is None, write the default
-            to it. If False, performance overhead is incurred from creating a
-            tempfile
+        save (bool): if True and raster's nodata value is None, write the
+            default to it. If False, performance overhead is incurred from
+            creating a tempfile
 
-        convex_hull: if True, return the convex hull of the mask image or poly
+        convex_hull (bool):
+            if True, return the convex hull of the mask image or poly
 
-        as_poly: if True, return the mask as a shapely Polygon or MultiPolygon
-            instead of a raster image, in (w, h) order (opposite of Python
-            convention).
+        as_poly (bool): if True, return the mask as a shapely Polygon or
+            MultiPolygon instead of a raster image, in (w, h) order (opposite
+            of Python convention).
 
     Returns:
         If as_poly, a shapely Polygon or MultiPolygon bounding the valid
@@ -59,15 +60,24 @@ def mask(raster, nodata=0, save=True, convex_hull=False, as_poly=True):
         >>> from watch.utils.util_raster import *
         >>> from watch.demo.landsat_demodata import grab_landsat_product
         >>> path = grab_landsat_product()['bands'][0]
-        >>>
+        >>> #
         >>> mask_img = mask(path, as_poly=False)
         >>> import kwimage as ki
         >>> assert mask_img.shape == ki.load_image_shape(path)[:2]
         >>> assert set(np.unique(mask_img)) == {0, 255}
-        >>>
+        >>> #
         >>> mask_poly = mask(path, as_poly=True)
         >>> import shapely
         >>> assert isinstance(mask_poly, shapely.geometry.Polygon)
+        >>> # xdoctest: +REQURIES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.figure(fnum=1, doclf=True)
+        >>> kw_poly = kwimage.Polygon.coerce(mask_poly.buffer(0).simplify(10))
+        >>> canvas = mask_img.copy()
+        >>> canvas = kw_poly.draw_on(canvas, color='green')
+        >>> kw_poly.scale(1.1, about='center').draw(alpha=0.5, color='red', setlim=True)
+        >>> kwplot.imshow(canvas)
     """
     # workaround for
     # https://rasterio.readthedocs.io/en/latest/faq.html#why-can-t-rasterio-find-proj-db-rasterio-from-pypi-versions-1-2-0

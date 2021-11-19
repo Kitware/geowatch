@@ -822,6 +822,7 @@ class SimpleDataCube(object):
             >>>                       max_workers=max_workers)
         """
         from kwcoco.util.util_json import ensure_json_serializable
+        # from watch.utils import util_raster
         # import watch
         coco_dset = cube.coco_dset
 
@@ -872,6 +873,14 @@ class SimpleDataCube(object):
         # parallelize over images
         pool = ub.JobPool(mode='thread', max_workers=img_workers)
 
+        sh_space_region_crs84 = space_region.to_shapely()
+        import geopandas as gpd
+        space_region_crs84 = gpd.GeoDataFrame({'geometry': [sh_space_region_crs84]}, crs='crs84')
+
+        @ub.memoize
+        def space_region_in_crs(crs):
+            return space_region_crs84.to_crs(crs)
+
         frame_count = 0
         for datetime_ in ub.ProgIter(datetimes, desc='submit extract jobs', verbose=1):
             if max_frames is not None:
@@ -897,8 +906,29 @@ class SimpleDataCube(object):
                     rows = []
                     for gid in sensor_gids:
                         coco_img = coco_dset.coco_image(gid)
+                        # coco_img
+
+                        # Should more than just the primary asset be used here?
                         primary_asset = coco_img.primary_asset()
                         fpath = join(coco_dset.bundle_dpath, primary_asset['file_name'])
+
+                        valid_region_utm = primary_asset.get('valid_region_utm', None)
+                        if valid_region_utm is None:
+                            kwcoco_extensions.coco_populate_geo_img_heuristics(coco_dset, gid, keep_geotiff_metadata=True)
+
+                        valid_region_utm = primary_asset.get('valid_region_utm', None)
+                        if valid_region_utm is not None:
+                            from shapely import geometry
+                            this_utm_crs = primary_asset['utm_crs_info']['auth']
+                            space_region_utm = space_region_in_crs(this_utm_crs)
+                            sh_space_region_utm = space_region_utm['geometry'].iloc[0]
+                            sh_region_utm = geometry.shape(primary_asset['valid_region_utm'])
+                            isect_area = sh_region_utm.intersection(sh_space_region_utm).area
+                            other_area = sh_space_region_utm.area
+                            valid_iooa = isect_area / other_area
+                        else:
+                            valid_iooa = 0
+
                         # primary_chan = primary_asset.get('channels', None)
                         # print('primary_chan = {!r}'.format(primary_chan))
                         # print('fpath = {!r}'.format(fpath))
@@ -906,9 +936,9 @@ class SimpleDataCube(object):
                         # Hack
                         primary_utmzone = info['out'].split('EPSG",')[-1].split(']')[0]
                         same_utm = str(utm_epsg_zone) == str(primary_utmzone)
-                        # TOODO: how do we get the amount of overlap with the query region? WRT to the valid data polygons?
+                        # TODO: how do we get the amount of overlap with the query region? WRT to the valid data polygons?
                         valid_percent = (float(info['out'].split('STATISTICS_VALID_PERCENT')[-1].split('=')[-1].split('\n')[0] or '0')) / 100
-                        score = valid_percent + (same_utm * 10)
+                        score = valid_percent + (same_utm * 10) + valid_iooa * 100
                         rows.append({
                             'score': score,
                             'gid': gid,
@@ -1128,6 +1158,8 @@ def extract_image_job(img, anns, bundle_dpath, date, num, frame_index,
             if obj['is_rpc']:
                 is_rpc = True
         else:
+            if 'geotiff_metadata' not in obj:
+                kwcoco_extensions._populate_canvas_obj(bundle_dpath, obj, keep_geotiff_metadata=True)
             if obj['geotiff_metadata']['is_rpc']:
                 is_rpc = True
 

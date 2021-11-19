@@ -160,6 +160,7 @@ def coco_populate_geo_img_heuristics(coco_dset, gid, overwrite=False,
     # to determine their geo-properties.
     asset_errors = []
     for obj in asset_objs:
+        pass
         errors = _populate_canvas_obj(bundle_dpath, obj, overwrite=overwrite,
                                       default_gsd=default_gsd,
                                       keep_geotiff_metadata=keep_geotiff_metadata)
@@ -214,13 +215,35 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
     if fname is not None:
         fpath = join(bundle_dpath, fname)
 
+        info = None
+        dem_hint = obj.get('dem_hint', 'use')
+        metakw = {}
+        if dem_hint == 'ignore':
+            metakw['elevation'] = 0
+
+        valid_region_utm = obj.get('valid_region_utm', None)
+        if valid_region_utm is None:
+            from watch.utils import util_raster
+            import numpy as np
+            _ = ub.cmd('gdalinfo -stats {}'.format(fpath), check=True)
+            sh_poly = util_raster.mask(fpath)
+            sh_poly = sh_poly.buffer(0).simplify(10)
+            kw_poly = kwimage.MultiPolygon.from_shapely(sh_poly)
+            obj['valid_region'] = kw_poly.to_coco(style='new')
+            if info is None:
+                info = watch.gis.geotiff.geotiff_metadata(fpath, **metakw)
+            wld_to_pxl = np.linalg.inv(info['wld_to_pxl'])
+            kw_poly_utm = kw_poly.warp(wld_to_pxl).warp(info['wld_to_utm'])
+            poly_utm = kw_poly_utm.to_geojson()
+            poly_utm['properties'] = {}
+            poly_utm['properties']['crs'] = obj['utm_crs_info']
+            obj['valid_region_utm'] = poly_utm
+            obj['band_metas'] = info['band_metas']
+
         if 'warp' in overwrite or warp_to_wld is None or approx_meter_gsd is None:
             try:
-                dem_hint = obj.get('dem_hint', 'use')
-                metakw = {}
-                if dem_hint == 'ignore':
-                    metakw['elevation'] = 0
-                info = watch.gis.geotiff.geotiff_metadata(fpath, **metakw)
+                if info is None:
+                    info = watch.gis.geotiff.geotiff_metadata(fpath, **metakw)
                 if keep_geotiff_metadata:
                     obj['geotiff_metadata'] = info
                 height, width = info['img_shape'][0:2]
