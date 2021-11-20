@@ -119,7 +119,7 @@ def main(cmdline=True, **kwargs):
         >>> from watch.utils import kwcoco_extensions
         >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral', num_frames=5)
         >>> img = dset.dataset['images'][0]
-        >>> coco_img = kwcoco_extensions.CocoImage(img, dset)
+        >>> coco_img = dset.coco_image(img['id'])
         >>> channel_chunks = list(ub.chunks(coco_img.channels.fuse().parsed, chunksize=3))
         >>> channels = ','.join(['|'.join(p) for p in channel_chunks])
         >>> kwargs = {
@@ -365,7 +365,6 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     # See if we can look at what we made
     from kwcoco import channel_spec
     from watch.utils.util_norm import normalize_intensity
-    from watch.utils.kwcoco_extensions import CocoImage
     from watch.utils import util_kwimage
 
     sensor_coarse = img.get('sensor_coarse', 'unknown')
@@ -394,7 +393,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         channels = channel_spec.ChannelSpec.coerce(channels)
         chan_groups = channels.streams()
     else:
-        coco_img = CocoImage(img)
+        coco_img = coco_dset.coco_image(img['id'])
         channels = coco_img.channels
         if request_grouped_bands == 'default':
             # Use false color for special groups

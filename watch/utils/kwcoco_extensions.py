@@ -17,7 +17,6 @@ import numbers
 
 from os.path import join
 from watch.utils import util_raster
-# Was originally defined in this file, moved to kwcoco proper
 from kwcoco.coco_image import CocoImage
 
 try:
@@ -26,7 +25,9 @@ except Exception:
     profile = ub.identity
 
 
-def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None, overwrite=False, default_gsd=None, conform=True, workers=0):
+def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None,
+                          overwrite=False, default_gsd=None, conform=True,
+                          workers=0):
     """
     Aggregate populate function for fields useful to WATCH.
 

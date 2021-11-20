@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from watch.utils import kwcoco_extensions
 from watch.utils import util_kwimage
 import kwarray
@@ -49,7 +50,7 @@ def time_aggregated_polys(coco_dset, thresh=0.15, morph_kernel=3):
     key = 'change_prob'
     running = kwarray.RunningStats()
     for img in coco_dset.imgs.values():
-        coco_img = kwcoco_extensions.CocoImage(img, coco_dset)
+        coco_img = coco_dset.coco_image(img['id'])
         if key in coco_img.channels:
             img_probs = coco_img.delay(key, space='video').finalize()
             running.update(img_probs)

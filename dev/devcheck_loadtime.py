@@ -219,7 +219,7 @@ def check_loadtime():
         sample_gids = sample_gids[::max(1, len(sample_gids) // num_samples)]
         sample_fpaths = []
         for gid in sample_gids:
-            coco_img = watch.utils.kwcoco_extensions.CocoImage(coco_dset.imgs[gid], coco_dset)
+            coco_img = coco_dset.coco_image(gid)
             delayed = coco_img.delay(channels)
             for p, v in ub.IndexableWalker(delayed.__json__()):
                 if p[-1] == 'fpath':
