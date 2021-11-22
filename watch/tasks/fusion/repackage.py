@@ -92,7 +92,8 @@ def gather_checkpoints():
     train_base = dvc_dpath / 'training'
     dataset_names = [
         # 'Drop1_October2021',
-        'Drop1_November2021',
+        # 'Drop1_November2021',
+        'Drop1-20201117',
     ]
     user_machine_dpaths = list(train_base.glob('*/*'))
 
@@ -102,7 +103,7 @@ def gather_checkpoints():
             dset_dpath = um_dpath / dset_name
             lightning_log_dpaths = list((dset_dpath / 'runs').glob('*/lightning_logs'))
             for ll_dpath in lightning_log_dpaths:
-                if not ll_dpath.parent.name.startswith('Activity'):
+                if not ll_dpath.parent.name.startswith(('Activity', 'SC_')):
                     continue
                 for checkpoint_fpath in list((ll_dpath).glob('*/checkpoints/*.ckpt')):
                     parts = checkpoint_fpath.name.split('-')
@@ -110,8 +111,9 @@ def gather_checkpoints():
                         print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
                         all_checkpoint_paths.append(checkpoint_fpath)
 
-    unevaled_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
-    unevaled_dpath.mkdir(exist_ok=True, parents=True)
+    # storage_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
+    storage_dpath = dvc_dpath / 'models/fusion/SC-20201117'
+    storage_dpath.mkdir(exist_ok=True, parents=True)
 
     import ubelt as ub
     import shutil
@@ -119,7 +121,7 @@ def gather_checkpoints():
         package_fpath = repackage(p)
         package_fpath = pathlib.Path(package_fpath)
         name = package_fpath.name.split('_epoch')[0]
-        name_dpath = unevaled_dpath / name
+        name_dpath = storage_dpath / name
         name_dpath.mkdir(exist_ok=True, parents=True)
         if not name_dpath.exists():
             shutil.copy(package_fpath, name_dpath)

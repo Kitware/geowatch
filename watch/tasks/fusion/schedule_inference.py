@@ -11,7 +11,11 @@ def gather_candidate_models():
     dvc_dpath = watch.utils.util_data.find_smart_dvc_dpath()
 
     # HARD CODED
-    model_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
+    # model_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
+    # test_dataset_fpath = dvc_dpath / 'Drop1-Aligned-L1/vali_combo11.kwcoco.json'
+
+    # model_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
+    model_dpath = dvc_dpath / 'models/fusion/SC-20201117'
     test_dataset_fpath = dvc_dpath / 'Drop1-Aligned-L1/vali_combo11.kwcoco.json'
 
     stamp = ub.timestamp() + '_' + ub.hash_data([])[0:8]
@@ -45,7 +49,9 @@ def gather_candidate_models():
     tmux_schedule_dpath = dvc_dpath / '_tmp_tmux_schedule'
     tmux_schedule_dpath.mkdir(exist_ok=True)
 
-    GPUS = [0, 1, 2, 3]
+    # GPUS = [0, 1, 2, 3]
+    GPUS = [0]
+
     parallel_job_ids = range(len(GPUS))
     parallel_queues = {
         queue_index: {
