@@ -12,13 +12,16 @@ from argparse import ArgumentParser, RawTextHelpFormatter
 import os
 
 # local imports
-from .model import pretext
-from .iarpa_dataset import kwcoco_dataset
+from .pretext_model import pretext
 
 
 def main(args):
     if args.train_dataset is None:
         raise ValueError('train_dataset must contain path to kwcoco file')
+
+    sensor = args.sensor
+    if 'S2' in args.sensor and 'L8' in args.sensor:
+        sensor = 'shared'
 
     args.tasks = sorted(args.tasks)
     dataset_name = os.path.basename(os.path.dirname(args.train_dataset))
@@ -26,7 +29,7 @@ def main(args):
         args.save_dir,
         '_'.join(args.tasks),
         dataset_name,
-        args.sensor,
+        sensor,
         )
 
     model = pretext(hparams=args)
@@ -62,7 +65,7 @@ if __name__ == '__main__':
             --vali_dataset=path/to/vali.kwcoco.json
     """
     parser = ArgumentParser(description='', formatter_class=RawTextHelpFormatter)
-
+    from scriptconfig.smartcast import smartcast
     ###dataset hparams
     parser.add_argument('--train_dataset', type=str, help="path/to/train.kwcoco.json", required=True)
     parser.add_argument('--vali_dataset', type=str, help="path/to/vali.kwcoco.json", default=None)
@@ -71,11 +74,11 @@ if __name__ == '__main__':
     parser.add_argument('--feature_dim_each_task', type=int, default=8)
     parser.add_argument('--tasks', nargs='+', help=f'specify which tasks to choose from ({", ".join(pretext.TASK_NAMES)}, or all.\nEx: --tasks {pretext.TASK_NAMES[0]} {pretext.TASK_NAMES[1]}', default=['all'])
     parser.add_argument('--focal_gamma', type=float, help='Focal parameter in loss function for arrow of time task. 0 corresponds to binary cross entropy loss', default=2)
-    parser.add_argument('--aot_penalty_weight', type=float, help='Weight to apply to difference of feature map regularization in arrow of time task. Set to 0 to ignore calculations.', default=1)
-    parser.add_argument('--aot_penalty_percentage', type=float, help='Percentage of pixels to apply feature map regularization penalty too. Penalty applies to lowest values among differences o feature maps', default=.8)
+    parser.add_argument('--aot_penalty_weight', type=float, help='Weight to apply to difference of feature map regularization in arrow of time task. Set to 0 to ignore calculations.', default=0)
+    parser.add_argument('--aot_penalty_percentage', type=float, help='Percentage of pixels to apply feature map regularization penalty too. Penalty applies to lowest values among differences of feature maps', default=.8)
     ###sensor hparams
-    parser.add_argument('--sensor', type=str, default='S2')
-    parser.add_argument('--bands', nargs='+', help=f'specify which bands to use for the given sensor.\ntypical bands for S2 sensor : {", ".join(kwcoco_dataset.S2_channel_names)}, or all.\ntypical bands for L8 sensor : {", ".join(kwcoco_dataset.L8_channel_names)}, or all.\nEx: --sensor S2 --bands {kwcoco_dataset.S2_channel_names[0]} {kwcoco_dataset.S2_channel_names[1]}', default=['all'])
+    parser.add_argument('--sensor', type=smartcast, nargs='+', default=['S2', 'L8'])
+    parser.add_argument('--bands', type=smartcast, help='Choose bands on which to train. Can specify \'all\' for all bands from given sensor, or \'shared\' to use common bands when using both S2 and L8 sensors', nargs='+', default=['shared'])
     ###learning hparams
     parser.add_argument('--patch_size', type=int, default=128)
     parser.add_argument('--max_epochs', type=int, default=50)
@@ -90,7 +93,7 @@ if __name__ == '__main__':
     parser.add_argument('--save_dir', type=str, default=None)
     ###device
     parser.add_argument('--device', type=str, default='gpu')
-    parser.add_argument('--gpus', type=int, nargs='+', help='gpu(s) to run on', default=0)
+    parser.add_argument('--gpus', type=int, help='gpu(s) to run on', default=1)
 
     parser.set_defaults(
         terminate_on_nan=True,

@@ -5,9 +5,9 @@ from argparse import Namespace
 import pytorch_lightning as pl
 from torchmetrics.classification.accuracy import Accuracy
 
-from .iarpa_dataset import kwcoco_dataset
-from .unet_blur import UNetEncoder, UNetDecoder
-from .focal_loss import BinaryFocalLoss
+from .data.datasets import kwcoco_dataset
+from .utils.unet_blur import UNetEncoder, UNetDecoder
+from .utils.focal_loss import BinaryFocalLoss
 
 
 class pretext(pl.LightningModule):

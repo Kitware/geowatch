@@ -12,13 +12,14 @@ from tqdm import tqdm
 import ubelt as ub
 
 # local imports
-from .pretext_model import pretext
-from .data.datasets import kwcoco_dataset
+from .segmentation_model import segmentation_model
+from .data.multi_image_datasets import kwcoco_dataset
 from watch.utils import util_parallel
 from watch.utils.lightning_ext import util_globals
+from .pretext_model import pretext
 
 
-def predict(args):
+def main(args):
     print('Loading checkpoint')
 
     if True:
@@ -27,11 +28,11 @@ def predict(args):
             'train_dataset': None,
             'vali_dataset': None,
         }
-        cls = pretext
+        cls = segmentation_model
         checkpoint = torch.load(args.ckpt_path)
         # Hack for getting the input channels
         overrides['num_channels'] = (
-            checkpoint['state_dict']['encoder.inc.conv.conv.0.weight'].shape[1]
+            checkpoint['state_dict']['backbone.inc.conv.conv.0.weight'].shape[1]
         )
         print('overrides = {}'.format(ub.repr2(overrides, nl=1)))
         checkpoint[cls.CHECKPOINT_HYPER_PARAMS_KEY].update(overrides)
@@ -47,26 +48,17 @@ def predict(args):
 
     model.eval().to(device)
     print('Initiating dataset')
-    dataset = kwcoco_dataset(args.input_kwcoco, args.sensor, args.bands, mode='test')
+    dataset = kwcoco_dataset(args.input_kwcoco, sensor=args.sensor, bands=args.bands, num_images=model.hparams.num_images, mode='test', segmentation_labels=True)
 
     num_workers = util_globals.coerce_num_workers(args.num_workers)
     print('num_workers = {!r}'.format(num_workers))
 
     loader = torch.utils.data.DataLoader(
-        dataset, num_workers=num_workers, collate_fn=ub.identity, batch_size=1)
+        dataset, num_workers=num_workers, batch_size=1)
     num_batches = len(loader)
-    # Start background processes
-    loader_iter = iter(loader)
 
     # Build a task queue for background write results workers
-    # queue = util_parallel.BlockingJobQueue(max_workers=num_workers)
-    queue = util_parallel.BlockingJobQueue(max_workers=0)
-
-    if len(args.tasks) == 1 and args.tasks[0].lower() == 'all':
-        feature_types = model.TASK_NAMES
-        feature_types.append('shared')
-    else:
-        feature_types = args.tasks
+    queue = util_parallel.BlockingJobQueue(max_workers=num_workers)
 
     print('Evaluating and saving features')
 
@@ -76,49 +68,50 @@ def predict(args):
         root, _ = os.path.split(args.input_kwcoco)
 
     with torch.set_grad_enabled(False):
-        for batch in tqdm(loader_iter, total=num_batches):
-            for item in batch:
-                image_id, image_info, image = item
+        for batch in tqdm(loader, total=num_batches):
+            image_id = batch['img1_id']
+            image_info = dataset.dset.index.imgs[image_id.item()]
+            # image_id, image_info, image  = dataset.get_img(idx, args.device)
 
-                image = image.to(device)
+            aux_base = image_info['auxiliary'][0]
+            path, file_name = os.path.split(aux_base['file_name'])
 
-                aux_base = image_info['auxiliary'][0]
-                path, file_name = os.path.split(aux_base['file_name'])
+            if args.data_save_folder is not None:
+                save_path = args.data_save_folder
+            else:
+                save_path = os.path.join(root, 'uky_invariants', path)
 
-                if args.data_save_folder is not None:
-                    save_path = args.data_save_folder
-                else:
-                    save_path = os.path.join(root, 'uky_invariants', path)
+            if not os.path.exists(save_path):
+                os.makedirs(save_path, exist_ok=True)
 
-                if not os.path.exists(save_path):
-                    os.makedirs(save_path, exist_ok=True)
+            out = model.test_step(batch)
+            heatmap = torch.sigmoid(out['prediction_map'][:, 0, 1, :, :] - out['prediction_map'][:, 0, 0, :, :])
 
-                features = model.predict(image)
+            # Predictions are saved in 'video space', so warp_aux_to_img is the inverse of warp_img_to_vid
+            warp_img_to_vid = kwimage.Affine.coerce(image_info.get('warp_img_to_vid', None))
+            warp_aux_to_img = warp_img_to_vid.inv().concise()
 
-                # Predictions are saved in 'video space', so warp_aux_to_img is the inverse of warp_img_to_vid
-                warp_img_to_vid = kwimage.Affine.coerce(image_info.get('warp_img_to_vid', None))
-                warp_aux_to_img = warp_img_to_vid.inv().concise()
+            last_us_idx = file_name.rfind('_')
+            features_to_write = {}
 
-                last_us_idx = file_name.rfind('_')
-                features_to_write = {}
-                for key in feature_types:
-                    feat = features[key].detach().squeeze()
-                    feat = feat.permute(1, 2, 0).cpu().numpy()
-                    features_to_write[key] = feat
-                    name = file_name[:last_us_idx] + '_invariants_' + key + '.tif'
-                    # kwimage.imwrite(os.path.join(save_path, name), feat, space=None,
-                    #                 backend='gdal', compress='DEFLATE')
+            feat = heatmap.detach()
+            feat = feat.permute(1, 2, 0).cpu().numpy()
+            features_to_write['segmentation_heatmap'] = feat
 
-                    info = {}
-                    info['file_name'] = os.path.join('uky_invariants', path, name)
-                    info['height'] = feat.shape[0]
-                    info['width'] = feat.shape[1]
-                    info['num_bands'] = feat.shape[2]
-                    info['channels'] = 'inv_' + key + f':{feat.shape[-1]}'
-                    info['warp_aux_to_img'] = warp_aux_to_img
-                    dataset.dset.index.imgs[image_id]['auxiliary'].append(info)
+            name = file_name[:last_us_idx] + '_invariants_' + 'segmentation_heatmap' + '.tif'
+            # kwimage.imwrite(os.path.join(save_path, name), feat, space=None,
+            #                 backend='gdal', compress='DEFLATE')
 
-                queue.submit(_write_results_fn, features_to_write, save_path, file_name)
+            info = {}
+            info['file_name'] = os.path.join('uky_invariants', path, name)
+            info['height'] = feat.shape[0]
+            info['width'] = feat.shape[1]
+            info['num_bands'] = feat.shape[2]
+            info['channels'] = ['inv_segmentation_heatmap']
+            info['warp_aux_to_img'] = warp_aux_to_img
+            dataset.dset.index.imgs[image_id.item()]['auxiliary'].append(info)
+
+            queue.submit(_write_results_fn, features_to_write, save_path, file_name)
 
     if args.output_kwcoco is None:
         args.output_kwcoco = os.path.join(root, 'uky_invariants.kwcoco.json')
@@ -138,41 +131,7 @@ def _write_results_fn(features_to_write, save_path, file_name):
         name = file_name[:last_us_idx] + '_invariants_' + key + '.tif'
         fpath = os.path.join(save_path, name)
         kwimage.imwrite(fpath, feat, space=None, backend='gdal',
-                        compress='RAW', blocksize=64)
-
-
-def main():
-    parser = ArgumentParser(description='', formatter_class=RawTextHelpFormatter)
-    from scriptconfig.smartcast import smartcast
-    parser.add_argument('--device', type=str, default='cuda')
-
-    # pytorch lightning checkpoint
-    parser.add_argument('--ckpt_path', type=str, required=True)
-    parser.add_argument('--num_workers', type=str, default=0, help='number of background data loading workers')
-
-    # data flags - make sure these match the trained checkpoint
-    parser.add_argument('--sensor', type=smartcast, nargs='+', default=['S2', 'L8'])
-    parser.add_argument('--bands', type=str, help='Choose bands on which to train. Can specify \'all\' for all bands from given sensor, or \'share\' to use common bands when using both S2 and L8 sensors', nargs='+', default=['shared'])
-    # output flags
-    parser.add_argument('--data_save_folder', help='Path to store generated feature tifs, data will end up within a folder named \'uky_invariants\'. If not specified, data is saved in the folder uky_invariants within the overall data folder.', type=str)
-    parser.add_argument('--input_kwcoco', type=str, help='Path to kwcoco dataset with images to generate feature for', required=True)
-    parser.add_argument('--output_kwcoco', type=str, help='Path to write an output kwcoco file. Output file will be a copy of input_kwcoco with addition feature fields generated by predict.py. If None, output_kwcoco will update input kwcoco.', default=None)
-    parser.add_argument('--tasks', nargs='+', help=f'specify which tasks to choose from ({", ".join(pretext.TASK_NAMES)}, shared, or all.\nEx: --tasks {pretext.TASK_NAMES[0]} {pretext.TASK_NAMES[1]}', default=['all'])
-    parser.set_defaults(
-        terminate_on_nan=True
-        )
-
-    args = parser.parse_args()
-
-    # check save directory
-    default_path = os.path.join(os.getcwd(), 'watch/tasks/invariants')
-    if args.ckpt_path is None and os.path.exists(default_path):
-        args.ckpt_path = os.path.join(default_path, 'logs')
-    elif args.ckpt_path is None:
-        args.ckpt_path = 'invariants_logs'
-
-    # torch.autograd.set_detect_anomaly(True)
-    predict(args)
+                        compress='DEFLATE')
 
 
 if __name__ == '__main__':
@@ -183,4 +142,30 @@ if __name__ == '__main__':
         python -m watch.tasks.template.predict \
             --input_kwcoco=path/to/data.kwcoco.json
     """
-    main()
+    parser = ArgumentParser(description='', formatter_class=RawTextHelpFormatter)
+    parser.add_argument('--device', type=str, default='cuda')
+
+    # pytorch lightning checkpoint
+    parser.add_argument('--ckpt_path', type=str, required=True)
+    parser.add_argument('--num_workers', type=str, default=0, help='number of background data loading workers')
+
+    # data flags - make sure these match the trained checkpoint
+    parser.add_argument('--sensor', type=str, nargs='+', default=['S2', 'L8'])
+    parser.add_argument('--bands', type=str, help='Choose bands on which to train. Can specify \'all\' for all bands from given sensor, or \'share\' to use common bands when using both S2 and L8 sensors', nargs='+', default=['shared'])
+
+    # output flags
+    parser.add_argument('--data_save_folder', help='Path to store generated feature tifs, data will end up within a folder named \'uky_invariants\'. If not specified, data is saved in the folder uky_invariants within the overall data folder.', type=str)
+    parser.add_argument('--input_kwcoco', type=str, help='Path to kwcoco dataset with images to generate feature for', required=True)
+    parser.add_argument('--output_kwcoco', type=str, help='Path to write an output kwcoco file. Output file will be a copy of input_kwcoco with addition feature fields generated by predict.py. If None, output_kwcoco will update input kwcoco.', default=None)
+
+    args = parser.parse_args()
+
+    # check save directory
+    default_path = os.path.join(os.getcwd(), 'watch/tasks/invariants')
+    if args.ckpt_path is None and os.path.exists(default_path):
+        args.ckpt_path = os.path.join(default_path, 'logs')
+    elif args.ckpt_path is None:
+        args.ckpt_path = 'invariants_logs'
+
+    torch.autograd.set_detect_anomaly(True)
+    main(args)
