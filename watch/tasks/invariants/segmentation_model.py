@@ -83,7 +83,7 @@ class segmentation_model(pl.LightningModule):
         images = [batch[key] for key in batch if key[:5] == 'image']
         images = torch.stack(images, dim=1).to(self.device)
         if self.hparams.positional_encoding:
-            positions = batch['time_steps']
+            positions = batch['time_steps'].to(self.device)
         else:
             positions = None
         forward = self.forward(images, positions)
