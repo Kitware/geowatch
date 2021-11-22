@@ -1268,11 +1268,16 @@ def _class_weights_from_freq(total_freq, mode='median-idf'):
     freq = total_freq.copy()
 
     _min, _max = np.percentile(freq, [5, 95])
-    is_valid = (_min <= freq) & (freq <= _max)
-    if np.any(is_valid):
-        middle_value = np.median(freq[is_valid])
+    is_valid = freq >= (_min <= freq) & (freq <= _max)
+    is_robust = (_max >= freq) & (freq >= _min)
+    if np.any(is_robust):
+        middle_value = np.median(freq[is_robust])
     else:
-        middle_value = np.median(freq)
+        is_valid  = (np.isfinite(freq)) & (freq >= 0)
+        if np.any(is_valid):
+            middle_value = np.median(freq[is_valid])
+        else:
+            middle_value = 2
 
     # variant of median-inverse-frequency
     mask = freq != 0

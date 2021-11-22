@@ -50,34 +50,32 @@ def repackage(checkpoint_fpath, force=False):
 
     package_fpath = x.parent / package_name
 
-    if not force and package_fpath.exists():
-        return str(package_fpath)
+    if force or not package_fpath.exists():
+        import netharn as nh
+        xpu = nh.XPU.coerce('cpu')
+        checkpoint = xpu.load(checkpoint_fpath)
 
-    import netharn as nh
-    xpu = nh.XPU.coerce('cpu')
-    checkpoint = xpu.load(checkpoint_fpath)
+        # checkpoint = torch.load(checkpoint_fpath)
+        print(list(checkpoint.keys()))
+        hparams = checkpoint['hyper_parameters']
+        if 'input_channels' in hparams:
+            from kwcoco.channel_spec import ChannelSpec
+            # Hack for strange pickle issue
+            chan = hparams['input_channels']
+            if not hasattr(chan, '_spec') and hasattr(chan, '_info'):
+                chan = ChannelSpec.coerce(chan._info['spec'])
+                hparams['input_channels'] = chan
+            else:
+                hparams['input_channels'] = ChannelSpec.coerce(chan.spec)
 
-    # checkpoint = torch.load(checkpoint_fpath)
-    print(list(checkpoint.keys()))
-    hparams = checkpoint['hyper_parameters']
-    if 'input_channels' in hparams:
-        from kwcoco.channel_spec import ChannelSpec
-        # Hack for strange pickle issue
-        chan = hparams['input_channels']
-        if not hasattr(chan, '_spec') and hasattr(chan, '_info'):
-            chan = ChannelSpec.coerce(chan._info['spec'])
-            hparams['input_channels'] = chan
-        else:
-            hparams['input_channels'] = ChannelSpec.coerce(chan.spec)
+        method = methods.MultimodalTransformer(**hparams)
+        state_dict = checkpoint['state_dict']
+        method.load_state_dict(state_dict)
 
-    method = methods.MultimodalTransformer(**hparams)
-    state_dict = checkpoint['state_dict']
-    method.load_state_dict(state_dict)
+        if train_dpath_hint is not None:
+            method.train_dpath_hint = train_dpath_hint
 
-    if train_dpath_hint is not None:
-        method.train_dpath_hint = train_dpath_hint
-
-    method.save_package(str(package_fpath))
+        method.save_package(str(package_fpath))
     return str(package_fpath)
 
 
