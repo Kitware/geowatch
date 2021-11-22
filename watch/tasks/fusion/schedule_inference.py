@@ -196,13 +196,19 @@ def gather_measures():
     import pathlib
 
     dvc_dpath = watch.utils.util_data.find_smart_dvc_dpath()
-    if True:
+    if False:
         # Hack for pointing at a remote
         dvc_dpath = ub.shrinkuser(dvc_dpath, home=ub.expandpath('$HOME/remote/horologic'))
 
-    model_dpath = pathlib.Path(dvc_dpath) / 'models/fusion/unevaluated-activity-2021-11-12'
+    # model_dpath = pathlib.Path(dvc_dpath) / 'models/fusion/unevaluated-activity-2021-11-12'
+    fusion_model_dpath = pathlib.Path(dvc_dpath) / 'models/fusion/'
+    print(ub.repr2(list(fusion_model_dpath.glob('*'))))
+    # model_dpath = fusion_model_dpath / 'unevaluated-activity-2021-11-12'
+    model_dpath = fusion_model_dpath / 'SC-20201117'
 
-    measure_fpaths = list(model_dpath.glob('eval_links/*/curves/measures2.json'))
+    # measure_fpaths = list(model_dpath.glob('eval_links/*/curves/measures2.json'))
+    measure_fpaths = list(model_dpath.glob('*/*/*/eval/curves/measures2.json'))
+    # dataset_to_evals = ub.group_items(eval_dpaths, lambda x: x.parent.name)
 
     all_infos = []
     for measure_fpath in ub.ProgIter(measure_fpaths):

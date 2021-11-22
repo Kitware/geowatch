@@ -110,7 +110,8 @@ def make_eval_symlinks():
     dvc_dpath = util_data.find_smart_dvc_dpath()
 
     # HACK: HARD CODED
-    model_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
+    # model_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
+    model_dpath = dvc_dpath / 'models/fusion/SC-20201117'
     eval_link_base = model_dpath / 'eval_links'
     eval_link_base.mkdir(exist_ok=True)
 

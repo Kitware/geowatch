@@ -3,7 +3,7 @@ Helper script for packaging a checkpoint into a torch package
 """
 
 
-def repackage(checkpoint_fpath):
+def repackage(checkpoint_fpath, force=False):
     """
 
     checkpoint_fpath
@@ -15,9 +15,7 @@ def repackage(checkpoint_fpath):
 
     checkpoint_fpath = '/home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=53-step=28457.ckpt'
 
-
     """
-    import torch
     import ubelt as ub
     import pathlib
     import os
@@ -28,6 +26,32 @@ def repackage(checkpoint_fpath):
     # If we have a checkpoint path we can load it if we make assumptions
     # init method from checkpoint.
     checkpoint_fpath = os.fspath(checkpoint_fpath)
+
+    x = pathlib.Path(ub.augpath(checkpoint_fpath, ext='.pt'))
+    package_name = x.name
+
+    # Can we precompute the package name of this checkpoint?
+    train_dpath_hint = None
+    if checkpoint_fpath.endswith('.ckpt'):
+        path_ = pathlib.Path(checkpoint_fpath)
+        if path_.parent.stem == 'checkpoints':
+            train_dpath_hint = path_.parent.parent
+
+    if train_dpath_hint is not None:
+        candidates = list(train_dpath_hint.glob('fit_config.yaml'))
+        if len(candidates) == 1:
+            meta_fpath = candidates[0]
+            with open(meta_fpath, 'r') as file:
+                data = yaml.safe_load(file)
+            # Hack to put experiment name in package name
+            expt_name = pathlib.Path(data['default_root_dir']).name
+            if expt_name not in package_name:
+                package_name = expt_name + '_' + package_name
+
+    package_fpath = x.parent / package_name
+
+    if not force and package_fpath.exists():
+        return str(package_fpath)
 
     import netharn as nh
     xpu = nh.XPU.coerce('cpu')
@@ -50,33 +74,11 @@ def repackage(checkpoint_fpath):
     state_dict = checkpoint['state_dict']
     method.load_state_dict(state_dict)
 
-    train_dpath_hint = None
-    if checkpoint_fpath.endswith('.ckpt'):
-        path_ = pathlib.Path(checkpoint_fpath)
-        if path_.parent.stem == 'checkpoints':
-            train_dpath_hint = path_.parent.parent
-            method.train_dpath_hint = train_dpath_hint
-
-    x = ub.augpath(checkpoint_fpath, ext='.pt')
-    x = pathlib.Path(x)
-    package_name = x.name
-    # package_name = x.name.replace('checkpoint_', 'package_')
-
     if train_dpath_hint is not None:
-        candidates = list(train_dpath_hint.glob('fit_config.yaml'))
-        if len(candidates) == 1:
-            meta_fpath = candidates[0]
-            with open(meta_fpath, 'r') as file:
-                data = yaml.safe_load(file)
-            # Hack to put experiment name in package name
-            expt_name = pathlib.Path(data['default_root_dir']).name
-            if expt_name not in package_name:
-                package_name = expt_name + '_' + package_name
+        method.train_dpath_hint = train_dpath_hint
 
-    package_fpath = str(x.parent / package_name)
     method.save_package(str(package_fpath))
-
-    return package_fpath
+    return str(package_fpath)
 
 
 def gather_checkpoints():
