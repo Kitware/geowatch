@@ -1,5 +1,7 @@
 """
 Helper for scheduling a set of prediction + evaluation jobs
+
+python -m watch.tasks.fusion.schedule_inference gather_candidate_models
 """
 
 
@@ -10,13 +12,20 @@ def gather_candidate_models():
     import ubelt as ub
     dvc_dpath = watch.utils.util_data.find_smart_dvc_dpath()
 
+    # with_saliency = 'auto'
+    # with_class = 'auto'
+    with_saliency = 'auto'
+    with_class = 'auto'
+
     # HARD CODED
     # model_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
     # test_dataset_fpath = dvc_dpath / 'Drop1-Aligned-L1/vali_combo11.kwcoco.json'
 
     # model_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
     model_dpath = dvc_dpath / 'models/fusion/SC-20201117'
-    test_dataset_fpath = dvc_dpath / 'Drop1-Aligned-L1/vali_combo11.kwcoco.json'
+    test_dataset_fpath = dvc_dpath / 'Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json'
+
+    assert test_dataset_fpath.exists()
 
     stamp = ub.timestamp() + '_' + ub.hash_data([])[0:8]
 
@@ -85,6 +94,8 @@ def gather_candidate_models():
         suggestions['test_dataset'] = test_dataset_fpath
         suggestions['true_dataset'] = test_dataset_fpath
         suggestions['package_fpath'] = package_fpath
+        suggestions['with_class'] = with_class
+        suggestions['with_saliency'] = with_saliency
 
         if with_pred:
             pred_command = ub.codeblock(
@@ -92,8 +103,8 @@ def gather_candidate_models():
                 python -m watch.tasks.fusion.predict \
                     --write_probs=True \
                     --write_preds=False \
-                    --with_class=True \
-                    --with_saliency=True \
+                    --with_class={with_class} \
+                    --with_saliency={with_saliency} \
                     --with_change=False \
                     --package_fpath={package_fpath} \
                     --pred_dataset={pred_dataset} \
