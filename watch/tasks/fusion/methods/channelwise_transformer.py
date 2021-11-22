@@ -1247,9 +1247,14 @@ def _class_weights_from_freq(total_freq, mode='median-idf'):
     Example:
         >>> from watch.tasks.fusion.methods.channelwise_transformer import _class_weights_from_freq
         >>> total_freq = np.array([19503736, 92885, 883379, 0, 0])
-        >>> _class_weights_from_freq(total_freq, mode='idf')
+        >>> print(_class_weights_from_freq(total_freq, mode='idf'))
         >>> print(_class_weights_from_freq(total_freq, mode='median-idf'))
-        >>> _class_weights_from_freq(total_freq, mode='log-median-idf')
+        >>> print(_class_weights_from_freq(total_freq, mode='log-median-idf'))
+
+        >>> total_freq = np.array([19503736, 92885, 883379, 0, 0, 0, 0, 0, 0, 0, 0])
+        >>> print(_class_weights_from_freq(total_freq, mode='idf'))
+        >>> print(_class_weights_from_freq(total_freq, mode='median-idf'))
+        >>> print(_class_weights_from_freq(total_freq, mode='log-median-idf'))
     """
     import numpy as np
 
@@ -1266,25 +1271,22 @@ def _class_weights_from_freq(total_freq, mode='median-idf'):
             return out
 
     freq = total_freq.copy()
+    is_natural = total_freq > 0 & np.isfinite(total_freq)
+    natural_freq = freq[is_natural]
+    mask = is_natural.copy()
 
-    _min, _max = np.percentile(freq, [5, 95])
-    is_valid = freq >= (_min <= freq) & (freq <= _max)
-    is_robust = (_max >= freq) & (freq >= _min)
-    if np.any(is_robust):
-        middle_value = np.median(freq[is_robust])
-    else:
-        is_valid  = (np.isfinite(freq)) & (freq >= 0)
-        if np.any(is_valid):
-            middle_value = np.median(freq[is_valid])
+    if len(natural_freq):
+        _min, _max = np.quantile(natural_freq, [0.05, 0.95])
+        is_robust = (_max >= freq) & (freq >= _min)
+        if np.any(is_robust):
+            middle_value = np.median(freq[is_robust])
         else:
-            middle_value = 2
+            middle_value = np.median(natural_freq)
+        freq[~is_natural] = natural_freq.min() / 2
+    else:
+        middle_value = 2
 
     # variant of median-inverse-frequency
-    mask = freq != 0
-    nonzero_freq = freq[mask]
-    if len(nonzero_freq):
-        freq[freq == 0] = nonzero_freq.min() / 2
-
     if mode == 'idf':
         # There is no difference and this and median after reweighting
         weights = (1 / freq)
@@ -1315,11 +1317,13 @@ def _class_weights_from_freq(total_freq, mode='median-idf'):
     # see them and need to learn them, but my intuition is to give them
     # less weight than things we have a shot of learning well
     # so they dont mess up the main categories
-    weights[mask] = weights[mask] / weights[mask].max()
+    natural_weights = weights[mask]
+    if len(natural_weights):
+        denom = natural_weights.max()
+    else:
+        denom = 1
+    weights[mask] = weights[mask] / denom
     weights[~mask] = weights[mask].max() / 7
-
-    # weights[] = 1.0
-
     weights = np.round(weights, 6)
     return weights
 
