@@ -149,6 +149,8 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
     for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='collect animate jobs'):
         job.result()
 
+    print('Wrote animations to viz_dpath = {!r}'.format(viz_dpath))
+
 
 if __name__ == '__main__':
     """

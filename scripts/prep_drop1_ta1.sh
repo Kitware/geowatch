@@ -32,13 +32,15 @@ REGION_FPATH=$DVC_DPATH/drop1/all_regions.geojson
 
 # The folder that will contain the TA2-ready kwcoco dataset
 # TODO: is the the right name for the new TA2-dataset?
-ALIGNED_KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$ALIGNED_BUNDLE_NAME
-ALIGNED_KWCOCO_FPATH=$ALIGNED_KWCOCO_BUNDLE_DPATH/data.kwcoco.json
+ALIGNED_KWCOCO_BUNDLE=$DVC_DPATH/$ALIGNED_BUNDLE_NAME
+ALIGNED_KWCOCO_FPATH=$ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json
 
 
 download_uncropped_data(){
     __doc__="
     Download and prepare the uncropped data
+
+    source ~/code/watch/scripts/prep_drop1_ta1.sh
     "
 
     # Grab the stac items we will query directly from S3 and combine it into a single query json file
@@ -73,6 +75,8 @@ download_uncropped_data(){
 crop_to_regions(){
     __doc__="
     Crop the downloaded data to create TA2 training data.
+
+    source ~/code/watch/scripts/prep_drop1_ta1.sh
     "
     # Crop the unstructured data into "videos" aligned to each region.
     python -m watch.cli.coco_align_geotiffs \
@@ -97,8 +101,8 @@ unprotect_old_cropped_dvc_data(){
     __doc__="
     If we are updating a DVC repo we need to unprotect any file we could overwrite
     "
-    dvc unprotect $ALIGNED_KWCOCO_BUNDLE_DPATH/*/*.json
-    dvc unprotect $ALIGNED_KWCOCO_BUNDLE_DPATH/*.json
+    dvc unprotect $ALIGNED_KWCOCO_BUNDLE/*/*.json
+    dvc unprotect $ALIGNED_KWCOCO_BUNDLE/*.json
 }
 
 
@@ -127,7 +131,7 @@ add_new_data_to_dvc(){
     git push origin
 
     # Push new items from the local cache to the remote AWS cache
-    dvc push -r aws --recursive $ALIGNED_KWCOCO_BUNDLE_DPATH
+    dvc push -r aws --recursive $ALIGNED_KWCOCO_BUNDLE
 
 }
 
@@ -141,7 +145,7 @@ visualize_cropped_dataset(){
         --space="video" \
         --num_workers=avail \
         --channels="red|green|blue" \
-        --viz_dpath=$ALIGNED_KWCOCO_BUNDLE_DPATH/_viz \
+        --viz_dpath=$ALIGNED_KWCOCO_BUNDLE/_viz \
         --animate=True
 }
 
@@ -161,5 +165,6 @@ prep_drop1_ta1_main(){
 }
 
 
-# Execute the main script
-prep_drop1_ta1_main
+# Note: This script just defines variables (fast to run)
+# Execute the main script manually after sourcing
+# prep_drop1_ta1_main

@@ -304,6 +304,8 @@ def main(cmdline=True, **kwargs):
 
         pool.jobs.clear()
 
+    print('Wrote images to viz_dpath = {!r}'.format(viz_dpath))
+
     if config['animate']:
         from watch.cli import animate_visualizations
         animate_visualizations.animate_visualizations(

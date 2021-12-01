@@ -25,9 +25,38 @@ except Exception:
     profile = ub.identity
 
 
+def filter_image_ids(coco_dset, gids=None, include_sensors=None,
+                     exclude_sensors=None):
+    """
+    Filters to a specific set of images given query parameters
+    """
+    def coerce_set(x):
+        return set(x.split(',')) if isinstance(x, str) else set(x)
+    def filter_by_attribute(table, key, include, exclude):
+        if include is not None or exclude is not None:
+            if include is not None:
+                include = coerce_set(include)
+            if exclude is not None:
+                exclude = coerce_set(exclude)
+            values = table.lookup(key)
+            if include is None:
+                flags = [v not in exclude for v in values]
+            elif exclude is None:
+                flags = [v in include for v in values]
+            else:
+                flags = [v in include and v not in exclude for v in values]
+            table = table.compress(flags)
+        return table
+    valid_images = coco_dset.images(gids)
+    valid_images = filter_by_attribute(
+        valid_images, 'sensor_coarse', include_sensors, exclude_sensors)
+    valid_gids = list(valid_images)
+    return valid_gids
+
+
 def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None,
                           overwrite=False, default_gsd=None, conform=True,
-                          workers=0):
+                          workers=0, mode='thread'):
     """
     Aggregate populate function for fields useful to WATCH.
 
@@ -91,7 +120,7 @@ def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None,
     #                                      default_gsd=default_gsd)
     coco_populate_geo_heuristics(
         coco_dset, gids=gids, overwrite=overwrite, default_gsd=default_gsd,
-        workers=workers)
+        workers=workers, mode=mode)
 
     for vidid in ub.ProgIter(vidids, total=len(vidids), desc='populate videos'):
         coco_populate_geo_video_stats(coco_dset, vidid, target_gsd=target_gsd)
@@ -100,7 +129,8 @@ def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None,
     coco_dset._ensure_json_serializable()
 
 
-def coco_populate_geo_heuristics(coco_dset, gids=None, overwrite=False, default_gsd=None, workers=0, **kw):
+def coco_populate_geo_heuristics(coco_dset, gids=None, overwrite=False,
+                                 default_gsd=None, workers=0, mode='thread', **kw):
     """
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -110,18 +140,28 @@ def coco_populate_geo_heuristics(coco_dset, gids=None, overwrite=False, default_
         >>> dvc_dpath = find_smart_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
-        >>> coco_populate_geo_heuristics(coco_dset, overwrite=True, workers=4)
+        >>> coco_populate_geo_heuristics(coco_dset, overwrite=True, workers=12,
+        >>>                              keep_geotiff_metadata=False,
+        >>>                              mode='process')
     """
-    if gids is None:
-        gids = list(coco_dset.index.imgs.keys())
-    executor = ub.JobPool('thread', max_workers=workers)
+    gids = coco_dset.images(gids)._ids
+    # Cant multiprocess because of SwigPyObjects... bleh
+    # keep_geotiff_metadata must be False to use mode=process
+    executor = ub.JobPool(mode, max_workers=workers)
+    # executor = ub.JobPool('process', max_workers=workers)
     for gid in ub.ProgIter(gids, desc='submit populate imgs'):
-        executor.submit(coco_populate_geo_img_heuristics, coco_dset, gid,
+        coco_img = coco_dset.coco_image(gid).detach()
+        executor.submit(coco_populate_geo_img_heuristics2, coco_img,
                         overwrite=overwrite, default_gsd=default_gsd, **kw)
     for job in ub.ProgIter(executor.as_completed(), total=len(executor), desc='collect populate imgs'):
-        job.result()
+        img = job.result()
+        if mode == 'process':
+            # for multiprocessing
+            real_img = coco_dset.index.imgs[img['id']]
+            real_img.update(img)
 
 
+@profile
 def coco_populate_geo_img_heuristics(coco_dset, gid, overwrite=False,
                                      default_gsd=None,
                                      keep_geotiff_metadata=False, **kw):
@@ -154,15 +194,42 @@ def coco_populate_geo_img_heuristics(coco_dset, gid, overwrite=False,
         >>> dset2 = kwcoco.CocoDataset.demo('shapes8')
         >>> coco_populate_geo_img_heuristics(dset2, gid, overwrite=True)
     """
-    bundle_dpath = coco_dset.bundle_dpath
-    img = coco_dset.imgs[gid]
-    coco_img = coco_dset._coco_image(gid)
+    # import watch
+    # bundle_dpath = coco_dset.bundle_dpath
+    # img = coco_dset.imgs[gid]
+    coco_img = coco_dset.coco_image(gid)
+    coco_populate_geo_img_heuristics2(
+        coco_img, overwrite=overwrite, default_gsd=default_gsd,
+        keep_geotiff_metadata=keep_geotiff_metadata, **kw)
+
+
+@profile
+def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
+                                      default_gsd=None,
+                                      keep_geotiff_metadata=False, **kw):
+    import watch
+    bundle_dpath = coco_img.bundle_dpath
+    img = coco_img.img
 
     primary_obj = coco_img.primary_asset()
     asset_objs = list(coco_img.iter_asset_objs())
 
-    # Note: for non-geotiffs we could use the transformation provided with them
-    # to determine their geo-properties.
+    valid_overwrites = {'warp', 'band', 'channels'}
+    default_overwrites = {'warp', 'band'}
+    if isinstance(overwrite, str):
+        overwrite = set(overwrite.split(','))
+    if overwrite is True:
+        overwrite = default_overwrites
+    elif overwrite is False:
+        overwrite = {}
+    else:
+        overwrite = set(overwrite)
+        unexpected = overwrite - valid_overwrites
+        if unexpected:
+            raise ValueError(f'Got unexpected overwrites: {unexpected}')
+
+    # Note: for non-geotiffs we could use the aux_to_img transformation
+    # provided with them to determine their geo-properties.
     asset_errors = []
     for obj in asset_objs:
         errors = _populate_canvas_obj(
@@ -175,6 +242,58 @@ def coco_populate_geo_img_heuristics(coco_dset, gid, overwrite=False,
         warnings.warn(f'img {info} has issues introspecting')
 
     if keep_geotiff_metadata:
+        info = primary_obj.get('geotiff_metadata', None)
+        if info is None:
+            dem_hint = primary_obj.get('dem_hint', 'use')
+            metakw = {}
+            if dem_hint == 'ignore':
+                metakw['elevation'] = 0
+            primary_fname = primary_obj.get('file_name', None)
+            primary_fpath = join(bundle_dpath, primary_fname)
+            info = watch.gis.geotiff.geotiff_metadata(primary_fpath, **metakw)
+            primary_obj['geotiff_metadata'] = info
+
+    valid_region_utm = img.get('valid_region_utm', None)
+    if valid_region_utm is None or 'warp' in overwrite:
+        # _ = ub.cmd('gdalinfo -stats {}'.format(fpath), check=True)
+        primary_fname = primary_obj.get('file_name', None)
+        primary_fpath = join(bundle_dpath, primary_fname)
+
+        # TODO: ensure real nodata exists (maybe write helper file to disk?)
+        sensor_coarse = img.get('sensor_coarse', None)
+        if sensor_coarse in {'S2', 'L8', 'WV'}:
+            nodata = 0
+        else:
+            nodata = None
+
+        sh_poly = util_raster.mask(
+            primary_fpath, tolerance=10, default_nodata=nodata,
+            # max_polys=100,
+            convex_hull=True)
+        kw_poly = kwimage.MultiPolygon.from_shapely(sh_poly)
+        # print('kw_poly = {!r}'.format(kw_poly.data[0]))
+        info = primary_obj.get('geotiff_metadata', None)
+        if info is None:
+            metakw = {}
+            dem_hint = primary_obj.get('dem_hint', 'use')
+            if dem_hint == 'ignore':
+                metakw['elevation'] = 0
+            info = watch.gis.geotiff.geotiff_metadata(primary_fpath, **metakw)
+
+        # TODO: get a better heuristic here
+        primary_obj['valid_region'] = kw_poly.to_coco(style='new')
+        img['valid_region'] = kw_poly.to_coco(style='new')
+
+        if 'pxl_to_wld' in info:
+            pxl_to_wld = info['pxl_to_wld']
+            kw_poly_utm = kw_poly.warp(pxl_to_wld).warp(info['wld_to_utm'])
+            poly_utm = kw_poly_utm.to_geojson()
+            poly_utm['properties'] = {}
+            poly_utm['properties']['crs'] = info['utm_crs_info']
+            primary_obj['valid_region_utm'] = poly_utm
+            img['valid_region_utm'] = poly_utm
+
+    if keep_geotiff_metadata:
         img['geotiff_metadata'] = primary_obj['geotiff_metadata']
 
     if 'geos_corners' in primary_obj:
@@ -184,6 +303,7 @@ def coco_populate_geo_img_heuristics(coco_dset, gid, overwrite=False,
         img['geos_corners'] = primary_obj['geos_corners']
     else:
         print('None of the assets had geo information')
+    return img
 
 
 @profile
@@ -191,10 +311,18 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
                          default_gsd=None, keep_geotiff_metadata=False):
     """
     obj can be an img or aux
+
+    Ignore:
+        obj = coco_img.primary_asset()
+        bundle_dpath = dset.bundle_dpath
+        overwrite = True
+        with_wgs = False
+        default_gsd = None
+        keep_geotiff_metadata = False
     """
     import watch
     import kwcoco
-    sensor_coarse = obj.get('sensor_coarse', None)
+    sensor_coarse = obj.get('sensor_coarse', None)  # not reliable
     num_bands = obj.get('num_bands', None)
     channels = obj.get('channels', None)
     fname = obj.get('file_name', None)
@@ -225,25 +353,6 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
         if dem_hint == 'ignore':
             metakw['elevation'] = 0
 
-        valid_region_utm = obj.get('valid_region_utm', None)
-        if valid_region_utm is None:
-            # _ = ub.cmd('gdalinfo -stats {}'.format(fpath), check=True)
-            sh_poly = util_raster.mask(fpath, tolerance=10)
-            kw_poly = kwimage.MultiPolygon.from_shapely(sh_poly)
-            # TODO: get a better heuristic here
-            obj['valid_region'] = kw_poly.to_coco(style='new')
-            if info is None:
-                info = watch.gis.geotiff.geotiff_metadata(fpath, **metakw)
-            obj['band_metas'] = info['band_metas']
-
-            if 'wld_to_pxl' in info:
-                wld_to_pxl = np.linalg.inv(info['wld_to_pxl'])
-                kw_poly_utm = kw_poly.warp(wld_to_pxl).warp(info['wld_to_utm'])
-                poly_utm = kw_poly_utm.to_geojson()
-                poly_utm['properties'] = {}
-                poly_utm['properties']['crs'] = info['utm_crs_info']
-                obj['valid_region_utm'] = poly_utm
-
         if 'warp' in overwrite or warp_to_wld is None or approx_meter_gsd is None:
             try:
                 if info is None:
@@ -262,12 +371,8 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
                 # FIXME: FOR NOW JUST USE THIS BIG HACK
                 xy1_man = info['pxl_corners'].data.astype(np.float64)
                 xy2_man = info['utm_corners'].data.astype(np.float64)
-                hack_aff = fit_affine_matrix(xy1_man, xy2_man)
-                hack_aff = kwimage.Affine.coerce(hack_aff)
-
-                # crs_info['utm_corners'].warp(np.asarray(hack_aff.inv()))
-                # crs_info['pxl_corners'].warp(np.asarray(hack_aff))
-
+                hack_aff = kwimage.Affine.coerce(
+                    fit_affine_matrix(xy1_man, xy2_man))
                 obj_to_wld = kwimage.Affine.coerce(hack_aff)
                 # cv2.getAffineTransform(utm_corners, pxl_corners)
 
@@ -291,7 +396,7 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
                     'wld_crs_info': wld_crs_info,
                     'utm_crs_info': utm_crs_info,
                 })
-
+                obj['band_metas'] = info['band_metas']
                 obj['is_rpc'] = info['is_rpc']
 
                 if with_wgs:
@@ -828,8 +933,8 @@ def geotiff_format_info(fpath):
     return format_info
 
 
-def ensure_transfered_geo_data(coco_dset):
-    for gid in ub.ProgIter(list(coco_dset.images())):
+def ensure_transfered_geo_data(coco_dset, gids=None):
+    for gid in ub.ProgIter(coco_dset.images(gids), desc='transfer metadata'):
         transfer_geo_metadata(coco_dset, gid)
 
 

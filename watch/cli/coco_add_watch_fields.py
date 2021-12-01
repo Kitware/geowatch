@@ -32,7 +32,9 @@ class AddWatchFieldsConfig(scfg.Config):
 
         'default_gsd': scfg.Value(None, help='if specified, assumed any images without geo-metadata have this GSD'),
 
-        'workers': scfg.Value(0, help='number of io threads')
+        'workers': scfg.Value(0, help='number of io threads'),
+
+        'mode': scfg.Value('process', help='can be thread, process, or serial'),
     }
 
 
@@ -93,6 +95,12 @@ def main(**kwargs):
     dset = kwcoco.CocoDataset.coerce(config['src'])
     print('dset = {!r}'.format(dset))
 
+    # valid_gids = kwcoco_extensions.filter_image_ids(
+    #     dset,
+    #     include_sensors=config['include_sensors'],
+    #     exclude_sensors=config['exclude_sensors'],
+    # )
+
     # hack in colors
     from watch import heuristics
     from watch.utils.lightning_ext import util_globals
@@ -107,7 +115,7 @@ def main(**kwargs):
 
     kwcoco_extensions.populate_watch_fields(
         dset, target_gsd=target_gsd, overwrite=overwrite,
-        default_gsd=default_gsd, workers=workers)
+        default_gsd=default_gsd, workers=workers, mode=config['mode'])
     print('dset.index.videos = {}'.format(ub.repr2(dset.index.videos, nl=2, precision=4)))
 
     if config['edit_geotiff_metadata']:
@@ -125,6 +133,7 @@ def main(**kwargs):
     if config['dst'] is not None:
         print('write dataset')
         dset.fpath = config['dst']
+        print('dset.fpath = {!r}'.format(dset.fpath))
         dset.dump(dset.fpath, newlines=True)
     else:
         print('not writing')

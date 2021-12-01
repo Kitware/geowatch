@@ -7,6 +7,8 @@ Notes:
       (i.e. lon/lat) **unless** another CRS is specified.
 
     * WGS84 (aka EPSG 4326) is always given as latitude longitude
+
+    * EPSG stands for "European Petroleum Survey Group"
 """
 import ubelt as ub
 import numpy as np
@@ -49,6 +51,54 @@ def utm_epsg_from_latlon(lat, lon):
     if south is True:
         epsg_code += 100
     return epsg_code
+
+
+def find_local_meter_epsg_crs(geom_crs84):
+    """
+    Find the "best" meter based CRS for a smallish geographic region.
+
+    Currently this only returns UTM zones. Might be better to return an Albers
+    projection if the geometry spans more than one UTM zone.
+
+    Args:
+        geom_crs84 (Geometry): shapely geometry in CRS84 (lon/lat wgs84)
+
+    Returns:
+        int: epsg code
+
+    References:
+        [1] https://gis.stackexchange.com/questions/148181/choosing-projection-crs-for-short-distance-based-analysis/148187
+        [2] http://projfinder.com/
+
+    Example:
+        >>> import sys, ubelt
+        >>> sys.path.append(ubelt.expandpath('~/code/watch'))
+        >>> from watch.gis.spatial_reference import *  # NOQA
+        >>> import kwimage
+        >>> geom_crs84 = kwimage.Polygon.random().translate(-0.5).scale((180, 90)).to_shapely()
+        >>> epsg_zone = find_local_meter_epsg_crs(geom_crs84)
+
+    TODO:
+        - [ ] Albers?
+        - [ ] Better UTM zone intersection
+        - [ ] Fix edge cases
+    """
+    lonmin, latmin, lonmax, latmax = geom_crs84.bounds
+    # Hack: this doesnt work on boundries (or for larger regions)
+    # correct way of doing this would be lookup candiate CRS zones,
+    # and find the one with highest intersection area weighted by distance
+    # to the center of the valid region.
+    latmid = (latmin + latmax) / 2
+    lonmid = (lonmin + lonmax) / 2
+    candidate_utm_codes = [
+        utm_epsg_from_latlon(latmin, lonmin),
+        utm_epsg_from_latlon(latmax, lonmax),
+        utm_epsg_from_latlon(latmax, lonmin),
+        utm_epsg_from_latlon(latmin, lonmax),
+        utm_epsg_from_latlon(latmid, lonmid),
+    ]
+    epsg_zone = ub.argmax(ub.dict_hist(candidate_utm_codes))
+    return epsg_zone
 
 
 def check_latlons(lat, lon):

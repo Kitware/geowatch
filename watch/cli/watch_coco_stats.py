@@ -23,6 +23,13 @@ class WatchCocoStats(scfg.Config):
         config = WatchCocoStats(kw, cmdline=cmdline)
 
         fpaths = config['src']
+        print('config = {}'.format(ub.repr2(config, nl=1)))
+
+        if isinstance(fpaths, str):
+            if ',' in fpaths:
+                print('warning: might not handle this case well')
+            fpaths = [fpaths]
+
         assert len(fpaths) == 1, 'only 1 for now'
 
         fpath = fpaths[0]
@@ -46,8 +53,15 @@ def coco_watch_stats(dset):
     num_videos = len(dset.index.videos)
     print('num_videos = {!r}'.format(num_videos))
     print('Per-video stats summary')
+
+    video_summary_rows = []
+
+    all_image_ids = set(dset.images())
+    all_image_ids_with_video = set()
+
     all_sensor_entries = []
     for vidid, gids in dset.index.vidid_to_gids.items():
+        all_image_ids_with_video.update(gids)
         avail_sensors = dset.images(gids).lookup('sensor_coarse', None)
         sensor_freq = ub.dict_hist(avail_sensors)
         video = dset.index.videos[vidid]
@@ -78,6 +92,28 @@ def coco_watch_stats(dset):
             vid_info_str, max_length=512, trunc_loc=0.6)
         print('video_info = {}'.format(vid_info_str))
         all_sensor_entries.extend(all_sensor_entries)
+        video_summary_rows.append(ub.dict_diff(video_info, {'sensor_freq', 'warp_wld_to_vid'}))
+
+    print('dset.tag = {!r}'.format(dset.tag))
+
+    basic_stats = dset.basic_stats()
+    ext_stats = dset.extended_stats()
+    print('basic_stats = {}'.format(ub.repr2(basic_stats, nl=1)))
+    print('ext_stats = {}'.format(ub.repr2(ext_stats, nl=1, align=':', precision=3)))
+
+    attrs = dset.videos().attribute_frequency()
+    print('video_attrs = {}'.format(ub.repr2(attrs, nl=1)))
+    attrs = dset.images().attribute_frequency()
+    print('image_attrs = {}'.format(ub.repr2(attrs, nl=1)))
+    attrs = dset.annots().attribute_frequency()
+    print('annot_attrs = {}'.format(ub.repr2(attrs, nl=1)))
+
+    loose_image_ids = sorted(all_image_ids - all_image_ids_with_video)
+    print('len(loose_image_ids) = {!r}'.format(len(loose_image_ids)))
+
+    import pandas as pd
+    video_summary = pd.DataFrame(video_summary_rows)
+    print(video_summary)
 
     # coco_dset = dset
     # all_images = coco_dset.images()
@@ -86,6 +122,10 @@ def coco_watch_stats(dset):
     # ub.dict_hist(['|'.join(sorted(coco_img.channels.fuse().parsed)) for coco_img in coco_images])
     # ub.dict_hist([(coco_img.channels.fuse() & kwcoco.FusedChannelSpec.coerce('red|green|blue|panchromatic')).spec for coco_img in coco_images])
     # all_images.lookup('sensor_coarse')
+
+    # coco_img = dset.images().take([0]).coco_images[0]
+    # fpath = coco_img.primary_image_filepath()
+    # _ = ub.cmd('gdalinfo {}'.format(fpath), verbose=3)
 
     sensor_hist = ub.dict_hist(all_sensor_entries)
     print('Sensor Histogram = {}'.format(ub.repr2(sensor_hist, nl=1)))
@@ -101,5 +141,7 @@ if __name__ == '__main__':
     """
     CommandLine:
         python -m watch.cli.watch_coco_stats --src=special:vidshapes8-multispectral
+
+        smartwatch stats drop1/data.kwcoco.json
     """
     WatchCocoStats.main()
