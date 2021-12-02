@@ -478,7 +478,11 @@ def fit_model(args=None, cmdline=False, **kwargs):
     """
     # cv2.setNumThreads(0)
     from watch.tasks.fusion import utils
-    modules = make_lightning_modules(cmdline=cmdline, **kwargs)
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', '.*GPU available but not used.*')
+        modules = make_lightning_modules(cmdline=cmdline, **kwargs)
 
     # args = modules['args']
     trainer = modules['trainer']
@@ -503,10 +507,17 @@ def fit_model(args=None, cmdline=False, **kwargs):
             kwplot.show_if_requested()
         print('tune_result = {}'.format(ub.repr2(tune_result, nl=1)))
 
-    # fit the model
-    print('Fit starting')
-    trainer.fit(model, datamodule)
-    print('Fit finished')
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', '.*is a deprecated alias for the builtin.*')
+        warnings.filterwarnings('ignore', '.*GPU available but not used.*')
+        warnings.filterwarnings('ignore', '.*Skipping val loop.*')
+        warnings.filterwarnings('ignore', '.*does not have many workers which may be a bottleneck.*')
+        warnings.filterwarnings('ignore', '.*Set a lower value for log_every_n_steps if you want to see logs for the training.*')
+
+        # fit the model
+        print('Fit starting')
+        trainer.fit(model, datamodule)
+        print('Fit finished')
 
     # Hack: what is the best way to get at this info?
     package_fpath = trainer.package_fpath

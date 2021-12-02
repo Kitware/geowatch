@@ -5,6 +5,10 @@ def test_init_from_pretrained_state():
     from os.path import join
     from watch.tasks.fusion.fit import fit_model  # NOQA
     import kwcoco
+
+    # import xdev
+    # xdev.make_warnings_print_tracebacks()
+
     # args = None
     # cmdline = False
     gpus = None
@@ -29,6 +33,7 @@ def test_init_from_pretrained_state():
          'num_workers': 1,
          'gpus': gpus,
     }
+
     package_fpath = fit_model(**fit_kwargs)
 
     # Start a new training run but try to init from the pretrianed state
@@ -44,3 +49,11 @@ def test_init_from_pretrained_state():
     fit_kwargs3['init'] = 'kaiming_normal'
     fit_kwargs3['diff_inputs'] = True
     fit_model(**fit_kwargs2)
+
+
+if __name__ == '__main__':
+    """
+    CommandLine:
+        python ~/code/watch/tests/test_init_from_pretrained.py
+    """
+    test_init_from_pretrained_state()
