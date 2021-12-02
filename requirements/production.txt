@@ -64,7 +64,8 @@ rasterio>=1.2.10
 utm>=0.7.0
 rtree>=0.9.7
 pygeos>=0.10.2
-rgd-client>=0.2.5,!= 0.2.3
+rgd_imagery_client>=0.2.7
+rgd-client>=0.2.7
 fiona>=1.8.20
 geojson>=2.5.0
 mgrs>=1.4.2
