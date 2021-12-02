@@ -31,7 +31,11 @@ def grab_sentinel2_product(index=0, overwrite=False):
     SeeAlso:
         watch.util.util_rgdc.bands_sentinel2
     """
-    from rgd_client.rgdc import RasterDownload
+    try:
+        from rgd_imagery_client import RasterDownload
+    except ImportError:
+        from rgd_client.rgdc import RasterDownload
+
     from os.path import join, basename, relpath
     urls = [
         'http://storage.googleapis.com/gcp-public-data-sentinel-2/tiles/52/S/DG/S2A_MSIL1C_20181101T020821_N0206_R103_T52SDG_20181101T040328.SAFE',
