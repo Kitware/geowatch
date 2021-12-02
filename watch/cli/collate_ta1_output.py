@@ -446,10 +446,16 @@ def collate_ta1_output(input_path,
     for collation_job in ub.ProgIter(as_completed(collation_jobs),
                                      total=len(collation_jobs),
                                      desc='collation jobs'):
-        stac_item = collation_job.result()
-        if stac_item is not None:
-            output_stac_items_by_collection.setdefault(
-                stac_item.collection_id, []).append(stac_item)
+        try:
+            stac_item = collation_job.result()
+        except Exception as e:
+            print("Exception occurred (printed below), dropping item!")
+            print(e)
+            continue
+        else:
+            if stac_item is not None:
+                output_stac_items_by_collection.setdefault(
+                    stac_item.collection_id, []).append(stac_item)
 
     for collection_id, stac_items in output_stac_items_by_collection.items():
         collection_output_path = '/'.join((
