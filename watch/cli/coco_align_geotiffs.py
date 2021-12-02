@@ -381,8 +381,6 @@ def main(cmdline=True, **kw):
     """
     from watch.utils.lightning_ext import util_globals
     from watch.utils import util_path
-    import watch
-    import geopandas as gpd
     import pandas as pd
     config = CocoAlignGeotiffConfig(default=kw, cmdline=cmdline)
 
@@ -503,17 +501,6 @@ def main(cmdline=True, **kw):
         region_df['geometry'] = region_df['geometry'].scale(
             xfact=context_factor, yfact=context_factor, origin='center')
 
-    # Lookup the UTM zone for each region
-    zone_col = []
-    for idx, row in region_df.iterrows():
-        crs = gpd.GeoDataFrame([row], crs=region_df.crs).estimate_utm_crs()
-        utm_epsg_zone_v1 = crs.to_epsg()
-        geom_crs84 = row.geometry
-        utm_epsg_zone_v2 = watch.gis.spatial_reference.find_local_meter_epsg_crs(geom_crs84)
-        zone_col.append(utm_epsg_zone_v2)
-        assert utm_epsg_zone_v2 == utm_epsg_zone_v1, 'consistency'
-    region_df['local_epsg'] = zone_col
-
     # For each ROI extract the aligned regions to the target path
     extract_dpath = ub.ensuredir(output_bundle_dpath)
 
@@ -600,7 +587,7 @@ class SimpleDataCube(object):
         cube.img_geos_df = img_geos_df
 
     @classmethod
-    def demo(SimpleDataCube, num_imgs=1, with_region=False):
+    def demo(SimpleDataCube, with_region=False):
         from watch.demo.landsat_demodata import grab_landsat_product
         from watch.gis.geotiff import geotiff_metadata
         # Create a dead simple coco dataset with one image
@@ -650,7 +637,8 @@ class SimpleDataCube(object):
                     },
                 ]
             }
-            region_df = gpd.GeoDataFrame.from_features(region_geojson)
+            region_df = gpd.GeoDataFrame.from_features(
+                region_geojson, crs=util_gis._get_crs84())
             return cube, region_df
         return cube
 
@@ -677,15 +665,25 @@ class SimpleDataCube(object):
             >>> to_extract = cube.query_image_overlaps2(region_df)
         """
         from kwcoco.util.util_json import ensure_json_serializable
-        # New maybe faster and safer way of finding overlaps?
+        import geopandas as gpd
+        import watch
+
+        # Quickly find overlaps using a spatial index
         ridx_to_gidsx = util_gis.geopandas_pairwise_overlaps(region_df, cube.img_geos_df)
+
+        print('candidate query overlaps')
         print('ridx_to_gidsx = {}'.format(ub.repr2(ridx_to_gidsx, nl=1)))
-        # TODO: maybe check for self-overlap?
-        # ridx_to_ridx = util_gis.geopandas_pairwise_overlaps(region_df, region_df)
 
         to_extract = []
         for ridx, gidxs in ridx_to_gidsx.items():
             region_row = region_df.iloc[ridx]
+
+            crs = gpd.GeoDataFrame([region_row], crs=region_df.crs).estimate_utm_crs()
+            utm_epsg_zone_v1 = crs.to_epsg()
+            geom_crs84 = region_row.geometry
+            utm_epsg_zone_v2 = watch.gis.spatial_reference.find_local_meter_epsg_crs(geom_crs84)
+            assert utm_epsg_zone_v2 == utm_epsg_zone_v1, 'consistency'
+            local_epsg = utm_epsg_zone_v2
 
             space_region = kwimage.Polygon.from_shapely(region_row.geometry)
             space_box = space_region.bounding_box().to_ltrb()
@@ -751,7 +749,7 @@ class SimpleDataCube(object):
                         'space_box': space_box,
                         'video_name': video_name,
                         'properties': region_props,
-                        'local_epsg': region_props['local_epsg'],
+                        'local_epsg': local_epsg,
                     }
                     to_extract.append(image_overlaps)
         return to_extract
@@ -914,8 +912,12 @@ class SimpleDataCube(object):
 
                         valid_region_utm = coco_img.img.get('valid_region_utm', None)
                         if valid_region_utm is not None:
-                            sh_valid_region_utm = geometry.shape(coco_img.img['valid_region_utm'])
-                            this_utm_crs = coco_img.img['utm_crs_info']['auth']
+                            geos_valid_region_utm = coco_img.img['valid_region_utm']
+                            try:
+                                this_utm_crs = geos_valid_region_utm['properties']['crs']['auth']
+                            except KeyError:
+                                this_utm_crs = coco_img.img['utm_crs_info']['auth']
+                            sh_valid_region_utm = geometry.shape(geos_valid_region_utm)
                             valid_region_utm = gpd.GeoDataFrame({'geometry': [sh_valid_region_utm]}, crs=this_utm_crs)
                             valid_region_local = valid_region_utm.to_crs(local_epsg)
                             sh_valid_region_local = valid_region_local.geometry.iloc[0]
@@ -946,7 +948,7 @@ class SimpleDataCube(object):
                     # groups.append((final_gids[0], final_gids[1:]))
 
                     # Output a visualization of this group and its overlaps
-                    DEBUG_VALID_REGIONS = True
+                    DEBUG_VALID_REGIONS = visualize
                     if DEBUG_VALID_REGIONS:
                         import kwplot
                         from shapely.ops import unary_union

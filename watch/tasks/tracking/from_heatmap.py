@@ -20,9 +20,10 @@ def mask_to_scored_polygons(probs, thresh):
         >>> kwplot.imshow(probs > 0.5)
     """
     # Threshold scores
-    hard_mask = probs > thresh
+    hard_mask_c = (probs > thresh).astype(np.uint8)
     # Convert to polygons
-    polygons = kwimage.Mask(hard_mask, 'c_mask').to_multi_polygon()
+    hard_mask = kwimage.Mask(hard_mask_c, 'c_mask')
+    polygons = hard_mask.to_multi_polygon()
     for poly in polygons:
         # Compute a score for the polygon
         # First compute the valid bounds of the polygon

@@ -150,7 +150,9 @@ def coco_populate_geo_heuristics(coco_dset, gids=None, overwrite=False,
     executor = ub.JobPool(mode, max_workers=workers)
     # executor = ub.JobPool('process', max_workers=workers)
     for gid in ub.ProgIter(gids, desc='submit populate imgs'):
-        coco_img = coco_dset.coco_image(gid).detach()
+        coco_img = coco_dset.coco_image(gid)
+        if mode == 'process':
+            coco_img = coco_img.detach()
         executor.submit(coco_populate_geo_img_heuristics2, coco_img,
                         overwrite=overwrite, default_gsd=default_gsd, **kw)
     for job in ub.ProgIter(executor.as_completed(), total=len(executor), desc='collect populate imgs'):
