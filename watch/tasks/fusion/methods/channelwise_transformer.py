@@ -899,24 +899,28 @@ class MultimodalTransformer(pl.LightningModule):
                 need_class_loss    = 1 or self.global_class_weight > 0
                 need_saliency_loss = 1 or self.global_saliency_weight > 0
 
+                # TODO: the logic for each of the heads could be consolidated
+
                 # Change loss part
                 if need_change_loss:
                     change_pred_input = einops.rearrange(
                         change_logits,
+                        'b t h w c -> ' + self.change_criterion_logit_shape).contiguous()
+                    change_weights = einops.rearrange(
+                        frame_change_weights[..., None],
                         'b t h w c -> ' + self.change_criterion_logit_shape).contiguous()
                     if self.change_criterion_target_encoding == 'index':
                         change_true_cxs = true_changes.long()
                         change_true_input = einops.rearrange(
                             change_true_cxs,
                             'b t h w -> ' + self.change_criterion_target_shape).contiguous()
+                        # hack: I hate squeeze, refactor
+                        change_weights = change_weights.squeeze(dim=1)
                     elif self.change_criterion_target_encoding == 'onehot':
                         # Note: 1HE is much easier to work with
                         change_true_ohe = kwarray.one_hot_embedding(true_changes.long(), 2, dim=-1)
                         change_true_input = einops.rearrange(
                             change_true_ohe,
-                            'b t h w c -> ' + self.change_criterion_target_shape).contiguous()
-                        change_weights = einops.rearrange(
-                            frame_change_weights[..., None],
                             'b t h w c -> ' + self.change_criterion_target_shape).contiguous()
                     else:
                         raise KeyError(self.change_criterion_target_encoding)
@@ -926,6 +930,7 @@ class MultimodalTransformer(pl.LightningModule):
                         change_true_input
                     )
                     full_change_weight = torch.broadcast_to(change_weights, unreduced_change_loss.shape)
+                    # Weighted reduction
                     weighted_change_loss = (full_change_weight * unreduced_change_loss).sum() / (full_change_weight.sum() + eps_f32)
                     item_loss_parts['change'] = self.global_change_weight * weighted_change_loss
 
@@ -934,18 +939,20 @@ class MultimodalTransformer(pl.LightningModule):
                     class_pred_input = einops.rearrange(
                         class_logits,
                         'b t h w c -> ' + self.class_criterion_logit_shape).contiguous()
+                    class_weights = einops.rearrange(
+                        frame_class_weights[..., None],
+                        'b t h w c -> ' + self.class_criterion_logit_shape).contiguous()
                     if self.class_criterion_target_encoding == 'index':
                         class_true_cxs = true_class.long()
                         class_true_input = einops.rearrange(
                             class_true_cxs,
                             'b t h w -> ' + self.class_criterion_target_shape).contiguous()
+                        # hack: I hate squeeze, refactor
+                        class_weights = class_weights.squeeze(dim=1)
                     elif self.class_criterion_target_encoding == 'onehot':
                         class_true_ohe = kwarray.one_hot_embedding(true_class.long(), len(self.classes), dim=-1)
                         class_true_input = einops.rearrange(
                             class_true_ohe,
-                            'b t h w c -> ' + self.class_criterion_target_shape).contiguous()
-                        class_weights = einops.rearrange(
-                            frame_class_weights[..., None],
                             'b t h w c -> ' + self.class_criterion_target_shape).contiguous()
                     else:
                         raise KeyError(self.class_criterion_target_encoding)
@@ -963,18 +970,20 @@ class MultimodalTransformer(pl.LightningModule):
                     saliency_pred_input = einops.rearrange(
                         saliency_logits,
                         'b t h w c -> ' + self.saliency_criterion_logit_shape).contiguous()
+                    saliency_weights = einops.rearrange(
+                        frame_saliency_weights[..., None],
+                        'b t h w c -> ' + self.saliency_criterion_logit_shape).contiguous()
                     if self.saliency_criterion_target_encoding == 'index':
                         saliency_true_cxs = true_saliency.long()
                         saliency_true_input = einops.rearrange(
                             saliency_true_cxs,
                             'b t h w -> ' + self.saliency_criterion_target_shape).contiguous()
+                        # hack: I hate squeeze, refactor
+                        saliency_weights = saliency_weights.squeeze(dim=1)
                     elif self.saliency_criterion_target_encoding == 'onehot':
                         saliency_true_ohe = kwarray.one_hot_embedding(true_saliency.long(), self.saliency_num_classes, dim=-1)
                         saliency_true_input = einops.rearrange(
                             saliency_true_ohe,
-                            'b t h w c -> ' + self.saliency_criterion_target_shape).contiguous()
-                        saliency_weights = einops.rearrange(
-                            frame_saliency_weights[..., None],
                             'b t h w c -> ' + self.saliency_criterion_target_shape).contiguous()
                     else:
                         raise KeyError(self.saliency_criterion_target_encoding)
@@ -1330,7 +1339,8 @@ def _class_weights_from_freq(total_freq, mode='median-idf'):
 
 def coerce_criterion(loss_code, weights):
     """
-    Helps build a loss function
+    Helps build a loss function and returns information about the shapes needed
+    by the specific loss.
     """
     # import monai
     if loss_code == 'cce':
