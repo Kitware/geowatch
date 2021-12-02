@@ -327,6 +327,18 @@ def generic_collate_item(asset_name_map,
                 subprocess.run([*aws_base_command,
                                 asset_href, ssh_asset_outpath], check=True)
 
+    with tempfile.NamedTemporaryFile() as temporary_file:
+        datetime = stac_item.properties['datetime']
+
+        with open(temporary_file.name, 'w') as f:
+            print(datetime, file=f)
+
+        datetime_outpath = '/'.join(
+                    (ssh_outdir, "{}_{}_SSH_datetime.txt".format(
+                            original_id, performer_code)))
+        subprocess.run([*aws_base_command,
+                        temporary_file.name, datetime_outpath], check=True)
+
     stac_item.assets = output_assets
 
     return stac_item
