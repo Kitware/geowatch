@@ -259,3 +259,9 @@ teamfeatures(){
         --src $ALIGNED_KWCOCO_BUNDLE/train_combo11.kwcoco.json \
         --dst $ALIGNED_KWCOCO_BUNDLE/train_combo11.kwcoco.json.prop 
 }
+
+
+main_drop1_level1(){
+    prepare_uncropped_data
+    extract_aligned_cropped_regions
+}

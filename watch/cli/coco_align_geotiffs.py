@@ -959,7 +959,7 @@ class SimpleDataCube(object):
                         debug_dpath.mkdir(exist_ok=True)
                         with kwplot.BackendContext('agg'):
 
-                            debug_name = '{}_{}_{}'.format(iso_time, space_str, sensor_coarse)
+                            debug_name = '{}_{}_{}_{}'.format(video_name, iso_time, space_str, sensor_coarse)
 
                             # Dump a visualization of the bounds of the
                             # valid region for debugging.
@@ -1045,7 +1045,7 @@ class SimpleDataCube(object):
                     'other_gids': [],
                 })
 
-            continue
+            # continue
 
             for num, group in enumerate(groups):
                 main_gid = group['main_gid']
@@ -1080,7 +1080,7 @@ class SimpleDataCube(object):
                 start_aid = start_aid + len(anns)
                 frame_index = frame_index + 1
 
-        return
+        # return
 
         sub_new_gids = []
         sub_new_aids = []
