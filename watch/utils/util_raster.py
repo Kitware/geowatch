@@ -86,7 +86,7 @@ def mask(raster, default_nodata=None, save=False, convex_hull=False, as_poly=Tru
         >>> mask_poly = mask(path, as_poly=True)
         >>> import shapely
         >>> assert isinstance(mask_poly, shapely.geometry.Polygon)
-        >>> # xdoctest: +REQURIES(--show)
+        >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> kwplot.autompl()
         >>> kwplot.figure(fnum=1, doclf=True)

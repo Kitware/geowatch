@@ -75,8 +75,8 @@ class TextLogger(pl.callbacks.Callback):
     def on_sanity_check_end(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         self._log('on_sanity_check_end')
 
-    def on_keyboard_interrupt(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
-        self._log('on_keyboard_interrupt')
+    def on_exception(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
+        self._log('on_exception')
         self._log('KEYBOARD INTERUPT')
         self._log('trainer.default_root_dir = {!r}'.format(trainer.default_root_dir))
         self._log('trainer.log_dir = {!r}'.format(trainer.log_dir))
