@@ -164,14 +164,17 @@ def _remap_quality_mask(quality_mask_path, outdir):
     # 4 => cloud
     # 255 => no observation
     #
-    # Remapping to Landsat QA standard
+    # Remapping to Landsat QA standard (first bit in the remapped
+    # output indicates whether the pixel should be used for scoring or
+    # not with '1' indicating yes it should be used for scoring, and
+    # '0' indicating no)
     output_path = os.path.join(outdir, 'out_qa.tif')
     subprocess.run(['gdal_calc.py',
                     '-A', quality_mask_path,
                     '--outfile', output_path,
                     '--overwrite',
                     '--calc',
-                    '64*(A==0)+128*(A==1)+16*(A==2)+32*(A==3)+8*(A==4)+255*(A==255)',  # noqa
+                    '1*(A==0)+64*(A==0)+128*(A==1)+16*(A==2)+32*(A==3)+8*(A==4)+255*(A==255)',  # noqa
                     '--NoDataValue', '255'], check=True)
 
     return output_path
