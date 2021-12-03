@@ -9,12 +9,12 @@ list of json dictionaries, where each
 
 TODO:
     - [ ] Is our computation of the "site-boundary" correct?
-    - [ ] Do we have a complete list of IARPA category names?
-    - [ ] Do we have a complete list of IARPA sensor names?
+    - [x] Do we have a complete list of IARPA category names?
+    - [x] Do we have a complete list of IARPA sensor names?
     - [ ] Is our computation of the "predicted_phase" correct?
     - [ ] How do we compute "is_occluded"?
-    - [ ] Document details about is_site_boundary
-    - [ ] Document details about is_occluded
+    - [x] Document details about is_site_boundary
+    - [x] Document details about is_occluded
 
 .. code::
 
@@ -239,11 +239,11 @@ def track_to_site(coco_dset,
         add prediction field to each feature
         > A “Polygon” should define the foreign members “current_phase”,
         > “predicted_next_phase”, and “predicted_next_phase_date”.
-        TODO we need to figure out how to link individual polygons across frames
-        within a track when we have >1 polygon per track_index (from MultiPolygon
-        or multiple annotations) to handle splitting/merging.
-        This is because this prediction foreign field is defined wrt the CURRENT
-        polygon, not per-observation.
+        TODO we need to figure out how to link individual polygons across
+        frames within a track when we have >1 polygon per track_index
+        (from MultiPolygon or multiple annotations) to handle splitting/merging
+        This is because this prediction foreign field is defined wrt the
+        CURRENT polygon, not per-observation.
         '''
         for ix, feat in enumerate(features):
 
@@ -382,6 +382,84 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id=None, as_summary=False):
             sites.append(site)
 
     return sites
+
+
+def add_site_summary_to_kwcoco(site_summary_or_region_model,
+                               coco_dset,
+                               region_id=None):
+    """
+    Add a site summary(s) to a kwcoco dataset as a set of polygon annotations.
+    These annotations will have category "Site Boundary", 1 track per summary.
+    """
+    import json
+    import jsonschema
+    import kwimage
+    # input validation
+    if isinstance(site_summary_or_region_model, str):
+        if os.path.isfile(site_summary_or_region_model):
+            with open(site_summary_or_region_model) as f:
+                site_summary_or_region_model = json.load(f)
+        else:
+            site_summary_or_region_model = json.loads(
+                site_summary_or_region_model)
+    assert isinstance(
+        site_summary_or_region_model, dict
+    ), f'unknown site summary dtype {type(site_summary_or_region_model)}'
+    try:
+        region_model_schema = watch.rc.load_region_model_schema()
+        region_model = site_summary_or_region_model
+        jsonschema.validate(region_model, schema=region_model_schema)
+        site_summaries = [
+            f for f in region_model['features']
+            if f['properties']['type'] == 'site_summary'
+        ]
+        if region_id is None:
+            region_feat = region_model['features'][0]
+            assert region_feat['properties']['type'] == 'region'
+            region_id = region_feat['properties']['name']
+    except jsonschema.ValidationError:
+        try:
+            site_summary = site_summary_or_region_model
+            jsonschema.validate(site_summary, schema=region_model_schema)
+            site_summaries = [site_summary]
+            if region_id is None:
+                assert len(coco_dset.index.name_to_vid) == 1, 'ambiguous video'
+                region_id = ub.peek(coco_dset.index.name_to_vid)
+        except jsonschema.ValidationError:
+            raise ValueError('site summary or region model is not valid')
+
+    # write site summaries
+    cid = coco_dset.ensure_category('Site Boundary')
+    new_trackids = watch.utils.kwcoco_extensions.TrackidGenerator(coco_dset)
+    for site_summary in site_summaries:
+
+        track_id = next(new_trackids)
+
+        # get relevant images
+        images = coco_dset.images(
+            vidid=coco_dset.index.name_to_vid[region_id]['id'])
+        start_date = dateutil.parser.parse(
+            site_summary['properties']['start_date'])
+        end_date = dateutil.parser.parse(
+            site_summary['properties']['end_date'])
+        flags = [
+            start_date <= dateutil.parser.parse(date_str).date() <= end_date
+            for date_str in images.lookup('date_captured')
+        ]
+        images = images.compress(flags)
+
+        # apply site boundary as polygons
+        geo_poly = kwimage.MultiPolygon.from_geojson(site_summary['geometry'])
+        for img in images.objs:
+            img_poly = geo_poly.warp(kwimage.Affine.coerce(img['wld_to_pxl']))
+            bbox = list(img_poly.bounding_box().to_coco())[0]
+            coco_dset.add_annotation(image_id=img['id'],
+                                     category_id=cid,
+                                     bbox=bbox,
+                                     segmentation=img_poly,
+                                     track_id=track_id)
+
+    return coco_dset
 
 
 def main(args):
@@ -531,6 +609,13 @@ def main(args):
         If set, write the normalized and tracked kwcoco in_file back to disk
         so you can skip the --track_fn next time this is run on it.
         '''))
+    parser.add_argument('--site_summary',
+                        default=None,
+                        help=ub.paragraph('''
+        File path or serialized json object containing either a site_summary
+        or a region_model that includes site summaries. Each summary found will
+        be added to in_file to use in site characterization.
+        '''))
     args = parser.parse_args(args)
 
     # Read the kwcoco file
@@ -552,6 +637,12 @@ def main(args):
         track_fn = lambda x: x  # noqa
     else:
         track_fn = eval(args.track_fn)
+
+    if args.site_summary is not None:
+        if args.bas_mode:
+            raise ValueError('--site_summary cannot be used in --bas_mode')
+        coco_dset = add_site_summary_to_kwcoco(
+                args.site_summary, coco_dset, args.region_id)
 
     coco_dset = watch.tasks.tracking.normalize.normalize(
         coco_dset,
