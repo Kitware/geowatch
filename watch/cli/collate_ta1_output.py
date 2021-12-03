@@ -52,9 +52,9 @@ S2_ASSET_NAME_MAP = {'image-B01': 'B01',
 # use in the collated output for SSH scoring.  Note that this also
 # serves as a filter as any asset name not found here will be excluded
 # from the output
-S2_SSH_ASSET_NAME_MAP = {'image-B02': 'B02',
-                         'image-B03': 'B03',
-                         'image-B04': 'B04',
+S2_SSH_ASSET_NAME_MAP = {'image-B02': '10m_B02',
+                         'image-B03': '10m_B03',
+                         'image-B04': '10m_B04',
                          'image-B8A': 'B05',
                          'image-B11': 'B06',
                          'image-B12': 'B07',
@@ -240,7 +240,8 @@ def collate_item(stac_item_dict,
     elif platform in SUPPORTED_S2_PLATFORMS:
         platform_collation_fn = partial(generic_collate_item,
                                         S2_ASSET_NAME_MAP,
-                                        S2_SSH_ASSET_NAME_MAP)
+                                        S2_SSH_ASSET_NAME_MAP,
+                                        additional_ssh_qa_resolutions=[10])
     elif platform in SUPPORTED_WV_PLATFORMS:
         platform_collation_fn = collate_wv_item
 
@@ -281,12 +282,14 @@ def generic_collate_item(asset_name_map,
                          original_id,
                          item_outdir,
                          ssh_outdir,
-                         performer_code):
+                         performer_code,
+                         additional_ssh_qa_resolutions=[]):
     item_outdir_base = os.path.basename(item_outdir)
     output_assets = {}
     for asset_name, asset in stac_item.assets.items():
         # Don't output asset if not included in map
         asset_suffix = asset_name_map.get(asset_name)
+        ssh_asset_suffix = ssh_asset_name_map.get(asset_name)
 
         if asset_suffix is None:
             continue
@@ -318,10 +321,32 @@ def generic_collate_item(asset_name_map,
 
                 asset_href = _remap_quality_mask(local_qa_path, tmpdirname)
 
+                for qa_res in additional_ssh_qa_resolutions:
+                    local_resized_qa_outpath = os.path.join(
+                        tmpdirname, 'qa_{}.tif'.format(qa_res))
+
+                    if not os.path.isfile(local_resized_qa_outpath):
+                        subprocess.run(['gdalwarp',
+                                        '-overwrite',
+                                        '-of', 'GTiff',
+                                        '-r', 'near',
+                                        '-tr', str(qa_res), str(qa_res),
+                                        asset_href,
+                                        local_resized_qa_outpath], check=True)
+
+                    resized_qa_ssh_outpath = '/'.join(
+                        (ssh_outdir, "{}_{}_SSH_{}m_{}.tif".format(
+                            original_id,
+                            performer_code,
+                            int(qa_res),
+                            ssh_asset_suffix)))
+                    subprocess.run([*aws_base_command,
+                                    local_resized_qa_outpath,
+                                    resized_qa_ssh_outpath], check=True)
+
             subprocess.run([*aws_base_command,
                             asset_href, stac_asset_outpath], check=True)
 
-            ssh_asset_suffix = ssh_asset_name_map.get(asset_name)
             if ssh_asset_suffix is not None:
                 ssh_asset_outpath = '/'.join(
                     (ssh_outdir, "{}_{}_SSH_{}.tif".format(
@@ -341,6 +366,15 @@ def generic_collate_item(asset_name_map,
                             original_id, performer_code)))
         subprocess.run([*aws_base_command,
                         temporary_file.name, datetime_outpath], check=True)
+
+        for qa_res in additional_ssh_qa_resolutions:
+            qa_res_datetime_outpath = '/'.join(
+                (ssh_outdir, "{}_{}_SSH_{}m_datetime.txt".format(
+                    original_id, performer_code, qa_res)))
+
+            subprocess.run([*aws_base_command,
+                            temporary_file.name, qa_res_datetime_outpath],
+                           check=True)
 
     stac_item.assets = output_assets
 
