@@ -1511,12 +1511,6 @@ def gdal_multi_warp(in_fpaths, out_fpath, space_box, local_epsg, rpcs=None):
     # Warp then merge
     import tempfile
 
-    print('local_epsg = {!r}'.format(local_epsg))
-    print('space_box = {!r}'.format(space_box))
-    print('out_fpath = {!r}'.format(out_fpath))
-    print('in_fpaths = {!r}'.format(in_fpaths))
-    print('rpcs = {!r}'.format(rpcs))
-
     # Write to a temporary file and then rename the file to the final
     # Destination so ctrl+c doesn't break everything
     tmp_out_fpath = ub.augpath(out_fpath, prefix='.tmp.')

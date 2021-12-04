@@ -197,8 +197,8 @@ def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
         >>> import kwcoco
         >>> ###
         >>> gid = 1
-        >>> dset1 = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
-        >>> coco_img = dset2.coco_image(gid)
+        >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
+        >>> coco_img = dset.coco_image(gid)
         >>> coco_populate_geo_img_heuristics2(coco_img, overwrite=True)
         >>> ###
         >>> gid = 1
@@ -425,6 +425,8 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
                     for obj={obj}
                     '''))
             obj['channels'] = channels
+
+        # TODO: determine nodata defaults based on sensor_coarse
 
         if enable_intensity_stats:
             # Use a sidecar file for now
