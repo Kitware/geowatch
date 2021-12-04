@@ -256,3 +256,52 @@ python -m watch.tasks.fusion.fit \
     --method="MultimodalTransformer" \
     --normalize_perframe=True \
     --arch_name=$ARCH 
+
+
+####----
+# Extension Horologic - 2021-12-03
+#
+
+
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop1-20201117
+ARCH=smt_it_stm_p8
+CHANNELS="blue|green|red|nir|swir16|swir22"
+EXPERIMENT_NAME=SC_${ARCH}_newanns_weighted_rgb_v26
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
+export CUDA_VISIBLE_DEVICES="2"
+python -m watch.tasks.fusion.fit \
+    --config $WORKDIR/configs/common_20201117.yaml  \
+    --channels=${CHANNELS} \
+    --name=$EXPERIMENT_NAME \
+    --chip_size=64 \
+    --time_steps=3 \
+    --default_root_dir=$DEFAULT_ROOT_DIR \
+    --method="MultimodalTransformer" \
+    --gpus "1" \
+    --amp_backend=apex \
+    --arch_name=$ARCH 
+
+
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop1-20201117
+ARCH=smt_it_stm_p8
+CHANNELS="brush|bare_ground|built_up|matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7|blue|green|red|nir|swir16|swir22"
+EXPERIMENT_NAME=SC_${ARCH}_newanns_weighted_hybrid_v27
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
+export CUDA_VISIBLE_DEVICES="3"
+python -m watch.tasks.fusion.fit \
+    --config $WORKDIR/configs/common_20201117.yaml  \
+    --channels=${CHANNELS} \
+    --name=$EXPERIMENT_NAME \
+    --chip_size=64 \
+    --time_steps=3 \
+    --default_root_dir=$DEFAULT_ROOT_DIR \
+    --method="MultimodalTransformer" \
+    --gpus "1" \
+    --amp_backend=apex \
+    --arch_name=$ARCH 

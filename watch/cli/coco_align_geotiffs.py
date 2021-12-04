@@ -21,78 +21,6 @@ at the moment.
 
 
 Notes:
-
-    # Example invocation to create the full drop1 aligned dataset
-    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-    INPUT_COCO_FPATH=$DVC_DPATH/drop1/data.kwcoco.json
-    OUTPUT_COCO_FPATH=$DVC_DPATH/drop1-S2-L8-WV-aligned/data.kwcoco.json
-    REGION_FPATH=$DVC_DPATH/drop1/all_regions.geojson
-    VIZ_DPATH=$DVC_DPATH/drop1-S2-L8-WV-aligned/_viz_video
-
-    # Quick stats about input datasets
-    python -m kwcoco stats $INPUT_COCO_FPATH
-    python -m watch stats $INPUT_COCO_FPATH
-
-    # Combine the region models
-    python -m watch.cli.merge_region_models \
-        --src $DVC_DPATH/drop1/region_models/*.geojson \
-        --dst $REGION_FPATH
-
-    python -m watch.cli.coco_add_watch_fields \
-        --src $INPUT_COCO_FPATH \
-        --dst $INPUT_COCO_FPATH.prepped \
-        --workers 16 \
-        --target_gsd=10
-
-    # Execute alignment / crop script
-    python -m watch.cli.coco_align_geotiffs \
-        --src $INPUT_COCO_FPATH.prepped \
-        --dst $OUTPUT_COCO_FPATH \
-        --regions $REGION_FPATH \
-        --rpc_align_method orthorectify \
-        --max_workers=10 \
-        --aux_workers=2 \
-        --context_factor=1 \
-        --visualize=False \
-        --skip_geo_preprop True \
-        --keep img
-
-    python -m watch.cli.coco_visualize_videos \
-        --src $OUTPUT_COCO_FPATH \
-        --space="video"
-
-    # Make an animated gif for specified bands (use "," to separate)
-    python -m watch.cli.animate_visualizations \
-            --viz_dpath $VIZ_DPATH \
-            --draw_imgs=False \
-            --draw_anns=True \
-            --channels "red|green|blue"
-
-    # Propagation actually touches the images, so this is necessary
-    # Propagate annotations forward in time
-    watch-cli propagate_labels \
-        --src $OUTPUT_COCO_FPATH \
-        --dst $OUTPUT_COCO_FPATH.tmp \
-        --ext $DVC_DPATH/drop1/annots.kwcoco.json \
-        --viz_dpath None \
-        --verbose 1 \
-        --validate 1 \
-        --crop 1 \
-        --max_workers None
-
-
-    python -m watch.cli.coco_align_geotiffs \
-
-    # Output stats
-    python -m kwcoco stats $OUTPUT_COCO_FPATH
-    python -m watch stats $OUTPUT_COCO_FPATH
-    python -m watch.cli.coco_visualize_videos \
-        --src $OUTPUT_COCO_FPATH \
-        --space="video"
-
-
-Notes:
-
     # Example invocation to create the full drop1 aligned dataset
 
     DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
@@ -129,42 +57,6 @@ Notes:
         --skip_geo_preprop True \
         --include_sensors=WV \
         --keep img
-
-
-Ignore:
-    # Input Args
-    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-    TA1_KWCOCO_FPATH=$DVC_DPATH/TA1-Processed/data.kwcoco.json
-    ALIGNED_KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop1-Aligned-TA1-2021-11
-    ALIGNED_KWCOCO_FPATH=$ALIGNED_KWCOCO_BUNDLE_DPATH/data.kwcoco.json
-
-    dvc unprotect $ALIGNED_KWCOCO_BUNDLE_DPATH/*/*.kwcoco.json
-
-    python -m watch.cli.coco_align_geotiffs \
-        --src $TA1_KWCOCO_FPATH \
-        --dst $ALIGNED_KWCOCO_BUNDLE_DPATH/aligned.kwcoco.json \
-        --regions $DVC_DPATH/drop1/region_models/LT_R001.geojson \
-        --rpc_align_method orthorectify \
-        --max_workers=10 \
-        --aux_workers=2 \
-        --skip_geo_preprop True \
-        --max_frames 1000 \
-        --target_gsd=10 --visualize="red|green|blue"
-
-    jq ".images[23].auxiliary[0].parent_file_name" /home/joncrall/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-TA1-2021-11/aligned.kwcoco.json
-    jq ".images[24].auxiliary[0].parent_file_name" /home/joncrall/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-TA1-2021-11/aligned.kwcoco.json
-
-    jq ".images[23].id" /home/joncrall/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-TA1-2021-11/aligned.kwcoco.json
-    jq ".images[24].id" /home/joncrall/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-TA1-2021-11/aligned.kwcoco.json
-
-    jq ".images[11].id" /home/joncrall/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-TA1-2021-11/aligned.kwcoco.json
-
-    rm -rf $ALIGNED_KWCOCO_BUNDLE_DPATH/_aligned_viz
-    python -m watch.cli.coco_visualize_videos \
-        --src $ALIGNED_KWCOCO_BUNDLE_DPATH/aligned.kwcoco.json \
-        --viz_dpath $ALIGNED_KWCOCO_BUNDLE_DPATH/_aligned_viz \
-        --channels "red|green|blue" \
-        --num_workers=10 --animate=True
 
 
 TODO:
@@ -587,55 +479,93 @@ class SimpleDataCube(object):
         cube.img_geos_df = img_geos_df
 
     @classmethod
-    def demo(SimpleDataCube, with_region=False):
+    def demo(SimpleDataCube, with_region=False, extra=0):
         from watch.demo.landsat_demodata import grab_landsat_product
         from watch.gis.geotiff import geotiff_metadata
         # Create a dead simple coco dataset with one image
         import geopandas as gpd
         import kwcoco
         coco_dset = kwcoco.CocoDataset()
-        ls_prod = grab_landsat_product()
-        fpath = ls_prod['bands'][0]
-        meta = geotiff_metadata(fpath)
-        # We need a date captured ATM in a specific format
-        dt = dateutil.parser.parse(
-            meta['filename_meta']['acquisition_date'])
-        date_captured = dt.strftime('%Y/%m/%d')
 
-        gid = coco_dset.add_image(file_name=fpath, date_captured=date_captured)
-        img_poly = kwimage.Polygon(exterior=meta['wgs84_corners'])
-        ann_poly = img_poly.scale(0.1, about='center')
-        sseg_geos = ann_poly.swap_axes().to_geojson()
-        coco_dset.add_annotation(
-            image_id=gid, bbox=[0, 0, 0, 0], segmentation_geos=sseg_geos)
+        landsat_products = []
+        # ls_prod = grab_landsat_product()
+        # landsat_products.append(ls_prod)
+        landsat_products.append(grab_landsat_product(demo_index=0))
+        if extra:
+            # For debugging
+            landsat_products.append(grab_landsat_product(demo_index=1))
+            landsat_products.append(grab_landsat_product(demo_index=2))
+
+        features = []
+
+        for prod_idx, ls_prod in enumerate(landsat_products):
+            fpath = ls_prod['bands'][0]
+            meta = geotiff_metadata(fpath)
+            # We need a date captured ATM in a specific format
+            dt = dateutil.parser.parse(
+                meta['filename_meta']['acquisition_date'])
+            date_captured = dt.strftime('%Y/%m/%d')
+
+            gid = coco_dset.add_image(file_name=fpath,
+                                      date_captured=date_captured,
+                                      sensor_coarse='L8')
+            img_poly = kwimage.Polygon(exterior=meta['wgs84_corners'])
+            ann_poly = img_poly.scale(0.1, about='center')
+            sseg_geos = ann_poly.swap_axes().to_geojson()
+            coco_dset.add_annotation(
+                image_id=gid, bbox=[0, 0, 0, 0], segmentation_geos=sseg_geos)
+
+            if prod_idx == 0:
+                # Only generate this feature for the first product
+                # for backwards compat
+                features.append({
+                    'type': 'Feature',
+                    'properties': {
+                        'type': 'region',
+                        'region_id': 'demo_region',
+                        'version': '2.1.0',
+                        'mgrs': None,
+                        'start_date': None,
+                        'end_date': None,
+                        'originator': 'foobar',
+                        'comments': None,
+                        'model_content': 'annotation',
+                        'sites': [],
+                    },
+                    'geometry': img_poly.scale(0.2, about='center').swap_axes().to_geojson(),
+                })
 
         kwcoco_extensions.coco_populate_geo_heuristics(
-            coco_dset, overwrite={'warp'}, workers=0,
+            coco_dset, overwrite={'warp'}, workers=2 if extra > 0 else 0,
             keep_geotiff_metadata=True,
         )
+
+        if extra:
+            # for the overlapping images add in a special feature.
+            overlap_box = kwimage.Boxes.from_slice(
+                (slice(54.5, 55.5), slice(24.5, 25.6))).to_polygons()[0]
+            features.append({
+                'type': 'Feature',
+                'properties': {
+                    'type': 'region',
+                    'region_id': 'demo_region',
+                    'version': '2.1.0',
+                    'mgrs': None,
+                    'start_date': None,
+                    'end_date': None,
+                    'originator': 'foobar',
+                    'comments': None,
+                    'model_content': 'annotation',
+                    'sites': [],
+                },
+                'geometry': overlap_box.to_geojson(),
+            })
 
         cube = SimpleDataCube(coco_dset)
         if with_region:
             region_geojson =  {
                 'type': 'FeatureCollection',
-                'features': [
-                    {
-                        'type': 'Feature',
-                        'properties': {
-                            'type': 'region',
-                            'region_id': 'demo_region',
-                            'version': '2.1.0',
-                            'mgrs': None,
-                            'start_date': None,
-                            'end_date': None,
-                            'originator': 'foobar',
-                            'comments': None,
-                            'model_content': 'annotation',
-                            'sites': [],
-                        },
-                        'geometry': img_poly.scale(0.2, about='center').swap_axes().to_geojson(),
-                    },
-                ]
+                'features': features,
             }
             region_df = gpd.GeoDataFrame.from_features(
                 region_geojson, crs=util_gis._get_crs84())
@@ -661,6 +591,7 @@ class SimpleDataCube(object):
                 subdirectories in the extract step.
 
         Example:
+            >>> from watch.cli.coco_align_geotiffs import *  # NOQA
             >>> cube, region_df = SimpleDataCube.demo(with_region=True)
             >>> to_extract = cube.query_image_overlaps2(region_df)
         """
@@ -796,6 +727,7 @@ class SimpleDataCube(object):
             kwcoco.CocoDataset: the given or new dataset that was modified
 
         Example:
+            >>> from watch.cli.coco_align_geotiffs import *  # NOQA
             >>> cube, region_df = SimpleDataCube.demo(with_region=True)
             >>> extract_dpath = ub.ensure_app_cache_dir('smart_watch/test/coco_align_geotiff/demo_extract_overlaps')
             >>> rpc_align_method = 'orthorectify'
@@ -808,6 +740,24 @@ class SimpleDataCube(object):
             >>> cube.extract_overlaps(image_overlaps, extract_dpath,
             >>>                       new_dset=new_dset, visualize=visualize,
             >>>                       max_workers=max_workers)
+
+        Example:
+            >>> # xdoctest: +REQUIRES(--slow)
+            >>> from watch.cli.coco_align_geotiffs import *  # NOQA
+            >>> cube, region_df = SimpleDataCube.demo(with_region=True, extra=True)
+            >>> extract_dpath = ub.ensure_app_cache_dir('smart_watch/test/coco_align_geotiff/demo_extract_overlaps2')
+            >>> rpc_align_method = 'orthorectify'
+            >>> write_subsets = True
+            >>> visualize = True
+            >>> max_workers = 0
+            >>> to_extract = cube.query_image_overlaps2(region_df)
+            >>> new_dset = kwcoco.CocoDataset()
+            >>> image_overlaps = to_extract[1]
+            >>> cube.extract_overlaps(image_overlaps, extract_dpath,
+            >>>                       new_dset=new_dset, visualize=visualize,
+            >>>                       max_workers=max_workers)
+
+            xdev.profile_now(SimpleDataCube.demo)
         """
         from kwcoco.util.util_json import ensure_json_serializable
         import geopandas as gpd
@@ -905,12 +855,6 @@ class SimpleDataCube(object):
                         fpath = join(coco_dset.bundle_dpath, primary_asset['file_name'])
 
                         valid_region_utm = coco_img.img.get('valid_region_utm', None)
-                        if valid_region_utm is None:
-                            # Hack, this should already exist
-                            kwcoco_extensions.coco_populate_geo_img_heuristics(
-                                coco_dset, gid, keep_geotiff_metadata=True)
-
-                        valid_region_utm = coco_img.img.get('valid_region_utm', None)
                         if valid_region_utm is not None:
                             geos_valid_region_utm = coco_img.img['valid_region_utm']
                             try:
@@ -925,7 +869,8 @@ class SimpleDataCube(object):
                             other_area = sh_space_region_local.area
                             valid_iooa = isect_area / other_area
                         else:
-                            valid_iooa = 0
+                            sh_valid_region_local = None
+                            valid_iooa = -1
 
                         score = valid_iooa
                         rows.append({
@@ -936,19 +881,19 @@ class SimpleDataCube(object):
                             'geometry': sh_valid_region_local,
                         })
 
-                    # Order the "main" image first here.
+                    # The order doesnt matter here. We will fix it after we
+                    # crop the images.
                     final_gids = [
                         r['gid'] for r in sorted(rows, key=lambda r: r['score'], reverse=True)]
-                    # hack only use one "best" image from the group
                     groups.append({
                         'main_gid': final_gids[0],
-                        'other_gids': [],
+                        # 'other_gids': [],
+                        'other_gids': final_gids[1:],
                         'sensor_coarse': sensor_coarse,
                     })
-                    # groups.append((final_gids[0], final_gids[1:]))
 
                     # Output a visualization of this group and its overlaps
-                    DEBUG_VALID_REGIONS = visualize
+                    DEBUG_VALID_REGIONS = visualize and 0
                     if DEBUG_VALID_REGIONS:
                         import kwplot
                         from shapely.ops import unary_union
@@ -1009,13 +954,13 @@ class SimpleDataCube(object):
                             ax.figure.savefig(debug_fpath)
 
                             debug_info = {
-                                'coco_fpath': coco_dset.fpath,
+                                'coco_fpath': os.path.abspath(coco_dset.fpath),
                                 'gids': final_gids,
                                 'rows': [ub.dict_diff(row, {'geometry'}) for row in rows],
                             }
                             fname = f'debug_{debug_name}_text.py'
                             debug_fpath = debug_dpath / fname
-                            datastr = ub.repr2(debug_info, nl=1)
+                            datastr = ub.repr2(debug_info, nl=2)
                             debug_text = ub.codeblock(
                                 '''
                                 """
@@ -1032,8 +977,8 @@ class SimpleDataCube(object):
 
                                     for coco_img in coco_imgs:
                                         gid = coco_img.img['id']
-                                        kwcoco_extensions.coco_populate_geo_img_heuristics(
-                                            parent_dset, gid, overwrite=True)
+                                        kwcoco_extensions.coco_populate_geo_img_heuristics2(
+                                            coco_img, overwrite=True)
 
                                 if __name__ == '__main__':
                                     main()
@@ -1548,8 +1493,29 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
 
 
 def gdal_multi_warp(in_fpaths, out_fpath, space_box, local_epsg, rpcs=None):
+    """
+    Ignore:
+        # Uses data from the data cube with extra=1
+        from watch.cli.coco_align_geotiffs import *  # NOQA
+        cube, region_df = SimpleDataCube.demo(with_region=True, extra=True)
+        local_epsg = 32635
+        space_box = kwimage.Polygon.from_shapely(region_df.geometry.iloc[1]).bounding_box().to_ltrb()
+        dpath = ub.ensure_app_cache_dir('smart_watch/test/gdal_multi_warp')
+        out_fpath = join(dpath, 'test_multi_warp.tif')
+        in_fpath1 = cube.coco_dset.get_image_fpath(2)
+        in_fpath2 = cube.coco_dset.get_image_fpath(3)
+        in_fpaths = [in_fpath1, in_fpath2]
+        rpcs = None
+        gdal_multi_warp(in_fpaths, out_fpath, space_box, local_epsg, rpcs)
+    """
     # Warp then merge
     import tempfile
+
+    print('local_epsg = {!r}'.format(local_epsg))
+    print('space_box = {!r}'.format(space_box))
+    print('out_fpath = {!r}'.format(out_fpath))
+    print('in_fpaths = {!r}'.format(in_fpaths))
+    print('rpcs = {!r}'.format(rpcs))
 
     # Write to a temporary file and then rename the file to the final
     # Destination so ctrl+c doesn't break everything
@@ -1559,15 +1525,29 @@ def gdal_multi_warp(in_fpaths, out_fpath, space_box, local_epsg, rpcs=None):
     warped_gpaths = []
     for in_fpath in in_fpaths:
         tmpfile = tempfile.NamedTemporaryFile(suffix='.tif')
-        tempfiles.append(tempfiles)
+        tempfiles.append(tmpfile)
         tmp_out = tmpfile.name
         gdal_single_warp(in_fpath, tmp_out, space_box, local_epsg,
                          rpcs=rpcs)
         warped_gpaths.append(tmp_out)
 
-    # Last image is copied over earlier ones, but we expect first image to be
-    # the primary one, so reverse order
-    warped_gpaths = warped_gpaths[::-1]
+    if 1:
+        valid_polygons = []
+        for tmp_out in warped_gpaths:
+            from watch.utils import util_raster
+            sh_poly = util_raster.mask(
+                tmp_out, tolerance=10, default_nodata=0)
+            valid_polygons.append(sh_poly)
+        valid_areas = [p.area for p in valid_polygons]
+
+        # Determine order by valid data
+        warped_gpaths = list(ub.sorted_vals(ub.dzip(warped_gpaths, valid_areas)).keys())
+        warped_gpaths = warped_gpaths[::-1]
+    else:
+        # Last image is copied over earlier ones, but we expect first image to be
+        # the primary one, so reverse order
+        warped_gpaths = warped_gpaths[::-1]
+
     merge_cmd_parts = ['gdal_merge.py', '-n', '0', '-o', tmp_out_fpath] + warped_gpaths
     merge_cmd = ' '.join(merge_cmd_parts)
     cmd_info = ub.cmd(merge_cmd_parts, check=True)
@@ -1577,6 +1557,27 @@ def gdal_multi_warp(in_fpaths, out_fpath, space_box, local_epsg, rpcs=None):
         print(cmd_info['err'])
         raise Exception(cmd_info['err'])
     os.rename(tmp_out_fpath, out_fpath)
+
+    if 0:
+        datas = []
+        for p in warped_gpaths:
+            d = kwimage.imread(p)
+            d = kwimage.normalize_intensity(d, nodata=0)
+            datas.append(d)
+
+        import kwplot
+        kwplot.autompl()
+        combo = kwimage.imread(out_fpath)
+        combo = kwimage.normalize_intensity(combo, nodata=0)
+        datas.append(combo)
+        kwplot.imshow(kwimage.stack_images(datas, axis=1))
+
+        datas2 = []
+        for p in in_fpaths:
+            d = kwimage.imread(p)
+            d = kwimage.normalize_intensity(d, nodata=0)
+            datas2.append(d)
+        kwplot.imshow(kwimage.stack_images(datas2, axis=1), fnum=2)
 
 
 def gdal_single_warp(in_fpath, out_fpath, space_box, local_epsg, rpcs=None):

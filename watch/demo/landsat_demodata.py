@@ -2,7 +2,7 @@ import ubelt as ub
 from os.path import join
 
 
-def grab_landsat_product(product_id=None):
+def grab_landsat_product(product_id=None, demo_index=0):
     """
     Download and cache all items for a landsat product.
 
@@ -10,6 +10,9 @@ def grab_landsat_product(product_id=None):
         product_id (str, default=None):
             The product id to download (currently NotImplemented).
             If unspecified, an arbitrary scene is returned.
+
+        demo_index (int):
+            hack, can be 0, 1, or 2. Regions 1 and 2 should overlap.
 
     Returns:
         Dict[str, object]:
@@ -57,8 +60,17 @@ def grab_landsat_product(product_id=None):
     if product_id is not None:
         raise NotImplementedError('Must use the default scene')
 
-    scene_name = 'LC08_L1TP_037029_20130602_20170310_01_T1'
-    scene_path = join('LC08', '01', '037', '029', scene_name)
+    if demo_index == 0:
+        scene_name = 'LC08_L1TP_037029_20130602_20170310_01_T1'
+        scene_path = join('LC08', '01', '037', '029', scene_name)
+    elif demo_index == 1:
+        scene_name = 'LC08_L1TP_187022_20191020_20191030_01_T1'
+        scene_path = join('LC08', '01', '187', '022', scene_name)
+    elif demo_index == 2:
+        scene_name = 'LC08_L1TP_187021_20191020_20191030_01_T1'
+        scene_path = join('LC08', '01', '187', '021', scene_name)
+    else:
+        raise KeyError(demo_index)
 
     if False:
         # overkill?

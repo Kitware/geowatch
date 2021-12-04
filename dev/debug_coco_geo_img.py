@@ -32,8 +32,8 @@ def main():
     for coco_img in coco_imgs:
         gid = coco_img.img['id']
 
-        kwcoco_extensions.coco_populate_geo_img_heuristics(
-            parent_dset, gid, overwrite=True, keep_geotiff_metadata=True)
+        kwcoco_extensions.coco_populate_geo_img_heuristics2(
+            coco_img, overwrite=True, keep_geotiff_metadata=True)
 
         aux_geo_rows = []
         for obj in coco_img.iter_asset_objs():

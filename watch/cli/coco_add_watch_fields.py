@@ -35,6 +35,12 @@ class AddWatchFieldsConfig(scfg.Config):
         'workers': scfg.Value(0, help='number of io threads'),
 
         'mode': scfg.Value('process', help='can be thread, process, or serial'),
+
+        'enable_video_stats': scfg.Value(True, help='set to False to disable video stats'),
+
+        'enable_valid_region': scfg.Value(False, help='set to True to enable valid region computation'),
+
+        'enable_intensity_stats': scfg.Value(False, help='if True, will compute intensity statistics on each channel of each image'),
     }
 
 
@@ -107,15 +113,11 @@ def main(**kwargs):
     heuristics.ensure_heuristic_colors(dset)
 
     print('start populate')
-    target_gsd = config['target_gsd']
-    overwrite = config['overwrite']
-    default_gsd = config['default_gsd']
-    workers = util_globals.coerce_num_workers(config['workers'])
-    print('workers = {!r}'.format(workers))
 
-    kwcoco_extensions.populate_watch_fields(
-        dset, target_gsd=target_gsd, overwrite=overwrite,
-        default_gsd=default_gsd, workers=workers, mode=config['mode'])
+    populate_kw = ub.compatible(config, kwcoco_extensions.populate_watch_fields)
+    populate_kw['workers'] = util_globals.coerce_num_workers(config['workers'])
+
+    kwcoco_extensions.populate_watch_fields(dset, **populate_kw)
     print('dset.index.videos = {}'.format(ub.repr2(dset.index.videos, nl=2, precision=4)))
 
     if config['edit_geotiff_metadata']:

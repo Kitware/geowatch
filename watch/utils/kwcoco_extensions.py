@@ -55,8 +55,13 @@ def filter_image_ids(coco_dset, gids=None, include_sensors=None,
 
 
 def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None,
-                          overwrite=False, default_gsd=None, conform=True,
-                          workers=0, mode='thread'):
+                          overwrite=False, default_gsd=None,
+                          conform=True,
+                          enable_video_stats=True,
+                          enable_valid_region=False,
+                          enable_intensity_stats=False,
+                          workers=0,
+                          mode='thread'):
     """
     Aggregate populate function for fields useful to WATCH.
 
@@ -115,15 +120,15 @@ def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None,
     else:
         gids = list(ub.flatten(coco_dset.images(vidid=vidid) for vidid in vidids))
 
-    # for gid in ub.ProgIter(gids, total=len(gids), desc='populate imgs'):
-    #     coco_populate_geo_img_heuristics(coco_dset, gid, overwrite=overwrite,
-    #                                      default_gsd=default_gsd)
     coco_populate_geo_heuristics(
         coco_dset, gids=gids, overwrite=overwrite, default_gsd=default_gsd,
-        workers=workers, mode=mode)
+        workers=workers, mode=mode,
+        enable_intensity_stats=enable_intensity_stats,
+        enable_valid_region=enable_valid_region)
 
-    for vidid in ub.ProgIter(vidids, total=len(vidids), desc='populate videos'):
-        coco_populate_geo_video_stats(coco_dset, vidid, target_gsd=target_gsd)
+    if enable_video_stats:
+        for vidid in ub.ProgIter(vidids, total=len(vidids), desc='populate videos'):
+            coco_populate_geo_video_stats(coco_dset, vidid, target_gsd=target_gsd)
 
     # serialize intermediate objects
     coco_dset._ensure_json_serializable()
@@ -164,9 +169,11 @@ def coco_populate_geo_heuristics(coco_dset, gids=None, overwrite=False,
 
 
 @profile
-def coco_populate_geo_img_heuristics(coco_dset, gid, overwrite=False,
-                                     default_gsd=None,
-                                     keep_geotiff_metadata=False, **kw):
+def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
+                                      default_gsd=None,
+                                      keep_geotiff_metadata=False,
+                                      enable_intensity_stats=False,
+                                      enable_valid_region=False):
     """
     Note: this will not overwrite existing channel info unless specified
 
@@ -181,7 +188,8 @@ def coco_populate_geo_img_heuristics(coco_dset, gid, overwrite=False,
         >>> overwrite = {'warp', 'band'}
         >>> default_gsd = None
         >>> kw = {}
-        >>> coco_populate_geo_img_heuristics(coco_dset, gid)
+        >>> coco_img = coco_dset.coco_image(gid)
+        >>> coco_populate_geo_img_heuristics2(coco_img)
         >>> img = coco_dset.index.imgs[gid]
 
     Example:
@@ -190,25 +198,14 @@ def coco_populate_geo_img_heuristics(coco_dset, gid, overwrite=False,
         >>> ###
         >>> gid = 1
         >>> dset1 = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
-        >>> coco_populate_geo_img_heuristics(dset1, gid, overwrite=True)
+        >>> coco_img = dset2.coco_image(gid)
+        >>> coco_populate_geo_img_heuristics2(coco_img, overwrite=True)
         >>> ###
         >>> gid = 1
         >>> dset2 = kwcoco.CocoDataset.demo('shapes8')
-        >>> coco_populate_geo_img_heuristics(dset2, gid, overwrite=True)
+        >>> coco_img = dset2.coco_image(gid)
+        >>> coco_populate_geo_img_heuristics2(coco_img, overwrite=True)
     """
-    # import watch
-    # bundle_dpath = coco_dset.bundle_dpath
-    # img = coco_dset.imgs[gid]
-    coco_img = coco_dset.coco_image(gid)
-    coco_populate_geo_img_heuristics2(
-        coco_img, overwrite=overwrite, default_gsd=default_gsd,
-        keep_geotiff_metadata=keep_geotiff_metadata, **kw)
-
-
-@profile
-def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
-                                      default_gsd=None,
-                                      keep_geotiff_metadata=False, **kw):
     import watch
     bundle_dpath = coco_img.bundle_dpath
     img = coco_img.img
@@ -216,19 +213,7 @@ def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
     primary_obj = coco_img.primary_asset()
     asset_objs = list(coco_img.iter_asset_objs())
 
-    valid_overwrites = {'warp', 'band', 'channels'}
-    default_overwrites = {'warp', 'band'}
-    if isinstance(overwrite, str):
-        overwrite = set(overwrite.split(','))
-    if overwrite is True:
-        overwrite = default_overwrites
-    elif overwrite is False:
-        overwrite = {}
-    else:
-        overwrite = set(overwrite)
-        unexpected = overwrite - valid_overwrites
-        if unexpected:
-            raise ValueError(f'Got unexpected overwrites: {unexpected}')
+    overwrite = _coerce_overwrite(overwrite)
 
     # Note: for non-geotiffs we could use the aux_to_img transformation
     # provided with them to determine their geo-properties.
@@ -236,7 +221,8 @@ def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
     for obj in asset_objs:
         errors = _populate_canvas_obj(
             bundle_dpath, obj, overwrite=overwrite, default_gsd=default_gsd,
-            keep_geotiff_metadata=keep_geotiff_metadata)
+            keep_geotiff_metadata=keep_geotiff_metadata,
+            enable_intensity_stats=enable_intensity_stats)
         asset_errors.append(errors)
 
     if all(asset_errors):
@@ -256,7 +242,7 @@ def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
             primary_obj['geotiff_metadata'] = info
 
     valid_region_utm = img.get('valid_region_utm', None)
-    if valid_region_utm is None or 'warp' in overwrite:
+    if enable_valid_region and (valid_region_utm is None or 'warp' in overwrite):
         # _ = ub.cmd('gdalinfo -stats {}'.format(fpath), check=True)
         primary_fname = primary_obj.get('file_name', None)
         primary_fpath = join(bundle_dpath, primary_fname)
@@ -310,13 +296,18 @@ def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
 
 @profile
 def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
-                         default_gsd=None, keep_geotiff_metadata=False):
+                         default_gsd=None, keep_geotiff_metadata=False,
+                         enable_intensity_stats=False):
     """
     obj can be an img or aux
 
     Ignore:
+        from watch.utils.kwcoco_extensions import *  # NOQA
+        from watch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
+        coco_dset = demo_kwcoco_with_heatmaps()
+        coco_img = coco_dset.coco_image(1)
         obj = coco_img.primary_asset()
-        bundle_dpath = dset.bundle_dpath
+        bundle_dpath = coco_dset.bundle_dpath
         overwrite = True
         with_wgs = False
         default_gsd = None
@@ -331,19 +322,8 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
     warp_to_wld = obj.get('warp_to_wld', None)
     approx_meter_gsd = obj.get('approx_meter_gsd', None)
 
-    valid_overwrites = {'warp', 'band', 'channels'}
-    default_overwrites = {'warp', 'band'}
-    if isinstance(overwrite, str):
-        overwrite = set(overwrite.split(','))
-    if overwrite is True:
-        overwrite = default_overwrites
-    elif overwrite is False:
-        overwrite = {}
-    else:
-        overwrite = set(overwrite)
-        unexpected = overwrite - valid_overwrites
-        if unexpected:
-            raise ValueError(f'Got unexpected overwrites: {unexpected}')
+    overwrite = _coerce_overwrite(overwrite)
+
     errors = []
     # Can only do this for images with file names
     if fname is not None:
@@ -445,7 +425,60 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
                     for obj={obj}
                     '''))
             obj['channels'] = channels
+
+        if enable_intensity_stats:
+            # Use a sidecar file for now
+            import pathlib
+            import pickle
+            stats_fpath = pathlib.Path(fpath + '.stats.pkl')
+            # if _is_writeable(stats_fpath.parent):
+            #     pass
+            if not stats_fpath.exists():
+                import kwarray
+                imdata = kwimage.imread(fpath)
+                imdata = kwarray.atleast_nd(imdata, 3)
+                stats_info = {'bands': []}
+                for imband in imdata.transpose(2, 0, 1):
+                    data = imband.ravel()
+                    intensity_hist = ub.dict_hist(data)
+                    intensity_hist = ub.sorted_keys(intensity_hist)
+                    stats_info['bands'].append({
+                        'intensity_hist': intensity_hist,
+                    })
+                with open(stats_fpath, 'wb') as file:
+                    pickle.dump(stats_info, file)
+            else:
+                pass
+
         return errors
+
+
+@ub.memoize
+def _is_writeable(dpath):
+    " https://stackoverflow.com/questions/2113427/determining-whether-a-directory-is-writeable "
+    import os
+    return os.access(dpath, os.W_OK) and os.path.isdir(dpath)
+
+
+def _coerce_overwrite(overwrite):
+    """
+    Im not a big fan of the way overwrite currently works, might want to
+    refactor.
+    """
+    valid_overwrites = {'warp', 'band', 'channels'}
+    default_overwrites = {'warp', 'band'}
+    if isinstance(overwrite, str):
+        overwrite = set(overwrite.split(','))
+    if overwrite is True:
+        overwrite = default_overwrites
+    elif overwrite is False:
+        overwrite = {}
+    else:
+        overwrite = set(overwrite)
+        unexpected = overwrite - valid_overwrites
+        if unexpected:
+            raise ValueError(f'Got unexpected overwrites: {unexpected}')
+    return overwrite
 
 
 # def single_geotiff_metadata(bundle_dpath, img, serializable=False):
