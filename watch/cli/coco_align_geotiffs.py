@@ -76,6 +76,7 @@ from os.path import join, exists
 from watch.cli.coco_visualize_videos import _write_ann_visualizations2
 from watch.utils import util_gis
 from watch.utils import util_time
+from watch.utils import util_gdal
 from watch.utils import kwcoco_extensions  # NOQA
 
 
@@ -803,6 +804,7 @@ class SimpleDataCube(object):
             new_dset.ensure_category(**cat)
 
         bundle_dpath = coco_dset.bundle_dpath
+        new_bundle_dpath = new_dset.bundle_dpath
         new_anns = []
 
         # Manage new ids such that parallelization does not impact their order
@@ -854,6 +856,8 @@ class SimpleDataCube(object):
                         primary_asset = coco_img.primary_asset()
                         fpath = join(coco_dset.bundle_dpath, primary_asset['file_name'])
 
+                        # Note: valid region data is not necessary as input but
+                        # we use it if it exists.
                         valid_region_utm = coco_img.img.get('valid_region_utm', None)
                         if valid_region_utm is not None:
                             geos_valid_region_utm = coco_img.img['valid_region_utm']
@@ -1019,10 +1023,11 @@ class SimpleDataCube(object):
 
                 job = pool.submit(
                     extract_image_job,
-                    img, anns, bundle_dpath, name, datetime_, num, frame_index, new_vidid,
-                    rpc_align_method, sub_bundle_dpath, space_str,
-                    space_region, space_box, start_gid, start_aid, aux_workers,
-                    keep, local_epsg=local_epsg, other_imgs=other_imgs)
+                    img, anns, bundle_dpath, new_bundle_dpath, name, datetime_,
+                    num, frame_index, new_vidid, rpc_align_method,
+                    sub_bundle_dpath, space_str, space_region, space_box,
+                    start_gid, start_aid, aux_workers, keep,
+                    local_epsg=local_epsg, other_imgs=other_imgs)
                 start_gid = start_gid + 1
                 start_aid = start_aid + len(anns)
                 frame_index = frame_index + 1
@@ -1135,11 +1140,11 @@ class SimpleDataCube(object):
 
 
 @profile
-def extract_image_job(img, anns, bundle_dpath, name, datetime_, num, frame_index,
-                      new_vidid, rpc_align_method, sub_bundle_dpath, space_str,
-                      space_region, space_box, start_gid, start_aid,
-                      aux_workers=0, keep=False, local_epsg=None,
-                      other_imgs=None):
+def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
+                      datetime_, num, frame_index, new_vidid, rpc_align_method,
+                      sub_bundle_dpath, space_str, space_region, space_box,
+                      start_gid, start_aid, aux_workers=0, keep=False,
+                      local_epsg=None, other_imgs=None):
     """
     Threaded worker function for :func:`SimpleDataCube.extract_overlaps`.
     """
@@ -1151,14 +1156,6 @@ def extract_image_job(img, anns, bundle_dpath, name, datetime_, num, frame_index
     has_base_image = img.get('file_name', None) is not None
     objs = [ub.dict_diff(obj, {'auxiliary'}) for obj in coco_img.iter_asset_objs()]
     sensor_coarse = img.get('sensor_coarse', 'unknown')
-
-    if 0:
-        for obj in objs:
-            print(ub.repr2(ub.dict_diff(obj, {
-                'warp_aux_to_img', 'geos_corners',
-                'wgs84_corners', 'wld_crs_info', 'utm_crs_info', 'warp_to_wld',
-                'utm_corners',
-            })))
 
     channels_to_objs = ub.ddict(list)
     for obj in objs:
@@ -1192,7 +1189,8 @@ def extract_image_job(img, anns, bundle_dpath, name, datetime_, num, frame_index
                 is_rpc = True
         else:
             if 'geotiff_metadata' not in obj:
-                kwcoco_extensions._populate_canvas_obj(bundle_dpath, obj, keep_geotiff_metadata=True)
+                kwcoco_extensions._populate_canvas_obj(bundle_dpath, obj,
+                                                       keep_geotiff_metadata=True)
             if obj['geotiff_metadata']['is_rpc']:
                 is_rpc = True
 
@@ -1225,6 +1223,7 @@ def extract_image_job(img, anns, bundle_dpath, name, datetime_, num, frame_index
     if align_method != 'pixel_crop':
         # If we are a pixel crop, we can transform directly
         for dst in dst_list:
+            # TODO: We should not populate this for computed features!
             # hack this in for heuristics
             if 'sensor_coarse' in img:
                 dst['sensor_coarse'] = img['sensor_coarse']
@@ -1285,6 +1284,11 @@ def extract_image_job(img, anns, bundle_dpath, name, datetime_, num, frame_index
     # new_img['video_id'] = new_vidid  # Done outside of this worker
     new_img['frame_index'] = frame_index
     new_img['timestamp'] = datetime_.timestamp()
+
+    new_coco_img = CocoImage(new_img)
+    new_coco_img._bundle_dpath = new_bundle_dpath
+    new_coco_img._video = {}
+    kwcoco_extensions._populate_valid_region(new_coco_img)
 
     # HANDLE ANNOTATIONS
     """
@@ -1475,6 +1479,14 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     # Destination so ctrl+c doesn't break everything
     tmp_dst_gpath = ub.augpath(dst_gpath, prefix='.tmp.')
 
+    nodata_cand = {obj.get('default_nodata', None) for obj in obj_group} - {None}
+    if len(nodata_cand) > 1:
+        raise AssertionError('Did not expect heterogeneous nodata values')
+    elif len(nodata_cand) == 0:
+        nodata = None
+    else:
+        nodata = ub.peek(nodata_cand)
+
     # When trying to get a gdalmerge to take multiple inputs I got a Attempt to
     # create 0x0 dataset is illegal,sizes must be larger than zero.  This new
     # method will call gdalwarp on each image individually and then merge them
@@ -1482,194 +1494,15 @@ def _aligncrop(obj_group, bundle_dpath, name, sensor_coarse, dst_dpath, space_re
     out_fpath = tmp_dst_gpath
     if len(input_gpaths) > 1:
         in_fpaths = input_gpaths
-        gdal_multi_warp(in_fpaths, out_fpath, space_box, local_epsg, rpcs=rpcs)
+        util_gdal.gdal_multi_warp(in_fpaths, out_fpath, space_box, local_epsg,
+                                  rpcs=rpcs, nodata=nodata)
     else:
         in_fpath = input_gpaths[0]
-        gdal_single_warp(in_fpath, out_fpath, space_box, local_epsg, rpcs=rpcs)
+        util_gdal.gdal_single_warp(in_fpath, out_fpath, space_box, local_epsg,
+                                   rpcs=rpcs, nodata=nodata)
 
     os.rename(tmp_dst_gpath, dst_gpath)
-
     return dst
-
-
-def gdal_multi_warp(in_fpaths, out_fpath, space_box, local_epsg, rpcs=None):
-    """
-    Ignore:
-        # Uses data from the data cube with extra=1
-        from watch.cli.coco_align_geotiffs import *  # NOQA
-        cube, region_df = SimpleDataCube.demo(with_region=True, extra=True)
-        local_epsg = 32635
-        space_box = kwimage.Polygon.from_shapely(region_df.geometry.iloc[1]).bounding_box().to_ltrb()
-        dpath = ub.ensure_app_cache_dir('smart_watch/test/gdal_multi_warp')
-        out_fpath = join(dpath, 'test_multi_warp.tif')
-        in_fpath1 = cube.coco_dset.get_image_fpath(2)
-        in_fpath2 = cube.coco_dset.get_image_fpath(3)
-        in_fpaths = [in_fpath1, in_fpath2]
-        rpcs = None
-        gdal_multi_warp(in_fpaths, out_fpath, space_box, local_epsg, rpcs)
-    """
-    # Warp then merge
-    import tempfile
-
-    # Write to a temporary file and then rename the file to the final
-    # Destination so ctrl+c doesn't break everything
-    tmp_out_fpath = ub.augpath(out_fpath, prefix='.tmp.')
-
-    tempfiles = []  # hold references
-    warped_gpaths = []
-    for in_fpath in in_fpaths:
-        tmpfile = tempfile.NamedTemporaryFile(suffix='.tif')
-        tempfiles.append(tmpfile)
-        tmp_out = tmpfile.name
-        gdal_single_warp(in_fpath, tmp_out, space_box, local_epsg,
-                         rpcs=rpcs)
-        warped_gpaths.append(tmp_out)
-
-    if 1:
-        valid_polygons = []
-        for tmp_out in warped_gpaths:
-            from watch.utils import util_raster
-            sh_poly = util_raster.mask(
-                tmp_out, tolerance=10, default_nodata=0)
-            valid_polygons.append(sh_poly)
-        valid_areas = [p.area for p in valid_polygons]
-
-        # Determine order by valid data
-        warped_gpaths = list(ub.sorted_vals(ub.dzip(warped_gpaths, valid_areas)).keys())
-        warped_gpaths = warped_gpaths[::-1]
-    else:
-        # Last image is copied over earlier ones, but we expect first image to be
-        # the primary one, so reverse order
-        warped_gpaths = warped_gpaths[::-1]
-
-    merge_cmd_parts = ['gdal_merge.py', '-n', '0', '-o', tmp_out_fpath] + warped_gpaths
-    merge_cmd = ' '.join(merge_cmd_parts)
-    cmd_info = ub.cmd(merge_cmd_parts, check=True)
-    if cmd_info['ret'] != 0:
-        print('\n\nCOMMAND FAILED: {!r}'.format(merge_cmd))
-        print(cmd_info['out'])
-        print(cmd_info['err'])
-        raise Exception(cmd_info['err'])
-    os.rename(tmp_out_fpath, out_fpath)
-
-    if 0:
-        datas = []
-        for p in warped_gpaths:
-            d = kwimage.imread(p)
-            d = kwimage.normalize_intensity(d, nodata=0)
-            datas.append(d)
-
-        import kwplot
-        kwplot.autompl()
-        combo = kwimage.imread(out_fpath)
-        combo = kwimage.normalize_intensity(combo, nodata=0)
-        datas.append(combo)
-        kwplot.imshow(kwimage.stack_images(datas, axis=1))
-
-        datas2 = []
-        for p in in_fpaths:
-            d = kwimage.imread(p)
-            d = kwimage.normalize_intensity(d, nodata=0)
-            datas2.append(d)
-        kwplot.imshow(kwimage.stack_images(datas2, axis=1), fnum=2)
-
-
-def gdal_single_warp(in_fpath, out_fpath, space_box, local_epsg, rpcs=None):
-    """
-    TODO:
-        - [ ] This should be a kwgeo function.
-    """
-    # Data is from geo-pandas so this should be traditional order
-    lonmin, latmin, lonmax, latmax = space_box.data[0]
-
-    # Coordinate Reference System of the "te" crop coordinates
-    # te_srs = spatial reference of query points
-    crop_coordinate_srs = 'epsg:4326'
-
-    # TODO: parametarize
-    compress = 'NONE'
-    blocksize = 64
-    # NUM_THREADS=2
-
-    # Coordinate Reference System of the "target" destination image
-    # t_srs = target spatial reference for output image
-    if local_epsg is None:
-        target_srs = 'epsg:4326'
-    else:
-        target_srs = 'epsg:{}'.format(local_epsg)
-
-    # Use the new COG output driver
-    prefix_template = (
-        '''
-        gdalwarp
-        -multi
-        --config GDAL_CACHEMAX 500 -wm 500
-        --debug off
-        -te {xmin} {ymin} {xmax} {ymax}
-        -te_srs {crop_coordinate_srs}
-        -t_srs {target_srs}
-        -srcnodata {NODATA_VALUE}
-        -of COG
-        -co OVERVIEWS=AUTO
-        -co BLOCKSIZE={blocksize}
-        -co COMPRESS={compress}
-        -co NUM_THREADS=2
-        -overwrite
-        ''')
-
-    template_kw = {
-        'crop_coordinate_srs': crop_coordinate_srs,
-        'target_srs': target_srs,
-        'ymin': latmin,
-        'xmin': lonmin,
-        'ymax': latmax,
-        'xmax': lonmax,
-        'blocksize': blocksize,
-        'compress': compress,
-        'SRC': in_fpath,
-        'DST': out_fpath,
-
-        # TODO: Use cloudmask
-        'NODATA_VALUE': 0,  # TODO: determine if possible
-    }
-
-    # HACK TO FIND an appropirate DEM file
-    if rpcs is None:
-        template = ub.paragraph(
-            prefix_template +
-            '{SRC} {DST}')
-    else:
-        dems = rpcs.elevation
-        if hasattr(dems, 'find_reference_fpath'):
-            # TODO: get a better DEM path for this image if possible
-            dem_fpath, dem_info = dems.find_reference_fpath(latmin, lonmin)
-            template = ub.paragraph(
-                prefix_template +
-                '''
-                -rpc -et 0
-                -to RPC_DEM={dem_fpath}
-                {SRC} {DST}
-                ''')
-            template_kw['dem_fpath'] = dem_fpath
-        else:
-            dem_fpath = None
-            template = ub.paragraph(
-                prefix_template +
-                '''
-                -rpc -et 0
-                {SRC} {DST}
-                ''')
-
-    if compress == 'RAW':
-        compress = 'NONE'
-
-    command = template.format(**template_kw)
-    cmd_info = ub.cmd(command, verbose=0)  # NOQA
-    if cmd_info['ret'] != 0:
-        print('\n\nCOMMAND FAILED: {!r}'.format(command))
-        print(cmd_info['out'])
-        print(cmd_info['err'])
-        raise Exception(cmd_info['err'])
 
 
 _CLI = CocoAlignGeotiffConfig

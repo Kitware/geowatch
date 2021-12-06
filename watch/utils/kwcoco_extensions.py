@@ -180,6 +180,10 @@ def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
     Commandline
         xdoctest -m ~/code/watch/watch/utils/kwcoco_extensions.py --profile
 
+    TODO:
+        - [ ] Use logic in the align demo classmethod to make an example
+              that uses a real L8 / S2 image.
+
     Example:
         >>> from watch.utils.kwcoco_extensions import *  # NOQA
         >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
@@ -189,8 +193,25 @@ def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
         >>> default_gsd = None
         >>> kw = {}
         >>> coco_img = coco_dset.coco_image(gid)
+        >>> before_img_attrs = list(coco_img.img.keys())
+        >>> before_aux_attr_hist = ub.dict_hist(ub.flatten([list(aux) for aux in coco_img.img['auxiliary']]))
+        >>> print('before_img_attrs = {!r}'.format(before_img_attrs))
+        >>> print('before_aux_attr_hist = {}'.format(ub.repr2(before_aux_attr_hist, nl=1)))
         >>> coco_populate_geo_img_heuristics2(coco_img)
         >>> img = coco_dset.index.imgs[gid]
+        >>> after_img_attrs = list(coco_img.img.keys())
+        >>> after_aux_attr_hist = ub.dict_hist(ub.flatten([list(aux) for aux in coco_img.img['auxiliary']]))
+        >>> new_img_attrs = set(after_img_attrs) - set(before_img_attrs)
+        >>> new_aux_attrs = {k: after_aux_attr_hist[k] - before_aux_attr_hist.get(k, 0) for k in after_aux_attr_hist}
+        >>> new_aux_attrs = {k: v for k, v in new_aux_attrs.items() if v > 0}
+        >>> print('new_img_attrs = {}'.format(ub.repr2(new_img_attrs, nl=1)))
+        >>> print('new_aux_attrs = {}'.format(ub.repr2(new_aux_attrs, nl=1)))
+        >>> #print('after_img_attrs = {}'.format(ub.repr2(after_img_attrs, nl=1)))
+        >>> #print('after_aux_attr_hist = {}'.format(ub.repr2(after_aux_attr_hist, nl=1)))
+        >>> assert 'geos_corners' in img
+        >>> assert 'default_nodata' in img
+        >>> assert 'default_nodata' in new_aux_attrs
+        >>> print(ub.varied_values(list(map(lambda x: ub.map_vals(json.dumps, x), coco_img.img['auxiliary']))))
 
     Example:
         >>> from watch.utils.kwcoco_extensions import *  # NOQA
@@ -241,45 +262,12 @@ def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
             info = watch.gis.geotiff.geotiff_metadata(primary_fpath, **metakw)
             primary_obj['geotiff_metadata'] = info
 
+    if 'default_nodata' not in img:
+        img['default_nodata'] = primary_obj['default_nodata']
+
     valid_region_utm = img.get('valid_region_utm', None)
     if enable_valid_region and (valid_region_utm is None or 'warp' in overwrite):
-        # _ = ub.cmd('gdalinfo -stats {}'.format(fpath), check=True)
-        primary_fname = primary_obj.get('file_name', None)
-        primary_fpath = join(bundle_dpath, primary_fname)
-
-        # TODO: ensure real nodata exists (maybe write helper file to disk?)
-        sensor_coarse = img.get('sensor_coarse', None)
-        if sensor_coarse in {'S2', 'L8', 'WV'}:
-            nodata = 0
-        else:
-            nodata = None
-
-        sh_poly = util_raster.mask(
-            primary_fpath, tolerance=10, default_nodata=nodata,
-            # max_polys=100,
-            convex_hull=True)
-        kw_poly = kwimage.MultiPolygon.from_shapely(sh_poly)
-        # print('kw_poly = {!r}'.format(kw_poly.data[0]))
-        info = primary_obj.get('geotiff_metadata', None)
-        if info is None:
-            metakw = {}
-            dem_hint = primary_obj.get('dem_hint', 'use')
-            if dem_hint == 'ignore':
-                metakw['elevation'] = 0
-            info = watch.gis.geotiff.geotiff_metadata(primary_fpath, **metakw)
-
-        # TODO: get a better heuristic here
-        primary_obj['valid_region'] = kw_poly.to_coco(style='new')
-        img['valid_region'] = kw_poly.to_coco(style='new')
-
-        if 'pxl_to_wld' in info:
-            pxl_to_wld = info['pxl_to_wld']
-            kw_poly_utm = kw_poly.warp(pxl_to_wld).warp(info['wld_to_utm'])
-            poly_utm = kw_poly_utm.to_geojson()
-            poly_utm['properties'] = {}
-            poly_utm['properties']['crs'] = info['utm_crs_info']
-            primary_obj['valid_region_utm'] = poly_utm
-            img['valid_region_utm'] = poly_utm
+        _populate_valid_region(coco_img)
 
     if keep_geotiff_metadata:
         img['geotiff_metadata'] = primary_obj['geotiff_metadata']
@@ -292,6 +280,44 @@ def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
     else:
         print('None of the assets had geo information')
     return img
+
+
+def _populate_valid_region(coco_img):
+    import watch
+    # _ = ub.cmd('gdalinfo -stats {}'.format(fpath), check=True)
+    bundle_dpath = coco_img.bundle_dpath
+    img = coco_img.img
+    primary_obj = coco_img.primary_asset()
+    primary_fname = primary_obj.get('file_name', None)
+    primary_fpath = join(bundle_dpath, primary_fname)
+
+    sh_poly = util_raster.mask(
+        primary_fpath, tolerance=10,
+        default_nodata=primary_obj.get('default_nodata', None),
+        # max_polys=100,
+        convex_hull=True)
+    kw_poly = kwimage.MultiPolygon.from_shapely(sh_poly)
+    # print('kw_poly = {!r}'.format(kw_poly.data[0]))
+    info = primary_obj.get('geotiff_metadata', None)
+    if info is None:
+        metakw = {}
+        dem_hint = primary_obj.get('dem_hint', 'use')
+        if dem_hint == 'ignore':
+            metakw['elevation'] = 0
+        info = watch.gis.geotiff.geotiff_metadata(primary_fpath, **metakw)
+
+    # TODO: get a better heuristic here
+    primary_obj['valid_region'] = kw_poly.to_coco(style='new')
+    img['valid_region'] = kw_poly.to_coco(style='new')
+
+    if 'pxl_to_wld' in info:
+        pxl_to_wld = info['pxl_to_wld']
+        kw_poly_utm = kw_poly.warp(pxl_to_wld).warp(info['wld_to_utm'])
+        poly_utm = kw_poly_utm.to_geojson()
+        poly_utm['properties'] = {}
+        poly_utm['properties']['crs'] = info['utm_crs_info']
+        primary_obj['valid_region_utm'] = poly_utm
+        img['valid_region_utm'] = poly_utm
 
 
 @profile
@@ -334,6 +360,15 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
         metakw = {}
         if dem_hint == 'ignore':
             metakw['elevation'] = 0
+
+        # TODO: ensure real nodata exists (maybe write helper file to disk?)
+        sensor_coarse = obj.get('sensor_coarse', None)
+        if sensor_coarse in {'S2', 'L8', 'WV'}:
+            default_nodata = 0
+        else:
+            default_nodata = None
+        # Heuristic for no-data
+        obj['default_nodata'] = default_nodata
 
         if 'warp' in overwrite or warp_to_wld is None or approx_meter_gsd is None:
             try:
