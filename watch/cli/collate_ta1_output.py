@@ -22,7 +22,8 @@ SUPPORTED_S2_PLATFORMS = {'S2A',
                           'sentinel-2b'}  # Sentinel
 SUPPORTED_LS_PLATFORMS = {'OLI_TIRS',
                           'LANDSAT_8'}  # Landsat
-SUPPORTED_WV_PLATFORMS = {'DigitalGlobe'}  # Worldview
+SUPPORTED_WV_PLATFORMS = {'DigitalGlobe',
+                          'worldview-2'}  # Worldview
 SUPPORTED_PLATFORMS = (SUPPORTED_S2_PLATFORMS |
                        SUPPORTED_LS_PLATFORMS |
                        SUPPORTED_WV_PLATFORMS)
@@ -192,7 +193,7 @@ def collate_item(stac_item_dict,
     if platform not in SUPPORTED_PLATFORMS:
         print("* Warning unknown platform: '{}' for item, "
               "skipping!".format(platform))
-        return stac_item
+        return None
 
     output_stac_collection_id = 'ta1-{}-{}'.format(
         PLATFORM_SHORTHAND[platform], performer_code)
