@@ -61,11 +61,9 @@ class TimePolygonFilter(CocoDsetFilter):
 class ResponsePolygonFilter(CocoDsetFilter):
     '''
     Filters each track based on the average response of all tracks.
-    Currently replaced in time_aggregated_polys by per-track,
-    time-dependent reponse filtering.
     '''
     mean_response: float
-    default_gids: Set[int] = {}
+    gids: Set[int] = {}
 
     def __init__(self, tracks: Iterable[Track], key, threshold=0.001):
 
@@ -397,3 +395,16 @@ class TimeAggregatedHybrid(NewTrackFunction):
     def add_tracks_to_dset(self, coco_dset, tracks):
         return TimeAggregatedSC().add_tracks_to_dset(
             coco_dset, tracks, coco_dset_sc=self.coco_dset_sc)
+
+    def safe_apply(self, coco_dset, gids, overwrite):
+        '''
+        Handle subsetting coco_dset_sc at the same time as coco_dset
+        '''
+        tmp = self.coco_dset_sc.copy()
+        self.coco_dset_sc = self.safe_partition(self.coco_dset_sc,
+                                                gids,
+                                                remove=False)
+        # TODO this might not call self.add_tracks_to_dset as intended
+        result = super().safe_apply(coco_dset, gids, overwrite)
+        self.coco_dset_sc = tmp
+        return result

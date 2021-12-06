@@ -8,7 +8,7 @@ import ubelt as ub
 from dataclasses import dataclass, astuple
 import functools
 import collections
-import abc
+from abc import abstractmethod
 from typing import Union, Iterable, Optional, Any, Tuple, List
 
 Poly = Union[kwimage.Polygon, kwimage.MultiPolygon]
@@ -92,7 +92,7 @@ class PolygonFilter(collections.abc.Callable):
         return (poly for _, poly in self.on_augmented_polys(augmented_polys))
 
     @__call__.register
-    @abc.abstractmethod
+    @abstractmethod
     def on_augmented_polys(self, aug_polys: Iterable[Tuple[Any, Poly]]):
         raise NotImplementedError('must be implemented by subclasses')
 
@@ -117,7 +117,112 @@ class CocoDsetFilter(PolygonFilter):
 
 
 class TrackFunction(collections.abc.Callable):
-    pass
+    '''
+    Abstract class that all track functions should inherit from.
+    '''
+    @abstractmethod
+    def __call__(self, coco_dset) -> kwcoco.CocoDataset:
+        '''
+        Ensure each annotation in coco_dset has a track_id.
+        '''
+        raise NotImplementedError('must be implemented by subclasses')
+
+    def apply_per_video(self, coco_dset, overwrite=False):
+        '''
+        Main entrypoint for this class.
+        '''
+        for gids in coco_dset.index.vidid_to_gids.values():
+            coco_dset = self.safe_apply(coco_dset, gids, overwrite)
+        return coco_dset
+
+    def safe_apply(self, coco_dset, gids, overwrite):
+
+        sub_dset, coco_dset = self.safe_partition(coco_dset, gids, remove=True)
+
+        existing_aids = sub_dset.anns.copy().keys()
+
+        def tracks(annots):
+            return annots.get('track_id', None)
+
+        def are_trackless(annots):
+            return np.array(tracks(annots)) == None  # noqa
+
+        if overwrite:
+
+            sub_dset = self(sub_dset)
+
+        else:
+            existing_tracks = tracks(sub_dset.annots())
+            _are_trackless = are_trackless(sub_dset.annots())
+            if np.any(_are_trackless) or len(existing_tracks) == 0:
+
+                sub_dset = self(sub_dset)
+
+                # if new annots were not created, rollover the old tracks
+                annots = sub_dset.annots()
+                if annots.aids == existing_aids:
+                    annots.set(
+                        'track_id',
+                        np.where(_are_trackless, tracks(annots),
+                                 existing_tracks))
+
+        assert not any(are_trackless(sub_dset.annots()))
+        return self.safe_union(coco_dset, sub_dset)
+
+    @staticmethod
+    def safe_partition(coco_dset, gids, remove=True):
+        assert set(gids) in coco_dset.imgs.keys()
+        sub_dset = coco_dset.subset(gids=gids, copy=True)  # copy necessary?
+        # HACK ensure tracks are not duplicated between videos
+        # (if they are, this is fixed in dedupe_tracks anyway)
+        sub_dset.index.trackid_to_aids.update(coco_dset.index.trackid_to_aids)
+        if remove:
+            coco_dset = coco_dset.subset(coco_dset.imgs.keys() - gids)
+            return sub_dset, coco_dset
+        else:
+            return sub_dset
+
+    @staticmethod
+    def safe_union(coco_dset, new_dset, existing_aids=[]):
+        coco_dset._build_index()
+        new_dset._build_index()
+
+        if 0:
+            # could maybe use coco_dset.union, but it doesn't reuse IDs
+            # TODO an ensure_annotations to do this properly
+            # coco_dset.anns.update(sub_dset.anns)
+            for cat in new_dset.cats.values():
+                cat.pop('id')
+                coco_dset.ensure_category(**cat)
+
+            coco_dset.remove_annotations(existing_aids)
+            anns_to_add = new_dset.anns.copy().values()
+            for ann in anns_to_add:
+                ann.pop('id')
+                coco_dset.add_annotation(**ann)
+            return coco_dset
+        else:
+            return coco_dset.union(new_dset, disjoint_tracks=True)
+
+
+class NewTrackFunction(TrackFunction):
+    '''
+    Specialization of TrackFunction to create polygons that do not yet exist
+    in coco_dset, and add them as new annotations
+    '''
+    def __call__(self, coco_dset):
+        tracks = self.create_tracks(coco_dset)
+        coco_dset = self.add_tracks_to_dset(coco_dset, tracks)
+        return coco_dset
+
+    @abstractmethod
+    def create_tracks(self, coco_dset) -> Iterable[Track]:
+        raise NotImplementedError('must be implemented by subclasses')
+
+    @abstractmethod
+    def add_tracks_to_dset(self, coco_dset,
+                           tracks: Iterable[Track]) -> kwcoco.CocoDataset:
+        raise NotImplementedError('must be implemented by subclasses')
 
 
 def score(poly, probs, mode='score', threshold=0):

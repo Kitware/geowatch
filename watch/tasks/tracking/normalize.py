@@ -9,6 +9,7 @@ import ubelt as ub
 
 from watch.utils.kwcoco_extensions import TrackidGenerator
 from watch.gis.geotiff import geotiff_crs_info
+from watch.tasks.tracking.utils import TrackFunction
 
 
 def dedupe_annots(coco_dset):
@@ -251,36 +252,26 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
         return polys
 
     #
-    # 1.
+    # 1. and 2.
     #
 
-    def are_invalid(annots):
-        def _is_invalid(poly):
+    if min_area_px is None:
+        min_area_px = 0
+
+    def are_invalid_or_small(annots):
+        def _is_invalid_or_small(poly):
             try:
                 # TODO split out polys with invalid subsets
                 # ex. https://gis.stackexchange.com/a/321804
                 shp_poly = poly.to_shapely().buffer(0)
-                return shp_poly.area == 0 or not shp_poly.is_valid
+                return shp_poly.area <= min_area_px or not shp_poly.is_valid
             except ValueError:
                 return True
 
-        return list(map(_is_invalid, polys_in_video(annots, coco_dset)))
+        return list(map(_is_invalid_or_small,
+                        polys_in_video(annots, coco_dset)))
 
-    coco_dset = remove_annotations(coco_dset, are_invalid)
-
-    #
-    # 2.
-    #
-
-    if min_area_px is not None and min_area_px > 0:
-
-        def are_small(annots):
-            return np.array([
-                poly.to_shapely().area
-                for poly in polys_in_video(annots, coco_dset)
-            ]) < min_area_px
-
-        coco_dset = remove_annotations(coco_dset, are_small)
+    coco_dset = remove_annotations(coco_dset, are_invalid_or_small)
 
     #
     # 3.
@@ -342,6 +333,7 @@ def ensure_videos(coco_dset):
     return coco_dset
 
 
+<<<<<<< HEAD
 def apply_tracks(coco_dset, track_fn, overwrite, coco_dset_sc=None):
     '''
     Ensure each annotation in coco_dset has a track_id.
@@ -574,7 +566,7 @@ def normalize_sensors(coco_dset):
     return coco_dset
 
 
-def normalize(coco_dset, track_fn, overwrite, gt_dset=None, coco_dset_sc=None):
+def normalize(coco_dset, track_fn, overwrite, gt_dset=None, **track_kwargs):
     '''
     Driver function to apply all normalizations
 
@@ -642,10 +634,8 @@ def normalize(coco_dset, track_fn, overwrite, gt_dset=None, coco_dset_sc=None):
     coco_dset = ensure_videos(coco_dset)
 
     # apply tracks
-    coco_dset = apply_tracks(coco_dset,
-                             track_fn,
-                             overwrite,
-                             coco_dset_sc=coco_dset_sc)
+    assert isinstance(track_fn, TrackFunction), 'must supply a valid track_fn!'
+    coco_dset = track_fn(**track_kwargs).apply_per_video(coco_dset)
 
     # normalize and add geo segmentations
     coco_dset = _normalize_annots(coco_dset, overwrite=False)
