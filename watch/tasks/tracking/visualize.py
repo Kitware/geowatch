@@ -42,10 +42,10 @@ def get_pred_seg(dset, gid, render_track_id=False):
     for i, pred_sseg in enumerate(valid_segmentations):
         track_now = track_ids[i]
         # print('track id', track_now)
-        
+
         render_value = track_now if render_track_id else 1
         pred_canvas = pred_sseg.fill(pred_canvas, value=render_value)
-    
+
     return pred_canvas
 
 
@@ -63,8 +63,9 @@ def get_gt_seg(dset, gid, render_track_id=False):
     for i, true_sseg in enumerate(true_dets.data['segmentations']):
         track_now = track_ids[i]
         render_value = track_now if render_track_id else 1
+
         true_canvas = true_sseg.fill(true_canvas, value=render_value)
-        
+
     return true_canvas
 
 
@@ -92,7 +93,14 @@ def render_pred_gt(pred_canvas, gt_canvas):
     return out_canvas
 
 
-def visualize_videos(pred_dset, true_dset, out_dir='./_assets', hide_axis=False):
+def get_heatmap(dset, gid, key):
+    img = dset.index.imgs[gid]
+    coco_img = kwcoco_extensions.CocoImage(img, dset)
+    heatmap = coco_img.delay(key, space='video').finalize()
+    return heatmap
+
+
+def visualize_videos(pred_dset, true_dset, out_dir='./_assets', hide_axis=False, coco_dset_sc=None):
     os.makedirs(out_dir, exist_ok=True)
 
     for vidid, _ in pred_dset.index.videos.items():
@@ -106,8 +114,11 @@ def visualize_videos(pred_dset, true_dset, out_dir='./_assets', hide_axis=False)
         for j in range(n_images_to_visualize):
             plt.subplot(2, n_images_to_visualize, j+1)
             pred_canvas = get_pred_seg(pred_dset, gids[gid_list[j]])
-            gt_canvas = get_gt_seg(true_dset, gids[gid_list[j]])
-            coded_canvas = render_pred_gt(pred_canvas, gt_canvas)
+            if true_dset is not None:
+                gt_canvas = get_gt_seg(true_dset, gids[gid_list[j]])
+                coded_canvas = render_pred_gt(pred_canvas, gt_canvas)
+            else:
+                coded_canvas = pred_canvas
             plt.imshow(coded_canvas, interpolation='nearest')
             plt.title('image:'+str(gid_list[j]))
             if hide_axis:
@@ -128,3 +139,86 @@ def visualize_videos(pred_dset, true_dset, out_dir='./_assets', hide_axis=False)
         plt.tight_layout()
         plt.savefig(fname, bbox_inches='tight')
         plt.close()
+
+        if coco_dset_sc is not None:
+            plt.figure(figsize=(20,15))
+            for j in range(n_images_to_visualize):
+                plt.subplot(6, n_images_to_visualize, j+1)
+                keys = ['Site Preparation', 'Active Construction', 'Post Construction', 'No Activity']
+                heatmap = get_heatmap(coco_dset_sc, gids[gid_list[j]], keys[0])
+                plt.imshow(heatmap, vmin=0, vmax=1)
+                if j == 3:
+                    plt.title('image:'+str(gid_list[j])+ ' Prep')
+                else:
+                    plt.title('image:'+str(gid_list[j]))
+
+                plt.subplot(6, n_images_to_visualize, n_images_to_visualize+j+1)
+                heatmap = get_heatmap(coco_dset_sc, gids[gid_list[j]], keys[1])
+                plt.imshow(heatmap, vmin=0, vmax=1)
+                if j == 3:
+                    plt.title('Active')
+
+                plt.subplot(6, n_images_to_visualize, 2*n_images_to_visualize+j+1)
+                heatmap = get_heatmap(coco_dset_sc, gids[gid_list[j]], keys[2])
+                plt.imshow(heatmap, vmin=0, vmax=1)
+                if j == 3:
+                    plt.title('Post')
+
+                plt.subplot(6, n_images_to_visualize, 3*n_images_to_visualize+j+1)
+                heatmap = get_heatmap(coco_dset_sc, gids[gid_list[j]], keys[3])
+                plt.imshow(heatmap, vmin=0, vmax=1)
+                if j == 3:
+                    plt.title('No actvty')
+
+                plt.subplot(6, n_images_to_visualize, 4*n_images_to_visualize+j+1)
+                pred_canvas = get_pred_seg(pred_dset, gids[gid_list[j]])
+                plt.imshow(pred_canvas, vmin=0, vmax=1)
+                if j == 3:
+                    plt.title('Pred polygons')
+
+                if hide_axis:
+                    ax = plt.gca()
+                    ax.axes.xaxis.set_visible(False)
+                    ax.axes.yaxis.set_visible(False)
+
+                # RGB
+                plt.subplot(6, n_images_to_visualize, j+1+5*n_images_to_visualize)
+                rgb = get_rgb(pred_dset, gids[gid_list[j]])
+                plt.imshow(rgb)
+                if hide_axis:
+                    ax = plt.gca()
+                    ax.axes.xaxis.set_visible(False)
+                    ax.axes.yaxis.set_visible(False)
+
+            fname = out_dir+'/video_'+str(vidid)+'_sc_heatmaps.jpg'
+            plt.tight_layout()
+            plt.savefig(fname, bbox_inches='tight')
+            plt.close()
+
+        # Save class predictions of every track
+        track_ids = list(pred_dset.index.trackid_to_aids.keys())
+        track_labels = {}
+        for tid in track_ids:
+            track_labels[tid] = []
+        for gid in gids:
+            img = pred_dset.index.imgs[gid]
+
+            pred_anns = pred_dset.annots(gid=gid)
+            aids = pred_anns.aids
+            for i, aid in enumerate(aids):
+                ann = pred_dset.anns[aid]
+                tid = ann['track_id']
+                track_labels[tid].append(ann['category_id'])
+
+        # save track visualization
+        out_dir_track = os.path.join(out_dir, 'track_viz')
+        os.makedirs(out_dir_track, exist_ok=True)
+
+        for tid in track_ids:
+            plt.figure()
+            plt.plot(track_labels[tid])
+            plt.xlabel('images')
+            plt.ylabel('class ID')
+            fname = os.path.join(out_dir_track, str(tid)+'_track.jpg')
+            plt.savefig(fname)
+            plt.close()

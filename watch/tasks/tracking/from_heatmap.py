@@ -233,6 +233,7 @@ def vidpolys_to_tracks(coco_dset,
     key, bg_key = _validate_keys(key, bg_key)
     if coco_dset_sc is None:
         coco_dset_sc = coco_dset
+        print('Did not get Coco dataset with SC predictions!')
     if poly_start_ind is None:
         poly_start_ind = defaultdict(lambda: -1)
     if poly_end_ind is None:
@@ -453,7 +454,7 @@ def time_aggregated_polys_hybrid(coco_dset,
                                  thresh=0.3,
                                  morph_kernel=3,
                                  time_filtering=True,
-                                 response_filtering=True):
+                                 response_filtering=False):
     '''
     This method uses predictions from a BAS model to generate polygons.
     Predicted heatmaps from a Site Charachterization model are used to assign

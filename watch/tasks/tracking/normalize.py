@@ -373,7 +373,7 @@ def apply_tracks(coco_dset, track_fn, overwrite, coco_dset_sc=None):
             sub_dset_sc = coco_dset_sc.subset(gids=gids).copy()
             sub_dset_sc.index.trackid_to_aids.update(
                 coco_dset_sc.index.trackid_to_aids)
-            kwargs = dict(coco_dset_sc=sub_dset)
+            kwargs = dict(coco_dset_sc=sub_dset_sc)
         else:
             kwargs = dict()
 
@@ -662,10 +662,9 @@ def normalize(coco_dset, track_fn, overwrite, gt_dset=None, coco_dset_sc=None):
     # HACK, ensure coco_dset.index is up to date
     coco_dset._build_index()
 
-    if gt_dset is not None:
-        # visualize predicted sites with true sites
-        out_dir = './_assets/4_hybrid_test'
-        from visualize import visualize_videos
-        visualize_videos(coco_dset, gt_dset, out_dir)
+    # visualize predicted sites with true sites
+    out_dir = './_assets/1b_official_BR_small'
+    from visualize import visualize_videos
+    visualize_videos(coco_dset, gt_dset, out_dir, coco_dset_sc=coco_dset_sc)
 
     return coco_dset
