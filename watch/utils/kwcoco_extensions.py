@@ -187,6 +187,7 @@ def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
     Example:
         >>> from watch.utils.kwcoco_extensions import *  # NOQA
         >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
+        >>> import json
         >>> coco_dset = demo_kwcoco_with_heatmaps()
         >>> gid = 1
         >>> overwrite = {'warp', 'band'}
