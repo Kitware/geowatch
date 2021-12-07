@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from watch.utils import kwcoco_extensions
 from watch.utils import util_kwimage
 import kwarray
@@ -19,9 +20,10 @@ def mask_to_scored_polygons(probs, thresh):
         >>> kwplot.imshow(probs > 0.5)
     """
     # Threshold scores
-    hard_mask = probs > thresh
+    hard_mask_c = (probs > thresh).astype(np.uint8)
     # Convert to polygons
-    polygons = kwimage.Mask(hard_mask, 'c_mask').to_multi_polygon()
+    hard_mask = kwimage.Mask(hard_mask_c, 'c_mask')
+    polygons = hard_mask.to_multi_polygon()
     for poly in polygons:
         # Compute a score for the polygon
         # First compute the valid bounds of the polygon
@@ -49,7 +51,7 @@ def time_aggregated_polys(coco_dset, thresh=0.15, morph_kernel=3):
     key = 'change_prob'
     running = kwarray.RunningStats()
     for img in coco_dset.imgs.values():
-        coco_img = kwcoco_extensions.CocoImage(img, coco_dset)
+        coco_img = coco_dset.coco_image(img['id'])
         if key in coco_img.channels:
             img_probs = coco_img.delay(key, space='video').finalize()
             running.update(img_probs)

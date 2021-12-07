@@ -3,7 +3,7 @@ Helper script for packaging a checkpoint into a torch package
 """
 
 
-def repackage(checkpoint_fpath):
+def repackage(checkpoint_fpath, force=False):
     """
 
     checkpoint_fpath
@@ -15,9 +15,7 @@ def repackage(checkpoint_fpath):
 
     checkpoint_fpath = '/home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=53-step=28457.ckpt'
 
-
     """
-    import torch
     import ubelt as ub
     import pathlib
     import os
@@ -28,34 +26,16 @@ def repackage(checkpoint_fpath):
     # If we have a checkpoint path we can load it if we make assumptions
     # init method from checkpoint.
     checkpoint_fpath = os.fspath(checkpoint_fpath)
-    checkpoint = torch.load(checkpoint_fpath)
-    print(list(checkpoint.keys()))
-    hparams = checkpoint['hyper_parameters']
-    if 'input_channels' in hparams:
-        from kwcoco.channel_spec import ChannelSpec
-        # Hack for strange pickle issue
-        chan = hparams['input_channels']
-        if not hasattr(chan, '_spec') and hasattr(chan, '_info'):
-            chan = ChannelSpec.coerce(chan._info['spec'])
-            hparams['input_channels'] = chan
-        else:
-            hparams['input_channels'] = ChannelSpec.coerce(chan.spec)
 
-    method = methods.MultimodalTransformer(**hparams)
-    state_dict = checkpoint['state_dict']
-    method.load_state_dict(state_dict)
+    x = pathlib.Path(ub.augpath(checkpoint_fpath, ext='.pt'))
+    package_name = x.name
 
+    # Can we precompute the package name of this checkpoint?
     train_dpath_hint = None
     if checkpoint_fpath.endswith('.ckpt'):
         path_ = pathlib.Path(checkpoint_fpath)
         if path_.parent.stem == 'checkpoints':
             train_dpath_hint = path_.parent.parent
-            method.train_dpath_hint = train_dpath_hint
-
-    x = ub.augpath(checkpoint_fpath, ext='.pt')
-    x = pathlib.Path(x)
-    package_name = x.name
-    # package_name = x.name.replace('checkpoint_', 'package_')
 
     if train_dpath_hint is not None:
         candidates = list(train_dpath_hint.glob('fit_config.yaml'))
@@ -68,23 +48,52 @@ def repackage(checkpoint_fpath):
             if expt_name not in package_name:
                 package_name = expt_name + '_' + package_name
 
-    package_fpath = str(x.parent / package_name)
-    method.save_package(str(package_fpath))
+    package_fpath = x.parent / package_name
 
-    return package_fpath
+    if force or not package_fpath.exists():
+        import netharn as nh
+        xpu = nh.XPU.coerce('cpu')
+        checkpoint = xpu.load(checkpoint_fpath)
+
+        # checkpoint = torch.load(checkpoint_fpath)
+        print(list(checkpoint.keys()))
+        hparams = checkpoint['hyper_parameters']
+        if 'input_channels' in hparams:
+            from kwcoco.channel_spec import ChannelSpec
+            # Hack for strange pickle issue
+            chan = hparams['input_channels']
+            if not hasattr(chan, '_spec') and hasattr(chan, '_info'):
+                chan = ChannelSpec.coerce(chan._info['spec'])
+                hparams['input_channels'] = chan
+            else:
+                hparams['input_channels'] = ChannelSpec.coerce(chan.spec)
+
+        method = methods.MultimodalTransformer(**hparams)
+        state_dict = checkpoint['state_dict']
+        method.load_state_dict(state_dict)
+
+        if train_dpath_hint is not None:
+            method.train_dpath_hint = train_dpath_hint
+
+        method.save_package(str(package_fpath))
+    return str(package_fpath)
 
 
 def gather_checkpoints():
     """
     Hack function to move all checkpoints into a directory for evaluation
+
+    Ignore:
+        from watch.tasks.fusion.repackage import *  # NOQA
     """
     from watch.utils import util_data
     import pathlib
     dvc_dpath = util_data.find_smart_dvc_dpath()
     train_base = dvc_dpath / 'training'
     dataset_names = [
-        'Drop1_October2021',
-        'Drop1_November2021',
+        # 'Drop1_October2021',
+        # 'Drop1_November2021',
+        'Drop1-20201117',
     ]
     user_machine_dpaths = list(train_base.glob('*/*'))
 
@@ -94,14 +103,17 @@ def gather_checkpoints():
             dset_dpath = um_dpath / dset_name
             lightning_log_dpaths = list((dset_dpath / 'runs').glob('*/lightning_logs'))
             for ll_dpath in lightning_log_dpaths:
+                if not ll_dpath.parent.name.startswith(('Activity', 'SC_')):
+                    continue
                 for checkpoint_fpath in list((ll_dpath).glob('*/checkpoints/*.ckpt')):
                     parts = checkpoint_fpath.name.split('-')
-                    if int(parts[0].split('epoch=')[1]) > 10 and parts[-1].startswith('step='):
+                    if int(parts[0].split('epoch=')[1]) > 2 and parts[-1].startswith('step='):
                         print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
                         all_checkpoint_paths.append(checkpoint_fpath)
 
-    unevaled_dpath = dvc_dpath / 'models/fusion/unevaluated'
-    unevaled_dpath.mkdir(exist_ok=True, parents=True)
+    # storage_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
+    storage_dpath = dvc_dpath / 'models/fusion/SC-20201117'
+    storage_dpath.mkdir(exist_ok=True, parents=True)
 
     import ubelt as ub
     import shutil
@@ -109,9 +121,10 @@ def gather_checkpoints():
         package_fpath = repackage(p)
         package_fpath = pathlib.Path(package_fpath)
         name = package_fpath.name.split('_epoch')[0]
-        name_dpath = unevaled_dpath / name
+        name_dpath = storage_dpath / name
         name_dpath.mkdir(exist_ok=True, parents=True)
-        shutil.copy(package_fpath, name_dpath)
+        if not name_dpath.exists():
+            shutil.copy(package_fpath, name_dpath)
 
     import os
     for r, ds, fs in os.walk(train_base):

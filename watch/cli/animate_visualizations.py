@@ -49,7 +49,7 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
         >>> from watch.utils import kwcoco_extensions
         >>> dset = kwcoco.CocoDataset.demo('vidshapes2-msi', num_frames=5)
         >>> img = dset.dataset['images'][0]
-        >>> coco_img = kwcoco_extensions.CocoImage(img, dset)
+        >>> coco_img = dset.coco_image(img['id'])
         >>> channel_chunks = list(ub.chunks(coco_img.channels.fuse().parsed, chunksize=3))
         >>> channels = ','.join(['|'.join(p) for p in channel_chunks])
         >>> kwargs = {
@@ -148,6 +148,8 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
 
     for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='collect animate jobs'):
         job.result()
+
+    print('Wrote animations to viz_dpath = {!r}'.format(viz_dpath))
 
 
 if __name__ == '__main__':

@@ -237,7 +237,11 @@ def predict(cmdline=False, **kwargs):
                 traintime_vals['channels'] = method.input_channels.spec
             else:
                 traintime_vals['channels'] = list(method.input_norms.keys())[0]
+
+    # FIXME: Some of the inferred args seem to not have the right type here.
     able_to_infer = ub.dict_isect(traintime_vals, need_infer)
+    from scriptconfig.smartcast import smartcast
+    able_to_infer = ub.map_vals(smartcast, able_to_infer)
     unable_to_infer = ub.dict_diff(need_infer, traintime_vals)
     # Use defaults when we can't infer
     overloads = able_to_infer.copy()

@@ -1,19 +1,22 @@
-import os
-from copy import deepcopy
-from tempfile import NamedTemporaryFile
-from dataclasses import dataclass
-from typing import Union
-from contextlib import ExitStack
+# -*- coding: utf-8 -*-
+import kwimage
 import numpy as np
-from tempenv import TemporaryEnvironment
-from lxml import etree
+import os
+import pygeos
 import shapely as shp
 import shapely.geometry
 import shapely.ops
-from skimage.morphology import convex_hull_image
-import kwimage
-import pygeos
+import ubelt as ub
+import warnings
 
+from contextlib import ExitStack
+from copy import deepcopy
+from dataclasses import dataclass
+from lxml import etree
+from skimage.morphology import convex_hull_image
+from tempenv import TemporaryEnvironment
+from tempfile import NamedTemporaryFile
+from typing import Union
 from osgeo import gdal, osr
 
 import rasterio
@@ -23,8 +26,15 @@ from rasterio.enums import Resampling
 
 from watch.gis.spatial_reference import utm_epsg_from_latlon
 
+try:
+    from xdev import profile
+except Exception:
+    profile = ub.identity
 
-def mask(raster, nodata=0, save=True, convex_hull=False, as_poly=True):
+
+@profile
+def mask(raster, default_nodata=None, save=False, convex_hull=False, as_poly=True,
+         tolerance=None, max_polys=None):
     """
     Compute a raster's valid data mask in pixel coordinates.
 
@@ -33,19 +43,22 @@ def mask(raster, nodata=0, save=True, convex_hull=False, as_poly=True):
     mask, which is always per-band.
 
     Args:
-        raster: Path to a dataset (raster image file)
+        raster (str): Path to a dataset (raster image file)
 
-        nodata: if raster's nodata value is None, default to this
+        nodata (int): if raster's nodata value is None, default to this
 
-        save: if True and raster's nodata value is None, write the default
-            to it. If False, performance overhead is incurred from creating a
-            tempfile
+        save (bool): if True and raster's nodata value is None, write the
+            default to it. If False, performance overhead is incurred from
+            creating a tempfile
 
-        convex_hull: if True, return the convex hull of the mask image or poly
+        convex_hull (bool):
+            if True, return the convex hull of the mask image or poly
 
-        as_poly: if True, return the mask as a shapely Polygon or MultiPolygon
-            instead of a raster image, in (w, h) order (opposite of Python
-            convention).
+        as_poly (bool): if True, return the mask as a shapely Polygon or
+            MultiPolygon instead of a raster image, in (w, h) order (opposite
+            of Python convention).
+
+        tolerance (int): if specified, simplifies the valid polygon.
 
     Returns:
         If as_poly, a shapely Polygon or MultiPolygon bounding the valid
@@ -54,63 +67,169 @@ def mask(raster, nodata=0, save=True, convex_hull=False, as_poly=True):
         Else, a uint8 raster mask of the same shape as the input, where
         255 == valid and 0 == invalid.
 
+    Ignore:
+        raster = '/home/joncrall/data/dvc-repos/smart_watch_dvc/drop1/../drop1/_assets/google-cloud/LS/LC08_L1TP_016039_20160216_20170224_01_T1/LC08_L1TP_016039_20160216_20170224_01_T1_B1.TIF'
+        from watch.utils.util_raster import *
+        mask_img = mask(raster, as_poly=False)
+
     Example:
         >>> # xdoctest: +REQUIRES(--network)
         >>> from watch.utils.util_raster import *
         >>> from watch.demo.landsat_demodata import grab_landsat_product
         >>> path = grab_landsat_product()['bands'][0]
-        >>>
+        >>> #
         >>> mask_img = mask(path, as_poly=False)
         >>> import kwimage as ki
         >>> assert mask_img.shape == ki.load_image_shape(path)[:2]
         >>> assert set(np.unique(mask_img)) == {0, 255}
-        >>>
+        >>> #
         >>> mask_poly = mask(path, as_poly=True)
         >>> import shapely
         >>> assert isinstance(mask_poly, shapely.geometry.Polygon)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.figure(fnum=1, doclf=True)
+        >>> imdata = kwimage.imread(path)
+        >>> imdata = kwimage.normalize_intensity(imdata)
+        >>> kw_poly = kwimage.Polygon.coerce(mask_poly.buffer(0).simplify(10))
+        >>> canvas = imdata.copy()
+        >>> mask_alpha = kwimage.ensure_alpha_channel(mask_img, alpha=(mask_img > 0))
+        >>> canvas = kwimage.overlay_alpha_layers([mask_alpha, canvas])
+        >>> canvas = kw_poly.scale(0.9, about='center').draw_on(canvas, color='green', alpha=0.6)
+        >>> kw_poly.scale(1.1, about='center').draw(alpha=0.5, color='red', setlim=True)
+        >>> kwplot.imshow(canvas)
+
+    Example:
+        >>> # Test how the "save" functionality modifies the data
+        >>> import kwimage
+        >>> from watch.utils.util_raster import *
+        >>> import pathlib
+        >>> dpath = pathlib.Path(ub.ensure_app_cache_dir('watch/tests/empty_raster'))
+        >>> raster = dpath / 'empty.tif'
+        >>> ub.delete(raster)
+        >>> kwimage.imwrite(raster, np.zeros((3, 3, 5)))
+        >>> info1 = ub.cmd('gdalinfo {}'.format(raster))
+        >>> nodata = 0
+        >>> mask_img = mask(raster, as_poly=False)
+        >>> print('mask_img = {!r}'.format(mask_img))
+        >>> info2 = ub.cmd('gdalinfo {}'.format(raster))
+        >>> mask_poly = mask(raster, as_poly=True)
+        >>> info3 = ub.cmd('gdalinfo {}'.format(raster))
+        >>> print(info1['out'])
+        >>> print(info2['out'])
+        >>> print(info3['out'])
     """
-    # workaround for
-    # https://rasterio.readthedocs.io/en/latest/faq.html#why-can-t-rasterio-find-proj-db-rasterio-from-pypi-versions-1-2-0
-    with TemporaryEnvironment({'PROJ_LIB': None}):
-        img = rasterio.open(raster, 'r+')
-        if img.nodata is None and nodata is not None:
-            if save:
-                img.nodata = nodata
-                img.close()  # to apply changes
-                img = rasterio.open(raster, 'r')
-            else:
-                profile = img.profile
-                # TODO could optimize this with rasterio.shutil.copy
-                # or https://rasterio.readthedocs.io/en/latest/topics/windowed-rw.html#blocks
-                data = img.read()
+    scale_factor = None
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category=rasterio.errors.NotGeoreferencedWarning)
+        # workaround for
+        # https://rasterio.readthedocs.io/en/latest/faq.html#why-can-t-rasterio-find-proj-db-rasterio-from-pypi-versions-1-2-0
+        with TemporaryEnvironment({'PROJ_LIB': None}):
+            img = rasterio.open(raster, 'r')
+
+            # Work at the coarsest overview level for speed
+            overviews = {tuple(img.overviews(bandx)) for bandx in range(1, img.count + 1)}
+            if len(overviews) == 1:
+                overview_levels = ub.peek(overviews)
+                if len(overview_levels):
+                    img.close()
+                    # Open image with a higher overview level
+                    # https://github.com/rasterio/rasterio/issues/1504
+                    requested_overview = len(overview_levels) - 1
+                    img = rasterio.open(raster, 'r', overview_level=requested_overview)
+                    scale_factor = overview_levels[requested_overview]
+
+            try:
+                mask_img = None
+                if default_nodata is None:
+                    nodata = img.nodata
+                    use_disk_nodata = True
+                else:
+                    nodata = default_nodata
+                    use_disk_nodata = False
+
+                if nodata is None:
+                    # Not specified, and not introspectable
+                    # TODO: early return
+                    # if as_poly:
+                    #     pass
+                    # else:
+                    mask_img = np.full((img.height, img.width),
+                                       fill_value=255, dtype=np.uint8)
+
+                else:
+                    if save:
+                        raise NotImplementedError(
+                            'Dont update here. It can be unsafe. '
+                            'Probably should be done in a separate script')
+
+                    # if needs_nodata:
+                    #     # The image was closed, so we must open a new one
+                    #     if save:
+                    #         img.close()
+                    #         # Add on necessary information in footer
+                    #         with rasterio.open(raster, 'r+') as img:
+                    #             img.nodata = nodata
+                    #         img = rasterio.open(raster, 'r')
+                    #     else:
+                    #         profile = img.profile.copy()
+                    #         profile['nodata'] = nodata
+                    #         # TODO could optimize this with rasterio.shutil.copy
+                    #         # or https://rasterio.readthedocs.io/en/latest/topics/windowed-rw.html#blocks
+                    #         data = img.read()
+                    #         img.close()
+                    #         profile.update(nodata=nodata)
+                    #         memfile = MemoryFile()
+                    #         img = memfile.open(**profile)
+                    #         img.write(data)
+                    if use_disk_nodata:
+                        mask_img = img.dataset_mask()
+                    else:
+                        # simulate 0 = nodata, 255=valid data
+                        # operate inplace when possible
+                        imdata = img.read(1, out_dtype=np.uint8)
+                        np.not_equal(imdata, nodata, dtype=np.uint8, out=imdata)
+                        np.multiply(imdata, 255, out=imdata)
+                        mask_img = imdata
+
+            finally:
                 img.close()
 
-                profile.update(nodata=nodata)
-                memfile = MemoryFile()
-                img = memfile.open(profile)
-                img.write(data)
+        if convex_hull:
+            mask_img = convex_hull_image(mask_img).astype(np.uint8)
 
-        mask = img.dataset_mask()
-        img.close()
+        if not as_poly:
+            return mask_img
 
-    if convex_hull:
-        mask = convex_hull_image(mask).astype(np.uint8)
+        if mask_img is None:
+            raise AssertionError('mask image was None')
 
-    if not as_poly:
-        return mask
+        # mask has values 0 and 255
+        polys = []
+        for poly, val in rasterio.features.shapes(mask_img, connectivity=4):
+            if val > 0:
+                polys.append(shp.geometry.shape(poly))
+                if max_polys is not None and len(polys) > max_polys:
+                    break
 
-    # mask has values 0 and 255
-    polys = [
-        shp.geometry.shape(poly) for poly, val in rasterio.features.shapes(mask)
-        if val == 255
-    ]
-    poly = shp.ops.unary_union(polys).buffer(0)
+        if tolerance is not None:
+            polys = [poly.buffer(0).simplify(tolerance) for poly in polys]
+        mask_poly = shp.ops.unary_union(polys).buffer(0)
+        if tolerance is not None:
+            mask_poly.simplify(tolerance)
 
-    # do this again to fix any weirdness from union
-    if convex_hull:
-        poly = poly.convex_hull
+        # do this again to fix any weirdness from union
+        if convex_hull:
+            mask_poly = mask_poly.convex_hull
 
-    return poly
+        if scale_factor is not None:
+            mask_poly = shapely.affinity.scale(
+                mask_poly, xfact=scale_factor, yfact=scale_factor,
+                origin=(0, 0))
+
+    return mask_poly
 
 
 def crop_to(pxl_polys, raster, bounds_policy, intersect_policy='crop'):

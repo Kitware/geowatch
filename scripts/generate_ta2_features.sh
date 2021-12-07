@@ -191,7 +191,7 @@ dzyne_prediction(){
 
     # 88 in 40 seconds
     # 44 in 40 seconds
-    #export CUDA_VISIBLE_DEVICES="1"
+    export CUDA_VISIBLE_DEVICES="1"
     python -m watch.tasks.landcover.predict \
         --dataset=$BASE_COCO_FPATH \
         --deployed=$DZYNE_LANDCOVER_MODEL_FPATH  \

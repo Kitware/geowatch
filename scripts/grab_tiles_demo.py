@@ -11,7 +11,10 @@ import dateutil
 from datetime import datetime, timedelta
 from fels import run_fels
 # from fels import safedir_to_datetime, landsatdir_to_date
-from rgd_client import Rgdc
+# try:
+#     from rgd_client import Rgdc
+# except ImportError:
+from rgd_imagery_client import ImageryClient
 import ubelt as ub
 import scriptconfig as scfg
 
@@ -123,8 +126,8 @@ def try_rgdc(geojson_bbox, dt_min, dt_max, out_dpath=None, username=None,
     else:
         out_path = os.path.join(out_dpath, 'rgdc')
 
-    client = Rgdc(username=username, password=password,
-                  api_url='https://watch.resonantgeodata.com/api')
+    client = ImageryClient(username=username, password=password,
+                           api_url='https://watch.resonantgeodata.com/api')
     kwargs = {
         'query': json.dumps(geojson_bbox),
         'predicate': 'intersects',
@@ -135,14 +138,16 @@ def try_rgdc(geojson_bbox, dt_min, dt_max, out_dpath=None, username=None,
     results = {}
 
     if with_s2:
-        results['s2'] = (client.search(**kwargs, instrumentation='S2A')['results'] +
-                         client.search(**kwargs, instrumentation='S2B')['results'])
+        search = client.rgd.search
+        s2a = search(**kwargs, instrumentation='S2A')['results']
+        s2b = search(**kwargs, instrumentation='S2B')['results']
+        results['s2'] = (s2a + s2b)
 
     if with_l7:
-        results['l7'] = client.search(**kwargs, instrumentation='ETM')['results']
+        results['l7'] = search(**kwargs, instrumentation='ETM')['results']
 
     if with_l8:
-        results['l8'] = client.search(**kwargs, instrumentation='OLI_TIRS')['results']
+        results['l8'] = search(**kwargs, instrumentation='OLI_TIRS')['results']
 
     result_len = ub.map_vals(len, results)
     print('result_len = {}'.format(ub.repr2(result_len, nl=1)))
@@ -150,10 +155,9 @@ def try_rgdc(geojson_bbox, dt_min, dt_max, out_dpath=None, username=None,
     os.makedirs(out_path, exist_ok=True)
 
     for search_result in ub.flatten(results.values()):
-        paths = client.download_raster(search_result,
-                                       out_path,
-                                       nest_with_name=True,
-                                       keep_existing=True)
+        download_raster = client.imagery.download_raster
+        paths = download_raster(search_result, out_path, nest_with_name=True,
+                                keep_existing=True)
         print(paths.path)
 
 
@@ -216,6 +220,8 @@ def main(**kwargs):
     grab_tiles_demo main
 
     Example:
+        >>> # xdoctest: +SKIP
+        >>> # Skipping for now
         >>> region = {
         >>>     "type": "Feature",
         >>>     "geometry": {

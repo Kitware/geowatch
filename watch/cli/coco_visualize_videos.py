@@ -78,6 +78,32 @@ class CocoVisualizeConfig(scfg.Config):
         'zoom_to_tracks': scfg.Value(False, type=str, help='if True, zoom to tracked annotations. Experimental, might not work perfectly yet.'),
 
         'norm_over_time': scfg.Value(False, help='if True, normalize data over time'),
+
+        'extra_header': scfg.Value(None, help='extra text to include in the header'),
+
+        'select_images': scfg.Value(
+            None, type=str, help=ub.paragraph(
+                '''
+                A json query (via the jq spec) that specifies which images
+                belong in the subset. Note, this is a passed as the body of
+                the following jq query format string to filter valid ids
+                '.images[] | select({select_images}) | .id'.
+
+                Examples for this argument are as follows:
+                '.id < 3' will select all image ids less than 3.
+                '.file_name | test(".*png")' will select only images with
+                file names that end with png.
+                '.file_name | test(".*png") | not' will select only images
+                with file names that do not end with png.
+                '.myattr == "foo"' will select only image dictionaries
+                where the value of myattr is "foo".
+                '.id < 3 and (.file_name | test(".*png"))' will select only
+                images with id less than 3 that are also pngs.
+                .myattr | in({"val1": 1, "val4": 1}) will take images
+                where myattr is either val1 or val4.
+
+                Requries the "jq" python library is installed.
+                ''')),
     }
 
 
@@ -93,7 +119,7 @@ def main(cmdline=True, **kwargs):
         >>> from watch.utils import kwcoco_extensions
         >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral', num_frames=5)
         >>> img = dset.dataset['images'][0]
-        >>> coco_img = kwcoco_extensions.CocoImage(img, dset)
+        >>> coco_img = dset.coco_image(img['id'])
         >>> channel_chunks = list(ub.chunks(coco_img.channels.fuse().parsed, chunksize=3))
         >>> channels = ','.join(['|'.join(p) for p in channel_chunks])
         >>> kwargs = {
@@ -142,11 +168,27 @@ def main(cmdline=True, **kwargs):
 
     pool = ub.JobPool(mode='thread', max_workers=max_workers)
 
-    # TODO:
     from scriptconfig.smartcast import smartcast
     num_frames = smartcast(config['num_frames'])
     start_frame = smartcast(config['start_frame'])
     end_frame = None if num_frames is None else start_frame + num_frames
+
+    selected_gids = None
+    if config['select_images'] is not None:
+        try:
+            import jq
+        except Exception:
+            print('The jq library is required to run a generic image query')
+            raise
+
+        try:
+            query_text = ".images[] | select({select_images}) | .id".format(**config)
+            query = jq.compile(query_text)
+            selected_gids = query.input(coco_dset.dataset).all()
+            selected_gids = set(selected_gids)
+        except Exception:
+            print('JQ Query Failed: {}'.format(query_text))
+            raise
 
     video_names = []
     for vidid, video in prog:
@@ -155,9 +197,10 @@ def main(cmdline=True, **kwargs):
         video_names.append(video['name'])
 
         gids = coco_dset.index.vidid_to_gids[vidid]
+        if selected_gids is not None:
+            gids = list(ub.oset(gids) & set(selected_gids))
 
         norm_over_time = config['norm_over_time']
-        print('norm_over_time = {!r}'.format(norm_over_time))
         if not norm_over_time:
             chan_to_normalizer = None
         else:
@@ -201,8 +244,8 @@ def main(cmdline=True, **kwargs):
                     'high': 0.90,
                     'mid': 0.5,
                     'low': 0.01,
-                    # 'mode': 'linear',
-                    'mode': 'sigmoid',
+                    'mode': 'linear',
+                    # 'mode': 'sigmoid',
                 })
                 chan_to_normalizer[chan] = normalizer
             print('chan_to_normalizer = {}'.format(ub.repr2(chan_to_normalizer, nl=1)))
@@ -227,7 +270,11 @@ def main(cmdline=True, **kwargs):
                     img = coco_dset.index.imgs[gid]
                     anns = coco_dset.annots(gid=gid).objs
 
-                    _header_extra = f'tid={tid}'
+                    if config['extra_header']:
+                        _header_extra = f'tid={tid}' + config['extra_header']
+                    else:
+                        _header_extra = f'tid={tid}'
+
                     pool.submit(_write_ann_visualizations2,
                                 coco_dset, img, anns, track_dpath, space=space,
                                 channels=channels, vid_crop_box=vid_crop_box,
@@ -240,17 +287,24 @@ def main(cmdline=True, **kwargs):
                 img = coco_dset.index.imgs[gid]
                 anns = coco_dset.annots(gid=gid).objs
 
+                if config['extra_header']:
+                    _header_extra = config['extra_header']
+                else:
+                    _header_extra = ''
+
                 pool.submit(_write_ann_visualizations2,
                             coco_dset, img, anns, sub_dpath, space=space,
                             channels=channels,
                             draw_imgs=config['draw_imgs'],
-                            draw_anns=config['draw_anns'], _header_extra=None,
+                            draw_anns=config['draw_anns'], _header_extra=_header_extra,
                             chan_to_normalizer=chan_to_normalizer)
 
         for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):
             job.result()
 
         pool.jobs.clear()
+
+    print('Wrote images to viz_dpath = {!r}'.format(viz_dpath))
 
     if config['animate']:
         from watch.cli import animate_visualizations
@@ -313,7 +367,6 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     # See if we can look at what we made
     from kwcoco import channel_spec
     from watch.utils.util_norm import normalize_intensity
-    from watch.utils.kwcoco_extensions import CocoImage
     from watch.utils import util_kwimage
 
     sensor_coarse = img.get('sensor_coarse', 'unknown')
@@ -342,7 +395,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         channels = channel_spec.ChannelSpec.coerce(channels)
         chan_groups = channels.streams()
     else:
-        coco_img = CocoImage(img)
+        coco_img = coco_dset.coco_image(img['id'])
         channels = coco_img.channels
         if request_grouped_bands == 'default':
             # Use false color for special groups

@@ -66,6 +66,11 @@ try:
         'development': parse_requirements('requirements/development.txt'),
         'problematic': parse_requirements('requirements/problematic.txt'),
         'optional': parse_requirements('requirements/optional.txt'),
+        # Really annoying that this is the best we can do
+        # The user *must* choose either headless or graphics
+        # to get a complete working install.
+        'headless': parse_requirements('requirements/headless.txt'),
+        'graphics': parse_requirements('requirements/graphics.txt'),
     }
 except Exception as ex:
     print('ex = {!r}'.format(ex))

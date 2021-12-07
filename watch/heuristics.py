@@ -12,12 +12,18 @@ import ubelt as ub
 # Might need to split this up into a finger-grained structure
 IGNORE_CLASSNAMES = {
     'clouds', 'occluded',
-    'ignore', 'unknown',
+    'ignore', 'unknown', 'Unknown',
 
 }
 
 BACKGROUND_CLASSES = {
     'background', 'No Activity', 'Post Construction', 'negative',
+}
+
+
+# These classes are used in BAS, but not in AC/SC
+UNDISTINGUISHED_CLASSES = {
+    'positive',
 }
 
 

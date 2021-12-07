@@ -76,6 +76,7 @@ def make_nice_dirs():
     dataset_names = [
         'Drop1_October2021',
         'Drop1_November2021',
+        'Drop1_2020-11-17',
     ]
     user_machine_dpaths = list(train_base.glob('*/*'))
     # all_checkpoint_paths = []
@@ -100,10 +101,55 @@ def make_nice_dirs():
                 ub.symlink(version_dpath, nice_dpath, verbose=1)
 
 
+def make_eval_symlinks():
+    """
+    """
+    from watch.utils import util_data
+    import ubelt as ub
+    import pathlib  # NOQA
+    dvc_dpath = util_data.find_smart_dvc_dpath()
+
+    # HACK: HARD CODED
+    # model_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
+    model_dpath = dvc_dpath / 'models/fusion/SC-20201117'
+    eval_link_base = model_dpath / 'eval_links'
+    eval_link_base.mkdir(exist_ok=True)
+
+    eval_dpaths = list(model_dpath.glob('*/*/*/eval'))
+    for eval_dpath in eval_dpaths:
+        # Hack: find a better way to get info needed to make a nice folder name
+        eval_link_name = 'eval_' + eval_dpath.parent.name + '_' + eval_dpath.parent.parent.name
+        eval_nice_dpath = eval_link_base / eval_link_name
+        ub.symlink(eval_dpath, eval_nice_dpath)
+
+
+def make_pred_symlinks():
+    """
+    """
+    from watch.utils import util_data
+    import ubelt as ub
+    import pathlib  # NOQA
+    dvc_dpath = util_data.find_smart_dvc_dpath()
+
+    # HACK: HARD CODED
+    model_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
+    link_base = model_dpath / 'pred_links'
+    link_base.mkdir(exist_ok=True)
+
+    dpaths = list(model_dpath.glob('*/pred_*/*'))
+    for dpath in dpaths:
+        # Hack: find a better way to get info needed to make a nice folder name
+        link_name = 'pred_' + dpath.name + '_' + dpath.parent.name
+        nice_dpath = link_base / link_name
+        ub.symlink(dpath, nice_dpath)
+
+
 if __name__ == '__main__':
     """
     CommandLine:
         python ~/code/watch/watch/tasks/fusion/organize.py make_nice_dirs
+        python ~/code/watch/watch/tasks/fusion/organize.py make_eval_symlinks
+        python ~/code/watch/watch/tasks/fusion/organize.py make_pred_symlinks
     """
     import fire
     fire.Fire()

@@ -28,7 +28,6 @@ def _draw_tracks():
         # 'forest_deciduous|forest_evergreen'
         # |brush|grassland|bare_ground|built_up|cropland|rice_field|marsh|swamp|inland_water|snow_or_ice_field|reef|sand_dune|sebkha|ocean<10m|ocean>10m|lake|river|beach|alluvial_deposits|med_low_density_built_up
     ]
-    # coco_img = kwcoco_extensions.CocoImage(img, coco_dset)
     channels = '|'.join(channel_groups)
 
     combinable_extra = []

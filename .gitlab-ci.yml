@@ -2,6 +2,9 @@
 .__doc__: &__doc__
     - | 
 
+        Template for this files is (sort of) in
+        ~/misc/templates/PYPKG/.gitlab-ci.yml
+
         # Note: expand yaml
         yaml merge-expand .gitlab-ci.yml _expandyml && cat _expandyml
          

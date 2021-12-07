@@ -20,12 +20,19 @@ CAND_PACKAGES2=$(ls --color=never $DVC_DPATH/models/fusion/bas/Saliency_smt_it_j
 
 CAND_PACKAGES=("${CAND_PACKAGES2[@]}" "${CAND_PACKAGES1[@]}")
 
+
+
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc 
+ls $DVC_DPATH/models/fusion/unevaluated-activity-2021-11-12
+
+#KWCOCO_BUNDLE_DPATH=$DVC_DPATH/drop1-S2-L8-aligned
+#TEST_DATASET=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop1-Aligned-L1
+TEST_DATASET=$KWCOCO_BUNDLE_DPATH/combo_vali_data.kwcoco.json
+
 echo "CAND_PACKAGES = $CAND_PACKAGES"
 for PACKAGE_FPATH in ${CAND_PACKAGES[@]}; do
 
-    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/drop1-S2-L8-aligned
-    #TEST_DATASET=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json
-    TEST_DATASET=$KWCOCO_BUNDLE_DPATH/combo_vali_data.kwcoco.json
 
 
     SUGGESTIONS="$(python -m watch.tasks.fusion.organize suggest_paths \
@@ -100,3 +107,7 @@ python -m watch.tasks.fusion.evaluate \
 #--chip_overlap=0 \
 
 done
+
+
+
+#PACKAGE_FPATH=$DVC_DPATH/models/fusion/bas/Saliency_smt_it_joint_p8_raw_v001/Saliency_smt_it_joint_p8_raw_v001_epoch=41-step=22133.pt
