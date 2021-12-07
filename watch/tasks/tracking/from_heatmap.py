@@ -7,11 +7,11 @@ import kwcoco
 import numpy as np
 import ubelt as ub
 import itertools
-from typing import Iterable, Tuple, Set, List
+from typing import Iterable, Tuple, Set
 from dataclasses import dataclass
 from watch.tasks.tracking.utils import (Track, PolygonFilter, NewTrackFunction,
-                                        mask_to_polygons, heatmap, Poly,
-                                        CocoDsetFilter)
+                                        mask_to_polygons, heatmap, score, Poly,
+                                        CocoDsetFilter, _validate_keys)
 
 
 @dataclass
@@ -25,17 +25,12 @@ class SmallPolygonFilter(PolygonFilter):
 
 
 class TimePolygonFilter(CocoDsetFilter):
-    def get_poly_time_ind(self,
-                          gids_polys: Iterable[Tuple[int, Poly]],
-                          reverse=False):
+    def get_poly_time_ind(self, gids_polys: Iterable[Tuple[int, Poly]]):
         """
         Given a potential track, compute index of the first match of the track
         with its mask.
         Mask is computed by comparing heatmaps with threshold.
         """
-        if reverse:
-            gids_polys = reversed(gids_polys)
-
         for image_ind, (gid, poly) in enumerate(gids_polys):
             try:
                 overlap = self.score(poly,
@@ -51,11 +46,14 @@ class TimePolygonFilter(CocoDsetFilter):
 
     def on_observations(self, observations):
         start_idx = self.get_poly_time_ind(
-            ((o.gid, o.poly) for o in observations))
+                map(lambda o: (o.gid, o.poly),  observations))
         end_idx = self.get_poly_time_ind(
-            ((o.gid, o.poly) for o in observations), reverse=True)
+                map(lambda o: (o.gid, o.poly), reversed(observations)))
         len_obs = sum(1 for _ in observations)
         return itertools.islice(observations, start_idx, len_obs - end_idx)
+
+    def on_augmented_polys(self, aug_polys):
+        raise NotImplementedError('need gids for time filtering')
 
 
 class ResponsePolygonFilter(CocoDsetFilter):
@@ -112,25 +110,6 @@ class ResponsePolygonFilter(CocoDsetFilter):
 >>>>>>> class structure for track functions and filter functions
 
 
-def _validate_keys(key, bg_key):
-    # for backwards compatibility
-    if isinstance(key, str):
-        key = [key]
-    if bg_key is None:
-        bg_key = []
-    elif isinstance(bg_key, str):
-        bg_key = [bg_key]
-
-    # error checking
-    if len(key) < 1:
-        raise ValueError('must have at least one key')
-    if (len(key) > len(set(key)) or len(bg_key) > len(set(bg_key))):
-        raise ValueError('keys are duplicated')
-    if not set(key).isdisjoint(set(bg_key)):
-        raise ValueError('cannot have a key in foreground and background')
-    return key, bg_key
-
-
 def add_tracks_to_dset(coco_dset,
                        tracks,
                        thresh,
@@ -153,11 +132,11 @@ def add_tracks_to_dset(coco_dset,
                                        space=space)
         return probs_dct
 
-    def add_annotation(gid, poly, score, track_id, space='video'):
+    def add_annotation(gid, poly, this_score, track_id, space='video'):
         assert space in {'image', 'video'}
 
         # assign category (key) from max score
-        if score > thresh or len(bg_key) == 0:
+        if this_score > thresh or len(bg_key) == 0:
             cand_keys = key
         else:
             cand_keys = bg_key
@@ -184,7 +163,7 @@ def add_tracks_to_dset(coco_dset,
                                  category_id=cid,
                                  bbox=bbox,
                                  segmentation=poly,
-                                 score=score,
+                                 score=this_score,
                                  track_id=track_id)
 
     new_trackids = kwcoco_extensions.TrackidGenerator(coco_dset)
@@ -253,13 +232,17 @@ def time_aggregated_polys(coco_dset,
         for k in key:
             running_dct[k].update(fg_chan_probs[k][:, :, np.newaxis])
 
-        bg_img_probs, bg_chan_probs = heatmap(coco_dset,
-                                              gid,
-                                              bg_key,
-                                              return_chan_probs=True)
-        running_dct['bg'].update(bg_img_probs[:, :, np.newaxis])
-        for k in bg_key:
-            running_dct[k].update(bg_chan_probs[k][:, :, np.newaxis])
+        if len(bg_key) > 0:
+            bg_img_probs, bg_chan_probs = heatmap(coco_dset,
+                                                  gid,
+                                                  bg_key,
+                                                  return_chan_probs=True)
+            running_dct['bg'].update(bg_img_probs[:, :, np.newaxis])
+            for k in bg_key:
+                running_dct[k].update(bg_chan_probs[k][:, :, np.newaxis])
+        else:
+            running_dct['bg'].update(
+                    np.zeros_like(fg_img_probs)[:, :, np.newaxis])
 
     # turn heatmaps into scores and polygons
     def probs(running):
@@ -303,7 +286,8 @@ def time_aggregated_polys(coco_dset,
     if time_filtering:
         # TODO investigate different thresh here
         time_thresh = thresh
-        tracks = TimePolygonFilter(coco_dset, key, time_thresh)(tracks)
+        time_filter = TimePolygonFilter(coco_dset, tuple(key), time_thresh)
+        tracks = map(time_filter, tracks)
 
     return tracks
 
@@ -317,11 +301,12 @@ class TimeAggregatedBAS(NewTrackFunction):
     morph_kernel: int = 3
     time_filtering: bool = True
     response_filtering: bool = False
-    change_keys: List[str] = ['salient', 'change_prob', 'change']
+    change_keys: Tuple[str] = ('salient', 'change_prob', 'change')
 
     def create_tracks(self, coco_dset):
         for change_key in self.change_keys:
             try:
+                # import xdev; xdev.embed()
                 tracks = time_aggregated_polys(
                     coco_dset,
                     self.thresh,
@@ -353,10 +338,10 @@ class TimeAggregatedSC(NewTrackFunction):
     morph_kernel: int = 3
     time_filtering: bool = False
     response_filtering: bool = False
-    key: List[str] = [
+    key: Tuple[str] = (
         'Site Preparation', 'Active Construction', 'Post Construction'
-    ]
-    bg_key: List[str] = ['No Activity']
+    )
+    bg_key: Tuple[str] = ('No Activity')
     use_boundary_annots: bool = True
 
     def create_tracks(self, coco_dset):
@@ -393,7 +378,7 @@ class TimeAggregatedHybrid(NewTrackFunction):
         return TimeAggregatedBAS().create_tracks(coco_dset)
 
     def add_tracks_to_dset(self, coco_dset, tracks):
-        return TimeAggregatedSC().add_tracks_to_dset(
+        return TimeAggregatedSC(use_boundary_annots=False).add_tracks_to_dset(
             coco_dset, tracks, coco_dset_sc=self.coco_dset_sc)
 
     def safe_apply(self, coco_dset, gids, overwrite):

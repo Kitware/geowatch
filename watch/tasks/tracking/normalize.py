@@ -634,7 +634,8 @@ def normalize(coco_dset, track_fn, overwrite, gt_dset=None, **track_kwargs):
     coco_dset = ensure_videos(coco_dset)
 
     # apply tracks
-    assert isinstance(track_fn, TrackFunction), 'must supply a valid track_fn!'
+    assert issubclass(track_fn, TrackFunction), 'must supply a valid track_fn!'
+    # import xdev; xdev.embed()
     coco_dset = track_fn(**track_kwargs).apply_per_video(coco_dset)
 
     # normalize and add geo segmentations
@@ -643,7 +644,6 @@ def normalize(coco_dset, track_fn, overwrite, gt_dset=None, **track_kwargs):
     print('after normalizing: track ids',
           set(coco_dset.annots().get('track_id', None)))
 
-    coco_dset._build_index()
     coco_dset = dedupe_tracks(coco_dset)
     coco_dset = add_track_index(coco_dset)
     coco_dset = normalize_phases(coco_dset)

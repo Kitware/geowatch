@@ -6,7 +6,8 @@ from rasterio import features
 import shapely.geometry
 import ubelt as ub
 from dataclasses import dataclass, astuple
-import functools
+# import functools
+import itertools
 import collections
 from abc import abstractmethod
 from typing import Union, Iterable, Optional, Any, Tuple, List
@@ -68,17 +69,38 @@ class PolygonFilter(collections.abc.Callable):
     Given that assumption, PolygonFilters can be called on any supported type
     containing polygons and return a filtered version of it.
     '''
-    @functools.singledispatchmethod
+    # @functools.singledispatchmethod
+    '''
+    singledispatch does not work on parameterized container types until
+    collections.abc.*[] is supported in Python 3.9; see:
+    https://bugs.python.org/issue34499
+    https://bugs.python.org/issue34498
+
+    So, do this by hand instead.
+    '''
     def __call__(self, obj):
+        if isinstance(obj, Track):
+            return self.on_track(obj)
+        # could use more_itertools.peekable instead
+        obj, obj2 = itertools.tee(obj)
+        sample_object = next(iter(obj2))
+        if isinstance(sample_object, Observation):
+            return self.on_observations(obj)
+        # TypeError: Subscripted generics cannot be used with class and instance checks
+        # breaking change in py3.7...
+        if isinstance(sample_object, (kwimage.Polygon, kwimage.MultiPolygon)):
+            return self.on_polys(obj)
+        if isinstance(sample_object[1], (kwimage.Polygon, kwimage.MultiPolygon)):
+            return self.on_augmented_polys(obj)
         raise NotImplementedError(f'cannot filter polygons from {obj}:'
                                   ' unsupported type')
 
-    @__call__.register
+    # @__call__.register
     def on_track(self, track: Track):
         track.observations = self.on_observations(track.observations)
         return track
 
-    @__call__.register
+    # @__call__.register
     def on_observations(self, observations: Iterable[Observation]):
         # extract the polygon from each Observation to operate on
         augmented_polys = ((astuple(obs), obs.poly) for obs in observations)
@@ -86,12 +108,12 @@ class PolygonFilter(collections.abc.Callable):
         return (Observation(**obs)
                 for obs, _ in self.on_augmented_polys(augmented_polys))
 
-    @__call__.register
+    # @__call__.register
     def on_polys(self, polys: Iterable[Poly]):
         augmented_polys = ((None, p) for p in polys)
         return (poly for _, poly in self.on_augmented_polys(augmented_polys))
 
-    @__call__.register
+    # @__call__.register
     @abstractmethod
     def on_augmented_polys(self, aug_polys: Iterable[Tuple[Any, Poly]]):
         raise NotImplementedError('must be implemented by subclasses')
@@ -104,7 +126,7 @@ class CocoDsetFilter(PolygonFilter):
     registered as gids in a CocoDataset
     '''
     dset: kwcoco.CocoDataset
-    key: List[str]
+    key: Tuple[str]
     threshold: float
 
     @ub.memoize
@@ -171,7 +193,7 @@ class TrackFunction(collections.abc.Callable):
 
     @staticmethod
     def safe_partition(coco_dset, gids, remove=True):
-        assert set(gids) in coco_dset.imgs.keys()
+        assert set(gids).issubset(coco_dset.imgs.keys())
         sub_dset = coco_dset.subset(gids=gids, copy=True)  # copy necessary?
         # HACK ensure tracks are not duplicated between videos
         # (if they are, this is fixed in dedupe_tracks anyway)
@@ -203,6 +225,14 @@ class TrackFunction(collections.abc.Callable):
             return coco_dset
         else:
             return coco_dset.union(new_dset, disjoint_tracks=True)
+
+
+class NoOpTrackFunction(TrackFunction):
+    '''
+    Use existing tracks.
+    '''
+    def __call__(self, coco_dset):
+        return coco_dset
 
 
 class NewTrackFunction(TrackFunction):
@@ -336,6 +366,29 @@ def mask_to_scored_polygons(probs, thresh):
     return mask_to_polygons(probs, thresh, scored=True)
 
 
+def _validate_keys(key, bg_key):
+    # for backwards compatibility
+    if isinstance(key, str):
+        key = [key]
+    elif isinstance(key, tuple):
+        key = list(key)
+    if bg_key is None:
+        bg_key = []
+    elif isinstance(bg_key, str):
+        bg_key = [bg_key]
+    elif isinstance(bg_key, tuple):
+        bg_key = list(bg_key)
+
+    # error checking
+    if len(key) < 1:
+        raise ValueError('must have at least one key')
+    if (len(key) > len(set(key)) or len(bg_key) > len(set(bg_key))):
+        raise ValueError('keys are duplicated')
+    if not set(key).isdisjoint(set(bg_key)):
+        raise ValueError('cannot have a key in foreground and background')
+    return key, bg_key
+
+
 def heatmap(dset, gid, key, return_chan_probs=False, space='video'):
     """
     Find the total heatmap of key within gid
@@ -348,6 +401,7 @@ def heatmap(dset, gid, key, return_chan_probs=False, space='video'):
             if True, also return a dict {k:heatmap(k) for k in keys}
         space: 'video' or 'image'
     """
+    key, _ = _validate_keys(key, None)
     img = dset.index.imgs[gid]
     coco_img = kwcoco_extensions.CocoImage(img, dset)
     w, h = coco_img.delay(space=space).dsize

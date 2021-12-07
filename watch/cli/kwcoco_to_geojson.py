@@ -54,6 +54,7 @@ References:
     .. [3] https://smartgitlab.com/TE/annotations
 """
 import geojson
+import json
 import os
 import sys
 import argparse
@@ -479,7 +480,7 @@ def main(args):
         >>> bas_args = [
         >>>     '--in_file', coco_dset.fpath,
         >>>     '--out_dir', regions_dir,
-        >>>     '--track_fn', 'watch.tasks.tracking.from_polygon.mono',
+        >>>     '--track_fn', 'watch.tasks.tracking.from_polygon.MonoTrack',
         >>>     '--bas_mode',
         >>>     '--write_in_file'
         >>> ]
@@ -525,7 +526,7 @@ def main(args):
         >>>     '--in_file', coco_dset.fpath,
         >>>     '--out_dir', regions_dir,
         >>>     '--track_fn', 'watch.tasks.tracking.from_heatmap.'
-        >>>                   'time_aggregated_polys_bas',
+        >>>                   'TimeAggregatedBAS',
         >>>     '--bas_mode',
         >>>     # '--write_in_file'
         >>> ]
@@ -551,8 +552,9 @@ def main(args):
         >>>     '--in_file', coco_dset.fpath,
         >>>     '--out_dir', sites_dir,
         >>>     '--track_fn', 'watch.tasks.tracking.from_heatmap.'
-        >>>                   'time_aggregated_polys_hybrid',
-        >>>     '--in_file_sc', coco_dset_sc.fpath
+        >>>                   'TimeAggregatedHybrid',
+        >>>     '--track_kwargs', (
+        >>>         '{"coco_dset_sc": "' + coco_dset_sc.fpath + '"}')
         >>> ]
         >>> main(sc_args)
         >>> # cleanup
@@ -571,27 +573,43 @@ def main(args):
     parser = argparse.ArgumentParser(
         description='Convert KWCOCO to IARPA GeoJSON')
     parser.add_argument('--in_file', help='Input KWCOCO to convert')
-    parser.add_argument('--in_file_gt',
-                        default=None,
-                        help='GT KWCOCO file used for visualizations')
-    parser.add_argument('--in_file_sc',
-                        default=None,
-                        help='KWCOCO file with SC prediction heatmaps')
     parser.add_argument(
         '--out_dir',
-        help='Output directory where GeoJSON files will be written. '
-        'NOTE: in --bas_mode, writing to a region is not idempotent. '
-        'To regenerate a region, delete or edit the region file before '
-        'rerunning this script.')
+        help=ub.paragraph('''
+        Output directory where GeoJSON files will be written.
+        NOTE: in --bas_mode, writing to a region is not idempotent.
+        To regenerate a region, delete or edit the region file before
+        rerunning this script.
+        '''))
     parser.add_argument('--region_id',
                         help=ub.paragraph('''
         ID for region that sites belong to.
         If None, try to infer from kwcoco file.
         '''))
-    parser.add_argument('--track_fn',
-                        help=ub.paragraph('''
+    track_args = parser.add_mutually_exclusive_group()
+    track_args.add_argument('--track_fn',
+                            help=ub.paragraph('''
         Function to add tracks. If None, use existing tracks.
-        Example: 'watch.tasks.tracking.from_heatmap.time_aggregated_polys'
+        Example: 'watch.tasks.tracking.from_heatmap.TimeAggregatedBAS'
+        '''))
+    track_args.add_argument('--default_track_fn',
+                            help=ub.paragraph('''
+        String code to pick a sensible track_fn based on the contents
+        of in_file. Supported codes are ['change_heatmaps', 'change_polys',
+        'class_heatmaps', 'class_polys']. Any other string will be interpreted
+        as the image channel to use for 'change_heatmaps' (default: 'salient',
+        'change_prob', or 'change'). Supported classes are ['Site Preparation',
+        'Active Construction', 'Post Construction', 'No Activity']. For
+        class_heatmaps, these should be image channels; for class_polys, they
+        should be annotation categories.
+        '''))
+    parser.add_argument('--track_kwargs',
+                        default='{}',
+                        help=ub.paragraph('''
+        JSON string or path to file containing keyword arguments for the
+        chosen TrackFunction. Examples include: coco_dset_gt, coco_dset_sc,
+        thresh, change_keys.
+        Any file paths will be loaded as CocoDatasets if possible.
         '''))
     parser.add_argument('--bas_mode',
                         action='store_true',
@@ -618,23 +636,38 @@ def main(args):
         '''))
     args = parser.parse_args(args)
 
-    # Read the kwcoco file
+    # load the track kwargs
+    if os.path.isfile(args.track_kwargs):
+        track_kwargs = json.load(args.track_kwargs)
+    else:
+        track_kwargs = json.loads(args.track_kwargs)
+    assert isinstance(track_kwargs, dict)
+
+    # Read the kwcoco file(s)
     coco_dset = kwcoco.CocoDataset(args.in_file)
+    for k, v in track_kwargs.items():
+        if isinstance(v, str) and os.path.isfile(v):
+            try:
+                track_kwargs[k] = kwcoco.CocoDataset(v)
+            except json.JSONDecodeError:  # TODO make this smarter
+                pass
 
-    if args.in_file_gt is not None:
-        gt_dset = kwcoco.CocoDataset(args.in_file_gt)
-    else:
-        gt_dset = None
-
-    if args.in_file_sc is not None:
-        coco_dset_sc = kwcoco.CocoDataset(args.in_file_sc)
-    else:
-        coco_dset_sc = None
-
-    # Normalize
-    if args.track_fn is None:
-        # no-op function
-        track_fn = lambda x: x  # noqa
+    # Pick a track_fn
+    if args.default_track_fn is not None:
+        from watch.tasks.tracking import from_heatmap, from_polygon
+        if args.default_track_fn == 'change_heatmaps':
+            track_fn = from_heatmap.TimeAggregatedBAS
+        elif args.default_track_fn == 'change_polys':
+            track_fn = from_polygon.OverlapTrack
+        if args.default_track_fn == 'class_heatmaps':
+            track_fn = from_heatmap.TimeAggregatedSC
+        elif args.default_track_fn == 'class_polys':
+            track_fn = from_polygon.OverlapTrack
+        else:
+            track_fn = from_heatmap.TimeAggregatedBAS
+            track_kwargs['change_keys'] = [args.default_track_fn]
+    elif args.track_fn is None:
+        track_fn = watch.tasks.tracking.utils.NoOpTrackFunction
     else:
         track_fn = eval(args.track_fn)
 
@@ -648,8 +681,7 @@ def main(args):
         coco_dset,
         track_fn=track_fn,
         overwrite=False,
-        gt_dset=gt_dset,
-        coco_dset_sc=coco_dset_sc)
+        **track_kwargs)
 
     if args.write_in_file:
         coco_dset.dump(args.in_file, indent=2)
