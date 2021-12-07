@@ -157,13 +157,18 @@ def _load_input(path):
 
 
 def _remap_quality_mask(quality_mask_path, outdir):
-    # FMask cloudmask values are associated with the following classes:
-    # 0 => clear land pixel
-    # 1 => clear water pixel
-    # 2 => cloud shadow
-    # 3 => snow
-    # 4 => cloud
-    # 255 => no observation
+    # The cloud mask is a uint8, 30m GSD raster with the
+    # following values [2]:
+    #
+    # 0: null
+    # 1: clear
+    # 2: cloud
+    # 3: shadow
+    # 4: snow
+    # 5: water
+    # 6-7: unused
+    #
+    # [2] https://github.com/ubarsc/python-fmask/blob/master/fmask/fmask.py#L82  # noqa
     #
     # Remapping to Landsat QA standard (first bit in the remapped
     # output indicates whether the pixel should be used for scoring or
@@ -175,7 +180,7 @@ def _remap_quality_mask(quality_mask_path, outdir):
                     '--outfile', output_path,
                     '--overwrite',
                     '--calc',
-                    '1*(A==0)+64*(A==0)+128*(A==1)+16*(A==2)+32*(A==3)+8*(A==4)+255*(A==255)',  # noqa
+                    '1*(A==1)+64*(A==1)+128*(A==5)+16*(A==3)+32*(A==4)+8*(A==2)+255*(A==255)',  # noqa
                     '--NoDataValue', '255'], check=True)
 
     return output_path

@@ -148,16 +148,18 @@ def mtra_preprocess_item(stac_item,
 
         if band == 'cloudmask' and remap_cloudmask_to_hls:
             print("** Remapping cloudmask to HLS values")
-            # FMask cloudmask values are associated with the following classes:
-            # 0 => clear land pixel
-            # 1 => clear water pixel
-            # 2 => cloud shadow
-            # 3 => snow
-            # 4 => cloud
-            # 255 => no observation
+            # The cloud mask is a uint8, 30m GSD raster with the
+            # following values [2]:
             #
-            # See HLS user guide (page 12) regarding quality
-            # assessment layer values
+            # 0: null
+            # 1: clear
+            # 2: cloud
+            # 3: shadow
+            # 4: snow
+            # 5: water
+            # 6-7: unused
+            #
+            # [2] https://github.com/ubarsc/python-fmask/blob/master/fmask/fmask.py#L82  # noqa
             remapped_cloudmask_outpath = os.path.join(
                 item_outdir, 'remapped_cloudmask.tif')
             subprocess.run([
@@ -165,7 +167,7 @@ def mtra_preprocess_item(stac_item,
                 '-A', vrt_outpath,
                 '--outfile', remapped_cloudmask_outpath,
                 '--calc',
-                '0*(A==0)+32*(A==1)+8*(A==2)+16*(A==3)+2*(A==4)+255*(A==255)',
+                '0*(A==1)+32*(A==5)+8*(A==3)+16*(A==4)+2*(A==2)+255*(A==255)',
                 '--NoDataValue', '255'], check=True)
 
             vrt_outpath = remapped_cloudmask_outpath
