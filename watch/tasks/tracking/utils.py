@@ -315,7 +315,7 @@ def mask_to_polygons(probs, thresh, bounds=None, scored=False):
     Args:
         probs: aka heatmap, image of probability values
         thresh: to turn probs into a hard mask
-        bounds: a polygon to crop the results to
+        bounds: a kwimage or shapely polygon to crop the results to
     Example:
         >>> from watch.tasks.tracking.from_heatmap import *  # NOQA
         >>> import kwimage

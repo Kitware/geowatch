@@ -107,7 +107,6 @@ class ResponsePolygonFilter(CocoDsetFilter):
             if self.response(obs.poly,
                              obs.gid) / self.mean_response > threshold:
                 yield obs
->>>>>>> class structure for track functions and filter functions
 
 
 def add_tracks_to_dset(coco_dset,
@@ -142,7 +141,7 @@ def add_tracks_to_dset(coco_dset,
             cand_keys = bg_key
         if len(cand_keys) > 1:
             cand_scores = [
-                score(poly, probs)
+                score(poly, probs)  # awk, this could be a class
                 for probs in _heatmap(gid, key, space).values()
             ]
             cat_name = cand_keys[np.argmax(cand_scores)]
@@ -215,13 +214,34 @@ def time_aggregated_polys(coco_dset,
         raise KeyError(f'{coco_dset.tag} has no keys {key} or {bg_key}')
 
     if use_boundary_annots:
-        raise NotImplementedError
+        # get spatial bounds
+        import shapely.ops
+        annots = coco_dset.annots()
+        boundary_annots = annots.compress(
+            np.array(annots.cnames, dtype=str) == 'Site Boundary')
+        if len(annots) < 1:
+            print(f'warning: no Site Boundary annots in dset {coco_dset.tag}!')
+        boundary_polys = [
+            poly.to_shapely() for poly in
+            boundary_annots.detections.data['segmentations'].to_polygon_list()
+        ]
+        bounds = shapely.ops.unary_union(boundary_polys)
+        # get temporal bounds
+        # TODO this works fine for one site boundary, for multiple sites each
+        # trackid with Site Boundary annots should be handled separately.
+        gids = np.unique(boundary_annots.gids)
+        # remove boundary annots so they don't interfere with site labels
+        # TODO preserve trackid for new polys?
+        coco_dset.remove_categories(['Site Boundary'], keep_annots=False)
+    else:
+        bounds = None
+        gids = coco_dset.imgs.keys()
 
     # record fg and bg keys across frames, and partial sums of fg and bg
     # this guarantees RunningStats of equal length for all keys,
     # even with partial/nonexistence
     running_dct = defaultdict(kwarray.RunningStats)
-    for gid in coco_dset.imgs:
+    for gid in gids:
 
         # TODO change assertion behavior to allow partial failure here
         fg_img_probs, fg_chan_probs = heatmap(coco_dset,
@@ -257,7 +277,7 @@ def time_aggregated_polys(coco_dset,
     # only the label (key) changes per-frame
     # to generalize this, have to get scored_polys from all keys
     # and associate them somehow
-    polys = list(mask_to_polygons(probs(running_dct['fg']), thresh))
+    polys = list(mask_to_polygons(probs(running_dct['fg']), thresh, bounds=bounds))
 
     print('time aggregation: number of polygons:', len(polys))
 

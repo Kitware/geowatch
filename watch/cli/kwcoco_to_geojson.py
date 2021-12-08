@@ -419,15 +419,12 @@ def add_site_summary_to_kwcoco(site_summary_or_region_model,
             assert region_feat['properties']['type'] == 'region'
             region_id = region_feat['properties']['name']
     except jsonschema.ValidationError:
-        try:
-            site_summary = site_summary_or_region_model
-            jsonschema.validate(site_summary, schema=region_model_schema)
-            site_summaries = [site_summary]
-            if region_id is None:
-                assert len(coco_dset.index.name_to_vid) == 1, 'ambiguous video'
-                region_id = ub.peek(coco_dset.index.name_to_vid)
-        except jsonschema.ValidationError:
-            raise ValueError('site summary or region model is not valid')
+        # TODO validate this
+        site_summary = site_summary_or_region_model
+        site_summaries = [site_summary]
+        if region_id is None:
+            assert len(coco_dset.index.name_to_video) == 1, 'ambiguous video'
+            region_id = ub.peek(coco_dset.index.name_to_video)
 
     # write site summaries
     cid = coco_dset.ensure_category('Site Boundary')
@@ -438,11 +435,11 @@ def add_site_summary_to_kwcoco(site_summary_or_region_model,
 
         # get relevant images
         images = coco_dset.images(
-            vidid=coco_dset.index.name_to_vid[region_id]['id'])
+            vidid=coco_dset.index.name_to_video[region_id]['id'])
         start_date = dateutil.parser.parse(
-            site_summary['properties']['start_date'])
+            site_summary['properties']['start_date']).date()
         end_date = dateutil.parser.parse(
-            site_summary['properties']['end_date'])
+            site_summary['properties']['end_date']).date()
         flags = [
             start_date <= dateutil.parser.parse(date_str).date() <= end_date
             for date_str in images.lookup('date_captured')
@@ -452,7 +449,8 @@ def add_site_summary_to_kwcoco(site_summary_or_region_model,
         # apply site boundary as polygons
         geo_poly = kwimage.MultiPolygon.from_geojson(site_summary['geometry'])
         for img in images.objs:
-            img_poly = geo_poly.warp(kwimage.Affine.coerce(img['wld_to_pxl']))
+            img_poly = geo_poly.warp(kwimage.Affine.coerce(
+                img.get('wld_to_pxl', {'scale': 1})))
             bbox = list(img_poly.bounding_box().to_coco())[0]
             coco_dset.add_annotation(image_id=img['id'],
                                      category_id=cid,
@@ -506,7 +504,7 @@ def main(args):
 
     Example:
         >>> # test a more complicated track function
-        >>> from watch.cli.kwcoco_to_geojson import main
+        >>> from watch.cli.kwcoco_to_geojson import demo
         >>> from watch.demo import smart_kwcoco_demodata
         >>> from watch.utils.kwcoco_extensions import CocoImage
         >>> import kwcoco
@@ -521,19 +519,6 @@ def main(args):
         >>> coco_dset.fpath = 'bas.kwcoco.json'
         >>> # TODO make serializable, check set() and main()
         >>> coco_dset.dump(coco_dset.fpath, indent=2)
-        >>> regions_dir = 'regions/'
-        >>> bas_args = [
-        >>>     '--in_file', coco_dset.fpath,
-        >>>     '--out_dir', regions_dir,
-        >>>     '--track_fn', 'watch.tasks.tracking.from_heatmap.'
-        >>>                   'TimeAggregatedBAS',
-        >>>     '--bas_mode',
-        >>>     # '--write_in_file'
-        >>> ]
-        >>> # run BAS on it
-        >>> main(bas_args)
-        >>> # reload it with tracks
-        >>> # coco_dset = kwcoco.CocoDataset(coco_dset.fpath)
         >>> # make a new SC dataset
         >>> coco_dset_sc = smart_kwcoco_demodata.demo_kwcoco_with_heatmaps(
         >>>     num_videos=2)
@@ -541,46 +526,36 @@ def main(args):
         >>>     img['sensor_coarse'] = 'S2'
         >>> coco_dset_sc.remove_categories(coco_dset_sc.cats.keys())
         >>> for img in coco_dset_sc.imgs.values():
-        >>>     for aux, key in zip(img['auxiliary'], ['Site Preparation',
-        >>>             'Active Construction', 'Post Construction']):
+        >>>     for aux, key in zip(img['auxiliary'],
+        >>>                         ['Site Preparation', 'Active Construction',
+        >>>                          'Post Construction', 'No Activity']):
         >>>         aux['channels'] = key
         >>> coco_dset_sc.fpath = 'sc.kwcoco.json'
         >>> coco_dset_sc.dump(coco_dset_sc.fpath, indent=2)
-        >>> # run SC on both of them
+        >>> regions_dir = 'regions/'
         >>> sites_dir = 'sites/'
-        >>> sc_args = [
-        >>>     '--in_file', coco_dset.fpath,
-        >>>     '--out_dir', sites_dir,
-        >>>     '--track_fn', 'watch.tasks.tracking.from_heatmap.'
-        >>>                   'TimeAggregatedHybrid',
-        >>>     '--track_kwargs', (
-        >>>         '{"coco_dset_sc": "' + coco_dset_sc.fpath + '"}')
-        >>> ]
-        >>> main(sc_args)
-        >>> # cleanup
-        >>> for pth in os.listdir(regions_dir):
-        >>>     os.remove(os.path.join(regions_dir, pth))
-        >>> os.removedirs(regions_dir)
-        >>> for pth in os.listdir(sites_dir):
-        >>>     os.remove(os.path.join(sites_dir, pth))
-        >>> os.removedirs(sites_dir)
-        >>> if not os.path.isabs(coco_dset.fpath):
-        >>>     os.remove(coco_dset.fpath)
-        >>> if not os.path.isabs(coco_dset_sc.fpath):
-        >>>     os.remove(coco_dset.fpath)
+        >>> # moved this to a separate function for length
+        >>> demo(coco_dset, regions_dir, coco_dset_sc, sites_dir, cleanup=True)
 
     """
     parser = argparse.ArgumentParser(
         description='Convert KWCOCO to IARPA GeoJSON')
-    parser.add_argument('--in_file', help='Input KWCOCO to convert')
+    parser.add_argument(
+        '--in_file',
+        required=True, 
+        help='Input KWCOCO to convert')
     parser.add_argument(
         '--out_dir',
+        required=True,
         help=ub.paragraph('''
         Output directory where GeoJSON files will be written.
         NOTE: in --bas_mode, writing to a region is not idempotent.
         To regenerate a region, delete or edit the region file before
         rerunning this script.
         '''))
+    parser.add_argument(
+        '--in_file_gt',
+        help='If available, ground truth KWCOCO to visualize')
     parser.add_argument('--region_id',
                         help=ub.paragraph('''
         ID for region that sites belong to.
@@ -644,11 +619,15 @@ def main(args):
     assert isinstance(track_kwargs, dict)
 
     # Read the kwcoco file(s)
-    coco_dset = kwcoco.CocoDataset(args.in_file)
+    coco_dset = kwcoco.CocoDataset.coerce(args.in_file)
+    if args.in_file_gt is not None:
+        gt_dset = kwcoco.CocoDataset.coerce(args.in_file_gt)
+    else:
+        gt_dset = None
     for k, v in track_kwargs.items():
         if isinstance(v, str) and os.path.isfile(v):
             try:
-                track_kwargs[k] = kwcoco.CocoDataset(v)
+                track_kwargs[k] = kwcoco.CocoDataset.coerce(v)
             except json.JSONDecodeError:  # TODO make this smarter
                 pass
 
@@ -681,11 +660,12 @@ def main(args):
         coco_dset,
         track_fn=track_fn,
         overwrite=False,
+        gt_dset=gt_dset,
         **track_kwargs)
 
     if args.write_in_file:
         coco_dset.dump(args.in_file, indent=2)
-
+    # import xdev; xdev.embed()
     # Convert kwcoco to sites
     sites = convert_kwcoco_to_iarpa(coco_dset,
                                     args.region_id,
@@ -728,6 +708,77 @@ def main(args):
                       f'site {site_fpath}')
             with open(os.path.join(site_fpath), 'w') as f:
                 geojson.dump(site, f, indent=2)
+
+
+def demo(coco_dset,
+         regions_dir,
+         coco_dset_sc,
+         sites_dir,
+         cleanup=True,
+         hybrid=False):
+    bas_args = [
+        '--in_file',
+        coco_dset.fpath,
+        '--out_dir',
+        regions_dir,
+        '--track_fn',
+        'watch.tasks.tracking.from_heatmap.'
+        'TimeAggregatedBAS',
+        '--bas_mode',
+        # '--write_in_file'
+    ]
+    # run BAS on it
+    main(bas_args)
+    # reload it with tracks
+    # coco_dset = kwcoco.CocoDataset(coco_dset.fpath)
+    # run SC on both of them
+    if hybrid:  # hybrid approach
+        sc_args = [
+            '--in_file', coco_dset.fpath, '--out_dir', sites_dir, '--track_fn',
+            'watch.tasks.tracking.from_heatmap.'
+            'TimeAggregatedHybrid', '--track_kwargs',
+            ('{"coco_dset_sc": "' + coco_dset_sc.fpath + '"}')
+        ]
+        main(sc_args)
+    else:  # true per-site SC
+        import json
+        from tempfile import NamedTemporaryFile
+        sc_args = [
+            '--out_dir',
+            sites_dir,
+            '--track_fn',
+            'watch.tasks.tracking.from_heatmap.'
+            'TimeAggregatedSC',
+        ]
+        for vid_name, vid in coco_dset_sc.index.name_to_video.items():
+            gids = coco_dset_sc.index.vidid_to_gids[vid['id']]
+            sub_dset = coco_dset_sc.subset(gids)
+            tmpfile = NamedTemporaryFile()
+            sub_dset.fpath = tmpfile.name
+            sub_dset.dump(sub_dset.fpath)
+            region = json.load(
+                open(os.path.join(regions_dir, f'{vid_name}.geojson')))
+            for site in [
+                    f for f in region['features']
+                    if f['properties']['type'] == 'site_summary'
+            ]:
+                print('running site ' + site['properties']['site_id'])
+                main(sc_args + [
+                    '--in_file', sub_dset.fpath,
+                    '--track_kwargs', '{"use_boundary_annots": false}'
+                ])
+                # '--site_summary', json.dumps(site)])
+    if cleanup:
+        for pth in os.listdir(regions_dir):
+            os.remove(os.path.join(regions_dir, pth))
+        os.removedirs(regions_dir)
+        for pth in os.listdir(sites_dir):
+            os.remove(os.path.join(sites_dir, pth))
+        os.removedirs(sites_dir)
+        if not os.path.isabs(coco_dset.fpath):
+            os.remove(coco_dset.fpath)
+        if not os.path.isabs(coco_dset_sc.fpath):
+            os.remove(coco_dset_sc.fpath)
 
 
 if __name__ == '__main__':
