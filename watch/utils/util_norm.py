@@ -159,7 +159,7 @@ def find_robust_normalizers(data, params='auto'):
 
 # NOTE: This exists in kwimage now
 def normalize_intensity(imdata, return_info=False, nodata=None, axis=None,
-                        dtype=np.float32, params='auto'):
+                        dtype=np.float32, params='auto', mask=None):
     """
     Normalize data intensities using heuristics to help put sensor data with
     extremely high or low contrast into a visible range.
@@ -252,20 +252,30 @@ def normalize_intensity(imdata, return_info=False, nodata=None, axis=None,
         # be implementd more effciently.
         assert not return_info
         reorg = imdata.swapaxes(0, axis)
-        parts = []
-        for item in reorg:
-            part = normalize_intensity(item, nodata=nodata, axis=None)
-            parts.append(part[None, :])
+        if mask is None:
+            parts = []
+            for item in reorg:
+                part = normalize_intensity(item, nodata=nodata, axis=None)
+                parts.append(part[None, :])
+        else:
+            reorg_mask = mask.swapaxes(0, axis)
+            parts = []
+            for item, item_mask in zip(reorg, reorg_mask):
+                part = normalize_intensity(item, nodata=nodata, axis=None, mask=item_mask)
+                parts.append(part[None, :])
         recomb = np.concatenate(parts, axis=0)
         final = recomb.swapaxes(0, axis)
         return final
 
-    if nodata is not None:
-        mask = imdata != nodata
-        imdata_valid = imdata[mask]
+    if mask is None:
+        if nodata is not None:
+            mask = imdata != nodata
+            imdata_valid = imdata[mask]
+        else:
+            mask = None
+            imdata_valid = imdata
     else:
-        mask = None
-        imdata_valid = imdata
+        imdata_valid = imdata[mask]
 
     normalizer = find_robust_normalizers(imdata_valid, params=params)
 

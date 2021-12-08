@@ -18,6 +18,7 @@ def main(cmdline=True, **kw):
         'merge_region_models',
         'project_annotations',
         'coco_show_auxiliary',
+        'coco_visualize_videos',
     ]
     module_lut = {}
     for name in modnames:
@@ -44,6 +45,10 @@ def main(cmdline=True, **kw):
 
     cmd_alias = {
         'watch_coco_stats': ['stats'],
+        'coco_visualize_videos': ['visualize'],
+        'coco_align_geotiffs': ['align'],
+        'project_annotations': ['project'],
+        'coco_add_watch_fields': ['add_fields']
     }
 
     for cli_module in cli_modules:
@@ -53,6 +58,11 @@ def main(cmdline=True, **kw):
             cli_subconfig = cli_module._SubConfig
         else:
             cli_subconfig = None
+            if hasattr(cli_module, '_CLI'):
+                # scriptconfig cli pattern
+                cli_subconfig = cli_module._CLI
+            else:
+                cli_subconfig = None
         if hasattr(cli_subconfig, 'main'):
             main_func = cli_subconfig.main
         elif hasattr(cli_module, 'main'):

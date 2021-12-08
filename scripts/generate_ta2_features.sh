@@ -15,7 +15,7 @@ Example:
 '
 
 DVC_DPATH=${DVC_DPATH:-$HOME/data/dvc-repos/smart_watch_dvc}
-KWCOCO_BUNDLE_DPATH=${KWCOCO_BUNDLE_DPATH:-$DVC_DPATH/drop1-S2-L8-aligned}
+KWCOCO_BUNDLE_DPATH=${KWCOCO_BUNDLE_DPATH:-$DVC_DPATH/Drop1-Aligned-L1}
 
 BASE_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json
 #BASE_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/propogated.kwcoco.json
@@ -23,19 +23,18 @@ BASE_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json
 
 # Models
 
-# Gen1
+# Older
 #RUTGERS_MATERIAL_MODEL_FPATH="$DVC_DPATH/models/rutgers/experiments_epoch_30_loss_0.05691597167379317_valmIoU_0.5694727912477856_time_2021-08-07-09:01:01.pth"
 #DZYNE_LANDCOVER_MODEL_FPATH="$DVC_DPATH/models/landcover/visnav_osm.pt"
 #UKY_S2_MODEL_FPATH=${UKY_L8_MODEL_FPATH:-$DVC_DPATH/models/uky_invariants/sort_augment_overlap/S2_drop1-S2-L8-aligned-old.0.ckpt}
 #UKY_L8_MODEL_FPATH=${UKY_L8_MODEL_FPATH:-$DVC_DPATH/models/uky_invariants/sort_augment_overlap/L8_drop1-S2-L8-aligned-old.0.ckpt}
+#DZYNE_LANDCOVER_MODEL_FPATH="$DVC_DPATH/models/landcover/visnav_sentinel2.pt"
 
-
-# Gen2
+# Current
 UKY_S2_MODEL_FPATH=${UKY_S2_MODEL_FPATH:-$DVC_DPATH/models/uky_features_21-10-01/S2_model/drop1-S2-L8-aligned/checkpoints/S2_drop1-S2-L8-aligned.cpkt}
 UKY_L8_MODEL_FPATH=${UKY_L8_MODEL_FPATH:-$DVC_DPATH/models/uky_features_21-10-01/L8_model/drop1-S2-L8-aligned/checkpoints/L8_drop1-S2-L8-aligned.cpkt}
-RUTGERS_MATERIAL_MODEL_FPATH="$DVC_DPATH/models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_2021-10-01-16:27:07.pth"
-DZYNE_LANDCOVER_MODEL_FPATH="$DVC_DPATH/models/landcover/visnav_sentinel2.pt"
-
+RUTGERS_MATERIAL_MODEL_FPATH="$DVC_DPATH/models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_20211001T162707.pth"
+DZYNE_LANDCOVER_MODEL_FPATH="$DVC_DPATH/models/landcover/visnav_remap_s2_subset.pt"
 
 
 UKY_S2_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/_partial_uky_pred_S2.kwcoco.json
@@ -183,6 +182,9 @@ rutgers_prediction(){
 
 
 dzyne_prediction(){
+    __doc__='
+    source ~/code/watch/scripts/generate_ta2_features.sh
+    '
     # ----------------
     # DZYNE Prediction
     # ----------------

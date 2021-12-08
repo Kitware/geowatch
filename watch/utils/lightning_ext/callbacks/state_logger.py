@@ -48,8 +48,8 @@ class StateLogger(pl.callbacks.Callback):
     def on_sanity_check_end(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         print('on_sanity_check_end')
 
-    def on_keyboard_interrupt(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
-        print('on_keyboard_interrupt')
-        print('KEYBOARD INTERUPT')
+    def on_exception(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
+        print('on_exception')
+        print('INTERUPT')
         print('trainer.default_root_dir = {!r}'.format(trainer.default_root_dir))
         print('trainer.log_dir = {!r}'.format(trainer.log_dir))

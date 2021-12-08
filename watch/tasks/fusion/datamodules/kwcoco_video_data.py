@@ -12,7 +12,7 @@ import ubelt as ub
 from kwcoco import channel_spec
 from torch.utils import data
 from watch.tasks.fusion import utils
-from watch.tasks.fusion import heuristics
+from watch import heuristics
 from watch.utils import kwcoco_extensions
 from watch.utils import util_bands
 from watch.utils import util_iter
@@ -62,7 +62,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         >>>     chip_size=chip_size,
         >>>     neg_to_pos_ratio=0,
         >>> )
-        >>> self.setup("fit")
+        >>> self.setup('fit')
         >>> dl = self.train_dataloader()
         >>> dataset = dl.dataset
         >>> batch = next(iter(dl))
@@ -97,7 +97,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         >>>     chip_size=chip_size,
         >>>     normalize_inputs=True,
         >>> )
-        >>> self.setup("fit")
+        >>> self.setup('fit')
         >>> dl = self.train_dataloader()
         >>> batch = next(iter(dl))
         >>> expect_shape = (batch_size, time_steps, len(chan_spec), chip_size, chip_size)
@@ -124,14 +124,17 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         channels=None,
         batch_size=4,
         preprocessing_step=None,
-        tfms_channel_subset=None,
+        tfms_channel_subset=None,  # DEPRECATE
         normalize_inputs=False,
+        normalize_perframe=False,
         match_histograms=False,
+        upweight_centers=True,
         diff_inputs=False,
         verbose=1,
         num_workers=4,
         torch_sharing_strategy='default',
         torch_start_method='default',
+        resample_invalid_frames=True,
     ):
         """
         Args:
@@ -156,8 +159,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.train_kwcoco = train_dataset
         self.vali_kwcoco = vali_dataset
         self.test_kwcoco = test_dataset
-        self.time_steps = time_steps
-        self.chip_size = chip_size
+        self.time_steps = int(time_steps)
+        self.chip_size = int(chip_size)
         self.time_overlap = time_overlap
         self.chip_overlap = chip_overlap
         self.neg_to_pos_ratio = neg_to_pos_ratio
@@ -170,6 +173,20 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.diff_inputs = diff_inputs
         self.time_span = time_span
         self.match_histograms = match_histograms
+        self.resample_invalid_frames = resample_invalid_frames
+        self.upweight_centers = upweight_centers
+        self.normalize_perframe = normalize_perframe
+
+        self.common_dataset_kwargs = dict(
+                channels=self.channels,
+                time_sampling=self.time_sampling,
+                diff_inputs=self.diff_inputs,
+                exclude_sensors=self.exclude_sensors,
+                match_histograms=self.match_histograms,
+                upweight_centers=self.upweight_centers,
+                resample_invalid_frames=self.resample_invalid_frames,
+                normalize_perframe=self.normalize_perframe,
+        )
 
         self.num_workers = util_globals.coerce_num_workers(num_workers)
         self.torch_start_method = torch_start_method
@@ -235,6 +252,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         parser.add_argument('--channels', default=None, type=str, help='channels to use should be ChannelSpec coercable')
         parser.add_argument('--batch_size', default=4, type=int)
         parser.add_argument('--time_span', default='2y', type=str, help='how long a time window should roughly span by default')
+        parser.add_argument('--resample_invalid_frames', default=True, help='if True, will attempt to resample any frame without valid data')
 
         parser.add_argument(
             '--normalize_inputs', default=True, type=smartcast, help=ub.paragraph(
@@ -246,6 +264,13 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         parser.add_argument(
             '--match_histograms', default=True, type=smartcast, help=ub.paragraph(
                 '''
+                undocumented
+                '''))
+
+        parser.add_argument(
+            '--upweight_centers', default=True, type=smartcast, help=ub.paragraph(
+                '''
+                undocumented
                 '''))
         parser.add_argument(
             '--diff_inputs', default=False, type=smartcast, help=ub.paragraph(
@@ -304,14 +329,11 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             train_dataset = KWCocoVideoDataset(
                 coco_train_sampler,
                 sample_shape=(self.time_steps, self.chip_size, self.chip_size),
+                mode='fit',
                 # window_overlap=(self.time_overlap, self.chip_overlap, self.chip_overlap),
                 window_overlap=self.chip_overlap,  # FIXME
-                channels=self.channels,
                 neg_to_pos_ratio=self.neg_to_pos_ratio,
-                time_sampling=self.time_sampling,
-                diff_inputs=self.diff_inputs,
-                exclude_sensors=self.exclude_sensors,
-                match_histograms=self.match_histograms,
+                **self.common_dataset_kwargs,
             )
 
             # Unfortunately lightning seems to only enable / disables
@@ -353,17 +375,10 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 vali_dataset = KWCocoVideoDataset(
                     vali_coco_sampler,
                     sample_shape=(self.time_steps, self.chip_size, self.chip_size),
-                    # window_overlap=(self.time_overlap, self.chip_overlap, self.chip_overlap),
-                    # window_overlap=self.chip_overlap,  # FIXME
-                    window_overlap=0,
-                    channels=self.channels,
-                    time_sampling=self.time_sampling,
                     mode='vali',
+                    window_overlap=0,
                     neg_to_pos_ratio=0,
-                    diff_inputs=self.diff_inputs,
-                    exclude_sensors=self.exclude_sensors,
-                    match_histograms=self.match_histograms,
-                )
+                    **self.common_dataset_kwargs)
                 self.torch_datasets['vali'] = vali_dataset
                 ub.inject_method(self, lambda self: self._make_dataloader('vali', shuffle=False), 'val_dataloader')
 
@@ -380,13 +395,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 test_coco_sampler,
                 sample_shape=(self.time_steps, self.chip_size, self.chip_size),
                 window_overlap=self.chip_overlap,  # FIXME
-                # window_overlap=0,
-                # (self.time_overlap, self.chip_overlap, self.chip_overlap),
-                channels=self.channels,
                 mode='test',
-                diff_inputs=self.diff_inputs,
-                exclude_sensors=self.exclude_sensors,
-                match_histograms=self.match_histograms,
+                **self.common_dataset_kwargs,
             )
 
             ub.inject_method(self, lambda self: self._make_dataloader('test', shuffle=False), 'test_dataloader')
@@ -565,7 +575,7 @@ class KWCocoVideoDataset(data.Dataset):
         >>>     sample_shape=(5, 128, 128),
         >>>     window_overlap=0,
         >>>     channels="blue|green|red|nir|swir16",
-        >>>     neg_to_pos_ratio=0, time_sampling='auto', diff_inputs=1, mode='train', match_histograms=True,
+        >>>     neg_to_pos_ratio=0, time_sampling='auto', diff_inputs=1, mode='fit', match_histograms=True,
         >>> )
         >>> item = self[0]
         >>> canvas = self.draw_item(item)
@@ -600,6 +610,9 @@ class KWCocoVideoDataset(data.Dataset):
         time_span='2y',
         exclude_sensors=None,
         match_histograms=False,
+        resample_invalid_frames=True,
+        upweight_centers=True,
+        normalize_perframe=False,
     ):
 
         # TODO: the set of "valid" background classnames should be defined
@@ -608,8 +621,12 @@ class KWCocoVideoDataset(data.Dataset):
         # into the kwcoco spec marking a class as some type of "background"
         self._hueristic_background_classnames = heuristics.BACKGROUND_CLASSES
         self._heuristic_ignore_classnames = heuristics.IGNORE_CLASSNAMES
+        self._heuristic_undistinguished_classnames = heuristics.UNDISTINGUISHED_CLASSES
 
         self.match_histograms = match_histograms
+        self.normalize_perframe = normalize_perframe
+        self.resample_invalid_frames = resample_invalid_frames
+        self.upweight_centers = upweight_centers
 
         if channels is None:
             # Hack to use all channels in the first image.
@@ -700,6 +717,8 @@ class KWCocoVideoDataset(data.Dataset):
             graph.add_node('ignore')
             self.ignore_classes = self._heuristic_ignore_classnames & set(graph.nodes)
 
+        self.undistinguished_classes = self._heuristic_undistinguished_classnames & set(graph.nodes)
+
         self.classes = kwcoco.CategoryTree(graph)
 
         bg_catname = ub.peek(sorted(self.background_classes))
@@ -761,10 +780,7 @@ class KWCocoVideoDataset(data.Dataset):
             ub.oset(['red', 'green', 'blue']),
             ub.oset(['Dred', 'Dgreen', 'Dblue']),
             ub.oset(['r', 'g', 'b']),
-            ub.oset(['B04', 'B03', 'B02']),  # for onera
-            ub.oset(['matset_1', 'matset_2', 'matset_3']),  # hack
-            ub.oset(['snow_or_ice_field', 'built_up', 'grassland']),  # hack
-        ]
+        ] + heuristics.HUERISTIC_COMBINABLE_CHANNELS
 
     def __len__(self):
         return self.length
@@ -851,11 +867,42 @@ class KWCocoVideoDataset(data.Dataset):
             >>> kwplot.imshow(canvas)
             >>> kwplot.show_if_requested()
 
-            kwplot.imshow(self.draw_item(self[4], max_channels=10, overlay_on_image=0))
+        Example:
+            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+            >>> # Run the following tests on real watch data if DVC is available
+            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+            >>> import ndsampler
+            >>> import kwcoco
+            >>> from watch.utils.util_data import find_smart_dvc_dpath
+            >>> dvc_dpath = find_smart_dvc_dpath()
+            >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1/vali_data_nowv.kwcoco.json'
+            >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+            >>> sampler = ndsampler.CocoSampler(coco_dset)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=(5, 128, 128), channels='red|green|blue|nir', normalize_perframe=True)
+            >>> index = 3
+            >>> item = self[index]
+            >>> canvas = self.draw_item(item)
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas)
+            >>> kwplot.show_if_requested()
+
+        Ignore:
+            import kwplot
+            kwplot.autompl()
+            import xdev
+            sample_indices = list(range(len(self)))
+            for index in xdev.InteractiveIter(sample_indices):
+                item = self[index]
+                canvas = self.draw_item(item)
+                kwplot.imshow(canvas)
+                xdev.InteractiveIter.draw()
         """
 
         if isinstance(index, dict):
             tr = index
+            index = 'given-as-dictionary'
         else:
             if self.mode == 'test':
                 tr = self.new_sample_grid['targets'][index]
@@ -927,6 +974,68 @@ class KWCocoVideoDataset(data.Dataset):
             tr_, with_annots=with_annots,
             padkw={'constant_values': np.nan}
         )
+
+        ALLOW_RESAMPLE = self.resample_invalid_frames
+        if ALLOW_RESAMPLE:
+            # If any image is junk allow for a resample
+            is_frame_bad = np.isnan(sample['im']).all(axis=(1, 2, 3))
+            if np.any(is_frame_bad):
+                gids = np.array(tr_['gids'])
+                good_gids = gids[~is_frame_bad].tolist()
+                vidid = tr_['video_id']
+                time_sampler = self.new_sample_grid['vidid_to_time_sampler'][vidid]
+                video_gids = time_sampler.video_gids
+                bad_gids = gids[is_frame_bad].tolist()
+                new_bad_gids = bad_gids
+                iter_idx = 0
+                while len(new_bad_gids):
+                    print('resampling: {}'.format(index))
+                    include_idxs = np.where(kwarray.isect_flags(time_sampler.video_gids, good_gids))[0]
+                    exclude_idxs = np.where(kwarray.isect_flags(time_sampler.video_gids, bad_gids))[0]
+                    chosen, info = time_sampler.sample(include=include_idxs, exclude=exclude_idxs, error_level=1, return_info=True)
+                    new_idxs = np.setdiff1d(chosen, include_idxs)
+                    new_gids = video_gids[new_idxs]
+
+                    tr_test = tr_.copy()
+                    tr_test['gids'] = new_gids
+                    test_sample = sampler.load_sample(
+                        tr_test, with_annots=False, padkw={'constant_values': np.nan}
+                    )
+                    new_is_frame_bad = np.isnan(test_sample['im']).all(axis=(1, 2, 3))
+                    new_good_gids = new_gids[~new_is_frame_bad].tolist()
+                    new_bad_gids = new_gids[new_is_frame_bad].tolist()
+                    bad_gids.extend(new_bad_gids)
+                    good_gids.extend(new_good_gids)
+                    iter_idx += 1
+                    if iter_idx > 100:
+                        raise Exception('Something is wrong')
+
+                resampled_gids = ub.oset(video_gids) & good_gids
+                tr_['gids'] = resampled_gids
+                # finalize resample sample
+                sample = sampler.load_sample(
+                    tr_, with_annots=with_annots,
+                    padkw={'constant_values': np.nan}
+                )
+
+        if self.normalize_perframe:
+            from watch.utils.util_norm import normalize_intensity
+            im = sample['im']
+            # mask = ~np.isnan(im)
+            # mask[im == 0] = False
+            reorg = einops.rearrange(im, 't h w c -> (t c) h w')
+            to_restack = []
+            for item in reorg:
+                mask = (item != 0) & np.isfinite(item)
+                norm_item = normalize_intensity(item, params={
+                    'high': 0.90,
+                    'mid': 0.5,
+                    'low': 0.01,
+                    'mode': 'linear',
+                }, mask=mask)
+                to_restack.append(norm_item)
+            norm_im = einops.rearrange(np.stack(to_restack, axis=0), '(t c) h w -> t h w c', c=im.shape[3])
+            sample['im'] = norm_im
 
         if self.special_inputs or self.diff_inputs:
             import xarray as xr
@@ -1052,7 +1161,17 @@ class KWCocoVideoDataset(data.Dataset):
 
         prev_frame_cidxs = None
 
-        for frame, dets, gid in zip(raw_frame_list, raw_det_list, raw_gids):
+        if not self.inference_only:
+            num_frames = len(raw_frame_list)
+            frame0 = raw_frame_list[0]
+            # from watch.utils import util_kwimage
+            # Learn more from the center of the space-time patch
+            time_weights = kwimage.gaussian_patch((1, num_frames))[0]
+            time_weights = time_weights / time_weights.max()
+            space_weights = util_kwimage.upweight_center_mask(frame0.shape[0:2])
+            # time_weights[1:] = 0
+
+        for time_idx, (frame, dets, gid) in enumerate(zip(raw_frame_list, raw_det_list, raw_gids)):
             img = self.sampler.dset.imgs[gid]
 
             frame = np.asarray(frame, dtype=np.float32)
@@ -1094,8 +1213,13 @@ class KWCocoVideoDataset(data.Dataset):
                 frame_class_ohe = np.full(ohe_shape, dtype=np.uint8,
                                           fill_value=0)
 
-                frame_ignore = np.full(space_shape, dtype=np.uint8,
-                                       fill_value=0)
+                # Ignore for saliency
+                saliency_ignore = np.full(space_shape, dtype=np.uint8,
+                                          fill_value=0)
+
+                # Ignore for class
+                frame_class_ignore = np.full(space_shape, dtype=np.uint8,
+                                             fill_value=0)
 
                 # Rasterize frame targets
                 ann_polys = dets.data['segmentations'].to_polygon_list()
@@ -1110,14 +1234,26 @@ class KWCocoVideoDataset(data.Dataset):
                     if catname in self.background_classes:
                         pass
                     elif catname in self.ignore_classes:
-                        poly.fill(frame_ignore, value=1)
+                        poly.fill(saliency_ignore, value=1)
+                        poly.fill(frame_class_ignore, value=1)
                     else:
-                        poly.fill(frame_class_ohe[cidx], value=1)
+                        if catname in self.undistinguished_classes:
+                            poly.fill(frame_class_ohe[cidx], value=1)
+                        else:
+                            poly.fill(frame_class_ohe[cidx], value=1)
 
-                # Dilate the truth map
+                # Postprocess (Dilate?) the truth map
                 for cidx, class_map in enumerate(frame_class_ohe):
-                    class_map = util_kwimage.morphology(class_map, 'dilate', kernel=5)
+                    # class_map = util_kwimage.morphology(class_map, 'dilate', kernel=5)
                     frame_cidxs[class_map > 0] = cidx
+
+                if self.upweight_centers:
+                    frame_weights = space_weights * time_weights[time_idx]
+                else:
+                    frame_weights = 1.0
+
+                saliency_weights = frame_weights * (1 - saliency_ignore)
+                class_weights = frame_weights * (1 - frame_class_ignore)
 
                 # convert annotations into a change detection task suitable for
                 # the network.
@@ -1149,7 +1285,9 @@ class KWCocoVideoDataset(data.Dataset):
                 frame_item.update({
                     'change': frame_change,
                     'class_idxs': torch.from_numpy(frame_cidxs),
-                    'ignore': torch.from_numpy(frame_ignore),
+                    'ignore': torch.from_numpy(saliency_ignore),
+                    'class_weights': torch.from_numpy(class_weights),
+                    'saliency_weights': torch.from_numpy(saliency_weights),
                 })
                 prev_frame_cidxs = frame_cidxs
             frame_items.append(frame_item)
@@ -1188,7 +1326,7 @@ class KWCocoVideoDataset(data.Dataset):
             ('hashid', self.sampler.dset._build_hashid()),
             ('channels', self.input_channels.__json__()),
             # ('sample_shape', self.sample_shape),
-            ('depends_version', 6),  # bump if `compute_dataset_stats` changes
+            ('depends_version', 7),  # bump if `compute_dataset_stats` changes
         ])
         workdir = None
         cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends)
@@ -1222,7 +1360,9 @@ class KWCocoVideoDataset(data.Dataset):
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (2, 256, 256)
             >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=None)
-            >>> self.compute_dataset_stats()
+            >>> stats = self.compute_dataset_stats()
+            >>> assert stats['class_freq']['star'] > 0 or stats['class_freq']['superstar'] > 0 or stats['class_freq']['eff'] > 0
+            >>> assert stats['class_freq']['background'] > 0
 
         CommandLine:
             DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.datamodules.kwcoco_video_data KWCocoVideoDataset.compute_dataset_stats:1
@@ -1245,8 +1385,8 @@ class KWCocoVideoDataset(data.Dataset):
             >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, neg_to_pos_ratio=1.0)
             >>> item = self[100]
             >>> #self.compute_dataset_stats(num=10)
-            >>> num_workers = 14
-            >>> num = 1000
+            >>> num_workers = 0
+            >>> num = 100
             >>> batch_size = 6
             >>> self.compute_dataset_stats(num=num, num_workers=num_workers, batch_size=batch_size)
         """
@@ -1280,6 +1420,7 @@ class KWCocoVideoDataset(data.Dataset):
                 for frame_item in item['frames']:
 
                     class_idxs = frame_item['class_idxs']
+                    # print(np.unique(class_idxs))
                     item_freq = np.histogram(class_idxs.ravel(), bins=bins)[0]
                     total_freq += item_freq
 
@@ -1325,7 +1466,7 @@ class KWCocoVideoDataset(data.Dataset):
     @profile
     def draw_item(self, item, item_output=None, combinable_extra=None,
                   max_channels=5, max_dim=256, norm_over_time=0,
-                  overlay_on_image=True):
+                  overlay_on_image=False):
         """
         Visualize an item produced by this DataSet.
 
@@ -1751,9 +1892,6 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> dvc_dpath = find_smart_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
-        >>> # Create a sliding window object for each specific image (because they may
-        >>> # have different sizes, technically we could memoize this)
-        >>> import kwarray
         >>> window_overlap = 0.0
         >>> window_dims = (2, 128, 128)
         >>> keepbound = False
@@ -1763,14 +1901,28 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> positives = list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
         _ = xdev.profile_now(sample_video_spacetime_targets)(dset, window_dims, window_overlap)
 
+        >>> import os
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> from watch.utils.util_data import find_smart_dvc_dpath
+        >>> dvc_dpath = find_smart_dvc_dpath()
+        >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1/vali_data_wv.kwcoco.json'
+        >>> dset = kwcoco.CocoDataset(coco_fpath)
+        >>> window_overlap = 0.0
+        >>> window_dims = (2, 128, 128)
+        >>> keepbound = False
+        >>> exclude_sensors = None
+        >>> sample_grid = sample_video_spacetime_targets(dset, window_dims, window_overlap)
+        >>> time_sampling = 'hard+distribute'
+        >>> time_span = '2y'
+        >>> use_annot_info = True
+        >>> time_sampling = 'hard+distribute'
+        >>> positives = list(ub.take(sample_grid['targets'], sample_grid['positives_indexes']))
+
     Example:
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> import ndsampler
         >>> import kwcoco
         >>> dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=30)
-        >>> # Create a sliding window object for each specific image (because they may
-        >>> # have different sizes, technically we could memoize this)
-        >>> import kwarray
         >>> window_overlap = 0.0
         >>> window_dims = (3, 96, 96)
         >>> keepbound = False
@@ -1837,6 +1989,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
             dset, video_id, gids=video_gids, time_window=window_time_dims,
             affinity_type=affinity_type, update_rule=update_rule,
             name=video_info['name'], time_span=time_span)
+        time_sampler.video_gids = np.array(video_gids)
         time_sampler.determenistic = True
 
         if use_annot_info:
@@ -1867,7 +2020,10 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                         'aid': aid,
                     })
 
-            unique_tlbr = util_kwarray.unique_rows(np.array(all_vid_tlbr))
+            if len(all_vid_tlbr):
+                unique_tlbr = util_kwarray.unique_rows(np.array(all_vid_tlbr))
+            else:
+                unique_tlbr = []
             for idx, tlbr_box in enumerate(unique_tlbr):
                 qtree.insert(idx, tlbr_box)
                 qtree.idx_to_tlbr[idx] = tlbr_box
@@ -1912,6 +2068,18 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                         # Hack: exclude all annotated regions from negative sampling
                         negative_idxs.append(len(targets))
 
+                # Reselect the keyframes if we are overlaping a nodata region?
+                # Or do that on the fly?
+                if False:
+                    for gid in gids:
+                        coco_img = dset.coco_image(gid)
+                        coco_img.channels
+                        part = coco_img.delay(space='video')
+                        cropped = part.crop(space_region)
+                        arr = cropped.finalize(as_xarray=True)
+                        if np.all(arr == 0):
+                            print('BLACK REGION')
+
                 targets.append({
                     'main_idx': main_idx,
                     'video_id': video_id,
@@ -1942,6 +2110,9 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
 
 
 def lookup_track_info(coco_dset, tid):
+    """
+    Find the spatio-temporal extent of a track
+    """
     track_aids = coco_dset.index.trackid_to_aids[tid]
     vidspace_boxes = []
     track_gids = []
@@ -1969,7 +2140,7 @@ def lookup_track_info(coco_dset, tid):
     return track_info
 
 
-def make_trackbased_spatial_samples(coco_dset):
+def make_track_based_spatial_samples(coco_dset):
     """
     Ignore:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -1977,7 +2148,7 @@ def make_trackbased_spatial_samples(coco_dset):
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> from watch.utils.util_data import find_smart_dvc_dpath
         >>> dvc_dpath = find_smart_dvc_dpath()
-        >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
+        >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1/data.kwcoco.json'
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
     """
     tid_list = list(coco_dset.index.trackid_to_aids.keys())

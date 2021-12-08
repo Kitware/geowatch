@@ -413,7 +413,7 @@ def specialized_index_bands(bands=None, coco_img=None, symbolic=False):
         >>> gid = ub.peek(dset.index.imgs.keys())
         >>> vidid = dset.index.name_to_video['BH_Manama_R01']['id']
         >>> gid = dset.index.vidid_to_gids[vidid][0]
-        >>> coco_img = kwcoco_extensions.CocoImage.from_gid(dset, gid)
+        >>> coco_img = dset.coco_image(gid)
         >>> print('coco_img.channels = {!r}'.format(coco_img.channels))
         >>> symbolic = False
         >>> indexes = specialized_index_bands(coco_img=coco_img)
@@ -734,7 +734,7 @@ def specialized_index_bands2(coco_img=None):
         >>> dset = kwcoco.CocoDataset(coco_fpath)
         >>> from watch.utils import kwcoco_extensions
         >>> gid = ub.peek(dset.index.imgs.keys())
-        >>> coco_img = kwcoco_extensions.CocoImage.from_gid(dset, gid)
+        >>> coco_img = dset.coco_image(gid)
         >>> print('coco_img.channels = {!r}'.format(coco_img.channels))
         >>> symbolic = False
         >>> indexes = specialized_index_bands2(coco_img=coco_img)

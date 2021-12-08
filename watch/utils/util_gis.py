@@ -257,6 +257,7 @@ def read_geojson(file, default_axis_mapping='OAMS_TRADITIONAL_GIS_ORDER'):
 
 @ub.memoize
 def _get_crs84():
+    """ This call can be fairly slow, so we cache it. """
     from pyproj import CRS
     crs84 = CRS.from_user_input('crs84')
     return crs84

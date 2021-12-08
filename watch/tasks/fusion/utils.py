@@ -69,6 +69,7 @@ def load_model_from_package(package_path):
         file = io.StringIO()
         file.write(fit_config_text)
         file.seek(0)
+        # Note: types might be wrong here
         fit_config = yaml.safe_load(file)
         model.fit_config = fit_config
 

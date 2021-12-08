@@ -36,12 +36,15 @@ class WVRgbDataset(_CocoTorchDataset):
         return False
 
     def _load(self, gid):
+        delayed = self.dset.delayed_load(gid, channels='red|green|blue')
+        img = delayed.finalize()
 
-        if self.dset.imgs[gid].get('channels') == WV_CHANNELS:
-            img = self.dset.load_image(gid)
-        else:
-            img = self.dset.load_image(gid, WV_CHANNELS)
-        img = img[:, :, [4, 2, 1]]
+        # if self.dset.imgs[gid].get('channels') == WV_CHANNELS:
+        #     img = self.dset.load_image(gid)
+        # else:
+        #     img = self.dset.load_image(gid, WV_CHANNELS)
+        # img = img[:, :, [4, 2, 1]]
+
         img = 255 * normalizeRGB(np.asarray(img), (3, 97))
         img = img.astype(np.uint8)
 

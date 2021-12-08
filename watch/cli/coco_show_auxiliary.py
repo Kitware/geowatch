@@ -82,11 +82,10 @@ def test_auxiliary_values(dset):
             return len(self.gids)
 
         def __getitem__(self, idx):
-            from watch.utils import kwcoco_extensions
             gid = self.gids[idx]
 
             img = self.dset.index.imgs[gid]
-            coco_img = kwcoco_extensions.CocoImage(img, self.dset)
+            coco_img = self.dset.coco_image(img['id'])
 
             channels = coco_img.channels.fuse()
             channels = 'matseg_0|matseg_1'

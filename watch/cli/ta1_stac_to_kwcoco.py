@@ -160,7 +160,7 @@ def make_coco_img_from_stac_asset(asset_dict,
             ref, force_affine=force_affine)
         infos['header'] = watch.gis.geotiff.geotiff_header_info(ref)
     finally:
-        del ref
+        ref = None
 
     # Combine sensor candidates
     sensor_candidates = list(ub.flatten([

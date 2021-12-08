@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Adds fields needed by ndsampler to correctly "watch" a region.
 
@@ -8,16 +9,14 @@ lower resolution) than an image GSD.
 """
 # import kwcoco
 import warnings
+import numpy as np
 import ubelt as ub
 import kwimage
 import itertools
-
-import numpy as np
-from os.path import join
 import numbers
-from kwimage.transform import Affine
 
-# Was originally defined in this file, moved to kwcoco proper
+from os.path import join
+from watch.utils import util_raster
 from kwcoco.coco_image import CocoImage
 
 try:
@@ -26,7 +25,43 @@ except Exception:
     profile = ub.identity
 
 
-def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None, overwrite=False, default_gsd=None, conform=True, workers=0):
+def filter_image_ids(coco_dset, gids=None, include_sensors=None,
+                     exclude_sensors=None):
+    """
+    Filters to a specific set of images given query parameters
+    """
+    def coerce_set(x):
+        return set(x.split(',')) if isinstance(x, str) else set(x)
+    def filter_by_attribute(table, key, include, exclude):
+        if include is not None or exclude is not None:
+            if include is not None:
+                include = coerce_set(include)
+            if exclude is not None:
+                exclude = coerce_set(exclude)
+            values = table.lookup(key)
+            if include is None:
+                flags = [v not in exclude for v in values]
+            elif exclude is None:
+                flags = [v in include for v in values]
+            else:
+                flags = [v in include and v not in exclude for v in values]
+            table = table.compress(flags)
+        return table
+    valid_images = coco_dset.images(gids)
+    valid_images = filter_by_attribute(
+        valid_images, 'sensor_coarse', include_sensors, exclude_sensors)
+    valid_gids = list(valid_images)
+    return valid_gids
+
+
+def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None,
+                          overwrite=False, default_gsd=None,
+                          conform=True,
+                          enable_video_stats=True,
+                          enable_valid_region=False,
+                          enable_intensity_stats=False,
+                          workers=0,
+                          mode='thread'):
     """
     Aggregate populate function for fields useful to WATCH.
 
@@ -85,21 +120,22 @@ def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None, overwrite=Fal
     else:
         gids = list(ub.flatten(coco_dset.images(vidid=vidid) for vidid in vidids))
 
-    # for gid in ub.ProgIter(gids, total=len(gids), desc='populate imgs'):
-    #     coco_populate_geo_img_heuristics(coco_dset, gid, overwrite=overwrite,
-    #                                      default_gsd=default_gsd)
     coco_populate_geo_heuristics(
         coco_dset, gids=gids, overwrite=overwrite, default_gsd=default_gsd,
-        workers=workers)
+        workers=workers, mode=mode,
+        enable_intensity_stats=enable_intensity_stats,
+        enable_valid_region=enable_valid_region)
 
-    for vidid in ub.ProgIter(vidids, total=len(vidids), desc='populate videos'):
-        coco_populate_geo_video_stats(coco_dset, vidid, target_gsd=target_gsd)
+    if enable_video_stats:
+        for vidid in ub.ProgIter(vidids, total=len(vidids), desc='populate videos'):
+            coco_populate_geo_video_stats(coco_dset, vidid, target_gsd=target_gsd)
 
     # serialize intermediate objects
     coco_dset._ensure_json_serializable()
 
 
-def coco_populate_geo_heuristics(coco_dset, gids=None, overwrite=False, default_gsd=None, workers=0, **kw):
+def coco_populate_geo_heuristics(coco_dset, gids=None, overwrite=False,
+                                 default_gsd=None, workers=0, mode='thread', **kw):
     """
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -109,65 +145,130 @@ def coco_populate_geo_heuristics(coco_dset, gids=None, overwrite=False, default_
         >>> dvc_dpath = find_smart_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
-        >>> coco_populate_geo_heuristics(coco_dset, overwrite=True, workers=4)
+        >>> coco_populate_geo_heuristics(coco_dset, overwrite=True, workers=12,
+        >>>                              keep_geotiff_metadata=False,
+        >>>                              mode='process')
     """
-    if gids is None:
-        gids = list(coco_dset.index.imgs.keys())
-    executor = ub.JobPool('thread', max_workers=workers)
+    gids = coco_dset.images(gids)._ids
+    # Cant multiprocess because of SwigPyObjects... bleh
+    # keep_geotiff_metadata must be False to use mode=process
+    executor = ub.JobPool(mode, max_workers=workers)
+    # executor = ub.JobPool('process', max_workers=workers)
     for gid in ub.ProgIter(gids, desc='submit populate imgs'):
-        executor.submit(coco_populate_geo_img_heuristics, coco_dset, gid,
+        coco_img = coco_dset.coco_image(gid)
+        if mode == 'process':
+            coco_img = coco_img.detach()
+        executor.submit(coco_populate_geo_img_heuristics2, coco_img,
                         overwrite=overwrite, default_gsd=default_gsd, **kw)
     for job in ub.ProgIter(executor.as_completed(), total=len(executor), desc='collect populate imgs'):
-        job.result()
+        img = job.result()
+        if mode == 'process':
+            # for multiprocessing
+            real_img = coco_dset.index.imgs[img['id']]
+            real_img.update(img)
 
 
-def coco_populate_geo_img_heuristics(coco_dset, gid, overwrite=False,
-                                     default_gsd=None,
-                                     keep_geotiff_metadata=False, **kw):
+@profile
+def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
+                                      default_gsd=None,
+                                      keep_geotiff_metadata=False,
+                                      enable_intensity_stats=False,
+                                      enable_valid_region=False):
     """
     Note: this will not overwrite existing channel info unless specified
+
+    Commandline
+        xdoctest -m ~/code/watch/watch/utils/kwcoco_extensions.py --profile
+
+    TODO:
+        - [ ] Use logic in the align demo classmethod to make an example
+              that uses a real L8 / S2 image.
 
     Example:
         >>> from watch.utils.kwcoco_extensions import *  # NOQA
         >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
+        >>> import json
         >>> coco_dset = demo_kwcoco_with_heatmaps()
         >>> gid = 1
         >>> overwrite = {'warp', 'band'}
         >>> default_gsd = None
         >>> kw = {}
-        >>> coco_populate_geo_img_heuristics(coco_dset, gid)
+        >>> coco_img = coco_dset.coco_image(gid)
+        >>> before_img_attrs = list(coco_img.img.keys())
+        >>> before_aux_attr_hist = ub.dict_hist(ub.flatten([list(aux) for aux in coco_img.img['auxiliary']]))
+        >>> print('before_img_attrs = {!r}'.format(before_img_attrs))
+        >>> print('before_aux_attr_hist = {}'.format(ub.repr2(before_aux_attr_hist, nl=1)))
+        >>> coco_populate_geo_img_heuristics2(coco_img)
+        >>> img = coco_dset.index.imgs[gid]
+        >>> after_img_attrs = list(coco_img.img.keys())
+        >>> after_aux_attr_hist = ub.dict_hist(ub.flatten([list(aux) for aux in coco_img.img['auxiliary']]))
+        >>> new_img_attrs = set(after_img_attrs) - set(before_img_attrs)
+        >>> new_aux_attrs = {k: after_aux_attr_hist[k] - before_aux_attr_hist.get(k, 0) for k in after_aux_attr_hist}
+        >>> new_aux_attrs = {k: v for k, v in new_aux_attrs.items() if v > 0}
+        >>> print('new_img_attrs = {}'.format(ub.repr2(new_img_attrs, nl=1)))
+        >>> print('new_aux_attrs = {}'.format(ub.repr2(new_aux_attrs, nl=1)))
+        >>> #print('after_img_attrs = {}'.format(ub.repr2(after_img_attrs, nl=1)))
+        >>> #print('after_aux_attr_hist = {}'.format(ub.repr2(after_aux_attr_hist, nl=1)))
+        >>> assert 'geos_corners' in img
+        >>> assert 'default_nodata' in img
+        >>> assert 'default_nodata' in new_aux_attrs
+        >>> print(ub.varied_values(list(map(lambda x: ub.map_vals(json.dumps, x), coco_img.img['auxiliary']))))
 
     Example:
         >>> from watch.utils.kwcoco_extensions import *  # NOQA
         >>> import kwcoco
         >>> ###
         >>> gid = 1
-        >>> dset1 = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
-        >>> coco_populate_geo_img_heuristics(dset1, gid, overwrite=True)
+        >>> dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
+        >>> coco_img = dset.coco_image(gid)
+        >>> coco_populate_geo_img_heuristics2(coco_img, overwrite=True)
         >>> ###
         >>> gid = 1
         >>> dset2 = kwcoco.CocoDataset.demo('shapes8')
-        >>> coco_populate_geo_img_heuristics(dset2, gid, overwrite=True)
+        >>> coco_img = dset2.coco_image(gid)
+        >>> coco_populate_geo_img_heuristics2(coco_img, overwrite=True)
     """
-    bundle_dpath = coco_dset.bundle_dpath
-    img = coco_dset.imgs[gid]
-    coco_img = coco_dset._coco_image(gid)
+    import watch
+    bundle_dpath = coco_img.bundle_dpath
+    img = coco_img.img
 
     primary_obj = coco_img.primary_asset()
     asset_objs = list(coco_img.iter_asset_objs())
 
-    # Note: for non-geotiffs we could use the transformation provided with them
-    # to determine their geo-properties.
+    overwrite = _coerce_overwrite(overwrite)
+
+    # Note: for non-geotiffs we could use the aux_to_img transformation
+    # provided with them to determine their geo-properties.
     asset_errors = []
     for obj in asset_objs:
-        errors = _populate_canvas_obj(bundle_dpath, obj, overwrite=overwrite,
-                                      default_gsd=default_gsd,
-                                      keep_geotiff_metadata=keep_geotiff_metadata)
+        errors = _populate_canvas_obj(
+            bundle_dpath, obj, overwrite=overwrite, default_gsd=default_gsd,
+            keep_geotiff_metadata=keep_geotiff_metadata,
+            enable_intensity_stats=enable_intensity_stats)
         asset_errors.append(errors)
 
     if all(asset_errors):
         info = ub.dict_isect(img, {'name', 'file_name', 'id'})
         warnings.warn(f'img {info} has issues introspecting')
+
+    if keep_geotiff_metadata:
+        info = primary_obj.get('geotiff_metadata', None)
+        if info is None:
+            dem_hint = primary_obj.get('dem_hint', 'use')
+            metakw = {}
+            if dem_hint == 'ignore':
+                metakw['elevation'] = 0
+            primary_fname = primary_obj.get('file_name', None)
+            primary_fpath = join(bundle_dpath, primary_fname)
+            info = watch.gis.geotiff.geotiff_metadata(primary_fpath, **metakw)
+            primary_obj['geotiff_metadata'] = info
+
+    if 'default_nodata' not in img:
+        img['default_nodata'] = primary_obj['default_nodata']
+
+    valid_region_utm = img.get('valid_region_utm', None)
+    if enable_valid_region and (valid_region_utm is None or 'warp' in overwrite):
+        _populate_valid_region(coco_img)
 
     if keep_geotiff_metadata:
         img['geotiff_metadata'] = primary_obj['geotiff_metadata']
@@ -179,48 +280,101 @@ def coco_populate_geo_img_heuristics(coco_dset, gid, overwrite=False,
         img['geos_corners'] = primary_obj['geos_corners']
     else:
         print('None of the assets had geo information')
+    return img
+
+
+def _populate_valid_region(coco_img):
+    import watch
+    # _ = ub.cmd('gdalinfo -stats {}'.format(fpath), check=True)
+    bundle_dpath = coco_img.bundle_dpath
+    img = coco_img.img
+    primary_obj = coco_img.primary_asset()
+    primary_fname = primary_obj.get('file_name', None)
+    primary_fpath = join(bundle_dpath, primary_fname)
+
+    sh_poly = util_raster.mask(
+        primary_fpath, tolerance=10,
+        default_nodata=primary_obj.get('default_nodata', None),
+        # max_polys=100,
+        convex_hull=True)
+    kw_poly = kwimage.MultiPolygon.from_shapely(sh_poly)
+    # print('kw_poly = {!r}'.format(kw_poly.data[0]))
+    info = primary_obj.get('geotiff_metadata', None)
+    if info is None:
+        metakw = {}
+        dem_hint = primary_obj.get('dem_hint', 'use')
+        if dem_hint == 'ignore':
+            metakw['elevation'] = 0
+        info = watch.gis.geotiff.geotiff_metadata(primary_fpath, **metakw)
+
+    # TODO: get a better heuristic here
+    primary_obj['valid_region'] = kw_poly.to_coco(style='new')
+    img['valid_region'] = kw_poly.to_coco(style='new')
+
+    if 'pxl_to_wld' in info:
+        pxl_to_wld = info['pxl_to_wld']
+        kw_poly_utm = kw_poly.warp(pxl_to_wld).warp(info['wld_to_utm'])
+        poly_utm = kw_poly_utm.to_geojson()
+        poly_utm['properties'] = {}
+        poly_utm['properties']['crs'] = info['utm_crs_info']
+        primary_obj['valid_region_utm'] = poly_utm
+        img['valid_region_utm'] = poly_utm
 
 
 @profile
 def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
-                         default_gsd=None, keep_geotiff_metadata=False):
+                         default_gsd=None, keep_geotiff_metadata=False,
+                         enable_intensity_stats=False):
     """
     obj can be an img or aux
+
+    Ignore:
+        from watch.utils.kwcoco_extensions import *  # NOQA
+        from watch.demo.smart_kwcoco_demodata import demo_kwcoco_with_heatmaps
+        coco_dset = demo_kwcoco_with_heatmaps()
+        coco_img = coco_dset.coco_image(1)
+        obj = coco_img.primary_asset()
+        bundle_dpath = coco_dset.bundle_dpath
+        overwrite = True
+        with_wgs = False
+        default_gsd = None
+        keep_geotiff_metadata = False
     """
     import watch
     import kwcoco
-    sensor_coarse = obj.get('sensor_coarse', None)
+    sensor_coarse = obj.get('sensor_coarse', None)  # not reliable
     num_bands = obj.get('num_bands', None)
     channels = obj.get('channels', None)
     fname = obj.get('file_name', None)
     warp_to_wld = obj.get('warp_to_wld', None)
     approx_meter_gsd = obj.get('approx_meter_gsd', None)
 
-    valid_overwrites = {'warp', 'band', 'channels'}
-    default_overwrites = {'warp', 'band'}
-    if isinstance(overwrite, str):
-        overwrite = set(overwrite.split(','))
-    if overwrite is True:
-        overwrite = default_overwrites
-    elif overwrite is False:
-        overwrite = {}
-    else:
-        overwrite = set(overwrite)
-        unexpected = overwrite - valid_overwrites
-        if unexpected:
-            raise ValueError(f'Got unexpected overwrites: {unexpected}')
+    overwrite = _coerce_overwrite(overwrite)
+
     errors = []
     # Can only do this for images with file names
     if fname is not None:
         fpath = join(bundle_dpath, fname)
 
+        info = None
+        dem_hint = obj.get('dem_hint', 'use')
+        metakw = {}
+        if dem_hint == 'ignore':
+            metakw['elevation'] = 0
+
+        # TODO: ensure real nodata exists (maybe write helper file to disk?)
+        sensor_coarse = obj.get('sensor_coarse', None)
+        if sensor_coarse in {'S2', 'L8', 'WV'}:
+            default_nodata = 0
+        else:
+            default_nodata = None
+        # Heuristic for no-data
+        obj['default_nodata'] = default_nodata
+
         if 'warp' in overwrite or warp_to_wld is None or approx_meter_gsd is None:
             try:
-                dem_hint = obj.get('dem_hint', 'use')
-                metakw = {}
-                if dem_hint == 'ignore':
-                    metakw['elevation'] = 0
-                info = watch.gis.geotiff.geotiff_metadata(fpath, **metakw)
+                if info is None:
+                    info = watch.gis.geotiff.geotiff_metadata(fpath, **metakw)
                 if keep_geotiff_metadata:
                     obj['geotiff_metadata'] = info
                 height, width = info['img_shape'][0:2]
@@ -230,18 +384,14 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
                 # print('info = {!r}'.format(info))
 
                 # WE NEED TO ACCOUNT FOR WLD_CRS TO USE THIS
-                # obj_to_wld = Affine.coerce(info['pxl_to_wld'])
+                # obj_to_wld = kwimage.Affine.coerce(info['pxl_to_wld'])
 
                 # FIXME: FOR NOW JUST USE THIS BIG HACK
                 xy1_man = info['pxl_corners'].data.astype(np.float64)
                 xy2_man = info['utm_corners'].data.astype(np.float64)
-                hack_aff = fit_affine_matrix(xy1_man, xy2_man)
-                hack_aff = Affine.coerce(hack_aff)
-
-                # crs_info['utm_corners'].warp(np.asarray(hack_aff.inv()))
-                # crs_info['pxl_corners'].warp(np.asarray(hack_aff))
-
-                obj_to_wld = Affine.coerce(hack_aff)
+                hack_aff = kwimage.Affine.coerce(
+                    fit_affine_matrix(xy1_man, xy2_man))
+                obj_to_wld = kwimage.Affine.coerce(hack_aff)
                 # cv2.getAffineTransform(utm_corners, pxl_corners)
 
                 wgs84_crs_info = ub.dict_diff(info['wgs84_crs_info'], {'type'})
@@ -264,7 +414,7 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
                     'wld_crs_info': wld_crs_info,
                     'utm_crs_info': utm_crs_info,
                 })
-
+                obj['band_metas'] = info['band_metas']
                 obj['is_rpc'] = info['is_rpc']
 
                 if with_wgs:
@@ -277,14 +427,14 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
             except Exception as ex:
                 if default_gsd is not None:
                     obj['approx_meter_gsd'] = default_gsd
-                    obj['warp_to_wld'] = Affine.eye().__json__()
+                    obj['warp_to_wld'] = kwimage.Affine.eye().__json__()
                 else:
                     # FIXME: This might not be the best way to report errors
                     # raise
                     errors.append('no_crs_info: {!r}'.format(ex))
             else:
                 obj['approx_meter_gsd'] = approx_meter_gsd
-                obj['warp_to_wld'] = Affine.coerce(obj_to_wld).__json__()
+                obj['warp_to_wld'] = kwimage.Affine.coerce(obj_to_wld).__json__()
 
         if 'band' in overwrite or num_bands is None:
             try:
@@ -311,7 +461,62 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
                     for obj={obj}
                     '''))
             obj['channels'] = channels
+
+        # TODO: determine nodata defaults based on sensor_coarse
+
+        if enable_intensity_stats:
+            # Use a sidecar file for now
+            import pathlib
+            import pickle
+            stats_fpath = pathlib.Path(fpath + '.stats.pkl')
+            # if _is_writeable(stats_fpath.parent):
+            #     pass
+            if not stats_fpath.exists():
+                import kwarray
+                imdata = kwimage.imread(fpath)
+                imdata = kwarray.atleast_nd(imdata, 3)
+                stats_info = {'bands': []}
+                for imband in imdata.transpose(2, 0, 1):
+                    data = imband.ravel()
+                    intensity_hist = ub.dict_hist(data)
+                    intensity_hist = ub.sorted_keys(intensity_hist)
+                    stats_info['bands'].append({
+                        'intensity_hist': intensity_hist,
+                    })
+                with open(stats_fpath, 'wb') as file:
+                    pickle.dump(stats_info, file)
+            else:
+                pass
+
         return errors
+
+
+@ub.memoize
+def _is_writeable(dpath):
+    " https://stackoverflow.com/questions/2113427/determining-whether-a-directory-is-writeable "
+    import os
+    return os.access(dpath, os.W_OK) and os.path.isdir(dpath)
+
+
+def _coerce_overwrite(overwrite):
+    """
+    Im not a big fan of the way overwrite currently works, might want to
+    refactor.
+    """
+    valid_overwrites = {'warp', 'band', 'channels'}
+    default_overwrites = {'warp', 'band'}
+    if isinstance(overwrite, str):
+        overwrite = set(overwrite.split(','))
+    if overwrite is True:
+        overwrite = default_overwrites
+    elif overwrite is False:
+        overwrite = {}
+    else:
+        overwrite = set(overwrite)
+        unexpected = overwrite - valid_overwrites
+        if unexpected:
+            raise ValueError(f'Got unexpected overwrites: {unexpected}')
+    return overwrite
 
 
 # def single_geotiff_metadata(bundle_dpath, img, serializable=False):
@@ -485,8 +690,8 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
                     metadata.
                     '''))
 
-            wld_from_aux = Affine.coerce(aux_chosen.get('warp_to_wld', None))
-            img_from_aux = Affine.coerce(aux_chosen['warp_aux_to_img'])
+            wld_from_aux = kwimage.Affine.coerce(aux_chosen.get('warp_to_wld', None))
+            img_from_aux = kwimage.Affine.coerce(aux_chosen['warp_aux_to_img'])
             aux_from_img = img_from_aux.inv()
             wld_from_img = wld_from_aux @ aux_from_img
             approx_meter_gsd = aux_chosen['approx_meter_gsd']
@@ -500,7 +705,7 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
                 The image may not have associated geo metadata.
                 '''))
 
-        wld_from_img = Affine.coerce(wld_from_img)
+        wld_from_img = kwimage.Affine.coerce(wld_from_img)
 
         asset_channels = []
         asset_gsds = []
@@ -567,11 +772,14 @@ def coco_populate_geo_video_stats(coco_dset, vidid, target_gsd='max-resolution')
     )
     scale = base_info['to_target_scale_factor']
     base_wld_crs_info = base_info['wld_crs_info']
+    # if base_wld_crs_info is None:
+    #     import xdev
+    #     xdev.embed()
 
     # Can add an extra transform here if the video is not exactly in
     # any specific image space
     baseimg_from_wld = base_info['img_to_wld'].inv()
-    vid_from_wld = Affine.scale(scale) @ baseimg_from_wld
+    vid_from_wld = kwimage.Affine.scale(scale) @ baseimg_from_wld
     video['width'] = int(np.ceil(base_info['width'] * scale))
     video['height'] = int(np.ceil(base_info['height'] * scale))
 
@@ -798,8 +1006,8 @@ def geotiff_format_info(fpath):
     return format_info
 
 
-def ensure_transfered_geo_data(coco_dset):
-    for gid in ub.ProgIter(list(coco_dset.images())):
+def ensure_transfered_geo_data(coco_dset, gids=None):
+    for gid in ub.ProgIter(coco_dset.images(gids), desc='transfer metadata'):
         transfer_geo_metadata(coco_dset, gid)
 
 
@@ -848,6 +1056,8 @@ def transfer_geo_metadata(coco_dset, gid):
             fpath = join(coco_img.dset.bundle_dpath, fname)
             try:
                 info = watch.gis.geotiff.geotiff_metadata(fpath)
+                if info.get('crs_error', None) is not None:
+                    raise Exception
             except Exception:
                 assets_without_geo_info[asset_idx] = obj
             else:
@@ -872,7 +1082,10 @@ def transfer_geo_metadata(coco_dset, gid):
                             if fname is not None:
                                 fpath = join(coco_img.dset.bundle_dpath, fname)
                                 try:
+                                    # Try until we find an image with real CRS info
                                     info = watch.gis.geotiff.geotiff_metadata(fpath)
+                                    if info.get('crs_error', None) is not None:
+                                        raise Exception
                                 except Exception:
                                     continue
                                 else:
@@ -1168,6 +1381,9 @@ def __WIP_add_auxiliary(coco_dset, gid, fname, channels, data, warp_aux_to_img=N
             auxiliary channel and the base image. If unspecified
             it is assumed that a simple scaling will suffice.
 
+    NOTE:
+        See CocoImage.add_auxiliary_item for a maintained implementation
+
     Ignore:
         import kwcoco
         coco_dset = kwcoco.CocoDataset.demo('shapes8')
@@ -1335,7 +1551,7 @@ def warp_annot_segmentations_from_geos(coco_dset):
     from os.path import join
     for gid in coco_dset.images():
         coco_img = coco_dset._coco_image(gid)
-        asset = coco_img.primary_asset()
+        asset = coco_img.primary_asset(requires=['geos_corners'])
         fpath = join(coco_dset.bundle_dpath, asset['file_name'])
         geo_meta = watch.gis.geotiff.geotiff_metadata(fpath)
         warp_wld_from_aux = kwimage.Affine.coerce(geo_meta['pxl_to_wld'])
@@ -1469,7 +1685,7 @@ def covered_image_geo_regions(coco_dset, merge=False):
             geos_corners = img['geos_corners']
         else:
             coco_img = coco_dset.coco_image(img['id'])
-            asset = coco_img.primary_asset()
+            asset = coco_img.primary_asset(requires=['geos_corners'])
             geos_corners = asset['geos_corners']
         geos_crs_info = geos_corners.get('properties').get('crs_info', None)
         if geos_crs_info is not None:
@@ -1543,7 +1759,7 @@ def covered_annot_geo_regions(coco_dset, merge=False):
 
                 # What CRS should we be doing this in? Is WGS84 OK?
                 # Should we switch to UTM?
-                img_rois_ = ops.cascaded_union(sh_annot_polys_)
+                img_rois_ = ops.unary_union(sh_annot_polys_)
                 try:
                     img_rois = list(img_rois_)
                 except Exception:
@@ -1557,7 +1773,7 @@ def covered_annot_geo_regions(coco_dset, merge=False):
 
         # TODO: if there are only midly overlapping regions, we should likely split
         # them up. We can also group by UTM coordinates to reduce computation.
-        sh_rois_ = ops.cascaded_union([
+        sh_rois_ = ops.unary_union([
             p.buffer(0) for rois in gid_to_rois.values()
             for p in rois
         ])
