@@ -1,16 +1,18 @@
 import argparse
 import sys
 
+# Import hack to fix somehow broken import of `from
+# watch.utils.util_raster import GdalOpen` in run_mtra
+from osgeo import gdal, osr  # noqa
+
 from watch.cli.baseline_framework_ingress import baseline_framework_ingress
 from watch.cli.baseline_framework_egress import baseline_framework_egress
-from watch.cli.s2_coreg import run_s2_coreg_l1c
-from watch.cli.run_brdf import run_brdf
-from watch.cli.ortho_wv import ortho_wv
+from watch.cli.run_mtra import run_mtra
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Run UMD coregistered as baseline framework component")
+        description="Run UConn's MTRA as baseline framework component")
 
     parser.add_argument('input_path',
                         type=str,
@@ -45,20 +47,26 @@ def main():
                         default=1,
                         required=False,
                         help="Number of jobs to run in parallel")
+    parser.add_argument("--num_pairs",
+                        required=False,
+                        type=int,
+                        help="Number of best Landsat and S2 pairs to select "
+                             "for building the harmonization model")
 
-    run_coreg_for_baseline(**vars(parser.parse_args()))
+    run_mtra_for_baseline(**vars(parser.parse_args()))
 
     return 0
 
 
-def run_coreg_for_baseline(input_path,
-                           output_path,
-                           outbucket,
-                           aws_profile=None,
-                           dryrun=False,
-                           requester_pays=False,
-                           newline=False,
-                           jobs=1):
+def run_mtra_for_baseline(input_path,
+                          output_path,
+                          outbucket,
+                          aws_profile=None,
+                          dryrun=False,
+                          requester_pays=False,
+                          newline=False,
+                          jobs=1,
+                          num_pairs=6):
     print("* Running ingress *")
     ingress_catalog = baseline_framework_ingress(
         input_path,
@@ -68,27 +76,17 @@ def run_coreg_for_baseline(input_path,
         requester_pays,
         jobs)
 
-    print("* Running coregistration *")
-    coreg_catalog = run_s2_coreg_l1c(
+    print("* Running MTRA harmonization *")
+    mtra_catalog = run_mtra(
         ingress_catalog,
-        '/tmp/coreg')
-
-    print("* Running BRDF correction *")
-    brdf_catalog = run_brdf(
-        coreg_catalog,
-        '/tmp/brdf',
-        jobs=1)
-
-    print("* Orthorectifying WV data *")
-    wv_updated_catalog = ortho_wv(
-        brdf_catalog,
-        '/tmp/orth_wv',
-        jobs=1,
-        as_cog=True)
+        '/tmp/mtra',
+        num_pairs=num_pairs,
+        remap_cloudmask_to_hls=True,
+        jobs=jobs)
 
     print("* Running egress *")
     te_output = baseline_framework_egress(
-        wv_updated_catalog,
+        mtra_catalog,
         output_path,
         outbucket,
         aws_profile,
