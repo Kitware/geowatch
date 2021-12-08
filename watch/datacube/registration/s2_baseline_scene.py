@@ -41,7 +41,23 @@ def find_baseline_scene(xmls, return_paths=False):
         >>> from watch.demo.sentinel2_demodata import grab_sentinel2_product
         >>> #
         >>> safedirs = [str(grab_sentinel2_product(i).path) for i in range(3)]
-        >>> baseline = find_baseline_scene([safedir_to_xml(s) for s in safedirs])
+        >>> input_dirs = []
+        >>> # HACK: Re-arranging input "granuledirs" to reflect what
+        >>> # we receive from the Atmospheric Correction algorithm
+        >>> for safedir in safedirs:
+        >>>     col, _, datetime, _, _, mgrs, _ = os.path.basename(safedir).split('_')
+        >>>     input_dir = os.path.join(os.path.dirname(safedir), '_'.join((col, 'MSI', 'L2A', mgrs, datetime, datetime)))
+        >>>     input_image_data_dir = os.path.join(input_dir, 'IMG_DATA')
+        >>>     os.makedirs(input_image_data_dir, exist_ok=True)
+        >>>     mtd_tl_xml_path = safedir_to_xml(safedir)
+        >>>     if not os.path.isfile(os.path.join(input_dir, 'MTD_TL.xml')):
+        >>>         os.symlink(mtd_tl_xml_path, os.path.join(input_dir, 'MTD_TL.xml'))
+        >>>     for b04 in glob.glob(os.path.join(os.path.dirname(safedir_to_xml(safedir)), 'IMG_DATA', '*_B04.jp2')):
+        >>>         if not os.path.isfile(os.path.join(input_image_data_dir, os.path.basename(b04))):
+        >>>             os.symlink(b04, os.path.join(input_image_data_dir, os.path.basename(b04)))
+        >>>     input_dirs.append(input_dir)
+        >>> #
+        >>> baseline = find_baseline_scene([os.path.join(d, 'MTD_TL.xml') for d in input_dirs])
         >>> #
         >>> mgrs_tile = ''.join(safedirs[0].split(os.path.sep)[-4:-1])
         >>> # not essential, could change with demodata
@@ -56,15 +72,15 @@ def find_baseline_scene(xmls, return_paths=False):
         >>> # the tile matches
         >>> df['mgrs_tile_id'] == mgrs_tile
         >>> # the granuledir exists in the chosen safedir
-        >>> assert safedirs[1] in df['granuledir']
+        >>> assert input_dirs[1] in df['granuledir']
         >>> #
         >>> # alternate use:
-        >>> baseline = find_baseline_scene([safedir_to_xml(s) for s in safedirs], return_paths=True)
-        >>> assert baseline[mgrs_tile].startswith(os.path.abspath(safedirs[1]))
+        >>> baseline = find_baseline_scene([os.path.join(d, 'MTD_TL.xml') for d in input_dirs], return_paths=True)
+        >>> assert baseline[mgrs_tile].startswith(os.path.abspath(input_dirs[1]))
         >>> #
         >>> df.pop('granuledir')  # not portable for testing
         >>> assert df.to_dict() == {
-        >>>     'granule_id': 'L1C_T52SDG_A017589_20181104T022402',
+        >>>     'granule_id': 'S2A_MSI_L2A_T52SDG_20181104T021841_20181104T021841',
         >>>     'proc_ver': 2.06,
         >>>     'sun_zenith_angle': 53.7076919780578,
         >>>     'cloud': 0.00046,
