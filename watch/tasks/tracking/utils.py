@@ -88,6 +88,7 @@ class PolygonFilter(collections.abc.Callable):
         # 'TypeError: Subscripted generics cannot be used with class and
         # instance checks'
         # breaking change in py3.7...
+        # if isinstance(sample_object, Poly):
         if isinstance(sample_object, (kwimage.Polygon, kwimage.MultiPolygon)):
             return self.on_polys(obj)
         if isinstance(sample_object[1],
@@ -211,9 +212,8 @@ class TrackFunction(collections.abc.Callable):
         new_dset._build_index()
 
         if 0:
-            # could maybe use coco_dset.union, but it doesn't reuse IDs
-            # TODO an ensure_annotations to do this properly
-            # coco_dset.anns.update(sub_dset.anns)
+            # coco_dset.union doesn't re-use image IDs
+            # so we can only use it when coco_dset and new_dset are disjoint
             for cat in new_dset.cats.values():
                 cat.pop('id')
                 coco_dset.ensure_category(**cat)
@@ -256,7 +256,7 @@ class NewTrackFunction(TrackFunction):
         raise NotImplementedError('must be implemented by subclasses')
 
 
-def score(poly, probs, mode='score', threshold=0):
+def score(poly, probs, mode='score', threshold=0, use_rasterio=True):
     '''
     Args:
         poly: kwimage.Polygon or MultiPolygon in pixel coords
@@ -268,6 +268,8 @@ def score(poly, probs, mode='score', threshold=0):
             'response': average value of probs in poly
             'overlap': fraction of poly with probs > threshold
 
+        use_rasterio: use rasterio.features module instead of kwimage
+
         threshold: only used for mode='overlap'
     '''
     if 0:
@@ -278,12 +280,12 @@ def score(poly, probs, mode='score', threshold=0):
         # First compute the valid bounds of the polygon
         # And create a mask for only the valid region of the polygon
         box = poly.bounding_box().quantize().to_xywh()
-        # Ensure w/h are positive
-        box.data[:, 2:4] = np.maximum(box.data[:, 2:4], 1)
+        # Ensure box is inside probs
+        ymax, xmax = probs.shape[:2]
+        box = box.clip(0, 0, xmax, ymax).to_xywh()
         x, y, w, h = box.data[0]
-        if 1:  # rasterio inverse
+        if use_rasterio:  # rasterio inverse
             rel_poly = poly.translate((0.5 - x, 0.5 - y))
-            rel_mask = np.zeros((h, w))
             rel_mask = features.rasterize([rel_poly.to_geojson()],
                                           out_shape=(h, w))
         else:  # kwimage inverse
@@ -295,6 +297,8 @@ def score(poly, probs, mode='score', threshold=0):
         if len(rel_probs.shape) == 3:
             rel_probs = rel_probs[:, :, 0]
 
+    # TODO these are preserved for backwards compatibility, but they should
+    # actually be the same. Test and remove them.
     if mode == 'response':
         response = (rel_mask * rel_probs).mean()
         return response
@@ -311,60 +315,62 @@ def score(poly, probs, mode='score', threshold=0):
         raise ValueError(mode)
 
 
-def mask_to_polygons(probs, thresh, bounds=None, scored=False):
+def mask_to_polygons(probs,
+                     thresh,
+                     bounds=None,
+                     scored=False,
+                     use_rasterio=True):
     """
     Args:
         probs: aka heatmap, image of probability values
         thresh: to turn probs into a hard mask
         bounds: a kwimage or shapely polygon to crop the results to
+        scored: return Iterable[Tuple[score, poly]] instead of Iterable[Poly]
+        use_rasterio: use rasterio.features module instead of kwimage
     Example:
-        >>> from watch.tasks.tracking.from_heatmap import *  # NOQA
+        >>> from watch.tasks.tracking.utils import mask_to_polygons
         >>> import kwimage
-        >>> probs = kwimage.Heatmap.random(dims=(64, 64), rng=0).data['class_probs'][0]
+        >>> probs = kwimage.Heatmap.random(dims=(64, 64),
+        >>>                                rng=0).data['class_probs'][0]
         >>> thresh = 0.5
         >>> polys = mask_to_polygons(probs, thresh, scored=True)
-        >>> poly1, score1 = list(polys)[0]
+        >>> score1, poly1 = list(polys)[0]
         >>> # xdoctest: +IGNORE_WANT
         >>> import kwplot
         >>> kwplot.autompl()
         >>> kwplot.imshow(probs > 0.5)
     """
     # Threshold scores
-    binary_mask = probs > thresh
-    shapes = features.shapes(binary_mask.astype(np.int16))
-
+    binary_mask = (probs > thresh).astype(np.uint8)
     if bounds is not None:
         try:  # is this a shapely or geojson object?
             bounds = shapely.geometry.asShape(bounds)
         except ValueError:  # is this a kwimage object?
             bounds = bounds.to_shapely()
-        shp_polygons = [
-            shapely.geometry.asShape(s).intersection(bounds) for s, v in shapes
-            if v
-        ]
-        polygons = [
-            kwimage.Polygon.from_shapely(s).translate((-0.5, -0.5))
-            for s in shp_polygons if not s.is_empty
-        ]
+        if use_rasterio:
+            # TODO needed?
+            bounds = shapely.geometry.translate(bounds, 0.5, 0.5)  # x, y order
+            # TODO investigate all_touched option
+            bounds_mask = features.rasterize([bounds], dtype=np.uint8)
+        else:
+            bounds_mask = kwimage.Polygon.from_shapely(bounds).to_mask(
+                probs.shape).numpy().data.astype(np.uint8)
+        binary_mask *= bounds_mask
 
-    else:
+    if use_rasterio:
+        shapes = features.shapes(binary_mask)
         polygons = [
             kwimage.Polygon.from_geojson(s).translate((-0.5, -0.5))
             for s, v in shapes if v
         ]
+    else:
+        polygons = kwimage.Mask(binary_mask, 'c_mask').to_multi_polygon()
 
     if scored:
         for poly in polygons:
             yield score(poly, probs), poly
     else:
         yield from polygons
-
-
-def mask_to_scored_polygons(probs, thresh):
-    '''
-    For backwards compatibility.
-    '''
-    return mask_to_polygons(probs, thresh, scored=True)
 
 
 def _validate_keys(key, bg_key):

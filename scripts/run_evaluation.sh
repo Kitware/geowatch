@@ -59,30 +59,28 @@ python -m watch.cli.kwcoco_to_geojson \
 
 
 REGIONS_VALI=(
-    "52SDG KR_Pyeongchang_R01"
-    "52SDG KR_Pyeongchang_R02"
+    "KR_R001"
+    "KR_R002"
 )
 REGIONS_TRAIN=(
-    "17RMP US_Jacksonville_R01"
-    "23KPQ BR_Rio_R01"
-    "23KPR BR_Rio_R02"
-    "35ULA LT_Kaunas_R01"
-    "39RVK BH_Manama_R01"
-    "59GPM NZ_Christchurch_R01"
+    "US_R001"
+    "BR_R001"
+    "BR_R002"
+    "LT_R001"
+    "BH_R001"
+    "NZ_R001"
 )
 REGIONS=("${REGIONS_VALI[@]}")
 # REGIONS=("${REGIONS_TRAIN[@]}")
 
-for TILE_REGION in "${REGIONS[@]}"; do
-    set -- $TILE_REGION
-    TILE=$1
-    REGION=$2
+for REGION in "${REGIONS[@]}"; do
     echo EVAL $REGION
 
     IMAGE_PATH=$REGION
     rm -r $IMAGE_PATH
     mkdir $IMAGE_PATH
     # hack in the date string that T&E code is expecting to match filenames
+    # TODO grab rgb when possible for viz
     for f in $DSET_PATH/$REGION/*/affine_warp/*/*blue.tif; do
         BASENAME=$(basename $f)
         DATE="${BASENAME:5:10}"
@@ -105,7 +103,7 @@ for TILE_REGION in "${REGIONS[@]}"; do
     mkdir $OUT_PATH
 
     # this is supposed to be a cache, but it is currently bugged on T&E's end
-    rm -r pickled
+    # rm -r pickled
 
     python run_evaluation.py \
         --roi $REGION \
@@ -113,6 +111,6 @@ for TILE_REGION in "${REGIONS[@]}"; do
         --sm_path $SITES_PATH \
         --output_dir $OUT_PATH \
         --image_path $IMAGE_PATH \
-        --rm_path $DVC_DPATH/annotations/region_models/$TILE\_$REGION.geojson
+        --rm_path $DVC_DPATH/annotations/region_models/$REGION.geojson
 
 done

@@ -351,11 +351,11 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id=None, as_summary=False):
     Example:
         >>> from watch.cli.kwcoco_to_geojson import *  # NOQA
         >>> from watch.tasks.tracking.normalize import normalize
-        >>> from watch.tasks.tracking.from_polygon import mono
+        >>> from watch.tasks.tracking.from_polygon import MonoTrack
         >>> from watch.demo import smart_kwcoco_demodata
         >>> import ubelt as ub
         >>> coco_dset = smart_kwcoco_demodata.demo_smart_aligned_kwcoco()
-        >>> coco_dset = normalize(coco_dset, track_fn=mono, overwrite=False)
+        >>> coco_dset = normalize(coco_dset, track_fn=MonoTrack, overwrite=False)
         >>> region_id = 'KR_R001'
         >>> sites = convert_kwcoco_to_iarpa(coco_dset, region_id)
         >>> print('sites = {}'.format(ub.repr2(sites, nl=7, sort=0)))

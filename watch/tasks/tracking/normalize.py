@@ -175,9 +175,8 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
         >>> import kwimage
         >>> from copy import deepcopy
         >>> from watch.tasks.tracking.normalize import remove_small_annots
-        >>> from watch.demo.smart_kwcoco_demodata import \
-        >>>     demo_kwcoco_with_heatmaps
-        >>> dset = demo_kwcoco_with_heatmaps()
+        >>> from watch.demo import smart_kwcoco_demodata
+        >>> dset = smart_kwcoco_demodata.demo_kwcoco_with_heatmaps()
         >>> # This dset has 1 video with all images the same size
         >>> # For testing, resize one of the images so there is a meaningful
         >>> # difference between img space and vid space
@@ -240,7 +239,7 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
         warps = [
             kwimage.Affine.coerce(aff)
             for aff in coco_dset.images(annots.gids).get(
-                'warp_img_to_vid', None)
+                'warp_img_to_vid', {'scale': 1})
         ]
 
         # apply warping
@@ -380,9 +379,8 @@ def normalize_phases(coco_dset):
     Example:
         >>> # test baseline guess
         >>> from watch.tasks.tracking.normalize import normalize_phases
-        >>> from watch.demo.smart_kwcoco_demodata import \
-        >>>     demo_kwcoco_with_heatmaps
-        >>> dset = demo_kwcoco_with_heatmaps()
+        >>> from watch.demo import smart_kwcoco_demodata
+        >>> dset = smart_kwcoco_demodata.demo_kwcoco_with_heatmaps()
         >>> dset.cats[1]['name'] = 'salient'
         >>> dset.remove_categories([2,3])
         >>> assert dset.cats == {1: {'id': 1, 'name': 'salient'}}
@@ -390,10 +388,10 @@ def normalize_phases(coco_dset):
         >>> # TODO file bug report
         >>> dset._build_index()
         >>> dset = normalize_phases(dset)
-        >>> assert dset.categories(dset.annots().category_id).name == \
+        >>> assert (dset.categories(dset.annots().category_id).name ==
         >>>     ((['Site Preparation'] * 10) +
         >>>      (['Active Construction'] * 9) +
-        >>>       ['Post Construction'])
+        >>>      (['Post Construction'])))
     '''
     # Remove site boundary annotations (should be already incorporated
     # by track_fn if needed)
@@ -495,7 +493,7 @@ def normalize(coco_dset, track_fn, overwrite, gt_dset=None, **track_kwargs):
     Example:
         >>> import kwcoco as kc
         >>> from watch.tasks.tracking.normalize import *
-        >>> from watch.tasks.tracking.from_polygon import overlap
+        >>> from watch.tasks.tracking.from_polygon import OverlapTrack
         >>> # create demodata
         >>> d = kc.CocoDataset.demo()
         >>> ann_dct = d.anns[1]
@@ -524,17 +522,16 @@ def normalize(coco_dset, track_fn, overwrite, gt_dset=None, **track_kwargs):
         >>> coco_dset = ensure_videos(coco_dset)
         >>> assert coco_dset.index.vidid_to_gids[1] == coco_dset.imgs.keys()
         >>> n_existing_annots = coco_dset.n_annots
-        >>> coco_dset = apply_tracks(coco_dset, overlap, overwrite)
-        >>> assert set(coco_dset.annots().get('track_id')) == {1}
+        >>> coco_dset = OverlapTrack().apply_per_video(coco_dset, overwrite)
+        >>> assert set(coco_dset.annots().get('track_id')) == {0}  # not 1?
         >>> assert coco_dset.n_annots == n_existing_annots
         >>> coco_dset = dedupe_tracks(coco_dset)
-        >>> assert set(coco_dset.annots().get('track_id')) == {1}
+        >>> assert set(coco_dset.annots().get('track_id')) == {0}
         >>> coco_dset = add_track_index(coco_dset)
         >>> assert coco_dset.annots().get('track_index') == [0,1,2]
         >>> coco_dset = normalize_phases(coco_dset)
-        >>> assert ([coco_dset.cats[cid]['name']
-        >>>     for cid in coco_dset.annots().cids] ==
-        >>> ['Site Preparation', 'Site Preparation', 'Active Construction'])
+        >>> assert (coco_dset.annots().cnames ==
+        >>> ['Site Preparation', 'Site Preparation', 'Post Construction'])
         >>> coco_dset = normalize_sensors(coco_dset)
         >>> assert (coco_dset.images().get('sensor_coarse') ==
         >>>     ['WorldView', 'Sentinel-2', 'Landsat 8'])
