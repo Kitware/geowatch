@@ -3,11 +3,9 @@ import kwimage
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-from watch.utils import kwcoco_extensions
 
 def get_rgb(dset, gid):
-    img = dset.index.imgs[gid]
-    coco_img = kwcoco_extensions.CocoImage(img, dset)
+    coco_img = dset.coco_image(gid)
     r = coco_img.delay('red', space='video').finalize()
     g = coco_img.delay('green', space='video').finalize()
     b = coco_img.delay('blue', space='video').finalize()
@@ -94,8 +92,7 @@ def render_pred_gt(pred_canvas, gt_canvas):
 
 
 def get_heatmap(dset, gid, key):
-    img = dset.index.imgs[gid]
-    coco_img = kwcoco_extensions.CocoImage(img, dset)
+    coco_img = dset.coco_image(gid)
     heatmap = coco_img.delay(key, space='video').finalize()
     return heatmap
 

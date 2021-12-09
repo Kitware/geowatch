@@ -506,7 +506,6 @@ def main(args):
         >>> # test a more complicated track function
         >>> from watch.cli.kwcoco_to_geojson import demo
         >>> from watch.demo import smart_kwcoco_demodata
-        >>> from watch.utils.kwcoco_extensions import CocoImage
         >>> import kwcoco
         >>> import ubelt as ub
         >>> # make a new BAS dataset

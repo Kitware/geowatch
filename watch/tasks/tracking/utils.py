@@ -1,4 +1,3 @@
-from watch.utils import kwcoco_extensions
 import kwimage
 import numpy as np
 import kwcoco
@@ -10,7 +9,7 @@ from dataclasses import dataclass, astuple
 import itertools
 import collections
 from abc import abstractmethod
-from typing import Union, Iterable, Optional, Any, Tuple, List
+from typing import Union, Iterable, Optional, Any, Tuple
 
 Poly = Union[kwimage.Polygon, kwimage.MultiPolygon]
 
@@ -86,11 +85,13 @@ class PolygonFilter(collections.abc.Callable):
         sample_object = next(iter(obj2))
         if isinstance(sample_object, Observation):
             return self.on_observations(obj)
-        # TypeError: Subscripted generics cannot be used with class and instance checks
+        # 'TypeError: Subscripted generics cannot be used with class and
+        # instance checks'
         # breaking change in py3.7...
         if isinstance(sample_object, (kwimage.Polygon, kwimage.MultiPolygon)):
             return self.on_polys(obj)
-        if isinstance(sample_object[1], (kwimage.Polygon, kwimage.MultiPolygon)):
+        if isinstance(sample_object[1],
+                      (kwimage.Polygon, kwimage.MultiPolygon)):
             return self.on_augmented_polys(obj)
         raise NotImplementedError(f'cannot filter polygons from {obj}:'
                                   ' unsupported type')
@@ -402,8 +403,7 @@ def heatmap(dset, gid, key, return_chan_probs=False, space='video'):
         space: 'video' or 'image'
     """
     key, _ = _validate_keys(key, None)
-    img = dset.index.imgs[gid]
-    coco_img = kwcoco_extensions.CocoImage(img, dset)
+    coco_img = dset.coco_image(gid)
     w, h = coco_img.delay(space=space).dsize
     fg_img_probs = np.zeros((h, w))
     common = kwcoco.FusedChannelSpec.coerce(

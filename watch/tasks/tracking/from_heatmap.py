@@ -204,8 +204,8 @@ def time_aggregated_polys(coco_dset,
     key, bg_key = _validate_keys(key, bg_key)
     _all_keys = set(key + bg_key)
     has_requested_chans_list = []
-    for img in coco_dset.imgs.values():
-        coco_img = kwcoco_extensions.CocoImage(img, coco_dset)
+    for gid in coco_dset.imgs:
+        coco_img = coco_dset.coco_image(gid)
         chan_codes = coco_img.channels.normalize().fuse().as_set()
         flag = bool(_all_keys & chan_codes)
         has_requested_chans_list.append(flag)
