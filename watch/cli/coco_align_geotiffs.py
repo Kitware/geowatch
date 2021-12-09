@@ -636,6 +636,7 @@ class SimpleDataCube(object):
             if len(gidxs) == 0:
                 print('WARNING: No spatial matches to {}'.format(video_name))
             else:
+                from watch.utils import util_time
 
                 # TODO: filter dates out of range
                 query_start_date = region_row.get('start_date', None)
@@ -643,16 +644,16 @@ class SimpleDataCube(object):
 
                 cand_gids = cube.img_geos_df.iloc[gidxs].gid
                 cand_datecaptured = cube.coco_dset.images(cand_gids).lookup('date_captured')
-                cand_datetimes = [dateutil.parser.parse(c) for c in cand_datecaptured]
+                cand_datetimes = [util_time.coerce_datetime(c) for c in cand_datecaptured]
 
                 if query_start_date is not None:
-                    query_start_datetime = dateutil.parser.parse(query_start_date)
+                    query_start_datetime = util_time.coerce_datetime(query_start_date)
                     flags = [dt >= query_start_datetime for dt in cand_datetimes]
                     cand_datetimes = list(ub.compress(cand_datetimes, flags))
                     cand_gids = list(ub.compress(cand_gids, flags))
 
                 if query_end_date is not None:
-                    query_end_datetime = dateutil.parser.parse(query_end_date)
+                    query_end_datetime = util_time.coerce_datetime(query_end_date)
                     flags = [dt <= query_end_datetime for dt in cand_datetimes]
                     cand_datetimes = list(ub.compress(cand_datetimes, flags))
                     cand_gids = list(ub.compress(cand_gids, flags))
