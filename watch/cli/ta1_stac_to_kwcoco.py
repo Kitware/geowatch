@@ -103,7 +103,7 @@ def _determine_l8_channels(asset_dict):
                         asset_href, re.I):
         return m.group(1).lower()
     elif m := re.search(r'(B\w{1,2})\.(tiff?|jp2)$', asset_href, re.I):  # NOQA
-        return L8_CHANNEL_ALIAS.get(m.group(1))
+        return L8_CHANNEL_ALIAS.get(m.group(1), m.group(1))
     else:
         return None
 
