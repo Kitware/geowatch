@@ -189,6 +189,10 @@ def schedule_evaluation(model_globstr, test_dataset, gpus=None):
     with_saliency = 'auto'
     with_class = 'auto'
 
+    with_pred = True  # TODO: allow caching
+    with_eval = True
+    workers_per_queue = 5
+    recompute = False
 
     # HARD CODED
     # model_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
@@ -201,9 +205,6 @@ def schedule_evaluation(model_globstr, test_dataset, gpus=None):
     assert test_dataset_fpath.exists()
 
     stamp = ub.timestamp() + '_' + ub.hash_data([])[0:8]
-
-    with_pred = True  # TODO: allow caching
-    with_eval = True
 
     def package_metadata(package_fpath):
         # Hack for choosing one model from this "type"
@@ -244,8 +245,6 @@ def schedule_evaluation(model_globstr, test_dataset, gpus=None):
             if len(gpu_info['procs']) == 0:
                 GPUS.append(gpu_idx)
 
-    workers_per_queue = 5
-
     # GPUS = [0, 1, 2, 3]
     # GPUS = [0]
 
@@ -253,14 +252,17 @@ def schedule_evaluation(model_globstr, test_dataset, gpus=None):
         'DVC_DPATH': dvc_dpath,
     }
 
-    recompute = False
-
     jobs = TMUXMultiQueue(name=stamp, size=len(GPUS), environ=environ,
                           gres=GPUS, dpath=tmux_schedule_dpath)
     for info, queue in zip(packages_to_eval, jobs):
         package_fpath = info['fpath']
         suggestions = organize.suggest_paths(package_fpath=package_fpath, test_dataset=test_dataset_fpath)
         suggestions = json.loads(suggestions)
+
+        pred_dataset_fpath = pathlib.Path(suggestions['pred_dataset'])
+        eval_metrics_fpath = pathlib.Path(suggestions['eval_dpath']) / 'curves/measures2.json'
+
+        suggestions['eval_metrics'] = eval_metrics_fpath
         suggestions['test_dataset'] = test_dataset_fpath
         suggestions['true_dataset'] = test_dataset_fpath
         suggestions['package_fpath'] = package_fpath
@@ -295,7 +297,8 @@ def schedule_evaluation(model_globstr, test_dataset, gpus=None):
                     pred_command
                 )
 
-            queue.submit(pred_command)
+            if recompute or not pred_dataset_fpath.exists():
+                queue.submit(pred_command)
 
         if with_eval:
             eval_command = ub.codeblock(
@@ -308,13 +311,12 @@ def schedule_evaluation(model_globstr, test_dataset, gpus=None):
             if not recompute:
                 # TODO: use a real stamp file
                 # Only run the command if its expected output does not exist
-                eval_stamp_file = str(suggestions['eval_dpath']) + '/curves/measures2.json'
-                suggestions['eval_stamp_file'] = eval_stamp_file
                 eval_command = (
-                    '[[ -f "{eval_stamp_file}" ]] || '.format(**suggestions) +
+                    '[[ -f "{eval_metrics}" ]] || '.format(**suggestions) +
                     eval_command
                 )
-            queue.submit(eval_command)
+            if recompute or not eval_metrics_fpath.exists():
+                queue.submit(eval_command)
 
     jobs.rprint()
 
@@ -366,13 +368,19 @@ def gather_measures():
 
     # measure_fpaths = list(model_dpath.glob('eval_links/*/curves/measures2.json'))
     measure_fpaths = list(model_dpath.glob('*/*/*/eval/curves/measures2.json'))
+    print(len(measure_fpaths))
     # dataset_to_evals = ub.group_items(eval_dpaths, lambda x: x.parent.name)
 
+    jobs = ub.JobPool('thread', max_workers=10)
     all_infos = []
     for measure_fpath in ub.ProgIter(measure_fpaths):
-        with open(measure_fpath, 'r') as file:
-            info = json.load(file)
-        all_infos.append(info)
+        def load_data(measure_fpath):
+            with open(measure_fpath, 'r') as file:
+                info = json.load(file)
+            return info
+        jobs.submit(load_data, measure_fpath)
+    for job in jobs.as_completed(desc='collect jobs'):
+        all_infos.append(job.result())
 
     from kwcoco.coco_evaluator import CocoSingleResult
     class_rows = []
@@ -443,20 +451,36 @@ def gather_measures():
     ax = sns.lineplot(data=mean_df, x='step', y='mAUC', hue='expt_name', marker='o')
     ax.set_title('Pixelwise mAUC AC metrics: KR_R002')
 
+    from kwcoco.metrics import drawing
+    fig = kwplot.figure(fnum=3, doclf=True)
     sorted_results = sorted(all_results, key=lambda x: x.ovr_measures[catname]['ap'])[::-1]
     catname = 'Active Construction'
     colors = kwplot.Color.distinct(len(sorted_results))
     for idx, result in enumerate(sorted_results):
         color = colors[idx]
         color = [kwplot.Color(color).as01()]
-        from kwcoco.metrics import drawing
         measure = result.ovr_measures[catname]
         measure['ap']
-
         prefix = result.meta['title']
-        kw = {}
+        kw = {'fnum': 3}
         drawing.draw_prcurve(measure, prefix=prefix, color=color, **kw)
-        # measure.draw('pr')
+    fig.gca().set_title('Comparison of runs AP: {}'.format(catname))
+
+    fig = kwplot.figure(fnum=4, doclf=True)
+    sorted_results = sorted(all_results, key=lambda x: x.ovr_measures[catname]['auc'])[::-1]
+    catname = 'Active Construction'
+    colors = kwplot.Color.distinct(len(sorted_results))
+    for idx, result in enumerate(sorted_results):
+        color = colors[idx]
+        color = [kwplot.Color(color).as01()]
+        measure = result.ovr_measures[catname]
+        prefix = result.meta['title']
+        kw = {'fnum': 4}
+        drawing.draw_roc(measure, prefix=prefix, color=color, **kw)
+    ax = fig.gca()
+    # ax.set_xlabel('fpr (false positive rate)')
+    # ax.set_xlabel('tpr (true positive rate)')
+    ax.set_title('Comparison of runs AUC: {}'.format(catname))
 
 
 # def run_command_in_tmux_queue(command, name):
