@@ -84,6 +84,8 @@ def _determine_s2_channels(asset_dict):
     elif len(eo_band_names) > 0:
         return '|'.join((S2_CHANNEL_ALIAS.get(eobn, eobn)
                          for eobn in eo_band_names))
+    elif m := re.search(r'(B\w{2})\.(tiff?|jp2)$', asset_href, re.I):  # NOQA
+        return S2_CHANNEL_ALIAS.get(m.group(1), m.group(1))
     else:
         return None
 
@@ -100,6 +102,8 @@ def _determine_l8_channels(asset_dict):
     elif m := re.search(r'(QA_PIXEL|QA_RADSAT|SR_QA_AEROSOL)\.(tiff?|jp2)$',  # NOQA
                         asset_href, re.I):
         return m.group(1).lower()
+    elif m := re.search(r'(B\w{1,2})\.(tiff?|jp2)$', asset_href, re.I):  # NOQA
+        return L8_CHANNEL_ALIAS.get(m.group(1))
     else:
         return None
 
