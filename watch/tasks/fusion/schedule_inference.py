@@ -1,7 +1,7 @@
 """
 Helper for scheduling a set of prediction + evaluation jobs
 
-python -m watch.tasks.fusion.schedule_inference gather_candidate_models
+python -m watch.tasks.fusion.schedule_inference schedule_evaluation
 """
 import pathlib
 import ubelt as ub
@@ -65,7 +65,6 @@ class TMUXMultiQueue(ub.NiceRepr):
         >>> self.submit('echo bazbiz')
         >>> self.write()
         >>> self.rprint()
-
     """
     def __init__(self, name, size=1, environ=None, dpath=None, gres=None):
         if dpath is None:
@@ -151,7 +150,34 @@ class TMUXMultiQueue(ub.NiceRepr):
         console.print(Panel(Syntax(code, 'bash'), title=str(self.fpath)))
 
 
-def gather_candidate_models():
+def schedule_evaluation(model_globstr, test_dataset, gpus=None):
+    """
+    First ensure that models have been copied to the DVC repo in the
+    appropriate path. (as noted by model_dpath)
+
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+    KWCOCO_TEST_FPATH=$DVC_DPATH/Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json
+
+    MODEL_GLOB=$DVC_DPATH/'models/fusion/SC-20201117/*/*.pt'
+    echo "$MODEL_GLOB"
+
+    cd $DVC_DPATH
+    dvc pull -r aws --recursive models/fusion/SC-20201117
+
+        --model_globstr="$MODEL_GLOB"
+        --test_dataset="$KWCOCO_TEST_FPATH"
+
+    Ignore:
+        import watch
+        dvc_dpath = watch.utils.util_data.find_smart_dvc_dpath()
+        model_globstr = str(dvc_dpath / 'models/fusion/SC-20201117/*/*.pt')
+        test_dataset = dvc_dpath / 'Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json'
+
+    TODO:
+        - [ ] Specify the model_dpath as an arg
+        - [ ] Specify target dataset as an argument
+        - [ ] Skip models that were already evaluated
+    """
     import watch
     from watch.tasks.fusion import organize
     import json
@@ -163,14 +189,15 @@ def gather_candidate_models():
     with_saliency = 'auto'
     with_class = 'auto'
 
+
     # HARD CODED
     # model_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
     # test_dataset_fpath = dvc_dpath / 'Drop1-Aligned-L1/vali_combo11.kwcoco.json'
 
     # model_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
-    model_dpath = dvc_dpath / 'models/fusion/SC-20201117'
-    test_dataset_fpath = dvc_dpath / 'Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json'
-
+    # model_dpath = dvc_dpath / 'models/fusion/SC-20201117'
+    # test_dataset_fpath = dvc_dpath / 'Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json'
+    test_dataset_fpath = pathlib.Path(test_dataset)
     assert test_dataset_fpath.exists()
 
     stamp = ub.timestamp() + '_' + ub.hash_data([])[0:8]
@@ -190,26 +217,43 @@ def gather_candidate_models():
         return info
 
     packages_to_eval = []
-    for subfolder in model_dpath.glob('*'):
-        package_fpaths = list(subfolder.glob('*.pt'))
-        subfolder_infos = [package_metadata(package_fpath)
-                           for package_fpath in package_fpaths]
-        subfolder_infos = sorted(subfolder_infos, key=lambda x: x['epoch'], reverse=True)
-        for info in subfolder_infos:
-            if 'rutgers_v5' in info['name']:
-                break
-            packages_to_eval.append(info)
-            # break
+    import glob
+    for package_fpath in glob.glob(model_globstr, recursive=True):
+        package_info = package_metadata(pathlib.Path(package_fpath))
+        packages_to_eval.append(package_info)
+
+    # # for subfolder in model_dpath.glob('*'):
+    #     # package_fpaths = list(subfolder.glob('*.pt'))
+    #     subfolder_infos = [package_metadata(package_fpath)
+    #                        for package_fpath in package_fpaths]
+    #     subfolder_infos = sorted(subfolder_infos, key=lambda x: x['epoch'], reverse=True)
+    #     for info in subfolder_infos:
+    #         if 'rutgers_v5' in info['name']:
+    #             break
+    #         packages_to_eval.append(info)
+    #         # break
 
     tmux_schedule_dpath = dvc_dpath / '_tmp_tmux_schedule'
     tmux_schedule_dpath.mkdir(exist_ok=True)
 
+    if gpus is None:
+        # Use all unused gpus
+        import netharn as nh
+        GPUS = []
+        for gpu_idx, gpu_info in nh.device.gpu_info().items():
+            if len(gpu_info['procs']) == 0:
+                GPUS.append(gpu_idx)
+
+    workers_per_queue = 5
+
     # GPUS = [0, 1, 2, 3]
-    GPUS = [0]
+    # GPUS = [0]
 
     environ = {
         'DVC_DPATH': dvc_dpath,
     }
+
+    recompute = False
 
     jobs = TMUXMultiQueue(name=stamp, size=len(GPUS), environ=environ,
                           gres=GPUS, dpath=tmux_schedule_dpath)
@@ -222,6 +266,11 @@ def gather_candidate_models():
         suggestions['package_fpath'] = package_fpath
         suggestions['with_class'] = with_class
         suggestions['with_saliency'] = with_saliency
+        suggestions = ub.map_vals(lambda x: str(x).replace(
+            str(dvc_dpath), '$DVC_DPATH'), suggestions)
+        predictkw = {
+            'workers_per_queue': workers_per_queue,
+        }
 
         if with_pred:
             pred_command = ub.codeblock(
@@ -238,17 +287,33 @@ def gather_candidate_models():
                     --num_workers=5 \
                     --gpus=0 \
                     --batch_size=1
-                ''').format(**suggestions).replace(str(dvc_dpath), '$DVC_DPATH')
+                ''').format(**suggestions, **predictkw)
+            if not recompute:
+                # Only run the command if its expected output does not exist
+                pred_command = (
+                    '[[ -f "{pred_dataset}" ]] || '.format(**suggestions) +
+                    pred_command
+                )
+
             queue.submit(pred_command)
 
         if with_eval:
             eval_command = ub.codeblock(
                 r'''
                 python -m watch.tasks.fusion.evaluate \
-                        --true_dataset={true_dataset} \
-                        --pred_dataset={pred_dataset} \
-                          --eval_dpath={eval_dpath}
-                ''').format(**suggestions).replace(str(dvc_dpath), '$DVC_DPATH')
+                    --true_dataset={true_dataset} \
+                    --pred_dataset={pred_dataset} \
+                      --eval_dpath={eval_dpath}
+                ''').format(**suggestions)
+            if not recompute:
+                # TODO: use a real stamp file
+                # Only run the command if its expected output does not exist
+                eval_stamp_file = str(suggestions['eval_dpath']) + '/curves/measures2.json'
+                suggestions['eval_stamp_file'] = eval_stamp_file
+                eval_command = (
+                    '[[ -f "{eval_stamp_file}" ]] || '.format(**suggestions) +
+                    eval_command
+                )
             queue.submit(eval_command)
 
     jobs.rprint()
@@ -286,9 +351,12 @@ def gather_measures():
     import pathlib
 
     dvc_dpath = watch.utils.util_data.find_smart_dvc_dpath()
+
     if False:
+        remote = 'horologic'
+        remote = 'namek'
         # Hack for pointing at a remote
-        dvc_dpath = ub.shrinkuser(dvc_dpath, home=ub.expandpath('$HOME/remote/horologic'))
+        dvc_dpath = ub.shrinkuser(dvc_dpath, home=ub.expandpath(f'$HOME/remote/{remote}'))
 
     # model_dpath = pathlib.Path(dvc_dpath) / 'models/fusion/unevaluated-activity-2021-11-12'
     fusion_model_dpath = pathlib.Path(dvc_dpath) / 'models/fusion/'
@@ -411,7 +479,7 @@ def gather_measures():
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/tasks/fusion/schedule_inference.py gather_candidate_models
+        python ~/code/watch/watch/tasks/fusion/schedule_inference.py schedule_evaluation
 
         python ~/code/watch/watch/tasks/fusion/organize.py make_nice_dirs
         python ~/code/watch/watch/tasks/fusion/organize.py make_eval_symlinks
