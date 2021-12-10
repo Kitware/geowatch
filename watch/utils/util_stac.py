@@ -9,6 +9,7 @@ def parallel_map_items(catalog,
                        mapper_func,
                        max_workers=4,
                        mode='process',
+                       drop_on_error=True,
                        extra_args=[],
                        extra_kwargs={}):
     """
@@ -31,17 +32,27 @@ def parallel_map_items(catalog,
             for item in input_stac_items]
 
     output_item_links = []
-    for mapped in (job.result() for job in as_completed(jobs)):
-        # Allowing mappers to act as filters as well by returning None
-        if mapped is None:
-            continue
-        elif isinstance(mapped, pystac.Item):
-            output_item_links.append(pystac.Link(
-                'item', mapped, pystac.MediaType.JSON))
+    for job in as_completed(jobs):
+        try:
+            mapped = job.result()
+        except Exception as e:
+            if drop_on_error:
+                print("Exception occurred (printed below), dropping item!")
+                print(e)
+                continue
+            else:
+                raise e
         else:
-            for _i in mapped:
+            # Allowing mappers to act as filters as well by returning None
+            if mapped is None:
+                continue
+            elif isinstance(mapped, pystac.Item):
                 output_item_links.append(pystac.Link(
                     'item', mapped, pystac.MediaType.JSON))
+            else:
+                for item in mapped:
+                    output_item_links.append(pystac.Link(
+                        'item', item, pystac.MediaType.JSON))
 
     out_catalog.clear_items()
     out_catalog.add_links(output_item_links)
