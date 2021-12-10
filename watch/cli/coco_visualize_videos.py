@@ -402,8 +402,8 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                     'mode': 'linear',
                     'min_val': 0.,
                     'max_val': 30000,
-                    # 'beta': 1.5,
-                    # 'alpha': 0.08048152417842046
+                    'beta': 1.5,
+                    'alpha': 0.08048152417842046
                 }
         if sensor_coarse == 'S2':
             for c in ['blue', 'green', 'red', 'nir', 'swir16', 'swir22']:
@@ -412,8 +412,8 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                     'mode': 'linear',
                     'min_val': 6000,
                     'max_val': 20000,
-                    # 'beta': 1.5,
-                    # 'alpha': 0.08048152417842046
+                    'beta': 1.5,
+                    'alpha': 0.08048152417842046
                 }
 
     if channels is not None:
