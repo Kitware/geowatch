@@ -20,6 +20,7 @@ from shutil import copyfile
 S2_BANDS = ['B%02d' % (x) for x in np.arange(1, 13)]
 S2_BANDS.append('B8A')
 L8_BANDS = ['B%01d' % (x) for x in np.arange(1, 12)]
+L8_BANDS_NO_SR = {'B%01d' % (x) for x in np.arange(8, 12)}
 L8_BANDS_EXTRA_COL1 = ['BQA']
 L8_BANDS_EXTRA_COL2 = ['QA_PIXEL', 'QA_RADSAT', 'SAA', 'SZA', 'VAA', 'VZA']
 L8_ANGLE_BANDS = ['SEA4', 'SEZ4', 'SOA4', 'SOZ4']
@@ -385,7 +386,11 @@ def l8_coregister(mgrs_tile, input_folder, output_folder, baseline_scene):
 
                 # now transforming files
                 for b in L8_BANDS:
-                    fname_band = f'{scene_id}_{b}.TIF'
+                    if b in L8_BANDS_NO_SR:
+                        fname_band = f'{scene_id_nosr}_{b}.TIF'
+                    else:
+                        fname_band = f'{scene_id}_{b}.TIF'
+
                     pfname_band = os.path.join(path_data, fname_band)
 
                     # convert band to tmp file into MGRS gridding scheme
