@@ -122,7 +122,7 @@ def main(**kwargs):
     include_channels = None if include_channels is None else kwcoco.FusedChannelSpec.coerce(include_channels)
     exclude_channels = None if exclude_channels is None else kwcoco.FusedChannelSpec.coerce(exclude_channels)
 
-    jobs = ub.JobPool(mode=config['model'], max_workers=workers)
+    jobs = ub.JobPool(mode=config['mode'], max_workers=workers)
     for coco_img in ub.ProgIter(images.coco_images, desc='submit stats jobs'):
         coco_img.detach()
         job = jobs.submit(ensure_intensity_stats, coco_img,
