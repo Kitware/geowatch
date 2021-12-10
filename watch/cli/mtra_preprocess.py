@@ -124,11 +124,9 @@ def mtra_preprocess_item(stac_item,
     vrts = {}
     for band in selected_bands:
         resampling_method = 'cubic'
-        nodata = 0
 
         if band == 'cloudmask':
             resampling_method = 'near'
-            nodata = 'None'
 
         asset_basename, asset_ext = os.path.splitext(
             os.path.basename(assets_dict[band]))
@@ -140,8 +138,6 @@ def mtra_preprocess_item(stac_item,
             '-of', 'VRT',
             '-r', resampling_method,
             '-tr', str(abs(gsd)), str(abs(gsd)),
-            '-srcnodata', str(nodata),
-            '-dstnodata', str(nodata),
             assets_dict[band],
             vrt_outpath], check=True)
 
