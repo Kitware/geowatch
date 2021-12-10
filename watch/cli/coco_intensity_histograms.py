@@ -461,12 +461,15 @@ def plot_intensity_histograms(accum, config):
 
         hist_data_kw_ = hist_data_kw.copy()
         if hist_data_kw_['bins'] == 'auto':
-            hist_data_kw_['bins'] = _weighted_auto_bins(sensor_df, hist_data_kw)
+            xvar = hist_data_kw['x']
+            weightvar = hist_data_kw['weights']
+            hist_data_kw_['bins'] = _weighted_auto_bins(sensor_df, xvar, weightvar)
 
         ax = kwplot.figure(fnum=1, pnum=pnum_()).gca()
         # z = [tuple(a.values()) for a in sensor_df[['intensity_bin', 'channel', 'sensor']].to_dict('records')]
         # ub.find_duplicates(z)
         try:
+            # https://github.com/mwaskom/seaborn/issues/2709
             sns.histplot(ax=ax, data=sensor_df.reset_index(), **hist_data_kw_, **hist_style_kw)
         except Exception:
             print('hist_data_kw_ = {}'.format(ub.repr2(hist_data_kw_, nl=1)))
@@ -482,22 +485,37 @@ def plot_intensity_histograms(accum, config):
     return fig
 
 
-def _weighted_auto_bins(sensor_df, hist_data_kw):
+def _weighted_auto_bins(data, xvar, weightvar):
     """
-    import pandas as pd
-    hist_data_kw = {
-        'x': 'intensity_bin',
-        'weights': 'weights',
-    }
-    sensor_df = pd.DataFrame({
-        'intensity_bin': np.random.rand(100),
-        'weights': np.random.rand(100),
-    })
+    Generalized histogram bandwidth estimators for weighted univariate data
 
+    References:
+        https://github.com/mwaskom/seaborn/issues/2710
+
+    Example:
+        >>> import pandas as pd
+        >>> import numpy as np
+        >>> n = 100
+        >>> to_stack = []
+        >>> rng = np.random.RandomState(432)
+        >>> for group_idx in range(3):
+        >>>     part_data = pd.DataFrame({
+        >>>         'x': np.arange(n),
+        >>>         'weights': rng.randint(0, 100, size=n),
+        >>>         'hue': [f'group_{group_idx}'] * n,
+        >>>     })
+        >>>     to_stack.append(part_data)
+        >>> data = pd.concat(to_stack).reset_index()
+        >>> xvar = 'x'
+        >>> weightvar = 'weights'
+        >>> n_equal_bins = _weighted_auto_bins(data, xvar, weightvar)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import seaborn as sns
+        >>> sns.histplot(data=data, bins=n_equal_bins, x='x', weights='weights', hue='hue')
     """
-    sort_df = sensor_df.sort_values(hist_data_kw['x'])
-    values = sort_df[hist_data_kw['x']]
-    weights = sort_df[hist_data_kw['weights']]
+    sort_df = data.sort_values(xvar)
+    values = sort_df[xvar]
+    weights = sort_df[weightvar]
     minval = values.iloc[0]
     maxval = values.iloc[-1]
 
@@ -513,7 +531,7 @@ def _weighted_auto_bins(sensor_df, hist_data_kw):
     iqr = values.iloc[idx2] - values.iloc[idx1]
     _hist_bin_fd = 2.0 * iqr * total ** (-1.0 / 3.0)
 
-    fd_bw = _hist_bin_fd
+    fd_bw = _hist_bin_fd  # Freedman-Diaconis
     sturges_bw = _hist_bin_sturges
 
     if fd_bw:
@@ -530,6 +548,9 @@ def _weighted_auto_bins(sensor_df, hist_data_kw):
         # Width can be zero for some estimators, e.g. FD when
         # the IQR of the data is zero.
         n_equal_bins = 1
+
+    # Take the minimum of this and the number of actual bins
+    n_equal_bins = min(n_equal_bins, len(values))
     return n_equal_bins
 
 
@@ -537,27 +558,3 @@ _SubConfig = IntensityHistogramConfig
 
 if __name__ == '__main__':
     main()
-
-
-def seaborn_bug_mwe():
-    import kwplot
-    kwplot.autompl()
-
-    import pandas as pd
-    import seaborn as sns
-    sns.set()
-    import matplotlib.pyplot as plt  # NOQA
-
-    n = 10
-    to_stack = []
-    for group_idx in range(3):
-        part_data = pd.DataFrame({
-            'bin': np.arange(n),
-            'value': np.random.randint(0, 100, size=n),
-            'group': [f'group_{group_idx}'] * n,
-        })
-        to_stack.append(part_data)
-    data = pd.concat(to_stack)
-
-    ax = plt.figure().gca()
-    sns.histplot(ax=ax, data=data.reset_index(), bins=10, x='bin', weights='value', hue='group')
