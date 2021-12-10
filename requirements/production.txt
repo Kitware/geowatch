@@ -43,6 +43,7 @@ progiter>=0.1.3
 fire>=0.4.0
 
 # Imaging
+distinctipy>=0.1.5
 kwimage>=0.7.16
 kwcoco>=0.2.18
 Pillow>=8.0.1

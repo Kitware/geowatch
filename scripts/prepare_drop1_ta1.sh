@@ -53,7 +53,7 @@ download_uncropped_data(){
     __doc__="
     Download and prepare the uncropped data
 
-    source ~/code/watch/scripts/prep_drop1_ta1.sh
+    source ~/code/watch/scripts/prepare_drop1_ta1.sh
     "
 
     # Grab the stac items we will query directly from S3 and combine it into a single query json file
@@ -153,14 +153,23 @@ add_new_data_to_dvc(){
 visualize_cropped_dataset(){
     __doc__="
     Optional: visualize the results of the cropped dataset
+
+    source ~/code/watch/scripts/prepare_drop1_ta1.sh
     "
-    python -m watch.cli.coco_visualize_videos \
+    smartwatch visualize \
         --src $ALIGNED_KWCOCO_FPATH \
         --space="video" \
         --num_workers=avail \
         --channels="red|green|blue" \
         --viz_dpath=$ALIGNED_KWCOCO_BUNDLE/_viz \
         --animate=True
+
+    smartwatch intensity_histograms \
+        --src $ALIGNED_KWCOCO_FPATH \
+        --num_workers=avail \
+        --dst=$ALIGNED_KWCOCO_BUNDLE/_viz/histograms.jpg 
+
+        --channels="red|green|blue" \
 }
 
 
