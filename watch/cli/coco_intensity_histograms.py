@@ -36,6 +36,9 @@ class IntensityHistogramConfig(scfg.Config):
         'workers': scfg.Value(0, help='number of io workers'),
         'mode': scfg.Value('process', help='type of parallelism'),
 
+        'include_channels': scfg.Value(None, help='if specified can be | separated valid channels'),
+        'exclude_channels': scfg.Value(None, help='if specified can be | separated invalid channels'),
+
         'include_sensors': scfg.Value(None, help='if specified can be comma separated valid sensors'),
         'exclude_sensors': scfg.Value(None, help='if specified can be comma separated invalid sensors'),
 
@@ -114,10 +117,15 @@ def main(**kwargs):
     workers = util_globals.coerce_num_workers(config['workers'])
     print('workers = {!r}'.format(workers))
 
+    include_channels = kwcoco.FusedChannelSpec.coerce(config['include_channels'])
+    exclude_channels = kwcoco.FusedChannelSpec.coerce(config['exclude_channels'])
+
     jobs = ub.JobPool(mode=config['model'], max_workers=workers)
     for coco_img in ub.ProgIter(images.coco_images, desc='submit stats jobs'):
         coco_img.detach()
-        job = jobs.submit(ensure_intensity_stats, coco_img)
+        job = jobs.submit(ensure_intensity_stats, coco_img,
+                          include_channels=include_channels,
+                          exclude_channels=exclude_channels)
         job.coco_img = coco_img
 
     accum = HistAccum()
@@ -196,7 +204,7 @@ def ensure_intensity_sidecar(fpath, recompute=False):
     return stats_fpath
 
 
-def ensure_intensity_stats(coco_img, recompute=False):
+def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exclude_channels=None):
     from os.path import join
     intensity_stats = {'bands': []}
     for obj in coco_img.iter_asset_objs():
@@ -254,7 +262,7 @@ def plot_intensity_histograms(accum, config):
         for channel, hist in sub.items():
             unique_channels.add(channel)
             hist = ub.sorted_keys(hist)
-            hist.pop(0)
+            # hist.pop(0)
             df = pd.DataFrame({
                 'intensity_bin': np.array(list(hist.keys())),
                 'value': np.array(list(hist.values())),
