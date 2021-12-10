@@ -415,6 +415,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                     'beta': 1.5,
                     'alpha': 0.08048152417842046
                 }
+        print('HACK chan_to_normalizer = {!r}'.format(chan_to_normalizer))
 
     if channels is not None:
         if isinstance(channels, list):
