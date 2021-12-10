@@ -64,7 +64,7 @@ if WATCH_HACK_IMPORT_ORDER:
     _execute_import_order_hacks(WATCH_HACK_IMPORT_ORDER)
 
 
-__version__ = '0.1.5'
+__version__ = '0.1.6'
 
 
 def lazy_import(module_name, submodules, submod_attrs):

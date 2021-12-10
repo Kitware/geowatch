@@ -79,6 +79,8 @@ class CocoVisualizeConfig(scfg.Config):
 
         'norm_over_time': scfg.Value(False, help='if True, normalize data over time'),
 
+        'norm_hack': scfg.Value(False, help='if true apply normalization hack'),
+
         'extra_header': scfg.Value(None, help='extra text to include in the header'),
 
         'select_images': scfg.Value(
@@ -279,7 +281,8 @@ def main(cmdline=True, **kwargs):
                                 coco_dset, img, anns, track_dpath, space=space,
                                 channels=channels, vid_crop_box=vid_crop_box,
                                 _header_extra=_header_extra,
-                                chan_to_normalizer=chan_to_normalizer)
+                                chan_to_normalizer=chan_to_normalizer,
+                                norm_hack=config['norm_hack'])
 
         else:
             gid_subset = gids[start_frame:end_frame]
@@ -297,7 +300,8 @@ def main(cmdline=True, **kwargs):
                             channels=channels,
                             draw_imgs=config['draw_imgs'],
                             draw_anns=config['draw_anns'], _header_extra=_header_extra,
-                            chan_to_normalizer=chan_to_normalizer)
+                            chan_to_normalizer=chan_to_normalizer,
+                            norm_hack=config['norm_hack'])
 
         for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):
             job.result()
@@ -359,7 +363,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                request_grouped_bands='default',
                                draw_imgs=True,
                                draw_anns=True, _header_extra=None,
-                               chan_to_normalizer=None):
+                               chan_to_normalizer=None, norm_hack=False):
     """
     Dumps an intensity normalized "space-aligned" kwcoco image visualization
     (with or without annotation overlays) for specific bands to disk.
@@ -388,6 +392,30 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             header_lines.append(header_line)
 
     delayed = coco_dset.delayed_load(img['id'], space=space)
+
+    if norm_hack:
+        chan_to_normalizer = {}
+        if sensor_coarse == 'L8':
+            for c in ['blue', 'green', 'red', 'nir', 'swir16', 'swir22']:
+                chan_to_normalizer[c] = {
+                    'type': 'normalize',
+                    'mode': 'linear',
+                    'min_val': 0.,
+                    'max_val': 30000,
+                    'beta': 1.5,
+                    'alpha': 0.08048152417842046
+                }
+        if sensor_coarse == 'S2':
+            for c in ['blue', 'green', 'red', 'nir', 'swir16', 'swir22']:
+                chan_to_normalizer[c] = {
+                    'type': 'normalize',
+                    'mode': 'linear',
+                    'min_val': 6000,
+                    'max_val': 20000,
+                    'beta': 1.5,
+                    'alpha': 0.08048152417842046
+                }
+        print('HACK chan_to_normalizer = {!r}'.format(chan_to_normalizer))
 
     if channels is not None:
         if isinstance(channels, list):

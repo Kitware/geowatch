@@ -117,6 +117,9 @@ def coerce_num_workers(num_workers='auto', minimum=0):
     """
     Return some number of CPUs based on a chosen hueristic
 
+    Note:
+        Moved to kwcoco.util.util_resources
+
     Args:
         num_workers (int | str):
             A special string code, or an exact number of cpus
