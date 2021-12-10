@@ -141,7 +141,7 @@ def find_baseline_scene(xmls, return_paths=False):
         # Coverage of the scene 0-1
         # Selecting a B04
         pfname_b04 = glob.glob(
-            os.path.join(path_to_xml, 'IMG_DATA') + '/*_B04.jp2')
+            os.path.join(path_to_xml, '*_B04.tif'))
         coverage = 0.
         if len(pfname_b04) == 1:
             ds = gdal.Open(pfname_b04[0])
@@ -151,6 +151,10 @@ def find_baseline_scene(xmls, return_paths=False):
 
                 ds = None
                 arr = None
+        else:
+            raise RuntimeError("Couldn't determine coverage for '{}'".format(
+                granule_id))
+
         tmp_dict['coverage'] = coverage
 
         # Adding to the dataframe
