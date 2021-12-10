@@ -241,7 +241,7 @@ def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exc
             with open(stats_fpath, 'rb') as file:
                 stat_info = pickle.load(file)
 
-            alwaysappend = len(requested_channels) == len(channels)
+            alwaysappend = requested_channels.numel() == channels.numel()
 
             for band_idx, band_stat in enumerate(stat_info['bands']):
                 try:
@@ -431,6 +431,7 @@ def plot_intensity_histograms(accum, config):
 
         info_rows = []
         for channel, chan_df in sensor_df.groupby('channel'):
+            print(chan_df)
 
             values = chan_df.intensity_bin
             weights = chan_df.value
@@ -441,11 +442,11 @@ def plot_intensity_histograms(accum, config):
             stddev = np.sqrt(variance)
 
             info = {
-                'min': chan_df.intensity_bin.min(),
-                'max': chan_df.intensity_bin.max(),
+                'min': values.min(),
+                'max': values.max(),
                 'mean': average,
                 'std': stddev,
-                'total': chan_df.value.sum(),
+                'total_weight': chan_df.value.sum(),
                 'channel': channel,
                 'sensor': sensor_name,
             }

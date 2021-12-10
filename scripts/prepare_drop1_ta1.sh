@@ -107,7 +107,7 @@ crop_to_regions(){
     python -m watch.cli.project_annotations \
         --site_models="$DVC_DPATH/drop1/site_models/*.geojson" \
         --src $ALIGNED_KWCOCO_FPATH \
-        --dst $ALIGNED_KWCOCO_FPATH
+        --dst $ALIGNED_KWCOCO_FPATH 
 }
 
 
@@ -171,7 +171,7 @@ visualize_cropped_dataset(){
         --num_workers=avail \
         --mode=process \
         --include_channels="blue|green|red|nir|swir16|swir22" \
-        --dst=$ALIGNED_KWCOCO_BUNDLE/_viz/histograms.jpg 
+        --dst=$ALIGNED_KWCOCO_BUNDLE/_viz/histograms.jpg  --show=True
 
         --channels="red|green|blue" \
 }
