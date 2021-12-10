@@ -19,7 +19,6 @@ class HistAccum:
 
 def checker():
     import pathlib
-    a4d61fc6069144cabf8b7197b1a3472d
     dpath = pathlib.Path('/home/joncrall/data/dvc-repos/smart_watch_dvc/TA1-Uncropped-MTRA/ingress/99cdee5aec0a47cabaa434dfb8a55bdf')
     dpath = pathlib.Path('/home/joncrall/data/dvc-repos/smart_watch_dvc/TA1-Uncropped-MTRA/ingress/a4d61fc6069144cabf8b7197b1a3472d')
     for fpath in sorted(list(dpath.glob('*.tif'))):
