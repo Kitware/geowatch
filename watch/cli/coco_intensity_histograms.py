@@ -224,14 +224,17 @@ def ensure_intensity_stats(coco_img, recompute=False):
             try:
                 band_name = channels[band_idx]
             except IndexError:
-                print('obj = {}'.format(ub.repr2(obj, nl=1)))
-                print('coco_img = {!r}'.format(coco_img))
-                print('fpath = {!r}'.format(fpath))
-                print('stats_fpath = {!r}'.format(stats_fpath))
-                print(len(stat_info['bands']))
-                print('band_idx = {!r}'.format(band_idx))
-                print('channels = {!r}'.format(channels))
-                raise
+                print('bad channel declaration fpath = {!r}'.format(fpath))
+                if 0:
+                    print('obj = {}'.format(ub.repr2(obj, nl=1)))
+                    print('coco_img = {!r}'.format(coco_img))
+                    print('fpath = {!r}'.format(fpath))
+                    print('stats_fpath = {!r}'.format(stats_fpath))
+                    print(len(stat_info['bands']))
+                    print('band_idx = {!r}'.format(band_idx))
+                    print('channels = {!r}'.format(channels))
+                # raise
+                band_name = 'unknown'
             band_stat['band_name'] = band_name
             intensity_stats['bands'].append(band_stat)
     return intensity_stats
