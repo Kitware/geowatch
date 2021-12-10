@@ -450,6 +450,7 @@ def plot_intensity_histograms(accum, config):
                 'channel': channel,
                 'sensor': sensor_name,
             }
+            print('info = {}'.format(ub.repr2(info, nl=1)))
             info_rows.append(info)
 
         sensor_chan_stats = pd.DataFrame(info_rows)
