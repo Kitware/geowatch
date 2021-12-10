@@ -145,6 +145,7 @@ def main(**kwargs):
 
     dst_fpath = config['dst']
     if dst_fpath is not None:
+        print('dump to dst_fpath = {!r}'.format(dst_fpath))
         fig.set_size_inches(np.array([6.4, 4.8]) * 1.68)
         fig.tight_layout()
         fig.savefig(dst_fpath)
