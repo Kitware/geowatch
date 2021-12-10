@@ -434,6 +434,7 @@ def plot_intensity_histograms(accum, config):
             info = {
                 'min': chan_df.intensity_bin.min(),
                 'max': chan_df.intensity_bin.max(),
+                'total': chan_df.value.sum(),
                 'channel': channel,
                 'sensor': sensor_name,
             }
@@ -444,7 +445,7 @@ def plot_intensity_histograms(accum, config):
 
         hist_data_kw_ = hist_data_kw.copy()
         if hist_data_kw_['bins'] == 'auto':
-            hist_data_kw_['bins'] = _weighted_auto_bins(sensor_df, hist_style_kw)
+            hist_data_kw_['bins'] = _weighted_auto_bins(sensor_df, hist_data_kw)
 
         ax = kwplot.figure(fnum=1, pnum=pnum_()).gca()
         sns.histplot(ax=ax, data=sensor_df, **hist_data_kw_, **hist_style_kw)
@@ -455,10 +456,10 @@ def plot_intensity_histograms(accum, config):
     return fig
 
 
-def _weighted_auto_bins(sensor_df, hist_style_kw):
+def _weighted_auto_bins(sensor_df, hist_data_kw):
     """
     import pandas as pd
-    hist_style_kw = {
+    hist_data_kw = {
         'x': 'intensity_bin',
         'weights': 'weights',
     }
@@ -468,9 +469,9 @@ def _weighted_auto_bins(sensor_df, hist_style_kw):
     })
 
     """
-    sort_df = sensor_df.sort_values(hist_style_kw['x'])
-    values = sort_df[hist_style_kw['x']]
-    weights = sort_df[hist_style_kw['weights']]
+    sort_df = sensor_df.sort_values(hist_data_kw['x'])
+    values = sort_df[hist_data_kw['x']]
+    weights = sort_df[hist_data_kw['weights']]
     minval = values.iloc[0]
     maxval = values.iloc[-1]
 
