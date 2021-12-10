@@ -225,7 +225,7 @@ def l8_coregister(mgrs_tile, input_folder, output_folder, baseline_scene):
             # we add padding of padding_px pixels
             com_prefix = (
                 f'gdalwarp -overwrite -of VRT -r cubic -tr 30 30  '
-                f'-te {x_min-30*padding_px} {y_min-30*padding_px} {x_max+30*padding_px} {y_max+30*padding_px} -t_srs "epsg:{utm_epsg}" -srcnodata 0 -dstnodata 0'
+                f'-te {x_min-30*padding_px} {y_min-30*padding_px} {x_max+30*padding_px} {y_max+30*padding_px} -t_srs "epsg:{utm_epsg}"'
             )
             l8_fname_tmp_base_band = f'{scene_id_mgrs}_{l8_base_band}_tmp.vrt'
             com = f'{com_prefix} {db[x]} {os.path.join(path_out_data, l8_fname_tmp_base_band)}'
@@ -401,14 +401,14 @@ def l8_coregister(mgrs_tile, input_folder, output_folder, baseline_scene):
                     com_prefix = (
                         f'gdalwarp -overwrite -of VRT -r cubic -tr {abs(x_res)} {abs(y_res)} '
                         f'-te {x_min-abs(x_res)*padding_px} {y_min-abs(x_res)*padding_px} {x_max+abs(x_res)*padding_px} {y_max+abs(x_res)*padding_px} '
-                        f'-t_srs "epsg:{utm_epsg}" -srcnodata 0 -dstnodata 0')
+                        f'-t_srs "epsg:{utm_epsg}"')
                     l8_fname_tmp_band = f'{scene_id_mgrs}_{b}_tmp.vrt'
                     com = f'{com_prefix} {pfname_band} {os.path.join(path_out_data, l8_fname_tmp_band)}'
                     os.system(com)
 
                     # running re-sampling using GCP
-                    com_gdal_translate_prefix = f'gdal_translate -of VRT --optfile {os.path.join(path_to_gcp, fname_gcp)} -r cubic -a_srs "epsg:{utm_epsg}" -a_nodata 0'
-                    com_gdalwarp_prefix = f'gdalwarp -overwrite -of GTiff -order 3 -et 0.05 -r cubic -co "COMPRESS=DEFLATE" -tr {abs(x_res)} {abs(y_res)} -te {x_min} {y_min} {x_max} {y_max} -t_srs "epsg:{utm_epsg}" -srcnodata 0 -dstnodata 0'
+                    com_gdal_translate_prefix = f'gdal_translate -of VRT --optfile {os.path.join(path_to_gcp, fname_gcp)} -r cubic -a_srs "epsg:{utm_epsg}"'
+                    com_gdalwarp_prefix = f'gdalwarp -overwrite -of GTiff -order 3 -et 0.05 -r cubic -co "COMPRESS=DEFLATE" -tr {abs(x_res)} {abs(y_res)} -te {x_min} {y_min} {x_max} {y_max} -t_srs "epsg:{utm_epsg}"'
                     fname_vrt = f'{scene_id_mgrs}_{b}.vrt'
                     fname_out = f'{scene_id_mgrs}_{b}.tif'
                     os.system(
@@ -454,25 +454,23 @@ def l8_coregister(mgrs_tile, input_folder, output_folder, baseline_scene):
                     y_res = 30
                     fname_gcp = fname_gcp_30
                     resampling_method = 'cubic'
-                    nodata = 0
 
                     if ('QA' in b) or ('cloudmask' in b):
                         resampling_method = 'near'
-                        nodata = 'None'
 
                     # convert band to MGRS tmp file
                     com_prefix = (
                         f'gdalwarp -overwrite -of VRT -r {resampling_method} -tr {abs(x_res)} {abs(y_res)} '
                         f'-te {x_min-abs(x_res)*padding_px} {y_min-abs(x_res)*padding_px} {x_max+abs(x_res)*padding_px} {y_max+abs(x_res)*padding_px} '
-                        f'-t_srs "epsg:{utm_epsg}" -srcnodata {nodata} -dstnodata {nodata}'
+                        f'-t_srs "epsg:{utm_epsg}"'
                     )
                     l8_fname_tmp_band = f'{scene_id_mgrs}_{b}_tmp.vrt'
                     com = f'{com_prefix} {pfname_band} {os.path.join(path_out_data, l8_fname_tmp_band)}'
                     os.system(com)
 
                     # running re-sampling using GCP
-                    com_gdal_translate_prefix = f'gdal_translate -of VRT --optfile {os.path.join(path_to_gcp, fname_gcp)} -r {resampling_method} -a_srs "epsg:{utm_epsg}" -a_nodata {nodata}'
-                    com_gdalwarp_prefix = f'gdalwarp -overwrite -of GTiff -order 3 -et 0.05 -r {resampling_method} -co "COMPRESS=DEFLATE" -tr {abs(x_res)} {abs(y_res)} -te {x_min} {y_min} {x_max} {y_max} -t_srs "epsg:{utm_epsg}" -srcnodata {nodata} -dstnodata {nodata}'
+                    com_gdal_translate_prefix = f'gdal_translate -of VRT --optfile {os.path.join(path_to_gcp, fname_gcp)} -r {resampling_method} -a_srs "epsg:{utm_epsg}"'
+                    com_gdalwarp_prefix = f'gdalwarp -overwrite -of GTiff -order 3 -et 0.05 -r {resampling_method} -co "COMPRESS=DEFLATE" -tr {abs(x_res)} {abs(y_res)} -te {x_min} {y_min} {x_max} {y_max} -t_srs "epsg:{utm_epsg}"'
                     fname_vrt = f'{scene_id_mgrs}_{b}.vrt'
                     fname_out = f'{scene_id_mgrs}_{b}.tif'
                     os.system(
