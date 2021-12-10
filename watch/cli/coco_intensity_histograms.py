@@ -105,6 +105,8 @@ def main(**kwargs):
     kwplot.autosns()
 
     config = IntensityHistogramConfig(kwargs, cmdline=True)
+    print('config = {}'.format(ub.repr2(config.to_dict(), nl=1)))
+
     coco_dset = kwcoco.CocoDataset.coerce(config['src'])
 
     valid_gids = kwcoco_extensions.filter_image_ids(
@@ -436,13 +438,12 @@ def plot_intensity_histograms(accum, config):
             }
             info_rows.append(info)
 
-
         sensor_chan_stats = pd.DataFrame(info_rows)
         print(sensor_chan_stats)
 
         hist_data_kw_ = hist_data_kw.copy()
         if hist_data_kw_['bins'] == 'auto':
-           hist_data_kw_['bins'] = _weighted_auto_bins(sensor_df, hist_style_kw)
+            hist_data_kw_['bins'] = _weighted_auto_bins(sensor_df, hist_style_kw)
 
         ax = kwplot.figure(fnum=1, pnum=pnum_()).gca()
         sns.histplot(ax=ax, data=sensor_df, **hist_data_kw_, **hist_style_kw)
