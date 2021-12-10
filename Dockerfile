@@ -72,8 +72,8 @@ fi
 RUN pip install awscli
 
 RUN conda activate watch && \
-    pip uninstall -y python-fmask && \
-    pip install git+https://git@github.com/ubarsc/python-fmask.git#egg=python-fmask
+    pip install "git+https://git@github.com/ubarsc/rios.git" && \
+    pip install "git+https://git@github.com/ubarsc/python-fmask.git#egg=python-fmask"
 
 COPY . /watch
 
