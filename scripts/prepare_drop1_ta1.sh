@@ -164,9 +164,13 @@ visualize_cropped_dataset(){
         --viz_dpath=$ALIGNED_KWCOCO_BUNDLE/_viz \
         --animate=True
 
+    python -m watch.cli intensity_histograms \
+
     smartwatch intensity_histograms \
         --src $ALIGNED_KWCOCO_FPATH \
         --num_workers=avail \
+        --mode=process \
+        --include_channels="blue|green|red|nir|swir16|swir22" \
         --dst=$ALIGNED_KWCOCO_BUNDLE/_viz/histograms.jpg 
 
         --channels="red|green|blue" \

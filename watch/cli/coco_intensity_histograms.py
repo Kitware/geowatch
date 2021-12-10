@@ -431,9 +431,20 @@ def plot_intensity_histograms(accum, config):
 
         info_rows = []
         for channel, chan_df in sensor_df.groupby('channel'):
+
+            values = chan_df.intensity_bin
+            weights = chan_df.value
+
+            average = np.average(values, weights=weights)
+            variance = np.average((values - average)**2, weights=weights)
+            variance = variance * sum(weights) / (sum(weights) - 1)
+            stddev = np.sqrt(variance)
+
             info = {
                 'min': chan_df.intensity_bin.min(),
                 'max': chan_df.intensity_bin.max(),
+                'mean': average,
+                'std': stddev,
                 'total': chan_df.value.sum(),
                 'channel': channel,
                 'sensor': sensor_name,
