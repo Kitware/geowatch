@@ -279,7 +279,7 @@ def plot_intensity_histograms(accum, config):
             hist = ub.sorted_keys(hist)
             # hist.pop(0)
             df = pd.DataFrame({
-                'intensity_bin': np.array(list(hist.keys())),
+                'intensity_bin': np.array(list(hist.keys()), dtype=int),
                 'value': np.array(list(hist.values())),
                 'channel': [channel] * len(hist),
                 'sensor': [sensor] * len(hist),
@@ -293,6 +293,7 @@ def plot_intensity_histograms(accum, config):
         import warnings
         warnings.warn('There were {} non-finite values'.format(num_nonfinite))
         full_df = full_df[is_finite]
+    full_df = full_df.reset_index()
 
     # sns.lineplot(full_df=df, x='intensity_bin', y='value')
     # max_val = np.iinfo(np.uint16).max
@@ -463,8 +464,10 @@ def plot_intensity_histograms(accum, config):
             hist_data_kw_['bins'] = _weighted_auto_bins(sensor_df, hist_data_kw)
 
         ax = kwplot.figure(fnum=1, pnum=pnum_()).gca()
+        # z = [tuple(a.values()) for a in sensor_df[['intensity_bin', 'channel', 'sensor']].to_dict('records')]
+        # ub.find_duplicates(z)
         try:
-            sns.histplot(ax=ax, data=sensor_df, **hist_data_kw_, **hist_style_kw)
+            sns.histplot(ax=ax, data=sensor_df.reset_index(), **hist_data_kw_, **hist_style_kw)
         except Exception:
             print('hist_data_kw_ = {}'.format(ub.repr2(hist_data_kw_, nl=1)))
             print('hist_style_kw = {}'.format(ub.repr2(hist_style_kw, nl=1)))
@@ -534,3 +537,27 @@ _SubConfig = IntensityHistogramConfig
 
 if __name__ == '__main__':
     main()
+
+
+def seaborn_bug_mwe():
+    import kwplot
+    kwplot.autompl()
+
+    import pandas as pd
+    import seaborn as sns
+    sns.set()
+    import matplotlib.pyplot as plt  # NOQA
+
+    n = 10
+    to_stack = []
+    for group_idx in range(3):
+        part_data = pd.DataFrame({
+            'bin': np.arange(n),
+            'value': np.random.randint(0, 100, size=n),
+            'group': [f'group_{group_idx}'] * n,
+        })
+        to_stack.append(part_data)
+    data = pd.concat(to_stack)
+
+    ax = plt.figure().gca()
+    sns.histplot(ax=ax, data=data.reset_index(), bins=10, x='bin', weights='value', hue='group')

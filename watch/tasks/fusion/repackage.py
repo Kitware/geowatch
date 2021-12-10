@@ -153,7 +153,7 @@ def gather_checkpoints():
     assert git_info2['ret'] == 0
 
     import dvc.main
-    from dvc import main
+    # from dvc import main
     import os
     saved_cwd = os.getcwd()
     try:
