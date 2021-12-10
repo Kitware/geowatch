@@ -162,7 +162,7 @@ visualize_cropped_dataset(){
         --num_workers=avail \
         --channels="red|green|blue" \
         --viz_dpath=$ALIGNED_KWCOCO_BUNDLE/_viz \
-        --animate=True
+        --animate=True --norm_hack=True
 
     python -m watch.cli intensity_histograms \
 
