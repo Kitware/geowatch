@@ -442,14 +442,15 @@ def plot_intensity_histograms(accum, config):
             stddev = np.sqrt(variance)
 
             info = {
-                'min': values.min(),
-                'max': values.max(),
+                'min': float(values.min()),
+                'max': float(values.max()),
                 'mean': average,
                 'std': stddev,
                 'total_weight': chan_df.value.sum(),
                 'channel': channel,
                 'sensor': sensor_name,
             }
+            assert info['max'] >= info['min']
             print('info = {}'.format(ub.repr2(info, nl=1)))
             info_rows.append(info)
 
