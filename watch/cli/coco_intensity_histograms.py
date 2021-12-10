@@ -112,8 +112,9 @@ def main(**kwargs):
 
     images = coco_dset.images(valid_gids)
     workers = util_globals.coerce_num_workers(config['workers'])
+    print('workers = {!r}'.format(workers))
 
-    jobs = ub.JobPool(mode='process', max_workers=workers)
+    jobs = ub.JobPool(mode=config['model'], max_workers=workers)
     for coco_img in ub.ProgIter(images.coco_images, desc='submit stats jobs'):
         coco_img.detach()
         job = jobs.submit(ensure_intensity_stats, coco_img)
