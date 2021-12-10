@@ -94,7 +94,7 @@ def cloudmask(in_dpath,
         [2] https://github.com/ubarsc/python-fmask/blob/master/fmask/fmask.py#L82
 
     Example:
-        >>> # xdoctest: +REQUIRES(--network)
+        >>> # xdoctest: +REQUIRES(--network) +SKIP
         >>> import os
         >>> import numpy as np
         >>> from watch.datacube.cloud.fmask3 import *
