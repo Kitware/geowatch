@@ -117,8 +117,10 @@ def main(**kwargs):
     workers = util_globals.coerce_num_workers(config['workers'])
     print('workers = {!r}'.format(workers))
 
-    include_channels = kwcoco.FusedChannelSpec.coerce(config['include_channels'])
-    exclude_channels = kwcoco.FusedChannelSpec.coerce(config['exclude_channels'])
+    include_channels = config['include_channels']
+    exclude_channels = config['exclude_channels']
+    include_channels = None if include_channels is None else kwcoco.FusedChannelSpec.coerce(include_channels)
+    exclude_channels = None if exclude_channels is None else kwcoco.FusedChannelSpec.coerce(exclude_channels)
 
     jobs = ub.JobPool(mode=config['model'], max_workers=workers)
     for coco_img in ub.ProgIter(images.coco_images, desc='submit stats jobs'):
