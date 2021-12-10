@@ -451,7 +451,7 @@ def plot_intensity_histograms(accum, config):
                 'sensor': sensor_name,
             }
             assert info['max'] >= info['min']
-            print('info = {}'.format(ub.repr2(info, nl=1)))
+            print('info = {}'.format(ub.repr2(info, nl=1, sort=False)))
             info_rows.append(info)
 
         sensor_chan_stats = pd.DataFrame(info_rows)
