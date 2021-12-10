@@ -196,7 +196,8 @@ def apply_harmonization_item_map(stac_item,
              '-S', _ensure_map_at_res(slope_map, xres, yres),
              '--S_band={}'.format(i + 1),
              '-I', _ensure_map_at_res(intercept_map, xres, yres),
-             '--I_band={}'.format(i + 1)])
+             '--I_band={}'.format(i + 1),
+             '--type', 'Int16'])
 
         # Replace asset href with harmonized version
         stac_item.assets[asset_name].href = band_outpath
