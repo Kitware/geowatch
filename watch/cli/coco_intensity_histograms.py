@@ -224,30 +224,40 @@ def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exc
             else:
                 channels = kwcoco.FusedChannelSpec.coerce(num_channels)
 
-        channels = kwcoco.FusedChannelSpec.coerce(channels).as_list()
-        stats_fpath = ensure_intensity_sidecar(fpath, recompute=recompute)
-        with open(stats_fpath, 'rb') as file:
-            stat_info = pickle.load(file)
+        channels = kwcoco.FusedChannelSpec.coerce(channels)
+        declared_channel_list = channels.as_list()
 
-        obj.get('channels', None)
+        requested_channels = channels
+        if include_channels:
+            requested_channels = requested_channels & include_channels
+        if exclude_channels:
+            requested_channels = requested_channels - exclude_channels
 
-        for band_idx, band_stat in enumerate(stat_info['bands']):
-            try:
-                band_name = channels[band_idx]
-            except IndexError:
-                print('bad channel declaration fpath = {!r}'.format(fpath))
-                if 0:
-                    print('obj = {}'.format(ub.repr2(obj, nl=1)))
-                    print('coco_img = {!r}'.format(coco_img))
-                    print('fpath = {!r}'.format(fpath))
-                    print('stats_fpath = {!r}'.format(stats_fpath))
-                    print(len(stat_info['bands']))
-                    print('band_idx = {!r}'.format(band_idx))
-                    print('channels = {!r}'.format(channels))
-                # raise
-                band_name = 'unknown'
-            band_stat['band_name'] = band_name
-            intensity_stats['bands'].append(band_stat)
+        if len(requested_channels) > 0:
+            stats_fpath = ensure_intensity_sidecar(fpath, recompute=recompute)
+            with open(stats_fpath, 'rb') as file:
+                stat_info = pickle.load(file)
+
+            alwaysappend = len(requested_channels) == len(channels)
+
+            for band_idx, band_stat in enumerate(stat_info['bands']):
+                try:
+                    band_name = declared_channel_list[band_idx]
+                except IndexError:
+                    print('bad channel declaration fpath = {!r}'.format(fpath))
+                    if 0:
+                        print('obj = {}'.format(ub.repr2(obj, nl=1)))
+                        print('coco_img = {!r}'.format(coco_img))
+                        print('fpath = {!r}'.format(fpath))
+                        print('stats_fpath = {!r}'.format(stats_fpath))
+                        print(len(stat_info['bands']))
+                        print('band_idx = {!r}'.format(band_idx))
+                        print('channels = {!r}'.format(channels))
+                    # raise
+                    band_name = 'unknown'
+                if alwaysappend or band_name in requested_channels:
+                    band_stat['band_name'] = band_name
+                    intensity_stats['bands'].append(band_stat)
     return intensity_stats
 
 
@@ -425,15 +435,73 @@ def plot_intensity_histograms(accum, config):
                 'sensor': sensor_name,
             }
             info_rows.append(info)
-        print(pd.DataFrame(info_rows))
+
+
+        sensor_chan_stats = pd.DataFrame(info_rows)
+        print(sensor_chan_stats)
+
+        hist_data_kw_ = hist_data_kw.copy()
+        if hist_data_kw_['bins'] == 'auto':
+           hist_data_kw_['bins'] = _weighted_auto_bins(sensor_df, hist_style_kw)
 
         ax = kwplot.figure(fnum=1, pnum=pnum_()).gca()
-        sns.histplot(ax=ax, data=sensor_df, **hist_data_kw, **hist_style_kw)
+        sns.histplot(ax=ax, data=sensor_df, **hist_data_kw_, **hist_style_kw)
         ax.set_title(sensor_name)
         # maxx = sensor_df.intensity_bin.max()
         # maxx = sensor_maxes[sensor_name]
         # ax.set_xlim(0, maxx)
     return fig
+
+
+def _weighted_auto_bins(sensor_df, hist_style_kw):
+    """
+    import pandas as pd
+    hist_style_kw = {
+        'x': 'intensity_bin',
+        'weights': 'weights',
+    }
+    sensor_df = pd.DataFrame({
+        'intensity_bin': np.random.rand(100),
+        'weights': np.random.rand(100),
+    })
+
+    """
+    sort_df = sensor_df.sort_values(hist_style_kw['x'])
+    values = sort_df[hist_style_kw['x']]
+    weights = sort_df[hist_style_kw['weights']]
+    minval = values.iloc[0]
+    maxval = values.iloc[-1]
+
+    total = weights.sum()
+    ptp = maxval - minval
+
+    # _hist_bin_sqrt = ptp / np.sqrt(total)
+    _hist_bin_sturges = ptp / (np.log2(total) + 1.0)
+
+    cumtotal = weights.cumsum().values
+    quantiles = cumtotal / cumtotal[-1]
+    idx2, idx1 = np.searchsorted(quantiles, [0.75, 0.25])
+    iqr = values.iloc[idx2] - values.iloc[idx1]
+    _hist_bin_fd = 2.0 * iqr * total ** (-1.0 / 3.0)
+
+    fd_bw = _hist_bin_fd
+    sturges_bw = _hist_bin_sturges
+
+    if fd_bw:
+        bw_est = min(fd_bw, sturges_bw)
+    else:
+        # limited variance, so we return a len dependent bw estimator
+        bw_est = sturges_bw
+
+    from numpy.lib.histograms import _get_outer_edges, _unsigned_subtract
+    first_edge, last_edge = _get_outer_edges(values, None)
+    if bw_est:
+        n_equal_bins = int(np.ceil(_unsigned_subtract(last_edge, first_edge) / bw_est))
+    else:
+        # Width can be zero for some estimators, e.g. FD when
+        # the IQR of the data is zero.
+        n_equal_bins = 1
+    return n_equal_bins
 
 
 _SubConfig = IntensityHistogramConfig
