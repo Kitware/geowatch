@@ -445,11 +445,11 @@ def gather_measures():
 
     kwplot.figure(fnum=1, doclf=True)
     ax = sns.lineplot(data=mean_df, x='step', y='mAP', hue='expt_name', marker='o')
-    ax.set_title('Pixelwise mAP AC metrics: KR_R002')
+    ax.set_title('Pixelwise mAP AC metrics: KR_R001 + KR_R002')
 
     kwplot.figure(fnum=2, doclf=True)
     ax = sns.lineplot(data=mean_df, x='step', y='mAUC', hue='expt_name', marker='o')
-    ax.set_title('Pixelwise mAUC AC metrics: KR_R002')
+    ax.set_title('Pixelwise mAUC AC metrics: KR_R001 + KR_R002')
 
     from kwcoco.metrics import drawing
     fig = kwplot.figure(fnum=3, doclf=True)

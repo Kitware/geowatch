@@ -133,7 +133,7 @@ def main(**kwargs):
         job.coco_img = coco_img
 
     accum = HistAccum()
-    for job in jobs.as_completed(desc='accumulate stats'):
+    for job in ub.ProgIter(jobs.as_completed(), desc='accumulate stats', total=len(jobs.jobs)):
         intensity_stats = job.result()
         sensor = job.coco_img.get('sensor_coarse', 'unknown_sensor')
         for band_stats in intensity_stats['bands']:
