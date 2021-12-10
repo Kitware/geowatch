@@ -1,7 +1,7 @@
 """
 Compute intensity histograms of the underlying images in this dataset.
 
-Example:
+CommandLine:
     smartwatch intensity_histograms --src special:vidshapes8-msi --show=True --stat=density
     smartwatch intensity_histograms --src special:photos --show=True --fill=False
     smartwatch intensity_histograms --src special:shapes8 --show=True --stat=count --cumulative=True --multiple=stack
@@ -463,7 +463,15 @@ def plot_intensity_histograms(accum, config):
             hist_data_kw_['bins'] = _weighted_auto_bins(sensor_df, hist_data_kw)
 
         ax = kwplot.figure(fnum=1, pnum=pnum_()).gca()
-        sns.histplot(ax=ax, data=sensor_df, **hist_data_kw_, **hist_style_kw)
+        try:
+            sns.histplot(ax=ax, data=sensor_df, **hist_data_kw_, **hist_style_kw)
+        except Exception:
+            print('hist_data_kw_ = {}'.format(ub.repr2(hist_data_kw_, nl=1)))
+            print('hist_style_kw = {}'.format(ub.repr2(hist_style_kw, nl=1)))
+            print('ERROR')
+            print(sensor_df)
+            raise
+            pass
         ax.set_title(sensor_name)
         # maxx = sensor_df.intensity_bin.max()
         # maxx = sensor_maxes[sensor_name]
