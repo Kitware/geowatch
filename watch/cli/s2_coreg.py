@@ -48,6 +48,8 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
 
     s2_l1c_items = {}
     l8_l1_items = {}
+    # Tracking set of original STAC items to be removed
+    original_item_ids = set()
     for item in catalog.get_all_items():
         if re.match(S2_L1C_RE, item.id):
             # Get base directory for assets
@@ -61,6 +63,7 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
                 raise RuntimeError("Couldn't determine STAC item basedir")
 
             s2_l1c_items[item_base_dir] = item
+            original_item_ids.add(item.id)
         elif re.match(S2_L1C_GRANULE_RE, item.id):
             # Get base directory for assets
             item_base_dir = None
@@ -72,6 +75,7 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
                 raise RuntimeError("Couldn't determine STAC item basedir")
 
             s2_l1c_items[item_base_dir] = item
+            original_item_ids.add(item.id)
         elif re.match(L8_L1_RE, item.id):
             # Get base directory for assets
             item_base_dir = None
@@ -84,6 +88,7 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
                 raise RuntimeError("Couldn't determine STAC item basedir")
 
             l8_l1_items[item_base_dir] = item
+            original_item_ids.add(item.id)
 
     s2_l1c_item_dirs = set(s2_l1c_items.keys())
 
@@ -106,19 +111,22 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
         grid_tiles = s2_grid_tiles_for_geometry(item_geometry)
 
         for grid_tile in set(grid_tiles).intersection(baseline_scenes.keys()):
-            l8_coregister(grid_tile,
-                          l8_l1_item_dir,
-                          outdir,
-                          baseline_scenes[grid_tile])
-
-            l8_scenes.setdefault(grid_tile, []).append(l8_l1_item_dir)
+            try:
+                l8_coregister(grid_tile,
+                              l8_l1_item_dir,
+                              outdir,
+                              baseline_scenes[grid_tile])
+            except Exception as e:
+                print("Couldn't coregister scene: [{}], skipping!".format(
+                    l8_l1_item_dir))
+                print(e)
+                continue
+            else:
+                l8_scenes.setdefault(grid_tile, []).append(l8_l1_item_dir)
 
     catalog_outpath = os.path.abspath(os.path.join(outdir, 'catalog.json'))
     catalog.set_self_href(catalog_outpath)
     catalog.set_root(catalog)
-
-    # Tracking set of original STAC items to be removed
-    original_item_ids = set()
 
     for l8_scene, l8_scene_images in l8_scenes.items():
         for l8_scene_image in l8_scene_images:
