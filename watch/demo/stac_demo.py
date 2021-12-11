@@ -5,6 +5,10 @@ import json
 
 
 def demo():
+    """
+    Returns:
+        str: path to a demo stac catalog
+    """
     data = sentinel2_demodata.grab_sentinel2_product(0)
     gpath = os.path.join(str(data.path), str(data.images[0]))
     dpath = ub.ensure_app_cache_dir('watch/demo/demo_stac')
