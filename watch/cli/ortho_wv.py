@@ -1,9 +1,7 @@
 import argparse
-import glob
 import os
 import sys
 import shapely.geometry
-import tempfile
 import ubelt as ub
 import numpy as np
 from copy import deepcopy
@@ -97,6 +95,7 @@ def ortho_wv(stac_catalog, outdir, jobs=1, as_cog=False, te_dems=False, to_utm=F
 
     return output_catalog
 
+
 def _item_map(stac_item, outdir, as_cog, te_dems, to_utm):
     # This assumes we're not changing the stac_item ID in any of
     # the mapping functions
@@ -170,7 +169,7 @@ def orthorectify(stac_item, outdir, as_cog, te_dems, to_utm=False):
         -overwrite
         {in_fpath} {out_fpath}
         ''')
-    cmd = ub.cmd(cmd_str, check=True, verbose=0)
+    ub.cmd(cmd_str, check=True, verbose=0)
 
     item = deepcopy(stac_item)
     item.assets['data'].href = out_fpath
@@ -203,7 +202,7 @@ def pansharpen(stac_item_pan, stac_item_msi, outdir):
         –threads ALL_CPUS
         –co BITIFF=IF_NEEDED
         ''')
-    cmd = ub.cmd(cmd_str, check=True, verbose=0)
+    ub.cmd(cmd_str, check=True, verbose=0)
     item = deepcopy(stac_item_msi)
     item.href = out_fpath
     item.properties = ub.dict_isect(item.properties, [k for k in item.properties if 'gsd' not in k])
