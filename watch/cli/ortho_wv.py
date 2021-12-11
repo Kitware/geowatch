@@ -69,7 +69,6 @@ def ortho_wv(stac_catalog, outdir, jobs=1, as_cog=False, te_dems=False, to_utm=F
         mode='process' if jobs > 1 else 'serial',
         extra_args=[outdir, as_cog, te_dems, to_utm])
 
-
     if pansharpen:
         pansharpened_catalog = parallel_map_items(
             orthorectified_catalog,
@@ -85,7 +84,7 @@ def ortho_wv(stac_catalog, outdir, jobs=1, as_cog=False, te_dems=False, to_utm=F
     else:
         output_catalog = parallel_map_items(
             pansharpened_catalog,
-            _item_map2,
+            _item_map,
             max_workers=jobs,
             mode='process' if jobs > 1 else 'serial',
             extra_args=[outdir])
@@ -97,6 +96,10 @@ def ortho_wv(stac_catalog, outdir, jobs=1, as_cog=False, te_dems=False, to_utm=F
 
 
 def _item_map(stac_item, outdir, as_cog, te_dems, to_utm):
+    """
+    Args:
+        stac_item (pystac.Item)
+    """
     # This assumes we're not changing the stac_item ID in any of
     # the mapping functions
     item_outdir = os.path.join(outdir, stac_item.id)
@@ -132,18 +135,46 @@ def _item_map(stac_item, outdir, as_cog, te_dems, to_utm):
 
 
 def orthorectify(stac_item, outdir, as_cog, te_dems, to_utm=False):
+    """
+    Args:
+        stac_item (pystac.Item)
+    """
     in_fpath = stac_item.assets['data'].href
     out_fpath = os.path.join(outdir, os.path.basename(in_fpath))
 
+    # parametarize?
+    blocksize = 64  # FIXME: should this be 256 for TA1?
+    compress = 'NONE'
+
+    # NOTE: The names of the driver options depend on the `driver`. The options
+    # for the COG driver are given here:
+    # https://gdal.org/drivers/raster/cog.html and these differ from
+    # options for other drivers (e.g. GTIFF
+    # https://gdal.org/drivers/raster/gtiff.html#raster-gtiff)
     if as_cog:
         out_fpath = os.path.splitext(out_fpath)[0] + '.tif'
         driver = '-of cog'
+        driver_options = ub.paragraph(
+            f'''
+            -co TILED=YES
+            -co OVERVIEWS=AUTO
+            -co BLOCKSIZE={blocksize}
+            -co COMPRESS={compress}
+            ''')
     else:
+        # Regular gtiff driver has no overviews options
         driver = ''
+        driver_options = ub.paragraph(
+            f'''
+            -co TILED=YES
+            -co BLOCKXSIZE={blocksize}
+            -co BLOCKYSIZE={blocksize}
+            -co COMPRESS={compress}
+            ''')
 
     lon, lat = np.concatenate(shapely.geometry.asShape(stac_item.geometry).centroid.xy)
     if te_dems:
-        raise NotImplementedError
+        raise NotImplementedError('TODO: point to T&E DEMs')
     else:
         dems = watch.gis.elevation.girder_gtop30_elevation_dem()
         dem_fpath, dem_info = dems.find_reference_fpath(lat, lon)
@@ -156,16 +187,16 @@ def orthorectify(stac_item, outdir, as_cog, te_dems, to_utm=False):
     else:
         epsg = 4326
 
-    cmd_str = ub.paragraph(f'''
+    cmd_str = ub.paragraph(
+        f'''
         gdalwarp
         -multi
         --config GDAL_CACHEMAX 500 -wm 500
         --debug off
         -t_srs EPSG:{epsg} -et 0
         -rpc -to RPC_DEM={dem_fpath}
-        -co TILED=YES
-        -co BLOCKXSIZE=64
-        -co BLOCKYSIZE=64
+        {driver}
+        {driver_options}
         -overwrite
         {in_fpath} {out_fpath}
         ''')
@@ -182,7 +213,7 @@ def orthorectify(stac_item, outdir, as_cog, te_dems, to_utm=False):
     return item
 
 
-def pansharpen(stac_item_pan, stac_item_msi, outdir):
+def _pan_map(stac_item_pan, stac_item_msi, outdir):
     '''
     Returns a modified copy of stac_item_msi.
 
@@ -190,17 +221,17 @@ def pansharpen(stac_item_pan, stac_item_msi, outdir):
     stac_item_pan's, but 'nitf:*gsd*' removed as these will be invalid.
     '''
     # to get rgb instead of input 4- or 8-channel, add:
-    # –b red_band –b blue_band –b green_band
-    # –spat_adjust intersection
-    # –co PHOTOMETRIC=RGB
+    # -b red_band -b blue_band -b green_band
+    # -spat_adjust intersection
+    # -co PHOTOMETRIC=RGB
     pan_fpath = stac_item_pan.assets['data'].href
     msi_fpath = stac_item_msi.assets['data'].href
     out_fpath = os.path.join(outdir, os.path.basename(msi_fpath))
     cmd_str = ub.paragraph(f'''
         gdal_pansharpen.py
         {pan_fpath} {msi_fpath} {out_fpath}
-        –threads ALL_CPUS
-        –co BITIFF=IF_NEEDED
+        -threads ALL_CPUS
+        -co BIGTIFF=IF_NEEDED
         ''')
     ub.cmd(cmd_str, check=True, verbose=0)
     item = deepcopy(stac_item_msi)
