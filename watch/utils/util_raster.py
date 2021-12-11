@@ -336,6 +336,9 @@ def crop_to(pxl_polys, raster, bounds_policy, intersect_policy='crop'):
         else:
             result.append(None)
 
+    return result
+
+
 def list_gdal_drivers():
     '''
     List all drivers currently available to GDAL to create a raster
