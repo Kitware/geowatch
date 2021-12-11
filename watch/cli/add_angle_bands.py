@@ -231,8 +231,11 @@ def add_angles_s2(stac_item, item_outdir):
             break
 
     mtd_base_dir = os.path.dirname(mtd_tl_xml_file)
-    output_path_prefix = os.path.commonprefix(
-        glob.glob(os.path.join(mtd_base_dir, "IMG_DATA", "*.jp2")))
+    output_path_prefix = os.path.commonpath(
+        glob.glob(os.path.join(mtd_base_dir, "**", "*04.jp2"), recursive=True))
+
+    if not os.path.isdir(output_path_prefix):
+        output_path_prefix = os.path.dirname(output_path_prefix)
 
     with tempfile.TemporaryDirectory() as tmpdirname:
         angle_file_paths = generate_anglebands(mtd_tl_xml_file, tmpdirname)
@@ -242,7 +245,7 @@ def add_angles_s2(stac_item, item_outdir):
             if m is not None:
                 ss, az = m.groups()
 
-                output_path = "{}S{}{}4.tif".format(
+                output_path = "{}/S{}{}4.tif".format(
                     output_path_prefix,
                     'O' if ss == 'solar' else 'E',
                     'A' if az == 'azimuth' else 'Z')
