@@ -149,8 +149,10 @@ def gather_checkpoints():
     git_info1 = ub.cmd(gitcmd, verbose=3, check=True, cwd=dvc_dpath)
     assert git_info1['ret'] == 0
 
-    git_info2 = ub.cmd('git push', verbose=3, check=True, cwd=dvc_dpath)
-    assert git_info2['ret'] == 0
+    # git_info3 = ub.cmd('git commit -am "new models"', verbose=3, check=True, cwd=dvc_dpath)  # dangerous?
+    # assert git_info3['ret'] == 0
+    # git_info2 = ub.cmd('git push', verbose=3, check=True, cwd=dvc_dpath)
+    # assert git_info2['ret'] == 0
 
     import dvc.main
     # from dvc import main
@@ -166,7 +168,12 @@ def gather_checkpoints():
 
     """
     # on remote
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+    cd $DVC_DPATH
+    git pull
     dvc pull -r aws --recursive models/fusion/SC-20201117
+
+    python ~/code/watch/watch/tasks/fusion/schedule_inference.py schedule_evaluation --gpus=None
     """
 
     import os

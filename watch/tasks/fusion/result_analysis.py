@@ -52,8 +52,9 @@ class ResultAnalysis:
         >>> self.analysis()
     """
 
-    def __init__(self, results):
+    def __init__(self, results, ignore_params=None):
         self.results = results
+        self.ignore_params = ignore_params
 
     @classmethod
     def demo(cls, num=10, rng=None):
@@ -63,14 +64,23 @@ class ResultAnalysis:
         return self
 
     def analysis(self):
+        import scipy
+        import numpy as np
         rows = [r.to_dict() for r in self.results]
         table = pd.DataFrame(rows)
 
         config_rows = [r.params for r in self.results]
-        varied = ub.varied_values(config_rows)
+        sentinel = object()
+        pd.DataFrame(config_rows).channels
+        varied = ub.varied_values(config_rows, default=sentinel, min_variations=1)
+        if self.ignore_params:
+            for k in self.ignore_params:
+                varied.pop(k, None)
+        self.varied = varied
 
         # encode if we want to maximize or minimize a metric
         metric_to_objective = {
+            'ap': 'max',
             'acc': 'max',
             'f1': 'max',
             'loss': 'min',
@@ -89,7 +99,11 @@ class ResultAnalysis:
                     'metric': metric_key,
                 }
 
-                objective = metric_to_objective[metric_key]
+                objective = metric_to_objective.get(metric_key, None)
+                if objective is None:
+                    print(f'warning assume ascending for {metric_key}')
+                    objective = 'max'
+
                 ascending = objective == 'min'
 
                 # Find all items with this particular param value
@@ -120,8 +134,14 @@ class ResultAnalysis:
                 value_pairs.update(map(frozenset, ub.iter_window(moments.sort_values('mean', ascending=ascending).index, 2)))
 
                 # https://en.wikipedia.org/wiki/Kruskal%E2%80%93Wallis_one-way_analysis_of_variance
-                anova_krus_result = scipy.stats.kruskal(*value_to_metric.values())
-                anova_1way_result = scipy.stats.f_oneway(*value_to_metric.values())
+                try:
+                    anova_krus_result = scipy.stats.kruskal(*value_to_metric.values())
+                except ValueError:
+                    anova_krus_result = scipy.stats.stats.KruskalResult(np.nan, np.nan)
+                if len(value_to_metric) > 1:
+                    anova_1way_result = scipy.stats.f_oneway(*value_to_metric.values())
+                else:
+                    anova_1way_result = scipy.stats.stats.F_onewayResult(np.nan, np.nan)
                 statistics['anova_kruskal'] = anova_krus_result
                 statistics['anova_1way'] = anova_1way_result
                 statistics['moments'] = moments
@@ -129,7 +149,10 @@ class ResultAnalysis:
                 pairwise_statistics = []
                 for pair in value_pairs:
                     pair_statistics = {}
-                    param_val1, param_val2 = sorted(pair)
+                    try:
+                        param_val1, param_val2 = sorted(pair)
+                    except Exception:
+                        param_val1, param_val2 = (pair)
                     metric_vals1 = value_to_metric[param_val1]
                     metric_vals2 = value_to_metric[param_val2]
                     pair_statistics['value1'] = param_val1
@@ -151,7 +174,7 @@ class ResultAnalysis:
         for metric_key in metric_keys:
             for param_name, stat_groups in ub.group_items(all_statistics, key=lambda x: x['param_name']).items():
                 statistics = ub.group_items(stat_groups, key=lambda x: x['metric'])[metric_key][0]
-                title = ('PARAMETER {!r}'.format(param_name))
+                title = ('PARAMETER {!r} - {}'.format(param_name, metric_key))
                 print('\n\n')
                 print(title)
                 print('=' * len(title))

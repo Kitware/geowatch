@@ -150,7 +150,7 @@ class TMUXMultiQueue(ub.NiceRepr):
         console.print(Panel(Syntax(code, 'bash'), title=str(self.fpath)))
 
 
-def schedule_evaluation(model_globstr, test_dataset, gpus=None):
+def schedule_evaluation(model_globstr=None, test_dataset=None, gpus=None, run=False):
     """
     First ensure that models have been copied to the DVC repo in the
     appropriate path. (as noted by model_dpath)
@@ -168,10 +168,6 @@ def schedule_evaluation(model_globstr, test_dataset, gpus=None):
         --test_dataset="$KWCOCO_TEST_FPATH"
 
     Ignore:
-        import watch
-        dvc_dpath = watch.utils.util_data.find_smart_dvc_dpath()
-        model_globstr = str(dvc_dpath / 'models/fusion/SC-20201117/*/*.pt')
-        test_dataset = dvc_dpath / 'Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json'
 
     TODO:
         - [ ] Specify the model_dpath as an arg
@@ -182,6 +178,13 @@ def schedule_evaluation(model_globstr, test_dataset, gpus=None):
     from watch.tasks.fusion import organize
     import json
     import ubelt as ub
+
+    if model_globstr is None and test_dataset is None:
+        dvc_dpath = watch.utils.util_data.find_smart_dvc_dpath()
+        model_globstr = str(dvc_dpath / 'models/fusion/SC-20201117/*/*.pt')
+        test_dataset = dvc_dpath / 'Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json'
+        gpus = None
+
     dvc_dpath = watch.utils.util_data.find_smart_dvc_dpath()
 
     # with_saliency = 'auto'
@@ -322,7 +325,10 @@ def schedule_evaluation(model_globstr, test_dataset, gpus=None):
 
     driver_fpath = jobs.write()
     # RUN
-    ub.cmd('bash ' + str(driver_fpath), verbose=3, check=True)
+    if run:
+        ub.cmd('bash ' + str(driver_fpath), verbose=3, check=True)
+    else:
+        print('Wrote script: now execute {} to run'.format(driver_fpath))
 
     """
     # Now postprocess script:
@@ -350,18 +356,21 @@ def gather_measures():
     import pandas as pd
     import numpy as np
     import ubelt as ub
-    import pathlib
+    # import pathlib
 
     dvc_dpath = watch.utils.util_data.find_smart_dvc_dpath()
 
-    if False:
+    if True:
+        # Prefer a remote
         remote = 'horologic'
         remote = 'namek'
         # Hack for pointing at a remote
-        dvc_dpath = ub.shrinkuser(dvc_dpath, home=ub.expandpath(f'$HOME/remote/{remote}'))
+        remote_dpath = pathlib.Path(ub.shrinkuser(dvc_dpath, home=ub.expandpath(f'$HOME/remote/{remote}')))
+        if remote_dpath.exists():
+            dvc_dpath = remote_dpath
 
     # model_dpath = pathlib.Path(dvc_dpath) / 'models/fusion/unevaluated-activity-2021-11-12'
-    fusion_model_dpath = pathlib.Path(dvc_dpath) / 'models/fusion/'
+    fusion_model_dpath = dvc_dpath / 'models/fusion/'
     print(ub.repr2(list(fusion_model_dpath.glob('*'))))
     # model_dpath = fusion_model_dpath / 'unevaluated-activity-2021-11-12'
     model_dpath = fusion_model_dpath / 'SC-20201117'
@@ -379,15 +388,21 @@ def gather_measures():
                 info = json.load(file)
             return info
         jobs.submit(load_data, measure_fpath)
+
+    # job = next(iter(jobs.as_completed(desc='collect jobs')))
+    # all_infos = [job.result()]
     for job in jobs.as_completed(desc='collect jobs'):
         all_infos.append(job.result())
 
     from kwcoco.coco_evaluator import CocoSingleResult
+    import yaml
+    from watch.tasks.fusion import result_analysis
     class_rows = []
     mean_rows = []
-
     all_results = []
-    for info in all_infos:
+    results_list2 = []
+
+    for info in ub.ProgIter(all_infos):
         result = CocoSingleResult.from_json(info)
         all_results.append(result)
 
@@ -401,18 +416,20 @@ def gather_measures():
         step = int(title.split('step=')[1].split('-')[0])
         expt_name = title.split('epoch=')[0]
 
+        expt_class_rows = []
         for catname, bin_measure in info['ovr_measures'].items():
             class_aps.append(bin_measure['ap'])
             class_aucs.append(bin_measure['auc'])
-            row = {}
-            row['AP'] = bin_measure['ap']
-            row['AUC'] = bin_measure['auc']
-            row['catname'] = catname
-            row['title'] = title
-            row['expt_name'] = expt_name
-            row['epoch'] = epoch
-            row['step'] = step
-            class_rows.append(row)
+            class_row = {}
+            class_row['AP'] = bin_measure['ap']
+            class_row['AUC'] = bin_measure['auc']
+            class_row['catname'] = catname
+            class_row['title'] = title
+            class_row['expt_name'] = expt_name
+            class_row['epoch'] = epoch
+            class_row['step'] = step
+            expt_class_rows.append(class_row)
+        class_rows.extend(expt_class_rows)
 
         row = {}
         row['mAP'] = np.nanmean(class_aps)
@@ -423,6 +440,57 @@ def gather_measures():
         row['epoch'] = epoch
         row['step'] = step
         mean_rows.append(row)
+
+        for meta_item in info['meta']['info']:
+            if meta_item['type'] == 'process':
+                process_props = meta_item['properties']
+                if process_props['name'] == 'watch.tasks.fusion.predict':
+                    predict_args = process_props['args']
+                    cand_remote = process_props['hostname']
+                    # Did we (I?) seriously not serialize the train params?
+                    package_fpath = predict_args['package_fpath']
+                    cand_remote_fpath = pathlib.Path(ub.shrinkuser(package_fpath, home=ub.expandpath(f'$HOME/remote/{cand_remote}')))
+                    if cand_remote_fpath.exists():
+                        base_file = ub.zopen(cand_remote_fpath, zipext='.pt')
+                        found = None
+                        for subfile in base_file.namelist():
+                            if 'package_header/fit_config.yaml' in subfile:
+                                found = subfile
+                        file = ub.zopen(cand_remote_fpath / found, zipext='.pt')
+                        train_config = yaml.safe_load(file)
+                        # TODO: this should have already existed
+                        result.meta['train_config'] = train_config
+
+                        bin_measure = info['ovr_measures']
+                        metrics = {
+                            'map': row['mAP'],
+                            'mauc': row['mAUC'],
+                            'nocls_ap': info['nocls_measures']['ap'],
+                            'nocls_auc': info['nocls_measures']['auc'],
+                        }
+                        for class_row in expt_class_rows:
+                            metrics[class_row['catname'] + '_AP'] = class_row['AP']
+                            metrics[class_row['catname'] + '_AUC'] = class_row['AUC']
+
+                        result2 = result_analysis.Result(
+                             name=result.meta['title'],
+                             params=train_config,
+                             metrics=metrics,
+                        )
+                        results_list2.append(result2)
+
+    self = result_analysis.ResultAnalysis(results_list2, ignore_params={
+        'default_root_dir',
+        'name',
+        'enable_progress_bar'
+        'prepare_data_per_node', 'enable_model_summary', 'checkpoint_callback',
+        'detect_anomaly', 'gpus', 'terminate_on_nan', 'train_dataset',
+        'workdir', 'config', 'num_workers', 'amp_backend', 'enable_progress_bar',
+        'flush_logs_every_n_steps', 'enable_checkpointing', 'prepare_data_per_node',
+        'amp_level',
+        'vali_dataset', 'test_dataset',
+    })
+    self.analysis()
 
     mean_df = pd.DataFrame(mean_rows)
     print('Sort by mAP')
