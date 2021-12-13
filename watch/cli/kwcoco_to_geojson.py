@@ -16,31 +16,6 @@ TODO:
     - [x] Document details about is_site_boundary
     - [x] Document details about is_occluded
 
-.. code::
-
-    {
-        "id": "site-000001",
-        "type": "FeatureCollection",
-        "features": [
-            {
-                "type": "Feature",
-                "geometry": <GeoJson Geometry>  # a polygon or multipolygon
-                "properties": {
-                    "observation_date": <iso-datetime>  # e.g. "1981-01-01",
-                    "score": <float>  # e.g. 1.0,
-                    "predicted_phase": <phase-label>  # e.g. "Active Construction",
-                    "predicted_phase_start_date": <iso-datetime>  # e.g. "1981-01-01",
-                    "is_occluded":  <comma-separated-str-of-True-False-for-each-poly>,  # e.g. "False,True"
-                    "is_site_boundary": <comma-separated-str-of-True-False-for-each-poly>,  # e.g. "False,True"
-                    "current_phase": <PhaseLabel>     # e.g. "No Activity",
-                    "sensor_name": <name-of-sensor>   # e.g. "WorldView",
-                    "source": <name-of-source-image>  # e.g. "WorldviewFile-1980-01-01.NTF"
-                },
-            },
-            ...
-        ]
-    }
-
 
 For official documentation about the KWCOCO json format see [1]_. A formal
 json-schema can be found in ``kwcoco.coco_schema``
@@ -50,7 +25,7 @@ json-schema can be found in ``watch/rc/site-model.schema.json``.
 
 References:
     .. [1] https://gitlab.kitware.com/computer-vision/kwcoco
-    .. [2] https://infrastructure.smartgitlab.com/docs/pages/api/site_model.html
+    .. [2] https://infrastructure.smartgitlab.com/docs/pages/api/
     .. [3] https://smartgitlab.com/TE/annotations
 """
 import geojson
@@ -66,8 +41,6 @@ import shapely.ops
 from mgrs import MGRS
 import numpy as np
 import ubelt as ub
-
-# import xdev
 
 
 def _single_geometry(geom):
@@ -99,11 +72,16 @@ def geojson_feature(img, anns, coco_dset, with_properties=True):
         computation.
         '''
         # pick the image that is actually copied to the metrics framework
+        # the source field is implied to be a STAC id, but overload it to
+        # enable viz during scoring without referring back to the kwcoco file
+        # TODO maybe use misc_info for this instead when STAC id is
+        # properly passed through to TA-2?
         source = None
         for aux in img.get('auxiliary', []):
             basename = os.path.basename(aux['file_name'])
             if basename.endswith('blue.tif'):
-                source = basename
+                # source = basename
+                source = os.path.abspath(aux['file_name'])
         if source is None:
             try:
                 # Pick reasonable source image, we don't have a spec for this
@@ -539,35 +517,42 @@ def main(args):
     """
     parser = argparse.ArgumentParser(
         description='Convert KWCOCO to IARPA GeoJSON')
-    parser.add_argument(
-        '--in_file',
-        required=True, 
-        help='Input KWCOCO to convert')
-    parser.add_argument(
-        '--out_dir',
-        required=True,
-        help=ub.paragraph('''
+    required_args = parser.add_argument_group('required')
+    required_args.add_argument('--in_file',
+                               required=True,
+                               help='Input KWCOCO to convert')
+    required_args.add_argument('--out_dir',
+                               required=True,
+                               help=ub.paragraph('''
         Output directory where GeoJSON files will be written.
         NOTE: in --bas_mode, writing to a region is not idempotent.
         To regenerate a region, delete or edit the region file before
         rerunning this script.
         '''))
-    parser.add_argument(
-        '--in_file_gt',
-        help='If available, ground truth KWCOCO to visualize')
-    parser.add_argument('--region_id',
-                        help=ub.paragraph('''
+    convenience_args = parser.add_argument_group('convenience')
+    convenience_args.add_argument(
+        '--in_file_gt', help='If available, ground truth KWCOCO to visualize')
+    convenience_args.add_argument('--region_id',
+                                  help=ub.paragraph('''
         ID for region that sites belong to.
         If None, try to infer from kwcoco file.
         '''))
-    track_args = parser.add_mutually_exclusive_group()
-    track_args.add_argument('--track_fn',
-                            help=ub.paragraph('''
+    convenience_args.add_argument('--write_in_file',
+                                  action='store_true',
+                                  help=ub.paragraph('''
+        If set, write the normalized and tracked kwcoco in_file back to disk
+        so you can skip the --track_fn next time this is run on it.
+        '''))
+    track_args = parser.add_argument_group(
+        'track', '--track_fn and --default_track_fn are mutually exclusive.')
+    track = track_args.add_mutually_exclusive_group()
+    track.add_argument('--track_fn',
+                       help=ub.paragraph('''
         Function to add tracks. If None, use existing tracks.
         Example: 'watch.tasks.tracking.from_heatmap.TimeAggregatedBAS'
         '''))
-    track_args.add_argument('--default_track_fn',
-                            help=ub.paragraph('''
+    track.add_argument('--default_track_fn',
+                       help=ub.paragraph('''
         String code to pick a sensible track_fn based on the contents
         of in_file. Supported codes are ['change_heatmaps', 'change_polys',
         'class_heatmaps', 'class_polys']. Any other string will be interpreted
@@ -577,38 +562,41 @@ def main(args):
         class_heatmaps, these should be image channels; for class_polys, they
         should be annotation categories.
         '''))
-    parser.add_argument('--track_kwargs',
-                        default='{}',
-                        help=ub.paragraph('''
+    track_args.add_argument('--track_kwargs',
+                            default='{}',
+                            help=ub.paragraph('''
         JSON string or path to file containing keyword arguments for the
         chosen TrackFunction. Examples include: coco_dset_gt, coco_dset_sc,
         thresh, change_keys.
         Any file paths will be loaded as CocoDatasets if possible.
         '''))
-    parser.add_argument('--bas_mode',
-                        action='store_true',
-                        help=ub.paragraph('''
-        In BAS mode, the following changes occur:
-            - output will be site summaries instead of sites
-            - existing region files will be searched for in out_dir, or
-                generated from in_file if not found, and site summaries
-                will be appended to them
-            - TODO different normalization pipeline
+    behavior_args = parser.add_argument_group(
+            'behavior',
+            '--bas_mode is mutually exclusive with other behavior args.')
+    behavior_args.add_argument('--bas_mode',
+                               action='store_true',
+                               help=ub.paragraph('''
+        In BAS mode, output will be site summaries instead of sites.
+        Region files will be searched for in out_dir, or generated from
+        in_file if not found, and site summaries will be appended to them.
         '''))
-    parser.add_argument('--write_in_file',
-                        action='store_true',
-                        help=ub.paragraph('''
-        If set, write the normalized and tracked kwcoco in_file back to disk
-        so you can skip the --track_fn next time this is run on it.
-        '''))
-    parser.add_argument('--site_summary',
-                        default=None,
-                        help=ub.paragraph('''
+    behavior_args.add_argument('--site_summary',
+                               default=None,
+                               help=ub.paragraph('''
         File path or serialized json object containing either a site_summary
         or a region_model that includes site summaries. Each summary found will
         be added to in_file to use in site characterization.
         '''))
-    args = parser.parse_args(args)
+    behavior_args.add_argument('--score',
+                               action='store_true',
+                               help=ub.paragraph('''
+        If set, all regions touched will be scored using the metrics framework.
+        Additional arguments to this script will be passed to
+        run_metrics_framework.py.
+        '''))
+    args, score_args = parser.parse_known_args(args)
+    if score_args and not args.score:
+        raise ValueError(f'unknown arguments {score_args}')
 
     # load the track kwargs
     if os.path.isfile(args.track_kwargs):
@@ -707,6 +695,13 @@ def main(args):
                       f'site {site_fpath}')
             with open(os.path.join(site_fpath), 'w') as f:
                 geojson.dump(site, f, indent=2)
+
+    if args.score:
+        import shlex
+        watch.cli.run_metrics_framework(shlex.join([
+            score_args,
+            '--sites',
+        ] + [json.dumps(site) for site in sites]))
 
 
 def demo(coco_dset,
