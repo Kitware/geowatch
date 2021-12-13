@@ -2,7 +2,6 @@ import sys
 import argparse
 import os
 import subprocess
-from uuid import uuid4
 
 import pystac
 
