@@ -42,16 +42,16 @@ if __name__ == '__main__':
     parser.add_argument('--max_epochs', type=int, default=50)
     parser.add_argument('--workers', type=int, default=8)
     parser.add_argument('--batch_size', type=int, default=64)
-    parser.add_argument('--step_size', type=int, default=15)
+    parser.add_argument('--step_size', type=int, default=10)
     parser.add_argument('--lr_gamma', type=float, default=.1)
     parser.add_argument('--weight_decay', type=float, default=1e-5)
-    parser.add_argument('--learning_rate', type=float, default=.001)
+    parser.add_argument('--learning_rate', type=float, default=.0001)
     parser.add_argument('--save_dir', default='watch/tasks/invariants/logs')
     parser.add_argument('--gpus', type=int, default=1)
     parser.add_argument('--drop_rate', type=float, default=.1)
 
     ###dataset
-    parser.add_argument('--dataset', type=str, help='Choose from: spacenet or kwcoco.', default='kwcoco')
+    parser.add_argument('--dataset', type=str, help='Choose from: spacenet, onera, or kwcoco.', default='kwcoco')
 
     ### kwcoco arguments
     parser.add_argument('--train_dataset', type=str, default='')
@@ -62,6 +62,9 @@ if __name__ == '__main__':
     ### spacenet arguments
     parser.add_argument('--remove_clouds', help='spacenet specific argument', action='store_true')
     parser.add_argument('--normalize_spacenet', help='spacenet specific argument', action='store_true')
+    
+    ### onera arguments
+    parser.add_argument('--onera_data_folder', help='Path to Onera. Only relevant if train_dataset and/or vali_dataset are onera.', type=str, default='/localdisk0/SCRATCH/watch/onera/')
 
 #To do: allow for pretrained weights in this architecture
     ### pretraining arguments
@@ -70,15 +73,14 @@ if __name__ == '__main__':
 #     parser.add_argument('--pretrained_encoder_only', action='store_true')
 
     ### main argument
-    parser.add_argument('--site_classification', help='Train on specific site label classes. In not selected, all classes are grouped together. To do: include ignore class.', action='store_true')
     parser.add_argument('--patch_size', type=int, default=64)
     parser.add_argument('--num_channels', type=int, default=6)
     parser.add_argument('--pos_class_weight', type=float, help='Weight on positive class for segmentation. Only used on binary labels.', default=10)
-    parser.add_argument('--num_images', type=int, default=4)
-    parser.add_argument('--num_attention_layers', type=int, default=2)
+    parser.add_argument('--num_images', type=int, default=2)
+    parser.add_argument('--num_attention_layers', type=int, default=4)
     parser.add_argument('--positional_encoding', action='store_true')
     parser.add_argument('--binary', help='Condense annotations to binary as opposed to site classification. Choose 0 to use classification labels.', type=int, default=1)
-    parser.add_argument('--check_val_every_n_epoch', type=int, default=1)
+    parser.add_argument('--check_val_every_n_epoch', type=int, default=3)
 
     args = parser.parse_args()
     main(args)

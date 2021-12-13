@@ -4,7 +4,7 @@ import numpy as np
 import pytorch_lightning as pl
 from argparse import Namespace
 from .utils.attention_unet import attention_unet
-from .data.multi_image_datasets import kwcoco_dataset, SpaceNet7
+from .data.datasets import kwcoco_dataset, SpaceNet7, Onera
 import warnings
 
 
@@ -26,8 +26,8 @@ class segmentation_model(pl.LightningModule):
         elif hparams.dataset == 'spacenet':
             self.trainset = SpaceNet7(hparams.patch_size, segmentation_labels=True, num_images=hparams.num_images, train=True)
             self.valset = SpaceNet7(hparams.patch_size, segmentation_labels=True, num_images=hparams.num_images, train=False)
-
-        if not hparams.site_classification:
+            
+        if hparams.binary:
             weight = torch.FloatTensor([1, hparams.pos_class_weight])
         else:
             warnings.warn('Classes/Ignore Classes/Background need to be re-checked before succesfully training on site classification models.')
