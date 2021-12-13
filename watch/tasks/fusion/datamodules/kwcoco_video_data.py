@@ -267,6 +267,12 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 '''))
 
         parser.add_argument(
+            '--normalize_perframe', default=False, type=smartcast, help=ub.paragraph(
+                '''
+                undocumented
+                '''))
+
+        parser.add_argument(
             '--upweight_centers', default=True, type=smartcast, help=ub.paragraph(
                 '''
                 undocumented

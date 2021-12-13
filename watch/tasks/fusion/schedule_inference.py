@@ -441,56 +441,110 @@ def gather_measures():
         row['step'] = step
         mean_rows.append(row)
 
-        for meta_item in info['meta']['info']:
-            if meta_item['type'] == 'process':
-                process_props = meta_item['properties']
-                if process_props['name'] == 'watch.tasks.fusion.predict':
-                    predict_args = process_props['args']
-                    cand_remote = process_props['hostname']
-                    # Did we (I?) seriously not serialize the train params?
-                    package_fpath = predict_args['package_fpath']
-                    cand_remote_fpath = pathlib.Path(ub.shrinkuser(package_fpath, home=ub.expandpath(f'$HOME/remote/{cand_remote}')))
-                    if cand_remote_fpath.exists():
-                        base_file = ub.zopen(cand_remote_fpath, zipext='.pt')
-                        found = None
-                        for subfile in base_file.namelist():
-                            if 'package_header/fit_config.yaml' in subfile:
-                                found = subfile
-                        file = ub.zopen(cand_remote_fpath / found, zipext='.pt')
-                        train_config = yaml.safe_load(file)
-                        # TODO: this should have already existed
-                        result.meta['train_config'] = train_config
+        class Found(Exception):
+            pass
 
-                        bin_measure = info['ovr_measures']
-                        metrics = {
-                            'map': row['mAP'],
-                            'mauc': row['mAUC'],
-                            'nocls_ap': info['nocls_measures']['ap'],
-                            'nocls_auc': info['nocls_measures']['auc'],
-                        }
-                        for class_row in expt_class_rows:
-                            metrics[class_row['catname'] + '_AP'] = class_row['AP']
-                            metrics[class_row['catname'] + '_AUC'] = class_row['AUC']
+        try:
+            predict_meta = None
+            for meta_item in info['meta']['info']:
+                if meta_item['type'] == 'process':
+                    if meta_item['properties']['name'] == 'watch.tasks.fusion.predict':
+                        predict_meta = meta_item
+                        raise Found
+        except Found:
+            pass
+        else:
+            raise Exception('no prediction metadata')
 
-                        result2 = result_analysis.Result(
-                             name=result.meta['title'],
-                             params=train_config,
-                             metrics=metrics,
-                        )
-                        results_list2.append(result2)
+        if predict_meta is not None:
+            process_props = predict_meta['properties']
+            predict_args = process_props['args']
+            cand_remote = process_props['hostname']
 
-    self = result_analysis.ResultAnalysis(results_list2, ignore_params={
-        'default_root_dir',
-        'name',
-        'enable_progress_bar'
+            if 'fit_config' in process_props:
+                fit_config = process_props['fit_config']
+                result.meta['fit_config'] = fit_config
+            else:
+                # Hack, for models where I forgot to serialize the
+                # fit configuration.
+                # Did we (I?) seriously not serialize the train params?
+                package_fpath = predict_args['package_fpath']
+                # hack, dont have enough into to properly remove the user directory
+                if True:
+                    hack_home = ub.expandpath(f'$HOME/remote/{cand_remote}')
+                    cand_remote_home = pathlib.Path(hack_home)
+                    tmp = pathlib.Path(package_fpath)
+                    if tmp.parts[0:4] == ('/', 'home', 'local', 'KHQ'):
+                        cand_suffix = '/'.join(tmp.parts[5:])
+                    elif tmp.parts[0:2] == ('/', 'home'):
+                        cand_suffix = '/'.join(tmp.parts[3:])
+                    else:
+                        raise Exception
+                    cand_remote_fpath = cand_remote_home / cand_suffix
+
+                # cand_remote_fpath = pathlib.Path(ub.shrinkuser(package_fpath, home=))
+                if cand_remote_fpath.exists():
+                    base_file = ub.zopen(cand_remote_fpath, ext='.pt')
+                    found = None
+                    for subfile in base_file.namelist():
+                        if 'package_header/fit_config.yaml' in subfile:
+                            found = subfile
+                    file = ub.zopen(cand_remote_fpath / found, ext='.pt')
+                    fit_config = yaml.safe_load(file)
+                    # TODO: this should have already existed
+                    result.meta['fit_config'] = fit_config
+                else:
+                    raise Exception
+
+            bin_measure = info['ovr_measures']
+            metrics = {
+                'map': row['mAP'],
+                'mauc': row['mAUC'],
+                'nocls_ap': info['nocls_measures']['ap'],
+                'nocls_auc': info['nocls_measures']['auc'],
+            }
+            for class_row in expt_class_rows:
+                metrics[class_row['catname'] + '_AP'] = class_row['AP']
+                metrics[class_row['catname'] + '_AUC'] = class_row['AUC']
+
+            # Add relevant train params here
+            row['channels'] = fit_config['channels']
+            row['time_steps'] = fit_config['time_steps']
+            row['chip_size'] = fit_config['chip_size']
+            row['arch_name'] = fit_config['arch_name']
+
+            result2 = result_analysis.Result(
+                 name=result.meta['title'],
+                 params=fit_config,
+                 metrics=metrics,
+            )
+            results_list2.append(result2)
+
+    ignore_params = {
+        'default_root_dir', 'name', 'enable_progress_bar'
         'prepare_data_per_node', 'enable_model_summary', 'checkpoint_callback',
         'detect_anomaly', 'gpus', 'terminate_on_nan', 'train_dataset',
-        'workdir', 'config', 'num_workers', 'amp_backend', 'enable_progress_bar',
-        'flush_logs_every_n_steps', 'enable_checkpointing', 'prepare_data_per_node',
-        'amp_level',
-        'vali_dataset', 'test_dataset',
-    })
+        'workdir', 'config', 'num_workers', 'amp_backend',
+        'enable_progress_bar', 'flush_logs_every_n_steps',
+        'enable_checkpointing', 'prepare_data_per_node', 'amp_level',
+        'vali_dataset', 'test_dataset', 'package_fpath',
+    }
+    ignore_metrics = {
+        'positive_AUC',
+        'positive_AP',
+        'nocls_auc',
+        'nocls_ap',
+        # 'map',
+        # 'mauc',
+    }
+    self = result_analysis.ResultAnalysis(
+        results_list2, ignore_params=ignore_params,
+        ignore_metrics=ignore_metrics,
+    )
     self.analysis()
+    stats_table = pd.DataFrame([ub.dict_diff(d, {'pairwise', 'param_values', 'moments'}) for d in self.statistics])
+    stats_table = stats_table.sort_values('anova_rank_p')
+    print(stats_table)
 
     mean_df = pd.DataFrame(mean_rows)
     print('Sort by mAP')
@@ -512,11 +566,11 @@ def gather_measures():
     sns = kwplot.autosns()
 
     kwplot.figure(fnum=1, doclf=True)
-    ax = sns.lineplot(data=mean_df, x='step', y='mAP', hue='expt_name', marker='o')
+    ax = sns.lineplot(data=mean_df, x='epoch', y='mAP', hue='expt_name', marker='o', style='channels')
     ax.set_title('Pixelwise mAP AC metrics: KR_R001 + KR_R002')
 
     kwplot.figure(fnum=2, doclf=True)
-    ax = sns.lineplot(data=mean_df, x='step', y='mAUC', hue='expt_name', marker='o')
+    ax = sns.lineplot(data=mean_df, x='step', y='mAUC', hue='expt_name', marker='o', style='channels')
     ax.set_title('Pixelwise mAUC AC metrics: KR_R001 + KR_R002')
 
     from kwcoco.metrics import drawing
@@ -524,7 +578,7 @@ def gather_measures():
     sorted_results = sorted(all_results, key=lambda x: x.ovr_measures[catname]['ap'])[::-1]
     catname = 'Active Construction'
     colors = kwplot.Color.distinct(len(sorted_results))
-    for idx, result in enumerate(sorted_results):
+    for idx, result in enumerate(sorted_results[0:16]):
         color = colors[idx]
         color = [kwplot.Color(color).as01()]
         measure = result.ovr_measures[catname]
@@ -537,7 +591,7 @@ def gather_measures():
     fig = kwplot.figure(fnum=4, doclf=True)
     sorted_results = sorted(all_results, key=lambda x: x.ovr_measures[catname]['auc'])[::-1]
     catname = 'Active Construction'
-    colors = kwplot.Color.distinct(len(sorted_results))
+    colors = kwplot.Color.distinct(len(sorted_results[0:16]))
     for idx, result in enumerate(sorted_results):
         color = colors[idx]
         color = [kwplot.Color(color).as01()]
