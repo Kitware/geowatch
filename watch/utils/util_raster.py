@@ -8,12 +8,12 @@ import shapely.geometry
 import shapely.ops
 import ubelt as ub
 import warnings
+from skimage.morphology import convex_hull_image
 
 from contextlib import ExitStack
 from copy import deepcopy
 from dataclasses import dataclass
 from lxml import etree
-from skimage.morphology import convex_hull_image
 from tempenv import TemporaryEnvironment
 from tempfile import NamedTemporaryFile
 from typing import Union
@@ -30,6 +30,29 @@ try:
     from xdev import profile
 except Exception:
     profile = ub.identity
+
+'''
+References:
+    https://gdal.org/programs/gdalwarp.html#cmdoption-gdalwarp-multi
+    https://gis.stackexchange.com/a/241810
+    https://trac.osgeo.org/gdal/wiki/UserDocs/GdalWarp#WillincreasingRAMincreasethespeedofgdalwarp
+    https://github.com/OpenDroneMap/ODM/issues/778
+
+TODO test this and see if it's safe to add:
+    --config GDAL_PAM_ENABLED NO
+Removes .aux.xml sidecar files and puts them in the geotiff metadata
+ex. histogram from fmask
+https://stackoverflow.com/a/51075774
+https://trac.osgeo.org/gdal/wiki/ConfigOptions#GDAL_PAM_ENABLED
+https://gdal.org/drivers/raster/gtiff.html#georeferencing
+'''
+gdalwarp_performance_opts = ub.paragraph('''
+        -multi
+        --config GDAL_CACHEMAX 15%
+        -wm 15%
+        -co NUM_THREADS=ALL_CPUS
+        -wo NUM_THREADS=1
+        ''')
 
 
 @profile
