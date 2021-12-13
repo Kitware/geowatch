@@ -1,4 +1,5 @@
 import argparse
+import sys
 import os
 import json
 from tempfile import TemporaryDirectory
@@ -129,9 +130,13 @@ def main(args):
                 python {os.path.join(metrics_dpath, 'run_evaluation.py')}
                     --roi {region_id}
                     --gt_path {os.path.join(gt_dpath, 'site_models')}
-                    --rm_path {os.path.join(gt_dpath, 'region_models', region_id + .geojson)}
+                    --rm_path {os.path.join(gt_dpath, 'region_models', region_id + '.geojson')}
                     --sm_path {site_dpath}
                     --image_path {image_dpath}
                     --output_dir {args.out_dir}
                 ''')
             ub.cmd(cmd, shell=False, verbose=0, check=True)
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv[1:]))
