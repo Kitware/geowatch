@@ -199,9 +199,8 @@ def _ortho_map(stac_item, outdir, drop_empty=False, *args, **kwargs):
 
     print("* Orthorectifying WV item: '{}'".format(stac_item.id))
 
-    if stac_item.properties[
-            'constellation'] == 'worldview' and stac_item.properties[
-                'nitf:image_preprocessing_level'] == '1R':
+    if(stac_item.properties.get('constellation') == 'worldview' and
+       stac_item.properties.get('nitf:image_preprocessing_level') == '1R'):
 
         output_stac_item = orthorectify(stac_item, outdir, *args, **kwargs)
 

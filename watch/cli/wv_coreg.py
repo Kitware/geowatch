@@ -152,7 +152,7 @@ def wv_coreg(wv_catalog, outdir, jobs=1, drop_empty=False, s2_catalog=None):
 
     # Look for the baseline s2 scenes among the s2 stac items
     def _is_baseline(s2_item):
-        return (s2_item.properties['constellation'] == 'sentinel-2' and
+        return (s2_item.properties.get('constellation') == 'sentinel-2' and
                 's2_coreg_l1c' in s2_item.properties['watch:process_history']
                 and s2_item.properties['watch:s2_coreg_l1c:is_baseline'])
 
@@ -189,7 +189,7 @@ def _coreg_map(stac_item, outdir, baseline_s2_items, item_pairs_dct,
     print("* Coregistering WV item: '{}'".format(stac_item.id))
 
     is_wv_ortho = (
-        stac_item.properties['constellation'] == 'worldview'
+        stac_item.properties.get('constellation') == 'worldview'
         and (stac_item.properties['nitf:image_preprocessing_level'] == '2G'
              or any('wv_ortho' in i
                     for i in stac_item.properties['watch:process_history'])))
