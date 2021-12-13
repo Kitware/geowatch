@@ -9,14 +9,11 @@ import shapely.ops
 import ubelt as ub
 import warnings
 from skimage.morphology import convex_hull_image
-import kwimage
-import pygeos
 
 from contextlib import ExitStack
 from copy import deepcopy
 from dataclasses import dataclass
 from lxml import etree
-from skimage.morphology import convex_hull_image
 from tempenv import TemporaryEnvironment
 from tempfile import NamedTemporaryFile
 from typing import Union
