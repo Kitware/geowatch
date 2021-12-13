@@ -1331,6 +1331,7 @@ class KWCocoVideoDataset(data.Dataset):
             ('hashid', self.sampler.dset._build_hashid()),
             ('channels', self.input_channels.__json__()),
             # ('sample_shape', self.sample_shape),
+            ('normalize_perframe', self.normalize_perframe),
             ('depends_version', 7),  # bump if `compute_dataset_stats` changes
         ])
         workdir = None
