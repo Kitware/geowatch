@@ -58,6 +58,8 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.add_argument('--with_class', type=smartcast, default='auto')
     parser.add_argument('--with_saliency', type=smartcast, default='auto')
 
+    parser.add_argument('--compress', type=str, default='RAW', help='type of compression for prob images')
+
     parser.add_argument(
         '--write_preds', default=True, type=smartcast, help=ub.paragraph(
             '''
@@ -357,6 +359,7 @@ def predict(cmdline=False, **kwargs):
             thresh=args.thresh,
             write_probs=args.write_probs,
             write_preds=args.write_preds,
+            prob_compress=args.compress,
             num_bands=1,
         )
         result_dataset.ensure_category('change')
@@ -380,6 +383,7 @@ def predict(cmdline=False, **kwargs):
             write_probs=args.write_probs,
             write_preds=args.write_preds,
             polygon_categories=foreground_classes,
+            prob_compress=args.compress,
             num_bands=len(method.classes),
         )
 
@@ -393,6 +397,7 @@ def predict(cmdline=False, **kwargs):
             write_probs=args.write_probs,
             write_preds=args.write_preds,
             polygon_categories=['salient'],
+            prob_compress=args.compress,
             num_bands=2,
         )
 

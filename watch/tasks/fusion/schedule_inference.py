@@ -290,6 +290,7 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus=None, run=Fa
                     --pred_dataset={pred_dataset} \
                     --test_dataset={test_dataset} \
                     --num_workers=5 \
+                    --compress=DEFLATE \
                     --gpus=0 \
                     --batch_size=1
                 ''').format(**suggestions, **predictkw)
