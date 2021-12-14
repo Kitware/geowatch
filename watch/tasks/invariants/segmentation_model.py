@@ -4,7 +4,7 @@ import numpy as np
 import pytorch_lightning as pl
 from argparse import Namespace
 from .utils.attention_unet import attention_unet
-from .data.datasets import kwcoco_dataset, SpaceNet7, Onera
+from .data.datasets import kwcoco_dataset, SpaceNet7
 import warnings
 
 
@@ -26,7 +26,7 @@ class segmentation_model(pl.LightningModule):
         elif hparams.dataset == 'spacenet':
             self.trainset = SpaceNet7(hparams.patch_size, segmentation_labels=True, num_images=hparams.num_images, train=True)
             self.valset = SpaceNet7(hparams.patch_size, segmentation_labels=True, num_images=hparams.num_images, train=False)
-            
+
         if hparams.binary:
             weight = torch.FloatTensor([1, hparams.pos_class_weight])
         else:

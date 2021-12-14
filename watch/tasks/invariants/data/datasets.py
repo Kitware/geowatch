@@ -10,6 +10,7 @@ import random
 from pandas import read_csv
 from ..utils.read_sentinel_images import read_sentinel_img_trio
 
+
 class kwcoco_dataset(Dataset):
     S2_l2a_channel_names = [
         'B02.tif', 'B01.tif', 'B03.tif', 'B04.tif', 'B05.tif', 'B06.tif', 'B07.tif', 'B08.tif', 'B09.tif', 'B11.tif', 'B12.tif', 'B8A.tif'
@@ -286,13 +287,15 @@ class kwcoco_dataset(Dataset):
     def num_channels(self):
         return len(self.channels)
 
+
 class Onera(Dataset):
     """Change Detection dataset class, used for both training and test data."""
-    def __init__(self, data_folder='/localdisk0/SCRATCH/watch/onera/', 
-                 train = True, 
-                 patch_size = 96, 
-                 num_channels = 13, 
-                 multihead=False, 
+    def __init__(self,
+                 data_folder='/localdisk0/SCRATCH/watch/onera/',
+                 train=True,
+                 patch_size=96,
+                 num_channels=13,
+                 multihead=False,
                  display=False,
                  class_weight=1,
                  randomize_order=False):
@@ -304,61 +307,56 @@ class Onera(Dataset):
                 on a sample.
         """
         self.display = display
-        self.randomize_order=randomize_order
+        self.randomize_order = randomize_order
         # basics
         self.path = data_folder
         self.num_channels = num_channels
         self.img_subpath = 'images/'
         self.train = train
-        
+
         if self.train:
             fname = 'train.txt'
             self.label_subpath = 'train_labels/'
             self.transforms1 = A.Compose([
-                A.HorizontalFlip(p=0.5),
-                A.RandomRotate90(p=.99),
-                A.RandomCrop(patch_size, patch_size)
-            ],
-            additional_targets={'image1': 'image', 'image2': 'image', 'mask1': 'mask'})
+                                                A.HorizontalFlip(p=0.5),
+                                                A.RandomRotate90(p=.99),
+                                                A.RandomCrop(patch_size, patch_size)
+                                            ],
+                                            additional_targets={'image1': 'image', 'image2': 'image', 'mask1': 'mask'})
         else:
             fname = 'test.txt'
             self.label_subpath = 'test_labels/'
-            self.transforms1 = A.Compose([
-                A.NoOp()
-            ],
-            additional_targets={'image1': 'image', 'image2': 'image', 'mask1': 'mask'})
-        
+            self.transforms1 = A.Compose([A.NoOp()],
+                                            additional_targets={'image1': 'image', 'image2': 'image', 'mask1': 'mask'})
+
         self.multihead = multihead
         if multihead:
             if train:
                 self.transforms2 = A.Compose([
-                    A.RandomCrop(height=patch_size, width=patch_size),
-                    A.RandomRotate90(p=0.5),
-                    A.HorizontalFlip(p=.75),
-                    A.VerticalFlip(p=.75)
-                ],
-                additional_targets={'image2': 'image'})
+                                                A.RandomCrop(height=patch_size, width=patch_size),
+                                                A.RandomRotate90(p=0.5),
+                                                A.HorizontalFlip(p=.75),
+                                                A.VerticalFlip(p=.75)
+                                                ],
+                                                additional_targets={'image2': 'image'})
             else:
                 self.transforms2 = A.Compose([
-#                     A.RandomCrop(height=patch_size, width=patch_size),
-                    A.HorizontalFlip(p=.75),
-                    A.VerticalFlip(p=.75)
-                ],
-                additional_targets={'image2': 'image'})
+                                                # A.RandomCrop(height=patch_size, width=patch_size),
+                                                A.HorizontalFlip(p=.75),
+                                                A.VerticalFlip(p=.75)
+                                                ],
+                                                additional_targets={'image2': 'image'})
             self.transforms3 = A.Compose([
                     A.Blur(p=.3),
                     A.RandomBrightnessContrast(always_apply=True)
             ])
-        
+
         self.to_tensor = transforms.ToTensor()
-        
+
         self.loc_names = read_csv(self.path + self.img_subpath + fname).columns
-        
-        n_pix = 0
-        true_pix = 0
-                
+
         self.num_channels = num_channels
-        
+
     def __len__(self):
         if self.train:
             return 2560
@@ -374,77 +372,77 @@ class Onera(Dataset):
 
         img1 = (img1 - img1.mean()) / img1.std()
         img2 = (img2 - img2.mean()) / img2.std()
-        
-        cm = 1*np.array(cm)
-        
+
+        cm = 1 * np.array(cm)
+
         transformed = self.transforms1(image=img1, image2=img2, mask=cm)
         img1 = transformed['image']
         img2 = transformed['image2']
         change_map = transformed['mask']
-        
+
         if self.multihead:
             transformed2 = self.transforms2(image=img1)
             img3 = transformed2['image']
             img3 = self.to_tensor(img3)
-            
+
             transformed3 = self.transforms3(image=img1)
             img4 = transformed3['image']
             img4 = self.to_tensor(img4)
-        
+
         img1 = self.to_tensor(img1)
         img2 = self.to_tensor(img2)
 
-        date1 = (0,0)
-        date2 = (1,1)
-        
+        date1 = (0, 0)
+        date2 = (1, 1)
+
         if self.randomize_order:
-            label = random.choice([0,1])
+            label = random.choice([0, 1])
         else:
-            label=1
-            
+            label = 1
+
         if not label:
             img1, img2 = img2, img1
             date1, date2 = date2, date1
-        
+
         if self.display:
             if self.num_channels == 3:
                 display_image1 = img1
                 display_image2 = img2
             elif self.num_channels == 13:
-                display_image1 = img1[[3,2,1],:,:]
-                display_image2 = img2[[3,2,1],:,:]
+                display_image1 = img1[[3, 2, 1], : , :]
+                display_image2 = img2[[3, 2, 1], : , :]
             else:
-                display_image1 = img1[[2,1,0],:,:]
-                display_image2 = img2[[2,1,0],:,:]                
+                display_image1 = img1[[2, 1, 0], :, :]
+                display_image2 = img2[[2, 1, 0], :, :]
             display_image1 = (2 + display_image1) / 3
             display_image2 = (2 + display_image2) / 3
         else:
-            display_image1=torch.tensor([])
-            display_image2=torch.tensor([])
-        
+            display_image1 = torch.tensor([])
+            display_image2 = torch.tensor([])
+
         if not self.multihead:
-            return {'image1': img1.float(), 
-                    'image2': img2.float(), 
-                    'change_map': change_map, 
+            return {'image1': img1.float(),
+                    'image2': img2.float(),
+                    'change_map': change_map,
                     'label': label,
                     'date1': date1,
                     'date2': date2,
                     'display_image1': display_image1,
                     'display_image2': display_image2,
-                   'time_steps': torch.tensor([0, 1])}
+                    'time_steps': torch.tensor([0, 1])}
 
         else:
-            return {'image1': img1.float(), 
-                    'image2': img2.float(), 
-                    'offset_image': img3.float(), 
-                    'augmented_image': img4.float(), 
-                    'change_map': change_map, 
+            return {'image1': img1.float(),
+                    'image2': img2.float(),
+                    'offset_image': img3.float(),
+                    'augmented_image': img4.float(),
+                    'change_map': change_map,
                     'label': label,
                     'date1': date1,
                     'date2': date2,
                     'display_image1': display_image1,
                     'display_image2': display_image2,
-                   'time_steps': torch.tensor([0, 1])}
+                    'time_steps': torch.tensor([0, 1])}
 
 
 class SpaceNet7(Dataset):

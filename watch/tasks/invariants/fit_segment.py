@@ -62,7 +62,7 @@ if __name__ == '__main__':
     ### spacenet arguments
     parser.add_argument('--remove_clouds', help='spacenet specific argument', action='store_true')
     parser.add_argument('--normalize_spacenet', help='spacenet specific argument', action='store_true')
-    
+
     ### onera arguments
     parser.add_argument('--onera_data_folder', help='Path to Onera. Only relevant if train_dataset and/or vali_dataset are onera.', type=str, default='/localdisk0/SCRATCH/watch/onera/')
 
