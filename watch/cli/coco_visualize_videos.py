@@ -81,6 +81,8 @@ class CocoVisualizeConfig(scfg.Config):
 
         'norm_hack': scfg.Value(False, help='if true apply normalization hack'),
 
+        'nodata': scfg.Value(0, type=int, help='Nodata value'),
+
         'extra_header': scfg.Value(None, help='extra text to include in the header'),
 
         'select_images': scfg.Value(
@@ -282,7 +284,8 @@ def main(cmdline=True, **kwargs):
                                 channels=channels, vid_crop_box=vid_crop_box,
                                 _header_extra=_header_extra,
                                 chan_to_normalizer=chan_to_normalizer,
-                                norm_hack=config['norm_hack'])
+                                norm_hack=config['norm_hack'],
+                                nodata=config['nodata'])
 
         else:
             gid_subset = gids[start_frame:end_frame]
@@ -301,7 +304,8 @@ def main(cmdline=True, **kwargs):
                             draw_imgs=config['draw_imgs'],
                             draw_anns=config['draw_anns'], _header_extra=_header_extra,
                             chan_to_normalizer=chan_to_normalizer,
-                            norm_hack=config['norm_hack'])
+                            norm_hack=config['norm_hack'],
+                            nodata=config['nodata'])
 
         for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):
             job.result()
@@ -363,7 +367,8 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                request_grouped_bands='default',
                                draw_imgs=True,
                                draw_anns=True, _header_extra=None,
-                               chan_to_normalizer=None, norm_hack=False):
+                               chan_to_normalizer=None, norm_hack=False,
+                               nodata=0):
     """
     Dumps an intensity normalized "space-aligned" kwcoco image visualization
     (with or without annotation overlays) for specific bands to disk.
@@ -517,12 +522,15 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             from kwcoco.util import util_delayed_poc
             chan = util_delayed_poc.DelayedChannelConcat([delayed]).take_channels(chan_group)
 
-        canvas = chan.finalize()
+        # Note: Using 'nearest' here since we're just visualizing (and
+        # otherwise nodata values can affect interpolated pixel
+        # values)
+        canvas = chan.finalize(interpolation='nearest')
         # import kwarray
         # kwarray.atleast_nd(canvas, 3)
 
         if chan_to_normalizer is None:
-            canvas = normalize_intensity(canvas, nodata=0, params={
+            canvas = normalize_intensity(canvas, nodata=nodata, params={
                 'high': 0.90,
                 'mid': 0.5,
                 'low': 0.01,
@@ -535,8 +543,8 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             for cx, c in enumerate(chan_list):
                 normalizer = chan_to_normalizer[c]
                 data = canvas[..., cx]
-                mask = (data != 0)
-                p = util_kwarray.apply_normalizer(data, normalizer, mask=mask)
+                mask = (data != nodata)
+                p = util_kwarray.apply_normalizer(data, normalizer, mask=mask, set_value_at_mask=0.)
                 new_parts.append(p)
             canvas = np.stack(new_parts, axis=2)
 
