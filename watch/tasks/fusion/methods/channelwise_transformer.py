@@ -809,8 +809,10 @@ class MultimodalTransformer(pl.LightningModule):
             frame_class_weights_list = []
             frame_saliency_weights_list = []
             for frame in item['frames']:
-                assert len(self.input_norms) == 1, 'only handle one mode for now'
-                for mode_key in self.input_norms.keys():
+
+                assert self.input_norms is None or len(self.input_norms) == 1, 'only handle one mode for now'
+                # for mode_key in self.input_norms.keys():
+                for mode_key in frame['modes'].keys():
                     mode_val = frame['modes'][mode_key]
                     mode_val = mode_val.float()
                     # self.input_norms = None

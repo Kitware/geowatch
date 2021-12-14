@@ -552,6 +552,18 @@ def gather_measures():
 
     mean_df['title'].apply(lambda x: int(x.split('epoch=')[1].split('-')[0]))
 
+    best_per_expt = pd.concat([subdf.loc[subdf[['mAP']].idxmax()] for t, subdf in mean_df.groupby('expt_name')])
+
+    if True:
+        # hacks
+        best_per_expt['channels'] = (
+            best_per_expt['channels'].apply(
+                lambda x: x.replace('matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7', 'matseg.0:8'))
+        )
+        best_per_expt = best_per_expt.drop('title', axis=1)
+        best_per_expt = best_per_expt.drop('catname', axis=1)
+    print(best_per_expt.sort_values('mAP').to_string())
+
     print('Sort by mAUC')
     print(mean_df.sort_values('mAUC').to_string())
 

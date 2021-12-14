@@ -1,4 +1,8 @@
 
+hack_rsync_dataset(){
+    rsync -avprLR horologic:data/dvc-repos/smart_watch_dvc/./Drop1-Aligned-L1  $HOME/data/dvc-repos/smart_watch_dvc
+}
+
 #Activity_smt_it_joint_m24_newanns_rgb_v4_epoch
 prep_and_inspect(){
     python -m watch.cli.coco_visualize_videos \
@@ -27,7 +31,7 @@ prep_and_inspect(){
         --default_config_key=iarpa \
         --pred_dataset=$KWCOCO_BUNDLE_DPATH/rutgers_nowv.kwcoco.json \
         --num_workers="16" \
-        --batch_size=4 --gpus "0" \
+        --batch_size=4 --gpus "1" \
         --compress=RAW --blocksize=64
 
     export CUDA_VISIBLE_DEVICES="1"
@@ -52,7 +56,7 @@ prep_and_inspect(){
     kwcoco stats $KWCOCO_BUNDLE_DPATH/combo_nowv.kwcoco.json.proj
     mv $KWCOCO_BUNDLE_DPATH/combo_nowv.kwcoco.json.proj $KWCOCO_BUNDLE_DPATH/combo_nowv.kwcoco.json
 
-    python -m watch stats $KWCOCO_BUNDLE_DPATH/combo_nowv.kwcoco.json
+    smartwatch stats $KWCOCO_BUNDLE_DPATH/combo_nowv.kwcoco.json
 
     # Split out train and validation data (TODO: add test when we can)
     kwcoco subset --src $KWCOCO_BUNDLE_DPATH/combo_nowv.kwcoco.json \
@@ -397,6 +401,55 @@ python -m watch.tasks.fusion.fit \
     --default_root_dir=$DEFAULT_ROOT_DIR \
     --method="MultimodalTransformer" \
     --normalize_perframe=True \
+    --gpus "1" \
+    --amp_backend=apex \
+    --arch_name=$ARCH 
+
+
+#
+# Followup Namek - 2021-12-13
+
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop1-20201117
+ARCH=smt_it_stm_p8
+CHANNELS="matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7"
+EXPERIMENT_NAME=SC_${ARCH}_newanns_weighted_rgb_v36
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
+export CUDA_VISIBLE_DEVICES="1"
+python -m watch.tasks.fusion.fit \
+    --config $WORKDIR/configs/common_20201117.yaml  \
+    --channels=${CHANNELS} \
+    --name=$EXPERIMENT_NAME \
+    --chip_size=64 \
+    --time_steps=3 \
+    --default_root_dir=$DEFAULT_ROOT_DIR \
+    --method="MultimodalTransformer" \
+    --normalize_inputs=False \
+    --gpus "1" \
+    --amp_backend=apex \
+    --arch_name=$ARCH 
+
+# Followup Yardrat - 2021-12-13
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop1-20201117
+ARCH=smt_it_stm_p8
+CHANNELS="matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7"
+EXPERIMENT_NAME=SC_${ARCH}_newanns_weighted_rgb_v37
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
+export CUDA_VISIBLE_DEVICES="1"
+python -m watch.tasks.fusion.fit \
+    --config $WORKDIR/configs/common_20201117.yaml  \
+    --channels=${CHANNELS} \
+    --name=$EXPERIMENT_NAME \
+    --chip_size=64 \
+    --time_steps=3 \
+    --default_root_dir=$DEFAULT_ROOT_DIR \
+    --method="MultimodalTransformer" \
+    --normalize_inputs=False \
     --gpus "1" \
     --amp_backend=apex \
     --arch_name=$ARCH 

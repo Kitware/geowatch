@@ -883,7 +883,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1/vali_data_nowv.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=(5, 128, 128), channels='red|green|blue|nir', normalize_perframe=True)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=(5, 128, 128), normalize_perframe=True)
             >>> index = 3
             >>> item = self[index]
             >>> canvas = self.draw_item(item)
@@ -973,6 +973,20 @@ class KWCocoVideoDataset(data.Dataset):
             with_annots = []
         else:
             with_annots = ['boxes', 'segmentation']
+
+        if True:
+            # New true-multimodal data items
+            for gid in tr_['gids']:
+                tr_frame = tr_.copy()
+                tr_frame['gids'] = [gid]
+                img = self.sampler.dset.imgs[gid]
+
+                img['sensor_coarse']
+
+                sample = sampler.load_sample(
+                    tr_frame, with_annots=with_annots,
+                    padkw={'constant_values': np.nan}
+                )
 
         # collect sample
         sample = sampler.load_sample(

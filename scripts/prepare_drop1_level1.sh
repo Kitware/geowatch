@@ -221,18 +221,21 @@ inspect(){
 }
 
 teamfeatures(){
-    export CUDA_VISIBLE_DEVICES="1"
-    smartwatch.tasks.rutgers_material_seg.predict \
+    __doc__="
+    source ~/code/watch/scripts/prepare_drop1_level1.sh
+    "
+    #export CUDA_VISIBLE_DEVICES="1"
+    python -m watch.tasks.rutgers_material_seg.predict \
         --test_dataset=$BASE_COCO_FPATH \
         --checkpoint_fpath=$RUTGERS_MATERIAL_MODEL_FPATH  \
         --default_config_key=iarpa \
         --pred_dataset=$ALIGNED_KWCOCO_BUNDLE/data_nowv_rutgers_mat_seg.kwcoco.json \
         --num_workers="8" \
-        --batch_size=32 --gpus "0" \
+        --batch_size=32 --gpus "1" \
         --compress=RAW --blocksize=64
 
-    export CUDA_VISIBLE_DEVICES="2"
-    smartwatch.tasks.landcover.predict \
+    #export CUDA_VISIBLE_DEVICES="2"
+    python -m watch.tasks.landcover.predict \
         --dataset=$BASE_COCO_FPATH \
         --deployed=$DZYNE_LANDCOVER_MODEL_FPATH  \
         --device=0 \
@@ -253,26 +256,29 @@ teamfeatures(){
     # Split out train and validation data 
     # (TODO: add test when we get enough data)
     kwcoco subset --src $ALIGNED_KWCOCO_BUNDLE/combo_nowv.kwcoco.json \
-            --dst $ALIGNED_KWCOCO_BUNDLE/train_combo11.kwcoco.json \
-            --select_videos '.name | startswith("KR_R002") | not'
+            --dst $ALIGNED_KWCOCO_BUNDLE/combo_train_nowv.kwcoco.json \
+            --select_videos '.name | startswith("KR_") | not'
 
     kwcoco subset --src $ALIGNED_KWCOCO_BUNDLE/combo_nowv.kwcoco.json \
-            --dst $ALIGNED_KWCOCO_BUNDLE/vali_combo11.kwcoco.json \
-            --select_videos '.name | startswith("KR_R002")'
+            --dst $ALIGNED_KWCOCO_BUNDLE/combo_vali_nowv.kwcoco.json \
+            --select_videos '.name | startswith("KR_")'
 
     echo "ALIGNED_KWCOCO_BUNDLE = $ALIGNED_KWCOCO_BUNDLE"
-    smartwatch add_fields --src $ALIGNED_KWCOCO_BUNDLE/vali_combo11.kwcoco.json --dst=$ALIGNED_KWCOCO_BUNDLE/vali_combo11.kwcoco.json --overwrite=warp
-    smartwatch add_fields --src $ALIGNED_KWCOCO_BUNDLE/train_combo11.kwcoco.json --dst=$ALIGNED_KWCOCO_BUNDLE/train_combo11.kwcoco.json --overwrite=warp
+    smartwatch add_fields --src $ALIGNED_KWCOCO_BUNDLE/combo_vali_nowv.kwcoco.json --dst=$ALIGNED_KWCOCO_BUNDLE/vali_combo11.kwcoco.json --overwrite=warp
+    smartwatch add_fields --src $ALIGNED_KWCOCO_BUNDLE/combo_train_nowv.kwcoco.json --dst=$ALIGNED_KWCOCO_BUNDLE/train_combo11.kwcoco.json --overwrite=warp
 
     smartwatch project \
         --site_models="$DVC_DPATH/drop1/site_models/*.geojson" \
-        --src $ALIGNED_KWCOCO_BUNDLE/vali_combo11.kwcoco.json \
-        --dst $ALIGNED_KWCOCO_BUNDLE/vali_combo11.kwcoco.json.prop 
+        --src $ALIGNED_KWCOCO_BUNDLE/combo_vali_nowv.kwcoco.json \
+        --dst $ALIGNED_KWCOCO_BUNDLE/combo_vali_nowv.kwcoco.json
 
     smartwatch project \
         --site_models="$DVC_DPATH/drop1/site_models/*.geojson" \
-        --src $ALIGNED_KWCOCO_BUNDLE/train_combo11.kwcoco.json \
-        --dst $ALIGNED_KWCOCO_BUNDLE/train_combo11.kwcoco.json.prop 
+        --src $ALIGNED_KWCOCO_BUNDLE/combo_train_nowv.kwcoco.json \
+        --dst $ALIGNED_KWCOCO_BUNDLE/combo_train_nowv.kwcoco.json
+
+    smartwatch stats $ALIGNED_KWCOCO_BUNDLE/combo_train_nowv.kwcoco.json
+    kwcoco stats $ALIGNED_KWCOCO_BUNDLE/combo_train_nowv.kwcoco.json
 }
 
 
