@@ -15,7 +15,7 @@ class segmentation_model(pl.LightningModule):
         if type(hparams) == dict:
             hparams = Namespace(**hparams)
 
-        self.backbone = attention_unet(hparams.num_channels, 2, pos_encode=hparams.positional_encoding, num_attention_layers=hparams.num_attention_layers)
+        self.backbone = attention_unet(hparams.num_channels, 2, pos_encode=hparams.positional_encoding, num_attention_layers=hparams.num_attention_layers, mode=hparams.positional_encoding_mode)
 
         ##### define dataset
         if hparams.dataset == 'kwcoco':

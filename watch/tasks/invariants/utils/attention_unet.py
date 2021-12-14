@@ -17,22 +17,28 @@ class positional_encoding(nn.Module):
 
 
 class attention_unet(nn.Module):
-    def __init__(self, in_channels, out_channels, dropout_rate=.5, pos_encode=False, num_attention_layers=1):
+    def __init__(self, in_channels, out_channels, dropout_rate=.5, pos_encode=False, num_attention_layers=1, mode='addition'):
         super(attention_unet, self).__init__()
 
         assert(num_attention_layers <= 4)
+        self.mode = mode
         self.num_attention_layers = num_attention_layers
         self.feature_dimensions = [64, 128, 256, 512, 1024]
+        dimension_adjustment = [0, 0, 0, 0]
+        if self.mode == 'concatenation' and pos_encode:
+            self.pos_embed_dim = 16
+            for i in range(num_attention_layers):
+                dimension_adjustment[i] = dimension_adjustment[i] + self.pos_embed_dim 
         self.inc = inconv(in_channels, self.feature_dimensions[0])
-        self.down1 = down_blur(self.feature_dimensions[0], self.feature_dimensions[1])
-        self.down2 = down_blur(self.feature_dimensions[1], self.feature_dimensions[2])
-        self.down3 = down_blur(self.feature_dimensions[2], self.feature_dimensions[3])
-        self.down4 = down_blur(self.feature_dimensions[3], self.feature_dimensions[3])
+        self.down1 = down_blur(self.feature_dimensions[0] + dimension_adjustment[0], self.feature_dimensions[1])
+        self.down2 = down_blur(self.feature_dimensions[1] + dimension_adjustment[1], self.feature_dimensions[2])
+        self.down3 = down_blur(self.feature_dimensions[2] + dimension_adjustment[2], self.feature_dimensions[3])
+        self.down4 = down_blur(self.feature_dimensions[3] + dimension_adjustment[3], self.feature_dimensions[3])
 
-        self.up1 = up(self.feature_dimensions[4], self.feature_dimensions[2])
-        self.up2 = up(self.feature_dimensions[3], self.feature_dimensions[1])
-        self.up3 = up(self.feature_dimensions[2], self.feature_dimensions[0])
-        self.up4 = up(self.feature_dimensions[1], self.feature_dimensions[0])
+        self.up1 = up(self.feature_dimensions[4] + dimension_adjustment[3], self.feature_dimensions[2])
+        self.up2 = up(self.feature_dimensions[3] + dimension_adjustment[2], self.feature_dimensions[1])
+        self.up3 = up(self.feature_dimensions[2] + dimension_adjustment[1], self.feature_dimensions[0])
+        self.up4 = up(self.feature_dimensions[1] + dimension_adjustment[0], self.feature_dimensions[0])
         self.outc = outconv(self.feature_dimensions[0], out_channels)
         self.drop = nn.Dropout(p=dropout_rate)
 
@@ -45,14 +51,14 @@ class attention_unet(nn.Module):
             self.key.append(nn.Conv2d(self.feature_dimensions[k], self.feature_dimensions[k], kernel_size=1))
             self.value.append(nn.Conv2d(self.feature_dimensions[k], self.feature_dimensions[k], kernel_size=1))
             if pos_encode:
-                self.positional_encoding.append(positional_encoding(dimensions=self.feature_dimensions[k]))
+                if self.mode == 'concatenation':
+                    self.positional_encoding.append(positional_encoding(dimensions=self.pos_embed_dim))
+                else:
+                    self.positional_encoding.append(positional_encoding(dimensions=self.feature_dimensions[k]))
         self.pos_encode = pos_encode
 
     def forward(self, images, timestamps=None):
         attention_layers = range(1, 1 + self.num_attention_layers)
-
-        if timestamps is None:
-            timestamps = torch.tensor(range(images.shape[1]))
 
         # images # B x T x C x H x W
 
@@ -72,9 +78,19 @@ class attention_unet(nn.Module):
             att = torch.softmax(att_linear, dim=1)
             x1 = torch.einsum('bpqhw, bpchw -> bqchw', att, V)
             if self.pos_encode:
-                positional_encode = self.positional_encoding[0](timestamps)
+                if timestamps is None:
+                    if self.mode == 'concatenation':
+                        positional_encode = torch.zeros(B, T, self.pos_embed_dim)
+                    else:
+                        positional_encode = torch.zeros(B, T, self.feature_dimensions[0])
+                else:
+                    positional_encode = self.positional_encoding[0](timestamps)
+
                 positional_encode = positional_encode.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, 1, H, W)
-                x1 = x1 + positional_encode
+                if self.mode == 'concatenation':
+                    x1 = torch.cat([x1, positional_encode], dim=2)
+                else:
+                    x1 = x1 + positional_encode
             x1 = x1.contiguous().view(B * T, -1, H, W)
         ###
 
@@ -89,9 +105,19 @@ class attention_unet(nn.Module):
             att = torch.softmax(att_linear, dim=1)
             x2 = torch.einsum('bpqhw, bpchw -> bqchw', att, V)
             if self.pos_encode:
-                positional_encode = self.positional_encoding[1](timestamps)
+                if timestamps is None:
+                    if self.mode == 'concatenation':
+                        positional_encode = torch.zeros(B, T, self.pos_embed_dim)
+                    else:
+                        positional_encode = torch.zeros(B, T, self.feature_dimensions[1])
+                else:
+                    positional_encode = self.positional_encoding[1](timestamps)
+
                 positional_encode = positional_encode.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, 1, H, W)
-                x2 = x2 + positional_encode
+                if self.mode == 'concatenation':
+                    x2 = torch.cat([x2, positional_encode], dim=2)
+                else:
+                    x2 = x2 + positional_encode
             x2 = x2.contiguous().view(B * T, -1, H, W)
         ###
 
@@ -107,9 +133,19 @@ class attention_unet(nn.Module):
             att = torch.softmax(att_linear, dim=1)
             x3 = torch.einsum('bpqhw, bpchw -> bqchw', att, V)
             if self.pos_encode:
-                positional_encode = self.positional_encoding[2](timestamps)
+                if timestamps is None:
+                    if self.mode == 'concatenation':
+                        positional_encode = torch.zeros(B, T, self.pos_embed_dim)
+                    else:
+                        positional_encode = torch.zeros(B, T, self.feature_dimensions[2])
+                else:
+                    positional_encode = self.positional_encoding[2](timestamps)
+
                 positional_encode = positional_encode.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, 1, H, W)
-                x3 = x3 + positional_encode
+                if self.mode == 'concatenation':
+                    x3 = torch.cat([x3, positional_encode], dim=2)
+                else:
+                    x3 = x3 + positional_encode
             x3 = x3.contiguous().view(B * T, -1, H, W)
         ###
 
@@ -125,9 +161,19 @@ class attention_unet(nn.Module):
             att = torch.softmax(att_linear, dim=1)
             x4 = torch.einsum('bpqhw, bpchw -> bqchw', att, V)
             if self.pos_encode:
-                positional_encode = self.positional_encoding[3](timestamps)
+                if timestamps is None:
+                    if self.mode == 'concatenation':
+                        positional_encode = torch.zeros(B, T, self.pos_embed_dim)
+                    else:
+                        positional_encode = torch.zeros(B, T, self.feature_dimensions[3])
+                else:
+                    positional_encode = self.positional_encoding[3](timestamps)
+
                 positional_encode = positional_encode.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, 1, H, W)
-                x4 = x4 + positional_encode
+                if self.mode == 'concatenation':
+                    x4 = torch.cat([x4, positional_encode], dim=2)
+                else:
+                    x4 = x4 + positional_encode
             x4 = x4.contiguous().view(B * T, -1, H, W)
         ###
 

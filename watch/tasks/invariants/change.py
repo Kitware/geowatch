@@ -32,7 +32,7 @@ class change(pl.LightningModule):
             else:
                 self.backbone = pretrained_model.backbone
         else:
-            self.backbone = attention_unet(hparams.num_channels, hparams.feature_dim, pos_encode=hparams.positional_encoding, num_attention_layers=hparams.num_attention_layers) #mode=hparams.positional_encoding_mode
+            self.backbone = attention_unet(hparams.num_channels, hparams.feature_dim, pos_encode=hparams.positional_encoding, num_attention_layers=hparams.num_attention_layers, mode=hparams.positional_encoding_mode)
 
         ##### define dataset
         if hparams.trainset == 'kwcoco':
