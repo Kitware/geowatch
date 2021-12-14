@@ -48,6 +48,8 @@ unprotect_dvc(){
 
 _debug_extract_aligned(){
     __doc__="
+    LOGIC FOR DEBUGGING WITH A SMALLER SUBSET OF DATA
+
         source ~/code/watch/scripts/prepare_drop1_level1.sh
     "
     kwcoco subset data.kwcoco.json
@@ -264,8 +266,8 @@ teamfeatures(){
             --select_videos '.name | startswith("KR_")'
 
     echo "ALIGNED_KWCOCO_BUNDLE = $ALIGNED_KWCOCO_BUNDLE"
-    smartwatch add_fields --src $ALIGNED_KWCOCO_BUNDLE/combo_vali_nowv.kwcoco.json --dst=$ALIGNED_KWCOCO_BUNDLE/vali_combo11.kwcoco.json --overwrite=warp
-    smartwatch add_fields --src $ALIGNED_KWCOCO_BUNDLE/combo_train_nowv.kwcoco.json --dst=$ALIGNED_KWCOCO_BUNDLE/train_combo11.kwcoco.json --overwrite=warp
+    #smartwatch add_fields --src $ALIGNED_KWCOCO_BUNDLE/combo_vali_nowv.kwcoco.json --dst=$ALIGNED_KWCOCO_BUNDLE/combo_vali_nowv.kwcoco.json --overwrite=warp
+    #smartwatch add_fields --src $ALIGNED_KWCOCO_BUNDLE/combo_train_nowv.kwcoco.json --dst=$ALIGNED_KWCOCO_BUNDLE/combo_train_nowv.kwcoco.json --overwrite=warp
 
     smartwatch project \
         --site_models="$DVC_DPATH/drop1/site_models/*.geojson" \

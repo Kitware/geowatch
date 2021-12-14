@@ -1,10 +1,13 @@
-
 hack_rsync_dataset(){
     rsync -avprLR horologic:data/dvc-repos/smart_watch_dvc/./Drop1-Aligned-L1  $HOME/data/dvc-repos/smart_watch_dvc
 }
 
 #Activity_smt_it_joint_m24_newanns_rgb_v4_epoch
 prep_and_inspect(){
+    __doc__="
+    SeeAlso:
+        ~/code/watch/scripts/prepare_drop1_level1.sh
+    "
     python -m watch.cli.coco_visualize_videos \
        --src $KWCOCO_BUNDLE_DPATH/prop_data.kwcoco.json \
        --channels "red|green|blue" \
@@ -29,7 +32,7 @@ prep_and_inspect(){
         --test_dataset=$KWCOCO_BUNDLE_DPATH/data_nowv.kwcoco.json \
         --checkpoint_fpath=$RUTGERS_MATERIAL_MODEL_FPATH  \
         --default_config_key=iarpa \
-        --pred_dataset=$KWCOCO_BUNDLE_DPATH/rutgers_nowv.kwcoco.json \
+        --pred_dataset=$KWCOCO_BUNDLE_DPATH/data_nowv_rutgers_mat_seg.kwcoco.json \
         --num_workers="16" \
         --batch_size=4 --gpus "1" \
         --compress=RAW --blocksize=64
@@ -40,21 +43,18 @@ prep_and_inspect(){
         --deployed=$DZYNE_LANDCOVER_MODEL_FPATH  \
         --device=0 \
         --num_workers="16" \
-        --output=$KWCOCO_BUNDLE_DPATH/landcover_nowv.kwcoco.json
+        --output=$KWCOCO_BUNDLE_DPATH/data_nowv_dzyne_landcover.kwcoco.json
 
     python ~/code/watch/watch/cli/coco_combine_features.py \
         --src $KWCOCO_BUNDLE_DPATH/data_nowv.kwcoco.json \
-              $KWCOCO_BUNDLE_DPATH/rutgers_nowv.kwcoco.json \
-              $KWCOCO_BUNDLE_DPATH/landcover_nowv.kwcoco.json \
+              $KWCOCO_BUNDLE_DPATH/data_nowv_rutgers_mat_seg.kwcoco.json \
+              $KWCOCO_BUNDLE_DPATH/data_nowv_dzyne_landcover.kwcoco.json \
         --dst $KWCOCO_BUNDLE_DPATH/combo_nowv.kwcoco.json
 
     python -m watch project \
         --site_models="$DVC_DPATH/drop1/site_models/*.geojson" \
         --src $KWCOCO_BUNDLE_DPATH/combo_nowv.kwcoco.json \
-        --dst $KWCOCO_BUNDLE_DPATH/combo_nowv.kwcoco.json.proj
-
-    kwcoco stats $KWCOCO_BUNDLE_DPATH/combo_nowv.kwcoco.json.proj
-    mv $KWCOCO_BUNDLE_DPATH/combo_nowv.kwcoco.json.proj $KWCOCO_BUNDLE_DPATH/combo_nowv.kwcoco.json
+        --dst $KWCOCO_BUNDLE_DPATH/combo_nowv.kwcoco.json
 
     smartwatch stats $KWCOCO_BUNDLE_DPATH/combo_nowv.kwcoco.json
 
@@ -440,7 +440,7 @@ CHANNELS="matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_
 EXPERIMENT_NAME=SC_${ARCH}_newanns_weighted_rgb_v37
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
-export CUDA_VISIBLE_DEVICES="1"
+export CUDA_VISIBLE_DEVICES="0"
 python -m watch.tasks.fusion.fit \
     --config $WORKDIR/configs/common_20201117.yaml  \
     --channels=${CHANNELS} \

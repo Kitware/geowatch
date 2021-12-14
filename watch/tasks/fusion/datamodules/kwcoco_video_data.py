@@ -974,7 +974,7 @@ class KWCocoVideoDataset(data.Dataset):
         else:
             with_annots = ['boxes', 'segmentation']
 
-        if True:
+        if False:
             # New true-multimodal data items
             for gid in tr_['gids']:
                 tr_frame = tr_.copy()

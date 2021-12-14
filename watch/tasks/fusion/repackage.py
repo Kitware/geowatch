@@ -81,13 +81,16 @@ def repackage(checkpoint_fpath, force=False):
 
 def gather_checkpoints():
     """
-    Hack function to move all checkpoints into a directory for evaluation
+    Package and copy checkpoints into the DVC folder for evaluation.
 
     Ignore:
         from watch.tasks.fusion.repackage import *  # NOQA
     """
     from watch.utils import util_data
     import pathlib
+    import ubelt as ub
+    import shutil
+    import os
     dvc_dpath = util_data.find_smart_dvc_dpath()
     train_base = dvc_dpath / 'training'
     dataset_names = [
@@ -95,6 +98,11 @@ def gather_checkpoints():
         # 'Drop1_November2021',
         'Drop1-20201117',
     ]
+
+    # storage_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
+    storage_dpath = dvc_dpath / 'models/fusion/SC-20201117'
+    storage_dpath.mkdir(exist_ok=True, parents=True)
+
     user_machine_dpaths = list(train_base.glob('*/*'))
 
     all_checkpoint_paths = []
@@ -103,7 +111,7 @@ def gather_checkpoints():
             dset_dpath = um_dpath / dset_name
             lightning_log_dpaths = list((dset_dpath / 'runs').glob('*/lightning_logs'))
             for ll_dpath in lightning_log_dpaths:
-                if not ll_dpath.parent.name.startswith(('Activity', 'SC_')):
+                if not ll_dpath.parent.name.startswith(('Activity', 'SC_')):  # HACK
                     continue
                 for checkpoint_fpath in list((ll_dpath).glob('*/checkpoints/*.ckpt')):
                     parts = checkpoint_fpath.name.split('-')
@@ -111,12 +119,6 @@ def gather_checkpoints():
                         print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
                         all_checkpoint_paths.append(checkpoint_fpath)
 
-    # storage_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
-    storage_dpath = dvc_dpath / 'models/fusion/SC-20201117'
-    storage_dpath.mkdir(exist_ok=True, parents=True)
-
-    import ubelt as ub
-    import shutil
     to_copy = []
     for p in ub.ProgIter(all_checkpoint_paths):
         package_fpath = repackage(p)
@@ -156,7 +158,6 @@ def gather_checkpoints():
 
     import dvc.main
     # from dvc import main
-    import os
     saved_cwd = os.getcwd()
     try:
         os.chdir(dvc_dpath)
@@ -175,13 +176,6 @@ def gather_checkpoints():
 
     python ~/code/watch/watch/tasks/fusion/schedule_inference.py schedule_evaluation --gpus=None
     """
-
-    import os
-    for r, ds, fs in os.walk(train_base):
-        if r.endswith('/lightning_logs'):
-            print('r = {!r}'.format(r))
-            break
-        pass
 
 
 if __name__ == '__main__':

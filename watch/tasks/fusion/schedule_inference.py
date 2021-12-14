@@ -356,12 +356,19 @@ def gather_measures():
     import pandas as pd
     import numpy as np
     import ubelt as ub
+    from kwcoco.coco_evaluator import CocoSingleResult
+    import yaml
+    from watch.tasks.fusion import result_analysis
+    import shutil
     # import pathlib
+
+    class Found(Exception):
+        pass
 
     dvc_dpath = watch.utils.util_data.find_smart_dvc_dpath()
 
     if True:
-        # Prefer a remote
+        # Prefer a remote (the machine where data is being evaluated)
         remote = 'horologic'
         remote = 'namek'
         # Hack for pointing at a remote
@@ -382,11 +389,67 @@ def gather_measures():
 
     jobs = ub.JobPool('thread', max_workers=10)
     all_infos = []
+    def load_data(measure_fpath):
+        with open(measure_fpath, 'r') as file:
+            info = json.load(file)
+        if True:
+            # Hack to ensure fit config is properly serialized
+            try:
+                predict_meta = None
+                for meta_item in info['meta']['info']:
+                    if meta_item['type'] == 'process':
+                        if meta_item['properties']['name'] == 'watch.tasks.fusion.predict':
+                            predict_meta = meta_item
+                            raise Found
+            except Found:
+                pass
+            else:
+                raise Exception('no prediction metadata')
+            process_props = predict_meta['properties']
+            predict_args = process_props['args']
+            cand_remote = process_props['hostname']
+            need_fit_config_hack = 'fit_config' not in process_props
+            if need_fit_config_hack:
+                # Hack, for models where I forgot to serialize the fit
+                # configuration.
+                print('Hacking in fit-config')
+                package_fpath = predict_args['package_fpath']
+                # hack, dont have enough into to properly remove the user directory
+                hack_home = ub.expandpath(f'$HOME/remote/{cand_remote}')
+                cand_remote_home = pathlib.Path(hack_home)
+                tmp = pathlib.Path(package_fpath)
+                possible_home_dirs = [
+                    pathlib.Path('/home/local/KHQ'),
+                    pathlib.Path('/home'),
+                ]
+                cand_suffix = None
+                for possible_home in possible_home_dirs:
+                    possible_home_parts = possible_home.parts
+                    n = len(possible_home_parts)
+                    if tmp.parts[:n] == possible_home_parts:
+                        cand_suffix = '/'.join(tmp.parts[n + 1:])
+                        break
+                if cand_suffix is None:
+                    raise Exception
+                cand_remote_fpath = cand_remote_home / cand_suffix
+                if cand_remote_fpath.exists():
+                    base_file = ub.zopen(cand_remote_fpath, ext='.pt')
+                    found = None
+                    for subfile in base_file.namelist():
+                        if 'package_header/fit_config.yaml' in subfile:
+                            found = subfile
+                    file = ub.zopen(cand_remote_fpath / found, ext='.pt')
+                    fit_config = yaml.safe_load(file)
+                    # TODO: this should have already existed
+                    process_props['fit_config'] = fit_config
+                    print('Backup measures: {}'.format(measure_fpath))
+                    shutil.copy(measure_fpath, ub.augpath(measure_fpath, suffix='.bak'))
+                    with open(measure_fpath, 'w') as file:
+                        json.dump(info, file)
+                else:
+                    raise Exception
+        return info
     for measure_fpath in ub.ProgIter(measure_fpaths):
-        def load_data(measure_fpath):
-            with open(measure_fpath, 'r') as file:
-                info = json.load(file)
-            return info
         jobs.submit(load_data, measure_fpath)
 
     # job = next(iter(jobs.as_completed(desc='collect jobs')))
@@ -394,9 +457,6 @@ def gather_measures():
     for job in jobs.as_completed(desc='collect jobs'):
         all_infos.append(job.result())
 
-    from kwcoco.coco_evaluator import CocoSingleResult
-    import yaml
-    from watch.tasks.fusion import result_analysis
     class_rows = []
     mean_rows = []
     all_results = []
@@ -441,9 +501,6 @@ def gather_measures():
         row['step'] = step
         mean_rows.append(row)
 
-        class Found(Exception):
-            pass
-
         try:
             predict_meta = None
             for meta_item in info['meta']['info']:
@@ -465,36 +522,7 @@ def gather_measures():
                 fit_config = process_props['fit_config']
                 result.meta['fit_config'] = fit_config
             else:
-                # Hack, for models where I forgot to serialize the
-                # fit configuration.
-                # Did we (I?) seriously not serialize the train params?
-                package_fpath = predict_args['package_fpath']
-                # hack, dont have enough into to properly remove the user directory
-                if True:
-                    hack_home = ub.expandpath(f'$HOME/remote/{cand_remote}')
-                    cand_remote_home = pathlib.Path(hack_home)
-                    tmp = pathlib.Path(package_fpath)
-                    if tmp.parts[0:4] == ('/', 'home', 'local', 'KHQ'):
-                        cand_suffix = '/'.join(tmp.parts[5:])
-                    elif tmp.parts[0:2] == ('/', 'home'):
-                        cand_suffix = '/'.join(tmp.parts[3:])
-                    else:
-                        raise Exception
-                    cand_remote_fpath = cand_remote_home / cand_suffix
-
-                # cand_remote_fpath = pathlib.Path(ub.shrinkuser(package_fpath, home=))
-                if cand_remote_fpath.exists():
-                    base_file = ub.zopen(cand_remote_fpath, ext='.pt')
-                    found = None
-                    for subfile in base_file.namelist():
-                        if 'package_header/fit_config.yaml' in subfile:
-                            found = subfile
-                    file = ub.zopen(cand_remote_fpath / found, ext='.pt')
-                    fit_config = yaml.safe_load(file)
-                    # TODO: this should have already existed
-                    result.meta['fit_config'] = fit_config
-                else:
-                    raise Exception
+                raise Exception('Fit config was not serialized correctly')
 
             bin_measure = info['ovr_measures']
             metrics = {
@@ -512,6 +540,10 @@ def gather_measures():
             row['time_steps'] = fit_config['time_steps']
             row['chip_size'] = fit_config['chip_size']
             row['arch_name'] = fit_config['arch_name']
+            row['train_remote'] = cand_remote
+
+            predict_args  # add predict window overlap
+            # row['train_remote'] = cand_remote
 
             result2 = result_analysis.Result(
                  name=result.meta['title'],
@@ -585,12 +617,15 @@ def gather_measures():
     ax = sns.lineplot(data=mean_df, x='step', y='mAUC', hue='expt_name', marker='o', style='channels')
     ax.set_title('Pixelwise mAUC AC metrics: KR_R001 + KR_R002')
 
+    max_num_curves = 16
+
     from kwcoco.metrics import drawing
     fig = kwplot.figure(fnum=3, doclf=True)
     sorted_results = sorted(all_results, key=lambda x: x.ovr_measures[catname]['ap'])[::-1]
+    results_to_plot = sorted_results[0:max_num_curves]
     catname = 'Active Construction'
-    colors = kwplot.Color.distinct(len(sorted_results))
-    for idx, result in enumerate(sorted_results[0:16]):
+    colors = kwplot.Color.distinct(len(results_to_plot))
+    for idx, result in enumerate(results_to_plot):
         color = colors[idx]
         color = [kwplot.Color(color).as01()]
         measure = result.ovr_measures[catname]
@@ -602,9 +637,10 @@ def gather_measures():
 
     fig = kwplot.figure(fnum=4, doclf=True)
     sorted_results = sorted(all_results, key=lambda x: x.ovr_measures[catname]['auc'])[::-1]
+    results_to_plot = sorted_results[0:max_num_curves]
     catname = 'Active Construction'
-    colors = kwplot.Color.distinct(len(sorted_results[0:16]))
-    for idx, result in enumerate(sorted_results):
+    colors = kwplot.Color.distinct(len(results_to_plot))
+    for idx, result in enumerate(results_to_plot):
         color = colors[idx]
         color = [kwplot.Color(color).as01()]
         measure = result.ovr_measures[catname]
