@@ -31,6 +31,13 @@ def load_model_from_package(package_path):
         * I don't like that we need to know module_name and arch_name a-priori
           given a path to a package, I just want to be able to construct
           the model instance. The package header solves this.
+
+    Ignore:
+        >>> from watch.tasks.fusion.utils import *  # NOQA
+        >>> import watch
+        >>> dvc_dpath = watch.utils.util_data.find_smart_dvc_dpath()
+        >>> package_path = dvc_dpath / 'models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_rgb_v26/SC_smt_it_stm_p8_newanns_weighted_rgb_v26_epoch=101-step=4366925.pt'
+        >>> model = load_model_from_package(package_path)
     """
     from torch import package
     import json

@@ -384,6 +384,7 @@ def video_track_info(coco_dset, vidid):
     for tid in track_ids:
         track_aids = coco_dset.index.trackid_to_aids[tid]
         vidspace_boxes = []
+        track_gids = []
         for aid in track_aids:
             ann = coco_dset.index.anns[aid]
             gid = ann['image_id']
@@ -393,11 +394,13 @@ def video_track_info(coco_dset, vidid):
             imgspace_box = kwimage.Boxes([bbox], 'xywh')
             vidspace_box = imgspace_box.warp(vid_from_img)
             vidspace_boxes.append(vidspace_box)
+            track_gids.append(gid)
         all_vidspace_boxes = kwimage.Boxes.concatenate(vidspace_boxes)
         full_vid_box = all_vidspace_boxes.bounding_box().to_xywh()
         tid_to_info[tid] = {
             'tid': tid,
             'full_vid_box': full_vid_box,
+            'track_gids': track_gids,
         }
     return tid_to_info
 

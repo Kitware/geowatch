@@ -226,6 +226,11 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus=None, run=Fa
         package_info = package_metadata(pathlib.Path(package_fpath))
         packages_to_eval.append(package_info)
 
+    shuffle_jobs = True
+    if shuffle_jobs:
+        import kwarray
+        packages_to_eval = kwarray.shuffle(packages_to_eval)
+
     # # for subfolder in model_dpath.glob('*'):
     #     # package_fpaths = list(subfolder.glob('*.pt'))
     #     subfolder_infos = [package_metadata(package_fpath)
@@ -521,6 +526,8 @@ def gather_measures():
 
             if 'fit_config' in process_props:
                 fit_config = process_props['fit_config']
+                # Add in defaults for new params
+                fit_config.setdefault('normalize_perframe', False)
                 result.meta['fit_config'] = fit_config
             else:
                 raise Exception('Fit config was not serialized correctly')
@@ -541,6 +548,8 @@ def gather_measures():
             row['time_steps'] = fit_config['time_steps']
             row['chip_size'] = fit_config['chip_size']
             row['arch_name'] = fit_config['arch_name']
+            row['normalize_perframe'] = fit_config.get('normalize_perframe', False)
+            row['normalize_inputs'] = fit_config.get('normalize_inputs', False)
             row['train_remote'] = cand_remote
 
             predict_args  # add predict window overlap
