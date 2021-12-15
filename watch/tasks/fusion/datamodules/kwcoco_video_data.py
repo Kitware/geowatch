@@ -981,6 +981,7 @@ class KWCocoVideoDataset(data.Dataset):
         # get positive sample definition
         # collect sample
         sampler = self.sampler
+        coco_dset = self.sampler.dset
         tr_['as_xarray'] = False
         tr_['use_experimental_loader'] = 1
 
@@ -1003,7 +1004,7 @@ class KWCocoVideoDataset(data.Dataset):
             gid_to_isbad = {}
 
             def sample_one_frame(gid):
-                coco_img = self.sampler.dset.coco_image(gid)
+                coco_img = coco_dset.coco_image(gid)
                 sensor_channels = self.sample_channels & coco_img.channels
                 tr_frame = tr_.copy()
                 tr_frame['gids'] = [gid]
@@ -1019,7 +1020,7 @@ class KWCocoVideoDataset(data.Dataset):
                 sample_one_frame(gid)
 
             vidid = tr_['video_id']
-            video = self.sampler.dset.index.videos[vidid]
+            video = coco_dset.index.videos[vidid]
             time_sampler = self.new_sample_grid['vidid_to_time_sampler'][vidid]
             video_gids = time_sampler.video_gids
 
@@ -1048,8 +1049,9 @@ class KWCocoVideoDataset(data.Dataset):
                             sample_one_frame(gid)
 
             good_gids = [gid for gid, flag in gid_to_isbad.items() if not flag]
-            resampled_gids = ub.oset(video_gids) & good_gids
-            tr_['gids'] = resampled_gids
+            final_gids = ub.oset(video_gids) & good_gids
+            # coco_dset.images(final_gids).lookup('date_captured')
+            tr_['gids'] = final_gids
 
             if self.sample_shape is None:
                 input_dsize = gid_to_sample[good_gids[0]]['im'].shape[1:3][::-1]
@@ -1075,8 +1077,8 @@ class KWCocoVideoDataset(data.Dataset):
                 raise NotImplementedError
 
             frame_items = []
-            for time_idx, gid in enumerate(good_gids):
-                img = self.sampler.dset.index.imgs[gid]
+            for time_idx, gid in enumerate(final_gids):
+                img = coco_dset.index.imgs[gid]
                 sample = gid_to_sample[gid]
                 # TODO: get nodata value here
                 # FIXME: nodata value needs to be handled in the kwcoco delay
@@ -1149,11 +1151,18 @@ class KWCocoVideoDataset(data.Dataset):
                         elif catname in self.ignore_classes:
                             poly.fill(saliency_ignore, value=1)
                             poly.fill(frame_class_ignore, value=1)
+                            # weights should allow us to distinguish ignore
+                            # from background. It shouldn't be learned on in
+                            # any case.
+                            poly.fill(frame_class_ohe[cidx], value=1)
                         else:
+                            # Indistinguishable classes should be ignored
+                            # for classification, but not saliency
                             if catname in self.undistinguished_classes:
-                                poly.fill(frame_class_ohe[cidx], value=0)
-                            else:
-                                poly.fill(frame_class_ohe[cidx], value=1)
+                                poly.fill(frame_class_ignore, value=1)
+                                # poly.fill(frame_class_ohe[cidx], value=0)
+                                # poly.fill(frame_class_ohe[cidx], value=0)
+                            poly.fill(frame_class_ohe[cidx], value=1)
 
                     # Postprocess (Dilate?) the truth map
                     for cidx, class_map in enumerate(frame_class_ohe):
@@ -1796,18 +1805,22 @@ class KWCocoVideoDataset(data.Dataset):
             >>> import kwcoco
             >>> from watch.utils.util_data import find_smart_dvc_dpath
             >>> dvc_dpath = find_smart_dvc_dpath()
-            >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/combo_data.kwcoco.json'
+            >>> #coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/combo_data.kwcoco.json'
+            >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1/vali_data_nowv.kwcoco.json'
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
-            >>> sample_shape = (7, 128, 128)
+            >>> sample_shape = (3, 128, 128)
             >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels='swamp|red|green|blue|swir22|lwir12|pan|nir', true_multimodal=True)
-            >>> vidid = 1
+            >>> vidid = self.sampler.dset.videos()[1]
             >>> from watch.cli.coco_visualize_videos import video_track_info
             >>> tid_to_info = video_track_info(coco_dset, vidid)
-            >>> track_info = ub.peek(tid_to_info.values())
+            >>> for track_info in tid_to_info.values():
+            >>>     cnames = coco_dset.annots(track_info['track_aids']).cnames
+            >>>     print(ub.oset(cnames))
+            >>> track_info = list(tid_to_info.values())[1]
             >>> index = {
             >>>     'space_slice': track_info['full_vid_box'].quantize().to_slices()[0],
-            >>>     'gids': track_info['track_gids'][0:9],
+            >>>     'gids': track_info['track_gids'][2:9],
             >>>     'video_id': vidid,
             >>> }
             >>> max_channels = 5

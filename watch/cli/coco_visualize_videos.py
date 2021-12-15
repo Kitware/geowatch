@@ -401,6 +401,7 @@ def video_track_info(coco_dset, vidid):
             'tid': tid,
             'full_vid_box': full_vid_box,
             'track_gids': track_gids,
+            'track_aids': track_aids,
         }
     return tid_to_info
 
