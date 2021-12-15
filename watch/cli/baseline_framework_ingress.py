@@ -73,6 +73,10 @@ def _item_map(feature, outdir, aws_base_command, dryrun, relative=False):
              'href': self_link['href'],
              'type': 'application/json'})
 
+    # Should only be added the first time the item is ingressed
+    if 'watch:original_item_id' not in feature['properties']:
+        feature['properties']['watch:original_item_id'] = feature['id']
+
     assets = feature.get('assets', {})
 
     # HTML index page for certain Landsat items, not needed here
@@ -210,8 +214,15 @@ def baseline_framework_ingress(input_path,
                             dryrun, relative)
             for feature in input_stac_items]
 
-    for mapped_item in (job.result() for job in as_completed(jobs)):
-        catalog.add_item(mapped_item)
+    for job in as_completed(jobs):
+        try:
+            mapped_item = job.result()
+        except Exception as e:
+            print("Exception occurred (printed below), dropping item!")
+            print(e)
+            continue
+        else:
+            catalog.add_item(mapped_item)
 
     catalog.save(catalog_type=catalog_type)
     print('wrote catalog_outpath = {!r}'.format(catalog_outpath))

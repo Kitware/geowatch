@@ -7,11 +7,13 @@ for DVC
 # user-specified arguments
 #DVC_DPATH=${DVC_DPATH:-$HOME/data/dvc-repos/smart_watch_dvc}
 #S3_DPATH=${S3_DPATH:-s3://kitware-smart-watch-data/processed/ta1/drop1/coreg_and_brdf/}
-#S3_DPATH=${S3_DPATH:-s3://kitware-smart-watch-data/processed/ta1/drop1/coreg_and_brdf/}
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-S3_DPATH=s3://kitware-smart-watch-data/processed/ta1/drop1/mtra
 
-TA1_PROCESS_TYPE=MTRA
+#S3_DPATH=s3://kitware-smart-watch-data/processed/ta1/drop1/mtra
+#TA1_PROCESS_TYPE=MTRA
+
+S3_DPATH=s3://kitware-smart-watch-data/processed/ta1/drop1/LT_rescaled_c1/LT/atmospheric-correction
+TA1_PROCESS_TYPE=LT_rescaled_c1
 
 ALIGNED_BUNDLE_NAME=Drop1-Aligned-TA1-$TA1_PROCESS_TYPE
 UNCROPPED_BUNDLE_NAME=TA1-Uncropped-$TA1_PROCESS_TYPE
@@ -36,19 +38,31 @@ ALIGNED_KWCOCO_BUNDLE=$DVC_DPATH/$ALIGNED_BUNDLE_NAME
 ALIGNED_KWCOCO_FPATH=$ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json
 
 
+echo "
+DVC_DPATH               = '$DVC_DPATH'
+S3_DPATH                = '$S3_DPATH'
+
+ALIGNED_BUNDLE_NAME     = '$ALIGNED_BUNDLE_NAME'
+UNCROPPED_BUNDLE_NAME   = '$UNCROPPED_BUNDLE_NAME'
+UNCROPPED_DPATH         = '$UNCROPPED_DPATH'
+ALIGNED_KWCOCO_BUNDLE   = '$ALIGNED_KWCOCO_BUNDLE'
+"
+
+
 download_uncropped_data(){
     __doc__="
     Download and prepare the uncropped data
 
-    source ~/code/watch/scripts/prep_drop1_ta1.sh
+    source ~/code/watch/scripts/prepare_drop1_ta1.sh
     "
 
     # Grab the stac items we will query directly from S3 and combine it into a single query json file
     mkdir -p $UNCROPPED_INGRESS_DPATH
     mkdir -p $UNCROPPED_QUERY_DPATH
+    aws s3 --profile iarpa ls $S3_DPATH/
     aws s3 --profile iarpa sync --exclude '*' --include '*.json' $S3_DPATH $UNCROPPED_QUERY_DPATH
-    jq . --indent 0 $UNCROPPED_QUERY_DPATH/*.json > $UNCROPPED_QUERY_FPATH
 
+    jq . --indent 0 $UNCROPPED_QUERY_DPATH/*.json > $UNCROPPED_QUERY_FPATH
 
     # Use the watch script to pull down the images as a stac catalog
     python -m watch.cli.baseline_framework_ingress \
@@ -68,7 +82,7 @@ download_uncropped_data(){
     python -m watch.cli.coco_add_watch_fields \
         --src $UNCROPPED_KWCOCO_FPATH \
         --dst $UNCROPPED_KWCOCO_FPATH \
-        --overwrite=warp
+        --overwrite=warp --workers=avail
 }
 
 
@@ -85,7 +99,7 @@ crop_to_regions(){
         --regions $REGION_FPATH \
         --workers=4 \
         --context_factor=1 \
-        --skip_geo_preprop=False \
+        --skip_geo_preprop=auto \
         --visualize=0 \
         --keep none
 
@@ -93,7 +107,7 @@ crop_to_regions(){
     python -m watch.cli.project_annotations \
         --site_models="$DVC_DPATH/drop1/site_models/*.geojson" \
         --src $ALIGNED_KWCOCO_FPATH \
-        --dst $ALIGNED_KWCOCO_FPATH
+        --dst $ALIGNED_KWCOCO_FPATH 
 }
 
 
@@ -139,14 +153,28 @@ add_new_data_to_dvc(){
 visualize_cropped_dataset(){
     __doc__="
     Optional: visualize the results of the cropped dataset
+
+    source ~/code/watch/scripts/prepare_drop1_ta1.sh
     "
-    python -m watch.cli.coco_visualize_videos \
+    smartwatch visualize \
         --src $ALIGNED_KWCOCO_FPATH \
         --space="video" \
         --num_workers=avail \
         --channels="red|green|blue" \
         --viz_dpath=$ALIGNED_KWCOCO_BUNDLE/_viz \
-        --animate=True
+        --draw_anns=False \
+        --animate=True --norm_hack=True
+
+    python -m watch.cli intensity_histograms \
+
+    smartwatch intensity_histograms \
+        --src $ALIGNED_KWCOCO_FPATH \
+        --num_workers=avail \
+        --mode=process \
+        --include_channels="blue|green|red|nir|swir16|swir22" \
+        --dst=$ALIGNED_KWCOCO_BUNDLE/_viz/histograms.jpg  --show=True
+
+        --channels="red|green|blue" \
 }
 
 

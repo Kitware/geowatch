@@ -145,7 +145,7 @@ def ensure_baseline_scene(baseline_scene):
         return get_granuledir(df)
 
 
-def s2_coregister(granuledirs, output_folder, baseline_scene):
+def s2_coregister(granuledirs, output_folder, baseline_scene, tile):
     '''
     Coregister Sentinel-2 scenes and save them to disk.
 
@@ -180,7 +180,7 @@ def s2_coregister(granuledirs, output_folder, baseline_scene):
 
     def get_band(granuledir):
         bands = glob.glob(
-            os.path.join(granuledir, 'IMG_DATA', f'*_{base_band}.jp2'))
+            os.path.join(granuledir, f'*{base_band}.tif'))
         assert len(bands) == 1
         return bands[0]
 
@@ -198,11 +198,10 @@ def s2_coregister(granuledirs, output_folder, baseline_scene):
     # run coregistration
     for x in pfnames:
         fname_base = os.path.basename(x)
-        tile = fname_base.split('_')[0]
         path_data = os.path.dirname(x)
         x = os.path.normpath(x)
-        scene_id = x.split(os.sep)[-3]
-        path_out_data = os.path.join(output_folder, tile, scene_id)
+        scene_id = os.path.basename(path_data)
+        path_out_data = os.path.join(output_folder, "T{}".format(tile), scene_id)
         os.makedirs(path_out_data, exist_ok=True)
 
         if x == pfname_master:
@@ -212,12 +211,15 @@ def s2_coregister(granuledirs, output_folder, baseline_scene):
                                      S2_ANGLE_BANDS,
                                      S2_ANCILLARY_RASTERS):
                 fname_band = os.path.basename(x.replace(base_band, b))
-                if b in S2_BANDS or b:
+                if b in S2_BANDS:
                     pfname_band = os.path.join(path_data, fname_band)
                 elif b in S2_ANGLE_BANDS:
                     pfname_band_base, _ = os.path.splitext(
                         os.path.join(path_data, fname_band))
                     pfname_band = "{}.tif".format(pfname_band_base)
+                    if not os.path.isfile(pfname_band):
+                        pfname_band = os.path.join(
+                            path_data, "{}.tif".format(b))
                 elif b in S2_ANCILLARY_RASTERS:
                     pfname_band = os.path.join(
                         path_data, "{}.tif".format(b))
@@ -355,6 +357,9 @@ def s2_coregister(granuledirs, output_folder, baseline_scene):
                             os.path.basename(x.replace(base_band, b)))
                         pfname_band = os.path.join(
                             path_data, "{}.tif".format(fname_band_base))
+                        if not os.path.isfile(pfname_band):
+                            pfname_band = os.path.join(
+                                path_data, "{}.tif".format(b))
                     elif b in S2_ANCILLARY_RASTERS:
                         pfname_band = os.path.join(
                             path_data, "{}.tif".format(b))
@@ -395,8 +400,15 @@ def s2_coregister(granuledirs, output_folder, baseline_scene):
                         os.path.join(path_to_gcp, fname_gcp), resampling_method, utm_epsg, nodata)
                     com_gdalwarp_prefix = 'gdalwarp -overwrite -of GTiff -order 3 -et 0.05 -r %s -co "COMPRESS=DEFLATE" -tr %s %s -te %s %s %s %s -t_srs "epsg:%s" -srcnodata %s -dstnodata %s' %\
                                           (resampling_method, abs(x_res), abs(x_res), x_min, y_min, x_max, y_max, utm_epsg, nodata, nodata)
-                    fname_vrt = '%s_%s.vrt' % (fname_base[:-8], b)
-                    fname_out = '%s_%s.tif' % (fname_base[:-8], b)
+
+                    fname_out_prefix = fname_base[:-8]
+                    if fname_out_prefix == '':
+                        fname_vrt = '%s.vrt' % (b)
+                        fname_out = '%s.tif' % (b)
+                    else:
+                        fname_vrt = '%s_%s.vrt' % (fname_base[:-8], b)
+                        fname_out = '%s_%s.tif' % (fname_base[:-8], b)
+
                     os.system('%s %s %s' %
                               (com_gdal_translate_prefix, pfname_band,
                                os.path.join(path_out_data, fname_vrt)))
@@ -414,7 +426,8 @@ def s2_coregister(granuledirs, output_folder, baseline_scene):
 def s2_coregister_all_tiles(input_folder_or_safedirs,
                             output_folder,
                             baseline_scenes={},
-                            dry_run=False):
+                            dry_run=False,
+                            granuledirs_input=False):
     '''
     Driver script to group S2 scenes into MGRS tiles, find baseline scenes for them,
     coregister them within each tile, and save them to disk.
@@ -454,12 +467,16 @@ def s2_coregister_all_tiles(input_folder_or_safedirs,
     '''
     # Get list of all granuledirs
     if isinstance(input_folder_or_safedirs, list):
-        safedirs = input_folder_or_safedirs
-        input_folder = os.path.commonpath(safedirs)
-        granuledirs = list(
-            itertools.chain.from_iterable(
-                glob.glob(os.path.join(s, 'GRANULE', f'*{os.path.sep}'))
-                for s in safedirs))
+        if granuledirs_input:
+            granuledirs = input_folder_or_safedirs
+            input_folder = os.path.commonpath(granuledirs)
+        else:
+            safedirs = input_folder_or_safedirs
+            input_folder = os.path.commonpath(safedirs)
+            granuledirs = list(
+                itertools.chain.from_iterable(
+                    glob.glob(os.path.join(s, 'GRANULE', f'*{os.path.sep}'))
+                    for s in safedirs))
     else:
         input_folder = input_folder_or_safedirs
         granuledirs = glob.glob(
@@ -469,9 +486,14 @@ def s2_coregister_all_tiles(input_folder_or_safedirs,
 
     # extract MGRS tiles from them
     scenes = defaultdict(list)
-    for g in granuledirs:
-        tile = os.path.basename(os.path.normpath(g)).split('_')[1][1:]
-        scenes[tile].append(g)
+    if granuledirs_input:
+        for g in granuledirs:
+            tile = os.path.basename(os.path.normpath(g)).split('_')[3][1:]
+            scenes[tile].append(g)
+    else:
+        for g in granuledirs:
+            tile = os.path.basename(os.path.normpath(g)).split('_')[1][1:]
+            scenes[tile].append(g)
 
     def ensure_baseline_scenes(baseline_scenes):
         '''
@@ -503,7 +525,7 @@ def s2_coregister_all_tiles(input_folder_or_safedirs,
     # run coregistration
     if not dry_run:
         for tile in scenes:
-            s2_coregister(scenes[tile], output_folder, baseline_scenes[tile])
+            s2_coregister(scenes[tile], output_folder, baseline_scenes[tile], tile)
 
     return scenes, baseline_scenes
 

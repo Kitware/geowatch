@@ -19,6 +19,7 @@ def main(cmdline=True, **kw):
         'project_annotations',
         'coco_show_auxiliary',
         'coco_visualize_videos',
+        'coco_intensity_histograms',
     ]
     module_lut = {}
     for name in modnames:
@@ -48,7 +49,8 @@ def main(cmdline=True, **kw):
         'coco_visualize_videos': ['visualize'],
         'coco_align_geotiffs': ['align'],
         'project_annotations': ['project'],
-        'coco_add_watch_fields': ['add_fields']
+        'coco_add_watch_fields': ['add_fields'],
+        'coco_intensity_histograms': ['intensity_histograms'],
     }
 
     for cli_module in cli_modules:

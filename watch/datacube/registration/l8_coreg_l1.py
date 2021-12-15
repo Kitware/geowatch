@@ -128,7 +128,7 @@ def l8_coregister(mgrs_tile, input_folder, output_folder, baseline_scene):
 
     def get_s2_band(granuledir):
         bands = glob.glob(
-            os.path.join(granuledir, 'IMG_DATA', f'*_{s2_base_band}.jp2'))
+            os.path.join(granuledir, f'*{s2_base_band}.tif'))
         assert len(bands) == 1
         return bands[0]
 
@@ -164,7 +164,8 @@ def l8_coregister(mgrs_tile, input_folder, output_folder, baseline_scene):
             path_data = os.path.dirname(db[x])
             scene_id = x
             lc8_collection = scene_id.split('_')[5]
-            scene_id_mgrs = f'{scene_id}_T{mgrs_tile}'
+            scene_id_nosr = scene_id.replace('_SR', '')
+            scene_id_mgrs = f'{scene_id_nosr}_T{mgrs_tile}'
             path_out_data = os.path.join(output_folder, tile, scene_id_mgrs)
 
             if not (os.path.isdir(path_out_data)):
@@ -303,7 +304,7 @@ def l8_coregister(mgrs_tile, input_folder, output_folder, baseline_scene):
                 f_30.close()
 
                 # Update metadata
-                fname_meta = f'{scene_id}_MTL.txt'
+                fname_meta = '{}_MTL.txt'.format(scene_id.replace('_SR', ''))
                 fname_meta_updated = f'{scene_id_mgrs}_MTL.txt'
                 f_meta_out = open(
                     os.path.join(path_out_data, fname_meta_updated), 'w')
@@ -427,12 +428,13 @@ def l8_coregister(mgrs_tile, input_folder, output_folder, baseline_scene):
                 for b in itertools.chain(extra_bands,
                                          L8_ANGLE_BANDS,
                                          L8_ANCILLARY_RASTERS):
+                    scene_id_for_band = scene_id.replace('_SR', '')
                     if b in extra_bands:
-                        fname_band = f'{scene_id}_{b}.TIF'
+                        fname_band = f'{scene_id_for_band}_{b}.TIF'
                         pfname_band = os.path.join(path_data, fname_band)
                     elif b in L8_ANGLE_BANDS:
-                        fname_band = f'{scene_id}_{b}.tif'
-                        pfname_band = os.path.join(path_data, fname_band)
+                        pfname_band = glob.glob(os.path.join(path_data, f'*_{b}.tif'))[0]
+                        # pfname_band = os.path.join(path_data, fname_band)
                     elif b in L8_ANCILLARY_RASTERS:
                         pfname_band = os.path.join(
                             path_data, "{}.tif".format(b))

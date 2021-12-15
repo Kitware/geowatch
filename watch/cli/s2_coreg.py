@@ -15,10 +15,11 @@ from watch.gis.sensors.sentinel2 import s2_grid_tiles_for_geometry
 
 
 # TODO: Fully specify or re-use something already in WATCH module?
-S2_L1C_RE = re.compile(r'S2[AB]_MSIL1C_.*')
-L8_L1_RE = re.compile(r'^L[COTEM]08_L1(TP|GT|GS)_\d{3}\d{3}_\d{4}\d{2}\d{2}_\d{4}\d{2}\d{2}_\d{2}_(RT|T1|T2)')
+S2_L1C_RE = re.compile(r'S2[AB]_MSI.*')
+S2_L1C_GRANULE_RE = re.compile(r'S2[AB]_.*_L(1C|2A)')
+L8_L1_RE = re.compile(r'^L[COTEM]08_L(1(TP|GT|GS)|2SP)_\d{3}\d{3}_\d{4}\d{2}\d{2}_\d{4}\d{2}\d{2}_\d{2}_(RT|T1|T2)')
 GRANULE_DIR_RE = re.compile(r'(.*)/GRANULE/(.*)')
-BAND_NAME_RE = re.compile(r'.*_(B[0-9A-Z]+|S[EO][AZ][0-9]?|cloudmask)\.(tiff?|vrt)$', re.I)
+BAND_NAME_RE = re.compile(r'.*(B[0-9A-Z]+|S[EO][AZ][0-9]?|[SV][ZA]A|cloudmask|QA_PIXEL|QA_RADSAT)\.(tiff?|vrt)$', re.I)
 
 
 def main():
@@ -47,12 +48,14 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
 
     s2_l1c_items = {}
     l8_l1_items = {}
+    # Tracking set of original STAC items to be removed
+    original_item_ids = set()
     for item in catalog.get_all_items():
         if re.match(S2_L1C_RE, item.id):
             # Get base directory for assets
             item_base_dir = None
             for link in item.links:
-                if link.rel == 'original':
+                if link.rel == 'self':
                     item_base_dir = os.path.dirname(link.get_href())
                     break
 
@@ -60,11 +63,24 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
                 raise RuntimeError("Couldn't determine STAC item basedir")
 
             s2_l1c_items[item_base_dir] = item
+            original_item_ids.add(item.id)
+        elif re.match(S2_L1C_GRANULE_RE, item.id):
+            # Get base directory for assets
+            item_base_dir = None
+            for link in item.links:
+                if link.rel == 'self':
+                    item_base_dir = os.path.dirname(link.get_href())
+                    break
+            if item_base_dir is None:
+                raise RuntimeError("Couldn't determine STAC item basedir")
+
+            s2_l1c_items[item_base_dir] = item
+            original_item_ids.add(item.id)
         elif re.match(L8_L1_RE, item.id):
             # Get base directory for assets
             item_base_dir = None
             for link in item.links:
-                if link.rel == 'original':
+                if link.rel == 'self':
                     item_base_dir = os.path.dirname(link.get_href())
                     break
 
@@ -72,6 +88,7 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
                 raise RuntimeError("Couldn't determine STAC item basedir")
 
             l8_l1_items[item_base_dir] = item
+            original_item_ids.add(item.id)
 
     s2_l1c_item_dirs = set(s2_l1c_items.keys())
 
@@ -80,9 +97,13 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
     if len(s2_l1c_item_dirs) > 0:
         scenes, baseline_scenes = s2_coregister_all_tiles(
             list(s2_l1c_item_dirs),
-            outdir)
+            outdir,
+            granuledirs_input=True)
     else:
         scenes, baseline_scenes = {}, {}
+
+    print(scenes)
+    print(baseline_scenes)
 
     l8_scenes = {}
     for l8_l1_item_dir, l8_l1_item in l8_l1_items.items():
@@ -90,19 +111,22 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
         grid_tiles = s2_grid_tiles_for_geometry(item_geometry)
 
         for grid_tile in set(grid_tiles).intersection(baseline_scenes.keys()):
-            l8_coregister(grid_tile,
-                          l8_l1_item_dir,
-                          outdir,
-                          baseline_scenes[grid_tile])
-
-            l8_scenes.setdefault(grid_tile, []).append(l8_l1_item_dir)
+            try:
+                l8_coregister(grid_tile,
+                              l8_l1_item_dir,
+                              outdir,
+                              baseline_scenes[grid_tile])
+            except Exception as e:
+                print("Couldn't coregister scene: [{}], skipping!".format(
+                    l8_l1_item_dir))
+                print(e)
+                continue
+            else:
+                l8_scenes.setdefault(grid_tile, []).append(l8_l1_item_dir)
 
     catalog_outpath = os.path.abspath(os.path.join(outdir, 'catalog.json'))
     catalog.set_self_href(catalog_outpath)
     catalog.set_root(catalog)
-
-    # Tracking set of original STAC items to be removed
-    original_item_ids = set()
 
     for l8_scene, l8_scene_images in l8_scenes.items():
         for l8_scene_image in l8_scene_images:
@@ -115,6 +139,7 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
             asset_path_basedir = os.path.join(
                 outdir, "T{}".format(l8_scene),
                 "{}_T{}".format(l8_scene_image_base, l8_scene))
+            print(asset_path_basedir)
             asset_paths = glob.glob(
                 os.path.join(asset_path_basedir, "*.tif"))
 
@@ -170,6 +195,11 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
             processed_item.id = new_id
             processed_item.assets = processed_assets
 
+            # Adding mgrs extension information
+            processed_item.properties['mgrs:utm_zone'] = l8_scene[0:2]
+            processed_item.properties['mgrs:latitude_band'] = l8_scene[2]
+            processed_item.properties['mgrs:grid_square'] = l8_scene[3:5]
+
             # Adding WATCH specific metadata to the STAC item
             # properties; we could formalize this at some point by
             # specifying a proper STAC extension, but I don't think
@@ -205,7 +235,8 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
             if match is not None:
                 scene_image_base_dir, granule_id = match.groups()
             else:
-                raise RuntimeError("Unexpected scene output path returned")
+                scene_image_base_dir = scene_image
+                granule_id = os.path.basename(scene_image_base_dir)
 
             scene_image_item_id = s2_l1c_items[scene_image_base_dir].id
             original_item_ids.add(scene_image_item_id)
@@ -267,6 +298,11 @@ def run_s2_coreg_l1c(stac_catalog, outdir):
             processed_item = original_item.clone()
             processed_item.id = new_id
             processed_item.assets = processed_assets
+
+            # Adding mgrs extension information
+            processed_item.properties['mgrs:utm_zone'] = scene[0:2]
+            processed_item.properties['mgrs:latitude_band'] = scene[2]
+            processed_item.properties['mgrs:grid_square'] = scene[3:5]
 
             # Adding WATCH specific metadata to the STAC item
             # properties; we could formalize this at some point by

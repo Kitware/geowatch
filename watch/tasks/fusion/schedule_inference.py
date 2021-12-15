@@ -1,7 +1,7 @@
 """
 Helper for scheduling a set of prediction + evaluation jobs
 
-python -m watch.tasks.fusion.schedule_inference gather_candidate_models
+python -m watch.tasks.fusion.schedule_inference schedule_evaluation
 """
 import pathlib
 import ubelt as ub
@@ -65,7 +65,6 @@ class TMUXMultiQueue(ub.NiceRepr):
         >>> self.submit('echo bazbiz')
         >>> self.write()
         >>> self.rprint()
-
     """
     def __init__(self, name, size=1, environ=None, dpath=None, gres=None):
         if dpath is None:
@@ -151,7 +150,34 @@ class TMUXMultiQueue(ub.NiceRepr):
         console.print(Panel(Syntax(code, 'bash'), title=str(self.fpath)))
 
 
-def gather_candidate_models():
+def schedule_evaluation(model_globstr, test_dataset, gpus=None):
+    """
+    First ensure that models have been copied to the DVC repo in the
+    appropriate path. (as noted by model_dpath)
+
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+    KWCOCO_TEST_FPATH=$DVC_DPATH/Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json
+
+    MODEL_GLOB=$DVC_DPATH/'models/fusion/SC-20201117/*/*.pt'
+    echo "$MODEL_GLOB"
+
+    cd $DVC_DPATH
+    dvc pull -r aws --recursive models/fusion/SC-20201117
+
+        --model_globstr="$MODEL_GLOB"
+        --test_dataset="$KWCOCO_TEST_FPATH"
+
+    Ignore:
+        import watch
+        dvc_dpath = watch.utils.util_data.find_smart_dvc_dpath()
+        model_globstr = str(dvc_dpath / 'models/fusion/SC-20201117/*/*.pt')
+        test_dataset = dvc_dpath / 'Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json'
+
+    TODO:
+        - [ ] Specify the model_dpath as an arg
+        - [ ] Specify target dataset as an argument
+        - [ ] Skip models that were already evaluated
+    """
     import watch
     from watch.tasks.fusion import organize
     import json
@@ -163,20 +189,22 @@ def gather_candidate_models():
     with_saliency = 'auto'
     with_class = 'auto'
 
+    with_pred = True  # TODO: allow caching
+    with_eval = True
+    workers_per_queue = 5
+    recompute = False
+
     # HARD CODED
     # model_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
     # test_dataset_fpath = dvc_dpath / 'Drop1-Aligned-L1/vali_combo11.kwcoco.json'
 
     # model_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
-    model_dpath = dvc_dpath / 'models/fusion/SC-20201117'
-    test_dataset_fpath = dvc_dpath / 'Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json'
-
+    # model_dpath = dvc_dpath / 'models/fusion/SC-20201117'
+    # test_dataset_fpath = dvc_dpath / 'Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json'
+    test_dataset_fpath = pathlib.Path(test_dataset)
     assert test_dataset_fpath.exists()
 
     stamp = ub.timestamp() + '_' + ub.hash_data([])[0:8]
-
-    with_pred = True  # TODO: allow caching
-    with_eval = True
 
     def package_metadata(package_fpath):
         # Hack for choosing one model from this "type"
@@ -190,22 +218,35 @@ def gather_candidate_models():
         return info
 
     packages_to_eval = []
-    for subfolder in model_dpath.glob('*'):
-        package_fpaths = list(subfolder.glob('*.pt'))
-        subfolder_infos = [package_metadata(package_fpath)
-                           for package_fpath in package_fpaths]
-        subfolder_infos = sorted(subfolder_infos, key=lambda x: x['epoch'], reverse=True)
-        for info in subfolder_infos:
-            if 'rutgers_v5' in info['name']:
-                break
-            packages_to_eval.append(info)
-            # break
+    import glob
+    for package_fpath in glob.glob(model_globstr, recursive=True):
+        package_info = package_metadata(pathlib.Path(package_fpath))
+        packages_to_eval.append(package_info)
+
+    # # for subfolder in model_dpath.glob('*'):
+    #     # package_fpaths = list(subfolder.glob('*.pt'))
+    #     subfolder_infos = [package_metadata(package_fpath)
+    #                        for package_fpath in package_fpaths]
+    #     subfolder_infos = sorted(subfolder_infos, key=lambda x: x['epoch'], reverse=True)
+    #     for info in subfolder_infos:
+    #         if 'rutgers_v5' in info['name']:
+    #             break
+    #         packages_to_eval.append(info)
+    #         # break
 
     tmux_schedule_dpath = dvc_dpath / '_tmp_tmux_schedule'
     tmux_schedule_dpath.mkdir(exist_ok=True)
 
+    if gpus is None:
+        # Use all unused gpus
+        import netharn as nh
+        GPUS = []
+        for gpu_idx, gpu_info in nh.device.gpu_info().items():
+            if len(gpu_info['procs']) == 0:
+                GPUS.append(gpu_idx)
+
     # GPUS = [0, 1, 2, 3]
-    GPUS = [0]
+    # GPUS = [0]
 
     environ = {
         'DVC_DPATH': dvc_dpath,
@@ -217,11 +258,21 @@ def gather_candidate_models():
         package_fpath = info['fpath']
         suggestions = organize.suggest_paths(package_fpath=package_fpath, test_dataset=test_dataset_fpath)
         suggestions = json.loads(suggestions)
+
+        pred_dataset_fpath = pathlib.Path(suggestions['pred_dataset'])
+        eval_metrics_fpath = pathlib.Path(suggestions['eval_dpath']) / 'curves/measures2.json'
+
+        suggestions['eval_metrics'] = eval_metrics_fpath
         suggestions['test_dataset'] = test_dataset_fpath
         suggestions['true_dataset'] = test_dataset_fpath
         suggestions['package_fpath'] = package_fpath
         suggestions['with_class'] = with_class
         suggestions['with_saliency'] = with_saliency
+        suggestions = ub.map_vals(lambda x: str(x).replace(
+            str(dvc_dpath), '$DVC_DPATH'), suggestions)
+        predictkw = {
+            'workers_per_queue': workers_per_queue,
+        }
 
         if with_pred:
             pred_command = ub.codeblock(
@@ -238,18 +289,34 @@ def gather_candidate_models():
                     --num_workers=5 \
                     --gpus=0 \
                     --batch_size=1
-                ''').format(**suggestions).replace(str(dvc_dpath), '$DVC_DPATH')
-            queue.submit(pred_command)
+                ''').format(**suggestions, **predictkw)
+            if not recompute:
+                # Only run the command if its expected output does not exist
+                pred_command = (
+                    '[[ -f "{pred_dataset}" ]] || '.format(**suggestions) +
+                    pred_command
+                )
+
+            if recompute or not pred_dataset_fpath.exists():
+                queue.submit(pred_command)
 
         if with_eval:
             eval_command = ub.codeblock(
                 r'''
                 python -m watch.tasks.fusion.evaluate \
-                        --true_dataset={true_dataset} \
-                        --pred_dataset={pred_dataset} \
-                          --eval_dpath={eval_dpath}
-                ''').format(**suggestions).replace(str(dvc_dpath), '$DVC_DPATH')
-            queue.submit(eval_command)
+                    --true_dataset={true_dataset} \
+                    --pred_dataset={pred_dataset} \
+                      --eval_dpath={eval_dpath}
+                ''').format(**suggestions)
+            if not recompute:
+                # TODO: use a real stamp file
+                # Only run the command if its expected output does not exist
+                eval_command = (
+                    '[[ -f "{eval_metrics}" ]] || '.format(**suggestions) +
+                    eval_command
+                )
+            if recompute or not eval_metrics_fpath.exists():
+                queue.submit(eval_command)
 
     jobs.rprint()
 
@@ -286,9 +353,12 @@ def gather_measures():
     import pathlib
 
     dvc_dpath = watch.utils.util_data.find_smart_dvc_dpath()
+
     if False:
+        remote = 'horologic'
+        remote = 'namek'
         # Hack for pointing at a remote
-        dvc_dpath = ub.shrinkuser(dvc_dpath, home=ub.expandpath('$HOME/remote/horologic'))
+        dvc_dpath = ub.shrinkuser(dvc_dpath, home=ub.expandpath(f'$HOME/remote/{remote}'))
 
     # model_dpath = pathlib.Path(dvc_dpath) / 'models/fusion/unevaluated-activity-2021-11-12'
     fusion_model_dpath = pathlib.Path(dvc_dpath) / 'models/fusion/'
@@ -298,13 +368,19 @@ def gather_measures():
 
     # measure_fpaths = list(model_dpath.glob('eval_links/*/curves/measures2.json'))
     measure_fpaths = list(model_dpath.glob('*/*/*/eval/curves/measures2.json'))
+    print(len(measure_fpaths))
     # dataset_to_evals = ub.group_items(eval_dpaths, lambda x: x.parent.name)
 
+    jobs = ub.JobPool('thread', max_workers=10)
     all_infos = []
     for measure_fpath in ub.ProgIter(measure_fpaths):
-        with open(measure_fpath, 'r') as file:
-            info = json.load(file)
-        all_infos.append(info)
+        def load_data(measure_fpath):
+            with open(measure_fpath, 'r') as file:
+                info = json.load(file)
+            return info
+        jobs.submit(load_data, measure_fpath)
+    for job in jobs.as_completed(desc='collect jobs'):
+        all_infos.append(job.result())
 
     from kwcoco.coco_evaluator import CocoSingleResult
     class_rows = []
@@ -369,26 +445,42 @@ def gather_measures():
 
     kwplot.figure(fnum=1, doclf=True)
     ax = sns.lineplot(data=mean_df, x='step', y='mAP', hue='expt_name', marker='o')
-    ax.set_title('Pixelwise mAP AC metrics: KR_R002')
+    ax.set_title('Pixelwise mAP AC metrics: KR_R001 + KR_R002')
 
     kwplot.figure(fnum=2, doclf=True)
     ax = sns.lineplot(data=mean_df, x='step', y='mAUC', hue='expt_name', marker='o')
-    ax.set_title('Pixelwise mAUC AC metrics: KR_R002')
+    ax.set_title('Pixelwise mAUC AC metrics: KR_R001 + KR_R002')
 
+    from kwcoco.metrics import drawing
+    fig = kwplot.figure(fnum=3, doclf=True)
     sorted_results = sorted(all_results, key=lambda x: x.ovr_measures[catname]['ap'])[::-1]
     catname = 'Active Construction'
     colors = kwplot.Color.distinct(len(sorted_results))
     for idx, result in enumerate(sorted_results):
         color = colors[idx]
         color = [kwplot.Color(color).as01()]
-        from kwcoco.metrics import drawing
         measure = result.ovr_measures[catname]
         measure['ap']
-
         prefix = result.meta['title']
-        kw = {}
+        kw = {'fnum': 3}
         drawing.draw_prcurve(measure, prefix=prefix, color=color, **kw)
-        # measure.draw('pr')
+    fig.gca().set_title('Comparison of runs AP: {}'.format(catname))
+
+    fig = kwplot.figure(fnum=4, doclf=True)
+    sorted_results = sorted(all_results, key=lambda x: x.ovr_measures[catname]['auc'])[::-1]
+    catname = 'Active Construction'
+    colors = kwplot.Color.distinct(len(sorted_results))
+    for idx, result in enumerate(sorted_results):
+        color = colors[idx]
+        color = [kwplot.Color(color).as01()]
+        measure = result.ovr_measures[catname]
+        prefix = result.meta['title']
+        kw = {'fnum': 4}
+        drawing.draw_roc(measure, prefix=prefix, color=color, **kw)
+    ax = fig.gca()
+    # ax.set_xlabel('fpr (false positive rate)')
+    # ax.set_xlabel('tpr (true positive rate)')
+    ax.set_title('Comparison of runs AUC: {}'.format(catname))
 
 
 # def run_command_in_tmux_queue(command, name):
@@ -411,7 +503,7 @@ def gather_measures():
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/tasks/fusion/schedule_inference.py gather_candidate_models
+        python ~/code/watch/watch/tasks/fusion/schedule_inference.py schedule_evaluation
 
         python ~/code/watch/watch/tasks/fusion/organize.py make_nice_dirs
         python ~/code/watch/watch/tasks/fusion/organize.py make_eval_symlinks

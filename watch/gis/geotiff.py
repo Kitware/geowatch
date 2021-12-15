@@ -194,6 +194,8 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
         >>> print('info = {}'.format(ub.repr2(info, nl=1, sort=False)))
         >>> assert not info['is_rpc']
         >>> assert info['img_shape'] == (512, 512)
+
+        tf = info['wgs84_to_wld']
     """
     from osgeo import gdal
     from osgeo import osr

@@ -87,13 +87,32 @@ def _format_offset(off):
     return s
 
 
-def coerce_datetime(data):
+def coerce_datetime(data, default_timezone='utc'):
+    """
+    Parses a timestamp and always returns a timestamp with a timezone
+
+    If only a date is specified, the time is defaulted to 00:00:00
+
+    If one is not discoverable a specified default is used.
+
+    Example:
+        >>> from watch.utils.util_time import *  # NOQA
+        >>> assert coerce_datetime(None) is None
+        >>> assert coerce_datetime('2020-01-01') == datetime.datetime(2020, 1, 1, 0, 0, tzinfo=datetime.timezone.utc)
+        >>> assert coerce_datetime(datetime.datetime(2020, 1, 1, 0, 0)) == datetime.datetime(2020, 1, 1, 0, 0, tzinfo=datetime.timezone.utc)
+        >>> assert coerce_datetime(datetime.datetime(2020, 1, 1, 0, 0).date()) == datetime.datetime(2020, 1, 1, 0, 0, tzinfo=datetime.timezone.utc)
+    """
     if data is None:
         return data
-    else:
+    elif isinstance(data, str):
         dt = dateutil.parser.parse(data)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=datetime.timezone.utc)
+    elif isinstance(data, datetime.datetime):
+        dt = data
+    elif isinstance(data, datetime.date):
+        dt = dateutil.parser.parse(data.isoformat())
+    else:
+        raise TypeError('unhandled {}'.format(data))
+    dt = ensure_timezone(dt, default=default_timezone)
     return dt
 
 

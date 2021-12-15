@@ -465,6 +465,7 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
         # TODO: determine nodata defaults based on sensor_coarse
 
         if enable_intensity_stats:
+            # TODO: rectify with code in cli/coco_intensity_histogram
             # Use a sidecar file for now
             import pathlib
             import pickle

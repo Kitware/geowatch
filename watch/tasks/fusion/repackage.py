@@ -117,14 +117,57 @@ def gather_checkpoints():
 
     import ubelt as ub
     import shutil
+    to_copy = []
     for p in ub.ProgIter(all_checkpoint_paths):
         package_fpath = repackage(p)
         package_fpath = pathlib.Path(package_fpath)
         name = package_fpath.name.split('_epoch')[0]
         name_dpath = storage_dpath / name
         name_dpath.mkdir(exist_ok=True, parents=True)
-        if not name_dpath.exists():
-            shutil.copy(package_fpath, name_dpath)
+        name_fpath = name_dpath / package_fpath.name
+        if not name_fpath.exists():
+            to_copy.append((package_fpath, name_dpath))
+    print(f'Copy {len(to_copy)} new checkpoints')
+    for package_fpath, name_fpath in ub.ProgIter(to_copy):
+        shutil.copy(package_fpath, name_fpath)
+
+    dvc_to_add = []
+    for package_dpath in list(storage_dpath.glob('*/*.pt')):
+        package_dvc_fpath = pathlib.Path(str(package_dpath) + '.dvc')
+        if not package_dvc_fpath.exists():
+            dvc_to_add.append(str(package_dpath.relative_to(dvc_dpath)))
+
+    dvc_info = ub.cmd(['dvc', 'add'] + dvc_to_add, cwd=dvc_dpath, verbose=3, check=True)
+    start = False
+    gitlines = []
+    for line in dvc_info['out'].split('\n'):
+        if start:
+            gitlines.append(line.strip())
+        if 'To track the changes with git, run:' in line:
+            start = True
+    gitcmd = ''.join(gitlines)
+    git_info1 = ub.cmd(gitcmd, verbose=3, check=True, cwd=dvc_dpath)
+    assert git_info1['ret'] == 0
+
+    git_info2 = ub.cmd('git push', verbose=3, check=True, cwd=dvc_dpath)
+    assert git_info2['ret'] == 0
+
+    import dvc.main
+    # from dvc import main
+    import os
+    saved_cwd = os.getcwd()
+    try:
+        os.chdir(dvc_dpath)
+        remote = 'aws'
+        dvc_command = ['push', '-r', remote, '--recursive', str(storage_dpath.relative_to(dvc_dpath))]
+        dvc.main.main(dvc_command)
+    finally:
+        os.chdir(saved_cwd)
+
+    """
+    # on remote
+    dvc pull -r aws --recursive models/fusion/SC-20201117
+    """
 
     import os
     for r, ds, fs in os.walk(train_base):

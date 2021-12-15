@@ -116,6 +116,7 @@ def main(cmdline=False, **kwargs):
         >>>     'dst': None,
         >>>     'site_models': dvc_dpath / 'drop1/site_models',
         >>> }
+        >>> main(**kwargs)
     """
     import geopandas as gpd  # NOQA
     config = ProjectAnnotationsConfig(default=kwargs, cmdline=cmdline)
