@@ -21,6 +21,9 @@ Poly = Union[kwimage.Polygon, kwimage.MultiPolygon]
 # - table structure/row-col slicing
 # Cons:
 # - geopandas
+# 
+# store these in a Track as a geodataframe, then instantiate as Obs as needed?
+# this avoids generators everywhere on access
 @dataclass
 class Observation:
     poly: Poly
@@ -35,10 +38,11 @@ class Observation:
 class Track:
     observations: Iterable[Observation]
     dset: Optional[kwcoco.CocoDataset]
-    vidid: Optional[int]
+    vidid: Optional[int] = None
+    track_id: Optional[int] = None
 
     @classmethod
-    def from_polys(cls, polys, dset, vidid=None, probs=None):
+    def from_polys(cls, polys, dset, probs=None, vidid=None, **kwargs):
         if vidid is not None:
             gids = dset.index.vidid_to_gids[vidid]
         else:
@@ -52,7 +56,7 @@ class Track:
         else:
             obs = [Observation(poly, gid) for poly, gid in zip(polys, gids)]
 
-        return cls(observations=obs, dset=dset, vidid=vidid)
+        return cls(observations=obs, dset=dset, vidid=vidid, **kwargs)
 
 
 class PolygonFilter(collections.abc.Callable):
@@ -82,7 +86,10 @@ class PolygonFilter(collections.abc.Callable):
             return self.on_track(obj)
         # could use more_itertools.peekable instead
         obj, obj2 = itertools.tee(obj)
-        sample_object = next(iter(obj2))
+        try:
+            sample_object = next(iter(obj2))
+        except StopIteration:
+            return obj
         if isinstance(sample_object, Observation):
             return self.on_observations(obj)
         # 'TypeError: Subscripted generics cannot be used with class and
@@ -274,6 +281,10 @@ def score(poly, probs, mode='score', threshold=0, use_rasterio=True):
 
         threshold: only used for mode='overlap'
     '''
+    # try converting from shapely
+    # TODO standard coerce fns between kwimage, shapely, and __geo_interface__
+    if not isinstance(poly, (kwimage.Polygon, kwimage.MultiPolygon)):
+        poly = kwimage.MultiPolygon.from_shapely(poly)
     if 0:
         # naive computation across the whole image
         poly_mask = poly.to_mask(probs.shape).numpy().data

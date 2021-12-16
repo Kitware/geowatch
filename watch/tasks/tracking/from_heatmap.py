@@ -11,7 +11,8 @@ from typing import Iterable, Tuple, Set
 from dataclasses import dataclass
 from watch.tasks.tracking.utils import (Track, PolygonFilter, NewTrackFunction,
                                         mask_to_polygons, heatmap, score, Poly,
-                                        CocoDsetFilter, _validate_keys)
+                                        CocoDsetFilter, _validate_keys,
+                                        Observation)
 
 
 @dataclass
@@ -46,9 +47,9 @@ class TimePolygonFilter(CocoDsetFilter):
 
     def on_observations(self, observations):
         start_idx = self.get_poly_time_ind(
-                map(lambda o: (o.gid, o.poly),  observations))
+            map(lambda o: (o.gid, o.poly), observations))
         end_idx = self.get_poly_time_ind(
-                map(lambda o: (o.gid, o.poly), reversed(observations)))
+            map(lambda o: (o.gid, o.poly), reversed(observations)))
         len_obs = sum(1 for _ in observations)
         return itertools.islice(observations, start_idx, len_obs - end_idx)
 
@@ -132,7 +133,6 @@ def add_tracks_to_dset(coco_dset,
         return probs_dct
 
     def add_annotation(gid, poly, this_score, track_id, space='video'):
-        assert space in {'image', 'video'}
 
         # assign category (key) from max score
         if this_score > thresh or len(bg_key) == 0:
@@ -149,6 +149,7 @@ def add_tracks_to_dset(coco_dset,
             cat_name = cand_keys[0]
         cid = coco_dset.ensure_category(cat_name)
 
+        assert space in {'image', 'video'}
         if space == 'video':
             # Transform the video polygon into image space
             img = coco_dset_sc.imgs[gid]
@@ -168,11 +169,38 @@ def add_tracks_to_dset(coco_dset,
     new_trackids = kwcoco_extensions.TrackidGenerator(coco_dset)
 
     for track in tracks:
+        if track.track_id is not None:
+            track_id = track.track_id
+            new_trackids.exclude_trackids([track_id])
+        else:
+            track_id = next(new_trackids)
         track_id = next(new_trackids)
         for obs in track.observations:
             add_annotation(obs.gid, obs.poly, obs.score, track_id)
 
     return coco_dset
+
+
+def get_boundary_tracks(coco_dset,
+                        boundary_cnames={'Site Boundary'}) -> Iterable[Track]:
+    annots = coco_dset.annots()
+    boundary_annots = annots.compress(
+        np.in1d(np.array(annots.cnames, dtype=str), list(boundary_cnames)))
+    if len(boundary_annots) < 1:
+        print(f'warning: no Site Boundary annots in dset {coco_dset.tag}!')
+    boundary_polys = [
+        poly.to_shapely() for poly in
+        boundary_annots.detections.data['segmentations'].to_polygon_list()
+    ]
+    assert len(boundary_polys) == len(boundary_annots), (
+        'TODO handle multipolygon boundaries')
+    for track_id, track_polygids in ub.group_items(
+            zip(boundary_polys, boundary_annots.gids),
+            boundary_annots.get('track_id', None)).items():
+        track_polys, track_gids = zip(*track_polygids)
+        yield Track(list(map(Observation, track_polys, track_gids)),
+                    dset=coco_dset,
+                    track_id=track_id)
 
 
 def time_aggregated_polys(coco_dset,
@@ -214,33 +242,29 @@ def time_aggregated_polys(coco_dset,
         raise KeyError(f'{coco_dset.tag} has no keys {key} or {bg_key}')
 
     if use_boundary_annots:
-        # get spatial bounds
         import shapely.ops
-        annots = coco_dset.annots()
-        boundary_annots = annots.compress(
-            np.array(annots.cnames, dtype=str) == 'Site Boundary')
-        if len(annots) < 1:
-            print(f'warning: no Site Boundary annots in dset {coco_dset.tag}!')
-        boundary_polys = [
-            poly.to_shapely() for poly in
-            boundary_annots.detections.data['segmentations'].to_polygon_list()
-        ]
-        bounds = shapely.ops.unary_union(boundary_polys)
-        # get temporal bounds
-        # TODO this works fine for one site boundary, for multiple sites each
-        # trackid with Site Boundary annots should be handled separately.
-        gids = np.unique(boundary_annots.gids)
-        # remove boundary annots so they don't interfere with site labels
-        # TODO preserve trackid for new polys?
-        coco_dset.remove_categories(['Site Boundary'], keep_annots=False)
+        boundary_tracks = list(get_boundary_tracks(coco_dset))
+        # TODO these obnoxious fors will be removed with gpd support in Track
+        bounds = shapely.ops.unary_union(
+            list(
+                itertools.chain.from_iterable(
+                    [obs.poly for obs in track.observations]
+                    for track in boundary_tracks)))
+        gids = list(
+            set.union(*({obs.gid
+                         for obs in track.observations}
+                        for track in boundary_tracks)))
     else:
+        boundary_tracks = None
         bounds = None
-        gids = coco_dset.imgs.keys()
+        gids = list(coco_dset.imgs.keys())
 
     # record fg and bg keys across frames, and partial sums of fg and bg
-    # this guarantees RunningStats of equal length for all keys,
-    # even with partial/nonexistence
-    running_dct = defaultdict(kwarray.RunningStats)
+    # would use RunningStats, but it can't support indexed/subsetted access
+    # for multiple site boundaries over different times.
+    # This solution is more efficient when len(tracks) > len(gids).
+    # running_dct = defaultdict(kwarray.RunningStats)
+    heatmaps_dct = defaultdict(list)
     for gid in gids:
 
         # TODO change assertion behavior to allow partial failure here
@@ -248,41 +272,61 @@ def time_aggregated_polys(coco_dset,
                                               gid,
                                               key,
                                               return_chan_probs=True)
-        running_dct['fg'].update(fg_img_probs[:, :, np.newaxis])
+        heatmaps_dct['fg'].append(fg_img_probs)
         for k in key:
-            running_dct[k].update(fg_chan_probs[k][:, :, np.newaxis])
+            heatmaps_dct[k].append(fg_chan_probs[k])
 
         if len(bg_key) > 0:
             bg_img_probs, bg_chan_probs = heatmap(coco_dset,
                                                   gid,
                                                   bg_key,
                                                   return_chan_probs=True)
-            running_dct['bg'].update(bg_img_probs[:, :, np.newaxis])
+            heatmaps_dct['bg'].append(bg_img_probs)
             for k in bg_key:
-                running_dct[k].update(bg_chan_probs[k][:, :, np.newaxis])
+                heatmaps_dct[k].append(bg_chan_probs[k])
         else:
-            running_dct['bg'].update(
-                    np.zeros_like(fg_img_probs)[:, :, np.newaxis])
+            heatmaps_dct['bg'].append(np.zeros_like(fg_img_probs))
 
     # turn heatmaps into scores and polygons
-    def probs(running):
-        probs = running.summarize(axis=2, keepdims=False)['mean']
+    def probs(heatmaps, weights=None):
+        probs = np.average(heatmaps, axis=0, weights=weights)
 
         hard_probs = util_kwimage.morphology(probs > thresh, 'dilate',
                                              morph_kernel)
         modulated_probs = probs * hard_probs
         return modulated_probs
 
-    # TODO this still restricts to same-shape polygon in every frame
-    # only the label (key) changes per-frame
-    # to generalize this, have to get scored_polys from all keys
-    # and associate them somehow
-    polys = list(mask_to_polygons(probs(running_dct['fg']), thresh, bounds=bounds))
+    if boundary_tracks is None:
+        polys = list(
+            mask_to_polygons(probs(heatmaps_dct['fg']), thresh, bounds=bounds))
+    else:
+        import shapely.ops
+        polys = []
+        print('generating polys in bounds: number of bounds: ',
+              len(boundary_tracks))
+        for track in boundary_tracks:
+            # TODO preserve track_ids
+            # TODO when bounds are time-varying, this lets individual frames
+            # go outside them; only enforces the union. Problem?
+            # currently bounds come from site summaries, which are not
+            # time-varying.
+            track_bounds = shapely.ops.unary_union(
+                [obs.poly for obs in track.observations])
+            gid_ixs = np.in1d(gids, [obs.gid for obs in track.observations])
+            track_polys = list(
+                mask_to_polygons(probs(heatmaps_dct['fg'], weights=gid_ixs),
+                                 thresh,
+                                 bounds=track_bounds))
+            poly = shapely.ops.unary_union(track_polys)
+            if poly.is_valid and not poly.is_empty:
+                polys.append(poly)
 
-    print('time aggregation: number of polygons:', len(polys))
+    print('time aggregation: number of polygons: ', len(polys))
+    import xdev; xdev.embed()
 
-    polys = list(SmallPolygonFilter(min_area_px=80)(polys))
-    print('removed small: remaining polygons:', len(polys))
+    if time_filtering:
+        polys = list(SmallPolygonFilter(min_area_px=80)(polys))
+        print('removed small: remaining polygons: ', len(polys))
 
     # turn each polygon into a list of polygons (map them across gids)
     heatmaps = [heatmap(coco_dset, gid, key) for gid in coco_dset.imgs]
@@ -358,9 +402,8 @@ class TimeAggregatedSC(NewTrackFunction):
     morph_kernel: int = 3
     time_filtering: bool = False
     response_filtering: bool = False
-    key: Tuple[str] = (
-        'Site Preparation', 'Active Construction', 'Post Construction'
-    )
+    key: Tuple[str] = ('Site Preparation', 'Active Construction',
+                       'Post Construction')
     bg_key: Tuple[str] = ('No Activity')
     use_boundary_annots: bool = True
 
