@@ -155,6 +155,7 @@ class TrackFunction(collections.abc.Callable):
         '''
         Main entrypoint for this class.
         '''
+        # TODO why are gids reordered in this index vs coco_dset.imgs?
         for gids in coco_dset.index.vidid_to_gids.values():
             coco_dset = self.safe_apply(coco_dset, gids, overwrite)
         return coco_dset
@@ -176,20 +177,21 @@ class TrackFunction(collections.abc.Callable):
             sub_dset = self(sub_dset)
 
         else:
+            # TODO more sophisticated way to check if we can skip self()
             existing_tracks = tracks(sub_dset.annots())
             _are_trackless = are_trackless(sub_dset.annots())
-            if np.any(_are_trackless) or len(existing_tracks) == 0:
 
-                sub_dset = self(sub_dset)
+            sub_dset = self(sub_dset)
 
-                # if new annots were not created, rollover the old tracks
-                annots = sub_dset.annots()
-                if annots.aids == existing_aids:
-                    annots.set(
-                        'track_id',
-                        np.where(_are_trackless, tracks(annots),
-                                 existing_tracks))
+            # if new annots were not created, rollover the old tracks
+            annots = sub_dset.annots()
+            if annots.aids == existing_aids:
+                annots.set(
+                    'track_id',
+                    np.where(_are_trackless, tracks(annots),
+                             existing_tracks))
 
+        #import xdev; xdev.embed()
         assert not any(are_trackless(sub_dset.annots()))
         return self.safe_union(coco_dset, sub_dset)
 
@@ -344,14 +346,24 @@ def mask_to_polygons(probs,
     binary_mask = (probs > thresh).astype(np.uint8)
     if bounds is not None:
         try:  # is this a shapely or geojson object?
-            bounds = shapely.geometry.asShape(bounds)
+            # asShape is being deprecated:
+            # https://github.com/shapely/shapely/issues/1100
+            bounds = shapely.geometry.shape(bounds)
         except ValueError:  # is this a kwimage object?
             bounds = bounds.to_shapely()
         if use_rasterio:
             # TODO needed?
-            bounds = shapely.geometry.translate(bounds, 0.5, 0.5)  # x, y order
+            # x, y order for shapely
+            #import xdev; xdev.embed()
+            bounds = shapely.affinity.translate(bounds, 0.5, 0.5)
             # TODO investigate all_touched option
-            bounds_mask = features.rasterize([bounds], dtype=np.uint8)
+            try:
+                bounds_mask = features.rasterize(
+                        [bounds],
+                        dtype=np.uint8,
+                        out_shape=binary_mask.shape[:2])
+            except TypeError:
+                import xdev; xdev.embed()
         else:
             bounds_mask = kwimage.Polygon.from_shapely(bounds).to_mask(
                 probs.shape).numpy().data.astype(np.uint8)

@@ -395,7 +395,7 @@ def add_site_summary_to_kwcoco(site_summary_or_region_model,
         if region_id is None:
             region_feat = region_model['features'][0]
             assert region_feat['properties']['type'] == 'region'
-            region_id = region_feat['properties']['name']
+            region_id = region_feat['properties']['region_id']
     except jsonschema.ValidationError:
         # TODO validate this
         site_summary = site_summary_or_region_model
@@ -437,6 +437,28 @@ def add_site_summary_to_kwcoco(site_summary_or_region_model,
                                      track_id=track_id)
 
     return coco_dset
+
+
+def create_region_feature(region_id, site_summaries):
+    geometry = _combined_geometries([
+        _single_geometry(summary['geometry']) for summary in site_summaries
+    ]).envelope
+    start_date = min(summary['properties']['start_date']
+                     for summary in site_summaries)
+    end_date = max(summary['properties']['end_date']
+                   for summary in site_summaries)
+    properties = {
+        'type': 'region',
+        'region_id': region_id,
+        'version': site_summaries[0]['properties']['version'],
+        'mgrs': site_summaries[0]['properties']['mgrs'],
+        'model_content': site_summaries[0]['properties']['model_content'],
+        'start_date': start_date,
+        'end_date': end_date,
+        'originator': site_summaries[0]['properties']['originator'],
+        'comments': None
+    }
+    return geojson.Feature(geometry=geometry, properties=properties)
 
 
 def main(args):
@@ -554,9 +576,9 @@ def main(args):
     track.add_argument('--default_track_fn',
                        help=ub.paragraph('''
         String code to pick a sensible track_fn based on the contents
-        of in_file. Supported codes are ['change_heatmaps', 'change_polys',
+        of in_file. Supported codes are ['saliency_heatmaps', 'change_polys',
         'class_heatmaps', 'class_polys']. Any other string will be interpreted
-        as the image channel to use for 'change_heatmaps' (default: 'salient',
+        as the image channel to use for 'saliency_heatmaps' (default: 'salient',
         'change_prob', or 'change'). Supported classes are ['Site Preparation',
         'Active Construction', 'Post Construction', 'No Activity']. For
         class_heatmaps, these should be image channels; for class_polys, they
@@ -621,11 +643,11 @@ def main(args):
     # Pick a track_fn
     if args.default_track_fn is not None:
         from watch.tasks.tracking import from_heatmap, from_polygon
-        if args.default_track_fn == 'change_heatmaps':
+        if args.default_track_fn == 'saliency_heatmaps':
             track_fn = from_heatmap.TimeAggregatedBAS
         elif args.default_track_fn == 'change_polys':
             track_fn = from_polygon.OverlapTrack
-        if args.default_track_fn == 'class_heatmaps':
+        elif args.default_track_fn == 'class_heatmaps':
             track_fn = from_heatmap.TimeAggregatedSC
         elif args.default_track_fn == 'class_polys':
             track_fn = from_polygon.OverlapTrack
@@ -652,40 +674,38 @@ def main(args):
 
     if args.write_in_file:
         coco_dset.dump(args.in_file, indent=2)
-    # import xdev; xdev.embed()
+    #import xdev; xdev.embed()
     # Convert kwcoco to sites
     sites = convert_kwcoco_to_iarpa(coco_dset,
                                     args.region_id,
                                     as_summary=args.bas_mode)
 
-    verbose = 0
+    verbose = 1
     os.makedirs(args.out_dir, exist_ok=True)
-    for site in sites:
-
-        if args.bas_mode:
-            #  write sites to region models on disk
-            site_props = site['properties']
-            assert site_props['type'] == 'site_summary'
-            region_id = site_props.pop('region_id')
+    if args.bas_mode:  # write sites to region models on disk
+        for region_id, site_summaries in ub.group_items(
+                sites,
+                lambda site: site['properties'].pop('region_id')).items():
             region_fpath = os.path.join(args.out_dir,
                                         region_id + '.geojson')
             if os.path.isfile(region_fpath):
                 with open(region_fpath, 'r') as f:
                     region = geojson.load(f)
                 if verbose:
-                    print(f'writing site {site_props["site_id"]} to existing'
-                          f' region {region_fpath}')
+                    print(f'writing to existing region {region_fpath}')
             else:
-                region = geojson.FeatureCollection([])
+                region = geojson.FeatureCollection([
+                        create_region_feature(region_id, site_summaries)])
                 if verbose:
-                    print(f'writing site {site_props["site_id"]} to new '
-                          f'region {region_fpath}')
-            region['features'].append(site)
+                    print(f'writing to new region {region_fpath}')
+            for site_summary in site_summaries:
+                assert site_summary['properties']['type'] == 'site_summary'
+                region['features'].append(site_summary)
             with open(region_fpath, 'w') as f:
                 geojson.dump(region, f, indent=2)
 
-        else:
-            # Write sites to disk
+    else:  # write sites to disk
+        for site in sites:
             site_props = site['features'][0]['properties']
             assert site_props['type'] == 'site'
             site_fpath = os.path.join(args.out_dir,
@@ -697,11 +717,11 @@ def main(args):
                 geojson.dump(site, f, indent=2)
 
     if args.score:
-        import shlex
-        watch.cli.run_metrics_framework(shlex.join([
+        from watch.cli.run_metrics_framework import main
+        main([
             score_args,
             '--sites',
-        ] + [json.dumps(site) for site in sites]))
+        ] + [json.dumps(site) for site in sites])
 
 
 def demo(coco_dset,

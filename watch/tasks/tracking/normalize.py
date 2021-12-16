@@ -395,7 +395,7 @@ def normalize_phases(coco_dset):
     '''
     # Remove site boundary annotations (should be already incorporated
     # by track_fn if needed)
-    coco_dset.remove_categories(['Site Boundary'], keep_annots=False)
+    # coco_dset.remove_categories(['Site Boundary'], keep_annots=False)
 
     # TODO: were these used by some toydata? They aren't in the real files.
     # TODO: if we are hardcoding names we should have some constants file
@@ -407,7 +407,7 @@ def normalize_phases(coco_dset):
         'obscured': 'Unknown',
         '': 'No Activity'
     }
-    good_cats = set(category_dict.values())
+    good_cats = set(category_dict.values()).union({'Site Boundary'})
     for cat_name in good_cats:
         coco_dset.ensure_category(cat_name)
 
@@ -423,13 +423,15 @@ def normalize_phases(coco_dset):
 
     # HACK remove change
     # TODO break out these heuristics
+    from collections import Counter
+    log = Counter()
     for trackid in coco_dset.index.trackid_to_aids.keys():
         annots = coco_dset.annots(trackid=trackid)
         cats = annots.cnames
         if set(cats) - good_cats:
             # if we have partial coverage, interpolate from good labels
             if set(cats) - change_cats:
-                print('we have partial coverage')
+                log.update(['partial class labels'])
                 cids = np.array(annots.cids)
                 good_ixs = np.in1d(cats, list(change_cats), invert=True)
                 ix_to_cid = dict(zip(range(len(good_ixs)), cids[good_ixs]))
@@ -441,8 +443,7 @@ def normalize_phases(coco_dset):
             # active construction for the second half
             # with post construction on the last frame
             else:
-                print(
-                    'Only got change IDs, assigning baseline activity labels')
+                log.update(['no class labels'])
                 gids_first_half, gids_second_half = np.array_split(
                     np.array(
                         coco_dset.index._set_sorted_by_frame_index(
@@ -455,7 +456,10 @@ def normalize_phases(coco_dset):
                                 siteprep_cid, active_cid)
                 cids = np.where(gids == gids_second_half[-1], post_cid, cids)
                 annots.set('category_id', cids)
+        else:
+            log.update(['full class labels'])
 
+    print('label status of tracks: ', log)
     return coco_dset
 
 
@@ -551,7 +555,7 @@ def normalize(coco_dset, track_fn, overwrite, gt_dset=None, **track_kwargs):
     if len(coco_dset.anns) > 0:
         coco_dset = _normalize_annots(coco_dset, overwrite)
     coco_dset = ensure_videos(coco_dset)
-
+    #import xdev; xdev.embed()
     # apply tracks
     assert issubclass(track_fn, TrackFunction), 'must supply a valid track_fn!'
     coco_dset = track_fn(**track_kwargs).apply_per_video(coco_dset)
