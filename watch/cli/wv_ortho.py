@@ -226,7 +226,7 @@ def orthorectify(stac_item, outdir, te_dems, as_vrt, as_utm):
         cmd_str_out = '-of COG -co BLOCKSIZE=64 -co COMPRESS=DEFLATE'
 
     lon, lat = np.concatenate(
-        shapely.geometry.asShape(stac_item.geometry).centroid.xy)
+        shapely.geometry.shape(stac_item.geometry).centroid.xy)
     if te_dems:
         raise NotImplementedError
     else:

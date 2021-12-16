@@ -291,7 +291,7 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
         def is_empty_rounded(geom):
             geom['coordinates'] = _set_precision(geom['coordinates'],
                                                  min_geo_precision)
-            return shapely.geometry.asShape(geom).is_empty
+            return shapely.geometry.shape(geom).is_empty
 
         def are_empty_rounded(annots):
             return list(

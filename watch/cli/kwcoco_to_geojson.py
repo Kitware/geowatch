@@ -44,7 +44,7 @@ import ubelt as ub
 
 
 def _single_geometry(geom):
-    return shapely.geometry.asShape(geom).buffer(0)
+    return shapely.geometry.shape(geom).buffer(0)
 
 
 def _combined_geometries(geometry_list):
