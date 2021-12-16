@@ -143,6 +143,9 @@ class kwcoco_dataset(Dataset):
         return img1_id, image_info, image
 
     def __getitem__(self, idx):
+        if self.mode == 'test':
+            return self.get_img(idx)
+        
         # get image1 id and the video it is associated with
         img1_id = self.dset_ids[idx]
         video = [y for y in self.videos if img1_id in self.dset.index.vidid_to_gids[y]][0]
@@ -205,9 +208,7 @@ class kwcoco_dataset(Dataset):
             out['display_image2'] = display_image2
             out['order'] = [x[0] for x in sorted(frame_index.items(), key=lambda item: item[1])]
             out['sensors'] = sensor_list
-            if self.mode == 'test':
-                # out['img1_info'] = img1_info
-                out['img1_id'] = img1_id
+
         else:
             aids = [self.dset.index.gid_to_aids[n] for n in id_list]
 
