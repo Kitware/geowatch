@@ -432,6 +432,13 @@ def normalize(arr, mode='linear', alpha=None, beta=None, out=None,
         >>> assert isclose(norm_m.min(), 0.5)
         >>> assert isclose(norm_m.max(), 0.5)
 
+        >>> # Ensure that we're clamping if explicit min or max values
+        >>> # are provided
+        >>> raw_m = (np.zeros((8, 8)) + 10)
+        >>> norm_m = normalize(raw_m, min_val=0, max_val=5)
+        >>> assert isclose(norm_m.min(), 1.0)
+        >>> assert isclose(norm_m.max(), 1.0)
+
     Example:
         >>> # xdoctest: +REQUIRES(module:kwimage)
         >>> import kwimage
@@ -526,8 +533,17 @@ def normalize(arr, mode='linear', alpha=None, beta=None, out=None,
     #     - [X] explicitly given min and max
     #     - [ ] raw-naive min and max inference
     #     - [ ] outlier-aware min and max inference
-    old_min = float_out.min() if min_val is None else min_val
-    old_max = float_out.max() if max_val is None else max_val
+    if min_val is not None:
+        old_min = min_val
+        float_out[float_out < min_val] = min_val
+    else:
+        old_min = float_out.min()
+
+    if max_val is not None:
+        old_max = max_val
+        float_out[float_out > max_val] = max_val
+    else:
+        old_max = float_out.max()
 
     old_span = old_max - old_min
     new_span = new_max - new_min
