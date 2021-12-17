@@ -71,10 +71,11 @@ def run_mtra_for_baseline(input_path,
     ingress_catalog = baseline_framework_ingress(
         input_path,
         '/tmp/ingress',
-        aws_profile,
-        dryrun,
-        requester_pays,
-        jobs)
+        aws_profile=aws_profile,
+        dryrun=dryrun,
+        requester_pays=requester_pays,
+        relative=False,
+        jobs=jobs)
 
     print("* Running MTRA harmonization *")
     mtra_catalog = run_mtra(

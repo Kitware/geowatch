@@ -64,10 +64,11 @@ def run_coreg_for_baseline(input_path,
     ingress_catalog = baseline_framework_ingress(
         input_path,
         '/tmp/ingress',
-        aws_profile,
-        dryrun,
-        requester_pays,
-        jobs)
+        aws_profile=aws_profile,
+        dryrun=dryrun,
+        requester_pays=requester_pays,
+        relative=False,
+        jobs=jobs)
 
     print("* Running coregistration *")
     coreg_catalog = run_s2_coreg_l1c(
