@@ -19,6 +19,7 @@ import pathlib
 import kwimage
 import pandas as pd
 import numpy as np
+import math
 
 
 class IntensityHistogramConfig(scfg.Config):
@@ -43,6 +44,8 @@ class IntensityHistogramConfig(scfg.Config):
         'exclude_sensors': scfg.Value(None, help='if specified can be comma separated invalid sensors'),
 
         'max_images': scfg.Value(None, help='if given only sample this many images when computing statistics'),
+
+        'valid_range': scfg.Value(None, help='Only include values within this range; specified as <min_val>:<max_val> e.g. (0:10000)'),
 
         # Histogram modifiers
         'kde': scfg.Value(True, help='if True compute a kernel density estimate to smooth the distribution'),
@@ -204,7 +207,8 @@ def main(**kwargs):
         coco_img.detach()
         job = jobs.submit(ensure_intensity_stats, coco_img,
                           include_channels=include_channels,
-                          exclude_channels=exclude_channels)
+                          exclude_channels=exclude_channels,
+                          valid_range=config['valid_range'])
         job.coco_img = coco_img
 
     accum = HistAccum()
@@ -350,13 +354,22 @@ def _fill_missing_colors(label_to_color):
     return final
 
 
-def ensure_intensity_sidecar(fpath, recompute=False):
+def ensure_intensity_sidecar(fpath, recompute=False, valid_range=None):
     """
     Write statistics next to the image
     """
     stats_fpath = pathlib.Path(fpath + '.stats.pkl')
 
-    if recompute or not stats_fpath.exists():
+    if recompute or not stats_fpath.exists() or valid_range is not None:
+        if valid_range is not None:
+            try:
+                valid_min, valid_max = map(int, valid_range.split(':'))
+            except ValueError:
+                valid_min, valid_max = map(float, valid_range.split(':'))
+        else:
+            valid_min = -math.inf
+            valid_max = math.inf
+
         imdata = kwimage.imread(fpath, backend='gdal')
         imdata = kwarray.atleast_nd(imdata, 3)
         # TODO: better float handling
@@ -366,6 +379,14 @@ def ensure_intensity_sidecar(fpath, recompute=False):
             data = imband.ravel()
             intensity_hist = ub.dict_hist(data)
             intensity_hist = ub.sorted_keys(intensity_hist)
+            bad_keys = set()
+            for key, value in intensity_hist.items():
+                if(key < valid_min or key > valid_max):
+                    bad_keys.add(key)
+
+            for key in bad_keys:
+                del intensity_hist[key]
+
             stats_info['bands'].append({
                 'intensity_hist': intensity_hist,
             })
@@ -374,7 +395,7 @@ def ensure_intensity_sidecar(fpath, recompute=False):
     return stats_fpath
 
 
-def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exclude_channels=None):
+def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exclude_channels=None, valid_range=None):
     from os.path import join
     intensity_stats = {'bands': []}
     for obj in coco_img.iter_asset_objs():
@@ -402,7 +423,8 @@ def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exc
             requested_channels = requested_channels - exclude_channels
 
         if len(requested_channels) > 0:
-            stats_fpath = ensure_intensity_sidecar(fpath, recompute=recompute)
+            stats_fpath = ensure_intensity_sidecar(
+                fpath, recompute=recompute, valid_range=valid_range)
             try:
                 with open(stats_fpath, 'rb') as file:
                     stat_info = pickle.load(file)
