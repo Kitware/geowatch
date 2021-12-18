@@ -217,7 +217,7 @@ class ResultAnalysis:
                 print(f'ANOVA hypothesis (roughly): the param {param_name!r} has no effect on the metric')
                 print('    Reject this hypothesis if the p value is less than a threshold')
                 print(ub.color_text(f'  Rank-ANOVA: p={anova_rank_p:0.4f}', 'green' if anova_rank_p < p_threshold else None))
-                print(ub.color_text(f'  Mean-ANOVA: p={anova_mean_p:0.4f}', 'green' if anova_rank_p < p_threshold else None))
+                print(ub.color_text(f'  Mean-ANOVA: p={anova_mean_p:0.4f}', 'green' if anova_mean_p < p_threshold else None))
                 print('')
                 print('Pairwise T-Tests')
                 for pairstat in stats_row['pairwise']:

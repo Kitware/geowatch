@@ -158,6 +158,16 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus=None, run=Fa
     DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
     KWCOCO_TEST_FPATH=$DVC_DPATH/Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json
 
+    kwcoco subset $DVC_DPATH/Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json
+    smartwatch stats --src $DVC_DPATH/Drop1-Aligned-L1/combo_train_nowv.kwcoco.json
+
+    # Hack to test on the train set for a sanity check
+    kwcoco subset --src $DVC_DPATH/Drop1-Aligned-L1/combo_train_nowv.kwcoco.json \
+            --dst $DVC_DPATH/Drop1-Aligned-L1/combo_train_US_R001_small_nowv.kwcoco.json \
+            --select_videos '.name | startswith("US_R001")' \
+            --select_images '.id % 4 == 0'
+    smartwatch stats $DVC_DPATH/Drop1-Aligned-L1/combo_train_US_R001_small_nowv.kwcoco.json
+
     MODEL_GLOB=$DVC_DPATH/'models/fusion/SC-20201117/*/*.pt'
     echo "$MODEL_GLOB"
 
@@ -183,6 +193,9 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus=None, run=Fa
         dvc_dpath = watch.utils.util_data.find_smart_dvc_dpath()
         model_globstr = str(dvc_dpath / 'models/fusion/SC-20201117/*/*.pt')
         test_dataset = dvc_dpath / 'Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json'
+
+        # hack for train set
+        test_dataset = dvc_dpath / 'Drop1-Aligned-L1/combo_train_US_R001_small_nowv.kwcoco.json'
         gpus = None
 
     dvc_dpath = watch.utils.util_data.find_smart_dvc_dpath()
@@ -255,7 +268,6 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus=None, run=Fa
 
     # GPUS = [0, 1, 2, 3]
     # GPUS = [0]
-
     environ = {
         'DVC_DPATH': dvc_dpath,
     }
@@ -390,6 +402,10 @@ def gather_measures():
 
     # measure_fpaths = list(model_dpath.glob('eval_links/*/curves/measures2.json'))
     measure_fpaths = list(model_dpath.glob('*/*/*/eval/curves/measures2.json'))
+
+    dset_groups = ub.group_items(measure_fpaths, lambda x: x.parent.parent.parent.name)
+    measure_fpaths = dset_groups['combo_train_US_R001_small_nowv.kwcoco']
+
     print(len(measure_fpaths))
     # dataset_to_evals = ub.group_items(eval_dpaths, lambda x: x.parent.name)
 
@@ -618,13 +634,17 @@ def gather_measures():
 
     import kwplot
     sns = kwplot.autosns()
+    plt = kwplot.autoplt()
 
     kwplot.figure(fnum=1, doclf=True)
     ax = sns.lineplot(data=mean_df, x='epoch', y='mAP', hue='expt_name', marker='o', style='channels')
-    ax.set_title('Pixelwise mAP AC metrics: KR_R001 + KR_R002')
+    h, ell = ax.get_legend_handles_labels()
+    ax.legend(h, ell, loc='lower right')
+    # ax.set_title('Pixelwise mAP AC metrics: KR_R001 + KR_R002')
+    ax.set_title('Pixelwise mAP AC metrics')  # todo: add train name
 
     kwplot.figure(fnum=2, doclf=True)
-    ax = sns.lineplot(data=mean_df, x='step', y='mAUC', hue='expt_name', marker='o', style='channels')
+    ax = sns.lineplot(data=mean_df, x='epoch', y='mAUC', hue='expt_name', marker='o', style='channels')
     ax.set_title('Pixelwise mAUC AC metrics: KR_R001 + KR_R002')
 
     max_num_curves = 16

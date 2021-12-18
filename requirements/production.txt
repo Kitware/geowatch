@@ -44,7 +44,7 @@ fire>=0.4.0
 
 # Imaging
 distinctipy>=1.1.5
-kwimage>=0.7.16
+kwimage>=0.8.0
 kwcoco>=0.2.19
 Pillow>=8.0.1
 albumentations>=1.0.0

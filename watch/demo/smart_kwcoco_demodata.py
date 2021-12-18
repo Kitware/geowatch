@@ -391,3 +391,22 @@ def _random_utm_box(rng=None):
     """
     utm_box = kwimage.Boxes([[utm_x, utm_y, w, h]], 'cxywh')
     return utm_box, utm_crs_info
+
+
+def demo_kwcoco_multisensor(num_videos=4, num_frames=10):
+    """
+    Ignore:
+        import watch
+        coco_dset = watch.demo.demo_kwcoco_multisensor()
+    """
+    coco_dset = kwcoco.CocoDataset.demo(
+        'vidshapes-msi', num_videos=num_videos, num_frames=num_frames,
+        image_size='random', rng=9111665008, multispectral=True,
+        multisensor=True)
+    # Hack in sensor_coarse
+    images = coco_dset.images()
+    groups = ub.sorted_keys(ub.group_items(images.coco_images, lambda x: x.channels.spec))
+    for idx, (k, g) in enumerate(groups.items()):
+        for coco_img in g:
+            coco_img.img['sensor_coarse'] = 'sensor{}'.format(idx)
+    return coco_dset

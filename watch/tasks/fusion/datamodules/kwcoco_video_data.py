@@ -463,6 +463,39 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             >>> kwplot.autompl()
             >>> kwplot.imshow(canvas)
             >>> kwplot.show_if_requestedV
+
+
+        Example:
+            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+            >>> from watch.tasks.fusion import datamodules
+            >>> import watch
+            >>> train_dataset = watch.demo.demo_kwcoco_multisensor()
+            >>> self = datamodules.KWCocoVideoDataModule(
+            >>>     train_dataset=train_dataset, chip_size=256, time_steps=5, num_workers=0, batch_size=3, true_multimodal=True)
+            >>> self.setup('fit')
+            >>> loader = self.train_dataloader()
+            >>> batch_iter = iter(loader)
+            >>> batch = next(batch_iter)
+            >>> item = batch[0]
+            >>> # Visualize
+            >>> B = len(batch)
+            >>> outputs = {'change_probs': [], 'class_probs': [], 'saliency_probs': []}
+            >>> # Add dummy outputs
+            >>> for item in batch:
+            >>>     [v.append([]) for v in outputs.values()]
+            >>>     for frame_idx, frame in enumerate(item['frames']):
+            >>>         H, W = frame['class_idxs'].shape
+            >>>         if frame_idx > 0:
+            >>>             outputs['change_probs'][-1].append(torch.rand(H, W))
+            >>>         outputs['class_probs'][-1].append(torch.rand(H, W, 10))
+            >>>         outputs['saliency_probs'][-1].append(torch.rand(H, W, 2))
+            >>> stage = 'train'
+            >>> canvas = self.draw_batch(batch, stage=stage, outputs=outputs, max_items=4)
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas)
+            >>> kwplot.show_if_requested()
         """
         dataset = self.torch_datasets[stage]
         # Get the raw dataset class
@@ -482,9 +515,15 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             # - [ ] per-frame semenatic segmentation
             item_output = {}
             if outputs is not None:
-                for k in ['change_probs', 'class_probs', 'saliency_probs']:
-                    if k in outputs:
-                        item_output[k] = outputs[k][item_idx].data.cpu().numpy()
+                item_output = ub.AutoDict()
+                # output_walker = ub.IndexableWalker(item_output)
+                input_walker = ub.IndexableWalker(outputs)
+                for p, v in input_walker:
+                    if isinstance(v, torch.Tensor):
+                        input_walker[p] = v.data.cpu().numpy()
+                # for k in ['change_probs', 'class_probs', 'saliency_probs']:
+                #     if k in outputs:
+                #         item_output[k] = outputs[k][item_idx].data.cpu().numpy()
 
             part = dataset.draw_item(item, item_output=item_output, overlay_on_image=overlay_on_image, **kwargs)
             canvas_list.append(part)
@@ -935,6 +974,25 @@ class KWCocoVideoDataset(data.Dataset):
             >>> self = KWCocoVideoDataset(sampler, sample_shape=(5, 256, 256), channels='red|green|blue|swir16|pan|lwir11|lwir12', normalize_perframe=False, true_multimodal=True)
             >>> self.disable_augmenter = True
             >>> index = 300
+            >>> item = self[index]
+            >>> canvas = self.draw_item(item)
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas)
+            >>> kwplot.show_if_requested()
+
+        Example:
+            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+            >>> import ndsampler
+            >>> import kwcoco
+            >>> import watch
+            >>> coco_dset = watch.demo.demo_kwcoco_multisensor()
+            >>> channels = '|'.join(sorted(set(ub.flatten([kwcoco.ChannelSpec.coerce(c).fuse().as_list() for c in groups.keys()]))))
+            >>> sampler = ndsampler.CocoSampler(coco_dset)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=(5, 256, 256), channels=channels, normalize_perframe=False, true_multimodal=True)
+            >>> self.disable_augmenter = True
+            >>> index = 0
             >>> item = self[index]
             >>> canvas = self.draw_item(item)
             >>> # xdoctest: +REQUIRES(--show)
