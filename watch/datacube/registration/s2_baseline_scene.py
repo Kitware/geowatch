@@ -53,8 +53,9 @@ def find_baseline_scene(xmls, return_paths=False):
         >>>     if not os.path.isfile(os.path.join(input_dir, 'MTD_TL.xml')):
         >>>         os.symlink(mtd_tl_xml_path, os.path.join(input_dir, 'MTD_TL.xml'))
         >>>     for b04 in glob.glob(os.path.join(os.path.dirname(safedir_to_xml(safedir)), 'IMG_DATA', '*_B04.jp2')):
-        >>>         if not os.path.isfile(os.path.join(input_image_data_dir, os.path.basename(b04))):
-        >>>             os.symlink(b04, os.path.join(input_image_data_dir, os.path.basename(b04)))
+        >>>         outpath = os.path.join(input_dir, os.path.basename(b04).replace(".jp2", ".tif"))
+        >>>         if not os.path.isfile(outpath):
+        >>>             os.symlink(b04, outpath)
         >>>     input_dirs.append(input_dir)
         >>> #
         >>> baseline = find_baseline_scene([os.path.join(d, 'MTD_TL.xml') for d in input_dirs])
