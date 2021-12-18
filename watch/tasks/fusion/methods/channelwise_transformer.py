@@ -607,17 +607,19 @@ class MultimodalTransformer(pl.LightningModule):
             >>> import os
             >>> if 0:
             >>>     dvc_dpath = find_smart_dvc_dpath()
-            >>>     coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/data.kwcoco.json')
+            >>>     coco_dset = join(dvc_dpath, 'drop1-S2-L8-aligned/data.kwcoco.json')
             >>>     channels='swir16|swir22|blue|green|red|nir'
             >>> else:
-            >>>     coco_fpath = 'special:vidshapes8-frames9-speed0.5-multispectral'
-            >>>     channels='B1|B11|B8'
-            >>> coco_dset = kwcoco.CocoDataset.coerce(coco_fpath)
+            >>>     import watch
+            >>>     coco_dset = watch.demo.demo_kwcoco_multisensor(max_speed=0.5)
+            >>>     # coco_dset = 'special:vidshapes8-frames9-speed0.5-multispectral'
+            >>>     channels='B1|B11|B8|r|g|b|gauss'
+            >>> coco_dset = kwcoco.CocoDataset.coerce(coco_dset)
             >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset=coco_dset,
             >>>     chip_size=160, batch_size=1, time_steps=5,
             >>>     channels=channels,
-            >>>     normalize_inputs=True, neg_to_pos_ratio=0, num_workers='avail/2',
+            >>>     normalize_inputs=True, neg_to_pos_ratio=0, num_workers='avail/2', true_multimodal=True,
             >>> )
             >>> datamodule.setup('fit')
             >>> torch_dset = datamodule.torch_datasets['train']

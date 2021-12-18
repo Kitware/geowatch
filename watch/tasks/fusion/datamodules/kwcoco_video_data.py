@@ -363,6 +363,13 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             if self.input_channels is None:
                 self.input_channels = train_dataset.input_channels
 
+            stats_params = {
+                'num': None,
+                'with_intensity': False,
+                'with_class': True,
+                'num_workers': self.num_workers,
+                'batch_size': self.batch_size,
+            }
             if self.normalize_inputs:
                 if isinstance(self.normalize_inputs, str):
                     raise NotImplementedError(
@@ -370,15 +377,17 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                         'e.g. imagenet')
                 else:
                     if isinstance(self.normalize_inputs, int):
-                        num = self.normalize_inputs
+                        stats_params['num'] = self.normalize_inputs
                     else:
-                        num = None
-                    self.dataset_stats = train_dataset.cached_dataset_stats(
-                        num=num, num_workers=self.num_workers,
-                        batch_size=self.batch_size)
+                        stats_params['num'] = None
+            else:
+                stats_params['with_intensity'] = False
 
-                    # Hack for now:
-                    self.input_stats = self.dataset_stats
+            # Hack for now:
+            # Note: also need for class weights
+            if stats_params is not None:
+                self.dataset_stats = train_dataset.cached_dataset_stats(**stats_params)
+                self.input_stats = self.dataset_stats
 
             if self.vali_kwcoco is not None:
                 # Explicit validation dataset should be prefered
@@ -1629,7 +1638,8 @@ class KWCocoVideoDataset(data.Dataset):
         }
         return item
 
-    def cached_dataset_stats(self, num=None, num_workers=0, batch_size=2):
+    def cached_dataset_stats(self, num=None, num_workers=0, batch_size=2,
+                             with_intensity=True, with_class=True):
         """
         Compute the normalization stats, and caches them
 
@@ -1644,7 +1654,9 @@ class KWCocoVideoDataset(data.Dataset):
             ('channels', self.input_channels.__json__()),
             # ('sample_shape', self.sample_shape),
             ('normalize_perframe', self.normalize_perframe),
-            ('depends_version', 7),  # bump if `compute_dataset_stats` changes
+            ('with_intensity', with_intensity),
+            ('with_class', with_class),
+            ('depends_version', 8),  # bump if `compute_dataset_stats` changes
         ])
         workdir = None
         cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends)
@@ -1655,7 +1667,8 @@ class KWCocoVideoDataset(data.Dataset):
             cacher.save(input_stats)
         return input_stats
 
-    def compute_dataset_stats(self, num=None, num_workers=0, batch_size=2):
+    def compute_dataset_stats(self, num=None, num_workers=0, batch_size=2,
+                              with_intensity=True, with_class=True):
         """
         Args:
             num (int | None): number of input items to compute stats for
@@ -1707,8 +1720,26 @@ class KWCocoVideoDataset(data.Dataset):
             >>> num = 100
             >>> batch_size = 6
             >>> self.compute_dataset_stats(num=num, num_workers=num_workers, batch_size=batch_size)
+
+        Example:
+            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+            >>> from watch.tasks.fusion import datamodules
+            >>> train_dataset = watch.demo.demo_kwcoco_multisensor()
+            >>> datamodule = datamodules.KWCocoVideoDataModule(
+            >>>     train_dataset=train_dataset, chip_size=256, time_steps=5, num_workers=0, batch_size=3, true_multimodal=True, normalize_inputs=True)
+            >>> datamodule.setup('fit')
+            >>> self = datamodule.torch_datasets['train']
+            >>> num_workers = 0
+            >>> num = 100
+            >>> batch_size = 6
+            >>> self.compute_dataset_stats()
+            >>> self.compute_dataset_stats(with_intensity=False)
+            >>> self.compute_dataset_stats(with_class=False)
+            >>> self.compute_dataset_stats(with_class=False, with_intensity=False)
         """
         num = num if isinstance(num, int) and num is not True else 1000
+        if not with_class and not with_intensity:
+            num = 1  # efficiency hack
         stats_idxs = kwarray.shuffle(np.arange(len(self)), rng=0)[0:min(num, len(self))]
         stats_subset = torch.utils.data.Subset(self, stats_idxs)
 
@@ -1720,9 +1751,15 @@ class KWCocoVideoDataset(data.Dataset):
             collate_fn=ub.identity, num_workers=num_workers, shuffle=True,
             batch_size=batch_size)
 
+        # dataset_sensors = set(
+        #     self.sampler.dset.images().lookup('sensor_coarse', None))
         # Track moving average of each fused channel stream
-        channel_stats = {key: kwarray.RunningStats()
-                         for key in self.input_channels.keys()}
+        # channel_stats = {
+        #     sensor: {key: kwarray.RunningStats()
+        #              for key in self.input_channels.keys()}
+        #     for sensor in dataset_sensors
+        # }
+        channel_stats = ub.AutoDict()
 
         timer = ub.Timer().tic()
         timer.first = 1
@@ -1732,48 +1769,69 @@ class KWCocoVideoDataset(data.Dataset):
         bins = np.arange(num_classes + 1)
         total_freq = np.zeros(num_classes, dtype=np.int64)
 
-        prog = ub.ProgIter(loader, desc='estimate mean/std')
+        prog = ub.ProgIter(loader, desc='estimate dataset stats')
         for batch_items in prog:
             for item in batch_items:
                 for frame_item in item['frames']:
-
-                    class_idxs = frame_item['class_idxs']
-                    # print(np.unique(class_idxs))
-                    item_freq = np.histogram(class_idxs.ravel(), bins=bins)[0]
-                    total_freq += item_freq
-
-                    for mode_code, mode_val in frame_item['modes'].items():
-                        running = channel_stats[mode_code]
-                        val = mode_val.numpy()
-                        flags = np.isfinite(val)
-                        if not np.all(flags):
-                            # Hack it:
-                            val[~flags] = 0
-                        running.update(val.astype(np.float64))
+                    if with_class:
+                        class_idxs = frame_item['class_idxs']
+                        # print(np.unique(class_idxs))
+                        item_freq = np.histogram(class_idxs.ravel(), bins=bins)[0]
+                        total_freq += item_freq
+                    if with_intensity:
+                        sensor_code = frame_item['sensor_coarse']
+                        modes = frame_item['modes']
+                        for mode_code, mode_val in modes.items():
+                            running = channel_stats[sensor_code][mode_code]
+                            if not running:
+                                running = kwarray.RunningStats()
+                                channel_stats[sensor_code][mode_code] = running
+                            val = mode_val.numpy()
+                            flags = np.isfinite(val)
+                            if not np.all(flags):
+                                # Hack it:
+                                val[~flags] = 0
+                            running.update(val.astype(np.float64))
 
             if timer.first or timer.toc() > 5:
                 from watch.utils.slugify_ext import smart_truncate
-                intermediate = ub.sorted_vals(ub.dzip(classes, total_freq), reverse=True)
-                intermediate_text = ub.repr2(intermediate, compact=1)
-                intermediate_text = smart_truncate(intermediate_text, max_length=40, trunc_loc=0.8)
-                curr = ub.dict_isect(running.summarize(keepdims=False), {'mean', 'std', 'max', 'min'})
-                curr = ub.map_vals(float, curr)
-                text = ub.repr2(curr, compact=1, precision=1, nl=0) + ' ' + intermediate_text
+                if with_class:
+                    intermediate = ub.sorted_vals(ub.dzip(classes, total_freq), reverse=True)
+                    intermediate_text = ub.repr2(intermediate, compact=1)
+                    intermediate_text = smart_truncate(intermediate_text, max_length=40, trunc_loc=0.8)
+                else:
+                    intermediate_text = ''
+
+                if with_intensity:
+                    curr = ub.dict_isect(running.summarize(keepdims=False), {'mean', 'std', 'max', 'min'})
+                    curr = ub.map_vals(float, curr)
+                    text = ub.repr2(curr, compact=1, precision=1, nl=0) + ' ' + intermediate_text
+                else:
+                    text = intermediate_text
                 prog.set_postfix_str(text)
                 timer.first = 0
                 timer.tic()
+        self.disable_augmenter = False
+
+        channel_stats = channel_stats.to_dict()
 
         # Return the raw counts and let the model choose how to handle it
-        class_freq = ub.dzip(classes, total_freq)
+        if with_class:
+            class_freq = ub.dzip(classes, total_freq)
+        else:
+            class_freq = None
 
-        input_stats = {}
-        for key, running in channel_stats.items():
-            perchan_stats = running.summarize(axis=(1, 2))
-            input_stats[key] = {
-                'mean': perchan_stats['mean'].round(3),  # only take 3 sigfigs
-                'std': np.maximum(perchan_stats['std'], 1e-3).round(3),
-            }
-        self.disable_augmenter = False
+        if with_intensity:
+            input_stats = {}
+            for sensor, submodes in channel_stats.items():
+                for chan_key, running in submodes.items():
+                    perchan_stats = running.summarize(axis=(1, 2))
+                    input_stats[(sensor, chan_key)] = {
+                        'mean': perchan_stats['mean'].round(3),  # only take 3 sigfigs
+                        'std': np.maximum(perchan_stats['std'], 1e-3).round(3),
+                    }
+        else:
+            input_stats = None
 
         dataset_stats = {
             'input_stats': input_stats,

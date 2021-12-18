@@ -393,16 +393,23 @@ def _random_utm_box(rng=None):
     return utm_box, utm_crs_info
 
 
-def demo_kwcoco_multisensor(num_videos=4, num_frames=10):
+def demo_kwcoco_multisensor(num_videos=4, num_frames=10, **kwargs):
     """
     Ignore:
         import watch
         coco_dset = watch.demo.demo_kwcoco_multisensor()
+        coco_dset = watch.demo.demo_kwcoco_multisensor(max_speed=0.5)
     """
-    coco_dset = kwcoco.CocoDataset.demo(
-        'vidshapes-msi', num_videos=num_videos, num_frames=num_frames,
-        image_size='random', rng=9111665008, multispectral=True,
-        multisensor=True)
+    demo_kwargs = {
+        'num_frames': num_frames,
+        'num_videos': num_videos,
+        'rng': 9111665008,
+        'multisensor': True,
+        'multispectral': True,
+        'image_size': 'random',
+    }
+    demo_kwargs.update(kwargs)
+    coco_dset = kwcoco.CocoDataset.demo('vidshapes', **demo_kwargs)
     # Hack in sensor_coarse
     images = coco_dset.images()
     groups = ub.sorted_keys(ub.group_items(images.coco_images, lambda x: x.channels.spec))
