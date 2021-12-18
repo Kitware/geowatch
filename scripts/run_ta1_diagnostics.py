@@ -5,6 +5,8 @@ import json
 import tempfile
 import subprocess
 import os
+import glob
+import shutil
 
 from watch.cli.baseline_framework_ingress import baseline_framework_ingress
 from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress  # noqa: 501
@@ -160,17 +162,39 @@ def run_diagnostics(input_path,
 
     # 6. Visualize the cropped dataset
     print("* Visualizing cropped dataset *")
+    visualization_dir = os.path.join(ta1_cropped_dir, '_viz')
     subprocess.run(['python', '-m', 'watch.cli.coco_visualize_videos',
                     '--src', ta1_cropped_watch_kwcoco_path,
                     '--space', 'video',
                     '--workers', str(jobs),
                     '--channels', 'red|green|blue',
-                    '--viz_dpath', os.path.join(ta1_cropped_dir, '_viz'),
-                    '--norm_hack', 'True',
+                    '--viz_dpath', visualization_dir,
+                    '--fixed_normalization_scheme', 'scaled_25percentile',
                     '--nodata', '-9999',
                     '--animate', 'True'], check=True)
+    for visualization_file in glob.glob(
+            os.path.join(visualization_dir, '*', '*.gif')):
+        vis_basename = os.path.basename(visualization_file)
+        # Move the visualization gifs to the top level so they're
+        # easier to find
+        shutil.copy(visualization_file,
+                    os.path.join(ta1_cropped_dir, vis_basename))
 
-    # 7. Egress (envelop KWCOCO dataset in a STAC item and egress;
+    # 7. Compute histograms
+    print("* Computing histograms *")
+    result = subprocess.run(
+        ['python', '-m', 'watch.cli.coco_intensity_histograms',
+         '--include_channels', 'red|green|blue|nir|swir16|swir22',
+         '--src', ta1_cropped_watch_kwcoco_path,
+         '--dst', os.path.join(ta1_cropped_dir,
+                               'intensity_histograms.jpg'),
+         '--show', 'False',
+         '--valid_range', '1:5000'], check=True, capture_output=True)
+    with open(os.path.join(ta1_cropped_dir,
+                           'intensity_histograms.txt'), 'wb') as f:
+        f.write(result.stdout)
+
+    # 8. Egress (envelop KWCOCO dataset in a STAC item and egress;
     #    will need to recursive copy the kwcoco output directory up to
     #    S3 bucket)
     print("* Egressing KWCOCO dataset and associated STAC item *")
