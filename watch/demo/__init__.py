@@ -69,6 +69,7 @@ __getattr__ = lazy_import(
             'grab_sentinel2_product',
         ],
         'smart_kwcoco_demodata': [
+            'coerce_kwcoco',
             'demo_kwcoco_multisensor',
             'demo_kwcoco_with_heatmaps',
             'demo_smart_aligned_kwcoco',
@@ -85,7 +86,7 @@ __getattr__ = lazy_import(
 def __dir__():
     return __all__
 
-__all__ = ['DEFAULT_KEY', 'demo', 'demo_kwcoco_multisensor',
+__all__ = ['DEFAULT_KEY', 'coerce_kwcoco', 'demo', 'demo_kwcoco_multisensor',
            'demo_kwcoco_with_heatmaps', 'demo_smart_aligned_kwcoco',
            'demo_smart_raw_kwcoco', 'dummy_demodata',
            'dummy_rpc_geotiff_fpath', 'grab_landsat_product',

@@ -417,3 +417,13 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, **kwargs):
         for coco_img in g:
             coco_img.img['sensor_coarse'] = 'sensor{}'.format(idx)
     return coco_dset
+
+
+def coerce_kwcoco(data='watch-msi', **kwargs):
+    """
+    coerce with watch special datasets
+    """
+    if isinstance(data, str) and 'watch' in data.split('-'):
+        return demo_kwcoco_multisensor(**kwargs)
+    else:
+        return kwcoco.CocoDataset.demo(data, **kwargs)

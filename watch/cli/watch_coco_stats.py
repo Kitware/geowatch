@@ -8,6 +8,9 @@ class WatchCocoStats(scfg.Config):
     """
     Print watch-relevant information about a kwcoco dataset
 
+    CommandLine:
+        smartwatch stats special:shapes8 vidshapes vidshapes-msi vidshapes-watch
+
     TODO:
         - [ ] Add other useful watch stats to this script
 
@@ -15,12 +18,20 @@ class WatchCocoStats(scfg.Config):
         kwcoco stats
     """
     default = {
-        'src': scfg.Value(['special:shapes8'], nargs='+', help='path to dataset', position=1),
+        'src': scfg.Value(
+            ['special:shapes8'], nargs='+', help=ub.paragraph(
+                '''
+                one or more datasets coercables, i.e. a path, live dataset, or
+                demodata code. Example demo codes are:
+                    special:watch_msi
+                    special:vidshapes8
+                    special:vidshapes8-msi
+                '''), position=1),
     }
 
     @classmethod
     def main(cls, cmdline=True, **kw):
-        import kwcoco
+        import pandas as pd
         config = WatchCocoStats(kw, cmdline=cmdline)
 
         fpaths = config['src']
@@ -31,11 +42,20 @@ class WatchCocoStats(scfg.Config):
                 print('warning: might not handle this case well')
             fpaths = [fpaths]
 
-        assert len(fpaths) == 1, 'only 1 for now'
+        # TODO: tabulate stats when possible.
+        import watch
+        collatables = []
+        print('collatables = {!r}'.format(collatables))
+        for fpath in ub.ProgIter(fpaths, verbose=3, desc='Load dataset stats'):
+            print('--')
+            dset = watch.demo.coerce_kwcoco(fpath)
+            print('dset = {!r}'.format(dset))
+            colltable = coco_watch_stats(dset)
+            collatables.append(colltable)
 
-        fpath = fpaths[0]
-        dset = kwcoco.CocoDataset.coerce(fpath)
-        coco_watch_stats(dset)
+        print('collatables = {}'.format(ub.repr2(collatables, nl=1)))
+        summary = pd.DataFrame(collatables)
+        print(summary)
 
 
 def coco_watch_stats(dset):
@@ -134,6 +154,16 @@ def coco_watch_stats(dset):
     print('MSI channel stats')
     info = kwcoco_extensions.coco_channel_stats(dset)
     print(ub.repr2(info, nl=4))
+
+    import pathlib
+    dset_bundle_suffix = '/'.join(pathlib.Path(dset.fpath).parts[-2:])
+
+    colltable = {
+        'dset': dset_bundle_suffix,
+        **basic_stats,
+    }
+
+    return colltable
 
 
 _SubConfig = WatchCocoStats
