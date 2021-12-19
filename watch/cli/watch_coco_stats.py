@@ -161,6 +161,7 @@ def coco_watch_stats(dset):
     colltable = {
         'dset': dset_bundle_suffix,
         **basic_stats,
+        **info['chan_hist']
     }
 
     return colltable
