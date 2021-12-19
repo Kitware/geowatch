@@ -149,6 +149,7 @@ def main(**kwargs):
     """
     from watch.utils import kwcoco_extensions
     from watch.utils.lightning_ext import util_globals
+    import watch
     import kwplot
     kwplot.autosns()
 
@@ -156,7 +157,7 @@ def main(**kwargs):
     print('config = {}'.format(ub.repr2(config.to_dict(), nl=1)))
 
     # coco_dset = kwcoco.CocoDataset.coerce(config['src'])
-    coco_dset = coerce_kwcoco(config['src'])
+    coco_dset = watch.demo.coerce_kwcoco(config['src'])
 
     valid_gids = kwcoco_extensions.filter_image_ids(
         coco_dset,
