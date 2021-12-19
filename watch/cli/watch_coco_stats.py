@@ -55,7 +55,7 @@ class WatchCocoStats(scfg.Config):
 
         print('collatables = {}'.format(ub.repr2(collatables, nl=1)))
         summary = pd.DataFrame(collatables)
-        print(summary)
+        print(summary.to_string())
 
 
 def coco_watch_stats(dset):
