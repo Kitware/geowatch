@@ -4,7 +4,7 @@ import numpy as np
 import pytorch_lightning as pl
 from argparse import Namespace
 from .utils.attention_unet import attention_unet
-from .data.datasets import kwcoco_dataset, SpaceNet7
+from .data.multi_image_datasets import kwcoco_dataset, SpaceNet7
 import warnings
 
 

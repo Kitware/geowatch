@@ -126,8 +126,7 @@ class kwcoco_dataset(Dataset):
                 image = (image - image.mean()) / image.std()
             image_dict['img{}'.format(1 + k)] = image
 
-        image = [torch.tensor(image_dict[key]) for key in image_dict]
-        image = [torch.tensor(x).permute(2, 0, 1).unsqueeze(0) for x in image]
+        image = [torch.tensor(image_dict[key]).permute(2, 0, 1).unsqueeze(0) for key in image_dict]
 
         image = torch.stack(image, dim=1)
         image_info = self.dset.index.imgs[img1_id]
@@ -145,7 +144,6 @@ class kwcoco_dataset(Dataset):
     def __getitem__(self, idx):
         if self.mode == 'test':
             return self.get_img(idx)
-        
         # get image1 id and the video it is associated with
         img1_id = self.dset_ids[idx]
         video = [y for y in self.videos if img1_id in self.dset.index.vidid_to_gids[y]][0]
