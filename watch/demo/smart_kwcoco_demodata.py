@@ -426,4 +426,4 @@ def coerce_kwcoco(data='watch-msi', **kwargs):
     if isinstance(data, str) and 'watch' in data.split('-'):
         return demo_kwcoco_multisensor(**kwargs)
     else:
-        return kwcoco.CocoDataset.demo(data, **kwargs)
+        return kwcoco.CocoDataset.coerce(data, **kwargs)

@@ -137,7 +137,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         torch_sharing_strategy='default',
         torch_start_method='default',
         resample_invalid_frames=True,
-        true_multimodal=False,
+        true_multimodal=True,
     ):
         """
         Args:
@@ -300,9 +300,10 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             ))
 
         parser.add_argument(
-            '--true_multimodal', default=False, type=smartcast, help=ub.paragraph(
+            '--true_multimodal', default=True, type=smartcast, help=ub.paragraph(
                 '''
-                Enables new logic for sampling multimodal data
+                Enables new logic for sampling multimodal data.
+                Old logic probably doesn't work anymore.
                 '''))
 
         parser.add_argument(
@@ -322,6 +323,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         return parent_parser
 
     def setup(self, stage):
+        import watch
         if self.verbose:
             print('Setup DataModule: stage = {!r}'.format(stage))
 
@@ -338,7 +340,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
             if self.verbose:
                 print('Build train kwcoco dataset')
-            train_coco_dset = kwcoco.CocoDataset.coerce(train_data)
+            # train_coco_dset = kwcoco.CocoDataset.coerce(train_data)
+            train_coco_dset = watch.demo.coerce_kwcoco(train_data)
             self.coco_datasets['train'] = train_coco_dset
 
             print('self.exclude_sensors', self.exclude_sensors)
@@ -524,15 +527,20 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             # - [ ] per-frame semenatic segmentation
             item_output = {}
             if outputs is not None:
+                print('outputs = {!r}'.format(outputs))
                 item_output = ub.AutoDict()
                 # output_walker = ub.IndexableWalker(item_output)
-                input_walker = ub.IndexableWalker(outputs)
-                for p, v in input_walker:
-                    if isinstance(v, torch.Tensor):
-                        input_walker[p] = v.data.cpu().numpy()
-                # for k in ['change_probs', 'class_probs', 'saliency_probs']:
-                #     if k in outputs:
-                #         item_output[k] = outputs[k][item_idx].data.cpu().numpy()
+                # input_walker = ub.IndexableWalker(outputs)
+                # for p, v in input_walker:
+                #     if isinstance(v, torch.Tensor):
+                #         d = input_walker
+                #         for k in p[:-1]:
+                #             d = d[k]
+                #         d[p[-1]] = v.data.cpu().numpy()
+                # print('item_output = {!r}'.format(item_output))
+                for k in ['change_probs', 'class_probs', 'saliency_probs']:
+                    if k in outputs:
+                        item_output[k] = outputs[k][item_idx].data.cpu().numpy()
 
             part = dataset.draw_item(item, item_output=item_output, overlay_on_image=overlay_on_image, **kwargs)
             canvas_list.append(part)
@@ -586,11 +594,12 @@ class KWCocoVideoDataset(data.Dataset):
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> import ndsampler
         >>> import kwcoco
-        >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
+        >>> import watch
+        >>> coco_dset = watch.demo.coerce_kwcoco('vidshapes-watch')
         >>> sampler = ndsampler.CocoSampler(coco_dset)
         >>> sample_shape = (2, 128, 128)
         >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape,
-        >>>                           channels=None, diff_inputs=True)
+        >>>                           channels=None, diff_inputs=False, true_multimodal=True)
         >>> index = 0
         >>> item = self[index]
         >>> canvas = self.draw_item(item)
@@ -698,6 +707,7 @@ class KWCocoVideoDataset(data.Dataset):
             # Hack to use all channels in the first image.
             # (Does not handle heterogeneous channels yet)
             chan_info = kwcoco_extensions.coco_channel_stats(sampler.dset)
+            # channels = ','.join(sorted(chan_info['chan_hist']))
             channels = chan_info['all_channels']
         channels = channel_spec.ChannelSpec.coerce(channels).normalize()
 
@@ -829,6 +839,10 @@ class KWCocoVideoDataset(data.Dataset):
             ','.join(_input_channels)
         )
 
+        # TODO:
+        # We need to know all of the combinations of channels each data item
+        # could produce
+
         self.mode = mode
 
         self.true_multimodal = true_multimodal
@@ -932,7 +946,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> channels = 'B10|B8|B1'
             >>> sample_shape = (4, 96, 96)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, neg_to_pos_ratio=0.1)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, neg_to_pos_ratio=0.1, true_multimodal=True)
             >>> item = self[self.n_pos + 1]
             >>> canvas = self.draw_item(item)
             >>> # xdoctest: +REQUIRES(--show)
@@ -997,8 +1011,8 @@ class KWCocoVideoDataset(data.Dataset):
             >>> import kwcoco
             >>> import watch
             >>> coco_dset = watch.demo.demo_kwcoco_multisensor()
-            >>> channels = '|'.join(sorted(set(ub.flatten([kwcoco.ChannelSpec.coerce(c).fuse().as_list() for c in groups.keys()]))))
             >>> sampler = ndsampler.CocoSampler(coco_dset)
+            >>> channels = '|'.join(sorted(set(ub.flatten([kwcoco.ChannelSpec.coerce(c).fuse().as_list() for c in groups.keys()]))))
             >>> self = KWCocoVideoDataset(sampler, sample_shape=(5, 256, 256), channels=channels, normalize_perframe=False, true_multimodal=True)
             >>> self.disable_augmenter = True
             >>> index = 0
@@ -1173,17 +1187,20 @@ class KWCocoVideoDataset(data.Dataset):
                 else:
                     timestamp = np.nan
 
+                sensor = img.get('sensor_coarse', '')
+
                 frame_item = {
                     'gid': gid,
                     'date_captured': img.get('date_captured', ''),
                     'timestamp': timestamp,
-                    'sensor_coarse': img.get('sensor_coarse', ''),
+                    'sensor': sensor,
                     'modes': {
                         mode_key: input_chw,
                     },
                     'change': None,
                     'class_idxs': None,
                     'ignore': None,
+                    'time_index': time_idx,
                 }
 
                 if not self.inference_only:
@@ -1433,7 +1450,7 @@ class KWCocoVideoDataset(data.Dataset):
             if not self.special_inputs and not self.diff_inputs:
                 main_idx_ = tr.get('main_idx', 0)
                 if self.match_histograms:
-                    nodata_mask = np.isnan(raw_frame_list)  # NOQA
+                    nodata_mask = nkey_to_learned_tensorp.isnan(raw_frame_list)  # NOQA
                     raw_frame_list = np.nan_to_num(raw_frame_list)
                     # Hack: do before diff
                     from skimage import exposure  # NOQA
@@ -1601,13 +1618,15 @@ class KWCocoVideoDataset(data.Dataset):
                 frame_item = {
                     'gid': gid,
                     'date_captured': img.get('date_captured', ''),
-                    'sensor_coarse': img.get('sensor_coarse', ''),
+                    'timestamp': np.nan,  # this code will 90% get removed, so no need to fix
+                    'sensor': img.get('sensor_coarse', ''),
                     'modes': {
                         mode_key: torch.from_numpy(input_chw),
                     },
                     'change': None,
                     'class_idxs': None,
                     'ignore': None,
+                    'time_index': time_idx,
                 }
 
                 if not self.inference_only:
@@ -1621,6 +1640,69 @@ class KWCocoVideoDataset(data.Dataset):
                     prev_frame_cidxs = frame_cidxs
                 frame_items.append(frame_item)
 
+        positional_tensors = None
+        if True:
+            # TODO: what is the standard way to do the learned embedding
+            # "input vector"?
+
+            @ub.memoize
+            def _string_to_hashvec(key):
+                # Maybe this should be a model responsibility.
+                # I dont like defining the positional encoding in the dataset
+                key_hash = ub.hash_data(key, base=16, hasher='blake3').encode()
+                key_tensor = np.frombuffer(memoryview(key_hash), dtype=np.int32).astype(np.float32)
+                key_tensor = key_tensor / np.linalg.norm(key_tensor)
+                return key_tensor
+
+            # TODO: preprocess any auxiliary learnable information into a
+            # Tensor. It is likely ideal to pre-stack whenever possible, but we
+            # need to keep the row-form data to make visualization
+            # straight-forward. We could use a flag to toggle it depending on
+            # if we need to visualize or not.
+            permode_datas = ub.ddict(list)
+            prev_timestamp = None
+
+            hack = utils.SinePositionalEncoding(0, 1, size=8)
+            time_index_encoding = hack._encoding_part(len(frame_items)).numpy()
+
+            for frame_item in frame_items:
+
+                k = 'timestamp'
+                frame_timestamp = np.array([frame_item[k]]).astype(np.float32)
+
+                for mode_code in frame_item['modes'].keys():
+                    key_tensor = _string_to_hashvec(mode_code)
+                    permode_datas['mode_tensor'].append(key_tensor)
+                    #
+                    k = 'time_index'
+                    time_index = frame_item[k]
+                    # v = np.array([frame_item[k]]).astype(np.float32)
+                    v = time_index_encoding[time_index]
+                    permode_datas[k].append(v)
+
+                    if prev_timestamp is None:
+                        time_offset = np.array([0]).astype(np.float32)
+                    else:
+                        time_offset = frame_timestamp - prev_timestamp
+
+                    permode_datas['time_offset'].append(time_offset)
+
+                    k = 'sensor'
+                    key_tensor = _string_to_hashvec(k)
+                    permode_datas[k].append(key_tensor)
+
+                prev_timestamp = frame_timestamp
+
+            positional_arrays = ub.map_vals(np.stack, permode_datas)
+            time_offset = positional_arrays.pop('time_offset', None)
+            time_offset = time_offset + 1
+            time_offset[np.isnan(time_offset)] = 0.1
+            positional_arrays['time_offset'] = np.log(time_offset)
+
+            # This is flattened for each frame for each mode.
+            # A bit hacky, not in love with it.
+            positional_tensors = ub.map_vals(torch.from_numpy, positional_arrays)
+
         # Only pass back some of the metadata (because I think torch
         # multiprocessing makes a new file descriptor for every Python object
         # or something like that)
@@ -1632,6 +1714,7 @@ class KWCocoVideoDataset(data.Dataset):
             # TODO: breakup modes into different items
             'index': index,
             'frames': frame_items,
+            'positional_tensors': positional_tensors,
             'video_id': vidid,
             'video_name': video['name'],
             'tr': tr_subset
@@ -1656,7 +1739,7 @@ class KWCocoVideoDataset(data.Dataset):
             ('normalize_perframe', self.normalize_perframe),
             ('with_intensity', with_intensity),
             ('with_class', with_class),
-            ('depends_version', 8),  # bump if `compute_dataset_stats` changes
+            ('depends_version', 12),  # bump if `compute_dataset_stats` changes
         ])
         workdir = None
         cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends)
@@ -1680,7 +1763,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=3)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> sample_shape = (2, 256, 256)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=None)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=None, true_multimodal=True)
             >>> self.compute_dataset_stats()
 
         Example:
@@ -1723,16 +1806,17 @@ class KWCocoVideoDataset(data.Dataset):
 
         Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+            >>> import watch
             >>> from watch.tasks.fusion import datamodules
-            >>> train_dataset = watch.demo.demo_kwcoco_multisensor()
             >>> datamodule = datamodules.KWCocoVideoDataModule(
-            >>>     train_dataset=train_dataset, chip_size=256, time_steps=5, num_workers=0, batch_size=3, true_multimodal=True, normalize_inputs=True)
+            >>>     train_dataset='vidshapes-watch', chip_size=256, time_steps=5, num_workers=0, batch_size=3, true_multimodal=True, normalize_inputs=True)
             >>> datamodule.setup('fit')
             >>> self = datamodule.torch_datasets['train']
             >>> num_workers = 0
-            >>> num = 100
+            >>> num = 10
             >>> batch_size = 6
-            >>> self.compute_dataset_stats()
+            >>> s = (self.compute_dataset_stats())
+            >>> print('s = {}'.format(ub.repr2(s, nl=3)))
             >>> self.compute_dataset_stats(with_intensity=False)
             >>> self.compute_dataset_stats(with_class=False)
             >>> self.compute_dataset_stats(with_class=False, with_intensity=False)
@@ -1769,6 +1853,8 @@ class KWCocoVideoDataset(data.Dataset):
         bins = np.arange(num_classes + 1)
         total_freq = np.zeros(num_classes, dtype=np.int64)
 
+        sensor_mode_hist = ub.ddict(lambda: 0)
+
         prog = ub.ProgIter(loader, desc='estimate dataset stats')
         for batch_items in prog:
             for item in batch_items:
@@ -1779,9 +1865,11 @@ class KWCocoVideoDataset(data.Dataset):
                         item_freq = np.histogram(class_idxs.ravel(), bins=bins)[0]
                         total_freq += item_freq
                     if with_intensity:
-                        sensor_code = frame_item['sensor_coarse']
+                        sensor_code = frame_item['sensor']
                         modes = frame_item['modes']
+
                         for mode_code, mode_val in modes.items():
+                            sensor_mode_hist[(sensor_code, mode_code)] += 1
                             running = channel_stats[sensor_code][mode_code]
                             if not running:
                                 running = kwarray.RunningStats()
@@ -1813,6 +1901,19 @@ class KWCocoVideoDataset(data.Dataset):
                 timer.tic()
         self.disable_augmenter = False
 
+        # Make a list of all unique modes in the dataset.
+        unique_sensor_modes = set(sensor_mode_hist.keys())
+
+        if True:
+            # This looks at the entire dataset, might want to
+            # make a better way of getting this info.
+            # self.sampler.dset.videos().images
+            coco_images = self.sampler.dset.images().coco_images
+            unique_sensor_modes.update(set(
+                (c.img.get('sensor_coarse', ''), c.channels.fuse().spec)
+                for c in coco_images
+            ))
+
         channel_stats = channel_stats.to_dict()
 
         # Return the raw counts and let the model choose how to handle it
@@ -1834,6 +1935,8 @@ class KWCocoVideoDataset(data.Dataset):
             input_stats = None
 
         dataset_stats = {
+            'unique_sensor_modes': unique_sensor_modes,
+            'sensor_mode_hist': dict(sensor_mode_hist),
             'input_stats': input_stats,
             'class_freq': class_freq,
         }
@@ -2010,7 +2113,7 @@ class KWCocoVideoDataset(data.Dataset):
                 'frame_available_chans': frame_available_chans,
                 'frame_truth': frame_truth,
                 'frame_weight': frame_weight,
-                'sensor_coarse': frame_item.get('sensor_coarse', ''),
+                'sensor': frame_item.get('sensor', ''),
             }
             frame_metas.append(frame_meta)
 
@@ -2044,7 +2147,7 @@ class KWCocoVideoDataset(data.Dataset):
                     'raw_signal': raw_signal,
                     'chan_code': chan_code,
                     'signal_text': f'{chan_code}',
-                    'sensor_coarse': frame_meta['sensor_coarse'],
+                    'sensor': frame_meta['sensor'],
                 }
                 chan_rows.append(row)
             frame_meta['chan_rows'] = chan_rows
@@ -2055,7 +2158,7 @@ class KWCocoVideoDataset(data.Dataset):
             # Normalize all cells with the same channel code across time
             channel_cells = [cell for frame_meta in frame_metas for cell in frame_meta['chan_rows']]
             # chan_to_cells = ub.group_items(channel_cells, lambda c: (c['chan_code'])
-            chan_to_cells = ub.group_items(channel_cells, lambda c: (c['chan_code'], c['sensor_coarse']))
+            chan_to_cells = ub.group_items(channel_cells, lambda c: (c['chan_code'], c['sensor']))
             for chan_code, cells in chan_to_cells.items():
                 flat = [c['raw_signal'].ravel() for c in cells]
                 cums = np.cumsum(list(map(len, flat)))
@@ -2139,10 +2242,10 @@ class KWCocoVideoDataset(data.Dataset):
                 text=f't={frame_idx} gid={gid}', color='salmon')
             vertical_stack.append(header_part)
 
-            sensor_coarse = frame_item.get('sensor_coarse', '')
-            if sensor_coarse:
+            sensor = frame_item.get('sensor', '')
+            if sensor:
                 header_part = util_kwimage.draw_header_text(
-                    image=header_dims, fit=False, text=f'{sensor_coarse}',
+                    image=header_dims, fit=False, text=f'{sensor}',
                     color='salmon')
                 vertical_stack.append(header_part)
 
