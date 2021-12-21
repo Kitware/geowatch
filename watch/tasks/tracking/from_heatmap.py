@@ -1,6 +1,7 @@
 from watch.utils import kwcoco_extensions
 from watch.utils import util_kwimage
 from collections import defaultdict
+from copy import deepcopy
 import kwarray
 import kwimage
 import kwcoco
@@ -181,13 +182,23 @@ def add_tracks_to_dset(coco_dset,
     return coco_dset
 
 
-def get_boundary_tracks(coco_dset,
-                        boundary_cnames={'Site Boundary'}) -> Iterable[Track]:
+def pop_boundary_tracks(coco_dset,
+                        cnames={'Site Boundary'}) -> Iterable[Track]:
+    '''
+    Convert site boundary annotations into Track objects and remove them
+    from coco_dset.
+
+    TODO make into a utility function; this isn't specific to site boundaries
+    '''
     annots = coco_dset.annots()
     boundary_annots = annots.compress(
-        np.in1d(np.array(annots.cnames, dtype=str), list(boundary_cnames)))
+        np.in1d(np.array(annots.cnames, dtype=str), list(cnames)))
     if len(boundary_annots) < 1:
         print(f'warning: no Site Boundary annots in dset {coco_dset.tag}!')
+
+    boundary_annots = deepcopy(boundary_annots)
+    coco_dset.remove_categories(list(cnames), keep_annots=False)
+
     boundary_polys = [
         poly.to_shapely() for poly in
         boundary_annots.detections.data['segmentations'].to_polygon_list()
@@ -243,17 +254,16 @@ def time_aggregated_polys(coco_dset,
 
     if use_boundary_annots:
         import shapely.ops
-        boundary_tracks = list(get_boundary_tracks(coco_dset))
+        boundary_tracks = list(pop_boundary_tracks(coco_dset))
         # TODO these obnoxious fors will be removed with gpd support in Track
         bounds = shapely.ops.unary_union(
             list(
                 itertools.chain.from_iterable(
                     [obs.poly for obs in track.observations]
                     for track in boundary_tracks)))
-        gids = list(
-            set.union(*({obs.gid
-                         for obs in track.observations}
-                        for track in boundary_tracks)))
+        gids = np.unique(np.concatenate(
+                    [[obs.gid for obs in track.observations]
+                     for track in boundary_tracks]))
     else:
         boundary_tracks = None
         bounds = None
@@ -287,7 +297,7 @@ def time_aggregated_polys(coco_dset,
         else:
             heatmaps_dct['bg'].append(np.zeros_like(fg_img_probs))
 
-    # turn heatmaps into scores and polygons
+    # turn heatmaps into polygons
     def probs(heatmaps, weights=None):
         probs = np.average(heatmaps, axis=0, weights=weights)
 
@@ -296,16 +306,25 @@ def time_aggregated_polys(coco_dset,
         modulated_probs = probs * hard_probs
         return modulated_probs
 
+    heatmaps = [heatmap(coco_dset, gid, key) for gid in coco_dset.imgs]
+
     if boundary_tracks is None:
+        # turn each polygon into a list of polygons (map them across gids)
+        def as_track(vidpoly):
+            return Track.from_polys(itertools.repeat(vidpoly),
+                                    coco_dset,
+                                    probs=heatmaps)
+
         polys = list(
             mask_to_polygons(probs(heatmaps_dct['fg']), thresh, bounds=bounds))
+        tracks = list(map(as_track, polys))
     else:
         import shapely.ops
-        polys = []
+        polys = []  # 'vidpolys' (1 per track)
+        tracks = []
         print('generating polys in bounds: number of bounds: ',
               len(boundary_tracks))
         for track in boundary_tracks:
-            # TODO preserve track_ids
             # TODO when bounds are time-varying, this lets individual frames
             # go outside them; only enforces the union. Problem?
             # currently bounds come from site summaries, which are not
@@ -317,41 +336,44 @@ def time_aggregated_polys(coco_dset,
                 mask_to_polygons(probs(heatmaps_dct['fg'], weights=gid_ixs),
                                  thresh,
                                  bounds=track_bounds))
-            poly = shapely.ops.unary_union(track_polys)
-            if poly.is_valid and not poly.is_empty:
-                polys.append(poly)
+            if len(track_polys) > 0:
+                poly = shapely.ops.unary_union(track_polys)
+                if poly.is_valid and not poly.is_empty:
+                    polys.append(poly)
+                    tracks.append(Track(
+                        [Observation(
+                            poly=poly,
+                            gid=obs.gid,
+                            score=score(poly, heatmaps[obs.gid])
+                         ) for obs in track.observations],
+                        dset=coco_dset,
+                        track_id=track.track_id))
 
     print('time aggregation: number of polygons: ', len(polys))
-    import xdev; xdev.embed()
 
-    if time_filtering:
-        polys = list(SmallPolygonFilter(min_area_px=80)(polys))
-        print('removed small: remaining polygons: ', len(polys))
+    # SmallPolygonFilter and ResponsePolygonFilter should operate on each
+    # vidpoly separately, so have to bookkeep both vidpolys and tracks
+    tracks_polys = zip(tracks, polys)
 
-    # turn each polygon into a list of polygons (map them across gids)
-    heatmaps = [heatmap(coco_dset, gid, key) for gid in coco_dset.imgs]
-
-    def as_track(vidpoly):
-        return Track.from_polys(itertools.repeat(vidpoly),
-                                coco_dset,
-                                probs=heatmaps)
+    tracks_polys = list(SmallPolygonFilter(min_area_px=80)(tracks_polys))
+    print('removed small: remaining polygons: ', len(tracks_polys))
 
     if response_filtering:
         response_thresh = 0.0002  # 0.0005
-        # don't convert these to tracks yet, to make ResponsePolygonFilter
-        # operate on each one as a separate track
-        polys = list(
-            ResponsePolygonFilter(map(as_track, polys), key,
-                                  response_thresh)(polys))
+        tracks_polys = list(
+            ResponsePolygonFilter([t for t, _ in tracks_polys], key,
+                                  response_thresh)(tracks_polys))
         print('after filtering based on per-polygon response ', len(polys))
 
-    tracks = map(as_track, polys)
+    # TimePolygonFilter edits tracks instead of removing them, so we can
+    # discard 'polys' and focus on 'tracks'
+    tracks = [t for t, _ in tracks_polys]
 
     if time_filtering:
         # TODO investigate different thresh here
         time_thresh = thresh
         time_filter = TimePolygonFilter(coco_dset, tuple(key), time_thresh)
-        tracks = map(time_filter, tracks)
+        tracks = list(map(time_filter, tracks))
 
     return tracks
 
@@ -365,31 +387,21 @@ class TimeAggregatedBAS(NewTrackFunction):
     morph_kernel: int = 3
     time_filtering: bool = True
     response_filtering: bool = False
-    change_keys: Tuple[str] = ('salient', 'change_prob', 'change')
+    key: str = 'salient'
 
     def create_tracks(self, coco_dset):
-        for change_key in self.change_keys:
-            try:
-                # import xdev; xdev.embed()
-                tracks = time_aggregated_polys(
-                    coco_dset,
-                    self.thresh,
-                    self.morph_kernel,
-                    key=change_key,
-                    time_filtering=self.time_filtering,
-                    response_filtering=self.response_filtering)
-                self.change_key = change_key
-                return tracks
-            except KeyError:
-                pass
-
-        raise KeyError(f'{coco_dset.tag} does not contain any image channel '
-                       f'{self.change_keys}')
+        tracks = time_aggregated_polys(
+            coco_dset,
+            self.thresh,
+            self.morph_kernel,
+            key=self.key,
+            time_filtering=self.time_filtering,
+            response_filtering=self.response_filtering)
+        return tracks
 
     def add_tracks_to_dset(self, coco_dset, tracks):
         coco_dset = add_tracks_to_dset(coco_dset, tracks, self.thresh,
-                                       self.change_key)
-
+                                       self.key)
         return coco_dset
 
 

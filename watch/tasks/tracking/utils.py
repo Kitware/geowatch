@@ -138,11 +138,11 @@ class CocoDsetFilter(PolygonFilter):
     key: Tuple[str]
     threshold: float
 
-    @ub.memoize
+    @ub.memoize_method
     def _heatmap(self, gid):
         return heatmap(self.dset, gid, self.key)
 
-    @ub.memoize
+    @ub.memoize_method
     def score(self, poly, gid, mode, threshold=None):
         return score(poly, self._heatmap(gid), mode=mode, threshold=threshold)
 
@@ -198,7 +198,6 @@ class TrackFunction(collections.abc.Callable):
                     np.where(_are_trackless, tracks(annots),
                              existing_tracks))
 
-        #import xdev; xdev.embed()
         assert not any(are_trackless(sub_dset.annots()))
         return self.safe_union(coco_dset, sub_dset)
 
@@ -365,16 +364,12 @@ def mask_to_polygons(probs,
         if use_rasterio:
             # TODO needed?
             # x, y order for shapely
-            #import xdev; xdev.embed()
             bounds = shapely.affinity.translate(bounds, 0.5, 0.5)
             # TODO investigate all_touched option
-            try:
-                bounds_mask = features.rasterize(
-                        [bounds],
-                        dtype=np.uint8,
-                        out_shape=binary_mask.shape[:2])
-            except TypeError:
-                import xdev; xdev.embed()
+            bounds_mask = features.rasterize(
+                    [bounds],
+                    dtype=np.uint8,
+                    out_shape=binary_mask.shape[:2])
         else:
             bounds_mask = kwimage.Polygon.from_shapely(bounds).to_mask(
                 probs.shape).numpy().data.astype(np.uint8)
