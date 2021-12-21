@@ -65,7 +65,10 @@ def dedupe_annots(coco_dset):
 
 def add_geos(coco_dset, overwrite, max_workers=16):
     '''
-    Add segmentation_geos to every annotation in coco_dset
+    Add 'segmentation_geos' to every annotation in coco_dset with a
+    'segmentation'.
+
+    TODO serializable osr.CoordinateTransform+srcCRS+dstCRS obj
 
     TODO how to handle cropped annotations from propagation?
     Currently this will not correctly round-trip a ground truth site model
@@ -73,6 +76,7 @@ def add_geos(coco_dset, overwrite, max_workers=16):
     Could use 'orig' attr to fix this, but of course generated annotations
     won't have this.
     '''
+
     if not overwrite:
         if None not in coco_dset.annots().get('segmentation_geos', None):
             return coco_dset
@@ -92,24 +96,24 @@ def add_geos(coco_dset, overwrite, max_workers=16):
     executor = ub.Executor('thread', max_workers)
     # optimization: filter to only images containing at least 1 annotation
     images = coco_dset.images()
-    annotated_gids = np.array(
-        images.gids)[np.array(list(map(len, images.annots))) > 0]
+
+    def needs_geos(ann):
+        return 'segmentation' in ann and (overwrite or
+                                          ('segmentation_geos' not in ann))
+
+    annotated_imgs = images.compress(
+        np.array(
+            [any(map(needs_geos, annots.objs)) for annots in images.annots()]))
     infos = {
-        gid: executor.submit(geotiff_crs_info, fpath(coco_dset.imgs[gid]))
-        for gid in annotated_gids
+        img['id']: executor.submit(geotiff_crs_info, fpath(img))
+        for img in annotated_imgs.objs
     }
-    '''
-    missing_geo_aids = np.extract(
-        np.array(coco_dset.annots().lookup('segmentation_geos', None)) == None,
-        coco_dset.annots().aids)
-    '''
-    for gid, img in ProgIter(coco_dset.imgs.items(),
+    for gid, img in ProgIter(zip(annotated_imgs.gids, annotated_imgs.objs),
                              desc='precomputing geo-segmentations'):
 
         # vectorize over anns; this does some unnecessary computation
         annots = coco_dset.annots(gid=gid)
-        if len(annots) == 0:
-            continue
+        assert len(annots) > 0, f'image {gid} should have annotations!'
         info = infos[gid].result()
         '''
         # if this was encoded into the image dict ok, we can just use it there
@@ -119,6 +123,7 @@ def add_geos(coco_dset, overwrite, max_workers=16):
             annotated_band(img)['wld_to_pxl']).inv()))
         '''
         img_anns = annots.detections.data['segmentations']
+        assert len(img_anns) == len(annots), 'TODO skip anns w/o segmentations'
         aux_anns = img_anns.warp(
             kwimage.Affine.coerce(
                 annotated_band(img).get('warp_aux_to_img',
@@ -131,7 +136,7 @@ def add_geos(coco_dset, overwrite, max_workers=16):
 
             ann = coco_dset.anns[aid]
 
-            if 'segmentation_geos' not in ann or overwrite:
+            if needs_geos(ann):
 
                 ann['segmentation_geos'] = geojson_ann
 
@@ -555,7 +560,6 @@ def normalize(coco_dset, track_fn, overwrite, gt_dset=None, **track_kwargs):
     if len(coco_dset.anns) > 0:
         coco_dset = _normalize_annots(coco_dset, overwrite)
     coco_dset = ensure_videos(coco_dset)
-    #import xdev; xdev.embed()
     # apply tracks
     assert issubclass(track_fn, TrackFunction), 'must supply a valid track_fn!'
     coco_dset = track_fn(**track_kwargs).apply_per_video(coco_dset)
