@@ -41,6 +41,7 @@ import shapely.ops
 from mgrs import MGRS
 import numpy as np
 import ubelt as ub
+# import colored_traceback.auto  # noqa
 
 
 def _single_geometry(geom):
@@ -404,7 +405,19 @@ def add_site_summary_to_kwcoco(site_summary_or_region_model,
             assert len(coco_dset.index.name_to_video) == 1, 'ambiguous video'
             region_id = ub.peek(coco_dset.index.name_to_video)
 
+    # TODO use pyproj instead, make sure it works with kwimage.warp
+    from osgeo import osr
+
+    @ub.memoize
+    def transform_wgs84_to(target_epsg_code):
+        wgs84 = osr.SpatialReference()
+        wgs84.ImportFromEPSG(4326)  # '+proj=longlat +datum=WGS84 +no_defs'
+        target = osr.SpatialReference()
+        target.ImportFromEPSG(int(target_epsg_code))
+        return osr.CoordinateTransformation(wgs84, target)
+
     # write site summaries
+    print('warping site boundaries to pxl space...')
     cid = coco_dset.ensure_category('Site Boundary')
     new_trackids = watch.utils.kwcoco_extensions.TrackidGenerator(coco_dset)
     for site_summary in site_summaries:
@@ -427,13 +440,22 @@ def add_site_summary_to_kwcoco(site_summary_or_region_model,
         # apply site boundary as polygons
         geo_poly = kwimage.MultiPolygon.from_geojson(site_summary['geometry'])
         for img in images.objs:
-            img_poly = geo_poly.warp(kwimage.Affine.coerce(
-                img.get('wld_to_pxl', {'scale': 1})))
+            if 'utm_crs_info' in img:
+                utm_epsg_code = img['utm_crs_info']['auth'][1]
+            else:
+                utm_epsg_code = 4326
+            transform_utm_to_pxl = kwimage.Affine.coerce(
+                            img.get('wld_to_pxl', {'scale': 1}))
+            img_poly = (geo_poly
+                        .swap_axes()  # TODO bookkeep this convention
+                        .warp(transform_wgs84_to(utm_epsg_code))
+                        .warp(transform_utm_to_pxl))
             bbox = list(img_poly.bounding_box().to_coco())[0]
             coco_dset.add_annotation(image_id=img['id'],
                                      category_id=cid,
                                      bbox=bbox,
                                      segmentation=img_poly,
+                                     segmentation_geos=geo_poly,
                                      track_id=track_id)
 
     return coco_dset
@@ -576,10 +598,10 @@ def main(args):
     track.add_argument('--default_track_fn',
                        help=ub.paragraph('''
         String code to pick a sensible track_fn based on the contents
-        of in_file. Supported codes are ['saliency_heatmaps', 'change_polys',
+        of in_file. Supported codes are ['saliency_heatmaps', 'saliency_polys',
         'class_heatmaps', 'class_polys']. Any other string will be interpreted
-        as the image channel to use for 'saliency_heatmaps' (default: 'salient',
-        'change_prob', or 'change'). Supported classes are ['Site Preparation',
+        as the image channel to use for 'saliency_heatmaps' (default:
+        'salient'). Supported classes are ['Site Preparation',
         'Active Construction', 'Post Construction', 'No Activity']. For
         class_heatmaps, these should be image channels; for class_polys, they
         should be annotation categories.
@@ -589,7 +611,7 @@ def main(args):
                             help=ub.paragraph('''
         JSON string or path to file containing keyword arguments for the
         chosen TrackFunction. Examples include: coco_dset_gt, coco_dset_sc,
-        thresh, change_keys.
+        thresh, possible_keys.
         Any file paths will be loaded as CocoDatasets if possible.
         '''))
     behavior_args = parser.add_argument_group(
@@ -645,7 +667,7 @@ def main(args):
         from watch.tasks.tracking import from_heatmap, from_polygon
         if args.default_track_fn == 'saliency_heatmaps':
             track_fn = from_heatmap.TimeAggregatedBAS
-        elif args.default_track_fn == 'change_polys':
+        elif args.default_track_fn == 'saliency_polys':
             track_fn = from_polygon.OverlapTrack
         elif args.default_track_fn == 'class_heatmaps':
             track_fn = from_heatmap.TimeAggregatedSC
@@ -653,7 +675,7 @@ def main(args):
             track_fn = from_polygon.OverlapTrack
         else:
             track_fn = from_heatmap.TimeAggregatedBAS
-            track_kwargs['change_keys'] = [args.default_track_fn]
+            track_kwargs['possible_keys'] = [args.default_track_fn]
     elif args.track_fn is None:
         track_fn = watch.tasks.tracking.utils.NoOpTrackFunction
     else:
@@ -674,7 +696,6 @@ def main(args):
 
     if args.write_in_file:
         coco_dset.dump(args.in_file, indent=2)
-    #import xdev; xdev.embed()
     # Convert kwcoco to sites
     sites = convert_kwcoco_to_iarpa(coco_dset,
                                     args.region_id,
