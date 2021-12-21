@@ -66,6 +66,10 @@ if __name__ == '__main__':
     """
     parser = ArgumentParser(description='', formatter_class=RawTextHelpFormatter)
     from scriptconfig.smartcast import smartcast
+    ###model hparams
+    parser.add_argument('--num_attention_layers', help='Number of attention layers between down convolutions. There can be up to 4 corresponding to each down convolution of the UNet.', type=int, default=4)
+    parser.add_argument('--positional_encoding', help='Use positional encoding of time stamps in model. Note: This option should remain False for all currently implemented pretext tasks since the network can learn to cheat based on date information.', action='store_true')
+    parser.add_argument('--positional_encoding_mode', help='addition or concatenation.', type=str, default='concatenation')
     ###dataset hparams
     parser.add_argument('--train_dataset', type=str, help="path/to/train.kwcoco.json", required=True)
     parser.add_argument('--vali_dataset', type=str, help="path/to/vali.kwcoco.json", default=None)
