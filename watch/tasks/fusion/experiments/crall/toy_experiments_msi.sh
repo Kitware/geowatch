@@ -14,7 +14,7 @@ TEST_FPATH=$DATA_DPATH/vidshapes_msi_test/data.kwcoco.json
 mkdir -p "$DATA_DPATH"
 kwcoco toydata --key=vidshapes-videos8-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$DATA_DPATH/vidshapes_msi_train" --verbose=5
 kwcoco toydata --key=vidshapes-videos5-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$DATA_DPATH/vidshapes_msi_vali"  --verbose=5
-kwcoco toydata --key=vidshapes-videos2-frames6-randgsize-speed0.2-msi-multisensor --bundle_dpath "$DATA_DPATH/vidshapes_msi_test" --verbose=5 --use_cache=False
+kwcoco toydata --key=vidshapes-videos2-frames6-randgsize-speed0.2-msi-multisensor --bundle_dpath "$DATA_DPATH/vidshapes_msi_test" --verbose=5 
 
 
 # Print stats
@@ -30,18 +30,17 @@ Should look like
 """
 
 
-kwcoco toydata --key=vidshapes-videos1-frames5-speed0.001-msi --bundle_dpath "$(realpath ./tmp)" --verbose=5 --use_cache=False
-python -m watch.cli.coco_visualize_videos \
-    --src "$(realpath ./tmp/data.kwcoco.json)" \
-    --channels="B1|B8|b" \
-    --viz_dpath="$(realpath ./tmp)/_viz" \
-    --animate=True
+#kwcoco toydata --key=vidshapes-videos1-frames5-speed0.001-msi --bundle_dpath "$(realpath ./tmp)" --verbose=5 --use_cache=False
+#python -m watch.cli.coco_visualize_videos \
+#    --src "$(realpath ./tmp/data.kwcoco.json)" \
+#    --channels="B1|B8|b" \
+#    --viz_dpath="$(realpath ./tmp)/_viz" \
+#    --animate=True
 
-
-python -m watch.cli.coco_visualize_videos \
-    --src "$DATA_DPATH/vidshapes_msi_train/data.kwcoco.json" \
-    --channels="gauss|B11,r|g|b,B1|B8|B11" \
-    --viz_dpath="$DATA_DPATH/vidshapes_msi_train/_viz" --animate=True
+#python -m watch.cli.coco_visualize_videos \
+#    --src "$DATA_DPATH/vidshapes_msi_train/data.kwcoco.json" \
+#    --channels="gauss|B11,r|g|b,B1|B8|B11" \
+#    --viz_dpath="$DATA_DPATH/vidshapes_msi_train/_viz" --animate=True
 
 
 ARCH=smt_it_stm_p8
@@ -106,7 +105,8 @@ python -m watch.tasks.fusion.fit \
        --package_fpath=$PACKAGE_FPATH \
         --train_dataset=$TRAIN_FPATH \
          --vali_dataset=$VALI_FPATH \
-         --test_dataset=$TEST_FPATH
+         --test_dataset=$TEST_FPATH \
+         --match_histograms=False
 
 # Predict 
 python -m watch.tasks.fusion.predict \

@@ -86,7 +86,45 @@ except Exception:
 
 
 from timm.models.layers import drop_path
+from torch._jit_internal import _copy_to_script_wrapper
 # from timm.models.layers.activations import sigmoid
+
+
+from torch.nn.modules.container import Module, Iterator
+
+
+class EmptyStrModuleDict(torch.nn.ModuleDict):
+    """
+    Regular torch.nn.ModuleDict doesnt allow empty str. Hack around this.
+    """
+    @_copy_to_script_wrapper
+    def __getitem__(self, key: str) -> Module:
+        key = '__EMPTY' if key == '' else key
+        return self._modules[key]
+
+    def __setitem__(self, key: str, module: Module) -> None:
+        key = '__EMPTY' if key == '' else key
+        self.add_module(key, module)
+
+    def __delitem__(self, key: str) -> None:
+        key = '__EMPTY' if key == '' else key
+        del self._modules[key]
+
+    @_copy_to_script_wrapper
+    def __contains__(self, key: str) -> bool:
+        key = '__EMPTY' if key == '' else key
+        return key in self._modules
+
+    def pop(self, key: str) -> Module:
+        r"""Remove key from the ModuleDict and return its module.
+
+        Args:
+            key (string): key to pop from the ModuleDict
+        """
+        key = '__EMPTY' if key == '' else key
+        v = self[key]
+        del self[key]
+        return v
 
 
 class MultimodalTransformer(pl.LightningModule):
@@ -270,11 +308,11 @@ class MultimodalTransformer(pl.LightningModule):
         self.unique_sensor_modes = self.dataset_stats['unique_sensor_modes']
 
         if input_stats is not None:
-            input_norms = torch.nn.ModuleDict()
+            input_norms = EmptyStrModuleDict()
             # sensors = list(ub.unique([s for (s, c) in input_stats.keys()]))
             for s, c in self.unique_sensor_modes:
                 if s not in input_norms:
-                    input_norms[s] = torch.nn.ModuleDict()
+                    input_norms[s] = EmptyStrModuleDict()
                 stats = input_stats.get((s, c), None)
                 if stats is None:
                     input_norms[s][c] = nh.layers.InputNorm()
@@ -462,7 +500,7 @@ class MultimodalTransformer(pl.LightningModule):
 
         # TODO: add tokenization strat to the FusionEncoder itself
         if tokenizer == 'rearrange':
-            stream_tokenizers = nn.ModuleDict()
+            stream_tokenizers = EmptyStrModuleDict()
             for stream_key, num_chan in stream_num_channels.items():
                 # Construct tokenize on a per-stream basis
                 # import netharn as nh
@@ -473,7 +511,7 @@ class MultimodalTransformer(pl.LightningModule):
                     ws=self.hparams.window_size)
                 stream_tokenizers[stream_key] = tokenize
         elif tokenizer == 'dwcnn':
-            stream_tokenizers = nn.ModuleDict()
+            stream_tokenizers = EmptyStrModuleDict()
             for stream_key, num_chan in stream_num_channels.items():
                 # Construct tokenize on a per-stream basis
                 # import netharn as nh
@@ -563,13 +601,13 @@ class MultimodalTransformer(pl.LightningModule):
         self.token_learner3_mode = nh.layers.MultiLayerPerceptronNd(
             dim=0, in_channels=16, hidden_channels=3, out_channels=8, residual=True, norm=None)
 
-        self.sensor_channel_tokenizers = nn.ModuleDict()
+        self.sensor_channel_tokenizers = EmptyStrModuleDict()
         for s, c in self.unique_sensor_modes:
             mode_code = kwcoco.FusedChannelSpec.coerce(c)
             # For each mode make a network that should learn to tokenize
             in_chan = mode_code.numel()
             if s not in self.sensor_channel_tokenizers:
-                self.sensor_channel_tokenizers[s] = nn.ModuleDict()
+                self.sensor_channel_tokenizers[s] = EmptyStrModuleDict()
             self.sensor_channel_tokenizers[s][c] = nh.layers.MultiLayerPerceptronNd(
                 dim=2, in_channels=in_chan, hidden_channels=3,
                 out_channels=MODAL_AGREEMENT_CHANS, residual=True, norm=None)
@@ -718,11 +756,22 @@ class MultimodalTransformer(pl.LightningModule):
             >>> import kwcoco
             >>> from os.path import join
             >>> import os
+            >>> if 1:
+            >>>     '''
+            >>>     # Generate toy datasets
+            >>>     DATA_DPATH=$HOME/data/work/toy_change
+            >>>     TRAIN_FPATH=$DATA_DPATH/vidshapes_msi_train/data.kwcoco.json
+            >>>     mkdir -p "$DATA_DPATH"
+            >>>     kwcoco toydata --key=vidshapes-videos8-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$DATA_DPATH/vidshapes_msi_train" --verbose=5
+            >>>     '''
+            >>>     coco_fpath = ub.expandpath('$HOME/data/work/toy_change/vidshapes_msi_train/data.kwcoco.json')
+            >>>     coco_dset = kwcoco.CocoDataset.coerce(coco_fpath)
+            >>>     channels="B11,r|g|b,B1|B8|B11"
             >>> if 0:
             >>>     dvc_dpath = find_smart_dvc_dpath()
             >>>     coco_dset = join(dvc_dpath, 'drop1-S2-L8-aligned/data.kwcoco.json')
             >>>     channels='swir16|swir22|blue|green|red|nir'
-            >>> else:
+            >>> if 0:
             >>>     import watch
             >>>     coco_dset = watch.demo.demo_kwcoco_multisensor(max_speed=0.5)
             >>>     # coco_dset = 'special:vidshapes8-frames9-speed0.5-multispectral'
@@ -730,7 +779,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> coco_dset = kwcoco.CocoDataset.coerce(coco_dset)
             >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset=coco_dset,
-            >>>     chip_size=224, batch_size=1, time_steps=7,
+            >>>     chip_size=224, batch_size=1, time_steps=3,
             >>>     channels=channels,
             >>>     normalize_inputs=True, neg_to_pos_ratio=0, num_workers='avail/2', true_multimodal=True,
             >>> )
@@ -950,6 +999,7 @@ class MultimodalTransformer(pl.LightningModule):
 
             # For loops are for handing heterogeneous inputs
             tokenized = []
+            token_frame_idx = []
             frame_class_weights_list = []
             frame_saliency_weights_list = []
             for frame_idx, (frame, frame_enc) in enumerate(zip(item['frames'], per_frame_pos_encoding)):
@@ -1004,6 +1054,7 @@ class MultimodalTransformer(pl.LightningModule):
                     # need to flatten it, at which point we need a decoder.
                     frame_sensor_chan_tokens = einops.rearrange(x2, 't hs ws f -> t (hs ws) f')
                     tokenized.append(frame_sensor_chan_tokens)
+                    token_frame_idx.append(frame_idx)
 
             # Because we are nt collating we need to add a batch dimension
             if frame_class_weights_list:
@@ -1031,10 +1082,25 @@ class MultimodalTransformer(pl.LightningModule):
             # Rather than just ignoring the first output?
             encoded_tokens = self.encoder(tokens)
 
+            split_pts = np.r_[[0], np.where(np.r_[np.diff(token_frame_idx), [-1]])[0] + 1]
+            split_sizes = np.diff(split_pts).tolist()
+            # split_pts.cumsum()
+            # split_pts = torch.from_numpy(split_pts).to(tokens.device)
+            perframe_frame_encodings = encoded_tokens.split(split_sizes, dim=2)
+
+            perframe_stackable_encodings = []
+            for encoded_modes in perframe_frame_encodings:
+                # max pool, maybe do something better later
+                frame_space_tokens = encoded_modes.max(dim=2)[0]
+                perframe_stackable_encodings.append(frame_space_tokens)
+
+            perframe_spacetime_tokens = torch.cat(perframe_stackable_encodings, dim=2)[:, 0]
+            spacetime_fused_features = einops.rearrange(perframe_spacetime_tokens, 'b t (hs ws) f -> b t hs ws f', hs=hs, ws=ws)
+
             # TODO: keep track of timesteps, and combine multiple modes within
             # a timestep at the end. We need to keep track of timesteps through
             # decoding.
-            spacetime_fused_features = einops.rearrange(encoded_tokens, 'b m t X (hs ws) f -> b (m t X) hs ws f', hs=hs, ws=ws, m=1, X=1)
+            # spacetime_fused_features = einops.rearrange(encoded_tokens, 'b m t X (hs ws) f -> b (m t X) hs ws f', hs=hs, ws=ws, m=1, X=1)
 
             # We do need a decoder now.
 
