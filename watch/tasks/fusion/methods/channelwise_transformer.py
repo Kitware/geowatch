@@ -1,3 +1,60 @@
+# -*- coding: utf-8 -*-
+"""
+
+Our data might look like this, a sequence of frames where the frames can contain
+heterogeneous data:
+
+    [
+        {
+            'frame_index': 0,
+            'time_offset': 0,
+            'sensor': 'S2',
+            'modes': {
+                'blue|green|red|swir1|swir2|nir': <Tensor shape=(6, 64, 64),
+                'pan': <Tensor shape=(1, 112, 112),
+            }
+            'truth': {
+                'class_idx': <Tensor shape=(5, 128, 128),
+            }
+        },
+        {
+            'frame_index': 1,
+            'time_offset': 100,
+            'sensor': 'L8',
+            'modes': {
+                'blue|green|red|lwir1|lwir2|nir': <Tensor shape=(6, 75, 75),
+            }
+            'truth': {
+                'class_idx': <Tensor shape=(5, 128, 128),
+            }
+        },
+        {
+            'frame_index': 2,
+            'time_offset': 120,
+            'sensor': 'S2',
+            'modes': {
+                'blue|green|red|swir1|swir2|nir': <Tensor shape=(6, 64, 64),
+                'pan': <Tensor shape=(1, 112, 112),
+            }
+            'truth': {
+                'class_idx': <Tensor shape=(5, 128, 128),
+            }
+        },
+        {
+            'frame_index': 3,
+            'time_offset': 130,
+            'sensor': 'WV',
+            'modes': {
+                'blue|green|red|nir': <Tensor shape=(4, 224, 224),
+                'pan': <Tensor shape=(1, 512, 512),
+            },
+            'truth': {
+                'class_idx': <Tensor shape=(5, 128, 128),
+            }
+        },
+    ]
+
+"""
 import einops
 import kwarray
 import kwcoco
