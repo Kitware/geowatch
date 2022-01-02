@@ -104,10 +104,14 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None):
 
     if dvc_dpath is None:
         dvc_dpath = util_data.find_smart_dvc_dpath()
+    else:
+        dvc_dpath = pathlib.Path(dvc_dpath)
 
     # storage_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
     if storage_dpath is None:
         storage_dpath = dvc_dpath / 'models/fusion/SC-20201117'
+    else:
+        storage_dpath = pathlib.Path(storage_dpath)
 
     if train_dpath is None:
         dataset_names = [
@@ -124,7 +128,7 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None):
                 dset_dpath = um_dpath / dset_name
                 dset_dpaths.append(dset_dpath)
     else:
-        dset_dpaths = [train_dpath]
+        dset_dpaths = [pathlib.Path(train_dpath)]
 
     for dset_dpath in dset_dpaths:
         lightning_log_dpaths = list((dset_dpath / 'runs').glob('*/lightning_logs'))
@@ -137,7 +141,6 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None):
                     print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
                     all_checkpoint_paths.append(checkpoint_fpath)
 
-    storage_dpath = pathlib.Path(storage_dpath)
     storage_dpath.mkdir(exist_ok=True, parents=True)
 
     to_copy = []
@@ -204,16 +207,16 @@ if __name__ == '__main__':
     CommandLine:
         python ~/code/watch/watch/tasks/fusion/repackage.py /home/joncrall/data/dvc-repos/smart_watch_dvc/training/toothbrush/joncrall/Drop1_Raw_Holdout/runs/ActivityClf_smt_it_joint_p8_raw_v019/lightning_logs/version_0/checkpoints/epoch=9-step=2299.ckpt
 
-        python -m watch.tasks.fusion.repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=53-step=28457.ckpt
+        python -m watch.tasks.fusion.repackage repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=53-step=28457.ckpt
 
-        python -m watch.tasks.fusion.repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=98-step=52172.ckpt
+        python -m watch.tasks.fusion.repackage repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=98-step=52172.ckpt
 
-        python -m watch.tasks.fusion.repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=21-step=11593.ckpt
+        python -m watch.tasks.fusion.repackage repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=21-step=11593.ckpt
 
-        python -m watch.tasks.fusion.repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=31-step=16863.ckpt
-        python -m watch.tasks.fusion.repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=43-step=23187.ckpt
+        python -m watch.tasks.fusion.repackage repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=31-step=16863.ckpt
+        python -m watch.tasks.fusion.repackage repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=43-step=23187.ckpt
 
-        python -m watch.tasks.fusion.repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_raw_v001/lightning_logs/version_1/checkpoints/epoch=145-step=76941.ckpt
+        python -m watch.tasks.fusion.repackage repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_raw_v001/lightning_logs/version_1/checkpoints/epoch=145-step=76941.ckpt
 
 
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
