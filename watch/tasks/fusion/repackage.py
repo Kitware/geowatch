@@ -79,45 +79,66 @@ def repackage(checkpoint_fpath, force=False):
     return str(package_fpath)
 
 
-def gather_checkpoints():
+def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None):
     """
     Package and copy checkpoints into the DVC folder for evaluation.
 
     Ignore:
         from watch.tasks.fusion.repackage import *  # NOQA
+
+    CommandLine:
+        DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+
+
+    python -m watch.tasks.fusion.repackage gather_checkpoints \
+        --dvc_dpath=$DVC_DPATH \
+        --storage_dpath=$DVC_DPATH/models/fusion/SC-20201117 \
+        --train_dpath=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1-20201117
+
     """
     from watch.utils import util_data
     import pathlib
     import ubelt as ub
     import shutil
     import os
-    dvc_dpath = util_data.find_smart_dvc_dpath()
-    train_base = dvc_dpath / 'training'
-    dataset_names = [
-        # 'Drop1_October2021',
-        # 'Drop1_November2021',
-        'Drop1-20201117',
-    ]
+
+    if dvc_dpath is None:
+        dvc_dpath = util_data.find_smart_dvc_dpath()
 
     # storage_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
-    storage_dpath = dvc_dpath / 'models/fusion/SC-20201117'
+    if storage_dpath is None:
+        storage_dpath = dvc_dpath / 'models/fusion/SC-20201117'
+
+    if train_dpath is None:
+        dataset_names = [
+            # 'Drop1_October2021',
+            # 'Drop1_November2021',
+            'Drop1-20201117',
+        ]
+        train_base = dvc_dpath / 'training'
+        user_machine_dpaths = list(train_base.glob('*/*'))
+        all_checkpoint_paths = []
+        dset_dpaths = []
+        for um_dpath in user_machine_dpaths:
+            for dset_name in dataset_names:
+                dset_dpath = um_dpath / dset_name
+                dset_dpaths.append(dset_dpath)
+    else:
+        dset_dpaths = [train_dpath]
+
+    for dset_dpath in dset_dpaths:
+        lightning_log_dpaths = list((dset_dpath / 'runs').glob('*/lightning_logs'))
+        for ll_dpath in lightning_log_dpaths:
+            if not ll_dpath.parent.name.startswith(('Activity', 'SC_')):  # HACK
+                continue
+            for checkpoint_fpath in list((ll_dpath).glob('*/checkpoints/*.ckpt')):
+                parts = checkpoint_fpath.name.split('-')
+                if int(parts[0].split('epoch=')[1]) > 2 and parts[-1].startswith('step='):
+                    print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
+                    all_checkpoint_paths.append(checkpoint_fpath)
+
+    storage_dpath = pathlib.Path(storage_dpath)
     storage_dpath.mkdir(exist_ok=True, parents=True)
-
-    user_machine_dpaths = list(train_base.glob('*/*'))
-
-    all_checkpoint_paths = []
-    for um_dpath in user_machine_dpaths:
-        for dset_name in dataset_names:
-            dset_dpath = um_dpath / dset_name
-            lightning_log_dpaths = list((dset_dpath / 'runs').glob('*/lightning_logs'))
-            for ll_dpath in lightning_log_dpaths:
-                if not ll_dpath.parent.name.startswith(('Activity', 'SC_')):  # HACK
-                    continue
-                for checkpoint_fpath in list((ll_dpath).glob('*/checkpoints/*.ckpt')):
-                    parts = checkpoint_fpath.name.split('-')
-                    if int(parts[0].split('epoch=')[1]) > 2 and parts[-1].startswith('step='):
-                        print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
-                        all_checkpoint_paths.append(checkpoint_fpath)
 
     to_copy = []
     for p in ub.ProgIter(all_checkpoint_paths):
