@@ -121,7 +121,6 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None):
         ]
         train_base = dvc_dpath / 'training'
         user_machine_dpaths = list(train_base.glob('*/*'))
-        all_checkpoint_paths = []
         dset_dpaths = []
         for um_dpath in user_machine_dpaths:
             for dset_name in dataset_names:
@@ -130,6 +129,7 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None):
     else:
         dset_dpaths = [pathlib.Path(train_dpath)]
 
+    all_checkpoint_paths = []
     for dset_dpath in dset_dpaths:
         lightning_log_dpaths = list((dset_dpath / 'runs').glob('*/lightning_logs'))
         for ll_dpath in lightning_log_dpaths:
