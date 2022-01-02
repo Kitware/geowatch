@@ -144,15 +144,23 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None):
     storage_dpath.mkdir(exist_ok=True, parents=True)
 
     to_copy = []
+    failed = []
     for p in ub.ProgIter(all_checkpoint_paths):
-        package_fpath = repackage(p)
-        package_fpath = pathlib.Path(package_fpath)
-        name = package_fpath.name.split('_epoch')[0]
-        name_dpath = storage_dpath / name
-        name_dpath.mkdir(exist_ok=True, parents=True)
-        name_fpath = name_dpath / package_fpath.name
-        if not name_fpath.exists():
-            to_copy.append((package_fpath, name_dpath))
+        try:
+            package_fpath = repackage(p)
+            package_fpath = pathlib.Path(package_fpath)
+            name = package_fpath.name.split('_epoch')[0]
+            name_dpath = storage_dpath / name
+            name_dpath.mkdir(exist_ok=True, parents=True)
+            name_fpath = name_dpath / package_fpath.name
+            if not name_fpath.exists():
+                to_copy.append((package_fpath, name_dpath))
+        except Exception as ex:
+            print(f'Failed to repackage {p=} {ex=}')
+            failed.append(p)
+
+    print(f'failed to repackage = {failed=!r}')
+
     print(f'Copy {len(to_copy)} new checkpoints')
     for package_fpath, name_fpath in ub.ProgIter(to_copy):
         shutil.copy(package_fpath, name_fpath)
