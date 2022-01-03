@@ -15,14 +15,13 @@ from torch import pca_lowrank as pca
 # local imports
 from .pretext_model import pretext
 from .data.multi_image_datasets import kwcoco_dataset
-from watch.utils import util_parallel
+# from watch.utils import util_parallel
 from watch.utils.lightning_ext import util_globals
 from .segmentation_model import segmentation_model as seg_model
-# from .predict_before_after import main as before_after
 
 
 def predict(args):
-
+    ### Set up folders, paths
     source_folder, _ = os.path.split(args.input_kwcoco)
     dvc_folder, data_folder = os.path.split(source_folder)
 
@@ -30,14 +29,14 @@ def predict(args):
         save_path = args.data_save_folder
         check1, check2 = os.path.split(save_path)
         if check2 != 'uky_invariants':
-            save_path = os.path.join(save_path, 'uky_invariants') 
+            save_path = os.path.join(save_path, 'uky_invariants')
     else:
         save_path = os.path.join(dvc_folder, 'uky_invariants')
 
     save_path = os.path.join(save_path, data_folder)
 
     if not os.path.exists(save_path):
-                    os.makedirs(save_path, exist_ok=True)
+        os.makedirs(save_path, exist_ok=True)
 
     if not args.output_kwcoco:
         args.output_kwcoco = os.path.join(save_path, 'invariants.kwcoco.json')
@@ -49,6 +48,7 @@ def predict(args):
     num_workers = util_globals.coerce_num_workers(args.num_workers)
     print('num_workers = {!r}'.format(num_workers))
 
+    ### Define tasks
     if 'before_after' in args.tasks:
         before_after_dim = 1
     else:
@@ -72,28 +72,23 @@ def predict(args):
         else:
             num_images = 2
 
-        dataset = kwcoco_dataset(args.input_kwcoco, sensor=pretext_hparams.sensor, bands=pretext_hparams.bands, patch_size=64, segmentation_labels=False, display=False, num_images=num_images)
-
         if args.do_pca:
+            ###Slightly reduced dataset for pca
+            dataset = kwcoco_dataset(args.input_kwcoco, sensor=pretext_hparams.sensor, bands=pretext_hparams.bands, patch_size=64, segmentation_labels=False, display=False, num_images=num_images)
+
             ### Define projector
             dl = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, num_workers=args.num_workers)
-#             aunet = pretext_model.backbone
             feature_collection = []
             print('Calculating projection matrix based on pca.')
-            ####
+
             for batch in tqdm(dl):
-                features = pretext_model.predict(batch['image1'].to(pretext_model.device))
+                image_stack = torch.stack([batch['image1'], batch['image2'], batch['offset_image1'], batch['augmented_image1']], dim=1)
+                features = pretext_model(image_stack.to(pretext_model.device))
                 feature_collection.append(features)
             stack = torch.stack(feature_collection).permute(0, 1, 3, 4, 2).reshape(-1, 64)
             reduction_dim = args.num_dim - before_after_dim - segmentation_dim
             _, _, projector = pca(stack, q=reduction_dim)
-            ####
-#                 image_stack = torch.stack([batch[key] for key in batch.keys() if 'image' in key and 'display' not in key], dim=1).to(device)
-#                 out = aunet(image_stack)
-#                 features = out[:, 0, :, :, :]
-#                 feature_collection.append(features1)
-#             stack = torch.stack(feature_collection).permute(0, 1, 3, 4, 2).reshape(-1, 64)
-#             _, _, projector = pca(stack, q=num_dim - before_after_dim - segmentation_dim)
+
             projector = projector.permute(1, 0).to(device)
 
     dataset = kwcoco_dataset(args.input_kwcoco, args.sensor, args.bands, mode='test')
@@ -118,7 +113,7 @@ def predict(args):
 
                 ###reroot original kwcoco to take out of uky_invariants folder
                 for x in dataset.dset.index.imgs[image_id]['auxiliary']:
-                    x['file_name'] = os.path.join('../..', data_folder, x['file_name']) 
+                    x['file_name'] = os.path.join('../..', data_folder, x['file_name'])
 
                 aux_base = image_info['auxiliary'][0]
                 rel_path, file_name = os.path.split(aux_base['file_name'])
@@ -168,8 +163,7 @@ def predict(args):
 
                 if 'before_after' in args.tasks:
                     ### TO DO: Set to output of separate model.
-                    #  before_after_heatmap = before_after_model(image[:, 0, :, :, :], image[:, 0, :, :, :])['heatmap']
-                    before_after_heatmap = pretext_model.predict_before_after(image)[0].permute(1, 2, 0).cpu().numpy()
+                    before_after_heatmap = pretext_model.shared_step(image)['before_after_heatmap'][0].permute(1, 2, 0).cpu().numpy()
                     name = file_name[:last_us_idx] + '_before_after_heatmap.tif'
                     kwimage.imwrite(os.path.join(save_folder, name), before_after_heatmap, space=None,
                                     backend='gdal', compress='DEFLATE')
@@ -181,9 +175,6 @@ def predict(args):
                     info['channels'] = 'before_after_heatmap'
                     info['warp_aux_to_img'] = warp_aux_to_img
                     dataset.dset.index.imgs[image_id]['auxiliary'].append(info)
-
-    if args.output_kwcoco is None:
-        args.output_kwcoco = os.path.join(root, 'uky_invariants.kwcoco.json')
 
     # queue.wait_until_finished()
 

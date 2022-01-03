@@ -92,7 +92,7 @@ class kwcoco_dataset(Dataset):
                 A.Blur(p=.75),
                 A.RandomBrightnessContrast(brightness_by_max=False, always_apply=True)
         ])
-
+        self.num_channels = len(self.channels)
         self.mode = mode
 
     def __len__(self,):
@@ -283,9 +283,6 @@ class kwcoco_dataset(Dataset):
                 'sensor_image1': im1_sensor,
                 'sensor_image2': im2_sensor
             }
-
-    def num_channels(self):
-        return len(self.channels)
 
 
 class Onera(Dataset):

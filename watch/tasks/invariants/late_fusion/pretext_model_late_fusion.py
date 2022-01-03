@@ -1,12 +1,14 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from argparse import Namespace
 import pytorch_lightning as pl
 from torchmetrics.classification.accuracy import Accuracy
 
-from .data.datasets import kwcoco_dataset
-from .utils.attention_unet import attention_unet
+from ..data.datasets import kwcoco_dataset
+from ..utils.unet_blur import UNetEncoder, UNetDecoder
+from ..utils.focal_loss import BinaryFocalLoss
 
 
 class pretext(pl.LightningModule):
@@ -25,11 +27,11 @@ class pretext(pl.LightningModule):
         self.save_hyperparameters(hparams)
 
         if hparams.train_dataset is not None:
-            self.trainset = kwcoco_dataset(hparams.train_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size)
+            self.trainset = kwcoco_dataset(hparams.train_dataset, hparams.sensor, hparams.bands, hparams.patch_size)
         else:
             self.trainset = None
         if hparams.vali_dataset is not None:
-            self.valset = kwcoco_dataset(hparams.vali_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size)
+            self.valset = kwcoco_dataset(hparams.vali_dataset, hparams.sensor, hparams.bands, hparams.patch_size)
         else:
             self.valset = None
 
@@ -38,7 +40,7 @@ class pretext(pl.LightningModule):
             # hack for loading without dataset state
             num_channels = hparams.num_channels
         elif self.trainset is not None:
-            num_channels = self.trainset.num_channels
+            num_channels = self.trainset.num_channels()
         else:
             num_channels = 6
 
@@ -61,11 +63,8 @@ class pretext(pl.LightningModule):
             self.task_indices.append(pretext.TASK_NAMES.index('overlap'))
 
         # shared model body
-        self.backbone = attention_unet(in_channels=num_channels,
-                                        out_channels=hparams.feature_dim_shared,
-                                        pos_encode=hparams.positional_encoding,
-                                        num_attention_layers=hparams.num_attention_layers,
-                                        mode=hparams.positional_encoding_mode)
+        self.encoder = UNetEncoder(in_channels=num_channels)
+        self.decoder = UNetDecoder(out_channels=self.hparams.feature_dim_shared)
 
         # task specific necks
         self.necks = [
@@ -73,19 +72,18 @@ class pretext(pl.LightningModule):
             self.task_neck(self.hparams.feature_dim_shared, self.hparams.feature_dim_each_task),  # augment task
             self.task_neck(self.hparams.feature_dim_shared, self.hparams.feature_dim_each_task),  # overlap task
         ]
-        self.necks = nn.ModuleList([ self.necks[i] for i in self.task_indices])
+        self.necks = nn.ModuleList([ self.necks[i] for i in self.task_indices ])
 
         # task specific heads
         self.heads = [
-            self.pixel_classification_head(2 * self.hparams.feature_dim_each_task, num_classes=2),  # sort task
+            self.pixel_classification_head(2 * self.hparams.feature_dim_each_task),  # sort task
             self.image_classification_head( self.hparams.feature_dim_each_task),  # augment task
             self.image_classification_head( self.hparams.feature_dim_each_task),  # overlap task
         ]
         self.heads = nn.ModuleList([ self.heads[i] for i in self.task_indices ])
         # task specific criterion
         self.criteria = [
-            # BinaryFocalLoss(gamma=self.hparams.focal_gamma),  # sort task
-            nn.NLLLoss(), #sort task
+            BinaryFocalLoss(gamma=self.hparams.focal_gamma),  # sort task
             nn.TripletMarginLoss(),  # augment task
             nn.TripletMarginLoss(),  # overlap task
         ]
@@ -94,22 +92,21 @@ class pretext(pl.LightningModule):
         # task specific metrics
         self.sort_accuracy = Accuracy()
 
-    def forward(self, image_stack, positional_encoding=None):
+    def forward(self, image):
         # pass through shared model body
-        return self.backbone(image_stack, positional_encoding)
+        encoded = self.encoder(image)
+        decoded = self.decoder(encoded)
+        return decoded
 
     def shared_step(self, batch):
         # get features of each image from shared model body
-        image_stack = torch.stack([batch['image1'], batch['image2'], batch['offset_image1'], batch['augmented_image1']], dim=1)
-        # positional_encoding must be set to none to produce viable pretext task results
-        out = self(image_stack, positional_encoding=None)
-        image1_features = out[:, 0, :, :, :]
-        image2_features = out[:, 1, :, :, :]
-        offset_image1_features = out[:, 2, :, :, :]
-        augmented_image1_features = out[:, 3, :, :, :]
+        image1_features = self(batch['image1'])
+        image2_features = self(batch['image2'])
+        offset_image1_features = self(batch['offset_image1'])
+        augmented_image1_features = self(batch['augmented_image1'])
         # get time sort labels
         time_sort_labels = batch['time_sort_label']
-        time_sort_labels = time_sort_labels.unsqueeze(1).unsqueeze(1).repeat(1, self.hparams.patch_size, self.hparams.patch_size)
+        time_sort_labels = time_sort_labels.unsqueeze(1).unsqueeze(1).repeat(1, self.hparams.patch_size, self.hparams.patch_size).unsqueeze(1)
 
         losses = []
         output = {}
@@ -117,18 +114,23 @@ class pretext(pl.LightningModule):
         # Time Sort task
         if 0 in self.task_indices:
             module_list_idx = self.task_indices.index(0)
-            time_sort_prediction = self.heads[module_list_idx](torch.cat((image1_features, image2_features), dim=1))
+            # forward pass through neck
+            image1_sort_out = self.necks[module_list_idx](image1_features)
+            image2_sort_out = self.necks[module_list_idx](image2_features)
+            # forward pass through head
+            time_sort_prediction = self.heads[module_list_idx](torch.cat((image1_sort_out, image2_sort_out), dim=1))
             # evaluate
-            loss_time = self.criteria[module_list_idx](time_sort_prediction.flatten(2).float(), time_sort_labels.flatten(1).long())
-            time_accuracy = self.sort_accuracy((torch.max(time_sort_prediction.data, 1)[1]), time_sort_labels.int())
+            loss_time = self.criteria[module_list_idx](time_sort_prediction, time_sort_labels)
+            if self.hparams.aot_penalty_weight:
+                l1_penalty = torch.norm(image1_sort_out - image2_sort_out, 1, dim=1) / image1_sort_out.shape[1]
+                l1_penalty_filtered = -1 * torch.topk(-1 * l1_penalty.flatten(), int(self.hparams.aot_penalty_percentage * l1_penalty.numel())).values
+                loss_time = loss_time + self.hparams.aot_penalty_weight * l1_penalty_filtered.mean()
+            time_accuracy = self.sort_accuracy((time_sort_prediction > 0.), time_sort_labels.int())
 
             losses.append(loss_time)
             output['time_accuracy'] = time_accuracy
             output['loss_time_sort'] = loss_time.detach()
-            output['before_after_heatmap'] = time_sort_prediction
-        else:
-            output['before_after_heatmap'] = None
-
+            output['before_after_heatmap'] = F.sigmoid(time_sort_prediction)
         # Overlap task
         if 2 in self.task_indices:
             module_list_idx = self.task_indices.index(2)
@@ -156,9 +158,6 @@ class pretext(pl.LightningModule):
             # image1 forward pass through head
             image1_augment_out = self.heads[module_list_idx](image1_augment_out)
             image1_augmented_augment_out = self.heads[module_list_idx](image1_augmented_augment_out)
-            # perform computation if not already done
-            if 2 not in self.task_indices:
-                image1_offset_overlap_out = self.heads[module_list_idx](image1_offset_overlap_out)
             # image1 evaluate
             loss_augment = self.criteria[module_list_idx](image1_augment_out, image1_augmented_augment_out, image1_offset_overlap_out)
 
@@ -173,13 +172,11 @@ class pretext(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         output = self.shared_step(batch)
-        output.pop('before_after_heatmap')
         self.log_dict(output)
         return output
 
     def validation_step(self, batch, batch_idx):
         output = self.shared_step(batch)
-        output.pop('before_after_heatmap')
         output = {"val_" + key: val for key, val in output.items()}
         self.log_dict(output)
         return output
@@ -190,6 +187,19 @@ class pretext(pl.LightningModule):
         shared_feats = self(batch)
         feats['shared'] = shared_feats
         return feats['shared']
+
+    ### Temporary solution
+    def predict_before_after(self, image):
+        self.eval()
+        im1 = image[:, 0, :]
+        im2 = image[:, 1, :]
+        image1_features = self(im1)
+        image2_features = self(im2)
+        image1_sort_out = self.necks[self.task_indices.index(0)](image1_features)
+        image2_sort_out = self.necks[self.task_indices.index(0)](image2_features)
+        # forward pass through head
+        time_sort_prediction = self.heads[self.task_indices.index(0)](torch.cat((image1_sort_out, image2_sort_out), dim=1))
+        return time_sort_prediction
 
     def train_dataloader(self):
         return DataLoader(self.trainset, batch_size=self.hparams.batch_size, num_workers=self.hparams.workers, shuffle=True)
@@ -210,7 +220,7 @@ class pretext(pl.LightningModule):
         return {'optimizer': opt, 'lr_scheduler': lr_scheduler}
 
     def task_neck(self, in_chan, out_chan):
-        kernel_size = 3
+        kernel_size = 1
         stride = 1
         padding = int((kernel_size - 1) / 2)
         return nn.Sequential(
@@ -222,7 +232,7 @@ class pretext(pl.LightningModule):
             nn.ReLU(inplace=True)
         )
 
-    def pixel_classification_head(self, in_chan, num_classes):
+    def pixel_classification_head(self, in_chan):
         kernel_size = 1
         stride = 1
         padding = int((kernel_size - 1) / 2)
@@ -230,11 +240,7 @@ class pretext(pl.LightningModule):
                             nn.Conv2d(in_chan, in_chan, kernel_size, stride, padding),
                             nn.BatchNorm2d(in_chan),
                             nn.ReLU(inplace=True),
-                            nn.Conv2d(in_chan, in_chan, kernel_size, stride, padding),
-                            nn.BatchNorm2d(in_chan),
-                            nn.ReLU(inplace=True),
-                            nn.Conv2d(in_chan, num_classes, 1, bias=False, padding=0),
-                            nn.LogSoftmax(dim=1)
+                            nn.Conv2d(in_chan, 1, 1, bias=False, padding=0),
                             )
 
     def image_classification_head(self, in_chan):

@@ -28,7 +28,7 @@ class attention_unet(nn.Module):
         if self.mode == 'concatenation' and pos_encode:
             self.pos_embed_dim = 16
             for i in range(num_attention_layers):
-                dimension_adjustment[i] = dimension_adjustment[i] + self.pos_embed_dim 
+                dimension_adjustment[i] = dimension_adjustment[i] + self.pos_embed_dim
         self.inc = inconv(in_channels, self.feature_dimensions[0])
         self.down1 = down_blur(self.feature_dimensions[0] + dimension_adjustment[0], self.feature_dimensions[1])
         self.down2 = down_blur(self.feature_dimensions[1] + dimension_adjustment[1], self.feature_dimensions[2])
@@ -80,9 +80,9 @@ class attention_unet(nn.Module):
             if self.pos_encode:
                 if timestamps is None:
                     if self.mode == 'concatenation':
-                        positional_encode = torch.zeros(B, T, self.pos_embed_dim)
+                        positional_encode = torch.zeros(B, T, self.pos_embed_dim).to(x1.device)
                     else:
-                        positional_encode = torch.zeros(B, T, self.feature_dimensions[0])
+                        positional_encode = torch.zeros(B, T, self.feature_dimensions[0]).to(x1.device)
                 else:
                     positional_encode = self.positional_encoding[0](timestamps)
 
@@ -107,9 +107,9 @@ class attention_unet(nn.Module):
             if self.pos_encode:
                 if timestamps is None:
                     if self.mode == 'concatenation':
-                        positional_encode = torch.zeros(B, T, self.pos_embed_dim)
+                        positional_encode = torch.zeros(B, T, self.pos_embed_dim).to(x1.device)
                     else:
-                        positional_encode = torch.zeros(B, T, self.feature_dimensions[1])
+                        positional_encode = torch.zeros(B, T, self.feature_dimensions[1]).to(x1.device)
                 else:
                     positional_encode = self.positional_encoding[1](timestamps)
 
@@ -135,9 +135,9 @@ class attention_unet(nn.Module):
             if self.pos_encode:
                 if timestamps is None:
                     if self.mode == 'concatenation':
-                        positional_encode = torch.zeros(B, T, self.pos_embed_dim)
+                        positional_encode = torch.zeros(B, T, self.pos_embed_dim).to(x1.device)
                     else:
-                        positional_encode = torch.zeros(B, T, self.feature_dimensions[2])
+                        positional_encode = torch.zeros(B, T, self.feature_dimensions[2]).to(x1.device)
                 else:
                     positional_encode = self.positional_encoding[2](timestamps)
 
@@ -163,9 +163,9 @@ class attention_unet(nn.Module):
             if self.pos_encode:
                 if timestamps is None:
                     if self.mode == 'concatenation':
-                        positional_encode = torch.zeros(B, T, self.pos_embed_dim)
+                        positional_encode = torch.zeros(B, T, self.pos_embed_dim).to(x1.device)
                     else:
-                        positional_encode = torch.zeros(B, T, self.feature_dimensions[3])
+                        positional_encode = torch.zeros(B, T, self.feature_dimensions[3]).to(x1.device)
                 else:
                     positional_encode = self.positional_encoding[3](timestamps)
 

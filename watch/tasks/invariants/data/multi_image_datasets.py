@@ -206,6 +206,7 @@ class kwcoco_dataset(Dataset):
             out['display_image2'] = display_image2
             out['order'] = [x[0] for x in sorted(frame_index.items(), key=lambda item: item[1])]
             out['sensors'] = sensor_list
+            out['time_steps'] = torch.tensor([out[key] for key in out if 'frame_number' in key])
 
         else:
             aids = [self.dset.index.gid_to_aids[n] for n in id_list]

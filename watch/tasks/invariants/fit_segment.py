@@ -67,7 +67,7 @@ if __name__ == '__main__':
     parser.add_argument('--onera_data_folder', help='Path to Onera. Only relevant if train_dataset and/or vali_dataset are onera.', type=str, default='/localdisk0/SCRATCH/watch/onera/')
 
 #To do: allow for pretrained weights in this architecture
-    ### pretraining arguments
+### pretraining arguments
 #     parser.add_argument('--pretrained_checkpoint', type=str, help='path to pretrained checkpoint. Leave blank for change detection training without pretraining.', default='')
 #     parser.add_argument('--pretrained_multihead', action='store_true', help='indicate if the pretrained checkpoint was trained in a multihead fashion')
 #     parser.add_argument('--pretrained_encoder_only', action='store_true')
