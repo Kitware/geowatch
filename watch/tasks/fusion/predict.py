@@ -240,6 +240,9 @@ def predict(cmdline=False, **kwargs):
             else:
                 traintime_params['channels'] = list(method.input_norms.keys())[0]
 
+    import xdev
+    xdev.embed()
+
     # FIXME: Some of the inferred args seem to not have the right type here.
     able_to_infer = ub.dict_isect(traintime_params, need_infer)
     from scriptconfig.smartcast import smartcast
