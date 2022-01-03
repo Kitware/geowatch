@@ -448,8 +448,9 @@ def predict(cmdline=False, **kwargs):
                         modes[key] = mode.to(device)
 
             # Predict on the batch
-            outputs = method.forward_step(batch, with_loss=False)
-            outputs = {head_key_mapping.get(k, k): v for k, v in outputs.items()}
+            with xdev.embed_on_exception_context:
+                outputs = method.forward_step(batch, with_loss=False)
+                outputs = {head_key_mapping.get(k, k): v for k, v in outputs.items()}
 
             if got_outputs is None:
                 got_outputs = list(outputs.keys())
