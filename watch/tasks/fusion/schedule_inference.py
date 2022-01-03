@@ -346,7 +346,7 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto', run=
     if run:
         ub.cmd('bash ' + str(driver_fpath), verbose=3, check=True)
     else:
-        print('Wrote script: now execute {} to run'.format(driver_fpath))
+        print('Wrote script: to run execute:\n{}'.format(driver_fpath))
 
     """
     # Now postprocess script:
