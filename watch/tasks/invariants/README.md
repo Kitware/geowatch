@@ -1,3 +1,8 @@
+Update 1/2022
+`predict.py` generates PCA reduced features from the given high dimensional feature maps generated from pretext tasks. Pretext features and segmentation maps are generated in within the same script and turned on and off with flags.
+
+Ex: `python -m watch.tasks.invariants.predict --input_kwcoco $SMART_WATCH_DVC/Drop1-L1-Aligned/data.kwcoco.json --output_kwcoco $SMART_WATCH_DVC/uky_invariants/Drop1-L1-Aligned/data.kwcoco.json --pretext_ckpt_path $SMART_WATCH_DVC/models/uky/uky_invariants_2022_01/pretext/checkpoint.ckpt --segmentation_ckpt $SMART_WATCH_DVC/models/uky/uky_invariants_2022_01/segmentation/checkpoint.ckpt --do_pca 1 --num_dim 8`
+
 Update: 11/2021
 There are now separate `fit_segment.py` and `predict_segment.py` scripts following the same syntax for producing binary segmentation heatmaps using a UNet architecture with attention blocks after each down convolution. Additional arguments are --num_attention_layers (from 0 to 4) and --positional_encoding, to include an encoding based on date of capture.
 
