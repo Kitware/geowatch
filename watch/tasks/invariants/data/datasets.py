@@ -37,15 +37,15 @@ class kwcoco_dataset(Dataset):
             bands = [bands]
         print('Using sensors:', sensor)
         print('Using bands:', bands)
-        
+
         if 'sensor_coarse' in self.images._id_to_obj[self.images._ids[0]].keys():
             # get available sensors
-            avail_sensors = set(self.images.lookup('sensor_coarse'))
+            # avail_sensors = set(self.images.lookup('sensor_coarse'))
             # filter images by desired sensor
             self.images = self.images.compress([x in sensor for x in self.images.lookup('sensor_coarse')])
             assert(self.images)
-        else:
-            avail_sensors = None
+        # else:
+        #     avail_sensors = None
 
         # get image ids and videos
         self.dset_ids = self.images.gids
