@@ -661,9 +661,9 @@ def gather_measures():
 
     from kwcoco.metrics import drawing
     fig = kwplot.figure(fnum=3, doclf=True)
+    catname = 'Active Construction'
     sorted_results = sorted(all_results, key=lambda x: x.ovr_measures[catname]['ap'])[::-1]
     results_to_plot = sorted_results[0:max_num_curves]
-    catname = 'Active Construction'
     colors = kwplot.Color.distinct(len(results_to_plot))
     for idx, result in enumerate(results_to_plot):
         color = colors[idx]
@@ -676,9 +676,9 @@ def gather_measures():
     fig.gca().set_title('Comparison of runs AP: {}'.format(catname))
 
     fig = kwplot.figure(fnum=4, doclf=True)
+    catname = 'Active Construction'
     sorted_results = sorted(all_results, key=lambda x: x.ovr_measures[catname]['auc'])[::-1]
     results_to_plot = sorted_results[0:max_num_curves]
-    catname = 'Active Construction'
     colors = kwplot.Color.distinct(len(results_to_plot))
     for idx, result in enumerate(results_to_plot):
         color = colors[idx]
