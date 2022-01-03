@@ -442,6 +442,10 @@ def predict(cmdline=False, **kwargs):
                     'space_slice': tuple(item['tr']['space_slice']),
                     'in_gids': [frame['gid'] for frame in item['frames']],
                 })
+                position_tensors = item.get('positional_tensors', None)
+                if position_tensors is not None:
+                    for k, v in position_tensors.items():
+                        position_tensors[k] = v.to(device)
                 for frame in item['frames']:
                     modes = frame['modes']
                     for key, mode in modes.items():
