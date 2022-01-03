@@ -432,6 +432,18 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
         print('self.torch_datasets = {}'.format(ub.repr2(self.torch_datasets, nl=1)))
 
+    @property
+    def train_dataset(self):
+        return self.torch_datasets.get('train', None)
+
+    @property
+    def test_dataset(self):
+        return self.torch_datasets.get('test', None)
+
+    @property
+    def vali_dataset(self):
+        return self.torch_datasets.get('vali', None)
+
     def _make_dataloader(self, stage, shuffle=False):
         return data.DataLoader(
             self.torch_datasets[stage],

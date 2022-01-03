@@ -13,6 +13,7 @@ from os.path import join
 from os.path import relpath
 import kwimage
 import kwarray
+import kwcoco
 from watch import heuristics
 from watch.tasks.fusion import datamodules
 from watch.tasks.fusion import utils
@@ -240,11 +241,11 @@ def predict(cmdline=False, **kwargs):
             else:
                 traintime_params['channels'] = list(method.input_norms.keys())[0]
 
-    import xdev
-    xdev.embed()
-
     # FIXME: Some of the inferred args seem to not have the right type here.
     able_to_infer = ub.dict_isect(traintime_params, need_infer)
+    if able_to_infer.get('channels', None) is not None:
+        # do this before smartcast breaks the spec
+        able_to_infer['channels'] = kwcoco.ChannelSpec.coerce(able_to_infer['channels'])
     from scriptconfig.smartcast import smartcast
     able_to_infer = ub.map_vals(smartcast, able_to_infer)
     unable_to_infer = ub.dict_diff(need_infer, traintime_params)
