@@ -14,7 +14,8 @@ from torch import pca_lowrank as pca
 
 # local imports
 from .pretext_model import pretext
-from .data.multi_image_datasets import kwcoco_dataset
+from .data.datasets import kwcoco_dataset
+from .data.multi_image_datasets import kwcoco_dataset as multi_image_dataset
 # from watch.utils import util_parallel
 from watch.utils.lightning_ext import util_globals
 from .segmentation_model import segmentation_model as seg_model
@@ -74,7 +75,7 @@ def predict(args):
 
         if args.do_pca:
             ###Slightly reduced dataset for pca
-            dataset = kwcoco_dataset(args.input_kwcoco, sensor=pretext_hparams.sensor, bands=pretext_hparams.bands, patch_size=64, segmentation_labels=False, display=False, num_images=num_images)
+            dataset = kwcoco_dataset(args.input_kwcoco, sensor=pretext_hparams.sensor, bands=pretext_hparams.bands, patch_size=32, change_labels=False, display=False)
 
             ### Define projector
             dl = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, num_workers=args.num_workers)
@@ -84,17 +85,17 @@ def predict(args):
             for batch in tqdm(dl):
                 image_stack = torch.stack([batch['image1'], batch['image2'], batch['offset_image1'], batch['augmented_image1']], dim=1)
                 features = pretext_model(image_stack.to(pretext_model.device))
-                feature_collection.append(features)
-            stack = torch.stack(feature_collection).permute(0, 1, 3, 4, 2).reshape(-1, 64)
+                feature_collection.append(features.cpu())
+            stack = torch.cat(feature_collection, dim=0).permute(0, 1, 3, 4, 2).reshape(-1, 64)
             reduction_dim = args.num_dim - before_after_dim - segmentation_dim
             _, _, projector = pca(stack, q=reduction_dim)
 
             projector = projector.permute(1, 0).to(device)
 
-    dataset = kwcoco_dataset(args.input_kwcoco, args.sensor, args.bands, mode='test')
+    dataset = multi_image_dataset(args.input_kwcoco, args.sensor, args.bands, mode='test')
 
     loader = torch.utils.data.DataLoader(
-        dataset, num_workers=num_workers, collate_fn=ub.identity, batch_size=1)
+        dataset, num_workers=num_workers, batch_size=1)
     num_batches = len(loader)
     # Start background processes
     loader_iter = iter(loader)
@@ -107,12 +108,15 @@ def predict(args):
 
     with torch.set_grad_enabled(False):
         for batch in tqdm(loader_iter, total=num_batches):
-            for item in batch:
-                image_id, image_info, image = item
-                image = image.to(device)
+            image_id = batch['img1_id']
+            image_info = dataset.dset.index.imgs[image_id.item()]
+            
+            if 'pretext' in args.tasks:
+                image_stack = torch.stack([batch['image1'], batch['image2'], batch['offset_image1'], batch['augmented_image1']], dim=1)
+                image_stack = image_stack.to(device)
 
                 ###reroot original kwcoco to take out of uky_invariants folder
-                for x in dataset.dset.index.imgs[image_id]['auxiliary']:
+                for x in image_info['auxiliary']:
                     x['file_name'] = os.path.join('../..', data_folder, x['file_name'])
 
                 aux_base = image_info['auxiliary'][0]
@@ -128,53 +132,57 @@ def predict(args):
 
                 last_us_idx = file_name.rfind('_')
 
-                if 'pretext' in args.tasks:
-                    features = pretext_model.predict(image[:, 0, :, :, :].to(pretext_model.device))
-                    if args.do_pca:
-                        features = torch.einsum('xy,byhw->bxhw', projector, features).squeeze()
-                    feat = features.permute(1, 2, 0).cpu().numpy()
-                    name = file_name[:last_us_idx] + '_invariants.tif'
-                    kwimage.imwrite(os.path.join(save_folder, name), feat, space=None,
-                                    backend='gdal', compress='DEFLATE')
-                    info = {}
-                    info['file_name'] = os.path.join(save_folder, name)
-                    info['height'] = feat.shape[0]
-                    info['width'] = feat.shape[1]
-                    info['num_bands'] = feat.shape[2]
-                    info['channels'] = f'invariants:{feat.shape[-1]}'
-                    info['warp_aux_to_img'] = warp_aux_to_img
-                    dataset.dset.index.imgs[image_id]['auxiliary'].append(info)
+                #select features corresponding to first image
+                features = pretext_model(image_stack)[:, 0, :, :, :]
 
-                    # queue.submit(_write_results_fn, feat, save_path, file_name)
+                if args.do_pca:
+                    features = torch.einsum('xy,byhw->bxhw', projector, features)
+                
+                feat = features.squeeze().permute(1, 2, 0).cpu().numpy()
+                name = file_name[:last_us_idx] + '_invariants.tif'
+                kwimage.imwrite(os.path.join(save_folder, name), feat, space=None,
+                                backend='gdal', compress='DEFLATE')
+                info = {}
+                info['file_name'] = os.path.join(save_folder, name)
+                info['height'] = feat.shape[0]
+                info['width'] = feat.shape[1]
+                info['num_bands'] = feat.shape[2]
+                info['channels'] = f'invariants:{feat.shape[-1]}'
+                info['warp_aux_to_img'] = warp_aux_to_img
+                dataset.dset.index.imgs[image_id.item()]['auxiliary'].append(info)
 
-                if 'segmentation' in args.tasks:
-                    segmentation_heatmap = torch.sigmoid(segmentation_model(image)['predictions'][0, 0, 1, :, :] - segmentation_model(image)['predictions'][0, 0, 0, :, :]).unsqueeze(0).permute(1, 2, 0).cpu().numpy()
-                    name = file_name[:last_us_idx] + '_segmentation_heatmap.tif'
-                    kwimage.imwrite(os.path.join(save_folder, name), segmentation_heatmap, space=None,
-                                    backend='gdal', compress='DEFLATE')
-                    info = {}
-                    info['file_name'] = os.path.join(save_folder, name)
-                    info['height'] = feat.shape[0]
-                    info['width'] = feat.shape[1]
-                    info['num_bands'] = feat.shape[2]
-                    info['channels'] = 'segmentation_heatmap'
-                    info['warp_aux_to_img'] = warp_aux_to_img
-                    dataset.dset.index.imgs[image_id]['auxiliary'].append(info)
+                # queue.submit(_write_results_fn, feat, save_path, file_name)
 
-                if 'before_after' in args.tasks:
-                    ### TO DO: Set to output of separate model.
-                    before_after_heatmap = pretext_model.shared_step(image)['before_after_heatmap'][0].permute(1, 2, 0).cpu().numpy()
-                    name = file_name[:last_us_idx] + '_before_after_heatmap.tif'
-                    kwimage.imwrite(os.path.join(save_folder, name), before_after_heatmap, space=None,
-                                    backend='gdal', compress='DEFLATE')
-                    info = {}
-                    info['file_name'] = os.path.join(save_folder, name)
-                    info['height'] = feat.shape[0]
-                    info['width'] = feat.shape[1]
-                    info['num_bands'] = feat.shape[2]
-                    info['channels'] = 'before_after_heatmap'
-                    info['warp_aux_to_img'] = warp_aux_to_img
-                    dataset.dset.index.imgs[image_id]['auxiliary'].append(info)
+            if 'before_after' in args.tasks:
+                ### TO DO: Set to output of separate model.
+                before_after_heatmap = pretext_model.shared_step(batch)['before_after_heatmap'][0].permute(1, 2, 0).cpu().numpy()
+                name = file_name[:last_us_idx] + '_before_after_heatmap.tif'
+                kwimage.imwrite(os.path.join(save_folder, name), before_after_heatmap, space=None,
+                                backend='gdal', compress='DEFLATE')
+                info = {}
+                info['file_name'] = os.path.join(save_folder, name)
+                info['height'] = feat.shape[0]
+                info['width'] = feat.shape[1]
+                info['num_bands'] = feat.shape[2]
+                info['channels'] = 'before_after_heatmap'
+                info['warp_aux_to_img'] = warp_aux_to_img
+                dataset.dset.index.imgs[image_id.item()]['auxiliary'].append(info)
+
+            if 'segmentation' in args.tasks:
+                image_stack = [batch[key] for key in batch if key[:5] == 'image']
+                image_stack = torch.stack(image_stack, dim=1).to(args.device)
+                segmentation_heatmap = torch.sigmoid(segmentation_model(image_stack)['predictions'][0, 0, 1, :, :] - segmentation_model(image_stack)['predictions'][0, 0, 0, :, :]).unsqueeze(0).permute(1, 2, 0).cpu().numpy()
+                name = file_name[:last_us_idx] + '_segmentation_heatmap.tif'
+                kwimage.imwrite(os.path.join(save_folder, name), segmentation_heatmap, space=None,
+                                backend='gdal', compress='DEFLATE')
+                info = {}
+                info['file_name'] = os.path.join(save_folder, name)
+                info['height'] = feat.shape[0]
+                info['width'] = feat.shape[1]
+                info['num_bands'] = feat.shape[2]
+                info['channels'] = 'segmentation_heatmap'
+                info['warp_aux_to_img'] = warp_aux_to_img
+                dataset.dset.index.imgs[image_id.item()]['auxiliary'].append(info)
 
     # queue.wait_until_finished()
 

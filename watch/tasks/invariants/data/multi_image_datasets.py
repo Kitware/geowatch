@@ -80,11 +80,20 @@ class kwcoco_dataset(Dataset):
             additional_targets['seg{}'.format(i + 1)] = 'mask'
 
         if mode == 'test':
+            self.segmentation_labels = False
             self.transforms = A.Compose([
                 A.NoOp(),
                 ],
                 additional_targets=additional_targets)
+            self.transforms2 = A.Compose([
+                    A.VerticalFlip(p=.999),
+                    A.HorizontalFlip(p=.999)],
+                additional_targets={'image2': 'image'})
 
+            self.transforms3 = A.Compose([
+                    A.Blur(p=.75),
+                    A.RandomBrightnessContrast(brightness_by_max=False, always_apply=True)
+            ])
         else:
             self.transforms = A.Compose([
                 A.RandomCrop(height=patch_size, width=patch_size),
@@ -142,12 +151,10 @@ class kwcoco_dataset(Dataset):
         return img1_id, image_info, image
 
     def __getitem__(self, idx):
-        if self.mode == 'test':
-            return self.get_img(idx)
         # get image1 id and the video it is associated with
         img1_id = self.dset_ids[idx]
         video = [y for y in self.videos if img1_id in self.dset.index.vidid_to_gids[y]][0]
-
+        out = dict()
         # randomly select image2 id from the same video (could be before or after image1)
         # make sure image2 is not image1 and image2 is in the set of filtered images by desired sensor
         id_list = [img1_id]
@@ -178,6 +185,32 @@ class kwcoco_dataset(Dataset):
             # transformations
             transformed = self.transforms(**albumentations_input)
             images = [transformed[key] for key in transformed]
+
+
+            if self.mode == 'test':
+                # additional transforms for test mode
+                transformed = self.transforms(image=images[0], image2=images[1])
+                transformed2 = self.transforms2(image=images[0])
+                img1 = transformed['image'] ###
+                img2 = transformed['image2'] ###
+                img3 = transformed2['image']
+                transformed3 = self.transforms3(image=img1)
+                # convert to tensors
+                img1 = torch.tensor(img1).permute(2, 0, 1)
+                img2 = torch.tensor(img2).permute(2, 0, 1)
+                img4 = transformed3['image']
+                img3 = torch.tensor(img3).permute(2, 0, 1)
+                img4 = torch.tensor(img4).permute(2, 0, 1)
+
+                frame_index1 = self.dset.index.imgs[img1_id]['frame_index']
+                frame_index2 = self.dset.index.imgs[id_list[1]]['frame_index']
+
+                out['offset_image1'] = img3.float()
+                out['augmented_image1'] = img4.float()
+                out['img1_id'] = img1_id
+                out['time_sort_label'] = float(frame_index1 < frame_index2)
+                # out['img1_info'] = self.dset.index.imgs[img1_id]
+
             images = [torch.tensor(x).permute(2, 0, 1) for x in images]
 
             if self.display:
@@ -197,7 +230,6 @@ class kwcoco_dataset(Dataset):
                 display_image1 = torch.tensor([])
                 display_image2 = torch.tensor([])
 
-            out = dict()
             for m in range(self.num_images):
                 out['image{}'.format(1 + m)] = images[m]
                 out['frame_number{}'.format(1 + m)] = frame_index[1 + m]
@@ -270,7 +302,6 @@ class kwcoco_dataset(Dataset):
                 display_image1 = torch.tensor([])
                 display_image2 = torch.tensor([])
 
-            out = dict()
             for m in range(self.num_images):
                 out['image{}'.format(1 + m)] = images[m]
                 out['frame_number{}'.format(1 + m)] = frame_index[1 + m]

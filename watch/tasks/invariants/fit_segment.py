@@ -23,7 +23,7 @@ def main(args):
 
     model = segmentation_model(hparams=args)
 
-    checkpoint_callback = ModelCheckpoint(monitor='validation_loss', mode='min', save_top_k=1, save_last=True)
+    checkpoint_callback = ModelCheckpoint(monitor='val_epoch_f1', mode='max', save_top_k=1, save_last=True)
     lr_logger = LearningRateMonitor(logging_interval='step')
 
     trainer = pl.Trainer.from_argparse_args(args,
@@ -41,7 +41,7 @@ if __name__ == '__main__':
     ###train hyperparameters
     parser.add_argument('--max_epochs', type=int, default=50)
     parser.add_argument('--workers', type=int, default=8)
-    parser.add_argument('--batch_size', type=int, default=64)
+    parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--step_size', type=int, default=10)
     parser.add_argument('--lr_gamma', type=float, default=.1)
     parser.add_argument('--weight_decay', type=float, default=1e-5)
@@ -81,7 +81,7 @@ if __name__ == '__main__':
     parser.add_argument('--positional_encoding', action='store_true')
     parser.add_argument('--positional_encoding_mode', type=str, help='addition or concatenation', default='concatenation')
     parser.add_argument('--binary', help='Condense annotations to binary as opposed to site classification. Choose 0 to use classification labels.', type=int, default=1)
-    parser.add_argument('--check_val_every_n_epoch', type=int, default=3)
+    parser.add_argument('--check_val_every_n_epoch', type=int, default=10)
 
     args = parser.parse_args()
     main(args)

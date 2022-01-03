@@ -100,7 +100,7 @@ class pretext(pl.LightningModule):
 
     def shared_step(self, batch):
         # get features of each image from shared model body
-        image_stack = torch.stack([batch['image1'], batch['image2'], batch['offset_image1'], batch['augmented_image1']], dim=1)
+        image_stack = torch.stack([batch['image1'], batch['image2'], batch['offset_image1'], batch['augmented_image1']], dim=1).to(self.device)
         # positional_encoding must be set to none to produce viable pretext task results
         out = self(image_stack, positional_encoding=None)
         image1_features = out[:, 0, :, :, :]
@@ -109,7 +109,8 @@ class pretext(pl.LightningModule):
         augmented_image1_features = out[:, 3, :, :, :]
         # get time sort labels
         time_sort_labels = batch['time_sort_label']
-        time_sort_labels = time_sort_labels.unsqueeze(1).unsqueeze(1).repeat(1, self.hparams.patch_size, self.hparams.patch_size)
+
+        time_sort_labels = time_sort_labels.unsqueeze(1).unsqueeze(1).repeat(1, image_stack.shape[-2], image_stack.shape[-1]).to(self.device)
 
         losses = []
         output = {}

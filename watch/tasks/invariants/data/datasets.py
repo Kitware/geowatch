@@ -112,12 +112,13 @@ class kwcoco_dataset(Dataset):
         return image_id, image_info, image
 
     def __getitem__(self, idx):
-        if self.mode == 'test':
-            # hack
-            return self.get_img(idx)
-
         # get image1 id and the video it is associated with
         img1_id = self.dset_ids[idx]
+        if self.mode == 'test':
+            img1_info = self.dset.index.imgs[img1_id]
+        else:
+            img1_info = torch.tensor([])
+
         video = [y for y in self.videos if img1_id in self.dset.index.vidid_to_gids[y]][0]
 
         # randomly select image2 id from the same video (could be before or after image1)
@@ -188,7 +189,9 @@ class kwcoco_dataset(Dataset):
                 'display_image1': display_image1,
                 'display_image2': display_image2,
                 'sensor_image1': im1_sensor,
-                'sensor_image2': im2_sensor
+                'sensor_image2': im2_sensor,
+                'img1_id': img1_id,
+                'img1_info': img1_info
             }
 
         else:
@@ -281,7 +284,9 @@ class kwcoco_dataset(Dataset):
                 'display_image1': display_image1,
                 'display_image2': display_image2,
                 'sensor_image1': im1_sensor,
-                'sensor_image2': im2_sensor
+                'sensor_image2': im2_sensor,
+                'img1_id': img1_id,
+                'img1_info': img1_info
             }
 
 
