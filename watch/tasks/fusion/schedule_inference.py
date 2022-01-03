@@ -150,7 +150,7 @@ class TMUXMultiQueue(ub.NiceRepr):
         console.print(Panel(Syntax(code, 'bash'), title=str(self.fpath)))
 
 
-def schedule_evaluation(model_globstr=None, test_dataset=None, gpus=None, run=False):
+def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto', run=False):
     """
     First ensure that models have been copied to the DVC repo in the
     appropriate path. (as noted by model_dpath)
@@ -195,8 +195,8 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus=None, run=Fa
         test_dataset = dvc_dpath / 'Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json'
 
         # hack for train set
-        test_dataset = dvc_dpath / 'Drop1-Aligned-L1/combo_train_US_R001_small_nowv.kwcoco.json'
-        gpus = None
+        # test_dataset = dvc_dpath / 'Drop1-Aligned-L1/combo_train_US_R001_small_nowv.kwcoco.json'
+        gpus = 'auto'
 
     dvc_dpath = watch.utils.util_data.find_smart_dvc_dpath()
 
@@ -258,7 +258,7 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus=None, run=Fa
     tmux_schedule_dpath = dvc_dpath / '_tmp_tmux_schedule'
     tmux_schedule_dpath.mkdir(exist_ok=True)
 
-    if gpus is None:
+    if gpus == 'auto':
         # Use all unused gpus
         import netharn as nh
         GPUS = []
@@ -405,6 +405,7 @@ def gather_measures():
 
     dset_groups = ub.group_items(measure_fpaths, lambda x: x.parent.parent.parent.name)
     measure_fpaths = dset_groups['combo_train_US_R001_small_nowv.kwcoco']
+    # measure_fpaths = dset_groups['combo_vali_nowv.kwcoco']
 
     print(len(measure_fpaths))
     # dataset_to_evals = ub.group_items(eval_dpaths, lambda x: x.parent.name)
@@ -595,6 +596,18 @@ def gather_measures():
         # 'map',
         # 'mauc',
     }
+
+    def shrink_notations(df):
+        df['channels'] = (
+            df['channels'].apply(
+                lambda x: x.replace('matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7', 'matseg.0:8'))
+        )
+        df['channels'] = (
+            df['channels'].apply(
+                lambda x: x.replace('blue|green|red|nir|swir16|swir22', 'RAW_BGRNSS'))
+        )
+        return df
+
     self = result_analysis.ResultAnalysis(
         results_list2, ignore_params=ignore_params,
         ignore_metrics=ignore_metrics,
@@ -605,6 +618,7 @@ def gather_measures():
     print(stats_table)
 
     mean_df = pd.DataFrame(mean_rows)
+    mean_df = shrink_notations(mean_df)
     print('Sort by mAP')
     print(mean_df.sort_values('mAP').to_string())
 
@@ -613,11 +627,7 @@ def gather_measures():
     best_per_expt = pd.concat([subdf.loc[subdf[['mAP']].idxmax()] for t, subdf in mean_df.groupby('expt_name')])
 
     if True:
-        # hacks
-        best_per_expt['channels'] = (
-            best_per_expt['channels'].apply(
-                lambda x: x.replace('matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7', 'matseg.0:8'))
-        )
+        best_per_expt = shrink_notations(best_per_expt)
         best_per_expt = best_per_expt.drop('title', axis=1)
         best_per_expt = best_per_expt.drop('catname', axis=1)
     print(best_per_expt.sort_values('mAP').to_string())
