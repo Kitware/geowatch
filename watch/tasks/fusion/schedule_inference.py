@@ -404,8 +404,8 @@ def gather_measures():
     measure_fpaths = list(model_dpath.glob('*/*/*/eval/curves/measures2.json'))
 
     dset_groups = ub.group_items(measure_fpaths, lambda x: x.parent.parent.parent.name)
-    measure_fpaths = dset_groups['combo_train_US_R001_small_nowv.kwcoco']
-    # measure_fpaths = dset_groups['combo_vali_nowv.kwcoco']
+    # measure_fpaths = dset_groups['combo_train_US_R001_small_nowv.kwcoco']
+    measure_fpaths = dset_groups['combo_vali_nowv.kwcoco']
 
     print(len(measure_fpaths))
     # dataset_to_evals = ub.group_items(eval_dpaths, lambda x: x.parent.name)
@@ -598,13 +598,34 @@ def gather_measures():
     }
 
     def shrink_notations(df):
+        import kwcoco
+        import re
+        from watch.utils import util_regex
+        b = util_regex.PythonRegexBuilder()
+        pat0 = r'v\d+'
+        pat1 = '^{pat}$'.format(pat=pat0)
+        pat2 = b.lookbehind('_') + pat0 + b.optional(b.lookahead('_'))
+        pat_text = b.oneof(*map(b.group, (pat1, pat2)))
+        pat = re.compile(pat_text)
+
+        df = df.copy()
+
+        if 0:
+            df['expt_name'] = (
+                df['expt_name'].apply(
+                    lambda x: pat.search(x).group()
+                ))
         df['channels'] = (
             df['channels'].apply(
-                lambda x: x.replace('matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7', 'matseg.0:8'))
+                lambda x: kwcoco.ChannelSpec.coerce(x.replace('matseg_', 'matseg.')).concise().spec
+            ))
+        df['channels'] = (
+            df['channels'].apply(
+                lambda x: x.replace('blue|green|red|nir|swir16|swir22', 'BGRNSH'))
         )
         df['channels'] = (
             df['channels'].apply(
-                lambda x: x.replace('blue|green|red|nir|swir16|swir22', 'RAW_BGRNSS'))
+                lambda x: x.replace('brush|bare_ground|built_up', 'seg:3'))
         )
         return df
 
@@ -625,22 +646,27 @@ def gather_measures():
     mean_df['title'].apply(lambda x: int(x.split('epoch=')[1].split('-')[0]))
 
     best_per_expt = pd.concat([subdf.loc[subdf[['mAP']].idxmax()] for t, subdf in mean_df.groupby('expt_name')])
-
     if True:
         best_per_expt = shrink_notations(best_per_expt)
         best_per_expt = best_per_expt.drop('title', axis=1)
         best_per_expt = best_per_expt.drop('catname', axis=1)
+        best_per_expt = best_per_expt.drop('normalize_perframe', axis=1)
+        best_per_expt = best_per_expt.drop('normalize_inputs', axis=1)
+        best_per_expt = best_per_expt.drop('train_remote', axis=1)
+        best_per_expt = best_per_expt.drop('step', axis=1)
+        best_per_expt = best_per_expt.drop('arch_name', axis=1)
+        best_per_expt = best_per_expt.rename({'time_steps': 'time', 'chip_size': 'space'}, axis=1)
     print(best_per_expt.sort_values('mAP').to_string())
 
     print('Sort by mAUC')
-    print(mean_df.sort_values('mAUC').to_string())
+    print(mean_df[~mean_df['mAP'].isnull()].sort_values('mAUC').to_string())
 
     class_df = pd.DataFrame(class_rows)
     print('Sort by AP')
-    print(class_df.sort_values('AP').to_string())
+    print(class_df[~class_df['AP'].isnull()].sort_values('AP').to_string())
 
     print('Sort by AUC')
-    print(class_df.sort_values('AUC').to_string())
+    print(class_df[~class_df['AUC'].isnull()].sort_values('AUC').to_string())
 
     import kwplot
     sns = kwplot.autosns()
@@ -662,6 +688,8 @@ def gather_measures():
     from kwcoco.metrics import drawing
     fig = kwplot.figure(fnum=3, doclf=True)
     catname = 'Active Construction'
+    # catname = 'Site Preparation'
+
     sorted_results = sorted(all_results, key=lambda x: x.ovr_measures[catname]['ap'])[::-1]
     results_to_plot = sorted_results[0:max_num_curves]
     colors = kwplot.Color.distinct(len(results_to_plot))
@@ -669,15 +697,16 @@ def gather_measures():
         color = colors[idx]
         color = [kwplot.Color(color).as01()]
         measure = result.ovr_measures[catname]
-        measure['ap']
+        print(measure['ap'])
         prefix = result.meta['title']
         kw = {'fnum': 3}
         drawing.draw_prcurve(measure, prefix=prefix, color=color, **kw)
     fig.gca().set_title('Comparison of runs AP: {}'.format(catname))
 
     fig = kwplot.figure(fnum=4, doclf=True)
-    catname = 'Active Construction'
+    # catname = 'Active Construction'
     sorted_results = sorted(all_results, key=lambda x: x.ovr_measures[catname]['auc'])[::-1]
+    # catname = 'Site Preparation'
     results_to_plot = sorted_results[0:max_num_curves]
     colors = kwplot.Color.distinct(len(results_to_plot))
     for idx, result in enumerate(results_to_plot):

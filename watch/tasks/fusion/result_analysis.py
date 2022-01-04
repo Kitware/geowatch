@@ -56,6 +56,10 @@ class ResultAnalysis:
 
     def __init__(self, results, ignore_params=None, ignore_metrics=None):
         self.results = results
+        if ignore_metrics is None:
+            ignore_metrics = set()
+        if ignore_params is None:
+            ignore_params = set()
         self.ignore_params = ignore_params
         self.ignore_metrics = ignore_metrics
 

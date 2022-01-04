@@ -486,7 +486,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             >>> import kwplot
             >>> kwplot.autompl()
             >>> kwplot.imshow(canvas)
-            >>> kwplot.show_if_requestedV
+            >>> kwplot.show_if_requested()
 
 
         Example:
@@ -550,9 +550,9 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 #             d = d[k]
                 #         d[p[-1]] = v.data.cpu().numpy()
                 # print('item_output = {!r}'.format(item_output))
-                for k in ['change_probs', 'class_probs', 'saliency_probs']:
-                    if k in outputs:
-                        item_output[k] = outputs[k][item_idx].data.cpu().numpy()
+                for head_key in ['change_probs', 'class_probs', 'saliency_probs']:
+                    if head_key in outputs:
+                        item_output[head_key] = [f.data.cpu().numpy() for f in outputs[head_key][item_idx]]
 
             part = dataset.draw_item(item, item_output=item_output, overlay_on_image=overlay_on_image, **kwargs)
             canvas_list.append(part)
@@ -581,7 +581,7 @@ class KWCocoVideoDataset(data.Dataset):
         >>> sampler = ndsampler.CocoSampler(coco_dset)
         >>> channels = 'B10|B8a|B1|B8'
         >>> sample_shape = (3, 256, 256)
-        >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, time_sampling='soft+distribute', diff_inputs=True, match_histograms=True)
+        >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, time_sampling='soft+distribute', diff_inputs=0, match_histograms=0)
         >>> index = len(self) // 4
         >>> item = self[index]
         >>> canvas = self.draw_item(item)
@@ -635,7 +635,7 @@ class KWCocoVideoDataset(data.Dataset):
         >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
         >>> sampler = ndsampler.CocoSampler(coco_dset)
         >>> sample_shape = (7, 128, 128)
-        >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels='red|green|blue|swir16|swir22|nir|ASI', match_histograms=True)
+        >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels='red|green|blue|swir16|swir22|nir|ASI', match_histograms=0)
         >>> item = self[4]
         >>> canvas = self.draw_item(item)
         >>> # xdoctest: +REQUIRES(--show)
@@ -661,7 +661,7 @@ class KWCocoVideoDataset(data.Dataset):
         >>>     sample_shape=(5, 128, 128),
         >>>     window_overlap=0,
         >>>     channels="blue|green|red|nir|swir16",
-        >>>     neg_to_pos_ratio=0, time_sampling='auto', diff_inputs=1, mode='fit', match_histograms=True,
+        >>>     neg_to_pos_ratio=0, time_sampling='auto', diff_inputs=1, mode='fit', match_histograms=0,
         >>> )
         >>> item = self[0]
         >>> canvas = self.draw_item(item)
@@ -699,7 +699,7 @@ class KWCocoVideoDataset(data.Dataset):
         resample_invalid_frames=True,
         upweight_centers=True,
         normalize_perframe=False,
-        true_multimodal=False,
+        true_multimodal=True,
     ):
 
         # TODO: the set of "valid" background classnames should be defined
@@ -941,7 +941,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> channels = 'B10|B8a|B1|B8'
             >>> sample_shape = (4, 530, 610)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, diff_inputs=True)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, diff_inputs=0)
             >>> item = self[0]
             >>> canvas = self.draw_item(item)
             >>> # xdoctest: +REQUIRES(--show)

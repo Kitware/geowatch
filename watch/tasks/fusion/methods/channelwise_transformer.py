@@ -259,6 +259,7 @@ class MultimodalTransformer(pl.LightningModule):
                  dataset_stats=None,
                  input_stats=None,
                  input_channels=None,
+                 unique_sensors=None,
                  attention_impl='exact',
                  window_size=8,
                  global_class_weight=1.0,
@@ -305,7 +306,17 @@ class MultimodalTransformer(pl.LightningModule):
         known_sensors = None
         known_channels = None
 
-        self.unique_sensor_modes = self.dataset_stats['unique_sensor_modes']
+        # Not sure how relevant (input_channels) is anymore
+        if input_channels is None:
+            raise Exception('need them for num input_channels!')
+        input_channels = channel_spec.ChannelSpec.coerce(input_channels)
+        self.input_channels = input_channels
+
+        if self.dataset_stats is None:
+            # hack for tests (or no known sensors case)
+            self.unique_sensor_modes = {('', self.input_channels.spec)}
+        else:
+            self.unique_sensor_modes = self.dataset_stats['unique_sensor_modes']
 
         if input_stats is not None:
             input_norms = EmptyStrModuleDict()
@@ -328,11 +339,6 @@ class MultimodalTransformer(pl.LightningModule):
 
         self.classes = kwcoco.CategoryTree.coerce(classes)
         self.num_classes = len(self.classes)
-
-        if input_channels is None:
-            raise Exception('need them for num input_channels!')
-        input_channels = channel_spec.ChannelSpec.coerce(input_channels)
-        self.input_channels = input_channels
 
         input_streams = list(input_channels.streams())
         stream_num_channels = {s.spec: s.numel() for s in input_streams}
@@ -624,7 +630,7 @@ class MultimodalTransformer(pl.LightningModule):
         Example:
             >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
             >>> from watch.tasks.fusion import methods
-            >>> self = methods.MultimodalTransformer("smt_it_stm_p8", input_channels='r|g|b')
+            >>> self = methods.MultimodalTransformer("smt_it_stm_p8", input_channels='r|g|b', unique_sensor_modes={('', 'r|g|b')})
             >>> self.trainer = pl.Trainer(max_epochs=400)
             >>> [opt], [sched] = self.configure_optimizers()
             >>> rows = []
@@ -664,6 +670,8 @@ class MultimodalTransformer(pl.LightningModule):
     def forward(self, images):
         """
         Example:
+            >>> import pytest
+            >>> pytest.skip('not currently used')
             >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
             >>> from watch.tasks.fusion import datamodules
             >>> channels = 'B1,B8|B8a,B10|B11'
@@ -1390,11 +1398,8 @@ class MultimodalTransformer(pl.LightningModule):
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datamodules
             >>> model = methods.MultimodalTransformer("smt_it_stm_p8", input_channels=13)
-            >>> # We have to run an input through the module because it is lazy
-            >>> inputs = torch.rand(1, 2, 13, 128, 128)
-            >>> model(inputs)
 
-            >>> # Save the model
+            >>> # Save the model (TODO: need to save datamodule as well)
             >>> model.save_package(package_path)
 
             >>> # Test that the package can be reloaded
