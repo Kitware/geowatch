@@ -93,9 +93,8 @@ def predict(args):
     loader = torch.utils.data.DataLoader(
         dataset, num_workers=num_workers, batch_size=1)
     num_batches = len(loader)
-    # Start background processes
-    loader_iter = iter(loader)
 
+    # Start background processes
     # Build a task queue for background write results workers (Not currently using this)
     # queue = util_parallel.BlockingJobQueue(max_workers=0)
     # queue = util_parallel.BlockingJobQueue(max_workers=num_workers)
@@ -103,30 +102,31 @@ def predict(args):
     print('Evaluating and saving features')
 
     with torch.set_grad_enabled(False):
-        for batch in tqdm(loader_iter, total=num_batches):
+        for batch in tqdm(loader, total=num_batches):
             image_id = batch['img1_id']
             image_info = dataset.dset.index.imgs[image_id.item()]
+
+            aux_base = image_info['auxiliary'][0]
+            rel_path, file_name = os.path.split(aux_base['file_name'])
+
+            ###reroot original kwcoco to take out of uky_invariants folder
+            for x in image_info['auxiliary']:
+                x['file_name'] = os.path.join('../..', data_folder, x['file_name'])
+
+            save_folder = os.path.join(save_path, rel_path)
+            print('Saving features to {}'.format(save_folder))
+            if not os.path.exists(save_folder):
+                os.makedirs(save_folder, exist_ok=True)
+
+            # Predictions are saved in 'video space', so warp_aux_to_img is the inverse of warp_img_to_vid
+            warp_img_to_vid = kwimage.Affine.coerce(image_info.get('warp_img_to_vid', None))
+            warp_aux_to_img = warp_img_to_vid.inv().concise()
+
+            last_us_idx = file_name.rfind('_')
 
             if 'pretext' in args.tasks:
                 image_stack = torch.stack([batch['image1'], batch['image2'], batch['offset_image1'], batch['augmented_image1']], dim=1)
                 image_stack = image_stack.to(device)
-
-                ###reroot original kwcoco to take out of uky_invariants folder
-                for x in image_info['auxiliary']:
-                    x['file_name'] = os.path.join('../..', data_folder, x['file_name'])
-
-                aux_base = image_info['auxiliary'][0]
-                rel_path, file_name = os.path.split(aux_base['file_name'])
-
-                save_folder = os.path.join(save_path, rel_path)
-                if not os.path.exists(save_folder):
-                    os.makedirs(save_folder, exist_ok=True)
-
-                # Predictions are saved in 'video space', so warp_aux_to_img is the inverse of warp_img_to_vid
-                warp_img_to_vid = kwimage.Affine.coerce(image_info.get('warp_img_to_vid', None))
-                warp_aux_to_img = warp_img_to_vid.inv().concise()
-
-                last_us_idx = file_name.rfind('_')
 
                 #select features corresponding to first image
                 features = pretext_model(image_stack)[:, 0, :, :, :]
@@ -136,6 +136,7 @@ def predict(args):
 
                 feat = features.squeeze().permute(1, 2, 0).cpu().numpy()
                 name = file_name[:last_us_idx] + '_invariants.tif'
+
                 kwimage.imwrite(os.path.join(save_folder, name), feat, space=None,
                                 backend='gdal', compress='DEFLATE')
                 info = {}
@@ -157,9 +158,9 @@ def predict(args):
                                 backend='gdal', compress='DEFLATE')
                 info = {}
                 info['file_name'] = os.path.join(save_folder, name)
-                info['height'] = feat.shape[0]
-                info['width'] = feat.shape[1]
-                info['num_bands'] = feat.shape[2]
+                info['height'] = before_after_heatmap.shape[0]
+                info['width'] = before_after_heatmap.shape[1]
+                info['num_bands'] = before_after_heatmap.shape[2]
                 info['channels'] = 'before_after_heatmap'
                 info['warp_aux_to_img'] = warp_aux_to_img
                 dataset.dset.index.imgs[image_id.item()]['auxiliary'].append(info)
@@ -173,9 +174,9 @@ def predict(args):
                                 backend='gdal', compress='DEFLATE')
                 info = {}
                 info['file_name'] = os.path.join(save_folder, name)
-                info['height'] = feat.shape[0]
-                info['width'] = feat.shape[1]
-                info['num_bands'] = feat.shape[2]
+                info['height'] = segmentation_heatmap.shape[0]
+                info['width'] = segmentation_heatmap.shape[1]
+                info['num_bands'] = segmentation_heatmap.shape[2]
                 info['channels'] = 'segmentation_heatmap'
                 info['warp_aux_to_img'] = warp_aux_to_img
                 dataset.dset.index.imgs[image_id.item()]['auxiliary'].append(info)
