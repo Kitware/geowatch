@@ -114,7 +114,7 @@ def predict(args):
                 x['file_name'] = os.path.join('../..', data_folder, x['file_name'])
 
             save_folder = os.path.join(save_path, rel_path)
-            print('Saving features to {}'.format(save_folder))
+
             if not os.path.exists(save_folder):
                 os.makedirs(save_folder, exist_ok=True)
 
@@ -152,7 +152,8 @@ def predict(args):
 
             if 'before_after' in args.tasks:
                 ### TO DO: Set to output of separate model.
-                before_after_heatmap = pretext_model.shared_step(batch)['before_after_heatmap'][0].permute(1, 2, 0).cpu().numpy()
+                before_after_heatmap = pretext_model.shared_step(batch)['before_after_heatmap'][0].permute(1, 2, 0)
+                before_after_heatmap = torch.sigmoid(before_after_heatmap[:, :, 1] - before_after_heatmap[:, :, 0]).unsqueeze(-1).cpu().numpy()
                 name = file_name[:last_us_idx] + '_before_after_heatmap.tif'
                 kwimage.imwrite(os.path.join(save_folder, name), before_after_heatmap, space=None,
                                 backend='gdal', compress='DEFLATE')

@@ -3,7 +3,9 @@ Features are now generated with a multitemporal UNet with attention architecture
 
 With example below, the output_kwcoco of predict.py generates an 8 dimension feature map, of which one dimension is a segmentation heatmap and one is before/after heatmap. As currently set up, the resulting `invariants.kwcoco.json` file reroots the original image paths out of the uky_invariants folder, so that the original image bands can be loaded alongside the invariant features without disturbing or copying the original file structure.
 
-Ex: `python -m watch.tasks.invariants.predict --input_kwcoco $SMART_WATCH_DVC/Drop1-Aligned-L1/data.kwcoco.json --output_kwcoco $SMART_WATCH_DVC/uky_invariants/Drop1-Aligned-L1/invariants.kwcoco.json --pretext_ckpt_path $SMART_WATCH_DVC/models/uky/uky_invariants_2022_01/pretext/pretext.ckpt --segmentation_ckpt $SMART_WATCH_DVC/models/uky/uky_invariants_2022_01/segmentation/segmentation.ckpt --do_pca 1 --num_dim 8`
+Ex: `python -m watch.tasks.invariants.predict --input_kwcoco $SMART_WATCH_DVC/Drop1-Aligned-L1/data.kwcoco.json --output_kwcoco $SMART_WATCH_DVC/uky_invariants/Drop1-Aligned-L1/invariants.kwcoco.json --pretext_ckpt_path $SMART_WATCH_DVC/models/uky/uky_invariants_2022_01/pretext/pretext.ckpt --segmentation_ckpt $SMART_WATCH_DVC/models/uky/uky_invariants_2022_01/segmentation/segmentation.ckpt --do_pca 1 --num_dim 8 --tasks all`
+
+If --tasks is set to "invariants", then all 8 dimensions will come from pca reduced pretext features.
 
 Update: 11/2021
 There are now separate `fit_segment.py` and `predict_segment.py` scripts following the same syntax for producing binary segmentation heatmaps using a UNet architecture with attention blocks after each down convolution. Additional arguments are --num_attention_layers (from 0 to 4) and --positional_encoding, to include an encoding based on date of capture.
