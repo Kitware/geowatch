@@ -1024,7 +1024,8 @@ class KWCocoVideoDataset(data.Dataset):
             >>> import watch
             >>> coco_dset = watch.demo.demo_kwcoco_multisensor()
             >>> sampler = ndsampler.CocoSampler(coco_dset)
-            >>> channels = '|'.join(sorted(set(ub.flatten([kwcoco.ChannelSpec.coerce(c).fuse().as_list() for c in groups.keys()]))))
+            >>> channels = '|'.join(sorted(set(ub.flatten([c.channels.fuse().as_list() for c in coco_dset.images().coco_images]))))
+            >>> #channels = '|'.join(sorted(set(ub.flatten([kwcoco.ChannelSpec.coerce(c).fuse().as_list() for c in groups.keys()]))))
             >>> self = KWCocoVideoDataset(sampler, sample_shape=(5, 256, 256), channels=channels, normalize_perframe=False, true_multimodal=True)
             >>> self.disable_augmenter = True
             >>> index = 0

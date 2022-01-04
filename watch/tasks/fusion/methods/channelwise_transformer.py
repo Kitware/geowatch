@@ -630,7 +630,7 @@ class MultimodalTransformer(pl.LightningModule):
         Example:
             >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
             >>> from watch.tasks.fusion import methods
-            >>> self = methods.MultimodalTransformer("smt_it_stm_p8", input_channels='r|g|b', unique_sensor_modes={('', 'r|g|b')})
+            >>> self = methods.MultimodalTransformer("smt_it_stm_p8", input_channels='r|g|b')
             >>> self.trainer = pl.Trainer(max_epochs=400)
             >>> [opt], [sched] = self.configure_optimizers()
             >>> rows = []
