@@ -59,10 +59,9 @@ def predict(args):
         segmentation_dim = 1
         segmentation_model = seg_model.load_from_checkpoint(args.segmentation_ckpt_path)
         segmentation_model = segmentation_model.to(device)
-        seg_hparams = segmentation_model.hparams
+
     else:
         segmentation_dim = 0
-        seg_hparams = None
 
     if 'pretext' in args.tasks:
         pretext_model = pretext.load_from_checkpoint(args.pretext_ckpt_path, train_dataset=None, vali_dataset=None)

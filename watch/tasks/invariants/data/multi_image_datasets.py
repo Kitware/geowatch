@@ -186,7 +186,6 @@ class kwcoco_dataset(Dataset):
             transformed = self.transforms(**albumentations_input)
             images = [transformed[key] for key in transformed]
 
-
             if self.mode == 'test':
                 # additional transforms for test mode
                 transformed = self.transforms(image=images[0], image2=images[1])
