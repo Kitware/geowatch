@@ -670,7 +670,7 @@ def gather_measures():
 
     import kwplot
     sns = kwplot.autosns()
-    plt = kwplot.autoplt()
+    plt = kwplot.autoplt()  # NOQA
 
     kwplot.figure(fnum=1, doclf=True)
     ax = sns.lineplot(data=mean_df, x='epoch', y='mAP', hue='expt_name', marker='o', style='channels')

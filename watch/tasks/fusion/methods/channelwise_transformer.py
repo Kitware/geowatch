@@ -90,7 +90,7 @@ from torch._jit_internal import _copy_to_script_wrapper
 # from timm.models.layers.activations import sigmoid
 
 
-from torch.nn.modules.container import Module, Iterator
+from torch.nn.modules.container import Module, Iterator  # NOQA
 
 
 class EmptyStrModuleDict(torch.nn.ModuleDict):
