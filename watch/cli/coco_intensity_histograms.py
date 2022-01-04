@@ -2,7 +2,7 @@
 Compute intensity histograms of the underlying images in this dataset.
 
 CommandLine:
-    smartwatch intensity_histograms --src special:vidshapes8-msi --show=True --stat=density
+    smartwatch intensity_histograms --src special:watch-msi --show=True --stat=density
     smartwatch intensity_histograms --src special:photos --show=True --fill=False
     smartwatch intensity_histograms --src special:shapes8 --show=True --stat=count --cumulative=True --multiple=stack
 
@@ -85,6 +85,31 @@ class HistAccum:
         for k, v in data.items():
             final_accum[k] += v
 
+    def finalize(self):
+        # Stack all accuulated histograms into a longform dataframe
+        to_stack = {}
+        for sensor, sub in self.accum.items():
+            for channel, hist in sub.items():
+                hist = ub.sorted_keys(hist)
+                # hist.pop(0)
+                df = pd.DataFrame({
+                    'intensity_bin': np.array(list(hist.keys()), dtype=int),
+                    'value': np.array(list(hist.values())),
+                    'channel': [channel] * len(hist),
+                    'sensor': [sensor] * len(hist),
+                })
+                to_stack[(channel, sensor)] = df
+
+        full_df = pd.concat(list(to_stack.values()))
+        is_finite = np.isfinite(full_df.intensity_bin)
+        num_nonfinite = (~is_finite).sum()
+        if num_nonfinite > 0:
+            import warnings
+            warnings.warn('There were {} non-finite values'.format(num_nonfinite))
+            full_df = full_df[is_finite]
+        full_df = full_df.reset_index()
+        return full_df
+
 
 def demo_kwcoco_multisensor(num_videos=4, num_frames=10, **kwargs):
     """
@@ -115,6 +140,19 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, **kwargs):
     return coco_dset
 
 
+def coerce_kwcoco(data='watch-msi', **kwargs):
+    """
+    Note:
+        dev/flow21 has main implementation. remove this after this is merged
+
+    coerce with watch special datasets
+    """
+    if isinstance(data, str) and 'watch' in data.split('special:', 1)[-1].split('-'):
+        return demo_kwcoco_multisensor(**kwargs)
+    else:
+        return kwcoco.CocoDataset.coerce(data, **kwargs)
+
+
 def main(**kwargs):
     r"""
     Example:
@@ -136,8 +174,8 @@ def main(**kwargs):
     config = IntensityHistogramConfig(kwargs, cmdline=True)
     print('config = {}'.format(ub.repr2(config.to_dict(), nl=1)))
 
-    coco_dset = kwcoco.CocoDataset.coerce(config['src'])
-    coco_dset = demo_kwcoco_multisensor(config['src'])
+    # coco_dset = kwcoco.CocoDataset.coerce(config['src'])
+    coco_dset = coerce_kwcoco(config['src'])
 
     valid_gids = kwcoco_extensions.filter_image_ids(
         coco_dset,
@@ -171,7 +209,21 @@ def main(**kwargs):
             intensity_hist = band_stats['intensity_hist']
             accum.update(intensity_hist, sensor, band_name)
 
-    fig = plot_intensity_histograms(accum, config)
+    full_df = accum.finalize()
+
+    COMPARSE_SENSORS = True
+    if COMPARSE_SENSORS:
+        distance_metrics = compare_sensors(full_df)
+        harmony_scores = distance_metrics[['emd', 'mean_diff', 'energy_dist']].mean()
+        extra_text = ub.repr2(harmony_scores.to_dict(), precision=4, compact=1)
+        print('extra_text = {!r}'.format(extra_text))
+    else:
+        extra_text = None
+
+    fig = plot_intensity_histograms(full_df, config)
+
+    if extra_text is not None:
+        fig.suptitle(extra_text)
 
     dst_fpath = config['dst']
     if dst_fpath is not None:
@@ -183,6 +235,81 @@ def main(**kwargs):
     if config['show']:
         from matplotlib import pyplot as plt
         plt.show()
+
+
+def compare_sensors(full_df):
+    import itertools as it
+    import scipy
+    import scipy.stats
+
+    distance_metrics = []
+    sensor_channel_to_vw = {}
+    for channel, chan_df in full_df.groupby('channel'):
+        for _sensor, sensor_df in chan_df.groupby('sensor'):
+            _values = sensor_df['intensity_bin']
+            _weights = sensor_df['value']
+            sensor_channel_to_vw[(_sensor, channel)] = (_values, _weights)
+
+    print('comparing sensors')
+    print(ub.repr2(list(sensor_channel_to_vw.keys()), nl=1))
+    chan_to_group = ub.group_items(
+        sensor_channel_to_vw.keys(),
+        [t[1] for t in sensor_channel_to_vw.keys()]
+    )
+    chan_to_combos = {
+        chan: list(it.combinations(group, 2)) for chan, group in chan_to_group.items()
+    }
+    to_compare = list(ub.flatten(chan_to_combos.values()))
+
+    ub.Timerit()
+
+    for item1, item2 in ub.ProgIter(to_compare, desc='comparse_sensors', verbose=3):
+        sensor1, channel1 = item1
+        sensor2, channel2 = item2
+        assert channel1 == channel2
+        channel = channel1
+
+        row = {
+            'sensor1': sensor1,
+            'sensor2': sensor2,
+            'channel': channel,
+        }
+
+        u_values, u_weights = sensor_channel_to_vw[(sensor1, channel1)]
+        v_values, v_weights = sensor_channel_to_vw[(sensor2, channel1)]
+
+        # https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.wasserstein_distance.html#scipy.stats.wasserstein_distance
+        # https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.energy_distance.html#scipy.stats.energy_distance
+        dist_inputs = dict(
+            u_values=u_values, v_values=v_values, u_weights=u_weights,
+            v_weights=v_weights)
+
+        if 1:
+            row['emd'] = scipy.stats.wasserstein_distance(**dist_inputs)
+
+        if 1:
+            row['energy_dist'] = scipy.stats.energy_distance(**dist_inputs)
+
+        u_mean = np.average(u_values.values, weights=u_weights.values)
+        v_mean = np.average(v_values.values, weights=v_weights.values)
+        row['mean_diff'] = abs(u_mean - v_mean)
+
+        # TODO: robust alignment of pdfs
+        if 0:
+            cuv_values = np.union1d(u_values, v_values)
+            cu_indexes = np.where(kwarray.one_hot_embedding(u_values.values, cuv_values.max() + 1, dim=0).sum(axis=1) > 0)
+            cv_indexes = np.where(kwarray.one_hot_embedding(u_values.values, cuv_values.max() + 1, dim=0).sum(axis=1) > 0)
+            cu_weights = np.zeros(cuv_values.shape, dtype=np.float32)
+            cu_weights[cu_indexes] = u_weights
+            cv_weights = np.zeros(cuv_values.shape, dtype=np.float32)
+            cv_weights[cv_indexes] = v_weights
+            row['kld'] = scipy.stats.entropy(cu_weights, cv_weights)
+
+        distance_metrics.append(row)
+        print('row = {}'.format(ub.repr2(row, nl=1)))
+    distance_metrics = pd.DataFrame(distance_metrics)
+    print(distance_metrics.to_string())
+    return distance_metrics
 
 
 def _fill_missing_colors(label_to_color):
@@ -294,36 +421,13 @@ def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exc
     return intensity_stats
 
 
-def plot_intensity_histograms(accum, config):
+def plot_intensity_histograms(full_df, config):
+
+    unique_channels = full_df['channel'].unique()
+    unique_sensors = full_df['sensor'].unique()
+
     import kwplot
     sns = kwplot.autosns()
-
-    # Stack all accuulated histograms into a longform dataframe
-    to_stack = {}
-    unique_channels = set()
-    unique_sensors = set()
-    for sensor, sub in accum.accum.items():
-        unique_sensors.add(sensor)
-        for channel, hist in sub.items():
-            unique_channels.add(channel)
-            hist = ub.sorted_keys(hist)
-            # hist.pop(0)
-            df = pd.DataFrame({
-                'intensity_bin': np.array(list(hist.keys()), dtype=int),
-                'value': np.array(list(hist.values())),
-                'channel': [channel] * len(hist),
-                'sensor': [sensor] * len(hist),
-            })
-            to_stack[(channel, sensor)] = df
-
-    full_df = pd.concat(list(to_stack.values()))
-    is_finite = np.isfinite(full_df.intensity_bin)
-    num_nonfinite = (~is_finite).sum()
-    if num_nonfinite > 0:
-        import warnings
-        warnings.warn('There were {} non-finite values'.format(num_nonfinite))
-        full_df = full_df[is_finite]
-    full_df = full_df.reset_index()
 
     # sns.lineplot(full_df=df, x='intensity_bin', y='value')
     # max_val = np.iinfo(np.uint16).max
@@ -512,7 +616,13 @@ def plot_intensity_histograms(accum, config):
         # maxx = sensor_df.intensity_bin.max()
         # maxx = sensor_maxes[sensor_name]
         # ax.set_xlim(0, maxx)
+
     return fig
+
+
+# def _weighted_quantile(weights, qs):
+#     cumtotal = np.cumsum(weights)
+#     quantiles = cumtotal / cumtotal[-1]
 
 
 def _weighted_auto_bins(data, xvar, weightvar):
@@ -558,6 +668,7 @@ def _weighted_auto_bins(data, xvar, weightvar):
     cumtotal = weights.cumsum().values
     quantiles = cumtotal / cumtotal[-1]
     idx2, idx1 = np.searchsorted(quantiles, [0.75, 0.25])
+    # idx2, idx1 = _weighted_quantile(weights, [0.75, 0.25])
     iqr = values.iloc[idx2] - values.iloc[idx1]
     _hist_bin_fd = 2.0 * iqr * total ** (-1.0 / 3.0)
 
