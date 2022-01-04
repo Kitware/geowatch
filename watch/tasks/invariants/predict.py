@@ -9,7 +9,7 @@ from argparse import ArgumentParser, RawTextHelpFormatter
 import os
 import kwimage
 from tqdm import tqdm
-import ubelt as ub
+# import ubelt as ub ## not currently using
 from torch import pca_lowrank as pca
 
 # local imports
@@ -68,10 +68,6 @@ def predict(args):
         pretext_model = pretext.load_from_checkpoint(args.pretext_ckpt_path, train_dataset=None, vali_dataset=None)
         pretext_model = pretext_model.eval().to(device)
         pretext_hparams = pretext_model.hparams
-        if seg_hparams:
-            num_images = seg_hparams.num_images
-        else:
-            num_images = 2
 
         if args.do_pca:
             ###Slightly reduced dataset for pca
@@ -110,7 +106,7 @@ def predict(args):
         for batch in tqdm(loader_iter, total=num_batches):
             image_id = batch['img1_id']
             image_info = dataset.dset.index.imgs[image_id.item()]
-            
+
             if 'pretext' in args.tasks:
                 image_stack = torch.stack([batch['image1'], batch['image2'], batch['offset_image1'], batch['augmented_image1']], dim=1)
                 image_stack = image_stack.to(device)
@@ -137,7 +133,7 @@ def predict(args):
 
                 if args.do_pca:
                     features = torch.einsum('xy,byhw->bxhw', projector, features)
-                
+
                 feat = features.squeeze().permute(1, 2, 0).cpu().numpy()
                 name = file_name[:last_us_idx] + '_invariants.tif'
                 kwimage.imwrite(os.path.join(save_folder, name), feat, space=None,
