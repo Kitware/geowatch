@@ -86,6 +86,35 @@ class HistAccum:
             final_accum[k] += v
 
 
+def demo_kwcoco_multisensor(num_videos=4, num_frames=10, **kwargs):
+    """
+    Note:
+        dev/flow21 has main implementation. remove this after this is merged
+
+    Ignore:
+        import watch
+        coco_dset = watch.demo.demo_kwcoco_multisensor()
+        coco_dset = watch.demo.demo_kwcoco_multisensor(max_speed=0.5)
+    """
+    demo_kwargs = {
+        'num_frames': num_frames,
+        'num_videos': num_videos,
+        'rng': 9111665008,
+        'multisensor': True,
+        'multispectral': True,
+        'image_size': 'random',
+    }
+    demo_kwargs.update(kwargs)
+    coco_dset = kwcoco.CocoDataset.demo('vidshapes', **demo_kwargs)
+    # Hack in sensor_coarse
+    images = coco_dset.images()
+    groups = ub.sorted_keys(ub.group_items(images.coco_images, lambda x: x.channels.spec))
+    for idx, (k, g) in enumerate(groups.items()):
+        for coco_img in g:
+            coco_img.img['sensor_coarse'] = 'sensor{}'.format(idx)
+    return coco_dset
+
+
 def main(**kwargs):
     r"""
     Example:
@@ -108,6 +137,7 @@ def main(**kwargs):
     print('config = {}'.format(ub.repr2(config.to_dict(), nl=1)))
 
     coco_dset = kwcoco.CocoDataset.coerce(config['src'])
+    coco_dset = demo_kwcoco_multisensor(config['src'])
 
     valid_gids = kwcoco_extensions.filter_image_ids(
         coco_dset,
