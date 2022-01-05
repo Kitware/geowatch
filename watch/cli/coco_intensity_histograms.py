@@ -228,16 +228,13 @@ def main(**kwargs):
         job.coco_img = coco_img
 
     if config['valid_range'] is not None:
-        try:
-            valid_min, valid_max = map(int, config['valid_range'].split(':'))
-        except ValueError:
-            valid_min, valid_max = map(float, config['valid_range'].split(':'))
+        valid_min, valid_max = map(float, config['valid_range'].split(':'))
     else:
         valid_min = -math.inf
         valid_max = math.inf
 
     accum = HistAccum()
-    for job in ub.ProgIter(jobs.as_completed(), desc='accumulate stats', total=len(jobs.jobs)):
+    for job in jobs.as_completed(desc='accumulate stats'):
         intensity_stats = job.result()
         sensor = job.coco_img.get('sensor_coarse', 'unknown_sensor')
         for band_stats in intensity_stats['bands']:
@@ -252,7 +249,7 @@ def main(**kwargs):
     COMPARSE_SENSORS = True
     if COMPARSE_SENSORS:
         distance_metrics = compare_sensors(full_df)
-        request_columns = ['emd', 'mean_diff', 'energy_dist']
+        request_columns = ['emd', 'energy_dist', 'mean_diff', 'std_diff']
         have_columns = list(ub.oset(request_columns) & ub.oset(distance_metrics.columns))
         harmony_scores = distance_metrics[have_columns].mean()
         extra_text = ub.repr2(harmony_scores.to_dict(), precision=4, compact=1)
@@ -332,6 +329,16 @@ def compare_sensors(full_df):
         u_mean = np.average(u_values.values, weights=u_weights.values)
         v_mean = np.average(v_values.values, weights=v_weights.values)
         row['mean_diff'] = abs(u_mean - v_mean)
+
+        u_variance = np.average((u_values.values - u_mean) ** 2, weights=u_weights.values)
+        u_variance = u_variance * sum(u_weights.values) / (sum(u_weights.values) - 1)
+        u_std = np.sqrt(u_variance)
+
+        v_variance = np.average((v_values.values - v_mean) ** 2, weights=v_weights.values)
+        v_variance = v_variance * sum(v_weights.values) / (sum(v_weights.values) - 1)
+        v_std = np.sqrt(v_variance)
+
+        row['std_diff'] = abs(u_std - v_std)
 
         # TODO: robust alignment of pdfs
         if 0:
@@ -614,8 +621,10 @@ def plot_intensity_histograms(full_df, config):
             values = chan_df.intensity_bin
             weights = chan_df.value
 
+            # Note: the calculation of the variance depends on the type of
+            # weighting we choose
             average = np.average(values, weights=weights)
-            variance = np.average((values - average)**2, weights=weights)
+            variance = np.average((values - average) ** 2, weights=weights)
             variance = variance * sum(weights) / (sum(weights) - 1)
             stddev = np.sqrt(variance)
 
