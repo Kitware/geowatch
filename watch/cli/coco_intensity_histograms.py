@@ -403,8 +403,13 @@ def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exc
 
         if len(requested_channels) > 0:
             stats_fpath = ensure_intensity_sidecar(fpath, recompute=recompute)
-            with open(stats_fpath, 'rb') as file:
-                stat_info = pickle.load(file)
+            try:
+                with open(stats_fpath, 'rb') as file:
+                    stat_info = pickle.load(file)
+            except Exception as ex:
+                print('ex = {!r}'.format(ex))
+                print('error loading stats_fpath = {!r}'.format(stats_fpath))
+                raise
 
             alwaysappend = requested_channels.numel() == channels.numel()
 
