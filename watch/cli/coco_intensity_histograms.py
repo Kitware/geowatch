@@ -33,7 +33,7 @@ class IntensityHistogramConfig(scfg.Config):
 
         'show': scfg.Value(False, help='if True, do a plt.show()'),
 
-        'max_images': scfg.Value(None, help='if given only sample this many images for stats'),
+        'max_images': scfg.Value(None, help='if given only sample this many images when computing statistics'),
 
         'workers': scfg.Value(0, help='number of io workers'),
         'mode': scfg.Value('process', help='type of parallelism'),
@@ -190,7 +190,9 @@ def main(**kwargs):
     print('workers = {!r}'.format(workers))
 
     if config['max_images'] is not None:
+        print('images = {!r}'.format(images))
         images = coco_dset.images(list(images)[:int(config['max_images'])])
+        print('filter images = {!r}'.format(images))
 
     include_channels = config['include_channels']
     exclude_channels = config['exclude_channels']
@@ -268,8 +270,7 @@ def compare_sensors(full_df):
     }
     to_compare = list(ub.flatten(chan_to_combos.values()))
 
-    ub.Timerit()
-
+    # ub.Timerit()
     for item1, item2 in ub.ProgIter(to_compare, desc='comparse_sensors', verbose=3):
         sensor1, channel1 = item1
         sensor2, channel2 = item2
