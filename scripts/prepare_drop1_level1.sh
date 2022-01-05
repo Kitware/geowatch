@@ -8,7 +8,7 @@ projects the annotations onto the data
 
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 
-ALIGNED_BUNDLE_NAME=Drop1-Aligned-L1
+ALIGNED_BUNDLE_NAME=Drop1-Aligned-L1-2022
 UNCROPPED_BUNDLE_NAME=drop1
 
 UNCROPPED_DPATH=$DVC_DPATH/$UNCROPPED_BUNDLE_NAME
@@ -43,7 +43,6 @@ _debug_extract_aligned(){
     __doc__="
         source ~/code/watch/scripts/prepare_drop1_level1.sh
     "
-
     kwcoco subset data.kwcoco.json
     kwcoco stats $UNCROPPED_DPATH/data.kwcoco.json
     smartwatch stats $UNCROPPED_DPATH/data.kwcoco.json

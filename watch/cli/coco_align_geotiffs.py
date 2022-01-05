@@ -147,6 +147,13 @@ class CocoAlignGeotiffConfig(scfg.Config):
             '''
         )),
 
+        'debug_valid_regions': scfg.Value(True, help=ub.paragraph(
+            '''
+            write valid region visualizations to help debug "black images"
+            issues.
+            '''
+        )),
+
         'keep': scfg.Value('none', help=ub.paragraph(
             '''
             Level of detail to overwrite existing data at, since this is slow.
@@ -418,7 +425,8 @@ def main(cmdline=True, **kw):
             new_dset=new_dset, visualize=visualize,
             write_subsets=write_subsets, max_workers=max_workers,
             aux_workers=aux_workers, keep=keep, target_gsd=target_gsd,
-            max_frames=max_frames)
+            max_frames=max_frames,
+            debug_valid_regions=config['debug_valid_regions'])
 
     new_dset.fpath = dst_fpath
     print('Dumping new_dset.fpath = {!r}'.format(new_dset.fpath))
@@ -692,7 +700,7 @@ class SimpleDataCube(object):
                          rpc_align_method='orthorectify', new_dset=None,
                          write_subsets=True, visualize=True, max_workers=0,
                          aux_workers=0, keep='none', target_gsd=10,
-                         max_frames=None):
+                         max_frames=None, debug_valid_regions=True):
         """
         Given a region of interest, extract an aligned temporal sequence
         of data to a specified directory.
@@ -898,8 +906,7 @@ class SimpleDataCube(object):
                     })
 
                     # Output a visualization of this group and its overlaps
-                    DEBUG_VALID_REGIONS = visualize and 0
-                    if DEBUG_VALID_REGIONS:
+                    if debug_valid_regions:
                         import kwplot
                         from shapely.ops import unary_union
                         import shapely
