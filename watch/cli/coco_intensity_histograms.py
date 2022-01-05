@@ -33,6 +33,8 @@ class IntensityHistogramConfig(scfg.Config):
 
         'show': scfg.Value(False, help='if True, do a plt.show()'),
 
+        'max_images': scfg.Value(None, help='if given only sample this many images for stats')
+
         'workers': scfg.Value(0, help='number of io workers'),
         'mode': scfg.Value('process', help='type of parallelism'),
 
@@ -186,6 +188,9 @@ def main(**kwargs):
     images = coco_dset.images(valid_gids)
     workers = util_globals.coerce_num_workers(config['workers'])
     print('workers = {!r}'.format(workers))
+
+    if config['max_images'] is not None:
+        images = coco_dset.images(list(images)[:int(config['max_images'])])
 
     include_channels = config['include_channels']
     exclude_channels = config['exclude_channels']
