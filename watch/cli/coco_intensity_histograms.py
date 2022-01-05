@@ -47,6 +47,8 @@ class IntensityHistogramConfig(scfg.Config):
 
         'valid_range': scfg.Value(None, help='Only include values within this range; specified as <min_val>:<max_val> e.g. (0:10000)'),
 
+        'title': scfg.Value(None, help='Provide a title for the histogram figure'),
+
         # Histogram modifiers
         'kde': scfg.Value(True, help='if True compute a kernel density estimate to smooth the distribution'),
         'cumulative': scfg.Value(False, help='If True, plot the cumulative counts as bins increase.'),
@@ -259,8 +261,16 @@ def main(**kwargs):
 
     fig = plot_intensity_histograms(full_df, config)
 
+    title_lines = []
+    title = config.get('title', None)
+    if title is not None:
+        title_lines.append(title)
+
     if extra_text is not None:
-        fig.suptitle(extra_text)
+        title_lines.append(extra_text)
+
+    final_title = '\n'.join(title_lines)
+    fig.suptitle(final_title)
 
     dst_fpath = config['dst']
     if dst_fpath is not None:
@@ -512,87 +522,6 @@ def plot_intensity_histograms(full_df, config):
             palette[channel] = None
     palette = _fill_missing_colors(palette)
 
-    __hisplot_notes__ = """
-    # TODO: play with these:
-
-    binwidth : number or pair of numbers
-        Width of each bin, overrides ``bins`` but can be used with
-        ``binrange``.
-    binrange : pair of numbers or a pair of pairs
-        Lowest and highest value for bin edges; can be used either
-        with ``bins`` or ``binwidth``. Defaults to data extremes.
-
-    discrete : bool
-        If True, default to ``binwidth=1`` and draw the bars so that they are
-        centered on their corresponding data points. This avoids "gaps" that may
-        otherwise appear when using discrete (integer) data.
-    common_bins : bool
-        If True, use the same bins when semantic variables produce multiple
-        plots. If using a reference rule to determine the bins, it will be computed
-        with the full dataset.
-
-    common_norm : bool
-        If True and using a normalized statistic, the normalization will apply over
-        the full dataset. Otherwise, normalize each histogram independently.
-
-    fill : bool
-        If True, fill in the space under the histogram.
-    shrink : number
-        Scale the width of each bar relative to the binwidth by this factor.
-
-    pthresh : number or None
-        Like ``thresh``, but a value in [0, 1] such that cells with aggregate counts
-        (or other statistics, when used) up to this proportion of the total will be
-        transparent.
-
-    color : :mod:`matplotlib color <matplotlib.colors>`
-        Single color specification for when hue mapping is not used. Otherwise, the
-        plot will try to hook into the matplotlib property cycle.
-    log_scale : bool or number, or pair of bools or numbers
-        Set a log scale on the data axis (or axes, with bivariate data) with the
-        given base (default 10), and evaluate the KDE in log space.
-
-    # Probably ignorable
-
-    kde_kws : dict
-        Parameters that control the KDE computation, as in :func:`kdeplot`.
-    line_kws : dict
-        Parameters that control the KDE visualization, passed to
-        :meth:`matplotlib.axes.Axes.plot`.
-
-    # Ignorable
-    thresh : number or None
-        Cells with a statistic less than or equal to this value will be transparent.
-        Only relevant with bivariate data.
-    legend : bool
-        If False, suppress the legend for semantic variables.
-    ax : :class:`matplotlib.axes.Axes`
-        Pre-existing axes for the plot. Otherwise, call :func:`matplotlib.pyplot.gca`
-        internally.
-    cbar : bool
-        If True, add a colorbar to annotate the color mapping in a bivariate plot.
-        Note: Does not currently support plots with a ``hue`` variable well.
-    cbar_ax : :class:`matplotlib.axes.Axes`
-        Pre-existing axes for the colorbar.
-    cbar_kws : dict
-        Additional parameters passed to :meth:`matplotlib.figure.Figure.colorbar`.
-    pmax : number or None
-        A value in [0, 1] that sets that saturation point for the colormap at a value
-        such that cells below is constistute this proportion of the total count (or
-        other statistic, when used).
-    palette : string, list, dict, or :class:`matplotlib.colors.Colormap`
-        Method for choosing the colors to use when mapping the ``hue`` semantic.
-        String values are passed to :func:`color_palette`. List or dict values
-        imply categorical mapping, while a colormap object implies numeric mapping.
-    hue_order : vector of strings
-        Specify the order of processing and plotting for categorical levels of the
-        ``hue`` semantic.
-    hue_norm : tuple or :class:`matplotlib.colors.Normalize`
-        Either a pair of values that set the normalization range in data units
-        or an object that will map from data units into a [0, 1] interval. Usage
-        implies numeric mapping.
-    """
-    __hisplot_notes__
     hist_data_kw = dict(
         x='intensity_bin',
         weights='value',
@@ -608,6 +537,22 @@ def plot_intensity_histograms(full_df, config):
         kde=config['kde'],
         cumulative=config['cumulative'],
     )
+
+    if 0:
+        # __hisplot_notes__
+        import inspect
+        sig = inspect.signature(sns.histplot)
+        # Print params we might not have looked at in detail
+        exposed_params = {
+            'cumulative', 'kde', 'multiple', 'element', 'fill', 'hue', 'stat',
+            'bins', 'weights', 'x', 'palette',
+        }
+        probably_ignorable_params = {
+            'pmax', 'hue_order', 'hue_norm', 'cbar', 'cbar_kws', 'cbar_ax', 'ax',
+            'legend', 'thresh' 'y',
+        }
+        maybe_expose = (set(sig.parameters) - exposed_params) - probably_ignorable_params
+        print('maybe_expose = {}'.format(ub.repr2(maybe_expose, nl=1)))
 
     #  For S2 that is supposed to be divide by 10000.  For L8 it is multiply by 2.75e-5 and subtract 0.2.
     # 1 / 2.75e-5
