@@ -935,7 +935,7 @@ class SimpleDataCube(object):
                             wld_map_local_gdf = wld_map_crs84_gdf.to_crs(local_epsg)
 
                             ax = kwplot.figure(doclf=True, fnum=2).gca()
-                            ax.set_title(f'Local: {local_epsg}\n{iso_time} {sensor_coarse} {len(rows)} {final_gids}')
+                            ax.set_title(f'Local CRS: {local_epsg}\n{iso_time} sensor={sensor_coarse} n={len(rows)} source_gids={final_gids}')
                             wld_map_local_gdf.plot(ax=ax)
                             subimg_local_df.plot(ax=ax, color='blue', alpha=0.6, edgecolor='black', linewidth=4)
                             group_local_df.plot(ax=ax, color='pink', alpha=0.6)
@@ -952,7 +952,7 @@ class SimpleDataCube(object):
                             total_bounds_crs84 = total_bounds_local.to_crs('crs84')
                             # space_region_crs84 = space_region_local.to_crs('crs84')
                             ax = kwplot.figure(doclf=True, fnum=3).gca()
-                            ax.set_title(f'CRS84:\n{iso_time} {sensor_coarse} {len(rows)} {final_gids}')
+                            ax.set_title(f'CRS84:\n{iso_time} sensor={sensor_coarse} n={len(rows)} source_gids={final_gids}')
                             wld_map_crs84_gdf.plot(ax=ax)
                             subimg_crs84_df.plot(ax=ax, color='blue', alpha=0.6, edgecolor='black', linewidth=4)
                             group_crs84_df.plot(ax=ax, color='pink', alpha=0.6)
