@@ -170,6 +170,23 @@ def main(**kwargs):
         >>> kwargs['multiple'] = 'layer'
         >>> kwargs['element'] = 'step'
         >>> main(**kwargs)
+
+    Example:
+        >>> from watch.cli.coco_intensity_histograms import *  # NOQA
+        >>> import kwcoco
+        >>> import watch
+        >>> test_dpath = ub.ensure_app_cache_dir('watch/tests')
+        >>> image_fpath = test_dpath + '/intensityhist_demo2.jpg'
+        >>> coco_dset = coerce_kwcoco('watch-msi')
+        >>> kwargs = {
+        >>>     'src': coco_dset,
+        >>>     'dst': image_fpath,
+        >>>     'mode': 'thread',
+        >>>     'valid_range': '10:2000',
+        >>> }
+        >>> kwargs['multiple'] = 'layer'
+        >>> kwargs['element'] = 'step'
+        >>> main(**kwargs)
     """
     from watch.utils import kwcoco_extensions
     from watch.utils.lightning_ext import util_globals
