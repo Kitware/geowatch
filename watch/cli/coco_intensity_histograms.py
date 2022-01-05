@@ -33,7 +33,7 @@ class IntensityHistogramConfig(scfg.Config):
 
         'show': scfg.Value(False, help='if True, do a plt.show()'),
 
-        'max_images': scfg.Value(None, help='if given only sample this many images for stats')
+        'max_images': scfg.Value(None, help='if given only sample this many images for stats'),
 
         'workers': scfg.Value(0, help='number of io workers'),
         'mode': scfg.Value('process', help='type of parallelism'),
