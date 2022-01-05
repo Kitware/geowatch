@@ -195,7 +195,7 @@ def associate_msi_pan(stac_catalog):
     items_dct = {
         i.id: i
         for i in stac_catalog.get_all_items()
-        if i.properties['constellation'] == 'worldview'
+        if i.properties.get('constellation') == 'worldview'
     }
 
     if 0:

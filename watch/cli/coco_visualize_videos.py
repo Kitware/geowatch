@@ -79,7 +79,10 @@ class CocoVisualizeConfig(scfg.Config):
 
         'norm_over_time': scfg.Value(False, help='if True, normalize data over time'),
 
-        'norm_hack': scfg.Value(False, help='if true apply normalization hack'),
+        'fixed_normalization_scheme': scfg.Value(
+            None, type=str, help='Use a fixed normalization scheme for visualization; e.g. "scaled_25percentile"'),
+
+        'nodata': scfg.Value(0, type=int, help='Nodata value'),
 
         'extra_header': scfg.Value(None, help='extra text to include in the header'),
 
@@ -282,7 +285,9 @@ def main(cmdline=True, **kwargs):
                                 channels=channels, vid_crop_box=vid_crop_box,
                                 _header_extra=_header_extra,
                                 chan_to_normalizer=chan_to_normalizer,
-                                norm_hack=config['norm_hack'])
+                                fixed_normalization_scheme=config.get(
+                                    'fixed_normalization_scheme'),
+                                nodata=config['nodata'])
 
         else:
             gid_subset = gids[start_frame:end_frame]
@@ -299,9 +304,12 @@ def main(cmdline=True, **kwargs):
                             coco_dset, img, anns, sub_dpath, space=space,
                             channels=channels,
                             draw_imgs=config['draw_imgs'],
-                            draw_anns=config['draw_anns'], _header_extra=_header_extra,
+                            draw_anns=config['draw_anns'],
+                            _header_extra=_header_extra,
                             chan_to_normalizer=chan_to_normalizer,
-                            norm_hack=config['norm_hack'])
+                            fixed_normalization_scheme=config.get(
+                                'fixed_normalization_scheme'),
+                            nodata=config['nodata'])
 
         for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):
             job.result()
@@ -353,6 +361,62 @@ def video_track_info(coco_dset, vidid):
 _CLI = CocoVisualizeConfig
 
 
+def select_fixed_normalization(fixed_normalization_scheme, sensor_coarse):
+    chan_to_normalizer = {}
+    if fixed_normalization_scheme == 'scaled':
+        if sensor_coarse in {'L8', 'S2'}:
+            for c in ['blue', 'green', 'red', 'nir', 'swir16', 'swir22']:
+                chan_to_normalizer[c] = {'type': 'normalize', 'mode': 'linear',
+                                         'min_val': 0, 'max_val': 10_000}
+
+    elif fixed_normalization_scheme == 'scaled_50percentile':
+        if sensor_coarse in {'L8', 'S2'}:
+            for c in ['blue', 'green', 'red', 'nir', 'swir16', 'swir22']:
+                chan_to_normalizer[c] = {'type': 'normalize', 'mode': 'linear',
+                                         'min_val': 0, 'max_val': 5_000}
+
+    elif fixed_normalization_scheme == 'scaled_25percentile':
+        if sensor_coarse in {'L8', 'S2'}:
+            for c in ['blue', 'green', 'red', 'nir', 'swir16', 'swir22']:
+                chan_to_normalizer[c] = {'type': 'normalize', 'mode': 'linear',
+                                         'min_val': 0, 'max_val': 2_500}
+
+    elif fixed_normalization_scheme == 'scaled_raw':
+        if sensor_coarse == 'L8':
+            for c in ['blue', 'green', 'red', 'nir', 'swir16', 'swir22']:
+                chan_to_normalizer[c] = {'type': 'normalize', 'mode': 'linear',
+                                         'min_val': 7_272, 'max_val': 36_363}
+        if sensor_coarse == 'S2':
+            for c in ['blue', 'green', 'red', 'nir', 'swir16', 'swir22']:
+                chan_to_normalizer[c] = {'type': 'normalize', 'mode': 'linear',
+                                         'min_val': 1, 'max_val': 10_000}
+
+    elif fixed_normalization_scheme == 'scaled_raw_50percentile':
+        if sensor_coarse == 'L8':
+            for c in ['blue', 'green', 'red', 'nir', 'swir16', 'swir22']:
+                chan_to_normalizer[c] = {'type': 'normalize', 'mode': 'linear',
+                                         'min_val': 7_272, 'max_val': 21_818}
+        if sensor_coarse == 'S2':
+            for c in ['blue', 'green', 'red', 'nir', 'swir16', 'swir22']:
+                chan_to_normalizer[c] = {'type': 'normalize', 'mode': 'linear',
+                                         'min_val': 1, 'max_val': 5_000}
+
+    elif fixed_normalization_scheme == 'scaled_raw_25percentile':
+        if sensor_coarse == 'L8':
+            for c in ['blue', 'green', 'red', 'nir', 'swir16', 'swir22']:
+                chan_to_normalizer[c] = {'type': 'normalize', 'mode': 'linear',
+                                         'min_val': 7_272, 'max_val': 14_544}
+        if sensor_coarse == 'S2':
+            for c in ['blue', 'green', 'red', 'nir', 'swir16', 'swir22']:
+                chan_to_normalizer[c] = {'type': 'normalize', 'mode': 'linear',
+                                         'min_val': 1, 'max_val': 2_500}
+
+    else:
+        raise NotImplementedError('Unsupported fixed normalization scheme')
+
+    return chan_to_normalizer
+
+
 def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                img : dict,
                                anns : list,
@@ -363,7 +427,9 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                request_grouped_bands='default',
                                draw_imgs=True,
                                draw_anns=True, _header_extra=None,
-                               chan_to_normalizer=None, norm_hack=False):
+                               chan_to_normalizer=None,
+                               fixed_normalization_scheme=None,
+                               nodata=0):
     """
     Dumps an intensity normalized "space-aligned" kwcoco image visualization
     (with or without annotation overlays) for specific bands to disk.
@@ -393,29 +459,9 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
     delayed = coco_dset.delayed_load(img['id'], space=space)
 
-    if norm_hack:
-        chan_to_normalizer = {}
-        if sensor_coarse == 'L8':
-            for c in ['blue', 'green', 'red', 'nir', 'swir16', 'swir22']:
-                chan_to_normalizer[c] = {
-                    'type': 'normalize',
-                    'mode': 'linear',
-                    'min_val': 0.,
-                    'max_val': 30000,
-                    'beta': 1.5,
-                    'alpha': 0.08048152417842046
-                }
-        if sensor_coarse == 'S2':
-            for c in ['blue', 'green', 'red', 'nir', 'swir16', 'swir22']:
-                chan_to_normalizer[c] = {
-                    'type': 'normalize',
-                    'mode': 'linear',
-                    'min_val': 6000,
-                    'max_val': 20000,
-                    'beta': 1.5,
-                    'alpha': 0.08048152417842046
-                }
-        print('HACK chan_to_normalizer = {!r}'.format(chan_to_normalizer))
+    if fixed_normalization_scheme is not None:
+        chan_to_normalizer = select_fixed_normalization(
+            fixed_normalization_scheme, sensor_coarse)
 
     if channels is not None:
         if isinstance(channels, list):
@@ -517,12 +563,15 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             from kwcoco.util import util_delayed_poc
             chan = util_delayed_poc.DelayedChannelConcat([delayed]).take_channels(chan_group)
 
-        canvas = chan.finalize()
+        # Note: Using 'nearest' here since we're just visualizing (and
+        # otherwise nodata values can affect interpolated pixel
+        # values)
+        canvas = chan.finalize(interpolation='nearest')
         # import kwarray
         # kwarray.atleast_nd(canvas, 3)
 
         if chan_to_normalizer is None:
-            canvas = normalize_intensity(canvas, nodata=0, params={
+            canvas = normalize_intensity(canvas, nodata=nodata, params={
                 'high': 0.90,
                 'mid': 0.5,
                 'low': 0.01,
@@ -535,8 +584,8 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             for cx, c in enumerate(chan_list):
                 normalizer = chan_to_normalizer[c]
                 data = canvas[..., cx]
-                mask = (data != 0)
-                p = util_kwarray.apply_normalizer(data, normalizer, mask=mask)
+                mask = (data != nodata)
+                p = util_kwarray.apply_normalizer(data, normalizer, mask=mask, set_value_at_mask=0.)
                 new_parts.append(p)
             canvas = np.stack(new_parts, axis=2)
 

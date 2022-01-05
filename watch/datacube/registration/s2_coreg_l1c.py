@@ -379,7 +379,6 @@ def s2_coregister(granuledirs, output_folder, baseline_scene, tile):
                     x_res = 10
                     y_res = 10
                     resampling_method = 'cubic'
-                    nodata = 0
                     if ((b == 'B05') | (b == 'B06') | (b == 'B07') |
                         (b == 'B8A') | (b == 'B11') | (b == 'B12')):  # NOQA
                         fname_gcp = fname_gcp_20
@@ -394,12 +393,11 @@ def s2_coregister(granuledirs, output_folder, baseline_scene, tile):
                         x_res = 20
                         y_res = 20
                         resampling_method = 'near'
-                        nodata = 'None'
 
-                    com_gdal_translate_prefix = 'gdal_translate -of VRT --optfile %s -r %s -a_srs "epsg:%s" -a_nodata %s' % (
-                        os.path.join(path_to_gcp, fname_gcp), resampling_method, utm_epsg, nodata)
-                    com_gdalwarp_prefix = 'gdalwarp -overwrite -of GTiff -order 3 -et 0.05 -r %s -co "COMPRESS=DEFLATE" -tr %s %s -te %s %s %s %s -t_srs "epsg:%s" -srcnodata %s -dstnodata %s' %\
-                                          (resampling_method, abs(x_res), abs(x_res), x_min, y_min, x_max, y_max, utm_epsg, nodata, nodata)
+                    com_gdal_translate_prefix = 'gdal_translate -of VRT --optfile %s -r %s -a_srs "epsg:%s"' % (
+                        os.path.join(path_to_gcp, fname_gcp), resampling_method, utm_epsg)
+                    com_gdalwarp_prefix = 'gdalwarp -overwrite -of GTiff -order 3 -et 0.05 -r %s -co "COMPRESS=DEFLATE" -tr %s %s -te %s %s %s %s -t_srs "epsg:%s"' %\
+                                          (resampling_method, abs(x_res), abs(x_res), x_min, y_min, x_max, y_max, utm_epsg)
 
                     fname_out_prefix = fname_base[:-8]
                     if fname_out_prefix == '':

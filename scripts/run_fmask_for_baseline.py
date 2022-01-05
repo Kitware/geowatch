@@ -61,10 +61,11 @@ def run_coreg_for_baseline(input_path,
     ingress_catalog = baseline_framework_ingress(
         input_path,
         '/tmp/ingress',
-        aws_profile,
-        dryrun,
-        requester_pays,
-        jobs)
+        aws_profile=aws_profile,
+        dryrun=dryrun,
+        requester_pays=requester_pays,
+        relative=False,
+        jobs=jobs)
 
     fmask_catalog = run_fmask(
         ingress_catalog,

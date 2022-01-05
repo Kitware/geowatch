@@ -19,6 +19,7 @@ import pathlib
 import kwimage
 import pandas as pd
 import numpy as np
+import math
 
 
 class IntensityHistogramConfig(scfg.Config):
@@ -43,6 +44,8 @@ class IntensityHistogramConfig(scfg.Config):
         'exclude_sensors': scfg.Value(None, help='if specified can be comma separated invalid sensors'),
 
         'max_images': scfg.Value(None, help='if given only sample this many images when computing statistics'),
+
+        'valid_range': scfg.Value(None, help='Only include values within this range; specified as <min_val>:<max_val> e.g. (0:10000)'),
 
         # Histogram modifiers
         'kde': scfg.Value(True, help='if True compute a kernel density estimate to smooth the distribution'),
@@ -167,6 +170,23 @@ def main(**kwargs):
         >>> kwargs['multiple'] = 'layer'
         >>> kwargs['element'] = 'step'
         >>> main(**kwargs)
+
+    Example:
+        >>> from watch.cli.coco_intensity_histograms import *  # NOQA
+        >>> import kwcoco
+        >>> import watch
+        >>> test_dpath = ub.ensure_app_cache_dir('watch/tests')
+        >>> image_fpath = test_dpath + '/intensityhist_demo2.jpg'
+        >>> coco_dset = coerce_kwcoco('watch-msi')
+        >>> kwargs = {
+        >>>     'src': coco_dset,
+        >>>     'dst': image_fpath,
+        >>>     'mode': 'thread',
+        >>>     'valid_range': '10:2000',
+        >>> }
+        >>> kwargs['multiple'] = 'layer'
+        >>> kwargs['element'] = 'step'
+        >>> main(**kwargs)
     """
     from watch.utils import kwcoco_extensions
     from watch.utils.lightning_ext import util_globals
@@ -207,6 +227,15 @@ def main(**kwargs):
                           exclude_channels=exclude_channels)
         job.coco_img = coco_img
 
+    if config['valid_range'] is not None:
+        try:
+            valid_min, valid_max = map(int, config['valid_range'].split(':'))
+        except ValueError:
+            valid_min, valid_max = map(float, config['valid_range'].split(':'))
+    else:
+        valid_min = -math.inf
+        valid_max = math.inf
+
     accum = HistAccum()
     for job in ub.ProgIter(jobs.as_completed(), desc='accumulate stats', total=len(jobs.jobs)):
         intensity_stats = job.result()
@@ -214,6 +243,8 @@ def main(**kwargs):
         for band_stats in intensity_stats['bands']:
             band_name = band_stats['band_name']
             intensity_hist = band_stats['intensity_hist']
+            intensity_hist = {k: v for k, v in intensity_hist.items()
+                              if k >= valid_min and k <= valid_max}
             accum.update(intensity_hist, sensor, band_name)
 
     full_df = accum.finalize()
