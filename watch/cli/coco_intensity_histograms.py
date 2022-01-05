@@ -214,7 +214,9 @@ def main(**kwargs):
     COMPARSE_SENSORS = True
     if COMPARSE_SENSORS:
         distance_metrics = compare_sensors(full_df)
-        harmony_scores = distance_metrics[['emd', 'mean_diff', 'energy_dist']].mean()
+        request_columns = ['emd', 'mean_diff', 'energy_dist']
+        have_columns = list(ub.oset(distance_metrics) & ub.oset(distance_metrics.columns))
+        harmony_scores = distance_metrics[have_columns].mean()
         extra_text = ub.repr2(harmony_scores.to_dict(), precision=4, compact=1)
         print('extra_text = {!r}'.format(extra_text))
     else:
