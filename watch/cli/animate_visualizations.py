@@ -1,7 +1,5 @@
 #!/usr/bin/env python
-
 __notes__ = r"""
-
 .. :code: bash
 
     # Make an animated gif for specified bands (use "," to separate)
