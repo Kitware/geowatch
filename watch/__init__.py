@@ -7,8 +7,8 @@ import os
 __devnotes__ = """
 
 # Command to autogenerate lazy imports for this file
-mkinit -m watch --lazy --noattr
-mkinit -m watch --lazy --noattr -w
+mkinit -m watch --lazy --diff
+mkinit -m watch --lazy -w
 """
 
 WATCH_AUTOHACK_IMPORT_VARIANTS = {
@@ -64,7 +64,15 @@ if WATCH_HACK_IMPORT_ORDER:
     _execute_import_order_hacks(WATCH_HACK_IMPORT_ORDER)
 
 
-__version__ = '0.1.6'
+__version__ = '0.2.0'
+
+# Choose which submodules (and which submodule attributes) to expose
+__submodules__ = {
+    '*': [],  # include all modules, but don't expose attributes
+    'demo': ['coerce_kwcoco'],
+    'utils': ['find_smart_dvc_dpath']
+}
+
 
 
 def lazy_import(module_name, submodules, submod_attrs):
@@ -113,19 +121,28 @@ __getattr__ = lazy_import(
         'datasets',
         'demo',
         'gis',
+        'heuristics',
+        'models',
         'rc',
         'sequencing',
         'tasks',
         'utils',
         'validation',
     },
-    submod_attrs={},
+    submod_attrs={
+        'demo': [
+            'coerce_kwcoco',
+        ],
+        'utils': [
+            'find_smart_dvc_dpath',
+        ],
+    },
 )
 
 
 def __dir__():
     return __all__
 
-
-__all__ = ['cli', 'datacube', 'datasets', 'demo', 'gis', 'rc', 'sequencing',
-           'tasks', 'utils', 'validation']
+__all__ = ['cli', 'coerce_kwcoco', 'datacube', 'datasets', 'demo',
+           'find_smart_dvc_dpath', 'gis', 'heuristics', 'models', 'rc',
+           'sequencing', 'tasks', 'utils', 'validation']
