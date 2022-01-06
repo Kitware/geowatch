@@ -136,6 +136,17 @@ extract_aligned_cropped_regions(){
         --src $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json \
         --dst $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json
 
+    smartwatch stats "$ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json" 
+
+    #_="
+    smartwatch visualize --src \
+        $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json \
+        '--channels=panchromatic' \
+        --viz_dpath=$ALIGNED_KWCOCO_BUNDLE/_viz \
+        --draw_anns=False \
+        --select_images '.video_id == 3'
+    #"
+
     kwcoco subset --src $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json \
             --dst $ALIGNED_KWCOCO_BUNDLE/data_nowv.kwcoco.json \
             --select_images '.sensor_coarse != "WV"'
@@ -235,7 +246,6 @@ teamfeatures(){
         --device=0 \
         --num_workers="16" \
         --output=$ALIGNED_KWCOCO_BUNDLE/data_nowv_dzyne_landcover.kwcoco.json
-
     
     python ~/code/watch/watch/cli/coco_combine_features.py \
         --src $BASE_COCO_FPATH \

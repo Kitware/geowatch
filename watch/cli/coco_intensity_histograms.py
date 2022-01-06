@@ -117,48 +117,6 @@ class HistAccum:
         return full_df
 
 
-def demo_kwcoco_multisensor(num_videos=4, num_frames=10, **kwargs):
-    """
-    Note:
-        dev/flow21 has main implementation. remove this after this is merged
-
-    Ignore:
-        import watch
-        coco_dset = watch.demo.demo_kwcoco_multisensor()
-        coco_dset = watch.demo.demo_kwcoco_multisensor(max_speed=0.5)
-    """
-    demo_kwargs = {
-        'num_frames': num_frames,
-        'num_videos': num_videos,
-        'rng': 9111665008,
-        'multisensor': True,
-        'multispectral': True,
-        'image_size': 'random',
-    }
-    demo_kwargs.update(kwargs)
-    coco_dset = kwcoco.CocoDataset.demo('vidshapes', **demo_kwargs)
-    # Hack in sensor_coarse
-    images = coco_dset.images()
-    groups = ub.sorted_keys(ub.group_items(images.coco_images, lambda x: x.channels.spec))
-    for idx, (k, g) in enumerate(groups.items()):
-        for coco_img in g:
-            coco_img.img['sensor_coarse'] = 'sensor{}'.format(idx)
-    return coco_dset
-
-
-def coerce_kwcoco(data='watch-msi', **kwargs):
-    """
-    Note:
-        dev/flow21 has main implementation. remove this after this is merged
-
-    coerce with watch special datasets
-    """
-    if isinstance(data, str) and 'watch' in data.split('special:', 1)[-1].split('-'):
-        return demo_kwcoco_multisensor(**kwargs)
-    else:
-        return kwcoco.CocoDataset.coerce(data, **kwargs)
-
-
 def main(**kwargs):
     r"""
     Example:
@@ -247,9 +205,10 @@ def main(**kwargs):
 
     full_df = accum.finalize()
 
+    sensor_chan_stats, distance_metrics = sensor_stats_tables(full_df)
+
     COMPARSE_SENSORS = True
     if COMPARSE_SENSORS:
-        distance_metrics = compare_sensors(full_df)
         request_columns = ['emd', 'energy_dist', 'mean_diff', 'std_diff']
         have_columns = list(ub.oset(request_columns) & ub.oset(distance_metrics.columns))
         harmony_scores = distance_metrics[have_columns].mean()
@@ -283,32 +242,79 @@ def main(**kwargs):
         plt.show()
 
 
-def compare_sensors(full_df):
+# def try_with_statsmodels():
+#     import statsmodels.api as sm
+#     sm.nonparametric.KDEUnivariate?
+#     kde = sm.nonparametric.KDEUnivariate(obs_dist)
+
+
+def sensor_stats_tables(full_df):
     import itertools as it
     import scipy
     import scipy.stats
+    sensor_channel_to_vwf = {}
+    for _sensor, sensor_df in full_df.groupby('sensor'):
+        for channel, chan_df in sensor_df.groupby('channel'):
+            _values = chan_df['intensity_bin']
+            _weights = chan_df['value']
+            norm_weights = _weights / _weights.sum()
+            sensor_channel_to_vwf[(_sensor, channel)] = {
+                'raw_values': _values,
+                'raw_weights': _weights,
+                'norm_weights': norm_weights,
+                'sensorchan_df': chan_df,
+            }
 
-    distance_metrics = []
-    sensor_channel_to_vw = {}
-    for channel, chan_df in full_df.groupby('channel'):
-        for _sensor, sensor_df in chan_df.groupby('sensor'):
-            _values = sensor_df['intensity_bin']
-            _weights = sensor_df['value']
-            sensor_channel_to_vw[(_sensor, channel)] = (_values, _weights)
-
-    print('comparing sensors')
-    print(ub.repr2(list(sensor_channel_to_vw.keys()), nl=1))
+    print('compute per-sensor stats')
+    print(ub.repr2(list(sensor_channel_to_vwf.keys()), nl=1))
     chan_to_group = ub.group_items(
-        sensor_channel_to_vw.keys(),
-        [t[1] for t in sensor_channel_to_vw.keys()]
+        sensor_channel_to_vwf.keys(),
+        [t[1] for t in sensor_channel_to_vwf.keys()]
     )
     chan_to_combos = {
         chan: list(it.combinations(group, 2)) for chan, group in chan_to_group.items()
     }
     to_compare = list(ub.flatten(chan_to_combos.values()))
 
-    # ub.Timerit()
-    for item1, item2 in ub.ProgIter(to_compare, desc='comparse_sensors', verbose=3):
+    single_rows = []
+    for sensor, channel in ub.ProgIter(sensor_channel_to_vwf, desc='compute stats'):
+        sensor_data = sensor_channel_to_vwf[(sensor, channel)]
+        values = sensor_data['raw_values']
+        weights = sensor_data['raw_weights']
+        sensorchan_df = sensor_data['sensorchan_df']
+
+        # Note: the calculation of the variance depends on the type of
+        # weighting we choose
+        average = np.average(values, weights=weights)
+        variance = np.average((values - average) ** 2, weights=weights)
+        variance = variance * sum(weights) / (sum(weights) - 1)
+        stddev = np.sqrt(variance)
+
+        pytype = float if values.values.dtype.kind == 'f' else int
+        auto_bins = _weighted_auto_bins(
+            sensorchan_df, 'intensity_bin', 'value')
+
+        info = {
+            'min': pytype(values.min()),
+            'max': pytype(values.max()),
+            'mean': average,
+            'std': stddev,
+            'total_weight': weights.sum(),
+            'channel': channel,
+            'sensor': sensor,
+            'auto_bins': auto_bins,
+        }
+        assert info['max'] >= info['min']
+        # print('info = {}'.format(ub.repr2(info, nl=1, sort=False)))
+        single_rows.append(info)
+
+    sensor_chan_stats = pd.DataFrame(single_rows)
+    sensor_chan_stats = sensor_chan_stats.set_index(['sensor', 'channel'])
+    print(sensor_chan_stats)
+
+    print('compare channels between sensors')
+    pairwise_rows = []
+    for item1, item2 in ub.ProgIter(to_compare, desc='comparse_sensors', verbose=1):
         sensor1, channel1 = item1
         sensor2, channel2 = item2
         assert channel1 == channel2
@@ -320,8 +326,11 @@ def compare_sensors(full_df):
             'channel': channel,
         }
 
-        u_values, u_weights = sensor_channel_to_vw[(sensor1, channel1)]
-        v_values, v_weights = sensor_channel_to_vw[(sensor2, channel1)]
+        u_sensor_data = sensor_channel_to_vwf[(sensor1, channel1)]
+        v_sensor_data = sensor_channel_to_vwf[(sensor2, channel2)]
+
+        u_values, u_weights = ub.take(u_sensor_data, ['raw_values', 'raw_weights'])
+        v_values, v_weights = ub.take(v_sensor_data, ['raw_values', 'raw_weights'])
 
         # https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.wasserstein_distance.html#scipy.stats.wasserstein_distance
         # https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.energy_distance.html#scipy.stats.energy_distance
@@ -335,66 +344,31 @@ def compare_sensors(full_df):
         if 1:
             row['energy_dist'] = scipy.stats.energy_distance(**dist_inputs)
 
-        u_mean = np.average(u_values.values, weights=u_weights.values)
-        v_mean = np.average(v_values.values, weights=v_weights.values)
-        row['mean_diff'] = abs(u_mean - v_mean)
-
-        u_variance = np.average((u_values.values - u_mean) ** 2, weights=u_weights.values)
-        u_variance = u_variance * sum(u_weights.values) / (sum(u_weights.values) - 1)
-        u_std = np.sqrt(u_variance)
-
-        v_variance = np.average((v_values.values - v_mean) ** 2, weights=v_weights.values)
-        v_variance = v_variance * sum(v_weights.values) / (sum(v_weights.values) - 1)
-        v_std = np.sqrt(v_variance)
-
-        row['std_diff'] = abs(u_std - v_std)
+        u_stats = sensor_chan_stats.loc[(sensor1, channel1)]
+        v_stats = sensor_chan_stats.loc[(sensor2, channel2)]
+        row['mean_diff'] = abs(u_stats['mean'] - v_stats['mean'])
+        row['std_diff'] = abs(u_stats['std'] - v_stats['std'])
 
         # TODO: robust alignment of pdfs
-        if 0:
+        if 1:
             cuv_values = np.union1d(u_values, v_values)
-            cu_indexes = np.where(kwarray.one_hot_embedding(u_values.values, cuv_values.max() + 1, dim=0).sum(axis=1) > 0)
-            cv_indexes = np.where(kwarray.one_hot_embedding(u_values.values, cuv_values.max() + 1, dim=0).sum(axis=1) > 0)
-            cu_weights = np.zeros(cuv_values.shape, dtype=np.float32)
+            cuv_values.sort()
+            cu_weights = np.zeros(cuv_values.shape, dtype=np.float64)
+            cv_weights = np.zeros(cuv_values.shape, dtype=np.float64)
+            cu_indexes = np.where(kwarray.isect_flags(cuv_values, u_values))[0]
+            cv_indexes = np.where(kwarray.isect_flags(cuv_values, v_values))[0]
             cu_weights[cu_indexes] = u_weights
-            cv_weights = np.zeros(cuv_values.shape, dtype=np.float32)
             cv_weights[cv_indexes] = v_weights
+
+            cu_weights * cv_weights
+
             row['kld'] = scipy.stats.entropy(cu_weights, cv_weights)
 
-        distance_metrics.append(row)
-        print('row = {}'.format(ub.repr2(row, nl=1)))
-    distance_metrics = pd.DataFrame(distance_metrics)
+        pairwise_rows.append(row)
+
+    distance_metrics = pd.DataFrame(pairwise_rows)
     print(distance_metrics.to_string())
-    return distance_metrics
-
-
-def _fill_missing_colors(label_to_color):
-    """
-    label_to_color = {'foo': kwimage.Color('red').as01(), 'bar': None}
-    """
-    from distinctipy import distinctipy
-    import kwarray
-    import numpy as np
-    given = {k: kwimage.Color(v).as01() for k, v in label_to_color.items() if v is not None}
-    needs_color = sorted(set(label_to_color) - set(given))
-
-    seed = 6777939437
-    # hack in our code
-    def _patched_get_random_color(pastel_factor=0, rng=None):
-        rng = kwarray.ensure_rng(seed, api='python')
-        color = [(rng.random() + pastel_factor) / (1.0 + pastel_factor) for _ in range(3)]
-        return tuple(color)
-    distinctipy.get_random_color = _patched_get_random_color
-
-    exclude_colors = [
-        tuple(map(float, (d, d, d)))
-        for d in np.linspace(0, 1, 5)
-    ] + list(given.values())
-
-    final = given.copy()
-    new_colors = distinctipy.get_colors(len(needs_color), exclude_colors=exclude_colors)
-    for key, new_color in zip(needs_color, new_colors):
-        final[key] = tuple(map(float, new_color))
-    return final
+    return sensor_chan_stats, distance_metrics
 
 
 def ensure_intensity_sidecar(fpath, recompute=False):
@@ -422,6 +396,9 @@ def ensure_intensity_sidecar(fpath, recompute=False):
 
 
 def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exclude_channels=None):
+    """
+    Ensures a sidecar file exists for the kwcoco image
+    """
     from os.path import join
     intensity_stats = {'bands': []}
     for obj in coco_img.iter_asset_objs():
@@ -482,26 +459,13 @@ def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exc
 
 
 def plot_intensity_histograms(full_df, config):
-
     unique_channels = full_df['channel'].unique()
     unique_sensors = full_df['sensor'].unique()
 
     import kwplot
     sns = kwplot.autosns()
 
-    # sns.lineplot(full_df=df, x='intensity_bin', y='value')
-    # max_val = np.iinfo(np.uint16).max
-    # import kwimage
-
     palette = {
-        # 'red': kwimage.Color('red').as01(),
-        # 'blue': kwimage.Color('blue').as01(),
-        # 'green': kwimage.Color('green').as01(),
-        # 'cirrus': kwimage.Color('skyblue').as01(),
-        # 'coastal': kwimage.Color('purple').as01(),
-        # 'nir': kwimage.Color('orange').as01(),
-        # 'swir16': kwimage.Color('pink').as01(),
-        # 'swir22': kwimage.Color('hotpink').as01(),
         'red': 'red',
         'blue': 'blue',
         'green': 'green',
@@ -558,37 +522,6 @@ def plot_intensity_histograms(full_df, config):
     fig = kwplot.figure(fnum=1, doclf=True)
     pnum_ = kwplot.PlotNums(nSubplots=len(unique_sensors))
     for sensor_name, sensor_df in full_df.groupby('sensor'):
-
-        info_rows = []
-        for channel, chan_df in sensor_df.groupby('channel'):
-            # print(chan_df)
-            values = chan_df.intensity_bin
-            weights = chan_df.value
-
-            # Note: the calculation of the variance depends on the type of
-            # weighting we choose
-            average = np.average(values, weights=weights)
-            variance = np.average((values - average) ** 2, weights=weights)
-            variance = variance * sum(weights) / (sum(weights) - 1)
-            stddev = np.sqrt(variance)
-
-            pytype = float if values.values.dtype.kind == 'f' else int
-
-            info = {
-                'min': pytype(values.min()),
-                'max': pytype(values.max()),
-                'mean': average,
-                'std': stddev,
-                'total_weight': chan_df.value.sum(),
-                'channel': channel,
-                'sensor': sensor_name,
-            }
-            assert info['max'] >= info['min']
-            # print('info = {}'.format(ub.repr2(info, nl=1, sort=False)))
-            info_rows.append(info)
-
-        sensor_chan_stats = pd.DataFrame(info_rows)
-        print(sensor_chan_stats)
 
         hist_data_kw_ = hist_data_kw.copy()
         if hist_data_kw_['bins'] == 'auto':
@@ -690,6 +623,78 @@ def _weighted_auto_bins(data, xvar, weightvar):
     # Take the minimum of this and the number of actual bins
     n_equal_bins = min(n_equal_bins, len(values))
     return n_equal_bins
+
+
+def _fill_missing_colors(label_to_color):
+    """
+    label_to_color = {'foo': kwimage.Color('red').as01(), 'bar': None}
+    """
+    from distinctipy import distinctipy
+    import kwarray
+    import numpy as np
+    given = {k: kwimage.Color(v).as01() for k, v in label_to_color.items() if v is not None}
+    needs_color = sorted(set(label_to_color) - set(given))
+
+    seed = 6777939437
+    # hack in our code
+    def _patched_get_random_color(pastel_factor=0, rng=None):
+        rng = kwarray.ensure_rng(seed, api='python')
+        color = [(rng.random() + pastel_factor) / (1.0 + pastel_factor) for _ in range(3)]
+        return tuple(color)
+    distinctipy.get_random_color = _patched_get_random_color
+
+    exclude_colors = [
+        tuple(map(float, (d, d, d)))
+        for d in np.linspace(0, 1, 5)
+    ] + list(given.values())
+
+    final = given.copy()
+    new_colors = distinctipy.get_colors(len(needs_color), exclude_colors=exclude_colors)
+    for key, new_color in zip(needs_color, new_colors):
+        final[key] = tuple(map(float, new_color))
+    return final
+
+
+def demo_kwcoco_multisensor(num_videos=4, num_frames=10, **kwargs):
+    """
+    Note:
+        dev/flow21 has main implementation. remove this after this is merged
+
+    Ignore:
+        import watch
+        coco_dset = watch.demo.demo_kwcoco_multisensor()
+        coco_dset = watch.demo.demo_kwcoco_multisensor(max_speed=0.5)
+    """
+    demo_kwargs = {
+        'num_frames': num_frames,
+        'num_videos': num_videos,
+        'rng': 9111665008,
+        'multisensor': True,
+        'multispectral': True,
+        'image_size': 'random',
+    }
+    demo_kwargs.update(kwargs)
+    coco_dset = kwcoco.CocoDataset.demo('vidshapes', **demo_kwargs)
+    # Hack in sensor_coarse
+    images = coco_dset.images()
+    groups = ub.sorted_keys(ub.group_items(images.coco_images, lambda x: x.channels.spec))
+    for idx, (k, g) in enumerate(groups.items()):
+        for coco_img in g:
+            coco_img.img['sensor_coarse'] = 'sensor{}'.format(idx)
+    return coco_dset
+
+
+def coerce_kwcoco(data='watch-msi', **kwargs):
+    """
+    Note:
+        dev/flow21 has main implementation. remove this after this is merged
+
+    coerce with watch special datasets
+    """
+    if isinstance(data, str) and 'watch' in data.split('special:', 1)[-1].split('-'):
+        return demo_kwcoco_multisensor(**kwargs)
+    else:
+        return kwcoco.CocoDataset.coerce(data, **kwargs)
 
 
 _SubConfig = IntensityHistogramConfig

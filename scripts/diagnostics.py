@@ -28,14 +28,14 @@ def run_diagnostics():
 
     # Python variant of coco_intensity_histograms
     from watch.cli import coco_intensity_histograms
-    coco_intensity_histograms.main(
+    kwargs = dict(
         src=coco_dset,
         dst=analytic_dpath / 'intensity_hist.png',
         include_channels=channels,
         title=dset_name,
         valid_range='1:5000',
-        bins=512,
-    )
+        bins=512)
+    coco_intensity_histograms.main(**kwargs)
 
     for vidid in ub.ProgIter(videos, verbose=3):
         region_name = coco_dset.videos([vidid]).lookup('name')[0]
