@@ -53,7 +53,8 @@ def benchmark_models():
             normalize_inputs=True, neg_to_pos_ratio=0, num_workers='avail/2', true_multimodal=True,
         )
         datamodule.setup('fit')
-        batch = next(iter(datamodule.train_dataloader()))
+        # TODO
+        batch = next(iter(datamodule.train_dataloader()))  # NOQA
 
     encoder_info = transformer.encoder_configs.copy()
 

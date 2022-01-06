@@ -79,7 +79,8 @@ def repackage(checkpoint_fpath, force=False):
     return str(package_fpath)
 
 
-def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None):
+def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
+                       git_commit=False):
     """
     Package and copy checkpoints into the DVC folder for evaluation.
 
@@ -88,13 +89,11 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None):
 
     CommandLine:
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-
-
-    python -m watch.tasks.fusion.repackage gather_checkpoints \
-        --dvc_dpath=$DVC_DPATH \
-        --storage_dpath=$DVC_DPATH/models/fusion/SC-20201117 \
-        --train_dpath=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1-20201117
-
+        python -m watch.tasks.fusion.repackage gather_checkpoints \
+            --dvc_dpath=$DVC_DPATH \
+            --storage_dpath=$DVC_DPATH/models/fusion/SC-20201117 \
+            --train_dpath=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1-20201117 \
+            --git_commit=True
     """
     from watch.utils import util_data
     import pathlib
@@ -183,10 +182,11 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None):
     git_info1 = ub.cmd(gitcmd, verbose=3, check=True, cwd=dvc_dpath)
     assert git_info1['ret'] == 0
 
-    # git_info3 = ub.cmd('git commit -am "new models"', verbose=3, check=True, cwd=dvc_dpath)  # dangerous?
-    # assert git_info3['ret'] == 0
-    # git_info2 = ub.cmd('git push', verbose=3, check=True, cwd=dvc_dpath)
-    # assert git_info2['ret'] == 0
+    if git_commit:
+        git_info3 = ub.cmd('git commit -am "new models"', verbose=3, check=True, cwd=dvc_dpath)  # dangerous?
+        assert git_info3['ret'] == 0
+        git_info2 = ub.cmd('git push', verbose=3, check=True, cwd=dvc_dpath)
+        assert git_info2['ret'] == 0
 
     import dvc.main
     # from dvc import main
@@ -199,15 +199,16 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None):
     finally:
         os.chdir(saved_cwd)
 
-    """
-    # on remote
-    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-    cd $DVC_DPATH
-    git pull
-    dvc pull -r aws --recursive models/fusion/SC-20201117
+    print(ub.codeblock(
+        """
+        # On the evaluation remote you need to run something like:
+        DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+        cd $DVC_DPATH
+        git pull
+        dvc pull -r aws --recursive models/fusion/SC-20201117
 
-    python ~/code/watch/watch/tasks/fusion/schedule_inference.py schedule_evaluation --gpus=None
-    """
+        python ~/code/watch/watch/tasks/fusion/schedule_inference.py schedule_evaluation --gpus=None
+        """))
 
 
 if __name__ == '__main__':
