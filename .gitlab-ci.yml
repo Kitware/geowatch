@@ -194,6 +194,8 @@ run_linter:
 
     script:
         - head -n 20 watch/cli/animate_visualizations.py
+        - flake8 watch/cli/animate_visualizations.py
+        - flake8 --version
         - python dev/lint.py [atk,watch] --mode=lint
 
     # We should eventually enforce linting
