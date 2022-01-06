@@ -146,7 +146,7 @@ class CocoAlignGeotiffConfig(scfg.Config):
             '''
         )),
 
-        'debug_valid_regions': scfg.Value(True, help=ub.paragraph(
+        'debug_valid_regions': scfg.Value(False, help=ub.paragraph(
             '''
             write valid region visualizations to help debug "black images"
             issues.
@@ -253,6 +253,7 @@ def main(cmdline=True, **kw):
         >>>     'max_workers': 0,
         >>>     'aux_workers': 0,
         >>>     'visualize': 1,
+        >>>     'debug_valid_regions': True,
         >>> }
         >>> cmdline = False
         >>> new_dset = main(cmdline, **kw)
