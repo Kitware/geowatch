@@ -108,7 +108,7 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
 
     for type_ in types:
         for video_dpath in video_dpaths:
-            prog.set_extra(f'{type_=!r} {video_dpath=!r}')
+            prog.set_extra('type_={!r} video_dpath={!r}'.format(type_, video_dpath))
             prog.step()
             video_name = video_dpath.name
 
