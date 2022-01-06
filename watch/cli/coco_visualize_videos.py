@@ -114,6 +114,23 @@ class CocoVisualizeConfig(scfg.Config):
 
                 Requries the "jq" python library is installed.
                 ''')),
+
+        'select_videos': scfg.Value(
+            None, help=ub.paragraph(
+                '''
+                A json query (via the jq spec) that specifies which videos
+                belong in the subset. Note, this is a passed as the body of
+                the following jq query format string to filter valid ids
+                '.videos[] | select({select_images}) | .id'.
+
+                Examples for this argument are as follows:
+                '.file_name | startswith("foo")' will select only videos
+                where the name starts with foo.
+
+                Only applicable for dataset that contain videos.
+
+                Requries the "jq" python library is installed.
+                ''')),
     }
 
 
@@ -154,7 +171,6 @@ def main(cmdline=True, **kwargs):
     config = CocoVisualizeConfig(default=kwargs, cmdline=cmdline)
     space = config['space']
     channels = config['channels']
-    any3 = config['any3']
     print('config = {}'.format(ub.repr2(dict(config), nl=2)))
 
     if config['max_workers'] is not None:
@@ -197,6 +213,27 @@ def main(cmdline=True, **kwargs):
             query = jq.compile(query_text)
             selected_gids = query.input(coco_dset.dataset).all()
             selected_gids = set(selected_gids)
+        except Exception:
+            print('JQ Query Failed: {}'.format(query_text))
+            raise
+
+    if config['select_videos'] is not None:
+        try:
+            import jq
+        except Exception:
+            print('The jq library is required to run a generic image query')
+            raise
+
+        try:
+            query_text = ".videos[] | select({select_videos}) | .id".format(**config)
+            query = jq.compile(query_text)
+            selected_vidids = query.input(coco_dset.dataset).all()
+            vid_selected_gids = set(ub.flatten(coco_dset.index.vidid_to_gids[vidid]
+                                               for vidid in selected_vidids))
+            if selected_gids is None:
+                selected_gids = vid_selected_gids
+            else:
+                selected_gids &= vid_selected_gids
         except Exception:
             print('JQ Query Failed: {}'.format(query_text))
             raise

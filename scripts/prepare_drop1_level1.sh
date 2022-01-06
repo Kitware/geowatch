@@ -141,10 +141,10 @@ extract_aligned_cropped_regions(){
     #_="
     smartwatch visualize --src \
         $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json \
-        '--channels=panchromatic' \
+        --any3=only \
         --viz_dpath=$ALIGNED_KWCOCO_BUNDLE/_viz \
         --draw_anns=False \
-        --select_images '.video_id == 3'
+        --select_images '.video_id == 3' --animate=True
     #"
 
     kwcoco subset --src $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json \
