@@ -1,3 +1,30 @@
+#!/usr/bin/env python
+
+# This linter is complaining about this file in the CI, but not on my local
+# machine. I have no idea why. I just get:
+# watch/cli/animate_visualizations.py:1:7: E999 SyntaxError: invalid syntax
+# 1     E999 SyntaxError: invalid syntax
+
+
+__notes__ = r"""
+.. :code: bash
+
+    # Make an animated gif for specified bands (use "," to separate)
+    # Requires a CD
+    CHANNELS="red|green|blue"
+    mapfile -td \, _BANDS < <(printf "%s\0" "$CHANNELS")
+    items=$(jq -r '.videos[] | .name' $OUTPUT_COCO_FPATH)
+    for item in ${items[@]}; do
+        echo "item = $item"
+        for bandname in ${_BANDS[@]}; do
+            echo "_BANDS = $_BANDS"
+            BAND_DPATH="$VIZ_DPATH/${item}/_anns/${bandname}/"
+            GIF_FPATH="$VIZ_DPATH/${item}_anns_${bandname}.gif"
+            python -m watch.cli.gifify --frames_per_second .7 \
+                --input "$BAND_DPATH" --output "$GIF_FPATH"
+        done
+    done
+"""
 
 
 def animate_visualizations(viz_dpath, channels=None, video_names=None,

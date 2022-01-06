@@ -69,23 +69,3 @@ def main():
     output_fpath = manual_fpath / 'compare_ani.gif'
     from watch.cli import gifify
     gifify.ffmpeg_animate_frames(fpaths, output_fpath, in_framerate=0.7)
-
-
-# Manual gif notes
-# #!/usr/bin/env python
-# .. :code: bash
-#     # Make an animated gif for specified bands (use "," to separate)
-#     # Requires a CD
-#     CHANNELS="red|green|blue"
-#     mapfile -td \, _BANDS < <(printf "%s\0" "$CHANNELS")
-#     items=$(jq -r '.videos[] | .name' $OUTPUT_COCO_FPATH)
-#     for item in ${items[@]}; do
-#         echo "item = $item"
-#         for bandname in ${_BANDS[@]}; do
-#             echo "_BANDS = $_BANDS"
-#             BAND_DPATH="$VIZ_DPATH/${item}/_anns/${bandname}/"
-#             GIF_FPATH="$VIZ_DPATH/${item}_anns_${bandname}.gif"
-#             python -m watch.cli.gifify --frames_per_second .7 \
-#                 --input "$BAND_DPATH" --output "$GIF_FPATH"
-#         done
-#     done
