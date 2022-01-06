@@ -904,9 +904,10 @@ class SimpleDataCube(object):
                         'other_gids': final_gids[1:],
                         'sensor_coarse': sensor_coarse,
                     })
-
-                    # Output a visualization of this group and its overlaps
-                    if debug_valid_regions:
+                    # Output a visualization of this group and its overlaps but
+                    # only if we have that info
+                    can_vis_geos = any(row['geometry'] is not None for row in rows)
+                    if debug_valid_regions and can_vis_geos:
                         import kwplot
                         from shapely.ops import unary_union
                         import shapely
@@ -925,7 +926,7 @@ class SimpleDataCube(object):
                             wld_map_crs84_gdf = gpd.read_file(
                                 gpd.datasets.get_path('naturalearth_lowres')
                             ).to_crs('crs84')
-                            sh_tight_bounds_local = unary_union([sh_space_region_local] + [row['geometry'] for row in rows])
+                            sh_tight_bounds_local = unary_union([sh_space_region_local] + [row['geometry'] for row in rows if row['geometry'] is not None])
                             sh_total_bounds_local = shapely.affinity.scale(sh_tight_bounds_local.convex_hull, 2.5, 2.5)
                             total_bounds_local = gpd.GeoDataFrame({'geometry': [sh_total_bounds_local]}, crs=local_epsg)
 

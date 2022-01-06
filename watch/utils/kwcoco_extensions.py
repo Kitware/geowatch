@@ -1762,7 +1762,7 @@ def covered_annot_geo_regions(coco_dset, merge=False):
                 # Should we switch to UTM?
                 img_rois_ = ops.unary_union(sh_annot_polys_)
                 try:
-                    img_rois = list(img_rois_)
+                    img_rois = list(img_rois_.geoms)
                 except Exception:
                     img_rois = [img_rois_]
 
