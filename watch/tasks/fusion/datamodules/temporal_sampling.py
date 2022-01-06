@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import kwarray
 import kwimage
 import numpy as np
