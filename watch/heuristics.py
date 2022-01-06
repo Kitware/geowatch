@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 In the interest of development speed we can't always be perfect about correctly
 passing the right metadata to functions that need it. This module serves as a

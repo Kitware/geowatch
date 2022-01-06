@@ -1,14 +1,21 @@
+#!/bin/bash
 __doc__="
 This script prepares the Drop1 Level1 (i.e. Raw Data) dataset
 
 It crops the unaligned data in the 'drop1' folder on DVC to regions and
 projects the annotations onto the data
+
+
+CommandLine:
+    source ~/code/watch/scripts/prepare_drop1_level1.sh
+    prepare_uncropped_data
+    extract_aligned_cropped_regions
 "
 
 
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 
-ALIGNED_BUNDLE_NAME=Drop1-Aligned-L1
+ALIGNED_BUNDLE_NAME=Drop1-Aligned-L1-2022-01
 UNCROPPED_BUNDLE_NAME=drop1
 
 UNCROPPED_DPATH=$DVC_DPATH/$UNCROPPED_BUNDLE_NAME
@@ -43,7 +50,6 @@ _debug_extract_aligned(){
     __doc__="
         source ~/code/watch/scripts/prepare_drop1_level1.sh
     "
-
     kwcoco subset data.kwcoco.json
     kwcoco stats $UNCROPPED_DPATH/data.kwcoco.json
     smartwatch stats $UNCROPPED_DPATH/data.kwcoco.json
@@ -90,31 +96,38 @@ _debug_extract_aligned(){
 }
 
 
-prepare_uncropped_data(){
-    # Ensure unstructure drop1 data has geo-info in the kwcoco file 
-    # (makes running the align script faster)
-    echo "UNCROPPED_DPATH = $UNCROPPED_DPATH"
-    smartwatch add_fields \
-        --src $UNCROPPED_DPATH/data.kwcoco.json \
-        --dst $UNCROPPED_DPATH/data.kwcoco.json \
-        --overwrite=warp --workers=avail --mode=process 
-}
-
-
 extract_aligned_cropped_regions(){
     __doc__="
     Extract relevant data from 
 
     source ~/code/watch/scripts/prepare_drop1_level1.sh
     "
-    # Align and orthorectify the data to the chosen regions 
-    # TODO: FIXME: When I pass in a glob string of region files this doesnt work
-    # not sure why. It should work. I need to use the merged region script. Very strange.
-    smartwatch align \
+    mkdir -p $ALIGNED_KWCOCO_BUNDLE
+
+    # Ensure unstructure drop1 data has geo-info in the kwcoco file 
+    # (makes running the align script faster)
+    echo "UNCROPPED_DPATH = $UNCROPPED_DPATH"
+    smartwatch add_fields \
         --src $UNCROPPED_DPATH/data.kwcoco.json \
+        --dst $ALIGNED_KWCOCO_BUNDLE/uncropped_data.kwcoco.json \
+        --enable_valid_region True \
+        --overwrite=warp --workers=avail --mode=process 
+
+    # Combine all the regions into a single file
+    # TODO: FIXME: When I pass in a glob string of region files to "align", it
+    # doesnt work not sure why. It should work. I need to use the merged region
+    # script. Very strange.
+    smartwatch merge_region_models \
+        --src $DVC_DPATH/drop1/region_models/*.geojson \
+        --dst "$ALIGNED_KWCOCO_BUNDLE/all_geo_regions.geojson"
+
+    # Align and orthorectify the data to the chosen regions 
+    smartwatch align \
+        --src $ALIGNED_KWCOCO_BUNDLE/uncropped_data.kwcoco.json \
         --dst $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json \
-        --regions "$UNCROPPED_DPATH/all_regions.geojson" \
+        --regions "$ALIGNED_KWCOCO_BUNDLE/all_geo_regions.geojson" \
         --keep img \
+        --debug_valid_regions True \
         --workers="avail/2" \
         --aux_workers="2" 
 
@@ -122,6 +135,9 @@ extract_aligned_cropped_regions(){
         --site_models="$DVC_DPATH/drop1/site_models/*.geojson" \
         --src $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json \
         --dst $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json
+
+    smartwatch stats "$ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json" 
+
 
     kwcoco subset --src $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json \
             --dst $ALIGNED_KWCOCO_BUNDLE/data_nowv.kwcoco.json \
@@ -222,7 +238,6 @@ teamfeatures(){
         --device=0 \
         --num_workers="16" \
         --output=$ALIGNED_KWCOCO_BUNDLE/data_nowv_dzyne_landcover.kwcoco.json
-
     
     python ~/code/watch/watch/cli/coco_combine_features.py \
         --src $BASE_COCO_FPATH \
@@ -262,6 +277,6 @@ teamfeatures(){
 
 
 main_drop1_level1(){
-    prepare_uncropped_data
     extract_aligned_cropped_regions
+    #teamfeatures
 }

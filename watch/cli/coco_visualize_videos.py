@@ -1,20 +1,22 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """
 KWCoco video visualization script
 
 CommandLine:
     # A demo of this script on toydata is as follows
 
-    TEMP_DPATH=$(mktemp -d)
+    # TEMP_DPATH=$(mktemp -d)
+    TEMP_DPATH=$HOME/.cache/kwcoco/demo/viz
+    mkdir -p $TEMP_DPATH
     echo "TEMP_DPATH = $TEMP_DPATH"
     cd $TEMP_DPATH
-
     KWCOCO_BUNDLE_DPATH=$TEMP_DPATH/toy_bundle
     KWCOCO_FPATH=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json
     VIZ_DPATH=$KWCOCO_BUNDLE_DPATH/_viz
-    python -m kwcoco toydata --key=vidshapes3-msi-frames7 --dst=$KWCOCO_FPATH
-    python -m watch.cli.coco_visualize_videos --src=$KWCOCO_FPATH --viz_dpath=$VIZ_DPATH --animate=True
+    python -m kwcoco toydata --key=vidshapes3-msi-multisensor-frames7 --dst=$KWCOCO_FPATH
+
+    python -m watch.cli.coco_visualize_videos --src=$KWCOCO_FPATH --viz_dpath=$VIZ_DPATH --animate=True --workers=0 --any3=only
+
     python -m watch.cli.coco_visualize_videos --src=$KWCOCO_FPATH --viz_dpath=$VIZ_DPATH --zoom_to_tracks=True --start_frame=1 --num_frames=2 --animate=True
 """
 import kwcoco
@@ -57,12 +59,14 @@ class CocoVisualizeConfig(scfg.Config):
             writes them adjacent to the input kwcoco file
             ''')),
 
-        'workers': scfg.Value(4, help='number of parallel procs'),
+        'workers': scfg.Value(0, help='number of parallel procs'),
         'max_workers': scfg.Value(None, help='DEPRECATED USE workers'),
 
         'space': scfg.Value('video', help='can be image or video space'),
 
         'channels': scfg.Value(None, type=str, help='only viz these channels'),
+
+        'any3': scfg.Value(True, help='if True, ensure the "any3" channels are drawn. If set to "only", then other per-channel visualizations are supressed. TODO: better name?'),
 
         'draw_imgs': scfg.Value(True),
         'draw_anns': scfg.Value(True),
@@ -106,6 +110,23 @@ class CocoVisualizeConfig(scfg.Config):
                 images with id less than 3 that are also pngs.
                 .myattr | in({"val1": 1, "val4": 1}) will take images
                 where myattr is either val1 or val4.
+
+                Requries the "jq" python library is installed.
+                ''')),
+
+        'select_videos': scfg.Value(
+            None, help=ub.paragraph(
+                '''
+                A json query (via the jq spec) that specifies which videos
+                belong in the subset. Note, this is a passed as the body of
+                the following jq query format string to filter valid ids
+                '.videos[] | select({select_images}) | .id'.
+
+                Examples for this argument are as follows:
+                '.file_name | startswith("foo")' will select only videos
+                where the name starts with foo.
+
+                Only applicable for dataset that contain videos.
 
                 Requries the "jq" python library is installed.
                 ''')),
@@ -195,6 +216,27 @@ def main(cmdline=True, **kwargs):
             print('JQ Query Failed: {}'.format(query_text))
             raise
 
+    if config['select_videos'] is not None:
+        try:
+            import jq
+        except Exception:
+            print('The jq library is required to run a generic image query')
+            raise
+
+        try:
+            query_text = ".videos[] | select({select_videos}) | .id".format(**config)
+            query = jq.compile(query_text)
+            selected_vidids = query.input(coco_dset.dataset).all()
+            vid_selected_gids = set(ub.flatten(coco_dset.index.vidid_to_gids[vidid]
+                                               for vidid in selected_vidids))
+            if selected_gids is None:
+                selected_gids = vid_selected_gids
+            else:
+                selected_gids &= vid_selected_gids
+        except Exception:
+            print('JQ Query Failed: {}'.format(query_text))
+            raise
+
     video_names = []
     for vidid, video in prog:
         sub_dpath = viz_dpath / video['name']
@@ -216,7 +258,7 @@ def main(cmdline=True, **kwargs):
             # to use as the normalizer.
             # Probably better to use multiple images from the sequence
             # to do normalization
-            if channels is None:
+            if channels is not None:
                 requested_channels = kwcoco.ChannelSpec.coerce(channels).fuse().as_set()
             else:
                 requested_channels = set()
@@ -287,7 +329,8 @@ def main(cmdline=True, **kwargs):
                                 chan_to_normalizer=chan_to_normalizer,
                                 fixed_normalization_scheme=config.get(
                                     'fixed_normalization_scheme'),
-                                nodata=config['nodata'])
+                                nodata=config['nodata'],
+                                any3=config['any3'])
 
         else:
             gid_subset = gids[start_frame:end_frame]
@@ -309,7 +352,8 @@ def main(cmdline=True, **kwargs):
                             chan_to_normalizer=chan_to_normalizer,
                             fixed_normalization_scheme=config.get(
                                 'fixed_normalization_scheme'),
-                            nodata=config['nodata'])
+                            nodata=config['nodata'],
+                            any3=config['any3'])
 
         for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):
             job.result()
@@ -429,7 +473,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                draw_anns=True, _header_extra=None,
                                chan_to_normalizer=None,
                                fixed_normalization_scheme=None,
-                               nodata=0):
+                               nodata=0, any3=True):
     """
     Dumps an intensity normalized "space-aligned" kwcoco image visualization
     (with or without annotation overlays) for specific bands to disk.
@@ -467,10 +511,13 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         if isinstance(channels, list):
             channels = ','.join(channels)  # hack
         channels = channel_spec.ChannelSpec.coerce(channels)
-        chan_groups = channels.streams()
+        chan_groups = [
+            {'chan': chan_obj} for chan_obj in channels.streams()
+        ]
     else:
         coco_img = coco_dset.coco_image(img['id'])
         channels = coco_img.channels
+
         if request_grouped_bands == 'default':
             # Use false color for special groups
             request_grouped_bands = [
@@ -478,6 +525,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                 'r|g|b',
                 # 'nir|swir16|swir22',
             ]
+
         for cand in request_grouped_bands:
             cand = kwcoco.FusedChannelSpec.coerce(cand)
             has_cand = (channels & cand).numel() == cand.numel()
@@ -493,13 +541,55 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                 # For large group, just take the first 3 channels
                 if group.numel() > 8:
                     group = group.normalize()[0:3]
-                    chan_groups.append(group)
+                    chan_groups.append({
+                        'chan': group,
+                    })
                 else:
                     # For smaller groups split them into singles
                     for part in group:
-                        chan_groups.append(kwcoco.FusedChannelSpec.coerce(part))
+                        chan_groups.append({
+                            'chan': kwcoco.FusedChannelSpec.coerce(part)
+                        })
             else:
-                chan_groups.append(group)
+                chan_groups.append({
+                    'chan': group,
+                })
+
+    # sanatize channel paths (todo: kwcoco helper for this)
+    def sanatize_chan_pnams(cs):
+        return cs.replace('|', '_').replace(':', '-')
+
+    for row in chan_groups:
+        row['pname'] = sanatize_chan_pnams(row['chan'].spec)
+
+    if any3:
+        if any3 == 'only':
+            # Kick everything else out
+            chan_groups = []
+
+        # Try to visualize any3 channels to get a nice viewable sequence
+        avail_channels = channels.fuse()
+        common_visualizers = list(map(kwcoco.FusedChannelSpec.coerce, [
+            'red|green|blue',
+            'r|g|b',
+            'pan',
+            'panchromatic',
+        ]))
+        found = None
+        for cand in common_visualizers:
+            flag = (cand & avail_channels).spec == cand.spec
+            if flag:
+                found = cand
+                break
+
+        # Just show false color from the first few channels
+        if found is None:
+            first3 = avail_channels.as_list()[0:3]
+            found = kwcoco.FusedChannelSpec.coerce('|'.join(first3))
+        chan_groups.append({
+            'pname': 'any3',
+            'chan': found,
+        })
 
     img_view_dpath = sub_dpath / '_imgs'
     ann_view_dpath = sub_dpath / '_anns'
@@ -531,14 +621,11 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         dets = dets.translate(ann_shift)
         delayed = delayed.crop(crop_box.to_slices()[0])
 
-    for chan_group_obj in chan_groups:
+    for chan_row in chan_groups:
+        chan_pname = chan_row['pname']
+        chan_group_obj = chan_row['chan']
         chan_list = chan_group_obj.parsed
         chan_group = chan_group_obj.spec
-
-        # sanatize channel paths (todo: kwcoco helper for this)
-        def sanatize_chan_pnams(cs):
-            return cs.replace('|', '_').replace(':', '-')
-        chan_pname = sanatize_chan_pnams(chan_group)
 
         # spec = str(chan.channels.spec)
         img_chan_dpath = img_view_dpath / chan_pname
@@ -562,6 +649,11 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             # hack
             from kwcoco.util import util_delayed_poc
             chan = util_delayed_poc.DelayedChannelConcat([delayed]).take_channels(chan_group)
+
+        if 0:
+            import kwarray
+            chan_row['stats'] = kwarray.stats_dict(chan)
+            print('chan_row = {}'.format(ub.repr2(chan_row, nl=-1)))
 
         # Note: Using 'nearest' here since we're just visualizing (and
         # otherwise nodata values can affect interpolated pixel

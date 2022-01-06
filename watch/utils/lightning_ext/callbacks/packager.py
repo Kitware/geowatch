@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Packager callback to interface with torch.package
 """

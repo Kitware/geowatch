@@ -188,9 +188,12 @@ run_linter:
     before_script:
         - conda init bash
         - source ~/.bashrc
-        - conda install pip
+        # NOTE: The default env runs Python 3.7, need to run 3.8 for 3.8 syntax
+        - conda create -y -n lint_env python=3.8 --override-channels --channel conda-forge
+        - conda activate lint_env
+        - pip install pip -U
         - ls -al
-        - pip install flake8 ubelt fire
+        - pip install -r requirements/linting.txt 
 
     script:
         - python dev/lint.py [atk,watch] --mode=lint

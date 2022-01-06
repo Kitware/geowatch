@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Adds fields needed by ndsampler to correctly "watch" a region.
 
@@ -7,7 +6,6 @@ We assume input is orthorectified.  We assume some GSD "target" gsd for video
 and image processing. Note a video GSD will typically be much higher (i.e.
 lower resolution) than an image GSD.
 """
-# import kwcoco
 import warnings
 import numpy as np
 import ubelt as ub
@@ -1762,7 +1760,7 @@ def covered_annot_geo_regions(coco_dset, merge=False):
                 # Should we switch to UTM?
                 img_rois_ = ops.unary_union(sh_annot_polys_)
                 try:
-                    img_rois = list(img_rois_)
+                    img_rois = list(img_rois_.geoms)
                 except Exception:
                     img_rois = [img_rois_]
 

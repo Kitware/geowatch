@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import kwimage
 import os
 import ubelt as ub

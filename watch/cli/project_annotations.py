@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python
 r"""
 Assigns geospace annotation to image pixels and frames
 
