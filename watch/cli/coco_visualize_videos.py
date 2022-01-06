@@ -585,7 +585,6 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         delayed = delayed.crop(crop_box.to_slices()[0])
 
     for chan_row in chan_groups:
-        print('chan_row = {}'.format(ub.repr2(chan_row, nl=1)))
         chan_pname = chan_row['pname']
         chan_group_obj = chan_row['chan']
         chan_list = chan_group_obj.parsed
@@ -613,6 +612,11 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             # hack
             from kwcoco.util import util_delayed_poc
             chan = util_delayed_poc.DelayedChannelConcat([delayed]).take_channels(chan_group)
+
+        if 0:
+            import kwarray
+            chan_row['stats'] = kwarray.stats_dict(chan)
+            print('chan_row = {}'.format(ub.repr2(chan_row, nl=-1)))
 
         # Note: Using 'nearest' here since we're just visualizing (and
         # otherwise nodata values can affect interpolated pixel
