@@ -585,6 +585,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         delayed = delayed.crop(crop_box.to_slices()[0])
 
     for chan_row in chan_groups:
+        print('chan_row = {}'.format(ub.repr2(chan_row, nl=1)))
         chan_pname = chan_row['pname']
         chan_group_obj = chan_row['chan']
         chan_list = chan_group_obj.parsed
