@@ -191,7 +191,7 @@ run_linter:
         # NOTE: The default env runs Python 3.7, need to run 3.8 for 3.8 syntax
         - conda create -y -n lint_env python=3.8 --override-channels --channel conda-forge
         - conda activate lint_env
-        - conda install pip -U
+        - pip install pip -U
         - ls -al
         - pip install -r requirements/linting.txt 
 
