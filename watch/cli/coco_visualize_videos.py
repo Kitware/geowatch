@@ -581,6 +581,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             flag = (cand & avail_channels).spec == cand.spec
             if flag:
                 found = cand
+                break
 
         # Just show false color from the first few channels
         if found is None:

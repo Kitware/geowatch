@@ -138,14 +138,6 @@ extract_aligned_cropped_regions(){
 
     smartwatch stats "$ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json" 
 
-    #_="
-    smartwatch visualize --src \
-        $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json \
-        --any3=only \
-        --viz_dpath=$ALIGNED_KWCOCO_BUNDLE/_viz \
-        --draw_anns=False \
-        --select_images '.video_id == 3' --animate=True
-    #"
 
     kwcoco subset --src $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json \
             --dst $ALIGNED_KWCOCO_BUNDLE/data_nowv.kwcoco.json \
