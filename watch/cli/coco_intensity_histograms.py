@@ -15,7 +15,6 @@ import pickle
 import kwarray
 import ubelt as ub
 import scriptconfig as scfg
-import pathlib
 import kwimage
 import pandas as pd
 import numpy as np
@@ -402,7 +401,7 @@ def ensure_intensity_sidecar(fpath, recompute=False):
     """
     Write statistics next to the image
     """
-    stats_fpath = pathlib.Path(fpath + '.stats.pkl')
+    stats_fpath = ub.Path(fpath + '.stats.pkl')
 
     if recompute or not stats_fpath.exists():
         imdata = kwimage.imread(fpath, backend='gdal')

@@ -11,6 +11,8 @@ def run_diagnostics():
     bundle_dpath = dvc_dpath / 'Drop1-Aligned-TA1-2022-01'
     coco_fpath = bundle_dpath / 'data.kwcoco.json'
 
+    dset_name = bundle_dpath.stem
+
     analytic_dpath = ub.Path(bundle_dpath / 'analytics').ensuredir()
 
     coco_dset = kwcoco.CocoDataset.coerce(coco_fpath)
@@ -30,7 +32,9 @@ def run_diagnostics():
         src=coco_dset,
         dst=analytic_dpath / 'intensity_hist.png',
         include_channels=channels,
+        title=dset_name,
         valid_range='1:5000',
+        bins=512,
     )
 
     for vidid in ub.ProgIter(videos, verbose=3):
@@ -45,7 +49,8 @@ def run_diagnostics():
         coco_intensity_histograms.main(
             src=region_coco,
             dst=hist_fpath,
-            title=region_name,
+            title=f'{dset_name}: {region_name}',
             include_channels=channels,
             valid_range='1:5000',
+            bins=512,
         )
