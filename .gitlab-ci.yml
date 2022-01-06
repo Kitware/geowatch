@@ -193,6 +193,7 @@ run_linter:
         - pip install flake8 ubelt fire
 
     script:
+        - head -n 20 watch/cli/animate_visualizations.py
         - python dev/lint.py [atk,watch] --mode=lint
 
     # We should eventually enforce linting
