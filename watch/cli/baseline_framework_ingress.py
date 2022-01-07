@@ -274,7 +274,12 @@ def download_mtd_msil1c(product_id,
     # parallel folder (productInfo.json contains the name of the product).
     # This can be found in products/[year]/[month]/[day]/[product name].
     # (https://roda.sentinel-hub.com/sentinel-s2-l1c/readme.html)
-    dt = datetime.strptime(product_id.split('_')[2], '%Y%m%dT%H%M%S')
+    try:
+        dt = datetime.strptime(product_id.split('_')[2], '%Y%m%dT%H%M%S')
+    except ValueError:
+        # Support for older format product ID format, e.g.:
+        # "S2A_OPER_PRD_MSIL1C_PDMC_20160413T135705_R065_V20160412T102058_20160412T102058"
+        dt = datetime.strptime(product_id.split('_')[5], '%Y%m%dT%H%M%S')
 
     scheme, netloc, path, *_ = urlparse(metadata_href)
     index = path.find('tiles')
