@@ -721,6 +721,8 @@ def gather_measures():
     # ax.set_xlabel('tpr (true positive rate)')
     ax.set_title('Comparison of runs AUC: {}'.format(catname))
 
+    print(best_per_expt.sort_values('mAP').to_string())
+
 
 # def run_command_in_tmux_queue(command, name):
 #     """

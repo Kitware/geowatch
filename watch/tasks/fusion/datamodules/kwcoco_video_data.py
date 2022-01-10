@@ -2160,7 +2160,9 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                                    negative_classes=None, keepbound=False,
                                    exclude_sensors=None,
                                    time_sampling='hard+distribute',
-                                   time_span='2y', use_annot_info=True):
+                                   time_span='2y', use_annot_info=True,
+                                   use_grid_positives=True,
+                                   use_centered_positives=False):
     """
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -2202,20 +2204,133 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> import kwcoco
         >>> dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=30)
         >>> window_overlap = 0.0
-        >>> window_dims = (3, 96, 96)
+        >>> window_dims = (3, 32, 32)
         >>> keepbound = False
+        >>> time_sampling = 'soft+distribute'
         >>> sample_grid1 = sample_video_spacetime_targets(dset, window_dims, window_overlap, time_sampling='soft+distribute')
         >>> sample_grid2 = sample_video_spacetime_targets(dset, window_dims, window_overlap, time_sampling='contiguous+pairwise')
+
 
         ub.peek(sample_grid1['vidid_to_time_sampler'].values()).show_summary(fnum=1)
         ub.peek(sample_grid2['vidid_to_time_sampler'].values()).show_summary(fnum=2)
         _ = xdev.profile_now(sample_video_spacetime_targets)(dset, window_dims, window_overlap)
+
+    Ignore:
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_multisensor
+        >>> dset = coco_dset = demo_kwcoco_multisensor(dates=True, geodata=True, heatmap=True)
+        >>> import xdev
+        >>> globals().update(xdev.get_func_kwargs(sample_video_spacetime_targets))
+        >>> window_overlap = 0.0
+        >>> window_dims = (3, 32, 32)
+        >>> keepbound = False
+        >>> time_sampling = 'soft+distribute'
+        >>> use_centered_positives = True
+        >>> use_grid_positives = 1
+        >>> sample_grid1 = sample_video_spacetime_targets(
+        >>>     dset, window_dims, window_overlap, time_sampling=time_sampling,
+        >>>     use_grid_positives=use_grid_positives, use_centered_positives=use_centered_positives)
+        >>> #print('sample_grid1 = {}'.format(ub.repr2(sample_grid1, nl=2)))
+
+
+        if 0:
+            # Visualize the sample grid
+            import pandas as pd
+            targets = pd.DataFrame(sample_grid1['targets'])
+
+            dataset_canvases = []
+
+            for vidid, video_df in targets.groupby('video_id'):
+                gid_to_infos = ub.ddict(list)
+                for _, row in video_df.iterrows():
+                    for gid in row['gids']:
+                        gid_to_infos[gid].append({
+                            'gid': gid,
+                            'space_slice': row['space_slice'],
+                            'label': row['label'],
+                        })
+
+                video_canvases = []
+                common = ub.oset(dset.images(vidid=vidid)) & (gid_to_infos)
+                for gid in common:
+                    infos = gid_to_infos[gid]
+                    label_to_items = ub.group_items(infos, key=lambda x: x['label'])
+                    video = dset.index.videos[vidid]
+
+                    shape = (video['height'], video['width'], 4)
+                    canvas = np.zeros(shape, dtype=np.float32)
+                    shape = (2, video['height'], video['width'])
+                    accum = np.zeros(shape, dtype=np.float32)
+
+                    for label, items in label_to_items.items():
+                        label_idx = int(label == 'positive')
+                        for info in items:
+                            space_slice = info['space_slice']
+                            y_sl, x_sl = space_slice
+                            accum[(label_idx,) + space_slice] += 1
+                            # Add extra weight to borders for viz
+                            accum[label_idx, y_sl.start:y_sl.start + 1, x_sl.start: x_sl.stop] += 0.15
+                            accum[label_idx, y_sl.stop - 1:y_sl.stop, x_sl.start:x_sl.stop] += 0.15
+                            accum[label_idx, y_sl.start:y_sl.stop, x_sl.start: x_sl.start + 1] += 0.15
+                            accum[label_idx, y_sl.start:y_sl.stop, x_sl.stop - 1: x_sl.stop] += 0.15
+
+                    neg_accum = accum[0]
+                    pos_accum = accum[1]
+
+                    neg_alpha = neg_accum / (neg_accum.max() * 2)
+                    pos_alpha = pos_accum / (pos_accum.max() * 2)
+                    bg_canvas = canvas.copy()
+                    bg_canvas[..., 0:4] = [0, 0, 0, 1.0]
+                    pos_canvas = canvas.copy()
+                    neg_canvas = canvas.copy()
+                    pos_canvas[..., 0:3] = kwimage.Color('dodgerblue').as01()
+                    neg_canvas[..., 0:3] = kwimage.Color('orangered').as01()
+                    neg_canvas[..., 3] = neg_alpha
+                    pos_canvas[..., 3] = pos_alpha
+
+                    warp_vid_from_img = kwimage.Affine.coerce(
+                        dset.index.imgs[gid]['warp_img_to_vid'])
+
+                    vid_poly = kwimage.Boxes([[0, 0, video['width'], video['height']]], 'xywh').to_polygons()[0]
+                    coco_poly = dset.index.imgs[gid].get('valid_region', None)
+                    if coco_poly is None:
+                        kw_invalid_poly = None
+                    else:
+                        kw_poly_img = kwimage.MultiPolygon.coerce(coco_poly)
+                        valid_poly = kw_poly_img.warp(warp_vid_from_img)
+                        sh_invalid_poly = vid_poly.to_shapely().difference(valid_poly.to_shapely())
+                        kw_invalid_poly = kwimage.MultiPolygon.coerce(sh_invalid_poly)
+
+
+
+                    final_canvas = kwimage.overlay_alpha_layers([pos_canvas, neg_canvas, bg_canvas])
+                    final_canvas = kwimage.ensure_uint255(final_canvas)
+
+                    annot_dets = dset.annots(gid=gid).detections
+                    vid_annot_dets = annot_dets.warp(warp_vid_from_img)
+
+                    if 0:
+                        final_canvas = vid_annot_dets.draw_on(final_canvas)
+
+                    if kw_invalid_poly is not None:
+                        final_canvas = kw_invalid_poly.draw_on(final_canvas, color='yellow', alpha=0.5)
+
+                    final_canvas = kwimage.draw_header_text(final_canvas, f'{gid=}')
+                    video_canvases.append(final_canvas)
+
+                video_canvas = kwimage.stack_images(video_canvases, axis=1, pad=10)
+                dataset_canvases.append(video_canvas)
+
+
+            dataset_canvas = kwimage.stack_images(dataset_canvases, axis=0, pad=20)
+            kwplot.imshow(dataset_canvas, doclf=1)
+
     """
     # Create a sliding window object for each specific image (because they may
     # have different sizes, technically we could memoize this)
     import pyqtree
     from watch.tasks.fusion.datamodules import temporal_sampling as tsm  # NOQA
-    from watch.utils import util_kwarray
+    # from watch.utils import util_kwarray
 
     window_space_dims = window_dims[1:3]
     window_time_dims = window_dims[0]
@@ -2247,6 +2362,23 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
     if not update_rule:
         update_rule = 'distribute'
 
+    @ub.memoize
+    def get_image_valid_region_in_vidspace(gid):
+        coco_poly = dset.index.imgs[gid].get('valid_region', None)
+        if coco_poly is None:
+            sh_poly_vid = None
+        else:
+            warp_vid_from_img = kwimage.Affine.coerce(
+                dset.index.imgs[gid]['warp_img_to_vid'])
+            kw_poly_img = kwimage.MultiPolygon.coerce(coco_poly)
+            kw_poly_vid = kw_poly_img.warp(warp_vid_from_img)
+            sh_poly_vid = kw_poly_vid.to_shapely()
+        return sh_poly_vid
+
+    background_classes = heuristics.BACKGROUND_CLASSES
+    # heuristics.IGNORE_CLASSNAMES
+    # heuristics.UNDISTINGUISHED_CLASSES
+
     # Given an video
     all_vid_ids = list(dset.index.videos.keys())
     for video_id in ub.ProgIter(all_vid_ids, desc='sample video regions', verbose=3):
@@ -2270,41 +2402,60 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         time_sampler.video_gids = np.array(video_gids)
         time_sampler.determenistic = True
 
+        # For each frame, determenistically compute an initial list of which
+        # supporting frames we will look at when making a prediction for the
+        # "main" frame. Initially this is only based on temporal metadata.  We
+        # may modify this later depending on spatial properties.
+        main_idx_to_gids = {
+            main_idx: list(ub.take(video_gids, time_sampler.sample(main_idx)))
+            for main_idx in time_sampler.main_indexes
+        }
+
         if use_annot_info:
+            # Build a distribution of where annotations exist in this dataset
             qtree = pyqtree.Index((0, 0, video_info['width'], video_info['height']))
             qtree.aid_to_tlbr = {}
-            qtree.idx_to_tlbr = {}
+            # qtree.idx_to_tlbr = {}
             tid_to_infos = ub.ddict(list)
             video_aids = dset.images(video_gids).annots.lookup('id')
-            all_vid_tlbr = []
+            annot_vid_tlbr = []
+            aids_to_track = []
             for aids, gid in zip(video_aids, video_gids):
                 warp_vid_from_img = kwimage.Affine.coerce(
                     dset.index.imgs[gid]['warp_img_to_vid'])
                 img_info = dset.index.imgs[gid]
                 frame_index = img_info['frame_index']
-                tids = dset.annots(aids).lookup('track_id')
-                cids = dset.annots(aids).lookup('category_id')
-                for tid, aid, cid in zip(tids, aids, cids):
-                    imgspace_box = kwimage.Boxes([dset.index.anns[aid]['bbox']], 'xywh')
-                    vidspace_box = imgspace_box.warp(warp_vid_from_img)
-                    tlbr_box = vidspace_box.to_tlbr().data[0]
-                    all_vid_tlbr.append(tlbr_box)
-                    tid_to_infos[tid].append({
-                        'gid': gid,
-                        'cid': cid,
-                        'frame_index': frame_index,
-                        'vidspace_box': tlbr_box,
-                        'cname': dset._resolve_to_cat(cid)['name'],
-                        'aid': aid,
-                    })
+                tids = dset.annots(aids).lookup('track_id', None)
+                cids = dset.annots(aids).lookup('category_id', None)
+                cnames = dset.categories(cids).name
 
-            if len(all_vid_tlbr):
-                unique_tlbr = util_kwarray.unique_rows(np.array(all_vid_tlbr))
-            else:
-                unique_tlbr = []
-            for idx, tlbr_box in enumerate(unique_tlbr):
-                qtree.insert(idx, tlbr_box)
-                qtree.idx_to_tlbr[idx] = tlbr_box
+                for tid, aid, cid, cname in zip(tids, aids, cids, cnames):
+                    if cname not in background_classes:
+                        aids_to_track.append(aid)
+                        imgspace_box = kwimage.Boxes([dset.index.anns[aid]['bbox']], 'xywh')
+                        vidspace_box = imgspace_box.warp(warp_vid_from_img)
+                        tlbr_box = vidspace_box.to_tlbr().data[0]
+                        annot_vid_tlbr.append(tlbr_box)
+                        if tid is not None:
+                            tid_to_infos[tid].append({
+                                'gid': gid,
+                                'cid': cid,
+                                'frame_index': frame_index,
+                                'vidspace_box': tlbr_box,
+                                'cname': dset._resolve_to_cat(cid)['name'],
+                                'aid': aid,
+                            })
+                        qtree.insert(aid, tlbr_box)
+                        qtree.aid_to_tlbr[aid] = tlbr_box
+                        # qtree.idx_to_tlbr[aid] = tlbr_box
+
+            # if len(annot_vid_tlbr):
+            #     unique_tlbr = util_kwarray.unique_rows(np.array(annot_vid_tlbr))
+            # else:
+            #     unique_tlbr = []
+            # for idx, tlbr_box in enumerate(unique_tlbr):
+            #     qtree.insert(idx, tlbr_box)
+            #    qtree.idx_to_tlbr[idx] = tlbr_box
 
             # tid_to_dframe = ub.map_vals(kwarray.DataFrameLight.from_dict, tid_to_infos)
             # for track_dframe in tid_to_dframe.values():
@@ -2315,38 +2466,45 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
             #     track_dframe['track_pairwise_ious'] = track_boxes.ious(track_boxes)
             #     track_dframe['track_boxes'] = track_boxes
 
-        # Compute determenistic base sample
-        main_idx_to_gids = {
-            main_idx: list(ub.take(video_gids, time_sampler.sample(main_idx)))
-            for main_idx in time_sampler.main_indexes
-        }
-
-        for space_region in ub.ProgIter(list(slider)):
+        RESPECT_VALID_REGIONS = True
+        for space_region in ub.ProgIter(list(slider), desc='Sliding window'):
             y_sl, x_sl = space_region
+
+            kw_space_box = kwimage.Boxes.from_slice(space_region).to_tlbr()
 
             # Find all annotations that pass through this spatial region
             if use_annot_info:
-                vid_box = kwimage.Boxes.from_slice((y_sl, x_sl))
-                query = vid_box.to_tlbr().data[0]
-                isect_aids = qtree.intersect(query)
+                query = kw_space_box.data[0]
+                isect_aids = list(qtree.intersect(query))
                 # isect_aids = set(isect_aids)
+                isect_gids = set(dset.annots(isect_aids).lookup('image_id'))
 
-            for main_idx, gids in main_idx_to_gids.items():
+            if RESPECT_VALID_REGIONS:
+                # Reselect the keyframes if we overlap an invalid region
+                # (as denoted in the metadata, further filtering may happen later)
+                # todo: refactor to be cleaner
+                main_idx_to_gids2, resampled = _refine_time_sample(
+                    dset, main_idx_to_gids, kw_space_box, time_sampler,
+                    get_image_valid_region_in_vidspace)
+            else:
+                main_idx_to_gids2 = main_idx_to_gids
+                resampled = False
+
+            for main_idx, gids in main_idx_to_gids2.items():
+                main_gid = time_sampler.video_gids[main_idx]
+                label = 'unknown'
+
                 if use_annot_info:
                     if isect_aids:
-                        has_annot = True
-                        # has_annot = any(
-                        #     bool(isect_aids & dset.index.gid_to_aids[gid])
-                        #     for gid in gids)
+                        has_annot = bool(isect_gids & set(gids))
                     else:
                         has_annot = False
                     if has_annot:
-                        positive_idxs.append(len(targets))
+                        label = 'positive'
                     else:
                         # Hack: exclude all annotated regions from negative sampling
-                        negative_idxs.append(len(targets))
+                        label = 'negative'
 
-                # Reselect the keyframes if we are overlaping a nodata region?
                 # Or do that on the fly?
                 if False:
                     for gid in gids:
@@ -2358,14 +2516,61 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                         if np.all(arr == 0):
                             print('BLACK REGION')
 
+                if label == 'positive':
+                    if not use_grid_positives:
+                        continue
+                    positive_idxs.append(len(targets))
+                elif label == 'negative':
+                    negative_idxs.append(len(targets))
+
                 targets.append({
                     'main_idx': main_idx,
                     'video_id': video_id,
                     'gids': gids,
+                    'main_gid': main_gid,
                     'space_slice': space_region,
-                    # 'changes': ','.join(changes),
-                    # 'region_tracks': region_tracks,
+                    'resampled': resampled,
+                    'label': label,
                 })
+
+        INSERT_CENTERED_ANNOT_WINDOWS = use_centered_positives
+        if INSERT_CENTERED_ANNOT_WINDOWS and use_annot_info:
+            # in addition to the sliding window sample, add positive samples
+            # centered around each annotation.
+            for tid, infos in tid_to_infos.items():
+                # existing_gids = [info['gid'] for info in infos]
+                for info in infos:
+                    main_gid = info['gid']
+                    ann_box = kwimage.Boxes([info['vidspace_box']], 'tlbr').to_cxywh()
+                    ann_box.data[:, 2] = window_space_dims[1]
+                    ann_box.data[:, 3] = window_space_dims[0]
+                    kw_space_region = ann_box.to_tlbr().quantize()
+                    space_region = kw_space_region.to_slices()[0]
+                    #  FIXME, this code is ugly
+                    # TODO: we could make frames where the phase transitions
+                    # more likely here.
+                    _hack_main_idx = np.where(time_sampler.video_gids == main_gid)[0][0]
+                    sample_gids = list(ub.take(video_gids, time_sampler.sample(_hack_main_idx)))
+                    _hack = {_hack_main_idx: sample_gids}
+                    _hack2, _ = _refine_time_sample(dset, _hack, kw_space_box, time_sampler, get_image_valid_region_in_vidspace)
+                    if _hack2:
+                        gids = _hack2[_hack_main_idx]
+                        label = 'positive'
+                        positive_idxs.append(len(targets))
+                        targets.append({
+                            'main_idx': _hack_main_idx,
+                            'video_id': video_id,
+                            'gids': gids,
+                            'main_gid': main_gid,
+                            'space_slice': space_region,
+                            'label': label,
+                            'resampled': -1,
+                        })
+
+        main_idx_to_gids = {
+            main_idx: list(ub.take(video_gids, time_sampler.sample(main_idx)))
+            for main_idx in time_sampler.main_indexes
+        }
 
         # Disable determenism
         time_sampler.determenistic = False
@@ -2385,6 +2590,53 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         'vidid_to_time_sampler': vidid_to_time_sampler,
     }
     return sample_grid
+
+
+def _refine_time_sample(dset, main_idx_to_gids, kw_space_box, time_sampler, get_image_valid_region_in_vidspace):
+    """
+    Refine the time sample based on spatial information
+    """
+    video_gids = time_sampler.video_gids
+
+    iooa_thresh = 0.2  # parametarize?
+
+    gid_to_isbad = {}
+    for gid in video_gids:
+        valid_poly = get_image_valid_region_in_vidspace(gid)
+        gid_to_isbad[gid] = False
+        if valid_poly is not None:
+            sh_space_poly = kw_space_box.to_shapley()[0]
+            # flag = valid_poly.intersects(sh_space_poly)
+            isect = valid_poly.intersection(sh_space_poly)
+            iooa = isect.area / sh_space_poly.area
+            if iooa < iooa_thresh:
+                gid_to_isbad[gid] = True
+
+    all_bad_gids = [gid for gid, flag in gid_to_isbad.items() if flag]
+
+    resampled = 0
+    refined_sample = {}
+    for main_idx, gids in main_idx_to_gids.items():
+        main_gid = video_gids[main_idx]
+        # Skip the sample when the "main" frame is bad.
+        if not gid_to_isbad[main_gid]:
+            good_gids = [gid for gid in gids if not gid_to_isbad[gid]]
+            if good_gids != gids:
+                include_idxs = np.where(kwarray.isect_flags(video_gids, good_gids))[0]
+                exclude_idxs = np.where(kwarray.isect_flags(video_gids, all_bad_gids))[0]
+                chosen = time_sampler.sample(include=include_idxs, exclude=exclude_idxs, error_level=1, return_info=False)
+                new_gids = list(ub.take(video_gids, chosen))
+                # Are we allowed to return less than the initial expected
+                # number of frames? For transformers yes, but we should be
+                # careful to ask the user if they expect this.
+                new_are_bad = [g for g in new_gids if gid_to_isbad[g]]
+                if not new_are_bad:
+                    resampled += 1
+                    refined_sample[main_idx] = new_gids
+            else:
+                refined_sample[main_idx] = gids
+
+    return refined_sample, resampled
 
 
 def lookup_track_info(coco_dset, tid):

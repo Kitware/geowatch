@@ -1,4 +1,5 @@
 """
+Extends kwcoco demodata to be more smart-like
 """
 from dateutil.parser import isoparse
 from os.path import dirname
@@ -12,6 +13,7 @@ import geopandas as gpd
 import kwarray
 import kwcoco
 import kwimage
+import numpy as np
 import ubelt as ub
 import watch
 
@@ -163,12 +165,8 @@ def demo_kwcoco_with_heatmaps(num_videos=1, num_frames=20):
             import kwplot
             kwplot.imshow(vid_stack)
     """
-    import numpy as np
-    import pathlib
     import kwarray
     import kwcoco
-    import datetime
-    from kwarray.distributions import Uniform
     from kwarray.distributions import DiscreteUniform  # NOQA
 
     rng = 101893676  # random seed
@@ -191,7 +189,23 @@ def demo_kwcoco_with_heatmaps(num_videos=1, num_frames=20):
     # }
     # perterb.perterb_coco(coco_dset, **perterb_config)
 
-    asset_dpath = pathlib.Path(coco_dset.assets_dpath)
+    hack_in_heatmaps(coco_dset, rng=rng)
+    hack_in_timedata(coco_dset)
+
+    # Hack in geographic info
+    hack_seed_geometadata_in_dset(coco_dset, force=True, rng=rng)
+
+    from watch.utils import kwcoco_extensions
+    # Do a consistent transfer of the hacked seeded geodat to the other images
+    kwcoco_extensions.ensure_transfered_geo_data(coco_dset)
+
+    kwcoco_extensions.warp_annot_segmentations_to_geos(coco_dset)
+    return coco_dset
+
+
+def hack_in_heatmaps(coco_dset, rng=None):
+    rng = kwarray.ensure_rng(rng)
+    asset_dpath = ub.Path(coco_dset.assets_dpath)
     dummy_heatmap_dpath = asset_dpath / 'dummy_heatmaps'
     dummy_heatmap_dpath.mkdir(exist_ok=1, parents=True)
 
@@ -250,6 +264,9 @@ def demo_kwcoco_with_heatmaps(num_videos=1, num_frames=20):
             'warp_aux_to_img': warp_img_from_aux.concise(),
         })
 
+
+def hack_in_timedata(coco_dset):
+    from kwarray.distributions import Uniform
     min_time = datetime.datetime(year=1970, month=1, day=1)
     max_time = datetime.datetime(year=2101, month=1, day=1)
     time_distri = Uniform(min_time.timestamp(), max_time.timestamp())
@@ -262,17 +279,6 @@ def demo_kwcoco_with_heatmaps(num_videos=1, num_frames=20):
             ts = datetime.datetime.fromtimestamp(timestamp)
             img = coco_dset.index.imgs[gid]
             img['date_captured'] = ts.isoformat()
-
-    # Hack in geographic info
-    hack_seed_geometadata_in_dset(coco_dset, force=True, rng=rng)
-
-    from watch.utils import kwcoco_extensions
-
-    # Do a consistent transfer of the hacked seeded geodat to the other images
-    kwcoco_extensions.ensure_transfered_geo_data(coco_dset)
-
-    kwcoco_extensions.warp_annot_segmentations_to_geos(coco_dset)
-    return coco_dset
 
 
 def hack_seed_geometadata_in_dset(coco_dset, force=False, rng=None):
@@ -393,12 +399,26 @@ def _random_utm_box(rng=None):
     return utm_box, utm_crs_info
 
 
-def demo_kwcoco_multisensor(num_videos=4, num_frames=10, **kwargs):
+def demo_kwcoco_multisensor(num_videos=4, num_frames=10, heatmap=False,
+                            dates=False, geodata=False, **kwargs):
     """
     Ignore:
         import watch
         coco_dset = watch.demo.demo_kwcoco_multisensor()
         coco_dset = watch.demo.demo_kwcoco_multisensor(max_speed=0.5)
+
+        from watch.demo.smart_kwcoco_demodata import *  # NOQA
+        import xdev
+        globals().update(xdev.get_func_kwargs(demo_kwcoco_multisensor))
+        kwargs = {}
+
+    Example:
+        >>> from watch.demo.smart_kwcoco_demodata import *  # NOQA
+        >>> dates=True
+        >>> geodata=True
+        >>> heatmap=True
+        >>> kwargs = {}
+        >>> coco_dset = demo_kwcoco_multisensor(dates=True, geodata=True, heatmap=True)
     """
     demo_kwargs = {
         'num_frames': num_frames,
@@ -408,6 +428,8 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, **kwargs):
         'multispectral': True,
         'image_size': 'random',
     }
+    rng = kwarray.ensure_rng(demo_kwargs['rng'])
+    demo_kwargs['rng' ] = rng
     demo_kwargs.update(kwargs)
     coco_dset = kwcoco.CocoDataset.demo('vidshapes', **demo_kwargs)
     # Hack in sensor_coarse
@@ -416,6 +438,71 @@ def demo_kwcoco_multisensor(num_videos=4, num_frames=10, **kwargs):
     for idx, (k, g) in enumerate(groups.items()):
         for coco_img in g:
             coco_img.img['sensor_coarse'] = 'sensor{}'.format(idx)
+
+    random_ignore_annots = True
+    if random_ignore_annots:
+        neg_cid = coco_dset.ensure_category('negative')
+        ignore_cid = coco_dset.ensure_category('ignore')
+
+        for coco_img in coco_dset.images().coco_images:
+            dsize = coco_img.dsize
+            if rng.rand() > 0.8:
+                n = min(rng.randint(0, 3), rng.randint(0, 3)) + 1
+                for _ in range(n):
+                    cid = ignore_cid if rng.rand() > 0.5 else neg_cid
+                    poly = kwimage.Polygon.random().scale(dsize)
+                    new_ann = {
+                        'image_id': coco_img.img['id'],
+                        'category_id': cid,
+                        'bbox': list(poly.to_boxes().to_coco())[0],
+                        'segmentation': poly.to_coco('new'),
+                    }
+                    coco_dset.add_annotation(**new_ann)
+
+    if heatmap:
+        hack_in_heatmaps(coco_dset, rng=rng)
+
+    if dates:
+        hack_in_timedata(coco_dset)
+
+    if geodata:
+        # Hack in geographic info
+        hack_seed_geometadata_in_dset(coco_dset, force=True, rng=rng)
+        from watch.utils import kwcoco_extensions
+        # Do a consistent transfer of the hacked seeded geodata to the other images
+        kwcoco_extensions.ensure_transfered_geo_data(coco_dset)
+        kwcoco_extensions.warp_annot_segmentations_to_geos(coco_dset)
+
+        # Also hack in an invalid region in the top left of some videos
+        vidids = coco_dset.videos()
+        for _idx, vidid in enumerate(vidids):
+            gids = coco_dset.images(vidid=vidid)
+            if _idx == 0:
+                # For the first one make ALL frames invalid here
+                pass
+            elif _idx == 1:
+                # For the second one make all but ONE frames invalid
+                keep_idx = min(int(rng.rand() * len(gids)), len(gids) - 1)
+                gids = list(gids[:keep_idx]) + list(gids[keep_idx + 1:])
+            elif _idx == 2:
+                # For the third, make nothing invalid
+                gids = []
+            else:
+                # For the rest do a random subset
+                gids = gids.compress(rng.rand(len(gids)) > 0.5)
+            for gid in gids:
+                coco_img = coco_dset.coco_image(gid)
+                full_image_poly = kwimage.Boxes(
+                    [(0, 0) + coco_img.dsize], 'xywh')
+                demo_invalid_region = full_image_poly.scale(0.23)
+                outer = full_image_poly.to_shapely()[0]
+                inner = demo_invalid_region.to_shapely()[0]
+                demo_valid_region = kwimage.Polygon.from_shapely(outer.difference(inner))
+                coco_img.img['valid_region'] = demo_valid_region.to_coco('new')
+
+        # kwcoco_extensions.populate_watch_fields(
+        #     coco_dset, enable_valid_region=True)
+
     return coco_dset
 
 
