@@ -28,8 +28,7 @@ def main(args):
     parser = argparse.ArgumentParser(
         description='Score IARPA site model GeoJSON files using IARPA\'s '
         'metrics-and-test-framework')
-    parser.add_argument('--sites',
-                        required=True,
+    parser.add_argument('sites',
                         nargs='+',
                         help='''
         List of paths or serialized JSON strings containg v2 site models.
@@ -49,27 +48,34 @@ def main(args):
         https://smartgitlab.com/TE/metrics-and-test-framework.
         If None, use the environment variable METRICS_DPATH.
         ''')
+    # https://stackoverflow.com/a/49351471
     parser.add_argument('--virtualenv_cmd',
-                        default='conda activate te',
+                        default='true',  # no-op command
+                        nargs='+',  # hack for spaces
                         help='''
-        Command to run before calling the metrics framework in a subshell. 
+        Command to run before calling the metrics framework in a subshell.
         The metrics framework should be installed in a different virtual env
         from WATCH, using eg conda or pyenv.
         ''')
     parser.add_argument('--out_dir',
                         help='''
-        Output directory where scores will be written.
-        Defaults to ./output/{region_id}/
+        Output directory where scores will be written. Each region will have
+        Defaults to ./output/
         ''')
     args = parser.parse_args(args)
 
     # load sites
     sites = []
     for site in args.sites:
-        if os.path.isfile(site):
-            site = json.load(open(site))
-        else:
-            site = json.loads(site)
+        try:
+            if os.path.isfile(site):
+                site = json.load(open(site))
+            else:
+                site = json.loads(site)
+        except json.JSONDecodeError as e:  # TODO split out as decorator?
+            raise json.JSONDecodeError(e.msg + ' [cut for length]',
+                                       e.doc[:100] + '...',
+                                       e.pos)
         sites.append(site)
 
     # normalize paths
@@ -87,7 +93,8 @@ def main(args):
         os.makedirs(args.out_dir, exist_ok=True)
 
     # validate virtualenv command
-    ub.cmd(args.virtualenv_cmd, check=True)
+    virtualenv_cmd = ' '.join(args.virtualenv_cmd)
+    ub.cmd(virtualenv_cmd, verbose=1, check=True, shell=True)
 
     # split sites by region
     for region_id, region_sites in ub.group_items(
@@ -102,7 +109,8 @@ def main(args):
                 with open(
                         os.path.join(
                             site_dpath,
-                            site['features'][0]['properties']['site_id']),
+                            (site['features'][0]['properties']['site_id'] +
+                             '.geojson')),
                         'w') as f:
                     json.dump(site, f)
 
@@ -121,21 +129,26 @@ def main(args):
                 os.symlink(
                     img_path,
                     os.path.join(
-                        image_dpath, '_'.join(img_date,
-                                              os.path.basename(img_path))))
+                        image_dpath, '_'.join((img_date,
+                                               os.path.basename(img_path)))))
 
             # run metrics framework
-            cmd = ub.paragraph(f'''
-                {args.virtualenv_cmd};
+            if args.out_dir is not None:
+                out_dir = os.path.join(args.out_dir, region_id)
+            else:
+                out_dir = None
+            cmd = ub.paragraph(fr'''
+                {virtualenv_cmd} &&
                 python {os.path.join(metrics_dpath, 'run_evaluation.py')}
                     --roi {region_id}
                     --gt_path {os.path.join(gt_dpath, 'site_models')}
-                    --rm_path {os.path.join(gt_dpath, 'region_models', region_id + '.geojson')}
+                    --rm_path {os.path.join(gt_dpath, 'region_models',
+                                            region_id + '.geojson')}
                     --sm_path {site_dpath}
                     --image_path {image_dpath}
-                    --output_dir {args.out_dir}
+                    --output_dir {out_dir}
                 ''')
-            ub.cmd(cmd, shell=False, verbose=0, check=True)
+            ub.cmd(cmd, verbose=1, check=True, shell=True)
 
 
 if __name__ == '__main__':

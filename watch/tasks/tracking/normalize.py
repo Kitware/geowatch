@@ -103,7 +103,7 @@ def add_geos(coco_dset, overwrite, max_workers=16):
 
     annotated_imgs = images.compress(
         np.array(
-            [any(map(needs_geos, annots.objs)) for annots in images.annots()]))
+            [any(map(needs_geos, annots.objs)) for annots in images.annots]))
     infos = {
         img['id']: executor.submit(geotiff_crs_info, fpath(img))
         for img in annotated_imgs.objs
@@ -376,10 +376,15 @@ def add_track_index(coco_dset):
     return coco_dset
 
 
-def normalize_phases(coco_dset):
+def normalize_phases(coco_dset, baseline_keys={'salient'}):
     '''
     Convert internal representation of phases to their IARPA standards
     as well as inserting a baseline guess for activity classification
+
+    The only remaining categories in the returned coco_dset should be:
+        Site Preparation
+        Active Construction
+        Post Construction
 
     Example:
         >>> # test baseline guess
@@ -398,49 +403,57 @@ def normalize_phases(coco_dset):
         >>>      (['Active Construction'] * 9) +
         >>>      (['Post Construction'])))
     '''
-    # Remove site boundary annotations (should be already incorporated
-    # by track_fn if needed)
-    # coco_dset.remove_categories(['Site Boundary'], keep_annots=False)
+    from watch.heuristics import CATEGORIES, CNAMES_DCT
 
-    # TODO: were these used by some toydata? They aren't in the real files.
-    # TODO: if we are hardcoding names we should have some constants file
-    # to keep things sane.
-    category_dict = {
-        'construction': 'Active Construction',
-        'pre-construction': 'Site Preparation',
-        'finalized': 'Post Construction',
-        'obscured': 'Unknown',
-        '': 'No Activity'
-    }
-    good_cats = set(category_dict.values()).union({'Site Boundary'})
-    for cat_name in good_cats:
-        coco_dset.ensure_category(cat_name)
+    for cat in CATEGORIES:
+        coco_dset.ensure_category(**cat)
 
-    # possible category names for a change prediction
-    change_cats = {'change', 'change_prob', 'salient'}
+    baseline_keys = set(baseline_keys)
+    unknown_cnames = coco_dset.name_to_cat.keys() - (
+        {cat['name'] for cat in CATEGORIES} |
+        {'Site Boundary'} |
+        baseline_keys)
+    if unknown_cnames:
+        print('removing unknown categories {unknown_cnames}')
+        coco_dset.remove_categories(unknown_cnames, keep_annots=False)
 
-    for name, cat in coco_dset.name_to_cat.items():
-        try:
-            if name not in good_cats.union(change_cats):
-                cat['name'] = category_dict[name]
-        except KeyError:
-            raise KeyError(f'{coco_dset.tag} has unknown category {name}')
+    cnames_to_remove = set(
+        # negative examples, no longer needed
+        CNAMES_DCT['negative']['scored'] +
+        CNAMES_DCT['negative']['unscored'] +
+        # should have been consumed by track_fn, TODO more robust check
+        ['Site Boundary'])
+    coco_dset.remove_categories(cnames_to_remove, keep_annots=False)
 
-    # HACK remove change
+    cnames_to_replace = (
+        # 'positive'
+        set(CNAMES_DCT['positive']['unscored']) |
+        # 'salient' or equivalent
+        baseline_keys)
+
+    # metrics-and-test-framework/evaluation.py:1684
+    cnames_to_score = set(CNAMES_DCT['positive']['scored'])
+
+    assert set(coco_dset.name_to_cat).issubset(
+            cnames_to_replace | cnames_to_score)
+
+    # Replace positive annots of unknown class with a baseline guess class
     # TODO break out these heuristics
     from collections import Counter
     log = Counter()
     for trackid in coco_dset.index.trackid_to_aids.keys():
         annots = coco_dset.annots(trackid=trackid)
-        cats = annots.cnames
-        if set(cats) - good_cats:
+        cnames = annots.cnames
+        if set(cnames) - cnames_to_score:
             # if we have partial coverage, interpolate from good labels
-            if set(cats) - change_cats:
+            if set(cnames) - cnames_to_replace:
                 log.update(['partial class labels'])
                 cids = np.array(annots.cids)
-                good_ixs = np.in1d(cats, list(change_cats), invert=True)
+                good_ixs = np.in1d(cnames,
+                                   list(cnames_to_replace),
+                                   invert=True)
                 ix_to_cid = dict(zip(range(len(good_ixs)), cids[good_ixs]))
-                interp = np.interp(range(len(cats)), good_ixs,
+                interp = np.interp(range(len(cnames)), good_ixs,
                                    range(len(good_ixs)))
                 annots.set('category_id',
                            [ix_to_cid[int(ix)] for ix in np.round(interp)])
@@ -572,7 +585,11 @@ def normalize(coco_dset, track_fn, overwrite, gt_dset=None, **track_kwargs):
 
     coco_dset = dedupe_tracks(coco_dset)
     coco_dset = add_track_index(coco_dset)
-    coco_dset = normalize_phases(coco_dset)
+    if 'key' in track_kwargs:  # assume this is a baseline (saliency) key
+        coco_dset = normalize_phases(coco_dset,
+                                     baseline_keys={track_kwargs['key']})
+    else:
+        coco_dset = normalize_phases(coco_dset)
     coco_dset = normalize_sensors(coco_dset)
 
     # HACK, ensure coco_dset.index is up to date

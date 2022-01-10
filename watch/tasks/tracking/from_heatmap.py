@@ -8,7 +8,7 @@ import kwcoco
 import numpy as np
 import ubelt as ub
 import itertools
-from typing import Iterable, Tuple, Set
+from typing import Iterable, Tuple, Set, Union
 from dataclasses import dataclass
 from watch.tasks.tracking.utils import (Track, PolygonFilter, NewTrackFunction,
                                         mask_to_polygons, heatmap, score, Poly,
@@ -197,6 +197,7 @@ def pop_boundary_tracks(coco_dset,
         print(f'warning: no Site Boundary annots in dset {coco_dset.tag}!')
 
     boundary_annots = deepcopy(boundary_annots)
+    import xdev; xdev.embed()
     coco_dset.remove_categories(list(cnames), keep_annots=False)
 
     boundary_polys = [
@@ -410,7 +411,7 @@ class TimeAggregatedSC(NewTrackFunction):
     '''
     Wrapper for Site Characterization that looks for phase heatmaps.
     '''
-    thresh: float = 0.1
+    thresh: float = 0.01
     morph_kernel: int = 3
     time_filtering: bool = False
     response_filtering: bool = False
@@ -447,7 +448,11 @@ class TimeAggregatedHybrid(NewTrackFunction):
     coco_dset: KWCOCO file with BAS predictions
     coco_dset_sc: KWCOCO file with site characterization predictions
     '''
-    coco_dset_sc: kwcoco.CocoDataset
+    coco_dset_sc: Union[str, kwcoco.CocoDataset]
+
+    def __post_init__(self):
+        if isinstance(self.coco_dset_sc, str):
+            self.coco_dset_sc = kwcoco.CocoDataset.coerce(self.coco_dset_sc)
 
     def create_tracks(self, coco_dset):
         return TimeAggregatedBAS().create_tracks(coco_dset)

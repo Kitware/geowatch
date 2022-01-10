@@ -562,13 +562,12 @@ def main(args):
     parser = argparse.ArgumentParser(
         description='Convert KWCOCO to IARPA GeoJSON')
     required_args = parser.add_argument_group('required')
-    required_args.add_argument('--in_file',
-                               required=True,
+    required_args.add_argument('in_file',
                                help='Input KWCOCO to convert')
     required_args.add_argument('--out_dir',
-                               required=True,
                                help=ub.paragraph('''
         Output directory where GeoJSON files will be written.
+        Default: $(dirname in_file)/(regions if --bas_mode else sites)/
         NOTE: in --bas_mode, writing to a region is not idempotent.
         To regenerate a region, delete or edit the region file before
         rerunning this script.
@@ -631,16 +630,25 @@ def main(args):
         or a region_model that includes site summaries. Each summary found will
         be added to in_file to use in site characterization.
         '''))
-    behavior_args.add_argument('--score',
-                               action='store_true',
-                               help=ub.paragraph('''
+    # call run_metrics_framework as an optional subcommand
+    # https://stackoverflow.com/a/4575792
+    subparsers = parser.add_subparsers(dest='subparser_name')
+    score_parser = subparsers.add_parser('score',
+                                         help=ub.paragraph('''
         If set, all regions touched will be scored using the metrics framework.
-        Additional arguments to this script will be passed to
-        run_metrics_framework.py.
+        Additional arguments to this script will be passed to:
+            python -m watch.cli.run_metrics_framework --help
         '''))
-    args, score_args = parser.parse_known_args(args)
-    if score_args and not args.score:
-        raise ValueError(f'unknown arguments {score_args}')
+    score_parser.add_argument('score_args',
+                              nargs=argparse.REMAINDER)
+    args = parser.parse_args(args)
+
+    # set the out dir
+    out_dir = (args.out_dir if args.out_dir is not None else
+               os.path.join(
+                      os.path.dirname(args.in_file),
+                      'regions' if args.bas_mode else 'sites'))
+    os.makedirs(out_dir, exist_ok=True)
 
     # load the track kwargs
     if os.path.isfile(args.track_kwargs):
@@ -702,12 +710,11 @@ def main(args):
                                     as_summary=args.bas_mode)
 
     verbose = 1
-    os.makedirs(args.out_dir, exist_ok=True)
     if args.bas_mode:  # write sites to region models on disk
         for region_id, site_summaries in ub.group_items(
                 sites,
                 lambda site: site['properties'].pop('region_id')).items():
-            region_fpath = os.path.join(args.out_dir,
+            region_fpath = os.path.join(out_dir,
                                         region_id + '.geojson')
             if os.path.isfile(region_fpath):
                 with open(region_fpath, 'r') as f:
@@ -729,7 +736,7 @@ def main(args):
         for site in sites:
             site_props = site['features'][0]['properties']
             assert site_props['type'] == 'site'
-            site_fpath = os.path.join(args.out_dir,
+            site_fpath = os.path.join(out_dir,
                                       site_props['site_id'] + '.geojson')
             if verbose:
                 print(f'writing site {site_props["site_id"]} to new '
@@ -737,12 +744,13 @@ def main(args):
             with open(os.path.join(site_fpath), 'w') as f:
                 geojson.dump(site, f, indent=2)
 
-    if args.score:
+    if args.subparser_name == 'score':
         from watch.cli.run_metrics_framework import main
-        main([
-            score_args,
-            '--sites',
-        ] + [json.dumps(site) for site in sites])
+        try:
+            args.score_args.remove('--')
+        except ValueError:
+            pass
+        main([json.dumps(site) for site in sites] + args.score_args)
 
 
 def demo(coco_dset,
@@ -752,7 +760,6 @@ def demo(coco_dset,
          cleanup=True,
          hybrid=False):
     bas_args = [
-        '--in_file',
         coco_dset.fpath,
         '--out_dir',
         regions_dir,
@@ -769,7 +776,7 @@ def demo(coco_dset,
     # run SC on both of them
     if hybrid:  # hybrid approach
         sc_args = [
-            '--in_file', coco_dset.fpath, '--out_dir', sites_dir, '--track_fn',
+            coco_dset.fpath, '--out_dir', sites_dir, '--track_fn',
             'watch.tasks.tracking.from_heatmap.'
             'TimeAggregatedHybrid', '--track_kwargs',
             ('{"coco_dset_sc": "' + coco_dset_sc.fpath + '"}')
@@ -798,10 +805,10 @@ def demo(coco_dset,
                     if f['properties']['type'] == 'site_summary'
             ]:
                 print('running site ' + site['properties']['site_id'])
-                main(sc_args + [
-                    '--in_file', sub_dset.fpath,
+                main([
+                    sub_dset.fpath,
                     '--track_kwargs', '{"use_boundary_annots": false}'
-                ])
+                ] + sc_args)
                 # '--site_summary', json.dumps(site)])
     if cleanup:
         for pth in os.listdir(regions_dir):
