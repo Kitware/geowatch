@@ -50,7 +50,7 @@ kwcoco>=0.2.19
 Pillow>=8.0.1
 albumentations>=1.0.0
 scikit_image>=0.18.1
-ndsampler>=0.6.5
+ndsampler>=0.6.6
 tifffile>=2021.4.8
 medpy>=0.4.0
 

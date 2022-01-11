@@ -555,16 +555,25 @@ python -m watch.tasks.fusion.fit \
 
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 KWCOCO_BUNDLE_DPATH=${KWCOCO_BUNDLE_DPATH:-$DVC_DPATH/Drop1-Aligned-TA1-2022-01}
-TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_train_nowv.kwcoco.json
-VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_nowv.kwcoco.json
-TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_nowv.kwcoco.json
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/raw_train_nowv.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/raw_vali_nowv.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/raw_vali_nowv.kwcoco.json
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+
+# Split out train and validation data (TODO: add test when we can)
+kwcoco subset --src $KWCOCO_BUNDLE_DPATH/data_nowv.kwcoco.json \
+        --dst $VALI_FPATH \
+        --select_videos '.name | startswith("KR_")'
+
+kwcoco subset --src $KWCOCO_BUNDLE_DPATH/data_nowv.kwcoco.json \
+        --dst $TRAIN_FPATH \
+        --select_videos '.name | startswith("KR_") | not'
 
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop1-20201117
 ARCH=smt_it_stm_p8
 CHANNELS="blue|green|red|nir|swir16|swir22"
-EXPERIMENT_NAME=SC_${ARCH}_newanns_weighted_raw_v42
+EXPERIMENT_NAME=SC_${ARCH}_centerannot_raw_v42
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="3"

@@ -52,6 +52,7 @@ fix_opencv_conflicts(){
 
 
 # Simple tests
+echo "Start simple tests"
 EAGER_IMPORT=1 python -c "import watch; print(watch.__version__)"
 EAGER_IMPORT=1 python -m watch --help
 EAGER_IMPORT=1 python -m watch hello_world
