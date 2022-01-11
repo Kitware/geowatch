@@ -525,7 +525,7 @@ def hard_time_sample_pattern(unixtimes, time_window, time_span='2y'):
                     temporal_sampling[rx] = row
         # temporal_sampling = temporal_sampling % ( + 1)
 
-    print('last_time = {!r}'.format(last_time))
+    # print('last_time = {!r}'.format(last_time))
     wraparound = 1
     if wraparound:
         temporal_sampling = temporal_sampling % last_time

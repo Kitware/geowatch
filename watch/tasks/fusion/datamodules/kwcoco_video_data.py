@@ -2574,7 +2574,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         if INSERT_CENTERED_ANNOT_WINDOWS and use_annot_info:
             # in addition to the sliding window sample, add positive samples
             # centered around each annotation.
-            for tid, infos in tid_to_infos.items():
+            for tid, infos in ub.ProgIter(list(tid_to_infos.items()), desc='Centered annots'):
                 # existing_gids = [info['gid'] for info in infos]
                 for info in infos:
                     main_gid = info['gid']
