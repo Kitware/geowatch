@@ -567,15 +567,20 @@ CHANNELS="blue|green|red|nir|swir16|swir22"
 EXPERIMENT_NAME=SC_${ARCH}_newanns_weighted_raw_v42
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
-export CUDA_VISIBLE_DEVICES="1"
+export CUDA_VISIBLE_DEVICES="3"
 python -m watch.tasks.fusion.fit \
-    --config $WORKDIR/configs/common_20201117.yaml  \
+    --config "$WORKDIR/configs/common_20201117.yaml"  \
     --channels=${CHANNELS} \
     --name=$EXPERIMENT_NAME \
     --chip_size=64 \
     --time_steps=11 \
-    --default_root_dir=$DEFAULT_ROOT_DIR \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
     --method="MultimodalTransformer" \
     --gpus "1" \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
     --amp_backend=apex \
+    --use_grid_positives=False \
+    --use_centered_positives=True \
     --arch_name=$ARCH 

@@ -138,6 +138,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         torch_start_method='default',
         resample_invalid_frames=True,
         true_multimodal=True,
+        use_centered_positives=True,
+        use_grid_positives=True,
     ):
         """
         Args:
@@ -180,7 +182,10 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.upweight_centers = upweight_centers
         self.normalize_perframe = normalize_perframe
         self.true_multimodal = true_multimodal
+        self.use_centered_positives = use_centered_positives
+        self.use_grid_positives = use_grid_positives
 
+        # TODO: reduce redundency between this, the argparse args piece
         self.common_dataset_kwargs = dict(
             channels=self.channels,
             time_sampling=self.time_sampling,
@@ -191,6 +196,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             resample_invalid_frames=self.resample_invalid_frames,
             normalize_perframe=self.normalize_perframe,
             true_multimodal=self.true_multimodal,
+            use_centered_positives=self.use_centered_positives,
+            use_grid_positives=self.use_grid_positives,
         )
 
         self.num_workers = util_globals.coerce_num_workers(num_workers)
@@ -319,6 +326,11 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 Torch multiprocessing sharing strategy.
                 Can be fork, spawn, forkserver
                 '''))
+
+        parser.add_argument(
+            '--use_centered_positives', default=False, type=smartcast, help=ub.paragraph('Use centers of annotations as window centers'))
+        parser.add_argument(
+            '--use_grid_positives', default=True, type=smartcast, help=ub.paragraph('Use annotation overlaps with grid as positives'))
 
         return parent_parser
 
@@ -700,6 +712,8 @@ class KWCocoVideoDataset(data.Dataset):
         upweight_centers=True,
         normalize_perframe=False,
         true_multimodal=True,
+        use_grid_positives=True,
+        use_centered_positives=False,
     ):
 
         # TODO: the set of "valid" background classnames should be defined
@@ -756,6 +770,8 @@ class KWCocoVideoDataset(data.Dataset):
                 exclude_sensors=exclude_sensors,
                 time_sampling=time_sampling,
                 time_span=time_span,
+                use_centered_positives=use_centered_positives,
+                use_grid_positives=use_grid_positives,
             )
 
             n_pos = len(new_sample_grid['positives_indexes'])
@@ -2343,7 +2359,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> keepbound = False
         >>> time_sampling = 'soft+distribute'
         >>> use_centered_positives = True
-        >>> use_grid_positives = 1
+        >>> use_grid_positives = 0
         >>> sample_grid = sample_video_spacetime_targets(
         >>>     dset, window_dims, window_overlap, time_sampling=time_sampling,
         >>>     use_grid_positives=use_grid_positives, use_centered_positives=use_centered_positives)
