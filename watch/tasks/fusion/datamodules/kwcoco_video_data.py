@@ -2572,6 +2572,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
 
         INSERT_CENTERED_ANNOT_WINDOWS = use_centered_positives
         if INSERT_CENTERED_ANNOT_WINDOWS and use_annot_info:
+            # FIXME: This code is too slow
             # in addition to the sliding window sample, add positive samples
             # centered around each annotation.
             for tid, infos in ub.ProgIter(list(tid_to_infos.items()), desc='Centered annots'):
@@ -2589,7 +2590,15 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                     _hack_main_idx = np.where(time_sampler.video_gids == main_gid)[0][0]
                     sample_gids = list(ub.take(video_gids, time_sampler.sample(_hack_main_idx)))
                     _hack = {_hack_main_idx: sample_gids}
-                    _hack2, _ = _refine_time_sample(dset, _hack, kw_space_box, time_sampler, get_image_valid_region_in_vidspace)
+                    if 0:
+                        # Too slow to handle here, will have to handle
+                        # in getitem or be more efficient
+                        # 86% of the time is spent here
+                        _hack2, _ = _refine_time_sample(
+                            dset, _hack, kw_space_box, time_sampler,
+                            get_image_valid_region_in_vidspace)
+                    else:
+                        _hack2 = _hack
                     if _hack2:
                         gids = _hack2[_hack_main_idx]
                         label = 'positive_center'
@@ -2603,11 +2612,6 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                             'label': label,
                             'resampled': -1,
                         })
-
-        main_idx_to_gids = {
-            main_idx: list(ub.take(video_gids, time_sampler.sample(main_idx)))
-            for main_idx in time_sampler.main_indexes
-        }
 
         # Disable determenism
         time_sampler.determenistic = False
