@@ -2353,6 +2353,15 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> canvas = visualize_sample_grid(dset, sample_grid)
         >>> kwplot.imshow(canvas, doclf=1)
         >>> kwplot.show_if_requested()
+
+    Ignore:
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> from watch.utils.util_data import find_smart_dvc_dpath
+        >>> dvc_dpath = find_smart_dvc_dpath()
+        >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-TA1-2022-01/data.kwcoco.json'
+        >>> dset = kwcoco.CocoDataset(coco_fpath)
+        >>> window_overlap = 0.0
+        >>> window_dims = (3, 128, 128)
     """
     # Create a sliding window object for each specific image (because they may
     # have different sizes, technically we could memoize this)
@@ -2393,7 +2402,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
     @ub.memoize
     def get_image_valid_region_in_vidspace(gid):
         coco_poly = dset.index.imgs[gid].get('valid_region', None)
-        if coco_poly is None:
+        if coco_poly:
             sh_poly_vid = None
         else:
             warp_vid_from_img = kwimage.Affine.coerce(
