@@ -33,6 +33,10 @@ def main():
                         action='store_true',
                         default=False,
                         help="Run AWS CLI commands with --dryrun flag")
+    parser.add_argument('-s', '--show-progress',
+                        action='store_true',
+                        default=False,
+                        help='Show progress for AWS CLI commands')
     parser.add_argument("-n", "--newline",
                         action='store_true',
                         default=False,
@@ -89,6 +93,7 @@ def baseline_framework_egress(stac_catalog,
                               outbucket,
                               aws_profile=None,
                               dryrun=False,
+                              show_progress=False,
                               newline=False,
                               jobs=1):
     if isinstance(stac_catalog, str):
@@ -106,6 +111,9 @@ def baseline_framework_egress(stac_catalog,
 
     if dryrun:
         aws_base_command.append('--dryrun')
+
+    if not show_progress:
+        aws_base_command.append('--no-progress')
 
     output_catalog = parallel_map_items(
         catalog,

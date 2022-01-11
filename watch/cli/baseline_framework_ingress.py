@@ -36,6 +36,10 @@ def main():
                         action='store_true',
                         default=False,
                         help='Run AWS CLI commands with --dryrun flag')
+    parser.add_argument('-s', '--show-progress',
+                        action='store_true',
+                        default=False,
+                        help='Show progress for AWS CLI commands')
     parser.add_argument('-r', '--requester_pays',
                         action='store_true',
                         default=False,
@@ -154,6 +158,7 @@ def baseline_framework_ingress(input_path,
                                outdir,
                                aws_profile=None,
                                dryrun=False,
+                               show_progress=False,
                                requester_pays=False,
                                relative=False,
                                jobs=1):
@@ -182,6 +187,9 @@ def baseline_framework_ingress(input_path,
 
     if dryrun:
         aws_base_command.append('--dryrun')
+
+    if not show_progress:
+        aws_base_command.append('--no-progress')
 
     if requester_pays:
         aws_base_command.extend(['--request-payer', 'requester'])
