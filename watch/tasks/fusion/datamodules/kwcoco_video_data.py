@@ -2402,7 +2402,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
     @ub.memoize
     def get_image_valid_region_in_vidspace(gid):
         coco_poly = dset.index.imgs[gid].get('valid_region', None)
-        if coco_poly:
+        if not coco_poly:
             sh_poly_vid = None
         else:
             warp_vid_from_img = kwimage.Affine.coerce(
