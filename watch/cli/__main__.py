@@ -3,7 +3,7 @@ import ubelt as ub
 
 __devnotes__ = """
 
-# We may want to delay actual imports
+# We may want to delay actual imports, gdal import time can be excessive
 
 python -X importtime -c "import watch"
 WATCH_HACK_IMPORT_ORDER="" python  -X importtime -m watch.cli find_dvc

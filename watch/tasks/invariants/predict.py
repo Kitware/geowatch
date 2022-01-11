@@ -56,7 +56,7 @@ def predict(args):
 
     if 'segmentation' in args.tasks:
         segmentation_dim = 1
-        segmentation_model = seg_model.load_from_checkpoint(args.segmentation_ckpt_path)
+        segmentation_model = seg_model.load_from_checkpoint(args.segmentation_ckpt_path, dataset=None)
         segmentation_model = segmentation_model.to(device)
 
     else:

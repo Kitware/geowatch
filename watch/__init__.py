@@ -15,6 +15,7 @@ mkinit -m watch --lazy -w
 # Debug import time
 python -X importtime -c "import watch"
 WATCH_HACK_IMPORT_ORDER=variant3 python -X importtime -c "import watch"
+WATCH_HACK_IMPORT_ORDER=variant1 python -X importtime -c "import watch"
 """
 
 WATCH_AUTOHACK_IMPORT_VARIANTS = {
