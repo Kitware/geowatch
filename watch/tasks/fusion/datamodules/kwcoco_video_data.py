@@ -2156,13 +2156,131 @@ class KWCocoVideoDataset(data.Dataset):
         return loader
 
 
+def visualize_sample_grid(dset, sample_grid):
+    """
+    Debug visualization for sampling grid
+    """
+    # Visualize the sample grid
+    import pandas as pd
+    targets = pd.DataFrame(sample_grid['targets'])
+
+    dataset_canvases = []
+
+    max_vids = 8
+    max_frames = 8
+
+    vidid_to_videodf = dict(list(targets.groupby('video_id')))
+
+    orientation = 0
+
+    for vidid, video_df in vidid_to_videodf.items():
+        gid_to_infos = ub.ddict(list)
+        for _, row in video_df.iterrows():
+            for gid in row['gids']:
+                gid_to_infos[gid].append({
+                    'gid': gid,
+                    'space_slice': row['space_slice'],
+                    'label': row['label'],
+                })
+
+        video_canvases = []
+        common = ub.oset(dset.images(vidid=vidid)) & (gid_to_infos)
+        for gid in common:
+            infos = gid_to_infos[gid]
+            label_to_items = ub.group_items(infos, key=lambda x: x['label'])
+            video = dset.index.videos[vidid]
+
+            shape = (video['height'], video['width'], 4)
+            canvas = np.zeros(shape, dtype=np.float32)
+            shape = (2, video['height'], video['width'])
+            accum = np.zeros(shape, dtype=np.float32)
+
+            for label, items in label_to_items.items():
+                label_idx = {'positive_grid': 1, 'positive_center': 1,
+                             'negative_grid': 0}[label]
+                for info in items:
+                    space_slice = info['space_slice']
+                    y_sl, x_sl = space_slice
+                    # ww = x_sl.stop - x_sl.start
+                    # wh = y_sl.stop - y_sl.start
+                    ss = accum[(label_idx,) + space_slice].shape
+                    if np.prod(ss) > 0:
+                        vals = util_kwimage.upweight_center_mask(ss)
+                        vals = np.maximum(vals, 0.1)
+                        accum[(label_idx,) + space_slice] += vals
+                        # Add extra weight to borders for viz
+                        accum[label_idx, y_sl.start:y_sl.start + 1, x_sl.start: x_sl.stop] += 0.15
+                        accum[label_idx, y_sl.stop - 1:y_sl.stop, x_sl.start:x_sl.stop] += 0.15
+                        accum[label_idx, y_sl.start:y_sl.stop, x_sl.start: x_sl.start + 1] += 0.15
+                        accum[label_idx, y_sl.start:y_sl.stop, x_sl.stop - 1: x_sl.stop] += 0.15
+
+            neg_accum = accum[0]
+            pos_accum = accum[1]
+
+            neg_alpha = neg_accum / (neg_accum.max() * 2)
+            pos_alpha = pos_accum / (pos_accum.max() * 2)
+            bg_canvas = canvas.copy()
+            bg_canvas[..., 0:4] = [0., 0., 0., 1.0]
+            pos_canvas = canvas.copy()
+            neg_canvas = canvas.copy()
+            pos_canvas[..., 0:3] = kwimage.Color('dodgerblue').as01()
+            neg_canvas[..., 0:3] = kwimage.Color('orangered').as01()
+            neg_canvas[..., 3] = neg_alpha
+            pos_canvas[..., 3] = pos_alpha
+            neg_canvas = np.nan_to_num(neg_canvas)
+            pos_canvas = np.nan_to_num(pos_canvas)
+
+            warp_vid_from_img = kwimage.Affine.coerce(
+                dset.index.imgs[gid]['warp_img_to_vid'])
+
+            vid_poly = kwimage.Boxes([[0, 0, video['width'], video['height']]], 'xywh').to_polygons()[0]
+            coco_poly = dset.index.imgs[gid].get('valid_region', None)
+            if coco_poly is None:
+                kw_invalid_poly = None
+            else:
+                kw_poly_img = kwimage.MultiPolygon.coerce(coco_poly)
+                valid_poly = kw_poly_img.warp(warp_vid_from_img)
+                sh_invalid_poly = vid_poly.to_shapely().difference(valid_poly.to_shapely())
+                kw_invalid_poly = kwimage.MultiPolygon.coerce(sh_invalid_poly)
+
+            final_canvas = kwimage.overlay_alpha_layers([pos_canvas, neg_canvas, bg_canvas])
+            final_canvas = kwimage.ensure_uint255(final_canvas)
+
+            annot_dets = dset.annots(gid=gid).detections
+            vid_annot_dets = annot_dets.warp(warp_vid_from_img)
+
+            if 1:
+                final_canvas = vid_annot_dets.draw_on(final_canvas, color='white')
+
+            if kw_invalid_poly is not None:
+                final_canvas = kw_invalid_poly.draw_on(final_canvas, color='yellow', alpha=0.5)
+
+            final_canvas = kwimage.draw_header_text(final_canvas, f'{gid=}')
+            video_canvases.append(final_canvas)
+
+            if len(video_canvases) >= max_frames:
+                break
+
+        video_canvas = kwimage.stack_images(video_canvases, axis=1 - orientation, pad=10)
+        dataset_canvases.append(video_canvas)
+        if len(dataset_canvases) >= max_vids:
+            break
+
+    dataset_canvas = kwimage.stack_images(dataset_canvases, axis=orientation, pad=20)
+    if 0:
+        import kwplot
+        kwplot.autompl()
+        kwplot.imshow(dataset_canvas, doclf=1)
+    return dataset_canvas
+
+
 def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                                    negative_classes=None, keepbound=False,
                                    exclude_sensors=None,
                                    time_sampling='hard+distribute',
                                    time_span='2y', use_annot_info=True,
                                    use_grid_positives=True,
-                                   use_centered_positives=False):
+                                   use_centered_positives=True):
     """
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -2210,12 +2328,11 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> sample_grid1 = sample_video_spacetime_targets(dset, window_dims, window_overlap, time_sampling='soft+distribute')
         >>> sample_grid2 = sample_video_spacetime_targets(dset, window_dims, window_overlap, time_sampling='contiguous+pairwise')
 
-
         ub.peek(sample_grid1['vidid_to_time_sampler'].values()).show_summary(fnum=1)
         ub.peek(sample_grid2['vidid_to_time_sampler'].values()).show_summary(fnum=2)
         _ = xdev.profile_now(sample_video_spacetime_targets)(dset, window_dims, window_overlap)
 
-    Ignore:
+    Example:
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_multisensor
         >>> dset = coco_dset = demo_kwcoco_multisensor(dates=True, geodata=True, heatmap=True)
@@ -2227,104 +2344,15 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> time_sampling = 'soft+distribute'
         >>> use_centered_positives = True
         >>> use_grid_positives = 1
-        >>> sample_grid1 = sample_video_spacetime_targets(
+        >>> sample_grid = sample_video_spacetime_targets(
         >>>     dset, window_dims, window_overlap, time_sampling=time_sampling,
         >>>     use_grid_positives=use_grid_positives, use_centered_positives=use_centered_positives)
-        >>> #print('sample_grid1 = {}'.format(ub.repr2(sample_grid1, nl=2)))
-
-
-        if 0:
-            # Visualize the sample grid
-            import pandas as pd
-            targets = pd.DataFrame(sample_grid1['targets'])
-
-            dataset_canvases = []
-
-            for vidid, video_df in targets.groupby('video_id'):
-                gid_to_infos = ub.ddict(list)
-                for _, row in video_df.iterrows():
-                    for gid in row['gids']:
-                        gid_to_infos[gid].append({
-                            'gid': gid,
-                            'space_slice': row['space_slice'],
-                            'label': row['label'],
-                        })
-
-                video_canvases = []
-                common = ub.oset(dset.images(vidid=vidid)) & (gid_to_infos)
-                for gid in common:
-                    infos = gid_to_infos[gid]
-                    label_to_items = ub.group_items(infos, key=lambda x: x['label'])
-                    video = dset.index.videos[vidid]
-
-                    shape = (video['height'], video['width'], 4)
-                    canvas = np.zeros(shape, dtype=np.float32)
-                    shape = (2, video['height'], video['width'])
-                    accum = np.zeros(shape, dtype=np.float32)
-
-                    for label, items in label_to_items.items():
-                        label_idx = int(label == 'positive')
-                        for info in items:
-                            space_slice = info['space_slice']
-                            y_sl, x_sl = space_slice
-                            accum[(label_idx,) + space_slice] += 1
-                            # Add extra weight to borders for viz
-                            accum[label_idx, y_sl.start:y_sl.start + 1, x_sl.start: x_sl.stop] += 0.15
-                            accum[label_idx, y_sl.stop - 1:y_sl.stop, x_sl.start:x_sl.stop] += 0.15
-                            accum[label_idx, y_sl.start:y_sl.stop, x_sl.start: x_sl.start + 1] += 0.15
-                            accum[label_idx, y_sl.start:y_sl.stop, x_sl.stop - 1: x_sl.stop] += 0.15
-
-                    neg_accum = accum[0]
-                    pos_accum = accum[1]
-
-                    neg_alpha = neg_accum / (neg_accum.max() * 2)
-                    pos_alpha = pos_accum / (pos_accum.max() * 2)
-                    bg_canvas = canvas.copy()
-                    bg_canvas[..., 0:4] = [0, 0, 0, 1.0]
-                    pos_canvas = canvas.copy()
-                    neg_canvas = canvas.copy()
-                    pos_canvas[..., 0:3] = kwimage.Color('dodgerblue').as01()
-                    neg_canvas[..., 0:3] = kwimage.Color('orangered').as01()
-                    neg_canvas[..., 3] = neg_alpha
-                    pos_canvas[..., 3] = pos_alpha
-
-                    warp_vid_from_img = kwimage.Affine.coerce(
-                        dset.index.imgs[gid]['warp_img_to_vid'])
-
-                    vid_poly = kwimage.Boxes([[0, 0, video['width'], video['height']]], 'xywh').to_polygons()[0]
-                    coco_poly = dset.index.imgs[gid].get('valid_region', None)
-                    if coco_poly is None:
-                        kw_invalid_poly = None
-                    else:
-                        kw_poly_img = kwimage.MultiPolygon.coerce(coco_poly)
-                        valid_poly = kw_poly_img.warp(warp_vid_from_img)
-                        sh_invalid_poly = vid_poly.to_shapely().difference(valid_poly.to_shapely())
-                        kw_invalid_poly = kwimage.MultiPolygon.coerce(sh_invalid_poly)
-
-
-
-                    final_canvas = kwimage.overlay_alpha_layers([pos_canvas, neg_canvas, bg_canvas])
-                    final_canvas = kwimage.ensure_uint255(final_canvas)
-
-                    annot_dets = dset.annots(gid=gid).detections
-                    vid_annot_dets = annot_dets.warp(warp_vid_from_img)
-
-                    if 0:
-                        final_canvas = vid_annot_dets.draw_on(final_canvas)
-
-                    if kw_invalid_poly is not None:
-                        final_canvas = kw_invalid_poly.draw_on(final_canvas, color='yellow', alpha=0.5)
-
-                    final_canvas = kwimage.draw_header_text(final_canvas, f'{gid=}')
-                    video_canvases.append(final_canvas)
-
-                video_canvas = kwimage.stack_images(video_canvases, axis=1, pad=10)
-                dataset_canvases.append(video_canvas)
-
-
-            dataset_canvas = kwimage.stack_images(dataset_canvases, axis=0, pad=20)
-            kwplot.imshow(dataset_canvas, doclf=1)
-
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> canvas = visualize_sample_grid(dset, sample_grid)
+        >>> kwplot.imshow(canvas, doclf=1)
+        >>> kwplot.show_if_requested()
     """
     # Create a sliding window object for each specific image (because they may
     # have different sizes, technically we could memoize this)
@@ -2500,10 +2528,10 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                     else:
                         has_annot = False
                     if has_annot:
-                        label = 'positive'
+                        label = 'positive_grid'
                     else:
                         # Hack: exclude all annotated regions from negative sampling
-                        label = 'negative'
+                        label = 'negative_grid'
 
                 # Or do that on the fly?
                 if False:
@@ -2516,11 +2544,11 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                         if np.all(arr == 0):
                             print('BLACK REGION')
 
-                if label == 'positive':
+                if label == 'positive_grid':
                     if not use_grid_positives:
                         continue
                     positive_idxs.append(len(targets))
-                elif label == 'negative':
+                elif label == 'negative_grid':
                     negative_idxs.append(len(targets))
 
                 targets.append({
@@ -2555,7 +2583,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                     _hack2, _ = _refine_time_sample(dset, _hack, kw_space_box, time_sampler, get_image_valid_region_in_vidspace)
                     if _hack2:
                         gids = _hack2[_hack_main_idx]
-                        label = 'positive'
+                        label = 'positive_center'
                         positive_idxs.append(len(targets))
                         targets.append({
                             'main_idx': _hack_main_idx,

@@ -15,6 +15,8 @@ prep_and_inspect(){
 
     DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc 
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop1-Aligned-L1
+
+    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop1-Aligned-TA1-2022-01
     VIZ_DPATH=$KWCOCO_BUNDLE_DPATH/_viz
     TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_train_nowv.kwcoco.json
     VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_nowv.kwcoco.json
@@ -457,7 +459,7 @@ python -m watch.tasks.fusion.fit \
 
 
 #
-# New Sampling Horologic - 2021-12-26
+# New True-MultiModal Horologic - 2021-12-26
 
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
@@ -541,6 +543,37 @@ python -m watch.tasks.fusion.fit \
     --name=$EXPERIMENT_NAME \
     --chip_size=64 \
     --time_steps=15 \
+    --default_root_dir=$DEFAULT_ROOT_DIR \
+    --method="MultimodalTransformer" \
+    --gpus "1" \
+    --amp_backend=apex \
+    --arch_name=$ARCH 
+
+#
+# With Positive Centers Horologic - 2022-01-10
+
+
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+KWCOCO_BUNDLE_DPATH=${KWCOCO_BUNDLE_DPATH:-$DVC_DPATH/Drop1-Aligned-TA1-2022-01}
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_train_nowv.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_nowv.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_nowv.kwcoco.json
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop1-20201117
+ARCH=smt_it_stm_p8
+CHANNELS="blue|green|red|nir|swir16|swir22"
+EXPERIMENT_NAME=SC_${ARCH}_newanns_weighted_raw_v42
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
+export CUDA_VISIBLE_DEVICES="1"
+python -m watch.tasks.fusion.fit \
+    --config $WORKDIR/configs/common_20201117.yaml  \
+    --channels=${CHANNELS} \
+    --name=$EXPERIMENT_NAME \
+    --chip_size=64 \
+    --time_steps=11 \
     --default_root_dir=$DEFAULT_ROOT_DIR \
     --method="MultimodalTransformer" \
     --gpus "1" \
