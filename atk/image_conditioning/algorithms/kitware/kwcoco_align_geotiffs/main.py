@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from algorithm_toolkit import Algorithm, AlgorithmChain
 from watch.cli import coco_align_geotiffs
 

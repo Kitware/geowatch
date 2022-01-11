@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from watch.utils import kwcoco_extensions
 from watch.utils import util_kwimage
 import kwarray

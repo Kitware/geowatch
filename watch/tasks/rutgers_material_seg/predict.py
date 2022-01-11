@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 r"""
 Prediction script for Rutgers Material Semenatic Segmentation Models
 

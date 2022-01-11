@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 
 Our data might look like this, a sequence of frames where the frames can contain
