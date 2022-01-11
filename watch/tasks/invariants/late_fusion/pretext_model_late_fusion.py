@@ -1,13 +1,14 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from argparse import Namespace
 import pytorch_lightning as pl
 from torchmetrics.classification.accuracy import Accuracy
 
-from .iarpa_dataset import kwcoco_dataset
-from .unet_blur import UNetEncoder, UNetDecoder
-from .focal_loss import BinaryFocalLoss
+from ..data.datasets import kwcoco_dataset
+from ..utils.unet_blur import UNetEncoder, UNetDecoder
+from ..utils.focal_loss import BinaryFocalLoss
 
 
 class pretext(pl.LightningModule):
@@ -38,8 +39,10 @@ class pretext(pl.LightningModule):
         if hasattr(hparams, 'num_channels'):
             # hack for loading without dataset state
             num_channels = hparams.num_channels
-        else:
+        elif self.trainset is not None:
             num_channels = self.trainset.num_channels()
+        else:
+            num_channels = 6
 
         # determine which tasks to run
         self.task_indices = []
@@ -127,7 +130,7 @@ class pretext(pl.LightningModule):
             losses.append(loss_time)
             output['time_accuracy'] = time_accuracy
             output['loss_time_sort'] = loss_time.detach()
-
+            output['before_after_heatmap'] = F.sigmoid(time_sort_prediction)
         # Overlap task
         if 2 in self.task_indices:
             module_list_idx = self.task_indices.index(2)
@@ -183,9 +186,20 @@ class pretext(pl.LightningModule):
         feats = {}
         shared_feats = self(batch)
         feats['shared'] = shared_feats
-        for i in range(len(self.necks)):
-            feats[pretext.TASK_NAMES[self.task_indices[i]]] = self.necks[i](shared_feats)
-        return feats
+        return feats['shared']
+
+    ### Temporary solution
+    def predict_before_after(self, image):
+        self.eval()
+        im1 = image[:, 0, :]
+        im2 = image[:, 1, :]
+        image1_features = self(im1)
+        image2_features = self(im2)
+        image1_sort_out = self.necks[self.task_indices.index(0)](image1_features)
+        image2_sort_out = self.necks[self.task_indices.index(0)](image2_features)
+        # forward pass through head
+        time_sort_prediction = self.heads[self.task_indices.index(0)](torch.cat((image1_sort_out, image2_sort_out), dim=1))
+        return time_sort_prediction
 
     def train_dataloader(self):
         return DataLoader(self.trainset, batch_size=self.hparams.batch_size, num_workers=self.hparams.workers, shuffle=True)
