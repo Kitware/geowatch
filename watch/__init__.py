@@ -2,6 +2,8 @@
 The SMART WATCH module
 """
 import os
+import ubelt as ub
+import warnings
 
 
 __devnotes__ = """
@@ -9,12 +11,21 @@ __devnotes__ = """
 # Command to autogenerate lazy imports for this file
 mkinit -m watch --lazy --diff
 mkinit -m watch --lazy -w
+
+# Debug import time
+python -X importtime -c "import watch"
+WATCH_HACK_IMPORT_ORDER=variant3 python -X importtime -c "import watch"
 """
 
 WATCH_AUTOHACK_IMPORT_VARIANTS = {
     'variant1': ['geopandas', 'pyproj', 'gdal'],  # align-crs on horologic
     'variant2': ['pyproj', 'gdal'],   # CI machine
+    'variant3': ['geopandas', 'pyproj'],   # delay gdal import
 }
+
+if ub.argflag('--warntb'):
+    import xdev
+    xdev.make_warnings_print_tracebacks()
 
 WATCH_HACK_IMPORT_ORDER = os.environ.get('WATCH_HACK_IMPORT_ORDER', 'auto')
 
@@ -26,7 +37,11 @@ def _imoprt_hack(modname):
         import pyproj as module
         from pyproj import CRS  # NOQA
     elif modname == 'geopandas':
-        import geopandas as module
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', (
+                '.*is incompatible with the GEOS version '
+                'PyGEOS was compiled with.*'))
+            import geopandas as module
     elif modname == 'rasterio':
         import rasterio as module
     elif modname == 'fiona':

@@ -7,6 +7,10 @@ With example below, the `output_kwcoco` of predict.py generates an 8 dimension f
 Ex: 
 
 ```
+
+SMART_WATCH_DVC=$(WATCH_HACK_IMPORT_ORDER="" python -m watch.cli.find_dvc)
+echo "SMART_WATCH_DVC='${SMART_WATCH_DVC}'"
+
 python -m watch.tasks.invariants.predict \
     --input_kwcoco $SMART_WATCH_DVC/Drop1-Aligned-L1/data.kwcoco.json \
     --output_kwcoco $SMART_WATCH_DVC/uky_invariants/Drop1-Aligned-L1/invariants.kwcoco.json \
