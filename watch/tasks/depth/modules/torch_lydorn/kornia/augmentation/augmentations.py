@@ -13,10 +13,6 @@ def random_rotate(input: torch.Tensor) -> UnionType:
         input tensor.
     Returns:
         torch.Tensor: The rotated input
-
-    Example:
-        >>> from torch_lydorn.kornia.augmentation.augmentations import *  # NOQA
-        >>> input = torch.rand(2, 3, 5, 7, 11, 13)
     """
 
     if not torch.is_tensor(input):
