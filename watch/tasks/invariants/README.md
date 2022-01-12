@@ -12,13 +12,13 @@ SMART_WATCH_DVC=$(python -m watch.cli.find_dvc)
 export CUDA_VISIBLE_DEVICES=2
 python -m watch.tasks.invariants.predict \
     --input_kwcoco $SMART_WATCH_DVC/Drop1-Aligned-L1-2022-01/data.kwcoco.json \
-    --output_kwcoco $SMART_WATCH_DVC/uky_invariants/Drop1-Aligned-L1-2022-01/invariants.kwcoco.json \
+    --output_kwcoco $SMART_WATCH_DVC/Drop1-Aligned-L1-2022-01/invariants.kwcoco.json \
     --pretext_ckpt_path $SMART_WATCH_DVC/models/uky/uky_invariants_2022_01/pretext/pretext.ckpt \
     --segmentation_ckpt $SMART_WATCH_DVC/models/uky/uky_invariants_2022_01/segmentation/segmentation.ckpt \
     --do_pca 1 \
     --num_dim 8 \
     --num_workers 0 \
-    --tasks all
+    --tasks segmentation
 ```
 
 If --tasks is set to "invariants", then all 8 dimensions will come from pca reduced pretext features.
