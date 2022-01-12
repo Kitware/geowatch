@@ -34,3 +34,6 @@
 ### Added
 
 ### Changed
+
+
+Reminder: update `watch/__init__.py:__version__` [maintainer]
