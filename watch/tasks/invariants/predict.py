@@ -56,6 +56,7 @@ def predict(args):
             print('Calculating projection matrix based on pca.')
 
             with torch.set_grad_enabled(False):
+                # TODO: option to cache or specify a specific projection matrix?
                 for batch in tqdm(dl, desc='Calculating PCA matrix'):
                     image_stack = torch.stack([batch['image1'], batch['image2'], batch['offset_image1'], batch['augmented_image1']], dim=1)
                     features = pretext_model(image_stack.to(pretext_model.device))
@@ -129,7 +130,7 @@ def predict(args):
                 fpath = video_folder / fname
 
                 # kwimage.imwrite(fpath, feat, **imwrite_kw)
-                queue.submit(kwimage.imwrite, feat, **imwrite_kw)
+                queue.submit(kwimage.imwrite, fpath, feat, **imwrite_kw)
 
                 info = {}
                 info['file_name'] = str(fpath.relative_to(bundle_dpath))
@@ -149,7 +150,7 @@ def predict(args):
                 fpath = video_folder / fname
 
                 # kwimage.imwrite(fpath, before_after_heatmap, **imwrite_kw)
-                queue.submit(fpath, before_after_heatmap, **imwrite_kw)
+                queue.submit(kwimage.imwrite, fpath, before_after_heatmap, **imwrite_kw)
 
                 info = {}
                 info['file_name'] = str(fpath.relative_to(bundle_dpath))
@@ -168,8 +169,8 @@ def predict(args):
                 fname = image_info['name'] + '_segmentation_heatmap.tif'
                 fpath = video_folder / fname
 
-                kwimage.imwrite(fpath, segmentation_heatmap, **imwrite_kw)
-                queue.submit(fpath, segmentation_heatmap, **imwrite_kw)
+                # kwimage.imwrite(fpath, segmentation_heatmap, **imwrite_kw)
+                queue.submit(kwimage.imwrite, fpath, segmentation_heatmap, **imwrite_kw)
 
                 info = {}
                 info['file_name'] = str(fpath.relative_to(bundle_dpath))

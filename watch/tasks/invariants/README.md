@@ -17,8 +17,9 @@ python -m watch.tasks.invariants.predict \
     --segmentation_ckpt $SMART_WATCH_DVC/models/uky/uky_invariants_2022_01/segmentation/segmentation.ckpt \
     --do_pca 1 \
     --num_dim 8 \
-    --num_workers 0 \
-    --tasks segmentation
+    --num_workers 4 \
+    --write_workers 4 \
+    --tasks all
 ```
 
 If --tasks is set to "invariants", then all 8 dimensions will come from pca reduced pretext features.
