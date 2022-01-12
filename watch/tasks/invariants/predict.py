@@ -15,7 +15,6 @@ from tqdm import tqdm
 from .pretext_model import pretext
 from .data.datasets import kwcoco_dataset
 from .data.multi_image_datasets import kwcoco_dataset as multi_image_dataset
-# from watch.utils import util_parallel
 from watch.utils.lightning_ext import util_globals
 from .segmentation_model import segmentation_model as seg_model
 
@@ -79,7 +78,9 @@ def predict(args):
     # Start background processes
     # Build a task queue for background write results workers (Not currently using this)
     # queue = util_parallel.BlockingJobQueue(max_workers=0)
-    # queue = util_parallel.BlockingJobQueue(max_workers=num_workers)
+    from watch.utils import util_parallel
+    write_workers = util_globals.coerce_num_workers(args.write_workers)
+    queue = util_parallel.BlockingJobQueue(max_workers=write_workers)
 
     output_dset = dataset.dset.copy()
     output_dset.reroot(absolute=True)  # Make all paths absolute
@@ -93,6 +94,7 @@ def predict(args):
     imwrite_kw = {
         'compress': 'DEFLATE',
         'backend': 'gdal',
+        'blocksize': 64,
     }
 
     print('Evaluating and saving features')
@@ -126,7 +128,9 @@ def predict(args):
                 fname = image_info['name'] + '_invariants.tif'
                 fpath = video_folder / fname
 
-                kwimage.imwrite(fpath, feat, **imwrite_kw)
+                # kwimage.imwrite(fpath, feat, **imwrite_kw)
+                queue.submit(kwimage.imwrite, feat, **imwrite_kw)
+
                 info = {}
                 info['file_name'] = str(fpath.relative_to(bundle_dpath))
                 info['height'] = feat.shape[0]
@@ -136,8 +140,6 @@ def predict(args):
                 info['warp_aux_to_img'] = warp_aux_to_img
                 output_img['auxiliary'].append(info)
 
-                # queue.submit(_write_results_fn, feat, save_path, file_name)
-
             if 'before_after' in args.tasks:
                 ### TO DO: Set to output of separate model.
                 before_after_heatmap = pretext_model.shared_step(batch)['before_after_heatmap'][0].permute(1, 2, 0)
@@ -146,7 +148,8 @@ def predict(args):
                 fname = image_info['name'] + '_before_after_heatmap.tif'
                 fpath = video_folder / fname
 
-                kwimage.imwrite(fpath, before_after_heatmap, **imwrite_kw)
+                # kwimage.imwrite(fpath, before_after_heatmap, **imwrite_kw)
+                queue.submit(fpath, before_after_heatmap, **imwrite_kw)
 
                 info = {}
                 info['file_name'] = str(fpath.relative_to(bundle_dpath))
@@ -164,7 +167,9 @@ def predict(args):
 
                 fname = image_info['name'] + '_segmentation_heatmap.tif'
                 fpath = video_folder / fname
+
                 kwimage.imwrite(fpath, segmentation_heatmap, **imwrite_kw)
+                queue.submit(fpath, segmentation_heatmap, **imwrite_kw)
 
                 info = {}
                 info['file_name'] = str(fpath.relative_to(bundle_dpath))
@@ -182,14 +187,6 @@ def predict(args):
     print('Done')
 
 
-def _write_results_fn(feat, save_path, file_name):
-    last_us_idx = file_name.rfind('_')
-    name = file_name[:last_us_idx] + '_invariants.tif'
-    fpath = os.path.join(save_path, name)
-    kwimage.imwrite(fpath, feat, space=None, backend='gdal',
-                    compress='RAW', blocksize=64)
-
-
 def main():
     parser = ArgumentParser(description='', formatter_class=RawTextHelpFormatter)
     from scriptconfig.smartcast import smartcast
@@ -201,6 +198,7 @@ def main():
     parser.add_argument('--before_after_ckpt_path', type=str)
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--num_workers', type=int, default=4, help='number of background data loading workers')
+    parser.add_argument('--write_workers', type=int, default=0, help='number of background data writing workers')
 
     # data flags - make sure these match the trained checkpoint
     parser.add_argument('--sensor', type=smartcast, nargs='+', default=['S2', 'L8'])
