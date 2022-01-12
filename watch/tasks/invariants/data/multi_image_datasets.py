@@ -170,9 +170,7 @@ class kwcoco_dataset(Dataset):
         # load images
         image_dict = dict()
         for k in range(self.num_images):
-            import xdev
-            with xdev.embed_on_exception_context:
-                image = self.dset.delayed_load(id_list[k], channels=self.channels, space='video').finalize().astype(np.float32)
+            image = self.dset.delayed_load(id_list[k], channels=self.channels, space='video').finalize().astype(np.float32)
 
             image = np.nan_to_num(image)
             if image.std() != 0.:

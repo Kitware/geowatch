@@ -178,6 +178,7 @@ visualize_cropped_dataset(){
 }
 
 
+
 prep_drop1_ta1_main(){
     # Execute main steps
     download_uncropped_data

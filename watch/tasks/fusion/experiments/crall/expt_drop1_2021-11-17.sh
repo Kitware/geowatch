@@ -550,11 +550,10 @@ python -m watch.tasks.fusion.fit \
     --arch_name=$ARCH 
 
 #
-# With Positive Centers Horologic - 2022-01-10
-
+# TA1 With Positive Centers Horologic - 2022-01-10
 
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-KWCOCO_BUNDLE_DPATH=${KWCOCO_BUNDLE_DPATH:-$DVC_DPATH/Drop1-Aligned-TA1-2022-01}
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop1-Aligned-L1-2022-01
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/raw_train_nowv.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/raw_vali_nowv.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/raw_vali_nowv.kwcoco.json
@@ -562,11 +561,11 @@ DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 
 # Split out train and validation data (TODO: add test when we can)
 kwcoco subset --src $KWCOCO_BUNDLE_DPATH/data_nowv.kwcoco.json \
-        --dst $VALI_FPATH \
+        --dst "$VALI_FPATH" \
         --select_videos '.name | startswith("KR_")'
 
 kwcoco subset --src $KWCOCO_BUNDLE_DPATH/data_nowv.kwcoco.json \
-        --dst $TRAIN_FPATH \
+        --dst "$TRAIN_FPATH" \
         --select_videos '.name | startswith("KR_") | not'
 
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
@@ -583,6 +582,79 @@ python -m watch.tasks.fusion.fit \
     --name=$EXPERIMENT_NAME \
     --chip_size=64 \
     --time_steps=11 \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --method="MultimodalTransformer" \
+    --gpus "1" \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --amp_backend=apex \
+    --use_grid_positives=False \
+    --use_centered_positives=True \
+    --arch_name=$ARCH 
+
+
+# L1 With Invariants + Positive Horologic - 2022-01-11
+# Invariants got broke
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop1-Aligned-L1-2022-01
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/train_nowv_invariants.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/vali_nowv_invariants.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/vali_nowv_invariants.kwcoco.json
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+
+# Split out train and validation data (TODO: add test when we can)
+kwcoco subset --src "$KWCOCO_BUNDLE_DPATH/invariants_nowv.kwcoco.json" \
+        --dst "$VALI_FPATH" \
+        --select_videos '.name | startswith("KR_")'
+
+kwcoco subset --src "$KWCOCO_BUNDLE_DPATH/invariants_nowv.kwcoco.json" \
+        --dst "$TRAIN_FPATH" \
+        --select_videos '.name | startswith("KR_") | not'
+
+smartwatch stats "$TRAIN_FPATH"
+
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop1-20201117
+ARCH=smt_it_stm_p8
+CHANNELS="blue|green|red|nir|swir16|swir22,before_after_heatmap,segmentation_heatmap"
+EXPERIMENT_NAME=SC_${ARCH}_centerannot_uky2_v43
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
+export CUDA_VISIBLE_DEVICES="2"
+python -m watch.tasks.fusion.fit \
+    --config "$WORKDIR/configs/common_20201117.yaml"  \
+    --channels=${CHANNELS} \
+    --name=$EXPERIMENT_NAME \
+    --chip_size=64 \
+    --time_steps=7 \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --method="MultimodalTransformer" \
+    --gpus "1" \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --amp_backend=apex \
+    --use_grid_positives=False \
+    --use_centered_positives=True \
+    --arch_name=$ARCH 
+
+
+# L1 With Invariants + Positive Horologic - 2022-01-11
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop1-20201117
+ARCH=smt_it_stm_p8
+CHANNELS="blue|green|red|nir|swir16|swir22,invariants:6,before_after_heatmap,segmentation_heatmap"
+EXPERIMENT_NAME=SC_${ARCH}_centerannot_raw_v44
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
+export CUDA_VISIBLE_DEVICES="2"
+python -m watch.tasks.fusion.fit \
+    --config "$WORKDIR/configs/common_20201117.yaml"  \
+    --channels=${CHANNELS} \
+    --name=$EXPERIMENT_NAME \
+    --chip_size=64 \
+    --time_steps=7 \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --method="MultimodalTransformer" \
     --gpus "1" \

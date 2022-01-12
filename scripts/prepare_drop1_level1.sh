@@ -22,7 +22,6 @@ UNCROPPED_DPATH=$DVC_DPATH/$UNCROPPED_BUNDLE_NAME
 ALIGNED_KWCOCO_BUNDLE=$DVC_DPATH/$ALIGNED_BUNDLE_NAME
 
 
-BASE_COCO_FPATH=$ALIGNED_KWCOCO_BUNDLE/data_nowv.kwcoco.json
 RUTGERS_MATERIAL_MODEL_FPATH="$DVC_DPATH/models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_2021101T16277.pth"
 DZYNE_LANDCOVER_MODEL_FPATH="$DVC_DPATH/models/landcover/visnav_remap_s2_subset.pt"
 
@@ -33,7 +32,6 @@ ALIGNED_BUNDLE_NAME          = $ALIGNED_BUNDLE_NAME
 UNCROPPED_BUNDLE_NAME        = $UNCROPPED_BUNDLE_NAME
 UNCROPPED_DPATH              = $UNCROPPED_DPATH
 ALIGNED_KWCOCO_BUNDLE        = $ALIGNED_KWCOCO_BUNDLE
-BASE_COCO_FPATH              = $BASE_COCO_FPATH
 RUTGERS_MATERIAL_MODEL_FPATH = $RUTGERS_MATERIAL_MODEL_FPATH
 DZYNE_LANDCOVER_MODEL_FPATH  = $DZYNE_LANDCOVER_MODEL_FPATH
 "
@@ -226,6 +224,9 @@ teamfeatures(){
     __doc__="
     source ~/code/watch/scripts/prepare_drop1_level1.sh
     "
+    BASE_COCO_FPATH = $ALIGNED_KWCOCO_BUNDLE/data_nowv.kwcoco.json
+    BASE_COCO_FPATH = $BASE_COCO_FPATH
+
     #export CUDA_VISIBLE_DEVICES="1"
     python -m watch.tasks.rutgers_material_seg.predict \
         --test_dataset=$BASE_COCO_FPATH \
@@ -243,6 +244,24 @@ teamfeatures(){
         --device=0 \
         --num_workers="16" \
         --output=$ALIGNED_KWCOCO_BUNDLE/data_nowv_dzyne_landcover.kwcoco.json
+
+    #export CUDA_VISIBLE_DEVICES=2
+    python -m watch.tasks.invariants.predict \
+        --input_kwcoco "$DVC_DPATH/Drop1-Aligned-L1-2022-01/data.kwcoco.json" \
+        --output_kwcoco "$DVC_DPATH/Drop1-Aligned-L1-2022-01/invariants.kwcoco.json" \
+        --pretext_ckpt_path "$DVC_DPATH/models/uky/uky_invariants_2022_01/pretext/pretext.ckpt" \
+        --segmentation_ckpt "$DVC_DPATH/models/uky/uky_invariants_2022_01/segmentation/segmentation.ckpt" \
+        --do_pca 1 \
+        --num_dim 8 \
+        --num_workers avail/2 \
+        --write_workers avail/2 \
+        --tasks all
+
+    kwcoco subset --src "$DVC_DPATH/Drop1-Aligned-L1-2022-01/invariants.kwcoco.json" \
+            --dst "$DVC_DPATH/Drop1-Aligned-L1-2022-01/invariants_nowv.kwcoco.json" \
+            --select_images '.sensor_coarse != "WV"'
+
+    smartwatch stats "$DVC_DPATH/Drop1-Aligned-L1-2022-01/invariants_nowv.kwcoco.json"
     
     python ~/code/watch/watch/cli/coco_combine_features.py \
         --src $BASE_COCO_FPATH \

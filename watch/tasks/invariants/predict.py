@@ -51,7 +51,7 @@ def predict(args):
             dataset = kwcoco_dataset(args.input_kwcoco, sensor=pretext_hparams.sensor, bands=pretext_hparams.bands, patch_size=32, change_labels=False, display=False)
 
             ### Define projector
-            dl = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, num_workers=args.num_workers)
+            dl = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, num_workers=num_workers)
             feature_collection = []
             print('Calculating projection matrix based on pca.')
 
@@ -198,8 +198,8 @@ def main():
     parser.add_argument('--segmentation_ckpt_path', type=str)
     parser.add_argument('--before_after_ckpt_path', type=str)
     parser.add_argument('--batch_size', type=int, default=8)
-    parser.add_argument('--num_workers', type=int, default=4, help='number of background data loading workers')
-    parser.add_argument('--write_workers', type=int, default=0, help='number of background data writing workers')
+    parser.add_argument('--num_workers', default=4, help='number of background data loading workers')
+    parser.add_argument('--write_workers', default=0, help='number of background data writing workers')
 
     # data flags - make sure these match the trained checkpoint
     parser.add_argument('--sensor', type=smartcast, nargs='+', default=['S2', 'L8'])
