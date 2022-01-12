@@ -1,10 +1,17 @@
 <!--
     Merge request template for feature branches.
 
-    Should be used for significant features that increment WATCH's version number.
-    (Ex. 1.5.0 -> 1.6.0)
-    Major version number is 1.0 for Phase 1.
-    Patch version number is not being tracked.
+    See https://semver.org for versioning information:
+    >    Given a version number MAJOR.MINOR.PATCH, increment the:
+    >
+    >        MAJOR version when you make incompatible API changes,
+    >        MINOR version when you add functionality in a backwards compatible manner, and
+    >        PATCH version when you make backwards compatible bug fixes.
+
+    Major version number is 0 for no expectation of backwards comatibility.
+    "feature" template should be used for significant features that increment WATCH's minor version number.
+    (Ex. 0.5.0 -> 0.6.0)
+    "patch" template should be used for bugfixes or minor features that increment WATCH's patch version number.
 -->
 ## Short Description
 
@@ -22,6 +29,12 @@
 
 ## Changelog
 
+### Fixed
+
+### Added
+
+### Changed
+
 
 ## Checklist
 
@@ -36,6 +49,6 @@ python run_tests.py
 - [ ] New code is documented
 - [ ] Linting passes
 - [ ] Tests pass
-- [ ] This branch is rebased on master
-- [ ] `watch/__init__.py:__version__` is incremented
+- [ ] This branch is rebased on master               [maintainer]
+- [ ] `watch/__init__.py:__version__` is incremented [maintainer]
 
