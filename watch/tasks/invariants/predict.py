@@ -104,7 +104,7 @@ def predict(args):
     print('Evaluating and saving features')
 
     with torch.set_grad_enabled(False):
-        for batch in tqdm(loader, total=num_batches):
+        for batch in tqdm(loader, total=num_batches, desc='Compute features'):
             image_id = batch['img1_id']
             image_info = dataset.dset.index.imgs[image_id.item()]
 
