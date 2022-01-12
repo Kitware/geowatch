@@ -76,13 +76,17 @@ def predict(args):
             feature_collection = []
             print('Calculating projection matrix based on pca.')
 
-            for batch in tqdm(dl):
-                image_stack = torch.stack([batch['image1'], batch['image2'], batch['offset_image1'], batch['augmented_image1']], dim=1)
-                features = pretext_model(image_stack.to(pretext_model.device))
-                feature_collection.append(features.cpu())
-            stack = torch.cat(feature_collection, dim=0).permute(0, 1, 3, 4, 2).reshape(-1, 64)
-            reduction_dim = args.num_dim - before_after_dim - segmentation_dim
-            _, _, projector = pca(stack, q=reduction_dim)
+            with torch.set_grad_enabled(False):
+                for batch in tqdm(dl, desc='Calculating PCA matrix'):
+                    image_stack = torch.stack([batch['image1'], batch['image2'], batch['offset_image1'], batch['augmented_image1']], dim=1)
+                    features = pretext_model(image_stack.to(pretext_model.device))
+                    feature_collection.append(features.cpu())
+                features = None
+                image_stack = None
+                stack = torch.cat(feature_collection, dim=0).permute(0, 1, 3, 4, 2).reshape(-1, 64)
+                reduction_dim = args.num_dim - before_after_dim - segmentation_dim
+                _, _, projector = pca(stack, q=reduction_dim)
+                stack = None
 
             projector = projector.permute(1, 0).to(device)
 

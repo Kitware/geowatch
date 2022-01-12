@@ -50,6 +50,27 @@ fix_opencv_conflicts(){
     fi
 }
 
+torch_on_3090(){
+    # https://github.com/pytorch/pytorch/issues/31285
+    https://download.pytorch.org/whl/cpu/torch-1.10.0%2Bcpu-cp39-cp39-linux_x86_64.whl
+    pip install torch==1.10.0 torchvision==0.11.1 -f https://download.pytorch.org/whl/cu110/torch
+
+    python -c "import torch; print(torch.cuda.is_available())"
+    python -c "import torch; print(torch.rand(10).to(0))"
+
+    pip3 install --pre torch torchvision -f https://download.pytorch.org/whl/nightly/cu112/torch_nightly.html -U
+
+    # From source:
+    git clone --recursive https://github.com/pytorch/pytorch
+    cd pytorch
+    # if you are updating an existing checkout
+    git submodule sync
+    git submodule update --init --recursive --jobs 0
+    
+    
+
+}
+
 
 # Simple tests
 echo "Start simple tests"
