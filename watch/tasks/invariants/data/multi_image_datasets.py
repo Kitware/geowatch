@@ -313,7 +313,7 @@ class kwcoco_dataset(Dataset):
 
             out['time_steps'] = torch.tensor([out[key] for key in out if 'frame_number' in key])
             out['sensors'] = sensor_list
-#             out['img1_info'] = img1_info
+            # out['img1_info'] = img1_info
             out['img1_id'] = img1_id
         return out
 

@@ -101,6 +101,10 @@ def predict(args):
     # queue = util_parallel.BlockingJobQueue(max_workers=0)
     # queue = util_parallel.BlockingJobQueue(max_workers=num_workers)
 
+    output_dset = dataset.dset.copy()
+    import xdev
+    xdev.embed()
+
     print('Evaluating and saving features')
 
     with torch.set_grad_enabled(False):
