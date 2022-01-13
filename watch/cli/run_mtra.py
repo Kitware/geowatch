@@ -13,7 +13,6 @@ import ubelt
 
 from watch.utils.util_raster import GdalOpen
 from watch.cli.mtra_preprocess import stac_item_map
-from watch.utils.util_stac import parallel_map_items
 
 
 SUPPORTED_S2_PLATFORMS = {'S2A',
@@ -35,6 +34,7 @@ def main():
                         help="Path to input STAC catalog")
     parser.add_argument("-o", "--outdir",
                         type=str,
+                        required=True,
                         help="Output directory for the MTRA harmonized output "
                              "data and updated STAC catalog")
     parser.add_argument("--num_pairs",
@@ -215,35 +215,30 @@ def apply_harmonization_item_map(stac_item,
 
 
 def apply_harmonization(
-        stac_catalog,
+        items,
         outdir,
         slope_map,
         intercept_map,
         item_selector=_default_s2_item_selector,
         bands_to_harmonize=['B02', 'B03', 'B04', 'B8A', 'B11', 'B12'],
         jobs=1):
-
-    if isinstance(stac_catalog, str):
-        catalog = pystac.read_file(href=stac_catalog).full_copy()
-    elif isinstance(stac_catalog, dict):
-        catalog = pystac.Catalog.from_dict(stac_catalog).full_copy()
-    else:
-        catalog = stac_catalog.full_copy()
-
     os.makedirs(outdir, exist_ok=True)
 
-    output_catalog = parallel_map_items(
-        catalog,
-        apply_harmonization_item_map,
-        max_workers=jobs,
-        mode='process' if jobs > 1 else 'serial',
-        extra_args=[outdir, item_selector, bands_to_harmonize,
-                    slope_map, intercept_map])
+    harmonized_stac_items = []
+    executor = ubelt.Executor(mode='process' if jobs > 1 else 'serial',
+                              max_workers=jobs)
+    harmonization_jobs = [executor.submit(apply_harmonization_item_map,
+                                          stac_item,
+                                          outdir,
+                                          item_selector,
+                                          bands_to_harmonize,
+                                          slope_map, intercept_map)
+                          for stac_item in items]
+    for mapped_item in (harmonization_job.result() for harmonization_job
+                        in as_completed(harmonization_jobs)):
+        harmonized_stac_items.append(mapped_item)
 
-    output_catalog.set_self_href(os.path.join(outdir, 'catalog.json'))
-    output_catalog.save(catalog_type=pystac.CatalogType.ABSOLUTE_PUBLISHED)
-
-    return output_catalog
+    return harmonized_stac_items
 
 
 def _item_has_cloudmask(stac_item):
@@ -314,44 +309,71 @@ def run_mtra(stac_catalog,
     else:
         catalog = stac_catalog.full_copy()
 
-    if num_pairs is not None and num_pairs > 0:
-        print("* Selecting best items for harmonization model computation")
-        stac_items_for_harmonization_model =\
-            select_best_pairs(list(catalog.get_all_items()), num_pairs)
-    else:
-        stac_items_for_harmonization_model = list(catalog.get_all_items())
+    output_catalog = catalog.full_copy()
+    output_catalog.clear_items()
 
-    print("* Preprocessing items for harmonization model computation")
-    preprocess_dir = os.path.join(outdir, '_preprocessed')
-    os.makedirs(preprocess_dir, exist_ok=True)
-    preprocessed_stac_items = []
-    executor = ubelt.Executor(mode='process' if jobs > 1 else 'serial',
-                              max_workers=jobs)
-    preprocess_jobs = [executor.submit(stac_item_map, stac_item,
-                                       preprocess_dir, gsd,
-                                       remap_cloudmask_to_hls)
-                       for stac_item in stac_items_for_harmonization_model]
-    for mapped_item in (preprocess_job.result() for preprocess_job
-                        in as_completed(preprocess_jobs)):
-        preprocessed_stac_items.append(mapped_item)
+    grouped_items = {}
+    for item in catalog.get_all_items():
+        mgrs_tile = ''.join((item.properties.get('mgrs:utm_zone', '??'),
+                             item.properties.get('mgrs:latitude_band', '?'),
+                             item.properties.get('mgrs:grid_square', '??')))
+        grouped_items.setdefault(mgrs_tile, []).append(item)
 
-    print("* Computing harmonization model")
-    slope_map, intercept_map = compute_harmonization(
-        preprocessed_stac_items, outdir)
+    for mgrs_tile, stac_items in grouped_items.items():
+        if '?' in mgrs_tile:
+            print("* Warning * Couldn't parse MGRS tile ({}) for {} items, "
+                  "dropping them from output!".format(
+                      mgrs_tile, len(stac_items)))
+            continue
 
-    # Precompute different GSD slope & intercept map files to avoid
-    # having difference processes try to do it at the same time.
-    # TODO: Use a lock instead
-    _ensure_map_at_res(slope_map, 10.0, 10.0)
-    _ensure_map_at_res(intercept_map, 20.0, 20.0)
-    _ensure_map_at_res(slope_map, 10.0, 10.0)
-    _ensure_map_at_res(intercept_map, 20.0, 20.0)
+        print("* Running MTRA harmonization for MGRS tile {}: "
+              "{} items..".format(mgrs_tile, len(stac_items)))
 
-    print("* Applying harmonization model to select items")
-    output_stac_catalog = apply_harmonization(
-        catalog, outdir, slope_map, intercept_map, jobs=jobs)
+        if num_pairs is not None and num_pairs > 0:
+            print("* Selecting best items for harmonization model computation")
+            stac_items_for_harmonization_model =\
+                select_best_pairs(stac_items, num_pairs)
+        else:
+            stac_items_for_harmonization_model = stac_items
 
-    return output_stac_catalog
+        print("* Preprocessing items for harmonization model computation")
+        preprocess_dir = os.path.join(outdir, '_preprocessed')
+        os.makedirs(preprocess_dir, exist_ok=True)
+        preprocessed_stac_items = []
+        executor = ubelt.Executor(mode='process' if jobs > 1 else 'serial',
+                                  max_workers=jobs)
+        preprocess_jobs = [executor.submit(stac_item_map, stac_item,
+                                           preprocess_dir, gsd,
+                                           remap_cloudmask_to_hls)
+                           for stac_item in stac_items_for_harmonization_model]
+        for mapped_item in (preprocess_job.result() for preprocess_job
+                            in as_completed(preprocess_jobs)):
+            preprocessed_stac_items.append(mapped_item)
+
+        print("* Computing harmonization model")
+        slope_map, intercept_map = compute_harmonization(
+            preprocessed_stac_items, os.path.join(outdir, mgrs_tile))
+
+        # Precompute different GSD slope & intercept map files to avoid
+        # having difference processes try to do it at the same time.
+        # TODO: Use a lock instead
+        _ensure_map_at_res(slope_map, 10.0, 10.0)
+        _ensure_map_at_res(intercept_map, 20.0, 20.0)
+        _ensure_map_at_res(slope_map, 10.0, 10.0)
+        _ensure_map_at_res(intercept_map, 20.0, 20.0)
+
+        print("* Applying harmonization model to select items")
+        harmonized_items = apply_harmonization(
+            stac_items, outdir, slope_map, intercept_map, jobs=jobs)
+
+        for output_item in harmonized_items:
+            output_catalog.add_link(
+                pystac.Link('item', output_item, pystac.MediaType.JSON))
+
+    output_catalog.set_self_href(os.path.join(outdir, 'catalog.json'))
+    output_catalog.save(catalog_type=pystac.CatalogType.ABSOLUTE_PUBLISHED)
+
+    return output_catalog
 
 
 if __name__ == "__main__":
