@@ -89,6 +89,7 @@ def _item_map(feature, outdir, aws_base_command, dryrun, relative=False):
         del assets['index']
 
     new_assets = {}
+    assets_to_remove = set()
     for asset_name, asset in assets.items():
         asset_basename = os.path.basename(asset['href'])
 
@@ -128,14 +129,34 @@ def _item_map(feature, outdir, aws_base_command, dryrun, relative=False):
             # Update feature asset href to point to local outpath
             asset['href'] = local_asset_href
         else:
-            success = download_file(
-                asset_href, asset_outpath, aws_base_command, dryrun)
-            if success:
-                asset['href'] = local_asset_href
+            # Prefer to pull asset from S3 if available
+            if(urlparse(asset_href).scheme != 's3'
+               and 'alternate' in asset and 's3' in asset['alternate']):
+                asset_href_for_download = asset['alternate']['s3']['href']
             else:
-                print('Warning unrecognized scheme for asset href: {!r}, '
-                      'skipping!'.format(asset_href))
+                asset_href_for_download = asset_href
+
+            try:
+                success = download_file(asset_href_for_download,
+                                        asset_outpath,
+                                        aws_base_command,
+                                        dryrun)
+            except subprocess.CalledProcessError:
+                print("* Error * Couldn't download asset from href: '{}', "
+                      "removing asset from item!".format(
+                          asset_href_for_download))
+                assets_to_remove.add(asset_name)
                 continue
+            else:
+                if success:
+                    asset['href'] = local_asset_href
+                else:
+                    print('Warning unrecognized scheme for asset href: {!r}, '
+                          'skipping!'.format(asset_href_for_download))
+                    continue
+
+    for asset_name in assets_to_remove:
+        del assets[asset_name]
 
     for new_asset_name, new_asset in new_assets.items():
         assets[new_asset_name] = new_asset
