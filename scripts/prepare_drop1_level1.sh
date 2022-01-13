@@ -218,14 +218,16 @@ inspect(){
     smartwatch visualize --src $ALIGNED_KWCOCO_BUNDLE/vali_data_nowv.kwcoco.json --channels "red|green|blue" --viz_dpath=$ALIGNED_KWCOCO_BUNDLE/_viz_nowv_vali
     #smartwatch.cli.animate_visualizations --channels "red|green|blue" --viz_dpath=$ALIGNED_KWCOCO_BUNDLE/_viz_nowv_vali
     #smartwatch visualize --src subdata.kwcoco.json --channels "red|green|blue" --viz_dpath=./_viz --animate=True --workers=8
+
+
+    python -m watch stats $ALIGNED_KWCOCO_BUNDLE/invariants.kwcoco.json
+    python -m watch visualize --src $ALIGNED_KWCOCO_BUNDLE/invariants.kwcoco.json --channels "red|green|blue,before_after_heatmap,segmentation_heatmap,invariants:0:3,invariants:3:6" --viz_dpath=$ALIGNED_KWCOCO_BUNDLE/_viz_invariants
 }
 
 teamfeatures(){
     __doc__="
     source ~/code/watch/scripts/prepare_drop1_level1.sh
     "
-    BASE_COCO_FPATH = $ALIGNED_KWCOCO_BUNDLE/data_nowv.kwcoco.json
-    BASE_COCO_FPATH = $BASE_COCO_FPATH
 
     #export CUDA_VISIBLE_DEVICES="1"
     python -m watch.tasks.rutgers_material_seg.predict \
@@ -298,6 +300,14 @@ teamfeatures(){
         --src $ALIGNED_KWCOCO_BUNDLE/combo_train_nowv.kwcoco.json \
         --dst $ALIGNED_KWCOCO_BUNDLE/combo_train_nowv.kwcoco.json
 
+    UNCROPPED_BUNDLE_NAME=drop1
+    UNCROPPED_DPATH=
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+    python -m watch project \
+        --site_models="$DVC_DPATH/drop1/site_models/*.geojson" \
+        --src $DVC_DPATH/Drop1-Aligned-L1-2022-01/data.kwcoco.json \
+        --dst $DVC_DPATH/Drop1-Aligned-L1-2022-01/data.kwcoco.json
+
     smartwatch stats $ALIGNED_KWCOCO_BUNDLE/combo_train_nowv.kwcoco.json
     kwcoco stats $ALIGNED_KWCOCO_BUNDLE/combo_train_nowv.kwcoco.json
 }
@@ -306,4 +316,111 @@ teamfeatures(){
 main_drop1_level1(){
     extract_aligned_cropped_regions
     #teamfeatures
+}
+
+
+fixup_annotations(){
+    DVC_DPATH=$(python -m watch find_dvc)
+    echo "DVC_DPATH = $DVC_DPATH"
+
+    cd "$DVC_DPATH"
+    #ls "$DVC_DPATH/Drop1-Aligned-TA1-2022-01/"*.kwcoco.json
+
+
+    BASE_COCO_FPATH=$DVC_DPATH/Drop1-Aligned-TA1-2022-01/data.kwcoco.json
+    echo "BASE_COCO_FPATH = $BASE_COCO_FPATH"
+    project_annotations "$BASE_COCO_FPATH"
+
+}
+
+
+
+fixup_annotations(){
+
+    DVC_DPATH=$(python -m watch find_dvc)
+    echo "DVC_DPATH = $DVC_DPATH"
+    # ---
+    cd $DVC_DPATH
+
+    cd "$DVC_DPATH/Drop1-Aligned-L1-2022-01/"
+    dvc unprotect -- *.kwcoco.json
+    cd "$DVC_DPATH/Drop1-Aligned-TA1-2022-01/"
+    dvc unprotect -- *.kwcoco.json
+
+    project_annotations "$DVC_DPATH/Drop1-Aligned-TA1-2022-01/data.kwcoco.json"
+
+    project_annotations "$DVC_DPATH/Drop1-Aligned-L1-2022-01/data.kwcoco.json"
+
+    project_annotations "$DVC_DPATH/Drop1-Aligned-L1-2022-01/data_nowv.kwcoco.json"
+    project_annotations "$DVC_DPATH/Drop1-Aligned-L1-2022-01/train_data.kwcoco.json"
+    project_annotations "$DVC_DPATH/Drop1-Aligned-L1-2022-01/train_data_nowv.kwcoco.json"
+    project_annotations "$DVC_DPATH/Drop1-Aligned-L1-2022-01/train_data_wv.kwcoco.json"
+    project_annotations "$DVC_DPATH/Drop1-Aligned-L1-2022-01/vali_data.kwcoco.json"
+    project_annotations "$DVC_DPATH/Drop1-Aligned-L1-2022-01/vali_data_nowv.kwcoco.json"
+    project_annotations "$DVC_DPATH/Drop1-Aligned-L1-2022-01/vali_data_wv.kwcoco.json"
+}
+
+
+
+dvc_update_annotation_splits(){
+    __doc__="
+    Updates the annotations in the 'standard' dataset splits on DVC
+
+    DVC_DPATH=$(python -m watch find_dvc)
+    ALIGNED_KWCOCO_BUNDLE=$DVC_DPATH/Drop1-Aligned-TA1-2022-01
+    ALIGNED_KWCOCO_BUNDLE=$DVC_DPATH/Drop1-Aligned-L1-2022-01
+    "
+    ALIGNED_KWCOCO_BUNDLE=$1
+
+    cd $ALIGNED_KWCOCO_BUNDLE
+    dvc unprotect *.kwcoco.json
+
+    python -m watch project \
+        --site_models="$DVC_DPATH/drop1/site_models/*.geojson" \
+        --src "$ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json" \
+        --dst "$ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json"
+
+    kwcoco subset --src $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json \
+            --dst $ALIGNED_KWCOCO_BUNDLE/data_nowv.kwcoco.json \
+            --select_images '.sensor_coarse != "WV"'
+
+    # Split out train and validation data 
+    # (TODO: add test when we get enough data)
+    kwcoco subset --src $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json \
+            --dst $ALIGNED_KWCOCO_BUNDLE/train_data.kwcoco.json \
+            --select_videos '.name | startswith("KR_") | not'
+
+    kwcoco subset --src $ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json \
+            --dst $ALIGNED_KWCOCO_BUNDLE/vali_data.kwcoco.json \
+            --select_videos '.name | startswith("KR_")'
+
+    # 
+    kwcoco subset --src $ALIGNED_KWCOCO_BUNDLE/train_data.kwcoco.json \
+            --dst $ALIGNED_KWCOCO_BUNDLE/train_data_nowv.kwcoco.json \
+            --select_images '.sensor_coarse != "WV"'
+
+    kwcoco subset --src $ALIGNED_KWCOCO_BUNDLE/vali_data.kwcoco.json \
+            --dst $ALIGNED_KWCOCO_BUNDLE/vali_data_nowv.kwcoco.json \
+            --select_images '.sensor_coarse != "WV"'
+
+    kwcoco subset --src $ALIGNED_KWCOCO_BUNDLE/train_data.kwcoco.json \
+            --dst $ALIGNED_KWCOCO_BUNDLE/train_data_wv.kwcoco.json \
+            --select_images '.sensor_coarse == "WV"'
+
+    kwcoco subset --src $ALIGNED_KWCOCO_BUNDLE/vali_data.kwcoco.json \
+            --dst $ALIGNED_KWCOCO_BUNDLE/vali_data_wv.kwcoco.json \
+            --select_images '.sensor_coarse == "WV"'
+
+    kwcoco stats *.json
+
+    dvc add \
+        data.kwcoco.json \
+        data_nowv.kwcoco.json \
+        vali_data.kwcoco.json \
+        train_data.kwcoco.json \
+        train_data_wv.kwcoco.json \
+        vali_data_wv.kwcoco.json \
+        vali_data_nowv.kwcoco.json \
+        train_data_nowv.kwcoco.json 
+
 }

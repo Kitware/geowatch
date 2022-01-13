@@ -138,8 +138,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         torch_start_method='default',
         resample_invalid_frames=True,
         true_multimodal=True,
-        use_centered_positives=True,
         use_grid_positives=True,
+        use_centered_positives=False,
     ):
         """
         Args:
@@ -352,7 +352,6 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
 
             if self.verbose:
                 print('Build train kwcoco dataset')
-            # train_coco_dset = kwcoco.CocoDataset.coerce(train_data)
             train_coco_dset = watch.demo.coerce_kwcoco(train_data)
             self.coco_datasets['train'] = train_coco_dset
 
@@ -411,7 +410,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                     vali_data = str(vali_data.expanduser())
                 if self.verbose:
                     print('Build validation kwcoco dataset')
-                kwcoco_ds = kwcoco.CocoDataset.coerce(vali_data)
+                kwcoco_ds = watch.demo.coerce_kwcoco(vali_data)
                 vali_coco_sampler = ndsampler.CocoSampler(kwcoco_ds)
                 vali_dataset = KWCocoVideoDataset(
                     vali_coco_sampler,
@@ -429,7 +428,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 test_data = str(test_data.expanduser())
             if self.verbose:
                 print('Build test kwcoco dataset')
-            test_coco_dset = kwcoco.CocoDataset.coerce(test_data)
+            test_coco_dset = watch.demo.coerce_kwcoco(test_data)
             self.coco_datasets['test'] = test_coco_dset
             test_coco_sampler = ndsampler.CocoSampler(test_coco_dset)
             self.torch_datasets['test'] = KWCocoVideoDataset(
@@ -619,7 +618,9 @@ class KWCocoVideoDataset(data.Dataset):
         >>> import ndsampler
         >>> import kwcoco
         >>> import watch
-        >>> coco_dset = watch.demo.coerce_kwcoco('vidshapes-watch')
+        >>> coco_dset = watch.demo.coerce_kwcoco('watch')
+        >>> print({c.get('sensor_coarse') for c in coco_dset.images().coco_images})
+        >>> print({c.channels.spec for c in coco_dset.images().coco_images})
         >>> sampler = ndsampler.CocoSampler(coco_dset)
         >>> sample_shape = (2, 128, 128)
         >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape,
@@ -1538,6 +1539,9 @@ class KWCocoVideoDataset(data.Dataset):
             >>>     train_dataset='vidshapes-watch', chip_size=256, time_steps=5, num_workers=0, batch_size=3, true_multimodal=True, normalize_inputs=True)
             >>> datamodule.setup('fit')
             >>> self = datamodule.torch_datasets['train']
+            >>> coco_dset = self.sampler.dset
+            >>> print({c.get('sensor_coarse') for c in coco_dset.images().coco_images})
+            >>> print({c.channels.spec for c in coco_dset.images().coco_images})
             >>> num_workers = 0
             >>> num = 10
             >>> batch_size = 6
@@ -1580,6 +1584,15 @@ class KWCocoVideoDataset(data.Dataset):
         total_freq = np.zeros(num_classes, dtype=np.int64)
 
         sensor_mode_hist = ub.ddict(lambda: 0)
+
+        # TODO: we should ensure instance level frequency data as well
+        # as pixel level frequency data.
+
+        # TODO: we should ensure we include at least one sample from each type
+        # of modality.
+        # Note: the requested order of the channels could be different that
+        # what is registered in the dataset. Need to find a good way to account
+        # for this.
 
         prog = ub.ProgIter(loader, desc='estimate dataset stats')
         for batch_items in prog:
@@ -1636,7 +1649,7 @@ class KWCocoVideoDataset(data.Dataset):
             # self.sampler.dset.videos().images
             coco_images = self.sampler.dset.images().coco_images
             unique_sensor_modes.update(set(
-                (c.img.get('sensor_coarse', ''), c.channels.fuse().spec)
+                (c.img.get('sensor_coarse', ''), c.channels.fuse().normalize().spec)
                 for c in coco_images
             ))
 

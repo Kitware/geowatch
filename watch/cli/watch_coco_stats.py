@@ -45,7 +45,7 @@ class WatchCocoStats(scfg.Config):
         # TODO: tabulate stats when possible.
         import watch
         collatables = []
-        print('collatables = {!r}'.format(collatables))
+        # print('collatables = {!r}'.format(collatables))
         for fpath in ub.ProgIter(fpaths, verbose=3, desc='Load dataset stats'):
             print('--')
             dset = watch.demo.coerce_kwcoco(fpath)
@@ -53,7 +53,7 @@ class WatchCocoStats(scfg.Config):
             colltable = coco_watch_stats(dset)
             collatables.append(colltable)
 
-        print('collatables = {}'.format(ub.repr2(collatables, nl=1)))
+        print('collatables = {}'.format(ub.repr2(collatables, nl=2)))
         summary = pd.DataFrame(collatables)
         print(summary.to_string())
 

@@ -92,26 +92,42 @@ from torch._jit_internal import _copy_to_script_wrapper
 from torch.nn.modules.container import Module, Iterator  # NOQA
 
 
-class EmptyStrModuleDict(torch.nn.ModuleDict):
+class RobustModuleDict(torch.nn.ModuleDict):
     """
     Regular torch.nn.ModuleDict doesnt allow empty str. Hack around this.
+
+    Example:
+        >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+        >>> torch_dict = RobustModuleDict()
+        >>> # All printable characters should be usable as keys
+        >>> # If they are not, hack it.
+        >>> failed = []
+        >>> for c in list(string.printable) + ['']:
+        >>>     try:
+        >>>         torch_dict[c] = torch.nn.Linear(1, 1)
+        >>>     except KeyError:
+        >>>         failed.append(c)
+        >>> assert len(failed) == 0
     """
+    repl_dot = '#D#'
+    repl_empty = '__EMPTY'
+
     @_copy_to_script_wrapper
     def __getitem__(self, key: str) -> Module:
-        key = '__EMPTY' if key == '' else key
+        key = self.repl_empty if key == '' else key.replace('.', self.repl_dot)
         return self._modules[key]
 
     def __setitem__(self, key: str, module: Module) -> None:
-        key = '__EMPTY' if key == '' else key
+        key = self.repl_empty if key == '' else key.replace('.', self.repl_dot)
         self.add_module(key, module)
 
     def __delitem__(self, key: str) -> None:
-        key = '__EMPTY' if key == '' else key
+        key = self.repl_empty if key == '' else key.replace('.', self.repl_dot)
         del self._modules[key]
 
     @_copy_to_script_wrapper
     def __contains__(self, key: str) -> bool:
-        key = '__EMPTY' if key == '' else key
+        key = self.repl_empty if key == '' else key.replace('.', self.repl_dot)
         return key in self._modules
 
     def pop(self, key: str) -> Module:
@@ -120,7 +136,7 @@ class EmptyStrModuleDict(torch.nn.ModuleDict):
         Args:
             key (string): key to pop from the ModuleDict
         """
-        key = '__EMPTY' if key == '' else key
+        key = self.repl_empty if key == '' else key.replace('.', self.repl_dot)
         v = self[key]
         del self[key]
         return v
@@ -203,7 +219,7 @@ class MultimodalTransformer(pl.LightningModule):
             '--tokenizer', default='rearrange', type=str,
             choices=['dwcnn', 'rearrange'], help=ub.paragraph(
                 '''
-                How image patches aare broken into tokens.
+                How image patches are broken into tokens.
                 rearrange just shuffles raw pixels. dwcnn is a is a mobile
                 convolutional stem.
                 '''))
@@ -318,11 +334,11 @@ class MultimodalTransformer(pl.LightningModule):
             self.unique_sensor_modes = self.dataset_stats['unique_sensor_modes']
 
         if input_stats is not None:
-            input_norms = EmptyStrModuleDict()
+            input_norms = RobustModuleDict()
             # sensors = list(ub.unique([s for (s, c) in input_stats.keys()]))
             for s, c in self.unique_sensor_modes:
                 if s not in input_norms:
-                    input_norms[s] = EmptyStrModuleDict()
+                    input_norms[s] = RobustModuleDict()
                 stats = input_stats.get((s, c), None)
                 if stats is None:
                     input_norms[s][c] = nh.layers.InputNorm()
@@ -505,7 +521,7 @@ class MultimodalTransformer(pl.LightningModule):
 
         # TODO: add tokenization strat to the FusionEncoder itself
         if tokenizer == 'rearrange':
-            stream_tokenizers = EmptyStrModuleDict()
+            stream_tokenizers = RobustModuleDict()
             for stream_key, num_chan in stream_num_channels.items():
                 # Construct tokenize on a per-stream basis
                 # import netharn as nh
@@ -516,7 +532,7 @@ class MultimodalTransformer(pl.LightningModule):
                     ws=self.hparams.window_size)
                 stream_tokenizers[stream_key] = tokenize
         elif tokenizer == 'dwcnn':
-            stream_tokenizers = EmptyStrModuleDict()
+            stream_tokenizers = RobustModuleDict()
             for stream_key, num_chan in stream_num_channels.items():
                 # Construct tokenize on a per-stream basis
                 # import netharn as nh
@@ -593,9 +609,7 @@ class MultimodalTransformer(pl.LightningModule):
             norm=None
         )
 
-        print('self.dataset_stats = {!r}'.format(self.dataset_stats))
-
-        print('self.dataset_stats = {!r}'.format(self.dataset_stats))
+        print('self.dataset_stats = {}'.format(ub.repr2(self.dataset_stats, nl=-1)))
 
         ### NEW:
         # hashstr_tokenizer = torch.nn.Linear(16, 8)
@@ -606,13 +620,13 @@ class MultimodalTransformer(pl.LightningModule):
         self.token_learner3_mode = nh.layers.MultiLayerPerceptronNd(
             dim=0, in_channels=16, hidden_channels=3, out_channels=8, residual=True, norm=None)
 
-        self.sensor_channel_tokenizers = EmptyStrModuleDict()
+        self.sensor_channel_tokenizers = RobustModuleDict()
         for s, c in self.unique_sensor_modes:
             mode_code = kwcoco.FusedChannelSpec.coerce(c)
             # For each mode make a network that should learn to tokenize
             in_chan = mode_code.numel()
             if s not in self.sensor_channel_tokenizers:
-                self.sensor_channel_tokenizers[s] = EmptyStrModuleDict()
+                self.sensor_channel_tokenizers[s] = RobustModuleDict()
             self.sensor_channel_tokenizers[s][c] = nh.layers.MultiLayerPerceptronNd(
                 dim=2, in_channels=in_chan, hidden_channels=3,
                 out_channels=MODAL_AGREEMENT_CHANS, residual=True, norm=None)
@@ -1423,7 +1437,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> package_path = join(dpath, 'my_package.pt')
 
             >>> datamodule = datamodules.kwcoco_video_data.KWCocoVideoDataModule(
-            >>>     'special:vidshapes8-multispectral', chip_size=32,
+            >>>     'special:vidshapes8-multispectral-multisensor', chip_size=32,
             >>>     batch_size=1, time_steps=2, num_workers=0)
             >>> datamodule.setup('fit')
             >>> dataset_stats = datamodule.torch_datasets['train'].cached_dataset_stats(num=3)
