@@ -52,7 +52,7 @@ def main():
     return 0
 
 
-def _item_map(stac_item, outbucket, aws_base_command):
+def egress_item(stac_item, outbucket, aws_base_command):
     stac_item_dict = stac_item.to_dict()
 
     stac_item_outpath = os.path.join(
@@ -117,7 +117,7 @@ def baseline_framework_egress(stac_catalog,
 
     output_catalog = parallel_map_items(
         catalog,
-        _item_map,
+        egress_item,
         max_workers=jobs,
         mode='process' if jobs > 1 else 'serial',
         extra_args=[outbucket, aws_base_command])

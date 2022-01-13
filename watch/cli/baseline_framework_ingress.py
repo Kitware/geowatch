@@ -60,7 +60,7 @@ def main():
     return 0
 
 
-def _item_map(feature, outdir, aws_base_command, dryrun, relative=False):
+def ingress_item(feature, outdir, aws_base_command, dryrun, relative=False):
     # Adding a reference back to the original STAC
     # item if not already present
     self_link = None
@@ -239,7 +239,7 @@ def baseline_framework_ingress(input_path,
     executor = ubelt.Executor(mode='process' if jobs > 1 else 'serial',
                               max_workers=jobs)
 
-    jobs = [executor.submit(_item_map, feature, outdir, aws_base_command,
+    jobs = [executor.submit(ingress_item, feature, outdir, aws_base_command,
                             dryrun, relative)
             for feature in input_stac_items]
 

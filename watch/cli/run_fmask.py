@@ -33,8 +33,16 @@ def main():
     return 0
 
 
-def _item_map(stac_item, outdir, sensor_mapping):
-    sensor = sensor_mapping.get(stac_item.properties['platform'])
+SENSOR_MAPPING = {'S2A': 'S2',
+                  'S2B': 'S2',
+                  'sentinel-2a': 'S2',
+                  'sentinel-2b': 'S2',
+                  'OLI_TIRS': 'LS',
+                  'LANDSAT_8': 'LS'}
+
+
+def run_fmask_for_item(stac_item, outdir):
+    sensor = SENSOR_MAPPING.get(stac_item.properties['platform'])
     if sensor is None:
         return stac_item
 
@@ -126,19 +134,12 @@ def run_fmask(stac_catalog, outdir, jobs=1):
 
     os.makedirs(outdir, exist_ok=True)
 
-    sensor_mapping = {'S2A': 'S2',
-                      'S2B': 'S2',
-                      'sentinel-2a': 'S2',
-                      'sentinel-2b': 'S2',
-                      'OLI_TIRS': 'LS',
-                      'LANDSAT_8': 'LS'}
-
     output_catalog = parallel_map_items(
         catalog,
-        _item_map,
+        run_fmask_for_item,
         max_workers=jobs,
         mode='process' if jobs > 1 else 'serial',
-        extra_args=[outdir, sensor_mapping])
+        extra_args=[outdir])
 
     output_catalog.set_self_href(os.path.join(outdir, 'catalog.json'))
     output_catalog.save(catalog_type=pystac.CatalogType.ABSOLUTE_PUBLISHED)
