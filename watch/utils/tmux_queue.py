@@ -8,12 +8,12 @@ import os
 import json
 
 
-class TMUXJob(ub.NiceRepr):
+class TMUXLinearQueue(ub.NiceRepr):
     """
     A linear job queue
 
     Example:
-        >>> TMUXJob('foo', 'foo')
+        >>> TMUXLinearQueue('foo', 'foo')
     """
     def __init__(self, name, dpath, environ=None):
         self.name = name
@@ -21,6 +21,7 @@ class TMUXJob(ub.NiceRepr):
         self.dpath = ub.Path(dpath)
         self.fpath = self.dpath / (name + '.sh')
         self.header = '#!/bin/bash'
+        self.state_fpath = self.dpath / 'job_state_{}.txt'.format(self.name)
         self.commands = []
 
     def __nice__(self):
@@ -28,20 +29,31 @@ class TMUXJob(ub.NiceRepr):
 
     def finalize_text(self):
         script = [self.header]
-        state_fpath = self.dpath / 'job_state_{}.txt'.format(self.name)
-        def mark_state(text):
-            script.append(r"printf '{}\n' > {}".format(text, state_fpath))
-        mark_state(json.dumps({'status': 'init', 'total': len(self.commands), 'finished': 0}))
+
+        def _mark_state(state):
+            b = base_state.copy()
+            b.update(state)
+            text = json.dumps(b)
+            script.append(r"printf '{}\n' > {}".format(text, self.state_fpath))
+
+        base_state = {
+            'status': 'init',
+            'finished': 0,
+            'total': len(self.commands),
+            'name': self.name,
+        }
+        _mark_state({'status': 'init', 'finished': 0})
         if self.environ:
-            mark_state(json.dumps({'status': 'set_environ', 'total': len(self.commands), 'finished': 0}))
+            _mark_state({'status': 'set_environ', 'finished': 0})
             script.extend([
                 f'export {k}="{v}"' for k, v in self.environ.items()])
 
         for num, command in enumerate(self.commands):
-            mark_state(json.dumps({'status': 'run', 'total': len(self.commands), 'finished': num}))
+            _mark_state({'status': 'run', 'finished': num})
+            # TODO: Check if command failed and mark the state
             script.append(command)
 
-        mark_state(json.dumps({'status': 'done', 'total': len(self.commands), 'finished': num + 1}))
+        _mark_state({'status': 'done', 'finished': num + 1})
         text = '\n'.join(script)
         return text
 
@@ -66,13 +78,16 @@ class TMUXMultiQueue(ub.NiceRepr):
         >>> from watch.utils.tmux_queue import *  # NOQA
         >>> self = TMUXMultiQueue('foo', 2)
         >>> print('self = {!r}'.format(self))
-        >>> self.submit('echo hello')
-        >>> self.submit('echo world')
-        >>> self.submit('echo foo')
-        >>> self.submit('echo bar')
-        >>> self.submit('echo bazbiz')
+        >>> self.submit('echo hello && sleep 0.5')
+        >>> self.submit('echo world && sleep 0.5')
+        >>> self.submit('echo foo && sleep 0.5')
+        >>> self.submit('echo bar && sleep 0.5')
+        >>> self.submit('echo bazbiz && sleep 0.5')
         >>> self.write()
         >>> self.rprint()
+        >>> if ub.find_exe('tmux'):
+        >>>     self.run()
+        >>>     self.monitor()
     """
     def __init__(self, name, size=1, environ=None, dpath=None, gres=None):
         if dpath is None:
@@ -95,7 +110,7 @@ class TMUXMultiQueue(ub.NiceRepr):
                 for cvd, e in zip(gres, per_worker_environs)]
 
         self.workers = [
-            TMUXJob(
+            TMUXLinearQueue(
                 name='queue_{}_{}'.format(self.name, worker_idx),
                 dpath=self.dpath,
                 environ=e
@@ -146,7 +161,57 @@ class TMUXMultiQueue(ub.NiceRepr):
         return self.fpath
 
     def run(self):
+        if not ub.find_exe('tmux'):
+            raise Exception('tmux not found')
         return ub.cmd(f'bash {self.fpath}', verbose=3, check=True)
+
+    def monitor(self):
+        """
+        Monitor progress until the jobs are done
+        """
+        import time
+        from rich.live import Live
+        from rich.table import Table
+
+        def update_status_table():
+            # https://rich.readthedocs.io/en/stable/live.html
+            table = Table()
+            table.add_column('name')
+            table.add_column('status')
+            table.add_column('finished')
+            table.add_column('total')
+
+            finished = True
+
+            for worker in self.workers:
+                color = ''
+                try:
+                    state = json.loads(worker.state_fpath.read_text())
+                except Exception:
+                    finished = False
+                    state = {
+                        'name': worker.name, 'status': 'unknown',
+                        'total': len(worker.commands), 'finished': -1
+                    }
+                    color = '[red]'
+                else:
+                    finished &= (state['status'] == 'done')
+                    if state['status'] == 'done':
+                        color = '[green]'
+                table.add_row(
+                    state['name'],
+                    state['status'],
+                    f"{color}{state['finished']}",
+                    f"{state['total']}",
+                )
+            return table, finished
+
+        table, finished = update_status_table()
+        with Live(table, refresh_per_second=4) as live:
+            while not finished:
+                time.sleep(0.4)
+                table, finished = update_status_table()
+                live.update(table)
 
     def rprint(self):
         from rich.panel import Panel
