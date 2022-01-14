@@ -61,6 +61,27 @@ def main():
     return 0
 
 
+def _item_map(stac_item, outbucket, aws_base_command, dryrun):
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        ingressed_item = ingress_item(
+            stac_item,
+            os.path.join(tmpdirname, 'ingress'),
+            aws_base_command,
+            dryrun)
+
+        fmask_item = run_fmask_for_item(
+            ingressed_item,
+            os.path.join(tmpdirname, 'fmask'))
+
+        angles_item = add_angle_bands_to_item(
+            fmask_item,
+            os.path.join(tmpdirname, 'angles'))
+
+        return egress_item(angles_item,
+                           outbucket,
+                           aws_base_command)
+
+
 def run_coreg_for_baseline(input_path,
                            output_path,
                            outbucket,
@@ -105,26 +126,6 @@ def run_coreg_for_baseline(input_path,
             input_stac_items = _load_input(temporary_file.name)
     else:
         input_stac_items = _load_input(input_path)
-
-    def _item_map(stac_item, outbucket, aws_base_command, dryrun):
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            ingressed_item = ingress_item(
-                stac_item,
-                os.path.join(tmpdirname, 'ingress'),
-                aws_base_command,
-                dryrun)
-
-            fmask_item = run_fmask_for_item(
-                ingressed_item,
-                os.path.join(tmpdirname, 'fmask'))
-
-            angles_item = add_angle_bands_to_item(
-                fmask_item,
-                os.path.join(tmpdirname, 'angles'))
-
-            return egress_item(angles_item,
-                               outbucket,
-                               aws_base_command)
 
     executor = ubelt.Executor(mode='process' if jobs > 1 else 'serial',
                               max_workers=jobs)
