@@ -4,7 +4,7 @@ def schedule_teamfeature_compute():
     """
     The idea is that we should have a lightweight scheduler.  I think something
     fairly minimal can be implemented with tmux, but it would be nice to have a
-    more robust slurm extension. Maybe airflow / luigi.
+    more robust slurm extension.
     """
     import ubelt as ub
     import watch
@@ -29,6 +29,21 @@ def schedule_teamfeature_compute():
     }
 
     commands = []
+
+    # tmux queue is still limited. The order of submission matters.
+
+    # Landcover is fairly fast to run, do it first
+    commands.append(ub.codeblock(
+        fr'''
+        python -m watch.tasks.landcover.predict \
+            --dataset="{base_coco_fpath}" \
+            --deployed="{model_fpaths['dzyne_landcover']}" \
+            --output="{outputs['dzyne_landcover']}" \
+            --device=0 \
+            --num_workers="8"
+        '''))
+
+    # Run materials while landcover is running
     commands.append(ub.codeblock(
         fr'''
         python -m watch.tasks.rutgers_material_seg.predict \
@@ -41,16 +56,7 @@ def schedule_teamfeature_compute():
             --compress=DEFLATE --blocksize=64
         '''))
 
-    commands.append(ub.codeblock(
-        fr'''
-        python -m watch.tasks.landcover.predict \
-            --dataset="{base_coco_fpath}" \
-            --deployed="{model_fpaths['dzyne_landcover']}" \
-            --output="{outputs['dzyne_landcover']}" \
-            --device=0 \
-            --num_workers="8"
-        '''))
-
+    # When landcover finishes run invariants
     commands.append(ub.codeblock(
         fr'''
         python -m watch.tasks.invariants.predict \
@@ -71,9 +77,23 @@ def schedule_teamfeature_compute():
         if len(gpu_info['procs']) == 0:
             GPUS.append(gpu_idx)
 
-    tq = tmux_queue.TMUXMultiQueue(name='teamfeat', size=len(GPUS), gres=GPUS)
+    # GPUS = [0, 1]
+    tq = tmux_queue.TMUXMultiQueue(name=f'teamfeat-{ub.timestamp()}', size=len(GPUS), gres=GPUS)
 
     for command in commands:
         tq.submit(command)
 
     tq.rprint()
+
+    tq.write()
+
+    import subprocess
+    try:
+        tq.run()
+    except subprocess.CalledProcessError as ex:
+        print('ex.stdout = {!r}'.format(ex.stdout))
+        print('ex.stderr = {!r}'.format(ex.stderr))
+        print('ex.returncode = {!r}'.format(ex.returncode))
+        raise
+
+    tq.monitor()

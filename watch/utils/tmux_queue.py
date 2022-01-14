@@ -1,5 +1,38 @@
 """
 A very simple queue based on tmux and bash
+
+It should be possible to add more functionality, such as:
+
+    - [x] A linear job queue - via one tmux shell
+
+    - [x] Mulitple linear job queues - via multiple tmux shells
+
+    - [x] Ability to query status of jobs - tmux script writes status to a
+          file, secondary thread reads is.
+
+    - [ ] Central scheduler - given that we can know when a job is done
+          a central scheduling process can run in the background, check
+          the status of existing jobs, and spawn new jobs
+
+    - [ ] Dependencies between jobs - given a central scheduler, it can
+          only spawn a new job if a its dependencies have been met.
+
+    - [ ] GPU resource requirements - if a job indicates how much of a
+          particular resources it needs, the scheduler can only schedule the
+          next job if it "fits" given the resources taken by the current
+          running jobs.
+
+    - [ ] Duck typed API that uses Slurm if available. Slurm is a robust
+          full featured queuing system. If it is available we should
+          make it easy for the user to swap the tmux queue for slurm.
+
+    - [ ] Duck typed API that uses subprocesses. Tmux is not always available,
+          we could go even lighter weight and simply execute a subprocess that
+          does the same thing as the linear queue. The downside is you don't
+          get the nice tmux way of looking at the status of what the jobs are
+          doing, but that doesn't matter in debugged automated workflows, and
+          this does seem like a nice simple utility. Doesnt seem to exist
+          elsewhere either, but my search terms might be wrong.
 """
 import ubelt as ub
 import itertools as it
