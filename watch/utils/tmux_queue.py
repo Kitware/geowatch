@@ -5,32 +5,43 @@ import ubelt as ub
 import itertools as it
 import stat
 import os
+import json
 
 
-class TMUXQueue(ub.NiceRepr):
+class TMUXJob(ub.NiceRepr):
     """
-    A lightweight, but limited job queue
+    A linear job queue
 
     Example:
-        >>> TMUXQueue('foo', 'foo')
+        >>> TMUXJob('foo', 'foo')
     """
     def __init__(self, name, dpath, environ=None):
         self.name = name
         self.environ = environ
         self.dpath = ub.Path(dpath)
         self.fpath = self.dpath / (name + '.sh')
-        self.header = ['#!/bin/bash']
+        self.header = '#!/bin/bash'
         self.commands = []
 
     def __nice__(self):
         return f'{self.name} - {len(self.commands)}'
 
     def finalize_text(self):
-        script = self.header
+        script = [self.header]
+        state_fpath = self.dpath / 'job_state_{}.txt'.format(self.name)
+        def mark_state(text):
+            script.append(r"printf '{}\n' > {}".format(text, state_fpath))
+        mark_state(json.dumps({'status': 'init', 'total': len(self.commands), 'finished': 0}))
         if self.environ:
-            script = script + [
-                f'export {k}="{v}"' for k, v in self.environ.items()]
-        script = script + self.commands
+            mark_state(json.dumps({'status': 'set_environ', 'total': len(self.commands), 'finished': 0}))
+            script.extend([
+                f'export {k}="{v}"' for k, v in self.environ.items()])
+
+        for num, command in enumerate(self.commands):
+            mark_state(json.dumps({'status': 'running', 'total': len(self.commands), 'finished': num}))
+            script.append(command)
+
+        mark_state(json.dumps({'status': 'done', 'total': len(self.commands), 'finished': num + 1}))
         text = '\n'.join(script)
         return text
 
@@ -84,7 +95,7 @@ class TMUXMultiQueue(ub.NiceRepr):
                 for cvd, e in zip(gres, per_worker_environs)]
 
         self.workers = [
-            TMUXQueue(
+            TMUXJob(
                 name='queue_{}_{}'.format(self.name, worker_idx),
                 dpath=self.dpath,
                 environ=e
