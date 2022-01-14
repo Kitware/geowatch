@@ -1,6 +1,6 @@
 
 
-def schedule_teamfeature_compute():
+def schedule_teamfeature_compute(gres=None):
     """
     The idea is that we should have a lightweight scheduler.  I think something
     fairly minimal can be implemented with tmux, but it would be nice to have a
@@ -80,14 +80,19 @@ def schedule_teamfeature_compute():
         ''')
     tasks.append(task)
 
-    import netharn as nh
-    GPUS = []
-    for gpu_idx, gpu_info in nh.device.gpu_info().items():
-        if len(gpu_info['procs']) == 0:
-            GPUS.append(gpu_idx)
+    from scriptconfig.smartcast import smartcast
+    gres = smartcast(gres)
+    print('gres = {!r}'.format(gres))
+    return
+    if gres is None:
+        import netharn as nh
+        gres = []
+        for gpu_idx, gpu_info in nh.device.gpu_info().items():
+            if len(gpu_info['procs']) == 0:
+                gres.append(gpu_idx)
 
-    # GPUS = [0, 1]
-    tq = tmux_queue.TMUXMultiQueue(name=f'teamfeat-{ub.timestamp()}', size=len(GPUS), gres=GPUS)
+    # gres = [0, 1]
+    tq = tmux_queue.TMUXMultiQueue(name=f'teamfeat-{ub.timestamp()}', size=len(gres), gres=gres)
 
     for task in tasks:
         command = f"[[ -f '{task['output_fpath']}' ]] || " + task['command']
@@ -106,6 +111,8 @@ def schedule_teamfeature_compute():
         print('ex.returncode = {!r}'.format(ex.returncode))
         raise
 
+    tq.monitor()
+
     if 0:
         tocombine = [str(base_coco_fpath)] + [str(task['output_fpath']) for task in tasks]
         combined_fpath = str(aligned_bundle_dpath / 'combo.kwcoco.json')
@@ -118,4 +125,11 @@ def schedule_teamfeature_compute():
         print(command)
         ub.cmd(command, verbose=2, check=True)
 
-    tq.monitor()
+
+if __name__ == '__main__':
+    """
+    CommandLine:
+        python ~/code/watch/scripts/schedule_teamfeatures.py --gres=0,1
+    """
+    import fire
+    fire.Fire(schedule_teamfeature_compute)
