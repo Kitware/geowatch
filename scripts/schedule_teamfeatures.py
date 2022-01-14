@@ -89,6 +89,8 @@ def schedule_teamfeature_compute(gres=None):
         for gpu_idx, gpu_info in nh.device.gpu_info().items():
             if len(gpu_info['procs']) == 0:
                 gres.append(gpu_idx)
+    elif not ub.iterable(gres):
+        gres = [gres]
 
     # gres = [0, 1]
     tq = tmux_queue.TMUXMultiQueue(name=f'teamfeat-{ub.timestamp()}', size=len(gres), gres=gres)
