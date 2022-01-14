@@ -30,7 +30,6 @@ requests>=2.25.1
 fasteners>=0.16.3
 blake3>=0.2.1
 jq>=1.2.1
-lru_dict>=1.1.7
 
 girder_client>=3.1.6
 lxml>=4.6.3
