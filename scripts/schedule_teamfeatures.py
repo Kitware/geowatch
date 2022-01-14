@@ -106,4 +106,16 @@ def schedule_teamfeature_compute():
         print('ex.returncode = {!r}'.format(ex.returncode))
         raise
 
+    if 0:
+        tocombine = [str(base_coco_fpath)] + [str(task['output_fpath']) for task in tasks]
+        combined_fpath = str(aligned_bundle_dpath / 'combo.kwcoco.json')
+        command = ub.codeblock(
+            f'''
+            python -m watch.cli.coco_combine_features \
+                --src {' '.join(tocombine)} \
+                --dst {combined_fpath}
+            ''')
+        print(command)
+        ub.cmd(command, verbose=2, check=True)
+
     tq.monitor()

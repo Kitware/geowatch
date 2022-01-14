@@ -28,7 +28,7 @@ Usage:
 
     DVC_DPATH=$(python -m watch.cli.find_dvc)
     KWCOCO_BUNDLE=$DVC_DPATH/Drop1-Aligned-L1
-    KWCOCO_FPATH=$KWCOCO_BUNDLE/vali_data_wv.kwcoco.json
+    KWCOCO_FPATH=$KWCOCO_BUNDLE/data.kwcoco.json
 
     python -m watch.tasks.depth.predict \
         --dataset  $KWCOCO_BUNDLE/data.kwcoco.json \

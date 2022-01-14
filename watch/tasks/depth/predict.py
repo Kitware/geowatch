@@ -18,6 +18,7 @@ from scipy import ndimage
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from . import modules_monkeypatch  # NOQA
 from .datasets import WVRgbDataset
 from .pl_highres_verify import MultiTaskModel, modify_bn, dfactor, local_utils
 from .utils import process_image_chunked
