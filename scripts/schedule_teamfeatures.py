@@ -83,7 +83,6 @@ def schedule_teamfeature_compute(gres=None):
     from scriptconfig.smartcast import smartcast
     gres = smartcast(gres)
     print('gres = {!r}'.format(gres))
-    return
     if gres is None:
         import netharn as nh
         gres = []
@@ -129,7 +128,7 @@ def schedule_teamfeature_compute(gres=None):
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/scripts/schedule_teamfeatures.py --gres=0,1
+        python scripts/schedule_teamfeatures.py --gres=0
     """
     import fire
     fire.Fire(schedule_teamfeature_compute)
