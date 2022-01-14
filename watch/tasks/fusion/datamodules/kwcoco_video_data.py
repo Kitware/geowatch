@@ -2195,7 +2195,7 @@ def visualize_sample_grid(dset, sample_grid):
 
     dataset_canvases = []
 
-    max_vids = 8
+    max_vids = 2
     max_frames = 8
 
     vidid_to_videodf = dict(list(targets.groupby('video_id')))

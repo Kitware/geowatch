@@ -777,7 +777,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> import kwcoco
             >>> from os.path import join
             >>> import os
-            >>> if 1:
+            >>> if 0:
             >>>     '''
             >>>     # Generate toy datasets
             >>>     DATA_DPATH=$HOME/data/work/toy_change
@@ -792,7 +792,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     dvc_dpath = find_smart_dvc_dpath()
             >>>     coco_dset = join(dvc_dpath, 'drop1-S2-L8-aligned/data.kwcoco.json')
             >>>     channels='swir16|swir22|blue|green|red|nir'
-            >>> if 0:
+            >>> if 1:
             >>>     import watch
             >>>     coco_dset = watch.demo.demo_kwcoco_multisensor(max_speed=0.5)
             >>>     # coco_dset = 'special:vidshapes8-frames9-speed0.5-multispectral'
