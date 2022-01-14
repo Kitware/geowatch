@@ -28,40 +28,48 @@ def schedule_teamfeature_compute():
         'uky_invariants': aligned_bundle_dpath / 'uky_invariants.kwcoco.json',
     }
 
-    commands = []
-
+    tasks = []
     # tmux queue is still limited. The order of submission matters.
 
     # Landcover is fairly fast to run, do it first
-    commands.append(ub.codeblock(
+    task = {}
+    task['output_fpath'] = outputs['dzyne_landcover']
+    task['command'] = ub.codeblock(
         fr'''
         python -m watch.tasks.landcover.predict \
             --dataset="{base_coco_fpath}" \
             --deployed="{model_fpaths['dzyne_landcover']}" \
-            --output="{outputs['dzyne_landcover']}" \
+            --output="{task['output_fpath']}" \
             --device=0 \
             --num_workers="8"
-        '''))
+        ''')
+    tasks.append(task)
 
     # Run materials while landcover is running
-    commands.append(ub.codeblock(
+    task = {}
+    task['output_fpath'] = outputs['rutgers_materials']
+    task['command'] = ub.codeblock(
         fr'''
         python -m watch.tasks.rutgers_material_seg.predict \
             --test_dataset="{base_coco_fpath}" \
             --checkpoint_fpath="{model_fpaths['rutgers_materials']}" \
-            --pred_dataset="{outputs['rutgers_materials']}" \
+            --pred_dataset="{task['output_fpath']}" \
             --default_config_key=iarpa \
             --num_workers="8" \
             --batch_size=32 --gpus "0" \
             --compress=DEFLATE --blocksize=64
-        '''))
+        ''')
+    tasks.append(task)
 
     # When landcover finishes run invariants
-    commands.append(ub.codeblock(
+    # Note: Does not run on a 1080, needs 18GB in this form
+    task = {}
+    task['output_fpath'] = outputs['uky_invariants']
+    task['command'] = ub.codeblock(
         fr'''
         python -m watch.tasks.invariants.predict \
             --input_kwcoco "{base_coco_fpath}" \
-            --output_kwcoco "{outputs['uky_invariants']}" \
+            --output_kwcoco "{task['output_fpath']}" \
             --pretext_ckpt_path "{model_fpaths['uky_pretext']}" \
             --segmentation_ckpt "{model_fpaths['uky_segmentation']}" \
             --do_pca 1 \
@@ -69,7 +77,8 @@ def schedule_teamfeature_compute():
             --num_workers avail/2 \
             --write_workers avail/2 \
             --tasks all
-        '''))
+        ''')
+    tasks.append(task)
 
     import netharn as nh
     GPUS = []
@@ -80,7 +89,8 @@ def schedule_teamfeature_compute():
     # GPUS = [0, 1]
     tq = tmux_queue.TMUXMultiQueue(name=f'teamfeat-{ub.timestamp()}', size=len(GPUS), gres=GPUS)
 
-    for command in commands:
+    for task in tasks:
+        command = f"[[ -f '{task['output_fpath']}' ]] || " + task['command']
         tq.submit(command)
 
     tq.rprint()

@@ -4,7 +4,6 @@ This is a Template for writing training logic.
 """
 # package imports
 import kwimage
-import os
 import torch
 import ubelt as ub
 from argparse import ArgumentParser, RawTextHelpFormatter
