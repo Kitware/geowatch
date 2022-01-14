@@ -25,6 +25,8 @@ ALIGNED_KWCOCO_BUNDLE=$DVC_DPATH/$ALIGNED_BUNDLE_NAME
 RUTGERS_MATERIAL_MODEL_FPATH="$DVC_DPATH/models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_2021101T16277.pth"
 DZYNE_LANDCOVER_MODEL_FPATH="$DVC_DPATH/models/landcover/visnav_remap_s2_subset.pt"
 
+BASE_COCO_FPATH=$ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json
+
 
 echo "
 DVC_DPATH                    = $DVC_DPATH
@@ -242,7 +244,7 @@ teamfeatures(){
         --pred_dataset="$ALIGNED_KWCOCO_BUNDLE"/data_nowv_rutgers_mat_seg.kwcoco.json \
         --num_workers="8" \
         --batch_size=32 --gpus "1" \
-        --compress=RAW --blocksize=64
+        --compress=DEFLATE --blocksize=64
 
     #export CUDA_VISIBLE_DEVICES="2"
     python -m watch.tasks.landcover.predict \
@@ -264,6 +266,13 @@ teamfeatures(){
         --write_workers avail/2 \
         --tasks all
 
+    KWCOCO_FPATH=$KWCOCO_BUNDLE/vali_data_wv.kwcoco.json
+
+    python -m watch.tasks.depth.predict \
+        --dataset  $KWCOCO_BUNDLE/data.kwcoco.json \
+        --output   $KWCOCO_BUNDLE/dzyne_depth/depth1.kwcoco.json \
+        --deployed $DVC_DPATH/models/depth/weights_v1.pt
+
     kwcoco subset --src "$DVC_DPATH/Drop1-Aligned-L1-2022-01/invariants.kwcoco.json" \
             --dst "$DVC_DPATH/Drop1-Aligned-L1-2022-01/invariants_nowv.kwcoco.json" \
             --select_images '.sensor_coarse != "WV"'
@@ -276,6 +285,10 @@ teamfeatures(){
               "$ALIGNED_KWCOCO_BUNDLE"/data_nowv_dzyne_landcover.kwcoco.json \
         --dst "$ALIGNED_KWCOCO_BUNDLE"/combo_nowv.kwcoco.json
 
+}
+
+
+oldstuff(){
     smartwatch stats "$ALIGNED_KWCOCO_BUNDLE"/combo_nowv.kwcoco.json
 
     smartwatch visualize --src "$ALIGNED_KWCOCO_BUNDLE"/combo_nowv.kwcoco.json --channels="matseg_0|matseg_1|matseg_2,matseg_3|matseg_4|matseg_5" --workers=8

@@ -24,8 +24,9 @@ Usage:
 4. Run the prediction:
     ```
     # DVC_DPATH=/dvc
+    # DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc/
 
-    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc/
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
     KWCOCO_BUNDLE=$DVC_DPATH/Drop1-Aligned-L1
     KWCOCO_FPATH=$KWCOCO_BUNDLE/vali_data_wv.kwcoco.json
 
