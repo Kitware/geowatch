@@ -1,5 +1,6 @@
 import argparse
 import sys
+import traceback
 import os
 import json
 import tempfile
@@ -141,12 +142,12 @@ def run_coreg_for_baseline(input_path,
     for job in as_completed(fmask_jobs):
         try:
             mapped_item = job.result()
-        except Exception as e:
+        except Exception:
             print("Exception occurred (printed below), dropping item!")
-            print(e)
+            traceback.print_exception(*sys.exc_info())
             continue
         else:
-            output_stac_items.append(mapped_item)
+            output_stac_items.append(mapped_item.to_dict())
 
     if newline:
         te_output = '\n'.join((json.dumps(item) for item in output_stac_items))
