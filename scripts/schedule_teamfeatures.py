@@ -65,5 +65,15 @@ def schedule_teamfeature_compute():
             --tasks all
         '''))
 
+    import netharn as nh
+    GPUS = []
+    for gpu_idx, gpu_info in nh.device.gpu_info().items():
+        if len(gpu_info['procs']) == 0:
+            GPUS.append(gpu_idx)
 
-    tmux_queue.TMUXMultiQueue(size=2)
+    tq = tmux_queue.TMUXMultiQueue(name='teamfeat', size=len(GPUS), gres=GPUS)
+
+    for command in commands:
+        tq.submit(command)
+
+    tq.rprint()

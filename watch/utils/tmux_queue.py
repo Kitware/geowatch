@@ -1,7 +1,6 @@
 """
 A very simple queue based on tmux and bash
 """
-import pathlib
 import ubelt as ub
 import itertools as it
 import stat
@@ -18,7 +17,7 @@ class TMUXQueue(ub.NiceRepr):
     def __init__(self, name, dpath, environ=None):
         self.name = name
         self.environ = environ
-        self.dpath = pathlib.Path(dpath)
+        self.dpath = ub.Path(dpath)
         self.fpath = self.dpath / (name + '.sh')
         self.header = ['#!/bin/bash']
         self.commands = []
@@ -67,9 +66,11 @@ class TMUXMultiQueue(ub.NiceRepr):
     def __init__(self, name, size=1, environ=None, dpath=None, gres=None):
         if dpath is None:
             dpath = ub.ensure_app_cache_dir('watch/tmux_queue')
-        self.dpath = pathlib.Path(dpath)
+        self.dpath = ub.Path(dpath)
         self.name = name
         self.size = size
+        if environ is None:
+            environ = {}
         self.environ = environ
         self.fpath = self.dpath / f'run_queues_{self.name}.sh'
 
