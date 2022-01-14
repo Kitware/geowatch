@@ -38,7 +38,7 @@ class TMUXJob(ub.NiceRepr):
                 f'export {k}="{v}"' for k, v in self.environ.items()])
 
         for num, command in enumerate(self.commands):
-            mark_state(json.dumps({'status': 'running', 'total': len(self.commands), 'finished': num}))
+            mark_state(json.dumps({'status': 'run', 'total': len(self.commands), 'finished': num}))
             script.append(command)
 
         mark_state(json.dumps({'status': 'done', 'total': len(self.commands), 'finished': num + 1}))
