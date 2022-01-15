@@ -97,10 +97,6 @@ def ingress_item(feature, outdir, aws_base_command, dryrun, relative=False):
 
         asset_outpath = os.path.join(feature_output_dir, asset_basename)
 
-        local_asset_href = os.path.abspath(asset_outpath)
-        if relative:
-            local_asset_href = os.path.relpath(asset_outpath, outdir)
-
         asset_href = asset['href']
 
         try:
@@ -119,6 +115,10 @@ def ingress_item(feature, outdir, aws_base_command, dryrun, relative=False):
                     new_assets['productmetadata'] = new_asset
         except KeyError:
             pass
+
+        local_asset_href = os.path.abspath(asset_outpath)
+        if relative:
+            local_asset_href = os.path.relpath(asset_outpath, outdir)
 
         if not dryrun:
             os.makedirs(feature_output_dir, exist_ok=True)
