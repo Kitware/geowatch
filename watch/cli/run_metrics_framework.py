@@ -104,11 +104,15 @@ def main(args):
         with TemporaryDirectory() as site_dpath, TemporaryDirectory(
         ) as image_dpath:
 
+            # doctor site_dpath for expected structure
+            site_sub_dpath = os.path.join(site_dpath, 'latest', region_id)
+            os.makedirs(site_sub_dpath, exist_ok=True)
+
             # copy site models to site_dpath
             for site in region_sites:
                 with open(
                         os.path.join(
-                            site_dpath,
+                            site_sub_dpath,
                             (site['features'][0]['properties']['site_id'] +
                              '.geojson')),
                         'w') as f:
@@ -142,13 +146,14 @@ def main(args):
                 python {os.path.join(metrics_dpath, 'run_evaluation.py')}
                     --roi {region_id}
                     --gt_path {os.path.join(gt_dpath, 'site_models')}
-                    --rm_path {os.path.join(gt_dpath, 'region_models',
-                                            region_id + '.geojson')}
+                    --rm_path {os.path.join(gt_dpath, 'region_models')}
                     --sm_path {site_dpath}
-                    --image_path {image_dpath}
+                    --image_dir {image_dpath}
                     --output_dir {out_dir}
                 ''')
-            ub.cmd(cmd, verbose=1, check=True, shell=True)
+            import xdev
+            with xdev.embed_on_exception_context():
+                ub.cmd(cmd, verbose=1, check=True, shell=True)
 
 
 if __name__ == '__main__':
