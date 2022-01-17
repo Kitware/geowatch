@@ -13,10 +13,17 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
                     determenistic=False, update_rule='pairwise', gamma=1,
                     error_level=2):
     """
-    Choose random samples to maximize
+    Randomly select `size` timesteps from a larger pool based on "affinity".
 
-    Given an affinity matrix between frames and an initial set of indices to
-    include, chooses a sample of other frames to complete the sample.
+    Given an NxN affinity matrix between frames and an initial set of indices
+    to include, chooses a sample of other frames to complete the sample.  Each
+    row and column in the affinity matrix represent a "selectable" timestamp.
+    Given an initial set of ``include_indices`` that indicate which timesteps
+    must be included in the sample. An iterative process is used to select
+    remaining indices such that ``size`` timesteps are returned. In each
+    iteration we choose the "next" timestep based on a probability distribution
+    derived from (1) the affinity matrix (2) the currently included set of
+    indexes and (3) the update rule.
 
     Args:
         affinity (ndarray):
@@ -34,6 +41,32 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         rng (Coercable[RandomState]):
             random state
 
+        determenistic (bool):
+            if True, on each step we choose the next timestamp with maximum
+            probability. Otherwise, we randomly choose a timestep, but with
+            probability according to the current distribution.
+
+        gamma (float, default=1.0):
+            Exponent that modulates the probability distribution. Lower gamma
+            will "flatten" the probability curve. At gamma=0, all frames will
+            be equally likely regardless of affinity. As gamma -> inf, the rule
+            becomes more likely to sample the maximum probaility at each
+            timestep. In the limit this becomes equivalent to
+            ``determenistic=True``.
+
+        update_rule (str):
+            Modifies how the affinity matrix is used to create the
+            probability distribution for the "next" frame that will be
+            selected.
+            a "+" separated string of codes which can contain:
+                * pairwise - if included, each newly chosen sample will
+                    modulate the initial "main" affinity with it's own
+                    affinity.  Otherwise, only the affinity of the initially
+                    included rows are considered.
+                * distribute - if included, every step of weight updates will
+                    downweight samples temporally close to the most recently
+                    selected sample.
+
         error_level (int):
             how seriously to take errors
             error level 0:
@@ -45,6 +78,9 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
                 duplicate and excluded indexes will raise an error
             error level 3:
                 duplicate, excluded, and 0-affinity indexes will raise an error
+
+        jit (bool):
+            NotImplemented - do not use
 
     Possible Related Work:
         * Random Stratified Sampling Affinity Matrix
