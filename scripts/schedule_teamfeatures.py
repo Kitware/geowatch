@@ -126,11 +126,18 @@ def schedule_teamfeature_compute(gres=None):
         print(command)
         ub.cmd(command, verbose=2, check=True)
 
+    """
+    Ignore:
+
+        python -m kwcoco stats data.kwcoco.json uky_invariants.kwcoco.json dzyne_landcover.kwcoco.json
+        python -m watch stats uky_invariants.kwcoco.json dzyne_landcover.kwcoco.json
+    """
+
 
 if __name__ == '__main__':
     """
     CommandLine:
-        python scripts/schedule_teamfeatures.py --gres=0
+        python scripts/schedule_teamfeatures.py --gres=2
     """
     import fire
     fire.Fire(schedule_teamfeature_compute)

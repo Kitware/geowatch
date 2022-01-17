@@ -96,8 +96,8 @@ class TMUXLinearQueue(PathIdentifiable):
             # Init state to keep track of job progress
             let "_QUEUE_NUM_ERRORED=0"
             let "_QUEUE_NUM_FINISHED=0"
-            _QUEUE_STATUS="init"
             _QUEUE_TOTAL={total}
+            _QUEUE_STATUS=""
             '''))
 
         def _mark_status(status):

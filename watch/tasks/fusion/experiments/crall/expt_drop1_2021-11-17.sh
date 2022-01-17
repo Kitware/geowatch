@@ -665,3 +665,61 @@ python -m watch.tasks.fusion.fit \
     --use_grid_positives=False \
     --use_centered_positives=True \
     --arch_name=$ARCH 
+
+
+# L1 With Invariants + DZYNE + Positive Horologic - 2022-01-17
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop1-Aligned-L1-2022-01
+
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/train_nowv_du_data.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/vali_nowv_du_data.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/vali_nowv_du_data.kwcoco.json
+
+_prep_feats_for_2022_01_17(){
+    # Rutgers mats did not finish, so combine what we have
+    python -m watch.cli.coco_combine_features \
+        --src data.kwcoco.json \
+              uky_invariants.kwcoco.json \
+              dzyne_landcover.kwcoco.json \
+        --dst combo_du_data.kwcoco.json
+
+    jq .images[0] uky_invariants.kwcoco.json
+    jq .images[0] dzyne_landcover.kwcoco.json
+
+    kwcoco subset --src "$KWCOCO_BUNDLE_DPATH/invariants_nowv.kwcoco.json" \
+            --dst "vali_nowv_du_data.kwcoco.json" \
+            --select_images '.sensor_coarse != "WV"' \
+            --select_videos '.name | startswith("KR_")'
+
+    kwcoco subset --src "$KWCOCO_BUNDLE_DPATH/invariants_nowv.kwcoco.json" \
+            --dst "train_nowv_du_data.kwcoco.json" \
+            --select_images '.sensor_coarse != "WV"' \
+            --select_videos '.name | startswith("KR_") | not'
+}
+
+
+
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop1-20201117
+ARCH=smt_it_stm_p8
+CHANNELS="blue|green|red|nir|swir16|swir22,invariants:6,before_after_heatmap,segmentation_heatmap"
+EXPERIMENT_NAME=SC_${ARCH}_centerannot_raw_v44
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
+export CUDA_VISIBLE_DEVICES="2"
+python -m watch.tasks.fusion.fit \
+    --config "$WORKDIR/configs/common_20201117.yaml"  \
+    --channels=${CHANNELS} \
+    --name=$EXPERIMENT_NAME \
+    --chip_size=64 \
+    --time_steps=7 \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --method="MultimodalTransformer" \
+    --gpus "1" \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --amp_backend=apex \
+    --use_grid_positives=False \
+    --use_centered_positives=True \
+    --arch_name=$ARCH 

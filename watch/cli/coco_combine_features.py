@@ -58,16 +58,18 @@ def combine_auxiliary_features(dst_dset, src_dsets):
     for src_dset in src_dsets:
         gids1, gids2, report = associate_images(dst_dset, src_dset)
         print('report = {!r}'.format(report))
-        for gid1, gid2 in zip(gids1, gids2):
-            dst_img = dst_dset.index.imgs[gid1]
-            src_img = src_dset.index.imgs[gid2]
-            dst_auxiliary = dst_img.get('auxiliary')
-            have_channels = set(aux.get('channels') for aux in dst_auxiliary)
-            assert src_img['name'] == dst_img['name']
-            for src_aux in src_img['auxiliary']:
-                if src_aux['channels'] not in have_channels:
-                    have_channels.add(src_aux['channels'])
-                    dst_auxiliary.append(src_aux)
+        import xdev
+        with xdev.embed_on_exception_context:
+            for gid1, gid2 in zip(gids1, gids2):
+                dst_img = dst_dset.index.imgs[gid1]
+                src_img = src_dset.index.imgs[gid2]
+                dst_auxiliary = dst_img.get('auxiliary')
+                have_channels = set(aux.get('channels') for aux in dst_auxiliary)
+                assert src_img['name'] == dst_img['name']
+                for src_aux in src_img['auxiliary']:
+                    if src_aux['channels'] not in have_channels:
+                        have_channels.add(src_aux['channels'])
+                        dst_auxiliary.append(src_aux)
     return dst_dset
 
 
