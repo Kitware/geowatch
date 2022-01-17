@@ -89,12 +89,15 @@ class TMUXLinearQueue(PathIdentifiable):
     def finalize_text(self):
         script = [self.header]
 
+        total = len(self.commands)
+
         script.append(ub.codeblock(
             f'''
+            # Init state to keep track of job progress
             let "_QUEUE_NUM_ERRORED=0"
             let "_QUEUE_NUM_FINISHED=0"
             _QUEUE_STATUS="init"
-            _QUEUE_TOTAL={len(self.commands)}
+            _QUEUE_TOTAL={total}
             '''))
 
         def _mark_status(status):
@@ -123,6 +126,11 @@ class TMUXLinearQueue(PathIdentifiable):
 
         for num, command in enumerate(self.commands):
             _mark_status('run')
+            script.append(ub.codeblock(
+                '''
+                #
+                # Command #{} / {}
+                ''').format(num + 1, total))
             script.append(command)
             # Check command status and update the bash state
             script.append(ub.codeblock(
