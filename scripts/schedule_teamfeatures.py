@@ -93,11 +93,12 @@ def schedule_teamfeature_compute(gres=None):
         gres = [gres]
 
     # gres = [0, 1]
-    tq = tmux_queue.TMUXMultiQueue(name=f'teamfeat-{ub.timestamp()}', size=len(gres), gres=gres)
+    tq = tmux_queue.TMUXMultiQueue(name='teamfeat', size=len(gres), gres=gres)
 
     for task in tasks:
-        command = f"[[ -f '{task['output_fpath']}' ]] || " + task['command']
-        tq.submit(command)
+        if not task['output_fpath'].exists():
+            command = f"[[ -f '{task['output_fpath']}' ]] || " + task['command']
+            tq.submit(command)
 
     tq.rprint()
 
@@ -105,27 +106,97 @@ def schedule_teamfeature_compute(gres=None):
 
     import subprocess
     try:
-        tq.run()
+        tq.run(block=True)
     except subprocess.CalledProcessError as ex:
         print('ex.stdout = {!r}'.format(ex.stdout))
         print('ex.stderr = {!r}'.format(ex.stderr))
         print('ex.returncode = {!r}'.format(ex.returncode))
         raise
 
-    tq.monitor()
-
     if 1:
         # Finalize features by combining them all into combo.kwcoco.json
         tocombine = [str(base_coco_fpath)] + [str(task['output_fpath']) for task in tasks]
-        combined_fpath = str(aligned_bundle_dpath / 'combo.kwcoco.json')
+        combined_fpath = aligned_bundle_dpath / 'combo.kwcoco.json'
+
+        # TODO: enable forcing if needbe
+        if not combined_fpath.exists() or 0:
+            command = ub.codeblock(
+                f'''
+                python -m watch.cli.coco_combine_features \
+                    --src {' '.join(tocombine)} \
+                    --dst {combined_fpath}
+                ''')
+            ub.cmd(command, verbose=2, check=True)
+
+        splits = {
+            'combo_train': aligned_bundle_dpath / 'combo_train.kwcoco.json',
+            'combo_nowv_train': aligned_bundle_dpath / 'combo_nowv_train.kwcoco.json',
+            'combo_wv_train': aligned_bundle_dpath / 'combo_wv_train.kwcoco.json',
+
+            'combo_vali': aligned_bundle_dpath / 'combo_vali.kwcoco.json',
+            'combo_nowv_vali': aligned_bundle_dpath / 'combo_nowv_vali.kwcoco.json',
+            'combo_wv_vali': aligned_bundle_dpath / 'combo_wv_vali.kwcoco.json',
+        }
+
+        tq = tmux_queue.TMUXMultiQueue(name='splits', size=2)
+
+        # Perform train/validation splits with and without worldview
         command = ub.codeblock(
             f'''
-            python -m watch.cli.coco_combine_features \
-                --src {' '.join(tocombine)} \
-                --dst {combined_fpath}
+            python -m kwcoco subset \
+                --src {combined_fpath} \
+                --dst {splits['combo_train']} \
+                --select_videos '.name | startswith("KR_") | not'
             ''')
-        print(command)
-        ub.cmd(command, verbose=2, check=True)
+        tq.submit(command, index=0)
+
+        command = ub.codeblock(
+            f'''
+            python -m kwcoco subset \
+                --src {splits['combo_train']} \
+                --dst {splits['combo_nowv_train']} \
+                --select_images '.sensor_coarse != "WV"'
+            ''')
+        tq.submit(command, index=0)
+
+        command = ub.codeblock(
+            f'''
+            python -m kwcoco subset \
+                --src {splits['combo_train']} \
+                --dst {splits['combo_wv_train']} \
+                --select_images '.sensor_coarse == "WV"'
+            ''')
+        tq.submit(command, index=0)
+
+        # Perform vali/validation splits with and without worldview
+        command = ub.codeblock(
+            f'''
+            python -m kwcoco subset \
+                --src {combined_fpath} \
+                --dst {splits['combo_vali']} \
+                --select_videos '.name | startswith("KR_") | not'
+            ''')
+        tq.submit(command, index=1)
+
+        command = ub.codeblock(
+            f'''
+            python -m kwcoco subset \
+                --src {splits['combo_vali']} \
+                --dst {splits['combo_nowv_vali']} \
+                --select_images '.sensor_coarse != "WV"'
+            ''')
+        tq.submit(command, index=1)
+
+        command = ub.codeblock(
+            f'''
+            python -m kwcoco subset \
+                --src {splits['combo_vali']} \
+                --dst {splits['combo_wv_vali']} \
+                --select_images '.sensor_coarse == "WV"'
+            ''')
+        tq.submit(command, index=1)
+
+        tq.run(block=True)
 
     """
     Ignore:

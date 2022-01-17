@@ -55,6 +55,20 @@ class WatchCocoStats(scfg.Config):
 
         print('collatables = {}'.format(ub.repr2(collatables, nl=2)))
         summary = pd.DataFrame(collatables)
+
+        from watch.utils import slugify_ext
+        col_name_map = {}
+        for cname in summary.columns:
+            new_cname = slugify_ext.smart_truncate(cname, max_length=10)
+            if cname != new_cname:
+                col_name_map[cname] = new_cname
+
+        if col_name_map:
+            print('Remap names for readability:')
+            print('col_name_map = {}'.format(ub.repr2(
+                ub.invert_dict(col_name_map), nl=1)))
+
+        summary = summary.rename(col_name_map, axis=1)
         print(summary.to_string())
 
 
@@ -161,7 +175,8 @@ def coco_watch_stats(dset):
     colltable = {
         'dset': dset_bundle_suffix,
         **basic_stats,
-        **info['chan_hist']
+        **info['chan_hist'],
+        **info['sensor_hist'],
     }
 
     return colltable

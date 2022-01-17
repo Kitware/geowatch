@@ -229,8 +229,16 @@ class TMUXMultiQueue(PathIdentifiable):
     def __iter__(self):
         yield from self._worker_cycle
 
-    def submit(self, command):
-        return next(self._worker_cycle).submit(command)
+    def submit(self, command, index=None):
+        """
+        Args:
+            index (int): if True, forces this job into a particular queue
+        """
+        if index is None:
+            worker = next(self._worker_cycle)
+        else:
+            worker = self.workers[index]
+        return worker.submit(command)
 
     def finalize_text(self):
         # Create a driver script
@@ -264,11 +272,13 @@ class TMUXMultiQueue(PathIdentifiable):
             stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP))
         return self.fpath
 
-    def run(self):
+    def run(self, block=False):
         if not ub.find_exe('tmux'):
             raise Exception('tmux not found')
         self.write()
-        return ub.cmd(f'bash {self.fpath}', verbose=3, check=True)
+        ub.cmd(f'bash {self.fpath}', verbose=3, check=True)
+        if block:
+            return self.monitor()
 
     def monitor(self):
         """
