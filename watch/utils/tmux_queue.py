@@ -114,7 +114,7 @@ class TMUXLinearQueue(PathIdentifiable):
                 '"{}": "{}"'.format('name', self.name),
                 '"{}": "{}"'.format('rootid', self.rootid),
             ]
-            dump_code = 'printf \'{' + ', '.join(json_parts) + '}\n\' > ' + str(self.state_fpath)
+            dump_code = 'printf \'{' + ', '.join(json_parts) + '}\\n\' > ' + str(self.state_fpath)
             script.append(dump_code)
             script.append('cat ' + str(self.state_fpath))
 
@@ -129,7 +129,7 @@ class TMUXLinearQueue(PathIdentifiable):
             script.append(ub.codeblock(
                 '''
                 #
-                # Command #{} / {}
+                # Command {} / {}
                 ''').format(num + 1, total))
             script.append(command)
             # Check command status and update the bash state
@@ -244,9 +244,9 @@ class TMUXMultiQueue(PathIdentifiable):
             # run_command_in_tmux_queue(command, name)
             part = ub.codeblock(
                 f'''
-                ### Run Queue: {queue.name}
-                tmux new-session -d -s {queue.name} "bash"
-                tmux send -t {queue.name} "source {queue.fpath}" Enter
+                ### Run Queue: {queue.pathid}
+                tmux new-session -d -s {queue.pathid} "bash"
+                tmux send -t {queue.pathid} "source {queue.fpath}" Enter
                 ''').format()
             driver_lines.append(part)
         driver_lines += ['echo "jobs submitted"']
