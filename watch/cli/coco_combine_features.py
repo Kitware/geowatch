@@ -69,7 +69,7 @@ def combine_auxiliary_features(dst_dset, src_dsets):
                 dst_auxiliary = dst_img['auxiliary'] = []
             have_channels = set(aux.get('channels') for aux in dst_auxiliary)
             assert src_img['name'] == dst_img['name']
-            for src_aux in src_img['auxiliary']:
+            for src_aux in src_auxiliary:
                 if src_aux['channels'] not in have_channels:
                     have_channels.add(src_aux['channels'])
                     dst_auxiliary.append(src_aux)

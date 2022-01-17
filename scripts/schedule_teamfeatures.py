@@ -114,7 +114,8 @@ def schedule_teamfeature_compute(gres=None):
 
     tq.monitor()
 
-    if 0:
+    if 1:
+        # Finalize features by combining them all into combo.kwcoco.json
         tocombine = [str(base_coco_fpath)] + [str(task['output_fpath']) for task in tasks]
         combined_fpath = str(aligned_bundle_dpath / 'combo.kwcoco.json')
         command = ub.codeblock(
