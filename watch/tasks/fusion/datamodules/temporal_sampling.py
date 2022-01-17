@@ -581,6 +581,10 @@ def hard_time_sample_pattern(unixtimes, time_window, time_span='2y'):
 
 
 def guess_missing_unixtimes(unixtimes):
+    """
+    Hueristic solution to fill in missing time values via interpolation /
+    extrapolation.
+    """
     missing_date = np.isnan(unixtimes)
     missing_any_dates = np.any(missing_date)
     have_any_dates = not np.all(missing_date)
@@ -767,6 +771,7 @@ def hard_frame_affinity(unixtimes, sensors, time_window, time_span='2y', blur=Fa
 
 @ub.memoize
 def cython_aff_samp_mod():
+    """ Old JIT code, no longer works """
     import os
     from watch.tasks.fusion.datamodules import kwcoco_video_data
     fpath = os.path.join(os.path.dirname(kwcoco_video_data.__file__), 'affinity_sampling.pyx')
@@ -776,6 +781,9 @@ def cython_aff_samp_mod():
 
 
 def show_affinity_sample_process(chosen, info, fnum=1):
+    """
+    Debugging / demo visualization
+    """
     # import seaborn as sns
     import kwplot
     # from matplotlib import pyplot as plt
@@ -861,6 +869,9 @@ def show_affinity_sample_process(chosen, info, fnum=1):
 
 
 def plot_dense_sample_indices(sample_idxs, unixtimes, title_suffix='', linewidths=0):
+    """
+    Visualization helper
+    """
     import seaborn as sns
     import pandas as pd
 
@@ -883,6 +894,9 @@ def plot_dense_sample_indices(sample_idxs, unixtimes, title_suffix='', linewidth
 
 
 def plot_temporal_sample_indices(sample_idxs, unixtimes, title_suffix=''):
+    """
+    Visualization helper
+    """
     import matplotlib.pyplot as plt
     unixtimes = guess_missing_unixtimes(unixtimes)
     datetimes = np.array([datetime.datetime.fromtimestamp(t) for t in unixtimes])
@@ -905,6 +919,9 @@ def plot_temporal_sample_indices(sample_idxs, unixtimes, title_suffix=''):
 
 
 def plot_temporal_sample(affinity, sample_idxs, unixtimes, fnum=1):
+    """
+    Visualization helper
+    """
     import kwplot
     kwplot.autompl()
 
@@ -921,12 +938,42 @@ def plot_temporal_sample(affinity, sample_idxs, unixtimes, fnum=1):
 
 class TimeWindowSampler:
     """
-    Helper for sampling temporal regions over an entire video.
+    Object oriented API to produce random temporal samples given a set of
+    keyframes with metadata.
+
+    This works by computing a pairwise "affinity" NxN matrix for each of the N
+    keyframes. The details of the affinity matrix depend on parameters passed
+    to this object. Intuitively, the value at ``Affinity[i, j]`` represents how
+    much frame-i "wants" to be in the same sample as frame-j.
 
     Args:
-        unixtimes (List[int]) : list of unix timestamps for each frame
-        sensors (List[str]) : list of attributes for each frame
-        time_window (int): number of frames to sample
+        unixtimes (List[int]):
+            list of unix timestamps for each frame
+
+        sensors (List[str]):
+            list of attributes for each frame
+
+        time_window (int):
+            number of frames to sample
+
+        affinity_type (str):
+            Method for computing the affinity matrix for the underlying
+            sampling algorithm.
+
+        update_rule (str):
+            "+" separated string that can contain {"distribute", "pairwise"}.
+            See :func:`affinity_sample` for details.
+
+        gamma (float):
+            See :func:`affinity_sample` for details.
+
+        time_span (Coercable[datetime.timedelta]):
+            The ideal distince in time that frames should be separated in.
+            This is typically a string code. E.g. "1y" is one year.
+
+        name (str):
+            A name for this object.  For developer convinience, has no
+            influence on the algorithm.
 
     Ignore:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -1021,14 +1068,6 @@ class TimeWindowSampler:
             sample_idxs = np.array([all_indexes[sl] for sl in time_slider])
             self.affinity = kwarray.one_hot_embedding(
                 sample_idxs, len(self.unixtimes), dim=1).sum(axis=2)
-            # affinity[np.eye(len(affinity), dtype=bool)] = 0
-            # if blur:
-            #     affinity = kwimage.gaussian_blur(affinity, kernel=(5, 1))
-            # affinity[np.eye(len(affinity), dtype=bool)] = 0
-            # # affinity = affinity * 0.99 + 0.01
-            # affinity = affinity / affinity.max()
-            # affinity[np.eye(len(affinity), dtype=bool)] = 1
-
         else:
             raise Exception
 
