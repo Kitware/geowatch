@@ -188,7 +188,10 @@ def predict(cmdline=False, **kwargs):
         for _name, mod in method.named_modules():
             if 'Rearrange' in mod.__class__.__name__:
                 mod._recipe = mod.recipe()
-
+        # hack: dont load the metrics
+        method.class_metrics = None
+        method.saliency_metrics = None
+        method.change_metrics = None
     except Exception:
         # If we have a checkpoint path we can load it if we make assumptions
         # init method from checkpoint.
@@ -309,11 +312,23 @@ def predict(cmdline=False, **kwargs):
     from kwcoco.util import util_json
     import os
     import socket
+    jsonified_args = util_json.ensure_json_serializable(args.__dict__)
+    # This will be serailized in kwcoco, so make sure it can be coerced to json
+    walker = ub.IndexableWalker(jsonified_args)
+    for problem in util_json.find_json_unserializable(jsonified_args):
+        bad_data = problem['data']
+        if isinstance(bad_data, kwcoco.CocoDataset):
+            fixed_fpath = getattr(bad_data, 'fpath', None)
+            if fixed_fpath is not None:
+                walker[problem['loc']] = fixed_fpath
+            else:
+                walker[problem['loc']] = '<IN_MEMORY_DATASET: {}>'.format(bad_data._build_hashid())
+
     info.append({
         'type': 'process',
         'properties': {
             'name': 'watch.tasks.fusion.predict',
-            'args': util_json.ensure_json_serializable(args.__dict__),
+            'args': jsonified_args,
             'hostname': socket.gethostname(),
             'cwd': os.getcwd(),
             'userhome': ub.userhome(),
@@ -434,7 +449,6 @@ def predict(cmdline=False, **kwargs):
     with torch.set_grad_enabled(False):
         # prog.set_extra(' <will populate stats after first video>')
         for batch in prog:
-
             batch_regions = []
             # Move data onto the prediction device, grab spacetime region info
             for item in batch:
@@ -452,9 +466,8 @@ def predict(cmdline=False, **kwargs):
                         modes[key] = mode.to(device)
 
             # Predict on the batch
-            with xdev.embed_on_exception_context:
-                outputs = method.forward_step(batch, with_loss=False)
-                outputs = {head_key_mapping.get(k, k): v for k, v in outputs.items()}
+            outputs = method.forward_step(batch, with_loss=False)
+            outputs = {head_key_mapping.get(k, k): v for k, v in outputs.items()}
 
             if got_outputs is None:
                 got_outputs = list(outputs.keys())

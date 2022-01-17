@@ -280,7 +280,7 @@ class TMUXMultiQueue(PathIdentifiable):
         if block:
             return self.monitor()
 
-    def monitor(self):
+    def monitor(self, refresh_rate=0.4):
         """
         Monitor progress until the jobs are done
         """
@@ -296,6 +296,13 @@ class TMUXMultiQueue(PathIdentifiable):
                 table.add_column(col)
 
             finished = True
+            agg_state = {
+                'name': 'agg',
+                'status': '',
+                'errored': 0,
+                'finished': 0,
+                'total': 0
+            }
 
             for worker in self.workers:
                 fin_color = ''
@@ -308,8 +315,8 @@ class TMUXMultiQueue(PathIdentifiable):
                         'name': worker.name,
                         'status': 'unknown',
                         'total': len(worker.commands),
-                        'finished': -1,
-                        'errored': -1,
+                        'finished': None,
+                        'errored': None,
                     }
                     fin_color = '[yellow]'
                 else:
@@ -320,6 +327,10 @@ class TMUXMultiQueue(PathIdentifiable):
                     if (state['errored'] > 0):
                         err_color = '[red]'
 
+                    agg_state['total'] += state['total']
+                    agg_state['finished'] += state['finished']
+                    agg_state['errored'] += state['errored']
+
                 table.add_row(
                     state['name'],
                     state['status'],
@@ -327,14 +338,29 @@ class TMUXMultiQueue(PathIdentifiable):
                     f"{err_color}{state['errored']}",
                     f"{state['total']}",
                 )
-            return table, finished
 
-        table, finished = update_status_table()
+            if not finished:
+                agg_state['status'] = 'run'
+            else:
+                agg_state['status'] = 'done'
+
+            if len(self.workers) > 1:
+                table.add_row(
+                    agg_state['name'],
+                    agg_state['status'],
+                    f"{agg_state['finished']}",
+                    f"{agg_state['errored']}",
+                    f"{agg_state['total']}",
+                )
+            return table, finished, agg_state
+
+        table, finished, agg_state = update_status_table()
         with Live(table, refresh_per_second=4) as live:
             while not finished:
-                time.sleep(0.4)
-                table, finished = update_status_table()
+                time.sleep(refresh_rate)
+                table, finished, agg_state = update_status_table()
                 live.update(table)
+        return agg_state
 
     def rprint(self):
         from rich.panel import Panel
@@ -346,3 +372,61 @@ class TMUXMultiQueue(PathIdentifiable):
             console.print(Panel(Syntax(code, 'bash'), title=str(queue.fpath)))
         code = self.finalize_text()
         console.print(Panel(Syntax(code, 'bash'), title=str(self.fpath)))
+
+    def kill(self):
+        # Kills all the tmux panes
+        for queue in self.workers:
+            print('\n\nqueue = {!r}'.format(queue))
+            # First print out the contents for debug
+            ub.cmd(f'tmux capture-pane -p -t "{queue.pathid}:0.0"', verbose=2)
+            # Then kill it
+            ub.cmd(f'tmux kill-session -t {queue.pathid}', verbose=2)
+
+    def _tmux_current_sessions(self):
+        # Kills all the tmux panes
+        info = ub.cmd('tmux list-sessions')
+        sessions = []
+        for line in info['out'].split('\n'):
+            line = line.strip()
+            if line:
+                session_id, rest = line.split(':', 1)
+                sessions.append({
+                    'id': session_id,
+                    'rest': rest
+                })
+        return sessions
+
+
+if 0:
+    __tmux_notes__ = """
+    # Useful tmux commands
+
+    tmux list-commands
+
+
+    tmux new-session -d -s {queue.pathid} "bash"
+    tmux send -t {queue.pathid} "source {queue.fpath}" Enter
+
+    tmux new-session -d -s my_session_id "bash"
+
+    tmux list-sessions
+    tmux list-panes -a
+    tmux list-windows -a
+
+    # This can query the content of the current pane
+    tmux capture-pane -p -t "my_session_id:0.0"
+
+    tmux attach-session -t my_session_id
+
+    tmux kill-session -t my_session_id
+
+    tmux list-windows -t my_session_id
+
+    tmux capture-pane -t my_session_id
+    tmux capture-pane --help
+    -t my_session_id
+
+
+
+
+    """

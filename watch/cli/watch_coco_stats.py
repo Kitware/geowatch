@@ -59,7 +59,8 @@ class WatchCocoStats(scfg.Config):
         from watch.utils import slugify_ext
         col_name_map = {}
         for cname in summary.columns:
-            new_cname = slugify_ext.smart_truncate(cname, max_length=10)
+            new_cname = slugify_ext.smart_truncate(
+                cname, max_length=10, trunc_loc=1.0)
             if cname != new_cname:
                 col_name_map[cname] = new_cname
 

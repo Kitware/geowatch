@@ -212,7 +212,7 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         git pull
         dvc pull -r aws --recursive models/fusion/SC-20201117
 
-        python ~/code/watch/watch/tasks/fusion/schedule_inference.py schedule_evaluation --gpus=auto
+        python ~/code/watch/watch/tasks/fusion/schedule_inference.py schedule_evaluation --gpus=auto --run=True
         """))
 
 

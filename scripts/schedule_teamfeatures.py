@@ -106,12 +106,15 @@ def schedule_teamfeature_compute(gres=None):
 
     import subprocess
     try:
-        tq.run(block=True)
+        agg_state = tq.run(block=True)
     except subprocess.CalledProcessError as ex:
         print('ex.stdout = {!r}'.format(ex.stdout))
         print('ex.stderr = {!r}'.format(ex.stderr))
         print('ex.returncode = {!r}'.format(ex.returncode))
         raise
+    else:
+        if not agg_state['errored']:
+            tq.kill()
 
     if 1:
         # Finalize features by combining them all into combo.kwcoco.json
@@ -138,7 +141,7 @@ def schedule_teamfeature_compute(gres=None):
             'combo_wv_vali': aligned_bundle_dpath / 'combo_wv_vali.kwcoco.json',
         }
 
-        tq = tmux_queue.TMUXMultiQueue(name='splits', size=2)
+        tq = tmux_queue.TMUXMultiQueue(name='watch-splits', size=2)
 
         # Perform train/validation splits with and without worldview
         command = ub.codeblock(
@@ -174,7 +177,7 @@ def schedule_teamfeature_compute(gres=None):
             python -m kwcoco subset \
                 --src {combined_fpath} \
                 --dst {splits['combo_vali']} \
-                --select_videos '.name | startswith("KR_") | not'
+                --select_videos '.name | startswith("KR_")'
             ''')
         tq.submit(command, index=1)
 
@@ -195,8 +198,9 @@ def schedule_teamfeature_compute(gres=None):
                 --select_images '.sensor_coarse == "WV"'
             ''')
         tq.submit(command, index=1)
-
-        tq.run(block=True)
+        agg_state = tq.run(block=True)
+        if not agg_state['errored']:
+            tq.kill()
 
     """
     Ignore:

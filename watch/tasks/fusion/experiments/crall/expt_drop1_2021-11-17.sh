@@ -707,7 +707,7 @@ DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="3"
 python -m watch.tasks.fusion.fit \
-    --config "$WORKDIR/configs/common_20201117.yaml"  \
+    --config "$WORKDIR/configs/common_20201117.yaml" \
     --channels=${CHANNELS} \
     --name=$EXPERIMENT_NAME \
     --chip_size=64 \
@@ -725,8 +725,7 @@ python -m watch.tasks.fusion.fit \
     --arch_name=$ARCH 
 
 
-# L1 With All Features + Positive Namek - 2022-01-11
-
+# L1 With All Features + Positive Toothbrush - 2022-01-11
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop1-Aligned-L1-2022-01
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_nowv_train.kwcoco.json
@@ -759,4 +758,5 @@ python -m watch.tasks.fusion.fit \
     --use_grid_positives=False \
     --attention_impl=exact \
     --use_centered_positives=True \
+    --num_workers=avail \
     --arch_name=$ARCH 

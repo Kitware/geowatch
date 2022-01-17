@@ -46,12 +46,11 @@ class CocoVisualizeConfig(scfg.Config):
         python -m watch.cli.gifify -i "./viz_out/US_Jacksonville_R01/_anns/red|green|blue/" -o US_Jacksonville_R01_anns.gif
 
         # NEW: as of 2021-11-04 : helper animation script
-
         python -m watch.cli.animate_visualizations --viz_dpath ./viz_out
 
     """
     default = {
-        'src': scfg.Value('data.kwcoco.json', help='input dataset'),
+        'src': scfg.Value('data.kwcoco.json', help='input dataset', position=1),
 
         'viz_dpath': scfg.Value(None, help=ub.paragraph(
             '''
