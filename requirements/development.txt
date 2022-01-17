@@ -19,3 +19,6 @@ torch_optimizer >= 0.1.0 ;python_version>='3.6'
 
 # GIS
 fels >= 1.4.0
+
+# Note sure if this should be a requirement yet
+# dvc>=2.9.3

@@ -171,16 +171,21 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
             dvc_to_add.append(str(package_dpath.relative_to(dvc_dpath)))
 
     dvc_info = ub.cmd(['dvc', 'add'] + dvc_to_add, cwd=dvc_dpath, verbose=3, check=True)
-    start = False
-    gitlines = []
-    for line in dvc_info['out'].split('\n'):
-        if start:
-            gitlines.append(line.strip())
-        if 'To track the changes with git, run:' in line:
-            start = True
-    gitcmd = ''.join(gitlines)
-    git_info1 = ub.cmd(gitcmd, verbose=3, check=True, cwd=dvc_dpath)
-    assert git_info1['ret'] == 0
+
+    if 1:
+        # Note: Using auto-add means we do not need this, check
+        # the setting and disable if necessary
+        start = False
+        gitlines = []
+        for line in dvc_info['out'].split('\n'):
+            if start:
+                gitlines.append(line.strip())
+            if 'To track the changes with git, run:' in line:
+                start = True
+        gitcmd = ''.join(gitlines)
+        if gitcmd:
+            git_info1 = ub.cmd(gitcmd, verbose=3, check=True, cwd=dvc_dpath)
+            assert git_info1['ret'] == 0
 
     if git_commit:
         git_info3 = ub.cmd('git commit -am "new models"', verbose=3, check=True, cwd=dvc_dpath)  # dangerous?
@@ -207,7 +212,7 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         git pull
         dvc pull -r aws --recursive models/fusion/SC-20201117
 
-        python ~/code/watch/watch/tasks/fusion/schedule_inference.py schedule_evaluation --gpus=None
+        python ~/code/watch/watch/tasks/fusion/schedule_inference.py schedule_evaluation --gpus=auto
         """))
 
 

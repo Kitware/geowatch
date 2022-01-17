@@ -62,7 +62,6 @@ class TimeWindowSampler:
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> import os
-        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
         >>> import watch
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
@@ -118,7 +117,6 @@ class TimeWindowSampler:
         Example:
             >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
             >>> import os
-            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
             >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
             >>> from watch.utils.util_data import find_smart_dvc_dpath
             >>> dvc_dpath = find_smart_dvc_dpath()
@@ -212,7 +210,6 @@ class TimeWindowSampler:
         Example:
             >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
             >>> import os
-            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
             >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
             >>> from watch.utils.util_data import find_smart_dvc_dpath
             >>> dvc_dpath = find_smart_dvc_dpath()
@@ -280,7 +277,6 @@ class TimeWindowSampler:
         Example:
             >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
             >>> import os
-            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
             >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
             >>> from watch.utils.util_data import find_smart_dvc_dpath
             >>> dvc_dpath = find_smart_dvc_dpath()
@@ -365,7 +361,6 @@ class TimeWindowSampler:
         Example:
             >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
             >>> import os
-            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
             >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
             >>> from watch.utils.util_data import find_smart_dvc_dpath
             >>> dvc_dpath = find_smart_dvc_dpath()
@@ -723,7 +718,6 @@ def hard_time_sample_pattern(unixtimes, time_window, time_span='2y'):
         https://docs.google.com/presentation/d/1GSOaY31cKNERQObl_L3vk0rGu6zU7YM_ZFLrdksHSC0/edit#slide=id.p
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> low = datetime.datetime.now().timestamp()
         >>> high = low + datetime.timedelta(days=365 * 5).total_seconds()
         >>> rng = kwarray.ensure_rng(0)
@@ -742,7 +736,6 @@ def hard_time_sample_pattern(unixtimes, time_window, time_span='2y'):
     Ignore:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> import os
-        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> from watch.utils.util_data import find_smart_dvc_dpath
         >>> dvc_dpath = find_smart_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/data.kwcoco.json'
@@ -947,7 +940,6 @@ def soft_frame_affinity(unixtimes, sensors=None, time_span='2y'):
     heuristic.
 
     Example:
-        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> low = datetime.datetime.now().timestamp()
         >>> high = low + datetime.timedelta(days=365 * 5).total_seconds()
         >>> rng = kwarray.ensure_rng(0)
@@ -1134,8 +1126,8 @@ def guess_missing_unixtimes(unixtimes):
 def cython_aff_samp_mod():
     """ Old JIT code, no longer works """
     import os
-    from watch.tasks.fusion.datamodules import kwcoco_video_data
-    fpath = os.path.join(os.path.dirname(kwcoco_video_data.__file__), 'affinity_sampling.pyx')
+    from watch.tasks.fusion.datamodules import temporal_sampling
+    fpath = os.path.join(os.path.dirname(temporal_sampling.__file__), 'affinity_sampling.pyx')
     import xdev
     cython_mod = xdev.import_module_from_pyx(fpath, verbose=0, annotate=True)
     return cython_mod

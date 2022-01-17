@@ -23,7 +23,7 @@ pip install -e .
 #pip install GDAL>=3.5.0 --find-links https://girder.github.io/large_image_wheels -U
 pip install GDAL==3.3.1 --find-links https://girder.github.io/large_image_wheels -U
 
-pip install dvc[all]
+pip install dvc[all]>=2.9.3
 
 fix_opencv_conflicts(){
     __doc__="

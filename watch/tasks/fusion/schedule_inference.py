@@ -201,7 +201,9 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto', run=
     driver_fpath = jobs.write()
     # RUN
     if run:
-        ub.cmd('bash ' + str(driver_fpath), verbose=3, check=True)
+        # ub.cmd('bash ' + str(driver_fpath), verbose=3, check=True)
+        jobs.run()
+        jobs.monitor()
     else:
         print('Wrote script: to run execute:\n{}'.format(driver_fpath))
 
