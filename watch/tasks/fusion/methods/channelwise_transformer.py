@@ -98,6 +98,7 @@ class RobustModuleDict(torch.nn.ModuleDict):
 
     Example:
         >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+        >>> import string
         >>> torch_dict = RobustModuleDict()
         >>> # All printable characters should be usable as keys
         >>> # If they are not, hack it.

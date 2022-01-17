@@ -10,7 +10,7 @@ xarray>=0.17.0
 filterpy>=1.4.5
 numexpr>=2.7.3
 einops>=0.3.0
-dask[array]
+dask[array]>=2021.12.0
 
 # Frameworks
 algorithm_toolkit==0.2.0

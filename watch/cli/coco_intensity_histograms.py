@@ -120,6 +120,7 @@ class HistAccum:
 def main(**kwargs):
     r"""
     Example:
+        >>> # xdoctest: +REQUIRES(--slow)
         >>> from watch.cli.coco_intensity_histograms import *  # NOQA
         >>> import kwcoco
         >>> test_dpath = ub.ensure_app_cache_dir('watch/tests')
@@ -131,6 +132,7 @@ def main(**kwargs):
         >>> main(**kwargs)
 
     Example:
+        >>> # xdoctest: +REQUIRES(--slow)
         >>> from watch.cli.coco_intensity_histograms import *  # NOQA
         >>> import kwcoco
         >>> import watch
@@ -520,9 +522,13 @@ def plot_intensity_histograms(full_df, config):
 
     #  For S2 that is supposed to be divide by 10000.  For L8 it is multiply by 2.75e-5 and subtract 0.2.
     # 1 / 2.75e-5
+    print('start plot')
     fig = kwplot.figure(fnum=1, doclf=True)
+    print('fig = {!r}'.format(fig))
     pnum_ = kwplot.PlotNums(nSubplots=len(unique_sensors))
+    print('pnum_ = {!r}'.format(pnum_))
     for sensor_name, sensor_df in full_df.groupby('sensor'):
+        print('plot sensor_name = {!r}'.format(sensor_name))
 
         hist_data_kw_ = hist_data_kw.copy()
         if hist_data_kw_['bins'] == 'auto':
