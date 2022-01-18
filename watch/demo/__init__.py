@@ -50,8 +50,10 @@ __getattr__ = lazy_import(
     submodules={
         'dummy_demodata',
         'landsat_demodata',
-        'sentinel2_demodata',
         'nitf_demodata',
+        'sentinel2_demodata',
+        'smart_kwcoco_demodata',
+        'stac_demo',
     },
     submod_attrs={
         'dummy_demodata': [
@@ -60,12 +62,23 @@ __getattr__ = lazy_import(
         'landsat_demodata': [
             'grab_landsat_product',
         ],
-        'sentinel2_demodata': [
-            'grab_sentinel2_product',
-        ],
         'nitf_demodata': [
             'DEFAULT_KEY',
             'grab_nitf_fpath',
+        ],
+        'sentinel2_demodata': [
+            'grab_sentinel2_product',
+        ],
+        'smart_kwcoco_demodata': [
+            'coerce_kwcoco',
+            'demo_kwcoco_multisensor',
+            'demo_kwcoco_with_heatmaps',
+            'demo_smart_aligned_kwcoco',
+            'demo_smart_raw_kwcoco',
+            'hack_seed_geometadata_in_dset',
+        ],
+        'stac_demo': [
+            'demo',
         ],
     },
 )
@@ -74,7 +87,11 @@ __getattr__ = lazy_import(
 def __dir__():
     return __all__
 
-
-__all__ = ['DEFAULT_KEY', 'dummy_demodata', 'dummy_rpc_geotiff_fpath',
-           'grab_landsat_product', 'grab_nitf_fpath', 'landsat_demodata',
-           'nitf_demodata']
+__all__ = ['DEFAULT_KEY', 'coerce_kwcoco', 'demo', 'demo_kwcoco_multisensor',
+           'demo_kwcoco_with_heatmaps', 'demo_smart_aligned_kwcoco',
+           'demo_smart_raw_kwcoco', 'dummy_demodata',
+           'dummy_rpc_geotiff_fpath', 'grab_landsat_product',
+           'grab_nitf_fpath', 'grab_sentinel2_product',
+           'hack_seed_geometadata_in_dset', 'landsat_demodata',
+           'nitf_demodata', 'sentinel2_demodata', 'smart_kwcoco_demodata',
+           'stac_demo']

@@ -357,31 +357,9 @@ def assign_sites_to_images(coco_dset, sites, propogate, geospace_lookup='auto'):
 
                 catname = site_row['current_phase']
                 if catname is None:
-                    if status == 'ignore':
-                        catname = 'ignore'
-                    elif status == 'positive_excluded':
-                        # This is positive, but is not "big" enough
-                        catname = 'ignore'
-                    elif status == 'positive_unbounded':
-                        # Start or end date might not be defined.
-                        catname = 'positive'
-                    elif status == 'positive_pending':
-                        # Does not have phase labels
-                        catname = 'positive'
-                    elif status == 'positive_partial':
-                        # Might have phase labels
-                        catname = 'positive'
-                    elif status == 'positive_annotated':
-                        # Has phase labels
-                        assert catname is not None
-                    elif 'positive' in status:
-                        catname = 'ignore'
-                    elif 'negative' == status:
-                        catname = 'negative'
-                    elif 'negative_unbounded' == status:
-                        catname = 'negative'
-                    else:
-                        raise NotImplementedError(status)
+                    # Based on the status choose a kwcoco category name
+                    # using the watch heuristics
+                    catname = heuristics.PHASE_STATUS_TO_KWCOCO_CATNAME[status]
 
                 propogated_on = []
                 category_colors = []

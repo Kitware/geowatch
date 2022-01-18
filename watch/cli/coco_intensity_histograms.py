@@ -27,7 +27,7 @@ class IntensityHistogramConfig(scfg.Config):
     target GSD.
     """
     default = {
-        'src': scfg.Value('in.geojson.json', help='input dataset to chip'),
+        'src': scfg.Value('in.geojson.json', help='input dataset to chip', position=1),
 
         'dst': scfg.Value(None, help='if specified dump the figure to disk at this path'),
 
@@ -60,7 +60,7 @@ class IntensityHistogramConfig(scfg.Config):
         'multiple': scfg.Value('layer', choices=['layer', 'dodge', 'stack', 'fill']
                                , help='Approach to resolving multiple elements when semantic mapping creates subsets.'),
 
-        'stat': scfg.Value('density', choices={'count', 'frequency', 'density', 'probability'}, help=ub.paragraph(
+        'stat': scfg.Value('probability', choices={'count', 'frequency', 'density', 'probability'}, help=ub.paragraph(
             '''
             Aggregate statistic to compute in each bin.
 
@@ -120,6 +120,7 @@ class HistAccum:
 def main(**kwargs):
     r"""
     Example:
+        >>> # xdoctest: +REQUIRES(--slow)
         >>> from watch.cli.coco_intensity_histograms import *  # NOQA
         >>> import kwcoco
         >>> test_dpath = ub.ensure_app_cache_dir('watch/tests')
@@ -131,6 +132,7 @@ def main(**kwargs):
         >>> main(**kwargs)
 
     Example:
+        >>> # xdoctest: +REQUIRES(--slow)
         >>> from watch.cli.coco_intensity_histograms import *  # NOQA
         >>> import kwcoco
         >>> import watch
@@ -149,6 +151,7 @@ def main(**kwargs):
     """
     from watch.utils import kwcoco_extensions
     from watch.utils.lightning_ext import util_globals
+    import watch
     import kwplot
     kwplot.autosns()
 
@@ -156,7 +159,7 @@ def main(**kwargs):
     print('config = {}'.format(ub.repr2(config.to_dict(), nl=1)))
 
     # coco_dset = kwcoco.CocoDataset.coerce(config['src'])
-    coco_dset = coerce_kwcoco(config['src'])
+    coco_dset = watch.demo.coerce_kwcoco(config['src'])
 
     valid_gids = kwcoco_extensions.filter_image_ids(
         coco_dset,
@@ -339,6 +342,7 @@ def sensor_stats_tables(full_df):
             v_weights=v_weights)
 
         if 1:
+            # TODO: normalize data such that density (or probability?) is 1.0
             row['emd'] = scipy.stats.wasserstein_distance(**dist_inputs)
 
         if 1:
@@ -519,9 +523,13 @@ def plot_intensity_histograms(full_df, config):
 
     #  For S2 that is supposed to be divide by 10000.  For L8 it is multiply by 2.75e-5 and subtract 0.2.
     # 1 / 2.75e-5
+    print('start plot')
     fig = kwplot.figure(fnum=1, doclf=True)
+    print('fig = {!r}'.format(fig))
     pnum_ = kwplot.PlotNums(nSubplots=len(unique_sensors))
+    print('pnum_ = {!r}'.format(pnum_))
     for sensor_name, sensor_df in full_df.groupby('sensor'):
+        print('plot sensor_name = {!r}'.format(sensor_name))
 
         hist_data_kw_ = hist_data_kw.copy()
         if hist_data_kw_['bins'] == 'auto':

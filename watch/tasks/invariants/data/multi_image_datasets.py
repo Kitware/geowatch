@@ -190,8 +190,8 @@ class kwcoco_dataset(Dataset):
                 # additional transforms for test mode
                 transformed = self.transforms(image=images[0], image2=images[1])
                 transformed2 = self.transforms2(image=images[0])
-                img1 = transformed['image'] ###
-                img2 = transformed['image2'] ###
+                img1 = transformed['image']
+                img2 = transformed['image2']
                 img3 = transformed2['image']
                 transformed3 = self.transforms3(image=img1)
                 # convert to tensors
@@ -267,7 +267,7 @@ class kwcoco_dataset(Dataset):
                     mask = torch.from_numpy(np_mask)
                     combined.append(mask.unsqueeze(0))
                 if combined:
-                    overall_mask = torch.max(torch.cat(combined, dim=0), dim=0)[0].numpy() ### HACK
+                    overall_mask = torch.max(torch.cat(combined, dim=0), dim=0)[0].numpy()  # ### HACK
                 else:
                     overall_mask = np.zeros_like(image_dict['img1'][:, :, 0])
 
@@ -311,7 +311,7 @@ class kwcoco_dataset(Dataset):
 
             out['time_steps'] = torch.tensor([out[key] for key in out if 'frame_number' in key])
             out['sensors'] = sensor_list
-#             out['img1_info'] = img1_info
+            # out['img1_info'] = img1_info
             out['img1_id'] = img1_id
         return out
 
@@ -321,7 +321,7 @@ class SpaceNet7(Dataset):
     normalize_params = [[0.16198677, 0.22665408, 0.1745371], [0.06108317, 0.06515977, 0.04128775]]
     def __init__(self,
                     patch_size=128,
-                    splits='satellite_sort/data/spacenet/splits_unmasked/', #### unmasked images
+                    splits='satellite_sort/data/spacenet/splits_unmasked/',  # ### unmasked images
                     train=True,
                     display=False,
                     num_images=3,

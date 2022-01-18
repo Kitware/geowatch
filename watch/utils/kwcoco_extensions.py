@@ -1452,26 +1452,34 @@ def coco_channel_stats(coco_dset):
         >>> from watch.utils import kwcoco_extensions
         >>> import kwcoco
         >>> import ubelt as ub
-        >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
+        >>> import watch
+        >>> coco_dset = watch.coerce_kwcoco('vidshapes-watch')
         >>> info = kwcoco_extensions.coco_channel_stats(coco_dset)
-        >>> print(ub.repr2(info, nl=1))
+        >>> print(ub.repr2(info, nl=3))
     """
-    channel_col = []
+    sensor_hist = ub.ddict(lambda: 0)
+    chan_hist = ub.ddict(lambda: 0)
+    sensorchan_hist = ub.ddict(lambda: ub.ddict(lambda: 0))
+
     for _gid, img in coco_dset.index.imgs.items():
         channels = []
         for obj in CocoImage(img).iter_asset_objs():
             channels.append(obj.get('channels', 'unknown-chan'))
-        channel_col.append('|'.join(channels))
-
-    chan_hist = ub.dict_hist(channel_col)
+        chan = '|'.join(channels)
+        sensor = img.get('sensor_coarse', '')
+        chan_hist[chan] += 1
+        sensor_hist[sensor] += 1
+        sensorchan_hist[sensor][chan] += 1
 
     from kwcoco.channel_spec import FusedChannelSpec as FS
     osets = [FS.coerce(c).as_oset() for c in chan_hist]
-    common_channels = FS(list(ub.oset.intersection(*osets)))
-    all_channels = FS(list(ub.oset.union(*osets)))
+    common_channels = FS.coerce(list(ub.oset.intersection(*osets))).concise()
+    all_channels = FS.coerce(list(ub.oset.union(*osets))).concise()
 
     info = {
         'chan_hist': chan_hist,
+        'sensor_hist': sensor_hist,
+        'sensorchan_hist': sensorchan_hist,
         'common_channels': common_channels,
         'all_channels': all_channels,
     }

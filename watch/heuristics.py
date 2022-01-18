@@ -79,3 +79,17 @@ HUERISTIC_COMBINABLE_CHANNELS = [
     ub.oset(['matset_1', 'matset_2', 'matset_3']),  # hack
     ub.oset(['snow_or_ice_field', 'built_up', 'grassland']),  # hack
 ]
+
+
+# Mapping of annotation status to the kwcoco category name
+# Used in project annotations
+PHASE_STATUS_TO_KWCOCO_CATNAME = {
+    'ignore': 'ignore',
+    'negative': 'negative',
+    'negative_unbounded': 'negative',
+    'positive_excluded': 'ignore',  # This is positive, but is not "big" enough
+    'positive_unbounded': 'positive',  # Start or end date might not be defined
+    'positive_pending': 'positive',  # Does not have phase labels
+    'positive_partial': 'positive',  # Does not have phase labels
+    'positive_annotated': None,  # This must have a category already do not map
+}

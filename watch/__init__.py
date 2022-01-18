@@ -2,19 +2,31 @@
 The SMART WATCH module
 """
 import os
+import ubelt as ub
+import warnings
 
 
 __devnotes__ = """
 
 # Command to autogenerate lazy imports for this file
-mkinit -m watch --lazy --noattr
-mkinit -m watch --lazy --noattr -w
+mkinit -m watch --lazy --diff
+mkinit -m watch --lazy -w
+
+# Debug import time
+python -X importtime -c "import watch"
+WATCH_HACK_IMPORT_ORDER=variant3 python -X importtime -c "import watch"
+WATCH_HACK_IMPORT_ORDER=variant1 python -X importtime -c "import watch"
 """
 
 WATCH_AUTOHACK_IMPORT_VARIANTS = {
     'variant1': ['geopandas', 'pyproj', 'gdal'],  # align-crs on horologic
     'variant2': ['pyproj', 'gdal'],   # CI machine
+    'variant3': ['geopandas', 'pyproj'],   # delay gdal import
 }
+
+if ub.argflag('--warntb'):
+    import xdev
+    xdev.make_warnings_print_tracebacks()
 
 WATCH_HACK_IMPORT_ORDER = os.environ.get('WATCH_HACK_IMPORT_ORDER', 'auto')
 
@@ -26,7 +38,11 @@ def _imoprt_hack(modname):
         import pyproj as module
         from pyproj import CRS  # NOQA
     elif modname == 'geopandas':
-        import geopandas as module
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', (
+                '.*is incompatible with the GEOS version '
+                'PyGEOS was compiled with.*'))
+            import geopandas as module
     elif modname == 'rasterio':
         import rasterio as module
     elif modname == 'fiona':
@@ -64,7 +80,14 @@ if WATCH_HACK_IMPORT_ORDER:
     _execute_import_order_hacks(WATCH_HACK_IMPORT_ORDER)
 
 
-__version__ = '0.1.6'
+__version__ = '0.2.0'
+
+# Choose which submodules (and which submodule attributes) to expose
+__submodules__ = {
+    '*': [],  # include all modules, but don't expose attributes
+    'demo': ['coerce_kwcoco'],
+    'utils': ['find_smart_dvc_dpath']
+}
 
 
 def lazy_import(module_name, submodules, submod_attrs):
@@ -113,19 +136,28 @@ __getattr__ = lazy_import(
         'datasets',
         'demo',
         'gis',
+        'heuristics',
+        'models',
         'rc',
         'sequencing',
         'tasks',
         'utils',
         'validation',
     },
-    submod_attrs={},
+    submod_attrs={
+        'demo': [
+            'coerce_kwcoco',
+        ],
+        'utils': [
+            'find_smart_dvc_dpath',
+        ],
+    },
 )
 
 
 def __dir__():
     return __all__
 
-
-__all__ = ['cli', 'datacube', 'datasets', 'demo', 'gis', 'rc', 'sequencing',
-           'tasks', 'utils', 'validation']
+__all__ = ['cli', 'coerce_kwcoco', 'datacube', 'datasets', 'demo',
+           'find_smart_dvc_dpath', 'gis', 'heuristics', 'models', 'rc',
+           'sequencing', 'tasks', 'utils', 'validation']

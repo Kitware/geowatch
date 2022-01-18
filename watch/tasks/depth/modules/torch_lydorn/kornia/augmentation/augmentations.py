@@ -20,7 +20,7 @@ def random_rotate(input: torch.Tensor) -> UnionType:
 
     device: torch.device = input.device
     input = input.unsqueeze(0)
-    input = input.view((-1, (*input.shape[-3:])))
+    input = input.view(-1, *input.shape[-3:])
     angle: torch.Tensor = torch.empty(input.shape[0], device=device).uniform_(-180, -180)
 
     rotated = rotate(input, angle)
@@ -53,7 +53,7 @@ def random_vflip(input: torch.Tensor, p: float = 0.5, return_transform: bool = F
     dtype: torch.dtype = input.dtype
 
     input = input.unsqueeze(0)
-    input = input.view((-1, (*input.shape[-3:])))
+    input = input.view(-1, *input.shape[-3:])
 
     probs: torch.Tensor = torch.empty(input.shape[0], device=device).uniform_(0, 1)
 

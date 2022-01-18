@@ -13,6 +13,7 @@ from os.path import join
 from os.path import relpath
 import kwimage
 import kwarray
+import kwcoco
 from watch import heuristics
 from watch.tasks.fusion import datamodules
 from watch.tasks.fusion import utils
@@ -57,6 +58,8 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.add_argument('--with_change', type=smartcast, default='auto')
     parser.add_argument('--with_class', type=smartcast, default='auto')
     parser.add_argument('--with_saliency', type=smartcast, default='auto')
+
+    parser.add_argument('--compress', type=str, default='RAW', help='type of compression for prob images')
 
     parser.add_argument(
         '--write_preds', default=True, type=smartcast, help=ub.paragraph(
@@ -185,7 +188,10 @@ def predict(cmdline=False, **kwargs):
         for _name, mod in method.named_modules():
             if 'Rearrange' in mod.__class__.__name__:
                 mod._recipe = mod.recipe()
-
+        # hack: dont load the metrics
+        method.class_metrics = None
+        method.saliency_metrics = None
+        method.change_metrics = None
     except Exception:
         # If we have a checkpoint path we can load it if we make assumptions
         # init method from checkpoint.
@@ -224,25 +230,28 @@ def predict(cmdline=False, **kwargs):
     need_infer = {k: v for k, v in parsetime_vals.items() if v == 'auto'}
     # Try and infer what data we were given at train time
     if hasattr(method, 'fit_config'):
-        traintime_vals = method.fit_config
+        traintime_params = method.fit_config
     elif hasattr(method, 'datamodule_hparams'):
-        traintime_vals = method.datamodule_hparams
+        traintime_params = method.datamodule_hparams
     else:
-        traintime_vals = {}
+        traintime_params = {}
         if datamodule_vars['channels'] in {None, 'auto'}:
             print('Warning have to make assumptions. Might not always work')
             if hasattr(method, 'input_channels'):
                 # note input_channels are sometimes different than the channels the
                 # datamodule expects. Depending on special keys and such.
-                traintime_vals['channels'] = method.input_channels.spec
+                traintime_params['channels'] = method.input_channels.spec
             else:
-                traintime_vals['channels'] = list(method.input_norms.keys())[0]
+                traintime_params['channels'] = list(method.input_norms.keys())[0]
 
     # FIXME: Some of the inferred args seem to not have the right type here.
-    able_to_infer = ub.dict_isect(traintime_vals, need_infer)
+    able_to_infer = ub.dict_isect(traintime_params, need_infer)
+    if able_to_infer.get('channels', None) is not None:
+        # do this before smartcast breaks the spec
+        able_to_infer['channels'] = kwcoco.ChannelSpec.coerce(able_to_infer['channels'])
     from scriptconfig.smartcast import smartcast
     able_to_infer = ub.map_vals(smartcast, able_to_infer)
-    unable_to_infer = ub.dict_diff(need_infer, traintime_vals)
+    unable_to_infer = ub.dict_diff(need_infer, traintime_params)
     # Use defaults when we can't infer
     overloads = able_to_infer.copy()
     overloads.update(ub.dict_isect(args.datamodule_defaults, unable_to_infer))
@@ -252,8 +261,8 @@ def predict(cmdline=False, **kwargs):
     print('overloads = {}'.format(ub.repr2(overloads, nl=1)))
 
     deviation = ub.varied_values([
-        ub.dict_isect(traintime_vals, datamodule_vars),
-        ub.dict_isect(datamodule_vars, traintime_vals),
+        ub.dict_isect(traintime_params, datamodule_vars),
+        ub.dict_isect(datamodule_vars, traintime_params),
     ], min_variations=1)
     print('deviation from fit->predict settings = {}'.format(ub.repr2(deviation, nl=1)))
 
@@ -303,14 +312,28 @@ def predict(cmdline=False, **kwargs):
     from kwcoco.util import util_json
     import os
     import socket
+    jsonified_args = util_json.ensure_json_serializable(args.__dict__)
+    # This will be serailized in kwcoco, so make sure it can be coerced to json
+    walker = ub.IndexableWalker(jsonified_args)
+    for problem in util_json.find_json_unserializable(jsonified_args):
+        bad_data = problem['data']
+        if isinstance(bad_data, kwcoco.CocoDataset):
+            fixed_fpath = getattr(bad_data, 'fpath', None)
+            if fixed_fpath is not None:
+                walker[problem['loc']] = fixed_fpath
+            else:
+                walker[problem['loc']] = '<IN_MEMORY_DATASET: {}>'.format(bad_data._build_hashid())
+
     info.append({
         'type': 'process',
         'properties': {
             'name': 'watch.tasks.fusion.predict',
-            'args': util_json.ensure_json_serializable(args.__dict__),
+            'args': jsonified_args,
             'hostname': socket.gethostname(),
             'cwd': os.getcwd(),
+            'userhome': ub.userhome(),
             'timestamp': ub.timestamp(),
+            'fit_config': traintime_params,
         }
     })
 
@@ -352,9 +375,11 @@ def predict(cmdline=False, **kwargs):
             stiching_space='video',
             device=stitch_device,
             chan_code='change',
+            short_code='pred_change',
             thresh=args.thresh,
             write_probs=args.write_probs,
             write_preds=args.write_preds,
+            prob_compress=args.compress,
             num_bands=1,
         )
         result_dataset.ensure_category('change')
@@ -374,10 +399,12 @@ def predict(cmdline=False, **kwargs):
             stiching_space='video',
             device=stitch_device,
             chan_code=class_chan_code,
+            short_code='pred_class',
             thresh=args.thresh,
             write_probs=args.write_probs,
             write_preds=args.write_preds,
             polygon_categories=foreground_classes,
+            prob_compress=args.compress,
             num_bands=len(method.classes),
         )
 
@@ -387,10 +414,12 @@ def predict(cmdline=False, **kwargs):
             stiching_space='video',
             device=stitch_device,
             chan_code='not_salient|salient',
+            short_code='pred_saliency',
             thresh=args.thresh,
             write_probs=args.write_probs,
             write_preds=args.write_preds,
             polygon_categories=['salient'],
+            prob_compress=args.compress,
             num_bands=2,
         )
 
@@ -423,7 +452,6 @@ def predict(cmdline=False, **kwargs):
     with torch.set_grad_enabled(False):
         # prog.set_extra(' <will populate stats after first video>')
         for batch in prog:
-
             batch_regions = []
             # Move data onto the prediction device, grab spacetime region info
             for item in batch:
@@ -431,6 +459,10 @@ def predict(cmdline=False, **kwargs):
                     'space_slice': tuple(item['tr']['space_slice']),
                     'in_gids': [frame['gid'] for frame in item['frames']],
                 })
+                position_tensors = item.get('positional_tensors', None)
+                if position_tensors is not None:
+                    for k, v in position_tensors.items():
+                        position_tensors[k] = v.to(device)
                 for frame in item['frames']:
                     modes = frame['modes']
                     for key, mode in modes.items():

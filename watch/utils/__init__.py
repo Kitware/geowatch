@@ -1,6 +1,11 @@
 """
-mkinit ~/code/watch/watch/utils/__init__.py --lazy --noattr -w
+mkinit ~/code/watch/watch/utils/__init__.py --lazy -w
 """
+
+__submodules__ = {
+    '*': [],
+    'util_data': ['find_smart_dvc_dpath'],
+}
 
 
 def lazy_import(module_name, submodules, submod_attrs):
@@ -45,29 +50,42 @@ __getattr__ = lazy_import(
     __name__,
     submodules={
         'configargparse_ext',
+        'ext_monai',
         'kwcoco_extensions',
         'lightning_ext',
         'slugify_ext',
         'util_bands',
         'util_data',
+        'util_gdal',
         'util_girder',
+        'util_gis',
         'util_iter',
+        'util_kwarray',
         'util_kwimage',
+        'util_kwplot',
         'util_norm',
+        'util_parallel',
         'util_path',
         'util_raster',
+        'util_regex',
         'util_rgdc',
         'util_stac',
+        'util_time',
     },
-    submod_attrs={},
+    submod_attrs={
+        'util_data': [
+            'find_smart_dvc_dpath',
+        ],
+    },
 )
 
 
 def __dir__():
     return __all__
 
-
-__all__ = ['configargparse_ext', 'kwcoco_extensions', 'lightning_ext',
-           'slugify_ext', 'util_bands', 'util_data', 'util_girder',
-           'util_iter', 'util_kwimage', 'util_norm', 'util_path',
-           'util_raster', 'util_rgdc', 'util_stac']
+__all__ = ['configargparse_ext', 'ext_monai', 'find_smart_dvc_dpath',
+           'kwcoco_extensions', 'lightning_ext', 'slugify_ext', 'util_bands',
+           'util_data', 'util_gdal', 'util_girder', 'util_gis', 'util_iter',
+           'util_kwarray', 'util_kwimage', 'util_kwplot', 'util_norm',
+           'util_parallel', 'util_path', 'util_raster', 'util_regex',
+           'util_rgdc', 'util_stac', 'util_time']

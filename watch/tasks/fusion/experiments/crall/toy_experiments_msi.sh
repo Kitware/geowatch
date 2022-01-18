@@ -11,40 +11,41 @@ TRAIN_FPATH=$DATA_DPATH/vidshapes_msi_train/data.kwcoco.json
 VALI_FPATH=$DATA_DPATH/vidshapes_msi_vali/data.kwcoco.json
 TEST_FPATH=$DATA_DPATH/vidshapes_msi_test/data.kwcoco.json 
 
-mkdir -p $DATA_DPATH
-kwcoco toydata vidshapes8-frames5-speed0.2-multispectral --bundle_dpath $DATA_DPATH/vidshapes_msi_train
-kwcoco toydata vidshapes4-frames5-speed0.2-multispectral --bundle_dpath $DATA_DPATH/vidshapes_msi_vali
-kwcoco toydata vidshapes2-frames6-speed0.2-multispectral --bundle_dpath $DATA_DPATH/vidshapes_msi_test
+mkdir -p "$DATA_DPATH"
+kwcoco toydata --key=vidshapes-videos8-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$DATA_DPATH/vidshapes_msi_train" --verbose=5
+kwcoco toydata --key=vidshapes-videos5-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$DATA_DPATH/vidshapes_msi_vali"  --verbose=5
+kwcoco toydata --key=vidshapes-videos2-frames6-randgsize-speed0.2-msi-multisensor --bundle_dpath "$DATA_DPATH/vidshapes_msi_test" --verbose=5 
 
 
 # Print stats
-python -m kwcoco stats $TRAIN_FPATH $VALI_FPATH $TEST_FPATH
-python -m watch watch_coco_stats $TRAIN_FPATH 
+python -m kwcoco stats "$TRAIN_FPATH" "$VALI_FPATH" "$TEST_FPATH"
+python -m watch stats "$TRAIN_FPATH" "$VALI_FPATH" "$TEST_FPATH"
+
+__doc__="""
+Should look like 
+                                   dset  n_anns  n_imgs  n_videos  n_cats  r|g|b|disparity|gauss|B8|B11  B1|B8|B8a|B10|B11  r|g|b|flowx|flowy|distri|B10|B11
+0  vidshapes_msi_train/data.kwcoco.json      80      40         8       3                            12                 12                                16
+1   vidshapes_msi_vali/data.kwcoco.json      50      25         5       3                             9                 10                                 6
+2   vidshapes_msi_test/data.kwcoco.json      24      12         2       3                             5                  3                                 4
+"""
 
 
-python -m watch.cli.coco_visualize_videos \
-    --src $DATA_DPATH/vidshapes_msi_train/data.kwcoco.json \
-    --channels="B1|B8|B11,B1" \
-    --viz_dpath=$DATA_DPATH/vidshapes_msi_train/_viz
+#kwcoco toydata --key=vidshapes-videos1-frames5-speed0.001-msi --bundle_dpath "$(realpath ./tmp)" --verbose=5 --use_cache=False
+#python -m watch.cli.coco_visualize_videos \
+#    --src "$(realpath ./tmp/data.kwcoco.json)" \
+#    --channels="B1|B8|b" \
+#    --viz_dpath="$(realpath ./tmp)/_viz" \
+#    --animate=True
 
-items=$(jq -r '.videos[] | .name' $DATA_DPATH/vidshapes_msi_train/data.kwcoco.json)
-for item in ${items[@]}; do
-    echo "item = $item"
-    python -m watch.cli.gifify --frames_per_second 1.0 \
-        --inputs "$DATA_DPATH/vidshapes_msi_train/_viz/${item}/_anns/B1" \
-        --output "$DATA_DPATH/vidshapes_msi_train/_viz/${item}_ann.gif"
-
-    python -m watch.cli.gifify --frames_per_second 1.0 \
-        --inputs "$DATA_DPATH/vidshapes_msi_train/_viz/${item}/_imgs/B1|B8|B11" \
-        --output "$DATA_DPATH/vidshapes_msi_train/_viz/${item}_img.gif"
-done
-
-
+#python -m watch.cli.coco_visualize_videos \
+#    --src "$DATA_DPATH/vidshapes_msi_train/data.kwcoco.json" \
+#    --channels="gauss|B11,r|g|b,B1|B8|B11" \
+#    --viz_dpath="$DATA_DPATH/vidshapes_msi_train/_viz" --animate=True
 
 
 ARCH=smt_it_stm_p8
 
-CHANNELS="B8|B1|B11|B8a"
+CHANNELS="B11,r|g|b,B1|B8|B11"
 
 EXPERIMENT_NAME=ToyFusion_${ARCH}_v001
 DATASET_NAME=ToyDataMSI
@@ -56,8 +57,9 @@ DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_NAME/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package.pt 
 
 SUGGESTIONS="$(python -m watch.tasks.fusion.organize suggest_paths \
-    --package_fpath=$PACKAGE_FPATH \
-    --test_dataset=$TEST_FPATH)"
+    --package_fpath=\"$PACKAGE_FPATH\" \
+    --test_dataset=\"$TEST_FPATH\")"
+
 PRED_DATASET="$(echo "$SUGGESTIONS" | jq -r .pred_dataset)"
 EVAL_DATASET="$(echo "$SUGGESTIONS" | jq -r .eval_dpath)"
 
@@ -85,14 +87,14 @@ python -m watch.tasks.fusion.fit \
     --time_span=1y \
     --gpus=1 \
     --accumulate_grad_batches=1 \
-    --dump=$TRAIN_CONFIG_FPATH
+    --dump="$TRAIN_CONFIG_FPATH"
 
 # Configure prediction hyperparams
 python -m watch.tasks.fusion.predict \
     --gpus=1 \
     --write_preds=True \
     --write_probs=False \
-    --dump=$PRED_CONFIG_FPATH
+    --dump="$PRED_CONFIG_FPATH"
 
 
 # Fit 
@@ -103,7 +105,8 @@ python -m watch.tasks.fusion.fit \
        --package_fpath=$PACKAGE_FPATH \
         --train_dataset=$TRAIN_FPATH \
          --vali_dataset=$VALI_FPATH \
-         --test_dataset=$TEST_FPATH
+         --test_dataset=$TEST_FPATH \
+         --match_histograms=False
 
 # Predict 
 python -m watch.tasks.fusion.predict \

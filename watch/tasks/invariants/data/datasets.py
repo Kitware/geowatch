@@ -150,8 +150,8 @@ class kwcoco_dataset(Dataset):
             # transformations
             transformed = self.transforms(image=img1, image2=img2)
             transformed2 = self.transforms2(image=img1)
-            img1 = transformed['image'] ###
-            img2 = transformed['image2'] ###
+            img1 = transformed['image']
+            img2 = transformed['image2']
 
             if self.display:
                 if self.num_channels == 3:

@@ -46,12 +46,11 @@ class CocoVisualizeConfig(scfg.Config):
         python -m watch.cli.gifify -i "./viz_out/US_Jacksonville_R01/_anns/red|green|blue/" -o US_Jacksonville_R01_anns.gif
 
         # NEW: as of 2021-11-04 : helper animation script
-
         python -m watch.cli.animate_visualizations --viz_dpath ./viz_out
 
     """
     default = {
-        'src': scfg.Value('data.kwcoco.json', help='input dataset'),
+        'src': scfg.Value('data.kwcoco.json', help='input dataset', position=1),
 
         'viz_dpath': scfg.Value(None, help=ub.paragraph(
             '''
@@ -384,6 +383,7 @@ def video_track_info(coco_dset, vidid):
     for tid in track_ids:
         track_aids = coco_dset.index.trackid_to_aids[tid]
         vidspace_boxes = []
+        track_gids = []
         for aid in track_aids:
             ann = coco_dset.index.anns[aid]
             gid = ann['image_id']
@@ -393,11 +393,14 @@ def video_track_info(coco_dset, vidid):
             imgspace_box = kwimage.Boxes([bbox], 'xywh')
             vidspace_box = imgspace_box.warp(vid_from_img)
             vidspace_boxes.append(vidspace_box)
+            track_gids.append(gid)
         all_vidspace_boxes = kwimage.Boxes.concatenate(vidspace_boxes)
         full_vid_box = all_vidspace_boxes.bounding_box().to_xywh()
         tid_to_info[tid] = {
             'tid': tid,
             'full_vid_box': full_vid_box,
+            'track_gids': track_gids,
+            'track_aids': track_aids,
         }
     return tid_to_info
 

@@ -12,11 +12,13 @@ xdev >= 0.2.3
 # Machine learning
 tensorboard_logger >= 0.1.0 
 tensorboard >= 2.4.1
-torch_optimizer >= 0.1.0
 torchmetrics >= 0.4.1
 performer_pytorch >= 1.0.11
 reformer_pytorch >= 1.4.3
-torch-optimizer >= 0.1.0 ;python_version>='3.6'
+torch_optimizer >= 0.1.0 ;python_version>='3.6'
 
 # GIS
 fels >= 1.4.0
+
+# Note sure if this should be a requirement yet
+# dvc>=2.9.3

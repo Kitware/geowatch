@@ -1,4 +1,3 @@
-from watch.tasks.fusion.architectures import transformer
 import ubelt as ub
 
 try:
@@ -14,6 +13,7 @@ def benchmark_models():
     import netharn as nh
     # from watch.tasks.fusion import datamodules
     import torch.profiler
+    from watch.tasks.fusion.architectures import transformer
     from watch.tasks.fusion.methods.channelwise_transformer import MultimodalTransformer
     # from torch.profiler import profile, ProfilerActivity, record_function
     # datamodule = datamodules.KWCocoVideoDataModule(
@@ -35,10 +35,26 @@ def benchmark_models():
         # 'T': [2, 5, 9],
         # 'T': [2, 5, 9],
         # 'T': [2],
-        'T': [2, 9, 17],
+        'T': [2, 9, 11, 17],
         # 'M': [3, 5, 7, 11, 13, 32, 64, 128, 256],
         'M': [3, 5, 7, 11, 13, 32, 64],
     }))
+
+    # coco_fpath = ub.expandpath('$HOME/data/work/toy_change/vidshapes_msi_train/data.kwcoco.json')
+    import watch
+    from watch.tasks.fusion import datamodules
+    if 1:
+        coco_dset = watch.demo.coerce_kwcoco('watch-msi')
+        channels = "B11,r|g|b,B1|B8|B11"
+        datamodule = datamodules.KWCocoVideoDataModule(
+            train_dataset=coco_dset,
+            chip_size=224, batch_size=1, time_steps=3,
+            channels=channels,
+            normalize_inputs=True, neg_to_pos_ratio=0, num_workers='avail/2', true_multimodal=True,
+        )
+        datamodule.setup('fit')
+        # TODO
+        batch = next(iter(datamodule.train_dataloader()))  # NOQA
 
     encoder_info = transformer.encoder_configs.copy()
 
@@ -100,6 +116,7 @@ def benchmark_models():
 
     # Pure memory benchmarks
     for modelkw, inputkw in ub.ProgIter(bench_grid, verbose=3):
+
         # for arch_name in ['smt_it_stm_p8']:
         M = inputkw['M']
         T = inputkw['T']
@@ -108,6 +125,8 @@ def benchmark_models():
         row.update(inputkw)
         row.update(modelkw)
         row.update(ub.dict_isect(transformer.encoder_configs[modelkw['arch_name']], {'n_layers', 'embedding_size', 'n_heads'}))
+
+        # Get dummy input
 
         images = torch.rand(1, T, M, S, S).to(device)
 

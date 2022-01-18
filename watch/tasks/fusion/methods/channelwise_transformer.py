@@ -1,3 +1,59 @@
+"""
+
+Our data might look like this, a sequence of frames where the frames can contain
+heterogeneous data:
+
+    [
+        {
+            'frame_index': 0,
+            'time_offset': 0,
+            'sensor': 'S2',
+            'modes': {
+                'blue|green|red|swir1|swir2|nir': <Tensor shape=(6, 64, 64),
+                'pan': <Tensor shape=(1, 112, 112),
+            }
+            'truth': {
+                'class_idx': <Tensor shape=(5, 128, 128),
+            }
+        },
+        {
+            'frame_index': 1,
+            'time_offset': 100,
+            'sensor': 'L8',
+            'modes': {
+                'blue|green|red|lwir1|lwir2|nir': <Tensor shape=(6, 75, 75),
+            }
+            'truth': {
+                'class_idx': <Tensor shape=(5, 128, 128),
+            }
+        },
+        {
+            'frame_index': 2,
+            'time_offset': 120,
+            'sensor': 'S2',
+            'modes': {
+                'blue|green|red|swir1|swir2|nir': <Tensor shape=(6, 64, 64),
+                'pan': <Tensor shape=(1, 112, 112),
+            }
+            'truth': {
+                'class_idx': <Tensor shape=(5, 128, 128),
+            }
+        },
+        {
+            'frame_index': 3,
+            'time_offset': 130,
+            'sensor': 'WV',
+            'modes': {
+                'blue|green|red|nir': <Tensor shape=(4, 224, 224),
+                'pan': <Tensor shape=(1, 512, 512),
+            },
+            'truth': {
+                'class_idx': <Tensor shape=(5, 128, 128),
+            }
+        },
+    ]
+
+"""
 import einops
 import kwarray
 import kwcoco
@@ -5,6 +61,7 @@ import ubelt as ub
 import torch
 import torchmetrics
 import pathlib
+# import math
 
 import numpy as np
 import netharn as nh
@@ -14,7 +71,7 @@ import pytorch_lightning as pl
 from torch import nn
 from einops.layers.torch import Rearrange
 from kwcoco import channel_spec
-from torchvision import transforms
+# from torchvision import transforms
 from torch.optim import lr_scheduler
 from watch import heuristics
 from watch.tasks.fusion import utils
@@ -28,7 +85,66 @@ except Exception:
 
 
 from timm.models.layers import drop_path
+from torch._jit_internal import _copy_to_script_wrapper
 # from timm.models.layers.activations import sigmoid
+
+
+from torch.nn.modules.container import Module, Iterator  # NOQA
+
+
+class RobustModuleDict(torch.nn.ModuleDict):
+    """
+    Regular torch.nn.ModuleDict doesnt allow empty str. Hack around this.
+
+    Example:
+        >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+        >>> import string
+        >>> torch_dict = RobustModuleDict()
+        >>> # All printable characters should be usable as keys
+        >>> # If they are not, hack it.
+        >>> failed = []
+        >>> for c in list(string.printable) + ['']:
+        >>>     try:
+        >>>         torch_dict[c] = torch.nn.Linear(1, 1)
+        >>>     except KeyError:
+        >>>         failed.append(c)
+        >>> assert len(failed) == 0
+    """
+    repl_dot = '#D#'
+    repl_empty = '__EMPTY'
+
+    def _normalize_key(self, key):
+        key = self.repl_empty if key == '' else key.replace('.', self.repl_dot)
+        return key
+
+    @_copy_to_script_wrapper
+    def __getitem__(self, key: str) -> Module:
+        key = self._normalize_key(key)
+        return self._modules[key]
+
+    def __setitem__(self, key: str, module: Module) -> None:
+        key = self._normalize_key(key)
+        self.add_module(key, module)
+
+    def __delitem__(self, key: str) -> None:
+        key = self._normalize_key(key)
+        del self._modules[key]
+
+    @_copy_to_script_wrapper
+    def __contains__(self, key: str) -> bool:
+        key = self._normalize_key(key)
+        return key in self._modules
+
+    def pop(self, key: str) -> Module:
+        r"""Remove key from the ModuleDict and return its module.
+
+        Args:
+            key (string): key to pop from the ModuleDict
+        """
+        key = self._normalize_key(key)
+        v = self[key]
+        del self[key]
+        return v
 
 
 class MultimodalTransformer(pl.LightningModule):
@@ -47,15 +163,16 @@ class MultimodalTransformer(pl.LightningModule):
         >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
         >>> from watch.tasks.fusion import datamodules
         >>> datamodule = datamodules.KWCocoVideoDataModule(
-        >>>     train_dataset='special:vidshapes8', num_workers=0)
+        >>>     train_dataset='special:vidshapes-watch', num_workers=4)
         >>> datamodule.setup('fit')
-        >>> dataset_stats = datamodule.torch_datasets['train'].cached_dataset_stats()
+        >>> dataset = datamodule.torch_datasets['train']
+        >>> dataset_stats = dataset.cached_dataset_stats(num=3)
         >>> loader = datamodule.train_dataloader()
         >>> batch = next(iter(loader))
         >>> #self = MultimodalTransformer(arch_name='smt_it_joint_p8')
         >>> self = MultimodalTransformer(arch_name='smt_it_joint_p8',
         >>>                              input_channels=datamodule.input_channels,
-        >>>                              input_stats=dataset_stats,
+        >>>                              dataset_stats=dataset_stats,
         >>>                              classes=datamodule.classes,
         >>>                              change_loss='dicefocal',
         >>>                              attention_impl='performer')
@@ -105,14 +222,15 @@ class MultimodalTransformer(pl.LightningModule):
 
         parser.add_argument(
             '--tokenizer', default='rearrange', type=str,
-            choices=['dwcnn', 'rearrange'], help=ub.paragraph(
+            choices=['dwcnn', 'rearrange', 'conv7'], help=ub.paragraph(
                 '''
-                How image patches aare broken into tokens.
-                rearrange just shuffles raw pixels. dwcnn is a is a mobile
-                convolutional stem.
+                How image patches are broken into tokens.
+                rearrange just shuffles raw pixels.
+                dwcnn is a is a mobile convolutional stem.
+                conv7 is a simple 1x1x7x7 convolutional stem.
                 '''))
-        parser.add_argument('--token_norm', default='auto', type=str,
-                            choices=['auto', 'group', 'batch'])
+        parser.add_argument('--token_norm', default='none', type=str,
+                            choices=['none', 'auto', 'group', 'batch'])
         parser.add_argument('--arch_name', default='smt_it_joint_p8', type=str,
                             choices=available_encoders)
         parser.add_argument('--dropout', default=0.1, type=float)
@@ -159,8 +277,10 @@ class MultimodalTransformer(pl.LightningModule):
                  saliency_weights='auto',
                  positive_change_weight=1.,
                  negative_change_weight=1.,
+                 dataset_stats=None,
                  input_stats=None,
                  input_channels=None,
+                 unique_sensors=None,
                  attention_impl='exact',
                  window_size=8,
                  global_class_weight=1.0,
@@ -186,30 +306,60 @@ class MultimodalTransformer(pl.LightningModule):
         self.squash_modes = squash_modes
 
         # HACK:
-        if input_stats is not None and 'input_stats' in input_stats:
-            dataset_stats = input_stats
+        if dataset_stats is None:
+            if input_stats is not None and 'input_stats' in input_stats:
+                import warnings
+                warnings.warn('use dataset stats instead')
+                dataset_stats = input_stats
+
+        if dataset_stats is not None:
             input_stats = dataset_stats['input_stats']
             class_freq = dataset_stats['class_freq']
         else:
             class_freq = None
 
         self.class_freq = class_freq
+        self.dataset_stats = dataset_stats
 
         # Handle channel-wise input mean/std in the network (This is in
         # contrast to common practice where it is done in the dataloader)
-        self.input_norms = None
-        if input_stats is not None:
-            self.input_norms = torch.nn.ModuleDict()
-            for key, stats in input_stats.items():
-                self.input_norms[key] = nh.layers.InputNorm(**stats)
+        input_norms = None
+        known_sensors = None
+        known_channels = None
 
-        self.classes = kwcoco.CategoryTree.coerce(classes)
-        self.num_classes = len(self.classes)
-
+        # Not sure how relevant (input_channels) is anymore
         if input_channels is None:
             raise Exception('need them for num input_channels!')
         input_channels = channel_spec.ChannelSpec.coerce(input_channels)
         self.input_channels = input_channels
+
+        if self.dataset_stats is None:
+            # hack for tests (or no known sensors case)
+            self.unique_sensor_modes = {('', self.input_channels.spec)}
+        else:
+            self.unique_sensor_modes = self.dataset_stats['unique_sensor_modes']
+
+        if input_stats is not None:
+            input_norms = RobustModuleDict()
+            # sensors = list(ub.unique([s for (s, c) in input_stats.keys()]))
+            for s, c in self.unique_sensor_modes:
+                if s not in input_norms:
+                    input_norms[s] = RobustModuleDict()
+                stats = input_stats.get((s, c), None)
+                if stats is None:
+                    input_norms[s][c] = nh.layers.InputNorm()
+                else:
+                    input_norms[s][c] = nh.layers.InputNorm(**stats)
+
+            for (s, c), stats in input_stats.items():
+                input_norms[s][c] = nh.layers.InputNorm(**stats)
+
+        self.known_sensors = known_sensors
+        self.known_channels = known_channels
+        self.input_norms = input_norms
+
+        self.classes = kwcoco.CategoryTree.coerce(classes)
+        self.num_classes = len(self.classes)
 
         input_streams = list(input_channels.streams())
         stream_num_channels = {s.spec: s.numel() for s in input_streams}
@@ -347,52 +497,93 @@ class MultimodalTransformer(pl.LightningModule):
 
         self.input_channels.numel()
 
-        in_features_raw = self.hparams.window_size * self.hparams.window_size
-        if self.squash_modes:
-            in_features_raw = in_features_raw * num_channels
-
+        # if self.squash_modes:
+        # in_features_raw = in_features_raw * num_channels
         # TODO:
         #     - [ ] Dynamic / Learned embedding
-        encode_t = utils.SinePositionalEncoding(5, 1, size=8)
-        encode_m = utils.SinePositionalEncoding(5, 2, size=8)
-        encode_h = utils.SinePositionalEncoding(5, 3, size=8)
-        encode_w = utils.SinePositionalEncoding(5, 4, size=8)
-        self.add_encoding = transforms.Compose([
-            encode_t, encode_m, encode_h, encode_w,
-        ])
-        in_features_pos = sum(p.size for p in self.add_encoding.transforms)
-
-        in_features = in_features_pos + in_features_raw
-        self.in_features = in_features
-        self.in_features_pos = in_features_pos
-        self.in_features_raw = in_features_raw
+        # encode_t = utils.SinePositionalEncoding(5, 1, size=8)
+        # encode_m = utils.SinePositionalEncoding(5, 2, size=8)
+        # encode_h = utils.SinePositionalEncoding(5, 3, size=8)
+        # encode_w = utils.SinePositionalEncoding(5, 4, size=8)
+        # self.add_encoding = transforms.Compose([
+        #     encode_t, encode_m, encode_h, encode_w,
+        # ])
+        # in_features_pos = sum(p.size for p in self.add_encoding.transforms)
 
         # TODO:
         #     - [X] Classifier MLP, skip connections
         #     - [ ] Decoder - unsure if necessary
 
+        MODAL_AGREEMENT_CHANS = 8
+
         # TODO: add tokenization strat to the FusionEncoder itself
+        # if tokenizer == 'rearrange':
+        #     stream_tokenizers = RobustModuleDict()
+        #     for stream_key, num_chan in stream_num_channels.items():
+        #         # Construct tokenize on a per-stream basis
+        #         # import netharn as nh
+        #         tokenize = Rearrange(
+        #             'b t c (h hs) (w ws) -> b t c h w (ws hs)',
+        #             c=num_chan,
+        #             hs=self.hparams.window_size,
+        #             ws=self.hparams.window_size)
+        #         stream_tokenizers[stream_key] = tokenize
+        #         in_features_raw = self.hparams.window_size * self.hparams.window_size
+        #         in_features_raw = in_features_raw * MODAL_AGREEMENT_CHANS
+        # elif tokenizer == 'conv7':
+        #     stream_tokenizers = RobustModuleDict()
+        #     for stream_key, num_chan in stream_num_channels.items():
+        #         # Construct tokenize on a per-stream basis
+        #         # import netharn as nh
+        #         in_features_raw = MODAL_AGREEMENT_CHANS
+        #         tokenize = ConvTokenizer(num_chan, in_features_raw,
+        #                                  norm=None)
+        #         stream_tokenizers[stream_key] = tokenize
+        # elif tokenizer == 'dwcnn':
+        #     stream_tokenizers = RobustModuleDict()
+        #     for stream_key, num_chan in stream_num_channels.items():
+        #         # Construct tokenize on a per-stream basis
+        #         # import netharn as nh
+        #         tokenize = DWCNNTokenizer(num_chan, MODAL_AGREEMENT_CHANS, norm=token_norm)
+        #         stream_tokenizers[stream_key] = tokenize
+        # else:
+        #     raise KeyError(tokenizer)
+        # self.stream_tokenizers = stream_tokenizers
+
+        self.tokenizer = tokenizer
+
         if tokenizer == 'rearrange':
-            stream_tokenizers = nn.ModuleDict()
-            for stream_key, num_chan in stream_num_channels.items():
-                # Construct tokenize on a per-stream basis
-                # import netharn as nh
-                tokenize = Rearrange(
-                    'b t c (h hs) (w ws) -> b t c h w (ws hs)',
-                    c=num_chan,
-                    hs=self.hparams.window_size,
-                    ws=self.hparams.window_size)
-                stream_tokenizers[stream_key] = tokenize
-        elif tokenizer == 'dwcnn':
-            stream_tokenizers = nn.ModuleDict()
-            for stream_key, num_chan in stream_num_channels.items():
-                # Construct tokenize on a per-stream basis
-                # import netharn as nh
-                tokenize = DWCNNTokenizer(num_chan, norm=token_norm)
-                stream_tokenizers[stream_key] = tokenize
+            self.sensor_channel_tokenizers = RobustModuleDict()
+            for s, c in self.unique_sensor_modes:
+                mode_code = kwcoco.FusedChannelSpec.coerce(c)
+                # For each mode make a network that should learn to tokenize
+                in_chan = mode_code.numel()
+                if s not in self.sensor_channel_tokenizers:
+                    self.sensor_channel_tokenizers[s] = RobustModuleDict()
+                self.sensor_channel_tokenizers[s][c] = nh.layers.MultiLayerPerceptronNd(
+                    dim=2, in_channels=in_chan, hidden_channels=3,
+                    out_channels=MODAL_AGREEMENT_CHANS, residual=True, norm=None)
+                in_features_raw = self.hparams.window_size * self.hparams.window_size
+                in_features_raw = in_features_raw * MODAL_AGREEMENT_CHANS
+        elif tokenizer == 'conv7':
+            self.sensor_channel_tokenizers = RobustModuleDict()
+            for s, c in self.unique_sensor_modes:
+                mode_code = kwcoco.FusedChannelSpec.coerce(c)
+                # For each mode make a network that should learn to tokenize
+                in_chan = mode_code.numel()
+                if s not in self.sensor_channel_tokenizers:
+                    self.sensor_channel_tokenizers[s] = RobustModuleDict()
+                in_features_raw = MODAL_AGREEMENT_CHANS
+                tokenize = ConvTokenizer(in_chan, in_features_raw, norm=None)
+                self.sensor_channel_tokenizers[s][c] = tokenize
         else:
-            raise KeyError(tokenizer)
-        self.stream_tokenizers = stream_tokenizers
+            raise Exception
+
+        in_features_pos = 48
+        in_features = in_features_pos + in_features_raw
+        self.in_features = in_features
+        self.in_features_pos = in_features_pos
+        self.in_features_raw = in_features_raw
 
         # 'https://rwightman.github.io/pytorch-image-models/models/vision-transformer/'
         if arch_name in transformer.encoder_configs:
@@ -461,6 +652,17 @@ class MultimodalTransformer(pl.LightningModule):
             norm=None
         )
 
+        print('self.dataset_stats = {}'.format(ub.repr2(self.dataset_stats, nl=-1)))
+
+        ### NEW:
+        # hashstr_tokenizer = torch.nn.Linear(16, 8)
+        self.token_learner1_time_delta = nh.layers.MultiLayerPerceptronNd(
+            dim=0, in_channels=1, hidden_channels=3, out_channels=8, residual=True, norm=None)
+        self.token_learner2_sensor = nh.layers.MultiLayerPerceptronNd(
+            dim=0, in_channels=16, hidden_channels=3, out_channels=8, residual=True, norm=None)
+        self.token_learner3_mode = nh.layers.MultiLayerPerceptronNd(
+            dim=0, in_channels=16, hidden_channels=3, out_channels=8, residual=True, norm=None)
+
     def configure_optimizers(self):
         """
         TODO:
@@ -513,6 +715,8 @@ class MultimodalTransformer(pl.LightningModule):
     def forward(self, images):
         """
         Example:
+            >>> import pytest
+            >>> pytest.skip('not currently used')
             >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
             >>> from watch.tasks.fusion import datamodules
             >>> channels = 'B1,B8|B8a,B10|B11'
@@ -522,7 +726,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> datamodule.setup('fit')
             >>> input_channels = datamodule.input_channels
             >>> train_dataset = datamodule.torch_datasets['train']
-            >>> input_stats = train_dataset.cached_dataset_stats()
+            >>> dataset_stats = train_dataset.cached_dataset_stats()
             >>> loader = datamodule.train_dataloader()
             >>> tokenizer = 'convexpt-v1'
             >>> tokenizer = 'dwcnn'
@@ -531,7 +735,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> self = MultimodalTransformer(
             >>>     arch_name='smt_it_joint_p8',
             >>>     input_channels=input_channels,
-            >>>     input_stats=input_stats,
+            >>>     dataset_stats=dataset_stats,
             >>>     change_loss='dicefocal',
             >>>     attention_impl='performer',
             >>>     tokenizer=tokenizer,
@@ -606,26 +810,39 @@ class MultimodalTransformer(pl.LightningModule):
             >>> from os.path import join
             >>> import os
             >>> if 0:
+            >>>     '''
+            >>>     # Generate toy datasets
+            >>>     DATA_DPATH=$HOME/data/work/toy_change
+            >>>     TRAIN_FPATH=$DATA_DPATH/vidshapes_msi_train/data.kwcoco.json
+            >>>     mkdir -p "$DATA_DPATH"
+            >>>     kwcoco toydata --key=vidshapes-videos8-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$DATA_DPATH/vidshapes_msi_train" --verbose=5
+            >>>     '''
+            >>>     coco_fpath = ub.expandpath('$HOME/data/work/toy_change/vidshapes_msi_train/data.kwcoco.json')
+            >>>     coco_dset = kwcoco.CocoDataset.coerce(coco_fpath)
+            >>>     channels="B11,r|g|b,B1|B8|B11"
+            >>> if 0:
             >>>     dvc_dpath = find_smart_dvc_dpath()
-            >>>     coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/data.kwcoco.json')
+            >>>     coco_dset = join(dvc_dpath, 'drop1-S2-L8-aligned/data.kwcoco.json')
             >>>     channels='swir16|swir22|blue|green|red|nir'
-            >>> else:
-            >>>     coco_fpath = 'special:vidshapes8-frames9-speed0.5-multispectral'
-            >>>     channels='B1|B11|B8'
-            >>> coco_dset = kwcoco.CocoDataset.coerce(coco_fpath)
+            >>> if 1:
+            >>>     import watch
+            >>>     coco_dset = watch.demo.demo_kwcoco_multisensor(max_speed=0.5)
+            >>>     # coco_dset = 'special:vidshapes8-frames9-speed0.5-multispectral'
+            >>>     channels='B1|B11|B8|r|g|b|gauss'
+            >>> coco_dset = kwcoco.CocoDataset.coerce(coco_dset)
             >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset=coco_dset,
-            >>>     chip_size=160, batch_size=1, time_steps=5,
+            >>>     chip_size=64, batch_size=1, time_steps=3,
             >>>     channels=channels,
-            >>>     normalize_inputs=True, neg_to_pos_ratio=0, num_workers='avail/2',
+            >>>     normalize_inputs=True, neg_to_pos_ratio=0, num_workers='avail/2', true_multimodal=True,
             >>> )
             >>> datamodule.setup('fit')
             >>> torch_dset = datamodule.torch_datasets['train']
             >>> torch_dset.disable_augmenter = True
-            >>> input_stats = datamodule.input_stats
+            >>> dataset_stats = datamodule.dataset_stats
             >>> input_channels = datamodule.input_channels
             >>> classes = datamodule.classes
-            >>> print('input_stats = {}'.format(ub.repr2(input_stats, nl=3)))
+            >>> print('dataset_stats = {}'.format(ub.repr2(dataset_stats, nl=3)))
             >>> print('input_channels = {}'.format(input_channels))
             >>> print('classes = {}'.format(classes))
             >>> # Choose subclass to test this with (does not cover all cases)
@@ -634,8 +851,8 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     # Backbone
             >>>     arch_name='smt_it_joint_p8',
             >>>     #arch_name='smt_it_stm_p8',
-            >>>     attention_impl='performer',
-            >>>     #attention_impl='exact',
+            >>>     #attention_impl='performer',
+            >>>     attention_impl='exact',
             >>>     #arch_name='deit',
             >>>     change_loss='focal',
             >>>     #class_loss='cce',
@@ -653,13 +870,14 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     class_weights='auto',
             >>>     # ===========
             >>>     # Domain Metadata (Look Ma, not hard coded!)
-            >>>     input_stats=input_stats,
+            >>>     dataset_stats=dataset_stats,
             >>>     classes=classes,
             >>>     input_channels=input_channels,
             >>>     #tokenizer='dwcnn',
-            >>>     tokenizer='rearrange',
+            >>>     tokenizer='conv7',
+            >>>     #tokenizer='rearrange',
             >>>     squash_modes=True,
-            >>>     normalize_perframe=True,
+            >>>     # normalize_perframe=True,
             >>>     window_size=8,
             >>>     )
             >>> self.datamodule = datamodule
@@ -670,7 +888,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> batch = next(iter(loader))
             >>> import kwplot
             >>> kwplot.autompl(force='Qt5Agg')
-            >>> canvas = datamodule.draw_batch(batch, max_channels=3, overlay_on_image=0)
+            >>> canvas = datamodule.draw_batch(batch, max_channels=5, overlay_on_image=0)
             >>> kwplot.imshow(canvas, fnum=1)
             >>> # Run overfit
             >>> device = 0
@@ -697,7 +915,8 @@ class MultimodalTransformer(pl.LightningModule):
             if isinstance(val, torch.Tensor):
                 walker[path] = val.to(device)
         outputs = self.training_step(batch)
-        canvas = datamodule.draw_batch(batch, outputs=outputs, max_channels=1, overlay_on_image=0)
+        max_channels = 3
+        canvas = datamodule.draw_batch(batch, outputs=outputs, max_channels=max_channels, overlay_on_image=0)
         kwplot.imshow(canvas)
 
         loss_records = []
@@ -738,7 +957,7 @@ class MultimodalTransformer(pl.LightningModule):
                 loss.backward()
                 optim.step()
                 step += 1
-            canvas = datamodule.draw_batch(batch, outputs=outputs, max_channels=1, overlay_on_image=0, max_items=4)
+            canvas = datamodule.draw_batch(batch, outputs=outputs, max_channels=max_channels, overlay_on_image=0, max_items=4)
             kwplot.imshow(canvas, pnum=(1, 2, 1), fnum=fnum)
             fig = kwplot.figure(fnum=fnum, pnum=(1, 2, 2))
             #kwplot.imshow(canvas, pnum=(1, 2, 1))
@@ -765,22 +984,25 @@ class MultimodalTransformer(pl.LightningModule):
             >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datamodules
+            >>> import watch
             >>> datamodule = datamodules.KWCocoVideoDataModule(
-            >>>     train_dataset='special:vidshapes1-multispectral',
-            >>>     num_workers=0, chip_size=128,
+            >>>     train_dataset='special:vidshapes-watch',
+            >>>     num_workers='avail / 2', chip_size=128, true_multimodal=True,
             >>>     normalize_inputs=True, neg_to_pos_ratio=0,
             >>> )
             >>> datamodule.setup('fit')
+            >>> train_dset = datamodule.torch_datasets['train']
             >>> loader = datamodule.train_dataloader()
             >>> batch = next(iter(loader))
 
             >>> # Choose subclass to test this with (does not cover all cases)
-            >>> self = methods.MultimodalTransformer(
-            >>>     arch_name='smt_it_joint_p8',
-            >>>     input_stats=datamodule.input_stats,
+            >>> self = model = methods.MultimodalTransformer(
+            >>>     arch_name='smt_it_joint_p8', tokenizer='conv7',
+            >>>     dataset_stats=datamodule.dataset_stats,
             >>>     classes=datamodule.classes, input_channels=datamodule.input_channels)
-            >>> outputs = self.forward_step(batch, with_loss=True)
-            >>> canvas = datamodule.draw_batch(batch, outputs=outputs)
+            >>> with_loss = True
+            >>> outputs = self.forward_step(batch, with_loss=with_loss)
+            >>> canvas = datamodule.draw_batch(batch, outputs=outputs, max_items=3, overlay_on_image=False)
             >>> # xdoctest: +REQUIRES(--show)
             >>> import kwplot
             >>> kwplot.autompl()
@@ -799,29 +1021,108 @@ class MultimodalTransformer(pl.LightningModule):
         item_change_probs = []
         item_class_probs = []
         item_saliency_probs = []
+
         for item in batch:
 
-            # For now, just reconstruct the stacked input, but
-            # in the future, the encoder will need to take care of
-            # the heterogeneous inputs
+            if 1:
+                positional_tensors = item['positional_tensors']
+                positional_outputs = []
+                key = 'time_offset'
+                pos_input = positional_tensors[key].float()
+                pos_output = self.token_learner1_time_delta(pos_input)
+                positional_outputs.append(pos_output)
 
-            frame_ims = []
+                key = 'sensor'
+                pos_input = positional_tensors[key].float()
+                pos_output = self.token_learner2_sensor(pos_input)
+                positional_outputs.append(pos_output)
+
+                key = 'mode_tensor'
+                pos_input = positional_tensors[key].float()
+                pos_output = self.token_learner3_mode(pos_input)
+                positional_outputs.append(pos_output)
+
+                positional_outputs.append(positional_tensors['time_index'])
+
+                per_frame_pos_encoding = torch.concat(positional_outputs, axis=1)
+
+                # encode_t = utils.SinePositionalEncoding(5, 1, size=8)
+                # encode_m = utils.SinePositionalEncoding(5, 2, size=8)
+                encode_h = utils.SinePositionalEncoding(5, 3, size=8)
+                encode_w = utils.SinePositionalEncoding(5, 4, size=8)
+
+            # For loops are for handing heterogeneous inputs
+            tokenized = []
+            token_frame_idx = []
             frame_class_weights_list = []
             frame_saliency_weights_list = []
-            for frame in item['frames']:
-                assert len(self.input_norms) == 1, 'only handle one mode for now'
-                for mode_key in self.input_norms.keys():
-                    mode_val = frame['modes'][mode_key]
-                    mode_val = mode_val.float()
-                    # self.input_norms = None
-                    if self.input_norms is not None:
-                        mode_norm = self.input_norms[mode_key]
-                        mode_val = mode_norm(mode_val)
-                    frame_ims.append(mode_val)
-
+            for frame_idx, (frame, frame_enc) in enumerate(zip(item['frames'], per_frame_pos_encoding)):
                 if with_loss:
                     frame_class_weights_list.append(frame['class_weights'])
                     frame_saliency_weights_list.append(frame['saliency_weights'])
+
+                modes = frame['modes']
+                sensor = frame['sensor']
+                for chan_code, mode_val in modes.items():
+
+                    mode_val = mode_val.float()
+                    if self.input_norms is not None:
+                        try:
+                            mode_norm = self.input_norms[sensor][chan_code]
+                            mode_val = mode_norm(mode_val)
+                        except KeyError:
+                            print(f'Failed to process {sensor=!r} {chan_code=!r}')
+                            print('Expected available norms are:')
+                            for _s in sorted(self.input_norms.keys()):
+                                for _c in sorted(self.input_norms[_s].keys()):
+                                    print(f'{_s=!r} {_c=!r}')
+                            print('self.unique_sensor_modes = {!r}'.format(self.unique_sensor_modes))
+                            raise
+                        # self.sensor_channel_tokenizers[]
+
+                    # Lookup the "tokenizing" network for this type of input
+                    sensor_chan_tokenizer = self.sensor_channel_tokenizers[sensor][chan_code]
+
+                    # Is it worth gathering and stacking items in batches here?
+                    mixed_mode = sensor_chan_tokenizer(mode_val[None, :])
+
+                    # TODO: better spatial encoding such that we can
+                    # pre-flatten the spatial tokens with the time/sensor
+                    # dimension. (modes of measurement and positional encoding
+                    # are squashed in the feature dimension, and modes of
+                    # space/time/sensor are in the token dimension)
+
+                    # The number of channels needs to be normalized via 1x1
+                    # convolutions. This should be a separate layer for
+                    # each mode / chan code.
+                    # Downsample
+                    if self.tokenizer == 'rearrange':
+                        ws = self.hparams.window_size
+                        # HACK: reorganize and fix
+                        mode_vals_tokens = einops.rearrange(
+                            mixed_mode, 'b c (h hs) (w ws) -> b h w (ws hs c)', hs=ws, ws=ws)
+                    else:
+                        mode_vals_tokens = einops.rearrange(
+                            mixed_mode, 'b c h w -> b h w c')
+                    encode_h = utils.SinePositionalEncoding(3, 1, size=8)
+                    encode_w = utils.SinePositionalEncoding(3, 2, size=8)
+                    x1 = encode_w(encode_h(mode_vals_tokens))
+
+                    # Any tricks needed to handle inputs/outputs at different
+                    # resolutions should go here
+                    encoding_expanded = frame_enc[None, None, None, :].expand(list(x1.shape[0:3]) + [frame_enc.shape[0]])
+
+                    # Mixup the space/time dims into the token dims to make this
+                    # general.
+                    x2 = torch.cat([x1, encoding_expanded.type_as(x1)], dim=3)
+
+                    # frame_sensor_chan_tokens = einops.rearrange(x2, 't hs ws f -> (t hs ws) f')
+
+                    # Keep time/sensor channel separate for now, but we will
+                    # need to flatten it, at which point we need a decoder.
+                    frame_sensor_chan_tokens = einops.rearrange(x2, 't hs ws f -> t (hs ws) f')
+                    tokenized.append(frame_sensor_chan_tokens)
+                    token_frame_idx.append(frame_idx)
 
             # Because we are nt collating we need to add a batch dimension
             if frame_class_weights_list:
@@ -832,11 +1133,74 @@ class MultimodalTransformer(pl.LightningModule):
             if frame_saliency_weights_list:
                 frame_saliency_weights = torch.stack(frame_saliency_weights_list)[None, ...]
 
-            images = torch.stack(frame_ims)[None, ...]
+            tokens = torch.stack(tokenized, dim=0)[None, None, ...]
 
-            B, T, C, H, W = images.shape
+            # B = 1
+            # T = len(tokens)  # hack
+            H, W = mode_val.shape[-2:]  # hack
+            # C
+            hs, ws = mode_vals_tokens.shape[1:3]  # hack
 
-            logits = self.forward(images)
+            # images = torch.stack(frame_ims)[None, ...]
+            # B, T, C, H, W = images.shape
+
+            # logits = self.forward(frame_tokens)
+
+            # TODO: maybe make the encoder return a sequence of 1 less?
+            # Rather than just ignoring the first output?
+            encoded_tokens = self.encoder(tokens)
+
+            split_pts = np.r_[[0], np.where(np.r_[np.diff(token_frame_idx), [-1]])[0] + 1]
+            split_sizes = np.diff(split_pts).tolist()
+            # split_pts.cumsum()
+            # split_pts = torch.from_numpy(split_pts).to(tokens.device)
+            perframe_frame_encodings = encoded_tokens.split(split_sizes, dim=2)
+
+            perframe_stackable_encodings = []
+            for encoded_modes in perframe_frame_encodings:
+                # max pool, maybe do something better later
+                frame_space_tokens = encoded_modes.max(dim=2)[0]
+                perframe_stackable_encodings.append(frame_space_tokens)
+
+            perframe_spacetime_tokens = torch.cat(perframe_stackable_encodings, dim=2)[:, 0]
+            spacetime_fused_features = einops.rearrange(perframe_spacetime_tokens, 'b t (hs ws) f -> b t hs ws f', hs=hs, ws=ws)
+
+            # TODO: keep track of timesteps, and combine multiple modes within
+            # a timestep at the end. We need to keep track of timesteps through
+            # decoding.
+            # spacetime_fused_features = einops.rearrange(encoded_tokens, 'b m t X (hs ws) f -> b (m t X) hs ws f', hs=hs, ws=ws, m=1, X=1)
+
+            # We do need a decoder now.
+
+            # if not self.squash_modes:
+            #     # Final channel-wise fusion
+            #     chan_last = self.move_channels_last(patch_feats)
+
+            #     # Latent channels are now marginalized away
+            #     spacetime_fused_features = self.channel_fuser(chan_last)[..., 0]
+            #     # spacetime_fused_features = einops.reduce(similarity, "b t c h w -> b t h w", "mean")
+            # else:
+            #     assert patch_feats.shape[2] == 1
+            #     spacetime_fused_features = patch_feats[:, :, 0, ...]
+
+            # if 0:
+            #     # TODO: add DotProduct back in?
+            #     # similarity between neighboring timesteps
+            #     feats = nn.functional.normalize(feats, dim=-1)
+            #     similarity = torch.einsum("b t c h w f , b t c h w f -> b t c h w", feats[:, :-1], feats[:, 1:])
+            #     similarity = einops.reduce(similarity, "b t c h w -> b t h w", "mean")
+            #     distance = -3.0 * similarity
+
+            # Pass the final fused space-time feature to a classifier
+            change_logits = self.change_clf(spacetime_fused_features[:, 1:])
+            class_logits = self.class_clf(spacetime_fused_features)
+            saliency_logits = self.saliency_clf(spacetime_fused_features)
+
+            logits = {
+                'change': change_logits,
+                'class': class_logits,
+                'saliency': saliency_logits,
+            }
 
             # TODO: it may be faster to compute loss at the downsampled
             # resolution.
@@ -1094,11 +1458,8 @@ class MultimodalTransformer(pl.LightningModule):
             >>> from watch.tasks.fusion import methods
             >>> from watch.tasks.fusion import datamodules
             >>> model = methods.MultimodalTransformer("smt_it_stm_p8", input_channels=13)
-            >>> # We have to run an input through the module because it is lazy
-            >>> inputs = torch.rand(1, 2, 13, 128, 128)
-            >>> model(inputs)
 
-            >>> # Save the model
+            >>> # Save the model (TODO: need to save datamodule as well)
             >>> model.save_package(package_path)
 
             >>> # Test that the package can be reloaded
@@ -1123,16 +1484,16 @@ class MultimodalTransformer(pl.LightningModule):
             >>> package_path = join(dpath, 'my_package.pt')
 
             >>> datamodule = datamodules.kwcoco_video_data.KWCocoVideoDataModule(
-            >>>     'special:vidshapes8-multispectral', chip_size=32,
+            >>>     'special:vidshapes8-multispectral-multisensor', chip_size=32,
             >>>     batch_size=1, time_steps=2, num_workers=0)
             >>> datamodule.setup('fit')
-            >>> input_stats = datamodule.torch_datasets['train'].cached_dataset_stats(num=3)
+            >>> dataset_stats = datamodule.torch_datasets['train'].cached_dataset_stats(num=3)
             >>> classes = datamodule.torch_datasets['train'].classes
 
             >>> # Use one of our fusion.architectures in a test
             >>> self = methods.MultimodalTransformer(
             >>>     "smt_it_stm_p8", classes=classes,
-            >>>     input_stats=input_stats, input_channels=datamodule.input_channels)
+            >>>     dataset_stats=dataset_stats, input_channels=datamodule.input_channels)
 
             >>> # We have to run an input through the module because it is lazy
             >>> batch = ub.peek(iter(datamodule.train_dataloader()))
@@ -1479,7 +1840,7 @@ class OurDepthwiseSeparableConv(nn.Module):
 
 
 class DWCNNTokenizer(nn.Module):
-    def __init__(self, in_chn, norm='auto'):
+    def __init__(self, in_chn, out_chn, norm='auto'):
         super().__init__()
         self.norm = norm
         # self.to_images = Rearrange("b t c h w -> (b t) c h w")
@@ -1487,9 +1848,9 @@ class DWCNNTokenizer(nn.Module):
             OurDepthwiseSeparableConv(in_chn, in_chn, kernel_size=3, stride=1, padding=1, residual=1, norm=None, noli=None),
             OurDepthwiseSeparableConv(in_chn, in_chn * 4, kernel_size=3, stride=2, padding=1, residual=0, norm=norm),
             OurDepthwiseSeparableConv(in_chn * 4, in_chn * 8, kernel_size=3, stride=2, padding=1, residual=0, norm=norm),
-            OurDepthwiseSeparableConv(in_chn * 8, in_chn * 64, kernel_size=3, stride=2, padding=1, residual=0, norm=norm),
+            OurDepthwiseSeparableConv(in_chn * 8, out_chn, kernel_size=3, stride=2, padding=1, residual=0, norm=norm),
         ])
-        self.expand_factor = 64
+        self.expand_factor = out_chn
         # self.to_tokens = Rearrange("(b t) (c ef) h w -> (b t) c h w ef", ef=self.expand_factor, b=1)
 
     def forward(self, inputs):
@@ -1502,4 +1863,38 @@ class DWCNNTokenizer(nn.Module):
         inputs2d = einops.rearrange(inputs, 'b t c h w -> (b t) c h w')
         tokens2d = self.stem(inputs2d)
         tokens = einops.rearrange(tokens2d, '(b t) (c ef) h w -> b t c h w ef', b=b, t=t, ef=self.expand_factor)
+        return tokens
+
+
+class ConvTokenizer(nn.Module):
+    """
+    Example:
+        from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+        self = ConvTokenizer(13, 64)
+        print('self = {!r}'.format(self))
+        inputs = torch.rand(2, 13, 64, 64)
+        tokens = self(inputs)
+        print('inputs.shape = {!r}'.format(inputs.shape))
+        print('tokens.shape = {!r}'.format(tokens.shape))
+    """
+    def __init__(self, in_chn, out_chn, norm=None):
+        super().__init__()
+        self.down = nh.layers.ConvNormNd(
+            dim=2, in_channels=in_chn, out_channels=in_chn, groups=in_chn,
+            norm=norm, noli=None, kernel_size=7, stride=3, padding=3,
+        )
+        self.one_by_one = nh.layers.ConvNormNd(
+            dim=2, in_channels=in_chn, out_channels=out_chn, groups=1,
+            norm=norm, noli=None, kernel_size=1, stride=1, padding=0,
+        )
+
+    def forward(self, inputs):
+        # b, t, c, h, w = inputs.shape
+        b, c, h, w = inputs.shape
+        # inputs2d = einops.rearrange(inputs, 'b t c h w -> (b t) c h w')
+        inputs2d = inputs
+        tokens2d = self.down(inputs2d)
+        tokens2d = self.one_by_one(tokens2d)
+        tokens = tokens2d
+        # tokens = einops.rearrange(tokens2d, '(b t) c h w -> b t c h w 1', b=b, t=t)
         return tokens

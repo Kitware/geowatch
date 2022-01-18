@@ -179,8 +179,8 @@ def associate_images(true_coco, pred_coco):
         vidid2 = video2['id']
         gids1 = true_coco.index.vidid_to_gids[vidid1]
         gids2 = pred_coco.index.vidid_to_gids[vidid2]
-        keys1 = ub.oset(ub.dict_take(gid_to_key1, gids1))
-        keys2 = ub.oset(ub.dict_take(gid_to_key2, gids2))
+        keys1 = ub.oset(ub.take(gid_to_key1, gids1))
+        keys2 = ub.oset(ub.take(gid_to_key2, gids2))
         match_keys = ub.oset(keys1) & ub.oset(keys2)
         match_gids1 = list(ub.take(key_to_gid1, match_keys))
         match_gids2 = list(ub.take(key_to_gid2, match_keys))

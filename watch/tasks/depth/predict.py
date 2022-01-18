@@ -18,6 +18,7 @@ from scipy import ndimage
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from . import modules_monkeypatch  # NOQA
 from .datasets import WVRgbDataset
 from .pl_highres_verify import MultiTaskModel, modify_bn, dfactor, local_utils
 from .utils import process_image_chunked
@@ -56,33 +57,37 @@ def predict(dataset, deployed, output):
     model.load_state_dict(state_dict)
 
     model = modify_bn(model, track_running_stats=False, bn_momentum=0.01)
+    model = model.eval()
     model.to(get_device())
 
     log.debug('processing images')
     dataloader = DataLoader(dataset, num_workers=0, batch_size=1, collate_fn=lambda x: x)
-    for batch in tqdm(dataloader, miniters=1, unit='image', disable=True):
-        assert len(batch) == 1
-        img_info = batch[0]
-        gid = img_info['id']
-        try:
-            image = img_info['imgdata']
-            pred = process_image_chunked(image,
-                                         partial(run_inference, model=model),
-                                         chip_size=(2048, 2048, 3)
-                                         )
+    with torch.no_grad():
+        for batch in tqdm(dataloader, miniters=1, unit='image', disable=True):
+            assert len(batch) == 1
+            img_info = batch[0]
+            gid = img_info['id']
+            try:
+                S = 2048
+                S = 1024
+                image = img_info['imgdata']
+                pred = process_image_chunked(image,
+                                             partial(run_inference, model=model),
+                                             chip_size=(S, S, 3)
+                                             )
 
-            # get clean img_info
-            img_info = dataset.dset.imgs[gid]
-            info = _write_output(img_info, pred, output_dir=output_data_dir)
-            aux = output_dset.imgs[gid].get('auxiliary', [])
-            aux.append(info)
-            output_dset.imgs[gid]['auxiliary'] = aux
+                # get clean img_info
+                img_info = dataset.dset.imgs[gid]
+                info = _write_output(img_info, pred, output_dir=output_data_dir)
+                aux = output_dset.imgs[gid].get('auxiliary', [])
+                aux.append(info)
+                output_dset.imgs[gid]['auxiliary'] = aux
 
-        except KeyboardInterrupt:
-            log.info('interrupted')
-            break
-        except Exception:
-            log.exception('Unable to load id:{} - {}'.format(img_info['id'], img_info['name']))
+            except KeyboardInterrupt:
+                log.info('interrupted')
+                break
+            except Exception:
+                log.exception('Unable to load id:{} - {}'.format(img_info['id'], img_info['name']))
 
     output_dset.dump(str(output_dset_filename), indent=2)
     log.info('output written to {}'.format(output_dset_filename))
@@ -149,7 +154,7 @@ def _write_output(img_info, image, output_dir):
         kwimage.imwrite(str(pred_filename),
                         image,
                         backend='gdal',
-                        compress='deflate')
+                        compress='DEFLATE')
 
     return info
 
