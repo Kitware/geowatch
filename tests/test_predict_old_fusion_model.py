@@ -35,7 +35,9 @@ def test_predict_old_fusion_model():
 
     # model_fpath = dvc_dpath / 'models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_raw_v39/SC_smt_it_stm_p8_newanns_weighted_raw_v39_epoch=53-step=2311901.pt'
 
-    model_fpath = dvc_dpath / 'models/fusion/SC-20201117/SC_smt_it_st_s12_newanns_weighted_rgb_v22/SC_smt_it_st_s12_newanns_weighted_rgb_v22_epoch=117-step=5051933.pt'
+    # model_fpath = dvc_dpath / 'models/fusion/SC-20201117/SC_smt_it_st_s12_newanns_weighted_rgb_v22/SC_smt_it_st_s12_newanns_weighted_rgb_v22_epoch=117-step=5051933.pt'
+    model_fpath = dvc_dpath / 'models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_raw_v39/SC_smt_it_stm_p8_newanns_weighted_raw_v39_epoch=53-step=2311901.pt'
+
     request_dvc_path(model_fpath)
 
     # from watch.tasks.fusion import utils

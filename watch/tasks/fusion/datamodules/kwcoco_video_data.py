@@ -2015,7 +2015,7 @@ class KWCocoVideoDataset(data.Dataset):
 
             # Create the true change label overlay
             overlay_key = 'change'
-            if overlay_key in truth_overlay_keys:
+            if overlay_key in truth_overlay_keys and 0:
                 change_overlay = np.zeros(overlay_shape + (4,), dtype=np.float32)
                 changes = frame_truth.get(overlay_key, None)
                 if changes is not None:
@@ -2036,49 +2036,10 @@ class KWCocoVideoDataset(data.Dataset):
                         'label_text': overlay_key,
                     })
 
-            if not overlay_on_image:
-                # Draw the overlays by themselves
-                for overlay_info in overlay_items:
-                    label_text = overlay_info['label_text']
-                    row_canvas = overlay_info['overlay'][..., 0:3]
-                    row_canvas = kwimage.imresize(row_canvas, max_dim=max_dim).clip(0, 1)
-                    signal_bottom_y = 1  # hack: hardcoded
-                    row_canvas = kwimage.draw_text_on_image(
-                        row_canvas, label_text, (1, signal_bottom_y + 1),
-                        valign='top', color='lime', border=3)
-                    vertical_stack.append(row_canvas)
-
-            for iterx, row in enumerate(chan_rows):
-                layers = []
-                label_text = None
-                if overlay_on_image:
-                    # Draw truth on the image itself
-                    if iterx < len(overlay_items):
-                        overlay_info = overlay_items[iterx]
-                        layers.append(overlay_info['overlay'])
-                        label_text = overlay_info['label_text']
-
-                layers.append(row['norm_signal'])
-                row_canvas = kwimage.overlay_alpha_layers(layers)[..., 0:3]
-
-                row_canvas = kwimage.imresize(row_canvas, max_dim=max_dim).clip(0, 1)
-                row_canvas = kwimage.draw_text_on_image(
-                    row_canvas, row['signal_text'], (1, 1), valign='top',
-                    color='white', border=3)
-
-                if label_text:
-                    # TODO: make draw_text_on_image able to return the
-                    # geometry of what it drew and use that.
-                    signal_bottom_y = 31  # hack: hardcoded
-                    row_canvas = kwimage.draw_text_on_image(
-                        row_canvas, label_text, (1, signal_bottom_y + 1),
-                        valign='top', color='lime', border=3)
-                vertical_stack.append(row_canvas)
-
             # TODO: clean up logic
             key = 'class_probs'
             overlay_index = 0
-            if item_output and  key in item_output:
+            if item_output and key in item_output:
                 if overlay_on_image:
                     norm_signal = chan_rows[overlay_index]['norm_signal']
                 else:
@@ -2098,7 +2059,7 @@ class KWCocoVideoDataset(data.Dataset):
 
             key = 'change_probs'
             overlay_index = 1
-            if item_output and  key in item_output:
+            if item_output and  key in item_output and 0:
                 # Make a probability heatmap we can either display
                 # independently or overlay on a rendered channel
                 if frame_idx == 0:
@@ -2147,6 +2108,46 @@ class KWCocoVideoDataset(data.Dataset):
                     pred_part, pred_text, (1, 1), valign='top',
                     color='dodgerblue', border=3)
                 vertical_stack.append(pred_part)
+
+            if not overlay_on_image:
+                # FIXME: might be broken
+                # Draw the overlays by themselves
+                for overlay_info in overlay_items:
+                    label_text = overlay_info['label_text']
+                    row_canvas = overlay_info['overlay'][..., 0:3]
+                    row_canvas = kwimage.imresize(row_canvas, max_dim=max_dim).clip(0, 1)
+                    signal_bottom_y = 1  # hack: hardcoded
+                    row_canvas = kwimage.draw_text_on_image(
+                        row_canvas, label_text, (1, signal_bottom_y + 1),
+                        valign='top', color='lime', border=3)
+                    vertical_stack.append(row_canvas)
+
+            for iterx, row in enumerate(chan_rows):
+                layers = []
+                label_text = None
+                if overlay_on_image:
+                    # Draw truth on the image itself
+                    if iterx < len(overlay_items):
+                        overlay_info = overlay_items[iterx]
+                        layers.append(overlay_info['overlay'])
+                        label_text = overlay_info['label_text']
+
+                layers.append(row['norm_signal'])
+                row_canvas = kwimage.overlay_alpha_layers(layers)[..., 0:3]
+
+                row_canvas = kwimage.imresize(row_canvas, max_dim=max_dim).clip(0, 1)
+                row_canvas = kwimage.draw_text_on_image(
+                    row_canvas, row['signal_text'], (1, 1), valign='top',
+                    color='white', border=3)
+
+                if label_text:
+                    # TODO: make draw_text_on_image able to return the
+                    # geometry of what it drew and use that.
+                    signal_bottom_y = 31  # hack: hardcoded
+                    row_canvas = kwimage.draw_text_on_image(
+                        row_canvas, label_text, (1, signal_bottom_y + 1),
+                        valign='top', color='lime', border=3)
+                vertical_stack.append(row_canvas)
 
             vertical_stack = [kwimage.ensure_uint255(p) for p in vertical_stack]
             frame_canvas = kwimage.stack_images(vertical_stack, overlap=-3)
