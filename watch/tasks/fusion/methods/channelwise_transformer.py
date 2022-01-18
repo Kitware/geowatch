@@ -113,22 +113,26 @@ class RobustModuleDict(torch.nn.ModuleDict):
     repl_dot = '#D#'
     repl_empty = '__EMPTY'
 
+    def _normalize_key(self, key):
+        key = self.repl_empty if key == '' else key.replace('.', self.repl_dot)
+        return key
+
     @_copy_to_script_wrapper
     def __getitem__(self, key: str) -> Module:
-        key = self.repl_empty if key == '' else key.replace('.', self.repl_dot)
+        key = self._normalize_key(key)
         return self._modules[key]
 
     def __setitem__(self, key: str, module: Module) -> None:
-        key = self.repl_empty if key == '' else key.replace('.', self.repl_dot)
+        key = self._normalize_key(key)
         self.add_module(key, module)
 
     def __delitem__(self, key: str) -> None:
-        key = self.repl_empty if key == '' else key.replace('.', self.repl_dot)
+        key = self._normalize_key(key)
         del self._modules[key]
 
     @_copy_to_script_wrapper
     def __contains__(self, key: str) -> bool:
-        key = self.repl_empty if key == '' else key.replace('.', self.repl_dot)
+        key = self._normalize_key(key)
         return key in self._modules
 
     def pop(self, key: str) -> Module:
@@ -137,7 +141,7 @@ class RobustModuleDict(torch.nn.ModuleDict):
         Args:
             key (string): key to pop from the ModuleDict
         """
-        key = self.repl_empty if key == '' else key.replace('.', self.repl_dot)
+        key = self._normalize_key(key)
         v = self[key]
         del self[key]
         return v
@@ -1063,9 +1067,17 @@ class MultimodalTransformer(pl.LightningModule):
 
                     mode_val = mode_val.float()
                     if self.input_norms is not None:
-                        mode_norm = self.input_norms[sensor][chan_code]
-                        mode_val = mode_norm(mode_val)
-
+                        try:
+                            mode_norm = self.input_norms[sensor][chan_code]
+                            mode_val = mode_norm(mode_val)
+                        except KeyError:
+                            print(f'Failed to process {sensor=!r} {chan_code=!r}')
+                            print('Expected available norms are:')
+                            for _s in sorted(self.input_norms.keys()):
+                                for _c in sorted(self.input_norms[_s].keys()):
+                                    print(f'{_s=!r} {_c=!r}')
+                            print('self.unique_sensor_modes = {!r}'.format(self.unique_sensor_modes))
+                            raise
                         # self.sensor_channel_tokenizers[]
 
                     # Lookup the "tokenizing" network for this type of input

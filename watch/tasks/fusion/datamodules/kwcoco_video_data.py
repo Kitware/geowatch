@@ -1648,10 +1648,13 @@ class KWCocoVideoDataset(data.Dataset):
             # make a better way of getting this info.
             # self.sampler.dset.videos().images
             coco_images = self.sampler.dset.images().coco_images
-            unique_sensor_modes.update(set(
-                (c.img.get('sensor_coarse', ''), c.channels.fuse().normalize().spec)
-                for c in coco_images
-            ))
+            hacked = set()
+            for c in coco_images:
+                sspec = c.img.get('sensor_coarse', '')
+                # Ensure channels are returned in requested order
+                cspec = (self.input_channels & c.channels.fuse().normalize()).fuse().normalize().spec
+                hacked.add((sspec, cspec))
+            unique_sensor_modes.update(hacked)
 
         channel_stats = channel_stats.to_dict()
 
@@ -1746,7 +1749,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> item_output['class_probs'] = class_probs  # first frame does not have change
             >>> #binprobs[0][:] = 0  # first change prob should be all zeros
             >>> canvas = self.draw_item(item, item_output, combinable_extra=combinable_extra, overlay_on_image=1)
-            >>> canvas2 = self.draw_item(item, item_output, combinable_extra=combinable_extra, max_channels=1, overlay_on_image=0)
+            >>> canvas2 = self.draw_item(item, item_output, combinable_extra=combinable_extra, max_channels=3, overlay_on_image=0)
             >>> # xdoctest: +REQUIRES(--show)
             >>> import kwplot
             >>> kwplot.autompl()
@@ -1795,11 +1798,116 @@ class KWCocoVideoDataset(data.Dataset):
             >>> kwplot.imshow(canvas)
             >>> kwplot.show_if_requested()
         """
-        classes = self.classes
+        builder = BatchVisualizationBuilder(
+            item=item, item_output=item_output,
+            default_combinable_channels=self.default_combinable_channels,
+            norm_over_time=norm_over_time, max_dim=max_dim,
+            max_channels=max_channels, overlay_on_image=overlay_on_image,
+            draw_weights=draw_weights, combinable_extra=combinable_extra,
+            classes=self.classes)
+        canvas = builder.build()
+        return canvas
 
-        combinable_channels = self.default_combinable_channels
+    def make_loader(self, batch_size=1, num_workers=0, shuffle=False,
+                    pin_memory=False):
+        """
+        Example:
+            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+            >>> import ndsampler
+            >>> import kwcoco
+            >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
+            >>> sampler = ndsampler.CocoSampler(coco_dset)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=(3, 530, 610))
+            >>> loader = self.make_loader(batch_size=2)
+            >>> batch = next(iter(loader))
+        """
+        loader = torch.utils.data.DataLoader(
+            self, batch_size=batch_size, num_workers=num_workers,
+            shuffle=shuffle, pin_memory=pin_memory, collate_fn=ub.identity)
+        return loader
+
+
+class BatchVisualizationBuilder:
+    """
+    Helper object to build a batch visualization
+
+    Example:
+        >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+        >>> import ndsampler
+        >>> import watch
+        >>> coco_dset = watch.coerce_kwcoco('vidshapes2-watch', num_frames=5)
+        >>> sampler = ndsampler.CocoSampler(coco_dset)
+        >>> channels = 'B10|B8a|B1|B8|B11'
+        >>> combinable_extra = [['B10', 'B8', 'B8a']]  # special behavior
+        >>> # combinable_extra = None  # uncomment for raw behavior
+        >>> sample_shape = (5, 530, 610)
+        >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels)
+        >>> index = len(self) // 4
+        >>> item = self[index]
+        >>> # Calculate the probability of change for each frame
+        >>> item_output = {}
+        >>> change_prob_list = []
+        >>> for _ in range(1, sample_shape[0]):
+        >>>     change_prob = kwimage.Heatmap.random(
+        >>>         dims=sample_shape[1:3], classes=1).data['class_probs'][0]
+        >>>     change_prob_list += [change_prob]
+        >>> change_probs = np.stack(change_prob_list)
+        >>> item_output['change_probs'] = change_probs  # first frame does not have change
+        >>> #
+        >>> # Probability of each class for each frame
+        >>> class_prob_list = []
+        >>> for _ in range(0, sample_shape[0]):
+        >>>     class_prob = kwimage.Heatmap.random(
+        >>>         dims=sample_shape[1:3], classes=list(sampler.classes)).data['class_probs']
+        >>>     class_prob_list += [einops.rearrange(class_prob, 'c h w -> h w c')]
+        >>> class_probs = np.stack(class_prob_list)
+        >>> item_output['class_probs'] = class_probs  # first frame does not have change
+        >>> #binprobs[0][:] = 0  # first change prob should be all zeros
+        >>> builder = BatchVisualizationBuilder(
+        >>>     item, item_output, classes=self.classes,
+        >>>     default_combinable_channels=self.default_combinable_channels, combinable_extra=combinable_extra)
+        >>> builder.overlay_on_image = 1
+        >>> canvas = builder.build()
+        >>> builder.max_channels = 3
+        >>> builder.overlay_on_image = 0
+        >>> canvas2 = builder.build()
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(canvas, fnum=1, pnum=(1, 2, 1))
+        >>> kwplot.imshow(canvas2, fnum=1, pnum=(1, 2, 2))
+        >>> kwplot.show_if_requested()
+    """
+
+    def __init__(builder, item, item_output=None, combinable_extra=None,
+                 max_channels=5, max_dim=256, norm_over_time=0,
+                 overlay_on_image=False, draw_weights=True, classes=None,
+                 default_combinable_channels=None):
+        builder.max_channels = max_channels
+        builder.max_dim = max_dim
+        builder.norm_over_time = norm_over_time
+        builder.combinable_extra = combinable_extra
+        builder.item_output = item_output
+        builder.item = item
+        builder.overlay_on_image = overlay_on_image
+        builder.draw_weights = draw_weights
+
+        builder.classes = classes
+        builder.default_combinable_channels = default_combinable_channels
+
+        combinable_channels = default_combinable_channels
         if combinable_extra is not None:
             combinable_channels += list(map(ub.oset, combinable_extra))
+        builder.combinable_channels = combinable_channels
+
+    def build(builder):
+        builder._prepare_frame_metadata()
+        canvas = builder._build_canvas()
+        return canvas
+
+    def _prepare_frame_metadata(builder):
+        item = builder.item
+        combinable_channels = builder.combinable_channels
 
         truth_keys = ['class_idxs', 'change']
         weight_keys = ['class_weights', 'saliency_weights']
@@ -1866,7 +1974,7 @@ class KWCocoVideoDataset(data.Dataset):
         for frame_meta in frame_metas:
             chan_keys = frame_meta['frame_available_chans']
             frame_priority = ub.dict_isect(chan_priority, chan_keys)
-            chosen = ub.argsort(frame_priority, reverse=True)[0:max_channels]
+            chosen = ub.argsort(frame_priority, reverse=True)[0:builder.max_channels]
             frame_meta['chans_to_use'] = chosen
 
         # Gather channels to visualize
@@ -1893,7 +2001,7 @@ class KWCocoVideoDataset(data.Dataset):
             assert len(chan_rows) > 0, 'no channels to draw on'
 
         # Normalize raw signal into visualizable range
-        if norm_over_time:
+        if builder.norm_over_time:
             # Normalize all cells with the same channel code across time
             channel_cells = [cell for frame_meta in frame_metas for cell in frame_meta['chan_rows']]
             # chan_to_cells = ub.group_items(channel_cells, lambda c: (c['chan_code'])
@@ -1927,7 +2035,7 @@ class KWCocoVideoDataset(data.Dataset):
                     norm_signal = kwimage.atleast_3channels(norm_signal)
                     row['norm_signal'] = norm_signal
 
-        if draw_weights:
+        if builder.draw_weights:
             # Normalize weights for visualization
             all_weight_overlays = []
             for frame_meta in frame_metas:
@@ -1955,6 +2063,11 @@ class KWCocoVideoDataset(data.Dataset):
                     weight_overlay[:, 3] = 0.5
                     cell['overlay'] = weight_overlay
 
+        builder.frame_metas = frame_metas
+
+    def _build_canvas(builder):
+        frame_metas = builder.frame_metas
+
         # Given prepared frame metadata, build a vertical stack of per-chanel
         # information, and then horizontally stack the timesteps.
         horizontal_stack = []
@@ -1963,194 +2076,8 @@ class KWCocoVideoDataset(data.Dataset):
         weight_overlay_keys = set(ub.flatten([m['frame_weight'] for m in frame_metas]))
 
         for frame_meta in frame_metas:
-            vertical_stack = []
-
-            frame_idx = frame_meta['frame_idx']
-            frame_item = frame_meta['frame_item']
-            chan_rows = frame_meta['chan_rows']
-
-            frame_truth = frame_meta['frame_truth']
-            frame_weight = frame_meta['frame_weight']
-
-            gid = frame_item['gid']
-
-            # Build column headers
-            header_dims = {'width': max_dim}
-            header_part = util_kwimage.draw_header_text(
-                image=header_dims, fit=False,
-                text=f't={frame_idx} gid={gid}', color='salmon')
-            vertical_stack.append(header_part)
-
-            sensor = frame_item.get('sensor', '')
-            if sensor:
-                header_part = util_kwimage.draw_header_text(
-                    image=header_dims, fit=False, text=f'{sensor}',
-                    color='salmon')
-                vertical_stack.append(header_part)
-
-            date_captured = frame_item.get('date_captured', '')
-            if date_captured:
-                header_part = util_kwimage.draw_header_text(
-                    header_dims, fit='shrink', text=f'{date_captured}',
-                    color='salmon')
-                vertical_stack.append(header_part)
-
-            # Build truth / metadata overlays
-            overlay_shape = ub.peek(frame_truth.values()).shape[0:2]
-
-            # Create overlays for training objective targets
-            overlay_items = []
-
-            # Create the the true class label overlay
-            overlay_key = 'class_idxs'
-            if overlay_key in truth_overlay_keys:
-                class_idxs = frame_truth.get(overlay_key, None)
-                true_heatmap = kwimage.Heatmap(class_idx=class_idxs, classes=classes)
-                class_overlay = true_heatmap.colorize('class_idx')
-                class_overlay[..., 3] = 0.5
-                overlay_items.append({
-                    'overlay': class_overlay,
-                    'label_text': 'true class',
-                })
-
-            # Create the true change label overlay
-            overlay_key = 'change'
-            if overlay_key in truth_overlay_keys and 0:
-                change_overlay = np.zeros(overlay_shape + (4,), dtype=np.float32)
-                changes = frame_truth.get(overlay_key, None)
-                if changes is not None:
-                    change_overlay = kwimage.Mask(changes, format='c_mask').draw_on(change_overlay, color='lime')
-                    change_overlay = kwimage.ensure_alpha_channel(change_overlay)
-                    change_overlay[..., 3] = (changes > 0).astype(np.float32) * 0.5
-                overlay_items.append({
-                    'overlay': change_overlay,
-                    'label_text': 'true change',
-                })
-
-            if draw_weights:
-                weight_overlays = frame_meta['weight_overlays']
-                for overlay_key in weight_overlay_keys:
-                    weight_overlay_info = weight_overlays.get(overlay_key, None)
-                    overlay_items.append({
-                        'overlay': weight_overlay_info['overlay'],
-                        'label_text': overlay_key,
-                    })
-
-            # TODO: clean up logic
-            key = 'class_probs'
-            overlay_index = 0
-            if item_output and key in item_output:
-                if overlay_on_image:
-                    norm_signal = chan_rows[overlay_index]['norm_signal']
-                else:
-                    norm_signal = np.zeros_like(chan_rows[min(overlay_index, len(chan_rows) - 1)]['norm_signal'])
-                x = item_output[key][frame_idx]
-                class_probs = einops.rearrange(x, 'h w c -> c h w')
-                class_heatmap = kwimage.Heatmap(class_probs=class_probs, classes=classes)
-                pred_part = class_heatmap.draw_on(norm_signal, with_alpha=0.7)
-                # TODO: we might want to overlay the prediction on one or
-                # all of the channels
-                pred_part = kwimage.imresize(pred_part, max_dim=max_dim).clip(0, 1)
-                pred_text = f'pred class t={frame_idx}'
-                pred_part = kwimage.draw_text_on_image(
-                    pred_part, pred_text, (1, 1), valign='top',
-                    color='dodgerblue', border=3)
-                vertical_stack.append(pred_part)
-
-            key = 'change_probs'
-            overlay_index = 1
-            if item_output and  key in item_output and 0:
-                # Make a probability heatmap we can either display
-                # independently or overlay on a rendered channel
-                if frame_idx == 0:
-                    # BIG RED X
-                    h, w = vertical_stack[-1].shape[0:2]
-                    pred_mask = kwimage.draw_text_on_image(
-                        {'width': w, 'height': h}, 'X', org=(w // 2, h // 2),
-                        valign='center', halign='center', fontScale=10,
-                        color='red')
-                    pred_part = pred_mask
-                else:
-                    pred_raw = item_output[key][frame_idx - 1]
-                    # Draw predictions on the first item
-                    pred_mask = kwimage.make_heatmask(pred_raw)
-                    norm_signal = chan_rows[min(overlay_index, len(chan_rows) - 1)]['norm_signal']
-                    if overlay_on_image:
-                        norm_signal = norm_signal
-                    else:
-                        norm_signal = np.zeros_like(norm_signal)
-                    pred_layers = [pred_mask, norm_signal]
-                    pred_part = kwimage.overlay_alpha_layers(pred_layers)
-                    # TODO: we might want to overlay the prediction on one or
-                    # all of the channels
-                    pred_part = kwimage.imresize(pred_part, max_dim=max_dim).clip(0, 1)
-                    pred_text = f'pred change t={frame_idx}'
-                    pred_part = kwimage.draw_text_on_image(
-                        pred_part, pred_text, (1, 1), valign='top',
-                        color='dodgerblue', border=3)
-                vertical_stack.append(pred_part)
-
-            key = 'saliency_probs'
-            if item_output and  key in item_output:
-                if overlay_on_image:
-                    norm_signal = chan_rows[0]['norm_signal']
-                else:
-                    norm_signal = np.zeros_like(chan_rows[min(overlay_index, len(chan_rows) - 1)]['norm_signal'])
-                x = item_output[key][frame_idx]
-                saliency_probs = einops.rearrange(x, 'h w c -> c h w')
-                saliency_heatmap = kwimage.Heatmap(class_probs=saliency_probs)
-                pred_part = saliency_heatmap.draw_on(norm_signal, with_alpha=0.7)
-                # TODO: we might want to overlay the prediction on one or
-                # all of the channels
-                pred_part = kwimage.imresize(pred_part, max_dim=max_dim).clip(0, 1)
-                pred_text = f'pred saliency t={frame_idx}'
-                pred_part = kwimage.draw_text_on_image(
-                    pred_part, pred_text, (1, 1), valign='top',
-                    color='dodgerblue', border=3)
-                vertical_stack.append(pred_part)
-
-            if not overlay_on_image:
-                # FIXME: might be broken
-                # Draw the overlays by themselves
-                for overlay_info in overlay_items:
-                    label_text = overlay_info['label_text']
-                    row_canvas = overlay_info['overlay'][..., 0:3]
-                    row_canvas = kwimage.imresize(row_canvas, max_dim=max_dim).clip(0, 1)
-                    signal_bottom_y = 1  # hack: hardcoded
-                    row_canvas = kwimage.draw_text_on_image(
-                        row_canvas, label_text, (1, signal_bottom_y + 1),
-                        valign='top', color='lime', border=3)
-                    vertical_stack.append(row_canvas)
-
-            for iterx, row in enumerate(chan_rows):
-                layers = []
-                label_text = None
-                if overlay_on_image:
-                    # Draw truth on the image itself
-                    if iterx < len(overlay_items):
-                        overlay_info = overlay_items[iterx]
-                        layers.append(overlay_info['overlay'])
-                        label_text = overlay_info['label_text']
-
-                layers.append(row['norm_signal'])
-                row_canvas = kwimage.overlay_alpha_layers(layers)[..., 0:3]
-
-                row_canvas = kwimage.imresize(row_canvas, max_dim=max_dim).clip(0, 1)
-                row_canvas = kwimage.draw_text_on_image(
-                    row_canvas, row['signal_text'], (1, 1), valign='top',
-                    color='white', border=3)
-
-                if label_text:
-                    # TODO: make draw_text_on_image able to return the
-                    # geometry of what it drew and use that.
-                    signal_bottom_y = 31  # hack: hardcoded
-                    row_canvas = kwimage.draw_text_on_image(
-                        row_canvas, label_text, (1, signal_bottom_y + 1),
-                        valign='top', color='lime', border=3)
-                vertical_stack.append(row_canvas)
-
-            vertical_stack = [kwimage.ensure_uint255(p) for p in vertical_stack]
-            frame_canvas = kwimage.stack_images(vertical_stack, overlap=-3)
+            frame_canvas = builder._build_frame_vertical_stack(
+                frame_meta, truth_overlay_keys, weight_overlay_keys)
             horizontal_stack.append(frame_canvas)
 
         canvas = kwimage.stack_images(horizontal_stack, axis=1, overlap=-5)
@@ -2159,7 +2086,7 @@ class KWCocoVideoDataset(data.Dataset):
 
         width = canvas.shape[1]
 
-        vid_text = f'video: {item["video_id"]} - {item["video_name"]}'
+        vid_text = f'video: {builder.item["video_id"]} - {builder.item["video_name"]}'
         vid_header = kwimage.draw_text_on_image(
             {'width': width}, vid_text, org=(width // 2, 3), valign='top',
             halign='center', color='pink')
@@ -2167,23 +2094,206 @@ class KWCocoVideoDataset(data.Dataset):
         canvas = kwimage.stack_images([vid_header, canvas], axis=0, overlap=-3)
         return canvas
 
-    def make_loader(self, batch_size=1, num_workers=0, shuffle=False,
-                    pin_memory=False):
+    def _build_frame_vertical_stack(builder, frame_meta, truth_overlay_keys, weight_overlay_keys):
         """
-        Example:
-            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
-            >>> import ndsampler
-            >>> import kwcoco
-            >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
-            >>> sampler = ndsampler.CocoSampler(coco_dset)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=(3, 530, 610))
-            >>> loader = self.make_loader(batch_size=2)
-            >>> batch = next(iter(loader))
+        Build a vertical stack for a single frame
         """
-        loader = torch.utils.data.DataLoader(
-            self, batch_size=batch_size, num_workers=num_workers,
-            shuffle=shuffle, pin_memory=pin_memory, collate_fn=ub.identity)
-        return loader
+        draw_change = False
+        draw_saliency = False
+        draw_classes = False
+
+        classes = builder.classes
+        item_output = builder.item_output
+
+        vertical_stack = []
+
+        frame_idx = frame_meta['frame_idx']
+        frame_item = frame_meta['frame_item']
+        chan_rows = frame_meta['chan_rows']
+
+        frame_truth = frame_meta['frame_truth']
+        # frame_weight = frame_meta['frame_weight']
+
+        gid = frame_item['gid']
+
+        # Build column headers
+        header_dims = {'width': builder.max_dim}
+        header_part = util_kwimage.draw_header_text(
+            image=header_dims, fit=False,
+            text=f't={frame_idx} gid={gid}', color='salmon')
+        vertical_stack.append(header_part)
+
+        sensor = frame_item.get('sensor', '')
+        if sensor:
+            header_part = util_kwimage.draw_header_text(
+                image=header_dims, fit=False, text=f'{sensor}',
+                color='salmon')
+            vertical_stack.append(header_part)
+
+        date_captured = frame_item.get('date_captured', '')
+        if date_captured:
+            header_part = util_kwimage.draw_header_text(
+                header_dims, fit='shrink', text=f'{date_captured}',
+                color='salmon')
+            vertical_stack.append(header_part)
+
+        # Build truth / metadata overlays
+        overlay_shape = ub.peek(frame_truth.values()).shape[0:2]
+
+        # Create overlays for training objective targets
+        overlay_items = []
+
+        # Create the the true class label overlay
+        overlay_key = 'class_idxs'
+        if overlay_key in truth_overlay_keys:
+            class_idxs = frame_truth.get(overlay_key, None)
+            true_heatmap = kwimage.Heatmap(class_idx=class_idxs, classes=classes)
+            class_overlay = true_heatmap.colorize('class_idx')
+            class_overlay[..., 3] = 0.5
+            overlay_items.append({
+                'overlay': class_overlay,
+                'label_text': 'true class',
+            })
+
+        # Create the true change label overlay
+        overlay_key = 'change'
+        if overlay_key in truth_overlay_keys and draw_change:
+            change_overlay = np.zeros(overlay_shape + (4,), dtype=np.float32)
+            changes = frame_truth.get(overlay_key, None)
+            if changes is not None:
+                change_overlay = kwimage.Mask(changes, format='c_mask').draw_on(change_overlay, color='lime')
+                change_overlay = kwimage.ensure_alpha_channel(change_overlay)
+                change_overlay[..., 3] = (changes > 0).astype(np.float32) * 0.5
+            overlay_items.append({
+                'overlay': change_overlay,
+                'label_text': 'true change',
+            })
+
+        if builder.draw_weights:
+            weight_overlays = frame_meta['weight_overlays']
+            for overlay_key in weight_overlay_keys:
+                weight_overlay_info = weight_overlays.get(overlay_key, None)
+                overlay_items.append({
+                    'overlay': weight_overlay_info['overlay'],
+                    'label_text': overlay_key,
+                })
+
+        # TODO: clean up logic
+        key = 'class_probs'
+        overlay_index = 0
+        if item_output and key in item_output and draw_classes:
+            if builder.overlay_on_image:
+                norm_signal = chan_rows[overlay_index]['norm_signal']
+            else:
+                norm_signal = np.zeros_like(chan_rows[min(overlay_index, len(chan_rows) - 1)]['norm_signal'])
+            x = item_output[key][frame_idx]
+            class_probs = einops.rearrange(x, 'h w c -> c h w')
+            class_heatmap = kwimage.Heatmap(class_probs=class_probs, classes=classes)
+            pred_part = class_heatmap.draw_on(norm_signal, with_alpha=0.7)
+            # TODO: we might want to overlay the prediction on one or
+            # all of the channels
+            pred_part = kwimage.imresize(pred_part, max_dim=builder.max_dim).clip(0, 1)
+            pred_text = f'pred class t={frame_idx}'
+            pred_part = kwimage.draw_text_on_image(
+                pred_part, pred_text, (1, 1), valign='top',
+                color='dodgerblue', border=3)
+            vertical_stack.append(pred_part)
+
+        key = 'change_probs'
+        overlay_index = 1
+        if item_output and  key in item_output and draw_change:
+            # Make a probability heatmap we can either display
+            # independently or overlay on a rendered channel
+            if frame_idx == 0:
+                # BIG RED X
+                h, w = vertical_stack[-1].shape[0:2]
+                pred_mask = kwimage.draw_text_on_image(
+                    {'width': w, 'height': h}, 'X', org=(w // 2, h // 2),
+                    valign='center', halign='center', fontScale=10,
+                    color='red')
+                pred_part = pred_mask
+            else:
+                pred_raw = item_output[key][frame_idx - 1]
+                # Draw predictions on the first item
+                pred_mask = kwimage.make_heatmask(pred_raw)
+                norm_signal = chan_rows[min(overlay_index, len(chan_rows) - 1)]['norm_signal']
+                if builder.overlay_on_image:
+                    norm_signal = norm_signal
+                else:
+                    norm_signal = np.zeros_like(norm_signal)
+                pred_layers = [pred_mask, norm_signal]
+                pred_part = kwimage.overlay_alpha_layers(pred_layers)
+                # TODO: we might want to overlay the prediction on one or
+                # all of the channels
+                pred_part = kwimage.imresize(pred_part, max_dim=builder.max_dim).clip(0, 1)
+                pred_text = f'pred change t={frame_idx}'
+                pred_part = kwimage.draw_text_on_image(
+                    pred_part, pred_text, (1, 1), valign='top',
+                    color='dodgerblue', border=3)
+            vertical_stack.append(pred_part)
+
+        key = 'saliency_probs'
+        if item_output and  key in item_output and draw_saliency:
+            if builder.overlay_on_image:
+                norm_signal = chan_rows[0]['norm_signal']
+            else:
+                norm_signal = np.zeros_like(chan_rows[min(overlay_index, len(chan_rows) - 1)]['norm_signal'])
+            x = item_output[key][frame_idx]
+            saliency_probs = einops.rearrange(x, 'h w c -> c h w')
+            saliency_heatmap = kwimage.Heatmap(class_probs=saliency_probs)
+            pred_part = saliency_heatmap.draw_on(norm_signal, with_alpha=0.7)
+            # TODO: we might want to overlay the prediction on one or
+            # all of the channels
+            pred_part = kwimage.imresize(pred_part, max_dim=builder.max_dim).clip(0, 1)
+            pred_text = f'pred saliency t={frame_idx}'
+            pred_part = kwimage.draw_text_on_image(
+                pred_part, pred_text, (1, 1), valign='top',
+                color='dodgerblue', border=3)
+            vertical_stack.append(pred_part)
+
+        if not builder.overlay_on_image:
+            # FIXME: might be broken
+            # Draw the overlays by themselves
+            for overlay_info in overlay_items:
+                label_text = overlay_info['label_text']
+                row_canvas = overlay_info['overlay'][..., 0:3]
+                row_canvas = kwimage.imresize(row_canvas, max_dim=builder.max_dim).clip(0, 1)
+                signal_bottom_y = 1  # hack: hardcoded
+                row_canvas = kwimage.draw_text_on_image(
+                    row_canvas, label_text, (1, signal_bottom_y + 1),
+                    valign='top', color='lime', border=3)
+                vertical_stack.append(row_canvas)
+
+        for iterx, row in enumerate(chan_rows):
+            layers = []
+            label_text = None
+            if builder.overlay_on_image:
+                # Draw truth on the image itself
+                if iterx < len(overlay_items):
+                    overlay_info = overlay_items[iterx]
+                    layers.append(overlay_info['overlay'])
+                    label_text = overlay_info['label_text']
+
+            layers.append(row['norm_signal'])
+            row_canvas = kwimage.overlay_alpha_layers(layers)[..., 0:3]
+
+            row_canvas = kwimage.imresize(row_canvas, max_dim=builder.max_dim).clip(0, 1)
+            row_canvas = kwimage.draw_text_on_image(
+                row_canvas, row['signal_text'], (1, 1), valign='top',
+                color='white', border=3)
+
+            if label_text:
+                # TODO: make draw_text_on_image able to return the
+                # geometry of what it drew and use that.
+                signal_bottom_y = 31  # hack: hardcoded
+                row_canvas = kwimage.draw_text_on_image(
+                    row_canvas, label_text, (1, signal_bottom_y + 1),
+                    valign='top', color='lime', border=3)
+            vertical_stack.append(row_canvas)
+
+        vertical_stack = [kwimage.ensure_uint255(p) for p in vertical_stack]
+        frame_canvas = kwimage.stack_images(vertical_stack, overlap=-3)
+        return frame_canvas
 
 
 def visualize_sample_grid(dset, sample_grid):
