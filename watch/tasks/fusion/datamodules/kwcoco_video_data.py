@@ -1127,7 +1127,8 @@ class KWCocoVideoDataset(data.Dataset):
                 tr_frame['channels'] = stream
                 sample = sampler.load_sample(
                     tr_frame, with_annots=first_with_annot,
-                    padkw={'constant_values': np.nan}
+                    padkw={'constant_values': np.nan},
+                    dtype=np.float32
                 )
                 # dont ask for annotations multiple times
                 if not np.all(np.isnan(sample['im'])):

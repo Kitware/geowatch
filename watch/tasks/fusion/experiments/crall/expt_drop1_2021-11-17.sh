@@ -802,12 +802,12 @@ python -m watch.tasks.fusion.fit \
     --arch_name=$ARCH 
 
 
-# TA1 with raw features Namek - 2022-01-18
+# L1 BAS with raw features Namek - 2022-01-18
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop1-Aligned-L1-2022-01
-TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
-VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
-TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/train_data_nowv.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/vali_data_nowv.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/vali_data_nowv.kwcoco.json
 __check__='
 smartwatch stats $VALI_FPATH $TRAIN_FPATH
 '
@@ -815,11 +815,51 @@ WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop1-20201117
 ARCH=smt_it_stm_p8
 CHANNELS="blue|green|red|nir|swir16|swir22"
-smartwatch stats "$TRAIN_FPATH" "$VALI_FPATH"
 EXPERIMENT_NAME=BAS_${ARCH}_v48
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
 export CUDA_VISIBLE_DEVICES="0"
+python -m watch.tasks.fusion.fit \
+    --config "$WORKDIR/configs/common_20201117.yaml"  \
+    --channels=${CHANNELS} \
+    --name=$EXPERIMENT_NAME \
+    --chip_size=96 \
+    --time_steps=3 \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --method="MultimodalTransformer" \
+    --gpus "1" \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --amp_backend=apex \
+    --attention_impl=exact \
+    --tokenizer=conv7 \
+    --use_grid_positives=True \
+    --use_centered_positives=True \
+    --neg_to_pos_ratio=0.25 \
+    --global_class_weight=0.0 \
+    --global_change_weight=1.0 \
+    --num_workers=avail/2 \
+    --arch_name=$ARCH
+
+
+# TA1 BAS with raw features Namek - 2022-01-18
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop1-Aligned-TA1-2022-01
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/train_data_nowv.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/vali_data_nowv.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/vali_data_nowv.kwcoco.json
+__check__='
+smartwatch stats $VALI_FPATH $TRAIN_FPATH
+'
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop1-20201117
+ARCH=smt_it_stm_p8
+CHANNELS="blue|green|red|nir|swir16|swir22"
+EXPERIMENT_NAME=BAS_${ARCH}_ta1_v49
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
+export CUDA_VISIBLE_DEVICES="1"
 python -m watch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
     --channels=${CHANNELS} \
