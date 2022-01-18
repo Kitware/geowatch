@@ -100,13 +100,13 @@ def main(cmdline=True, **kwargs):
     if config[key]:
         # Landcover is fairly fast to run, do it first
         task = {}
-        task['output_fpath'] = outputs['dzyne_landcover']
+        task['output_fpath'] = outputs['dzyne_depth']
         task['command'] = ub.codeblock(
             fr'''
             python -m watch.tasks.depth.predict \
                 --dataset="{base_coco_fpath}" \
                 --output="{task['output_fpath']}" \
-                --deployed="{model_fpaths['dzyne_landcover']}" \
+                --deployed="{model_fpaths['dzyne_depth']}" \
             ''')
         combo_code_parts.append(codes[key])
         tasks.append(task)
@@ -277,6 +277,6 @@ if __name__ == '__main__':
     """
     CommandLine:
         python -m watch.cli.prepare_teamfeats --gres=0,2 --with_depth=True --keep_sessions=True
-        python -m watch.cli.prepare_teamfeats --gres=2 --with_rutgers=False --keep_sessions=True
+        python -m watch.cli.prepare_teamfeats --gres=2 --with_materials=False --keep_sessions=True
     """
     main(cmdline=True)
