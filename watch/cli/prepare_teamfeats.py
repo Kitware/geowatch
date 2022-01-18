@@ -8,9 +8,12 @@ class TeamFeaturePipelineConfig(scfg.Config):
         'bundle_name': 'Drop1-Aligned-L1-2022-01',
         'base_coco_name': 'data.kwcoco.json',
         'gres': scfg.Value('auto', help='comma separated list of gpus or auto'),
-        'with_dzyne': True,
-        'with_uky': True,
-        'with_rutgers': True,
+
+        'with_landcover': True,
+        'with_materials': True,
+        'with_invariants': True,
+        'with_depth': False,
+
         'data_workers': scfg.Value(2, help='dataloader workers for each proc'),
         'keep_sessions': scfg.Value(False, help='if True does not close tmux sessions'),
     }
@@ -55,19 +58,29 @@ def main(cmdline=True, **kwargs):
         'dzyne_landcover': dvc_dpath / 'models/landcover/visnav_remap_s2_subset.pt',
         'uky_pretext': dvc_dpath / 'models/uky/uky_invariants_2022_01/pretext/pretext.ckpt',
         'uky_segmentation': dvc_dpath / 'models/uky/uky_invariants_2022_01/segmentation/segmentation.ckpt',
+        'dzyne_depth': dvc_dpath / 'models/depth/weights_v1.pt',
     }
 
     outputs = {
         'rutgers_materials': aligned_bundle_dpath / 'rutgers_mat_seg.kwcoco.json',
         'dzyne_landcover': aligned_bundle_dpath / 'dzyne_landcover.kwcoco.json',
+        'dzyne_depth': aligned_bundle_dpath / 'dzyne_depth.kwcoco.json',
         'uky_invariants': aligned_bundle_dpath / 'uky_invariants.kwcoco.json',
+    }
+
+    codes = {
+        'with_landcover': 'L',
+        'with_depth': 'D',
+        'with_materials': 'M',
+        'with_invariants': 'I',
     }
 
     tasks = []
     # tmux queue is still limited. The order of submission matters.
 
     combo_code_parts = []
-    if config['with_dzyne']:
+    key = 'with_landcover'
+    if config[key]:
         # Landcover is fairly fast to run, do it first
         task = {}
         task['output_fpath'] = outputs['dzyne_landcover']
@@ -77,14 +90,30 @@ def main(cmdline=True, **kwargs):
                 --dataset="{base_coco_fpath}" \
                 --deployed="{model_fpaths['dzyne_landcover']}" \
                 --output="{task['output_fpath']}" \
+                --num_workers="{data_workers}" \
                 --device=0 \
-                --num_workers="8"
             ''')
-        combo_code_parts.append('D')
+        combo_code_parts.append(codes[key])
+        tasks.append(task)
+
+    key = 'with_depth'
+    if config[key]:
+        # Landcover is fairly fast to run, do it first
+        task = {}
+        task['output_fpath'] = outputs['dzyne_landcover']
+        task['command'] = ub.codeblock(
+            fr'''
+            python -m watch.tasks.depth.predict \
+                --dataset="{base_coco_fpath}" \
+                --output="{task['output_fpath']}" \
+                --deployed="{model_fpaths['dzyne_landcover']}" \
+            ''')
+        combo_code_parts.append(codes[key])
         tasks.append(task)
 
     # Run materials while landcover is running
-    if config['with_rutgers']:
+    key = 'with_materials'
+    if config[key]:
         task = {}
         task['output_fpath'] = outputs['rutgers_materials']
         task['command'] = ub.codeblock(
@@ -94,16 +123,17 @@ def main(cmdline=True, **kwargs):
                 --checkpoint_fpath="{model_fpaths['rutgers_materials']}" \
                 --pred_dataset="{task['output_fpath']}" \
                 --default_config_key=iarpa \
-                --num_workers="8" \
+                --num_workers="{data_workers}" \
                 --batch_size=32 --gpus "0" \
                 --compress=DEFLATE --blocksize=64
             ''')
-        combo_code_parts.append('R')
+        combo_code_parts.append(codes[key])
         tasks.append(task)
 
     # When landcover finishes run invariants
     # Note: Does not run on a 1080, needs 18GB in this form
-    if config['with_uky']:
+    key = 'with_invariants'
+    if config[key]:
         task = {}
         task['output_fpath'] = outputs['uky_invariants']
         task['command'] = ub.codeblock(
@@ -115,11 +145,11 @@ def main(cmdline=True, **kwargs):
                 --segmentation_ckpt "{model_fpaths['uky_segmentation']}" \
                 --do_pca 1 \
                 --num_dim 8 \
-                --num_workers {data_workers} \
+                --num_workers="{data_workers}" \
                 --write_workers 2 \
                 --tasks all
             ''')
-        combo_code_parts.append('U')
+        combo_code_parts.append(codes[key])
         tasks.append(task)
 
     # gres = [0, 1]
@@ -151,8 +181,7 @@ def main(cmdline=True, **kwargs):
     if 1:
         # Finalize features by combining them all into combo.kwcoco.json
         tocombine = [str(base_coco_fpath)] + [str(task['output_fpath']) for task in tasks]
-
-        combo_code = ''.join(combo_code_parts)
+        combo_code = ''.join(sorted(combo_code_parts))
         combo_fpath = aligned_bundle_dpath / f'combo_{combo_code}.kwcoco.json'
 
         # TODO: enable forcing if needbe
