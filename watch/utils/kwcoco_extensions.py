@@ -30,6 +30,7 @@ def filter_image_ids(coco_dset, gids=None, include_sensors=None,
     """
     def coerce_set(x):
         return set(x.split(',')) if isinstance(x, str) else set(x)
+
     def filter_by_attribute(table, key, include, exclude):
         if include is not None or exclude is not None:
             if include is not None:

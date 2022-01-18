@@ -1,8 +1,8 @@
-import kwcoco
 import kwimage
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+
 
 def get_rgb(dset, gid):
     coco_img = dset.coco_image(gid)
@@ -50,7 +50,7 @@ def get_pred_seg(dset, gid, render_track_id=False):
 def get_gt_seg(dset, gid, render_track_id=False):
     img = dset.index.imgs[gid]
     shape = (img['height'], img['width'])
-    
+
     # Create a truth "panoptic segmentation" style mask
     true_canvas = np.zeros(shape, dtype=np.uint8)
     true_dets = dset.annots(gid=gid).detections
@@ -71,23 +71,22 @@ def render_pred_gt(pred_canvas, gt_canvas):
     # assumes both canvases to be binary
     # output color coding:
     # TN=white(R=1,G=1,B=1), TP=Green(R=0,G=1,B=0), FN=Yellow(R=1,G=1,B=0), FP=Red(R=1,G=0,B=0)
-    shape = pred_canvas.shape
     out_canvas = np.zeros((pred_canvas.shape[0], pred_canvas.shape[1], 3))
-    
+
     tn = (gt_canvas == 0) & (pred_canvas == 0)
     tp = (gt_canvas == 1) & (pred_canvas == 1)
-    fn = (gt_canvas == 1) & (pred_canvas == 0)
+    # fn = (gt_canvas == 1) & (pred_canvas == 0)
     fp = (gt_canvas == 0) & (pred_canvas == 1)
-    
+
     # R
-    out_canvas[:,:,0] = np.clip(1-tp, a_min=0, a_max=1)
-    
+    out_canvas[:, :, 0] = np.clip(1 - tp, a_min=0, a_max=1)
+
     # G
-    out_canvas[:,:,1] = np.clip(1-fp, a_min=0, a_max=1)
+    out_canvas[:, :, 1] = np.clip(1 - fp, a_min=0, a_max=1)
 
     # B
-    out_canvas[:,:,2] = np.clip(tn, a_min=0, a_max=1)
-    
+    out_canvas[:, :, 2] = np.clip(tn, a_min=0, a_max=1)
+
     return out_canvas
 
 
@@ -104,12 +103,12 @@ def visualize_videos(pred_dset, true_dset, out_dir='./_assets', hide_axis=False,
         gids = pred_dset.index.vidid_to_gids[vidid]
 
         n_images_to_visualize = 8
-        sample_spacing = len(gids)//n_images_to_visualize
+        sample_spacing = len(gids) // n_images_to_visualize
         gid_list = np.arange(start=0, stop=len(gids), step=sample_spacing)
 
-        plt.figure(figsize=(20,5))
+        plt.figure(figsize=(20, 5))
         for j in range(n_images_to_visualize):
-            plt.subplot(2, n_images_to_visualize, j+1)
+            plt.subplot(2, n_images_to_visualize, j + 1)
             pred_canvas = get_pred_seg(pred_dset, gids[gid_list[j]])
             if true_dset is not None:
                 gt_canvas = get_gt_seg(true_dset, gids[gid_list[j]])
@@ -117,14 +116,14 @@ def visualize_videos(pred_dset, true_dset, out_dir='./_assets', hide_axis=False,
             else:
                 coded_canvas = pred_canvas
             plt.imshow(coded_canvas, interpolation='nearest')
-            plt.title('image:'+str(gid_list[j]))
+            plt.title('image:' + str(gid_list[j]))
             if hide_axis:
                 ax = plt.gca()
                 ax.axes.xaxis.set_visible(False)
                 ax.axes.yaxis.set_visible(False)
 
             # RGB
-            plt.subplot(2, n_images_to_visualize, j+1+n_images_to_visualize)
+            plt.subplot(2, n_images_to_visualize, j + 1 + n_images_to_visualize)
             rgb = get_rgb(pred_dset, gids[gid_list[j]])
             plt.imshow(rgb)
             if hide_axis:
@@ -132,42 +131,42 @@ def visualize_videos(pred_dset, true_dset, out_dir='./_assets', hide_axis=False,
                 ax.axes.xaxis.set_visible(False)
                 ax.axes.yaxis.set_visible(False)
 
-        fname = out_dir+'/video_'+str(vidid)+'_tracks.jpg'
+        fname = out_dir + '/video_' + str(vidid) + '_tracks.jpg'
         plt.tight_layout()
         plt.savefig(fname, bbox_inches='tight')
         plt.close()
 
         if coco_dset_sc is not None:
-            plt.figure(figsize=(20,15))
+            plt.figure(figsize=(20, 15))
             for j in range(n_images_to_visualize):
-                plt.subplot(6, n_images_to_visualize, j+1)
+                plt.subplot(6, n_images_to_visualize, j + 1)
                 keys = ['Site Preparation', 'Active Construction', 'Post Construction', 'No Activity']
                 heatmap = get_heatmap(coco_dset_sc, gids[gid_list[j]], keys[0])
                 plt.imshow(heatmap, vmin=0, vmax=1)
                 if j == 3:
-                    plt.title('image:'+str(gid_list[j])+ ' Prep')
+                    plt.title('image:' + str(gid_list[j]) + ' Prep')
                 else:
-                    plt.title('image:'+str(gid_list[j]))
+                    plt.title('image:' + str(gid_list[j]))
 
-                plt.subplot(6, n_images_to_visualize, n_images_to_visualize+j+1)
+                plt.subplot(6, n_images_to_visualize, n_images_to_visualize + j + 1)
                 heatmap = get_heatmap(coco_dset_sc, gids[gid_list[j]], keys[1])
                 plt.imshow(heatmap, vmin=0, vmax=1)
                 if j == 3:
                     plt.title('Active')
 
-                plt.subplot(6, n_images_to_visualize, 2*n_images_to_visualize+j+1)
+                plt.subplot(6, n_images_to_visualize, 2 * n_images_to_visualize + j + 1)
                 heatmap = get_heatmap(coco_dset_sc, gids[gid_list[j]], keys[2])
                 plt.imshow(heatmap, vmin=0, vmax=1)
                 if j == 3:
                     plt.title('Post')
 
-                plt.subplot(6, n_images_to_visualize, 3*n_images_to_visualize+j+1)
+                plt.subplot(6, n_images_to_visualize, 3 * n_images_to_visualize + j + 1)
                 heatmap = get_heatmap(coco_dset_sc, gids[gid_list[j]], keys[3])
                 plt.imshow(heatmap, vmin=0, vmax=1)
                 if j == 3:
                     plt.title('No actvty')
 
-                plt.subplot(6, n_images_to_visualize, 4*n_images_to_visualize+j+1)
+                plt.subplot(6, n_images_to_visualize, 4 * n_images_to_visualize + j + 1)
                 pred_canvas = get_pred_seg(pred_dset, gids[gid_list[j]])
                 plt.imshow(pred_canvas, vmin=0, vmax=1)
                 if j == 3:
@@ -179,7 +178,7 @@ def visualize_videos(pred_dset, true_dset, out_dir='./_assets', hide_axis=False,
                     ax.axes.yaxis.set_visible(False)
 
                 # RGB
-                plt.subplot(6, n_images_to_visualize, j+1+5*n_images_to_visualize)
+                plt.subplot(6, n_images_to_visualize, j + 1 + 5 * n_images_to_visualize)
                 rgb = get_rgb(pred_dset, gids[gid_list[j]])
                 plt.imshow(rgb)
                 if hide_axis:
@@ -187,7 +186,7 @@ def visualize_videos(pred_dset, true_dset, out_dir='./_assets', hide_axis=False,
                     ax.axes.xaxis.set_visible(False)
                     ax.axes.yaxis.set_visible(False)
 
-            fname = out_dir+'/video_'+str(vidid)+'_sc_heatmaps.jpg'
+            fname = out_dir + '/video_' + str(vidid) + '_sc_heatmaps.jpg'
             plt.tight_layout()
             plt.savefig(fname, bbox_inches='tight')
             plt.close()
@@ -198,8 +197,6 @@ def visualize_videos(pred_dset, true_dset, out_dir='./_assets', hide_axis=False,
         for tid in track_ids:
             track_labels[tid] = []
         for gid in gids:
-            img = pred_dset.index.imgs[gid]
-
             pred_anns = pred_dset.annots(gid=gid)
             aids = pred_anns.aids
             for i, aid in enumerate(aids):
@@ -216,6 +213,6 @@ def visualize_videos(pred_dset, true_dset, out_dir='./_assets', hide_axis=False,
             plt.plot(track_labels[tid])
             plt.xlabel('images')
             plt.ylabel('class ID')
-            fname = os.path.join(out_dir_track, str(tid)+'_track.jpg')
+            fname = os.path.join(out_dir_track, str(tid) + '_track.jpg')
             plt.savefig(fname)
             plt.close()

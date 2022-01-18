@@ -498,7 +498,7 @@ def main(args):
         >>> region_id = 'dummy_region'
         >>> regions_dir = 'regions/'
         >>> bas_args = [
-        >>>     '--in_file', coco_dset.fpath,
+        >>>     coco_dset.fpath,
         >>>     '--out_dir', regions_dir,
         >>>     '--track_fn', 'watch.tasks.tracking.from_polygon.MonoTrack',
         >>>     '--bas_mode',
@@ -510,7 +510,7 @@ def main(args):
         >>> # run SC on the same dset
         >>> sites_dir = 'sites/'
         >>> sc_args = [
-        >>>     '--in_file', coco_dset.fpath,
+        >>>     coco_dset.fpath,
         >>>     '--out_dir', sites_dir,
         >>> ]
         >>> main(sc_args)
@@ -688,7 +688,7 @@ def main(args):
         track_fn = watch.tasks.tracking.utils.NoOpTrackFunction
     else:
         track_fn = eval(args.track_fn)
-    
+
     # add site summaries (site boundary annotations)
     if args.site_summary is not None:
         if args.bas_mode:

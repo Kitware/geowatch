@@ -406,6 +406,7 @@ def specialized_index_bands(bands=None, coco_img=None, symbolic=False):
         >>> from watch.utils.util_bands import *  # NOQA
         >>> from watch.utils.util_data import find_smart_dvc_dpath
         >>> import kwcoco
+        >>> import ubelt as ub
         >>> dvc_dpath = find_smart_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
         >>> dset = kwcoco.CocoDataset(coco_fpath)

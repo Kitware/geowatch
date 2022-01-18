@@ -391,14 +391,14 @@ def normalize_phases(coco_dset, baseline_keys={'salient'}):
         >>> from watch.tasks.tracking.normalize import normalize_phases
         >>> from watch.demo import smart_kwcoco_demodata
         >>> dset = smart_kwcoco_demodata.demo_kwcoco_with_heatmaps()
-        >>> dset.cats[1]['name'] = 'salient'
-        >>> dset.remove_categories([2,3])
-        >>> assert dset.cats == {1: {'id': 1, 'name': 'salient'}}
+        >>> dset.cats[3]['name'] = 'salient'
+        >>> dset.remove_categories([1,2])
+        >>> assert dset.cats == {3: {'id': 3, 'name': 'salient'}}
         >>> # HACK, this shouldn't be needed?
         >>> # TODO file bug report
         >>> dset._build_index()
         >>> dset = normalize_phases(dset)
-        >>> assert (dset.categories(dset.annots().category_id).name ==
+        >>> assert (dset.annots(trackid=1).cnames ==
         >>>     ((['Site Preparation'] * 10) +
         >>>      (['Active Construction'] * 9) +
         >>>      (['Post Construction'])))

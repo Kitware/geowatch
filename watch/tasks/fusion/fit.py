@@ -28,8 +28,8 @@ Example:
     >>> from watch.tasks.fusion.fit import *  # NOQA
     >>> import watch
     >>> dvc_dpath = watch.utils.util_data.find_smart_dvc_dpath()
-    >>> train_fpath = dvc_dpath / 'drop1_S2_aligned_c1/train_data.kwcoco.json'
-    >>> vali_fpath = dvc_dpath / 'drop1_S2_aligned_c1/vali_data.kwcoco.json'
+    >>> train_fpath = dvc_dpath / 'drop1-S2-L8-aligned/train_data.kwcoco.json'
+    >>> vali_fpath = dvc_dpath / 'drop1-S2-L8-aligned/vali_data.kwcoco.json'
 
     >>> import kwcoco
     >>> dset = kwcoco.CocoDataset(train_fpath)

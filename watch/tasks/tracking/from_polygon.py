@@ -7,6 +7,7 @@ class MonoTrack(TrackFunction):
     '''
     Combine all polygons into the same track.
     '''
+
     def __call__(self, coco_dset):
         coco_dset.annots().set('track_id', next(TrackidGenerator(coco_dset)))
 

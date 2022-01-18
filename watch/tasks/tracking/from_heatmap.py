@@ -262,9 +262,10 @@ def time_aggregated_polys(coco_dset,
                 itertools.chain.from_iterable(
                     [obs.poly for obs in track.observations]
                     for track in boundary_tracks)))
-        gids = list(np.unique(np.concatenate(
-                    [[obs.gid for obs in track.observations]
-                     for track in boundary_tracks])))
+        gids = list(
+            np.unique(
+                np.concatenate([[obs.gid for obs in track.observations]
+                                for track in boundary_tracks])))
     else:
         boundary_tracks = None
         bounds = None
@@ -328,23 +329,25 @@ def time_aggregated_polys(coco_dset,
             track_bounds = shapely.ops.unary_union(
                 [obs.poly for obs in track.observations])
             gid_ixs = np.in1d(gids, [obs.gid for obs in track.observations])
-            track_polys = mask_to_polygons(
-                                 probs(heatmaps_dct['fg'], weights=gid_ixs),
-                                 thresh,
-                                 bounds=track_bounds)
+            track_polys = mask_to_polygons(probs(heatmaps_dct['fg'],
+                                                 weights=gid_ixs),
+                                           thresh,
+                                           bounds=track_bounds)
             poly = shapely.ops.unary_union(
-                    [p.to_shapely() for p in track_polys])
+                [p.to_shapely() for p in track_polys])
             if poly.is_valid and not poly.is_empty:
                 poly = kwimage.MultiPolygon.from_shapely(poly)
                 out_track = Track(
-                    [Observation(
-                        poly=poly,
-                        gid=obs.gid,
-                        score=score(
-                            poly,
-                            # TODO optimize .index()
-                            heatmaps_dct['fg'][gids.index(obs.gid)])
-                     ) for obs in track.observations],
+                    [
+                        Observation(
+                            poly=poly,
+                            gid=obs.gid,
+                            score=score(
+                                poly,
+                                # TODO optimize .index()
+                                heatmaps_dct['fg'][gids.index(obs.gid)]))
+                        for obs in track.observations
+                    ],
                     dset=coco_dset,
                     track_id=track.track_id)
                 return out_track, poly
