@@ -165,6 +165,8 @@ def main(cmdline=True, **kwargs):
 
     tq.write()
 
+    # TODO: make the monitor spawn in a new tmux session. The monitor could
+    # actually be the scheduler process.
     import subprocess
     try:
         agg_state = tq.run(block=True)
