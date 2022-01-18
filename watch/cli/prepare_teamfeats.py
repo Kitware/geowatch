@@ -106,7 +106,7 @@ def main(cmdline=True, **kwargs):
             python -m watch.tasks.depth.predict \
                 --dataset="{base_coco_fpath}" \
                 --output="{task['output_fpath']}" \
-                --deployed="{model_fpaths['dzyne_depth']}" \
+                --deployed="{model_fpaths['dzyne_depth']}"
             ''')
         combo_code_parts.append(codes[key])
         tasks.append(task)
@@ -276,7 +276,7 @@ def main(cmdline=True, **kwargs):
 if __name__ == '__main__':
     """
     CommandLine:
-        python -m watch.cli.prepare_teamfeats --gres=0,2 --with_depth=True --keep_sessions=True
+        python -m watch.cli.prepare_teamfeats --gres=0 --with_depth=True --keep_sessions=True
         python -m watch.cli.prepare_teamfeats --gres=2 --with_materials=False --keep_sessions=True
     """
     main(cmdline=True)
