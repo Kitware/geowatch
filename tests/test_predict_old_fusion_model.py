@@ -1,6 +1,22 @@
+import ubelt as ub
+
+
+def ensure_dvc_path(fpath):
+    if not fpath.exists():
+        dvc_fpath = fpath.augment(stem=fpath.name, ext='.dvc')
+        if dvc_fpath.exists():
+            remote = 'aws'  # parametarize
+            ub.cmd(f'dvc pull -r {remote} {dvc_fpath.name}',
+                   cwd=dvc_fpath.parent, verbose=2, check=True)
+        raise Exception('File {} not exist in a DVC directory'.format(dvc_fpath))
+
+
 def test_predict_old_fusion_model():
     """
-    Check that the old fusion models still work for prediction
+    Check that the old fusion models still work for prediction.
+
+    This tests requires program data as is not exepcted to run on CI in this
+    state. We should have a test for our latest-and-greatest models though.
     """
     import watch
     import kwcoco
@@ -9,7 +25,12 @@ def test_predict_old_fusion_model():
     import ubelt as ub
     dvc_dpath = watch.find_smart_dvc_dpath()
     # model_fpath = dvc_dpath / 'models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_raw_v39/SC_smt_it_stm_p8_newanns_weighted_raw_v39_epoch=53-step=2311901.pt'
-    model_fpath = dvc_dpath / 'models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_cs64_t5_perframe_rgb_v34/SC_smt_it_stm_p8_newanns_cs64_t5_perframe_rgb_v34_epoch=13-step=599381.pt'
+
+    model_fpath = dvc_dpath / 'models/fusion/SC-20201117/SC_smt_it_st_s12_newanns_weighted_rgb_v22/SC_smt_it_st_s12_newanns_weighted_rgb_v22_epoch=117-step=5051933.pt'
+    ensure_dvc_path(model_fpath)
+
+    # from watch.tasks.fusion import utils
+    # method = utils.load_model_from_package(model_fpath)
 
     coco_fpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/data.kwcoco.json'
     if not model_fpath.exists():
@@ -25,7 +46,7 @@ def test_predict_old_fusion_model():
     subset = dset.subset(gids)
 
     output_dpath = ub.Path(ub.ensure_app_cache_dir('watch/tests/pred/oldmodel'))
-    output_dpath.delete().ensuredir()
+    # output_dpath.delete().ensuredir()
 
     subset.reroot(absolute=True)
     subset.fpath = str(output_dpath / 'test_input.kwcoco.json')
@@ -54,15 +75,19 @@ def test_predict_old_fusion_model():
         'pred_dataset': pred_fpath,
         'package_fpath': model_fpath,
         'chip_overlap': 0.0,
-        'gpus': 1,
+        'gpus': 0,
     }
     kwargs = pred_kwargs  # NOQA
     predict.predict(**pred_kwargs)
 
     """
     # For devs
-    cd /home/joncrall/.cache/watch/tests/pred/oldmodel/
+    cd $HOME/.cache/watch/tests/pred/oldmodel/
     smartwatch visualize ./test_input.kwcoco.json --viz_dpath=./_viz_test_input
     smartwatch visualize ./pred_bundle/pred.kwcoco.json --viz_dpath=./old_viz_check
+
+    smartwatch intensity_histograms ./pred_bundle/pred.kwcoco.json --dst=./intensity_histo.png --stat probability \
+            --valid_range=0:1 --exclude_channels=cirrus
+
     smartwatch visualize /home/joncrall/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-L1-2022-01/data.kwcoco.json --viz_dpath=./orig_viz_check
     """

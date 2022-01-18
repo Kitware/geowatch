@@ -27,7 +27,7 @@ class IntensityHistogramConfig(scfg.Config):
     target GSD.
     """
     default = {
-        'src': scfg.Value('in.geojson.json', help='input dataset to chip'),
+        'src': scfg.Value('in.geojson.json', help='input dataset to chip', position=1),
 
         'dst': scfg.Value(None, help='if specified dump the figure to disk at this path'),
 
@@ -60,7 +60,7 @@ class IntensityHistogramConfig(scfg.Config):
         'multiple': scfg.Value('layer', choices=['layer', 'dodge', 'stack', 'fill']
                                , help='Approach to resolving multiple elements when semantic mapping creates subsets.'),
 
-        'stat': scfg.Value('density', choices={'count', 'frequency', 'density', 'probability'}, help=ub.paragraph(
+        'stat': scfg.Value('probability', choices={'count', 'frequency', 'density', 'probability'}, help=ub.paragraph(
             '''
             Aggregate statistic to compute in each bin.
 
@@ -342,6 +342,7 @@ def sensor_stats_tables(full_df):
             v_weights=v_weights)
 
         if 1:
+            # TODO: normalize data such that density (or probability?) is 1.0
             row['emd'] = scipy.stats.wasserstein_distance(**dist_inputs)
 
         if 1:
