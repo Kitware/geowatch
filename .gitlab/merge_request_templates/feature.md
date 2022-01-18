@@ -56,5 +56,4 @@ python run_tests.py
 - [ ] Linting passes
 - [ ] Tests pass
 - [ ] This branch is rebased on master               [maintainer]
-- [ ] `watch/__init__.py:__version__` is incremented [maintainer]
 

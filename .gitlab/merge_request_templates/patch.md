@@ -40,6 +40,3 @@ Major version number is 0 for no expectation of backwards comatibility.
 ### Added
 
 ### Changed
-
-
-Reminder: update `watch/__init__.py:__version__` [maintainer]
