@@ -21,7 +21,7 @@ Poly = Union[kwimage.Polygon, kwimage.MultiPolygon]
 # - table structure/row-col slicing
 # Cons:
 # - geopandas
-# 
+#
 # store these in a Track as a geodataframe, then instantiate as Obs as needed?
 # this avoids generators everywhere on access
 @dataclass
@@ -87,7 +87,7 @@ class PolygonFilter(collections.abc.Callable):
         # could use more_itertools.peekable instead
         obj, obj2 = itertools.tee(obj)
         try:
-            sample_object = next(iter(obj2))
+            sample_object = next(obj2)
         except StopIteration:
             return obj
         if isinstance(sample_object, Observation):
@@ -101,8 +101,8 @@ class PolygonFilter(collections.abc.Callable):
         if isinstance(sample_object[1],
                       (kwimage.Polygon, kwimage.MultiPolygon)):
             return self.on_augmented_polys(obj)
-        raise NotImplementedError(f'cannot filter polygons from {obj}:'
-                                  ' unsupported type')
+        raise NotImplementedError(
+                f'cannot filter polys like {sample_object}: unsupported type')
 
     # @__call__.register
     def on_track(self, track: Track):
@@ -203,14 +203,12 @@ class TrackFunction(collections.abc.Callable):
 
     @staticmethod
     def safe_partition(coco_dset, gids, remove=True):
-        assert set(gids).issubset(coco_dset.imgs.keys())
-        sub_dset = coco_dset.subset(gids=gids, copy=True)  # copy necessary?
+        sub_dset = coco_dset.subset(gids=gids, copy=True)
         # HACK ensure tracks are not duplicated between videos
         # (if they are, this is fixed in dedupe_tracks anyway)
         sub_dset.index.trackid_to_aids.update(coco_dset.index.trackid_to_aids)
         if remove:
-            coco_dset = coco_dset.subset(coco_dset.imgs.keys() - gids)
-            return sub_dset, coco_dset
+            return sub_dset, coco_dset.subset(coco_dset.imgs.keys() - gids)
         else:
             return sub_dset
 
@@ -339,6 +337,10 @@ def mask_to_polygons(probs,
         bounds: a kwimage or shapely polygon to crop the results to
         scored: return Iterable[Tuple[score, poly]] instead of Iterable[Poly]
         use_rasterio: use rasterio.features module instead of kwimage
+
+    Returns:
+        Iterable[kwcoco.Polygon]
+
     Example:
         >>> from watch.tasks.tracking.utils import mask_to_polygons
         >>> import kwimage

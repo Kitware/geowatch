@@ -88,7 +88,8 @@ if [ -z ${DVC_DPATH} ]; then
     export DVC_DPATH=~/smart/data/smart_watch_dvc;
 fi
 
-DSET_DPATH=$DVC_DPATH/Drop1-Aligned-L1
+# DSET_DPATH=$DVC_DPATH/Drop1-Aligned-L1
+DSET_DPATH=$DVC_DPATH/Drop1-Aligned-L1-2022-01
 
 METRICS_DPATH=~/smart/metrics-and-test-framework
 

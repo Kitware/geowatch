@@ -1502,7 +1502,7 @@ class TrackidGenerator(ub.NiceRepr):
 
     def exclude_trackids(self, trackids):
         if self.used_trackids.intersection(trackids):
-            print(f'warning: coco_dset {self.coco_dset.tag} with trackids '
+            print(f'warning: CocoDataset {self.dset.tag} with trackids '
                   f'{self.used_trackids} already has trackids in {trackids}')
         self.used_trackids.update(trackids)
 

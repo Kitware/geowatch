@@ -551,7 +551,7 @@ def normalize(coco_dset, track_fn, overwrite, gt_dset=None, **track_kwargs):
         >>> assert set(coco_dset.annots().get('track_id')) == {0}
         >>> coco_dset = add_track_index(coco_dset)
         >>> assert coco_dset.annots().get('track_index') == [0,1,2]
-        >>> coco_dset = normalize_phases(coco_dset)
+        >>> coco_dset = normalize_phases(coco_dset, baseline_keys={'change'})
         >>> assert (coco_dset.annots().cnames ==
         >>> ['Site Preparation', 'Site Preparation', 'Post Construction'])
         >>> coco_dset = normalize_sensors(coco_dset)

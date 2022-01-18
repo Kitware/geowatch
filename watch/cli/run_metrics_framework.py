@@ -229,9 +229,12 @@ def main(args):
                     --image_dir {image_dpath}
                     --output_dir {out_dir}
                 ''')
-            import xdev
-            with xdev.embed_on_exception_context():
+            import subprocess
+            try:
                 ub.cmd(cmd, verbose=1, check=True, shell=True)
+            except subprocess.CalledProcessError:
+                print('error in metrics framework, probably due to zero '
+                      'TP site matches.')
 
 
 if __name__ == '__main__':

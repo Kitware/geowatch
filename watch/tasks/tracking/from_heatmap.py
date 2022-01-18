@@ -8,7 +8,7 @@ import kwcoco
 import numpy as np
 import ubelt as ub
 import itertools
-from typing import Iterable, Tuple, Set, Union
+from typing import Iterable, Tuple, Set, Union, Optional
 from dataclasses import dataclass
 from watch.tasks.tracking.utils import (Track, PolygonFilter, NewTrackFunction,
                                         mask_to_polygons, heatmap, score, Poly,
@@ -197,7 +197,6 @@ def pop_boundary_tracks(coco_dset,
         print(f'warning: no Site Boundary annots in dset {coco_dset.tag}!')
 
     boundary_annots = deepcopy(boundary_annots)
-    import xdev; xdev.embed()
     coco_dset.remove_categories(list(cnames), keep_annots=False)
 
     boundary_polys = [
@@ -256,15 +255,16 @@ def time_aggregated_polys(coco_dset,
     if use_boundary_annots:
         import shapely.ops
         boundary_tracks = list(pop_boundary_tracks(coco_dset))
+        assert len(boundary_tracks) > 0, 'need valid site boundaries!'
         # TODO these obnoxious fors will be removed with gpd support in Track
         bounds = shapely.ops.unary_union(
             list(
                 itertools.chain.from_iterable(
                     [obs.poly for obs in track.observations]
                     for track in boundary_tracks)))
-        gids = np.unique(np.concatenate(
+        gids = list(np.unique(np.concatenate(
                     [[obs.gid for obs in track.observations]
-                     for track in boundary_tracks]))
+                     for track in boundary_tracks])))
     else:
         boundary_tracks = None
         bounds = None
@@ -307,25 +307,20 @@ def time_aggregated_polys(coco_dset,
         modulated_probs = probs * hard_probs
         return modulated_probs
 
-    heatmaps = [heatmap(coco_dset, gid, key) for gid in coco_dset.imgs]
-
     if boundary_tracks is None:
         # turn each polygon into a list of polygons (map them across gids)
         def as_track(vidpoly):
             return Track.from_polys(itertools.repeat(vidpoly),
                                     coco_dset,
-                                    probs=heatmaps)
+                                    probs=heatmaps_dct['fg'])
 
         polys = list(
             mask_to_polygons(probs(heatmaps_dct['fg']), thresh, bounds=bounds))
-        tracks = list(map(as_track, polys))
+        tracks_polys = list(zip(map(as_track, polys), polys))
     else:
         import shapely.ops
-        polys = []  # 'vidpolys' (1 per track)
-        tracks = []
-        print('generating polys in bounds: number of bounds: ',
-              len(boundary_tracks))
-        for track in boundary_tracks:
+
+        def fill_boundary_track(track) -> Optional[Tuple[Track, Poly]]:
             # TODO when bounds are time-varying, this lets individual frames
             # go outside them; only enforces the union. Problem?
             # currently bounds come from site summaries, which are not
@@ -333,28 +328,37 @@ def time_aggregated_polys(coco_dset,
             track_bounds = shapely.ops.unary_union(
                 [obs.poly for obs in track.observations])
             gid_ixs = np.in1d(gids, [obs.gid for obs in track.observations])
-            track_polys = list(
-                mask_to_polygons(probs(heatmaps_dct['fg'], weights=gid_ixs),
+            track_polys = mask_to_polygons(
+                                 probs(heatmaps_dct['fg'], weights=gid_ixs),
                                  thresh,
-                                 bounds=track_bounds))
-            if len(track_polys) > 0:
-                poly = shapely.ops.unary_union(track_polys)
-                if poly.is_valid and not poly.is_empty:
-                    polys.append(poly)
-                    tracks.append(Track(
-                        [Observation(
-                            poly=poly,
-                            gid=obs.gid,
-                            score=score(poly, heatmaps[obs.gid])
-                         ) for obs in track.observations],
-                        dset=coco_dset,
-                        track_id=track.track_id))
+                                 bounds=track_bounds)
+            poly = shapely.ops.unary_union(
+                    [p.to_shapely() for p in track_polys])
+            if poly.is_valid and not poly.is_empty:
+                poly = kwimage.MultiPolygon.from_shapely(poly)
+                out_track = Track(
+                    [Observation(
+                        poly=poly,
+                        gid=obs.gid,
+                        score=score(
+                            poly,
+                            # TODO optimize .index()
+                            heatmaps_dct['fg'][gids.index(obs.gid)])
+                     ) for obs in track.observations],
+                    dset=coco_dset,
+                    track_id=track.track_id)
+                return out_track, poly
 
-    print('time aggregation: number of polygons: ', len(polys))
+        print('generating polys in bounds: number of bounds: ',
+              len(boundary_tracks))
+        tracks_polys = list(
+                filter(None, map(fill_boundary_track, boundary_tracks)))
+
+    print('time aggregation: number of polygons: ', len(tracks_polys))
 
     # SmallPolygonFilter and ResponsePolygonFilter should operate on each
     # vidpoly separately, so have to bookkeep both vidpolys and tracks
-    tracks_polys = zip(tracks, polys)
+    # in a list track_polys
 
     tracks_polys = list(SmallPolygonFilter(min_area_px=80)(tracks_polys))
     print('removed small: remaining polygons: ', len(tracks_polys))
@@ -364,7 +368,8 @@ def time_aggregated_polys(coco_dset,
         tracks_polys = list(
             ResponsePolygonFilter([t for t, _ in tracks_polys], key,
                                   response_thresh)(tracks_polys))
-        print('after filtering based on per-polygon response ', len(polys))
+        print('after filtering based on per-polygon response ',
+              len(tracks_polys))
 
     # TimePolygonFilter edits tracks instead of removing them, so we can
     # discard 'polys' and focus on 'tracks'

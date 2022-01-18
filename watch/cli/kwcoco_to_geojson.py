@@ -688,12 +688,18 @@ def main(args):
         track_fn = watch.tasks.tracking.utils.NoOpTrackFunction
     else:
         track_fn = eval(args.track_fn)
-
+    
+    # add site summaries (site boundary annotations)
     if args.site_summary is not None:
         if args.bas_mode:
             raise ValueError('--site_summary cannot be used in --bas_mode')
         coco_dset = add_site_summary_to_kwcoco(
                 args.site_summary, coco_dset, args.region_id)
+        cid = coco_dset.name_to_cat['Site Boundary']['id']
+        coco_dset = coco_dset.subset(coco_dset.index.cid_to_gids[cid])
+        print('restricting dset to videos with site_summary annots: ',
+              set(coco_dset.index.name_to_video))
+        assert coco_dset.n_images > 0, 'no valid videos!'
 
     coco_dset = watch.tasks.tracking.normalize.normalize(
         coco_dset,
@@ -745,12 +751,15 @@ def main(args):
                 geojson.dump(site, f, indent=2)
 
     if args.subparser_name == 'score':
-        from watch.cli.run_metrics_framework import main
-        try:
-            args.score_args.remove('--')
-        except ValueError:
-            pass
-        main([json.dumps(site) for site in sites] + args.score_args)
+        if len(sites) > 0:
+            from watch.cli.run_metrics_framework import main
+            try:
+                args.score_args.remove('--')
+            except ValueError:
+                pass
+            main([json.dumps(site) for site in sites] + args.score_args)
+        else:
+            print('no sites to score!')
 
 
 def demo(coco_dset,
