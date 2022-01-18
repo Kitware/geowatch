@@ -546,6 +546,8 @@ class MultimodalTransformer(pl.LightningModule):
         #     raise KeyError(tokenizer)
         # self.stream_tokenizers = stream_tokenizers
 
+        self.tokenizer = tokenizer
+
         if tokenizer == 'rearrange':
             self.sensor_channel_tokenizers = RobustModuleDict()
             for s, c in self.unique_sensor_modes:
@@ -1082,11 +1084,14 @@ class MultimodalTransformer(pl.LightningModule):
                     # convolutions. This should be a separate layer for
                     # each mode / chan code.
                     # Downsample
-                    # ws = self.hparams.window_size
-                    # mode_vals_tokens = einops.rearrange(
-                    #     mixed_mode, 'b c (h hs) (w ws) -> b h w (ws hs c)', hs=ws, ws=ws)
-                    mode_vals_tokens = einops.rearrange(
-                        mixed_mode, 'b c h w -> b h w c')
+                    if self.tokenizer == 'rearrange':
+                        ws = self.hparams.window_size
+                        # HACK: reorganize and fix
+                        mode_vals_tokens = einops.rearrange(
+                            mixed_mode, 'b c (h hs) (w ws) -> b h w (ws hs c)', hs=ws, ws=ws)
+                    else:
+                        mode_vals_tokens = einops.rearrange(
+                            mixed_mode, 'b c h w -> b h w c')
                     encode_h = utils.SinePositionalEncoding(3, 1, size=8)
                     encode_w = utils.SinePositionalEncoding(3, 2, size=8)
                     x1 = encode_w(encode_h(mode_vals_tokens))
