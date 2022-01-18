@@ -20,7 +20,63 @@ REGIONS_TRAIN=(
 '''
 
 
-def merge_metrics_results():
+def merge_metrics_results(region_dpaths, out_dpath=None):
+    '''
+    Merge metrics results from multiple regions.
+
+    Args:
+        region_dpaths: List of directories containing the subdirs
+            bas/
+            sc/ [optional]
+        out_dpath: Directory to save merged results. Existing contents will
+            be removed.
+            Default is {common root of region_dpaths}/merged/
+    '''
+    if out_dpath is None:
+        out_dpath = os.path.join(os.path.commonpath(region_dpaths), 'merged')
+    assert out_dpath not in region_dpaths
+    os.system(f'rm -r {out_dpath}')
+    os.makedirs(out_dpath, exist_ok=True)
+
+    bas_dpaths = filter(os.path.isdir,
+                        (os.path.join(r, 'bas') for r in region_dpaths))
+    sc_dpaths = filter(os.path.isdir,
+                       (os.path.join(r, 'sc') for r in region_dpaths))
+    print(bas_dpaths, sc_dpaths)
+
+    return NotImplemented
+
+
+def ensure_thumbnails(image_path, gt_dpath, region_id, coco_dset):
+    '''
+    Symlink and organize images in the format the metrics framework expects
+
+    For the region visualizations:
+    > image_list = glob(f"{self.image_path}/
+    >   {self.region_model.id.replace('_', '/')}/images/*/*/*.jp2")
+
+    For the site visualizations:
+    > image_list = glob(f"{self.image_path}/
+    >   {gt_ann_id.replace('_', '/')}/crops/*.tif")
+
+    Which becomes:
+    {country_code}/
+        {region_num}/
+            images/
+                */
+                    */
+                        *.jp2
+            {site_num}/
+                crops/
+                    *.tif
+
+    Args:
+        image_path: root directory to save under
+        gt_dpath: $DVC_DPATH/annotations/ == smartgitlab.com/TE/annotations/
+        region_id: ex. 'KR_R001'
+        coco_dset: containing a video named {region_id}
+    '''
+
     return NotImplemented
 
 
@@ -61,6 +117,21 @@ def main(args):
                         help='''
         Output directory where scores will be written. Each region will have
         Defaults to ./output/
+        ''')
+
+    if 0:  # TODO
+        parser.add_argument('--keep_thumbnails',
+                            action='store_true',
+                            help='''
+        Output thumbnails of region and ground truth sites to
+        {out_dir}/thumbnails/
+        ''')
+
+        parser.add_argument('--merge',
+                            action='store_true',
+                            help='''
+        Merge BAS and SC metrics from all regions and output to
+        {out_dir}/merged/
         ''')
     args = parser.parse_args(args)
 
@@ -118,23 +189,30 @@ def main(args):
                         'w') as f:
                     json.dump(site, f)
 
-            # link rgb images to image_dpath for viz
-            img_date_dct = dict()
-            for site in sites:
-                for feat in site['features'][1:]:
-                    img_path = feat['properties']['source']
-                    if os.path.isfile(img_path):
-                        img_date_dct[img_path] = feat['properties'][
-                            'observation_date']
-                    else:
-                        print(f'warning: image {img_path} is not a valid path')
-            for img_path, img_date in img_date_dct.items():
-                # use filename expected by metrics framework
-                os.symlink(
-                    img_path,
-                    os.path.join(
-                        image_dpath, '_'.join((img_date,
-                                               os.path.basename(img_path)))))
+            if 1:
+
+                # link rgb images to image_dpath for viz
+                img_date_dct = dict()
+                for site in sites:
+                    for feat in site['features'][1:]:
+                        img_path = feat['properties']['source']
+                        if os.path.isfile(img_path):
+                            img_date_dct[img_path] = feat['properties'][
+                                'observation_date']
+                        else:
+                            print(f'warning: image {img_path}'
+                                  ' is not a valid path')
+                for img_path, img_date in img_date_dct.items():
+                    # use filename expected by metrics framework
+                    os.symlink(
+                        img_path,
+                        os.path.join(
+                            image_dpath, '_'.join(
+                                (img_date, os.path.basename(img_path)))))
+
+            else:  # TODO finish updating this
+
+                ensure_thumbnails()
 
             # run metrics framework
             if args.out_dir is not None:
