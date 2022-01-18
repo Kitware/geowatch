@@ -1,7 +1,11 @@
 import ubelt as ub
 
 
-def ensure_dvc_path(fpath):
+def request_dvc_path(fpath):
+    """
+    If the file is in a DVC directory and the user has permissions,
+    attempt to pull the file from a remote if it doesn't exist locally.
+    """
     if not fpath.exists():
         dvc_fpath = fpath.augment(stem=fpath.name, ext='.dvc')
         if dvc_fpath.exists():
@@ -23,11 +27,16 @@ def test_predict_old_fusion_model():
     import pytest
     from watch.utils import kwcoco_extensions
     import ubelt as ub
-    dvc_dpath = watch.find_smart_dvc_dpath()
+
+    try:
+        dvc_dpath = watch.find_smart_dvc_dpath()
+    except Exception:
+        pytest.skip('dvc path does not exist')
+
     # model_fpath = dvc_dpath / 'models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_raw_v39/SC_smt_it_stm_p8_newanns_weighted_raw_v39_epoch=53-step=2311901.pt'
 
     model_fpath = dvc_dpath / 'models/fusion/SC-20201117/SC_smt_it_st_s12_newanns_weighted_rgb_v22/SC_smt_it_st_s12_newanns_weighted_rgb_v22_epoch=117-step=5051933.pt'
-    ensure_dvc_path(model_fpath)
+    request_dvc_path(model_fpath)
 
     # from watch.tasks.fusion import utils
     # method = utils.load_model_from_package(model_fpath)
@@ -91,3 +100,11 @@ def test_predict_old_fusion_model():
 
     smartwatch visualize /home/joncrall/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-L1-2022-01/data.kwcoco.json --viz_dpath=./orig_viz_check
     """
+
+
+if __name__ == '__main__':
+    """
+    CommandLine:
+        python ~/code/watch/tests/test_predict_old_fusion_model.py
+    """
+    test_predict_old_fusion_model()

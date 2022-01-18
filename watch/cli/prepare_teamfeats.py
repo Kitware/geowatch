@@ -197,13 +197,13 @@ def main(cmdline=True, **kwargs):
             ub.cmd(command, verbose=2, check=True)
 
         splits = {
-            'combo_train': combo_fpath.augment(suffix='_train'),
-            'combo_nowv_train': combo_fpath.augment(suffix='_nowv_train'),
-            'combo_wv_train': combo_fpath.augment(suffix='_wv_train'),
+            'combo_train': combo_fpath.augment(suffix='_train', multidot=True),
+            'combo_nowv_train': combo_fpath.augment(suffix='_nowv_train', multidot=True),
+            'combo_wv_train': combo_fpath.augment(suffix='_wv_train', multidot=True),
 
-            'combo_vali': combo_fpath.augment(suffix='_vali'),
-            'combo_nowv_vali': combo_fpath.augment(suffix='_nowv_vali'),
-            'combo_wv_vali': combo_fpath.augment(suffix='_wv_vali'),
+            'combo_vali': combo_fpath.augment(suffix='_vali', multidot=True),
+            'combo_nowv_vali': combo_fpath.augment(suffix='_nowv_vali', multidot=True),
+            'combo_wv_vali': combo_fpath.augment(suffix='_wv_vali', multidot=True),
         }
 
         tq = tmux_queue.TMUXMultiQueue(name='watch-splits', size=2)
@@ -279,6 +279,7 @@ if __name__ == '__main__':
     """
     CommandLine:
         python -m watch.cli.prepare_teamfeats --gres=0 --with_depth=True --keep_sessions=True
+        python -m watch.cli.prepare_teamfeats --gres=0,2 --with_depth=True --keep_sessions=True
         python -m watch.cli.prepare_teamfeats --gres=2 --with_materials=False --keep_sessions=True
     """
     main(cmdline=True)

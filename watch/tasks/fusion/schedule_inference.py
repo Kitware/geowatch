@@ -238,6 +238,8 @@ def gather_measures():
     from watch.tasks.fusion import result_analysis
     import shutil
 
+    # TODO: high level results for a model should be serialized to DVC
+
     class Found(Exception):
         pass
 
