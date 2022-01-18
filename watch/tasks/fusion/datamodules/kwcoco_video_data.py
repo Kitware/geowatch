@@ -1863,6 +1863,15 @@ class BatchVisualizationBuilder:
         >>>     class_prob_list += [einops.rearrange(class_prob, 'c h w -> h w c')]
         >>> class_probs = np.stack(class_prob_list)
         >>> item_output['class_probs'] = class_probs  # first frame does not have change
+        >>> #
+        >>> # Probability of "saliency" (i.e. non-background) for each frame
+        >>> saliency_prob_list = []
+        >>> for _ in range(0, sample_shape[0]):
+        >>>     saliency_prob = kwimage.Heatmap.random(
+        >>>         dims=sample_shape[1:3], classes=1).data['class_probs']
+        >>>     saliency_prob_list += [einops.rearrange(saliency_prob, 'c h w -> h w c')]
+        >>> saliency_probs = np.stack(saliency_prob_list)
+        >>> item_output['saliency_probs'] = saliency_probs  # first frame does not have change
         >>> #binprobs[0][:] = 0  # first change prob should be all zeros
         >>> builder = BatchVisualizationBuilder(
         >>>     item, item_output, classes=self.classes,
@@ -2077,7 +2086,7 @@ class BatchVisualizationBuilder:
         weight_overlay_keys = set(ub.flatten([m['frame_weight'] for m in frame_metas]))
 
         for frame_meta in frame_metas:
-            frame_canvas = builder._build_frame_vertical_stack(
+            frame_canvas = builder._build_frame(
                 frame_meta, truth_overlay_keys, weight_overlay_keys)
             horizontal_stack.append(frame_canvas)
 
@@ -2095,26 +2104,14 @@ class BatchVisualizationBuilder:
         canvas = kwimage.stack_images([vid_header, canvas], axis=0, overlap=-3)
         return canvas
 
-    def _build_frame_vertical_stack(builder, frame_meta, truth_overlay_keys, weight_overlay_keys):
+    def _build_frame_header(builder, frame_meta):
         """
-        Build a vertical stack for a single frame
+        Make the text header for each timestep (frame)
         """
-        draw_change = False
-        draw_saliency = False
-        draw_classes = False
+        header_stack = []
 
-        classes = builder.classes
-        item_output = builder.item_output
-
-        vertical_stack = []
-
-        frame_idx = frame_meta['frame_idx']
         frame_item = frame_meta['frame_item']
-        chan_rows = frame_meta['chan_rows']
-
-        frame_truth = frame_meta['frame_truth']
-        # frame_weight = frame_meta['frame_weight']
-
+        frame_idx = frame_meta['frame_idx']
         gid = frame_item['gid']
 
         # Build column headers
@@ -2122,21 +2119,45 @@ class BatchVisualizationBuilder:
         header_part = util_kwimage.draw_header_text(
             image=header_dims, fit=False,
             text=f't={frame_idx} gid={gid}', color='salmon')
-        vertical_stack.append(header_part)
+        header_stack.append(header_part)
 
         sensor = frame_item.get('sensor', '')
         if sensor:
             header_part = util_kwimage.draw_header_text(
                 image=header_dims, fit=False, text=f'{sensor}',
                 color='salmon')
-            vertical_stack.append(header_part)
+            header_stack.append(header_part)
 
         date_captured = frame_item.get('date_captured', '')
         if date_captured:
             header_part = util_kwimage.draw_header_text(
                 header_dims, fit='shrink', text=f'{date_captured}',
                 color='salmon')
-            vertical_stack.append(header_part)
+            header_stack.append(header_part)
+        return header_stack
+
+    def _build_frame(builder, frame_meta, truth_overlay_keys, weight_overlay_keys):
+        """
+        Build a vertical stack for a single frame
+        """
+        draw_change = False
+        draw_saliency = True
+        draw_classes = True
+
+        classes = builder.classes
+        item_output = builder.item_output
+
+        vertical_stack = []
+
+        frame_idx = frame_meta['frame_idx']
+        chan_rows = frame_meta['chan_rows']
+
+        frame_truth = frame_meta['frame_truth']
+        # frame_weight = frame_meta['frame_weight']
+
+        # Build column headers
+        header_stack = builder._build_frame_header(frame_meta)
+        vertical_stack.extend(header_stack)
 
         # Build truth / metadata overlays
         overlay_shape = ub.peek(frame_truth.values()).shape[0:2]
