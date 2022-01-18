@@ -276,7 +276,7 @@ def main(cmdline=True, **kwargs):
 if __name__ == '__main__':
     """
     CommandLine:
-        python -m watch.cli.prepare_teamfeats --gres=2
-        python -m watch.cli.prepare_teamfeats --gres=2 --with_rutgers=False
+        python -m watch.cli.prepare_teamfeats --gres=0,2 --with_depth=True --keep_sessions=True
+        python -m watch.cli.prepare_teamfeats --gres=2 --with_rutgers=False --keep_sessions=True
     """
     main(cmdline=True)
