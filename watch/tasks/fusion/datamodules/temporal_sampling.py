@@ -8,6 +8,143 @@ from dateutil import parser
 from watch.utils import util_kwarray
 
 
+class MultiTimeWindowSampler:
+    """
+    A wrapper that contains multiple time window samplers with different
+    affinity matrices to increase the diversity of temporal sampling.
+
+    Example:
+        >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
+        >>> low = datetime.datetime.now().timestamp()
+        >>> high = low + datetime.timedelta(days=365 * 5).total_seconds()
+        >>> rng = kwarray.ensure_rng(0)
+        >>> unixtimes = np.array(sorted(rng.randint(low, high, 113)), dtype=float)
+        >>> sensors = ['a' for _ in range(len(unixtimes))]
+        >>> time_window = 5
+        >>> self = MultiTimeWindowSampler(
+        >>>     unixtimes=unixtimes, sensors=sensors, time_window=time_window, update_rule='pairwise+distribute',
+        >>>     #time_spans=['2y', '1y', '5m'])
+        >>>     time_spans='7d-1m', affinity_type='soft2')
+        >>> self.sample()
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autosns()
+        >>> self.show_summary(10)
+    """
+    def __init__(self, unixtimes, sensors, time_window, affinity_type='hard',
+                 update_rule='distribute', determenistic=False, gamma=1,
+                 time_spans=['2y', '1y', '5m'], name='?'):
+
+        if isinstance(time_spans, str):
+            time_spans = time_spans.split('-')
+
+        self.sensors = sensors
+        self.unixtimes = unixtimes
+        self.time_window = time_window
+        self.update_rule = update_rule
+        self.affinity_type = affinity_type
+        self.determenistic = determenistic
+        self.gamma = gamma
+        self.name = name
+        self.num_frames = len(unixtimes)
+        self.time_spans = time_spans
+        self.sub_samplers = {}
+        self._build()
+
+    def _build(self):
+        for time_span in self.time_spans:
+            sub_sampler = TimeWindowSampler(
+                unixtimes=self.unixtimes,
+                sensors=self.sensors,
+                time_window=self.time_window,
+                update_rule=self.update_rule,
+                affinity_type=self.affinity_type,
+                determenistic=self.determenistic,
+                gamma=self.gamma,
+                name=self.name,
+                time_span=time_span,
+            )
+            self.sub_samplers[time_span] = sub_sampler
+
+    def sample(self, main_frame_idx=None, include=None, exclude=None,
+               return_info=False, error_level=0, rng=None):
+        """
+        Chooses a sub-sampler and samples from it.
+
+        Args:
+            main_frame_idx (int): "main" sample index.
+            include (List[int]): other indexes forced to be included
+            exclude (List[int]): other indexes forced to be excluded
+            return_info (bool): for debugging / introspection
+            error_level (int): See :func:`affinity_sample`.
+
+        Returns:
+            ndarray | Tuple[ndarray, Dict]
+        """
+        rng = kwarray.ensure_rng(rng)
+        chosen_key = rng.choice(list(self.sub_samplers.keys()))
+        chosen_sampler = self.sub_samplers[chosen_key]
+        return chosen_sampler.sample(main_frame_idx, include=include,
+                                     exclude=exclude, return_info=return_info,
+                                     rng=rng, error_level=error_level)
+
+    @property
+    def affinity(self):
+        """
+        Approximate combined affinity, for this multi-sampler
+        """
+        affinity = np.mean(np.stack([sampler.affinity for sampler in self.sub_samplers.values()]), axis=0)
+        return affinity
+
+    def show_summary(self, samples_per_frame=1, fnum=1):
+        """
+        Similar to :func:`TimeWindowSampler.show_summary`
+        """
+        import kwplot
+        kwplot.autompl()
+
+        sample_idxs = []
+        for idx in range(len(self.unixtimes)):
+            for _ in range(samples_per_frame):
+                idxs = self.sample(idx)
+                sample_idxs.append(idxs)
+
+        if 0:
+            sample_idxs = np.array(sorted(map(tuple, sample_idxs)))
+        else:
+            sample_idxs = np.array(sample_idxs)
+
+        title_info = ub.codeblock(
+            f'''
+            name={self.name}
+            affinity_type={self.affinity_type} determenistic={self.determenistic}
+            update_rule={self.update_rule} gamma={self.gamma}
+            ''')
+
+        pnum_ = kwplot.PlotNums(nCols=3)
+
+        fig = kwplot.figure(fnum=fnum, doclf=True)
+
+        fig = kwplot.figure(fnum=fnum, pnum=pnum_())
+        ax = fig.gca()
+
+        affinity = self.affinity
+
+        kwplot.imshow(affinity, ax=ax)
+        ax.set_title('combined frame affinity')
+
+        fig = kwplot.figure(fnum=fnum, pnum=pnum_())
+        if samples_per_frame < 5:
+            ax = plot_dense_sample_indices(sample_idxs, self.unixtimes, linewidths=0.1)
+            ax.set_aspect('equal')
+        else:
+            ax = plot_dense_sample_indices(sample_idxs, self.unixtimes, linewidths=0.001)
+
+        kwplot.figure(fnum=fnum, pnum=pnum_())
+        plot_temporal_sample_indices(sample_idxs, self.unixtimes)
+        fig.suptitle(title_info)
+
+
 class TimeWindowSampler:
     """
     Object oriented API to produce random temporal samples given a set of
@@ -31,7 +168,8 @@ class TimeWindowSampler:
         affinity_type (str):
             Method for computing the affinity matrix for the underlying
             sampling algorithm. Can be:
-                "soft" - The generalized random affinity matrix.
+                "soft" - The old generalized random affinity matrix.
+                "soft2" - The new generalized random affinity matrix.
                 "hard" - A simplified affinity algorithm.
                 "hardish" - Like hard, but with a blur.
                 "contiguous" - Neighboring frames get high affinity.
@@ -71,7 +209,7 @@ class TimeWindowSampler:
         >>> self = TimeWindowSampler.from_coco_video(
         >>>     dset, vidid,
         >>>     time_window=5,
-        >>>     affinity_type='soft', time_span='1y',
+        >>>     affinity_type='soft2', time_span='1y',
         >>>     update_rule='distribute')
         >>> self.determenistic = False
         >>> self.show_summary(samples_per_frame=3, fnum=1)
@@ -131,10 +269,15 @@ class TimeWindowSampler:
             >>> self.determenistic = True
             >>> self.show_procedure(fnum=1)
         """
-        if self.affinity_type == 'soft':
+        if self.affinity_type.startswith('soft'):
+            if self.affinity_type == 'soft':
+                version = 1
+            else:
+                version = int(self.affinity_type[4:])
             # Soft affinity
             self.affinity = soft_frame_affinity(self.unixtimes, self.sensors,
-                                                self.time_span)['final']
+                                                self.time_span,
+                                                version=version)['final']
         elif self.affinity_type == 'hard':
             # Hard affinity
             self.affinity = hard_frame_affinity(self.unixtimes, self.sensors,
@@ -220,7 +363,7 @@ class TimeWindowSampler:
             >>>     dset, vidid,
             >>>     time_span='1y',
             >>>     time_window=3,
-            >>>     affinity_type='soft',
+            >>>     affinity_type='soft2',
             >>>     update_rule='distribute+pairwise')
             >>> self.determenistic = False
             >>> self.show_summary(samples_per_frame=1 if self.determenistic else 10, fnum=1)
@@ -286,7 +429,7 @@ class TimeWindowSampler:
             >>> vidid = video_ids[2]
             >>> # Demo behavior over a grid of parameters
             >>> grid = list(ub.named_product({
-            >>>     'affinity_type': ['hard', 'soft'],
+            >>>     'affinity_type': ['hard', 'soft2'],
             >>>     'update_rule': ['distribute', 'pairwise+distribute'],
             >>>     #'determenistic': [False, True],
             >>>     'determenistic': [False],
@@ -370,7 +513,7 @@ class TimeWindowSampler:
             >>> self = TimeWindowSampler.from_coco_video(
             >>>     dset, vidid,
             >>>     time_window=5,
-            >>>     affinity_type='soft',
+            >>>     affinity_type='soft2',
             >>>     update_rule='distribute+pairwise')
             >>> self.determenistic = False
             >>> self.show_procedure(idx=0, fnum=10)
@@ -381,7 +524,7 @@ class TimeWindowSampler:
                 xdev.InteractiveIter.draw()
 
 
-            self = TimeWindowSampler.from_coco_video(dset, vidid, time_window=5, affinity_type='soft', update_rule='distribute+pairwise')
+            self = TimeWindowSampler.from_coco_video(dset, vidid, time_window=5, affinity_type='soft2', update_rule='distribute+pairwise')
             self.determenistic = True
             self.show_summary(samples_per_frame=20, fnum=1)
             self.determenistic = False
@@ -515,10 +658,10 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         >>> rng = kwarray.ensure_rng(0)
         >>> unixtimes = np.array(sorted(rng.randint(low, high, 113)), dtype=float)
         >>> #
-        >>> affinity = soft_frame_affinity(unixtimes)['final']
+        >>> affinity = soft_frame_affinity(unixtimes, version=2, time_span='1d')['final']
         >>> include_indices = [5]
         >>> size = 5
-        >>> chosen, info = affinity_sample(affinity, size, include_indices,
+        >>> chosen, info = affinity_sample(affinity, size, include_indices, update_rule='pairwise',
         >>>                                return_info=True, determenistic=True)
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
@@ -533,7 +676,7 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         >>> rng = kwarray.ensure_rng(0)
         >>> unixtimes = np.array(sorted(rng.randint(low, high, 5)), dtype=float)
         >>> self = TimeWindowSampler(unixtimes, sensors=None, time_window=4,
-        >>>     affinity_type='soft', time_span='0.3y',
+        >>>     affinity_type='soft2', time_span='0.3y',
         >>>     update_rule='distribute+pairwise')
         >>> self.determenistic = False
         >>> import pytest
@@ -703,6 +846,46 @@ def affinity_sample(affinity, size, include_indices=None, exclude_indices=None,
         return chosen
 
 
+def coerce_timedelta(delta):
+    """
+    Example:
+        coerce_timedelta('1y')
+        coerce_timedelta('1m')
+        coerce_timedelta('1d')
+        coerce_timedelta('1H')
+        coerce_timedelta('1M')
+        coerce_timedelta('1S')
+        coerce_timedelta(10.3)
+
+    References:
+        https://docs.python.org/3.4/library/datetime.html#strftime-strptime-behavior
+    """
+    if isinstance(delta, (int, float)):
+        delta = datetime.timedelta(seconds=delta)
+    elif isinstance(delta, str):
+        # TODO: better coercion function
+        if delta.endswith('y'):
+            delta = datetime.timedelta(days=365 * float(delta[:-1]))
+        elif delta.endswith('d'):
+            delta = datetime.timedelta(days=1 * float(delta[:-1]))
+        elif delta.endswith('m'):
+            delta = datetime.timedelta(days=30.437 * float(delta[:-1]))
+        elif delta.endswith('H'):
+            delta = datetime.timedelta(hours=float(delta[:-1]))
+        elif delta.endswith('M'):
+            delta = datetime.timedelta(minutes=float(delta[:-1]))
+        elif delta.endswith('S'):
+            delta = datetime.timedelta(seconds=float(delta[:-1]))
+        else:
+            import pytimeparse  #
+            pytimeparse.parse(delta)
+    elif isinstance(delta, datetime.timedelta):
+        pass
+    else:
+        raise TypeError(type(delta))
+    return delta
+
+
 def hard_time_sample_pattern(unixtimes, time_window, time_span='2y'):
     """
     Finds hard time sampling indexes
@@ -828,15 +1011,7 @@ def hard_time_sample_pattern(unixtimes, time_window, time_span='2y'):
                 datetime.timedelta(days=0).total_seconds(),
             ])
         else:
-            if isinstance(time_span, str):
-                # TODO: better coercion function
-                if time_span.endswith('y'):
-                    time_span = datetime.timedelta(days=365 * float(time_span[:-1])).total_seconds()
-                elif time_span.endswith('d'):
-                    time_span = datetime.timedelta(days=1 * float(time_span[:-1])).total_seconds()
-                else:
-                    import pytimeparse  #
-                    pytimeparse.parse(time_span)
+            time_span = coerce_timedelta(time_span).total_seconds()
             min_time = -datetime.timedelta(seconds=time_span).total_seconds()
             max_time = datetime.timedelta(seconds=time_span).total_seconds()
             template_deltas = np.linspace(min_time, max_time, time_window).round().astype(int)
@@ -934,7 +1109,7 @@ def hard_time_sample_pattern(unixtimes, time_window, time_span='2y'):
     return sample_idxs
 
 
-def soft_frame_affinity(unixtimes, sensors=None, time_span='2y'):
+def soft_frame_affinity(unixtimes, sensors=None, time_span='2y', version=1):
     """
     Produce a pairwise affinity weights between frames based on a dilated time
     heuristic.
@@ -947,22 +1122,22 @@ def soft_frame_affinity(unixtimes, sensors=None, time_span='2y'):
 
         >>> # Test no missing data case
         >>> unixtimes = base_unixtimes.copy()
-        >>> allhave_weights = soft_frame_affinity(unixtimes)
+        >>> allhave_weights = soft_frame_affinity(unixtimes, version=2)
         >>> #
         >>> # Test all missing data case
         >>> unixtimes = np.full_like(unixtimes, fill_value=np.nan)
-        >>> allmiss_weights = soft_frame_affinity(unixtimes)
+        >>> allmiss_weights = soft_frame_affinity(unixtimes, version=2)
         >>> #
         >>> # Test partial missing data case
         >>> unixtimes = base_unixtimes.copy()
         >>> unixtimes[rng.rand(*unixtimes.shape) < 0.1] = np.nan
-        >>> anymiss_weights_1 = soft_frame_affinity(unixtimes)
+        >>> anymiss_weights_1 = soft_frame_affinity(unixtimes, version=2)
         >>> unixtimes = base_unixtimes.copy()
         >>> unixtimes[rng.rand(*unixtimes.shape) < 0.5] = np.nan
-        >>> anymiss_weights_2 = soft_frame_affinity(unixtimes)
+        >>> anymiss_weights_2 = soft_frame_affinity(unixtimes, version=2)
         >>> unixtimes = base_unixtimes.copy()
         >>> unixtimes[rng.rand(*unixtimes.shape) < 0.9] = np.nan
-        >>> anymiss_weights_3 = soft_frame_affinity(unixtimes)
+        >>> anymiss_weights_3 = soft_frame_affinity(unixtimes, version=2)
 
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
@@ -980,7 +1155,7 @@ def soft_frame_affinity(unixtimes, sensors=None, time_span='2y'):
         >>> sns = kwplot.autosns()
         >>> fig = kwplot.figure(fnum=2, doclf=True)
         >>> kwplot.imshow(kwimage.normalize(allhave_weights['final']), pnum=(1, 3, 1), title='pairwise affinity')
-        >>> row_idx = 0
+        >>> row_idx = 5
         >>> df = pd.DataFrame({k: v[row_idx] for k, v in allhave_weights.items()})
         >>> df['index'] = np.arange(df.shape[0])
         >>> data = df.drop(['final'], axis=1).melt(['index'])
@@ -1013,23 +1188,41 @@ def soft_frame_affinity(unixtimes, sensors=None, time_span='2y'):
         # Upweight similar times of day
         daylight_weights = ((1 + np.cos(day_deltas * math.tau)) / 2.0) * 0.95 + 0.95
 
-        # Upweight times in the future
-        # future_weights = year_deltas ** 0.25
-        # future_weights = util_kwarray.asymptotic(year_deltas, degree=1)
-        future_weights = util_kwarray.tukey_biweight_loss(year_deltas, c=0.5)
-        future_weights = future_weights - future_weights.min()
-        future_weights = (future_weights / future_weights.max())
-        future_weights = future_weights * 0.8 + 0.2
+        if version == 1:
+            # backwards compat
+            # Upweight times in the future
+            # future_weights = year_deltas ** 0.25
+            # future_weights = util_kwarray.asymptotic(year_deltas, degree=1)
+            future_weights = util_kwarray.tukey_biweight_loss(year_deltas, c=0.5)
+            future_weights = future_weights - future_weights.min()
+            future_weights = (future_weights / future_weights.max())
+            future_weights = future_weights * 0.8 + 0.2
+            weights['future'] = future_weights
+        elif version == 2:
+            # TODO:
+            # incorporate the time_span?
+            time_span = coerce_timedelta(time_span).total_seconds()
 
-        # TODO:
-        # incorporate the time_span?
+            span_delta = (second_deltas - time_span) ** 2
+            norm_span_delta = span_delta / (time_span ** 2)
+            weights['time_span'] = (1 - np.minimum(norm_span_delta, 1)) * 0.5 + 0.5
+
+            # squash daylight weight influence
+            try:
+                middle = np.nanmean(daylight_weights)
+            except Exception:
+                middle = 0
+
+            # Modify the influence of season / daylight
+            daylight_weights = (daylight_weights - middle) * 0.1 + (middle / 2)
+            season_weights = ((season_weights - 0.5) / 2) + 0.5
 
         weights['daylight'] = daylight_weights
         weights['season'] = season_weights
-        weights['future'] = future_weights
 
-        frame_weights = season_weights * daylight_weights
-        frame_weights = frame_weights * future_weights
+        frame_weights = np.prod(np.stack(list(weights.values())), axis=0)
+        # frame_weights = season_weights * daylight_weights
+        # frame_weights = frame_weights * future_weights
     else:
         frame_weights = None
 

@@ -138,3 +138,7 @@ def ensure_timezone(dt, default='utc'):
             else:
                 raise NotImplementedError
         return dt.replace(tzinfo=tzinfo)
+
+
+def coerce_timedelta(delta):
+    raise NotImplementedError('see temporal sampling for draft')
