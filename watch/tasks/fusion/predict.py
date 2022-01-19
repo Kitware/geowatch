@@ -187,7 +187,10 @@ def predict(cmdline=False, **kwargs):
         # fix einops bug
         for _name, mod in method.named_modules():
             if 'Rearrange' in mod.__class__.__name__:
-                mod._recipe = mod.recipe()
+                try:
+                    mod._recipe = mod.recipe()
+                except AttributeError:
+                    pass
         # hack: dont load the metrics
         method.class_metrics = None
         method.saliency_metrics = None

@@ -901,7 +901,6 @@ class KWCocoVideoDataset(data.Dataset):
             'saliency': True,
         }
 
-
         # Hacks: combinable channels can be visualized as RGB images.
         # The only reason this is a hack is because of the hardcoded names
         # otherwise it is a cool feature.
