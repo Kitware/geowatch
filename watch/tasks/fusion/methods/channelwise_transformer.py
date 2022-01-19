@@ -905,7 +905,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> import watch
             >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset='special:vidshapes-watch',
-            >>>     num_workers='avail / 2', chip_size=64, time_steps=2, true_multimodal=True,
+            >>>     num_workers='avail / 2', chip_size=96, time_steps=2, true_multimodal=True,
             >>>     normalize_inputs=1, neg_to_pos_ratio=0, batch_size=1,
             >>> )
             >>> datamodule.setup('fit')
@@ -915,8 +915,8 @@ class MultimodalTransformer(pl.LightningModule):
 
             >>> # Choose subclass to test this with (does not cover all cases)
             >>> self = model = methods.MultimodalTransformer(
-            >>>     arch_name='smt_it_joint_p8', tokenizer='conv7',
-            >>>     dataset_stats=datamodule.dataset_stats, global_saliency_weight=0.0, global_change_weight=0.0, global_class_weight=0.0,
+            >>>     arch_name='smt_it_joint_p8', tokenizer='rearrange',
+            >>>     dataset_stats=datamodule.dataset_stats, global_saliency_weight=0.0, global_change_weight=0.0, global_class_weight=1.0,
             >>>     classes=datamodule.classes, input_channels=datamodule.input_channels)
             >>> with_loss = True
             >>> outputs = self.forward_step(batch, with_loss=with_loss)
@@ -1154,7 +1154,7 @@ class MultimodalTransformer(pl.LightningModule):
                         frame['change'] for frame in item['frames'][1:]
                     ])[None, ...]
 
-                if self.global_head_weights['change'] or self.global_head_weights['saliency']:
+                if self.global_head_weights['class'] or self.global_head_weights['saliency']:
                     # [B, T, H, W]
                     item_truths['class'] = torch.stack([
                         frame['class_idxs'] for frame in item['frames']
