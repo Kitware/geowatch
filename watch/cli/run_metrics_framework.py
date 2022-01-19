@@ -193,6 +193,7 @@ def main(args):
 
         site_dpath = (tmp_dpath / 'site' / region_id).ensuredir()
         image_dpath = (tmp_dpath / 'image' / region_id).ensuredir()
+        cache_dpath = (tmp_dpath / 'cache' / region_id).ensuredir()
 
         if True:
             # doctor site_dpath for expected structure
@@ -240,6 +241,7 @@ def main(args):
                 out_dir = os.path.join(args.out_dir, region_id)
             else:
                 out_dir = None
+            # cache_dpath is always empty to work around bugs
             cmd = ub.paragraph(fr'''
                 {virtualenv_cmd} &&
                 python {os.path.join(metrics_dpath, 'run_evaluation.py')}
@@ -249,7 +251,9 @@ def main(args):
                     --sm_path {site_dpath}
                     --image_dir {image_dpath}
                     --output_dir {out_dir}
+                    --cache_dir {cache_dpath}
                 ''')
+            import subprocess
             try:
                 ub.cmd(cmd, verbose=3, check=True, shell=True)
             except subprocess.CalledProcessError:
