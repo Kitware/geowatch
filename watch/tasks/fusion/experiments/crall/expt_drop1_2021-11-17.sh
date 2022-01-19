@@ -833,12 +833,12 @@ python -m watch.tasks.fusion.fit \
     --test_dataset="$TEST_FPATH" \
     --amp_backend=apex \
     --attention_impl=exact \
-    --tokenizer=conv7 \
+    --tokenizer=rearrange \
     --use_grid_positives=True \
     --use_centered_positives=True \
     --neg_to_pos_ratio=0.25 \
     --global_class_weight=0.0 \
-    --global_change_weight=1.0 \
+    --global_saliency_weight=1.0 \
     --num_workers=avail/2 \
     --arch_name=$ARCH
 
@@ -874,11 +874,53 @@ python -m watch.tasks.fusion.fit \
     --test_dataset="$TEST_FPATH" \
     --amp_backend=apex \
     --attention_impl=exact \
-    --tokenizer=conv7 \
+    --tokenizer=rearrange \
     --use_grid_positives=True \
     --use_centered_positives=True \
     --neg_to_pos_ratio=0.25 \
     --global_class_weight=0.0 \
-    --global_change_weight=1.0 \
+    --global_saliency_weight=1.0 \
     --num_workers=avail/2 \
+    --arch_name=$ARCH
+
+
+# L1 With Many Features + Positive Toothbrush LinConv - 2022-01-19
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop1-Aligned-L1-2022-01
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_nowv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_nowv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_nowv_vali.kwcoco.json
+__check__='
+smartwatch stats $VALI_FPATH $TRAIN_FPATH
+'
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop1-20201117
+ARCH=smt_it_stm_p8
+CHANNELS="blue|green|red|nir|swir16|swir22,invariants:6|before_after_heatmap|segmentation_heatmap,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field,matseg_0|matseg_1|matseg_2|matseg_3|matseg_4|matseg_5|matseg_6|matseg_7|matseg_8|matseg_9|matseg_10|matseg_11|matseg_12|matseg_13|matseg_14|matseg_15"
+
+smartwatch stats "$TRAIN_FPATH" "$VALI_FPATH"
+EXPERIMENT_NAME=BOTH_${ARCH}_centerannot_ILM_v50
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
+export CUDA_VISIBLE_DEVICES="0"
+python -m watch.tasks.fusion.fit \
+    --config "$WORKDIR/configs/common_20201117.yaml"  \
+    --channels=${CHANNELS} \
+    --name=$EXPERIMENT_NAME \
+    --chip_size=64 \
+    --time_steps=5 \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --method="MultimodalTransformer" \
+    --gpus "1" \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --amp_backend=apex \
+    --attention_impl=exact \
+    --tokenizer=linconv \
+    --use_centered_positives=True \
+    --use_grid_positives=True \
+    --num_workers="avail/2" \
+    --global_saliency_weight=1.00 \
+    --global_class_weight=1.00 \
     --arch_name=$ARCH

@@ -301,7 +301,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             '--num_workers', default=4, type=str, help=ub.paragraph(
                 '''
                 number of background workers. Can be auto or an avail
-                expression
+                expression. TODO: rename to data_workers?
                 '''
             ))
 
@@ -1388,8 +1388,7 @@ class KWCocoVideoDataset(data.Dataset):
             permode_datas = ub.ddict(list)
             prev_timestamp = None
 
-            hack = utils.SinePositionalEncoding(0, 1, size=8)
-            time_index_encoding = hack._encoding_part(len(frame_items)).numpy()
+            time_index_encoding = utils.ordinal_position_encoding(len(frame_items), 8).numpy()
 
             for frame_item in frame_items:
 
@@ -2593,6 +2592,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
             video_gids = all_video_gids
         # video_frame_idxs = np.array(list(range(len(video_gids))))
 
+        # TODO: allow for multiple time samplers
         time_sampler = tsm.TimeWindowSampler.from_coco_video(
             dset, video_id, gids=video_gids, time_window=window_time_dims,
             affinity_type=affinity_type, update_rule=update_rule,
