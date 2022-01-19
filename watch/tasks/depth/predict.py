@@ -33,7 +33,8 @@ log = logging.getLogger(__name__)
 @click.option('--dataset', required=True, type=click.Path(exists=True), help='input kwcoco dataset')
 @click.option('--deployed', required=True, type=click.Path(exists=True), help='pytorch weights file')
 @click.option('--output', required=False, type=click.Path(), help='output kwcoco dataset')
-def predict(dataset, deployed, output):
+@click.option('--window_size', required=False, type=int, default=1024, help='sliding window size')
+def predict(dataset, deployed, output, window_size=1024):
     coco_dset_filename = dataset
     weights_filename = Path(deployed)
     output_dset_filename = get_output_file(output)
@@ -63,18 +64,17 @@ def predict(dataset, deployed, output):
     log.debug('processing images')
     dataloader = DataLoader(dataset, num_workers=0, batch_size=1, collate_fn=lambda x: x)
     with torch.no_grad():
-        for batch in tqdm(dataloader, miniters=1, unit='image', disable=True):
+        for batch in tqdm(dataloader, miniters=1, unit='image', disable=False):
             assert len(batch) == 1
             img_info = batch[0]
             gid = img_info['id']
             try:
-                S = 2048
-                S = 1024
+                S = window_size
                 image = img_info['imgdata']
-                pred = process_image_chunked(image,
-                                             partial(run_inference, model=model),
-                                             chip_size=(S, S, 3)
-                                             )
+                pred = process_image_chunked(
+                    image, partial(run_inference, model=model),
+                    chip_size=(S, S, 3)
+                )
 
                 # get clean img_info
                 img_info = dataset.dset.imgs[gid]
@@ -90,6 +90,7 @@ def predict(dataset, deployed, output):
                 log.exception('Unable to load id:{} - {}'.format(img_info['id'], img_info['name']))
 
     output_dset.dump(str(output_dset_filename), indent=2)
+    output_dset.validate()
     log.info('output written to {}'.format(output_dset_filename))
 
 
@@ -166,6 +167,15 @@ def _load_config():
 
 
 if __name__ == '__main__':
+    r"""
+    # Notes:
+
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+    python -m watch.tasks.depth.predict \
+        --dataset="$DVC_DPATH/Drop1-Aligned-L1-2022-01/data.kwcoco.json" \
+        --output="$DVC_DPATH/Drop1-Aligned-L1-2022-01/dzyne_depth.kwcoco.json" \
+        --deployed="$DVC_DPATH/models/depth/weights_v1.pt"
+    """
     setup_logging()
     torch.hub.set_dir('/tmp/weights')
     predict()

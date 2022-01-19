@@ -16,6 +16,9 @@ class TeamFeaturePipelineConfig(scfg.Config):
 
         'data_workers': scfg.Value(2, help='dataloader workers for each proc'),
         'keep_sessions': scfg.Value(False, help='if True does not close tmux sessions'),
+
+        'run': scfg.Value(True, help='if True execute the pipeline'),
+        'cache': scfg.Value(True, help='if True skip completed results'),
     }
 
 
@@ -157,9 +160,12 @@ def main(cmdline=True, **kwargs):
     tq = tmux_queue.TMUXMultiQueue(name='teamfeat', size=size, gres=gres)
 
     for task in tasks:
-        if not task['output_fpath'].exists():
-            command = f"[[ -f '{task['output_fpath']}' ]] || " + task['command']
-            tq.submit(command)
+        if config['cache']:
+            if not task['output_fpath'].exists():
+                command = f"[[ -f '{task['output_fpath']}' ]] || " + task['command']
+                tq.submit(command)
+        else:
+            tq.submit(task['command'])
 
     tq.rprint()
 
@@ -167,18 +173,19 @@ def main(cmdline=True, **kwargs):
 
     # TODO: make the monitor spawn in a new tmux session. The monitor could
     # actually be the scheduler process.
-    import subprocess
-    try:
-        agg_state = tq.run(block=True)
-    except subprocess.CalledProcessError as ex:
-        print('ex.stdout = {!r}'.format(ex.stdout))
-        print('ex.stderr = {!r}'.format(ex.stderr))
-        print('ex.returncode = {!r}'.format(ex.returncode))
-        raise
-    else:
-        if not config['keep_sessions']:
-            if not agg_state['errored']:
-                tq.kill()
+    if config['run']:
+        import subprocess
+        try:
+            agg_state = tq.run(block=True)
+        except subprocess.CalledProcessError as ex:
+            print('ex.stdout = {!r}'.format(ex.stdout))
+            print('ex.stderr = {!r}'.format(ex.stderr))
+            print('ex.returncode = {!r}'.format(ex.returncode))
+            raise
+        else:
+            if not config['keep_sessions']:
+                if not agg_state['errored']:
+                    tq.kill()
 
     if 1:
         # Finalize features by combining them all into combo.kwcoco.json
@@ -186,15 +193,24 @@ def main(cmdline=True, **kwargs):
         combo_code = ''.join(sorted(combo_code_parts))
         combo_fpath = aligned_bundle_dpath / f'combo_{combo_code}.kwcoco.json'
 
+        tq = tmux_queue.TMUXMultiQueue(name='combine-feats', size=2)
+
         # TODO: enable forcing if needbe
-        if not combo_fpath.exists() or 0:
+        if not combo_fpath.exists() or not config['cache']:
             command = ub.codeblock(
                 f'''
                 python -m watch.cli.coco_combine_features \
                     --src {' '.join(tocombine)} \
                     --dst {combo_fpath}
                 ''')
-            ub.cmd(command, verbose=2, check=True)
+            tq.submit(command)
+
+        tq.rprint()
+        if config['run']:
+            agg_state = tq.run(block=True)
+            if not config['keep_sessions']:
+                if not agg_state['errored']:
+                    tq.kill()
 
         splits = {
             'combo_train': combo_fpath.augment(suffix='_train', multidot=True),
@@ -263,10 +279,14 @@ def main(cmdline=True, **kwargs):
                 --select_images '.sensor_coarse == "WV"'
             ''')
         tq.submit(command, index=1)
-        agg_state = tq.run(block=True)
-        if not config['keep_sessions']:
-            if not agg_state['errored']:
-                tq.kill()
+
+        tq.rprint()
+
+        if config['run']:
+            agg_state = tq.run(block=True)
+            if not config['keep_sessions']:
+                if not agg_state['errored']:
+                    tq.kill()
 
     """
     Ignore:
@@ -278,7 +298,8 @@ def main(cmdline=True, **kwargs):
 if __name__ == '__main__':
     """
     CommandLine:
-        python -m watch.cli.prepare_teamfeats --gres=0 --with_depth=True --keep_sessions=True
+        python -m watch.cli.prepare_teamfeats --gres=0 --with_depth=True --keep_sessions=True --run=False --cache=False
+
         python -m watch.cli.prepare_teamfeats --gres=0,2 --with_depth=True --keep_sessions=True
         python -m watch.cli.prepare_teamfeats --gres=2 --with_materials=False --keep_sessions=True
     """

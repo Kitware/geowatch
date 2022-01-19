@@ -902,7 +902,7 @@ smartwatch stats "$TRAIN_FPATH" "$VALI_FPATH"
 EXPERIMENT_NAME=BOTH_${ARCH}_centerannot_ILM_v50
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
-export CUDA_VISIBLE_DEVICES="1"
+export CUDA_VISIBLE_DEVICES="0"
 python -m watch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
     --channels=${CHANNELS} \
@@ -944,7 +944,7 @@ smartwatch stats "$TRAIN_FPATH" "$VALI_FPATH"
 EXPERIMENT_NAME=BOTH_${ARCH}_L1_IL_v51
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
-export CUDA_VISIBLE_DEVICES="0"
+export CUDA_VISIBLE_DEVICES="1"
 python -m watch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
     --channels=${CHANNELS} \
@@ -965,5 +965,6 @@ python -m watch.tasks.fusion.fit \
     --num_workers="avail/2" \
     --global_saliency_weight=1.00 \
     --global_class_weight=1.00 \
+    --time_sampling=soft2 \
     --batch_size=8 \
     --arch_name=$ARCH

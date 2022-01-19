@@ -369,7 +369,9 @@ class TMUXMultiQueue(PathIdentifiable):
         console = Console()
         for queue in self.workers:
             code = queue.finalize_text()
-            console.print(Panel(Syntax(code, 'bash'), title=str(queue.fpath)))
+            # console.print(Panel(Syntax(code, 'bash'), title=str(queue.fpath)))
+            console.print(Syntax(code, 'bash'))
+
         code = self.finalize_text()
         console.print(Panel(Syntax(code, 'bash'), title=str(self.fpath)))
 

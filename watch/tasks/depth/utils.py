@@ -32,7 +32,7 @@ def process_image_chunked(image,
     # the actual size of the image passed to __process_chip is chunk_size + 2*overlap
     chunk_size = tuple(map(lambda c, o: c - 2 * o, chip_size, overlap))
 
-    image = da.asanyarray(image)
+    image: da.Array = da.asanyarray(image)
     image = image.rechunk(chunk_size)
 
     pbar = tqdm(unit=' chip')
@@ -46,7 +46,8 @@ def process_image_chunked(image,
         dtype=output_dtype,
         meta=np.array((), dtype=output_dtype),
         # pass through
-        pbar=pbar
+        pbar=pbar,
+        boundary='none',
     )
     pred = pred.compute(scheduler='single-threaded')
     pbar.close()
