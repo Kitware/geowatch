@@ -103,13 +103,18 @@ def main(cmdline=True, **kwargs):
     if config[key]:
         # Landcover is fairly fast to run, do it first
         task = {}
+        # Only need 1 worker to minimize lag between images, task is GPU bound
+        depth_data_workers = max(2, data_workers)
+        depth_window_size = 1536  # takes 18GB
         task['output_fpath'] = outputs['dzyne_depth']
         task['command'] = ub.codeblock(
             fr'''
             python -m watch.tasks.depth.predict \
                 --dataset="{base_coco_fpath}" \
                 --output="{task['output_fpath']}" \
-                --deployed="{model_fpaths['dzyne_depth']}"
+                --deployed="{model_fpaths['dzyne_depth']}" \
+                --data_workers={depth_data_workers} \
+                --window_size={depth_window_size}
             ''')
         combo_code_parts.append(codes[key])
         tasks.append(task)
