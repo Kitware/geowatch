@@ -204,7 +204,6 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.torch_start_method = torch_start_method
         self.torch_sharing_strategy = torch_sharing_strategy
 
-        self.input_stats = None
         self.dataset_stats = None
 
         # will only correspond to train
@@ -401,7 +400,6 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             # Note: also need for class weights
             if stats_params is not None:
                 self.dataset_stats = train_dataset.cached_dataset_stats(**stats_params)
-                self.input_stats = self.dataset_stats
 
             if self.vali_kwcoco is not None:
                 # Explicit validation dataset should be prefered
@@ -1471,12 +1469,12 @@ class KWCocoVideoDataset(data.Dataset):
         ])
         workdir = None
         cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends)
-        input_stats = cacher.tryload()
-        if input_stats is None or ub.argflag('--force-recompute-stats'):
-            input_stats = self.compute_dataset_stats(
+        dataset_stats = cacher.tryload()
+        if dataset_stats is None or ub.argflag('--force-recompute-stats'):
+            dataset_stats = self.compute_dataset_stats(
                 num, num_workers=num_workers, batch_size=batch_size)
-            cacher.save(input_stats)
-        return input_stats
+            cacher.save(dataset_stats)
+        return dataset_stats
 
     def compute_dataset_stats(self, num=None, num_workers=0, batch_size=2,
                               with_intensity=True, with_class=True):
@@ -2140,7 +2138,7 @@ class BatchVisualizationBuilder:
         """
         Build a vertical stack for a single frame
         """
-        draw_change = False
+        draw_change = True
         draw_saliency = True
         draw_classes = True
 
@@ -2228,7 +2226,8 @@ class BatchVisualizationBuilder:
             # independently or overlay on a rendered channel
             if frame_idx == 0:
                 # BIG RED X
-                h, w = vertical_stack[-1].shape[0:2]
+                # h, w = vertical_stack[-1].shape[0:2]
+                h = w = builder.max_dim
                 pred_mask = kwimage.draw_text_on_image(
                     {'width': w, 'height': h}, 'X', org=(w // 2, h // 2),
                     valign='center', halign='center', fontScale=10,

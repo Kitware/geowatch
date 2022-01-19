@@ -86,10 +86,7 @@ except Exception:
 
 from timm.models.layers import drop_path
 from torch._jit_internal import _copy_to_script_wrapper
-# from timm.models.layers.activations import sigmoid
-
-
-from torch.nn.modules.container import Module, Iterator  # NOQA
+from torch.nn.modules.container import Module
 
 
 class RobustModuleDict(torch.nn.ModuleDict):
@@ -278,7 +275,6 @@ class MultimodalTransformer(pl.LightningModule):
                  positive_change_weight=1.,
                  negative_change_weight=1.,
                  dataset_stats=None,
-                 input_stats=None,
                  input_channels=None,
                  unique_sensors=None,
                  attention_impl='exact',
@@ -304,13 +300,6 @@ class MultimodalTransformer(pl.LightningModule):
 
         self.arch_name = arch_name
         self.squash_modes = squash_modes
-
-        # HACK:
-        if dataset_stats is None:
-            if input_stats is not None and 'input_stats' in input_stats:
-                import warnings
-                warnings.warn('use dataset stats instead')
-                dataset_stats = input_stats
 
         if dataset_stats is not None:
             input_stats = dataset_stats['input_stats']
@@ -341,7 +330,6 @@ class MultimodalTransformer(pl.LightningModule):
 
         if input_stats is not None:
             input_norms = RobustModuleDict()
-            # sensors = list(ub.unique([s for (s, c) in input_stats.keys()]))
             for s, c in self.unique_sensor_modes:
                 if s not in input_norms:
                     input_norms[s] = RobustModuleDict()
@@ -365,17 +353,17 @@ class MultimodalTransformer(pl.LightningModule):
         stream_num_channels = {s.spec: s.numel() for s in input_streams}
         self.stream_num_channels = stream_num_channels
 
-        # TODO: rework "streams" to get the sum
-        num_channels = input_channels.numel()
-
         self.global_class_weight = global_class_weight
         self.global_change_weight = global_change_weight
         self.global_saliency_weight = global_saliency_weight
+        self.global_head_weights = {
+            'class': global_class_weight,
+            'change': global_change_weight,
+            'saliency': global_saliency_weight,
+        }
+
         self.positive_change_weight = positive_change_weight
         self.negative_change_weight = negative_change_weight
-
-        self.class_loss = class_loss
-        self.change_loss = change_loss
 
         # TODO: this data should be introspectable via the kwcoco file
         hueristic_background_keys = heuristics.BACKGROUND_CLASSES
@@ -456,24 +444,6 @@ class MultimodalTransformer(pl.LightningModule):
             self.positive_change_weight
         ])
 
-        _info = coerce_criterion(self.class_loss, self.class_weights)
-        self.class_criterion = _info['criterion']
-        self.class_criterion_target_encoding = _info['target_encoding']
-        self.class_criterion_logit_shape = _info['logit_shape']
-        self.class_criterion_target_shape = _info['target_shape']
-
-        _info = coerce_criterion(change_loss, self.change_weights)
-        self.change_criterion = _info['criterion']
-        self.change_criterion_target_encoding = _info['target_encoding']
-        self.change_criterion_logit_shape = _info['logit_shape']
-        self.change_criterion_target_shape = _info['target_shape']
-
-        _info = coerce_criterion(saliency_loss, self.saliency_weights)
-        self.saliency_criterion = _info['criterion']
-        self.saliency_criterion_target_encoding = _info['target_encoding']
-        self.saliency_criterion_logit_shape = _info['logit_shape']
-        self.saliency_criterion_target_shape = _info['target_shape']
-
         self.class_metrics = nn.ModuleDict({
             # "acc": torchmetrics.Accuracy(),
             # "iou": torchmetrics.IoU(2),
@@ -494,8 +464,6 @@ class MultimodalTransformer(pl.LightningModule):
             'f1_micro': torchmetrics.F1(threshold=0.5, average='micro'),
             'f1_macro': torchmetrics.F1(threshold=0.5, average='macro', num_classes=self.saliency_num_classes),
         })
-
-        self.input_channels.numel()
 
         # if self.squash_modes:
         # in_features_raw = in_features_raw * num_channels
@@ -585,6 +553,15 @@ class MultimodalTransformer(pl.LightningModule):
         self.in_features_pos = in_features_pos
         self.in_features_raw = in_features_raw
 
+        ### NEW:
+        # Learned positional encodings
+        self.token_learner1_time_delta = nh.layers.MultiLayerPerceptronNd(
+            dim=0, in_channels=1, hidden_channels=3, out_channels=8, residual=True, norm=None)
+        self.token_learner2_sensor = nh.layers.MultiLayerPerceptronNd(
+            dim=0, in_channels=16, hidden_channels=3, out_channels=8, residual=True, norm=None)
+        self.token_learner3_mode = nh.layers.MultiLayerPerceptronNd(
+            dim=0, in_channels=16, hidden_channels=3, out_channels=8, residual=True, norm=None)
+
         # 'https://rwightman.github.io/pytorch-image-models/models/vision-transformer/'
         if arch_name in transformer.encoder_configs:
             encoder_config = transformer.encoder_configs[arch_name]
@@ -604,64 +581,49 @@ class MultimodalTransformer(pl.LightningModule):
             )
         else:
             raise NotImplementedError
-        # else:
-        #     if arch_name != 'vit_base_patch16_224':
-        #         print('might not work')
-        #         transformer.TimmEncoder(arch_name)
-        #         import timm
-        #         model = timm.create_model('vit_base_patch16_224', pretrained=True)
-        #         import netharn as nh
-        #         nh.OutputShapeFor(model)
 
         feat_dim = self.encoder.out_features
 
-        self.move_channels_last = Rearrange('b t c h w f -> b t h w f c')
-
-        # A simple linear layer that learns to combine channels
-        self.channel_fuser = nh.layers.MultiLayerPerceptronNd(
-            0, num_channels, [], 1, norm=None)
-
-        # self.binary_clf = nn.LazyLinear(1)  # TODO: rename to change_clf
-        # self.class_clf = nn.LazyLinear(len(self.classes))  # category classifier
         self.change_head_hidden = change_head_hidden
         self.class_head_hidden = class_head_hidden
         self.saliency_head_hidden = saliency_head_hidden
 
-        self.change_clf = nh.layers.MultiLayerPerceptronNd(
-            dim=0,
-            in_channels=feat_dim,
-            hidden_channels=self.change_head_hidden,
-            out_channels=2,
-            norm=None
-        )
-        self.class_clf = nh.layers.MultiLayerPerceptronNd(
-            dim=0,
-            in_channels=feat_dim,
-            hidden_channels=self.class_head_hidden,
-            out_channels=self.num_classes,
-            norm=None
-        )
+        self.class_loss = class_loss
+        self.change_loss = change_loss
+        self.saliency_loss = saliency_loss
 
-        # TODO:
-        # Maybe drop heads if their weight is None?
-        self.saliency_clf = nh.layers.MultiLayerPerceptronNd(
-            dim=0,
-            in_channels=feat_dim,
-            hidden_channels=self.saliency_head_hidden,
-            out_channels=self.saliency_num_classes,  # saliency will be trinary with an "other" class
-            norm=None
-        )
+        self.criterions = torch.nn.ModuleDict()
+        self.heads = torch.nn.ModuleDict()
 
-        print('self.dataset_stats = {}'.format(ub.repr2(self.dataset_stats, nl=-1)))
+        if self.global_head_weights['change']:
+            self.heads['change'] = nh.layers.MultiLayerPerceptronNd(
+                dim=0,
+                in_channels=feat_dim,
+                hidden_channels=self.change_head_hidden,
+                out_channels=2,
+                norm=None
+            )
+            self.criterions['change'] = coerce_criterion(change_loss, self.change_weights)
 
-        ### NEW:
-        # hashstr_tokenizer = torch.nn.Linear(16, 8)
-        self.token_learner1_time_delta = nh.layers.MultiLayerPerceptronNd(
-            dim=0, in_channels=1, hidden_channels=3, out_channels=8, residual=True, norm=None)
-        self.token_learner2_sensor = nh.layers.MultiLayerPerceptronNd(
-            dim=0, in_channels=16, hidden_channels=3, out_channels=8, residual=True, norm=None)
-        self.token_learner3_mode = nh.layers.MultiLayerPerceptronNd(
-            dim=0, in_channels=16, hidden_channels=3, out_channels=8, residual=True, norm=None)
+        if self.global_head_weights['class']:
+            self.heads['class'] = nh.layers.MultiLayerPerceptronNd(
+                dim=0,
+                in_channels=feat_dim,
+                hidden_channels=self.class_head_hidden,
+                out_channels=self.num_classes,
+                norm=None
+            )
+            self.criterions['class'] = coerce_criterion(class_loss, self.class_weights)
+
+        if self.global_head_weights['saliency']:
+            self.heads['saliency'] = nh.layers.MultiLayerPerceptronNd(
+                dim=0,
+                in_channels=feat_dim,
+                hidden_channels=self.saliency_head_hidden,
+                out_channels=self.saliency_num_classes,  # saliency will be trinary with an "other" class
+                norm=None
+            )
+            self.criterions['saliency'] = coerce_criterion(saliency_loss, self.saliency_weights)
 
     def configure_optimizers(self):
         """
@@ -744,51 +706,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> images.shape
             >>> self.forward(images)
         """
-        # Break images up into patches
-        assert len(self.stream_tokenizers) == 1
-        tokenize = ub.peek(self.stream_tokenizers.values())
-        raw_patch_tokens = tokenize(images)
-
-        if self.squash_modes:
-            raw_patch_tokens = einops.rearrange(raw_patch_tokens, 'b t c h w f -> b t 1 h w (c f)')
-
-        # Add positional encodings for time, mode, and space.
-        patch_tokens = self.add_encoding(raw_patch_tokens)
-
-        # TODO: maybe make the encoder return a sequence of 1 less?
-        # Rather than just ignoring the first output?
-        patch_feats = self.encoder(patch_tokens)
-
-        if not self.squash_modes:
-            # Final channel-wise fusion
-            chan_last = self.move_channels_last(patch_feats)
-
-            # Latent channels are now marginalized away
-            spacetime_fused_features = self.channel_fuser(chan_last)[..., 0]
-            # spacetime_fused_features = einops.reduce(similarity, "b t c h w -> b t h w", "mean")
-        else:
-            assert patch_feats.shape[2] == 1
-            spacetime_fused_features = patch_feats[:, :, 0, ...]
-
-        # if 0:
-        #     # TODO: add DotProduct back in?
-        #     # similarity between neighboring timesteps
-        #     feats = nn.functional.normalize(feats, dim=-1)
-        #     similarity = torch.einsum("b t c h w f , b t c h w f -> b t c h w", feats[:, :-1], feats[:, 1:])
-        #     similarity = einops.reduce(similarity, "b t c h w -> b t h w", "mean")
-        #     distance = -3.0 * similarity
-
-        # Pass the final fused space-time feature to a classifier
-        change_logits = self.change_clf(spacetime_fused_features[:, 1:])
-        class_logits = self.class_clf(spacetime_fused_features)
-        saliency_logits = self.saliency_clf(spacetime_fused_features)
-
-        logits = {
-            'change': change_logits,
-            'class': class_logits,
-            'saliency': saliency_logits,
-        }
-        return logits
+        raise NotImplementedError('see forward_step instad')
 
     def overfit(self, batch):
         """
@@ -898,11 +816,12 @@ class MultimodalTransformer(pl.LightningModule):
         nh.initializers.Orthogonal()(self)
         """
         import kwplot
-        from watch.utils.slugify_ext import smart_truncate
         import torch_optimizer
-        from kwplot.mpl_make import render_figure_to_image
         import xdev
         import kwimage
+        import pandas as pd
+        from watch.utils.slugify_ext import smart_truncate
+        from kwplot.mpl_make import render_figure_to_image
 
         sns = kwplot.autosns()
         datamodule = self.datamodule
@@ -961,7 +880,6 @@ class MultimodalTransformer(pl.LightningModule):
             kwplot.imshow(canvas, pnum=(1, 2, 1), fnum=fnum)
             fig = kwplot.figure(fnum=fnum, pnum=(1, 2, 2))
             #kwplot.imshow(canvas, pnum=(1, 2, 1))
-            import pandas as pd
             ax = sns.lineplot(data=pd.DataFrame(loss_records), x='step', y='val', hue='part')
             ax.set_yscale('logit')
             fig.suptitle(smart_truncate(str(optim).replace('\n', ''), max_length=64))
@@ -987,8 +905,8 @@ class MultimodalTransformer(pl.LightningModule):
             >>> import watch
             >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset='special:vidshapes-watch',
-            >>>     num_workers='avail / 2', chip_size=128, true_multimodal=True,
-            >>>     normalize_inputs=True, neg_to_pos_ratio=0,
+            >>>     num_workers='avail / 2', chip_size=64, time_steps=2, true_multimodal=True,
+            >>>     normalize_inputs=1, neg_to_pos_ratio=0, batch_size=1,
             >>> )
             >>> datamodule.setup('fit')
             >>> train_dset = datamodule.torch_datasets['train']
@@ -998,7 +916,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> # Choose subclass to test this with (does not cover all cases)
             >>> self = model = methods.MultimodalTransformer(
             >>>     arch_name='smt_it_joint_p8', tokenizer='conv7',
-            >>>     dataset_stats=datamodule.dataset_stats,
+            >>>     dataset_stats=datamodule.dataset_stats, global_saliency_weight=0.0, global_change_weight=0.0, global_class_weight=0.0,
             >>>     classes=datamodule.classes, input_channels=datamodule.input_channels)
             >>> with_loss = True
             >>> outputs = self.forward_step(batch, with_loss=with_loss)
@@ -1014,17 +932,14 @@ class MultimodalTransformer(pl.LightningModule):
 
         item_losses = []
 
-        item_changes_truth = []
-        item_classes_truth = []
-        item_saliency_truth = []
-
-        item_change_probs = []
-        item_class_probs = []
-        item_saliency_probs = []
+        # Initialize truth and probs for each head / item that will be stacked
+        batch_head_truths = {k: [] for k in self.heads.keys()}
+        batch_head_probs = {k: [] for k in self.heads.keys()}
 
         for item in batch:
 
             if 1:
+                # Clean this up
                 positional_tensors = item['positional_tensors']
                 positional_outputs = []
                 key = 'time_offset'
@@ -1054,12 +969,22 @@ class MultimodalTransformer(pl.LightningModule):
             # For loops are for handing heterogeneous inputs
             tokenized = []
             token_frame_idx = []
-            frame_class_weights_list = []
-            frame_saliency_weights_list = []
+
+            item_weight_lists = {}
+            if self.global_head_weights['class'] or self.global_head_weights['change']:
+                # TODO: the dataloader should probably just provide the change weights
+                item_weight_lists['class'] = []
+            if self.global_head_weights['saliency']:
+                item_weight_lists['saliency'] = []
+
+            # frame_class_weights_list = []
+            # frame_saliency_weights_list = []
             for frame_idx, (frame, frame_enc) in enumerate(zip(item['frames'], per_frame_pos_encoding)):
                 if with_loss:
-                    frame_class_weights_list.append(frame['class_weights'])
-                    frame_saliency_weights_list.append(frame['saliency_weights'])
+                    if 'class' in item_weight_lists:
+                        item_weight_lists['class'].append(frame['class_weights'])
+                    if 'saliency' in item_weight_lists:
+                        item_weight_lists['saliency'].append(frame['saliency_weights'])
 
                 modes = frame['modes']
                 sensor = frame['sensor']
@@ -1124,15 +1049,6 @@ class MultimodalTransformer(pl.LightningModule):
                     tokenized.append(frame_sensor_chan_tokens)
                     token_frame_idx.append(frame_idx)
 
-            # Because we are nt collating we need to add a batch dimension
-            if frame_class_weights_list:
-                frame_class_weights = torch.stack(frame_class_weights_list)[None, ...]
-                rt_frame_change_weights = torch.mul(frame_class_weights[:, 1:, ], frame_class_weights[:, :-1, ])
-                frame_change_weights = rt_frame_change_weights * rt_frame_change_weights
-
-            if frame_saliency_weights_list:
-                frame_saliency_weights = torch.stack(frame_saliency_weights_list)[None, ...]
-
             tokens = torch.stack(tokenized, dim=0)[None, None, ...]
 
             # B = 1
@@ -1170,11 +1086,7 @@ class MultimodalTransformer(pl.LightningModule):
             # decoding.
             # spacetime_fused_features = einops.rearrange(encoded_tokens, 'b m t X (hs ws) f -> b (m t X) hs ws f', hs=hs, ws=ws, m=1, X=1)
 
-            # We do need a decoder now.
-
-            # if not self.squash_modes:
-            #     # Final channel-wise fusion
-            #     chan_last = self.move_channels_last(patch_feats)
+            # Do we need a decorder now?
 
             #     # Latent channels are now marginalized away
             #     spacetime_fused_features = self.channel_fuser(chan_last)[..., 0]
@@ -1183,24 +1095,19 @@ class MultimodalTransformer(pl.LightningModule):
             #     assert patch_feats.shape[2] == 1
             #     spacetime_fused_features = patch_feats[:, :, 0, ...]
 
-            # if 0:
-            #     # TODO: add DotProduct back in?
-            #     # similarity between neighboring timesteps
-            #     feats = nn.functional.normalize(feats, dim=-1)
-            #     similarity = torch.einsum("b t c h w f , b t c h w f -> b t c h w", feats[:, :-1], feats[:, 1:])
-            #     similarity = einops.reduce(similarity, "b t c h w -> b t h w", "mean")
-            #     distance = -3.0 * similarity
-
             # Pass the final fused space-time feature to a classifier
-            change_logits = self.change_clf(spacetime_fused_features[:, 1:])
-            class_logits = self.class_clf(spacetime_fused_features)
-            saliency_logits = self.saliency_clf(spacetime_fused_features)
 
-            logits = {
-                'change': change_logits,
-                'class': class_logits,
-                'saliency': saliency_logits,
-            }
+            logits = {}
+            if 'change' in self.heads:
+                # TODO: the change head should take unmodified features as
+                # input and then it can do a dot-product / look at second half
+                # / whatever.
+                # _feats = spacetime_fused_features[:, :-1] - spacetime_fused_features[:, 1:]
+                logits['change'] = self.heads['change'](spacetime_fused_features[:, 1:, :, :, :])
+            if 'class' in self.heads:
+                logits['class'] = self.heads['class'](spacetime_fused_features)
+            if 'saliency' in self.heads:
+                logits['saliency'] = self.heads['saliency'](spacetime_fused_features)
 
             # TODO: it may be faster to compute loss at the downsampled
             # resolution.
@@ -1213,186 +1120,128 @@ class MultimodalTransformer(pl.LightningModule):
                 resampled = einops.rearrange(_tmp2, 'b (t c) h w -> b t h w c', c=logit_val.shape[4])
                 resampled_logits[logit_key] = resampled
 
-            class_logits = resampled_logits['class']
-            change_logits = resampled_logits['change']
-            saliency_logits = resampled_logits['saliency']
-
+            # Convert logits into probabilities for output
             # Remove batch index in both cases
-            change_prob = change_logits.detach().softmax(dim=4)[0, ..., 1]
-            class_prob = class_logits.detach().sigmoid()[0]
-            saliency_prob = saliency_logits.detach().sigmoid()[0]
+            probs = {}
+            if 'change' in resampled_logits:
+                probs['change'] = resampled_logits['change'].detach().softmax(dim=4)[0, ..., 1]
+            if 'class' in resampled_logits:
+                probs['class'] = resampled_logits['class'].detach().sigmoid()[0]
+            if 'saliency' in resampled_logits:
+                probs['saliency'] = resampled_logits['saliency'].detach().sigmoid()[0]
 
-            # Hack the change prob so it works with our currently binary
-            # visualizations
-            # change_prob = ((1 - change_prob[..., 0]) + change_prob[..., 0]) / 2.0
-
-            item_change_probs.append(change_prob)
-            item_class_probs.append(class_prob)
-            item_saliency_probs.append(saliency_prob)
+            # Append the item result to the batch outputs
+            for k, v in probs.items():
+                batch_head_probs[k].append(v)
 
             item_loss_parts = {}
-
             if with_loss:
-                true_changes = torch.stack([
-                    frame['change'] for frame in item['frames'][1:]
-                ])[None, ...]
-                item_changes_truth.append(true_changes)  # [B, T, H, W, C]
+                # Stack the weights for each item
+                item_weights = {
+                    # Because we are nt collating we need to add a batch dimension
+                    key: torch.stack(tensors)[None, ...]
+                    for key, tensors in item_weight_lists.items()
+                }
+                if 'change' in self.heads:
+                    # Special case to compute change weights
+                    _cw = item_weights['class']
+                    item_weights['change'] = torch.mul(_cw[:, 1:, ], _cw[:, :-1, ])
 
-                true_class = torch.stack([
-                    frame['class_idxs'] for frame in item['frames']
-                ])[None, ...]
-                item_classes_truth.append(true_class)  # [B, T, H, W, C]
+                item_truths = {}
+                if self.global_head_weights['change']:
+                    # [B, T, H, W]
+                    item_truths['change'] = torch.stack([
+                        frame['change'] for frame in item['frames'][1:]
+                    ])[None, ...]
 
-                if not hasattr(self, '_fg_idxs'):
-                    fg_idxs = sorted(ub.take(self.classes.node_to_idx, self.foreground_classes))
-                    # bg_idxs = sorted(ub.take(self.classes.node_to_idx, self.background_classes))
-                    fg_idxs = np.expand_dims(np.array(fg_idxs), (0, 1, 2, 3))
-                    self._fg_idxs = torch.Tensor(fg_idxs).to(true_class.device)
-                    # true_class[..., None] == torch.Tensor(self._fg_idxs)
-                    # self._bg_idxs = bg_idxs
+                if self.global_head_weights['change'] or self.global_head_weights['saliency']:
+                    # [B, T, H, W]
+                    item_truths['class'] = torch.stack([
+                        frame['class_idxs'] for frame in item['frames']
+                    ])[None, ...]
 
-                true_saliency = (true_class[..., None] == self._fg_idxs).any(dim=4).long()
-                item_saliency_truth.append(true_saliency)
+                if self.global_head_weights['saliency']:
+                    # A "Salient" class is anything that is a foreground class
+                    # Not sure if this should be a dataloader thing or not
+                    if not hasattr(self, '_fg_idxs'):
+                        fg_idxs = sorted(ub.take(self.classes.node_to_idx, self.foreground_classes))
+                        fg_idxs = np.expand_dims(np.array(fg_idxs), (0, 1, 2, 3))
+                        self._fg_idxs = torch.Tensor(fg_idxs).to(item_truths['class'].device)
+                    item_truths['saliency'] = (item_truths['class'][..., None] == self._fg_idxs).any(dim=4).long()
 
-                # compute criterion
-                # valids_ = (1 - ignores)[..., None]  # [B, T, H, W, 1]
+                if 0:
+                    ub.map_vals(lambda x: x.shape, item_weights)
+                    ub.map_vals(lambda x: x.shape, item_truths)
 
-                # Hack: change the 1-logit binary case to 2 class binary case
-                need_change_loss   = 1 or self.global_change_weight > 0
-                need_class_loss    = 1 or self.global_class_weight > 0
-                need_saliency_loss = 1 or self.global_saliency_weight > 0
+                for k, v in batch_head_truths.items():
+                    v.append(item_truths[k])
 
-                # TODO: the logic for each of the heads could be consolidated
+                # Compute criterion loss for each head
+                for head_key, head_logits in resampled_logits.items():
 
-                # Change loss part
-                if need_change_loss:
-                    change_pred_input = einops.rearrange(
-                        change_logits,
-                        'b t h w c -> ' + self.change_criterion_logit_shape).contiguous()
-                    change_weights = einops.rearrange(
-                        frame_change_weights[..., None],
-                        'b t h w c -> ' + self.change_criterion_logit_shape).contiguous()
-                    if self.change_criterion_target_encoding == 'index':
-                        change_true_cxs = true_changes.long()
-                        change_true_input = einops.rearrange(
-                            change_true_cxs,
-                            'b t h w -> ' + self.change_criterion_target_shape).contiguous()
-                        # hack: I hate squeeze, refactor
-                        change_weights = change_weights.squeeze(dim=1)
-                    elif self.change_criterion_target_encoding == 'onehot':
+                    criterion = self.criterions[head_key]
+                    head_truth = item_truths[head_key]
+                    head_weights = item_weights[head_key]
+                    global_head_weight = self.global_head_weights[head_key]
+
+                    head_pred_input = einops.rearrange(head_logits, 'b t h w c -> ' + criterion.logit_shape).contiguous()
+                    head_weights_input = einops.rearrange(head_weights[..., None], 'b t h w c -> ' + criterion.logit_shape).contiguous()
+
+                    if criterion.target_encoding == 'index':
+                        head_true_idxs = head_truth.long()
+                        head_true_input = einops.rearrange(head_true_idxs, 'b t h w -> ' + criterion.target_shape).contiguous()
+                        head_weights_input = head_weights_input[:, 0]
+                    elif criterion.target_encoding == 'onehot':
                         # Note: 1HE is much easier to work with
-                        change_true_ohe = kwarray.one_hot_embedding(true_changes.long(), 2, dim=-1)
-                        change_true_input = einops.rearrange(
-                            change_true_ohe,
-                            'b t h w c -> ' + self.change_criterion_target_shape).contiguous()
+                        head_true_ohe = kwarray.one_hot_embedding(head_truth.long(), criterion.in_channels, dim=-1)
+                        head_true_input = einops.rearrange(head_true_ohe, 'b t h w c -> ' + criterion.target_shape).contiguous()
                     else:
-                        raise KeyError(self.change_criterion_target_encoding)
-
-                    unreduced_change_loss = self.change_criterion(
-                        change_pred_input,
-                        change_true_input
-                    )
-                    full_change_weight = torch.broadcast_to(change_weights, unreduced_change_loss.shape)
+                        raise KeyError(criterion.target_encoding)
+                    unreduced_head_loss = criterion(head_pred_input, head_true_input)
+                    full_head_weight = torch.broadcast_to(head_weights_input, unreduced_head_loss.shape)
                     # Weighted reduction
-                    weighted_change_loss = (full_change_weight * unreduced_change_loss).sum() / (full_change_weight.sum() + eps_f32)
-                    item_loss_parts['change'] = self.global_change_weight * weighted_change_loss
-
-                # Class loss part
-                if need_class_loss:
-                    class_pred_input = einops.rearrange(
-                        class_logits,
-                        'b t h w c -> ' + self.class_criterion_logit_shape).contiguous()
-                    class_weights = einops.rearrange(
-                        frame_class_weights[..., None],
-                        'b t h w c -> ' + self.class_criterion_logit_shape).contiguous()
-                    if self.class_criterion_target_encoding == 'index':
-                        class_true_cxs = true_class.long()
-                        class_true_input = einops.rearrange(
-                            class_true_cxs,
-                            'b t h w -> ' + self.class_criterion_target_shape).contiguous()
-                        # hack: I hate squeeze, refactor
-                        class_weights = class_weights.squeeze(dim=1)
-                    elif self.class_criterion_target_encoding == 'onehot':
-                        class_true_ohe = kwarray.one_hot_embedding(true_class.long(), len(self.classes), dim=-1)
-                        class_true_input = einops.rearrange(
-                            class_true_ohe,
-                            'b t h w c -> ' + self.class_criterion_target_shape).contiguous()
-                    else:
-                        raise KeyError(self.class_criterion_target_encoding)
-
-                    unreduced_class_loss = self.class_criterion(
-                        class_pred_input,
-                        class_true_input
-                    )
-                    full_class_weight = torch.broadcast_to(class_weights, unreduced_class_loss.shape)
-                    weighted_class_loss = (full_class_weight * unreduced_class_loss).sum() / (full_class_weight.sum() + eps_f32)
-                    item_loss_parts['class'] = self.global_class_weight * weighted_class_loss
-
-                # Saliency loss part
-                if need_saliency_loss:
-                    saliency_pred_input = einops.rearrange(
-                        saliency_logits,
-                        'b t h w c -> ' + self.saliency_criterion_logit_shape).contiguous()
-                    saliency_weights = einops.rearrange(
-                        frame_saliency_weights[..., None],
-                        'b t h w c -> ' + self.saliency_criterion_logit_shape).contiguous()
-                    if self.saliency_criterion_target_encoding == 'index':
-                        saliency_true_cxs = true_saliency.long()
-                        saliency_true_input = einops.rearrange(
-                            saliency_true_cxs,
-                            'b t h w -> ' + self.saliency_criterion_target_shape).contiguous()
-                        # hack: I hate squeeze, refactor
-                        saliency_weights = saliency_weights.squeeze(dim=1)
-                    elif self.saliency_criterion_target_encoding == 'onehot':
-                        saliency_true_ohe = kwarray.one_hot_embedding(true_saliency.long(), self.saliency_num_classes, dim=-1)
-                        saliency_true_input = einops.rearrange(
-                            saliency_true_ohe,
-                            'b t h w c -> ' + self.saliency_criterion_target_shape).contiguous()
-                    else:
-                        raise KeyError(self.saliency_criterion_target_encoding)
-                    unreduced_saliency_loss = self.saliency_criterion(
-                        saliency_pred_input,
-                        saliency_true_input
-                    )
-                    full_saliency_weight = torch.broadcast_to(saliency_weights, unreduced_saliency_loss.shape)
-                    weighted_saliency_loss = (full_saliency_weight * unreduced_saliency_loss).sum() / (full_saliency_weight.sum() + eps_f32)
-                    item_loss_parts['saliency'] = self.global_saliency_weight * weighted_saliency_loss
+                    weighted_head_loss = (full_head_weight * unreduced_head_loss).sum() / (full_head_weight.sum() + eps_f32)
+                    item_loss_parts[head_key] = global_head_weight * weighted_head_loss
 
                 item_losses.append(item_loss_parts)
 
-        outputs['change_probs'] = item_change_probs
-        outputs['class_probs'] = item_class_probs
-        outputs['saliency_probs'] = item_saliency_probs
+        if 'change' in batch_head_probs:
+            outputs['change_probs'] = batch_head_probs['change']
+        if 'class' in batch_head_probs:
+            outputs['class_probs'] = batch_head_probs['class']
+        if 'saliency' in batch_head_probs:
+            outputs['saliency_probs'] = batch_head_probs['saliency']
 
         if with_loss:
             total_loss = sum(
                 val for parts in item_losses for val in parts.values())
 
-            all_true_change = torch.cat(item_changes_truth, dim=0)
-            all_pred_change = torch.stack(item_change_probs)
+            to_compare = {}
+            if 'change' in batch_head_truths:
+                _true = torch.cat(batch_head_truths['change'], dim=0)
+                _pred = torch.stack(batch_head_probs['change'])
+                to_compare['change'] = (_true, _pred)
 
-            all_true_class = torch.cat(item_classes_truth, dim=0).view(-1)
-            all_pred_class = torch.stack(item_class_probs).view(-1, self.num_classes)
+            if 'class' in batch_head_truths:
+                _true = torch.cat(batch_head_truths['class'], dim=0).view(-1)
+                _pred = torch.stack(batch_head_probs['class']).view(-1, self.num_classes)
+                to_compare['class'] = (_true, _pred)
 
-            all_true_saliency = torch.cat(item_saliency_truth, dim=0).view(-1)
-            all_pred_saliency = torch.stack(item_saliency_probs).view(-1, self.saliency_num_classes)
+            if 'saliency' in batch_head_truths:
+                _true = torch.cat(batch_head_truths['saliency'], dim=0).view(-1)
+                _pred = torch.stack(batch_head_probs['saliency']).view(-1, self.saliency_num_classes)
+                to_compare['saliency'] = (_true, _pred)
 
             # compute metrics
             if self.trainer is not None:
                 item_metrics = {}
 
-                # Dont log unless a trainer is attached
-                for key, metric in self.change_metrics.items():
-                    val = metric(all_pred_change, all_true_change)
-                    item_metrics[f'{stage}_change_{key}'] = val
-
-                for key, metric in self.class_metrics.items():
-                    val = metric(all_pred_class, all_true_class)
-                    item_metrics[f'{stage}_class_{key}'] = val
-
-                for key, metric in self.saliency_metrics.items():
-                    val = metric(all_pred_saliency, all_true_saliency)
-                    item_metrics[f'{stage}_saliency_{key}'] = val
+                for head_key in to_compare.keys():
+                    _true, _pred = to_compare[head_key]
+                    # Dont log unless a trainer is attached
+                    for key, metric in self.change_metrics.items():
+                        val = metric(_pred, _true)
+                        item_metrics[f'{stage}_{head_key}_{key}'] = val
 
                 for key, val in item_metrics.items():
                     self.log(key, val, prog_bar=True)
@@ -1736,13 +1585,18 @@ def coerce_criterion(loss_code, weights):
         # self.class_criterion = nn.BCEWithLogitsLoss()
         raise NotImplementedError(loss_code)
 
-    criterion_info = {
-        'criterion': criterion,
-        'target_encoding': target_encoding,
-        'logit_shape': logit_shape,
-        'target_shape': target_shape,
-    }
-    return criterion_info
+    # Augment the criterion with extra information about what it expects
+    criterion.target_encoding = target_encoding
+    criterion.logit_shape = logit_shape
+    criterion.target_shape = target_shape
+    criterion.in_channels = len(weights)
+    # criterion_info = {
+    #     'criterion': criterion,
+    #     'target_encoding': target_encoding,
+    #     'logit_shape': logit_shape,
+    #     'target_shape': target_shape,
+    # }
+    return criterion
 
 
 class OurDepthwiseSeparableConv(nn.Module):
