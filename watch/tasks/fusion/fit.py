@@ -364,6 +364,10 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     # Note: Changed name from method to model
     model = method_class(**method_var_dict)
 
+    # Tell the datamodule what tasks the datasets will need to generate data
+    # for.
+    datamodule._notify_about_tasks(model=model)
+
     if args.resume_from_checkpoint is None:
         import netharn as nh
         init_cls, init_kw = nh.api.Initializer.coerce(init=args.init)

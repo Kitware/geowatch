@@ -802,7 +802,7 @@ python -m watch.tasks.fusion.fit \
     --arch_name=$ARCH 
 
 
-# L1 BAS with raw features Namek - 2022-01-18
+# L1 BAS with raw features Namek - 2022-01-19
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop1-Aligned-L1-2022-01
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/train_data_nowv.kwcoco.json
@@ -843,7 +843,7 @@ python -m watch.tasks.fusion.fit \
     --arch_name=$ARCH
 
 
-# TA1 BAS with raw features Namek - 2022-01-18
+# TA1 BAS with raw features Namek - 2022-01-19
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop1-Aligned-TA1-2022-01
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/train_data_nowv.kwcoco.json
@@ -902,7 +902,7 @@ smartwatch stats "$TRAIN_FPATH" "$VALI_FPATH"
 EXPERIMENT_NAME=BOTH_${ARCH}_centerannot_ILM_v50
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
-export CUDA_VISIBLE_DEVICES="0"
+export CUDA_VISIBLE_DEVICES="1"
 python -m watch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
     --channels=${CHANNELS} \

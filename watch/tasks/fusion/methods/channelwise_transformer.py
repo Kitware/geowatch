@@ -219,12 +219,13 @@ class MultimodalTransformer(pl.LightningModule):
 
         parser.add_argument(
             '--tokenizer', default='rearrange', type=str,
-            choices=['dwcnn', 'rearrange', 'conv7'], help=ub.paragraph(
+            choices=['dwcnn', 'rearrange', 'conv7', 'linconv'], help=ub.paragraph(
                 '''
                 How image patches are broken into tokens.
-                rearrange just shuffles raw pixels.
+                rearrange is a 1x1 MLP and grouping of pixel grids.
                 dwcnn is a is a mobile convolutional stem.
                 conv7 is a simple 1x1x7x7 convolutional stem.
+                linconv is a stack of 3x3 grouped convolutions without any nonlinearity
                 '''))
         parser.add_argument('--token_norm', default='none', type=str,
                             choices=['none', 'auto', 'group', 'batch'])
@@ -702,7 +703,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     train_dataset=coco_dset,
             >>>     chip_size=128, batch_size=1, time_steps=5,
             >>>     channels=channels,
-            >>>     normalize_inputs=100, neg_to_pos_ratio=0, num_workers='avail/2', true_multimodal=True, use_grid_positives=False, use_centered_positives=True,
+            >>>     normalize_inputs=1, neg_to_pos_ratio=0, num_workers='avail/2', true_multimodal=True, use_grid_positives=False, use_centered_positives=True,
             >>> )
             >>> datamodule.setup('fit')
             >>> dataset = torch_dset = datamodule.torch_datasets['train']
@@ -855,18 +856,17 @@ class MultimodalTransformer(pl.LightningModule):
             >>> import watch
             >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset='special:vidshapes-watch',
-            >>>     num_workers='avail / 2', chip_size=96, time_steps=2, true_multimodal=True,
+            >>>     num_workers='avail / 2', chip_size=96, time_steps=4, true_multimodal=True,
             >>>     normalize_inputs=1, neg_to_pos_ratio=0, batch_size=1,
             >>> )
             >>> datamodule.setup('fit')
             >>> train_dset = datamodule.torch_datasets['train']
             >>> loader = datamodule.train_dataloader()
             >>> batch = next(iter(loader))
-
             >>> # Choose subclass to test this with (does not cover all cases)
             >>> self = model = methods.MultimodalTransformer(
             >>>     arch_name='smt_it_joint_p8', tokenizer='rearrange',
-            >>>     dataset_stats=datamodule.dataset_stats, global_saliency_weight=0.0, global_change_weight=0.0, global_class_weight=1.0,
+            >>>     dataset_stats=datamodule.dataset_stats, global_saliency_weight=1.0, global_change_weight=1.0, global_class_weight=1.0,
             >>>     classes=datamodule.classes, input_channels=datamodule.input_channels)
             >>> with_loss = True
             >>> outputs = self.forward_step(batch, with_loss=with_loss)
@@ -918,21 +918,19 @@ class MultimodalTransformer(pl.LightningModule):
             tokenized = []
             token_frame_idx = []
 
-            item_weight_lists = {}
-            if self.global_head_weights['class'] or self.global_head_weights['change']:
-                # TODO: the dataloader should probably just provide the change weights
-                item_weight_lists['class'] = []
-            if self.global_head_weights['saliency']:
-                item_weight_lists['saliency'] = []
+            item_pixel_weights_list = {
+                k: [] for k, v in self.global_head_weights.items() if v > 0
+            }
 
-            # frame_class_weights_list = []
-            # frame_saliency_weights_list = []
             for frame_idx, (frame, frame_enc) in enumerate(zip(item['frames'], per_frame_pos_encoding)):
                 if with_loss:
-                    if 'class' in item_weight_lists:
-                        item_weight_lists['class'].append(frame['class_weights'])
-                    if 'saliency' in item_weight_lists:
-                        item_weight_lists['saliency'].append(frame['saliency_weights'])
+                    if 'class' in item_pixel_weights_list:
+                        item_pixel_weights_list['class'].append(frame['class_weights'])
+                    if 'saliency' in item_pixel_weights_list:
+                        item_pixel_weights_list['saliency'].append(frame['saliency_weights'])
+                    if 'change' in item_pixel_weights_list:
+                        if frame_idx > 0:
+                            item_pixel_weights_list['change'].append(frame['change_weights'])
 
                 modes = frame['modes']
                 sensor = frame['sensor']
@@ -1054,13 +1052,9 @@ class MultimodalTransformer(pl.LightningModule):
                 # Stack the weights for each item
                 item_weights = {
                     # Because we are nt collating we need to add a batch dimension
-                    key: torch.stack(tensors)[None, ...]
-                    for key, tensors in item_weight_lists.items()
+                    key: torch.stack(_tensors)[None, ...]
+                    for key, _tensors in item_pixel_weights_list.items()
                 }
-                if 'change' in self.heads:
-                    # Special case to compute change weights
-                    _cw = item_weights['class']
-                    item_weights['change'] = torch.mul(_cw[:, 1:, ], _cw[:, :-1, ])
 
                 item_truths = {}
                 if self.global_head_weights['change']:
@@ -1069,24 +1063,16 @@ class MultimodalTransformer(pl.LightningModule):
                         frame['change'] for frame in item['frames'][1:]
                     ])[None, ...]
 
-                if self.global_head_weights['class'] or self.global_head_weights['saliency']:
+                if self.global_head_weights['class']:
                     # [B, T, H, W]
                     item_truths['class'] = torch.stack([
                         frame['class_idxs'] for frame in item['frames']
                     ])[None, ...]
 
                 if self.global_head_weights['saliency']:
-                    # A "Salient" class is anything that is a foreground class
-                    # Not sure if this should be a dataloader thing or not
-                    if not hasattr(self, '_fg_idxs'):
-                        fg_idxs = sorted(ub.take(self.classes.node_to_idx, self.foreground_classes))
-                        fg_idxs = np.expand_dims(np.array(fg_idxs), (0, 1, 2, 3))
-                        self._fg_idxs = torch.Tensor(fg_idxs).to(item_truths['class'].device)
-                    item_truths['saliency'] = (item_truths['class'][..., None] == self._fg_idxs).any(dim=4).long()
-
-                if 0:
-                    ub.map_vals(lambda x: x.shape, item_weights)
-                    ub.map_vals(lambda x: x.shape, item_truths)
+                    item_truths['saliency'] = torch.stack([
+                        frame['saliency'] for frame in item['frames']
+                    ])[None, ...]
 
                 for k, v in batch_head_truths.items():
                     v.append(item_truths[k])
@@ -1101,6 +1087,9 @@ class MultimodalTransformer(pl.LightningModule):
 
                     head_pred_input = einops.rearrange(head_logits, 'b t h w c -> ' + criterion.logit_shape).contiguous()
                     head_weights_input = einops.rearrange(head_weights[..., None], 'b t h w c -> ' + criterion.logit_shape).contiguous()
+
+                    if 1:
+                        print('head_truth.shape = {!r}'.format(head_truth.shape))
 
                     if criterion.target_encoding == 'index':
                         head_true_idxs = head_truth.long()

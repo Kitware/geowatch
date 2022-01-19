@@ -20,6 +20,7 @@ from watch.utils import util_kwimage
 from watch.utils import util_time
 from watch.utils import util_norm
 from watch.utils.lightning_ext import util_globals
+from typing import Dict
 
 # __all__ = ['KWCocoVideoDataModule', 'KWCocoVideoDataset']
 
@@ -211,8 +212,10 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.input_channels = None
 
         # Store train / test / vali
-        self.torch_datasets = {}
-        self.coco_datasets = {}
+        self.torch_datasets: Dict[str, KWCocoVideoDataset] = {}
+        self.coco_datasets: Dict[str, kwcoco.CocoDataset] = {}
+
+        self.requested_tasks = None
 
         if self.verbose:
             print('Init KWCocoVideoDataModule')
@@ -436,7 +439,6 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 mode='test',
                 **self.common_dataset_kwargs,
             )
-
             ub.inject_method(self, lambda self: self._make_dataloader('test', shuffle=False), 'test_dataloader')
 
         print('self.torch_datasets = {}'.format(ub.repr2(self.torch_datasets, nl=1)))
@@ -462,6 +464,20 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             shuffle=shuffle,
             pin_memory=True,
         )
+
+    def _notify_about_tasks(self, requested_tasks=None, model=None):
+        """
+        Hacky method. Given the multimodal model, tell all the datasets which
+        tasks they will need to generate data for. (This helps make the
+        visualizations cleaner).
+        """
+        if model is not None:
+            assert requested_tasks is None
+            requested_tasks = {k: w > 0 for k, w in model.global_head_weights.items()}
+        assert requested_tasks is not None
+        self.requested_tasks = requested_tasks
+        for dataset in self.torch_datasets.values():
+            dataset._notify_about_tasks(requested_tasks)
 
     def draw_batch(self, batch, stage='train', outputs=None, max_items=2,
                    overlay_on_image=False, **kwargs):
@@ -879,7 +895,12 @@ class KWCocoVideoDataset(data.Dataset):
         # hidden option for now (todo: expose this)
         self.inference_only = False
         self.with_change = True
-        self.with_class = True
+        self.requested_tasks = {
+            'change': True,
+            'class': True,
+            'saliency': True,
+        }
+
 
         # Hacks: combinable channels can be visualized as RGB images.
         # The only reason this is a hack is because of the hardcoded names
@@ -892,6 +913,18 @@ class KWCocoVideoDataset(data.Dataset):
 
     def __len__(self):
         return self.length
+
+    def _notify_about_tasks(self, requested_tasks=None, model=None):
+        """
+        Hacky method. Given the multimodal model, tell all the datasets which
+        tasks they will need to generate data for. (This helps make the
+        visualizations cleaner).
+        """
+        if model is not None:
+            assert requested_tasks is None
+            requested_tasks = {k: w > 0 for k, w in model.global_head_weights.items()}
+        assert requested_tasks is not None
+        self.requested_tasks = requested_tasks
 
     # def _make_augmenter():
     #     # TODO: how to make this work with kwimage polygons?
@@ -1123,6 +1156,7 @@ class KWCocoVideoDataset(data.Dataset):
             first_with_annot = with_annots
             for stream in sensor_channels.streams():
                 tr_frame['channels'] = stream
+                # TODO: FIXME: Use the correct nodata value here!
                 sample = sampler.load_sample(
                     tr_frame, with_annots=first_with_annot,
                     padkw={'constant_values': np.nan},
@@ -1187,6 +1221,7 @@ class KWCocoVideoDataset(data.Dataset):
             num_frames = len(good_gids)
             time_weights = kwimage.gaussian_patch((1, num_frames))[0]
             time_weights = time_weights / time_weights.max()
+            time_weights = np.minimum(time_weights, 0.05)
             space_weights = util_kwimage.upweight_center_mask(input_dsize[::-1])
 
         if self.special_inputs:
@@ -1271,8 +1306,14 @@ class KWCocoVideoDataset(data.Dataset):
                 frame_cidxs = np.full(space_shape, dtype=np.int32,
                                       fill_value=bg_idx)
 
-                ohe_shape = (len(self.classes),) + space_shape
-                frame_class_ohe = np.zeros(ohe_shape, dtype=np.uint8)
+                class_ohe_shape = (len(self.classes),) + space_shape
+                salient_shape = space_shape
+
+                # A "Salient" class is anything that is a foreground class
+                # Not sure if this should be a dataloader thing or not
+                frame_saliency = np.zeros(salient_shape, dtype=np.uint8)
+
+                frame_class_ohe = np.zeros(class_ohe_shape, dtype=np.uint8)
                 saliency_ignore = np.zeros(space_shape, dtype=np.uint8)
                 frame_class_ignore = np.zeros(space_shape, dtype=np.uint8)
 
@@ -1295,6 +1336,7 @@ class KWCocoVideoDataset(data.Dataset):
                         # from background. It shouldn't be learned on in
                         # any case.
                         poly.fill(frame_class_ohe[cidx], value=1)
+                        poly.fill(frame_saliency, value=1)
                     else:
                         # Indistinguishable classes should be ignored
                         # for classification, but not saliency
@@ -1303,6 +1345,7 @@ class KWCocoVideoDataset(data.Dataset):
                             # poly.fill(frame_class_ohe[cidx], value=0)
                             # poly.fill(frame_class_ohe[cidx], value=0)
                         poly.fill(frame_class_ohe[cidx], value=1)
+                        poly.fill(frame_saliency, value=1)
 
                 # Postprocess (Dilate?) the truth map
                 for cidx, class_map in enumerate(frame_class_ohe):
@@ -1318,12 +1361,13 @@ class KWCocoVideoDataset(data.Dataset):
                 class_weights = frame_weights * (1 - frame_class_ignore)
 
             if not self.inference_only:
-                frame_item.update({
-                    'class_idxs': frame_cidxs,
-                    'ignore': saliency_ignore,
-                    'class_weights': class_weights,
-                    'saliency_weights': saliency_weights,
-                })
+                if self.requested_tasks['class']:
+                    frame_item['class_idxs'] = frame_cidxs
+                    frame_item['class_weights'] = class_weights
+                if self.requested_tasks['saliency']:
+                    frame_item['saliency'] = frame_saliency
+                    frame_item['saliency_weights'] = saliency_weights
+
             frame_items.append(frame_item)
 
         if self.normalize_perframe:
@@ -1348,15 +1392,17 @@ class KWCocoVideoDataset(data.Dataset):
 
         # Add in change truth
         if not self.inference_only:
-            if self.with_change:
+            if self.requested_tasks['change']:
                 for frame1, frame2 in ub.iter_window(frame_items, 2):
                     frame_change = (frame1['class_idxs'] != frame2['class_idxs']).astype(np.uint8)
                     frame_change = util_kwimage.morphology(frame_change, 'open', kernel=3)
+                    change_weights = frame1['class_weights'] * frame2['class_weights']
                     frame2['change'] = frame_change
+                    frame2['change_weights'] = change_weights
 
         # Convert data to torch
         for frame_item in frame_items:
-            truth_keys = ['change', 'class_idxs', 'ignore', 'class_weights', 'saliency_weights']
+            truth_keys = ['change', 'class_idxs', 'saliency', 'class_weights', 'saliency_weights', 'change_weights']
             for key in truth_keys:
                 data = frame_item.get(key, None)
                 frame_modes = frame_item['modes']
