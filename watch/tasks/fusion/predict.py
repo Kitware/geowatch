@@ -17,7 +17,7 @@ import kwcoco
 from watch import heuristics
 from watch.tasks.fusion import datamodules
 from watch.tasks.fusion import utils
-from watch.tasks.tracking import from_heatmap
+from watch.tasks.tracking.utils import mask_to_polygons
 from watch.utils import util_path
 from watch.utils import util_parallel
 from watch.utils import util_kwimage
@@ -835,10 +835,10 @@ class CocoStitchingManager(object):
                 # Threshold scores (todo: could be per class)
                 thresh = self.thresh
                 # Convert to polygons
-                scored_polys = list(from_heatmap.mask_to_scored_polygons(
-                    band_probs, thresh))
+                scored_polys = list(mask_to_polygons(
+                    band_probs, thresh, scored=True, use_rasterio=False))
                 n_anns = len(scored_polys)
-                for vid_poly, score in scored_polys:
+                for score, vid_poly in scored_polys:
                     # Transform the video polygon into image space
                     img_poly = vid_poly.warp(img_from_vid)
                     bbox = list(img_poly.bounding_box().to_coco())[0]

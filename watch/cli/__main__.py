@@ -30,6 +30,8 @@ def main(cmdline=True, **kw):
         'coco_visualize_videos',
         'coco_intensity_histograms',
         'find_dvc',
+        'kwcoco_to_geojson',
+        'run_metrics_framework',
     ]
     module_lut = {}
     for name in modnames:

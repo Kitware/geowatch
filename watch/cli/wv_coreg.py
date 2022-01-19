@@ -311,9 +311,9 @@ def best_match(s2_items, wv_item):
     TODO add datetime bounds to this?
     Can use pygeos to parallelize at the wv_item or catalog level if needed
     '''
-    wv_shp = shapely.geometry.asShape(wv_item.geometry)
+    wv_shp = shapely.geometry.shape(wv_item.geometry)
     return max(s2_items,
-               key=lambda item: shapely.geometry.asShape(item.geometry).
+               key=lambda item: shapely.geometry.shape(item.geometry).
                intersection(wv_shp).area)
 
 

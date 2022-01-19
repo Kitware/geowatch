@@ -1,0 +1,174 @@
+{
+  "$id": "https://example.com/person.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Job Spec",
+  "type": "object",
+  "properties": {
+    "jobDetails": {
+      "type": "object",
+      "properties": {
+        "submitter": {
+          "type": "string",
+          "description": "Name of individual running a trial"
+        },
+        "email": {
+          "type": "array",
+          "description": "Emails addresses to notify when complete",
+          "items": {
+            "type": "string",
+            "format": "email"
+          }
+        },
+        "purpose": {
+          "type": "string",
+          "description": "Description of why job was submitted"
+        },
+        "flow_name": {
+          "type": "string",
+          "description": "Name of root processor group in NiFi (\"Generic SMART Flow\" by default)"
+        },
+        "nifi_flow_id": {
+          "type": "string",
+          "description": "ID of \"NiFi Flow\" processor group"
+        },                
+        "roi": {
+          "type": "string",
+          "description": "S3 URI to GeoJSON file containing polygon or multi-polygon which will be processed",
+          "format": "uri",
+          "pattern": "^s3://.*"
+        },
+        "job_s3": {
+          "type": "string",
+          "description": "Location on s3 where job results will be written to"
+        },        
+        "split_level": {
+          "type": "number",
+          "minimumValue": 0,
+          "description": "MGRS tile side length in km, which the roi will be split into (Default 1km)"
+        },
+        "split_buffer": {
+          "type": "number",
+          "minimumValue": 0,
+          "description": "Distance to use as a tile buffer in km (Default 0.05km)"
+        },
+        "time_increment": {
+          "type": "number",
+          "minimumValue": 0,
+          "description": "Number of days to iterate over at once (Default 30)"
+        },
+        "eks_namespace": {
+          "type": "string",
+          "description": "The name of the EKS namespace to use"
+        },
+        "eks_gitlab_secret": {
+          "type": "string",
+          "description": "The name of the file containing the infrastructure registry credentials"
+        }                        
+      },
+      "required": [
+        "submitter",
+        "email",
+        "purpose",
+        "flow_name",
+        "nifi_flow_id",
+        "roi",
+        "job_s3",
+        "split_level",
+        "split_buffer",
+        "time_increment",
+        "eks_namespace",
+        "eks_gitlab_secret"
+      ]
+    },
+    "tasks_services": {
+      "type": "array",
+      "description": "A list of task and service objects",
+      "items": {
+        "$ref": "#/definitions/task_or_service"
+      }
+    }
+  },
+  "definitions": {
+    "task_or_service": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "Human readable name for task/service",
+          "type": "string"
+        },
+        "type": {
+          "description": "Task or service indicator",
+          "enum": [
+            "task",
+            "service"
+          ]
+        },
+        "eks_kind": {
+          "type": "string",
+          "description": "The type of the EKS service to run"
+        },
+        "eks_task": {
+          "type": "string",
+          "description": "The name of the EKS task to run"
+        },
+        "eks_resources": {
+          "type": "string",
+          "description": "The required resources to run the task"
+        },
+        "DOCKER_IMAGE": {
+          "type": "string",
+          "description": "The docker image on which the task will run"
+        },
+        "concurrency": {
+          "type": "number",
+          "description": "Max number of task instances to run in parallel"
+        },        
+        "execution_script": {
+          "type": "string",
+          "description": "The name of the shell script used to launch the eks task"
+        },
+        "input_collection": {
+          "type": "string",
+          "description": "The name of the STAC collection that this algorithm should draw from"
+        },
+        "output_collection": {
+          "type": "string",
+          "description": "The name of the STAC collection that products will be written to"
+        },
+        "STAC_search": {
+          "type": "array",
+          "description": "STAC search parameters"
+        },                       
+        "output_s3": {
+          "type": "string",
+          "description": "The S3 location the algorithm should write its products to"
+        },
+        "log_location": {
+          "type": "string",
+          "description": "The log location (probably S3)"
+        },
+        "cmd": {
+          "type": "array",
+          "description": "Command to run task (including task name and args)"
+        }
+      },
+      "required": [
+        "name",
+        "type",
+        "eks_kind",
+        "eks_task",
+        "eks_resources",
+        "DOCKER_IMAGE",
+        "concurrency",
+        "execution_script",
+        "input_collection",
+        "output_collection",
+        "STAC_search",
+        "output_s3",
+        "log_location",
+        "cmd"
+      ]
+    }
+  }
+}
+

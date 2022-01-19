@@ -80,6 +80,8 @@ def main(cmdline=True, **kwargs):
     """
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> # xdoctest: +SKIP
+        >>> # drop1-S2-L8-aligned-old deprecated
         >>> from watch.cli.coco_combine_features import *  # NOQA
         >>> import os
         >>> from watch.utils.util_path import coercepath

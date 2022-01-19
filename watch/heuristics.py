@@ -53,17 +53,70 @@ HUERISTIC_STATUS_DATA = [
     {'name': 'ignore', 'color': 'purple'},
 ]
 
+# mapping for "placeholder" categories "positive", "negative", "ignore"
+# for statuses without an activity label.
+# The "positive_annotated" status should always have an activity label.
+STATUS_TO_CAT = {
+    'ignore':
+        'ignore',
+    'positive_excluded':
+        # This is positive, but is not "big" enough
+        'ignore',
+    'positive_unbounded':
+        # Start or end date might not be defined.
+        'positive',
+    'positive_pending':
+        # Does not have phase labels
+        'positive',
+    'positive_partial':
+        # Might have phase labels
+        'positive',
+    # 'positive_annotated':
+        # Has phase labels
+        # assert catname is not None
+    'negative':
+        'negative',
+    'negative_unbounded':
+        'negative',
+}
 
-CATEGORIES = [
-    {'name': 'No Activity', 'color': 'tomato'},
+# metrics-and-test-framework/evaluation.py:1684
+CATEGORIES_SCORED = [
     {'name': 'Site Preparation', 'color': 'gold'},
     {'name': 'Active Construction', 'color': 'lime'},
     {'name': 'Post Construction', 'color': 'darkturquoise'},
+]
+
+CATEGORIES_POSITIVE = CATEGORIES_SCORED + [
+    {'name': 'positive', 'color': 'olive'},
+]
+
+CATEGORIES_NEGATIVE = [
+    {'name': 'No Activity', 'color': 'tomato'},
     {'name': 'Unknown', 'color': 'blueviolet'},
     {'name': 'ignore', 'color': 'slategray'},
     {'name': 'negative', 'color': 'orangered'},
-    {'name': 'positive', 'color': 'olive'},
 ]
+
+CATEGORIES = CATEGORIES_POSITIVE + CATEGORIES_NEGATIVE
+
+CATEGORIES_DCT = {
+        'positive': {
+            'scored': CATEGORIES_SCORED,
+            'unscored': CATEGORIES_POSITIVE[len(CATEGORIES_SCORED):],
+        },
+        'negative': {
+            'scored': [],
+            'unscored': CATEGORIES_NEGATIVE
+        }
+}
+
+# 'name' field only
+CNAMES_DCT = {
+    k1: {k2: [cat['name'] for cat in cats]
+         for k2, cats in dct.items()}
+    for k1, dct in CATEGORIES_DCT.items()
+}
 
 
 def ensure_heuristic_colors(coco_dset):

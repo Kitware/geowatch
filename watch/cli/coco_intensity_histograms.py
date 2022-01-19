@@ -76,6 +76,7 @@ class HistAccum:
     """
     Helper to accumulate histograms
     """
+
     def __init__(self):
         self.accum = {}
         self.n = 0
@@ -645,6 +646,7 @@ def _fill_missing_colors(label_to_color):
 
     seed = 6777939437
     # hack in our code
+
     def _patched_get_random_color(pastel_factor=0, rng=None):
         rng = kwarray.ensure_rng(seed, api='python')
         color = [(rng.random() + pastel_factor) / (1.0 + pastel_factor) for _ in range(3)]
