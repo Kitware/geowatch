@@ -2242,7 +2242,9 @@ class BatchVisualizationBuilder:
             saliency = frame_truth.get(overlay_key, None)
             if saliency is not None:
                 saliency_overlay = kwimage.make_heatmask(saliency)
-                saliency_overlay[..., 3] = 0.5
+                saliency_overlay = kwimage.Mask(saliency, format='c_mask').draw_on(saliency_overlay, color='dodgerblue')
+                saliency_overlay = kwimage.ensure_alpha_channel(saliency_overlay)
+                saliency_overlay[..., 3] = (saliency > 0).astype(np.float32) * 0.5
             overlay_items.append({
                 'overlay': saliency_overlay,
                 'label_text': 'true saliency',
