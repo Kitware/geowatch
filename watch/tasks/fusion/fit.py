@@ -335,8 +335,6 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     datamodule_class = getattr(datamodules, args.datamodule)
 
     # init datamodule from args
-    # TODO: compute and cache mean / std if it is not provided. Pass this to
-    # the model so it can whiten the inputs.
     datamodule_vars = ub.compatible(args.__dict__, datamodule_class.__init__)
     # datamodule_vars["preprocessing_step"] = model.preprocessing_step
     datamodule = datamodule_class(**datamodule_vars)
@@ -352,15 +350,23 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
 
     method_var_dict = ub.compatible(method_var_dict, method_class.__init__)
 
-    if hasattr(datamodule, 'input_stats'):
-        print('datamodule.input_stats = {}'.format(
-            ub.repr2(datamodule.input_stats, nl=2, sort=0)))
-        method_var_dict['input_stats'] = datamodule.input_stats
+    if hasattr(datamodule, 'dataset_stats'):
+        # Compute mean/std
+        # TODO: allow for hardcoding per-sensor/channel mean/std in the
+        # heuristics and then using those to have the option to skip computing
+        # them for new datasets.
+        print('datamodule.dataset_stats = {}'.format(
+            ub.repr2(datamodule.dataset_stats, nl=3, sort=0)))
+        method_var_dict['dataset_stats'] = datamodule.dataset_stats
         method_var_dict['input_channels'] = datamodule.input_channels
 
     method_var_dict['classes'] = datamodule.classes
     # Note: Changed name from method to model
     model = method_class(**method_var_dict)
+
+    # Tell the datamodule what tasks the datasets will need to generate data
+    # for.
+    datamodule._notify_about_tasks(model=model)
 
     if args.resume_from_checkpoint is None:
         import netharn as nh
@@ -409,13 +415,27 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
                     verbose=True, strict=False),
                 pl.callbacks.ModelCheckpoint(
                     monitor='val_loss', mode='min', save_top_k=4),
-                pl.callbacks.ModelCheckpoint(
-                    monitor='val_change_f1', mode='max', save_top_k=4),
-                pl.callbacks.ModelCheckpoint(
-                    monitor='val_class_f1_micro', mode='max', save_top_k=4),
-                pl.callbacks.ModelCheckpoint(
-                    monitor='val_class_f1_macro', mode='max', save_top_k=4),
             ]
+
+            if datamodule.requested_tasks['change']:
+                callbacks += [
+                    pl.callbacks.ModelCheckpoint(
+                        monitor='val_change_f1', mode='max', save_top_k=4),
+                ]
+
+            if datamodule.requested_tasks['saliency']:
+                callbacks += [
+                    pl.callbacks.ModelCheckpoint(
+                        monitor='val_change_f1', mode='max', save_top_k=4),
+                ]
+
+            if datamodule.requested_tasks['class']:
+                callbacks += [
+                    pl.callbacks.ModelCheckpoint(
+                        monitor='val_class_f1_micro', mode='max', save_top_k=4),
+                    pl.callbacks.ModelCheckpoint(
+                        monitor='val_class_f1_macro', mode='max', save_top_k=4),
+                ]
     else:
         callbacks = []
 
