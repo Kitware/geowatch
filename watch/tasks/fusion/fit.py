@@ -426,7 +426,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
             if datamodule.requested_tasks['saliency']:
                 callbacks += [
                     pl.callbacks.ModelCheckpoint(
-                        monitor='val_change_f1', mode='max', save_top_k=4),
+                        monitor='val_saliency_f1', mode='max', save_top_k=4),
                 ]
 
             if datamodule.requested_tasks['class']:
