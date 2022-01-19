@@ -325,6 +325,7 @@ class MultimodalTransformer(pl.LightningModule):
 
         if self.dataset_stats is None:
             # hack for tests (or no known sensors case)
+            input_stats = None
             self.unique_sensor_modes = {('', self.input_channels.spec)}
         else:
             self.unique_sensor_modes = self.dataset_stats['unique_sensor_modes']
