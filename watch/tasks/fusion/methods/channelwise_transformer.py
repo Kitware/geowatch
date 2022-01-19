@@ -1088,9 +1088,6 @@ class MultimodalTransformer(pl.LightningModule):
                     head_pred_input = einops.rearrange(head_logits, 'b t h w c -> ' + criterion.logit_shape).contiguous()
                     head_weights_input = einops.rearrange(head_weights[..., None], 'b t h w c -> ' + criterion.logit_shape).contiguous()
 
-                    if 1:
-                        print('head_truth.shape = {!r}'.format(head_truth.shape))
-
                     if criterion.target_encoding == 'index':
                         head_true_idxs = head_truth.long()
                         head_true_input = einops.rearrange(head_true_idxs, 'b t h w -> ' + criterion.target_shape).contiguous()
