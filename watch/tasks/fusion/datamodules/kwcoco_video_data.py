@@ -1222,7 +1222,7 @@ class KWCocoVideoDataset(data.Dataset):
             time_weights = kwimage.gaussian_patch((1, num_frames))[0]
             time_weights = time_weights / time_weights.max()
             time_weights = time_weights.clip(0, 1)
-            time_weights = np.maximum(time_weights, 0.01)
+            time_weights = np.maximum(time_weights, 0.1)
             space_weights = util_kwimage.upweight_center_mask(input_dsize[::-1])
 
         if self.special_inputs:
