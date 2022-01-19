@@ -62,7 +62,18 @@ def main():
     return 0
 
 
+SUPPORTED_PLATFORMS = {'S2A',
+                       'S2B',
+                       'sentinel-2a',
+                       'sentinel-2b',
+                       'LANDSAT_8',
+                       'OLI_TIRS'}
+
+
 def _item_map(stac_item, outbucket, aws_base_command, dryrun):
+    if stac_item['properties'].get('platform') not in SUPPORTED_PLATFORMS:
+        return stac_item
+
     with tempfile.TemporaryDirectory() as tmpdirname:
         ingressed_item = ingress_item(
             stac_item,
