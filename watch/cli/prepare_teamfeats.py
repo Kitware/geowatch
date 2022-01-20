@@ -81,6 +81,8 @@ def main(cmdline=True, **kwargs):
         'with_invariants': 'I',
     }
 
+    with_rich = 0
+
     tasks = []
     # tmux queue is still limited. The order of submission matters.
 
@@ -175,7 +177,7 @@ def main(cmdline=True, **kwargs):
         else:
             tq.submit(task['command'])
 
-    tq.rprint()
+    tq.rprint(with_rich=with_rich)
 
     tq.write()
 
@@ -205,15 +207,17 @@ def main(cmdline=True, **kwargs):
 
         # TODO: enable forcing if needbe
         if not combo_fpath.exists() or not config['cache']:
+            #  Indent of this the codeblock matters for this line
+            src_lines = ' \\\n                          '.join(tocombine)
             command = ub.codeblock(
-                f'''
+                fr'''
                 python -m watch.cli.coco_combine_features \
-                    --src {' '.join(tocombine)} \
+                    --src {src_lines} \
                     --dst {combo_fpath}
                 ''')
             tq.submit(command)
 
-        tq.rprint()
+        tq.rprint(with_rich=with_rich)
         if config['run']:
             agg_state = tq.run(block=True)
             if not config['keep_sessions']:
@@ -234,7 +238,7 @@ def main(cmdline=True, **kwargs):
 
         # Perform train/validation splits with and without worldview
         command = ub.codeblock(
-            f'''
+            fr'''
             python -m kwcoco subset \
                 --src {combo_fpath} \
                 --dst {splits['combo_train']} \
@@ -243,7 +247,7 @@ def main(cmdline=True, **kwargs):
         tq.submit(command, index=0)
 
         command = ub.codeblock(
-            f'''
+            fr'''
             python -m kwcoco subset \
                 --src {splits['combo_train']} \
                 --dst {splits['combo_nowv_train']} \
@@ -252,7 +256,7 @@ def main(cmdline=True, **kwargs):
         tq.submit(command, index=0)
 
         command = ub.codeblock(
-            f'''
+            fr'''
             python -m kwcoco subset \
                 --src {splits['combo_train']} \
                 --dst {splits['combo_wv_train']} \
@@ -262,7 +266,7 @@ def main(cmdline=True, **kwargs):
 
         # Perform vali/validation splits with and without worldview
         command = ub.codeblock(
-            f'''
+            fr'''
             python -m kwcoco subset \
                 --src {combo_fpath} \
                 --dst {splits['combo_vali']} \
@@ -271,7 +275,7 @@ def main(cmdline=True, **kwargs):
         tq.submit(command, index=1)
 
         command = ub.codeblock(
-            f'''
+            fr'''
             python -m kwcoco subset \
                 --src {splits['combo_vali']} \
                 --dst {splits['combo_nowv_vali']} \
@@ -280,7 +284,7 @@ def main(cmdline=True, **kwargs):
         tq.submit(command, index=1)
 
         command = ub.codeblock(
-            f'''
+            fr'''
             python -m kwcoco subset \
                 --src {splits['combo_vali']} \
                 --dst {splits['combo_wv_vali']} \
@@ -288,7 +292,7 @@ def main(cmdline=True, **kwargs):
             ''')
         tq.submit(command, index=1)
 
-        tq.rprint()
+        tq.rprint(with_rich=with_rich)
 
         if config['run']:
             agg_state = tq.run(block=True)
@@ -312,11 +316,3 @@ if __name__ == '__main__':
         python -m watch.cli.prepare_teamfeats --gres=2 --with_materials=False --keep_sessions=True
     """
     main(cmdline=True)
-
-python -m watch.tasks.depth.predict \
-    --dataset="/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-L1-2022-01/data.kwcoco.json" \
-    --output="/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-L1-2022-01/dzyne_depth.kwcoco.json" \
-    --deployed="/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/models/depth/weights_v1.pt" \
-    --data_workers=2 \
-    --window_size=1536
-

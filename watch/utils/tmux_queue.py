@@ -86,37 +86,39 @@ class TMUXLinearQueue(PathIdentifiable):
     def __nice__(self):
         return f'{self.pathid} - {len(self.commands)}'
 
-    def finalize_text(self):
+    def finalize_text(self, with_status=True):
         script = [self.header]
 
         total = len(self.commands)
 
-        script.append(ub.codeblock(
-            f'''
-            # Init state to keep track of job progress
-            let "_QUEUE_NUM_ERRORED=0"
-            let "_QUEUE_NUM_FINISHED=0"
-            _QUEUE_TOTAL={total}
-            _QUEUE_STATUS=""
-            '''))
+        if with_status:
+            script.append(ub.codeblock(
+                f'''
+                # Init state to keep track of job progress
+                let "_QUEUE_NUM_ERRORED=0"
+                let "_QUEUE_NUM_FINISHED=0"
+                _QUEUE_TOTAL={total}
+                _QUEUE_STATUS=""
+                '''))
 
         def _mark_status(status):
             # be careful with json formatting here
-            script.append(ub.codeblock(
-                '''
-                _QUEUE_STATUS="{}"
-                ''').format(status))
-            json_parts = [
-                '"{}": "{}"'.format('status', '\'$_QUEUE_STATUS\''),
-                '"{}": {}'.format('finished', '\'$_QUEUE_NUM_FINISHED\''),
-                '"{}": {}'.format('errored', '\'$_QUEUE_NUM_ERRORED\''),
-                '"{}": {}'.format('total', '\'$_QUEUE_TOTAL\''),
-                '"{}": "{}"'.format('name', self.name),
-                '"{}": "{}"'.format('rootid', self.rootid),
-            ]
-            dump_code = 'printf \'{' + ', '.join(json_parts) + '}\\n\' > ' + str(self.state_fpath)
-            script.append(dump_code)
-            script.append('cat ' + str(self.state_fpath))
+            if with_status:
+                script.append(ub.codeblock(
+                    '''
+                    _QUEUE_STATUS="{}"
+                    ''').format(status))
+                json_parts = [
+                    '"{}": "{}"'.format('status', '\'$_QUEUE_STATUS\''),
+                    '"{}": {}'.format('finished', '\'$_QUEUE_NUM_FINISHED\''),
+                    '"{}": {}'.format('errored', '\'$_QUEUE_NUM_ERRORED\''),
+                    '"{}": {}'.format('total', '\'$_QUEUE_TOTAL\''),
+                    '"{}": "{}"'.format('name', self.name),
+                    '"{}": "{}"'.format('rootid', self.rootid),
+                ]
+                dump_code = 'printf \'{' + ', '.join(json_parts) + '}\\n\' > ' + str(self.state_fpath)
+                script.append(dump_code)
+                script.append('cat ' + str(self.state_fpath))
 
         _mark_status('init')
         if self.environ:
@@ -133,14 +135,15 @@ class TMUXLinearQueue(PathIdentifiable):
                 ''').format(num + 1, total))
             script.append(command)
             # Check command status and update the bash state
-            script.append(ub.codeblock(
-                '''
-                if [[ "$?" == "0" ]]; then
-                    let "_QUEUE_NUM_FINISHED=_QUEUE_NUM_FINISHED+1"
-                else
-                    let "_QUEUE_NUM_ERRORED=_QUEUE_NUM_ERRORED+1"
-                fi
-                '''))
+            if with_status:
+                script.append(ub.codeblock(
+                    '''
+                    if [[ "$?" == "0" ]]; then
+                        let "_QUEUE_NUM_FINISHED=_QUEUE_NUM_FINISHED+1"
+                    else
+                        let "_QUEUE_NUM_ERRORED=_QUEUE_NUM_ERRORED+1"
+                    fi
+                    '''))
 
         _mark_status('done')
         text = '\n'.join(script)
@@ -362,15 +365,21 @@ class TMUXMultiQueue(PathIdentifiable):
                 live.update(table)
         return agg_state
 
-    def rprint(self):
+    def rprint(self, with_status=False, with_rich=False):
+        """
+        Print info about the commands, optionally with rich
+        """
         from rich.panel import Panel
         from rich.syntax import Syntax
         from rich.console import Console
         console = Console()
         for queue in self.workers:
-            code = queue.finalize_text()
-            # console.print(Panel(Syntax(code, 'bash'), title=str(queue.fpath)))
-            console.print(Syntax(code, 'bash'))
+            code = queue.finalize_text(with_status=with_status)
+            if with_rich:
+                console.print(Panel(Syntax(code, 'bash'), title=str(queue.fpath)))
+                # console.print(Syntax(code, 'bash'))
+            else:
+                print(ub.highlight_code(code, 'bash'))
 
         code = self.finalize_text()
         console.print(Panel(Syntax(code, 'bash'), title=str(self.fpath)))

@@ -18,7 +18,7 @@ import ubelt as ub
 import kwimage
 
 
-def main():
+def stack_debug_regions():
     # HACK
     path1 = ub.Path('$HOME/remote/namek/smart_watch_dvc/Drop1-Aligned-L1-2022/_viz/BR_R002/_imgs/any3').expand()
     path2 = ub.Path('$HOME/remote/namek/smart_watch_dvc/Drop1-Aligned-L1-2022/_debug_regions').expand()
@@ -69,3 +69,28 @@ def main():
     output_fpath = manual_fpath / 'compare_ani.gif'
     from watch.cli import gifify
     gifify.ffmpeg_animate_frames(fpaths, output_fpath, in_framerate=0.7)
+
+
+def stack_ann_img_animations():
+    import watch
+    import tempfile
+    import kwimage
+    tmp_dpath = ub.Path(tempfile.mkdtemp())
+    dpath = watch.find_smart_dvc_dpath()
+    viz_dpath = dpath / 'Drop1-Aligned-L1-2022-01/_viz3'
+    for region in ub.ProgIter(list(viz_dpath.glob('*'))):
+        vid_name = region.name
+        fpaths1 = sorted(region.glob('_anns/depth/*.jpg'))
+        fpaths2 = sorted(region.glob('_imgs/depth/*.jpg'))
+        fpaths3 = []
+        for fpath1, fpath2 in zip(fpaths1, fpaths2):
+            img1 = kwimage.imread(fpath1)
+            img2 = kwimage.imread(fpath2)
+            img3 = kwimage.stack_images([img1, img2], axis=0)
+            fpath3 = tmp_dpath / fpath2.name
+            kwimage.imwrite(fpath3, img3)
+            fpaths3.append(fpath3)
+        output_fpath = viz_dpath / f'stack_{vid_name}.gif'
+        if fpaths3:
+            from watch.cli import gifify
+            gifify.ffmpeg_animate_frames(fpaths3, output_fpath, in_framerate=0.7)

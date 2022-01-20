@@ -2,6 +2,10 @@
 """
 KWCoco video visualization script
 
+TODO:
+    - [ ] Option to interpret a channel as a heatmap and overlay it on top of
+          another set of channels interpreted as a grayscale image.
+
 CommandLine:
     # A demo of this script on toydata is as follows
 
@@ -75,6 +79,8 @@ class CocoVisualizeConfig(scfg.Config):
         # 'channels': scfg.Value(None, type=str, help='only viz these channels'),
         'num_frames': scfg.Value(None, type=str, help='show the first N frames from each video, if None, all are shown'),
         'start_frame': scfg.Value(0, type=str, help='If specified each video will start on this frame'),
+
+        'skip_missing': scfg.Value(False, type=str, help='If true, skip any image that does not have the requested channels'),
 
         # TODO: better support for this
         # TODO: use the kwcoco_video_data, has good logic for this
@@ -236,15 +242,31 @@ def main(cmdline=True, **kwargs):
             print('JQ Query Failed: {}'.format(query_text))
             raise
 
+    if config['skip_missing'] and channels is not None:
+        requested_channels = kwcoco.ChannelSpec.coerce(channels).fuse().as_set()
+        coco_images = coco_dset.images(selected_gids).coco_images
+        keep = []
+        for coco_img in coco_images:
+            code = coco_img.channels.fuse().as_set()
+            if requested_channels & code:
+                keep.append(coco_img.img['id'])
+        print(f'Filtered {len(coco_images) - len(keep)} images without requested channels. Keeping {len(keep)}')
+        selected_gids = keep
+
     video_names = []
     for vidid, video in prog:
         sub_dpath = viz_dpath / video['name']
-        sub_dpath.mkdir(parents=True, exist_ok=1)
-        video_names.append(video['name'])
 
         gids = coco_dset.index.vidid_to_gids[vidid]
         if selected_gids is not None:
             gids = list(ub.oset(gids) & set(selected_gids))
+
+        if len(gids) == 0:
+            print(f'Skip {video["name"]=!r} with no selected images')
+            continue
+
+        sub_dpath.mkdir(parents=True, exist_ok=1)
+        video_names.append(video['name'])
 
         norm_over_time = config['norm_over_time']
         if not norm_over_time:
@@ -509,6 +531,9 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     if fixed_normalization_scheme is not None:
         chan_to_normalizer = select_fixed_normalization(
             fixed_normalization_scheme, sensor_coarse)
+        # Hacks for common "heatmap" channels
+        chan_to_normalizer['depth'] = {'type': 'normalize', 'mode': 'linear',
+                                       'min_val': 0, 'max_val': 255}
 
     if channels is not None:
         if isinstance(channels, list):
@@ -569,7 +594,6 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         if any3 == 'only':
             # Kick everything else out
             chan_groups = []
-
         # Try to visualize any3 channels to get a nice viewable sequence
         avail_channels = channels.fuse()
         common_visualizers = list(map(kwcoco.FusedChannelSpec.coerce, [
@@ -661,23 +685,26 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         # Note: Using 'nearest' here since we're just visualizing (and
         # otherwise nodata values can affect interpolated pixel
         # values)
-        canvas = chan.finalize(interpolation='nearest')
+        canvas = chan.finalize(interpolation='nearest', nodata=nodata)
         # import kwarray
         # kwarray.atleast_nd(canvas, 3)
 
         if chan_to_normalizer is None:
-            canvas = normalize_intensity(canvas, nodata=nodata, params={
+            # if canvas.max() <= 0 or canvas.min() >= 255:
+            # Hack to only do noramlization on "non-standard" data ranges
+            norm_canvas = normalize_intensity(canvas, nodata=nodata, params={
                 'high': 0.90,
                 'mid': 0.5,
                 'low': 0.01,
                 'mode': 'linear',
             })
+            canvas = norm_canvas
         else:
             from watch.utils import util_kwarray
             import numpy as np
             new_parts = []
             for cx, c in enumerate(chan_list):
-                normalizer = chan_to_normalizer[c]
+                normalizer = chan_to_normalizer.get(c, None)
                 data = canvas[..., cx]
                 mask = (data != nodata)
                 p = util_kwarray.apply_normalizer(data, normalizer, mask=mask, set_value_at_mask=0.)
