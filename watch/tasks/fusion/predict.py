@@ -195,6 +195,7 @@ def predict(cmdline=False, **kwargs):
         method.class_metrics = None
         method.saliency_metrics = None
         method.change_metrics = None
+        method.head_metrics = None
     except Exception:
         # If we have a checkpoint path we can load it if we make assumptions
         # init method from checkpoint.
