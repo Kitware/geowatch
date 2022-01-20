@@ -57,7 +57,7 @@ def main():
                         required=False,
                         help="Number of jobs to run in parallel")
 
-    run_coreg_for_baseline(**vars(parser.parse_args()))
+    run_fmask_streaming(**vars(parser.parse_args()))
 
     return 0
 
@@ -94,15 +94,15 @@ def _item_map(stac_item, outbucket, aws_base_command, dryrun):
                            aws_base_command)
 
 
-def run_coreg_for_baseline(input_path,
-                           output_path,
-                           outbucket,
-                           aws_profile=None,
-                           dryrun=False,
-                           show_progress=False,
-                           requester_pays=False,
-                           newline=False,
-                           jobs=1):
+def run_fmask_streaming(input_path,
+                        output_path,
+                        outbucket,
+                        aws_profile=None,
+                        dryrun=False,
+                        show_progress=False,
+                        requester_pays=False,
+                        newline=False,
+                        jobs=1):
     if aws_profile is not None:
         aws_base_command =\
             ['aws', 's3', '--profile', aws_profile, 'cp']
@@ -158,7 +158,10 @@ def run_coreg_for_baseline(input_path,
             traceback.print_exception(*sys.exc_info())
             continue
         else:
-            output_stac_items.append(mapped_item.to_dict())
+            if isinstance(mapped_item, dict):
+                output_stac_items.append(mapped_item)
+            else:
+                output_stac_items.append(mapped_item.to_dict())
 
     if newline:
         te_output = '\n'.join((json.dumps(item) for item in output_stac_items))
