@@ -134,14 +134,14 @@ def merge_bas_metrics_results(results: List[RegionResult]):
                 pd.date_range(region_feat['properties']['start_date'],
                               region_feat['properties']['end_date']))
 
-        return len(pd.DatetimeIndex.union_many(dates)) - 1
+            return len(dates[0].union_many(dates[1:])) - 1
 
     def n_unique_images(sites):
-        sources = set.union(*itertools.chain.from_iterable({
+        sources = set.union(*[{
             feat['properties']['source']
             for feat in site['features']
             if feat['properties']['type'] == 'observation'
-        } for site in sites))
+        } for site in sites])
         return len(sources)
 
     #
@@ -178,13 +178,15 @@ def merge_bas_metrics_results(results: List[RegionResult]):
     result_df[sum_cols] = merged_df.groupby(['rho', 'tau'])[sum_cols].sum()
 
     # ref: metrics-and-test-framework.evaluation.Metric
-    tp, fp, fn = result_df[['tp sites', 'fp sites', 'fn sites']]
-    result_df['precision'] = tp / (tp + fp) if tp else 0
-    result_df['recall (PD)'] = tp / (tp + fn) if tp else 0
-    result_df['F1'] = tp / (tp + 0.5 * (fp + fn)) if tp else 0
+    (_, tp), (_, fp), (_, fn) = result_df[['tp sites', 'fp sites',
+                                           'fn sites']].iteritems()
+    result_df['precision'] = np.where(tp > 0, tp / (tp + fp), 0)
+    result_df['recall (PD)'] = np.where(tp > 0, tp / (tp + fn), 0)
+    result_df['F1'] = np.where(tp > 0, tp / (tp + 0.5 * (fp + fn)), 0)
 
-    all_regions = [r.region for r in results]
-    all_sites = list(itertools.chain.from_iterable([r.sites for r in results]))
+    all_regions = [r.region_model for r in results]
+    all_sites = list(itertools.chain.from_iterable([
+        r.site_models for r in results]))
     # ref: metrics-and-test-framework.evaluation.Evaluation.build_scoreboard
     result_df['spatial FAR'] = fp.astype(float) / area(all_regions)
     result_df['temporal FAR'] = fp.astype(float) / n_dates(all_regions)
@@ -459,7 +461,9 @@ def main(args):
                       'TP site matches.')
 
     if args.merge:
-        merge_metrics_results(out_dirs, gt_dpath)
+        import xdev
+        with xdev.embed_on_exception_context():
+            merge_metrics_results(out_dirs, gt_dpath)
 
 
 if __name__ == '__main__':

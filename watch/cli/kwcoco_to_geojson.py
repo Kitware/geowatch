@@ -391,7 +391,9 @@ def add_site_summary_to_kwcoco(site_summary_or_region_model,
         jsonschema.validate(region_model, schema=region_model_schema)
         site_summaries = [
             f for f in region_model['features']
-            if f['properties']['type'] == 'site_summary'
+            if (f['properties']['type'] == 'site_summary'
+                # TODO handle positive_partial
+                and f['properties']['status'] == 'positive_annotated')
         ]
         if region_id is None:
             region_feat = region_model['features'][0]
