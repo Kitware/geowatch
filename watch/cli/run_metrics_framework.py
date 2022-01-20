@@ -3,53 +3,252 @@ import argparse
 import sys
 import os
 import json
+import parse
+import itertools
+import pandas as pd
+import numpy as np
+import shapely.geometry
+import shapely.ops
+from tempfile import TemporaryDirectory
+from dataclasses import dataclass
+from glob import glob
+from typing import List, Dict
 import ubelt as ub
 import subprocess
-from tempfile import TemporaryDirectory
-'''
-REGIONS_VALI=(
-    "KR_R001"
-    "KR_R002"
-)
-REGIONS_TRAIN=(
-    "US_R001"
-    "BR_R001"
-    "BR_R002"
-    "LT_R001"
-    "BH_R001"
-    "NZ_R001"
-)
-'''
 
 
-def merge_metrics_results(region_dpaths, out_dpath=None):
+@dataclass(frozen=True)
+class RegionResult:
+    region_id: str  # 'KR_R001'
+    region_model: Dict
+    site_models: List[Dict]
+    bas_dpath: str = None  # 'path/to/scores/latest/KR_R001/bas/'
+    sc_dpath: str = None  # 'path/to/scores/latest/KR_R001/phase_activity/'
+
+    @classmethod
+    def from_dpath_and_anns_root(cls, region_dpath, anns_root):
+        region_id = os.path.basename(os.path.normpath(region_dpath))
+        bas_dpath = os.path.join(region_dpath, 'bas')
+        bas_dpath = bas_dpath if os.path.isdir(bas_dpath) else None
+        sc_dpath = os.path.join(region_dpath, 'phase_activity')
+        sc_dpath = sc_dpath if os.path.isdir(sc_dpath) else None
+        region_model = json.load(
+            open(
+                os.path.join(anns_root, 'region_models',
+                             region_id + '.geojson')))
+        site_models = [
+            json.load(open(pth)) for pth in sorted(
+                glob(
+                    os.path.join(anns_root, 'site_models',
+                                 f'{region_id}_*.geojson')))
+        ]
+        return cls(region_id, region_model, site_models, bas_dpath, sc_dpath)
+
+
+def merge_bas_metrics_results(results: List[RegionResult]):
+    '''
+    Merge BAS results and return as a pd.DataFrame
+
+    with MultiIndex(['rho', 'tau']) (a parameter sweep)
+
+    and columns:
+        tp sites             int64
+        fp sites             int64
+        fn sites             int64
+        truth sites          int64
+        proposed sites       int64
+        total sites          int64
+        truth slices         int64
+        proposed slices      int64
+        precision          float64
+        recall (PD)        float64
+        F1                 float64
+        spatial FAR        float64
+        temporal FAR       float64
+        images FAR         float64
+    
+    as in bas/scoreboard_rho=*.csv
+    '''
+
+    #
+    # --- Helper functions for FAR ---
+    #
+
+    def area(regions):
+        # ref: metrics-and-test-framework.evaluation.GeometryUtil
+        def scale_area(lat):
+            """
+            Find square meters per degree for a given latitude based on EPSG:4326
+            :param lat: average latitude
+                note that both latitude and longitude scales are dependent on latitude only
+                https://en.wikipedia.org/wiki/Geographic_coordinate_system#Length_of_a_degree
+            :return: square meters per degree for latitude coordinate
+            """
+
+            lat *= np.pi / 180.0  # convert to radians
+            lat_scale = (111132.92 - (559.82 * np.cos(2 * lat)) +
+                         (1.175 * np.cos(4 * lat)) -
+                         (0.0023 * np.cos(6 * lat)))
+            lon_scale = ((111412.84 * np.cos(lat)) - (93.5 * np.cos(3 * lat)) +
+                         (0.118 * np.cos(5 * lat)))
+
+            return lat_scale * lon_scale
+
+        def area_sqkm(poly):
+            avg_lat = (poly.bounds[1] + poly.bounds[3]) / 2.0
+            return poly.area * scale_area(avg_lat)
+
+        polys = []
+        for region in regions:
+
+            region_feats = [
+                feat for feat in region['features']
+                if feat['properties']['type'] == 'region'
+            ]
+            assert len(region_feats) == 1
+            region_feat = region_feats[0]
+
+            polys.append(shapely.geometry.shape(region_feat['geometry']))
+
+        regions_poly = shapely.ops.unary_union(polys)
+
+        if isinstance(regions_poly, shapely.geometry.Polygon):
+            return area_sqkm(regions_poly)
+        elif isinstance(regions_poly, shapely.geometry.MultiPolygon):
+            return sum(map(area_sqkm, regions_poly))
+        else:
+            raise TypeError(regions_poly)
+
+    def n_dates(regions):
+        dates = []
+        for region in regions:
+
+            region_feats = [
+                feat for feat in region['features']
+                if feat['properties']['type'] == 'region'
+            ]
+            assert len(region_feats) == 1
+            region_feat = region_feats[0]
+
+            dates.append(
+                pd.date_range(region_feat['properties']['start_date'],
+                              region_feat['properties']['end_date']))
+
+        return len(pd.DatetimeIndex.union_many(dates)) - 1
+
+    def n_unique_images(sites):
+        sources = set.union(*itertools.chain.from_iterable({
+            feat['properties']['source']
+            for feat in site['features']
+            if feat['properties']['type'] == 'observation'
+        } for site in sites))
+        return len(sources)
+
+    #
+    # --- Main logic ---
+    #
+
+    def to_df(bas_dpath, region_id):
+        scoreboard_fpaths = sorted(
+            glob(os.path.join(bas_dpath, 'scoreboard_rho=*.csv')))
+
+        # load each per-rho scoreboard and concat them
+        rho_parser = parse.Parser('scoreboard_rho={rho:f}.csv')
+        dfs = []
+        for pth in scoreboard_fpaths:
+            rho = rho_parser.parse(os.path.basename(pth)).named['rho']
+            df = pd.read_csv(pth)
+            df['rho'] = rho
+            df['region_id'] = region_id
+            # MultiIndex with rho, tau and region_id
+            df = df.set_index(['region_id', 'rho', 'tau'])
+            dfs.append(df)
+
+        return pd.concat(dfs)
+
+    dfs = [to_df(r.bas_dpath, r.region_id) for r in results]
+
+    merged_df = pd.concat(dfs)
+    result_df = pd.DataFrame(index=dfs[0].droplevel('region_id').index)
+
+    sum_cols = [
+        'tp sites', 'fp sites', 'fn sites', 'truth sites', 'proposed sites',
+        'total sites', 'truth slices', 'proposed slices'
+    ]
+    result_df[sum_cols] = merged_df.groupby(['rho', 'tau'])[sum_cols].sum()
+
+    # ref: metrics-and-test-framework.evaluation.Metric
+    tp, fp, fn = result_df[['tp sites', 'fp sites', 'fn sites']]
+    result_df['precision'] = tp / (tp + fp) if tp else 0
+    result_df['recall (PD)'] = tp / (tp + fn) if tp else 0
+    result_df['F1'] = tp / (tp + 0.5 * (fp + fn)) if tp else 0
+
+    all_regions = [r.region for r in results]
+    all_sites = list(itertools.chain.from_iterable([r.sites for r in results]))
+    # ref: metrics-and-test-framework.evaluation.Evaluation.build_scoreboard
+    result_df['spatial FAR'] = fp.astype(float) / area(all_regions)
+    result_df['temporal FAR'] = fp.astype(float) / n_dates(all_regions)
+    result_df['images FAR'] = fp.astype(float) / n_unique_images(all_sites)
+
+    return result_df
+
+
+def merge_sc_metrics_results(results: List[RegionResult]):
+
+    return NotImplemented
+
+
+def merge_metrics_results(region_dpaths, anns_root, out_dpath=None):
     '''
     Merge metrics results from multiple regions.
 
     Args:
         region_dpaths: List of directories containing the subdirs
             bas/
-            sc/ [optional]
+            phase_activity/ [optional]
+            time_activity/ [TBD, not scored yet]
+        anns_root: Path to GT annotations repo
         out_dpath: Directory to save merged results. Existing contents will
             be removed.
             Default is {common root of region_dpaths}/merged/
+
+    Returns:
+        (bas_df, sc_df)
+        Two pd.DataFrames that are saved as
+            {out_dpath}/(bas|sc)_scoreboard_df.pkl
     '''
+
     if out_dpath is None:
         out_dpath = os.path.join(os.path.commonpath(region_dpaths), 'merged')
     assert out_dpath not in region_dpaths
     os.system(f'rm -r {out_dpath}')
     os.makedirs(out_dpath, exist_ok=True)
 
-    bas_dpaths = filter(os.path.isdir,
-                        (os.path.join(r, 'bas') for r in region_dpaths))
-    sc_dpaths = filter(os.path.isdir,
-                       (os.path.join(r, 'sc') for r in region_dpaths))
-    print(bas_dpaths, sc_dpaths)
+    results = [
+        RegionResult.from_dpath_and_anns_root(pth, anns_root)
+        for pth in region_dpaths
+    ]
 
-    return NotImplemented
+    #
+    # merge BAS
+    #
+
+    bas_df = merge_bas_metrics_results([r for r in results if r.bas_dpath])
+    bas_df.to_pickle(os.path.join(out_dpath, 'bas_scoreboard_df.pkl'))
+    #
+    # merge SC
+    #
+
+    if 0:  # TODO
+        sc_df = merge_sc_metrics_results([r for r in results if r.sc_dpath])
+        sc_df.to_pickle(os.path.join(out_dpath, 'sc_scoreboard_df.pkl'))
+
+        return bas_df, sc_df
+    else:
+        return bas_df
 
 
-def ensure_thumbnails(image_path, gt_dpath, region_id, coco_dset):
+def ensure_thumbnails(image_path, ann_root, region_id, coco_dset):
     '''
     Symlink and organize images in the format the metrics framework expects
 
@@ -74,7 +273,7 @@ def ensure_thumbnails(image_path, gt_dpath, region_id, coco_dset):
 
     Args:
         image_path: root directory to save under
-        gt_dpath: $DVC_DPATH/annotations/ == smartgitlab.com/TE/annotations/
+        ann_root: $DVC_DPATH/annotations/ == smartgitlab.com/TE/annotations/
         region_id: ex. 'KR_R001'
         coco_dset: containing a video named {region_id}
     '''
@@ -120,6 +319,12 @@ def main(args):
         Output directory where scores will be written. Each region will have
         Defaults to ./output/
         ''')
+    parser.add_argument('--merge',
+                        action='store_true',
+                        help='''
+    Merge BAS and SC metrics from all regions and output to
+    {out_dir}/merged/
+    ''')
 
     parser.add_argument('--tmp_dir',
                         help='''
@@ -135,12 +340,6 @@ def main(args):
         {out_dir}/thumbnails/
         ''')
 
-        parser.add_argument('--merge',
-                            action='store_true',
-                            help='''
-        Merge BAS and SC metrics from all regions and output to
-        {out_dir}/merged/
-        ''')
     args = parser.parse_args(args)
 
     # load sites
@@ -153,8 +352,7 @@ def main(args):
                 site = json.loads(site)
         except json.JSONDecodeError as e:  # TODO split out as decorator?
             raise json.JSONDecodeError(e.msg + ' [cut for length]',
-                                       e.doc[:100] + '...',
-                                       e.pos)
+                                       e.doc[:100] + '...', e.pos)
         sites.append(site)
 
     # normalize paths
@@ -186,6 +384,7 @@ def main(args):
     ub.cmd(virtualenv_cmd, verbose=1, check=True, shell=True)
 
     # split sites by region
+    out_dirs = []
     grouped_sites = ub.group_items(
         sites, lambda site: site['features'][0]['properties']['region_id'])
 
@@ -206,8 +405,7 @@ def main(args):
                         os.path.join(
                             site_sub_dpath,
                             (site['features'][0]['properties']['site_id'] +
-                             '.geojson')),
-                        'w') as f:
+                             '.geojson')), 'w') as f:
                     json.dump(site, f)
 
             if 1:
@@ -241,6 +439,7 @@ def main(args):
                 out_dir = os.path.join(args.out_dir, region_id)
             else:
                 out_dir = None
+            out_dirs.append(out_dir)
             # cache_dpath is always empty to work around bugs
             cmd = ub.paragraph(fr'''
                 {virtualenv_cmd} &&
@@ -253,12 +452,14 @@ def main(args):
                     --output_dir {out_dir}
                     --cache_dir {cache_dpath}
                 ''')
-            import subprocess
             try:
                 ub.cmd(cmd, verbose=3, check=True, shell=True)
             except subprocess.CalledProcessError:
                 print('error in metrics framework, probably due to zero '
                       'TP site matches.')
+
+    if args.merge:
+        merge_metrics_results(out_dirs, gt_dpath)
 
 
 if __name__ == '__main__':
