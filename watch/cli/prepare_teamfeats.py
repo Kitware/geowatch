@@ -16,6 +16,9 @@ class TeamFeaturePipelineConfig(scfg.Config):
 
         'data_workers': scfg.Value(2, help='dataloader workers for each proc'),
         'keep_sessions': scfg.Value(False, help='if True does not close tmux sessions'),
+
+        'run': scfg.Value(True, help='if True execute the pipeline'),
+        'cache': scfg.Value(True, help='if True skip completed results'),
     }
 
 
@@ -24,6 +27,9 @@ def main(cmdline=True, **kwargs):
     The idea is that we should have a lightweight scheduler.  I think something
     fairly minimal can be implemented with tmux, but it would be nice to have a
     more robust slurm extension.
+
+    TODO:
+        - [ ] Option to just dump the serial bash script that does everything.
     """
     import watch
     from watch.utils import tmux_queue
@@ -75,6 +81,8 @@ def main(cmdline=True, **kwargs):
         'with_invariants': 'I',
     }
 
+    with_rich = 0
+
     tasks = []
     # tmux queue is still limited. The order of submission matters.
 
@@ -100,13 +108,18 @@ def main(cmdline=True, **kwargs):
     if config[key]:
         # Landcover is fairly fast to run, do it first
         task = {}
+        # Only need 1 worker to minimize lag between images, task is GPU bound
+        depth_data_workers = max(2, data_workers)
+        depth_window_size = 1536  # takes 18GB
         task['output_fpath'] = outputs['dzyne_depth']
         task['command'] = ub.codeblock(
             fr'''
             python -m watch.tasks.depth.predict \
                 --dataset="{base_coco_fpath}" \
                 --output="{task['output_fpath']}" \
-                --deployed="{model_fpaths['dzyne_depth']}"
+                --deployed="{model_fpaths['dzyne_depth']}" \
+                --data_workers={depth_data_workers} \
+                --window_size={depth_window_size}
             ''')
         combo_code_parts.append(codes[key])
         tasks.append(task)
@@ -157,28 +170,32 @@ def main(cmdline=True, **kwargs):
     tq = tmux_queue.TMUXMultiQueue(name='teamfeat', size=size, gres=gres)
 
     for task in tasks:
-        if not task['output_fpath'].exists():
-            command = f"[[ -f '{task['output_fpath']}' ]] || " + task['command']
-            tq.submit(command)
+        if config['cache']:
+            if not task['output_fpath'].exists():
+                command = f"[[ -f '{task['output_fpath']}' ]] || " + task['command']
+                tq.submit(command)
+        else:
+            tq.submit(task['command'])
 
-    tq.rprint()
+    tq.rprint(with_rich=with_rich)
 
     tq.write()
 
     # TODO: make the monitor spawn in a new tmux session. The monitor could
     # actually be the scheduler process.
-    import subprocess
-    try:
-        agg_state = tq.run(block=True)
-    except subprocess.CalledProcessError as ex:
-        print('ex.stdout = {!r}'.format(ex.stdout))
-        print('ex.stderr = {!r}'.format(ex.stderr))
-        print('ex.returncode = {!r}'.format(ex.returncode))
-        raise
-    else:
-        if not config['keep_sessions']:
-            if not agg_state['errored']:
-                tq.kill()
+    if config['run']:
+        import subprocess
+        try:
+            agg_state = tq.run(block=True)
+        except subprocess.CalledProcessError as ex:
+            print('ex.stdout = {!r}'.format(ex.stdout))
+            print('ex.stderr = {!r}'.format(ex.stderr))
+            print('ex.returncode = {!r}'.format(ex.returncode))
+            raise
+        else:
+            if not config['keep_sessions']:
+                if not agg_state['errored']:
+                    tq.kill()
 
     if 1:
         # Finalize features by combining them all into combo.kwcoco.json
@@ -186,15 +203,26 @@ def main(cmdline=True, **kwargs):
         combo_code = ''.join(sorted(combo_code_parts))
         combo_fpath = aligned_bundle_dpath / f'combo_{combo_code}.kwcoco.json'
 
+        tq = tmux_queue.TMUXMultiQueue(name='combine-feats', size=2)
+
         # TODO: enable forcing if needbe
-        if not combo_fpath.exists() or 0:
+        if not combo_fpath.exists() or not config['cache']:
+            #  Indent of this the codeblock matters for this line
+            src_lines = ' \\\n                          '.join(tocombine)
             command = ub.codeblock(
-                f'''
+                fr'''
                 python -m watch.cli.coco_combine_features \
-                    --src {' '.join(tocombine)} \
+                    --src {src_lines} \
                     --dst {combo_fpath}
                 ''')
-            ub.cmd(command, verbose=2, check=True)
+            tq.submit(command)
+
+        tq.rprint(with_rich=with_rich)
+        if config['run']:
+            agg_state = tq.run(block=True)
+            if not config['keep_sessions']:
+                if not agg_state['errored']:
+                    tq.kill()
 
         splits = {
             'combo_train': combo_fpath.augment(suffix='_train', multidot=True),
@@ -210,7 +238,7 @@ def main(cmdline=True, **kwargs):
 
         # Perform train/validation splits with and without worldview
         command = ub.codeblock(
-            f'''
+            fr'''
             python -m kwcoco subset \
                 --src {combo_fpath} \
                 --dst {splits['combo_train']} \
@@ -219,7 +247,7 @@ def main(cmdline=True, **kwargs):
         tq.submit(command, index=0)
 
         command = ub.codeblock(
-            f'''
+            fr'''
             python -m kwcoco subset \
                 --src {splits['combo_train']} \
                 --dst {splits['combo_nowv_train']} \
@@ -228,7 +256,7 @@ def main(cmdline=True, **kwargs):
         tq.submit(command, index=0)
 
         command = ub.codeblock(
-            f'''
+            fr'''
             python -m kwcoco subset \
                 --src {splits['combo_train']} \
                 --dst {splits['combo_wv_train']} \
@@ -238,7 +266,7 @@ def main(cmdline=True, **kwargs):
 
         # Perform vali/validation splits with and without worldview
         command = ub.codeblock(
-            f'''
+            fr'''
             python -m kwcoco subset \
                 --src {combo_fpath} \
                 --dst {splits['combo_vali']} \
@@ -247,7 +275,7 @@ def main(cmdline=True, **kwargs):
         tq.submit(command, index=1)
 
         command = ub.codeblock(
-            f'''
+            fr'''
             python -m kwcoco subset \
                 --src {splits['combo_vali']} \
                 --dst {splits['combo_nowv_vali']} \
@@ -256,17 +284,21 @@ def main(cmdline=True, **kwargs):
         tq.submit(command, index=1)
 
         command = ub.codeblock(
-            f'''
+            fr'''
             python -m kwcoco subset \
                 --src {splits['combo_vali']} \
                 --dst {splits['combo_wv_vali']} \
                 --select_images '.sensor_coarse == "WV"'
             ''')
         tq.submit(command, index=1)
-        agg_state = tq.run(block=True)
-        if not config['keep_sessions']:
-            if not agg_state['errored']:
-                tq.kill()
+
+        tq.rprint(with_rich=with_rich)
+
+        if config['run']:
+            agg_state = tq.run(block=True)
+            if not config['keep_sessions']:
+                if not agg_state['errored']:
+                    tq.kill()
 
     """
     Ignore:
@@ -278,7 +310,8 @@ def main(cmdline=True, **kwargs):
 if __name__ == '__main__':
     """
     CommandLine:
-        python -m watch.cli.prepare_teamfeats --gres=0 --with_depth=True --keep_sessions=True
+        python -m watch.cli.prepare_teamfeats --gres=0 --with_depth=True --keep_sessions=False --run=False --cache=False
+
         python -m watch.cli.prepare_teamfeats --gres=0,2 --with_depth=True --keep_sessions=True
         python -m watch.cli.prepare_teamfeats --gres=2 --with_materials=False --keep_sessions=True
     """

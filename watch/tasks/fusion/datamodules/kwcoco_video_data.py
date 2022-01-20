@@ -606,7 +606,7 @@ class KWCocoVideoDataset(data.Dataset):
         >>> sampler = ndsampler.CocoSampler(coco_dset)
         >>> channels = 'B10|B8a|B1|B8'
         >>> sample_shape = (3, 256, 256)
-        >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, time_sampling='soft+distribute', diff_inputs=0, match_histograms=0)
+        >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, time_sampling='soft2+distribute', diff_inputs=0, match_histograms=0)
         >>> index = len(self) // 4
         >>> item = self[index]
         >>> canvas = self.draw_item(item, overlay_on_image=1)
@@ -1195,8 +1195,9 @@ class KWCocoVideoDataset(data.Dataset):
                     chosen = time_sampler.sample(include=include_idxs, exclude=exclude_idxs, error_level=1, return_info=False)
                     new_idxs = np.setdiff1d(chosen, include_idxs)
                     new_gids = video_gids[new_idxs]
-                    print('new_gids = {!r}'.format(new_gids))
+                    # print('new_gids = {!r}'.format(new_gids))
                     if not len(new_gids):
+                        print('exhausted resample possibilities')
                         # Exhausted all possibilities
                         break
                     for gid in new_gids:
@@ -2581,8 +2582,8 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> window_overlap = 0.0
         >>> window_dims = (3, 32, 32)
         >>> keepbound = False
-        >>> time_sampling = 'soft+distribute'
-        >>> sample_grid1 = sample_video_spacetime_targets(dset, window_dims, window_overlap, time_sampling='soft+distribute')
+        >>> time_sampling = 'soft2+distribute'
+        >>> sample_grid1 = sample_video_spacetime_targets(dset, window_dims, window_overlap, time_sampling='soft2+distribute')
         >>> sample_grid2 = sample_video_spacetime_targets(dset, window_dims, window_overlap, time_sampling='contiguous+pairwise')
 
         ub.peek(sample_grid1['vidid_to_time_sampler'].values()).show_summary(fnum=1)
@@ -2598,7 +2599,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> window_overlap = 0.0
         >>> window_dims = (3, 32, 32)
         >>> keepbound = False
-        >>> time_sampling = 'soft+distribute'
+        >>> time_sampling = 'soft2+distribute'
         >>> use_centered_positives = True
         >>> use_grid_positives = 0
         >>> sample_grid = sample_video_spacetime_targets(
@@ -2650,7 +2651,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
     vidid_to_valid_gids = {}
 
     parts = set(time_sampling.split('+'))
-    affinity_type_parts = parts & {'hard', 'hardish', 'contiguous', 'soft'}
+    affinity_type_parts = parts & {'hard', 'hardish', 'contiguous', 'soft2'}
     affinity_type = '+'.join(list(affinity_type_parts))
     update_rule = '+'.join(list(parts - affinity_type_parts))
     if not update_rule:
