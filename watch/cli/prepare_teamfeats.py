@@ -27,6 +27,9 @@ def main(cmdline=True, **kwargs):
     The idea is that we should have a lightweight scheduler.  I think something
     fairly minimal can be implemented with tmux, but it would be nice to have a
     more robust slurm extension.
+
+    TODO:
+        - [ ] Option to just dump the serial bash script that does everything.
     """
     import watch
     from watch.utils import tmux_queue
@@ -303,9 +306,17 @@ def main(cmdline=True, **kwargs):
 if __name__ == '__main__':
     """
     CommandLine:
-        python -m watch.cli.prepare_teamfeats --gres=0 --with_depth=True --keep_sessions=True --run=False --cache=False
+        python -m watch.cli.prepare_teamfeats --gres=0 --with_depth=True --keep_sessions=False --run=False --cache=False
 
         python -m watch.cli.prepare_teamfeats --gres=0,2 --with_depth=True --keep_sessions=True
         python -m watch.cli.prepare_teamfeats --gres=2 --with_materials=False --keep_sessions=True
     """
     main(cmdline=True)
+
+python -m watch.tasks.depth.predict \
+    --dataset="/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-L1-2022-01/data.kwcoco.json" \
+    --output="/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-L1-2022-01/dzyne_depth.kwcoco.json" \
+    --deployed="/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/models/depth/weights_v1.pt" \
+    --data_workers=2 \
+    --window_size=1536
+

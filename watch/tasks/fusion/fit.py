@@ -393,7 +393,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     if 1:
         callbacks = [
             # pl_ext.callbacks.AutoResumer(),
-            pl_ext.callbacks.StateLogger(),
+            # pl_ext.callbacks.StateLogger(),
             pl_ext.callbacks.TextLogger(args),
             # pl.callbacks.LambdaCallback(on_init_end=_on_init_end),
             pl_ext.callbacks.Packager(package_fpath=args.package_fpath),

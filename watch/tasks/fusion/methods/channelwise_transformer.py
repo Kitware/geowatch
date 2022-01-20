@@ -555,25 +555,20 @@ class MultimodalTransformer(pl.LightningModule):
             )
             self.criterions['saliency'] = coerce_criterion(saliency_loss, self.saliency_weights)
 
-        self.class_metrics = nn.ModuleDict({
+        self.head_metrics = nn.ModuleDict()
+        self.head_metrics['class'] = nn.ModuleDict({
             # "acc": torchmetrics.Accuracy(),
             # "iou": torchmetrics.IoU(2),
             'f1_micro': torchmetrics.F1(threshold=0.5, average='micro'),
             'f1_macro': torchmetrics.F1(threshold=0.5, average='macro', num_classes=self.num_classes),
         })
-
-        self.change_metrics = nn.ModuleDict({
+        self.head_metrics['change'] = nn.ModuleDict({
             # "acc": torchmetrics.Accuracy(),
             # "iou": torchmetrics.IoU(2),
             'f1': torchmetrics.F1(),
         })
-
-        self.saliency_metrics = nn.ModuleDict({
-            # "acc": torchmetrics.Accuracy(),
-            # "iou": torchmetrics.IoU(2),
-            # "f1": torchmetrics.F1(),
-            'f1_micro': torchmetrics.F1(threshold=0.5, average='micro'),
-            'f1_macro': torchmetrics.F1(threshold=0.5, average='macro', num_classes=self.saliency_num_classes),
+        self.head_metrics['saliency'] = nn.ModuleDict({
+            'f1': torchmetrics.F1(),
         })
 
     def configure_optimizers(self):
@@ -1141,9 +1136,9 @@ class MultimodalTransformer(pl.LightningModule):
                 for head_key in to_compare.keys():
                     _true, _pred = to_compare[head_key]
                     # Dont log unless a trainer is attached
-                    for key, metric in self.change_metrics.items():
+                    for metric_key, metric in self.head_metrics[head_key].items():
                         val = metric(_pred, _true)
-                        item_metrics[f'{stage}_{head_key}_{key}'] = val
+                        item_metrics[f'{stage}_{head_key}_{metric_key}'] = val
 
                 for key, val in item_metrics.items():
                     self.log(key, val, prog_bar=True)
