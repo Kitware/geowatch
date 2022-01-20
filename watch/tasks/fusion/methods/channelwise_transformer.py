@@ -467,7 +467,7 @@ class MultimodalTransformer(pl.LightningModule):
                 tokenize = ConvTokenizer(in_chan, in_features_raw, norm=None)
             elif tokenizer == 'linconv':
                 in_features_raw = MODAL_AGREEMENT_CHANS * 64
-                tokenize = ConvTokenizer(in_chan, in_features_raw, norm=None)
+                tokenize = LinearConvTokenizer(in_chan, in_features_raw, norm=None)
             elif tokenizer == 'dwcnn':
                 in_features_raw = MODAL_AGREEMENT_CHANS * 64
                 tokenize = DWCNNTokenizer(in_chan, in_features_raw, norm=token_norm)
@@ -1616,6 +1616,11 @@ class DWCNNTokenizer(nn.Module):
 
 
 class LinearConvTokenizer(nh.layers.Sequential):
+    """
+    Example:
+        >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+        >>> LinearConvTokenizer(1, 512)
+    """
     def __init__(self, in_channels, out_channels):
         # import math
         c1 = in_channels * 1

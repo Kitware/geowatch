@@ -1195,8 +1195,9 @@ class KWCocoVideoDataset(data.Dataset):
                     chosen = time_sampler.sample(include=include_idxs, exclude=exclude_idxs, error_level=1, return_info=False)
                     new_idxs = np.setdiff1d(chosen, include_idxs)
                     new_gids = video_gids[new_idxs]
-                    print('new_gids = {!r}'.format(new_gids))
+                    # print('new_gids = {!r}'.format(new_gids))
                     if not len(new_gids):
+                        print('exhausted resample possibilities')
                         # Exhausted all possibilities
                         break
                     for gid in new_gids:

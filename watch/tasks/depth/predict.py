@@ -203,7 +203,7 @@ if __name__ == '__main__':
         --output="$DVC_DPATH/Drop1-Aligned-L1-2022-01/dzyne_depth.kwcoco.json" \
         --deployed="$DVC_DPATH/models/depth/weights_v1.pt" \
         --dump_shards=True \
-        --data_workers=0 \
+        --data_workers=2 \
         --window_size=1536
 
     """
