@@ -381,6 +381,9 @@ def normalize_phases(coco_dset, baseline_keys={'salient'}):
     Convert internal representation of phases to their IARPA standards
     as well as inserting a baseline guess for activity classification
 
+    HACK: add a Post Construction frame at the end of every track
+    until we support partial sites
+
     The only remaining categories in the returned coco_dset should be:
         Site Preparation
         Active Construction
@@ -476,6 +479,13 @@ def normalize_phases(coco_dset, baseline_keys={'salient'}):
                 annots.set('category_id', cids)
         else:
             log.update(['full class labels'])
+
+        # HACK
+        last_gid = coco_dset.index._set_sorted_by_frame_index(
+                coco_dset.annots(trackid=trackid).gids)[-1]
+        post_cid = coco_dset.name_to_cat['Post Construction']['id']
+        coco_dset.annots(trackid=trackid, gid=last_gid).set(
+                'category_id', post_cid)
 
     print('label status of tracks: ', log)
     return coco_dset
