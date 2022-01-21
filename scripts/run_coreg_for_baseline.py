@@ -73,19 +73,20 @@ def run_coreg_for_baseline(input_path,
     print("* Running coregistration *")
     coreg_catalog = run_s2_coreg_l1c(
         ingress_catalog,
-        '/tmp/coreg')
+        '/tmp/coreg',
+        jobs=jobs)
 
     print("* Running BRDF correction *")
     brdf_catalog = run_brdf(
         coreg_catalog,
         '/tmp/brdf',
-        jobs=1)
+        jobs=jobs)
 
     print("* Orthorectifying WV data *")
     wv_ortho_catalog = wv_ortho(
         brdf_catalog,
         '/tmp/wv_ortho',
-        jobs=1,
+        jobs=jobs,
         drop_empty=True)
 
     print("* Coregistering WV *")
