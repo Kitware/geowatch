@@ -1301,6 +1301,8 @@ class KWCocoVideoDataset(data.Dataset):
 
             if not self.inference_only:
                 # Remember to apply any transform to the dets as well
+                # TODO: the info scale is on a per-mode basis, need to
+                # normalize it first or compute a mode-to-truth transform.
                 dets = frame_dets.scale(info['scale'])
                 dets = dets.translate(info['offset'])
 
@@ -1367,7 +1369,7 @@ class KWCocoVideoDataset(data.Dataset):
                 frame_weights = frame_weights.clip(0, 1)
 
             if not self.inference_only:
-                if self.requested_tasks['class']:
+                if self.requested_tasks['class'] or self.requested_tasks['change']:
                     frame_item['class_idxs'] = frame_cidxs
                     frame_item['class_weights'] = class_weights
                 if self.requested_tasks['saliency']:
@@ -1462,6 +1464,8 @@ class KWCocoVideoDataset(data.Dataset):
                     else:
                         time_offset = frame_timestamp - prev_timestamp
 
+                    # TODO: add seasonal positional encoding
+
                     permode_datas['time_offset'].append(time_offset)
 
                     k = 'sensor'
@@ -1516,7 +1520,7 @@ class KWCocoVideoDataset(data.Dataset):
             ('normalize_perframe', self.normalize_perframe),
             ('with_intensity', with_intensity),
             ('with_class', with_class),
-            ('depends_version', 12),  # bump if `compute_dataset_stats` changes
+            ('depends_version', 13),  # bump if `compute_dataset_stats` changes
         ])
         workdir = None
         cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends)
@@ -1557,6 +1561,10 @@ class KWCocoVideoDataset(data.Dataset):
 
         CommandLine:
             DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc xdoctest -m watch.tasks.fusion.datamodules.kwcoco_video_data KWCocoVideoDataset.compute_dataset_stats:1
+
+        Ignore:
+            import xdev
+            globals().update(xdev.get_func_kwargs(KWCocoVideoDataset.compute_dataset_stats))
 
         Example:
             >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -1703,7 +1711,8 @@ class KWCocoVideoDataset(data.Dataset):
                 sspec = c.img.get('sensor_coarse', '')
                 # Ensure channels are returned in requested order
                 cspec = (self.input_channels & c.channels.fuse().normalize()).fuse().normalize().spec
-                hacked.add((sspec, cspec))
+                if cspec:
+                    hacked.add((sspec, cspec))
             unique_sensor_modes.update(hacked)
 
         channel_stats = channel_stats.to_dict()
@@ -2594,8 +2603,6 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
         >>> from watch.demo.smart_kwcoco_demodata import demo_kwcoco_multisensor
         >>> dset = coco_dset = demo_kwcoco_multisensor(dates=True, geodata=True, heatmap=True)
-        >>> import xdev
-        >>> globals().update(xdev.get_func_kwargs(sample_video_spacetime_targets))
         >>> window_overlap = 0.0
         >>> window_dims = (3, 32, 32)
         >>> keepbound = False
@@ -2611,6 +2618,9 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
         >>> canvas = visualize_sample_grid(dset, sample_grid)
         >>> kwplot.imshow(canvas, doclf=1)
         >>> kwplot.show_if_requested()
+
+        import xdev
+        globals().update(xdev.get_func_kwargs(sample_video_spacetime_targets))
 
     Ignore:
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA

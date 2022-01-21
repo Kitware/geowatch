@@ -1,3 +1,4 @@
+#!/bin/bash
 __doc__="""
 This demonstrates an end-to-end pipeline on multispectral toydata
 
@@ -7,19 +8,28 @@ output if you run this should end with something like
 
 # Generate toy datasets
 DATA_DPATH=$HOME/data/work/toy_change
-TRAIN_FPATH=$DATA_DPATH/vidshapes_msi_train/data.kwcoco.json
+TRAIN_FPATH=$DATA_DPATH/vidshapes_msi_train100/data.kwcoco.json
 VALI_FPATH=$DATA_DPATH/vidshapes_msi_vali/data.kwcoco.json
 TEST_FPATH=$DATA_DPATH/vidshapes_msi_test/data.kwcoco.json 
 
-mkdir -p "$DATA_DPATH"
-kwcoco toydata --key=vidshapes-videos8-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$DATA_DPATH/vidshapes_msi_train" --verbose=5
-kwcoco toydata --key=vidshapes-videos5-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$DATA_DPATH/vidshapes_msi_vali"  --verbose=5
-kwcoco toydata --key=vidshapes-videos2-frames6-randgsize-speed0.2-msi-multisensor --bundle_dpath "$DATA_DPATH/vidshapes_msi_test" --verbose=5 
+generate_data(){
+    mkdir -p "$DATA_DPATH"
+    kwcoco toydata --key=vidshapes-videos100-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$DATA_DPATH/vidshapes_msi_train100" --verbose=5
+    kwcoco toydata --key=vidshapes-videos5-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$DATA_DPATH/vidshapes_msi_vali"  --verbose=5
+    kwcoco toydata --key=vidshapes-videos2-frames6-randgsize-speed0.2-msi-multisensor --bundle_dpath "$DATA_DPATH/vidshapes_msi_test" --verbose=5 
+}
 
 
-# Print stats
-python -m kwcoco stats "$TRAIN_FPATH" "$VALI_FPATH" "$TEST_FPATH"
-python -m watch stats "$TRAIN_FPATH" "$VALI_FPATH" "$TEST_FPATH"
+print_stats(){
+    # Print stats
+    python -m kwcoco stats "$TRAIN_FPATH" "$VALI_FPATH" "$TEST_FPATH"
+    python -m watch stats "$TRAIN_FPATH" "$VALI_FPATH" "$TEST_FPATH"
+}
+
+if [[ ! -e "$TRAIN_FPATH" ]]; then
+    generate_data
+    print_stats
+fi
 
 __doc__="""
 Should look like 
@@ -43,9 +53,27 @@ Should look like
 #    --viz_dpath="$DATA_DPATH/vidshapes_msi_train/_viz" --animate=True
 
 
+function join_by {
+  # https://stackoverflow.com/questions/1527049/how-can-i-join-elements-of-an-array-in-bash
+  local d=${1-} f=${2-}
+  if shift 2; then
+    printf %s "$f" "${@/#/$d}"
+  fi
+}
+
+
 ARCH=smt_it_stm_p8
 
-CHANNELS="B11,r|g|b,B1|B8|B11"
+STREAMS=(
+    "disparity|gauss"
+    "X.2|Y:2:6"
+    "B1|B8a"
+    "flowx|flowy|distri"
+)
+
+#CHANNELS="disparity|gauss,,B1|B8a"
+CHANNELS=$(join_by , "${STREAMS[@]}")
+echo "CHANNELS = $CHANNELS"
 
 EXPERIMENT_NAME=ToyFusion_${ARCH}_v001
 DATASET_NAME=ToyDataMSI
@@ -56,12 +84,13 @@ DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_NAME/runs/$EXPERIMENT_NAME
 # Specify the expected input / output files
 PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package.pt 
 
-SUGGESTIONS="$(python -m watch.tasks.fusion.organize suggest_paths \
-    --package_fpath=\"$PACKAGE_FPATH\" \
-    --test_dataset=\"$TEST_FPATH\")"
+SUGGESTIONS=$(
+    python -m watch.tasks.fusion.organize suggest_paths  \
+        --package_fpath="$PACKAGE_FPATH"  \
+        --test_dataset="$TEST_FPATH")
 
-PRED_DATASET="$(echo "$SUGGESTIONS" | jq -r .pred_dataset)"
-EVAL_DATASET="$(echo "$SUGGESTIONS" | jq -r .eval_dpath)"
+PRED_FPATH="$(echo "$SUGGESTIONS" | jq -r .pred_dataset)"
+EVAL_DPATH="$(echo "$SUGGESTIONS" | jq -r .eval_dpath)"
 
 TRAIN_CONFIG_FPATH=$WORKDIR/$DATASET_NAME/configs/train_$EXPERIMENT_NAME.yml 
 PRED_CONFIG_FPATH=$WORKDIR/$DATASET_NAME/configs/predict_$EXPERIMENT_NAME.yml 
@@ -76,8 +105,8 @@ python -m watch.tasks.fusion.fit \
     --learning_rate=3e-4 \
     --weight_decay=1e-5 \
     --dropout=0.1 \
-    --time_steps=4 \
-    --chip_size=64 \
+    --time_steps=3 \
+    --chip_size=128 \
     --batch_size=2 \
     --tokenizer=dwcnn \
     --global_saliency_weight=1.0 \
@@ -99,24 +128,23 @@ python -m watch.tasks.fusion.predict \
 
 # Fit 
 python -m watch.tasks.fusion.fit \
-           --config=$TRAIN_CONFIG_FPATH \
-      --num_workers=4 \
-    --default_root_dir=$DEFAULT_ROOT_DIR \
-       --package_fpath=$PACKAGE_FPATH \
-        --train_dataset=$TRAIN_FPATH \
-         --vali_dataset=$VALI_FPATH \
-         --test_dataset=$TEST_FPATH \
-         --match_histograms=False
+           --config="$TRAIN_CONFIG_FPATH" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+       --package_fpath="$PACKAGE_FPATH" \
+        --train_dataset="$TRAIN_FPATH" \
+         --vali_dataset="$VALI_FPATH" \
+         --test_dataset="$TEST_FPATH" \
+          --num_workers="4" 
 
 # Predict 
 python -m watch.tasks.fusion.predict \
-        --config=$PRED_CONFIG_FPATH \
-        --test_dataset=$TEST_FPATH \
-       --package_fpath=$PACKAGE_FPATH \
-        --pred_dataset=$PRED_FPATH
+        --config="$PRED_CONFIG_FPATH" \
+        --test_dataset="$TEST_FPATH" \
+       --package_fpath="$PACKAGE_FPATH" \
+        --pred_dataset="$PRED_FPATH"
 
 # Evaluate 
 python -m watch.tasks.fusion.evaluate \
-        --true_dataset=$TEST_FPATH \
-        --pred_dataset=$PRED_FPATH \
-          --eval_dpath=$EVAL_DPATH
+        --true_dataset="$TEST_FPATH" \
+        --pred_dataset="$PRED_FPATH" \
+          --eval_dpath="$EVAL_DPATH"
