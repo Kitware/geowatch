@@ -5,6 +5,7 @@ import xml.etree.ElementTree as ET
 from osgeo import gdal
 import numpy as np
 import pandas as pd
+import pystac
 
 
 def print_usage():
@@ -147,19 +148,33 @@ def find_baseline_scene(xmls, return_paths=False):
         tmp_dict['proc_ver'] = float(proc_ver[1:])  # assuming 'N02.01
 
         # Coverage of the scene 0-1
-        # Selecting a B04
-        pfname_b04 = glob.glob(
-            os.path.join(path_to_xml, '*_B04.tif'))
-        coverage = 0.
-        if len(pfname_b04) == 1:
-            ds = gdal.Open(pfname_b04[0])
-            if not (ds is None):  # checking if file is valid
-                arr = ds.GetRasterBand(1).ReadAsArray()
-                coverage = np.sum(arr > 0) / (1. * arr.shape[0] * arr.shape[1])
+        # Try to grab coverage value from STAC item if exists
+        coverage = None
+        for json_path in glob.glob(os.path.join(path_to_xml, '*.json')):
+            try:
+                stac_item = pystac.Item.from_file(json_path)
+            except pystac.errors.STACTypeError:
+                continue
+            else:
+                # Scaling coverage to be 0-1
+                coverage =\
+                    stac_item.properties['sentinel:data_coverage'] / 100.0
+                break
 
-                ds = None
-                arr = None
-        else:
+        if coverage is None:
+            # Compute from B04 band if couldn't grab from STAC
+            pfname_b04 = glob.glob(
+                os.path.join(path_to_xml, '*_B04.tif'))
+            if len(pfname_b04) == 1:
+                ds = gdal.Open(pfname_b04[0])
+                if not (ds is None):  # checking if file is valid
+                    arr = ds.GetRasterBand(1).ReadAsArray()
+                    coverage = np.sum(arr > 0) / (1. * arr.shape[0] * arr.shape[1])
+
+                    ds = None
+                    arr = None
+
+        if coverage is None:
             raise RuntimeError("Couldn't determine coverage for '{}'".format(
                 granule_id))
 
