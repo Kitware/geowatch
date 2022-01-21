@@ -84,7 +84,7 @@ if WATCH_HACK_IMPORT_ORDER:
     _execute_import_order_hacks(WATCH_HACK_IMPORT_ORDER)
 
 
-__version__ = '0.2.0'
+__version__ = '0.2.1'
 
 # Choose which submodules (and which submodule attributes) to expose
 __submodules__ = {
