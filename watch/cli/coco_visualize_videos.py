@@ -128,7 +128,7 @@ class CocoVisualizeConfig(scfg.Config):
                 '.videos[] | select({select_images}) | .id'.
 
                 Examples for this argument are as follows:
-                '.file_name | startswith("foo")' will select only videos
+                '.name | startswith("foo")' will select only videos
                 where the name starts with foo.
 
                 Only applicable for dataset that contain videos.
