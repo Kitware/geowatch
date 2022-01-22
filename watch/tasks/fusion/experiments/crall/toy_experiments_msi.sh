@@ -95,6 +95,8 @@ EVAL_DPATH="$(echo "$SUGGESTIONS" | jq -r .eval_dpath)"
 TRAIN_CONFIG_FPATH=$WORKDIR/$DATASET_NAME/configs/train_$EXPERIMENT_NAME.yml 
 PRED_CONFIG_FPATH=$WORKDIR/$DATASET_NAME/configs/predict_$EXPERIMENT_NAME.yml 
 
+export CUDA_VISIBLE_DEVICES="1"
+
 # Configure training hyperparameters
 python -m watch.tasks.fusion.fit \
     --name="$EXPERIMENT_NAME" \
@@ -106,9 +108,9 @@ python -m watch.tasks.fusion.fit \
     --weight_decay=1e-5 \
     --dropout=0.1 \
     --time_steps=5 \
-    --chip_size=128 \
+    --chip_size=256 \
     --batch_size=1 \
-    --tokenizer=linconv \
+    --tokenizer=dwcnn \
     --global_saliency_weight=1.0 \
     --global_change_weight=1.0 \
     --global_class_weight=1.0 \

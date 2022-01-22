@@ -1,0 +1,31 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: dvc-access-check-
+  annotations:
+    email: 'david.joy@kitware.com'
+    purpose: |
+      Check read access on DVC GitLab repo
+    submitter: 'David Joy'
+spec:
+  entrypoint: dvc-check
+  serviceAccountName: argo-runner
+  imagePullSecrets:
+    - name: gitlab-pull-secret
+  nodeSelector:
+    kitware.com/node-pool: standard
+  volumes:
+    - name: dvc-access-secret-volume
+      secret:
+        secretName: dvc-gitlab-access-token
+  templates:
+  - name: dvc-check
+    steps:
+      - - name: dvc-check-clone
+          templateRef:
+            name: watch-workflowtemplate-dvc-access-check
+            template: dvc-access-check
+          arguments:
+            parameters:
+              - name: container_tag
+                value: "60d9b534"

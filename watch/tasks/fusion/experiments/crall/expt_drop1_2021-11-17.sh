@@ -1035,7 +1035,7 @@ python -m watch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
     --channels=${CHANNELS} \
     --name=$EXPERIMENT_NAME \
-    --chip_size=192 \
+    --chip_size=224 \
     --time_steps=3 \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --method="MultimodalTransformer" \
@@ -1076,7 +1076,7 @@ python -m watch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
     --channels=${CHANNELS} \
     --name=$EXPERIMENT_NAME \
-    --chip_size=192 \
+    --chip_size=224 \
     --time_steps=3 \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --method="MultimodalTransformer" \
@@ -1095,3 +1095,49 @@ python -m watch.tasks.fusion.fit \
     --time_sampling=hardish \
     --num_workers=avail/2 \
     --arch_name=$ARCH
+
+
+# Transfer BAS+SC WV+L1 With Many Features + Positive Toothbrush LinConv - 2022-01-21
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop1-Aligned-L1-2022-01
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_vali.kwcoco.json
+__check__='
+smartwatch stats $VALI_FPATH $TRAIN_FPATH
+'
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop1-20201117
+ARCH=smt_it_stm_p8
+CHANNELS="blue|green|red|nir|swir16|swir22,depth,invariants:6|before_after_heatmap|segmentation_heatmap,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
+
+smartwatch stats "$TRAIN_FPATH" "$VALI_FPATH"
+EXPERIMENT_NAME=BOTH_${ARCH}_L1_DIL_v55
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
+export CUDA_VISIBLE_DEVICES="1"
+python -m watch.tasks.fusion.fit \
+    --config "$WORKDIR/configs/common_20201117.yaml"  \
+    --channels=${CHANNELS} \
+    --name=$EXPERIMENT_NAME \
+    --chip_size=160 \
+    --time_steps=9 \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --method="MultimodalTransformer" \
+    --gpus "1" \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --amp_backend=apex \
+    --attention_impl=exact \
+    --tokenizer=linconv \
+    --use_centered_positives=True \
+    --use_grid_positives=True \
+    --num_workers="avail/2" \
+    --time_span=1y \
+    --global_saliency_weight=1.00 \
+    --global_class_weight=1.00 \
+    --time_sampling=hardish \
+    --batch_size=4 \
+    --arch_name=$ARCH \
+    --init="$HOME/remote/toothbrush/data/dvc-repos/smart_watch_dvc/training/toothbrush/joncrall/Drop1-20201117/runs/BOTH_smt_it_stm_p8_L1_DIL_v52/lightning_logs/version_0/checkpoints/epoch=13-step=55215-c.ckpt"

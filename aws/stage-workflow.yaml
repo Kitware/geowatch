@@ -1,0 +1,43 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: stage-
+spec:
+  entrypoint: main
+  serviceAccountName: argo-test
+  templates:
+  - name: whalesay
+    container:
+      image: docker/whalesay
+      command: [cowsay]
+      args: ["hello world"]
+
+    #               A
+    # -----------------------------
+    #                  /   C1   \
+    #        B        |----------|
+    #                  \ C2  C3 /
+    # -----------------------------
+    #        D             E
+  - name: sub
+    steps:
+      - - name: C1
+          template: whalesay
+      - - name: C2
+          template: whalesay
+        - name: C3
+          template: whalesay
+
+  - name: main
+    steps:
+      - - name: A
+          template: whalesay
+      - - name: B
+          template: whalesay
+        - name: C
+          template: sub
+      - - name: D
+          template: whalesay
+        - name: E
+          template: whalesay
