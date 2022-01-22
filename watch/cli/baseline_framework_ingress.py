@@ -7,6 +7,7 @@ import subprocess
 from urllib.parse import urlparse
 from datetime import datetime
 from concurrent.futures import as_completed
+import traceback
 
 import ubelt
 import requests
@@ -60,7 +61,20 @@ def main():
     return 0
 
 
-def ingress_item(feature, outdir, aws_base_command, dryrun, relative=False):
+def _default_asset_selector(asset_name, asset):
+    return True
+
+
+def _default_item_selector(stac_item):
+    return True
+
+
+def ingress_item(feature,
+                 outdir,
+                 aws_base_command,
+                 dryrun,
+                 relative=False,
+                 asset_selector=_default_asset_selector):
     # Adding a reference back to the original STAC
     # item if not already present
     self_link = None
@@ -115,6 +129,12 @@ def ingress_item(feature, outdir, aws_base_command, dryrun, relative=False):
                     new_assets['productmetadata'] = new_asset
         except KeyError:
             pass
+
+        # Only download assets that pass the `asset_selector` filter.
+        # Note that the sentinel MTD_TL.xml that may be downloaded
+        # above will not have to pass through this filter
+        if not asset_selector(asset_name, asset):
+            continue
 
         local_asset_href = os.path.abspath(asset_outpath)
         if relative:
@@ -207,7 +227,9 @@ def baseline_framework_ingress(input_path,
                                show_progress=False,
                                requester_pays=False,
                                relative=False,
-                               jobs=1):
+                               jobs=1,
+                               item_selector=_default_item_selector,
+                               asset_selector=_default_asset_selector):
     os.makedirs(outdir, exist_ok=True)
 
     if relative:
@@ -246,15 +268,16 @@ def baseline_framework_ingress(input_path,
                               max_workers=jobs)
 
     jobs = [executor.submit(ingress_item, feature, outdir, aws_base_command,
-                            dryrun, relative)
-            for feature in input_stac_items]
+                            dryrun, relative, asset_selector)
+            for feature in input_stac_items
+            if item_selector(feature)]
 
     for job in as_completed(jobs):
         try:
             mapped_item = job.result()
-        except Exception as e:
+        except Exception:
             print("Exception occurred (printed below), dropping item!")
-            print(e)
+            traceback.print_exception(*sys.exc_info())
             continue
         else:
             catalog.add_item(mapped_item)
