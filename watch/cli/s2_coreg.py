@@ -108,6 +108,8 @@ def run_s2_coreg_l1c(stac_catalog, outdir, jobs=1):
     output_catalog.set_self_href(os.path.join(outdir, 'catalog.json'))
     output_catalog.save(catalog_type=pystac.CatalogType.ABSOLUTE_PUBLISHED)
 
+    return output_catalog
+
 
 @maps(history_entry='coregistration')
 def coreg_stac_item(stac_item, outdir, baseline_scenes):
