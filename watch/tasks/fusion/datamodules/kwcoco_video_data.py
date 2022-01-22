@@ -1929,21 +1929,22 @@ class BatchVisualizationBuilder:
         >>>         dims=sample_shape[1:3], classes=1).data['class_probs']
         >>>     saliency_prob_list += [einops.rearrange(saliency_prob, 'c h w -> h w c')]
         >>> saliency_probs = np.stack(saliency_prob_list)
-        >>> item_output['saliency_probs'] = saliency_probs  # first frame does not have change
+        >>> item_output['saliency_probs'] = saliency_probs
         >>> #binprobs[0][:] = 0  # first change prob should be all zeros
         >>> builder = BatchVisualizationBuilder(
         >>>     item, item_output, classes=self.classes, requested_tasks=self.requested_tasks,
         >>>     default_combinable_channels=self.default_combinable_channels, combinable_extra=combinable_extra)
-        >>> builder.overlay_on_image = 1
-        >>> canvas = builder.build()
+        >>> #builder.overlay_on_image = 1
+        >>> #canvas = builder.build()
         >>> builder.max_channels = 3
         >>> builder.overlay_on_image = 0
         >>> canvas2 = builder.build()
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> kwplot.autompl()
-        >>> kwplot.imshow(canvas, fnum=1, pnum=(1, 2, 1))
-        >>> kwplot.imshow(canvas2, fnum=1, pnum=(1, 2, 2))
+        >>> #kwplot.imshow(canvas, fnum=1, pnum=(1, 2, 1))
+        >>> #kwplot.imshow(canvas2, fnum=1, pnum=(1, 2, 2))
+        >>> kwplot.imshow(canvas2, fnum=1, doclf=True)
         >>> kwplot.show_if_requested()
     """
 
@@ -2250,14 +2251,18 @@ class BatchVisualizationBuilder:
         if overlay_key in truth_overlay_keys and builder.requested_tasks['saliency']:
             saliency = frame_truth.get(overlay_key, None)
             if saliency is not None:
-                saliency_overlay = kwimage.make_heatmask(saliency)
-                saliency_overlay = kwimage.Mask(saliency, format='c_mask').draw_on(saliency_overlay, color='dodgerblue')
-                saliency_overlay = kwimage.ensure_alpha_channel(saliency_overlay)
-                saliency_overlay[..., 3] = (saliency > 0).astype(np.float32) * 0.5
-            overlay_items.append({
-                'overlay': saliency_overlay,
-                'label_text': 'true saliency',
-            })
+                if 1:
+                    saliency_overlay = kwimage.make_heatmask(saliency.astype(np.float32), cmap='plasma').clip(0, 1)
+                    saliency_overlay[..., 3] *= 0.5
+                else:
+                    saliency_overlay = np.zeros(saliency.shape + (4,), dtype=np.float32)
+                    saliency_overlay = kwimage.Mask(saliency, format='c_mask').draw_on(saliency_overlay, color='dodgerblue')
+                    saliency_overlay = kwimage.ensure_alpha_channel(saliency_overlay)
+                    saliency_overlay[..., 3] = (saliency > 0).astype(np.float32) * 0.5
+                overlay_items.append({
+                    'overlay': saliency_overlay,
+                    'label_text': 'true saliency',
+                })
 
         # Create the true change label overlay
         overlay_key = 'change'
@@ -2322,8 +2327,12 @@ class BatchVisualizationBuilder:
                 norm_signal = np.zeros_like(chan_rows[min(overlay_index, len(chan_rows) - 1)]['norm_signal'])
             x = item_output[key][frame_idx]
             saliency_probs = einops.rearrange(x, 'h w c -> c h w')
-            saliency_heatmap = kwimage.Heatmap(class_probs=saliency_probs)
-            pred_part = saliency_heatmap.draw_on(norm_signal, with_alpha=0.7)
+            # Hard coded index, dont like
+            is_salient_probs = saliency_probs[0]
+            # saliency_heatmap = kwimage.Heatmap(class_probs=saliency_probs)
+            # pred_part = saliency_heatmap.draw_on(norm_signal, with_alpha=0.7)
+            pred_part = kwimage.make_heatmask(is_salient_probs, cmap='plasma')
+            pred_part[..., 3] = 0.7
             # TODO: we might want to overlay the prediction on one or
             # all of the channels
             pred_part = kwimage.imresize(pred_part, **resizekw).clip(0, 1)
@@ -2350,7 +2359,7 @@ class BatchVisualizationBuilder:
             else:
                 pred_raw = item_output[key][frame_idx - 1]
                 # Draw predictions on the first item
-                pred_mask = kwimage.make_heatmask(pred_raw)
+                pred_mask = kwimage.make_heatmask(pred_raw, cmap='viridis')
                 norm_signal = chan_rows[min(overlay_index, len(chan_rows) - 1)]['norm_signal']
                 if builder.overlay_on_image:
                     norm_signal = norm_signal
@@ -2375,6 +2384,7 @@ class BatchVisualizationBuilder:
                 row_canvas = overlay_info['overlay'][..., 0:3]
                 row_canvas = kwimage.imresize(row_canvas, **resizekw).clip(0, 1)
                 signal_bottom_y = 1  # hack: hardcoded
+                row_canvas = kwimage.ensure_uint255(row_canvas)
                 row_canvas = kwimage.draw_text_on_image(
                     row_canvas, label_text, (1, signal_bottom_y + 1),
                     valign='top', color='lime', border=3)
@@ -2394,6 +2404,7 @@ class BatchVisualizationBuilder:
             row_canvas = kwimage.overlay_alpha_layers(layers)[..., 0:3]
 
             row_canvas = kwimage.imresize(row_canvas, **resizekw).clip(0, 1)
+            row_canvas = kwimage.ensure_uint255(row_canvas)
             row_canvas = kwimage.draw_text_on_image(
                 row_canvas, row['signal_text'], (1, 1), valign='top',
                 color='white', border=3)
@@ -2413,6 +2424,7 @@ class BatchVisualizationBuilder:
             row_canvas = row_canvas.copy()
             row_canvas = kwimage.imresize(row_canvas, **resizekw).clip(0, 1)
             signal_bottom_y = 1  # hack: hardcoded
+            row_canvas = kwimage.ensure_uint255(row_canvas)
             row_canvas = kwimage.draw_text_on_image(
                 row_canvas, label_text, (1, signal_bottom_y + 1),
                 valign='top', color='lime', border=3)

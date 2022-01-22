@@ -106,7 +106,7 @@ python -m watch.tasks.fusion.fit \
     --weight_decay=1e-5 \
     --dropout=0.1 \
     --time_steps=5 \
-    --chip_size=64 \
+    --chip_size=128 \
     --batch_size=1 \
     --tokenizer=linconv \
     --global_saliency_weight=1.0 \

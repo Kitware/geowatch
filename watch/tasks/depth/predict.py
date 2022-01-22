@@ -218,7 +218,7 @@ if __name__ == '__main__':
     python -m watch visualize $DVC_DPATH/Drop1-Aligned-L1-2022-01/dzyne_depth.kwcoco.json \
         --viz_dpath $DVC_DPATH/Drop1-Aligned-L1-2022-01/_viz_depth \
         --animate=True --channels="red|green|blue" --skip_missing=True \
-        --select_images ".sensor_coarse == "WV"" --workers=4
+        --select_images '.sensor_coarse == "WV"' --workers=4
 
     """
     setup_logging()
