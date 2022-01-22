@@ -21,6 +21,9 @@ pip install -e .
 # pip install imgaug>=0.4.0
 # pip install netharn>=0.5.16
 #pip install GDAL>=3.5.0 --find-links https://girder.github.io/large_image_wheels -U
+
+# TODO: we should skip trying to install gdal if possible
+
 pip install GDAL==3.3.1 --find-links https://girder.github.io/large_image_wheels -U
 
 pip install dvc[all]>=2.9.3

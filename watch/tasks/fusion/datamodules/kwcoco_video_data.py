@@ -2270,9 +2270,13 @@ class BatchVisualizationBuilder:
             change_overlay = np.zeros(overlay_shape + (4,), dtype=np.float32)
             changes = frame_truth.get(overlay_key, None)
             if changes is not None:
-                change_overlay = kwimage.Mask(changes, format='c_mask').draw_on(change_overlay, color='lime')
-                change_overlay = kwimage.ensure_alpha_channel(change_overlay)
-                change_overlay[..., 3] = (changes > 0).astype(np.float32) * 0.5
+                if 1:
+                    change_overlay = kwimage.make_heatmask(changes.astype(np.float32), cmap='viridis').clip(0, 1)
+                    change_overlay[..., 3] *= 0.5
+                else:
+                    change_overlay = kwimage.Mask(changes, format='c_mask').draw_on(change_overlay, color='lime')
+                    change_overlay = kwimage.ensure_alpha_channel(change_overlay)
+                    change_overlay[..., 3] = (changes > 0).astype(np.float32) * 0.5
             overlay_items.append({
                 'overlay': change_overlay,
                 'label_text': 'true change',

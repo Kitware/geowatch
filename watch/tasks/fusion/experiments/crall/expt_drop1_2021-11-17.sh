@@ -1012,3 +1012,86 @@ python -m watch.tasks.fusion.fit \
     --time_sampling=soft2 \
     --batch_size=16 \
     --arch_name=$ARCH
+
+
+# L1 BAS with raw features Namek - 2022-01-21
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop1-Aligned-L1-2022-01
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/train_data_nowv.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/vali_data_nowv.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/vali_data_nowv.kwcoco.json
+__check__='
+smartwatch stats $VALI_FPATH $TRAIN_FPATH
+'
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop1-20201117
+ARCH=smt_it_stm_p8
+CHANNELS="blue|green|red|nir|swir16|swir22"
+EXPERIMENT_NAME=BAS_${ARCH}_L1_raw_v53
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
+export CUDA_VISIBLE_DEVICES="0"
+python -m watch.tasks.fusion.fit \
+    --config "$WORKDIR/configs/common_20201117.yaml"  \
+    --channels=${CHANNELS} \
+    --name=$EXPERIMENT_NAME \
+    --chip_size=192 \
+    --time_steps=3 \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --method="MultimodalTransformer" \
+    --gpus "1" \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --amp_backend=apex \
+    --attention_impl=exact \
+    --tokenizer=rearrange \
+    --use_grid_positives=True \
+    --use_centered_positives=True \
+    --neg_to_pos_ratio=0.25 \
+    --global_class_weight=0.0 \
+    --global_saliency_weight=1.0 \
+    --time_sampling=hardish \
+    --num_workers=avail/2 \
+    --arch_name=$ARCH
+
+# TA1 BAS with raw features Namek - 2022-01-21
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop1-Aligned-TA1-2022-01
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/train_data_nowv.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/vali_data_nowv.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/vali_data_nowv.kwcoco.json
+__check__='
+smartwatch stats $VALI_FPATH $TRAIN_FPATH
+'
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop1-20201117
+ARCH=smt_it_stm_p8
+CHANNELS="blue|green|red|nir|swir16|swir22"
+EXPERIMENT_NAME=BAS_${ARCH}_TA1_raw_v54
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
+export CUDA_VISIBLE_DEVICES="1"
+python -m watch.tasks.fusion.fit \
+    --config "$WORKDIR/configs/common_20201117.yaml"  \
+    --channels=${CHANNELS} \
+    --name=$EXPERIMENT_NAME \
+    --chip_size=192 \
+    --time_steps=3 \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --method="MultimodalTransformer" \
+    --gpus "1" \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --amp_backend=apex \
+    --attention_impl=exact \
+    --tokenizer=rearrange \
+    --use_grid_positives=True \
+    --use_centered_positives=True \
+    --neg_to_pos_ratio=0.25 \
+    --global_class_weight=0.0 \
+    --global_saliency_weight=1.0 \
+    --time_sampling=hardish \
+    --num_workers=avail/2 \
+    --arch_name=$ARCH
