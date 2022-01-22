@@ -2332,7 +2332,7 @@ class BatchVisualizationBuilder:
             x = item_output[key][frame_idx]
             saliency_probs = einops.rearrange(x, 'h w c -> c h w')
             # Hard coded index, dont like
-            is_salient_probs = saliency_probs[0]
+            is_salient_probs = saliency_probs[1]
             # saliency_heatmap = kwimage.Heatmap(class_probs=saliency_probs)
             # pred_part = saliency_heatmap.draw_on(norm_signal, with_alpha=0.7)
             pred_part = kwimage.make_heatmask(is_salient_probs, cmap='plasma')
