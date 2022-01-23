@@ -6,6 +6,8 @@
 
 
 # First ensure we can grab the latest and greatest version of the current checkout
+set -x
+mkdir -p "$HOME/.ssh"
 echo '|1|tln6/2oSoZ71GXymBD/DR6qjguM=|/DOcGHEnk4HujFZsiyAbN15hlp0= ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBIiKR90e4+4i2gkAW81AiD0Sg/eycexpA+suyTl0e/9DxM4qVNgufZ5p98mRmk3Dz748O3JBNL60kvFKNXN7ZYg=' >> "$HOME/.ssh/known_hosts"
 echo '|1|VnWfnYg/bKW2l/z9z8/3VZoTMMM=|iSpmXNap8X55Nc4WTWSD+/HjMus= ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBIiKR90e4+4i2gkAW81AiD0Sg/eycexpA+suyTl0e/9DxM4qVNgufZ5p98mRmk3Dz748O3JBNL60kvFKNXN7ZYg=' >> "$HOME/.ssh/known_hosts"
 
@@ -17,7 +19,6 @@ source /opt/conda/etc/profile.d/conda.sh
 
 
 # Update the watch code repo
-set -x
 cd "$WATCH_REPO_DPATH"
 
 # Add remote with our secret credentials and then pull from it

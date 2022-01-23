@@ -40,13 +40,8 @@ smartwatch_s3_sync_single(){
     S3_ROOT='$S3_ROOT'
     S3_DPATH='$S3_DPATH'
     "
-
     aws s3 --profile iarpa sync \
         "$LOCAL_DPATH" "$S3_DPATH"
-
-        #--exclude '*/monitor/train/batch/*' \
-        #--exclude '*/monitor/validate/batch/*' \
-        #--exclude '*/monitor/sanity_check/batch/*' \
 }
 
 

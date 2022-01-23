@@ -8,7 +8,7 @@ metadata:
       Check read access on DVC GitLab repo
     submitter: 'Jon Crall'
 spec:
-  entrypoint: dvc-check
+  entrypoint: ta2-train-init
   serviceAccountName: argo-runner
   imagePullSecrets:
     - name: gitlab-pull-secret
@@ -18,27 +18,14 @@ spec:
     - name: dvc-access-secret-volume
       secret:
         secretName: dvc-gitlab-access-token
-  #templates:
-  #- name: dvc-check
-  #  steps:
-  #    - - name: dvc-check-clone
-  #        templateRef:
-  #          name: watch-workflowtemplate-ta2-train-template
-  #          template: ta2-train
-  #        arguments:
-  #          parameters:
-  #            - name: container_tag
-  #              #value: "smart/watch/ta2_training_v2"
-  #              #value: "smart/watch/ta2_training_v2:latest"
-  #              value: "981feb6592f2"
   templates:
-  - name: dvc-check
+  - name: ta2-train-init
     container:
       #image: gitlab.kitware.com:4567/smart/watch/training:{{inputs.parameters.container_tag}}
       #image: gitlab.kitware.com:4567/smart/watch/ta2_training_v2:{{inputs.parameters.container_tag}}
-      image: gitlab.kitware.com:4567/smart/watch/ta2_training_v2:981feb6592f2
+      #image: gitlab.kitware.com:4567/smart/watch/ta2_training_v2:981feb6592f2
+      image: gitlab.kitware.com:4567/smart/watch/ta2_training_v2
       command: [bash]
-      #args: ["/watch/dev/sample_dvc_setup.sh"]
       args: ["/root/code/watch/aws/train_remote_init.sh"]
       resources:
         requests:
@@ -61,4 +48,3 @@ spec:
       volumeMounts:
         - name: dvc-access-secret-volume
           mountPath: "/secret/dvc-access-secret-mountpath"
-
