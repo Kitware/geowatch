@@ -55,15 +55,14 @@ else \
     (cd /root/code/watch && conda env create -f conda_env.yml); \
 fi
 
+#RUN pip install awscli
 
-RUN pip install awscli
+RUN conda activate watch && \
+    pip install awscli dvc[s3]
 
 COPY . /root/code/watch
 
 RUN conda activate watch && \
     pip install --no-deps -e /root/code/watch
-
-RUN conda activate watch && \
-    pip install dvc[s3]
 
 # docker build --build-arg BUILD_STRICT=1 .
