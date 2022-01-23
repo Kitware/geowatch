@@ -73,7 +73,7 @@ https://github.com/argoproj/argo-workflows/releases/tag/v3.2.6
 
    # To play with the training docker container
 
-   docker run -it gitlab.kitware.com:4567/smart/watch/training:60d9b534 bash
+   docker run -it gitlab.kitware.com:4567/smart/watch/ta2_training_v2:981feb6592f2 bash
 
    apt update
    apt install ssh tmux tree curl iputils-ping -y
