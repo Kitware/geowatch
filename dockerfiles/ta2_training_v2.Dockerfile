@@ -55,11 +55,16 @@ else \
     (cd /root/code/watch && conda env create -f conda_env.yml); \
 fi
 
+# Fully strict DVC+AWS
+RUN if [ "$BUILD_STRICT" -eq 1 ]; then \
+    (cd /root/code/watch && conda activate watch && pip install requirements-strict/dvc_and_aws.txt); \
+else \
+    (cd /root/code/watch && conda activate watch && pip install requirements/dvc_and_aws.txt); \
+fi
 # Has conflicts with DVC due to overly restrictive requirements
-RUN pip install awscli
-
-RUN conda activate watch && \
-    pip install dvc[s3]
+#RUN pip install awscli
+#RUN conda activate watch && \
+#    pip install dvc[s3]
 
 COPY . /root/code/watch
 
