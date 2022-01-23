@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
-  generateName: dvc-access-check-
+  generateName: watch-train-
   annotations:
     email: 'jon.crall@kitware.com'
     purpose: |
