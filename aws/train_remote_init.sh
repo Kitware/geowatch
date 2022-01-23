@@ -14,7 +14,6 @@ echo '|1|VnWfnYg/bKW2l/z9z8/3VZoTMMM=|iSpmXNap8X55Nc4WTWSD+/HjMus= ecdsa-sha2-ni
 
 export SMART_DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 export WATCH_REPO_DPATH=$HOME/code/watch
-
 source /opt/conda/etc/profile.d/conda.sh
 
 
