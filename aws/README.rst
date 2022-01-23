@@ -78,16 +78,8 @@ https://github.com/argoproj/argo-workflows/releases/tag/v3.2.6
    apt update
    apt install ssh tmux tree curl iputils-ping -y
 
-   cd /watch
-   git checkout master
-   # ECDSA key fingerprint is SHA256:Lm8wR6C3yccDC25Og9xIpS+WtfKJdB1pVtAhdN82v0Q.
-   cat $HOME/.ssh/known_hosts
+   See ~/code/watch/aws/train_remote_entrypoint.sh
 
-   ping https://gitlab.kitware.com/smart/watch.git
-
-   echo '|1|tln6/2oSoZ71GXymBD/DR6qjguM=|/DOcGHEnk4HujFZsiyAbN15hlp0= ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBIiKR90e4+4i2gkAW81AiD0Sg/eycexpA+suyTl0e/9DxM4qVNgufZ5p98mRmk3Dz748O3JBNL60kvFKNXN7ZYg=' >> $HOME/.ssh/known_hosts
-   echo '|1|VnWfnYg/bKW2l/z9z8/3VZoTMMM=|iSpmXNap8X55Nc4WTWSD+/HjMus= ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBIiKR90e4+4i2gkAW81AiD0Sg/eycexpA+suyTl0e/9DxM4qVNgufZ5p98mRmk3Dz748O3JBNL60kvFKNXN7ZYg=' >> $HOME/.ssh/known_hosts
-   git pull
    git remote --verbose
 
    argo list --running

@@ -7,6 +7,13 @@ docker pull gitlab.kitware.com:4567/computer-vision/ci-docker/miniconda3
 #docker login gitlab.kitware.com:4567
 
 cd "$HOME/code/watch/"
-docker build -t "ci-docker/miniconda3" -f ./dockerfiles/ta2_training_v2.Dockerfile .
+docker build -t "smart/watch/ta2_training_v2" -f ./dockerfiles/ta2_training_v2.Dockerfile --build-arg BUILD_STRICT=1 .
 
-docker build -t "smartwatch/ta2-train-v2" --build-arg BUILD_STRICT=1 .
+docker tag smart/watch/ta2-train-v2 gitlab.kitware.com:4567/smart/watch/ta2_training_v2
+docker push gitlab.kitware.com:4567/smart/watch/ta2_training_v2
+
+# f887e42a2206
+
+__test__="
+docker run -it f887e42a2206 bash
+"

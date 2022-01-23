@@ -50,17 +50,18 @@ COPY requirements /root/code/watch/requirements
 COPY dev /root/code/watch/dev
 
 RUN if [ "$BUILD_STRICT" -eq 1 ]; then \
-    (cd /root/code/watch/ && ./dev/make_strict_req.sh && conda env create -f conda_env_strict.yml); \
-else \-
-    (cd /root/code/watch/ && conda env create -f conda_env.yml); \
-fiore--
+    (cd /root/code/watch && ./dev/make_strict_req.sh && conda env create -f conda_env_strict.yml); \
+else \
+    (cd /root/code/watch && conda env create -f conda_env.yml); \
+fi
+
 
 RUN pip install awscli
 
 COPY . /root/code/watch
 
 RUN conda activate watch && \
-    pip install --no-deps -e /watch
+    pip install --no-deps -e /root/code/watch
 
 RUN conda activate watch && \
     pip install dvc[s3]
