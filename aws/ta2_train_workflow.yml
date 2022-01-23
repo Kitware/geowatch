@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
-  generateName: dvc-access-check-
+  generateName: ta2-train-template
   annotations:
     email: 'jon.crall@kitware.com'
     purpose: |
@@ -23,10 +23,11 @@ spec:
     steps:
       - - name: dvc-check-clone
           templateRef:
-            name: watch-workflowtemplate-dvc-access-check
-            template: dvc-access-check
+            name: watch-workflowtemplate-ta2-train-template
+            template: ta2-train-template
           arguments:
             parameters:
               - name: container_tag
-                value: "smart/watch/ta2_training_v2"
+                value: "smart/watch/ta2_training_v2:latest"
+                #value: "smart/watch/ta2_training_v2"
                 #value: "981feb6592f2"

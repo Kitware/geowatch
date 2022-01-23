@@ -1,21 +1,21 @@
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
-  name: watch-workflowtemplate-dvc-access-check
+  name: watch-workflowtemplate-ta2-train-template
 spec:
   volumes:
     - name: dvc-access-secret-volume
       secret:
         secretName: dvc-gitlab-access-token
   templates:
-    - name: dvc-access-check
+    - name: ta2-train-template
       inputs:
         parameters:
         - name: container_tag
       container:
         image: gitlab.kitware.com:4567/{{inputs.parameters.container_tag}}
         command: [bash]
-        args: ["/watch/dev/sample_dvc_setup.sh"]
+        args: ["/root/code/watch/aws/sample_dvc_setup.sh"]
         resources:
           requests:
             memory: "1000Mi"
