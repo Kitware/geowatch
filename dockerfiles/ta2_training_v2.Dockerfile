@@ -49,10 +49,11 @@ COPY conda_env.yml /root/code/watch/
 COPY requirements /root/code/watch/requirements
 COPY dev /root/code/watch/dev
 
+# Cache requirements before we depend on the repo itself
 RUN if [ "$BUILD_STRICT" -eq 1 ]; then \
-    (cd /root/code/watch && ./dev/make_strict_req.sh && conda env create -f conda_env_strict.yml); \
+    (cd /root/code/watch && ./dev/make_strict_req.sh && conda env create -f conda_env_strict.yml && pip download -r requirements-strict.txt); \
 else \
-    (cd /root/code/watch && conda env create -f conda_env.yml); \
+    (cd /root/code/watch && conda env create -f conda_env.yml && pip download -r requirements.txt); \
 fi
 
 
