@@ -13,11 +13,9 @@ spec:
         parameters:
         - name: container_tag
       container:
-        #image: gitlab.kitware.com:4567/smart/watch/training:{{inputs.parameters.container_tag}}
-        image: gitlab.kitware.com:4567/smart/watch/ta2_training_v2:{{inputs.parameters.container_tag}}
+        image: gitlab.kitware.com:4567/smart/watch/training:{{inputs.parameters.container_tag}}
         command: [bash]
-        #args: ["/watch/dev/sample_dvc_setup.sh"]
-        args: ["/root/code/watch/aws/train_remote_init.sh"]
+        args: ["/watch/dev/sample_dvc_setup.sh"]
         resources:
           requests:
             memory: "1000Mi"
