@@ -55,10 +55,11 @@ else \
     (cd /root/code/watch && conda env create -f conda_env.yml); \
 fi
 
-#RUN pip install awscli
+# Has conflicts with DVC due to overly restrictive requirements
+RUN pip install awscli
 
 RUN conda activate watch && \
-    pip install awscli dvc[s3]
+    pip install dvc[s3]
 
 COPY . /root/code/watch
 
