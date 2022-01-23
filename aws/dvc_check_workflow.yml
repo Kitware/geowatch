@@ -28,5 +28,5 @@ spec:
           arguments:
             parameters:
               - name: container_tag
-                value: "smart/watch/ta2_training_v2:981feb6592f2"
+                value: "smart/watch/ta2_training_v2"
                 #value: "981feb6592f2"
