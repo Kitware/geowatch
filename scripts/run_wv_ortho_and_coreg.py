@@ -3,8 +3,6 @@ import sys
 
 from watch.cli.baseline_framework_ingress import baseline_framework_ingress
 from watch.cli.baseline_framework_egress import baseline_framework_egress
-from watch.cli.s2_coreg import run_s2_coreg_l1c
-from watch.cli.run_brdf import run_brdf
 from watch.cli.wv_ortho import wv_ortho
 from watch.cli.wv_coreg import wv_coreg
 
@@ -47,12 +45,12 @@ def main():
                         required=False,
                         help="Number of jobs to run in parallel")
 
-    run_coreg_for_baseline(**vars(parser.parse_args()))
+    run_wv_ortho_and_coreg(**vars(parser.parse_args()))
 
     return 0
 
 
-def run_coreg_for_baseline(input_path,
+def run_wv_ortho_and_coreg(input_path,
                            output_path,
                            outbucket,
                            aws_profile=None,
@@ -70,21 +68,23 @@ def run_coreg_for_baseline(input_path,
         relative=False,
         jobs=jobs)
 
-    print("* Running coregistration *")
-    coreg_catalog = run_s2_coreg_l1c(
+    print("* Orthorectifying WV data *")
+    wv_ortho_catalog = wv_ortho(
         ingress_catalog,
-        '/tmp/coreg',
-        jobs=jobs)
+        '/tmp/wv_ortho',
+        jobs=jobs,
+        drop_empty=True)
 
-    print("* Running BRDF correction *")
-    brdf_catalog = run_brdf(
-        coreg_catalog,
-        '/tmp/brdf',
-        jobs=jobs)
+    print("* Coregistering WV *")
+    wv_coreg_catalog = wv_coreg(
+        wv_ortho_catalog,
+        '/tmp/wv_coreg',
+        jobs=jobs,
+        drop_empty=False)
 
     print("* Running egress *")
     te_output = baseline_framework_egress(
-        brdf_catalog,
+        wv_coreg_catalog,
         output_path,
         outbucket,
         aws_profile,
