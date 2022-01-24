@@ -12,6 +12,7 @@ import ubelt as ub
 import warnings
 from watch.tasks.fusion import utils
 from watch.utils import util_kwimage
+from watch.utils import kwcoco_extensions
 from kwcoco.coco_evaluator import CocoSingleResult
 from kwcoco.metrics.confusion_vectors import BinaryConfusionVectors
 from kwcoco.metrics.confusion_measures import OneVersusRestMeasureCombiner
@@ -142,68 +143,6 @@ def binary_confusion_measures(tn, fp, fn, tp):
         info['acc'] = acc
 
     return info
-
-
-@profile
-def associate_images(true_coco, pred_coco):
-    # TODO: robust image/video association (see kwcoco eval)
-    common_vidnames = set(true_coco.index.name_to_video) & set(pred_coco.index.name_to_video)
-
-    def image_keys(dset, gids):
-        # Generate image "keys" that should be compatible between datasets
-        for gid in gids:
-            img = dset.imgs[gid]
-            if img.get('file_name', None) is None:
-                yield img['name']
-            else:
-                yield img['file_name']
-
-    all_gids1 = list(true_coco.imgs.keys())
-    all_gids2 = list(pred_coco.imgs.keys())
-    all_keys1 = list(image_keys(true_coco, all_gids1))
-    all_keys2 = list(image_keys(pred_coco, all_gids2))
-    key_to_gid1 = ub.dzip(all_keys1, all_gids1)
-    key_to_gid2 = ub.dzip(all_keys2, all_gids2)
-    gid_to_key1 = ub.invert_dict(key_to_gid1)
-    gid_to_key2 = ub.invert_dict(key_to_gid2)
-
-    video_matches = []
-
-    all_match_gids1 = set()
-    all_match_gids2 = set()
-
-    for vidname in common_vidnames:
-        video1 = true_coco.index.name_to_video[vidname]
-        video2 = pred_coco.index.name_to_video[vidname]
-        vidid1 = video1['id']
-        vidid2 = video2['id']
-        gids1 = true_coco.index.vidid_to_gids[vidid1]
-        gids2 = pred_coco.index.vidid_to_gids[vidid2]
-        keys1 = ub.oset(ub.take(gid_to_key1, gids1))
-        keys2 = ub.oset(ub.take(gid_to_key2, gids2))
-        match_keys = ub.oset(keys1) & ub.oset(keys2)
-        match_gids1 = list(ub.take(key_to_gid1, match_keys))
-        match_gids2 = list(ub.take(key_to_gid2, match_keys))
-        all_match_gids1.update(match_gids1)
-        all_match_gids2.update(match_gids2)
-        video_matches.append({
-            'vidname': vidname,
-            'match_gids1': match_gids1,
-            'match_gids2': match_gids2,
-        })
-
-    unmatched_gid_to_key1 = ub.dict_diff(gid_to_key1, all_match_gids1)
-    unmatched_gid_to_key2 = ub.dict_diff(gid_to_key2, all_match_gids2)
-
-    remain_keys = set(unmatched_gid_to_key1.values()) & set(unmatched_gid_to_key2.values())
-    remain_gids1 = [key_to_gid1[key] for key in remain_keys]
-    remain_gids2 = [key_to_gid2[key] for key in remain_keys]
-
-    image_matches = {
-        'match_gids1': remain_gids1,
-        'match_gids2': remain_gids2,
-    }
-    return video_matches, image_matches
 
 
 @profile
@@ -556,7 +495,10 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto'):
         # otherwise assume that we should restirct to marked images
         required_marked = any(pred_coco.images().lookup('has_predictions', False))
 
-    video_matches, image_matches = associate_images(true_coco, pred_coco)
+    matches  = kwcoco_extensions.associate_images(
+        true_coco, pred_coco)
+    video_matches = matches['video']
+    image_matches = matches['image']
     rows = []
     chunk_size = 5
     thresh_bins = 256 * 256
