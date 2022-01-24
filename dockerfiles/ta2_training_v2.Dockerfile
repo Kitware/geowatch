@@ -59,7 +59,7 @@ COPY aws/dvc_and_aws.txt /root/code/watch/aws/dvc_and_aws.txt
 
 # Fully strict DVC+AWS
 RUN if [ "$BUILD_STRICT" -eq 1 ]; then \
-    (cd /root/code/watch && conda activate watch &&  's/>=/==/g' aws/dvc_and_aws.txt > aws/dvc_and_aws-strict.txt && pip install -r aws/dvc_and_aws-strict.txt); \
+    (cd /root/code/watch && conda activate watch && sed 's/>=/==/g' aws/dvc_and_aws.txt > aws/dvc_and_aws-strict.txt && pip install -r aws/dvc_and_aws-strict.txt); \
 else \
     (cd /root/code/watch && conda activate watch && pip install -r aws/dvc_and_aws.txt); \
 fi
