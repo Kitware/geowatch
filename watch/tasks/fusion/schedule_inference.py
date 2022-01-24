@@ -34,7 +34,15 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto', run=
         --model_globstr="$MODEL_GLOB"
         --test_dataset="$KWCOCO_TEST_FPATH"
 
-    Ignore:
+    CommandLine:
+
+        DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+        KWCOCO_TEST_FPATH=$DVC_DPATH/Drop1-Aligned-L1-2022-01/combo_DILM.kwcoco_vali.json
+        python -m watch.tasks.fusion.schedule_inference schedule_evaluation \
+            --gpus="0," \
+            --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/BOTH_*/*.pt" \
+            --test_dataset="$KWCOCO_TEST_FPATH" \
+            --run=False
 
     TODO:
         - [ ] Specify the model_dpath as an arg
@@ -80,7 +88,9 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto', run=
 
     def package_metadata(package_fpath):
         # Hack for choosing one model from this "type"
-        epoch_num = int(package_fpath.name.split('epoch=')[1].split('-')[0])
+        import xdev
+        with xdev.embed_on_exception_context:
+            epoch_num = int(package_fpath.name.split('epoch=')[1].split('-')[0])
         expt_name = package_fpath.name.split('_epoch')[0]
         info = {
             'name': expt_name,
@@ -100,6 +110,8 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto', run=
         import kwarray
         packages_to_eval = kwarray.shuffle(packages_to_eval)
 
+    print(f'{len(packages_to_eval)=}')
+
     # # for subfolder in model_dpath.glob('*'):
     #     # package_fpaths = list(subfolder.glob('*.pt'))
     #     subfolder_infos = [package_metadata(package_fpath)
@@ -114,14 +126,20 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto', run=
     tmux_schedule_dpath = dvc_dpath / '_tmp_tmux_schedule'
     tmux_schedule_dpath.mkdir(exist_ok=True)
 
+    print('gpus = {!r}'.format(gpus))
     if gpus == 'auto':
         # Use all unused gpus
         import netharn as nh
         GPUS = []
         for gpu_idx, gpu_info in nh.device.gpu_info().items():
+            print('gpu_idx = {!r}'.format(gpu_idx))
+            print('gpu_info = {!r}'.format(gpu_info))
             if len(gpu_info['procs']) == 0:
                 GPUS.append(gpu_idx)
+    else:
+        GPUS = gpus
 
+    print('GPUS = {!r}'.format(GPUS))
     # GPUS = [0, 1, 2, 3]
     # GPUS = [0]
     environ = {
@@ -163,9 +181,9 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto', run=
                     --package_fpath={package_fpath} \
                     --pred_dataset={pred_dataset} \
                     --test_dataset={test_dataset} \
-                    --num_workers=5 \
+                    --num_workers={workers_per_queue} \
                     --compress=DEFLATE \
-                    --gpus=0 \
+                    --gpus=0, \
                     --batch_size=1
                 ''').format(**suggestions, **predictkw)
             if not recompute:
@@ -196,7 +214,9 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto', run=
             if recompute or not eval_metrics_fpath.exists():
                 queue.submit(eval_command)
 
-    jobs.rprint()
+    print('jobs = {!r}'.format(jobs))
+    # print(f'{len(jobs)=}')
+    jobs.rprint(with_status=False, with_rich=True)
 
     # RUN
     if run:
@@ -249,6 +269,7 @@ def gather_measures():
         # Prefer a remote (the machine where data is being evaluated)
         remote = 'horologic'
         remote = 'namek'
+        remote = 'toothrush'
         # Hack for pointing at a remote
         remote_dpath = ub.Path(ub.shrinkuser(dvc_dpath, home=ub.expandpath(f'$HOME/remote/{remote}')))
         if remote_dpath.exists():
@@ -264,8 +285,15 @@ def gather_measures():
     measure_fpaths = list(model_dpath.glob('*/*/*/eval/curves/measures2.json'))
 
     dset_groups = ub.group_items(measure_fpaths, lambda x: x.parent.parent.parent.name)
+
+    predict_group_freq = ub.map_vals(len, dset_groups)
+    print('These are the different datasets prediction was run on.')
+    print('TODO: need to choose exactly 1 or a compatible set of them')
+    print('predict_group_freq = {}'.format(ub.repr2(predict_group_freq, nl=1)))
+
     # measure_fpaths = dset_groups['combo_train_US_R001_small_nowv.kwcoco']
-    measure_fpaths = dset_groups['combo_vali_nowv.kwcoco']
+    # measure_fpaths = dset_groups['combo_vali_nowv.kwcoco']
+    measure_fpaths = dset_groups['combo_DILM.kwcoco_vali']
 
     print(len(measure_fpaths))
     # dataset_to_evals = ub.group_items(eval_dpaths, lambda x: x.parent.name)

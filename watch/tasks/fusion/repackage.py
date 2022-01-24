@@ -94,6 +94,13 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
             --storage_dpath=$DVC_DPATH/models/fusion/SC-20201117 \
             --train_dpath=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1-20201117 \
             --git_commit=True
+
+        DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+        python -m watch.tasks.fusion.repackage gather_checkpoints \
+            --dvc_dpath=$DVC_DPATH \
+            --storage_dpath=$DVC_DPATH/models/fusion/SC-20201117 \
+            --train_dpath=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1-20201117 \
+            --git_commit=True
     """
     from watch.utils import util_data
     import pathlib
@@ -132,7 +139,7 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
     for dset_dpath in dset_dpaths:
         lightning_log_dpaths = list((dset_dpath / 'runs').glob('*/lightning_logs'))
         for ll_dpath in lightning_log_dpaths:
-            if not ll_dpath.parent.name.startswith(('Activity', 'SC_')):  # HACK
+            if not ll_dpath.parent.name.startswith(('Activity', 'SC_', 'BOTH_')):  # HACK
                 continue
             for checkpoint_fpath in list((ll_dpath).glob('*/checkpoints/*.ckpt')):
                 parts = checkpoint_fpath.name.split('-')

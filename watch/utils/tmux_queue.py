@@ -207,6 +207,8 @@ class TMUXMultiQueue(PathIdentifiable):
 
     def _init_workers(self):
         per_worker_environs = [self.environ] * self.size
+        print('per_worker_environs = {!r}'.format(per_worker_environs))
+        print('self.gres = {!r}'.format(self.gres))
         if self.gres:
             # TODO: more sophisticated GPU policy?
             per_worker_environs = [
@@ -224,6 +226,7 @@ class TMUXMultiQueue(PathIdentifiable):
             )
             for worker_idx, e in enumerate(per_worker_environs)
         ]
+        print('per_worker_environs = {!r}'.format(per_worker_environs))
         self._worker_cycle = it.cycle(self.workers)
 
     def __nice__(self):

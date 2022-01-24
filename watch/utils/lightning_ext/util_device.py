@@ -19,6 +19,8 @@ def coerce_devices(gpus, auto_select_gpus=False):
     """
     Coerce a command line argument or GPUs into a valid set of torch devices
 
+    This depends on the lightning auto_gpu_select, which has been unstable
+
     Args:
         gpus (List[int] | str | int | None): adds ability to parse
             "cpu", "auto", "auto:N".
@@ -28,19 +30,20 @@ def coerce_devices(gpus, auto_select_gpus=False):
 
     Example:
         >>> from watch.utils.lightning_ext import util_device
-        >>> util_device.coerce_devices('cpu')
-        >>> util_device.coerce_devices(None)
+        >>> print(util_device.coerce_devices('cpu'))
+        >>> print(util_device.coerce_devices(None))
         >>> # xdoctest: +SKIP
         >>> # breaks without a cuda machine
         >>> from watch.utils.lightning_ext import util_device
-        >>> util_device.coerce_devices("1")
-        >>> util_device.coerce_devices(1)
-        >>> util_device.coerce_devices([0, 1])
-        >>> util_device.coerce_devices("0, 1")
-        >>> util_device.coerce_devices("auto")
-        >>> util_device.coerce_devices("auto:1")
-        >>> util_device.coerce_devices("auto:2")
-        >>> util_device.coerce_devices("auto:3")
+        >>> #print(util_device.coerce_devices("0"))
+        >>> print(util_device.coerce_devices("1"))
+        >>> print(util_device.coerce_devices(1))
+        >>> print(util_device.coerce_devices([0, 1]))
+        >>> print(util_device.coerce_devices("0, 1"))
+        >>> print(util_device.coerce_devices("auto"))
+        >>> print(util_device.coerce_devices("auto:1"))
+        >>> print(util_device.coerce_devices("auto:2"))
+        >>> #print(util_device.coerce_devices("auto:3"))
     """
     import torch
 

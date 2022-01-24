@@ -344,7 +344,9 @@ def predict(cmdline=False, **kwargs):
     result_fpath.parent.mkdir(parents=True, exist_ok=True)
 
     from watch.utils.lightning_ext import util_device
+    print('args.gpus = {!r}'.format(args.gpus))
     devices = util_device.coerce_devices(args.gpus)
+    print('devices = {!r}'.format(devices))
     if len(devices) > 1:
         raise NotImplementedError('TODO: handle multiple devices')
     device = devices[0]

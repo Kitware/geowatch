@@ -1166,7 +1166,7 @@ python -m watch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20201117.yaml"  \
     --channels=${CHANNELS} \
     --name=$EXPERIMENT_NAME \
-    --chip_size=480 \
+    --chip_size=464 \
     --time_steps=3 \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --method="MultimodalTransformer" \
