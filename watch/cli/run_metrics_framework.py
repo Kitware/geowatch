@@ -96,7 +96,7 @@ def merge_bas_metrics_results(results: List[RegionResult]):
 
         def area_sqkm(poly):
             avg_lat = (poly.bounds[1] + poly.bounds[3]) / 2.0
-            return poly.area * scale_area(avg_lat)
+            return poly.area * scale_area(avg_lat) / 1e6
 
         polys = []
         for region in regions:
@@ -185,12 +185,22 @@ def merge_bas_metrics_results(results: List[RegionResult]):
     result_df['F1'] = np.where(tp > 0, tp / (tp + 0.5 * (fp + fn)), 0)
 
     all_regions = [r.region_model for r in results]
-    all_sites = list(itertools.chain.from_iterable([
-        r.site_models for r in results]))
     # ref: metrics-and-test-framework.evaluation.Evaluation.build_scoreboard
     result_df['spatial FAR'] = fp.astype(float) / area(all_regions)
     result_df['temporal FAR'] = fp.astype(float) / n_dates(all_regions)
-    result_df['images FAR'] = fp.astype(float) / n_unique_images(all_sites)
+
+    # this is not actually how Images FAR is calculated!
+    # https://smartgitlab.com/TE/metrics-and-test-framework/-/issues/23
+    #
+    # all_sites = list(itertools.chain.from_iterable([
+    #     r.site_models for r in results]))
+    # result_df['images FAR'] = fp.astype(float) / n_unique_images(all_sites)
+    #
+    # instead, images in multiple proposed site stacks are double-counted.
+    # take advantage of this to merge this metric with a simple average.
+    n_images = (merged_df['fp sites'] /
+                merged_df['images FAR']).groupby('region_id').sum()
+    result_df['images FAR'] = fp.astype(float) / n_images
 
     return result_df
 
@@ -461,9 +471,7 @@ def main(args):
                       'TP site matches.')
 
     if args.merge:
-        import xdev
-        with xdev.embed_on_exception_context():
-            merge_metrics_results(out_dirs, gt_dpath)
+        merge_metrics_results(out_dirs, gt_dpath)
 
 
 if __name__ == '__main__':
