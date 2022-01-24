@@ -139,7 +139,7 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
     for dset_dpath in dset_dpaths:
         lightning_log_dpaths = list((dset_dpath / 'runs').glob('*/lightning_logs'))
         for ll_dpath in lightning_log_dpaths:
-            if not ll_dpath.parent.name.startswith(('Activity', 'SC_', 'BOTH_')):  # HACK
+            if not ll_dpath.parent.name.startswith(('Activity', 'SC_', 'BOTH_', 'BAS_')):  # HACK
                 continue
             for checkpoint_fpath in list((ll_dpath).glob('*/checkpoints/*.ckpt')):
                 parts = checkpoint_fpath.name.split('-')
