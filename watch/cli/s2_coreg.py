@@ -127,10 +127,27 @@ def coreg_stac_item(stac_item, outdir, baseline_scenes):
 
 
 def coreg_s2_stac_item(stac_item, outdir, baseline_scenes):
-    mgrs_tile = ''.join(
-        map(str, (stac_item.properties["sentinel:utm_zone"],
-                  stac_item.properties["sentinel:latitude_band"],
-                  stac_item.properties["sentinel:grid_square"])))
+    mgrs_tile = None
+    try:
+        mgrs_tile = ''.join(
+            map(str, (stac_item.properties["sentinel:utm_zone"],
+                      stac_item.properties["sentinel:latitude_band"],
+                      stac_item.properties["sentinel:grid_square"])))
+    except KeyError:
+        pass
+
+    if mgrs_tile is None:
+        # Try parsing from product_id
+        original_item_id = stac_item.properties.get("watch:original_item_id")
+        if original_item_id is not None:
+            try:
+                mgrs_tile = original_item_id.split('_')[1]
+            except Exception:
+                pass
+
+    if mgrs_tile is None:
+        raise RuntimeError("Couldn't parse MGRS tile for Sentinel "
+                           "STAC Item: {}".format(stac_item.id))
 
     item_basedir = _determine_basedir_for_item(stac_item)
     # FIXME: Somewhat loose check for whether or not the item being

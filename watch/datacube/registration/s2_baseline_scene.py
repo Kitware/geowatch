@@ -156,9 +156,14 @@ def find_baseline_scene(xmls, return_paths=False):
             except pystac.errors.STACTypeError:
                 continue
             else:
-                # Scaling coverage to be 0-1
-                coverage =\
-                    stac_item.properties['sentinel:data_coverage'] / 100.0
+                # Fall back to checking 'data_coverage' field
+                data_coverage = stac_item.properties.get(
+                    'sentinel:data_coverage',
+                    stac_item.properties.get('data_coverage'))
+
+                if data_coverage is not None:
+                    # Scaling coverage to be 0-1
+                    coverage = float(data_coverage) / 100.0
                 break
 
         if coverage is None:
