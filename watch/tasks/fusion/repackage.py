@@ -79,54 +79,87 @@ def repackage(checkpoint_fpath, force=False):
     return str(package_fpath)
 
 
-def gather_checkpoints():
+def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
+                       git_commit=False):
     """
-    Hack function to move all checkpoints into a directory for evaluation
+    Package and copy checkpoints into the DVC folder for evaluation.
 
     Ignore:
         from watch.tasks.fusion.repackage import *  # NOQA
+
+    CommandLine:
+        DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+        python -m watch.tasks.fusion.repackage gather_checkpoints \
+            --dvc_dpath=$DVC_DPATH \
+            --storage_dpath=$DVC_DPATH/models/fusion/SC-20201117 \
+            --train_dpath=$DVC_DPATH/training/$HOSTNAME/$USER/Drop1-20201117 \
+            --git_commit=True
     """
     from watch.utils import util_data
     import pathlib
-    dvc_dpath = util_data.find_smart_dvc_dpath()
-    train_base = dvc_dpath / 'training'
-    dataset_names = [
-        # 'Drop1_October2021',
-        # 'Drop1_November2021',
-        'Drop1-20201117',
-    ]
-    user_machine_dpaths = list(train_base.glob('*/*'))
-
-    all_checkpoint_paths = []
-    for um_dpath in user_machine_dpaths:
-        for dset_name in dataset_names:
-            dset_dpath = um_dpath / dset_name
-            lightning_log_dpaths = list((dset_dpath / 'runs').glob('*/lightning_logs'))
-            for ll_dpath in lightning_log_dpaths:
-                if not ll_dpath.parent.name.startswith(('Activity', 'SC_')):
-                    continue
-                for checkpoint_fpath in list((ll_dpath).glob('*/checkpoints/*.ckpt')):
-                    parts = checkpoint_fpath.name.split('-')
-                    if int(parts[0].split('epoch=')[1]) > 2 and parts[-1].startswith('step='):
-                        print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
-                        all_checkpoint_paths.append(checkpoint_fpath)
-
-    # storage_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
-    storage_dpath = dvc_dpath / 'models/fusion/SC-20201117'
-    storage_dpath.mkdir(exist_ok=True, parents=True)
-
     import ubelt as ub
     import shutil
+    import os
+
+    if dvc_dpath is None:
+        dvc_dpath = util_data.find_smart_dvc_dpath()
+    else:
+        dvc_dpath = pathlib.Path(dvc_dpath)
+
+    # storage_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
+    if storage_dpath is None:
+        storage_dpath = dvc_dpath / 'models/fusion/SC-20201117'
+    else:
+        storage_dpath = pathlib.Path(storage_dpath)
+
+    if train_dpath is None:
+        dataset_names = [
+            # 'Drop1_October2021',
+            # 'Drop1_November2021',
+            'Drop1-20201117',
+        ]
+        train_base = dvc_dpath / 'training'
+        user_machine_dpaths = list(train_base.glob('*/*'))
+        dset_dpaths = []
+        for um_dpath in user_machine_dpaths:
+            for dset_name in dataset_names:
+                dset_dpath = um_dpath / dset_name
+                dset_dpaths.append(dset_dpath)
+    else:
+        dset_dpaths = [pathlib.Path(train_dpath)]
+
+    all_checkpoint_paths = []
+    for dset_dpath in dset_dpaths:
+        lightning_log_dpaths = list((dset_dpath / 'runs').glob('*/lightning_logs'))
+        for ll_dpath in lightning_log_dpaths:
+            if not ll_dpath.parent.name.startswith(('Activity', 'SC_')):  # HACK
+                continue
+            for checkpoint_fpath in list((ll_dpath).glob('*/checkpoints/*.ckpt')):
+                parts = checkpoint_fpath.name.split('-')
+                if int(parts[0].split('epoch=')[1]) > 2 and parts[-1].startswith('step='):
+                    print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
+                    all_checkpoint_paths.append(checkpoint_fpath)
+
+    storage_dpath.mkdir(exist_ok=True, parents=True)
+
     to_copy = []
+    failed = []
     for p in ub.ProgIter(all_checkpoint_paths):
-        package_fpath = repackage(p)
-        package_fpath = pathlib.Path(package_fpath)
-        name = package_fpath.name.split('_epoch')[0]
-        name_dpath = storage_dpath / name
-        name_dpath.mkdir(exist_ok=True, parents=True)
-        name_fpath = name_dpath / package_fpath.name
-        if not name_fpath.exists():
-            to_copy.append((package_fpath, name_dpath))
+        try:
+            package_fpath = repackage(p)
+            package_fpath = pathlib.Path(package_fpath)
+            name = package_fpath.name.split('_epoch')[0]
+            name_dpath = storage_dpath / name
+            name_dpath.mkdir(exist_ok=True, parents=True)
+            name_fpath = name_dpath / package_fpath.name
+            if not name_fpath.exists():
+                to_copy.append((package_fpath, name_dpath))
+        except Exception as ex:
+            print(f'Failed to repackage {p=} {ex=}')
+            failed.append(p)
+
+    print(f'failed to repackage = {failed=!r}')
+
     print(f'Copy {len(to_copy)} new checkpoints')
     for package_fpath, name_fpath in ub.ProgIter(to_copy):
         shutil.copy(package_fpath, name_fpath)
@@ -138,23 +171,30 @@ def gather_checkpoints():
             dvc_to_add.append(str(package_dpath.relative_to(dvc_dpath)))
 
     dvc_info = ub.cmd(['dvc', 'add'] + dvc_to_add, cwd=dvc_dpath, verbose=3, check=True)
-    start = False
-    gitlines = []
-    for line in dvc_info['out'].split('\n'):
-        if start:
-            gitlines.append(line.strip())
-        if 'To track the changes with git, run:' in line:
-            start = True
-    gitcmd = ''.join(gitlines)
-    git_info1 = ub.cmd(gitcmd, verbose=3, check=True, cwd=dvc_dpath)
-    assert git_info1['ret'] == 0
 
-    git_info2 = ub.cmd('git push', verbose=3, check=True, cwd=dvc_dpath)
-    assert git_info2['ret'] == 0
+    if 1:
+        # Note: Using auto-add means we do not need this, check
+        # the setting and disable if necessary
+        start = False
+        gitlines = []
+        for line in dvc_info['out'].split('\n'):
+            if start:
+                gitlines.append(line.strip())
+            if 'To track the changes with git, run:' in line:
+                start = True
+        gitcmd = ''.join(gitlines)
+        if gitcmd:
+            git_info1 = ub.cmd(gitcmd, verbose=3, check=True, cwd=dvc_dpath)
+            assert git_info1['ret'] == 0
+
+    if git_commit:
+        git_info3 = ub.cmd('git commit -am "new models"', verbose=3, check=True, cwd=dvc_dpath)  # dangerous?
+        assert git_info3['ret'] == 0
+        git_info2 = ub.cmd('git push', verbose=3, check=True, cwd=dvc_dpath)
+        assert git_info2['ret'] == 0
 
     import dvc.main
     # from dvc import main
-    import os
     saved_cwd = os.getcwd()
     try:
         os.chdir(dvc_dpath)
@@ -164,17 +204,16 @@ def gather_checkpoints():
     finally:
         os.chdir(saved_cwd)
 
-    """
-    # on remote
-    dvc pull -r aws --recursive models/fusion/SC-20201117
-    """
+    print(ub.codeblock(
+        """
+        # On the evaluation remote you need to run something like:
+        DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+        cd $DVC_DPATH
+        git pull
+        dvc pull -r aws --recursive models/fusion/SC-20201117
 
-    import os
-    for r, ds, fs in os.walk(train_base):
-        if r.endswith('/lightning_logs'):
-            print('r = {!r}'.format(r))
-            break
-        pass
+        python ~/code/watch/watch/tasks/fusion/schedule_inference.py schedule_evaluation --gpus=auto --run=True
+        """))
 
 
 if __name__ == '__main__':
@@ -182,16 +221,16 @@ if __name__ == '__main__':
     CommandLine:
         python ~/code/watch/watch/tasks/fusion/repackage.py /home/joncrall/data/dvc-repos/smart_watch_dvc/training/toothbrush/joncrall/Drop1_Raw_Holdout/runs/ActivityClf_smt_it_joint_p8_raw_v019/lightning_logs/version_0/checkpoints/epoch=9-step=2299.ckpt
 
-        python -m watch.tasks.fusion.repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=53-step=28457.ckpt
+        python -m watch.tasks.fusion.repackage repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=53-step=28457.ckpt
 
-        python -m watch.tasks.fusion.repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=98-step=52172.ckpt
+        python -m watch.tasks.fusion.repackage repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=98-step=52172.ckpt
 
-        python -m watch.tasks.fusion.repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=21-step=11593.ckpt
+        python -m watch.tasks.fusion.repackage repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=21-step=11593.ckpt
 
-        python -m watch.tasks.fusion.repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=31-step=16863.ckpt
-        python -m watch.tasks.fusion.repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=43-step=23187.ckpt
+        python -m watch.tasks.fusion.repackage repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=31-step=16863.ckpt
+        python -m watch.tasks.fusion.repackage repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=43-step=23187.ckpt
 
-        python -m watch.tasks.fusion.repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_raw_v001/lightning_logs/version_1/checkpoints/epoch=145-step=76941.ckpt
+        python -m watch.tasks.fusion.repackage repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_raw_v001/lightning_logs/version_1/checkpoints/epoch=145-step=76941.ckpt
 
 
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
@@ -201,4 +240,4 @@ if __name__ == '__main__':
 
     """
     import fire
-    fire.Fire(repackage)
+    fire.Fire()

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Adds fields needed by ndsampler to correctly "watch" a region.
 
@@ -7,7 +6,6 @@ We assume input is orthorectified.  We assume some GSD "target" gsd for video
 and image processing. Note a video GSD will typically be much higher (i.e.
 lower resolution) than an image GSD.
 """
-# import kwcoco
 import warnings
 import numpy as np
 import ubelt as ub
@@ -32,6 +30,7 @@ def filter_image_ids(coco_dset, gids=None, include_sensors=None,
     """
     def coerce_set(x):
         return set(x.split(',')) if isinstance(x, str) else set(x)
+
     def filter_by_attribute(table, key, include, exclude):
         if include is not None or exclude is not None:
             if include is not None:
@@ -1454,26 +1453,34 @@ def coco_channel_stats(coco_dset):
         >>> from watch.utils import kwcoco_extensions
         >>> import kwcoco
         >>> import ubelt as ub
-        >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes8-multispectral')
+        >>> import watch
+        >>> coco_dset = watch.coerce_kwcoco('vidshapes-watch')
         >>> info = kwcoco_extensions.coco_channel_stats(coco_dset)
-        >>> print(ub.repr2(info, nl=1))
+        >>> print(ub.repr2(info, nl=3))
     """
-    channel_col = []
+    sensor_hist = ub.ddict(lambda: 0)
+    chan_hist = ub.ddict(lambda: 0)
+    sensorchan_hist = ub.ddict(lambda: ub.ddict(lambda: 0))
+
     for _gid, img in coco_dset.index.imgs.items():
         channels = []
         for obj in CocoImage(img).iter_asset_objs():
             channels.append(obj.get('channels', 'unknown-chan'))
-        channel_col.append('|'.join(channels))
-
-    chan_hist = ub.dict_hist(channel_col)
+        chan = '|'.join(channels)
+        sensor = img.get('sensor_coarse', '')
+        chan_hist[chan] += 1
+        sensor_hist[sensor] += 1
+        sensorchan_hist[sensor][chan] += 1
 
     from kwcoco.channel_spec import FusedChannelSpec as FS
     osets = [FS.coerce(c).as_oset() for c in chan_hist]
-    common_channels = FS(list(ub.oset.intersection(*osets)))
-    all_channels = FS(list(ub.oset.union(*osets)))
+    common_channels = FS.coerce(list(ub.oset.intersection(*osets))).concise()
+    all_channels = FS.coerce(list(ub.oset.union(*osets))).concise()
 
     info = {
         'chan_hist': chan_hist,
+        'sensor_hist': sensor_hist,
+        'sensorchan_hist': sensorchan_hist,
         'common_channels': common_channels,
         'all_channels': all_channels,
     }
@@ -1489,13 +1496,20 @@ class TrackidGenerator(ub.NiceRepr):
     """
 
     def update_generator(self):
-        used_trackids = self.dset.index.trackid_to_aids.keys()
-        new_generator = filter(lambda x: x not in used_trackids,
+        self.used_trackids.update(self.dset.index.trackid_to_aids.keys())
+        new_generator = filter(lambda x: x not in self.used_trackids,
                                itertools.count(start=next(self.generator)))
         self.generator = new_generator
 
+    def exclude_trackids(self, trackids):
+        if self.used_trackids.intersection(trackids):
+            print(f'warning: CocoDataset {self.dset.tag} with trackids '
+                  f'{self.used_trackids} already has trackids in {trackids}')
+        self.used_trackids.update(trackids)
+
     def __init__(self, coco_dset):
         self.dset = coco_dset
+        self.used_trackids = set()
         self.generator = itertools.count(start=1)
         self.update_generator()
 
@@ -1762,7 +1776,7 @@ def covered_annot_geo_regions(coco_dset, merge=False):
                 # Should we switch to UTM?
                 img_rois_ = ops.unary_union(sh_annot_polys_)
                 try:
-                    img_rois = list(img_rois_)
+                    img_rois = list(img_rois_.geoms)
                 except Exception:
                     img_rois = [img_rois_]
 

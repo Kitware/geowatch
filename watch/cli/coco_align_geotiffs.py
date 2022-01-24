@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 r"""
 Given the raw data in kwcoco format, this script will extract orthorectified
 regions around areas of intere/t across time.
@@ -147,6 +146,13 @@ class CocoAlignGeotiffConfig(scfg.Config):
             '''
         )),
 
+        'debug_valid_regions': scfg.Value(False, help=ub.paragraph(
+            '''
+            write valid region visualizations to help debug "black images"
+            issues.
+            '''
+        )),
+
         'keep': scfg.Value('none', help=ub.paragraph(
             '''
             Level of detail to overwrite existing data at, since this is slow.
@@ -247,6 +253,7 @@ def main(cmdline=True, **kw):
         >>>     'max_workers': 0,
         >>>     'aux_workers': 0,
         >>>     'visualize': 1,
+        >>>     'debug_valid_regions': True,
         >>> }
         >>> cmdline = False
         >>> new_dset = main(cmdline, **kw)
@@ -418,7 +425,8 @@ def main(cmdline=True, **kw):
             new_dset=new_dset, visualize=visualize,
             write_subsets=write_subsets, max_workers=max_workers,
             aux_workers=aux_workers, keep=keep, target_gsd=target_gsd,
-            max_frames=max_frames)
+            max_frames=max_frames,
+            debug_valid_regions=config['debug_valid_regions'])
 
     new_dset.fpath = dst_fpath
     print('Dumping new_dset.fpath = {!r}'.format(new_dset.fpath))
@@ -692,7 +700,7 @@ class SimpleDataCube(object):
                          rpc_align_method='orthorectify', new_dset=None,
                          write_subsets=True, visualize=True, max_workers=0,
                          aux_workers=0, keep='none', target_gsd=10,
-                         max_frames=None):
+                         max_frames=None, debug_valid_regions=True):
         """
         Given a region of interest, extract an aligned temporal sequence
         of data to a specified directory.
@@ -896,10 +904,10 @@ class SimpleDataCube(object):
                         'other_gids': final_gids[1:],
                         'sensor_coarse': sensor_coarse,
                     })
-
-                    # Output a visualization of this group and its overlaps
-                    DEBUG_VALID_REGIONS = visualize and 0
-                    if DEBUG_VALID_REGIONS:
+                    # Output a visualization of this group and its overlaps but
+                    # only if we have that info
+                    can_vis_geos = any(row['geometry'] is not None for row in rows)
+                    if debug_valid_regions and can_vis_geos:
                         import kwplot
                         from shapely.ops import unary_union
                         import shapely
@@ -918,7 +926,7 @@ class SimpleDataCube(object):
                             wld_map_crs84_gdf = gpd.read_file(
                                 gpd.datasets.get_path('naturalearth_lowres')
                             ).to_crs('crs84')
-                            sh_tight_bounds_local = unary_union([sh_space_region_local] + [row['geometry'] for row in rows])
+                            sh_tight_bounds_local = unary_union([sh_space_region_local] + [row['geometry'] for row in rows if row['geometry'] is not None])
                             sh_total_bounds_local = shapely.affinity.scale(sh_tight_bounds_local.convex_hull, 2.5, 2.5)
                             total_bounds_local = gpd.GeoDataFrame({'geometry': [sh_total_bounds_local]}, crs=local_epsg)
 
@@ -928,7 +936,7 @@ class SimpleDataCube(object):
                             wld_map_local_gdf = wld_map_crs84_gdf.to_crs(local_epsg)
 
                             ax = kwplot.figure(doclf=True, fnum=2).gca()
-                            ax.set_title(f'Local: {local_epsg}\n{iso_time} {sensor_coarse} {len(rows)} {final_gids}')
+                            ax.set_title(f'Local CRS: {local_epsg}\n{iso_time} sensor={sensor_coarse} n={len(rows)} source_gids={final_gids}')
                             wld_map_local_gdf.plot(ax=ax)
                             subimg_local_df.plot(ax=ax, color='blue', alpha=0.6, edgecolor='black', linewidth=4)
                             group_local_df.plot(ax=ax, color='pink', alpha=0.6)
@@ -945,7 +953,7 @@ class SimpleDataCube(object):
                             total_bounds_crs84 = total_bounds_local.to_crs('crs84')
                             # space_region_crs84 = space_region_local.to_crs('crs84')
                             ax = kwplot.figure(doclf=True, fnum=3).gca()
-                            ax.set_title(f'CRS84:\n{iso_time} {sensor_coarse} {len(rows)} {final_gids}')
+                            ax.set_title(f'CRS84:\n{iso_time} sensor={sensor_coarse} n={len(rows)} source_gids={final_gids}')
                             wld_map_crs84_gdf.plot(ax=ax)
                             subimg_crs84_df.plot(ax=ax, color='blue', alpha=0.6, edgecolor='black', linewidth=4)
                             group_crs84_df.plot(ax=ax, color='pink', alpha=0.6)

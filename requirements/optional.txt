@@ -3,11 +3,11 @@
 
 PyQt5 >= 5.15
 
-ipython
-#xdev
-flake8
-autopep8
-mkinit
+ipython >= 7.25.0
+#xdev >= 0.2.4
+flake8 >= 4.0.1
+autopep8 >= 1.5.7
+mkinit >= 0.3.3
 
-timerit
-pint
+timerit >= 0.3.0
+pint >= 0.17

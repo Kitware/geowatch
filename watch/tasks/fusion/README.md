@@ -100,3 +100,10 @@ Automated dynamics / plugins?
     - [ ] ClassificationDataModule
     - [ ] DetectionDataModule
     - [ ] <Problem>DataModule
+
+
+
+### 
+
+Need to consolidate code in scheduler inference and repackage to get into a
+flow where models are trained and evaluated

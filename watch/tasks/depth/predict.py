@@ -1,5 +1,7 @@
 # import gdal here first otherwise the import fails due to conflict with rasterio
 # TODO fix
+# NOTE: from Jon C, wrt the above fix, the underlying issue is C libraries, and
+# there is some logic to work around this in the watch.__init__ module.
 from osgeo import gdal  # NOQA
 import json
 import logging
@@ -7,6 +9,7 @@ import warnings
 from functools import partial
 from pathlib import Path
 
+import os
 import click
 import kwcoco
 import kwimage
@@ -18,6 +21,7 @@ from scipy import ndimage
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from . import modules_monkeypatch  # NOQA
 from .datasets import WVRgbDataset
 from .pl_highres_verify import MultiTaskModel, modify_bn, dfactor, local_utils
 from .utils import process_image_chunked
@@ -32,22 +36,40 @@ log = logging.getLogger(__name__)
 @click.option('--dataset', required=True, type=click.Path(exists=True), help='input kwcoco dataset')
 @click.option('--deployed', required=True, type=click.Path(exists=True), help='pytorch weights file')
 @click.option('--output', required=False, type=click.Path(), help='output kwcoco dataset')
-def predict(dataset, deployed, output):
-    coco_dset_filename = dataset
+@click.option('--window_size', required=False, type=int, default=1024, help='sliding window size')
+@click.option('--dump_shards', required=False, default=False, help='if True, output partial kwcoco files as they are completed')
+@click.option('--data_workers', required=False, default=0, help='background data loaders')
+def predict(dataset, deployed, output, window_size=2048, dump_shards=False, data_workers=0):
     weights_filename = Path(deployed)
-    output_dset_filename = get_output_file(output)
-    output_data_dir = output_dset_filename.parent.joinpath(
-        output_dset_filename.name.split('.')[0])
 
-    log.info('Input:          {}'.format(coco_dset_filename))
+    output_dset_filename = get_output_file(output)
+
+    output_bundle_dpath = output_dset_filename.parent
+    output_data_dir = output_bundle_dpath / 'dzyne_depth'
+
+    log.info('Input:          {}'.format(dataset))
     log.info('Weights:        {}'.format(weights_filename))
     log.info('Output:         {}'.format(output_dset_filename))
     log.info('Output Images:  {}'.format(output_data_dir))
 
-    output_dset = kwcoco.CocoDataset(coco_dset_filename).copy()
+    input_dset = kwcoco.CocoDataset.coerce(dataset)
+    input_bundle_dpath = Path(input_dset.bundle_dpath)
+
+    output_dset = input_dset.copy()
+    if input_bundle_dpath != output_bundle_dpath:
+        # Need to change the root of the output directory
+        # The kwcoco reroot logic is flakey for complex cases, so be careful
+        # In the normal case where the output and input kwcoco share the same
+        # bundle, then this logic is avoided
+        output_dset.reroot(absolute=True)
+        output_dset.fpath = str(output_dset_filename)
+        new_prefix = os.path.relpath(input_bundle_dpath, output_bundle_dpath)
+        output_dset.reroot(old_prefix=str(input_bundle_dpath),
+                           new_prefix=str(new_prefix), absolute=False,
+                           check=True)
 
     # input data
-    dataset = WVRgbDataset(coco_dset_filename)
+    torch_dataset = WVRgbDataset(input_dset)
 
     # model
     log.debug('loading model')
@@ -56,35 +78,58 @@ def predict(dataset, deployed, output):
     model.load_state_dict(state_dict)
 
     model = modify_bn(model, track_running_stats=False, bn_momentum=0.01)
+    model = model.eval()
     model.to(get_device())
 
     log.debug('processing images')
-    dataloader = DataLoader(dataset, num_workers=0, batch_size=1, collate_fn=lambda x: x)
-    for batch in tqdm(dataloader, miniters=1, unit='image', disable=True):
-        assert len(batch) == 1
-        img_info = batch[0]
-        gid = img_info['id']
-        try:
-            image = img_info['imgdata']
-            pred = process_image_chunked(image,
-                                         partial(run_inference, model=model),
-                                         chip_size=(2048, 2048, 3)
-                                         )
+    dataloader = DataLoader(torch_dataset, num_workers=data_workers, batch_size=1, collate_fn=lambda x: x)
+    with torch.no_grad():
+        for batch in tqdm(dataloader, miniters=1, unit='image', disable=False):
+            assert len(batch) == 1
+            img_info = batch[0]
+            gid = img_info['id']
+            try:
+                S = window_size
+                image = img_info['imgdata']
+                pred = process_image_chunked(
+                    image, partial(run_inference, model=model),
+                    chip_size=(S, S, 3),
+                )
 
-            # get clean img_info
-            img_info = dataset.dset.imgs[gid]
-            info = _write_output(img_info, pred, output_dir=output_data_dir)
-            aux = output_dset.imgs[gid].get('auxiliary', [])
-            aux.append(info)
-            output_dset.imgs[gid]['auxiliary'] = aux
+                # get clean img_info
+                img_info = torch_dataset.dset.imgs[gid]
 
-        except KeyboardInterrupt:
-            log.info('interrupted')
-            break
-        except Exception:
-            log.exception('Unable to load id:{} - {}'.format(img_info['id'], img_info['name']))
+                # Construct an output file name based on the video and image name
+                imgname = img_info['name']
+                vidid = img_info.get('video_id', None)
+                if vidid is not None:
+                    vidname = torch_dataset.dset.index.videos[vidid]['name']
+                    output_dpath = output_data_dir / vidname
+                else:
+                    output_dpath = output_data_dir
+                pred_filename = output_dpath / (imgname + '_depth.tif')
+
+                info = _write_output(img_info, pred, pred_filename, output_bundle_dpath)
+                aux = output_dset.imgs[gid].get('auxiliary', [])
+                aux.append(info)
+                output_dset.imgs[gid]['auxiliary'] = aux
+
+                if dump_shards:
+                    # Dump debugging shard (TODO: could cache process for quick
+                    # reruns)
+                    shard_dset = output_dset.subset([gid])
+                    shard_dset.reroot(absolute=True)
+                    shard_dset.fpath = output_dpath / (imgname + '_depth.kwcoco.json')
+                    shard_dset.dump(shard_dset.fpath, indent=2)
+
+            except KeyboardInterrupt:
+                log.info('interrupted')
+                break
+            except Exception:
+                log.exception('Unable to load id:{} - {}'.format(img_info['id'], img_info['name']))
 
     output_dset.dump(str(output_dset_filename), indent=2)
+    output_dset.validate()
     log.info('output written to {}'.format(output_dset_filename))
 
 
@@ -120,26 +165,15 @@ def run_inference(image, model):
     return weighted_final
 
 
-def _write_output(img_info, image, output_dir):
-    if img_info.get('file_name'):
-        dir = Path(img_info.get('file_name')).parent
-    else:
-        dir = Path(img_info['auxiliary'][0]['file_name']).parent
-
-    dirs = list(dir.parts)
-    if dirs[0] == '_assets':
-        dirs = dirs[1:]
-
-    pred_filename = output_dir.joinpath('_assets', *dirs, img_info['name'] + '_depth.tif')
-
+def _write_output(img_info, pred, pred_filename, output_bundle_dpath):
     info = {
-        'file_name': str(pred_filename.relative_to(output_dir)),
+        'file_name': str(pred_filename.relative_to(output_bundle_dpath)),
         'channels': 'depth',
-        'height': image.shape[0],
-        'width': image.shape[1],
+        'height': pred.shape[0],
+        'width': pred.shape[1],
         'num_bands': 1,
-        'warp_aux_to_img': {'scale': [img_info['width'] / image.shape[1],
-                                      img_info['height'] / image.shape[0]],
+        'warp_aux_to_img': {'scale': [img_info['width'] / pred.shape[1],
+                                      img_info['height'] / pred.shape[0]],
                             'type': 'affine'}
     }
     pred_filename.parent.mkdir(parents=True, exist_ok=True)
@@ -147,10 +181,9 @@ def _write_output(img_info, image, output_dir):
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', UserWarning)
         kwimage.imwrite(str(pred_filename),
-                        image,
+                        pred,
                         backend='gdal',
-                        compress='deflate')
-
+                        compress='DEFLATE')
     return info
 
 
@@ -161,6 +194,19 @@ def _load_config():
 
 
 if __name__ == '__main__':
+    r"""
+    # Notes:
+
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+    python -m watch.tasks.depth.predict \
+        --dataset="$DVC_DPATH/Drop1-Aligned-L1-2022-01/data.kwcoco.json" \
+        --output="$DVC_DPATH/Drop1-Aligned-L1-2022-01/dzyne_depth.kwcoco.json" \
+        --deployed="$DVC_DPATH/models/depth/weights_v1.pt" \
+        --dump_shards=True \
+        --data_workers=2 \
+        --window_size=1536
+
+    """
     setup_logging()
     torch.hub.set_dir('/tmp/weights')
     predict()

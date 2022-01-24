@@ -36,6 +36,10 @@ def main():
                         action='store_true',
                         default=False,
                         help='Run AWS CLI commands with --dryrun flag')
+    parser.add_argument('-s', '--show-progress',
+                        action='store_true',
+                        default=False,
+                        help='Show progress for AWS CLI commands')
     parser.add_argument('-r', '--requester_pays',
                         action='store_true',
                         default=False,
@@ -56,7 +60,7 @@ def main():
     return 0
 
 
-def _item_map(feature, outdir, aws_base_command, dryrun, relative=False):
+def ingress_item(feature, outdir, aws_base_command, dryrun, relative=False):
     # Adding a reference back to the original STAC
     # item if not already present
     self_link = None
@@ -85,16 +89,13 @@ def _item_map(feature, outdir, aws_base_command, dryrun, relative=False):
         del assets['index']
 
     new_assets = {}
+    assets_to_remove = set()
     for asset_name, asset in assets.items():
         asset_basename = os.path.basename(asset['href'])
 
         feature_output_dir = os.path.join(outdir, feature['id'])
 
         asset_outpath = os.path.join(feature_output_dir, asset_basename)
-
-        local_asset_href = os.path.abspath(asset_outpath)
-        if relative:
-            local_asset_href = os.path.relpath(asset_outpath, outdir)
 
         asset_href = asset['href']
 
@@ -115,6 +116,10 @@ def _item_map(feature, outdir, aws_base_command, dryrun, relative=False):
         except KeyError:
             pass
 
+        local_asset_href = os.path.abspath(asset_outpath)
+        if relative:
+            local_asset_href = os.path.relpath(asset_outpath, outdir)
+
         if not dryrun:
             os.makedirs(feature_output_dir, exist_ok=True)
 
@@ -124,14 +129,34 @@ def _item_map(feature, outdir, aws_base_command, dryrun, relative=False):
             # Update feature asset href to point to local outpath
             asset['href'] = local_asset_href
         else:
-            success = download_file(
-                asset_href, asset_outpath, aws_base_command, dryrun)
-            if success:
-                asset['href'] = local_asset_href
+            # Prefer to pull asset from S3 if available
+            if(urlparse(asset_href).scheme != 's3'
+               and 'alternate' in asset and 's3' in asset['alternate']):
+                asset_href_for_download = asset['alternate']['s3']['href']
             else:
-                print('Warning unrecognized scheme for asset href: {!r}, '
-                      'skipping!'.format(asset_href))
+                asset_href_for_download = asset_href
+
+            try:
+                success = download_file(asset_href_for_download,
+                                        asset_outpath,
+                                        aws_base_command,
+                                        dryrun)
+            except subprocess.CalledProcessError:
+                print("* Error * Couldn't download asset from href: '{}', "
+                      "removing asset from item!".format(
+                          asset_href_for_download))
+                assets_to_remove.add(asset_name)
                 continue
+            else:
+                if success:
+                    asset['href'] = local_asset_href
+                else:
+                    print('Warning unrecognized scheme for asset href: {!r}, '
+                          'skipping!'.format(asset_href_for_download))
+                    continue
+
+    for asset_name in assets_to_remove:
+        del assets[asset_name]
 
     for new_asset_name, new_asset in new_assets.items():
         assets[new_asset_name] = new_asset
@@ -154,6 +179,7 @@ def baseline_framework_ingress(input_path,
                                outdir,
                                aws_profile=None,
                                dryrun=False,
+                               show_progress=False,
                                requester_pays=False,
                                relative=False,
                                jobs=1):
@@ -183,6 +209,9 @@ def baseline_framework_ingress(input_path,
     if dryrun:
         aws_base_command.append('--dryrun')
 
+    if not show_progress:
+        aws_base_command.append('--no-progress')
+
     if requester_pays:
         aws_base_command.extend(['--request-payer', 'requester'])
 
@@ -210,7 +239,7 @@ def baseline_framework_ingress(input_path,
     executor = ubelt.Executor(mode='process' if jobs > 1 else 'serial',
                               max_workers=jobs)
 
-    jobs = [executor.submit(_item_map, feature, outdir, aws_base_command,
+    jobs = [executor.submit(ingress_item, feature, outdir, aws_base_command,
                             dryrun, relative)
             for feature in input_stac_items]
 
@@ -266,7 +295,12 @@ def download_mtd_msil1c(product_id,
     # parallel folder (productInfo.json contains the name of the product).
     # This can be found in products/[year]/[month]/[day]/[product name].
     # (https://roda.sentinel-hub.com/sentinel-s2-l1c/readme.html)
-    dt = datetime.strptime(product_id.split('_')[2], '%Y%m%dT%H%M%S')
+    try:
+        dt = datetime.strptime(product_id.split('_')[2], '%Y%m%dT%H%M%S')
+    except ValueError:
+        # Support for older format product ID format, e.g.:
+        # "S2A_OPER_PRD_MSIL1C_PDMC_20160413T135705_R065_V20160412T102058_20160412T102058"
+        dt = datetime.strptime(product_id.split('_')[5], '%Y%m%dT%H%M%S')
 
     scheme, netloc, path, *_ = urlparse(metadata_href)
     index = path.find('tiles')

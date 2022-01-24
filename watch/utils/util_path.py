@@ -1,11 +1,12 @@
-import pathlib
 import os
+import ubelt as ub
+import pathlib
 
 
 def coercepath(path_like):
     """
     Args:
-        path_like (str | pathlib.Path | os.PathLike):
+        path_like (str | ub.Path | os.PathLike):
             an object representing a filesystem path
 
     Example:
@@ -15,7 +16,7 @@ def coercepath(path_like):
         >>> path = coercepath(path_like)
         >>> print('path = {!r}'.format(path))
         >>> #
-        >>> path_like = pathlib.Path('.')
+        >>> path_like = ub.Path('.')
         >>> path = coercepath(path_like)
         >>> print('path = {!r}'.format(path))
         >>> #
@@ -24,8 +25,8 @@ def coercepath(path_like):
         >>> print('path = {!r}'.format(path))
     """
     if isinstance(path_like, str):
-        path = pathlib.Path(path_like)
-    elif isinstance(path_like, pathlib.Path):
+        path = ub.Path(path_like)
+    elif isinstance(path_like, pathlib.PurePath):
         path = path_like
     elif isinstance(path_like, os.PathLike):
         path = path_like
@@ -48,7 +49,7 @@ def tree(path):
         >>> import itertools as it
         >>> from watch.utils.util_path import *  # NOQA
         >>> import ubelt as ub
-        >>> path = pathlib.Path('.')
+        >>> path = ub.Path('.')
         >>> gen = tree(path)
         >>> results = list(it.islice(gen, 5))
         >>> print('results = {}'.format(ub.repr2(results, nl=1)))

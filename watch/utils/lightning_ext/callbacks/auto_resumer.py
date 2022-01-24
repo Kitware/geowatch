@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import pytorch_lightning as pl
 from watch.utils import util_path
 

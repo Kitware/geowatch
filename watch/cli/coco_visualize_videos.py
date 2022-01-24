@@ -1,20 +1,26 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """
 KWCoco video visualization script
+
+TODO:
+    - [ ] Option to interpret a channel as a heatmap and overlay it on top of
+          another set of channels interpreted as a grayscale image.
 
 CommandLine:
     # A demo of this script on toydata is as follows
 
-    TEMP_DPATH=$(mktemp -d)
+    # TEMP_DPATH=$(mktemp -d)
+    TEMP_DPATH=$HOME/.cache/kwcoco/demo/viz
+    mkdir -p $TEMP_DPATH
     echo "TEMP_DPATH = $TEMP_DPATH"
     cd $TEMP_DPATH
-
     KWCOCO_BUNDLE_DPATH=$TEMP_DPATH/toy_bundle
     KWCOCO_FPATH=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json
     VIZ_DPATH=$KWCOCO_BUNDLE_DPATH/_viz
-    python -m kwcoco toydata --key=vidshapes3-msi-frames7 --dst=$KWCOCO_FPATH
-    python -m watch.cli.coco_visualize_videos --src=$KWCOCO_FPATH --viz_dpath=$VIZ_DPATH --animate=True
+    python -m kwcoco toydata --key=vidshapes3-msi-multisensor-frames7 --dst=$KWCOCO_FPATH
+
+    python -m watch.cli.coco_visualize_videos --src=$KWCOCO_FPATH --viz_dpath=$VIZ_DPATH --animate=True --workers=0 --any3=only
+
     python -m watch.cli.coco_visualize_videos --src=$KWCOCO_FPATH --viz_dpath=$VIZ_DPATH --zoom_to_tracks=True --start_frame=1 --num_frames=2 --animate=True
 """
 import kwcoco
@@ -44,12 +50,11 @@ class CocoVisualizeConfig(scfg.Config):
         python -m watch.cli.gifify -i "./viz_out/US_Jacksonville_R01/_anns/red|green|blue/" -o US_Jacksonville_R01_anns.gif
 
         # NEW: as of 2021-11-04 : helper animation script
-
         python -m watch.cli.animate_visualizations --viz_dpath ./viz_out
 
     """
     default = {
-        'src': scfg.Value('data.kwcoco.json', help='input dataset'),
+        'src': scfg.Value('data.kwcoco.json', help='input dataset', position=1),
 
         'viz_dpath': scfg.Value(None, help=ub.paragraph(
             '''
@@ -57,12 +62,14 @@ class CocoVisualizeConfig(scfg.Config):
             writes them adjacent to the input kwcoco file
             ''')),
 
-        'workers': scfg.Value(4, help='number of parallel procs'),
+        'workers': scfg.Value(0, help='number of parallel procs'),
         'max_workers': scfg.Value(None, help='DEPRECATED USE workers'),
 
         'space': scfg.Value('video', help='can be image or video space'),
 
         'channels': scfg.Value(None, type=str, help='only viz these channels'),
+
+        'any3': scfg.Value(True, help='if True, ensure the "any3" channels are drawn. If set to "only", then other per-channel visualizations are supressed. TODO: better name?'),
 
         'draw_imgs': scfg.Value(True),
         'draw_anns': scfg.Value(True),
@@ -73,13 +80,18 @@ class CocoVisualizeConfig(scfg.Config):
         'num_frames': scfg.Value(None, type=str, help='show the first N frames from each video, if None, all are shown'),
         'start_frame': scfg.Value(0, type=str, help='If specified each video will start on this frame'),
 
+        'skip_missing': scfg.Value(False, type=str, help='If true, skip any image that does not have the requested channels'),
+
         # TODO: better support for this
         # TODO: use the kwcoco_video_data, has good logic for this
         'zoom_to_tracks': scfg.Value(False, type=str, help='if True, zoom to tracked annotations. Experimental, might not work perfectly yet.'),
 
         'norm_over_time': scfg.Value(False, help='if True, normalize data over time'),
 
-        'norm_hack': scfg.Value(False, help='if true apply normalization hack'),
+        'fixed_normalization_scheme': scfg.Value(
+            None, type=str, help='Use a fixed normalization scheme for visualization; e.g. "scaled_25percentile"'),
+
+        'nodata': scfg.Value(0, type=int, help='Nodata value'),
 
         'extra_header': scfg.Value(None, help='extra text to include in the header'),
 
@@ -103,6 +115,23 @@ class CocoVisualizeConfig(scfg.Config):
                 images with id less than 3 that are also pngs.
                 .myattr | in({"val1": 1, "val4": 1}) will take images
                 where myattr is either val1 or val4.
+
+                Requries the "jq" python library is installed.
+                ''')),
+
+        'select_videos': scfg.Value(
+            None, help=ub.paragraph(
+                '''
+                A json query (via the jq spec) that specifies which videos
+                belong in the subset. Note, this is a passed as the body of
+                the following jq query format string to filter valid ids
+                '.videos[] | select({select_images}) | .id'.
+
+                Examples for this argument are as follows:
+                '.file_name | startswith("foo")' will select only videos
+                where the name starts with foo.
+
+                Only applicable for dataset that contain videos.
 
                 Requries the "jq" python library is installed.
                 ''')),
@@ -192,15 +221,52 @@ def main(cmdline=True, **kwargs):
             print('JQ Query Failed: {}'.format(query_text))
             raise
 
+    if config['select_videos'] is not None:
+        try:
+            import jq
+        except Exception:
+            print('The jq library is required to run a generic image query')
+            raise
+
+        try:
+            query_text = ".videos[] | select({select_videos}) | .id".format(**config)
+            query = jq.compile(query_text)
+            selected_vidids = query.input(coco_dset.dataset).all()
+            vid_selected_gids = set(ub.flatten(coco_dset.index.vidid_to_gids[vidid]
+                                               for vidid in selected_vidids))
+            if selected_gids is None:
+                selected_gids = vid_selected_gids
+            else:
+                selected_gids &= vid_selected_gids
+        except Exception:
+            print('JQ Query Failed: {}'.format(query_text))
+            raise
+
+    if config['skip_missing'] and channels is not None:
+        requested_channels = kwcoco.ChannelSpec.coerce(channels).fuse().as_set()
+        coco_images = coco_dset.images(selected_gids).coco_images
+        keep = []
+        for coco_img in coco_images:
+            code = coco_img.channels.fuse().as_set()
+            if requested_channels & code:
+                keep.append(coco_img.img['id'])
+        print(f'Filtered {len(coco_images) - len(keep)} images without requested channels. Keeping {len(keep)}')
+        selected_gids = keep
+
     video_names = []
     for vidid, video in prog:
         sub_dpath = viz_dpath / video['name']
-        sub_dpath.mkdir(parents=True, exist_ok=1)
-        video_names.append(video['name'])
 
         gids = coco_dset.index.vidid_to_gids[vidid]
         if selected_gids is not None:
             gids = list(ub.oset(gids) & set(selected_gids))
+
+        if len(gids) == 0:
+            print(f'Skip {video["name"]=!r} with no selected images')
+            continue
+
+        sub_dpath.mkdir(parents=True, exist_ok=1)
+        video_names.append(video['name'])
 
         norm_over_time = config['norm_over_time']
         if not norm_over_time:
@@ -213,7 +279,7 @@ def main(cmdline=True, **kwargs):
             # to use as the normalizer.
             # Probably better to use multiple images from the sequence
             # to do normalization
-            if channels is None:
+            if channels is not None:
                 requested_channels = kwcoco.ChannelSpec.coerce(channels).fuse().as_set()
             else:
                 requested_channels = set()
@@ -282,7 +348,10 @@ def main(cmdline=True, **kwargs):
                                 channels=channels, vid_crop_box=vid_crop_box,
                                 _header_extra=_header_extra,
                                 chan_to_normalizer=chan_to_normalizer,
-                                norm_hack=config['norm_hack'])
+                                fixed_normalization_scheme=config.get(
+                                    'fixed_normalization_scheme'),
+                                nodata=config['nodata'],
+                                any3=config['any3'])
 
         else:
             gid_subset = gids[start_frame:end_frame]
@@ -299,9 +368,13 @@ def main(cmdline=True, **kwargs):
                             coco_dset, img, anns, sub_dpath, space=space,
                             channels=channels,
                             draw_imgs=config['draw_imgs'],
-                            draw_anns=config['draw_anns'], _header_extra=_header_extra,
+                            draw_anns=config['draw_anns'],
+                            _header_extra=_header_extra,
                             chan_to_normalizer=chan_to_normalizer,
-                            norm_hack=config['norm_hack'])
+                            fixed_normalization_scheme=config.get(
+                                'fixed_normalization_scheme'),
+                            nodata=config['nodata'],
+                            any3=config['any3'])
 
         for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):
             job.result()
@@ -332,6 +405,7 @@ def video_track_info(coco_dset, vidid):
     for tid in track_ids:
         track_aids = coco_dset.index.trackid_to_aids[tid]
         vidspace_boxes = []
+        track_gids = []
         for aid in track_aids:
             ann = coco_dset.index.anns[aid]
             gid = ann['image_id']
@@ -341,16 +415,75 @@ def video_track_info(coco_dset, vidid):
             imgspace_box = kwimage.Boxes([bbox], 'xywh')
             vidspace_box = imgspace_box.warp(vid_from_img)
             vidspace_boxes.append(vidspace_box)
+            track_gids.append(gid)
         all_vidspace_boxes = kwimage.Boxes.concatenate(vidspace_boxes)
         full_vid_box = all_vidspace_boxes.bounding_box().to_xywh()
         tid_to_info[tid] = {
             'tid': tid,
             'full_vid_box': full_vid_box,
+            'track_gids': track_gids,
+            'track_aids': track_aids,
         }
     return tid_to_info
 
 
 _CLI = CocoVisualizeConfig
+
+
+def select_fixed_normalization(fixed_normalization_scheme, sensor_coarse):
+    chan_to_normalizer = {}
+    if fixed_normalization_scheme == 'scaled':
+        if sensor_coarse in {'L8', 'S2'}:
+            for c in ['blue', 'green', 'red', 'nir', 'swir16', 'swir22']:
+                chan_to_normalizer[c] = {'type': 'normalize', 'mode': 'linear',
+                                         'min_val': 0, 'max_val': 10_000}
+
+    elif fixed_normalization_scheme == 'scaled_50percentile':
+        if sensor_coarse in {'L8', 'S2'}:
+            for c in ['blue', 'green', 'red', 'nir', 'swir16', 'swir22']:
+                chan_to_normalizer[c] = {'type': 'normalize', 'mode': 'linear',
+                                         'min_val': 0, 'max_val': 5_000}
+
+    elif fixed_normalization_scheme == 'scaled_25percentile':
+        if sensor_coarse in {'L8', 'S2'}:
+            for c in ['blue', 'green', 'red', 'nir', 'swir16', 'swir22']:
+                chan_to_normalizer[c] = {'type': 'normalize', 'mode': 'linear',
+                                         'min_val': 0, 'max_val': 2_500}
+
+    elif fixed_normalization_scheme == 'scaled_raw':
+        if sensor_coarse == 'L8':
+            for c in ['blue', 'green', 'red', 'nir', 'swir16', 'swir22']:
+                chan_to_normalizer[c] = {'type': 'normalize', 'mode': 'linear',
+                                         'min_val': 7_272, 'max_val': 36_363}
+        if sensor_coarse == 'S2':
+            for c in ['blue', 'green', 'red', 'nir', 'swir16', 'swir22']:
+                chan_to_normalizer[c] = {'type': 'normalize', 'mode': 'linear',
+                                         'min_val': 1, 'max_val': 10_000}
+
+    elif fixed_normalization_scheme == 'scaled_raw_50percentile':
+        if sensor_coarse == 'L8':
+            for c in ['blue', 'green', 'red', 'nir', 'swir16', 'swir22']:
+                chan_to_normalizer[c] = {'type': 'normalize', 'mode': 'linear',
+                                         'min_val': 7_272, 'max_val': 21_818}
+        if sensor_coarse == 'S2':
+            for c in ['blue', 'green', 'red', 'nir', 'swir16', 'swir22']:
+                chan_to_normalizer[c] = {'type': 'normalize', 'mode': 'linear',
+                                         'min_val': 1, 'max_val': 5_000}
+
+    elif fixed_normalization_scheme == 'scaled_raw_25percentile':
+        if sensor_coarse == 'L8':
+            for c in ['blue', 'green', 'red', 'nir', 'swir16', 'swir22']:
+                chan_to_normalizer[c] = {'type': 'normalize', 'mode': 'linear',
+                                         'min_val': 7_272, 'max_val': 14_544}
+        if sensor_coarse == 'S2':
+            for c in ['blue', 'green', 'red', 'nir', 'swir16', 'swir22']:
+                chan_to_normalizer[c] = {'type': 'normalize', 'mode': 'linear',
+                                         'min_val': 1, 'max_val': 2_500}
+
+    else:
+        raise NotImplementedError('Unsupported fixed normalization scheme')
+
+    return chan_to_normalizer
 
 
 def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
@@ -363,7 +496,9 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                request_grouped_bands='default',
                                draw_imgs=True,
                                draw_anns=True, _header_extra=None,
-                               chan_to_normalizer=None, norm_hack=False):
+                               chan_to_normalizer=None,
+                               fixed_normalization_scheme=None,
+                               nodata=0, any3=True):
     """
     Dumps an intensity normalized "space-aligned" kwcoco image visualization
     (with or without annotation overlays) for specific bands to disk.
@@ -393,38 +528,24 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
     delayed = coco_dset.delayed_load(img['id'], space=space)
 
-    if norm_hack:
-        chan_to_normalizer = {}
-        if sensor_coarse == 'L8':
-            for c in ['blue', 'green', 'red', 'nir', 'swir16', 'swir22']:
-                chan_to_normalizer[c] = {
-                    'type': 'normalize',
-                    'mode': 'linear',
-                    'min_val': 0.,
-                    'max_val': 30000,
-                    'beta': 1.5,
-                    'alpha': 0.08048152417842046
-                }
-        if sensor_coarse == 'S2':
-            for c in ['blue', 'green', 'red', 'nir', 'swir16', 'swir22']:
-                chan_to_normalizer[c] = {
-                    'type': 'normalize',
-                    'mode': 'linear',
-                    'min_val': 6000,
-                    'max_val': 20000,
-                    'beta': 1.5,
-                    'alpha': 0.08048152417842046
-                }
-        print('HACK chan_to_normalizer = {!r}'.format(chan_to_normalizer))
+    if fixed_normalization_scheme is not None:
+        chan_to_normalizer = select_fixed_normalization(
+            fixed_normalization_scheme, sensor_coarse)
+        # Hacks for common "heatmap" channels
+        chan_to_normalizer['depth'] = {'type': 'normalize', 'mode': 'linear',
+                                       'min_val': 0, 'max_val': 255}
 
     if channels is not None:
         if isinstance(channels, list):
             channels = ','.join(channels)  # hack
         channels = channel_spec.ChannelSpec.coerce(channels)
-        chan_groups = channels.streams()
+        chan_groups = [
+            {'chan': chan_obj} for chan_obj in channels.streams()
+        ]
     else:
         coco_img = coco_dset.coco_image(img['id'])
         channels = coco_img.channels
+
         if request_grouped_bands == 'default':
             # Use false color for special groups
             request_grouped_bands = [
@@ -432,6 +553,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                 'r|g|b',
                 # 'nir|swir16|swir22',
             ]
+
         for cand in request_grouped_bands:
             cand = kwcoco.FusedChannelSpec.coerce(cand)
             has_cand = (channels & cand).numel() == cand.numel()
@@ -447,13 +569,54 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                 # For large group, just take the first 3 channels
                 if group.numel() > 8:
                     group = group.normalize()[0:3]
-                    chan_groups.append(group)
+                    chan_groups.append({
+                        'chan': group,
+                    })
                 else:
                     # For smaller groups split them into singles
                     for part in group:
-                        chan_groups.append(kwcoco.FusedChannelSpec.coerce(part))
+                        chan_groups.append({
+                            'chan': kwcoco.FusedChannelSpec.coerce(part)
+                        })
             else:
-                chan_groups.append(group)
+                chan_groups.append({
+                    'chan': group,
+                })
+
+    # sanatize channel paths (todo: kwcoco helper for this)
+    def sanatize_chan_pnams(cs):
+        return cs.replace('|', '_').replace(':', '-')
+
+    for row in chan_groups:
+        row['pname'] = sanatize_chan_pnams(row['chan'].spec)
+
+    if any3:
+        if any3 == 'only':
+            # Kick everything else out
+            chan_groups = []
+        # Try to visualize any3 channels to get a nice viewable sequence
+        avail_channels = channels.fuse()
+        common_visualizers = list(map(kwcoco.FusedChannelSpec.coerce, [
+            'red|green|blue',
+            'r|g|b',
+            'pan',
+            'panchromatic',
+        ]))
+        found = None
+        for cand in common_visualizers:
+            flag = (cand & avail_channels).spec == cand.spec
+            if flag:
+                found = cand
+                break
+
+        # Just show false color from the first few channels
+        if found is None:
+            first3 = avail_channels.as_list()[0:3]
+            found = kwcoco.FusedChannelSpec.coerce('|'.join(first3))
+        chan_groups.append({
+            'pname': 'any3',
+            'chan': found,
+        })
 
     img_view_dpath = sub_dpath / '_imgs'
     ann_view_dpath = sub_dpath / '_anns'
@@ -485,14 +648,11 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         dets = dets.translate(ann_shift)
         delayed = delayed.crop(crop_box.to_slices()[0])
 
-    for chan_group_obj in chan_groups:
+    for chan_row in chan_groups:
+        chan_pname = chan_row['pname']
+        chan_group_obj = chan_row['chan']
         chan_list = chan_group_obj.parsed
         chan_group = chan_group_obj.spec
-
-        # sanatize channel paths (todo: kwcoco helper for this)
-        def sanatize_chan_pnams(cs):
-            return cs.replace('|', '_').replace(':', '-')
-        chan_pname = sanatize_chan_pnams(chan_group)
 
         # spec = str(chan.channels.spec)
         img_chan_dpath = img_view_dpath / chan_pname
@@ -517,26 +677,37 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             from kwcoco.util import util_delayed_poc
             chan = util_delayed_poc.DelayedChannelConcat([delayed]).take_channels(chan_group)
 
-        canvas = chan.finalize()
+        if 0:
+            import kwarray
+            chan_row['stats'] = kwarray.stats_dict(chan)
+            print('chan_row = {}'.format(ub.repr2(chan_row, nl=-1)))
+
+        # Note: Using 'nearest' here since we're just visualizing (and
+        # otherwise nodata values can affect interpolated pixel
+        # values)
+        canvas = chan.finalize(interpolation='nearest', nodata=nodata)
         # import kwarray
         # kwarray.atleast_nd(canvas, 3)
 
         if chan_to_normalizer is None:
-            canvas = normalize_intensity(canvas, nodata=0, params={
+            # if canvas.max() <= 0 or canvas.min() >= 255:
+            # Hack to only do noramlization on "non-standard" data ranges
+            norm_canvas = normalize_intensity(canvas, nodata=nodata, params={
                 'high': 0.90,
                 'mid': 0.5,
                 'low': 0.01,
                 'mode': 'linear',
             })
+            canvas = norm_canvas
         else:
             from watch.utils import util_kwarray
             import numpy as np
             new_parts = []
             for cx, c in enumerate(chan_list):
-                normalizer = chan_to_normalizer[c]
+                normalizer = chan_to_normalizer.get(c, None)
                 data = canvas[..., cx]
-                mask = (data != 0)
-                p = util_kwarray.apply_normalizer(data, normalizer, mask=mask)
+                mask = (data != nodata)
+                p = util_kwarray.apply_normalizer(data, normalizer, mask=mask, set_value_at_mask=0.)
                 new_parts.append(p)
             canvas = np.stack(new_parts, axis=2)
 

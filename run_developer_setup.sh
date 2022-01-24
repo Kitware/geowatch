@@ -20,10 +20,10 @@ pip install -e .
 # Install more fragile dependencies
 # pip install imgaug>=0.4.0
 # pip install netharn>=0.5.16
-pip install GDAL>=3.3.1,!=3.4.0,!=3.3.3 --find-links https://girder.github.io/large_image_wheels -U
+#pip install GDAL>=3.5.0 --find-links https://girder.github.io/large_image_wheels -U
 pip install GDAL==3.3.1 --find-links https://girder.github.io/large_image_wheels -U
 
-pip install dvc[all]
+pip install dvc[all]>=2.9.3
 
 fix_opencv_conflicts(){
     __doc__="
@@ -50,8 +50,21 @@ fix_opencv_conflicts(){
     fi
 }
 
+torch_on_3090(){
+    # https://github.com/pytorch/pytorch/issues/31285
+    # Seems like we need to work from source:
+    git clone --recursive https://github.com/pytorch/pytorch
+    cd pytorch
+    # if you are updating an existing checkout
+    git submodule sync
+    git submodule update --init --recursive --jobs 0
+    pip install . -v
+}
+
+fix_opencv_conflicts
 
 # Simple tests
+echo "Start simple tests"
 EAGER_IMPORT=1 python -c "import watch; print(watch.__version__)"
 EAGER_IMPORT=1 python -m watch --help
 EAGER_IMPORT=1 python -m watch hello_world

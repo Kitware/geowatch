@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import pytorch_lightning as pl
 import ubelt as ub
 import numpy as np

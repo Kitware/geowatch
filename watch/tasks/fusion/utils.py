@@ -31,6 +31,13 @@ def load_model_from_package(package_path):
         * I don't like that we need to know module_name and arch_name a-priori
           given a path to a package, I just want to be able to construct
           the model instance. The package header solves this.
+
+    Ignore:
+        >>> from watch.tasks.fusion.utils import *  # NOQA
+        >>> import watch
+        >>> dvc_dpath = watch.utils.util_data.find_smart_dvc_dpath()
+        >>> package_path = dvc_dpath / 'models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_rgb_v26/SC_smt_it_stm_p8_newanns_weighted_rgb_v26_epoch=101-step=4366925.pt'
+        >>> model = load_model_from_package(package_path)
     """
     from torch import package
     import json
@@ -101,8 +108,50 @@ class DimensionDropout(nn.Module):
         return x[index]
 
 
+def ordinal_position_encoding(num_items, feat_size, method='sin', device='cpu'):
+    """
+    A positional encoding that represents ordinal
+
+    Args:
+        num_items (int): number of dimensions to be encoded (
+            e.g. this is a spatial or temporal index)
+        feat_size (int): this is the number of dimensions in the positional
+             encoding generated for each dimension / item
+
+    Example:
+        >>> # Use 5 feature dimensions to encode 3 timesteps
+        >>> import sys, ubelt
+        >>> sys.path.append(ubelt.expandpath('~/code/watch'))
+        >>> from watch.tasks.fusion.utils import *  # NOQA
+        >>> from watch.tasks.fusion.utils import _memo_legend
+        >>> num_timesteps = num_items = 3
+        >>> feat_size = 5
+        >>> encoding = ordinal_position_encoding(num_items, feat_size)
+    """
+    assert method == 'sin'
+    sf = 10000
+    parts = []
+    base = torch.arange(num_items, device=device)
+    for idx in range(feat_size):
+        exponent = (idx / feat_size)
+        modulator = (1 / (sf ** exponent))
+        theta = base * modulator
+        if idx % 2 == 0:
+            part = torch.sin(theta)
+        else:
+            part = torch.cos(theta)
+        parts.append(part)
+    encoding = torch.stack(parts, dim=1)
+    return encoding
+
+
 class SinePositionalEncoding(nn.Module):
     """
+    Args:
+        dest_dim (int): feature dimension to concat to
+        dim_to_encode (int): dimension encoding is supposed to represent
+        size (int): number of different encodings for the dim_to_encode
+
     Example:
         >>> from watch.tasks.fusion.utils import *  # NOQA
         >>> dest_dim = 3
@@ -111,6 +160,20 @@ class SinePositionalEncoding(nn.Module):
         >>> self = SinePositionalEncoding(dest_dim, dim_to_encode, size=size)
         >>> x = torch.rand(3, 5, 7, 11, 13)
         >>> y = self(x)
+
+    Ignore:
+        >>> from watch.tasks.fusion.utils import *  # NOQA
+        >>> self = SinePositionalEncoding(1, 0, size=8)
+        >>> encoding = self._encoding_part(10)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> import pandas as pd
+        >>> sns = kwplot.autosns()
+        >>> df = pd.concat([pd.DataFrame({'x': np.arange(len(part)), 'y': part, 'part': [idx] * len(part)}) for idx, part in enumerate(encoding.T)]).reset_index()
+        >>> fig = kwplot.figure(pnum=(1, 2, 1))
+        >>> ax = fig.gca()
+        >>> sns.lineplot(data=df, x='x', y='y', hue='part')
+        >>> kwplot.imshow(kwarray.normalize(encoding.numpy()).T, pnum=(1, 2, 2), cmap='magma')
     """
 
     def __init__(self, dest_dim, dim_to_encode, size=4):
@@ -120,19 +183,10 @@ class SinePositionalEncoding(nn.Module):
         self.size = size
         assert self.dest_dim != self.dim_to_encode
 
-    @profile
-    def forward(self, x):
-        expanded_shape = list(x.shape)
-        expanded_shape[self.dest_dim] = -1
-
-        expand_dims = [None] * len(x.shape)
-        expand_dims[self.dim_to_encode] = slice(0, None)
-        expand_dims[self.dest_dim] = slice(0, None)
-
+    def _encoding_part(self, num, device='cpu'):
         sf = 10000
         parts = []
-        num = x.shape[self.dim_to_encode]
-        base = torch.arange(num, device=x.device)
+        base = torch.arange(num, device=device)
         for idx in range(self.size):
             exponent = (idx / self.size)
             modulator = (1 / (sf ** exponent))
@@ -142,9 +196,22 @@ class SinePositionalEncoding(nn.Module):
             else:
                 part = torch.cos(theta)
             parts.append(part)
-
         encoding = torch.stack(parts, dim=1)
+        return encoding
 
+    @profile
+    def forward(self, x):
+        device = x.device
+        expanded_shape = list(x.shape)
+        expanded_shape[self.dest_dim] = -1
+
+        expand_dims = [None] * len(expanded_shape)
+        expand_dims[self.dim_to_encode] = slice(0, None)
+        expand_dims[self.dest_dim] = slice(0, None)
+
+        num = expanded_shape[self.dim_to_encode]
+
+        encoding = self._encoding_part(num, device)
         encoding = encoding[expand_dims].expand(expanded_shape)
 
         x = torch.cat([x, encoding.type_as(x)], dim=self.dest_dim)

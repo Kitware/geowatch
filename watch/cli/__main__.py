@@ -1,6 +1,15 @@
 import sys
 import ubelt as ub
 
+__devnotes__ = """
+
+# We may want to delay actual imports, gdal import time can be excessive
+
+python -X importtime -c "import watch"
+WATCH_HACK_IMPORT_ORDER="" python  -X importtime -m watch.cli find_dvc
+
+"""
+
 
 def main(cmdline=True, **kw):
     """
@@ -20,6 +29,9 @@ def main(cmdline=True, **kw):
         'coco_show_auxiliary',
         'coco_visualize_videos',
         'coco_intensity_histograms',
+        'find_dvc',
+        'kwcoco_to_geojson',
+        'run_metrics_framework',
     ]
     module_lut = {}
     for name in modnames:

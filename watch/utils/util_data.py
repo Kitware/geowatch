@@ -1,3 +1,5 @@
+import ubelt as ub
+import os
 
 
 def find_smart_dvc_dpath(on_error='raise'):
@@ -7,12 +9,9 @@ def find_smart_dvc_dpath(on_error='raise'):
 
     NOTE: other team members can add their "standard" locations if they want.
     """
-    import ubelt as ub
-    import os
-    from watch.utils import util_path
     _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
     dvc_dpath = os.environ.get('DVC_DPATH', _default)
-    dvc_dpath = util_path.coercepath(dvc_dpath)
+    dvc_dpath = ub.Path(dvc_dpath)
 
     if not dvc_dpath.exists():
         if on_error == 'raise':

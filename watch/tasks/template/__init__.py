@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 __dev__ = """
 mkinit ~/code/watch/watch/tasks/template/__init__.py --noattrs --lazy -w
 """

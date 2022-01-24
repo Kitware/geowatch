@@ -45,7 +45,7 @@ def main():
 
 
 @maps(history_entry='add_angle_bands')
-def _item_map(stac_item, outdir):
+def add_angle_bands_to_item(stac_item, outdir):
 
     print("* Generating angle bands for item: '{}'".format(stac_item.id))
 
@@ -75,10 +75,9 @@ def add_angle_bands(stac_catalog, outdir, jobs=1):
 
     os.makedirs(outdir, exist_ok=True)
 
-    # output_catalog = catalog.map_items(_item_map)
     output_catalog = parallel_map_items(
         catalog,
-        _item_map,
+        add_angle_bands_to_item,
         max_workers=jobs,
         mode='process' if jobs > 1 else 'serial',
         extra_args=[outdir])

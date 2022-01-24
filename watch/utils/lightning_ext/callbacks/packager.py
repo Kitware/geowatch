@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Packager callback to interface with torch.package
 """
@@ -139,7 +138,7 @@ class Packager(pl.callbacks.Callback):
         # package_fpath = self._make_package_fpath(trainer)
         # self._save_package(pl_module, package_fpath)
 
-    def on_exception(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
+    def on_exception(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', *args, **kw) -> None:
         """
         Saving a package on keyboard interrupt is useful for manual early
         stopping.

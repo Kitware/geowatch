@@ -124,11 +124,9 @@ def mtra_preprocess_item(stac_item,
     vrts = {}
     for band in selected_bands:
         resampling_method = 'cubic'
-        nodata = 0
 
         if band == 'cloudmask':
             resampling_method = 'near'
-            nodata = 'None'
 
         asset_basename, asset_ext = os.path.splitext(
             os.path.basename(assets_dict[band]))
@@ -140,8 +138,6 @@ def mtra_preprocess_item(stac_item,
             '-of', 'VRT',
             '-r', resampling_method,
             '-tr', str(abs(gsd)), str(abs(gsd)),
-            '-srcnodata', str(nodata),
-            '-dstnodata', str(nodata),
             assets_dict[band],
             vrt_outpath], check=True)
 
@@ -166,7 +162,7 @@ def mtra_preprocess_item(stac_item,
                 '-A', vrt_outpath,
                 '--outfile', remapped_cloudmask_outpath,
                 '--calc',
-                '0*(A==1)+32*(A==5)+8*(A==3)+16*(A==4)+2*(A==2)+255*(A==255)',
+                '0*(A==1)+32*(A==5)+8*(A==3)+16*(A==4)+2*(A==2)+255*(A==0)',
                 '--NoDataValue', '255'], check=True)
 
             vrt_outpath = remapped_cloudmask_outpath

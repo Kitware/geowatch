@@ -191,6 +191,23 @@ def brdf_correct_item(stac_item, platform):
                 brdf_corrected_band_filepath = '_BRDFed'.join(
                     os.path.splitext(band_filepath))
 
+                # Copy nodata values from original band file (to
+                # ensure same nodata value is used):
+                with GdalOpen(band_filepath) as ds:
+                    band = ds.GetRasterBand(1)
+                    nodata_value = band.GetNoDataValue()
+
+                subprocess.run([
+                    'gdal_calc.py',
+                    '-A', band_filepath,
+                    '-B', brdf_corrected_band_filepath,
+                    f'--calc={nodata_value}*(A=={nodata_value})+B*(A!={nodata_value})',  # noqa
+                    '--NoDataValue', str(nodata_value),
+                    '--outfile', brdf_corrected_band_filepath,
+                    '--quiet',
+                    '--hideNoData',
+                    '--overwrite'], check=True)
+
                 stac_item.assets[asset_name].href =\
                     brdf_corrected_band_filepath
 
