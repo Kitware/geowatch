@@ -146,3 +146,10 @@ PHASE_STATUS_TO_KWCOCO_CATNAME = {
     'positive_partial': 'positive',  # Does not have phase labels
     'positive_annotated': None,  # This must have a category already do not map
 }
+
+CONFUSION_COLOR_SCHEME = {
+    'TN': 'black',
+    'TP': 'white',
+    'FN': 'yellow',
+    'FP': 'red',
+}

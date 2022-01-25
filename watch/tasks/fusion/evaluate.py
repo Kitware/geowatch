@@ -429,8 +429,11 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, plot_dpath,
     """
     Draw a a sequence of true/pred image predictions
     """
-    colors = ['blue', 'green', 'yellow', 'red']
+    from watch import heuristics
     color_labels = ['TN', 'TP', 'FN', 'FP']
+    colors = list(heuristics.CONFUSION_COLOR_SCHEME.take(color_labels))
+    # colors = ['blue', 'green', 'yellow', 'red']
+    # colors = ['black', 'white', 'yellow', 'red']
     color_lut = np.array([kwimage.Color(c).as255() for c in colors])
 
     full_classes: kwcoco.CategoryTree = true_coco.object_categories()

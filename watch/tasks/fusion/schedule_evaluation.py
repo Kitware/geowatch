@@ -1,7 +1,7 @@
 """
 Helper for scheduling a set of prediction + evaluation jobs
 
-python -m watch.tasks.fusion.schedule_inference schedule_evaluation
+python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation
 """
 import ubelt as ub
 from watch.utils import tmux_queue
@@ -41,7 +41,7 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
 
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
         KWCOCO_TEST_FPATH=$DVC_DPATH/Drop1-Aligned-L1-2022-01/combo_DILM_nowv_vali.kwcoco.json
-        python -m watch.tasks.fusion.schedule_inference schedule_evaluation \
+        python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="0,1" \
             --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/BOTH_*/*.pt" \
             --test_dataset="$KWCOCO_TEST_FPATH" \
@@ -49,7 +49,7 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
 
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
         KWCOCO_TEST_FPATH=$DVC_DPATH/Drop1-Aligned-L1-2022-01/combo_DILM_nowv_vali.kwcoco.json
-        python -m watch.tasks.fusion.schedule_inference schedule_evaluation \
+        python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="0,1" \
             --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/BAS_*/*.pt" \
             --test_dataset="$KWCOCO_TEST_FPATH" \
@@ -265,13 +265,13 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/tasks/fusion/schedule_inference.py schedule_evaluation
+        python ~/code/watch/watch/tasks/fusion/schedule_evaluation.py schedule_evaluation
 
         python ~/code/watch/watch/tasks/fusion/organize.py make_nice_dirs
         python ~/code/watch/watch/tasks/fusion/organize.py make_eval_symlinks
         python ~/code/watch/watch/tasks/fusion/organize.py make_pred_symlinks
 
-        python ~/code/watch/watch/tasks/fusion/schedule_inference.py gather_measures
+        python ~/code/watch/watch/tasks/fusion/schedule_evaluation.py gather_measures
     """
     import fire
     fire.Fire()
