@@ -1,3 +1,67 @@
+"""
+Runs statistical tests on sets of configuration-metrics pairs
+
+Example:
+    >>> from watch.utils.result_analysis import *  # NOQA
+    >>> # Given a list of experiments, configs, and results
+    >>> # Create a ResultAnalysis object
+    >>> results = ResultAnalysis([
+    >>>     Result('expt0', {'param1': 2, 'param3': 'b'}, {'f1': 0.75}),
+    >>>     Result('expt1', {'param1': 0, 'param3': 'c'}, {'f1': 0.92}),
+    >>>     Result('expt2', {'param1': 1, 'param3': 'b'}, {'f1': 0.77}),
+    >>>     Result('expt3', {'param1': 1, 'param3': 'a'}, {'f1': 0.67}),
+    >>>     Result('expt4', {'param1': 0, 'param3': 'c'}, {'f1': 0.98}),
+    >>>     Result('expt5', {'param1': 2, 'param3': 'a'}, {'f1': 0.86}),
+    >>>     Result('expt6', {'param1': 1, 'param3': 'c'}, {'f1': 0.77}),
+    >>>     Result('expt7', {'param1': 1, 'param3': 'c'}, {'f1': 0.41}),
+    >>>     Result('expt8', {'param1': 1, 'param3': 'a'}, {'f1': 0.64}),
+    >>>     Result('expt9', {'param1': 0, 'param3': 'b'}, {'f1': 0.95}),
+    >>> ])
+    >>> # Calling the analysis method prints something like the following
+    >>> results.analysis()
+
+    PARAMETER 'param1' - f1
+    =======================
+    f1       mean       std   max   min  num  best
+    param1
+    0       0.950  0.030000  0.98  0.92  3.0  0.98
+    2       0.805  0.077782  0.86  0.75  2.0  0.86
+    1       0.652  0.147377  0.77  0.41  5.0  0.77
+
+    ANOVA hypothesis (roughly): the param 'param1' has no effect on the metric
+        Reject this hypothesis if the p value is less than a threshold
+      Rank-ANOVA: p=0.0397
+      Mean-ANOVA: p=0.0277
+
+    Pairwise T-Tests
+      Is param1=0 about as good as param1=2?
+        ttest_ind:  p=0.2058
+      Is param1=1 about as good as param1=2?
+        ttest_ind:  p=0.1508
+
+
+    PARAMETER 'param3' - f1
+    =======================
+    f1          mean       std   max   min  num  best
+    param3
+    c       0.770000  0.255734  0.98  0.41  4.0  0.98
+    b       0.823333  0.110151  0.95  0.75  3.0  0.95
+    a       0.723333  0.119304  0.86  0.64  3.0  0.86
+
+    ANOVA hypothesis (roughly): the param 'param3' has no effect on the metric
+        Reject this hypothesis if the p value is less than a threshold
+      Rank-ANOVA: p=0.5890
+      Mean-ANOVA: p=0.8145
+
+    Pairwise T-Tests
+      Is param3=b about as good as param3=c?
+        ttest_ind:  p=0.7266
+      Is param3=a about as good as param3=b?
+        ttest_ind:  p=0.3466
+        ttest_rel:  p=0.3466
+      Is param3=a about as good as param3=c?
+        ttest_ind:  p=0.7626
+"""
 import kwarray
 import ubelt as ub
 import pandas as pd
@@ -8,9 +72,18 @@ import scipy.stats  # NOQA
 
 class Result(ub.NiceRepr):
     """
+    Storage of names, parameters, and quality metrics for a single experiment.
+
+    Attributes:
+        name (str): name of the experiment
+        params (Dict[str, object]): configuration of the experiment
+        metrics (Dict[str, float]): quantitative results of the experiment
+
     Example:
-        self = Result.demo()
-        print('self = {!r}'.format(self))
+        >>> from watch.utils.result_analysis import *  # NOQA
+        >>> self = Result.demo(rng=32)
+        >>> print('self = {}'.format(self))
+        self = <Result(name=53f57161,f1=0.33,acc=0.75,param1=1,param2=6.67,param3=a)>
     """
     def __init__(self, name, params, metrics):
         self.name = name
@@ -49,7 +122,7 @@ class Result(ub.NiceRepr):
 class ResultAnalysis:
     """
     Example:
-        >>> from watch.tasks.fusion.result_analysis import *  # NOQA
+        >>> from watch.utils.result_analysis import *  # NOQA
         >>> self = ResultAnalysis.demo()
         >>> self.analysis()
     """
