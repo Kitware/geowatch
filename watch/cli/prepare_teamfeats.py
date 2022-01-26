@@ -3,6 +3,11 @@ import ubelt as ub
 
 
 class TeamFeaturePipelineConfig(scfg.Config):
+    """
+    This generates the bash commands necessary to run team feature computation,
+    followed by aggregation and then splitting out train / val datasets.
+
+    """
     default = {
         'dvc_dpath': scfg.Value('auto'),
         'bundle_name': 'Drop1-Aligned-L1-2022-01',
@@ -14,7 +19,7 @@ class TeamFeaturePipelineConfig(scfg.Config):
         'with_invariants': scfg.Value(True, help='Include UKY invariant features'),
         'with_depth': scfg.Value(True, help='Include DZYNE WorldView depth features'),
 
-        'virtualenv_cmd': scfg.Value(None, help=ub.paragraph(
+        'virtualenv_cmd': scfg.Value(None, type=str, help=ub.paragraph(
             '''
             Command to start the appropriate virtual environment if your bashrc
             does not start it by default.''')),
@@ -173,6 +178,8 @@ def main(cmdline=True, **kwargs):
     # gres = [0, 1]
     size = min(len(tasks), len(gres))
     tq = tmux_queue.TMUXMultiQueue(name='teamfeat', size=size, gres=gres)
+    if config['virtualenv_cmd']:
+        tq.add_header_command(config['virtualenv_cmd'])
 
     for task in tasks:
         if config['cache']:
@@ -208,6 +215,8 @@ def main(cmdline=True, **kwargs):
         combo_fpath = aligned_bundle_dpath / f'combo_{combo_code}.kwcoco.json'
 
         tq = tmux_queue.TMUXMultiQueue(name='combine-feats', size=2)
+        if config['virtualenv_cmd']:
+            tq.add_header_command(config['virtualenv_cmd'])
 
         # TODO: enable forcing if needbe
         if not combo_fpath.exists() or not config['cache']:
@@ -239,6 +248,8 @@ def main(cmdline=True, **kwargs):
         }
 
         tq = tmux_queue.TMUXMultiQueue(name='watch-splits', size=2)
+        if config['virtualenv_cmd']:
+            tq.add_header_command(config['virtualenv_cmd'])
 
         # Perform train/validation splits with and without worldview
         command = ub.codeblock(
@@ -314,7 +325,7 @@ def main(cmdline=True, **kwargs):
 if __name__ == '__main__':
     """
     CommandLine:
-        python -m watch.cli.prepare_teamfeats --gres=0 --with_depth=True --keep_sessions=False --run=False --cache=False
+        python -m watch.cli.prepare_teamfeats --gres=0 --with_depth=True --keep_sessions=False --run=False --cache=False --virtualenv_cmd "conda activate watch"
 
         python -m watch.cli.prepare_teamfeats --gres=0,2 --with_depth=True --keep_sessions=True
         python -m watch.cli.prepare_teamfeats --gres=2 --with_materials=False --keep_sessions=True
