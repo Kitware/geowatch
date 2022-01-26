@@ -193,7 +193,7 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
         dpath=tmux_schedule_dpath)
 
     recompute_pred = recompute
-    recompute_eval = recompute or 1
+    recompute_eval = recompute or 0
 
     for info, queue in zip(packages_to_eval, jobs):
         package_fpath = info['fpath']
