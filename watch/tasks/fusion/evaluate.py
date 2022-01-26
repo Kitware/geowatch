@@ -437,6 +437,7 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, heatmap_dpath,
     # colors = ['black', 'white', 'yellow', 'red']
     color_lut = np.array([kwimage.Color(c).as255() for c in colors])
 
+    heuristics.ensure_heuristic_coco_colors(true_coco)
     full_classes: kwcoco.CategoryTree = true_coco.object_categories()
 
     # Make a legend
@@ -450,9 +451,8 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, heatmap_dpath,
     if 1:
         # Class Legend
         label_to_color = {
-            node: data['color']
+            node: kwimage.Color(data['color']).as01()
             for node, data in full_classes.graph.nodes.items()}
-
         label_to_color = ub.sorted_keys(label_to_color)
         legend_img2 = _memo_legend(label_to_color)
         legend_img = kwimage.stack_images([legend_img, legend_img2], axis=0,
@@ -749,6 +749,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         image_matches['match_gids1'] = list(ub.compress(gids1, flags))
         image_matches['match_gids2'] = list(ub.compress(gids2, flags))
         total_images += len(gids1)
+    else:
+        total_images = None
 
     prog = ub.ProgIter(total=total_images, desc='scoring', adjust=False, freq=1)
     prog.begin()
@@ -827,7 +829,17 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
 
     # Reduce measures over the chunk
     print('Finalize salient measures')
+    # Note: this will return False if there are no salient measures
     salient_combo_measures = salient_measure_combiner.finalize()
+    if salient_combo_measures is False or salient_combo_measures is None:
+        # TODO: should be able to init an empty object
+        salient_combo_measures = BinaryConfusionVectors(
+            kwarray.DataFrameArray({
+                'is_true': np.empty((0,), dtype=bool),
+                'pred_score': np.empty((0,), dtype=float),
+                'weight': np.empty((0,), dtype=float),
+            })).measures()
+
     print('Finalize class measures')
     class_combo_measure_dict = class_measure_combiner.finalize()
     ovr_combo_measures = class_combo_measure_dict['perclass']
@@ -842,15 +854,18 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
             curve_dpath = ub.Path(eval_dpath) / 'curves'
             curve_dpath.mkdir(exist_ok=True, parents=True)
 
-            salient_combo_measures['meta'] = meta
-            title = meta.get('title', '')
-            measure_info = salient_combo_measures.__json__()
-            measures_fpath = curve_dpath / 'measures.json'
+            if isinstance(salient_combo_measures, dict):
+                salient_combo_measures['meta'] = meta
 
-            print('Dump measures_fpath={}'.format(measures_fpath))
-            with open(measures_fpath, 'w') as file:
-                measure_info['meta'] = meta
-                json.dump(measure_info, file)
+            title = meta.get('title', '')
+
+            # if 0:
+            #     measure_info = salient_combo_measures.__json__()
+            #     measures_fpath = curve_dpath / 'measures.json'
+            #     print('Dump measures_fpath={}'.format(measures_fpath))
+            #     with open(measures_fpath, 'w') as file:
+            #         measure_info['meta'] = meta
+            #         json.dump(measure_info, file)
 
             measures_fpath2 = curve_dpath / 'measures2.json'
             print('Dump measures_fpath2={}'.format(measures_fpath2))
