@@ -1,9 +1,11 @@
+#!/usr/bin/env python
 import argparse
 import sys
 import os
 import json
-from tempfile import TemporaryDirectory
 import ubelt as ub
+import subprocess
+from tempfile import TemporaryDirectory
 '''
 REGIONS_VALI=(
     "KR_R001"
@@ -106,7 +108,7 @@ def main(args):
         ''')
     # https://stackoverflow.com/a/49351471
     parser.add_argument('--virtualenv_cmd',
-                        default='true',  # no-op command
+                        default=['true'],  # no-op bash command
                         nargs='+',  # hack for spaces
                         help='''
         Command to run before calling the metrics framework in a subshell.
@@ -117,6 +119,12 @@ def main(args):
                         help='''
         Output directory where scores will be written. Each region will have
         Defaults to ./output/
+        ''')
+
+    parser.add_argument('--tmp_dir',
+                        help='''
+        If specified, will write temporary data here instead of using a
+        non-persistant directory
         ''')
 
     if 0:  # TODO
@@ -153,28 +161,40 @@ def main(args):
     if args.gt_dpath is not None:
         gt_dpath = os.path.abspath(args.gt_dpath)
     else:
-        gt_dpath = os.path.join(os.environ['DVC_DPATH'], 'annotations')
+        import watch
+        dvc_dpath = watch.find_smart_dvc_dpath()
+        gt_dpath = dvc_dpath / 'annotations'
+        print(f'gt_dpath unspecified, defaulting to {gt_dpath=}')
     assert os.path.isdir(gt_dpath), gt_dpath
     if args.metrics_dpath is not None:
         metrics_dpath = os.path.abspath(args.metrics_dpath)
     else:
         metrics_dpath = os.environ['METRICS_DPATH']
+        print(f'metrics_dpath unspecified, defaulting to {metrics_dpath=}')
     assert os.path.isdir(metrics_dpath), metrics_dpath
     if args.out_dir is not None:
         os.makedirs(args.out_dir, exist_ok=True)
+
+    if args.tmp_dir is not None:
+        tmp_dpath = ub.Path(args.tmp_dir)
+    else:
+        temp_dir = TemporaryDirectory(suffix='iarpa-metrics-tmp')
+        tmp_dpath = ub.Path(temp_dir.name)
 
     # validate virtualenv command
     virtualenv_cmd = ' '.join(args.virtualenv_cmd)
     ub.cmd(virtualenv_cmd, verbose=1, check=True, shell=True)
 
     # split sites by region
-    for region_id, region_sites in ub.group_items(
-            sites,
-            lambda site: site['features'][0]['properties']['region_id']).items(
-            ):
-        with TemporaryDirectory() as site_dpath, TemporaryDirectory(
-        ) as image_dpath:
+    grouped_sites = ub.group_items(
+        sites, lambda site: site['features'][0]['properties']['region_id'])
 
+    for region_id, region_sites in grouped_sites.items():
+
+        site_dpath = (tmp_dpath / 'site' / region_id).ensuredir()
+        image_dpath = (tmp_dpath / 'image' / region_id).ensuredir()
+
+        if True:
             # doctor site_dpath for expected structure
             site_sub_dpath = os.path.join(site_dpath, 'latest', region_id)
             os.makedirs(site_sub_dpath, exist_ok=True)
@@ -229,9 +249,8 @@ def main(args):
                     --image_dir {image_dpath}
                     --output_dir {out_dir}
                 ''')
-            import subprocess
             try:
-                ub.cmd(cmd, verbose=1, check=True, shell=True)
+                ub.cmd(cmd, verbose=3, check=True, shell=True)
             except subprocess.CalledProcessError:
                 print('error in metrics framework, probably due to zero '
                       'TP site matches.')
