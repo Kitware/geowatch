@@ -452,6 +452,7 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, heatmap_dpath,
         label_to_color = {
             node: data['color']
             for node, data in full_classes.graph.nodes.items()}
+
         label_to_color = ub.sorted_keys(label_to_color)
         legend_img2 = _memo_legend(label_to_color)
         legend_img = kwimage.stack_images([legend_img, legend_img2], axis=0,
@@ -667,7 +668,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                            score_space='video'):
     """
     CommandLine:
-        xdoctest -m /home/joncrall/code/watch/watch/tasks/fusion/evaluate.py evaluate_segmentations
+        xdoctest -m watch.tasks.fusion.evaluate evaluate_segmentations
 
     Example:
         >>> from watch.tasks.fusion.evaluate import *  # NOQA

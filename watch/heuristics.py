@@ -119,12 +119,71 @@ CNAMES_DCT = {
 }
 
 
-def ensure_heuristic_colors(coco_dset):
+def ensure_heuristic_coco_colors(coco_dset, force=False):
+    """
+    Args:
+        coco_dset (kwcoco.CocoDataset): object to modify
+        force (bool): if True, overwrites existing colors if needed
+
+    TODO:
+        - [ ] Move this non-heuristic functionality to
+            :func:`kwcoco.CocoDataset.ensure_class_colors`
+
+    Example:
+        >>> from watch.heuristics import *  # NOQA
+        >>> import kwcoco
+        >>> coco_dset = kwcoco.CocoDataset.demo()
+        >>> ensure_heuristic_coco_colors(coco_dset)
+        >>> assert all(c['color'] for c in coco_dset.cats.values())
+    """
     for hcat in CATEGORIES:
         cat = coco_dset.index.name_to_cat.get(hcat['name'], None)
         if cat is not None:
-            if cat.get('color', None) is None:
+            if force or cat.get('color', None) is None:
                 cat['color'] = hcat['color']
+    data_dicts = coco_dset.dataset['categories']
+    _ensure_distinct_dict_colors(data_dicts)
+
+
+def ensure_heuristic_category_tree_colors(classes, force=False):
+    """
+    Args:
+        classes (kwcoco.CategoryTree): object to modify
+        force (bool): if True, overwrites existing colors if needed
+
+    TODO:
+        - [ ] Move this non-heuristic functionality to
+            :func:`kwcoco.CategoryTree.ensure_colors`
+
+    Example:
+        >>> from watch.heuristics import *  # NOQA
+        >>> import kwcoco
+        >>> classes = kwcoco.CategoryTree.coerce(['ignore', 'positive', 'Active Construction', 'foobar', 'Unknown', 'baz'])
+        >>> ensure_heuristic_category_tree_colors(classes)
+        >>> assert all(d['color'] for n, d in classes.graph.nodes(data=True))
+    """
+    # Set any missing class color with the heuristic category
+    for hcat in CATEGORIES:
+        node_data = classes.graph.nodes.get(hcat['name'], None)
+        if node_data is not None:
+            if force or node_data.get('color', None) is None:
+                node_data['color'] = hcat['color']
+    data_dicts = [data for node, data in classes.graph.nodes(data=True)]
+    _ensure_distinct_dict_colors(data_dicts)
+
+
+def _ensure_distinct_dict_colors(data_dicts, force=False):
+    # Generalized part that could move to kwcoco
+    have_dicts = [d for d in data_dicts if d.get('color', None) is not None]
+    miss_dicts = [d for d in data_dicts if d.get('color', None) is None]
+    num_uncolored = len(miss_dicts)
+    if num_uncolored:
+        import kwimage
+        existing_colors = [kwimage.Color(d['color']).as01() for d in have_dicts]
+        new_colors = kwimage.Color.distinct(
+            num_uncolored, existing=existing_colors, legacy=False)
+        for d, c in zip(miss_dicts, new_colors):
+            d['color'] = c
 
 
 HUERISTIC_COMBINABLE_CHANNELS = [

@@ -30,8 +30,8 @@ def suggest_paths(test_dataset=None, package_fpath=None, pred_root=None):
         >>> from watch.tasks.fusion.organize import *  # NOQA
         >>> test_dataset = 'vali.kwcoco.json'
         >>> package_fpath = '/foo/package_abc.pt'
-        >>> suggest_paths(test_dataset, package_fpath)
-        >>> suggest_paths(test_dataset, package_fpath)
+        >>> suggestion_text = suggest_paths(test_dataset, package_fpath)
+        >>> print(suggestion_text)
     """
     import pathlib
     import json
@@ -39,8 +39,10 @@ def suggest_paths(test_dataset=None, package_fpath=None, pred_root=None):
     suggestions = {}
 
     if test_dataset is not None:
+        # TODO: better way to choose the test-dataset-identifier - needs a
+        # hashid
         test_dataset = pathlib.Path(test_dataset)
-        test_dset_name = test_dataset.parts[-2] + '_' + test_dataset.stem
+        test_dset_name = '_'.join((list(test_dataset.parts[-2:-1]) + [test_dataset.stem]))
         # test_dset_name = test_dataset.stem
     else:
         test_dset_name = 'unknown_test_dset'
@@ -65,7 +67,8 @@ def suggest_paths(test_dataset=None, package_fpath=None, pred_root=None):
 
     # TODO: make this return a dict, and handle jsonification
     # in the CLI main
-    return json.dumps(suggestions)
+    suggestion_text = json.dumps(suggestions)
+    return suggestion_text
 
 
 def make_nice_dirs():

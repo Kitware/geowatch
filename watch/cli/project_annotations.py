@@ -241,7 +241,7 @@ def assign_sites_to_images(coco_dset, sites, propogate, geospace_lookup='auto'):
     for cat in heuristics.CATEGORIES:
         coco_dset.ensure_category(**cat)
     # hack in heuristic colors
-    heuristics.ensure_heuristic_colors(coco_dset)
+    heuristics.ensure_heuristic_coco_colors(coco_dset)
     # handle any other colors
     kwcoco_extensions.category_category_colors(coco_dset)
     print(coco_dset.dataset['categories'])

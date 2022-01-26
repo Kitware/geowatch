@@ -9,10 +9,15 @@ class TeamFeaturePipelineConfig(scfg.Config):
         'base_coco_name': 'data.kwcoco.json',
         'gres': scfg.Value('auto', help='comma separated list of gpus or auto'),
 
-        'with_landcover': True,
-        'with_materials': True,
-        'with_invariants': True,
-        'with_depth': False,
+        'with_landcover': scfg.Value(True, help='Include DZYNE landcover features'),
+        'with_materials': scfg.Value(True, help='Include Rutgers material features'),
+        'with_invariants': scfg.Value(True, help='Include UKY invariant features'),
+        'with_depth': scfg.Value(True, help='Include DZYNE WorldView depth features'),
+
+        'virtualenv_cmd': scfg.Value(None, help=ub.paragraph(
+            '''
+            Command to start the appropriate virtual environment if your bashrc
+            does not start it by default.''')),
 
         'data_workers': scfg.Value(2, help='dataloader workers for each proc'),
         'keep_sessions': scfg.Value(False, help='if True does not close tmux sessions'),
@@ -178,7 +183,6 @@ def main(cmdline=True, **kwargs):
             tq.submit(task['command'])
 
     tq.rprint(with_rich=with_rich)
-
     tq.write()
 
     # TODO: make the monitor spawn in a new tmux session. The monitor could
