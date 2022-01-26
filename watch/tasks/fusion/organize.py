@@ -40,7 +40,8 @@ def suggest_paths(test_dataset=None, package_fpath=None, pred_root=None):
 
     if test_dataset is not None:
         test_dataset = pathlib.Path(test_dataset)
-        test_dset_name = test_dataset.stem
+        test_dset_name = test_dataset.parts[-2] + '_' + test_dataset.stem
+        # test_dset_name = test_dataset.stem
     else:
         test_dset_name = 'unknown_test_dset'
 

@@ -150,6 +150,6 @@ PHASE_STATUS_TO_KWCOCO_CATNAME = {
 CONFUSION_COLOR_SCHEME = {
     'TN': 'black',
     'TP': 'white',
-    'FN': 'yellow',
+    'FN': 'cyan',
     'FP': 'red',
 }

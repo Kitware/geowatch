@@ -173,6 +173,7 @@ def single_image_segmentation_metrics(true_coco, pred_coco, gid1, gid2,
     }
     info = {
         'row': row,
+        'shape': shape,
     }
 
     # TODO: parametarize these class categories
@@ -188,7 +189,7 @@ def single_image_segmentation_metrics(true_coco, pred_coco, gid1, gid2,
         have = stream.intersection(true_classes)
         predicted_classes.extend(have.parsed)
     classes_of_interest = ub.oset(predicted_classes) - (
-        background_classes | ignore_classes)
+        background_classes | ignore_classes | undistinguished_classes)
 
     # Determine if saliency has been predicted
     salient_class = 'salient'
@@ -268,12 +269,12 @@ def single_image_segmentation_metrics(true_coco, pred_coco, gid1, gid2,
                 bin_measures.summary()
                 cx_to_binvecs[cname] = bin_cfsn
             ovr_cfns = OneVsRestConfusionVectors(cx_to_binvecs, classes_of_interest)
-            ovr_measures = ovr_cfns.measures()
-            row['mAP'] = ovr_measures['mAP']
-            row['mAUC'] = ovr_measures['mAUC']
+            class_measures = ovr_cfns.measures()
+            row['mAP'] = class_measures['mAP']
+            row['mAUC'] = class_measures['mAUC']
             info.update({
                 # TODO: data for visualization
-                'ovr_measures': ovr_measures,
+                'class_measures': class_measures,
                 'catname_to_true': catname_to_true,
                 'catname_to_prob': catname_to_prob,
             })
@@ -424,14 +425,14 @@ def colorize_class_probs(probs, classes):
 
 
 @profile
-def dump_chunked_confusion(true_coco, pred_coco, chunk_info, plot_dpath,
+def dump_chunked_confusion(true_coco, pred_coco, chunk_info, heatmap_dpath,
                            score_space='video'):
     """
     Draw a a sequence of true/pred image predictions
     """
     from watch import heuristics
     color_labels = ['TN', 'TP', 'FN', 'FP']
-    colors = list(heuristics.CONFUSION_COLOR_SCHEME.take(color_labels))
+    colors = list(ub.take(heuristics.CONFUSION_COLOR_SCHEME, color_labels))
     # colors = ['blue', 'green', 'yellow', 'red']
     # colors = ['black', 'white', 'yellow', 'red']
     color_lut = np.array([kwimage.Color(c).as255() for c in colors])
@@ -440,9 +441,21 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, plot_dpath,
 
     # Make a legend
     color01_lut = color_lut / 255.0
-    label_to_color = ub.dzip(color_labels, color01_lut)
-    legend_img = _memo_legend(label_to_color)
-    legend_img = kwimage.ensure_uint255(legend_img)
+    if 1:
+        # Confusion Legend
+        label_to_color = ub.dzip(color_labels, color01_lut)
+        legend_img = _memo_legend(label_to_color)
+        legend_img = kwimage.ensure_uint255(legend_img)
+
+    if 1:
+        # Class Legend
+        label_to_color = {
+            node: data['color']
+            for node, data in full_classes.graph.nodes.items()}
+        label_to_color = ub.sorted_keys(label_to_color)
+        legend_img2 = _memo_legend(label_to_color)
+        legend_img = kwimage.stack_images([legend_img, legend_img2], axis=0,
+                                          pad=5)
 
     # Draw predictions on each frame
     parts = []
@@ -464,8 +477,10 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, plot_dpath,
 
         image_text = f'{frame_index} - gid = {true_gid}'
 
-        w = info['true_saliency'].shape[1]
+        w = info['shape'][1]
         zhack = {'width': w}
+
+        # SC_smt_it_stm_p8_newanns_weighted_raw_v39_epoch=52-step=2269088
 
         header = kwimage.draw_header_text(
             zhack,
@@ -640,14 +655,15 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, plot_dpath,
         {'width': plot_canvas.shape[1]}, plot_fname)
     plot_canvas = kwimage.stack_images([header, plot_canvas], axis=0)
 
-    plot_dpath = ub.Path(str(plot_dpath))
-    vid_plot_dpath = (plot_dpath / vidname_part).ensuredir()
+    heatmap_dpath = ub.Path(str(heatmap_dpath))
+    vid_plot_dpath = (heatmap_dpath / vidname_part).ensuredir()
     plot_fpath = vid_plot_dpath / plot_fname
     kwimage.imwrite(str(plot_fpath), plot_canvas)
 
 
 @profile
-def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto',
+def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
+                           draw_curves='auto', draw_heatmaps='auto',
                            score_space='video'):
     """
     CommandLine:
@@ -701,42 +717,20 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto',
     chunk_size = 5
     thresh_bins = 256 * 256
 
-    if draw == 'auto':
-        draw = bool(eval_dpath is not None)
+    if draw_curves == 'auto':
+        draw_curves = bool(eval_dpath is not None)
+
+    if draw_heatmaps == 'auto':
+        draw_heatmaps = bool(eval_dpath is not None)
 
     if eval_dpath is None:
-        plot_dpath = None
+        heatmap_dpath = None
     else:
-        plot_dpath = ub.Path(eval_dpath) / 'plots'
-        plot_dpath.mkdir(exist_ok=True, parents=True)
+        heatmap_dpath = ub.Path(eval_dpath) / 'heatmaps'
+        heatmap_dpath.mkdir(exist_ok=True, parents=True)
 
-    fg_measure_combiner = MeasureCombiner(thresh_bins=thresh_bins)
-    ovr_measure_combiner = OneVersusRestMeasureCombiner(thresh_bins=thresh_bins)
-
-    # combiner = ovr_measure_combiner.catname_to_combiner['Site Preparation']
-    # for x in combiner.queue:
-    #     d = x.asdict()
-    #     if np.any(d['tp_count']) > 0:
-    #         thr = x['thresholds']
-    #         tp = d['tp_count']
-    #         fp = d['fp_count']
-    #         tp_diff = np.diff(tp)
-    #         fp_diff = np.diff(fp)
-    #         flags = np.diff(tp) > 0
-    #         dtp_pts = tp_diff[flags]
-    #         fp_pts = fp[:-1][flags]
-    #         # np.diff(fp_pts) == 0
-    #         thr_pts = thr[:-1][flags]
-    #         print(kwarray.stats_dict(thr_pts * dtp_pts)['min'])
-
-    #         np.diff(thr[:-1][flags])
-    #         print(d['tp_count'])
-    #     print(t)
-    # measures = Measures.combine(combiner.queue, precision=15)
-    # measures.reconstruct()
-    # ovr_measure_combiner.submit(ovr_measures)
-    # ovr_measure_combiner.combine()
-    # ovr_measure_combiner.finalize()
+    salient_measure_combiner = MeasureCombiner(thresh_bins=thresh_bins)
+    class_measure_combiner = OneVersusRestMeasureCombiner(thresh_bins=thresh_bins)
 
     total_images = 0
 
@@ -778,29 +772,29 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto',
                     true_coco, pred_coco, gid1, gid2, score_space=score_space)
                 rows.append(info['row'])
 
-                ovr_measures = info.get('ovr_measures', None)
-                fg_measures = info.get('salient_measures', None)
-                if fg_measures is not None:
-                    fg_measure_combiner.submit(fg_measures)
-                if ovr_measures is not None:
-                    ovr_measure_combiner.submit(ovr_measures)
+                class_measures = info.get('class_measures', None)
+                salient_measures = info.get('salient_measures', None)
+                if salient_measures is not None:
+                    salient_measure_combiner.submit(salient_measures)
+                if class_measures is not None:
+                    class_measure_combiner.submit(class_measures)
 
-                if draw:
+                if draw_heatmaps:
                     chunk_info.append(info)
                 prog.update()
 
             # Reduce measures over the chunk
-            if fg_measure_combiner.queue_size > chunk_size:
-                fg_measure_combiner.combine()
-            if ovr_measure_combiner.queue_size > chunk_size:
-                ovr_measure_combiner.combine()
+            if salient_measure_combiner.queue_size > chunk_size:
+                salient_measure_combiner.combine()
+            if class_measure_combiner.queue_size > chunk_size:
+                class_measure_combiner.combine()
 
-            if draw:
+            if draw_heatmaps:
                 dump_chunked_confusion(
-                    true_coco, pred_coco, chunk_info, plot_dpath,
+                    true_coco, pred_coco, chunk_info, heatmap_dpath,
                     score_space=score_space)
 
-    # ovr_measure_combiner.catname_to_combiner['Site Preparation'].queue
+    # class_measure_combiner.catname_to_combiner['Site Preparation'].queue
 
     # Handle standalone images
     gids1 = image_matches['match_gids1']
@@ -809,63 +803,47 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto',
     for gid1, gid2 in zip(gids1, gids2):
         info = single_image_segmentation_metrics(
             true_coco, pred_coco, gid1, gid2, score_space=score_space)
-        ovr_measures = info.get('ovr_measures', None)
-        fg_measures = info.get('salient_measures', None)
-        if fg_measures is not None:
-            fg_measure_combiner.submit(fg_measures)
-        if ovr_measures is not None:
-            ovr_measure_combiner.submit(ovr_measures)
+        class_measures = info.get('class_measures', None)
+        salient_measures = info.get('salient_measures', None)
+        if salient_measures is not None:
+            salient_measure_combiner.submit(salient_measures)
+        if class_measures is not None:
+            class_measure_combiner.submit(class_measures)
         rows.append(info['row'])
-        if draw:
+        if draw_heatmaps:
             chunk_info = [info]
             dump_chunked_confusion(
-                true_coco, pred_coco, chunk_info, plot_dpath,
+                true_coco, pred_coco, chunk_info, heatmap_dpath,
                 score_space=score_space)
         prog.update()
         # Reduce measures over the chunk
-        if fg_measure_combiner.queue_size > chunk_size:
-            fg_measure_combiner.combine()
-        if ovr_measure_combiner.queue_size > chunk_size:
-            ovr_measure_combiner.combine()
+        if salient_measure_combiner.queue_size > chunk_size:
+            salient_measure_combiner.combine()
+        if class_measure_combiner.queue_size > chunk_size:
+            class_measure_combiner.combine()
 
     prog.end()
 
-    # import xdev
-    # xdev.embed()
-
     # Reduce measures over the chunk
-    print('Finalize fg measures')
-    fg_combo_measures = fg_measure_combiner.finalize()
-    print('Finalize ovr measures')
-    ovr_combo_measure_dict = ovr_measure_combiner.finalize()
-    ovr_combo_measures = ovr_combo_measure_dict['perclass']
-
-    # if 0:
-    #     m = Measures.combine(queue, thresh_bins=512 * 512).reconstruct()
-    #     print(m)
-    #     print(m.counts().pandas())
-    #     m = Measures.combine(queue, thresh_bins=None).reconstruct()
-    #     print(m)
-    #     print(m.counts().pandas())
-
-    if 0:
-        print(fg_combo_measures.counts().pandas())
-        for k, bm in ovr_combo_measures.items():
-            print(bm.counts().pandas())
+    print('Finalize salient measures')
+    salient_combo_measures = salient_measure_combiner.finalize()
+    print('Finalize class measures')
+    class_combo_measure_dict = class_measure_combiner.finalize()
+    ovr_combo_measures = class_combo_measure_dict['perclass']
 
     # Use the SingleResult container (TODO: better API)
     result = CocoSingleResult(
-        fg_combo_measures, ovr_combo_measures, None, meta)
+        salient_combo_measures, ovr_combo_measures, None, meta)
     print('result = {}'.format(result))
 
-    if fg_combo_measures is not None:
+    if salient_combo_measures is not None:
         if eval_dpath is not None:
             curve_dpath = ub.Path(eval_dpath) / 'curves'
             curve_dpath.mkdir(exist_ok=True, parents=True)
 
-            fg_combo_measures['meta'] = meta
+            salient_combo_measures['meta'] = meta
             title = meta.get('title', '')
-            measure_info = fg_combo_measures.__json__()
+            measure_info = salient_combo_measures.__json__()
             measures_fpath = curve_dpath / 'measures.json'
 
             print('Dump measures_fpath={}'.format(measures_fpath))
@@ -877,18 +855,18 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto',
             print('Dump measures_fpath2={}'.format(measures_fpath2))
             result.dump(os.fspath(measures_fpath2))
 
-            if draw:
+            if draw_curves:
                 import kwplot
                 # kwplot.autompl()
                 with kwplot.BackendContext('agg'):
                     fig = kwplot.figure(doclf=True)
 
-                    print('Dump fg figures')
-                    fg_combo_measures.summary_plot(fnum=1, title=title)
+                    print('Dump salient figures')
+                    salient_combo_measures.summary_plot(fnum=1, title=title)
                     fig = kwplot.autoplt().gcf()
-                    fig.savefig(str(curve_dpath / 'fg_summary.png'))
+                    fig.savefig(str(curve_dpath / 'salient_summary.png'))
 
-                    print('Dump ovr figures')
+                    print('Dump class figures')
                     result.dump_figures(curve_dpath, expt_title=title)
 
     df = pd.DataFrame(rows)
@@ -899,14 +877,14 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None, draw='auto',
     # summary = ub.map_vals(lambda x: x.item() if hasattr(x, 'item') else x, summary)
 
     summary = {}
-    if ovr_combo_measure_dict is not None:
-        summary['mAP'] = ovr_combo_measure_dict['mAP']
-        summary['mAUC'] = ovr_combo_measure_dict['mAUC']
+    if class_combo_measure_dict is not None:
+        summary['class_mAP'] = class_combo_measure_dict['mAP']
+        summary['class_mAUC'] = class_combo_measure_dict['mAUC']
 
-    if fg_combo_measures is not None:
-        summary['ap'] = fg_combo_measures['ap']
-        summary['auc'] = fg_combo_measures['auc']
-        summary['max_f1'] = fg_combo_measures['max_f1']
+    if salient_combo_measures is not None:
+        summary['salient_ap'] = salient_combo_measures['ap']
+        summary['salient_auc'] = salient_combo_measures['auc']
+        summary['salient_max_f1'] = salient_combo_measures['max_f1']
 
     print('summary = {}'.format(ub.repr2(
         summary, nl=1, precision=4, align=':', sort=0)))
@@ -922,8 +900,8 @@ def _redraw_measures(eval_dpath):
     measures_fpath = curve_dpath / 'measures.json'
     with open(measures_fpath, 'r') as file:
         state = json.load(file)
-        fg_combo_measures = Measures.from_json(state)
-        meta = fg_combo_measures.get('meta', [])
+        salient_combo_measures = Measures.from_json(state)
+        meta = salient_combo_measures.get('meta', [])
         title = ''
         if meta is not None:
             if isinstance(meta, list):
@@ -934,7 +912,7 @@ def _redraw_measures(eval_dpath):
                 title = meta.get('title', title)
         import kwplot
         with kwplot.BackendContext('agg'):
-            fg_combo_measures.summary_plot(fnum=1, title=title)
+            salient_combo_measures.summary_plot(fnum=1, title=title)
             fig = kwplot.autoplt().gcf()
             fig.savefig(str(curve_dpath / 'summary_redo.png'))
 
@@ -954,7 +932,8 @@ def make_evaluate_config(cmdline=False, **kwargs):
     parser.add_argument('--true_dataset', '--test_dataset', help='path to the groundtruth dataset')
     parser.add_argument('--pred_dataset', help='path to the predicted dataset')
     parser.add_argument('--eval_dpath', help='path to dump results')
-    parser.add_argument('--draw', default='auto', help='flag to draw or not')
+    parser.add_argument('--draw_curves', default='auto', help='flag to draw curves or not')
+    parser.add_argument('--draw_heatmaps', default='auto', help='flag to draw heatmaps or not')
     parser.add_argument('--score_space', default='video', help='can score in image or video space')
     parser.set_defaults(**kwargs)
     default_args = None if cmdline else []
@@ -976,12 +955,40 @@ def main(cmdline=True, **kwargs):
     eval_dpath = args.eval_dpath
     score_space = args.score_space
     from scriptconfig.smartcast import smartcast
-    draw = smartcast(args.draw)
-    evaluate_segmentations(true_coco, pred_coco, eval_dpath, draw=draw,
+    draw_heatmaps = smartcast(args.draw_heatmaps)
+    draw_curves = smartcast(args.draw_curves)
+    evaluate_segmentations(true_coco, pred_coco, eval_dpath,
+                           draw_curves=draw_curves,
+                           draw_heatmaps=draw_heatmaps,
                            score_space=score_space)
 
 
 if __name__ == '__main__':
+    r"""
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+
+    python -m watch.tasks.fusion.predict \
+        --write_probs=True \
+        --write_preds=False \
+        --with_class=auto \
+        --with_saliency=auto \
+        --with_change=False \
+        --package_fpath=$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819.pt \
+        --pred_dataset=$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/pred_BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819/combo_vali_nowv.kwcoco/pred.kwcoco.json \
+        --test_dataset=$DVC_DPATH/Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json \
+        --num_workers=5 \
+        --compress=DEFLATE \
+        --gpus=0, \
+        --batch_size=8
+
+    python -m watch.tasks.fusion.evaluate \
+        --true_dataset=$DVC_DPATH/Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json \
+        --pred_dataset=$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/pred_BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819/combo_vali_nowv.kwcoco/pred.kwcoco.json \
+          --eval_dpath=$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/pred_BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819/combo_vali_nowv.kwcoco/eval \
+          --score_space=video \
+          --draw_curves=1 \
+          --draw_heatmaps=1
+    """
     # import xdev
     # xdev.make_warnings_print_tracebacks()
     main()

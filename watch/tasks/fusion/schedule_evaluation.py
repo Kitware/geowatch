@@ -43,7 +43,7 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
         KWCOCO_TEST_FPATH=$DVC_DPATH/Drop1-Aligned-L1-2022-01/combo_DILM_nowv_vali.kwcoco.json
         python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="0,1" \
-            --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/BOTH_*/*.pt" \
+            --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/*/*.pt" \
             --test_dataset="$KWCOCO_TEST_FPATH" \
             --run=1 --with_rich=False --with_status=False
 
@@ -55,6 +55,22 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
             --test_dataset="$KWCOCO_TEST_FPATH" \
             --run=True --with_rich=False --with_status=False
 
+        DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+        KWCOCO_TEST_FPATH=$DVC_DPATH/Drop1-Aligned-TA1-2022-01/vali_data_nowv.kwcoco.json
+        python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="0,1" \
+            --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/BAS_*/*.pt" \
+            --test_dataset="$KWCOCO_TEST_FPATH" \
+            --run=1 --with_rich=False --with_status=False
+
+        DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+        KWCOCO_TEST_FPATH=$DVC_DPATH/Drop1-Aligned-L1-2022-01/combo_DILM_nowv_vali.kwcoco.json
+        python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="0,1" \
+            --model_globstr="special:HISTORY" \
+            --test_dataset="$KWCOCO_TEST_FPATH" \
+            --run=1 --with_rich=False --with_status=False
+
     TODO:
         - [ ] Specify the model_dpath as an arg
         - [ ] Specify target dataset as an argument
@@ -65,7 +81,7 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
     import json
 
     if model_globstr is None and test_dataset is None:
-        dvc_dpath = watch.utils.util_data.find_smart_dvc_dpath()
+        dvc_dpath = watch.find_smart_dvc_dpath()
         model_globstr = str(dvc_dpath / 'models/fusion/SC-20201117/*/*.pt')
         test_dataset = dvc_dpath / 'Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json'
 
@@ -73,7 +89,16 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
         # test_dataset = dvc_dpath / 'Drop1-Aligned-L1/combo_train_US_R001_small_nowv.kwcoco.json'
         gpus = 'auto'
 
-    dvc_dpath = watch.utils.util_data.find_smart_dvc_dpath()
+    dvc_dpath = watch.find_smart_dvc_dpath()
+
+    HISTORICAL_MODELS_OF_INTEREST = [
+        # 'models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_cs64_t5_perframe_rgb_v30/SC_smt_it_stm_p8_newanns_cs64_t5_perframe_rgb_v30_epoch=29-step=1284389.pt',
+        dvc_dpath / 'models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_cs64_t5_perframe_rgb_v30/SC_smt_it_stm_p8_newanns_cs64_t5_perframe_rgb_v30_epoch=29-step=1284389.pt',
+        dvc_dpath / 'models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_raw_v39/SC_smt_it_stm_p8_newanns_weighted_raw_v39_epoch=52-step=2269088.pt',
+        dvc_dpath / 'models/fusion/SC-20201117/SC_smt_it_stm_p8_centerannot_raw_v42/SC_smt_it_stm_p8_centerannot_raw_v42_epoch=5-step=89465.pt',
+        dvc_dpath / 'models/fusion/SC-20201117/BAS_smt_it_stm_p8_L1_raw_v53/BAS_smt_it_stm_p8_L1_raw_v53_epoch=15-step=340047.pt',
+        dvc_dpath / 'models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819.pt',
+    ]
 
     # with_saliency = 'auto'
     # with_class = 'auto'
@@ -112,9 +137,15 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
 
     packages_to_eval = []
     import glob
-    for package_fpath in glob.glob(model_globstr, recursive=True):
-        package_info = package_metadata(ub.Path(package_fpath))
-        packages_to_eval.append(package_info)
+    if model_globstr == 'special:HISTORY':
+        for package_fpath in HISTORICAL_MODELS_OF_INTEREST:
+            assert package_fpath.exists()
+            package_info = package_metadata(ub.Path(package_fpath))
+            packages_to_eval.append(package_info)
+    else:
+        for package_fpath in glob.glob(model_globstr, recursive=True):
+            package_info = package_metadata(ub.Path(package_fpath))
+            packages_to_eval.append(package_info)
 
     shuffle_jobs = True
     if shuffle_jobs:
@@ -178,8 +209,8 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
         suggestions['package_fpath'] = package_fpath
         suggestions['with_class'] = with_class
         suggestions['with_saliency'] = with_saliency
-        suggestions = ub.map_vals(lambda x: str(x).replace(
-            str(dvc_dpath), '$DVC_DPATH'), suggestions)
+        # suggestions = ub.map_vals(lambda x: str(x).replace(
+        #     str(dvc_dpath), '$DVC_DPATH'), suggestions)
         predictkw = {
             'workers_per_queue': workers_per_queue,
         }
@@ -217,7 +248,10 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
                 python -m watch.tasks.fusion.evaluate \
                     --true_dataset={true_dataset} \
                     --pred_dataset={pred_dataset} \
-                      --eval_dpath={eval_dpath}
+                      --eval_dpath={eval_dpath} \
+                      --score_space=video \
+                      --draw_curves=1 \
+                      --draw_heatmaps=1
                 ''').format(**suggestions)
             if not recompute_eval:
                 # TODO: use a real stamp file

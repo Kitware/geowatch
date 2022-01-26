@@ -121,13 +121,30 @@ class Result(ub.NiceRepr):
 
 class ResultAnalysis:
     """
+    Groups and runs stats on results
+
+    Attributes:
+        results (List[Result]): list of results
+
+        ignore_metrics (Set[str]): metrics to ignore
+
+        ignore_params (Set[str]): parameters to ignore
+
+        metric_objectives (Dict[str, str]):
+            indicate if each metrix should be maximized "max" or minimized
+            "min"
+
+        metrics (List[str]):
+            only consider these metrics
+
     Example:
         >>> from watch.utils.result_analysis import *  # NOQA
         >>> self = ResultAnalysis.demo()
         >>> self.analysis()
     """
 
-    def __init__(self, results, ignore_params=None, ignore_metrics=None):
+    def __init__(self, results, metrics=None, ignore_params=None,
+                 ignore_metrics=None, metric_objectives=None):
         self.results = results
         if ignore_metrics is None:
             ignore_metrics = set()
@@ -136,7 +153,21 @@ class ResultAnalysis:
         self.ignore_params = ignore_params
         self.ignore_metrics = ignore_metrics
 
-        self.metrics = None
+        # encode if we want to maximize or minimize a metric
+        default_metric_to_objective = {
+            'ap': 'max',
+            'acc': 'max',
+            'f1': 'max',
+            'loss': 'min',
+            'brier': 'min',
+        }
+        if metric_objectives is None:
+            metric_objectives = {}
+
+        self.metric_objectives = default_metric_to_objective.copy()
+        self.metric_objectives.update(metric_objectives)
+
+        self.metrics = metrics
         self.statistics = None
 
     @classmethod
@@ -166,15 +197,6 @@ class ResultAnalysis:
                 varied.pop(k, None)
         self.varied = varied
 
-        # encode if we want to maximize or minimize a metric
-        metric_to_objective = {
-            'ap': 'max',
-            'acc': 'max',
-            'f1': 'max',
-            'loss': 'min',
-            'brier': 'min',
-        }
-
         if self.metrics is None:
             avail_metrics = set.intersection(*[set(r.metrics.keys()) for r in self.results])
             self.metrics = sorted(avail_metrics - set(self.ignore_metrics))
@@ -189,9 +211,9 @@ class ResultAnalysis:
                     'metric': metric_key,
                 }
 
-                objective = metric_to_objective.get(metric_key, None)
+                objective = self.metric_objectives.get(metric_key, None)
                 if objective is None:
-                    print(f'warning assume ascending for {metric_key}')
+                    print(f'warning assume ascending for {metric_key=}')
                     objective = 'max'
 
                 ascending = objective == 'min'
