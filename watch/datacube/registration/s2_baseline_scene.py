@@ -83,7 +83,7 @@ def find_baseline_scene(xmls, return_paths=False):
         >>> df_dict = df.to_dict()
         >>> print(df_dict)
         >>> # Did the data on the server change? Should we ever expect that this is different?
-        >>> assert df.to_dict() == {
+        >>> assert (df.to_dict() == {
         >>>     'granule_id': 'S2A_MSI_L2A_T52SDG_20181104T021841_20181104T021841',
         >>>     'proc_ver': 2.06,
         >>>     'sun_zenith_angle': 53.7076919780578,
@@ -91,19 +91,15 @@ def find_baseline_scene(xmls, return_paths=False):
         >>>     'coverage': 0.9257082093290998,
         >>>     'mgrs_tile_id': '52SDG',
         >>>     'score': 0.8309162895912932
+        >>> }) or df.to_dict() == {
+        >>>     'granule_id': 'S2A_MSI_L2A_T52SDG_20181104T021841_20181104T021841',
+        >>>     'proc_ver': 2.06,
+        >>>     'sun_zenith_angle': 53.7076919780578,
+        >>>     'cloud': 0.00046,
+        >>>     'coverage': 0.9220606683454932,
+        >>>     'mgrs_tile_id': '52SDG',
+        >>>     'score': 0.8300044043453915
         >>> }
-
-
-        # Did the data on the server change? Should we ever expect that this is different?
-        assert df.to_dict() == {
-            'granule_id': 'S2A_MSI_L2A_T52SDG_20181104T021841_20181104T021841',
-            'proc_ver': 2.06,
-            'sun_zenith_angle': 53.7076919780578,
-            'cloud': 0.00046,
-            'coverage': 0.9220606683454932,
-            'mgrs_tile_id': '52SDG',
-            'score': 0.8300044043453915
-        }
 
     '''
     df_rows = []
