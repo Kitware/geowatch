@@ -8,6 +8,7 @@ import subprocess
 from concurrent.futures import as_completed
 
 import ubelt
+import pystac
 
 from watch.cli.baseline_framework_ingress import ingress_item
 from watch.cli.baseline_framework_egress import egress_item
@@ -71,27 +72,62 @@ SUPPORTED_PLATFORMS = {'S2A',
 
 
 def _item_map(stac_item, outbucket, aws_base_command, dryrun):
-    if stac_item['properties'].get('platform') not in SUPPORTED_PLATFORMS:
-        return stac_item
-
     with tempfile.TemporaryDirectory() as tmpdirname:
-        ingressed_item = ingress_item(
-            stac_item,
-            os.path.join(tmpdirname, 'ingress'),
-            aws_base_command,
-            dryrun)
+        status_file_basename = '{}.done'.format(stac_item['id'])
+        status_item_s3_path = os.path.join(
+            outbucket, 'status', status_file_basename)
+        status_item_local_path = os.path.join(
+            tmpdirname, status_file_basename)
 
-        fmask_item = run_fmask_for_item(
-            ingressed_item,
-            os.path.join(tmpdirname, 'fmask'))
+        try:
+            subprocess.run([*aws_base_command,
+                            status_item_s3_path,
+                            status_item_local_path],
+                           check=True)
+        except subprocess.CalledProcessError:
+            pass
+        else:
+            print("* Item: {} previously processed, not "
+                  "re-processing".format(stac_item['id']))
+            with open(status_item_local_path, 'r') as f:
+                return json.load(f)
 
-        angles_item = add_angle_bands_to_item(
-            fmask_item,
-            os.path.join(tmpdirname, 'angles'))
+        print("* Processing item: {}".format(stac_item['id']))
 
-        return egress_item(angles_item,
-                           outbucket,
-                           aws_base_command)
+        if stac_item['properties'].get('platform') not in SUPPORTED_PLATFORMS:
+            output_item = stac_item
+        else:
+            ingressed_item = ingress_item(
+                stac_item,
+                os.path.join(tmpdirname, 'ingress'),
+                aws_base_command,
+                dryrun)
+
+            fmask_item = run_fmask_for_item(
+                ingressed_item,
+                os.path.join(tmpdirname, 'fmask'))
+
+            angles_item = add_angle_bands_to_item(
+                fmask_item,
+                os.path.join(tmpdirname, 'angles'))
+
+            output_item = egress_item(angles_item,
+                                      outbucket,
+                                      aws_base_command)
+
+        output_status_file = os.path.join(
+            tmpdirname, '{}.output.done'.format(stac_item['id']))
+        with open(output_status_file, 'w') as outf:
+            if isinstance(output_item, pystac.Item):
+                print(json.dumps(output_item.to_dict()), file=outf)
+            else:
+                print(json.dumps(output_item.to_dict()), file=outf)
+
+            subprocess.run([*aws_base_command,
+                            output_status_file,
+                            status_item_s3_path], check=True)
+
+        return output_item
 
 
 def run_fmask_streaming(input_path,
