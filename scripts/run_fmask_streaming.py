@@ -10,6 +10,7 @@ from concurrent.futures import as_completed
 import ubelt
 import pystac
 
+from watch.utils.util_stac import CacheItemOutputS3
 from watch.cli.baseline_framework_ingress import ingress_item
 from watch.cli.baseline_framework_egress import egress_item
 from watch.cli.run_fmask import run_fmask_for_item
@@ -72,28 +73,9 @@ SUPPORTED_PLATFORMS = {'S2A',
 
 
 def _item_map(stac_item, outbucket, aws_base_command, dryrun):
+    print("* Processing item: {}".format(stac_item['id']))
+
     with tempfile.TemporaryDirectory() as tmpdirname:
-        status_file_basename = '{}.done'.format(stac_item['id'])
-        status_item_s3_path = os.path.join(
-            outbucket, 'status', status_file_basename)
-        status_item_local_path = os.path.join(
-            tmpdirname, status_file_basename)
-
-        try:
-            subprocess.run([*aws_base_command,
-                            status_item_s3_path,
-                            status_item_local_path],
-                           check=True)
-        except subprocess.CalledProcessError:
-            pass
-        else:
-            print("* Item: {} previously processed, not "
-                  "re-processing".format(stac_item['id']))
-            with open(status_item_local_path, 'r') as f:
-                return json.load(f)
-
-        print("* Processing item: {}".format(stac_item['id']))
-
         if stac_item['properties'].get('platform') not in SUPPORTED_PLATFORMS:
             output_item = stac_item
         else:
@@ -115,19 +97,8 @@ def _item_map(stac_item, outbucket, aws_base_command, dryrun):
                                       outbucket,
                                       aws_base_command)
 
-        output_status_file = os.path.join(
-            tmpdirname, '{}.output.done'.format(stac_item['id']))
-        with open(output_status_file, 'w') as outf:
-            if isinstance(output_item, pystac.Item):
-                print(json.dumps(output_item.to_dict()), file=outf)
-            else:
-                print(json.dumps(output_item.to_dict()), file=outf)
-
-            subprocess.run([*aws_base_command,
-                            output_status_file,
-                            status_item_s3_path], check=True)
-
-        return output_item
+        # Ensuring we return a list of items here
+        return [output_item]
 
 
 def run_fmask_streaming(input_path,
@@ -178,7 +149,9 @@ def run_fmask_streaming(input_path,
     executor = ubelt.Executor(mode='process' if jobs > 1 else 'serial',
                               max_workers=jobs)
 
-    fmask_jobs = [executor.submit(_item_map,
+    caching_item_map = CacheItemOutputS3(
+        _item_map, outbucket, aws_profile=aws_profile)
+    fmask_jobs = [executor.submit(caching_item_map,
                                   stac_item,
                                   outbucket,
                                   aws_base_command,
@@ -196,8 +169,14 @@ def run_fmask_streaming(input_path,
         else:
             if isinstance(mapped_item, dict):
                 output_stac_items.append(mapped_item)
-            else:
+            elif isinstance(mapped_item, pystac.Item):
                 output_stac_items.append(mapped_item.to_dict())
+            else:
+                for mi in mapped_item:
+                    if isinstance(mi, dict):
+                        output_stac_items.append(mi)
+                    elif isinstance(mi, pystac.Item):
+                        output_stac_items.append(mi.to_dict())
 
     if newline:
         te_output = '\n'.join((json.dumps(item) for item in output_stac_items))
@@ -210,7 +189,7 @@ def run_fmask_streaming(input_path,
     with tempfile.NamedTemporaryFile() as temporary_file:
         with open(temporary_file.name, 'w') as f:
             if newline:
-                print(te_output, end='', file=f)
+                print(te_output, file=f)
             else:
                 print(json.dumps(te_output, indent=2), file=f)
 
