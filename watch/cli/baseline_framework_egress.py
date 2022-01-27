@@ -136,7 +136,7 @@ def baseline_framework_egress(stac_catalog,
     with tempfile.NamedTemporaryFile() as temporary_file:
         with open(temporary_file.name, 'w') as f:
             if newline:
-                print(te_output, end='', file=f)
+                print(te_output, file=f)
             else:
                 print(json.dumps(te_output, indent=2), file=f)
 
