@@ -52,7 +52,7 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
         KWCOCO_TEST_FPATH=$DVC_DPATH/Drop1-Aligned-L1-2022-01/combo_DILM_nowv_vali.kwcoco.json
         python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="0,1" \
-            --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/BAS_*/*.pt" \
+            --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/BAS_*v53*/*.pt" \
             --test_dataset="$KWCOCO_TEST_FPATH" \
             --run=True --with_rich=False --with_status=False
 
@@ -203,7 +203,7 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
         suggestions = organize.suggest_paths(package_fpath=package_fpath, test_dataset=test_dataset_fpath)
         suggestions = json.loads(suggestions)
 
-        pred_dataset_fpath = ub.Path(suggestions['pred_dataset'])
+        pred_dataset_fpath = ub.Path(suggestions['pred_dataset'])  # NOQA
         eval_metrics_fpath = ub.Path(suggestions['eval_dpath']) / 'curves/measures2.json'
 
         suggestions['eval_metrics'] = eval_metrics_fpath
@@ -242,8 +242,8 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
                     pred_command
                 )
 
-            if recompute_pred or not pred_dataset_fpath.exists():
-                queue.submit(pred_command)
+            # if recompute_pred or not pred_dataset_fpath.exists():
+            queue.submit(pred_command)
 
         if with_eval:
             eval_command = ub.codeblock(
@@ -263,8 +263,8 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
                     '[[ -f "{eval_metrics}" ]] || '.format(**suggestions) +
                     eval_command
                 )
-            if recompute_eval or not eval_metrics_fpath.exists():
-                queue.submit(eval_command)
+            # if recompute_eval or not eval_metrics_fpath.exists():
+            queue.submit(eval_command)
 
     print('tq = {!r}'.format(tq))
     # print(f'{len(tq)=}')

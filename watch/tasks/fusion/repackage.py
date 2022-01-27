@@ -27,13 +27,13 @@ def repackage(checkpoint_fpath, force=False):
     # init method from checkpoint.
     checkpoint_fpath = os.fspath(checkpoint_fpath)
 
-    x = pathlib.Path(ub.augpath(checkpoint_fpath, ext='.pt'))
+    x = ub.Path(ub.augpath(checkpoint_fpath, ext='.pt'))
     package_name = x.name
 
     # Can we precompute the package name of this checkpoint?
     train_dpath_hint = None
     if checkpoint_fpath.endswith('.ckpt'):
-        path_ = pathlib.Path(checkpoint_fpath)
+        path_ = ub.Path(checkpoint_fpath)
         if path_.parent.stem == 'checkpoints':
             train_dpath_hint = path_.parent.parent
 
@@ -44,7 +44,7 @@ def repackage(checkpoint_fpath, force=False):
             with open(meta_fpath, 'r') as file:
                 data = yaml.safe_load(file)
             # Hack to put experiment name in package name
-            expt_name = pathlib.Path(data['default_root_dir']).name
+            expt_name = ub.Path(data['default_root_dir']).name
             if expt_name not in package_name:
                 package_name = expt_name + '_' + package_name
 
@@ -86,6 +86,9 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
 
     Ignore:
         from watch.tasks.fusion.repackage import *  # NOQA
+        import xdev
+        globals().update(xdev.get_func_kwargs(gather_checkpoints))
+        git_commit = True
 
     CommandLine:
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
@@ -103,7 +106,6 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
             --git_commit=True
     """
     from watch.utils import util_data
-    import pathlib
     import ubelt as ub
     import shutil
     import os
@@ -111,13 +113,13 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
     if dvc_dpath is None:
         dvc_dpath = util_data.find_smart_dvc_dpath()
     else:
-        dvc_dpath = pathlib.Path(dvc_dpath)
+        dvc_dpath = ub.Path(dvc_dpath)
 
     # storage_dpath = dvc_dpath / 'models/fusion/unevaluated-activity-2021-11-12'
     if storage_dpath is None:
         storage_dpath = dvc_dpath / 'models/fusion/SC-20201117'
     else:
-        storage_dpath = pathlib.Path(storage_dpath)
+        storage_dpath = ub.Path(storage_dpath)
 
     if train_dpath is None:
         dataset_names = [
@@ -133,7 +135,7 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
                 dset_dpath = um_dpath / dset_name
                 dset_dpaths.append(dset_dpath)
     else:
-        dset_dpaths = [pathlib.Path(train_dpath)]
+        dset_dpaths = [ub.Path(train_dpath)]
 
     all_checkpoint_paths = []
     for dset_dpath in dset_dpaths:
@@ -147,17 +149,17 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
                     print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
                     all_checkpoint_paths.append(checkpoint_fpath)
 
-    storage_dpath.mkdir(exist_ok=True, parents=True)
+    storage_dpath.ensuredir()
 
     to_copy = []
     failed = []
     for p in ub.ProgIter(all_checkpoint_paths):
         try:
             package_fpath = repackage(p)
-            package_fpath = pathlib.Path(package_fpath)
+            package_fpath = ub.Path(package_fpath)
             name = package_fpath.name.split('_epoch')[0]
             name_dpath = storage_dpath / name
-            name_dpath.mkdir(exist_ok=True, parents=True)
+            name_dpath.ensuredir()
             name_fpath = name_dpath / package_fpath.name
             if not name_fpath.exists():
                 to_copy.append((package_fpath, name_dpath))
@@ -173,14 +175,19 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
 
     dvc_to_add = []
     for package_dpath in list(storage_dpath.glob('*/*.pt')):
-        package_dvc_fpath = pathlib.Path(str(package_dpath) + '.dvc')
+        package_dvc_fpath = ub.Path(str(package_dpath) + '.dvc')
         if not package_dvc_fpath.exists():
             dvc_to_add.append(str(package_dpath.relative_to(dvc_dpath)))
 
+    print('New models to add to DVC: {}'.format(ub.repr2(dvc_to_add)))
     dvc_info = ub.cmd(['dvc', 'add'] + dvc_to_add, cwd=dvc_dpath, verbose=3, check=True)
 
-    if 1:
-        # Note: Using auto-add means we do not need this, check
+    # Determine if DVC will autostage the new files
+    # (It should for SMART)
+    has_autostage = ub.cmd('dvc config core.autostage', cwd=dvc_dpath, check=True)['out'].split() == 'true'
+
+    if not has_autostage:
+        # Note: Using autostageadd means we do not need this, check
         # the setting and disable if necessary
         start = False
         gitlines = []
