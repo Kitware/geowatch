@@ -84,7 +84,7 @@ class IngressProcessEgressWrapper:
 
         if not self.stac_item_selector(stac_item):
             print("**  STAC item {} did not satisfy selector, not "
-                  "processing".format(stac_item['id'])
+                  "processing".format(stac_item['id']))
             return [stac_item]
 
         with tempfile.TemporaryDirectory() as tmpdirname:
