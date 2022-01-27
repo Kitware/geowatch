@@ -199,15 +199,126 @@ def merge_bas_metrics_results(results: List[RegionResult]):
     # instead, images in multiple proposed site stacks are double-counted.
     # take advantage of this to merge this metric with a simple average.
     n_images = (merged_df['fp sites'] /
-                merged_df['images FAR']).groupby('region_id').sum()
+                merged_df['images FAR']).groupby('region_id').mean().sum()
     result_df['images FAR'] = fp.astype(float) / n_images
 
     return result_df
 
 
 def merge_sc_metrics_results(results: List[RegionResult]):
+    '''
+    Returns:
+        a list of pd.DataFrames
+        activity_table: F1 score, mean TIoU, temporal error
+        confusion_matrix: confusion matrix
+    '''
 
-    return NotImplemented
+    from sklearn.metrics import f1_score, confusion_matrix
+
+    def to_df(sc_dpath, region_id):
+        '''
+        confusion matrix and f1 scores apprently ignore subsites,
+        so we must do the same
+        TODO submit this as an issue
+        MWE:
+        >>> from sklearn.metrics import confusion_matrix
+        >>> confusion_matrix(['a,a', 'a'], ['a,a', 'b'], labels=['a', 'b'])
+        array([[0, 1],
+               [0, 0]])
+        '''
+
+        delim = ' vs. '
+
+        df = pd.read_csv(os.path.join(sc_dpath, 'activity_phase_table.csv'))
+
+        df['date'] = pd.to_datetime(df['date'])
+        df = df.set_index('date')
+        df = df.fillna(pd.NA).astype('string')
+
+        site_names = df.columns.values.tolist()
+
+        df = df.applymap(lambda cell: delim.join((cell, cell))
+                         if not pd.isna(cell) and delim not in cell else cell)
+        df = pd.concat(
+            [df[col].str.split(delim, expand=True) for col in site_names],
+            axis=1, ignore_index=True)
+
+        df.columns = pd.MultiIndex.from_product(
+            #  ([region_id], site_names, ['truth', 'proposed']),
+            #  names=['region_id', 'site', 'type'])
+            (site_names, ['truth', 'proposed']),
+            names=['site', 'type'])
+
+        return df
+
+    dfs = [to_df(r.sc_dpath, r.region_id) for r in results]
+    df = pd.concat(dfs, axis=1).sort_values('date')
+
+    # phase activity categories
+    phase_classifications = [
+        # "No Activity",
+        "Site Preparation",
+        "Active Construction",
+        "Post Construction",
+    ]
+
+    sites = df.columns.levels[0]
+    phase_true = np.concatenate(
+        [df[site, 'truth'].dropna().to_numpy() for site in sites])
+    phase_pred = np.concatenate(
+        [df[site, 'proposed'].dropna().to_numpy() for site in sites])
+
+    f1 = f1_score(phase_true,
+                  phase_pred,
+                  labels=phase_classifications,
+                  average=None)
+
+    # TIoU is only ever evaluated per-site, so we can safely average these
+    # per-site and call it a new metric mTIoU.
+    mtiou = pd.concat([
+        pd.read_csv(os.path.join(r.sc_dpath, 'activity_tiou_table.csv')).drop(
+            'TIoU', axis=1) for r in results
+    ],
+                      axis=1).mean(axis=1, skipna=True).values
+
+    # these are averaged using the mean over sites for each phase.
+    # So the correct average over regions is to weight by (sites/region)
+    temporal_errs = [
+        pd.read_csv(os.path.join(
+            r.sc_dpath,
+            'activity_prediction_table.csv')).loc[0][1:].astype(float).values
+        for r in results
+    ]
+    n_sites = [df.shape[1] for df in dfs]
+    try:
+        temporal_errs, n_sites = zip(*filter(
+            # TODO how to handle merging partial predictions?
+            lambda tn: len(tn[0]) == 3,
+            zip(temporal_errs, n_sites)))
+        temporal_err = np.average(temporal_errs, weights=n_sites, axis=0)
+    except ValueError:
+        temporal_err = [np.nan, np.nan, np.nan]
+
+    # import xdev; xdev.embed()
+    activity_table = pd.DataFrame(
+        {
+            'F1 score': f1,
+            'mean TIoU': mtiou,
+            'Temporal Error (days)': temporal_err
+        },
+        index=phase_classifications).T
+    activity_table = activity_table.rename_axis('Activity Classification',
+                                                axis='columns')
+
+    confusion_matrix = pd.DataFrame(confusion_matrix(
+        phase_true, phase_pred, labels=phase_classifications),
+                                    columns=phase_classifications,
+                                    index=phase_classifications)
+    confusion_matrix = confusion_matrix.rename_axis("truth phase")
+    confusion_matrix = confusion_matrix.rename_axis("predicted phase",
+                                                    axis="columns")
+
+    return activity_table, confusion_matrix
 
 
 def merge_metrics_results(region_dpaths, anns_root, out_dpath=None):
@@ -251,13 +362,26 @@ def merge_metrics_results(region_dpaths, anns_root, out_dpath=None):
     # merge SC
     #
 
-    if 0:  # TODO
-        sc_df = merge_sc_metrics_results([r for r in results if r.sc_dpath])
-        sc_df.to_pickle(os.path.join(out_dpath, 'sc_scoreboard_df.pkl'))
+    sc_df, sc_cm = merge_sc_metrics_results([r for r in results if r.sc_dpath])
+    sc_df.to_pickle(os.path.join(out_dpath, 'sc_activity_df.pkl'))
+    sc_cm.to_pickle(os.path.join(out_dpath, 'sc_confusion_df.pkl'))
 
-        return bas_df, sc_df
-    else:
-        return bas_df
+    #
+    # write summary in readable form
+    #
+
+    summary_path = os.path.join(out_dpath, 'summary.csv')
+    if os.path.isfile(summary_path):
+        os.remove(summary_path)
+    with open(summary_path, 'a+') as f:
+        best_bas_row = bas_df[bas_df['F1'] == bas_df['F1'].max()].iloc[[-1]]
+        best_bas_row.to_csv(f)
+        f.write('\n')
+        sc_df.to_csv(f)
+        f.write('\n')
+        sc_cm.to_csv(f)
+
+    return bas_df, sc_df, sc_cm
 
 
 def ensure_thumbnails(image_path, ann_root, region_id, coco_dset):
