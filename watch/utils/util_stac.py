@@ -1,8 +1,5 @@
 from concurrent.futures import as_completed
 from typing import cast
-import subprocess
-import tempfile
-import json
 
 import os
 import functools
@@ -181,56 +178,6 @@ def maps(_item_map=None, history_entry=None):
         return output_stac_item
 
     return wrapper
-
-
-class CacheItemOutputS3:
-    def __init__(self, item_map, outbucket, aws_profile=None):
-        self.item_map = item_map
-        self.outbucket = outbucket
-
-        if aws_profile is not None:
-            self.aws_base_command =\
-              ['aws', 's3', '--profile', aws_profile, 'cp', '--no-progress']
-        else:
-            self.aws_base_command = ['aws', 's3', 'cp', '--no-progress']
-
-    def __call__(self, stac_item, *args, **kwargs):
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            status_file_basename = '{}.done'.format(stac_item['id'])
-            status_item_s3_path = os.path.join(
-                self.outbucket, 'status', status_file_basename)
-            status_item_local_path = os.path.join(
-                tmpdirname, status_file_basename)
-
-            try:
-                subprocess.run([*self.aws_base_command,
-                                status_item_s3_path,
-                                status_item_local_path],
-                               check=True)
-            except subprocess.CalledProcessError:
-                pass
-            else:
-                print("* Item: {} previously processed, not "
-                      "re-processing".format(stac_item['id']))
-                with open(status_item_local_path) as f:
-                    return [json.loads(line) for line in f]
-
-            output_stac_items = self.item_map(stac_item, *args, **kwargs)
-
-            output_status_file = os.path.join(
-                tmpdirname, '{}.output.done'.format(stac_item['id']))
-            with open(output_status_file, 'w') as outf:
-                for output_item in output_stac_items:
-                    if isinstance(output_item, pystac.Item):
-                        print(json.dumps(output_item.to_dict()), file=outf)
-                    else:
-                        print(json.dumps(output_item.to_dict()), file=outf)
-
-            subprocess.run([*self.aws_base_command,
-                            output_status_file,
-                            status_item_s3_path], check=True)
-
-            return output_stac_items
 
 
 def associate_msi_pan(stac_catalog):
