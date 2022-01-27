@@ -612,7 +612,7 @@ def main(args):
                             help=ub.paragraph('''
         JSON string or path to file containing keyword arguments for the
         chosen TrackFunction. Examples include: coco_dset_gt, coco_dset_sc,
-        thresh, possible_keys.
+        thresh, key.
         Any file paths will be loaded as CocoDatasets if possible.
         '''))
     behavior_args = parser.add_argument_group(
@@ -685,7 +685,7 @@ def main(args):
             track_fn = from_polygon.OverlapTrack
         else:
             track_fn = from_heatmap.TimeAggregatedBAS
-            track_kwargs['possible_keys'] = [args.default_track_fn]
+            track_kwargs['key'] = [args.default_track_fn]
     elif args.track_fn is None:
         track_fn = watch.tasks.tracking.utils.NoOpTrackFunction
     else:

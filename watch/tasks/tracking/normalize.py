@@ -644,7 +644,7 @@ def normalize(coco_dset, track_fn, overwrite, gt_dset=None, **track_kwargs):
     coco_dset = add_track_index(coco_dset)
     if 'key' in track_kwargs:  # assume this is a baseline (saliency) key
         coco_dset = normalize_phases(coco_dset,
-                                     baseline_keys={track_kwargs['key']})
+                                     baseline_keys=set(track_kwargs['key']))
     else:
         coco_dset = normalize_phases(coco_dset)
     coco_dset = normalize_sensors(coco_dset)

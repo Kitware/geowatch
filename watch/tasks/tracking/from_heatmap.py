@@ -250,7 +250,10 @@ def time_aggregated_polys(coco_dset,
         has_requested_chans_list.append(flag)
 
     if not all(has_requested_chans_list):
-        raise KeyError(f'{coco_dset.tag} has no keys {key} or {bg_key}')
+        n_missing = (len(has_requested_chans_list) -
+                     sum(has_requested_chans_list))
+        raise KeyError(f'{n_missing} imgs in dset {coco_dset.tag} '
+                       f'have no keys {key} or {bg_key}.')
 
     if use_boundary_annots:
         import shapely.ops
