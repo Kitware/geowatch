@@ -143,7 +143,7 @@ def coco_watch_stats(dset):
         frame_dates = dset.images(gids).lookup('date_captured', None)
         frame_dt = sorted([dateutil.parser.parse(d) for d in frame_dates if d])
         if frame_dt:
-            date_range = (min(frame_dt).isoformat(), max(frame_dt).isoformat())
+            date_range = (min(frame_dt).date().isoformat(), max(frame_dt).date().isoformat())
         else:
             date_range = None
 
@@ -162,7 +162,7 @@ def coco_watch_stats(dset):
         print('video_info = {}'.format(vid_info_str))
         all_sensor_entries.extend(all_sensor_entries)
         # video_summary_rows.append(ub.dict_diff(video_info, {'sensor_freq', 'warp_wld_to_vid'}))
-        video_summary_rows.append(ub.dict_diff(video_info, {'warp_wld_to_vid'}))
+        video_summary_rows.append(ub.dict_diff(ub.odict(video_info), {'warp_wld_to_vid'}))
 
     print('dset.tag = {!r}'.format(dset.tag))
 

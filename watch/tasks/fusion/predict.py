@@ -846,7 +846,8 @@ class CocoStitchingManager(object):
                 thresh = self.thresh
                 # Convert to polygons
                 scored_polys = list(mask_to_polygons(
-                    band_probs, thresh, scored=True, use_rasterio=False))
+                    probs=band_probs, thresh=thresh, scored=True,
+                    use_rasterio=False))
                 n_anns = len(scored_polys)
                 for score, vid_poly in scored_polys:
                     # Transform the video polygon into image space
