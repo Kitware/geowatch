@@ -224,11 +224,12 @@ def main(args):
                                   ' is not a valid path')
                 for img_path, img_date in img_date_dct.items():
                     # use filename expected by metrics framework
-                    os.symlink(
+                    ub.symlink(
                         img_path,
                         os.path.join(
                             image_dpath, '_'.join(
-                                (img_date, os.path.basename(img_path)))))
+                                (img_date, os.path.basename(img_path)))),
+                        overwrite=True)
 
             else:  # TODO finish updating this
 
