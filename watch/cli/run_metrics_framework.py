@@ -518,6 +518,11 @@ def main(args):
         {out_dir}/thumbnails/
         ''')
 
+    parser.add_argument('--cache_dir', default=None, help='''
+        If specified, will use a cache directory, otherwise will not cache.
+        Do not use until IARPA fixes their cache bugs.
+        ''')
+
     args = parser.parse_args(args)
 
     # load sites
@@ -565,6 +570,15 @@ def main(args):
     out_dirs = []
     grouped_sites = ub.group_items(
         sites, lambda site: site['features'][0]['properties']['region_id'])
+
+    from scriptconfig.smartcast import smartcast
+    root_cache_dir = smartcast(args.cache_dir)
+    if root_cache_dir is None:
+        # Hack to force disable cache by using a different directory each time
+        _cache_dir = TemporaryDirectory(suffix='iarpa-metrics-cache')
+        root_cache_dir = ub.Path(_cache_dir.name)
+    else:
+        root_cache_dir = ub.Path(root_cache_dir)
 
     for region_id, region_sites in grouped_sites.items():
 

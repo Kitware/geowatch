@@ -8,7 +8,8 @@ from watch.utils import tmux_queue
 
 
 def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
-                        run=False, with_rich=True, with_status=True):
+                        run=False, with_rich=True, with_status=True,
+                        virtualenv_cmd=None):
     """
     First ensure that models have been copied to the DVC repo in the
     appropriate path. (as noted by model_dpath)
@@ -61,7 +62,7 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
             --gpus="0,1" \
             --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/BAS_*/*.pt" \
             --test_dataset="$KWCOCO_TEST_FPATH" \
-            --run=1 --with_rich=False --with_status=False
+            --run=0 --with_rich=False --with_status=False
 
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
         KWCOCO_TEST_FPATH=$DVC_DPATH/Drop1-Aligned-L1-2022-01/combo_DILM_nowv_vali.kwcoco.json
@@ -188,14 +189,16 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
         'DVC_DPATH': dvc_dpath,
     }
 
-    jobs = tmux_queue.TMUXMultiQueue(
+    tq = tmux_queue.TMUXMultiQueue(
         name=stamp, size=len(GPUS), environ=environ, gres=GPUS,
         dpath=tmux_schedule_dpath)
+    if virtualenv_cmd:
+        tq.add_header_command(virtualenv_cmd)
 
     recompute_pred = recompute
     recompute_eval = recompute or 0
 
-    for info, queue in zip(packages_to_eval, jobs):
+    for info, queue in zip(packages_to_eval, tq):
         package_fpath = info['fpath']
         suggestions = organize.suggest_paths(package_fpath=package_fpath, test_dataset=test_dataset_fpath)
         suggestions = json.loads(suggestions)
@@ -263,17 +266,17 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
             if recompute_eval or not eval_metrics_fpath.exists():
                 queue.submit(eval_command)
 
-    print('jobs = {!r}'.format(jobs))
-    # print(f'{len(jobs)=}')
-    jobs.rprint(with_status=with_status, with_rich=with_rich)
+    print('tq = {!r}'.format(tq))
+    # print(f'{len(tq)=}')
+    tq.rprint(with_status=with_status, with_rich=with_rich)
 
     # RUN
     if run:
         # ub.cmd('bash ' + str(driver_fpath), verbose=3, check=True)
-        jobs.run()
-        jobs.monitor()
+        tq.run()
+        tq.monitor()
     else:
-        driver_fpath = jobs.write()
+        driver_fpath = tq.write()
         print('Wrote script: to run execute:\n{}'.format(driver_fpath))
 
     """
