@@ -333,7 +333,7 @@ class TimeWindowSampler:
             self.affinity = kwarray.one_hot_embedding(
                 sample_idxs, len(self.unixtimes), dim=1).sum(axis=2)
         else:
-            raise Exception
+            raise KeyError(self.affinity_type)
 
         self.main_indexes = np.arange(self.affinity.shape[0])
 

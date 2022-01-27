@@ -1,0 +1,39 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: watch-workflowtemplate-dvc-access-check
+spec:
+  volumes:
+    - name: dvc-access-secret-volume
+      secret:
+        secretName: dvc-gitlab-access-token
+  templates:
+    - name: dvc-access-check
+      inputs:
+        parameters:
+        - name: container_tag
+      container:
+        image: gitlab.kitware.com:4567/smart/watch/training:{{inputs.parameters.container_tag}}
+        command: [bash]
+        args: ["/watch/dev/sample_dvc_setup.sh"]
+        resources:
+          requests:
+            memory: "1000Mi"
+            cpu: "1000m"
+          limits:
+            memory: "2000Mi"
+            cpu: "1500m"
+        env:
+          - name: DVC_GITLAB_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: dvc-gitlab-access-token
+                key: username
+          - name: DVC_GITLAB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: dvc-gitlab-access-token
+                key: password
+        volumeMounts:
+          - name: dvc-access-secret-volume
+            mountPath: "/secret/dvc-access-secret-mountpath"

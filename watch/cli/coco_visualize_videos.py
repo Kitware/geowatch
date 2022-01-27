@@ -128,7 +128,7 @@ class CocoVisualizeConfig(scfg.Config):
                 '.videos[] | select({select_images}) | .id'.
 
                 Examples for this argument are as follows:
-                '.file_name | startswith("foo")' will select only videos
+                '.name | startswith("foo")' will select only videos
                 where the name starts with foo.
 
                 Only applicable for dataset that contain videos.
@@ -706,11 +706,20 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             for cx, c in enumerate(chan_list):
                 normalizer = chan_to_normalizer.get(c, None)
                 data = canvas[..., cx]
-                mask = (data != nodata)
-                p = util_kwarray.apply_normalizer(data, normalizer, mask=mask, set_value_at_mask=0.)
+                if normalizer is None:
+                    p = normalize_intensity(data, nodata=nodata, params={
+                        'high': 0.90,
+                        'mid': 0.5,
+                        'low': 0.01,
+                        'mode': 'linear',
+                    })
+                else:
+                    mask = (data != nodata)
+                    import xdev
+                    with xdev.embed_on_exception_context:
+                        p = util_kwarray.apply_normalizer(data, normalizer, mask=mask, set_value_at_mask=0.)
                 new_parts.append(p)
             canvas = np.stack(new_parts, axis=2)
-
         canvas = util_kwimage.ensure_false_color(canvas)
 
         if len(canvas.shape) > 2 and canvas.shape[2] > 4:

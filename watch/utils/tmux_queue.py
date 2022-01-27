@@ -81,6 +81,7 @@ class TMUXLinearQueue(PathIdentifiable):
         self.state_fpath = self.dpath / 'job_state_{}.txt'.format(self.pathid)
         self.environ = environ
         self.header = '#!/bin/bash'
+        self.header_commands = []
         self.commands = []
 
     def __nice__(self):
@@ -126,6 +127,9 @@ class TMUXLinearQueue(PathIdentifiable):
             script.extend([
                 f'export {k}="{v}"' for k, v in self.environ.items()])
 
+        for command in self.header_commands:
+            script.append(command)
+
         for num, command in enumerate(self.commands):
             _mark_status('run')
             script.append(ub.codeblock(
@@ -148,6 +152,9 @@ class TMUXLinearQueue(PathIdentifiable):
         _mark_status('done')
         text = '\n'.join(script)
         return text
+
+    def add_header_command(self, command):
+        self.header_commands.append(command)
 
     def submit(self, command):
         # TODO: we could accept additional args here that modify how we handle
@@ -224,6 +231,7 @@ class TMUXMultiQueue(PathIdentifiable):
             )
             for worker_idx, e in enumerate(per_worker_environs)
         ]
+        print('per_worker_environs = {!r}'.format(per_worker_environs))
         self._worker_cycle = it.cycle(self.workers)
 
     def __nice__(self):
@@ -242,6 +250,13 @@ class TMUXMultiQueue(PathIdentifiable):
         else:
             worker = self.workers[index]
         return worker.submit(command)
+
+    def add_header_command(self, command):
+        """
+        Adds a header command run at the start of each queue
+        """
+        for worker in self.workers:
+            worker.add_header_command(command)
 
     def finalize_text(self):
         # Create a driver script
@@ -379,6 +394,7 @@ class TMUXMultiQueue(PathIdentifiable):
                 console.print(Panel(Syntax(code, 'bash'), title=str(queue.fpath)))
                 # console.print(Syntax(code, 'bash'))
             else:
+                print(ub.highlight_code(f'# --- {str(queue.fpath)}', 'bash'))
                 print(ub.highlight_code(code, 'bash'))
 
         code = self.finalize_text()

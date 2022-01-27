@@ -64,7 +64,7 @@ def find_baseline_scene(xmls, return_paths=False):
         >>> # not essential, could change with demodata
         >>> assert mgrs_tile == '52SDG'
         >>> # the tile matches
-        >>> assert baseline.keys() == {mgrs_tile}
+        >>> assert list(baseline.keys()) == [mgrs_tile]
         >>> #
         >>> df = baseline[mgrs_tile]
         >>> assert df.shape == (1,8)
@@ -80,7 +80,18 @@ def find_baseline_scene(xmls, return_paths=False):
         >>> assert baseline[mgrs_tile].startswith(os.path.abspath(input_dirs[1]))
         >>> #
         >>> df.pop('granuledir')  # not portable for testing
-        >>> assert df.to_dict() == {
+        >>> df_dict = df.to_dict()
+        >>> print(df_dict)
+        >>> # Did the data on the server change? Should we ever expect that this is different?
+        >>> assert (df.to_dict() == {
+        >>>     'granule_id': 'S2A_MSI_L2A_T52SDG_20181104T021841_20181104T021841',
+        >>>     'proc_ver': 2.06,
+        >>>     'sun_zenith_angle': 53.7076919780578,
+        >>>     'cloud': 0.00046,
+        >>>     'coverage': 0.9257082093290998,
+        >>>     'mgrs_tile_id': '52SDG',
+        >>>     'score': 0.8309162895912932
+        >>> }) or df.to_dict() == {
         >>>     'granule_id': 'S2A_MSI_L2A_T52SDG_20181104T021841_20181104T021841',
         >>>     'proc_ver': 2.06,
         >>>     'sun_zenith_angle': 53.7076919780578,
@@ -91,11 +102,7 @@ def find_baseline_scene(xmls, return_paths=False):
         >>> }
 
     '''
-    header = [
-        'granuledir', 'granule_id', 'proc_ver', 'sun_zenith_angle', 'cloud',
-        'coverage', 'mgrs_tile_id'
-    ]
-    df = pd.DataFrame(columns=header)
+    df_rows = []
 
     for pfname_xml in xmls:
         tmp_dict = {}
@@ -159,17 +166,20 @@ def find_baseline_scene(xmls, return_paths=False):
         tmp_dict['coverage'] = coverage
 
         # Adding to the dataframe
-        df = df.append(tmp_dict, ignore_index=True)
+        # df = df.append(tmp_dict, ignore_index=True)
         print(granule_id, proc_ver, sun_zenith_angle, cloud, coverage,
               tmp_dict['mgrs_tile_id'])
+
+        df_rows.append(tmp_dict)
 
         tree = None
         # break
 
-        norm_value_proc_ver = df['proc_ver'].max()
-        # print(norm_value_proc_ver)
-        df['score'] = 0.25 * df['coverage'] + 0.25 * (1 - df['cloud']) + \
-                     0.25 * (1 - df['sun_zenith_angle'] / 90.) + 0.25 * ( df['proc_ver'] / norm_value_proc_ver)
+    df = pd.DataFrame(df_rows)
+    norm_value_proc_ver = df['proc_ver'].max()
+    # print(norm_value_proc_ver)
+    df['score'] = 0.25 * df['coverage'] + 0.25 * (1 - df['cloud']) + \
+                 0.25 * (1 - df['sun_zenith_angle'] / 90.) + 0.25 * ( df['proc_ver'] / norm_value_proc_ver)
 
     print(df)
     mgrs_tile_list = pd.unique(df['mgrs_tile_id'].values)
@@ -177,7 +187,7 @@ def find_baseline_scene(xmls, return_paths=False):
 
     for mgrs_tile in mgrs_tile_list:
         df_tmp = df[df['mgrs_tile_id'] == mgrs_tile]
-        df_best = df_tmp.loc[[df_tmp['score'].idxmax()]]
+        df_best = df_tmp.loc[[df_tmp['score'].astype(float).idxmax()]]
         if return_paths:
             result[mgrs_tile] = os.path.normpath(df_best.squeeze()['granuledir'])
         else:

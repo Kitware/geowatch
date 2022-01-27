@@ -1,0 +1,64 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: dvc-access-check-
+  annotations:
+    email: 'jon.crall@kitware.com'
+    purpose: |
+      Check read access on DVC GitLab repo
+    submitter: 'Jon Crall'
+spec:
+  entrypoint: dvc-check
+  serviceAccountName: argo-runner
+  imagePullSecrets:
+    - name: gitlab-pull-secret
+  nodeSelector:
+    kitware.com/node-pool: standard
+  volumes:
+    - name: dvc-access-secret-volume
+      secret:
+        secretName: dvc-gitlab-access-token
+  #templates:
+  #- name: dvc-check
+  #  steps:
+  #    - - name: dvc-check-clone
+  #        templateRef:
+  #          name: watch-workflowtemplate-dvc-access-check
+  #          template: dvc-access-check
+  #        arguments:
+  #          parameters:
+  #            - name: container_tag
+  #              #value: "smart/watch/ta2_training_v2"
+  #              #value: "smart/watch/ta2_training_v2:latest"
+  #              value: "981feb6592f2"
+  templates:
+  - name: dvc-check
+    container:
+      #image: gitlab.kitware.com:4567/smart/watch/training:{{inputs.parameters.container_tag}}
+      #image: gitlab.kitware.com:4567/smart/watch/ta2_training_v2:{{inputs.parameters.container_tag}}
+      #image: gitlab.kitware.com:4567/smart/watch/ta2_training_v2:981feb6592f2
+      image: gitlab.kitware.com:4567/smart/watch/ta2_training_v2
+      command: [bash]
+      #args: ["/watch/dev/sample_dvc_setup.sh"]
+      args: ["/root/code/watch/aws/train_remote_init.sh"]
+      resources:
+        requests:
+          memory: "1000Mi"
+          cpu: "1000m"
+        limits:
+          memory: "2000Mi"
+          cpu: "1500m"
+      env:
+        - name: DVC_GITLAB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: dvc-gitlab-access-token
+              key: username
+        - name: DVC_GITLAB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: dvc-gitlab-access-token
+              key: password
+      volumeMounts:
+        - name: dvc-access-secret-volume
+          mountPath: "/secret/dvc-access-secret-mountpath"
