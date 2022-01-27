@@ -10,7 +10,8 @@ class TeamFeaturePipelineConfig(scfg.Config):
     """
     default = {
         'dvc_dpath': scfg.Value('auto'),
-        'bundle_name': 'Drop1-Aligned-L1-2022-01',
+        # 'bundle_name': 'Drop1-Aligned-L1-2022-01',
+        'bundle_name': 'Drop2-Aligned-TA1-2022-01',
         'base_coco_name': 'data.kwcoco.json',
         'gres': scfg.Value('auto', help='comma separated list of gpus or auto'),
 
@@ -212,21 +213,24 @@ def main(cmdline=True, **kwargs):
         # Finalize features by combining them all into combo.kwcoco.json
         tocombine = [str(base_coco_fpath)] + [str(task['output_fpath']) for task in tasks]
         combo_code = ''.join(sorted(combo_code_parts))
-        combo_fpath = aligned_bundle_dpath / f'combo_{combo_code}.kwcoco.json'
+
+        base_fpath = aligned_bundle_dpath / f'combo_{combo_code}.kwcoco.json'
+        # base_fpath = aligned_bundle_dpath / f'data.kwcoco.json'
+        # base_fpath = ub.Path(str(base_fpath).replace(str(dvc_dpath), '$DVC_DPATH'))
 
         tq = tmux_queue.TMUXMultiQueue(name='combine-feats', size=2)
         if config['virtualenv_cmd']:
             tq.add_header_command(config['virtualenv_cmd'])
 
         # TODO: enable forcing if needbe
-        if not combo_fpath.exists() or not config['cache']:
+        if not base_fpath.exists() or not config['cache']:
             #  Indent of this the codeblock matters for this line
             src_lines = ' \\\n                          '.join(tocombine)
             command = ub.codeblock(
                 fr'''
                 python -m watch.cli.coco_combine_features \
                     --src {src_lines} \
-                    --dst {combo_fpath}
+                    --dst {base_fpath}
                 ''')
             tq.submit(command)
 
@@ -238,13 +242,13 @@ def main(cmdline=True, **kwargs):
                     tq.kill()
 
         splits = {
-            'combo_train': combo_fpath.augment(suffix='_train', multidot=True),
-            'combo_nowv_train': combo_fpath.augment(suffix='_nowv_train', multidot=True),
-            'combo_wv_train': combo_fpath.augment(suffix='_wv_train', multidot=True),
+            'train': base_fpath.augment(suffix='_train', multidot=True),
+            'nowv_train': base_fpath.augment(suffix='_nowv_train', multidot=True),
+            'wv_train': base_fpath.augment(suffix='_wv_train', multidot=True),
 
-            'combo_vali': combo_fpath.augment(suffix='_vali', multidot=True),
-            'combo_nowv_vali': combo_fpath.augment(suffix='_nowv_vali', multidot=True),
-            'combo_wv_vali': combo_fpath.augment(suffix='_wv_vali', multidot=True),
+            'vali': base_fpath.augment(suffix='_vali', multidot=True),
+            'nowv_vali': base_fpath.augment(suffix='_nowv_vali', multidot=True),
+            'wv_vali': base_fpath.augment(suffix='_wv_vali', multidot=True),
         }
 
         tq = tmux_queue.TMUXMultiQueue(name='watch-splits', size=2)
@@ -255,8 +259,8 @@ def main(cmdline=True, **kwargs):
         command = ub.codeblock(
             fr'''
             python -m kwcoco subset \
-                --src {combo_fpath} \
-                --dst {splits['combo_train']} \
+                --src {base_fpath} \
+                --dst {splits['train']} \
                 --select_videos '.name | startswith("KR_") | not'
             ''')
         tq.submit(command, index=0)
@@ -264,8 +268,8 @@ def main(cmdline=True, **kwargs):
         command = ub.codeblock(
             fr'''
             python -m kwcoco subset \
-                --src {splits['combo_train']} \
-                --dst {splits['combo_nowv_train']} \
+                --src {splits['train']} \
+                --dst {splits['nowv_train']} \
                 --select_images '.sensor_coarse != "WV"'
             ''')
         tq.submit(command, index=0)
@@ -273,8 +277,8 @@ def main(cmdline=True, **kwargs):
         command = ub.codeblock(
             fr'''
             python -m kwcoco subset \
-                --src {splits['combo_train']} \
-                --dst {splits['combo_wv_train']} \
+                --src {splits['train']} \
+                --dst {splits['wv_train']} \
                 --select_images '.sensor_coarse == "WV"'
             ''')
         tq.submit(command, index=0)
@@ -283,8 +287,8 @@ def main(cmdline=True, **kwargs):
         command = ub.codeblock(
             fr'''
             python -m kwcoco subset \
-                --src {combo_fpath} \
-                --dst {splits['combo_vali']} \
+                --src {base_fpath} \
+                --dst {splits['vali']} \
                 --select_videos '.name | startswith("KR_")'
             ''')
         tq.submit(command, index=1)
@@ -292,8 +296,8 @@ def main(cmdline=True, **kwargs):
         command = ub.codeblock(
             fr'''
             python -m kwcoco subset \
-                --src {splits['combo_vali']} \
-                --dst {splits['combo_nowv_vali']} \
+                --src {splits['vali']} \
+                --dst {splits['nowv_vali']} \
                 --select_images '.sensor_coarse != "WV"'
             ''')
         tq.submit(command, index=1)
@@ -301,8 +305,8 @@ def main(cmdline=True, **kwargs):
         command = ub.codeblock(
             fr'''
             python -m kwcoco subset \
-                --src {splits['combo_vali']} \
-                --dst {splits['combo_wv_vali']} \
+                --src {splits['vali']} \
+                --dst {splits['wv_vali']} \
                 --select_images '.sensor_coarse == "WV"'
             ''')
         tq.submit(command, index=1)

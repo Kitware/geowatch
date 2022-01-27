@@ -139,13 +139,17 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
 
     all_checkpoint_paths = []
     for dset_dpath in dset_dpaths:
-        lightning_log_dpaths = list((dset_dpath / 'runs').glob('*/lightning_logs'))
+        # Find all paths with lightning logs
+        lightning_log_dpaths = list((dset_dpath / 'runs').glob('*v59*/lightning_logs'))
         for ll_dpath in lightning_log_dpaths:
             if not ll_dpath.parent.name.startswith(('Activity', 'SC_', 'BOTH_', 'BAS_')):  # HACK
                 continue
-            for checkpoint_fpath in list((ll_dpath).glob('*/checkpoints/*.ckpt')):
+            checkpoint_fpaths = list((ll_dpath).glob('*/checkpoints/*.ckpt'))
+            for checkpoint_fpath in checkpoint_fpaths:
                 parts = checkpoint_fpath.name.split('-')
-                if int(parts[0].split('epoch=')[1]) > 2 and parts[-1].startswith('step='):
+                epoch = int(parts[0].split('epoch=')[1])
+                # Dont add the -v2 versions
+                if epoch >= 0 and parts[-1].startswith('step='):
                     print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
                     all_checkpoint_paths.append(checkpoint_fpath)
 
@@ -161,6 +165,8 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
             name_dpath = storage_dpath / name
             name_dpath.ensuredir()
             name_fpath = name_dpath / package_fpath.name
+            print('package_fpath = {!r}'.format(package_fpath))
+            print('name_fpath = {!r}'.format(name_fpath))
             if not name_fpath.exists():
                 to_copy.append((package_fpath, name_dpath))
         except Exception as ex:
@@ -168,16 +174,17 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
             failed.append(p)
 
     print(f'failed to repackage = {failed=!r}')
+    print(f'failed to repackage = {len(failed)=!r}')
 
     print(f'Copy {len(to_copy)} new checkpoints')
     for package_fpath, name_fpath in ub.ProgIter(to_copy):
         shutil.copy(package_fpath, name_fpath)
 
     dvc_to_add = []
-    for package_dpath in list(storage_dpath.glob('*/*.pt')):
-        package_dvc_fpath = ub.Path(str(package_dpath) + '.dvc')
-        if not package_dvc_fpath.exists():
-            dvc_to_add.append(str(package_dpath.relative_to(dvc_dpath)))
+    for package_fpath in list(storage_dpath.glob('*/*.pt')):
+        package_dvc_fpath = ub.Path(str(package_fpath) + '.dvc')
+        if not package_dvc_fpath.exists() and package_fpath.is_file():
+            dvc_to_add.append(str(package_fpath.relative_to(dvc_dpath)))
 
     print('New models to add to DVC: {}'.format(ub.repr2(dvc_to_add)))
     dvc_info = ub.cmd(['dvc', 'add'] + dvc_to_add, cwd=dvc_dpath, verbose=3, check=True)

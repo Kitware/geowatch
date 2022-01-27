@@ -9,7 +9,7 @@ from watch.utils import tmux_queue
 
 def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
                         run=False, with_rich=True, with_status=True,
-                        virtualenv_cmd=None):
+                        virtualenv_cmd=None, skip_existing=False):
     """
     First ensure that models have been copied to the DVC repo in the
     appropriate path. (as noted by model_dpath)
@@ -46,7 +46,7 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
             --gpus="0,1" \
             --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/*/*.pt" \
             --test_dataset="$KWCOCO_TEST_FPATH" \
-            --run=1 --with_rich=False --with_status=False
+            --run=0 --with_rich=False --with_status=False --skip_existing=True
 
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
         KWCOCO_TEST_FPATH=$DVC_DPATH/Drop1-Aligned-L1-2022-01/combo_DILM_nowv_vali.kwcoco.json
@@ -69,6 +69,14 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
         python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="0,1" \
             --model_globstr="special:HISTORY" \
+            --test_dataset="$KWCOCO_TEST_FPATH" \
+            --run=1 --with_rich=False --with_status=False
+
+        DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+        KWCOCO_TEST_FPATH=$DVC_DPATH/Drop1-Aligned-L1-2022-01/vali_data_nowv.kwcoco.json
+        python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="0,1" \
+            --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/SC_*/*.pt" \
             --test_dataset="$KWCOCO_TEST_FPATH" \
             --run=1 --with_rich=False --with_status=False
 
@@ -242,8 +250,8 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
                     pred_command
                 )
 
-            # if recompute_pred or not pred_dataset_fpath.exists():
-            queue.submit(pred_command)
+            if recompute_pred or (skip_existing and not pred_dataset_fpath.exists()):
+                queue.submit(pred_command)
 
         if with_eval:
             eval_command = ub.codeblock(
@@ -263,8 +271,8 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
                     '[[ -f "{eval_metrics}" ]] || '.format(**suggestions) +
                     eval_command
                 )
-            # if recompute_eval or not eval_metrics_fpath.exists():
-            queue.submit(eval_command)
+            if recompute_eval or (skip_existing and not eval_metrics_fpath.exists()):
+                queue.submit(eval_command)
 
     print('tq = {!r}'.format(tq))
     # print(f'{len(tq)=}')

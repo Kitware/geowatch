@@ -45,13 +45,46 @@ class WatchCocoStats(scfg.Config):
         # TODO: tabulate stats when possible.
         import watch
         collatables = []
+        # video_info_rows = []
+        video_sensor_rows = []
+        all_sensors = set()
         # print('collatables = {!r}'.format(collatables))
         for fpath in ub.ProgIter(fpaths, verbose=3, desc='Load dataset stats'):
-            print('--')
+            print('\n--- Single Dataset Stats ---')
             dset = watch.demo.coerce_kwcoco(fpath)
             print('dset = {!r}'.format(dset))
-            colltable = coco_watch_stats(dset)
-            collatables.append(colltable)
+            stat_info = coco_watch_stats(dset)
+
+            collatable = {
+                'dset': stat_info['dset'],
+                **stat_info['basic_stats'],
+                **stat_info['chan_hist'],
+                **stat_info['sensor_hist'],
+            }
+            collatables.append(collatable)
+
+            for video_info_row in stat_info['video_summary_rows']:
+                video_sensor_freq = video_info_row['sensor_freq']
+                all_sensors.update(set(video_sensor_freq))
+                video_sensor_row = {
+                    'dset': stat_info['dset'],
+                    'name': video_info_row['name'],
+                    **video_sensor_freq,
+                }
+                video_sensor_rows.append(video_sensor_row)
+
+        print('\n--- Multi Dataset Stats --')
+
+        import math
+        all_sensors = sorted(all_sensors)
+        video_sensor_df = pd.DataFrame(video_sensor_rows)
+        piv = video_sensor_df.pivot(index=['name', 'dset'], columns=[], values=all_sensors)
+        piv = piv.sort_index()
+        piv = piv.astype(object)
+        piv = piv.applymap(lambda x: None if math.isnan(x) else int(x))
+        piv['total'] = piv.sum(axis=1)
+        print('Per-Video Sensor Frequency')
+        print(piv.to_string(float_format='%0.0f'))
 
         print('collatables = {}'.format(ub.repr2(collatables, nl=2)))
         summary = pd.DataFrame(collatables)
@@ -102,10 +135,10 @@ def coco_watch_stats(dset):
         sensor_freq = ub.dict_hist(avail_sensors)
         video = dset.index.videos[vidid]
         video = ub.dict_diff(video, ['regions', 'properties'])
-        video_str = ub.repr2(video, nl=-1, sort=False)
-        video_str = util_truncate.smart_truncate(
-            video_str, max_length=512, trunc_loc=0.7)
-        print('video = {}'.format(video_str))
+        # video_str = ub.repr2(video, nl=-1, sort=False)
+        # video_str = util_truncate.smart_truncate(
+        #     video_str, max_length=512, trunc_loc=0.7)
+        # print('video = {}'.format(video_str))
 
         frame_dates = dset.images(gids).lookup('date_captured', None)
         frame_dt = sorted([dateutil.parser.parse(d) for d in frame_dates if d])
@@ -116,9 +149,9 @@ def coco_watch_stats(dset):
 
         video_info = ub.dict_union({
             'name': video['name'],
-            'vidid': vidid,
-            'sensor_freq': sensor_freq,
+            **ub.dict_isect(video, ['width', 'height']),
             'num_frames': len(gids),
+            'sensor_freq': sensor_freq,
             'date_range': date_range,
         }, video)
         video_info.pop('regions', None)
@@ -128,7 +161,8 @@ def coco_watch_stats(dset):
             vid_info_str, max_length=512, trunc_loc=0.6)
         print('video_info = {}'.format(vid_info_str))
         all_sensor_entries.extend(all_sensor_entries)
-        video_summary_rows.append(ub.dict_diff(video_info, {'sensor_freq', 'warp_wld_to_vid'}))
+        # video_summary_rows.append(ub.dict_diff(video_info, {'sensor_freq', 'warp_wld_to_vid'}))
+        video_summary_rows.append(ub.dict_diff(video_info, {'warp_wld_to_vid'}))
 
     print('dset.tag = {!r}'.format(dset.tag))
 
@@ -173,14 +207,14 @@ def coco_watch_stats(dset):
     import pathlib
     dset_bundle_suffix = '/'.join(pathlib.Path(dset.fpath).parts[-2:])
 
-    colltable = {
+    stat_info = {
         'dset': dset_bundle_suffix,
-        **basic_stats,
-        **info['chan_hist'],
-        **info['sensor_hist'],
+        'basic_stats': basic_stats,
+        'chan_hist': info['chan_hist'],
+        'sensor_hist': info['sensor_hist'],
+        'video_summary_rows': video_summary_rows,
     }
-
-    return colltable
+    return stat_info
 
 
 _SubConfig = WatchCocoStats
