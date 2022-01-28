@@ -249,11 +249,14 @@ def time_aggregated_polys(coco_dset,
         flag = bool(_all_keys & chan_codes)
         has_requested_chans_list.append(flag)
 
+    if not any(has_requested_chans_list):
+        raise KeyError(f'no imgs in dset {coco_dset.tag} '
+                       f'have no keys {key} or {bg_key}.')
     if not all(has_requested_chans_list):
         n_missing = (len(has_requested_chans_list) -
                      sum(has_requested_chans_list))
-        raise KeyError(f'{n_missing} imgs in dset {coco_dset.tag} '
-                       f'have no keys {key} or {bg_key}.')
+        print(f'warning: {n_missing} imgs in dset {coco_dset.tag} '
+              f'have no keys {key} or {bg_key}. Interpolating...')
 
     if use_boundary_annots:
         import shapely.ops
@@ -282,13 +285,12 @@ def time_aggregated_polys(coco_dset,
     heatmaps_dct = defaultdict(list)
     for gid in gids:
 
-        # TODO change assertion behavior to allow partial failure here
         fg_img_probs, fg_chan_probs = heatmap(coco_dset,
                                               gid,
                                               key,
                                               return_chan_probs=True)
         heatmaps_dct['fg'].append(fg_img_probs)
-        for k in key:
+        for k in fg_chan_probs:
             heatmaps_dct[k].append(fg_chan_probs[k])
 
         if len(bg_key) > 0:
@@ -297,7 +299,7 @@ def time_aggregated_polys(coco_dset,
                                                   bg_key,
                                                   return_chan_probs=True)
             heatmaps_dct['bg'].append(bg_img_probs)
-            for k in bg_key:
+            for k in bg_chan_probs:
                 heatmaps_dct[k].append(bg_chan_probs[k])
         else:
             heatmaps_dct['bg'].append(np.zeros_like(fg_img_probs))
