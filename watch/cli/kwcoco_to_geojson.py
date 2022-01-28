@@ -164,6 +164,16 @@ def geojson_feature(img, anns, coco_dset, with_properties=True):
                 value.append(sep.join(map(str, [prop] * _len(geom))))
             properties[key] = sep.join(value)
 
+        # HACK
+        # We are not being scored on multipolygons in SC right now!
+        # https://smartgitlab.com/TE/metrics-and-test-framework/-/issues/24
+        #
+        # When safe, merge class labels for multipolygons so they'll be scored.
+        if 1:
+            phase = properties['current_phase'].split(sep)
+            if len(phase) > 1 and len(set(phase)) == 1:
+                properties['current_phase'] = phase[0]
+
         # identical properties
         for key in ['type', 'source', 'observation_date', 'sensor_name']:
             values = properties_list[key]
