@@ -847,10 +847,13 @@ class KWCocoVideoDataset(data.Dataset):
             self.n_pos = n_pos
             self.n_neg = len(self.negative_pool)
             self.length = self.n_pos + self.n_neg
-            print('len(neg_pool) ' + str(len(self.negative_pool)))
-            print('self.n_pos = {!r}'.format(self.n_pos))
-            print('self.n_neg = {!r}'.format(self.n_neg))
-            print('self.length = {!r}'.format(self.length))
+
+            # Hack:
+            self.length = min(self.length, 2048)
+            # print('len(neg_pool) ' + str(len(self.negative_pool)))
+            # print('self.n_pos = {!r}'.format(self.n_pos))
+            # print('self.n_neg = {!r}'.format(self.n_neg))
+            # print('self.length = {!r}'.format(self.length))
         self.new_sample_grid = new_sample_grid
 
         self.window_overlap = window_overlap
@@ -998,8 +1001,8 @@ class KWCocoVideoDataset(data.Dataset):
             # still having it at 0 for faster epochs.
             # TODO: dont shift off the edge.
             aff = kwimage.Affine.coerce(offset=(
-                rng.randint(-w // 2, w // 2),
-                rng.randint(-h // 2, h // 2)))
+                rng.randint(-w // 2.7, w // 2.7),
+                rng.randint(-h // 2.7, h // 2.7)))
 
             space_box = space_box.warp(aff).quantize()
             # aff = kwimage.Affine.coerce(offset=rng.randint(-8, 8, size=2))
@@ -1011,6 +1014,20 @@ class KWCocoVideoDataset(data.Dataset):
             time_sampler = self.new_sample_grid['vidid_to_time_sampler'][vidid]
             valid_gids = self.new_sample_grid['vidid_to_valid_gids'][vidid]
             tr_['gids'] = list(ub.take(valid_gids, time_sampler.sample(tr_['main_idx'])))
+
+            do_reduce_frames = rng.rand() > 0.5
+            if do_reduce_frames:
+                gids = tr_['gids']
+                main_gid = tr_['main_gid']
+                main_frame_idx = gids.index(main_gid)
+                flags = rng.rand(len(gids)) > 0.5
+                flags[main_frame_idx] = True
+                flags[0] = True
+                flags[-1] = True
+                gids = list(ub.compress(gids, flags))
+                # tr_['main_idx'] = gids.index(main_gid)
+                tr_['gids'] = gids
+
         return tr_
 
     @profile
@@ -1023,7 +1040,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> coco_dset = kwcoco.CocoDataset.demo('vidshapes2-multispectral', num_frames=5)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> channels = 'B10|B8a|B1|B8'
-            >>> sample_shape = (4, 530, 610)
+            >>> sample_shape = (5, 530, 610)
             >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, diff_inputs=0)
             >>> item = self[0]
             >>> canvas = self.draw_item(item)
@@ -1174,6 +1191,7 @@ class KWCocoVideoDataset(data.Dataset):
 
         NEW_TRUE_MULTIMODAL = self.true_multimodal
         ALLOW_RESAMPLE = self.resample_invalid_frames
+        ALLOW_FEWER_FRAMES = True
 
         if not NEW_TRUE_MULTIMODAL:
             raise NotImplementedError('old mode is gone')
@@ -1214,6 +1232,11 @@ class KWCocoVideoDataset(data.Dataset):
         time_sampler = self.new_sample_grid['vidid_to_time_sampler'][vidid]
         video_gids = time_sampler.video_gids
 
+        if ALLOW_FEWER_FRAMES:
+            error_level = 0
+        else:
+            error_level = 1
+
         if ALLOW_RESAMPLE:
             # If any image is junk allow for a resample
             if any(gid_to_isbad.values()):
@@ -1228,7 +1251,16 @@ class KWCocoVideoDataset(data.Dataset):
                     # print('resampling: {}'.format(index))
                     include_idxs = np.where(kwarray.isect_flags(time_sampler.video_gids, good_gids))[0]
                     exclude_idxs = np.where(kwarray.isect_flags(time_sampler.video_gids, bad_gids))[0]
-                    chosen = time_sampler.sample(include=include_idxs, exclude=exclude_idxs, error_level=1, return_info=False)
+                    try:
+                        chosen = time_sampler.sample(include=include_idxs,
+                                                     exclude=exclude_idxs,
+                                                     error_level=error_level,
+                                                     return_info=False)
+                    except Exception:
+                        if ALLOW_FEWER_FRAMES:
+                            break
+                        else:
+                            raise
                     new_idxs = np.setdiff1d(chosen, include_idxs)
                     new_gids = video_gids[new_idxs]
                     # print('new_gids = {!r}'.format(new_gids))
@@ -1240,21 +1272,29 @@ class KWCocoVideoDataset(data.Dataset):
                         sample_one_frame(gid)
 
         good_gids = [gid for gid, flag in gid_to_isbad.items() if not flag]
+        if len(good_gids) == 0:
+            # Force at least a few to be "good"
+            for gid in tr['gids']:
+                gid_to_isbad[gid] = False
+            good_gids = [gid for gid, flag in gid_to_isbad.items() if not flag]
+
         final_gids = ub.oset(video_gids) & good_gids
+        # requested_channel_order = self.input_channels.spec.split('|')
+        num_frames = len(final_gids)
+        if num_frames == 0:
+            raise Exception('0 frames')
+
         # coco_dset.images(final_gids).lookup('date_captured')
         tr_['gids'] = final_gids
 
         if self.sample_shape is None:
             # Do something better
-            input_dsize = ub.peek(gid_to_sample[good_gids[0]])['im'].shape[1:3][::-1]
+            input_dsize = ub.peek(gid_to_sample[final_gids[0]])['im'].shape[1:3][::-1]
         else:
             input_dsize = self.sample_shape[-2:][::-1]
 
-        # requested_channel_order = self.input_channels.spec.split('|')
-
         if not self.inference_only:
             # Learn more from the center of the space-time patch
-            num_frames = len(good_gids)
             time_weights = kwimage.gaussian_patch((1, num_frames))[0]
             time_weights = time_weights / time_weights.max()
             time_weights = time_weights.clip(0, 1)
@@ -1398,6 +1438,12 @@ class KWCocoVideoDataset(data.Dataset):
                     frame_weights = space_weights * time_weights[time_idx]
                 else:
                     frame_weights = 1.0
+
+                # Dilate ignore masks (dont care about the surrounding area
+                # either)
+                ignore_dilate = 11
+                frame_saliency = util_kwimage.morphology(frame_saliency, 'dilate', kernel=ignore_dilate)
+                saliency_ignore = util_kwimage.morphology(saliency_ignore, 'dilate', kernel=ignore_dilate)
 
                 saliency_weights = frame_weights * (1 - saliency_ignore)
                 class_weights = frame_weights * (1 - frame_class_ignore)

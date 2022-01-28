@@ -1370,3 +1370,98 @@ python -m watch.tasks.fusion.fit \
     --batch_size=1 \
     --arch_name=$ARCH \
     --init="$HOME/remote/toothbrush/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BAS_smt_it_stm_p8_TUNE_L1_DIL_v57/BAS_smt_it_stm_p8_TUNE_L1_DIL_v57_epoch=3-step=81135.pt"
+
+
+# Transfer BAS+SC WV+L1 With Few Features Toothbrush LinConv - 2022-01-27
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-01
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
+__check__='
+smartwatch stats $VALI_FPATH $TRAIN_FPATH
+'
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop1-20201117
+ARCH=smt_it_stm_p8
+#CHANNELS="depth,before_after_heatmap|segmentation_heatmap,brush|bare_ground|built_up,blue|green|red|nir|swir16|swir22"
+CHANNELS="blue|green|red|nir|swir16|swir22"
+#smartwatch stats "$TRAIN_FPATH" "$VALI_FPATH"
+EXPERIMENT_NAME=BOTH_${ARCH}_TA1_RAW_v61
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
+export CUDA_VISIBLE_DEVICES="1"
+python -m watch.tasks.fusion.fit \
+    --config "$WORKDIR/configs/common_20201117.yaml"  \
+    --channels=${CHANNELS} \
+    --name=$EXPERIMENT_NAME \
+    --chip_size=416 \
+    --time_steps=3 \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --method="MultimodalTransformer" \
+    --gpus "1" \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --amp_backend=apex \
+    --attention_impl=exact \
+    --tokenizer=linconv \
+    --use_centered_positives=True \
+    --use_grid_positives=True \
+    --num_workers="8" \
+    --time_span=1y \
+    --neg_to_pos_ratio=1.0 \
+    --global_saliency_weight=1.00 \
+    --global_class_weight=2.00 \
+    --time_sampling=soft2 \
+    --batch_size=1 \
+    --normalize_inputs=1024 \
+    --init="$HOME/remote/toothbrush/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819.pt"
+
+
+# Transfer BAS+SC WV+L1 With Few Features Toothbrush LinConv - 2022-01-27
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-01
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
+__check__='
+smartwatch stats $VALI_FPATH $TRAIN_FPATH
+'
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop1-20201117
+ARCH=smt_it_stm_p8
+#CHANNELS="depth,before_after_heatmap|segmentation_heatmap,brush|bare_ground|built_up,blue|green|red|nir|swir16|swir22"
+CHANNELS="blue|green|red|nir|swir16|swir22"
+#smartwatch stats "$TRAIN_FPATH" "$VALI_FPATH"
+EXPERIMENT_NAME=BOTH_${ARCH}_TA1_RAW_v62
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
+export CUDA_VISIBLE_DEVICES="0"
+python -m watch.tasks.fusion.fit \
+    --config "$WORKDIR/configs/common_20201117.yaml"  \
+    --channels=${CHANNELS} \
+    --name=$EXPERIMENT_NAME \
+    --chip_size=416 \
+    --time_steps=9 \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --method="MultimodalTransformer" \
+    --gpus "1" \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --amp_backend=apex \
+    --attention_impl=exact \
+    --tokenizer=linconv \
+    --use_centered_positives=True \
+    --use_grid_positives=True \
+    --num_workers="8" \
+    --time_span=1y \
+    --neg_to_pos_ratio=1.0 \
+    --global_saliency_weight=1.00 \
+    --global_class_weight=1.00 \
+    --time_sampling=soft2 \
+    --batch_size=1 \
+    --normalize_inputs=512 \
+    --arch_name=$ARCH \
+    --init="$HOME/remote/toothbrush/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819.pt"
