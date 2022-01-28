@@ -17,7 +17,6 @@ def repackage(checkpoint_fpath, force=False):
 
     """
     import ubelt as ub
-    import pathlib
     import os
     import yaml
     # For now there is only one model, but in the future we will need

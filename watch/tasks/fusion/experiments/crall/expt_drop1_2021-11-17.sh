@@ -1416,6 +1416,7 @@ python -m watch.tasks.fusion.fit \
     --time_sampling=soft2 \
     --batch_size=1 \
     --normalize_inputs=1024 \
+    --temporal_dropout=True \
     --init="$HOME/remote/toothbrush/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819.pt"
 
 
@@ -1464,4 +1465,5 @@ python -m watch.tasks.fusion.fit \
     --batch_size=1 \
     --normalize_inputs=512 \
     --arch_name=$ARCH \
+    --temporal_dropout=True \
     --init="$HOME/remote/toothbrush/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819.pt"

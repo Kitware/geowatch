@@ -177,6 +177,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         true_multimodal=True,
         use_grid_positives=True,
         use_centered_positives=False,
+        temporal_dropout=0.0,
     ):
         """
         Args:
@@ -206,36 +207,41 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.time_overlap = time_overlap
         self.chip_overlap = chip_overlap
         self.neg_to_pos_ratio = neg_to_pos_ratio
-        self.channels = channels
         self.batch_size = batch_size
         self.preprocessing_step = preprocessing_step
         self.normalize_inputs = normalize_inputs
-        self.time_sampling = time_sampling
-        self.exclude_sensors = exclude_sensors
-        self.diff_inputs = diff_inputs
         self.time_span = time_span
-        self.match_histograms = match_histograms
-        self.resample_invalid_frames = resample_invalid_frames
-        self.upweight_centers = upweight_centers
-        self.normalize_perframe = normalize_perframe
-        self.true_multimodal = true_multimodal
-        self.use_centered_positives = use_centered_positives
-        self.use_grid_positives = use_grid_positives
+
+        # self.channels = channels
+        # self.time_sampling = time_sampling
+        # self.exclude_sensors = exclude_sensors
+        # self.diff_inputs = diff_inputs
+        # self.match_histograms = match_histograms
+        # self.resample_invalid_frames = resample_invalid_frames
+        # self.upweight_centers = upweight_centers
+        # self.normalize_perframe = normalize_perframe
+        # self.true_multimodal = true_multimodal
+        # self.use_centered_positives = use_centered_positives
+        # self.use_grid_positives = use_grid_positives
+        # self.temporal_dropout = temporal_dropout
 
         # TODO: reduce redundency between this, the argparse args piece
         self.common_dataset_kwargs = dict(
-            channels=self.channels,
-            time_sampling=self.time_sampling,
-            diff_inputs=self.diff_inputs,
-            exclude_sensors=self.exclude_sensors,
-            match_histograms=self.match_histograms,
-            upweight_centers=self.upweight_centers,
-            resample_invalid_frames=self.resample_invalid_frames,
-            normalize_perframe=self.normalize_perframe,
-            true_multimodal=self.true_multimodal,
-            use_centered_positives=self.use_centered_positives,
-            use_grid_positives=self.use_grid_positives,
+            channels=channels,
+            time_sampling=time_sampling,
+            diff_inputs=diff_inputs,
+            exclude_sensors=exclude_sensors,
+            match_histograms=match_histograms,
+            upweight_centers=upweight_centers,
+            resample_invalid_frames=resample_invalid_frames,
+            normalize_perframe=normalize_perframe,
+            true_multimodal=true_multimodal,
+            use_centered_positives=use_centered_positives,
+            use_grid_positives=use_grid_positives,
+            temporal_dropout=temporal_dropout,
         )
+        for _k, _v in self.common_dataset_kwargs.items():
+            setattr(self, _k, _v)
 
         self.num_workers = util_globals.coerce_num_workers(num_workers)
         self.torch_start_method = torch_start_method
@@ -303,6 +309,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         parser.add_argument('--batch_size', default=4, type=int)
         parser.add_argument('--time_span', default='2y', type=str, help='how long a time window should roughly span by default')
         parser.add_argument('--resample_invalid_frames', default=True, help='if True, will attempt to resample any frame without valid data')
+        parser.add_argument('--temporal_dropout', default=0.0, help='Drops frames in a fraction of training batches'),
 
         parser.add_argument(
             '--normalize_inputs', default=True, type=smartcast, help=ub.paragraph(
@@ -765,6 +772,7 @@ class KWCocoVideoDataset(data.Dataset):
         true_multimodal=True,
         use_grid_positives=True,
         use_centered_positives=False,
+        temporal_dropout=0.0,
     ):
 
         # TODO: the set of "valid" background classnames should be defined
@@ -779,6 +787,7 @@ class KWCocoVideoDataset(data.Dataset):
         self.normalize_perframe = normalize_perframe
         self.resample_invalid_frames = resample_invalid_frames
         self.upweight_centers = upweight_centers
+        self.temporal_dropout = temporal_dropout
 
         if channels is None:
             # Hack to use all channels in the first image.
@@ -1015,8 +1024,10 @@ class KWCocoVideoDataset(data.Dataset):
             valid_gids = self.new_sample_grid['vidid_to_valid_gids'][vidid]
             tr_['gids'] = list(ub.take(valid_gids, time_sampler.sample(tr_['main_idx'])))
 
-            do_reduce_frames = rng.rand() > 0.5
-            if do_reduce_frames:
+            temporal_dropout_rate = self.temporal_dropout
+            do_temporal_dropout = rng.rand() > temporal_dropout_rate
+            if do_temporal_dropout:
+                # Temporal dropout
                 gids = tr_['gids']
                 main_gid = tr_['main_gid']
                 main_frame_idx = gids.index(main_gid)
