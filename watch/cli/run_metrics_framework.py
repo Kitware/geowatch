@@ -4,7 +4,6 @@ import sys
 import os
 import json
 import parse
-import itertools
 import pandas as pd
 import numpy as np
 import shapely.geometry
@@ -66,7 +65,7 @@ def merge_bas_metrics_results(results: List[RegionResult]):
         spatial FAR        float64
         temporal FAR       float64
         images FAR         float64
-    
+
     as in bas/scoreboard_rho=*.csv
     '''
 
