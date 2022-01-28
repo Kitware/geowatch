@@ -219,7 +219,7 @@ def merge_sc_metrics_results(results: List[RegionResult]):
         '''
         confusion matrix and f1 scores apprently ignore subsites,
         so we must do the same
-        TODO submit this as an issue
+        https://smartgitlab.com/TE/metrics-and-test-framework/-/issues/24
         MWE:
         >>> from sklearn.metrics import confusion_matrix
         >>> confusion_matrix(['a,a', 'a'], ['a,a', 'b'], labels=['a', 'b'])
@@ -241,7 +241,8 @@ def merge_sc_metrics_results(results: List[RegionResult]):
                          if not pd.isna(cell) and delim not in cell else cell)
         df = pd.concat(
             [df[col].str.split(delim, expand=True) for col in site_names],
-            axis=1, ignore_index=True)
+            axis=1,
+            ignore_index=True)
 
         df.columns = pd.MultiIndex.from_product(
             #  ([region_id], site_names, ['truth', 'proposed']),
@@ -384,7 +385,7 @@ def merge_metrics_results(region_dpaths, anns_root, out_dpath=None):
     return bas_df, sc_df, sc_cm
 
 
-def ensure_thumbnails(image_path, ann_root, region_id, coco_dset):
+def ensure_thumbnails(image_root, region_id, sites):
     '''
     Symlink and organize images in the format the metrics framework expects
 
@@ -408,13 +409,55 @@ def ensure_thumbnails(image_path, ann_root, region_id, coco_dset):
                     *.tif
 
     Args:
-        image_path: root directory to save under
-        ann_root: $DVC_DPATH/annotations/ == smartgitlab.com/TE/annotations/
+        image_root: root directory to save under
         region_id: ex. 'KR_R001'
-        coco_dset: containing a video named {region_id}
+        sites: proposed sites with image paths in the 'source' field
+            TODO change to 'misc_info' field
     '''
+    image_root = ub.Path(image_root)
 
-    return NotImplemented
+    # gather images and dates
+    site_img_date_dct = dict()
+    for site in sites:
+
+        img_date_dct = dict()
+
+        for feat in site['features']:
+            props = feat['properties']
+
+            if props['type'] == 'observation':
+
+                img_path = ub.Path(props['source'])
+                if img_path.is_file():
+                    img_date_dct[img_path] = props['observation_date']
+                else:
+                    print(f'warning: image {img_path}' ' is not a valid path')
+
+            elif props['type'] == 'site':
+                site_id = props['site_id']
+
+            else:
+                raise ValueError(props['type'])
+
+        site_img_date_dct[site_id] = img_date_dct
+
+    # build region viz
+    region_root = image_root.joinpath(*region_id.split('_')) / 'images' / 'a' / 'b'
+    region_root.mkdir(parents=True, exist_ok=True)
+    for img_path, img_date in ub.dict_union(
+            *site_img_date_dct.values()).items():
+        (region_root / '_'.join((img_date.replace(
+            '-', ''), img_path.with_suffix('.jp2').name))).symlink_to(img_path)
+
+    # build site viz
+    for site_id, img_date_dct in site_img_date_dct.items():
+        site_root = image_root.joinpath(*site_id.split('_')) / 'crops'
+        site_root.mkdir(parents=True, exist_ok=True)
+        for img_path, img_date in img_date_dct.items():
+            # TODO crop
+            (site_root / '_'.join(
+                (img_date.replace('-', ''),
+                 img_path.with_suffix('.tif').name))).symlink_to(img_path)
 
 
 def main(args):
@@ -442,10 +485,11 @@ def main(args):
         If None, use the environment variable METRICS_DPATH.
         ''')
     # https://stackoverflow.com/a/49351471
-    parser.add_argument('--virtualenv_cmd',
-                        default=['true'],  # no-op bash command
-                        nargs='+',  # hack for spaces
-                        help='''
+    parser.add_argument(
+        '--virtualenv_cmd',
+        default=['true'],  # no-op bash command
+        nargs='+',  # hack for spaces
+        help='''
         Command to run before calling the metrics framework in a subshell.
         The metrics framework should be installed in a different virtual env
         from WATCH, using eg conda or pyenv.
@@ -458,9 +502,9 @@ def main(args):
     parser.add_argument('--merge',
                         action='store_true',
                         help='''
-    Merge BAS and SC metrics from all regions and output to
-    {out_dir}/merged/
-    ''')
+        Merge BAS and SC metrics from all regions and output to
+        {out_dir}/merged/
+        ''')
 
     parser.add_argument('--tmp_dir',
                         help='''
@@ -468,10 +512,9 @@ def main(args):
         non-persistant directory
         ''')
 
-    if 0:  # TODO
-        parser.add_argument('--keep_thumbnails',
-                            action='store_true',
-                            help='''
+    parser.add_argument('--keep_thumbnails',
+                        action='store_true',
+                        help='''
         Output thumbnails of region and ground truth sites to
         {out_dir}/thumbnails/
         ''')
@@ -493,13 +536,13 @@ def main(args):
 
     # normalize paths
     if args.gt_dpath is not None:
-        gt_dpath = os.path.abspath(args.gt_dpath)
+        gt_dpath = ub.Path(args.gt_dpath).absolute()
     else:
         import watch
         dvc_dpath = watch.find_smart_dvc_dpath()
         gt_dpath = dvc_dpath / 'annotations'
         print(f'gt_dpath unspecified, defaulting to {gt_dpath=}')
-    assert os.path.isdir(gt_dpath), gt_dpath
+    assert gt_dpath.is_dir(), gt_dpath
     if args.metrics_dpath is not None:
         metrics_dpath = os.path.abspath(args.metrics_dpath)
     else:
@@ -527,74 +570,54 @@ def main(args):
     for region_id, region_sites in grouped_sites.items():
 
         site_dpath = (tmp_dpath / 'site' / region_id).ensuredir()
-        image_dpath = (tmp_dpath / 'image' / region_id).ensuredir()
+        image_dpath = (tmp_dpath / 'image').ensuredir()
+
+        # cache_dpath is always empty to work around bugs
         cache_dpath = (tmp_dpath / 'cache' / region_id).ensuredir()
 
-        if True:
-            # doctor site_dpath for expected structure
-            site_sub_dpath = os.path.join(site_dpath, 'latest', region_id)
-            os.makedirs(site_sub_dpath, exist_ok=True)
+        if args.out_dir is not None:
+            out_dir = ub.Path(args.out_dir) / region_id
+            if args.keep_thumbnails:
+                image_dpath = ub.Path(args.out_dir) / 'thumbnails'
+                ub.delete(image_dpath)
+        else:
+            out_dir = None
 
-            # copy site models to site_dpath
-            for site in region_sites:
-                with open(
-                        os.path.join(
-                            site_sub_dpath,
-                            (site['features'][0]['properties']['site_id'] +
-                             '.geojson')), 'w') as f:
-                    json.dump(site, f)
+        # doctor site_dpath for expected structure
+        site_sub_dpath = os.path.join(site_dpath, 'latest', region_id)
+        os.makedirs(site_sub_dpath, exist_ok=True)
 
-            if 1:
+        # copy site models to site_dpath
+        for site in region_sites:
+            with open(
+                    os.path.join(
+                        site_sub_dpath,
+                        (site['features'][0]['properties']['site_id'] +
+                         '.geojson')), 'w') as f:
+                json.dump(site, f)
 
-                # link rgb images to image_dpath for viz
-                img_date_dct = dict()
-                for site in sites:
-                    for feat in site['features'][1:]:
-                        img_path = feat['properties']['source']
-                        if os.path.isfile(img_path):
-                            img_date_dct[img_path] = feat['properties'][
-                                'observation_date']
-                        else:
-                            print(f'warning: image {img_path}'
-                                  ' is not a valid path')
-                for img_path, img_date in img_date_dct.items():
-                    # use filename expected by metrics framework
-                    ub.symlink(
-                        img_path,
-                        os.path.join(
-                            image_dpath, '_'.join(
-                                (img_date, os.path.basename(img_path)))),
-                        overwrite=True)
+        ensure_thumbnails(image_dpath, region_id, region_sites)
 
-            else:  # TODO finish updating this
-
-                ensure_thumbnails()
-
-            # run metrics framework
-            if args.out_dir is not None:
-                out_dir = os.path.join(args.out_dir, region_id)
-            else:
-                out_dir = None
+        # run metrics framework
+        cmd = ub.paragraph(fr'''
+            {virtualenv_cmd} &&
+            python {os.path.join(metrics_dpath, 'run_evaluation.py')}
+                --roi {region_id}
+                --gt_path {gt_dpath / 'site_models'}
+                --rm_path {gt_dpath / 'region_models'}
+                --sm_path {site_dpath}
+                --image_dir {image_dpath}
+                --output_dir {out_dir}
+                --cache_dir {cache_dpath}
+            ''')
+        try:
+            ub.cmd(cmd, verbose=3, check=True, shell=True)
             out_dirs.append(out_dir)
-            # cache_dpath is always empty to work around bugs
-            cmd = ub.paragraph(fr'''
-                {virtualenv_cmd} &&
-                python {os.path.join(metrics_dpath, 'run_evaluation.py')}
-                    --roi {region_id}
-                    --gt_path {os.path.join(gt_dpath, 'site_models')}
-                    --rm_path {os.path.join(gt_dpath, 'region_models')}
-                    --sm_path {site_dpath}
-                    --image_dir {image_dpath}
-                    --output_dir {out_dir}
-                    --cache_dir {cache_dpath}
-                ''')
-            try:
-                ub.cmd(cmd, verbose=3, check=True, shell=True)
-            except subprocess.CalledProcessError:
-                print('error in metrics framework, probably due to zero '
-                      'TP site matches.')
+        except subprocess.CalledProcessError:
+            print('error in metrics framework, probably due to zero '
+                  'TP site matches.')
 
-    if args.merge:
+    if args.merge and out_dirs:
         merge_metrics_results(out_dirs, gt_dpath)
 
 
