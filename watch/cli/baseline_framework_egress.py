@@ -53,7 +53,13 @@ def main():
 
 
 def egress_item(stac_item, outbucket, aws_base_command):
-    stac_item_dict = stac_item.to_dict()
+    if isinstance(stac_item, dict):
+        stac_item_dict = stac_item
+    elif isinstance(stac_item, pystac.Item):
+        stac_item_dict = stac_item.to_dict()
+    else:
+        raise TypeError("Expecting 'stac_item' to be either a dictionary "
+                        "or pystac.Item")
 
     stac_item_outpath = os.path.join(
         outbucket, "{}.json".format(stac_item.id))
@@ -86,6 +92,32 @@ def egress_item(stac_item, outbucket, aws_base_command):
     output_stac_item = pystac.Item.from_dict(stac_item_dict)
     output_stac_item.set_self_href(stac_item_outpath)
     return output_stac_item
+
+
+def upload_output_stac_items(output_stac_items,
+                             output_path,
+                             aws_base_command,
+                             newline=False):
+    if newline:
+        te_output = '\n'.join((json.dumps(item) for item in output_stac_items))
+    else:
+        te_output = {'raw_images': [],
+                     'stac': {
+                         'type': 'FeatureCollection',
+                         'features': output_stac_items}}
+
+    with tempfile.NamedTemporaryFile() as temporary_file:
+        with open(temporary_file.name, 'w') as f:
+            if newline:
+                print(te_output, file=f)
+            else:
+                print(json.dumps(te_output, indent=2), file=f)
+
+        command = [*aws_base_command, temporary_file.name, output_path]
+
+        subprocess.run(command, check=True)
+
+    return te_output
 
 
 def baseline_framework_egress(stac_catalog,
@@ -125,24 +157,8 @@ def baseline_framework_egress(stac_catalog,
     output_stac_items = [item.to_dict() for item
                          in output_catalog.get_all_items()]
 
-    if newline:
-        te_output = '\n'.join((json.dumps(item) for item in output_stac_items))
-    else:
-        te_output = {'raw_images': [],
-                     'stac': {
-                         'type': 'FeatureCollection',
-                         'features': output_stac_items}}
-
-    with tempfile.NamedTemporaryFile() as temporary_file:
-        with open(temporary_file.name, 'w') as f:
-            if newline:
-                print(te_output, file=f)
-            else:
-                print(json.dumps(te_output, indent=2), file=f)
-
-        command = [*aws_base_command, temporary_file.name, output_path]
-
-        subprocess.run(command, check=True)
+    te_output = upload_output_stac_items(
+        output_stac_items, output_path, aws_base_command, newline=newline)
 
     return te_output
 

@@ -71,6 +71,7 @@ __getattr__ = lazy_import(
         'util_rgdc',
         'util_stac',
         'util_time',
+        'util_framework',
     },
     submod_attrs={
         'util_data': [
@@ -88,4 +89,4 @@ __all__ = ['configargparse_ext', 'ext_monai', 'find_smart_dvc_dpath',
            'util_data', 'util_gdal', 'util_girder', 'util_gis', 'util_iter',
            'util_kwarray', 'util_kwimage', 'util_kwplot', 'util_norm',
            'util_parallel', 'util_path', 'util_raster', 'util_regex',
-           'util_rgdc', 'util_stac', 'util_time']
+           'util_rgdc', 'util_stac', 'util_time', 'util_framework']
