@@ -79,8 +79,11 @@ def geojson_feature(img, anns, coco_dset, with_properties=True):
         # properly passed through to TA-2?
         source = None
         for aux in img.get('auxiliary', []):
-            basename = os.path.basename(aux['file_name'])
-            if basename.endswith('blue.tif'):
+            if aux['channels'] in {'r|g|b', 'rgb'}:
+                # source = basename
+                source = os.path.abspath(aux['file_name'])
+        for aux in img.get('auxiliary', []):
+            if aux['channels'] in {'pan', 'panchromatic'}:
                 # source = basename
                 source = os.path.abspath(aux['file_name'])
         if source is None:
