@@ -1120,20 +1120,21 @@ class MultimodalTransformer(pl.LightningModule):
             to_compare = {}
             # Flatten everything for pixelwise comparisons
             if 'change' in batch_head_truths:
-                _true = torch.cat([x.view(-1) for x in batch_head_truths['change']], dim=0)
-                _pred = torch.cat([x.view(-1) for x in batch_head_probs['change']], dim=0)
+                _true = torch.cat([x.contiguous().view(-1) for x in batch_head_truths['change']], dim=0)
+                _pred = torch.cat([x.contiguous().view(-1) for x in batch_head_probs['change']], dim=0)
                 to_compare['change'] = (_true, _pred)
 
             if 'class' in batch_head_truths:
-                n_class = len(self.classes)
+                c = self.num_classes
                 # Truth is index-based (todo: per class binary maps)
                 _true = torch.cat([x.contiguous().view(-1) for x in batch_head_truths['class']], dim=0)
-                _pred = torch.cat([x.contiguous().view(-1, n_class) for x in batch_head_probs['class']], dim=0)
+                _pred = torch.cat([x.contiguous().view(-1, c) for x in batch_head_probs['class']], dim=0)
                 to_compare['class'] = (_true, _pred)
 
             if 'saliency' in batch_head_truths:
-                _true = torch.cat([x.view(-1) for x in batch_head_truths['saliency']], dim=0)
-                _pred = torch.cat([x.view(-1) for x in batch_head_probs['saliency']], dim=0)
+                c = self.saliency_num_classes
+                _true = torch.cat([x.contiguous().view(-1) for x in batch_head_truths['saliency']], dim=0)
+                _pred = torch.cat([x.contiguous().view(-1, c) for x in batch_head_probs['saliency']], dim=0)
                 to_compare['saliency'] = (_true, _pred)
 
             # compute metrics

@@ -139,7 +139,7 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
     all_checkpoint_paths = []
     for dset_dpath in dset_dpaths:
         # Find all paths with lightning logs
-        lightning_log_dpaths = list((dset_dpath / 'runs').glob('*v59*/lightning_logs'))
+        lightning_log_dpaths = list((dset_dpath / 'runs').glob('*/lightning_logs'))
         for ll_dpath in lightning_log_dpaths:
             if not ll_dpath.parent.name.startswith(('Activity', 'SC_', 'BOTH_', 'BAS_')):  # HACK
                 continue
