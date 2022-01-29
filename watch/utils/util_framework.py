@@ -15,8 +15,8 @@ class CacheItemOutputS3Wrapper:
         self.outbucket = outbucket
 
         if aws_profile is not None:
-            self.aws_base_command =\
-              ['aws', 's3', '--profile', aws_profile, 'cp', '--no-progress']
+            self.aws_base_command = [
+                'aws', 's3', '--profile', aws_profile, 'cp', '--no-progress']
         else:
             self.aws_base_command = ['aws', 's3', 'cp', '--no-progress']
 
