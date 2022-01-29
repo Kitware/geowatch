@@ -181,7 +181,8 @@ python -m watch.cli.kwcoco_to_geojson \
     score  -- \
         --metrics_dpath $METRICS_DPATH \
         --virtualenv_cmd $METRICS_VENV_CMD \
-        --out_dir $DSET_DPATH/scores/
+        --out_dir $DSET_DPATH/scores/ \
+        --merge # optional: merge results across regions
 
 
 #
@@ -240,5 +241,27 @@ for REGION_FILE in $DSET_DPATH/regions/*geojson; do
             --metrics_dpath $METRICS_DPATH \
             --virtualenv_cmd $METRICS_VENV_CMD \
             --out_dir $DSET_DPATH/scores/
+done
+
+
+#
+# DEMO: ceiling analysis: set GT sites as the proposed sites, 
+# then run SC on each site
+# (will break visualizations)
+# 
+
+
+# creates sites/[sites].geojson and scores/*
+rm -r $DSET_DPATH/sites
+rm -r $DSET_DPATH/scores
+for REGION_FILE in $DVC_DPATH/annotations/region_models/KR_*.geojson; do
+    python -m watch.cli.kwcoco_to_geojson \
+        $DSET_DPATH/sc.kwcoco.json \
+        --default_track_fn class_heatmaps \
+        --site_summary $REGION_FILE \
+        score -- \
+            --metrics_dpath $METRICS_DPATH \
+            --virtualenv_cmd $METRICS_VENV_CMD \
+            --out_dir $DSET_DPATH/scores/ \
 done
 

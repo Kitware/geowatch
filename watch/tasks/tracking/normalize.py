@@ -229,9 +229,10 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
         if len(annots) > 0:
             empty_aids = annots.compress(remove_fn(annots)).aids
             coco_dset.remove_annotations(empty_aids)
-            print(f'Removing small aids: {empty_aids}. '
-                  'After removing small, trackids: ',
-                  set(coco_dset.annots().get('track_id', None)))
+            print(
+                f'Removing small aids: {empty_aids}. '
+                'After removing small, trackids: ',
+                set(coco_dset.annots().get('track_id', None)))
         return coco_dset
 
     def polys_in_video(annots, coco_dset):
@@ -272,8 +273,8 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
             except ValueError:
                 return True
 
-        return list(map(_is_invalid_or_small,
-                        polys_in_video(annots, coco_dset)))
+        return list(
+            map(_is_invalid_or_small, polys_in_video(annots, coco_dset)))
 
     coco_dset = remove_annotations(coco_dset, are_invalid_or_small)
 
@@ -381,6 +382,9 @@ def normalize_phases(coco_dset, baseline_keys={'salient'}):
     Convert internal representation of phases to their IARPA standards
     as well as inserting a baseline guess for activity classification
 
+    HACK: add a Post Construction frame at the end of every track
+    until we support partial sites
+
     The only remaining categories in the returned coco_dset should be:
         Site Preparation
         Active Construction
@@ -410,17 +414,15 @@ def normalize_phases(coco_dset, baseline_keys={'salient'}):
 
     baseline_keys = set(baseline_keys)
     unknown_cnames = coco_dset.name_to_cat.keys() - (
-        {cat['name'] for cat in CATEGORIES} |
-        {'Site Boundary'} |
-        baseline_keys)
+        {cat['name']
+         for cat in CATEGORIES} | {'Site Boundary'} | baseline_keys)
     if unknown_cnames:
         print('removing unknown categories {unknown_cnames}')
         coco_dset.remove_categories(unknown_cnames, keep_annots=False)
 
     cnames_to_remove = set(
         # negative examples, no longer needed
-        CNAMES_DCT['negative']['scored'] +
-        CNAMES_DCT['negative']['unscored'] +
+        CNAMES_DCT['negative']['scored'] + CNAMES_DCT['negative']['unscored'] +
         # should have been consumed by track_fn, TODO more robust check
         ['Site Boundary'])
     coco_dset.remove_categories(cnames_to_remove, keep_annots=False)
@@ -434,8 +436,8 @@ def normalize_phases(coco_dset, baseline_keys={'salient'}):
     # metrics-and-test-framework/evaluation.py:1684
     cnames_to_score = set(CNAMES_DCT['positive']['scored'])
 
-    assert set(coco_dset.name_to_cat).issubset(
-            cnames_to_replace | cnames_to_score)
+    assert set(coco_dset.name_to_cat).issubset(cnames_to_replace
+                                               | cnames_to_score)
 
     # Replace positive annots of unknown class with a baseline guess class
     # TODO break out these heuristics
@@ -476,6 +478,60 @@ def normalize_phases(coco_dset, baseline_keys={'salient'}):
                 annots.set('category_id', cids)
         else:
             log.update(['full class labels'])
+
+        # HACK
+        # If the track ends before the end of the video, and the last frame is
+        # not post construction, add another frame of post construction
+        # TODO this is not a perfect approach, since we don't have per-subsite
+        # tracking across frames. We can run into a case where:
+        # frame  1   2   3
+        # ss1    AC  AC  PC
+        # ss2    AC  AC
+        # it is ambiguous whether ss2 ends on AC or merges with ss1.
+        # Ignore this edge case for now.
+        last_gid = coco_dset.index._set_sorted_by_frame_index(
+            coco_dset.annots(trackid=trackid).gids)[-1]
+        vidid = coco_dset.imgs[last_gid].get('video_id', None)
+        if vidid is None:
+            gids = coco_dset.index._set_sorted_by_frame_index(
+                coco_dset.images().gids)
+        else:
+            gids = coco_dset.index._set_sorted_by_frame_index(
+                coco_dset.images(vidid=vidid).gids)
+        current_gid = gids[-1]
+
+        def img_to_vid(gid):
+            return kwimage.Affine.coerce(coco_dset.imgs[gid].get(
+                'warp_img_to_vid', {'scale': 1}))
+
+        if last_gid != current_gid:
+            next_gid = gids[gids.index(last_gid) + 1]
+
+            post_cid = coco_dset.name_to_cat['Post Construction']['id']
+
+            # TODO make this work as expected - intersection instead of union
+            # coco_dset.annots(trackid=trackid, gid=last_gid)
+            anns = coco_dset.annots(aids=[
+                ann['id'] for ann in coco_dset.annots(gid=last_gid).objs if
+                ann['track_id'] == trackid and ann['category_id'] != post_cid
+            ])
+            dets = anns.detections.warp(img_to_vid(last_gid)).warp(
+                img_to_vid(next_gid).inv())
+            for ann, seg, bbox in zip(
+                    anns.objs, dets.data['segmentations'].to_coco(style='new'),
+                    dets.boxes.to_coco(style='new')):
+
+                post_ann = ann.copy()
+                post_ann.pop('id')
+                if 'track_index' in post_ann:
+                    post_ann['track_index'] += 1
+                post_ann.update(
+                    dict(image_id=next_gid,
+                         category_id=post_cid,
+                         segmentation=seg,
+                         bbox=bbox))
+                # import xdev; xdev.embed()
+                coco_dset.add_annotation(**post_ann)
 
     print('label status of tracks: ', log)
     return coco_dset
@@ -564,7 +620,8 @@ def normalize(coco_dset, track_fn, overwrite, gt_dset=None, **track_kwargs):
     def _normalize_annots(coco_dset, overwrite):
         coco_dset = dedupe_annots(coco_dset)
         coco_dset = add_geos(coco_dset, overwrite)
-        coco_dset = remove_small_annots(coco_dset, min_area_px=0,
+        coco_dset = remove_small_annots(coco_dset,
+                                        min_area_px=0,
                                         min_geo_precision=None)
         # coco_dset._build_index()
 
@@ -587,7 +644,7 @@ def normalize(coco_dset, track_fn, overwrite, gt_dset=None, **track_kwargs):
     coco_dset = add_track_index(coco_dset)
     if 'key' in track_kwargs:  # assume this is a baseline (saliency) key
         coco_dset = normalize_phases(coco_dset,
-                                     baseline_keys={track_kwargs['key']})
+                                     baseline_keys=set(track_kwargs['key']))
     else:
         coco_dset = normalize_phases(coco_dset)
     coco_dset = normalize_sensors(coco_dset)
@@ -599,7 +656,9 @@ def normalize(coco_dset, track_fn, overwrite, gt_dset=None, **track_kwargs):
         # visualize predicted sites with true sites
         out_dir = './_assets/1b_official_BR_small'
         from visualize import visualize_videos
-        visualize_videos(coco_dset, gt_dset, out_dir,
+        visualize_videos(coco_dset,
+                         gt_dset,
+                         out_dir,
                          coco_dset_sc=track_kwargs.get('coco_dset_sc'))
 
     return coco_dset

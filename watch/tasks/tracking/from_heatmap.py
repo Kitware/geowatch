@@ -249,8 +249,14 @@ def time_aggregated_polys(coco_dset,
         flag = bool(_all_keys & chan_codes)
         has_requested_chans_list.append(flag)
 
+    if not any(has_requested_chans_list):
+        raise KeyError(f'no imgs in dset {coco_dset.tag} '
+                       f'have keys {key} or {bg_key}.')
     if not all(has_requested_chans_list):
-        raise KeyError(f'{coco_dset.tag} has no keys {key} or {bg_key}')
+        n_missing = (len(has_requested_chans_list) -
+                     sum(has_requested_chans_list))
+        print(f'warning: {n_missing} imgs in dset {coco_dset.tag} '
+              f'have no keys {key} or {bg_key}. Interpolating...')
 
     if use_boundary_annots:
         import shapely.ops
@@ -277,25 +283,46 @@ def time_aggregated_polys(coco_dset,
     # This solution is more efficient when len(tracks) > len(gids).
     # running_dct = defaultdict(kwarray.RunningStats)
     heatmaps_dct = defaultdict(list)
+
+    # record previous heatmaps in video space to propagate thru missing frames
+    vid = coco_dset.index.videos[coco_dset.imgs[gids[0]]['video_id']]
+    vid_shape = (vid['width'], vid['height'])
+    prev_heatmap_dct = defaultdict(lambda: np.zeros(vid_shape))
+
     for gid in gids:
 
-        # TODO change assertion behavior to allow partial failure here
+        # we are working only in vid space, so forget about warping
         fg_img_probs, fg_chan_probs = heatmap(coco_dset,
                                               gid,
                                               key,
                                               return_chan_probs=True)
-        heatmaps_dct['fg'].append(fg_img_probs)
+        if any(np.flatnonzero(fg_img_probs)):
+            heatmaps_dct['fg'].append(fg_img_probs)
+        else:
+            heatmaps_dct['fg'].append(prev_heatmap_dct['fg'])
         for k in key:
-            heatmaps_dct[k].append(fg_chan_probs[k])
+            if k in fg_chan_probs:
+                heatmaps_dct[k].append(fg_chan_probs[k])
+                prev_heatmap_dct[k] = fg_chan_probs[k]
+            else:
+                heatmaps_dct[k].append(prev_heatmap_dct[k])
 
         if len(bg_key) > 0:
             bg_img_probs, bg_chan_probs = heatmap(coco_dset,
                                                   gid,
                                                   bg_key,
                                                   return_chan_probs=True)
-            heatmaps_dct['bg'].append(bg_img_probs)
+            if any(np.flatnonzero(bg_img_probs)):
+                heatmaps_dct['bg'].append(bg_img_probs)
+            else:
+                heatmaps_dct['bg'].append(prev_heatmap_dct['bg'])
             for k in bg_key:
-                heatmaps_dct[k].append(bg_chan_probs[k])
+                if k in bg_chan_probs:
+                    heatmaps_dct[k].append(bg_chan_probs[k])
+                    prev_heatmap_dct[k] = bg_chan_probs[k]
+                else:
+                    heatmaps_dct[k].append(prev_heatmap_dct[k])
+
         else:
             heatmaps_dct['bg'].append(np.zeros_like(fg_img_probs))
 

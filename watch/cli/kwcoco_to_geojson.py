@@ -79,8 +79,11 @@ def geojson_feature(img, anns, coco_dset, with_properties=True):
         # properly passed through to TA-2?
         source = None
         for aux in img.get('auxiliary', []):
-            basename = os.path.basename(aux['file_name'])
-            if basename.endswith('blue.tif'):
+            if aux['channels'] in {'r|g|b', 'rgb'}:
+                # source = basename
+                source = os.path.abspath(aux['file_name'])
+        for aux in img.get('auxiliary', []):
+            if aux['channels'] in {'pan', 'panchromatic'}:
                 # source = basename
                 source = os.path.abspath(aux['file_name'])
         if source is None:
@@ -160,6 +163,16 @@ def geojson_feature(img, anns, coco_dset, with_properties=True):
             for prop, geom in zip(properties_list[key], geometry_list):
                 value.append(sep.join(map(str, [prop] * _len(geom))))
             properties[key] = sep.join(value)
+
+        # HACK
+        # We are not being scored on multipolygons in SC right now!
+        # https://smartgitlab.com/TE/metrics-and-test-framework/-/issues/24
+        #
+        # When safe, merge class labels for multipolygons so they'll be scored.
+        if 1:
+            phase = properties['current_phase'].split(sep)
+            if len(phase) > 1 and len(set(phase)) == 1:
+                properties['current_phase'] = phase[0]
 
         # identical properties
         for key in ['type', 'source', 'observation_date', 'sensor_name']:
@@ -391,7 +404,9 @@ def add_site_summary_to_kwcoco(site_summary_or_region_model,
         jsonschema.validate(region_model, schema=region_model_schema)
         site_summaries = [
             f for f in region_model['features']
-            if f['properties']['type'] == 'site_summary'
+            if (f['properties']['type'] == 'site_summary'
+                # TODO handle positive_partial
+                and f['properties']['status'] == 'positive_annotated')
         ]
         if region_id is None:
             region_feat = region_model['features'][0]
@@ -610,7 +625,7 @@ def main(args):
                             help=ub.paragraph('''
         JSON string or path to file containing keyword arguments for the
         chosen TrackFunction. Examples include: coco_dset_gt, coco_dset_sc,
-        thresh, possible_keys.
+        thresh, key.
         Any file paths will be loaded as CocoDatasets if possible.
         '''))
     behavior_args = parser.add_argument_group(
@@ -683,7 +698,7 @@ def main(args):
             track_fn = from_polygon.OverlapTrack
         else:
             track_fn = from_heatmap.TimeAggregatedBAS
-            track_kwargs['possible_keys'] = [args.default_track_fn]
+            track_kwargs['key'] = [args.default_track_fn]
     elif args.track_fn is None:
         track_fn = watch.tasks.tracking.utils.NoOpTrackFunction
     else:
