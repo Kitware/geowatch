@@ -518,10 +518,12 @@ def main(args):
         {out_dir}/thumbnails/
         ''')
 
-    parser.add_argument('--cache_dir', default=None, help='''
-        If specified, will use a cache directory, otherwise will not cache.
-        Do not use until IARPA fixes their cache bugs.
-        ''')
+    parser.add_argument(
+        '--use_cache', default=False, action='store_true', help=ub.paragraph(
+            '''
+            IARPA metrics code currently contains a cache bug, do not enable
+            the cache until this is fixed.
+            '''))
 
     args = parser.parse_args(args)
 
@@ -571,22 +573,17 @@ def main(args):
     grouped_sites = ub.group_items(
         sites, lambda site: site['features'][0]['properties']['region_id'])
 
-    from scriptconfig.smartcast import smartcast
-    root_cache_dir = smartcast(args.cache_dir)
-    if root_cache_dir is None:
-        # Hack to force disable cache by using a different directory each time
-        _cache_dir = TemporaryDirectory(suffix='iarpa-metrics-cache')
-        root_cache_dir = ub.Path(_cache_dir.name)
-    else:
-        root_cache_dir = ub.Path(root_cache_dir)
-
     for region_id, region_sites in grouped_sites.items():
 
         site_dpath = (tmp_dpath / 'site' / region_id).ensuredir()
         image_dpath = (tmp_dpath / 'image').ensuredir()
 
-        # cache_dpath is always empty to work around bugs
-        cache_dpath = (tmp_dpath / 'cache' / region_id).ensuredir()
+        if args.use_cache:
+            cache_dpath = (tmp_dpath / 'cache' / region_id).ensuredir()
+        else:
+            # Hack to disable cache by using a different directory each time
+            _cache_dir = TemporaryDirectory(suffix='iarpa-metrics-cache')
+            cache_dpath = ub.Path(_cache_dir.name)
 
         if args.out_dir is not None:
             out_dir = ub.Path(args.out_dir) / region_id
