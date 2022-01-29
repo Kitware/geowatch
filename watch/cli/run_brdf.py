@@ -214,7 +214,7 @@ def brdf_correct_item(stac_item, platform):
     return stac_item
 
 
-def _item_map(stac_item, outdir):
+def brdf_item_map(stac_item, outdir):
     platform = stac_item.properties.get('platform')
 
     output_stac_item = brdf_correct_item(stac_item, platform)
@@ -242,7 +242,7 @@ def run_brdf(stac_catalog, outdir, jobs=1):
 
     output_catalog = parallel_map_items(
         catalog,
-        _item_map,
+        brdf_item_map,
         max_workers=jobs,
         mode='process' if jobs > 1 else 'serial',
         extra_args=[outdir])

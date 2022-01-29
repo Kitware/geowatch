@@ -58,7 +58,7 @@ def main():
 def _determine_basedir_for_item(stac_item):
     item_base_dir = None
     for link in stac_item.get_links('self'):
-        item_base_dir = os.path.dirname(link.get_href())
+        item_base_dir = os.path.dirname(link.target)
         break
 
     if item_base_dir is None:
@@ -90,8 +90,9 @@ def compute_baseline_scenes_only(stac_catalog, outdir):
     return baseline_scenes
 
 
-def run_s2_coreg_l1c(stac_catalog, outdir, jobs=1):
-    baseline_scenes = compute_baseline_scenes_only(stac_catalog, outdir)
+def run_s2_coreg_l1c(stac_catalog, outdir, jobs=1, baseline_scenes=None):
+    if baseline_scenes is None:
+        baseline_scenes = compute_baseline_scenes_only(stac_catalog, outdir)
 
     if isinstance(stac_catalog, str):
         catalog = pystac.read_file(href=stac_catalog).full_copy()
@@ -223,7 +224,7 @@ def coreg_s2_stac_item(stac_item, outdir, baseline_scenes):
     stac_item.properties['watch:s2_coreg_l1c:is_baseline'] =\
         is_baseline
 
-    return stac_item
+    return [stac_item]
 
 
 def coreg_ls_stac_item(stac_item, outdir, baseline_scenes):

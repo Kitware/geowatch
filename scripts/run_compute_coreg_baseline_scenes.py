@@ -74,7 +74,7 @@ def b04_asset_filter(asset_name, asset):
     return (('eo:bands' in asset and
              len(asset['eo:bands']) == 1 and
              asset['eo:bands'][0]['name'] == 'B04') or
-            re.match(r'B04(\.tiff?|\.jp2)', asset_name, re.I))
+            re.match(r'B04(\.tiff?|\.jp2)?', asset_name, re.I))
 
 
 def run_coreg_for_baseline(input_path,
@@ -103,6 +103,7 @@ def run_coreg_for_baseline(input_path,
 
     ingress_dir = '/tmp/ingress'
     baseline_scenes_outdir = '/tmp/coreg_baseline_scenes'
+    os.makedirs(baseline_scenes_outdir, exist_ok=True)
 
     print("* Running ingress *")
     ingress_catalog = baseline_framework_ingress(
@@ -137,12 +138,21 @@ def run_coreg_for_baseline(input_path,
             baseline_scene_stac_items.append(stac_item)
 
     for stac_item in baseline_scene_stac_items:
+        # Write out original STAC item for baseline scene as well
+        stac_item_outpath = os.path.join(
+            baseline_scenes_outdir,
+            stac_item.id, "{}.json".format(stac_item.id))
+        os.makedirs(os.path.dirname(stac_item_outpath), exist_ok=True)
+        with open(stac_item_outpath, 'w') as f:
+            json.dump(stac_item.to_dict(), f)
+
         ingress_item(stac_item.to_dict(),
                      baseline_scenes_outdir,
                      aws_base_command,
-                     dryrun,
+                     dryrun=dryrun,
                      relative=False,
                      asset_selector=b04_asset_filter)
+
         shutil.copy(
             os.path.join(ingress_dir, stac_item.id, 'MTD_TL.xml'),
             os.path.join(baseline_scenes_outdir, stac_item.id, 'MTD_TL.xml'))
