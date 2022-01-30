@@ -211,6 +211,12 @@ def brdf_correct_item(stac_item, platform):
                 stac_item.assets[asset_name].href =\
                     brdf_corrected_band_filepath
 
+    # Remove angle band assets from output STAC item as they're no
+    # longer needed
+    for angleband_asset in ('SOZ4', 'SOA4', 'SEZ4', 'SEA4'):
+        _, asset_name = assets_dict[angleband_asset]
+        del stac_item.assets[asset_name]
+
     return stac_item
 
 
