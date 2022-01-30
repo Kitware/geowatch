@@ -1027,7 +1027,7 @@ class KWCocoVideoDataset(data.Dataset):
             tr_['gids'] = list(ub.take(valid_gids, time_sampler.sample(tr_['main_idx'])))
 
             temporal_dropout_rate = self.temporal_dropout
-            do_temporal_dropout = rng.rand() > temporal_dropout_rate
+            do_temporal_dropout = rng.rand() < temporal_dropout_rate
             if do_temporal_dropout:
                 # Temporal dropout
                 gids = tr_['gids']
