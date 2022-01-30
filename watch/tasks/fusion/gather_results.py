@@ -234,8 +234,9 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
     # measure_fpaths = dset_groups['combo_vali_nowv.kwcoco']
     # measure_fpaths = dset_groups['combo_DILM_nowv_vali.kwcoco']
     # dataset_key = 'Drop1-Aligned-TA1-2022-01_vali_data_nowv.kwcoco'
-    dataset_key = 'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco'
-    dataset_key = 'combo_vali_nowv.kwcoco'
+    # dataset_key = 'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco'
+    # dataset_key = 'combo_vali_nowv.kwcoco'
+    dataset_key = 'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco'
     measure_fpaths = dset_groups[dataset_key]
     print(len(measure_fpaths))
     # dataset_to_evals = ub.group_items(eval_dpaths, lambda x: x.parent.name)
