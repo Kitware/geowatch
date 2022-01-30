@@ -1,5 +1,8 @@
 """
 Loads and summarizes pre-computed metrics over multiple experiments
+
+
+The main function is :func:`gather_measures`.
 """
 import json
 import pandas as pd
@@ -232,6 +235,7 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
     # measure_fpaths = dset_groups['combo_DILM_nowv_vali.kwcoco']
     # dataset_key = 'Drop1-Aligned-TA1-2022-01_vali_data_nowv.kwcoco'
     dataset_key = 'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco'
+    dataset_key = 'combo_vali_nowv.kwcoco'
     measure_fpaths = dset_groups[dataset_key]
     print(len(measure_fpaths))
     # dataset_to_evals = ub.group_items(eval_dpaths, lambda x: x.parent.name)
@@ -316,7 +320,7 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
 
     mean_df['title'].apply(lambda x: int(x.split('epoch=')[1].split('-')[0]))
 
-    def group_by_best(mean_df, metric_key):
+    def group_by_best(mean_df, metric_key, shrink=False):
         bests = []
         for t, subdf in mean_df.groupby('expt_name'):
             idx = subdf[[metric_key]].idxmax()
@@ -325,7 +329,7 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
                 best = subdf.loc[idx]
                 bests.append(best)
         best_per_expt = pd.concat(bests)
-        if True:
+        if shrink:
             best_per_expt = shrink_notations(best_per_expt)
             best_per_expt = best_per_expt.drop('title', axis=1)
             best_per_expt = best_per_expt.drop('catname', axis=1)
@@ -339,14 +343,14 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
 
     print('\nBest Class Models')
     try:
-        best_per_expt = group_by_best(mean_df, 'class_mAP')
+        best_per_expt = group_by_best(mean_df, 'class_mAP', shrink=True)
         print(best_per_expt.sort_values('class_mAP').to_string())
     except ValueError:
         pass
 
     try:
         print('\nBest Salient Models')
-        best_per_expt = group_by_best(mean_df, 'salient_AP')
+        best_per_expt = group_by_best(mean_df, 'salient_AP', shrink=True)
         print(best_per_expt.sort_values('salient_AP').to_string())
     except ValueError:
         pass
@@ -401,9 +405,34 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
     def plot_individual_class_curves(catname, fnum, metric='ap'):
         from kwcoco.metrics import drawing
         max_num_curves = 16
+        max_per_expt = None
+        max_per_expt = 1
         fig = kwplot.figure(fnum=fnum, doclf=True)
+
+        def lookup_metric(x):
+            return x.ovr_measures[catname][metric]
+
         relevant_results = [r for r in all_results if catname in r.ovr_measures]
-        sorted_results = sorted(relevant_results, key=lambda x: x.ovr_measures[catname][metric])[::-1]
+        # ub.group_items(relevant_results)
+
+        if 1:
+            # Take best per experiment
+            groups = ub.group_items(relevant_results, key=lambda x: x.meta['fit_config']['name'])
+            ordered_groups = []
+            for name, group in groups.items():
+                # if not ('v53' in name or 'v54' in name):
+                #     continue
+                ordered_group = sorted(group, key=lookup_metric)[::-1][:max_per_expt]
+                ordered_groups.append(ordered_group)
+            ordered_groups = sorted(ordered_groups, key=lambda g: lookup_metric(g[0]))[::-1]
+            import itertools as it
+            sorted_results = [x for x in ub.flatten(it.zip_longest(*ordered_groups)) if x is not None]
+        else:
+            sorted_results = sorted(relevant_results, key=lookup_metric)[::-1]
+
+        results_to_plot = sorted_results[0:max_num_curves]
+        results_to_plot = sorted(results_to_plot, key=lookup_metric)[::-1]
+        # sorted_results = sorted(relevant_results, key=lookup_metric)[::-1]
         results_to_plot = sorted_results[0:max_num_curves]
         colors = kwplot.Color.distinct(len(results_to_plot))
         for idx, result in enumerate(results_to_plot):
@@ -423,10 +452,32 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
     def plot_individual_salient_curves(fnum, metric='ap'):
         from kwcoco.metrics import drawing
         max_num_curves = 16
+        max_per_expt = None
+        max_per_expt = 1
         fig = kwplot.figure(fnum=fnum, doclf=True)
         relevant_results = [r for r in all_results if r.nocls_measures]
-        sorted_results = sorted(relevant_results, key=lambda x: x.nocls_measures[metric])[::-1]
+
+        def lookup_metric(x):
+            return x.nocls_measures[metric]
+
+        if 1:
+            # Take best per experiment
+            groups = ub.group_items(relevant_results, key=lambda x: x.meta['fit_config']['name'])
+            ordered_groups = []
+            for name, group in groups.items():
+                # if not ('v53' in name or 'v54' in name):
+                #     continue
+                ordered_group = sorted(group, key=lookup_metric)[::-1][:max_per_expt]
+                ordered_groups.append(ordered_group)
+            ordered_groups = sorted(ordered_groups, key=lambda g: lookup_metric(g[0]))[::-1]
+            import itertools as it
+            sorted_results = [x for x in ub.flatten(it.zip_longest(*ordered_groups)) if x is not None]
+        else:
+            sorted_results = sorted(relevant_results, key=lookup_metric)[::-1]
+
         results_to_plot = sorted_results[0:max_num_curves]
+        results_to_plot = sorted(results_to_plot, key=lookup_metric)[::-1]
+
         colors = kwplot.Color.distinct(len(results_to_plot))
         for idx, result in enumerate(results_to_plot):
             color = colors[idx]

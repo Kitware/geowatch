@@ -7,11 +7,21 @@ class TeamFeaturePipelineConfig(scfg.Config):
     This generates the bash commands necessary to run team feature computation,
     followed by aggregation and then splitting out train / val datasets.
 
+    Note:
+        The models and parameters to use are hard coded in this script.
     """
     default = {
-        'dvc_dpath': scfg.Value('auto'),
-        'bundle_name': 'Drop1-Aligned-L1-2022-01',
-        'base_coco_name': 'data.kwcoco.json',
+        'base_fpath': scfg.Value('auto', help=ub.paragraph(
+            '''
+            base coco file to compute team-features on, combine, and split. If
+            auto, uses a hard-coded value
+            ''')),
+        'dvc_dpath': scfg.Value('auto', help=ub.paragraph(
+            '''
+            The DVC directory where team feature model weights can be found.
+            If "auto" uses the ``watch.find_smart_dvc_dpath`` mechanism
+            to infer the location.
+            ''')),
         'gres': scfg.Value('auto', help='comma separated list of gpus or auto'),
 
         'with_landcover': scfg.Value(True, help='Include DZYNE landcover features'),
@@ -41,7 +51,6 @@ def main(cmdline=True, **kwargs):
     TODO:
         - [ ] Option to just dump the serial bash script that does everything.
     """
-    import watch
     from watch.utils import tmux_queue
     from watch.utils.lightning_ext import util_globals
     from scriptconfig.smartcast import smartcast
@@ -63,11 +72,19 @@ def main(cmdline=True, **kwargs):
         gres = [gres]
 
     if config['dvc_dpath'] == 'auto':
-        config['dvc_dpath'] = watch.find_smart_dvc_dpath()
+        import watch
+        dvc_dpath = watch.find_smart_dvc_dpath()
+    else:
+        dvc_dpath = ub.Path(config['dvc_dpath'])
 
-    dvc_dpath = ub.Path(config['dvc_dpath'])
-    aligned_bundle_dpath = dvc_dpath / config['bundle_name']
-    base_coco_fpath = aligned_bundle_dpath / config['base_coco_name']
+    if config['base_fpath'] == 'auto':
+        # Auto hack.
+        base_fpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/data.kwcoco.json'
+        # base_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
+    else:
+        base_fpath = ub.Path(config['base_fpath'])
+
+    aligned_bundle_dpath = base_fpath.parent
 
     model_fpaths = {
         'rutgers_materials': dvc_dpath / 'models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_2021101T16277.pth',
@@ -105,7 +122,7 @@ def main(cmdline=True, **kwargs):
         task['command'] = ub.codeblock(
             fr'''
             python -m watch.tasks.landcover.predict \
-                --dataset="{base_coco_fpath}" \
+                --dataset="{base_fpath}" \
                 --deployed="{model_fpaths['dzyne_landcover']}" \
                 --output="{task['output_fpath']}" \
                 --num_workers="{data_workers}" \
@@ -125,7 +142,7 @@ def main(cmdline=True, **kwargs):
         task['command'] = ub.codeblock(
             fr'''
             python -m watch.tasks.depth.predict \
-                --dataset="{base_coco_fpath}" \
+                --dataset="{base_fpath}" \
                 --output="{task['output_fpath']}" \
                 --deployed="{model_fpaths['dzyne_depth']}" \
                 --data_workers={depth_data_workers} \
@@ -142,7 +159,7 @@ def main(cmdline=True, **kwargs):
         task['command'] = ub.codeblock(
             fr'''
             python -m watch.tasks.rutgers_material_seg.predict \
-                --test_dataset="{base_coco_fpath}" \
+                --test_dataset="{base_fpath}" \
                 --checkpoint_fpath="{model_fpaths['rutgers_materials']}" \
                 --pred_dataset="{task['output_fpath']}" \
                 --default_config_key=iarpa \
@@ -162,7 +179,7 @@ def main(cmdline=True, **kwargs):
         task['command'] = ub.codeblock(
             fr'''
             python -m watch.tasks.invariants.predict \
-                --input_kwcoco "{base_coco_fpath}" \
+                --input_kwcoco "{base_fpath}" \
                 --output_kwcoco "{task['output_fpath']}" \
                 --pretext_ckpt_path "{model_fpaths['uky_pretext']}" \
                 --segmentation_ckpt "{model_fpaths['uky_segmentation']}" \
@@ -210,23 +227,24 @@ def main(cmdline=True, **kwargs):
 
     if 1:
         # Finalize features by combining them all into combo.kwcoco.json
-        tocombine = [str(base_coco_fpath)] + [str(task['output_fpath']) for task in tasks]
+        tocombine = [str(base_fpath)] + [str(task['output_fpath']) for task in tasks]
         combo_code = ''.join(sorted(combo_code_parts))
-        combo_fpath = aligned_bundle_dpath / f'combo_{combo_code}.kwcoco.json'
+
+        base_combo_fpath = aligned_bundle_dpath / f'combo_{combo_code}.kwcoco.json'
 
         tq = tmux_queue.TMUXMultiQueue(name='combine-feats', size=2)
         if config['virtualenv_cmd']:
             tq.add_header_command(config['virtualenv_cmd'])
 
         # TODO: enable forcing if needbe
-        if not combo_fpath.exists() or not config['cache']:
+        if not base_combo_fpath.exists() or not config['cache']:
             #  Indent of this the codeblock matters for this line
             src_lines = ' \\\n                          '.join(tocombine)
             command = ub.codeblock(
                 fr'''
                 python -m watch.cli.coco_combine_features \
                     --src {src_lines} \
-                    --dst {combo_fpath}
+                    --dst {base_combo_fpath}
                 ''')
             tq.submit(command)
 
@@ -237,83 +255,12 @@ def main(cmdline=True, **kwargs):
                 if not agg_state['errored']:
                     tq.kill()
 
-        splits = {
-            'combo_train': combo_fpath.augment(suffix='_train', multidot=True),
-            'combo_nowv_train': combo_fpath.augment(suffix='_nowv_train', multidot=True),
-            'combo_wv_train': combo_fpath.augment(suffix='_wv_train', multidot=True),
-
-            'combo_vali': combo_fpath.augment(suffix='_vali', multidot=True),
-            'combo_nowv_vali': combo_fpath.augment(suffix='_nowv_vali', multidot=True),
-            'combo_wv_vali': combo_fpath.augment(suffix='_wv_vali', multidot=True),
-        }
-
-        tq = tmux_queue.TMUXMultiQueue(name='watch-splits', size=2)
-        if config['virtualenv_cmd']:
-            tq.add_header_command(config['virtualenv_cmd'])
-
-        # Perform train/validation splits with and without worldview
-        command = ub.codeblock(
-            fr'''
-            python -m kwcoco subset \
-                --src {combo_fpath} \
-                --dst {splits['combo_train']} \
-                --select_videos '.name | startswith("KR_") | not'
-            ''')
-        tq.submit(command, index=0)
-
-        command = ub.codeblock(
-            fr'''
-            python -m kwcoco subset \
-                --src {splits['combo_train']} \
-                --dst {splits['combo_nowv_train']} \
-                --select_images '.sensor_coarse != "WV"'
-            ''')
-        tq.submit(command, index=0)
-
-        command = ub.codeblock(
-            fr'''
-            python -m kwcoco subset \
-                --src {splits['combo_train']} \
-                --dst {splits['combo_wv_train']} \
-                --select_images '.sensor_coarse == "WV"'
-            ''')
-        tq.submit(command, index=0)
-
-        # Perform vali/validation splits with and without worldview
-        command = ub.codeblock(
-            fr'''
-            python -m kwcoco subset \
-                --src {combo_fpath} \
-                --dst {splits['combo_vali']} \
-                --select_videos '.name | startswith("KR_")'
-            ''')
-        tq.submit(command, index=1)
-
-        command = ub.codeblock(
-            fr'''
-            python -m kwcoco subset \
-                --src {splits['combo_vali']} \
-                --dst {splits['combo_nowv_vali']} \
-                --select_images '.sensor_coarse != "WV"'
-            ''')
-        tq.submit(command, index=1)
-
-        command = ub.codeblock(
-            fr'''
-            python -m kwcoco subset \
-                --src {splits['combo_vali']} \
-                --dst {splits['combo_wv_vali']} \
-                --select_images '.sensor_coarse == "WV"'
-            ''')
-        tq.submit(command, index=1)
-
-        tq.rprint(with_rich=with_rich)
-
-        if config['run']:
-            agg_state = tq.run(block=True)
-            if not config['keep_sessions']:
-                if not agg_state['errored']:
-                    tq.kill()
+        # Also call the prepare-splits script
+        from watch.cli import prepare_splits
+        split_config = ub.dict_isect(
+            config, prepare_splits.PrepareSplitsConfig.default)
+        split_config['base_fpath'] = base_combo_fpath
+        prepare_splits.main()
 
     """
     Ignore:
@@ -325,7 +272,13 @@ def main(cmdline=True, **kwargs):
 if __name__ == '__main__':
     """
     CommandLine:
-        python -m watch.cli.prepare_teamfeats --gres=0 --with_depth=True --keep_sessions=False --run=False --cache=False --virtualenv_cmd "conda activate watch"
+        DVC_DPATH=$(python -m watch.cli.find_dvc)
+        python -m watch.cli.prepare_teamfeats \
+            --base_fpath="$DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json" \
+            --gres=0 \
+            --with_depth=True \
+            --keep_sessions=False \
+            --run=False --cache=False --virtualenv_cmd "conda activate watch"
 
         python -m watch.cli.prepare_teamfeats --gres=0,2 --with_depth=True --keep_sessions=True
         python -m watch.cli.prepare_teamfeats --gres=2 --with_materials=False --keep_sessions=True

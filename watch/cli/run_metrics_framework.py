@@ -518,6 +518,13 @@ def main(args):
         {out_dir}/thumbnails/
         ''')
 
+    parser.add_argument(
+        '--use_cache', default=False, action='store_true', help=ub.paragraph(
+            '''
+            IARPA metrics code currently contains a cache bug, do not enable
+            the cache until this is fixed.
+            '''))
+
     args = parser.parse_args(args)
 
     # load sites
@@ -571,8 +578,12 @@ def main(args):
         site_dpath = (tmp_dpath / 'site' / region_id).ensuredir()
         image_dpath = (tmp_dpath / 'image').ensuredir()
 
-        # cache_dpath is always empty to work around bugs
-        cache_dpath = (tmp_dpath / 'cache' / region_id).ensuredir()
+        if args.use_cache:
+            cache_dpath = (tmp_dpath / 'cache' / region_id).ensuredir()
+        else:
+            # Hack to disable cache by using a different directory each time
+            _cache_dir = TemporaryDirectory(suffix='iarpa-metrics-cache')
+            cache_dpath = ub.Path(_cache_dir.name)
 
         if args.out_dir is not None:
             out_dir = ub.Path(args.out_dir) / region_id

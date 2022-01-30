@@ -391,7 +391,7 @@ def mask_to_polygons(probs,
 
     if scored:
         for poly in polygons:
-            yield score(poly, probs), poly
+            yield score(poly, probs, use_rasterio=use_rasterio), poly
     else:
         yield from polygons
 

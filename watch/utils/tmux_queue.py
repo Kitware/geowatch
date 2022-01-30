@@ -258,14 +258,18 @@ class TMUXMultiQueue(PathIdentifiable):
         for worker in self.workers:
             worker.add_header_command(command)
 
+    @property
+    def total_jobs(self):
+        return sum(len(worker.commands) for worker in self.workers)
+
     def finalize_text(self):
         # Create a driver script
         driver_lines = [ub.codeblock(
             '''
             #!/bin/bash
             # Driver script to start the tmux-queue
-            echo "submitting jobs"
-            ''')]
+            echo "submitting {} jobs"
+            ''').format(self.total_jobs)]
         for queue in self.workers:
             # run_command_in_tmux_queue(command, name)
             part = ub.codeblock(

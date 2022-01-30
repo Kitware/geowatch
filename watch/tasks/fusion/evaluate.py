@@ -426,7 +426,7 @@ def colorize_class_probs(probs, classes):
 
 @profile
 def dump_chunked_confusion(true_coco, pred_coco, chunk_info, heatmap_dpath,
-                           score_space='video'):
+                           score_space='video', title=None):
     """
     Draw a a sequence of true/pred image predictions
     """
@@ -442,21 +442,25 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, heatmap_dpath,
 
     # Make a legend
     color01_lut = color_lut / 255.0
-    if 1:
-        # Confusion Legend
-        label_to_color = ub.dzip(color_labels, color01_lut)
-        legend_img = _memo_legend(label_to_color)
-        legend_img = kwimage.ensure_uint255(legend_img)
+    legend_images = []
 
-    if 1:
+    if 'catname_to_prob' in chunk_info[0]:
         # Class Legend
         label_to_color = {
             node: kwimage.Color(data['color']).as01()
             for node, data in full_classes.graph.nodes.items()}
         label_to_color = ub.sorted_keys(label_to_color)
-        legend_img2 = _memo_legend(label_to_color)
-        legend_img = kwimage.stack_images([legend_img, legend_img2], axis=0,
-                                          pad=5)
+        legend_img_class = _memo_legend(label_to_color)
+        legend_images.append(legend_img_class)
+
+    if 'pred_saliency' in chunk_info[0]:
+        # Confusion Legend
+        label_to_color = ub.dzip(color_labels, color01_lut)
+        legend_img_saliency_cfsn = _memo_legend(label_to_color)
+        legend_img_saliency_cfsn = kwimage.ensure_uint255(legend_img_saliency_cfsn)
+        legend_images.append(legend_img_saliency_cfsn)
+
+    legend_img = kwimage.stack_images(legend_images, axis=0, pad=5)
 
     # Draw predictions on each frame
     parts = []
@@ -476,18 +480,31 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, heatmap_dpath,
         frame_nums.append(frame_index)
         true_gids.append(true_gid)
 
-        image_text = f'{frame_index} - gid = {true_gid}'
+        image_header_text = f'{frame_index} - gid = {true_gid}'
 
-        w = info['shape'][1]
-        zhack = {'width': w}
+        date_captured = true_img.get('date_captured', '')
+        frame_index = true_img.get('frame_index', None)
+        gid = true_img.get('id', None)
+        sensor_coarse = true_img.get('sensor_coarse', 'unknown')
+        _header_extra = None
+        header_line_infos = [
+            [f'gid={gid}, frame={frame_index}', _header_extra],
+            [sensor_coarse, date_captured],
+        ]
+        header_lines = []
+        for line_info in header_line_infos:
+            header_line = ' '.join([p for p in line_info if p])
+            if header_line:
+                header_lines.append(header_line)
+        image_header_text = '\n'.join(header_lines)
 
+        imgw = info['shape'][1]
         # SC_smt_it_stm_p8_newanns_weighted_raw_v39_epoch=52-step=2269088
-
         header = kwimage.draw_header_text(
-            zhack,
+            {'width': imgw},
             # image=confusion_image,
             # image=None,
-            text=image_text, color='white', stack=False)
+            text=image_header_text, color='red', stack=False)
 
         vert_parts = [
             header,
@@ -628,8 +645,8 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, heatmap_dpath,
         vert_stack = kwimage.stack_images(vert_parts, axis=0)
         parts.append(vert_stack)
 
-    max_frame = min(frame_nums)
-    min_frame = max(frame_nums)
+    max_frame = max(frame_nums)
+    min_frame = min(frame_nums)
     max_gid = max(true_gids)
     min_gid = min(true_gids)
 
@@ -646,19 +663,26 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, heatmap_dpath,
     if not vidname_part:
         vidname_part = '_loose_images'
 
-    plot_fname = f'{vidname_part}-{frame_part}-{gid_part}.png'
+    plot_fstem = f'{vidname_part}-{frame_part}-{gid_part}'
+
+    canvas_title_parts = []
+    if title:
+        canvas_title_parts.append(title)
+    canvas_title_parts.append(plot_fstem)
+    canvas_title = '\n'.join(canvas_title_parts)
+
     plot_canvas = kwimage.stack_images(parts, axis=1, overlap=-10)
 
     plot_canvas = kwimage.stack_images(
         [plot_canvas, legend_img], axis=1, overlap=-10)
 
     header = kwimage.draw_header_text(
-        {'width': plot_canvas.shape[1]}, plot_fname)
+        {'width': plot_canvas.shape[1]}, canvas_title)
     plot_canvas = kwimage.stack_images([header, plot_canvas], axis=0)
 
     heatmap_dpath = ub.Path(str(heatmap_dpath))
     vid_plot_dpath = (heatmap_dpath / vidname_part).ensuredir()
-    plot_fpath = vid_plot_dpath / plot_fname
+    plot_fpath = vid_plot_dpath / (plot_fstem + '.png')
     kwimage.imwrite(str(plot_fpath), plot_canvas)
 
 
@@ -694,6 +718,11 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     # Extract metadata about the predictions to persist
     meta = {}
     meta['info'] = info = []
+
+    if pred_coco.fpath is not None:
+        pred_fpath = ub.Path(pred_coco.fpath)
+        meta['pred_name'] = '_'.join((list(pred_fpath.parts[-2:-1]) + [pred_fpath.stem]))
+
     for item in pred_coco.dataset['info']:
         if item.get('type', None) == 'process':
             proc_name = item.get('properties', {}).get('name', None)
@@ -701,8 +730,20 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                 package_fpath = item['properties']['args'].get('package_fpath')
                 if 'title' not in item:
                     item['title'] = ub.Path(package_fpath).stem
+                if 'package_name' not in item:
+                    item['package_name'] = ub.Path(package_fpath).stem
                 meta['title'] = item['title']
+                meta['package_name'] = item['package_name']
                 info.append(item)
+
+        pass
+
+    # Title contains the model package name if we can infer it
+    package_name = meta.get('package_name', '')
+    pred_name = meta.get('pred_name', '')
+    title_parts = [p for p in [package_name, pred_name] if p]
+    meta['title_parts'] = title_parts
+    title = meta['title'] = ' - '.join(title_parts)
 
     required_marked = 'auto'  # parametarize
     if required_marked == 'auto':
@@ -795,7 +836,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
             if draw_heatmaps:
                 dump_chunked_confusion(
                     true_coco, pred_coco, chunk_info, heatmap_dpath,
-                    score_space=score_space)
+                    score_space=score_space, title=title)
 
     # class_measure_combiner.catname_to_combiner['Site Preparation'].queue
 
@@ -817,7 +858,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
             chunk_info = [info]
             dump_chunked_confusion(
                 true_coco, pred_coco, chunk_info, heatmap_dpath,
-                score_space=score_space)
+                score_space=score_space, title=title)
         prog.update()
         # Reduce measures over the chunk
         if salient_measure_combiner.queue_size > chunk_size:
@@ -857,7 +898,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
             if isinstance(salient_combo_measures, dict):
                 salient_combo_measures['meta'] = meta
 
-            title = meta.get('title', '')
+            title = '\n'.join(meta.get('title_parts', [meta.get('title', '')]))
 
             # if 0:
             #     measure_info = salient_combo_measures.__json__()
@@ -925,7 +966,8 @@ def _redraw_measures(eval_dpath):
                 for item in meta:
                     title = item.get('title', title)
             else:
-                title = meta.get('title', title)
+                # title = meta.get('title', title)
+                title = '\n'.join(meta.get('title_parts', [meta.get('title', '')]))
         import kwplot
         with kwplot.BackendContext('agg'):
             salient_combo_measures.summary_plot(fnum=1, title=title)
