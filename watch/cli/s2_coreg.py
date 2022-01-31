@@ -7,7 +7,7 @@ import glob
 import traceback
 
 import pystac
-from shapely.geometry import shape
+from shapely.geometry import shape, Polygon, mapping
 
 from watch.datacube.registration.s2_coreg_l1c import (
     s2_coregister_all_tiles, s2_coregister)
@@ -15,6 +15,7 @@ from watch.datacube.registration.l8_coreg_l1 import (
     l8_coregister)
 from watch.gis.sensors.sentinel2 import s2_grid_tiles_for_geometry
 from watch.utils.util_stac import parallel_map_items, maps
+from watch.gis.geotiff import geotiff_metadata
 
 
 # TODO: Fully specify or re-use something already in WATCH module?
@@ -255,8 +256,11 @@ def coreg_ls_stac_item(stac_item, outdir, baseline_scenes):
             os.path.join(asset_path_basedir, "*.tif"))
 
         processed_assets = {}
+        base_band_path = None
         for asset_path in sorted(asset_paths):
             band_name = re.match(BAND_NAME_RE, asset_path).group(1)
+            if band_name == 'B4':
+                base_band_path = asset_path
 
             if band_name == 'cloudmask':
                 roles = ['cloudmask']
@@ -300,6 +304,17 @@ def coreg_ls_stac_item(stac_item, outdir, baseline_scenes):
         processed_item = stac_item.clone()
         processed_item.id = uuid4().hex
         processed_item.assets = processed_assets
+
+        # Update 'geometry' and 'bbox' for registered LS item as it's
+        # cropped / registered based on sentinel tiles.  Using the
+        # same band as is used for coregistration (B4):
+        base_band_info = geotiff_metadata(base_band_path)
+        geotiff_coords = base_band_info['wgs84_corners']
+        # Convert from lat/lon to lon/lat
+        geotiff_polygon = Polygon(geotiff_coords.data[:, ::-1])
+        processed_item.geometry = mapping(geotiff_polygon)
+        # pystac wants a list here instead of a tuple
+        processed_item.bbox = list(geotiff_polygon.bounds)
 
         # Adding mgrs extension information
         processed_item.properties['mgrs:utm_zone'] = mgrs_tile[0:2]
