@@ -239,6 +239,19 @@ def time_aggregated_polys(coco_dset,
             else, class is max(background keys).
 
         morph_kernel (int): height/width in px of close or dilate kernel
+
+    Example:
+        >>> # test interpolation
+        >>> from watch.tasks.tracking.from_heatmap import time_aggregated_polys
+        >>> from watch.demo import demo_kwcoco_with_heatmaps
+        >>> d = demo_kwcoco_with_heatmaps(num_frames=5, image_size=(480, 640))
+        >>> orig_track = time_aggregated_polys(d)[0].observations
+        >>> skip_gids = [1,3]
+        >>> for gid in skip_gids:
+        >>>      # remove salient channel
+        >>>      d.imgs[gid]['auxiliary'].pop()
+        >>> inter_track = time_aggregated_polys(d)[0].observations
+        >>> assert inter_track[0].score == 0, inter_track[1].score > 0
     '''
     key, bg_key = _validate_keys(key, bg_key)
     _all_keys = set(key + bg_key)
@@ -277,16 +290,17 @@ def time_aggregated_polys(coco_dset,
         bounds = None
         gids = list(coco_dset.imgs.keys())
 
-    # record fg and bg keys across frames, and partial sums of fg and bg
-    # would use RunningStats, but it can't support indexed/subsetted access
+    # Record fg and bg keys across frames, and partial sums of fg and bg.
+    # Would use RunningStats, but it can't support indexed/subsetted access
     # for multiple site boundaries over different times.
     # This solution is more efficient when len(tracks) > len(gids).
+    #
     # running_dct = defaultdict(kwarray.RunningStats)
     heatmaps_dct = defaultdict(list)
 
     # record previous heatmaps in video space to propagate thru missing frames
     vid = coco_dset.index.videos[coco_dset.imgs[gids[0]]['video_id']]
-    vid_shape = (vid['width'], vid['height'])
+    vid_shape = (vid['height'], vid['width'])
     prev_heatmap_dct = defaultdict(lambda: np.zeros(vid_shape))
 
     for gid in gids:
