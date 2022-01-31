@@ -396,7 +396,7 @@ def time_aggregated_polys(coco_dset,
         print('generating polys in bounds: number of bounds: ',
               len(boundary_tracks))
         tracks_polys = list(
-                filter(None, map(fill_boundary_track, boundary_tracks)))
+            filter(None, map(fill_boundary_track, boundary_tracks)))
 
     print('time aggregation: number of polygons: ', len(tracks_polys))
 
@@ -423,7 +423,9 @@ def time_aggregated_polys(coco_dset,
         # TODO investigate different thresh here
         time_thresh = thresh
         time_filter = TimePolygonFilter(coco_dset, tuple(key), time_thresh)
-        tracks = list(map(time_filter, tracks))
+        tracks = list(
+            filter(lambda track: len(track.observations) > 0,
+                   map(time_filter, tracks)))
 
     return tracks
 
