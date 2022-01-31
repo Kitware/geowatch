@@ -161,8 +161,8 @@ def _ensure_distinct_dict_colors(data_dicts, force=False):
 
 HUERISTIC_COMBINABLE_CHANNELS = [
     ub.oset(['B04', 'B03', 'B02']),  # for onera
-    ub.oset(['matset_1', 'matset_2', 'matset_3']),  # hack
-    ub.oset(['snow_or_ice_field', 'built_up', 'grassland']),  # hack
+    ub.oset(['matseg_1', 'matseg_2', 'matseg_3']),  # hack
+    # ub.oset(['snow_or_ice_field', 'built_up', 'grassland']),  # hack
 ]
 
 
