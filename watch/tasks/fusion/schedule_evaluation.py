@@ -258,7 +258,7 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
                     pred_command
                 )
 
-            if recompute_pred or (skip_existing and not pred_dataset_fpath.exists()):
+            if recompute_pred or not (skip_existing and pred_dataset_fpath.exists()):
                 queue.submit(pred_command)
 
         if with_eval:
@@ -279,7 +279,7 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
                     '[[ -f "{eval_metrics}" ]] || '.format(**suggestions) +
                     eval_command
                 )
-            if recompute_eval or (skip_existing and not eval_metrics_fpath.exists()):
+            if recompute_eval or not (skip_existing and eval_metrics_fpath.exists()):
                 queue.submit(eval_command)
 
     print('tq = {!r}'.format(tq))

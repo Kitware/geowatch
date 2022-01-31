@@ -441,6 +441,7 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
             color = [kwplot.Color(color).as01()]
             measure = result.ovr_measures[catname]
             prefix = result.meta['title']
+            prefix = result.meta['package_name']
             kw = {'fnum': fnum}
             if metric == 'ap':
                 drawing.draw_prcurve(measure, prefix=prefix, color=color, **kw)

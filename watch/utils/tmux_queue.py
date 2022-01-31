@@ -274,7 +274,7 @@ class TMUXMultiQueue(PathIdentifiable):
             # run_command_in_tmux_queue(command, name)
             part = ub.codeblock(
                 f'''
-                ### Run Queue: {queue.pathid}
+                ### Run Queue: {queue.pathid} with {len(queue.commands)} jobs
                 tmux new-session -d -s {queue.pathid} "bash"
                 tmux send -t {queue.pathid} "source {queue.fpath}" Enter
                 ''').format()
