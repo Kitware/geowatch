@@ -29,6 +29,12 @@ def main():
                         required=False,
                         type=str,
                         help="AWS Profile to use for AWS S3 CLI commands")
+    parser.add_argument("--aws_storage_class",
+                        required=False,
+                        type=str,
+                        default=None,
+                        help="AWS S3 storage class to use for egress AWS S3 "
+                             "CLI commands (e.g. 'ONEZONE_IA', default: None)")
     parser.add_argument("-d", "--dryrun",
                         action='store_true',
                         default=False,
@@ -127,7 +133,8 @@ def baseline_framework_egress(stac_catalog,
                               dryrun=False,
                               show_progress=False,
                               newline=False,
-                              jobs=1):
+                              jobs=1,
+                              aws_storage_class=None):
     if isinstance(stac_catalog, str):
         catalog = pystac.read_file(href=stac_catalog).full_copy()
     elif isinstance(stac_catalog, dict):
@@ -146,6 +153,9 @@ def baseline_framework_egress(stac_catalog,
 
     if not show_progress:
         aws_base_command.append('--no-progress')
+
+    if aws_storage_class is not None:
+        aws_base_command.extend(['--storage-class', aws_storage_class])
 
     output_catalog = parallel_map_items(
         catalog,
