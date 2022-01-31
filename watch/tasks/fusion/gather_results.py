@@ -505,8 +505,17 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
 
     fnum = 5
     plot_individual_salient_curves(fnum, metric='ap')
-
     # print(best_per_expt.sort_values('mAP').to_string())
+
+    # TOP CANDIDATE MODELS - FIND TOP K MODELS FOR EVERY METRIC
+    class_rows
+
+
+    mean_rows['class_mAP']
+    mean_rows['class_mAP']
+    mean_df = pd.DataFrame(mean_rows)
+    K = 5
+    mean_df.sort_values('class_mAP', ascending=False)['title'].iloc[0:K]
 
     if 1:
         plt.show()
