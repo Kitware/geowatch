@@ -344,7 +344,8 @@ def merge_metrics_results(region_dpaths, anns_root, out_dpath=None):
     if out_dpath is None:
         out_dpath = os.path.join(os.path.commonpath(region_dpaths), 'merged')
     assert out_dpath not in region_dpaths
-    os.system(f'rm -r {out_dpath}')
+    out_dpath.delete()
+    # os.system(f'rm -r {out_dpath}')
     os.makedirs(out_dpath, exist_ok=True)
 
     results = [
