@@ -8,7 +8,7 @@ import kwcoco
 import numpy as np
 import ubelt as ub
 import itertools
-from typing import Iterable, Tuple, Set, Union, Optional
+from typing import Iterable, Tuple, Set, Union, Optional, Literal
 from dataclasses import dataclass
 from watch.tasks.tracking.utils import (Track, PolygonFilter, NewTrackFunction,
                                         mask_to_polygons, heatmap, score, Poly,
@@ -52,7 +52,9 @@ class TimePolygonFilter(CocoDsetFilter):
         end_idx = self.get_poly_time_ind(
             map(lambda o: (o.gid, o.poly), reversed(observations)))
         len_obs = sum(1 for _ in observations)
-        return itertools.islice(observations, start_idx, len_obs - end_idx)
+        # have to make sure this doesn't get consumed
+        return list(itertools.islice(observations, start_idx, len_obs -
+                                     end_idx))
 
     def on_augmented_polys(self, aug_polys):
         raise NotImplementedError('need gids for time filtering')
@@ -221,7 +223,7 @@ def time_aggregated_polys(coco_dset,
                           bg_key=None,
                           time_filtering=False,
                           response_filtering=False,
-                          use_boundary_annots=False):
+                          use_boundaries=False):
     '''
     Track function.
 
@@ -253,6 +255,11 @@ def time_aggregated_polys(coco_dset,
         >>> inter_track = time_aggregated_polys(d)[0].observations
         >>> assert inter_track[0].score == 0, inter_track[1].score > 0
     '''
+
+    #
+    # --- input validation ---
+    #
+
     key, bg_key = _validate_keys(key, bg_key)
     _all_keys = set(key + bg_key)
     has_requested_chans_list = []
@@ -271,74 +278,68 @@ def time_aggregated_polys(coco_dset,
         print(f'warning: {n_missing} imgs in dset {coco_dset.tag} '
               f'have no keys {key} or {bg_key}. Interpolating...')
 
-    if use_boundary_annots:
-        import shapely.ops
-        boundary_tracks = list(pop_boundary_tracks(coco_dset))
-        assert len(boundary_tracks) > 0, 'need valid site boundaries!'
-        # TODO these obnoxious fors will be removed with gpd support in Track
-        bounds = shapely.ops.unary_union(
-            list(
-                itertools.chain.from_iterable(
-                    [obs.poly for obs in track.observations]
-                    for track in boundary_tracks)))
-        gids = list(
-            np.unique(
-                np.concatenate([[obs.gid for obs in track.observations]
-                                for track in boundary_tracks])))
-    else:
-        boundary_tracks = None
-        bounds = None
-        gids = list(coco_dset.imgs.keys())
-
-    # Record fg and bg keys across frames, and partial sums of fg and bg.
-    # Would use RunningStats, but it can't support indexed/subsetted access
-    # for multiple site boundaries over different times.
-    # This solution is more efficient when len(tracks) > len(gids).
     #
-    # running_dct = defaultdict(kwarray.RunningStats)
-    heatmaps_dct = defaultdict(list)
+    # --- utilities ---
+    #
 
-    # record previous heatmaps in video space to propagate thru missing frames
-    vid = coco_dset.index.videos[coco_dset.imgs[gids[0]]['video_id']]
-    vid_shape = (vid['height'], vid['width'])
-    prev_heatmap_dct = defaultdict(lambda: np.zeros(vid_shape))
+    def record_heatmaps(gids):
+        '''
+        Record fg and bg keys across coco_dset.
 
-    for gid in gids:
+        Returns:
+            {key: [heatmap]}
+        '''
+        # Would use RunningStats, but it can't support indexed/subsetted access
+        # for multiple site boundaries over different times.
+        # This solution is more efficient when len(tracks) > len(gids).
+        #
+        # running_dct = defaultdict(kwarray.RunningStats)
+        heatmaps_dct = defaultdict(list)
 
-        # we are working only in vid space, so forget about warping
-        fg_img_probs, fg_chan_probs = heatmap(coco_dset,
-                                              gid,
-                                              key,
-                                              return_chan_probs=True)
-        if any(np.flatnonzero(fg_img_probs)):
-            heatmaps_dct['fg'].append(fg_img_probs)
-        else:
-            heatmaps_dct['fg'].append(prev_heatmap_dct['fg'])
-        for k in key:
-            if k in fg_chan_probs:
-                heatmaps_dct[k].append(fg_chan_probs[k])
-                prev_heatmap_dct[k] = fg_chan_probs[k]
-            else:
-                heatmaps_dct[k].append(prev_heatmap_dct[k])
+        # record previous heatmaps in video space to propagate thru missing
+        # frames
+        vid = coco_dset.index.videos[coco_dset.imgs[gids[0]]['video_id']]
+        vid_shape = (vid['height'], vid['width'])
+        prev_heatmap_dct = defaultdict(lambda: np.zeros(vid_shape))
 
-        if len(bg_key) > 0:
-            bg_img_probs, bg_chan_probs = heatmap(coco_dset,
+        for gid in gids:
+
+            # we are working only in vid space, so forget about warping
+            fg_img_probs, fg_chan_probs = heatmap(coco_dset,
                                                   gid,
-                                                  bg_key,
+                                                  key,
                                                   return_chan_probs=True)
-            if any(np.flatnonzero(bg_img_probs)):
-                heatmaps_dct['bg'].append(bg_img_probs)
+            if any(np.flatnonzero(fg_img_probs)):
+                heatmaps_dct['fg'].append(fg_img_probs)
             else:
-                heatmaps_dct['bg'].append(prev_heatmap_dct['bg'])
-            for k in bg_key:
-                if k in bg_chan_probs:
-                    heatmaps_dct[k].append(bg_chan_probs[k])
-                    prev_heatmap_dct[k] = bg_chan_probs[k]
+                heatmaps_dct['fg'].append(prev_heatmap_dct['fg'])
+            for k in key:
+                if k in fg_chan_probs:
+                    heatmaps_dct[k].append(fg_chan_probs[k])
+                    prev_heatmap_dct[k] = fg_chan_probs[k]
                 else:
                     heatmaps_dct[k].append(prev_heatmap_dct[k])
 
-        else:
-            heatmaps_dct['bg'].append(np.zeros_like(fg_img_probs))
+            if len(bg_key) > 0:
+                bg_img_probs, bg_chan_probs = heatmap(coco_dset,
+                                                      gid,
+                                                      bg_key,
+                                                      return_chan_probs=True)
+                if any(np.flatnonzero(bg_img_probs)):
+                    heatmaps_dct['bg'].append(bg_img_probs)
+                else:
+                    heatmaps_dct['bg'].append(prev_heatmap_dct['bg'])
+                for k in bg_key:
+                    if k in bg_chan_probs:
+                        heatmaps_dct[k].append(bg_chan_probs[k])
+                        prev_heatmap_dct[k] = bg_chan_probs[k]
+                    else:
+                        heatmaps_dct[k].append(prev_heatmap_dct[k])
+
+            else:
+                heatmaps_dct['bg'].append(np.zeros_like(fg_img_probs))
+
+        return heatmaps_dct
 
     # turn heatmaps into polygons
     def probs(heatmaps, weights=None):
@@ -347,20 +348,27 @@ def time_aggregated_polys(coco_dset,
         hard_probs = util_kwimage.morphology(probs > thresh, 'dilate',
                                              morph_kernel)
         modulated_probs = probs * hard_probs
+
         return modulated_probs
 
-    if boundary_tracks is None:
-        # turn each polygon into a list of polygons (map them across gids)
-        def as_track(vidpoly):
-            return Track.from_polys(itertools.repeat(vidpoly),
-                                    coco_dset,
-                                    probs=heatmaps_dct['fg'])
-
-        polys = list(
-            mask_to_polygons(probs(heatmaps_dct['fg']), thresh, bounds=bounds))
-        tracks_polys = list(zip(map(as_track, polys), polys))
-    else:
+    def tracks_polys_bounds() -> Iterable[Tuple[Track, Poly]]:
         import shapely.ops
+        boundary_tracks = list(pop_boundary_tracks(coco_dset))
+        assert len(boundary_tracks) > 0, 'need valid site boundaries!'
+        '''
+        # TODO these obnoxious fors will be removed with gpd support in Track
+        # unused
+        bounds = shapely.ops.unary_union(
+            list(
+                itertools.chain.from_iterable(
+                    [obs.poly for obs in track.observations]
+                    for track in boundary_tracks)))
+        '''
+        gids = list(
+            np.unique(
+                np.concatenate([[obs.gid for obs in track.observations]
+                                for track in boundary_tracks])))
+        heatmaps = record_heatmaps(gids)['fg']
 
         def fill_boundary_track(track) -> Optional[Tuple[Track, Poly]]:
             # TODO when bounds are time-varying, this lets individual frames
@@ -370,7 +378,7 @@ def time_aggregated_polys(coco_dset,
             track_bounds = shapely.ops.unary_union(
                 [obs.poly for obs in track.observations])
             gid_ixs = np.in1d(gids, [obs.gid for obs in track.observations])
-            track_polys = mask_to_polygons(probs(heatmaps_dct['fg'],
+            track_polys = mask_to_polygons(probs(heatmaps,
                                                  weights=gid_ixs),
                                            thresh,
                                            bounds=track_bounds)
@@ -386,7 +394,7 @@ def time_aggregated_polys(coco_dset,
                             score=score(
                                 poly,
                                 # TODO optimize .index()
-                                heatmaps_dct['fg'][gids.index(obs.gid)]))
+                                heatmaps[gids.index(obs.gid)]))
                         for obs in track.observations
                     ],
                     dset=coco_dset,
@@ -395,8 +403,32 @@ def time_aggregated_polys(coco_dset,
 
         print('generating polys in bounds: number of bounds: ',
               len(boundary_tracks))
-        tracks_polys = list(
+        return list(
             filter(None, map(fill_boundary_track, boundary_tracks)))
+
+    def tracks_polys_nobounds() -> Iterable[Tuple[Track, Poly]]:
+        gids = list(coco_dset.imgs.keys())
+        heatmaps = record_heatmaps(gids)['fg']
+
+        # turn each polygon into a list of polygons (map them across gids)
+        def as_track(vidpoly):
+            return Track.from_polys(itertools.repeat(vidpoly),
+                                    coco_dset,
+                                    probs=heatmaps)
+
+        polys = list(
+            mask_to_polygons(probs(heatmaps), thresh))
+
+        return list(zip(map(as_track, polys), polys))
+
+    #
+    # --- main logic ---
+    #
+
+    if use_boundaries:
+        tracks_polys = tracks_polys_bounds()
+    else:
+        tracks_polys = tracks_polys_nobounds()
 
     print('time aggregation: number of polygons: ', len(tracks_polys))
 
@@ -418,13 +450,13 @@ def time_aggregated_polys(coco_dset,
     # TimePolygonFilter edits tracks instead of removing them, so we can
     # discard 'polys' and focus on 'tracks'
     tracks = [t for t, _ in tracks_polys]
-
+    # import xdev; xdev.embed()
     if time_filtering:
         # TODO investigate different thresh here
         time_thresh = thresh
         time_filter = TimePolygonFilter(coco_dset, tuple(key), time_thresh)
         tracks = list(
-            filter(lambda track: len(track.observations) > 0,
+            filter(lambda track: len(list(track.observations)) > 0,
                    map(time_filter, tracks)))
 
     return tracks
@@ -469,18 +501,28 @@ class TimeAggregatedSC(NewTrackFunction):
     key: Tuple[str] = ('Site Preparation', 'Active Construction',
                        'Post Construction')
     bg_key: Tuple[str] = ('No Activity')
-    use_boundary_annots: bool = True
+    boundaries_as: Literal['bounds', 'polys', 'none'] = 'bounds'
 
     def create_tracks(self, coco_dset):
-        tracks = time_aggregated_polys(
-            coco_dset,
-            self.thresh,
-            self.morph_kernel,
-            key=self.key,
-            bg_key=self.bg_key,
-            time_filtering=self.time_filtering,
-            response_filtering=self.response_filtering,
-            use_boundary_annots=self.use_boundary_annots)
+        '''
+        boundaries_as: use for Site Boundary annots in coco_dset
+            'bounds': generated polys will lie inside the boundaries
+            'polys': generated polys will be the boundaries
+            'none': generated polys will ignore the boundaries
+        '''
+        if self.boundaries_as == 'polys':
+            tracks = pop_boundary_tracks(coco_dset)
+        else:
+            tracks = time_aggregated_polys(
+                coco_dset,
+                self.thresh,
+                self.morph_kernel,
+                key=self.key,
+                bg_key=self.bg_key,
+                time_filtering=self.time_filtering,
+                response_filtering=self.response_filtering,
+                use_boundaries=(self.boundaries_as != 'none'))
+
         return tracks
 
     def add_tracks_to_dset(self, coco_dset, tracks, **kwargs):

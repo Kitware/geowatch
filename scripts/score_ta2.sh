@@ -237,6 +237,8 @@ for REGION_FILE in $DSET_DPATH/regions/*geojson; do
         $DSET_DPATH/sc.kwcoco.json \
         --default_track_fn class_heatmaps \
         --site_summary $REGION_FILE \
+        # optional: behaves like TimeAggregatedHybrid
+        # --track_kwargs "{\"boundaries_as\": \"polys\"}" \
         score -- \
             --metrics_dpath $METRICS_DPATH \
             --virtualenv_cmd $METRICS_VENV_CMD \
