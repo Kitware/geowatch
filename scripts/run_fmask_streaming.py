@@ -2,15 +2,15 @@ import argparse
 import sys
 import traceback
 import os
-import json
-import tempfile
-import subprocess
 from concurrent.futures import as_completed
 
 import ubelt
+import pystac
 
-from watch.cli.baseline_framework_ingress import ingress_item
-from watch.cli.baseline_framework_egress import egress_item
+from watch.utils.util_framework import (CacheItemOutputS3Wrapper,
+                                        IngressProcessEgressWrapper)
+from watch.cli.baseline_framework_ingress import load_input_stac_items
+from watch.cli.baseline_framework_egress import upload_output_stac_items
 from watch.cli.run_fmask import run_fmask_for_item
 from watch.cli.add_angle_bands import add_angle_bands_to_item
 
@@ -29,6 +29,12 @@ def main():
                         required=False,
                         type=str,
                         help="AWS Profile to use for AWS S3 CLI commands")
+    parser.add_argument("--aws_storage_class",
+                        required=False,
+                        type=str,
+                        default=None,
+                        help="AWS S3 storage class to use for egress AWS S3 "
+                             "CLI commands (e.g. 'ONEZONE_IA', default: None)")
     parser.add_argument("-d", "--dryrun",
                         action='store_true',
                         default=False,
@@ -70,34 +76,27 @@ SUPPORTED_PLATFORMS = {'S2A',
                        'OLI_TIRS'}
 
 
-def _item_map(stac_item, outbucket, aws_base_command, dryrun):
-    if stac_item['properties'].get('platform') not in SUPPORTED_PLATFORMS:
-        return stac_item
+def _item_selector(stac_item):
+    return stac_item['properties'].get('platform') in SUPPORTED_PLATFORMS
 
-    with tempfile.TemporaryDirectory() as tmpdirname:
-        ingressed_item = ingress_item(
-            stac_item,
-            os.path.join(tmpdirname, 'ingress'),
-            aws_base_command,
-            dryrun)
 
-        fmask_item = run_fmask_for_item(
-            ingressed_item,
-            os.path.join(tmpdirname, 'fmask'))
+def _item_map(stac_item, working_dir):
+    fmask_item = run_fmask_for_item(
+        stac_item,
+        os.path.join(working_dir, 'fmask'))
 
-        angles_item = add_angle_bands_to_item(
-            fmask_item,
-            os.path.join(tmpdirname, 'angles'))
+    angles_item = add_angle_bands_to_item(
+        fmask_item,
+        os.path.join(working_dir, 'angles'))
 
-        return egress_item(angles_item,
-                           outbucket,
-                           aws_base_command)
+    return angles_item
 
 
 def run_fmask_streaming(input_path,
                         output_path,
                         outbucket,
                         aws_profile=None,
+                        aws_storage_class=None,
                         dryrun=False,
                         show_progress=False,
                         requester_pays=False,
@@ -118,35 +117,26 @@ def run_fmask_streaming(input_path,
     if requester_pays:
         aws_base_command.extend(['--request-payer', 'requester'])
 
-    def _load_input(path):
-        try:
-            with open(path) as f:
-                input_json = json.load(f)
-            return input_json['stac'].get('features', [])
-        # Excepting KeyError here in case of a single line STAC item input
-        except (json.decoder.JSONDecodeError, KeyError):
-            # Support for simple newline separated STAC items
-            with open(path) as f:
-                return [json.loads(line) for line in f]
+    if aws_storage_class is not None:
+        aws_base_command.extend(['--storage-class', aws_storage_class])
 
-    if input_path.startswith('s3'):
-        with tempfile.NamedTemporaryFile() as temporary_file:
-            subprocess.run(
-                [*aws_base_command, input_path, temporary_file.name],
-                check=True)
-
-            input_stac_items = _load_input(temporary_file.name)
-    else:
-        input_stac_items = _load_input(input_path)
+    input_stac_items = load_input_stac_items(input_path, aws_base_command)
 
     executor = ubelt.Executor(mode='process' if jobs > 1 else 'serial',
                               max_workers=jobs)
 
-    fmask_jobs = [executor.submit(_item_map,
-                                  stac_item,
-                                  outbucket,
-                                  aws_base_command,
-                                  dryrun)
+    ingress_process_egress_map = IngressProcessEgressWrapper(
+        _item_map,
+        outbucket,
+        aws_base_command,
+        dryrun=dryrun,
+        stac_item_selector=_item_selector)
+    caching_item_map = CacheItemOutputS3Wrapper(
+        ingress_process_egress_map,
+        outbucket,
+        aws_profile=aws_profile)
+    fmask_jobs = [executor.submit(caching_item_map,
+                                  stac_item)
                   for stac_item in input_stac_items]
 
     output_stac_items = []
@@ -160,27 +150,17 @@ def run_fmask_streaming(input_path,
         else:
             if isinstance(mapped_item, dict):
                 output_stac_items.append(mapped_item)
-            else:
+            elif isinstance(mapped_item, pystac.Item):
                 output_stac_items.append(mapped_item.to_dict())
-
-    if newline:
-        te_output = '\n'.join((json.dumps(item) for item in output_stac_items))
-    else:
-        te_output = {'raw_images': [],
-                     'stac': {
-                         'type': 'FeatureCollection',
-                         'features': output_stac_items}}
-
-    with tempfile.NamedTemporaryFile() as temporary_file:
-        with open(temporary_file.name, 'w') as f:
-            if newline:
-                print(te_output, end='', file=f)
             else:
-                print(json.dumps(te_output, indent=2), file=f)
+                for mi in mapped_item:
+                    if isinstance(mi, dict):
+                        output_stac_items.append(mi)
+                    elif isinstance(mi, pystac.Item):
+                        output_stac_items.append(mi.to_dict())
 
-        command = [*aws_base_command, temporary_file.name, output_path]
-
-        subprocess.run(command, check=True)
+    te_output = upload_output_stac_items(
+        output_stac_items, output_path, aws_base_command, newline=newline)
 
     return te_output
 

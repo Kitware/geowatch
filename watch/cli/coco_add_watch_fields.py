@@ -110,7 +110,7 @@ def main(**kwargs):
     # hack in colors
     from watch import heuristics
     from watch.utils.lightning_ext import util_globals
-    heuristics.ensure_heuristic_colors(dset)
+    heuristics.ensure_heuristic_coco_colors(dset)
 
     print('start populate')
 

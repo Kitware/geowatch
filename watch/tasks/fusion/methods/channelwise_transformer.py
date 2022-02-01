@@ -467,7 +467,9 @@ class MultimodalTransformer(pl.LightningModule):
                 tokenize = ConvTokenizer(in_chan, in_features_raw, norm=None)
             elif tokenizer == 'linconv':
                 in_features_raw = MODAL_AGREEMENT_CHANS * 64
-                tokenize = LinearConvTokenizer(in_chan, in_features_raw, norm=None)
+                import xdev
+                with xdev.embed_on_exception_context:
+                    tokenize = LinearConvTokenizer(in_chan, in_features_raw)
             elif tokenizer == 'dwcnn':
                 in_features_raw = MODAL_AGREEMENT_CHANS * 64
                 tokenize = DWCNNTokenizer(in_chan, in_features_raw, norm=token_norm)
@@ -684,11 +686,11 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     coco_fpath = ub.expandpath('$HOME/data/work/toy_change/vidshapes_msi_train/data.kwcoco.json')
             >>>     coco_dset = kwcoco.CocoDataset.coerce(coco_fpath)
             >>>     channels="B11,r|g|b,B1|B8|B11"
-            >>> if 0:
+            >>> if 1:
             >>>     dvc_dpath = find_smart_dvc_dpath()
             >>>     coco_dset = join(dvc_dpath, 'drop1-S2-L8-aligned/data.kwcoco.json')
             >>>     channels='swir16|swir22|blue|green|red|nir'
-            >>> if 1:
+            >>> if 0:
             >>>     import watch
             >>>     coco_dset = watch.demo.demo_kwcoco_multisensor(max_speed=0.5)
             >>>     # coco_dset = 'special:vidshapes8-frames9-speed0.5-multispectral'
@@ -697,9 +699,11 @@ class MultimodalTransformer(pl.LightningModule):
             >>> coco_dset = kwcoco.CocoDataset.coerce(coco_dset)
             >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset=coco_dset,
-            >>>     chip_size=128, batch_size=1, time_steps=5,
+            >>>     chip_size=128, batch_size=4, time_steps=5,
             >>>     channels=channels,
-            >>>     normalize_inputs=1, neg_to_pos_ratio=0, num_workers='avail/2', true_multimodal=True, use_grid_positives=False, use_centered_positives=True,
+            >>>     normalize_inputs=1, neg_to_pos_ratio=0,
+            >>>     num_workers='avail/2', true_multimodal=True,
+            >>>     use_grid_positives=False, use_centered_positives=True,
             >>> )
             >>> datamodule.setup('fit')
             >>> dataset = torch_dset = datamodule.torch_datasets['train']
@@ -939,7 +943,7 @@ class MultimodalTransformer(pl.LightningModule):
                             mode_val = mode_norm(mode_val)
                         except KeyError:
                             print(f'Failed to process {sensor=!r} {chan_code=!r}')
-                            print('Expected available norms are:')
+                            print('Expected available norms (note the keys contain escape sequences) are:')
                             for _s in sorted(self.input_norms.keys()):
                                 for _c in sorted(self.input_norms[_s].keys()):
                                     print(f'{_s=!r} {_c=!r}')
@@ -1114,19 +1118,23 @@ class MultimodalTransformer(pl.LightningModule):
                 val for parts in item_losses for val in parts.values())
 
             to_compare = {}
+            # Flatten everything for pixelwise comparisons
             if 'change' in batch_head_truths:
-                _true = torch.cat(batch_head_truths['change'], dim=0)
-                _pred = torch.stack(batch_head_probs['change'])
+                _true = torch.cat([x.contiguous().view(-1) for x in batch_head_truths['change']], dim=0)
+                _pred = torch.cat([x.contiguous().view(-1) for x in batch_head_probs['change']], dim=0)
                 to_compare['change'] = (_true, _pred)
 
             if 'class' in batch_head_truths:
-                _true = torch.cat(batch_head_truths['class'], dim=0).view(-1)
-                _pred = torch.stack(batch_head_probs['class']).view(-1, self.num_classes)
+                c = self.num_classes
+                # Truth is index-based (todo: per class binary maps)
+                _true = torch.cat([x.contiguous().view(-1) for x in batch_head_truths['class']], dim=0)
+                _pred = torch.cat([x.contiguous().view(-1, c) for x in batch_head_probs['class']], dim=0)
                 to_compare['class'] = (_true, _pred)
 
             if 'saliency' in batch_head_truths:
-                _true = torch.cat(batch_head_truths['saliency'], dim=0).view(-1)
-                _pred = torch.stack(batch_head_probs['saliency']).view(-1, self.saliency_num_classes)
+                c = self.saliency_num_classes
+                _true = torch.cat([x.contiguous().view(-1) for x in batch_head_truths['saliency']], dim=0)
+                _pred = torch.cat([x.contiguous().view(-1, c) for x in batch_head_probs['saliency']], dim=0)
                 to_compare['saliency'] = (_true, _pred)
 
             # compute metrics
@@ -1590,29 +1598,25 @@ class OurDepthwiseSeparableConv(nn.Module):
         return x
 
 
-class DWCNNTokenizer(nn.Module):
+class DWCNNTokenizer(nh.layers.Sequential):
+    """
+    self = DWCNNTokenizer(13, 2)
+    inputs = torch.rand(2, 13, 16, 16)
+    self(inputs)
+    """
     def __init__(self, in_chn, out_chn, norm='auto'):
         super().__init__()
+        if norm == 'none':
+            norm = None
         self.norm = norm
-        self.stem = nn.Sequential(*[
+        super().__init__(*[
             OurDepthwiseSeparableConv(in_chn, in_chn, kernel_size=3, stride=1, padding=1, residual=1, norm=None, noli=None),
             OurDepthwiseSeparableConv(in_chn, in_chn * 4, kernel_size=3, stride=2, padding=1, residual=0, norm=norm),
             OurDepthwiseSeparableConv(in_chn * 4, in_chn * 8, kernel_size=3, stride=2, padding=1, residual=0, norm=norm),
             OurDepthwiseSeparableConv(in_chn * 8, out_chn, kernel_size=3, stride=2, padding=1, residual=0, norm=norm),
         ])
-        self.expand_factor = out_chn
+        self.in_channels = in_chn
         self.out_channels = out_chn
-        # self.to_tokens = Rearrange("(b t) (c ef) h w -> (b t) c h w ef", ef=self.expand_factor, b=1)
-
-    def forward(self, inputs):
-        """
-        self = DWCNNTokenizer(13, 2)
-        inputs = torch.rand(2, 13, 16, 16)
-        self(inputs)
-        """
-        b, c, h, w = inputs.shape
-        tokens = self.stem(inputs)
-        return tokens
 
 
 class LinearConvTokenizer(nh.layers.Sequential):
@@ -1649,6 +1653,8 @@ class LinearConvTokenizer(nh.layers.Sequential):
                 stride=1, padding=0,
             ).conv,
         )
+        self.in_channels = in_channels
+        self.out_channels = out_channels
 
 
 class ConvTokenizer(nn.Module):

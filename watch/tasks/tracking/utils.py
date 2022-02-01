@@ -391,7 +391,7 @@ def mask_to_polygons(probs,
 
     if scored:
         for poly in polygons:
-            yield score(poly, probs), poly
+            yield score(poly, probs, use_rasterio=use_rasterio), poly
     else:
         yield from polygons
 
@@ -419,7 +419,8 @@ def _validate_keys(key, bg_key):
     return key, bg_key
 
 
-def heatmap(dset, gid, key, return_chan_probs=False, space='video'):
+def heatmap(dset, gid, key, return_chan_probs=False, space='video',
+            missing='fill'):
     """
     Find the total heatmap of key within gid
 
@@ -430,6 +431,10 @@ def heatmap(dset, gid, key, return_chan_probs=False, space='video'):
         return_chan_probs:
             if True, also return a dict {k:heatmap(k) for k in keys}
         space: 'video' or 'image'
+        missing: behavior for missing keys.
+            'fill': return probs and chan_probs of zeros
+            'skip': return probs of zeros, skip chan_probs
+            'raise': raise exception
     """
     key, _ = _validate_keys(key, None)
     coco_img = dset.coco_image(gid)
@@ -438,11 +443,16 @@ def heatmap(dset, gid, key, return_chan_probs=False, space='video'):
     common = kwcoco.FusedChannelSpec.coerce(
         coco_img.channels.fuse()).intersection(
             kwcoco.FusedChannelSpec.coerce(key))
-    assert len(key) == len(common), (dset, gid, key)
 
-    if len(key) == 0:  # for bg_key
+    if missing == 'raise':
+        assert len(key) == len(common), (dset, gid, key)
+
+    if len(common) == 0:  # for bg_key
         if return_chan_probs:
-            return fg_img_probs, {}
+            if missing == 'skip':
+                return fg_img_probs, {}
+            else:
+                return fg_img_probs, {k: fg_img_probs for k in key}
         else:
             return fg_img_probs
 
@@ -456,8 +466,13 @@ def heatmap(dset, gid, key, return_chan_probs=False, space='video'):
         for k in key:
             codes = common.intersection(
                 kwcoco.FusedChannelSpec.coerce(k)).code_list()
-            chan_probs[k] = np.sum(
-                [key_img_probs[idxs[code]] for code in codes], axis=0)
+            probs = [key_img_probs[idxs[code]] for code in codes]
+            if len(probs) == 0:
+                if missing == 'skip':
+                    continue
+                else:
+                    probs.append(np.zeros((h, w)))
+            chan_probs[k] = np.sum(probs, axis=0)
         return fg_img_probs, chan_probs
     else:
         return fg_img_probs

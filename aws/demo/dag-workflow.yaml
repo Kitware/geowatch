@@ -1,0 +1,44 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: dag-
+spec:
+  entrypoint: main
+  serviceAccountName: argo-runner
+  templates:
+  - name: whalesay
+    container:
+      image: docker/whalesay
+      command: [cowsay]
+      args: ["hello world"]
+  - name: main
+    # A
+    # +----> B --------.
+    # |                |
+    # +----> C ------. |
+    # |              | |
+    # +----> D       | |
+    # |              | |
+    # +----> E       | |
+    # |              V V
+    # '-------------> F
+    dag:
+      tasks:
+        - name: A
+          template: whalesay
+        - name: B
+          dependencies: [A]
+          template: whalesay
+        - name: C
+          dependencies: [A]
+          template: whalesay
+        - name: D
+          dependencies: [A]
+          template: whalesay
+        - name: E
+          dependencies: [A]
+          template: whalesay
+        - name: F
+          dependencies: [A, B, C]
+          template: whalesay

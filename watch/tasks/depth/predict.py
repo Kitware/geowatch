@@ -198,6 +198,7 @@ if __name__ == '__main__':
     # Notes:
 
     DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+
     python -m watch.tasks.depth.predict \
         --dataset="$DVC_DPATH/Drop1-Aligned-L1-2022-01/data.kwcoco.json" \
         --output="$DVC_DPATH/Drop1-Aligned-L1-2022-01/dzyne_depth.kwcoco.json" \
@@ -205,6 +206,19 @@ if __name__ == '__main__':
         --dump_shards=True \
         --data_workers=2 \
         --window_size=1536
+
+    python -m watch visualize $DVC_DPATH/Drop1-Aligned-L1-2022-01/dzyne_depth.kwcoco.json \
+        --viz_dpath $DVC_DPATH/Drop1-Aligned-L1-2022-01/_viz_depth \
+        --animate=True --channels=depth --skip_missing=True
+
+    python -m watch stats $DVC_DPATH/Drop1-Aligned-L1-2022-01/dzyne_depth.kwcoco.json
+
+    python -m kwcoco stats $DVC_DPATH/Drop1-Aligned-L1-2022-01/dzyne_depth.kwcoco.json
+
+    python -m watch visualize $DVC_DPATH/Drop1-Aligned-L1-2022-01/dzyne_depth.kwcoco.json \
+        --viz_dpath $DVC_DPATH/Drop1-Aligned-L1-2022-01/_viz_depth \
+        --animate=True --channels="red|green|blue" --skip_missing=True \
+        --select_images '.sensor_coarse == "WV"' --workers=4
 
     """
     setup_logging()

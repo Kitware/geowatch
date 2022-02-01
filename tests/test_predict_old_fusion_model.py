@@ -86,7 +86,8 @@ def test_predict_old_fusion_model():
         'pred_dataset': pred_fpath,
         'package_fpath': model_fpath,
         'chip_overlap': 0.0,
-        'gpus': 0,
+        'gpus': "auto:1",
+        'num_workers': 0,
     }
     kwargs = pred_kwargs  # NOQA
     predict.predict(**pred_kwargs)

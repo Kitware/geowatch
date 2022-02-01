@@ -196,9 +196,13 @@ def predict(cmdline=False, **kwargs):
         method.saliency_metrics = None
         method.change_metrics = None
         method.head_metrics = None
-    except Exception:
+    except Exception as ex:
+        print('ex = {!r}'.format(ex))
+        print(f'Failed to read {args.package_fpath=!r} attempting workaround')
         # If we have a checkpoint path we can load it if we make assumptions
         # init method from checkpoint.
+        raise
+
         checkpoint = torch.load(args.package_fpath)
         print(list(checkpoint.keys()))
         from watch.tasks.fusion import methods
@@ -344,7 +348,9 @@ def predict(cmdline=False, **kwargs):
     result_fpath.parent.mkdir(parents=True, exist_ok=True)
 
     from watch.utils.lightning_ext import util_device
+    print('args.gpus = {!r}'.format(args.gpus))
     devices = util_device.coerce_devices(args.gpus)
+    print('devices = {!r}'.format(devices))
     if len(devices) > 1:
         raise NotImplementedError('TODO: handle multiple devices')
     device = devices[0]
@@ -840,7 +846,8 @@ class CocoStitchingManager(object):
                 thresh = self.thresh
                 # Convert to polygons
                 scored_polys = list(mask_to_polygons(
-                    band_probs, thresh, scored=True, use_rasterio=False))
+                    probs=band_probs, thresh=thresh, scored=True,
+                    use_rasterio=False))
                 n_anns = len(scored_polys)
                 for score, vid_poly in scored_polys:
                     # Transform the video polygon into image space
@@ -863,4 +870,21 @@ def main(cmdline=True, **kwargs):
 
 
 if __name__ == '__main__':
+    r"""
+    Test old model:
+
+    python -m watch.tasks.fusion.predict \
+        --write_probs=True \
+        --write_preds=False \
+        --with_class=auto \
+        --with_saliency=auto \
+        --with_change=False \
+        --package_fpath=/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_raw_v39/SC_smt_it_stm_p8_newanns_weighted_raw_v39_epoch=52-step=2269088.pt.dvc \
+        --pred_dataset=/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_raw_v39/pred_SC_smt_it_stm_p8_newanns_weighted_raw_v39_epoch=52-step=2269088.pt/Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco/pred.kwcoco.json \
+        --test_dataset=/home/joncrall/data/dvc-repos/smart_watch_dvc/Drop1-Aligned-L1-2022-01/combo_DILM_nowv_vali.kwcoco.json \
+        --num_workers=5 \
+        --compress=DEFLATE \
+        --gpus=0, \
+        --batch_size=1
+    """
     main()

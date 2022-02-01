@@ -349,7 +349,7 @@ def _auto_kernel_sigma(kernel=None, sigma=None, autokernel_mode='ours'):
 def upweight_center_mask(shape):
     """
     Example:
-        >>> from watch.tasks.fusion.predict import *  # NOQA
+        >>> from watch.utils.util_kwimage import *  # NOQA
         >>> shapes = [32, 64, 96, 128, 256]
         >>> results = {}
         >>> for shape in shapes:

@@ -68,7 +68,48 @@ class IntensityHistogramConfig(scfg.Config):
             - ``frequency`` shows the number of observations divided by the bin width
             - ``density`` normalizes counts so that the area of the histogram is 1
             - ``probability`` normalizes counts so that the sum of the bar heights is 1
-            '''))
+            ''')),
+
+        'select_images': scfg.Value(
+            None, type=str, help=ub.paragraph(
+                '''
+                A json query (via the jq spec) that specifies which images
+                belong in the subset. Note, this is a passed as the body of
+                the following jq query format string to filter valid ids
+                '.images[] | select({select_images}) | .id'.
+
+                Examples for this argument are as follows:
+                '.id < 3' will select all image ids less than 3.
+                '.file_name | test(".*png")' will select only images with
+                file names that end with png.
+                '.file_name | test(".*png") | not' will select only images
+                with file names that do not end with png.
+                '.myattr == "foo"' will select only image dictionaries
+                where the value of myattr is "foo".
+                '.id < 3 and (.file_name | test(".*png"))' will select only
+                images with id less than 3 that are also pngs.
+                .myattr | in({"val1": 1, "val4": 1}) will take images
+                where myattr is either val1 or val4.
+
+                Requries the "jq" python library is installed.
+                ''')),
+
+        'select_videos': scfg.Value(
+            None, help=ub.paragraph(
+                '''
+                A json query (via the jq spec) that specifies which videos
+                belong in the subset. Note, this is a passed as the body of
+                the following jq query format string to filter valid ids
+                '.videos[] | select({select_images}) | .id'.
+
+                Examples for this argument are as follows:
+                '.name | startswith("foo")' will select only videos
+                where the name starts with foo.
+
+                Only applicable for dataset that contain videos.
+
+                Requries the "jq" python library is installed.
+                ''')),
     }
 
 
@@ -166,6 +207,8 @@ def main(**kwargs):
         coco_dset,
         include_sensors=config['include_sensors'],
         exclude_sensors=config['exclude_sensors'],
+        select_images=config['select_images'],
+        select_videos=config['select_videos'],
     )
 
     images = coco_dset.images(valid_gids)

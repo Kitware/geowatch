@@ -1,0 +1,298 @@
+#awscli                                   Universal Command Line Environment for AWS.
+#├── PyYAML<5.5,>=3.10                    YAML parser and emitter for Python
+#├── botocore==1.23.41                    Low-level, data-driven core of boto 3.
+#│   ├── jmespath<1.0.0,>=0.7.1           JSON Matching Expressions
+#│   ├── python-dateutil<3.0.0,>=2.1      Extensions to the standard Python datetime module
+#│   │   └── six>=1.5                     Python 2 and 3 compatibility utilities
+#│   └── urllib3<1.27,>=1.25.4            HTTP library with thread-safe connection pooling, file post, and more.
+#├── colorama<0.4.4,>=0.2.5               Cross-platform colored terminal text.
+#├── docutils<0.16,>=0.10                 Docutils -- Python Documentation Utilities
+#├── rsa<4.8,>=3.1.2                      Pure-Python RSA implementation
+#│   └── pyasn1>=0.1.3                    ASN.1 types and codecs
+#└── s3transfer<0.6.0,>=0.5.0             An Amazon S3 Transfer Manager
+#    └── botocore<2.0a.0,>=1.12.36        Low-level, data-driven core of boto 3.
+#        ├── jmespath<1.0.0,>=0.7.1       JSON Matching Expressions
+#        ├── python-dateutil<3.0.0,>=2.1  Extensions to the standard Python datetime module
+#        │   └── six>=1.5                 Python 2 and 3 compatibility utilities
+#        └── urllib3<1.27,>=1.25.4        HTTP library with thread-safe connection pooling, file post, and more.
+
+#dvc[s3]                                              Git for data scientists - manage your code and data together
+#├── aiohttp-retry>=2.4.5                             Simple retry client for aiohttp
+#│   └── aiohttp                                      Async http client/server framework (asyncio)
+#│       ├── aiosignal>=1.1.2                         aiosignal: a list of registered asynchronous callbacks
+#│       │   └── frozenlist>=1.1.0                    A list-like structure which implements collections.abc.MutableSequence
+#│       ├── async-timeout<5.0,>=4.0.0a3              Timeout context manager for asyncio programs
+#│       ├── attrs>=17.3.0                            Classes Without Boilerplate
+#│       ├── charset-normalizer<3.0,>=2.0             The Real First Universal Charset Detector. Open, modern and actively maintained alternative to Chardet.
+#│       ├── frozenlist>=1.1.1                        A list-like structure which implements collections.abc.MutableSequence
+#│       ├── multidict<7.0,>=4.5                      multidict implementation
+#│       └── yarl<2.0,>=1.0                           Yet another URL library
+#│           ├── idna>=2.0                            Internationalized Domain Names in Applications (IDNA)
+#│           └── multidict>=4.0                       multidict implementation
+#├── appdirs>=1.4.3                                   A small Python module for determining appropriate platform-specific dirs, e.g. a "user data dir".
+#├── colorama>=0.3.9                                  Cross-platform colored terminal text.
+#├── configobj>=5.0.6                                 Config file reading, writing and validation.
+#│   └── six                                          Python 2 and 3 compatibility utilities
+#├── dictdiffer>=0.8.1                                Dictdiffer is a library that helps you to diff and patch dictionaries.
+#├── diskcache>=5.2.1                                 Disk Cache -- Disk and file backed persistent cache.
+#├── distro>=1.3.0                                    Distro - an OS platform information API
+#├── dpath<3,>=2.0.2                                  Filesystem-like pathing and searching for dictionaries
+#├── flatten-dict<1,>=0.4.1                           A flexible utility for flattening and unflattening dict-like objects in Python.
+#│   └── six<2.0,>=1.12                               Python 2 and 3 compatibility utilities
+#├── flufl.lock>=5                                    NFS-safe file locking with timeouts for POSIX and Windows
+#│   ├── atpublic>=2.3                                Keep all y'all's __all__'s in sync
+#│   └── psutil>=5.9.0                                Cross-platform lib for process and system monitoring in Python.
+#├── fsspec[http]>=2021.10.1                          File-system specification
+#│   ├── aiohttp                                      Async http client/server framework (asyncio)
+#│   │   ├── aiosignal>=1.1.2                         aiosignal: a list of registered asynchronous callbacks
+#│   │   │   └── frozenlist>=1.1.0                    A list-like structure which implements collections.abc.MutableSequence
+#│   │   ├── async-timeout<5.0,>=4.0.0a3              Timeout context manager for asyncio programs
+#│   │   ├── attrs>=17.3.0                            Classes Without Boilerplate
+#│   │   ├── charset-normalizer<3.0,>=2.0             The Real First Universal Charset Detector. Open, modern and actively maintained alternative to Chardet.
+#│   │   ├── frozenlist>=1.1.1                        A list-like structure which implements collections.abc.MutableSequence
+#│   │   ├── multidict<7.0,>=4.5                      multidict implementation
+#│   │   └── yarl<2.0,>=1.0                           Yet another URL library
+#│   │       ├── idna>=2.0                            Internationalized Domain Names in Applications (IDNA)
+#│   │       └── multidict>=4.0                       multidict implementation
+#│   └── requests                                     Python HTTP for Humans.
+#│       ├── certifi>=2017.4.17                       Python package for providing Mozilla's CA Bundle.
+#│       ├── charset-normalizer~=2.0.0                The Real First Universal Charset Detector. Open, modern and actively maintained alternative to Chardet.
+#│       ├── idna<4,>=2.5                             Internationalized Domain Names in Applications (IDNA)
+#│       └── urllib3<1.27,>=1.21.1                    HTTP library with thread-safe connection pooling, file post, and more.
+#├── funcy>=1.14                                      A fancy and practical functional tools
+#├── grandalf==0.6                                    Graph and drawing algorithms framework
+#│   ├── future                                       Clean single-source support for Python 3 and 2
+#│   └── pyparsing                                    Python parsing module
+#├── nanotime>=0.5.2                                  nanotime python implementation
+#├── networkx>=2.5                                    Python package for creating and manipulating graphs and networks
+#├── packaging>=19.0                                  Core utilities for Python packages
+#│   └── pyparsing!=3.0.5,>=2.0.2                     Python parsing module
+#├── pathspec<0.10.0,>=0.9.0                          Utility library for gitignore style pattern matching of file paths.
+#├── ply>=3.9                                         Python Lex & Yacc
+#├── psutil>=5.8.0                                    Cross-platform lib for process and system monitoring in Python.
+#├── pyasn1>=0.4.1                                    ASN.1 types and codecs
+#├── pydot>=1.2.4                                     Python interface to Graphviz's Dot
+#│   └── pyparsing>=2.1.4                             Python parsing module
+#├── pygtrie>=2.3.2                                   A pure Python trie data structure implementation.
+#├── pyparsing>=2.4.7                                 Python parsing module
+#├── python-benedict>=0.24.2                          python-benedict is a dict subclass with keylist/keypath support, normalized I/O operations (base64, csv, ini, json, pickle, plist, query-string, toml, xml, yaml) and many utilities... for humans, obviously.
+#│   ├── ftfy                                         Fixes some problems with Unicode text after the fact
+#│   │   └── wcwidth                                  Measures the displayed width of unicode strings in a terminal
+#│   ├── mailchecker                                  Cross-language email validation. Backed by a database of thousands throwable email providers.
+#│   ├── phonenumbers                                 Python version of Google's common library for parsing, formatting, storing and validating international phone numbers.
+#│   ├── python-dateutil                              Extensions to the standard Python datetime module
+#│   │   └── six>=1.5                                 Python 2 and 3 compatibility utilities
+#│   ├── python-fsutil                                file-system utilities for lazy devs.
+#│   │   └── requests                                 Python HTTP for Humans.
+#│   │       ├── certifi>=2017.4.17                   Python package for providing Mozilla's CA Bundle.
+#│   │       ├── charset-normalizer~=2.0.0            The Real First Universal Charset Detector. Open, modern and actively maintained alternative to Chardet.
+#│   │       ├── idna<4,>=2.5                         Internationalized Domain Names in Applications (IDNA)
+#│   │       └── urllib3<1.27,>=1.21.1                HTTP library with thread-safe connection pooling, file post, and more.
+#│   ├── python-slugify                               A Python Slugify application that handles Unicode
+#│   │   └── text-unidecode>=1.3                      The most basic Text::Unidecode port
+#│   ├── pyyaml                                       YAML parser and emitter for Python
+#│   ├── requests                                     Python HTTP for Humans.
+#│   │   ├── certifi>=2017.4.17                       Python package for providing Mozilla's CA Bundle.
+#│   │   ├── charset-normalizer~=2.0.0                The Real First Universal Charset Detector. Open, modern and actively maintained alternative to Chardet.
+#│   │   ├── idna<4,>=2.5                             Internationalized Domain Names in Applications (IDNA)
+#│   │   └── urllib3<1.27,>=1.21.1                    HTTP library with thread-safe connection pooling, file post, and more.
+#│   ├── six                                          Python 2 and 3 compatibility utilities
+#│   ├── toml                                         Python Library for Tom's Obvious, Minimal Language
+#│   └── xmltodict                                    Makes working with XML feel like you are working with JSON
+#├── requests>=2.22.0                                 Python HTTP for Humans.
+#│   ├── certifi>=2017.4.17                           Python package for providing Mozilla's CA Bundle.
+#│   ├── charset-normalizer~=2.0.0                    The Real First Universal Charset Detector. Open, modern and actively maintained alternative to Chardet.
+#│   ├── idna<4,>=2.5                                 Internationalized Domain Names in Applications (IDNA)
+#│   └── urllib3<1.27,>=1.21.1                        HTTP library with thread-safe connection pooling, file post, and more.
+#├── rich>=10.13.0                                    Render rich text, tables, progress bars, syntax highlighting, markdown and more to the terminal
+#│   ├── colorama<0.5.0,>=0.4.0                       Cross-platform colored terminal text.
+#│   ├── commonmark<0.10.0,>=0.9.0                    Python parser for the CommonMark Markdown spec
+#│   └── pygments<3.0.0,>=2.6.0                       Pygments is a syntax highlighting package written in Python.
+#├── ruamel.yaml>=0.17.11                             ruamel.yaml is a YAML parser/emitter that supports roundtrip preservation of comments, seq/map flow style, and map key order
+#│   └── ruamel.yaml.clib>=0.2.6                      C version of reader, parser and emitter for ruamel.yaml derived from libyaml
+#├── s3fs[boto3]>=2021.11.1                           Convenient Filesystem interface over S3
+#│   ├── aiobotocore[boto3]~=2.1.0                    Async client for aws services using botocore and aiohttp
+#│   │   ├── aiohttp>=3.3.1                           Async http client/server framework (asyncio)
+#│   │   │   ├── aiosignal>=1.1.2                     aiosignal: a list of registered asynchronous callbacks
+#│   │   │   │   └── frozenlist>=1.1.0                A list-like structure which implements collections.abc.MutableSequence
+#│   │   │   ├── async-timeout<5.0,>=4.0.0a3          Timeout context manager for asyncio programs
+#│   │   │   ├── attrs>=17.3.0                        Classes Without Boilerplate
+#│   │   │   ├── charset-normalizer<3.0,>=2.0         The Real First Universal Charset Detector. Open, modern and actively maintained alternative to Chardet.
+#│   │   │   ├── frozenlist>=1.1.1                    A list-like structure which implements collections.abc.MutableSequence
+#│   │   │   ├── multidict<7.0,>=4.5                  multidict implementation
+#│   │   │   └── yarl<2.0,>=1.0                       Yet another URL library
+#│   │   │       ├── idna>=2.0                        Internationalized Domain Names in Applications (IDNA)
+#│   │   │       └── multidict>=4.0                   multidict implementation
+#│   │   ├── aioitertools>=0.5.1                      itertools and builtins for AsyncIO and mixed iterables
+#│   │   ├── boto3<1.20.25,>=1.20.24                  The AWS SDK for Python
+#│   │   │   ├── botocore<1.24.0,>=1.23.24            Low-level, data-driven core of boto 3.
+#│   │   │   │   ├── jmespath<1.0.0,>=0.7.1           JSON Matching Expressions
+#│   │   │   │   ├── python-dateutil<3.0.0,>=2.1      Extensions to the standard Python datetime module
+#│   │   │   │   │   └── six>=1.5                     Python 2 and 3 compatibility utilities
+#│   │   │   │   └── urllib3<1.27,>=1.25.4            HTTP library with thread-safe connection pooling, file post, and more.
+#│   │   │   ├── jmespath<1.0.0,>=0.7.1               JSON Matching Expressions
+#│   │   │   └── s3transfer<0.6.0,>=0.5.0             An Amazon S3 Transfer Manager
+#│   │   │       └── botocore<2.0a.0,>=1.12.36        Low-level, data-driven core of boto 3.
+#│   │   │           ├── jmespath<1.0.0,>=0.7.1       JSON Matching Expressions
+#│   │   │           ├── python-dateutil<3.0.0,>=2.1  Extensions to the standard Python datetime module
+#│   │   │           │   └── six>=1.5                 Python 2 and 3 compatibility utilities
+#│   │   │           └── urllib3<1.27,>=1.25.4        HTTP library with thread-safe connection pooling, file post, and more.
+#│   │   ├── botocore<1.23.25,>=1.23.24               Low-level, data-driven core of boto 3.
+#│   │   │   ├── jmespath<1.0.0,>=0.7.1               JSON Matching Expressions
+#│   │   │   ├── python-dateutil<3.0.0,>=2.1          Extensions to the standard Python datetime module
+#│   │   │   │   └── six>=1.5                         Python 2 and 3 compatibility utilities
+#│   │   │   └── urllib3<1.27,>=1.25.4                HTTP library with thread-safe connection pooling, file post, and more.
+#│   │   └── wrapt>=1.10.10                           Module for decorators, wrappers and monkey patching.
+#│   ├── aiobotocore~=2.1.0                           Async client for aws services using botocore and aiohttp
+#│   │   ├── aiohttp>=3.3.1                           Async http client/server framework (asyncio)
+#│   │   │   ├── aiosignal>=1.1.2                     aiosignal: a list of registered asynchronous callbacks
+#│   │   │   │   └── frozenlist>=1.1.0                A list-like structure which implements collections.abc.MutableSequence
+#│   │   │   ├── async-timeout<5.0,>=4.0.0a3          Timeout context manager for asyncio programs
+#│   │   │   ├── attrs>=17.3.0                        Classes Without Boilerplate
+#│   │   │   ├── charset-normalizer<3.0,>=2.0         The Real First Universal Charset Detector. Open, modern and actively maintained alternative to Chardet.
+#│   │   │   ├── frozenlist>=1.1.1                    A list-like structure which implements collections.abc.MutableSequence
+#│   │   │   ├── multidict<7.0,>=4.5                  multidict implementation
+#│   │   │   └── yarl<2.0,>=1.0                       Yet another URL library
+#│   │   │       ├── idna>=2.0                        Internationalized Domain Names in Applications (IDNA)
+#│   │   │       └── multidict>=4.0                   multidict implementation
+#│   │   ├── aioitertools>=0.5.1                      itertools and builtins for AsyncIO and mixed iterables
+#│   │   ├── botocore<1.23.25,>=1.23.24               Low-level, data-driven core of boto 3.
+#│   │   │   ├── jmespath<1.0.0,>=0.7.1               JSON Matching Expressions
+#│   │   │   ├── python-dateutil<3.0.0,>=2.1          Extensions to the standard Python datetime module
+#│   │   │   │   └── six>=1.5                         Python 2 and 3 compatibility utilities
+#│   │   │   └── urllib3<1.27,>=1.25.4                HTTP library with thread-safe connection pooling, file post, and more.
+#│   │   └── wrapt>=1.10.10                           Module for decorators, wrappers and monkey patching.
+#│   ├── aiohttp<=4                                   Async http client/server framework (asyncio)
+#│   │   ├── aiosignal>=1.1.2                         aiosignal: a list of registered asynchronous callbacks
+#│   │   │   └── frozenlist>=1.1.0                    A list-like structure which implements collections.abc.MutableSequence
+#│   │   ├── async-timeout<5.0,>=4.0.0a3              Timeout context manager for asyncio programs
+#│   │   ├── attrs>=17.3.0                            Classes Without Boilerplate
+#│   │   ├── charset-normalizer<3.0,>=2.0             The Real First Universal Charset Detector. Open, modern and actively maintained alternative to Chardet.
+#│   │   ├── frozenlist>=1.1.1                        A list-like structure which implements collections.abc.MutableSequence
+#│   │   ├── multidict<7.0,>=4.5                      multidict implementation
+#│   │   └── yarl<2.0,>=1.0                           Yet another URL library
+#│   │       ├── idna>=2.0                            Internationalized Domain Names in Applications (IDNA)
+#│   │       └── multidict>=4.0                       multidict implementation
+#│   └── fsspec==2022.01.0                            File-system specification
+#├── scmrepo==0.0.7                                   SCM wrapper and fsspec filesystem for Git for use in DVC
+#│   ├── asyncssh<2.9,>=2.7.1                         AsyncSSH: Asynchronous SSHv2 client and server library
+#│   │   └── cryptography>=2.8                        cryptography is a package which provides cryptographic recipes and primitives to Python developers.
+#│   │       └── cffi>=1.12                           Foreign Function Interface for Python calling C code.
+#│   │           └── pycparser                        C parser in Python
+#│   ├── dulwich>=0.20.23                             Python Git Library
+#│   │   ├── certifi                                  Python package for providing Mozilla's CA Bundle.
+#│   │   └── urllib3>=1.24.1                          HTTP library with thread-safe connection pooling, file post, and more.
+#│   ├── fsspec>=2021.7.0                             File-system specification
+#│   ├── funcy>=1.14                                  A fancy and practical functional tools
+#│   ├── gitpython>3                                  GitPython is a python library used to interact with Git repositories
+#│   │   └── gitdb<5,>=4.0.1                          Git Object Database
+#│   │       └── smmap<6,>=3.0.1                      A pure Python implementation of a sliding window memory map manager
+#│   ├── pathspec<0.10.0,>=0.9.0                      Utility library for gitignore style pattern matching of file paths.
+#│   ├── pygit2>=1.5.0                                Python bindings for libgit2.
+#│   │   └── cffi>=1.4.0                              Foreign Function Interface for Python calling C code.
+#│   │       └── pycparser                            C parser in Python
+#│   └── pygtrie>=2.3.2                               A pure Python trie data structure implementation.
+#├── shortuuid>=0.5.0                                 A generator library for concise, unambiguous and URL-safe UUIDs.
+#├── shtab<2,>=1.3.4                                  Automagic shell tab completion for Python CLI applications
+#├── tabulate>=0.8.7                                  Pretty-print tabular data
+#├── toml>=0.10.1                                     Python Library for Tom's Obvious, Minimal Language
+#├── tqdm<5,>=4.45.0                                  Fast, Extensible Progress Meter
+#├── typing-extensions>=3.7.4                         Backported and Experimental Type Hints for Python 3.6+
+#├── voluptuous>=0.11.7
+#└── zc.lockfile>=1.2.1                               Basic inter-process locks
+#    └── setuptools                                   Easily download, build, install, upgrade, and uninstall Python packages
+
+
+awscli >= 1.22.24
+dvc[s3] >= 2.9.3
+
+# Transiative dependencies of AWS-CLI and DVC[s3]
+
+fsspec[http]==2022.01.0
+
+# aiobotocore>=2.1.0 
+# fsspec>=2022.01.0 
+# botocore>=1.23.41
+
+PyYAML>=5.4.1
+
+aiohttp<=4,>=3.8.1
+aiohttp-retry>=2.4.6
+
+aioitertools>=0.8.0 
+aiosignal>=1.2.0 
+appdirs>=1.4.4
+async-timeout<5.0,>=4.0.2
+asyncssh<2.9,>=2.8.1 
+atpublic>=2.3 
+attrs>=21.4.0
+boto3>=1.20.24
+certifi>=2021.10.8
+cffi>=1.15.0
+charset-normalizer>=2.0.10
+colorama>=0.4.3
+commonmark>=0.9.1
+configobj>=5.0.6 
+cryptography>=36.0.1
+dictdiffer>=0.9.0 
+diskcache>=5.4.0 
+distro>=1.6.0 
+docutils>=0.15.2
+dpath>=2.0.5
+dulwich>=0.20.28 
+flatten-dict<1,>=0.4.2
+flufl.lock>=6.0 
+frozenlist>=1.2.0 
+ftfy>=6.0.3
+funcy>=1.17 
+future>=0.18.2
+gitdb<5,>=4.0.9 
+gitpython>3.1.24
+grandalf==0.6 
+idna<4,>=3.3
+jmespath<1.0.0,>=0.10.0
+mailchecker>=4.1.7 
+multidict<7.0,>=5.2.0
+nanotime>=0.5.2 
+networkx>=2.6.3
+packaging>=21.3
+pathspec<0.10.0,>=0.9.0 
+phonenumbers>=8.12.40
+ply>=3.11
+psutil>=5.9.0 
+pyasn1>=0.4.8
+pycparser>=2.21
+pydot>=1.4.2
+pygit2>=1.7.2
+pygments<3.0.0,>=2.11.2
+pygtrie>=2.4.2
+pyparsing>=3.0.6
+python-benedict>=0.24.3
+python-dateutil<3.0.0,>=2.8.2 
+python-fsutil>=0.5.0
+python-slugify>=5.0.2
+requests>=2.27.1
+rich>=11.0.0
+rsa<4.8,>=4.7.2
+ruamel.yaml>=0.17.20 
+ruamel.yaml.clib>=0.2.6 
+s3fs>=2022.1.0
+s3transfer<0.6.0,>=0.5.0 
+scmrepo==0.0.7 
+setuptools 
+shortuuid>=1.0.8
+shtab<2,>=1.5.3
+six<2.0,>=1.16.0
+smmap<6,>=5.0.0
+tabulate>=0.8.9
+text-unidecode>=1.3 
+toml>=0.10.1 
+tqdm>=4.62.3 
+typing-extensions>=3.7.4 
+urllib3>=1.26.8
+voluptuous>=0.12.2
+wcwidth>=0.2.5 
+wrapt>=1.13.3
+xmltodict>=0.12.0
+yarl>=1.7.2
+zc.lockfile>=2.0

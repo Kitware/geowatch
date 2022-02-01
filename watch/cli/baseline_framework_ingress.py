@@ -175,6 +175,31 @@ def ingress_item(feature, outdir, aws_base_command, dryrun, relative=False):
     return item
 
 
+def load_input_stac_items(input_path, aws_base_command):
+    def _load_input(path):
+        try:
+            with open(path) as f:
+                input_json = json.load(f)
+            return input_json['stac'].get('features', [])
+        # Excepting KeyError here in case of a single line STAC item input
+        except (json.decoder.JSONDecodeError, KeyError):
+            # Support for simple newline separated STAC items
+            with open(path) as f:
+                return [json.loads(line) for line in f]
+
+    if input_path.startswith('s3'):
+        with tempfile.NamedTemporaryFile() as temporary_file:
+            subprocess.run(
+                [*aws_base_command, input_path, temporary_file.name],
+                check=True)
+
+            input_stac_items = _load_input(temporary_file.name)
+    else:
+        input_stac_items = _load_input(input_path)
+
+    return input_stac_items
+
+
 def baseline_framework_ingress(input_path,
                                outdir,
                                aws_profile=None,
@@ -215,26 +240,7 @@ def baseline_framework_ingress(input_path,
     if requester_pays:
         aws_base_command.extend(['--request-payer', 'requester'])
 
-    def _load_input(path):
-        try:
-            with open(path) as f:
-                input_json = json.load(f)
-            return input_json['stac'].get('features', [])
-        # Excepting KeyError here in case of a single line STAC item input
-        except (json.decoder.JSONDecodeError, KeyError):
-            # Support for simple newline separated STAC items
-            with open(path) as f:
-                return [json.loads(line) for line in f]
-
-    if input_path.startswith('s3'):
-        with tempfile.NamedTemporaryFile() as temporary_file:
-            subprocess.run(
-                [*aws_base_command, input_path, temporary_file.name],
-                check=True)
-
-            input_stac_items = _load_input(temporary_file.name)
-    else:
-        input_stac_items = _load_input(input_path)
+    input_stac_items = load_input_stac_items(input_path, aws_base_command)
 
     executor = ubelt.Executor(mode='process' if jobs > 1 else 'serial',
                               max_workers=jobs)
