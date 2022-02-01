@@ -8,7 +8,7 @@ from watch.utils import tmux_queue
 
 
 def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
-                        run=False, with_rich=True, with_status=True,
+                        run=False, with_rich=0, with_status=True,
                         virtualenv_cmd=None, skip_existing=False):
     """
     First ensure that models have been copied to the DVC repo in the
@@ -46,7 +46,7 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
             --gpus="0,1" \
             --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/*/*.pt" \
             --test_dataset="$KWCOCO_TEST_FPATH" \
-            --run=0 --with_rich=False --with_status=False --skip_existing=True
+            --run=0  --skip_existing=True
 
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
         KWCOCO_TEST_FPATH=$DVC_DPATH/Drop1-Aligned-L1-2022-01/combo_DILM_nowv_vali.kwcoco.json
@@ -54,7 +54,7 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
             --gpus="0,1" \
             --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/BAS_*v53*/*.pt" \
             --test_dataset="$KWCOCO_TEST_FPATH" \
-            --run=True --with_rich=False --with_status=False
+            --run=True
 
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
         KWCOCO_TEST_FPATH=$DVC_DPATH/Drop1-Aligned-TA1-2022-01/vali_data_nowv.kwcoco.json
@@ -62,7 +62,7 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
             --gpus="0,1" \
             --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/BAS_*/*.pt" \
             --test_dataset="$KWCOCO_TEST_FPATH" \
-            --run=0 --with_rich=False --with_status=False
+            --run=0
 
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
         KWCOCO_TEST_FPATH=$DVC_DPATH/Drop1-Aligned-L1-2022-01/combo_DILM_nowv_vali.kwcoco.json
@@ -70,15 +70,15 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
             --gpus="0,1" \
             --model_globstr="special:HISTORY" \
             --test_dataset="$KWCOCO_TEST_FPATH" \
-            --run=1 --with_rich=False --with_status=False
+            --run=1
 
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
         KWCOCO_TEST_FPATH=$DVC_DPATH/Drop1-Aligned-L1-2022-01/vali_data_nowv.kwcoco.json
         python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="0,1" \
+            --gpus="1," \
             --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/SC_*/*.pt" \
             --test_dataset="$KWCOCO_TEST_FPATH" \
-            --run=1 --with_rich=False --with_status=False
+            --run=0
 
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
         KWCOCO_TEST_FPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/data_nowv_vali.kwcoco.json
@@ -86,7 +86,7 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
             --gpus="0,1" \
             --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/BAS_smt_it_stm_p8_L1_raw_v53/*.pt" \
             --test_dataset="$KWCOCO_TEST_FPATH" \
-            --run=1 --with_rich=False --with_status=False --skip_existing=True
+            --run=1  --skip_existing=True
 
     TODO:
         - [ ] Specify the model_dpath as an arg

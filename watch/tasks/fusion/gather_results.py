@@ -197,6 +197,23 @@ def prepare_results(all_infos):
             row['normalize_inputs'] = fit_config.get('normalize_inputs', False)
             row['train_remote'] = cand_remote
 
+            def hack_smartcast(x):
+                try:
+                    return int(x)
+                except Exception:
+                    pass
+
+            from scriptconfig import smartcast
+            # hack
+            fit_config2 = {}
+            for k, v in fit_config.items():
+                if k not in {'channels', 'init'}:
+                    fit_config2[k] = smartcast.smartcast(v)
+                else:
+                    fit_config2[k] = v
+            fit_config = fit_config2
+            # fit_config = ub.map_vals(smartcast.smartcast, fit_config)
+
             predict_args  # add predict window overlap
             # row['train_remote'] = cand_remote
 
@@ -280,6 +297,20 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
     dset_groups = ub.group_items(measure_fpaths, lambda x: x.parent.parent.parent.name)
     print('dset_groups = {}'.format(ub.repr2(dset_groups, nl=2)))
 
+    if 0:
+        # Hack to move over data into a comparable eval
+        k1 = 'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco'
+        k2 = 'combo_DILM_nowv_vali.kwcoco'
+        a = sorted(dset_groups[k1])
+        b = sorted(dset_groups[k2])
+        for x in b:
+            y = ub.Path(str(x).replace(k2, k1))
+            print(y in a)
+            if not y.exists():
+                p1 = x.parent.parent.parent
+                p2 = y.parent.parent.parent
+                ub.symlink(p1, p2, verbose=1)
+
     predict_group_freq = ub.map_vals(len, dset_groups)
     print('These are the different datasets prediction was run on.')
     print('TODO: need to choose exactly 1 or a compatible set of them')
@@ -293,12 +324,20 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
     # dataset_key = 'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco'
     dataset_key = 'combo_DILM.kwcoco_vali'
     # dataset_key = 'Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco'
-    dataset_key = 'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco'
+
+    # dataset_key = 'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco'
+    dataset_keys = [
+        'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco',
+        # 'Drop1-Aligned-TA1-2022-01_vali_data_nowv.kwcoco',
+        # 'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco',
+    ]
 
     # dataset_key = 'combo_vali_nowv.kwcoco'
 
+    measure_fpaths = list(ub.flatten([dset_groups[k] for k in dataset_keys]))
     # dataset_key = 'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco'
-    measure_fpaths = dset_groups[dataset_key]
+    # measure_fpaths = dset_groups[dataset_key]
+
     print(len(measure_fpaths))
     # dataset_to_evals = ub.group_items(eval_dpaths, lambda x: x.parent.name)
 
@@ -373,13 +412,14 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
         )
         return df
 
-    self = result_analysis.ResultAnalysis(
+    analysis = result_analysis.ResultAnalysis(
         results_list2, ignore_params=ignore_params,
         metrics=['class_mAP', 'salient_AP'],
         ignore_metrics=ignore_metrics,
     )
-    self.analysis()
-    stats_table = pd.DataFrame([ub.dict_diff(d, {'pairwise', 'param_values', 'moments'}) for d in self.statistics])
+    analysis.analysis()
+    print('analysis.varied = {}'.format(ub.repr2(analysis.varied, nl=2)))
+    stats_table = pd.DataFrame([ub.dict_diff(d, {'pairwise', 'param_values', 'moments'}) for d in analysis.statistics])
     stats_table = stats_table.sort_values('anova_rank_p')
     print(stats_table)
 
@@ -515,6 +555,7 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
             else:
                 raise KeyError
         fig.gca().set_title(f'Comparison of runs {metric}: {catname} - {dataset_key}')
+        return fig
 
     def plot_individual_salient_curves(fnum, metric='ap'):
         from kwcoco.metrics import drawing
@@ -563,19 +604,24 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
                 drawing.draw_roc(measure, prefix=prefix, color=color, **kw)
             else:
                 raise KeyError
-        fig.gca().set_title(f'Comparison of runs {metric}: Salient - {dataset_key}')
+        fig.gca().set_title(f'Comparison of runs {metric}: Salient -\n{"-".join(dataset_keys)}')
+        return fig
 
     fnum = 3
     catname = 'Active Construction'
-    plot_individual_class_curves(catname, fnum, 'ap')
+    fig3 = plot_individual_class_curves(catname, fnum, 'ap')
 
     fnum = 4
     catname = 'Site Preparation'
-    plot_individual_class_curves(catname, fnum, 'ap')
+    fig4 = plot_individual_class_curves(catname, fnum, 'ap')
 
     fnum = 5
-    plot_individual_salient_curves(fnum, metric='ap')
+    fig5 = plot_individual_salient_curves(fnum, metric='ap')
     # print(best_per_expt.sort_values('mAP').to_string())
+
+    if 1:
+        fig3.set_size_inches(np.array([6.4, 4.8]) * 2.0)
+        fig3.tight_layout()
 
     if 1:
         plt.show()

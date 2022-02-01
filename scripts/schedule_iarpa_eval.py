@@ -198,6 +198,8 @@ python -m watch.cli.kwcoco_to_geojson \
         --tmp_dir "$IARPA_EVAL_DPATH/tmp" \
         --out_dir "$IARPA_EVAL_DPATH/scores"
 
+nautilus $IARPA_EVAL_DPATH
+
 
 python -m watch.cli.kwcoco_to_geojson \
     "$PRED_DATASET" \
