@@ -87,6 +87,8 @@ def add_geos(coco_dset, overwrite, max_workers=16):
         if img['file_name'] is not None:
             return img
         aux_ix = img.get('aux_annotated_candidate', 0)
+        if aux_ix is None:
+            aux_ix = 0
         return img['auxiliary'][aux_ix]
 
     def fpath(img):

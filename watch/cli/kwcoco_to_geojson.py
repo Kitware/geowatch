@@ -686,23 +686,40 @@ def main(args):
                 pass
 
     # Pick a track_fn
+    # HACK remove potentially conflicting annotations as well
+    # we shouldn't have saliency annots when we want class or vice versa
+    CLEAN_DSET = 1
+    class_cats = [cat['name'] for cat in watch.heuristics.CATEGORIES]
+    saliency_cats = ['salient']
     if args.default_track_fn is not None:
         from watch.tasks.tracking import from_heatmap, from_polygon
         if args.default_track_fn == 'saliency_heatmaps':
             track_fn = from_heatmap.TimeAggregatedBAS
+            if CLEAN_DSET:
+                coco_dset.remove_categories(class_cats)
         elif args.default_track_fn == 'saliency_polys':
             track_fn = from_polygon.OverlapTrack
+            if CLEAN_DSET:
+                coco_dset.remove_categories(class_cats)
         elif args.default_track_fn == 'class_heatmaps':
             track_fn = from_heatmap.TimeAggregatedSC
+            if CLEAN_DSET:
+                coco_dset.remove_categories(saliency_cats)
         elif args.default_track_fn == 'class_polys':
             track_fn = from_polygon.OverlapTrack
+            if CLEAN_DSET:
+                coco_dset.remove_categories(saliency_cats)
         else:
             track_fn = from_heatmap.TimeAggregatedBAS
             track_kwargs['key'] = [args.default_track_fn]
+            if CLEAN_DSET:
+                coco_dset.remove_categories(class_cats)
     elif args.track_fn is None:
         track_fn = watch.tasks.tracking.utils.NoOpTrackFunction
     else:
         track_fn = eval(args.track_fn)
+        if CLEAN_DSET:
+            print('warning: could not check for invalid cats!')
 
     # add site summaries (site boundary annotations)
     if args.site_summary is not None:
@@ -831,7 +848,7 @@ def demo(coco_dset,
                 print('running site ' + site['properties']['site_id'])
                 main([
                     sub_dset.fpath,
-                    '--track_kwargs', '{"use_boundary_annots": false}'
+                    '--track_kwargs', '{"boundaries_as": "none"}'
                 ] + sc_args)
                 # '--site_summary', json.dumps(site)])
     if cleanup:

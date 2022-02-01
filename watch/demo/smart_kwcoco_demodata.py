@@ -142,7 +142,7 @@ def demo_smart_aligned_kwcoco():
     return aligned_coco_dset
 
 
-def demo_kwcoco_with_heatmaps(num_videos=1, num_frames=20):
+def demo_kwcoco_with_heatmaps(num_videos=1, num_frames=20, image_size=(512, 512)):
     """
     Return a dummy kwcoco file with special metdata
 
@@ -175,7 +175,6 @@ def demo_kwcoco_with_heatmaps(num_videos=1, num_frames=20):
     # img_w = DiscreteUniform(256, 512, rng=rng)
     # img_h = DiscreteUniform(256, 512, rng=rng)
     # image_size = (img_w, img_h)
-    image_size = (512, 512)
 
     coco_dset = kwcoco.CocoDataset.demo(
         'vidshapes', num_videos=num_videos, num_frames=num_frames,
