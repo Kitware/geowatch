@@ -511,13 +511,6 @@ def main(args):
         non-persistant directory
         ''')
 
-    parser.add_argument('--keep_thumbnails',
-                        action='store_true',
-                        help='''
-        Output thumbnails of region and ground truth sites to
-        {out_dir}/thumbnails/
-        ''')
-
     parser.add_argument(
         '--use_cache', default=False, action='store_true', help=ub.paragraph(
             '''
@@ -587,9 +580,6 @@ def main(args):
 
         if args.out_dir is not None:
             out_dir = ub.Path(args.out_dir) / region_id
-            if args.keep_thumbnails:
-                image_dpath = ub.Path(args.out_dir) / 'thumbnails'
-                ub.delete(image_dpath)
         else:
             out_dir = None
 
