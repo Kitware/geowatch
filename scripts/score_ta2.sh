@@ -218,7 +218,8 @@ python -m watch.cli.kwcoco_to_geojson \
 
 
 #
-# DEMO: Run BAS to propose potential sites in a region, then run SC on each site
+# DEMO: Run BAS to propose potential sites in a region, then run SC on each
+# site
 # 
 
 
@@ -264,6 +265,5 @@ for REGION_FILE in $DVC_DPATH/annotations/region_models/KR_*.geojson; do
         score -- \
             --metrics_dpath $METRICS_DPATH \
             --virtualenv_cmd $METRICS_VENV_CMD \
-            --out_dir $DSET_DPATH/scores/ \
+            --out_dir $DSET_DPATH/scores/
 done
-
