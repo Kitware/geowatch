@@ -36,6 +36,30 @@ TO_EVALUATE = [
     '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/pred_BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819/Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco/pred.kwcoco.json',
 ]
 
+NAMEK_TO_EVALUATE_SC = [
+    '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_st_s12_newanns_weighted_pfnorm_rgb_v25/pred_SC_smt_it_st_s12_newanns_weighted_pfnorm_rgb_v25_epoch=13-step=599381/Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco/pred.kwcoco.json',
+    '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_centerannot_raw_v42/pred_SC_smt_it_stm_p8_centerannot_raw_v42_epoch=13-step=208753/Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco/pred.kwcoco.json',
+    '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_centerannot_raw_v42/pred_SC_smt_it_stm_p8_centerannot_raw_v42_epoch=3-step=59643/Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco/pred.kwcoco.json',
+    '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_centerannot_raw_v42/pred_SC_smt_it_stm_p8_centerannot_raw_v42_epoch=5-step=89465/Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco/pred.kwcoco.json',
+    '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_centerannot_raw_v42/pred_SC_smt_it_stm_p8_centerannot_raw_v42_epoch=55-step=835015/Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco/pred.kwcoco.json',
+    '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_centerannot_raw_v42/pred_SC_smt_it_stm_p8_centerannot_raw_v42_epoch=7-step=119287/Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco/pred.kwcoco.json',
+    '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_cs64_t5_perframe_rgb_v30/pred_SC_smt_it_stm_p8_newanns_cs64_t5_perframe_rgb_v30_epoch=26-step=1155950/Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco/pred.kwcoco.json',
+    '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_cs96_t3_perframe_rgb_v28/pred_SC_smt_it_stm_p8_newanns_cs96_t3_perframe_rgb_v28_epoch=51-step=1274623/Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco/pred.kwcoco.json',
+    '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_cs96_t3_perframe_rgb_v28/pred_SC_smt_it_stm_p8_newanns_cs96_t3_perframe_rgb_v28_epoch=57-step=1421695/Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco/pred.kwcoco.json',
+    '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_mat6raw6_v41/pred_SC_smt_it_stm_p8_newanns_weighted_mat6raw6_v41_epoch=27-step=1198763/Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco/pred.kwcoco.json',
+    '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_mat6raw6_v41/pred_SC_smt_it_stm_p8_newanns_weighted_mat6raw6_v41_epoch=32-step=1412828/Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco/pred.kwcoco.json',
+    '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_mat6raw6_v41/pred_SC_smt_it_stm_p8_newanns_weighted_mat6raw6_v41_epoch=42-step=1840958/Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco/pred.kwcoco.json',
+    '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_raw_v38/pred_SC_smt_it_stm_p8_newanns_weighted_raw_v38_epoch=85-step=3681917/Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco/pred.kwcoco.json',
+    '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_raw_v39/pred_SC_smt_it_stm_p8_newanns_weighted_raw_v39_epoch=13-step=599381/Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco/pred.kwcoco.json',
+    '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_raw_v39/pred_SC_smt_it_stm_p8_newanns_weighted_raw_v39_epoch=23-step=1027511/Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco/pred.kwcoco.json',
+    '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_raw_v39/pred_SC_smt_it_stm_p8_newanns_weighted_raw_v39_epoch=46-step=2012210/Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco/pred.kwcoco.json',
+    '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_raw_v39/pred_SC_smt_it_stm_p8_newanns_weighted_raw_v39_epoch=52-step=2269088/Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco/pred.kwcoco.json',
+    '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_raw_v39/pred_SC_smt_it_stm_p8_newanns_weighted_raw_v39_epoch=66-step=2868470/Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco/pred.kwcoco.json',
+    '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_raw_v39/pred_SC_smt_it_stm_p8_newanns_weighted_raw_v39_epoch=67-step=2911283/Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco/pred.kwcoco.json',
+    '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_rgb_v26/pred_SC_smt_it_stm_p8_newanns_weighted_rgb_v26_epoch=66-step=2868470/Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco/pred.kwcoco.json',
+    '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_newanns_weighted_rgb_v26/pred_SC_smt_it_stm_p8_newanns_weighted_rgb_v26_epoch=92-step=3981608/Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco/pred.kwcoco.json',
+]
+
 
 def main():
     run = 1
@@ -53,23 +77,34 @@ def main():
 
     IARPA_METRICS_DPATH = ub.cmd('python -c "import iarpa_smart_metrics, os; print(os.path.dirname(os.path.dirname(iarpa_smart_metrics.__file__)))"')['out'].strip()
 
+    # task = 'bas'
+    task = 'sc'
+    recompute_eval = 0
+    skip_existing = 1
+
     stamp = ub.timestamp() + '_' + ub.hash_data([])[0:8]
     tq = tmux_queue.TMUXMultiQueue(
         name=stamp, size=4, environ=environ,
         dpath=tmux_schedule_dpath)
 
-    bas_args = '--default_track_fn saliency_heatmaps'
-    sc_args = r'--track_fn watch.tasks.tracking.from_heatmap.TimeAggregatedHybrid --track_kwargs "{\"coco_dset_sc\": \"$PRED_DATASET\"}"'  # NOQA
-    task_args = bas_args
-
-    recompute_eval = 0
-    skip_existing = 1
+    # if task == 'sc':
+    #     TO_EVALUATE = [if 'SC' in TO_EVALUATE]
 
     for pred_fpath in TO_EVALUATE:
         pred_fpath = ub.Path(pred_fpath)
         pred_bundle_dpath = pred_fpath.parent
-        IARPA_EVAL_DPATH = pred_bundle_dpath / 'eval/iarpa'
+        IARPA_EVAL_DPATH = pred_bundle_dpath / f'eval/iarpa-{task}'
         summary_fpath = IARPA_EVAL_DPATH / 'scores/merged/summary2.json'
+
+        if task == 'bas':
+            bas_args = '--default_track_fn saliency_heatmaps'  # NOQA
+        elif task == 'sc':
+            sc_args = r'--track_fn watch.tasks.tracking.from_heatmap.TimeAggregatedHybrid --track_kwargs "{\"coco_dset_sc\": \"' + str(pred_fpath) + r'\"}"'  # NOQA
+        else:
+            raise KeyError
+
+        task_args = sc_args
+
         command = ub.codeblock(
             fr'''
             python -m watch.cli.kwcoco_to_geojson \
@@ -116,18 +151,62 @@ def main():
 
     rows = []
     for summary_fpath in have_outputs:
-        summary = json.loads(summary_fpath.read_text())
+        summary_text = summary_fpath.read_text()
+        if not summary_text:
+            print('bad summary_fpath = {!r}'.format(summary_fpath))
+        else:
+            summary = json.loads(summary_text)
 
-        pred_bundle_dpath = summary_fpath.parent.parent.parent.parent.parent
-        # dataset_key = pred_bundle_dpath.name
-        model_key = pred_bundle_dpath.parent.name
+            pred_bundle_dpath = summary_fpath.parent.parent.parent.parent.parent
+            # dataset_key = pred_bundle_dpath.name
+            model_key = pred_bundle_dpath.parent.name
 
-        best_bas_rows = pd.read_json(json.dumps(summary['best_bas_rows']), orient='table')
-        merged_row = best_bas_rows.loc['merged']
-        merged_subrow = merged_row[['F1']]
-        merged_subrow = merged_subrow.assign(model=[model_key])
-        # merged_subrow = merged_subrow.assign(dataset=[dataset_key])
-        rows.append(merged_subrow)
+            best_bas_rows = pd.read_json(json.dumps(summary['best_bas_rows']), orient='table')
+            merged_row = best_bas_rows.loc['merged']
+            merged_subrow = merged_row[['F1']]
+            merged_subrow = merged_subrow.assign(model=[model_key])
+            # merged_subrow = merged_subrow.assign(dataset=[dataset_key])
+            rows.append(merged_subrow)
     summary_df = pd.concat(rows)
     summary_df = summary_df.sort_values('F1')
     print(summary_df.to_string())
+
+
+"""
+
+HACK
+
+PRED_BUNDLE_DPATH="/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/pred_BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=6-step=62789/combo_DILM.kwcoco_vali"
+PRED_DATASET="$PRED_BUNDLE_DPATH/pred.kwcoco.json"
+EVAL_DPATH="$PRED_BUNDLE_DPATH/eval"
+IARPA_EVAL_DPATH="$EVAL_DPATH/iarpa-sc-thresh-0.1"
+IARPA_METRICS_DPATH=$(python -c "import iarpa_smart_metrics, os; print(os.path.dirname(os.path.dirname(iarpa_smart_metrics.__file__)))")
+
+REGION_FILE=/home/joncrall/data/dvc-repos/smart_watch_dvc/annotations/region_models/KR_R002.geojson
+
+echo $PRED_DATASET
+echo $REGION_FILE
+
+python -m watch.cli.kwcoco_to_geojson \
+    "$PRED_DATASET" \
+    --default_track_fn watch.tasks.tracking.from_heatmap.TimeAggregatedSC --track_kwargs "{\"thresh\": 0.01}" \
+    --site_summary $REGION_FILE \
+    score  -- \
+        --merge \
+        --gt_dpath "$DVC_DPATH/annotations" \
+        --metrics_dpath "$IARPA_METRICS_DPATH" \
+        --tmp_dir "$IARPA_EVAL_DPATH/tmp" \
+        --out_dir "$IARPA_EVAL_DPATH/scores"
+
+
+python -m watch.cli.kwcoco_to_geojson \
+    "$PRED_DATASET" \
+    --default_track_fn watch.tasks.tracking.from_heatmap.TimeAggregatedSC --track_kwargs "{\"thresh\": 0.01}" \
+    score  -- \
+        --merge \
+        --gt_dpath "$DVC_DPATH/annotations" \
+        --metrics_dpath "$IARPA_METRICS_DPATH" \
+        --tmp_dir "$IARPA_EVAL_DPATH/tmp" \
+        --out_dir "$IARPA_EVAL_DPATH/scores"
+
+"""

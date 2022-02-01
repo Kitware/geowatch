@@ -278,6 +278,7 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
 
     measure_fpaths = list(dvc_dpath.glob(measure_globstr))
     dset_groups = ub.group_items(measure_fpaths, lambda x: x.parent.parent.parent.name)
+    print('dset_groups = {}'.format(ub.repr2(dset_groups, nl=2)))
 
     predict_group_freq = ub.map_vals(len, dset_groups)
     print('These are the different datasets prediction was run on.')
@@ -289,8 +290,10 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
     # measure_fpaths = dset_groups['combo_DILM_nowv_vali.kwcoco']
 
     # dataset_key = 'Drop1-Aligned-TA1-2022-01_vali_data_nowv.kwcoco'
-
-    dataset_key = 'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco'
+    # dataset_key = 'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco'
+    dataset_key = 'combo_DILM.kwcoco_vali'
+    # dataset_key = 'Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco'
+    dataset_key = 'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco'
 
     # dataset_key = 'combo_vali_nowv.kwcoco'
 
@@ -302,12 +305,21 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
     jobs = ub.JobPool('thread', max_workers=10)
     all_infos = []
     for measure_fpath in ub.ProgIter(measure_fpaths):
-        jobs.submit(load_measure, measure_fpath)
+        job = jobs.submit(load_measure, measure_fpath)
+        job.measure_fpath = measure_fpath
 
     # job = next(iter(jobs.as_completed(desc='collect jobs')))
     # all_infos = [job.result()]
+    failed_jobs = []
     for job in jobs.as_completed(desc='collect jobs'):
-        all_infos.append(job.result())
+        try:
+            all_infos.append(job.result())
+        except Exception:
+            failed_jobs.append(job.measure_fpath)
+            print('Failed job.measure_fpath = {!r}'.format(job.measure_fpath))
+            pass
+
+    print(f'Failed Jobs {len(failed_jobs)=}/{len(jobs)}')
 
     class_rows, mean_rows, all_results, results_list2 = prepare_results(all_infos)
 
@@ -371,14 +383,29 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
     stats_table = stats_table.sort_values('anova_rank_p')
     print(stats_table)
 
+    class_df = pd.DataFrame(class_rows)
     mean_df = pd.DataFrame(mean_rows)
+    class_df = class_df.drop(set(class_df.columns) & {'title', 'pred_fpath', 'package_name'}, axis=1)
+    mean_df = mean_df.drop(set(mean_df.columns) & {'title', 'pred_fpath', 'package_name'}, axis=1)
+
     mean_df = shrink_notations(mean_df)
-    print('Sort by mAP')
+
+    print('\nSort by class_mAP')
     print(mean_df.sort_values('class_mAP').to_string())
+
+    print('\nSort by salient_AP')
     print(mean_df.sort_values('salient_AP').to_string())
 
-    mean_df['title'].apply(lambda x: int(x.split('epoch=')[1].split('-')[0]))
+    try:
+        print('\nClass: Sort by AP')
+        print(class_df[~class_df['AP'].isnull()].sort_values('AP').to_string())
 
+        print('\nClass: Sort by AUC')
+        print(class_df[~class_df['AUC'].isnull()].sort_values('AUC').to_string())
+    except KeyError:
+        pass
+
+    # mean_df['title'].apply(lambda x: int(x.split('epoch=')[1].split('-')[0]))
     def group_by_best(mean_df, metric_key, shrink=False):
         bests = []
         for t, subdf in mean_df.groupby('expt_name'):
@@ -390,13 +417,12 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
         best_per_expt = pd.concat(bests)
         if shrink:
             best_per_expt = shrink_notations(best_per_expt)
-            best_per_expt = best_per_expt.drop('title', axis=1)
-            best_per_expt = best_per_expt.drop('catname', axis=1)
-            best_per_expt = best_per_expt.drop('normalize_perframe', axis=1)
-            best_per_expt = best_per_expt.drop('normalize_inputs', axis=1)
-            best_per_expt = best_per_expt.drop('train_remote', axis=1)
-            best_per_expt = best_per_expt.drop('step', axis=1)
-            best_per_expt = best_per_expt.drop('arch_name', axis=1)
+            drop_cols = set(best_per_expt.columns) & {
+                'title', 'catname', 'normalize_perframe', 'normalize_inputs',
+                'train_remote', 'step', 'arch_name', 'package_name',
+                'pred_fpath',
+            }
+            best_per_expt = best_per_expt.drop(drop_cols, axis=1)
             best_per_expt = best_per_expt.rename({'time_steps': 'time', 'chip_size': 'space'}, axis=1)
         return best_per_expt
 
@@ -412,29 +438,6 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
         best_per_expt = group_by_best(mean_df, 'salient_AP', shrink=True)
         print(best_per_expt.sort_values('salient_AP').to_string())
     except ValueError:
-        pass
-
-    # print('\nSort by mAUC')
-    # print(mean_df[~mean_df['class_mAP'].isnull()].sort_values('class_mAP').to_string())
-
-    try:
-        class_df = pd.DataFrame(class_rows)
-        print('Class: Sort by AP')
-        print(class_df[~class_df['AP'].isnull()].sort_values('AP').to_string())
-
-        print('Class: Sort by AUC')
-        print(class_df[~class_df['AUC'].isnull()].sort_values('AUC').to_string())
-    except KeyError:
-        pass
-
-    try:
-        class_df = pd.DataFrame(class_rows)
-        print('Salient: Sort by AP')
-        print(class_df[~class_df['AP'].isnull()].sort_values('AP').to_string())
-
-        print('Salient: Sort by AUC')
-        print(class_df[~class_df['salient_AUC'].isnull()].sort_values('AUC').to_string())
-    except KeyError:
         pass
 
     import kwplot
@@ -498,8 +501,12 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
             color = colors[idx]
             color = [kwplot.Color(color).as01()]
             measure = result.ovr_measures[catname]
-            prefix = result.meta['title']
-            prefix = result.meta['package_name']
+            if 'package_name' in result.meta:
+                prefix = result.meta['package_name']
+            elif 'title' in result.meta:
+                prefix = result.meta['title']
+            else:
+                prefix = '?label-unknown?'
             kw = {'fnum': fnum}
             if metric == 'ap':
                 drawing.draw_prcurve(measure, prefix=prefix, color=color, **kw)
@@ -543,7 +550,12 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
             color = colors[idx]
             color = [kwplot.Color(color).as01()]
             measure = result.nocls_measures
-            prefix = result.meta['title']
+            if 'package_name' in result.meta:
+                prefix = result.meta['package_name']
+            elif 'title' in result.meta:
+                prefix = result.meta['title']
+            else:
+                prefix = '?label-unknown?'
             kw = {'fnum': fnum}
             if metric == 'ap':
                 drawing.draw_prcurve(measure, prefix=prefix, color=color, **kw)
