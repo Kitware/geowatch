@@ -11,6 +11,7 @@ from watch.utils.kwcoco_extensions import TrackidGenerator
 from watch.gis.geotiff import geotiff_crs_info
 from watch.tasks.tracking.utils import TrackFunction
 
+
 def dedupe_annots(coco_dset):
     '''
     Check for annotations with different aids that are the same geometry
