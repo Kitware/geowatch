@@ -189,7 +189,7 @@ echo $REGION_FILE
 
 python -m watch.cli.kwcoco_to_geojson \
     "$PRED_DATASET" \
-    --default_track_fn watch.tasks.tracking.from_heatmap.TimeAggregatedSC --track_kwargs "{\"thresh\": 0.01}" \
+    --track_fn watch.tasks.tracking.from_heatmap.TimeAggregatedSC --track_kwargs "{\"thresh\": 0.01}" \
     --site_summary $REGION_FILE \
     score  -- \
         --merge \
@@ -208,5 +208,4 @@ python -m watch.cli.kwcoco_to_geojson \
         --metrics_dpath "$IARPA_METRICS_DPATH" \
         --tmp_dir "$IARPA_EVAL_DPATH/tmp" \
         --out_dir "$IARPA_EVAL_DPATH/scores"
-
 """
