@@ -848,7 +848,7 @@ def demo(coco_dset,
                 print('running site ' + site['properties']['site_id'])
                 main([
                     sub_dset.fpath,
-                    '--track_kwargs', '{"use_boundary_annots": false}'
+                    '--track_kwargs', '{"boundaries_as": "none"}'
                 ] + sc_args)
                 # '--site_summary', json.dumps(site)])
     if cleanup:
