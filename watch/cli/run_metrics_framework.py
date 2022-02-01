@@ -44,7 +44,7 @@ class RegionResult:
         return cls(region_id, region_model, site_models, bas_dpath, sc_dpath)
 
 
-def merge_bas_metrics_results(results: List[RegionResult]):
+def merge_bas_metrics_results(bas_results: List[RegionResult]):
     '''
     Merge BAS results and return as a pd.DataFrame
 
@@ -114,7 +114,7 @@ def merge_bas_metrics_results(results: List[RegionResult]):
         if isinstance(regions_poly, shapely.geometry.Polygon):
             return area_sqkm(regions_poly)
         elif isinstance(regions_poly, shapely.geometry.MultiPolygon):
-            return sum(map(area_sqkm, regions_poly))
+            return sum(map(area_sqkm, regions_poly.geoms))
         else:
             raise TypeError(regions_poly)
 
@@ -133,7 +133,8 @@ def merge_bas_metrics_results(results: List[RegionResult]):
                 pd.date_range(region_feat['properties']['start_date'],
                               region_feat['properties']['end_date']))
 
-            return len(dates[0].union_many(dates[1:])) - 1
+            # return len(dates[0].union_many(dates[1:])) - 1
+            return len(dates[0].union(dates[1:])) - 1
 
     def n_unique_images(sites):
         sources = set.union(*[{
@@ -165,16 +166,16 @@ def merge_bas_metrics_results(results: List[RegionResult]):
 
         return pd.concat(dfs)
 
-    dfs = [to_df(r.bas_dpath, r.region_id) for r in results]
+    dfs = [to_df(r.bas_dpath, r.region_id) for r in bas_results]
 
-    merged_df = pd.concat(dfs)
+    concat_df = pd.concat(dfs)
     result_df = pd.DataFrame(index=dfs[0].droplevel('region_id').index)
 
     sum_cols = [
         'tp sites', 'fp sites', 'fn sites', 'truth sites', 'proposed sites',
         'total sites', 'truth slices', 'proposed slices'
     ]
-    result_df[sum_cols] = merged_df.groupby(['rho', 'tau'])[sum_cols].sum()
+    result_df[sum_cols] = concat_df.groupby(['rho', 'tau'])[sum_cols].sum()
 
     # ref: metrics-and-test-framework.evaluation.Metric
     (_, tp), (_, fp), (_, fn) = result_df[['tp sites', 'fp sites',
@@ -183,7 +184,7 @@ def merge_bas_metrics_results(results: List[RegionResult]):
     result_df['recall (PD)'] = np.where(tp > 0, tp / (tp + fn), 0)
     result_df['F1'] = np.where(tp > 0, tp / (tp + 0.5 * (fp + fn)), 0)
 
-    all_regions = [r.region_model for r in results]
+    all_regions = [r.region_model for r in bas_results]
     # ref: metrics-and-test-framework.evaluation.Evaluation.build_scoreboard
     result_df['spatial FAR'] = fp.astype(float) / area(all_regions)
     result_df['temporal FAR'] = fp.astype(float) / n_dates(all_regions)
@@ -192,19 +193,19 @@ def merge_bas_metrics_results(results: List[RegionResult]):
     # https://smartgitlab.com/TE/metrics-and-test-framework/-/issues/23
     #
     # all_sites = list(itertools.chain.from_iterable([
-    #     r.site_models for r in results]))
+    #     r.site_models for r in bas_results]))
     # result_df['images FAR'] = fp.astype(float) / n_unique_images(all_sites)
     #
     # instead, images in multiple proposed site stacks are double-counted.
     # take advantage of this to merge this metric with a simple average.
-    n_images = (merged_df['fp sites'] /
-                merged_df['images FAR']).groupby('region_id').mean().sum()
+    n_images = (concat_df['fp sites'] /
+                concat_df['images FAR']).groupby('region_id').mean().sum()
     result_df['images FAR'] = fp.astype(float) / n_images
 
-    return result_df
+    return result_df, concat_df
 
 
-def merge_sc_metrics_results(results: List[RegionResult]):
+def merge_sc_metrics_results(sc_results: List[RegionResult]):
     '''
     Returns:
         a list of pd.DataFrames
@@ -251,7 +252,7 @@ def merge_sc_metrics_results(results: List[RegionResult]):
 
         return df
 
-    dfs = [to_df(r.sc_dpath, r.region_id) for r in results]
+    dfs = [to_df(r.sc_dpath, r.region_id) for r in sc_results]
     df = pd.concat(dfs, axis=1).sort_values('date')
 
     # phase activity categories
@@ -277,7 +278,7 @@ def merge_sc_metrics_results(results: List[RegionResult]):
     # per-site and call it a new metric mTIoU.
     mtiou = pd.concat([
         pd.read_csv(os.path.join(r.sc_dpath, 'activity_tiou_table.csv')).drop(
-            'TIoU', axis=1) for r in results
+            'TIoU', axis=1) for r in sc_results
     ],
                       axis=1).mean(axis=1, skipna=True).values
 
@@ -287,7 +288,7 @@ def merge_sc_metrics_results(results: List[RegionResult]):
         pd.read_csv(os.path.join(
             r.sc_dpath,
             'activity_prediction_table.csv')).loc[0][1:].astype(float).values
-        for r in results
+        for r in sc_results
     ]
     n_sites = [df.shape[1] for df in dfs]
     try:
@@ -343,10 +344,9 @@ def merge_metrics_results(region_dpaths, anns_root, out_dpath=None):
 
     if out_dpath is None:
         out_dpath = os.path.join(os.path.commonpath(region_dpaths), 'merged')
+    out_dpath = ub.Path(out_dpath)
     assert out_dpath not in region_dpaths
-    out_dpath.delete()
-    # os.system(f'rm -r {out_dpath}')
-    os.makedirs(out_dpath, exist_ok=True)
+    out_dpath.delete().ensuredir()
 
     results = [
         RegionResult.from_dpath_and_anns_root(pth, anns_root)
@@ -357,7 +357,8 @@ def merge_metrics_results(region_dpaths, anns_root, out_dpath=None):
     # merge BAS
     #
 
-    bas_df = merge_bas_metrics_results([r for r in results if r.bas_dpath])
+    bas_results = [r for r in results if r.bas_dpath]
+    bas_df, bas_concat_df = merge_bas_metrics_results(bas_results)
     bas_df.to_pickle(os.path.join(out_dpath, 'bas_scoreboard_df.pkl'))
     #
     # merge SC
@@ -371,16 +372,46 @@ def merge_metrics_results(region_dpaths, anns_root, out_dpath=None):
     # write summary in readable form
     #
 
+    # Find best bas row in combined results
+    best_bas_row = bas_df.loc[[bas_df['F1'].idxmax()]]
+
+    # Find best bas row per-region
+    best_ids = bas_concat_df.groupby('region_id')['F1'].idxmax()
+    best_per_region = bas_concat_df.loc[best_ids]
+    best_bas_row_ = pd.concat({'merged':  best_bas_row}, names=['region_id'])
+    # Get a best row for each region and the "merged" region
+    best_bas_rows = pd.concat([best_per_region, best_bas_row_])
+    concise_best_bas_rows = best_bas_rows.rename(
+        {'tp sites': 'tp',
+         'fp sites': 'fp',
+         'fn sites': 'fn',
+         'truth sites': 'truth',
+         'proposed sites': 'proposed',
+         'total sites': 'total'}, axis=1)
+    concise_best_bas_rows = concise_best_bas_rows.drop([
+        'truth slices',
+        'proposed slices', 'precision', 'recall (PD)', 'spatial FAR',
+        'temporal FAR', 'images FAR'], axis=1)
+    print(concise_best_bas_rows.to_string())
+
     summary_path = os.path.join(out_dpath, 'summary.csv')
     if os.path.isfile(summary_path):
         os.remove(summary_path)
     with open(summary_path, 'a+') as f:
-        best_bas_row = bas_df[bas_df['F1'] == bas_df['F1'].max()].iloc[[-1]]
         best_bas_row.to_csv(f)
         f.write('\n')
         sc_df.to_csv(f)
         f.write('\n')
         sc_cm.to_csv(f)
+
+    json_data = {}
+    json_data['best_bas_rows'] = json.loads(best_bas_rows.to_json(orient='table', indent=2))
+    json_data['sc_cm'] = json.loads(sc_cm.to_json(orient='table', indent=2))
+    json_data['sc_df'] = json.loads(sc_df.to_json(orient='table', indent=2))
+
+    summary_path2 = out_dpath / 'summary2.json'
+    with open(summary_path2, 'w') as f:
+        json.dump(json_data, f, indent=4)
 
     return bas_df, sc_df, sc_cm
 
@@ -446,8 +477,9 @@ def ensure_thumbnails(image_root, region_id, sites):
     region_root.mkdir(parents=True, exist_ok=True)
     for img_path, img_date in ub.dict_union(
             *site_img_date_dct.values()).items():
-        (region_root / '_'.join((img_date.replace(
-            '-', ''), img_path.with_suffix('.jp2').name))).symlink_to(img_path)
+        link_path = (region_root / '_'.join(
+            (img_date.replace('-', ''), img_path.with_suffix('.jp2').name)))
+        ub.symlink(img_path, link_path, verbose=1)
 
     # build site viz
     for site_id, img_date_dct in site_img_date_dct.items():
@@ -455,9 +487,9 @@ def ensure_thumbnails(image_root, region_id, sites):
         site_root.mkdir(parents=True, exist_ok=True)
         for img_path, img_date in img_date_dct.items():
             # TODO crop
-            (site_root / '_'.join(
-                (img_date.replace('-', ''),
-                 img_path.with_suffix('.tif').name))).symlink_to(img_path)
+            link_path = (site_root / '_'.join(
+                (img_date.replace('-', ''), img_path.with_suffix('.tif').name)))
+            ub.symlink(img_path, link_path, verbose=1)
 
 
 def main(args):
@@ -620,6 +652,7 @@ def main(args):
 
     if args.merge and out_dirs:
         merge_metrics_results(out_dirs, gt_dpath)
+    print('out_dirs = {}'.format(ub.repr2(out_dirs, nl=1)))
 
 
 if __name__ == '__main__':

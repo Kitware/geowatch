@@ -187,3 +187,17 @@ CONFUSION_COLOR_SCHEME = {
     'FN': 'teal',
     'FP': 'red',
 }
+
+def dummy_legend():
+    # hack to make a legend for slides
+
+    label_to_color = {
+        cat['name']: cat['color']
+        for cat in CATEGORIES
+    }
+    label_to_color = ub.dict_subset(label_to_color, {
+        'Site Preparation', 'Active Construction', 'positive'})
+
+    import kwplot
+    kwplot.autompl()
+    kwplot.make_legend_img()

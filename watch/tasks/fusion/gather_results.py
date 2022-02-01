@@ -99,12 +99,36 @@ def prepare_results(all_infos):
         class_aps = []
         class_aucs = []
 
-        title = info['meta']['title']
+        meta = info['meta']
+
+        try:
+            predict_meta = None
+            for meta_item in meta['info']:
+                if meta_item['type'] == 'process':
+                    if meta_item['properties']['name'] == 'watch.tasks.fusion.predict':
+                        predict_meta = meta_item
+                        raise Found
+        except Found:
+            pass
+        else:
+            raise Exception('no prediction metadata')
+
+        pred_fpath = predict_meta['properties']['args']['pred_dataset']
+
+        title = meta['title']
+
+        if 'package_name' not in meta:
+            if ' ' not in title:
+                package_name = title
+            else:
+                raise AssertionError
+        else:
+            package_name = meta['package_name']
 
         # Hack to get the epoch/step/expt_name
-        epoch = int(title.split('epoch=')[1].split('-')[0])
-        step = int(title.split('step=')[1].split('-')[0])
-        expt_name = title.split('epoch=')[0]
+        epoch = int(package_name.split('epoch=')[1].split('-')[0])
+        step = int(package_name.split('step=')[1].split('-')[0])
+        expt_name = package_name.split('epoch=')[0]
 
         salient_measures = info['nocls_measures']
         class_measures = info['ovr_measures']
@@ -118,9 +142,11 @@ def prepare_results(all_infos):
             class_row['AUC'] = bin_measure['auc']
             class_row['catname'] = catname
             class_row['title'] = title
+            class_row['package_name'] = package_name
             class_row['expt_name'] = expt_name
             class_row['epoch'] = epoch
             class_row['step'] = step
+            class_row['pred_fpath'] = pred_fpath
             expt_class_rows.append(class_row)
         class_rows.extend(expt_class_rows)
 
@@ -130,23 +156,14 @@ def prepare_results(all_infos):
         row['salient_AP'] = salient_measures['ap']
         row['salient_AUC'] = salient_measures['auc']
         row['catname'] = 'all'
+        row['package_name'] = package_name
         row['title'] = title
         row['expt_name'] = expt_name
         row['epoch'] = epoch
         row['step'] = step
-        mean_rows.append(row)
+        row['pred_fpath'] = pred_fpath
 
-        try:
-            predict_meta = None
-            for meta_item in info['meta']['info']:
-                if meta_item['type'] == 'process':
-                    if meta_item['properties']['name'] == 'watch.tasks.fusion.predict':
-                        predict_meta = meta_item
-                        raise Found
-        except Found:
-            pass
-        else:
-            raise Exception('no prediction metadata')
+        mean_rows.append(row)
 
         if predict_meta is not None:
             process_props = predict_meta['properties']
@@ -189,6 +206,43 @@ def prepare_results(all_infos):
                  metrics=metrics,
             )
             results_list2.append(result2)
+
+    if True:
+        # TOP CANDIDATE MODELS - FIND TOP K MODELS FOR EVERY METRIC
+        mean_df = pd.DataFrame(mean_rows)
+        class_df = pd.DataFrame(class_rows)
+        K = 5
+        max_per_metric_per_expt = 2
+        class_candidate_indexes = []
+        for class_metric in ['AP', 'AUC']:
+            for catname, group in class_df.groupby('catname'):
+                valid_indexes = []
+                for expt_name, subgroup in group.groupby('expt_name'):
+                    best_subgroup = subgroup.sort_values(class_metric, ascending=False).iloc[0:max_per_metric_per_expt]
+                    valid_indexes.extend(best_subgroup.index.tolist())
+                valid_indexes = sorted(set(valid_indexes))
+                valid_group = group.loc[valid_indexes]
+                top_group = valid_group.sort_values(class_metric, ascending=False).iloc[0:K]
+                class_candidate_indexes.extend(top_group.index)
+        top_class_indexes = sorted(set(class_candidate_indexes))
+        class_df.loc[top_class_indexes]
+
+        mean_candidate_indexes = []
+        for metric in ['class_mAP', 'class_mAUC', 'salient_AP', 'salient_AUC']:
+            valid_indexes = []
+            for expt_name, subgroup in mean_df.groupby('expt_name'):
+                best_subgroup = subgroup.sort_values(metric, ascending=False).iloc[0:max_per_metric_per_expt]
+                valid_indexes.extend(best_subgroup.index.tolist())
+            valid_indexes = sorted(set(valid_indexes))
+            valid_group = mean_df.loc[valid_indexes]
+            top_group = valid_group.sort_values(metric, ascending=False).iloc[0:K]
+            mean_candidate_indexes.extend(top_group.index)
+        top_mean_indexes = sorted(set(mean_candidate_indexes))
+
+        cand_expt_names = set(class_df.loc[top_class_indexes]['pred_fpath'].tolist())
+        cand_expt_names.update(set(mean_df.loc[top_mean_indexes]['pred_fpath'].tolist()))
+        cand_expt_names = sorted(cand_expt_names)
+        print('cand_expt_names = {}'.format(ub.repr2(cand_expt_names, nl=1)))
 
     return class_rows, mean_rows, all_results, results_list2
 
@@ -233,10 +287,14 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
     # measure_fpaths = dset_groups['combo_train_US_R001_small_nowv.kwcoco']
     # measure_fpaths = dset_groups['combo_vali_nowv.kwcoco']
     # measure_fpaths = dset_groups['combo_DILM_nowv_vali.kwcoco']
+
     # dataset_key = 'Drop1-Aligned-TA1-2022-01_vali_data_nowv.kwcoco'
-    # dataset_key = 'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco'
+
+    dataset_key = 'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco'
+
     # dataset_key = 'combo_vali_nowv.kwcoco'
-    dataset_key = 'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco'
+
+    # dataset_key = 'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco'
     measure_fpaths = dset_groups[dataset_key]
     print(len(measure_fpaths))
     # dataset_to_evals = ub.group_items(eval_dpaths, lambda x: x.parent.name)
@@ -506,16 +564,6 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
     fnum = 5
     plot_individual_salient_curves(fnum, metric='ap')
     # print(best_per_expt.sort_values('mAP').to_string())
-
-    # TOP CANDIDATE MODELS - FIND TOP K MODELS FOR EVERY METRIC
-    class_rows
-
-
-    mean_rows['class_mAP']
-    mean_rows['class_mAP']
-    mean_df = pd.DataFrame(mean_rows)
-    K = 5
-    mean_df.sort_values('class_mAP', ascending=False)['title'].iloc[0:K]
 
     if 1:
         plt.show()
