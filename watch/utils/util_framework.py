@@ -46,11 +46,16 @@ class CacheItemOutputS3Wrapper:
             output_status_file = os.path.join(
                 tmpdirname, '{}.output.done'.format(stac_item['id']))
             with open(output_status_file, 'w') as outf:
-                for output_item in output_stac_items:
-                    if isinstance(output_item, pystac.Item):
-                        print(json.dumps(output_item.to_dict()), file=outf)
-                    else:
-                        print(json.dumps(output_item), file=outf)
+                if isinstance(output_stac_items, dict):
+                    print(json.dumps(output_stac_items), file=outf)
+                elif isinstance(output_stac_items, pystac.Item):
+                    print(json.dumps(output_stac_items.to_dict()), file=outf)
+                else:
+                    for output_item in output_stac_items:
+                        if isinstance(output_item, pystac.Item):
+                            print(json.dumps(output_item.to_dict()), file=outf)
+                        else:
+                            print(json.dumps(output_item), file=outf)
 
             subprocess.run([*self.aws_base_command,
                             output_status_file,
@@ -63,18 +68,26 @@ def _default_item_selector(stac_item):
     return True
 
 
+def _default_asset_selector(asset_name, asset):
+    return True
+
+
 class IngressProcessEgressWrapper:
     def __init__(self,
                  item_map,
                  outbucket,
                  aws_base_command,
                  dryrun=False,
-                 stac_item_selector=_default_item_selector):
+                 stac_item_selector=_default_item_selector,
+                 asset_selector=_default_asset_selector,
+                 skip_egress=False):
         self.item_map = item_map
         self.outbucket = outbucket
         self.aws_base_command = aws_base_command
         self.dryrun = dryrun
         self.stac_item_selector = stac_item_selector
+        self.asset_selector = asset_selector
+        self.skip_egress = skip_egress
 
     def __call__(self, stac_item, *args, **kwargs):
         # Assumes that the 'self.item_map' function accepts
@@ -92,7 +105,9 @@ class IngressProcessEgressWrapper:
                 stac_item,
                 os.path.join(tmpdirname, 'ingress'),
                 self.aws_base_command,
-                self.dryrun)
+                self.dryrun,
+                relative=False,
+                asset_selector=self.asset_selector)
 
             # Stripping the 'root' link here as it usually refers to
             # the catalog which isn't ingressed when we call
@@ -114,6 +129,9 @@ class IngressProcessEgressWrapper:
             else:
                 # Assume already an iterable of pystac.Item
                 processed_items = processed_item
+
+            if self.skip_egress:
+                return processed_items
 
             output_items = []
             for item in processed_items:

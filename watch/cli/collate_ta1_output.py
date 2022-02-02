@@ -14,6 +14,7 @@ import pystac
 from osgeo import gdal
 
 from watch.utils import util_bands
+from watch.cli.baseline_framework_ingress import load_input_stac_items
 
 
 SUPPORTED_S2_PLATFORMS = {'S2A',
@@ -23,7 +24,8 @@ SUPPORTED_S2_PLATFORMS = {'S2A',
 SUPPORTED_LS_PLATFORMS = {'OLI_TIRS',
                           'LANDSAT_8'}  # Landsat
 SUPPORTED_WV_PLATFORMS = {'DigitalGlobe',
-                          'worldview-2'}  # Worldview
+                          'worldview-2',
+                          'worldview-3'}  # Worldview
 SUPPORTED_PLATFORMS = (SUPPORTED_S2_PLATFORMS |
                        SUPPORTED_LS_PLATFORMS |
                        SUPPORTED_WV_PLATFORMS)
@@ -179,6 +181,7 @@ def _remap_quality_mask(quality_mask_path, outdir):
                     '-A', quality_mask_path,
                     '--outfile', output_path,
                     '--overwrite',
+                    '--quiet',
                     '--calc',
                     '1*(A==1)+64*(A==1)+128*(A==5)+16*(A==3)+32*(A==4)+8*(A==2)+255*(A==255)',  # noqa
                     '--NoDataValue', '255'], check=True)
@@ -186,12 +189,16 @@ def _remap_quality_mask(quality_mask_path, outdir):
     return output_path
 
 
-def collate_item(stac_item_dict,
+def collate_item(stac_item,
+                 working_dir,
                  aws_base_command,
                  output_bucket,
                  performer_code,
                  eval_num):
-    stac_item = pystac.Item.from_dict(stac_item_dict)
+    # TODO: Make use of `working_dir` argument here; not currently
+    # used but expected by streaming decorators (in util_framework)
+    if isinstance(stac_item, dict):
+        stac_item = pystac.Item.from_dict(stac_item)
 
     platform = stac_item.properties['platform']
 
@@ -281,6 +288,27 @@ def collate_item(stac_item_dict,
     return output_stac_item
 
 
+def convert_to_cog(input_filepath, resampling='AVERAGE'):
+    # Citing: https://smartgitlab.com/TE/standards/-/wikis/Data-Output-Specifications#cloud-optomized-geotiff-cog  # noqa
+    # Pixel interleaving
+    # Internal tiling with block size 256x256 pixels
+    # Internal overviews with block size 128x128 pixels and
+    # downsampling levels of 2, 4, 8, 16, 32, and 64
+    # Compression with the "deflate" algorithm
+    output_filepath = '_cog'.join(os.path.splitext(input_filepath))
+
+    subprocess.run(['gdal_translate',
+                    input_filepath, output_filepath,
+                    '-q',  # quiet
+                    '-of', 'cog',
+                    '-co', 'COMPRESS=DEFLATE',
+                    '-co', 'BLOCKSIZE=256',
+                    '-co', 'OVERVIEW_RESAMPLING={}'.format(resampling.upper()),
+                    '--config', 'GDAL_TIFF_OVR_BLOCKSIZE', '128'], check=True)
+
+    return output_filepath
+
+
 def generic_collate_item(asset_name_map,
                          ssh_asset_name_map,
                          stac_item,
@@ -321,11 +349,8 @@ def generic_collate_item(asset_name_map,
             if asset_suffix == 'QA':
                 # Remap QA band
                 print("* Remapping QA band ..")
-                local_qa_path = os.path.join(tmpdirname, 'orig_qa.tif')
-                subprocess.run([*aws_base_command,
-                                asset_href, local_qa_path], check=True)
 
-                asset_href = _remap_quality_mask(local_qa_path, tmpdirname)
+                asset_href = _remap_quality_mask(asset_href, tmpdirname)
 
                 for qa_res in additional_ssh_qa_resolutions:
                     local_resized_qa_outpath = os.path.join(
@@ -336,9 +361,14 @@ def generic_collate_item(asset_name_map,
                                         '-overwrite',
                                         '-of', 'GTiff',
                                         '-r', 'near',
+                                        '-q',
                                         '-tr', str(qa_res), str(qa_res),
                                         asset_href,
                                         local_resized_qa_outpath], check=True)
+
+                    local_resized_qa_outpath = convert_to_cog(
+                        local_resized_qa_outpath,
+                        resampling='NEAREST')
 
                     resized_qa_ssh_outpath = '/'.join(
                         (ssh_outdir, "{}_{}_SSH_{}m_{}.tif".format(
@@ -349,6 +379,10 @@ def generic_collate_item(asset_name_map,
                     subprocess.run([*aws_base_command,
                                     local_resized_qa_outpath,
                                     resized_qa_ssh_outpath], check=True)
+
+                asset_href = convert_to_cog(asset_href, resampling='NEAREST')
+            else:
+                asset_href = convert_to_cog(asset_href, resampling='AVERAGE')
 
             subprocess.run([*aws_base_command,
                             asset_href, stac_asset_outpath], check=True)
@@ -404,115 +438,69 @@ def collate_wv_item(stac_item,
         return [_reformat_bandname(b['name'])
                 for b in band_dicts]
 
-    with tempfile.NamedTemporaryFile(suffix='.tif') as temp_src_file:
-        subprocess.run([*aws_base_command,
-                        data_asset.href, temp_src_file.name], check=True)
+    bands = gdal.Info(data_asset.href, format='json')['bands']
 
-        bands = gdal.Info(temp_src_file.name, format='json')['bands']
+    if len(bands) == 1:
+        output_bands = _out_bands(util_bands.WORLDVIEW2_PAN)
+    elif len(bands) == 4:
+        output_bands = _out_bands(util_bands.WORLDVIEW2_MS4)
+    elif len(bands) == 8:
+        output_bands = _out_bands(util_bands.WORLDVIEW2_MS8)
+    else:
+        print('unknown channel signature for WV')
+        return None
 
-        if len(bands) == 1:
-            output_bands = _out_bands(util_bands.WORLDVIEW2_PAN)
-        elif len(bands) == 4:
-            output_bands = _out_bands(util_bands.WORLDVIEW2_MS4)
-        elif len(bands) == 8:
-            output_bands = _out_bands(util_bands.WORLDVIEW2_MS8)
-        else:
-            print('unknown channel signature for WV')
-            return None
+    item_outdir_base = os.path.basename(item_outdir)
+    output_assets = {}
+    for band_i, asset_suffix in enumerate(output_bands, start=1):
+        with tempfile.NamedTemporaryFile(suffix='.tif') as temporary_file:
+            if len(output_bands) > 1:
+                # Extract band as a seperate image
+                output_band_path = temporary_file.name
+                subprocess.run(['gdal_calc.py',
+                                '--quiet',
+                                '--calc', 'A',
+                                '--outfile', output_band_path,
+                                '-A', data_asset.href,
+                                '--A_band', str(band_i),
+                                '--overwrite'], check=True)
+            else:
+                # Only a single band output file, don't need to
+                # split our input image in this case
+                output_band_path = data_asset.href
 
-        item_outdir_base = os.path.basename(item_outdir)
-        output_assets = {}
-        for band_i, asset_suffix in enumerate(output_bands, start=1):
-            with tempfile.NamedTemporaryFile(suffix='.tif') as temporary_file:
-                if len(output_bands) > 1:
-                    # Extract band as a seperate image
-                    output_band_path = temporary_file.name
-                    subprocess.run(['gdal_calc.py',
-                                    '--calc', 'A',
-                                    '--outfile', output_band_path,
-                                    '-A', temp_src_file.name,
-                                    '--A_band', str(band_i),
-                                    '--overwrite'], check=True)
-                else:
-                    # Only a single band output file, don't need to
-                    # split our input image in this case
-                    output_band_path = temp_src_file.name
+            output_band_path = convert_to_cog(output_band_path,
+                                              resampling='AVERAGE')
 
-                stac_asset_outpath_basename = "{}_{}_{}.tif".format(
-                    original_id, performer_code, asset_suffix)
-                stac_asset_outpath = '/'.join(
-                    (item_outdir, stac_asset_outpath_basename))
+            stac_asset_outpath_basename = "{}_{}_{}.tif".format(
+                original_id, performer_code, asset_suffix)
+            stac_asset_outpath = '/'.join(
+                (item_outdir, stac_asset_outpath_basename))
 
-                # Default to asset_suffix if a map isn't found
-                output_asset_name = ASSET_SUFFIX_TO_NAME_MAP.get(
-                    asset_suffix, asset_suffix)
-                output_assets[output_asset_name] = pystac.Asset.from_dict(
-                    {'href': stac_asset_outpath,
-                     'title': '/'.join((item_outdir_base,
-                                        stac_asset_outpath_basename)),
-                     'roles': ['data']})
+            # Default to asset_suffix if a map isn't found
+            output_asset_name = ASSET_SUFFIX_TO_NAME_MAP.get(
+                asset_suffix, asset_suffix)
+            output_assets[output_asset_name] = pystac.Asset.from_dict(
+                {'href': stac_asset_outpath,
+                 'title': '/'.join((item_outdir_base,
+                                    stac_asset_outpath_basename)),
+                 'roles': ['data']})
 
-                # Copy assets up to S3
-                subprocess.run([*aws_base_command,
-                                output_band_path, stac_asset_outpath],
-                               check=True)
+            # Copy assets up to S3
+            subprocess.run([*aws_base_command,
+                            output_band_path, stac_asset_outpath],
+                           check=True)
 
     stac_item.assets = output_assets
 
     return stac_item
 
 
-def collate_ta1_output(input_path,
-                       output_bucket,
-                       aws_profile=None,
-                       dryrun=False,
-                       performer_code='kit',
-                       eval_num='1',
-                       jobs=1):
-    if aws_profile is not None:
-        aws_base_command =\
-            ['aws', 's3', '--profile', aws_profile, 'cp']
-    else:
-        aws_base_command = ['aws', 's3', 'cp']
-
-    if dryrun:
-        aws_base_command.append('--dryrun')
-
-    if input_path.startswith('s3'):
-        with tempfile.NamedTemporaryFile() as temporary_file:
-            subprocess.run(
-                [*aws_base_command, input_path, temporary_file.name],
-                check=True)
-
-            input_stac_items = _load_input(temporary_file.name)
-    else:
-        input_stac_items = _load_input(input_path)
-
-    executor = ub.Executor(mode='process' if jobs > 1 else 'serial',
-                           max_workers=jobs)
-    collation_jobs = [executor.submit(collate_item, stac_item_dict,
+def build_and_upload_stac_collections(stac_items_by_collection,
                                       aws_base_command,
                                       output_bucket,
-                                      performer_code,
-                                      eval_num)
-                      for stac_item_dict in input_stac_items]
-
-    output_stac_items_by_collection = {}
-    for collation_job in ub.ProgIter(as_completed(collation_jobs),
-                                     total=len(collation_jobs),
-                                     desc='collation jobs'):
-        try:
-            stac_item = collation_job.result()
-        except Exception as e:
-            print("Exception occurred (printed below), dropping item!")
-            print(e)
-            continue
-        else:
-            if stac_item is not None:
-                output_stac_items_by_collection.setdefault(
-                    stac_item.collection_id, []).append(stac_item)
-
-    for collection_id, stac_items in output_stac_items_by_collection.items():
+                                      performer_code):
+    for collection_id, stac_items in stac_items_by_collection.items():
         collection_output_path = '/'.join((
             output_bucket,
             collection_id,
@@ -549,6 +537,55 @@ def collate_ta1_output(input_path,
             subprocess.run([*aws_base_command,
                             temporary_file.name,
                             collection_output_path], check=True)
+
+
+def collate_ta1_output(input_path,
+                       output_bucket,
+                       aws_profile=None,
+                       dryrun=False,
+                       performer_code='kit',
+                       eval_num='1',
+                       jobs=1):
+    if aws_profile is not None:
+        aws_base_command =\
+            ['aws', 's3', '--profile', aws_profile, 'cp']
+    else:
+        aws_base_command = ['aws', 's3', 'cp']
+
+    if dryrun:
+        aws_base_command.append('--dryrun')
+
+    input_stac_items = load_input_stac_items(input_path, aws_base_command)
+
+    executor = ub.Executor(mode='process' if jobs > 1 else 'serial',
+                           max_workers=jobs)
+    collation_jobs = [executor.submit(collate_item, stac_item_dict,
+                                      None,  # working_dir (not currently used)
+                                      aws_base_command,
+                                      output_bucket,
+                                      performer_code,
+                                      eval_num)
+                      for stac_item_dict in input_stac_items]
+
+    output_stac_items_by_collection = {}
+    for collation_job in ub.ProgIter(as_completed(collation_jobs),
+                                     total=len(collation_jobs),
+                                     desc='collation jobs'):
+        try:
+            stac_item = collation_job.result()
+        except Exception as e:
+            print("Exception occurred (printed below), dropping item!")
+            print(e)
+            continue
+        else:
+            if stac_item is not None:
+                output_stac_items_by_collection.setdefault(
+                    stac_item.collection_id, []).append(stac_item)
+
+    build_and_upload_stac_collections(output_stac_items_by_collection,
+                                      aws_base_command,
+                                      output_bucket,
+                                      performer_code)
 
 
 if __name__ == "__main__":
