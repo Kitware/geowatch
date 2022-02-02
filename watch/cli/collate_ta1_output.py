@@ -14,7 +14,6 @@ import pystac
 from osgeo import gdal
 
 from watch.utils import util_bands
-from watch.cli.baseline_framework_ingress import load_input_stac_items
 
 
 SUPPORTED_S2_PLATFORMS = {'S2A',
@@ -100,9 +99,9 @@ ASSET_SUFFIX_TO_NAME_MAP = {'QA': 'quality',
 def main():
     parser = argparse.ArgumentParser(
         description="Collate TA-1 output data for T&E consumption")
-    parser.add_argument('input_path',
+    parser.add_argument('stac_catalog',
                         type=str,
-                        help="Path to input T&E Baseline Framework JSON")
+                        help="Path to input STAC catalog")
     parser.add_argument('output_bucket',
                         type=str,
                         help="S3 bucket path for collated data")
@@ -539,13 +538,18 @@ def build_and_upload_stac_collections(stac_items_by_collection,
                             collection_output_path], check=True)
 
 
-def collate_ta1_output(input_path,
+def collate_ta1_output(stac_catalog,
                        output_bucket,
                        aws_profile=None,
                        dryrun=False,
                        performer_code='kit',
                        eval_num='1',
                        jobs=1):
+    if isinstance(stac_catalog, str):
+        catalog = pystac.read_file(href=stac_catalog).full_copy()
+    else:
+        catalog = stac_catalog.full_copy()
+
     if aws_profile is not None:
         aws_base_command =\
             ['aws', 's3', '--profile', aws_profile, 'cp']
@@ -555,7 +559,7 @@ def collate_ta1_output(input_path,
     if dryrun:
         aws_base_command.append('--dryrun')
 
-    input_stac_items = load_input_stac_items(input_path, aws_base_command)
+    input_stac_items = [item.to_dict() for item in catalog.get_all_items()]
 
     executor = ub.Executor(mode='process' if jobs > 1 else 'serial',
                            max_workers=jobs)
