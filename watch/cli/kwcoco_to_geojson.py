@@ -784,7 +784,6 @@ def main(args):
               set(coco_dset.index.name_to_video))
         assert coco_dset.n_images > 0, 'no valid videos!'
 
-    # import xdev; xdev.embed()
     coco_dset = watch.tasks.tracking.normalize.normalize(
         coco_dset,
         track_fn=track_fn,

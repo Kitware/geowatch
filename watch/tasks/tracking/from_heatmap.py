@@ -359,7 +359,6 @@ def time_aggregated_polys(coco_dset,
     # TimePolygonFilter edits tracks instead of removing them, so we can
     # discard 'polys' and focus on 'tracks'
     tracks = [t for t, _ in tracks_polys]
-    # import xdev; xdev.embed()
     if time_filtering:
         # TODO investigate different thresh here
         time_thresh = thresh
@@ -474,7 +473,6 @@ class TimeAggregatedHybrid(NewTrackFunction):
         return TimeAggregatedBAS().create_tracks(coco_dset)
 
     def add_tracks_to_dset(self, coco_dset, tracks):
-        import xdev; xdev.embed()
         return TimeAggregatedSC(use_boundary_annots=False).add_tracks_to_dset(
             coco_dset, tracks, coco_dset_sc=self.coco_dset_sc)
 
