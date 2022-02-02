@@ -614,7 +614,7 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
         max_per_expt = None
         max_per_expt = 1
         fig = kwplot.figure(fnum=fnum, doclf=True)
-        relevant_results = [r for r in all_results if r.nocls_measures]
+        relevant_results = [r for r in all_results if r.nocls_measures and r.nocls_measures['nsupport'] > 0]
 
         for result in relevant_results:
             if 'package_name' in result.meta:
