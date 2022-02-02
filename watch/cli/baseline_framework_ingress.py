@@ -329,7 +329,7 @@ def download_mtd_msil1c(product_id,
     except ValueError:
         # Support for older format product ID format, e.g.:
         # "S2A_OPER_PRD_MSIL1C_PDMC_20160413T135705_R065_V20160412T102058_20160412T102058"
-        dt = datetime.strptime(product_id.split('_')[5], '%Y%m%dT%H%M%S')
+        dt = datetime.strptime(product_id.split('_')[7][1:], '%Y%m%dT%H%M%S')
 
     scheme, netloc, path, *_ = urlparse(metadata_href)
     index = path.find('tiles')
