@@ -51,6 +51,11 @@ def main():
                         default=1,
                         required=False,
                         help='Number of jobs to run in parallel')
+    parser.add_argument('--virtual',
+                        action='store_true',
+                        default=False,
+                        help='Replace asset hrefs with GDAL Virtual File '
+                             'System links')
 
     parser.add_argument('--relative', default=False,
                         action='store_true', help='if true use relative paths')
@@ -74,7 +79,8 @@ def ingress_item(feature,
                  aws_base_command,
                  dryrun,
                  relative=False,
-                 asset_selector=_default_asset_selector):
+                 asset_selector=_default_asset_selector,
+                 virtual=False):
     # Adding a reference back to the original STAC
     # item if not already present
     self_link = None
@@ -150,30 +156,44 @@ def ingress_item(feature,
             asset['href'] = local_asset_href
         else:
             # Prefer to pull asset from S3 if available
-            if(urlparse(asset_href).scheme != 's3'
+            parsed_asset_href = urlparse(asset_href)
+            if(parsed_asset_href.scheme != 's3'
                and 'alternate' in asset and 's3' in asset['alternate']):
                 asset_href_for_download = asset['alternate']['s3']['href']
             else:
                 asset_href_for_download = asset_href
 
-            try:
-                success = download_file(asset_href_for_download,
-                                        asset_outpath,
-                                        aws_base_command,
-                                        dryrun)
-            except subprocess.CalledProcessError:
-                print("* Error * Couldn't download asset from href: '{}', "
-                      "removing asset from item!".format(
-                          asset_href_for_download))
-                assets_to_remove.add(asset_name)
-                continue
-            else:
-                if success:
-                    asset['href'] = local_asset_href
+            if virtual:
+                if parsed_asset_href.scheme == 's3':
+                    asset['href'] = '/vsis3/{}{}'.format(
+                        parsed_asset_href.netloc,
+                        parsed_asset_href.path)
+                elif parsed_asset_href.scheme in {'http', 'https'}:
+                    asset['href'] = '/vsicurl/{}'.format(asset_href)
                 else:
-                    print('Warning unrecognized scheme for asset href: {!r}, '
-                          'skipping!'.format(asset_href_for_download))
+                    print("* Unsupported URI scheme '{}' for virtual ingress; "
+                          "not updating href: {}".format(
+                              parsed_asset_href.scheme, asset_href))
+            else:
+                try:
+                    success = download_file(asset_href_for_download,
+                                            asset_outpath,
+                                            aws_base_command,
+                                            dryrun)
+                except subprocess.CalledProcessError:
+                    print("* Error * Couldn't download asset from href: '{}', "
+                          "removing asset from item!".format(
+                              asset_href_for_download))
+                    assets_to_remove.add(asset_name)
                     continue
+                else:
+                    if success:
+                        asset['href'] = local_asset_href
+                    else:
+                        print('Warning unrecognized scheme for asset href: '
+                              '{!r}, skipping!'.format(
+                                  asset_href_for_download))
+                        continue
 
     for asset_name in assets_to_remove:
         del assets[asset_name]
@@ -229,7 +249,8 @@ def baseline_framework_ingress(input_path,
                                relative=False,
                                jobs=1,
                                item_selector=_default_item_selector,
-                               asset_selector=_default_asset_selector):
+                               asset_selector=_default_asset_selector,
+                               virtual=False):
     os.makedirs(outdir, exist_ok=True)
 
     if relative:
@@ -268,7 +289,7 @@ def baseline_framework_ingress(input_path,
                               max_workers=jobs)
 
     jobs = [executor.submit(ingress_item, feature, outdir, aws_base_command,
-                            dryrun, relative, asset_selector)
+                            dryrun, relative, asset_selector, virtual)
             for feature in input_stac_items
             if item_selector(feature)]
 
