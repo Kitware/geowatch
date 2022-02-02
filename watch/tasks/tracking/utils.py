@@ -82,7 +82,6 @@ class PolygonFilter(collections.abc.Callable):
 
     So, do this by hand instead.
     '''
-
     def __call__(self, obj):
         if isinstance(obj, Track):
             return self.on_track(obj)
@@ -104,7 +103,7 @@ class PolygonFilter(collections.abc.Callable):
                       (kwimage.Polygon, kwimage.MultiPolygon)):
             return self.on_augmented_polys(obj)
         raise NotImplementedError(
-                f'cannot filter polys like {sample_object}: unsupported type')
+            f'cannot filter polys like {sample_object}: unsupported type')
 
     # @__call__.register
     def on_track(self, track: Track):
@@ -197,8 +196,7 @@ class TrackFunction(collections.abc.Callable):
             if annots.aids == existing_aids:
                 annots.set(
                     'track_id',
-                    np.where(_are_trackless, tracks(annots),
-                             existing_tracks))
+                    np.where(_are_trackless, tracks(annots), existing_tracks))
 
         assert not any(are_trackless(sub_dset.annots()))
         return self.safe_union(coco_dset, sub_dset)
@@ -240,7 +238,6 @@ class NoOpTrackFunction(TrackFunction):
     '''
     Use existing tracks.
     '''
-
     def __call__(self, coco_dset):
         return coco_dset
 
@@ -250,7 +247,6 @@ class NewTrackFunction(TrackFunction):
     Specialization of TrackFunction to create polygons that do not yet exist
     in coco_dset, and add them as new annotations
     '''
-
     def __call__(self, coco_dset):
         tracks = self.create_tracks(coco_dset)
         coco_dset = self.add_tracks_to_dset(coco_dset, tracks)
@@ -266,10 +262,11 @@ class NewTrackFunction(TrackFunction):
         raise NotImplementedError('must be implemented by subclasses')
 
 
-def pop_tracks(coco_dset: kwcoco.CocoDataset,
-               cnames: Iterable[str],
-               remove: bool = True,
-               score: Optional[kwcoco.ChannelSpec] = None) -> Iterable[Track]:
+def pop_tracks(
+        coco_dset: kwcoco.CocoDataset,
+        cnames: Iterable[str],
+        remove: bool = True,
+        score_chan: Optional[kwcoco.ChannelSpec] = None) -> Iterable[Track]:
     '''
     Convert kwcoco annotations into Track objects.
 
@@ -277,7 +274,7 @@ def pop_tracks(coco_dset: kwcoco.CocoDataset,
         coco_dset
         cnames: category names
         remove: remove the annotations from coco_dset
-        score: score the track polygons by image overlap with this channel
+        score_chan: score the track polygons by image overlap with this channel
 
     Returns:
         Track objects.
@@ -293,19 +290,37 @@ def pop_tracks(coco_dset: kwcoco.CocoDataset,
         print(f'warning: no {cnames} annots in dset {coco_dset.tag}!')
 
     annots = deepcopy(annots)
-    coco_dset.remove_categories(cnames, keep_annots=(not remove))
+    if remove:
+        coco_dset.remove_categories(cnames, keep_annots=False)
 
-    polys = [
-        poly.to_shapely() for poly in
-        annots.detections.data['segmentations'].to_polygon_list()
-    ]
-    assert len(polys) == len(annots), (
-        'TODO handle multipolygon boundaries')
-    for track_id, track_polygids in ub.group_items(
-            zip(polys, annots.gids),
-            annots.get('track_id', None)).items():
-        track_polys, track_gids = zip(*track_polygids)
-        yield Track(list(map(Observation, track_polys, track_gids)),
+    polys = annots.detections.data['segmentations'].to_polygon_list()
+    assert len(polys) == len(annots), ('TODO handle multipolygon boundaries')
+
+    if score_chan is not None:
+        # bookkeep unique gids only
+        # hackish, pretend it's all one big track for efficient interpolation
+        # TODO make this work for multiple videos
+        gids = coco_dset.index._set_sorted_by_frame_index(annots.gids)
+        heatmaps_by_gid = dict(
+            zip(
+                gids,
+                heatmaps(coco_dset, gids,
+                         {score_chan.spec: list(score_chan.unique())
+                          })[score_chan.spec]))
+        scores = [
+            score(poly, heatmaps_by_gid[gid])
+            for poly, gid in zip(polys, annots.gids)
+        ]
+    else:
+        scores = [None] * len(annots)
+        # scores = annots.get('score', None)
+
+    for track_id, track_info in ub.group_items(zip(polys, annots.gids, scores),
+                                               annots.get('track_id',
+                                                          None)).items():
+        track_polys, track_gids, track_scores = zip(*track_info)
+        yield Track(list(
+            map(Observation, track_polys, track_gids, track_scores)),
                     dset=coco_dset,
                     track_id=track_id)
 
@@ -416,10 +431,9 @@ def mask_to_polygons(probs,
             # x, y order for shapely
             bounds = shapely.affinity.translate(bounds, 0.5, 0.5)
             # TODO investigate all_touched option
-            bounds_mask = features.rasterize(
-                    [bounds],
-                    dtype=np.uint8,
-                    out_shape=binary_mask.shape[:2])
+            bounds_mask = features.rasterize([bounds],
+                                             dtype=np.uint8,
+                                             out_shape=binary_mask.shape[:2])
         else:
             bounds_mask = kwimage.Polygon.from_shapely(bounds).to_mask(
                 probs.shape).numpy().data.astype(np.uint8)
@@ -467,7 +481,6 @@ def _validate_keys(key, bg_key):
 def heatmaps(coco_dset: kwcoco.CocoDataset,
              gids: List[int],
              keys: Union[List[str], Dict[str, List[str]]],
-             return_chan_probs=False,
              missing='fill',
              skipped='interpolate') -> Dict[str, List[np.array]]:
     '''
@@ -491,13 +504,12 @@ def heatmaps(coco_dset: kwcoco.CocoDataset,
 
     Restrictions wrt heatmap():
         - uses video space
+        - returns chan probs
 
     Args:
         coco_dset: kwcoco.CocoDataset
         gids: List[image id]
         key: List[str] list of channel names
-        return_chan_probs:
-            if True, also return a dict {k:heatmap(k) for k in keys}
         space: 'video' or 'image'
         missing: behavior for missing keys.
             'fill': return probs and chan_probs of zeros
@@ -541,7 +553,9 @@ def heatmaps(coco_dset: kwcoco.CocoDataset,
         for group, key in key_groups.items():
 
             # we are working only in vid space, so forget about warping
-            img_probs, chan_probs = heatmap(coco_dset, gid, key,
+            img_probs, chan_probs = heatmap(coco_dset,
+                                            gid,
+                                            key,
                                             space='video',
                                             return_chan_probs=True)
             # TODO make this more efficient using missing='skip'
@@ -570,7 +584,11 @@ def heatmaps(coco_dset: kwcoco.CocoDataset,
     return heatmaps_dct
 
 
-def heatmap(dset, gid, key, return_chan_probs=False, space='video',
+def heatmap(dset,
+            gid,
+            key,
+            return_chan_probs=False,
+            space='video',
             missing='fill'):
     """
     Find the total heatmap of key within gid

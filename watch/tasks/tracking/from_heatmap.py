@@ -285,7 +285,7 @@ def time_aggregated_polys(coco_dset,
             # currently bounds come from site summaries, which are not
             # time-varying.
             track_bounds = shapely.ops.unary_union(
-                [obs.poly for obs in track.observations])
+                [obs.poly.to_shapely() for obs in track.observations])
             gid_ixs = np.in1d(gids, [obs.gid for obs in track.observations])
             track_polys = mask_to_polygons(probs(_heatmaps, weights=gid_ixs),
                                            thresh,
@@ -420,8 +420,21 @@ class TimeAggregatedSC(NewTrackFunction):
             'none': generated polys will ignore the boundaries
         '''
         if self.boundaries_as == 'polys':
-            # TODO implement score
-            tracks = pop_tracks(coco_dset, cnames=['Site Boundary'])
+            tracks = pop_tracks(
+                coco_dset,
+                cnames=['Site Boundary'],
+                # these are SC scores, not BAS, so this is not a
+                # true reproduction of hybrid.
+                score_chan=kwcoco.ChannelSpec('|'.join(self.key)))
+            # hack in always-foreground instead
+            if 0:  # TODO
+                for track in list(tracks):
+                    for obs in track.observations:
+                        obs.score = 1
+
+            tracks = list(filter(
+                lambda track: len(list(track.observations)) > 0,
+                tracks))
         else:
             tracks = time_aggregated_polys(
                 coco_dset,
@@ -461,6 +474,7 @@ class TimeAggregatedHybrid(NewTrackFunction):
         return TimeAggregatedBAS().create_tracks(coco_dset)
 
     def add_tracks_to_dset(self, coco_dset, tracks):
+        import xdev; xdev.embed()
         return TimeAggregatedSC(use_boundary_annots=False).add_tracks_to_dset(
             coco_dset, tracks, coco_dset_sc=self.coco_dset_sc)
 
