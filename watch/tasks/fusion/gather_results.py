@@ -335,9 +335,15 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
 
     # dataset_key = 'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco'
     dataset_keys = [
+
+        'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco',
+        'Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco',
+        'Drop1-Aligned-TA1-2022-01_vali_data_nowv.kwcoco',
+        'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco',
+
         # 'Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco',
         # 'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco',
-        'Drop1-Aligned-TA1-2022-01_vali_data_nowv.kwcoco',
+        # 'Drop1-Aligned-TA1-2022-01_vali_data_nowv.kwcoco',
         # 'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco',
     ]
 

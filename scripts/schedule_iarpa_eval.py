@@ -71,11 +71,12 @@ BEST_MODELS = [
 
 
 TO_EVALUATE = [
-    '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BAS_smt_it_stm_p8_TA1_raw_v54/pred_BAS_smt_it_stm_p8_TA1_raw_v54_epoch=13-step=242605/Drop1-Aligned-TA1-2022-01_vali_data_nowv.kwcoco/pred.kwcoco.json',
+    # '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BAS_smt_it_stm_p8_TA1_raw_v54/pred_BAS_smt_it_stm_p8_TA1_raw_v54_epoch=13-step=242605/Drop1-Aligned-TA1-2022-01_vali_data_nowv.kwcoco/pred.kwcoco.json',
     # '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BAS_smt_it_stm_p8_TA1_raw_v54/pred_BAS_smt_it_stm_p8_TA1_raw_v54_epoch=13-step=242605/Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco/pred.kwcoco.json',
-    # '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BAS_smt_it_stm_p8_L1_raw_v53/pred_BAS_smt_it_stm_p8_L1_raw_v53_epoch=15-step=340047/Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco/pred.kwcoco.json',
+    '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BAS_smt_it_stm_p8_L1_raw_v53/pred_BAS_smt_it_stm_p8_L1_raw_v53_epoch=15-step=340047/Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco/pred.kwcoco.json',
 
 ]
+
 
 def main():
     run = 1
@@ -100,19 +101,19 @@ def main():
     recompute_eval = 0
     skip_existing = 1
 
+    # if task == 'sc':
+    #     TO_EVALUATE = [if 'SC' in TO_EVALUATE]
+    expected_outputs = []
     stamp = ub.timestamp() + '_' + ub.hash_data([])[0:8]
     tq = tmux_queue.TMUXMultiQueue(
         name=stamp, size=5, environ=environ,
         dpath=tmux_schedule_dpath)
 
-    # if task == 'sc':
-    #     TO_EVALUATE = [if 'SC' in TO_EVALUATE]
-
     import numpy as np
     track_kwargs_basis = {
-        'thresh': np.linspace(0.1, 0.3, 2).round(3).tolist(),
+        'thresh': np.linspace(0.1, 0.4, 10).round(3).tolist(),
+        # 'thresh': np.linspace(0.17, 0.22, 5).round(3).tolist(),
     }
-    expected_outputs = []
     for track_kwargs in ub.named_product(track_kwargs_basis):
         for pred_fpath in TO_EVALUATE:
             pred_fpath = ub.Path(pred_fpath)
@@ -140,7 +141,7 @@ def main():
                 python -m watch.cli.kwcoco_to_geojson \
                     "{pred_fpath}" \
                      {task_args} \
-                    --out_dir "{IARPA_EVAL_DPATH}" \
+                    --out_dir "{IARPA_EVAL_DPATH}/tracked_sites" \
                     score  -- \
                         --merge \
                         --gt_dpath "{dvc_dpath}/annotations" \
@@ -167,13 +168,13 @@ def main():
     #     print(IARPA_EVAL_DPATH)
     #     break
 
-    expected_outputs = []
-    for pred_fpath in TO_EVALUATE:
-        pred_fpath = ub.Path(pred_fpath)
-        pred_bundle_dpath = pred_fpath.parent
-        IARPA_EVAL_DPATH = pred_bundle_dpath / 'eval/iarpa'
-        summary_fpath = IARPA_EVAL_DPATH / 'scores/merged/summary2.json'
-        expected_outputs.append(summary_fpath)
+    # expected_outputs = []
+    # for pred_fpath in TO_EVALUATE:
+    #     pred_fpath = ub.Path(pred_fpath)
+    #     pred_bundle_dpath = pred_fpath.parent
+    #     IARPA_EVAL_DPATH = pred_bundle_dpath / 'eval/iarpa'
+    #     summary_fpath = IARPA_EVAL_DPATH / 'scores/merged/summary2.json'
+    #     expected_outputs.append(summary_fpath)
 
     have_outputs = [s for s in expected_outputs if s.exists()]
     have_outputs[0].exists()
@@ -186,6 +187,10 @@ def main():
         if not summary_text:
             print('bad summary_fpath = {!r}'.format(summary_fpath))
         else:
+            # hack to get thresh:
+            import parse
+            thresh = float(parse.parse('{}thresh={thresh}/{}', str(summary_fpath)).named['thresh'])
+
             summary = json.loads(summary_text)
 
             pred_bundle_dpath = summary_fpath.parent.parent.parent.parent.parent
@@ -195,12 +200,33 @@ def main():
             best_bas_rows = pd.read_json(json.dumps(summary['best_bas_rows']), orient='table')
             merged_row = best_bas_rows.loc['merged']
             merged_subrow = merged_row[['F1']]
+            merged_subrow = merged_subrow.assign(thresh=thresh)
             merged_subrow = merged_subrow.assign(model=[model_key])
+            merged_subrow = merged_subrow.reset_index()
+
             # merged_subrow = merged_subrow.assign(dataset=[dataset_key])
             rows.append(merged_subrow)
     summary_df = pd.concat(rows)
     summary_df = summary_df.sort_values('F1')
+    summary_df = summary_df.sort_values('thresh')
     print(summary_df.to_string())
+    summary_df = summary_df.iloc[3:]
+    print(summary_df.to_string())
+
+    if 1:
+        import dataframe_image as dfi
+        dfi.export(
+            summary_df,
+            "./tmp.png",
+            table_conversion="chrome",
+            fontsize=28,
+            max_rows=-1,
+        )
+        import kwplot
+        fig, _ = kwplot.imshow('./tmp.png', fnum=10)
+        fig.tight_layout()
+        kwplot.autompl()
+        kwplot.imshow('./tmp.png', fnum=101)
 
 
 """

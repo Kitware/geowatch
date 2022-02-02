@@ -632,17 +632,20 @@ def main(args):
         ensure_thumbnails(image_dpath, region_id, region_sites)
 
         # run metrics framework
-        cmd = ub.paragraph(fr'''
+        cmd = ub.codeblock(fr'''
             {virtualenv_cmd} &&
-            python {os.path.join(metrics_dpath, 'run_evaluation.py')}
-                --roi {region_id}
-                --gt_path {gt_dpath / 'site_models'}
-                --rm_path {gt_dpath / 'region_models'}
-                --sm_path {site_dpath}
-                --image_dir {image_dpath}
-                --output_dir {out_dir}
+            python {os.path.join(metrics_dpath, 'run_evaluation.py')} \
+                --roi {region_id} \
+                --gt_path {gt_dpath / 'site_models'} \
+                --rm_path {gt_dpath / 'region_models'} \
+                --sm_path {site_dpath} \
+                --image_dir {image_dpath} \
+                --output_dir {out_dir} \
                 --cache_dir {cache_dpath}
             ''')
+
+        (out_dir / 'invocation.sh').write_text(cmd)
+
         try:
             ub.cmd(cmd, verbose=3, check=True, shell=True)
             out_dirs.append(out_dir)
