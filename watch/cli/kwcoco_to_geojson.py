@@ -354,8 +354,9 @@ def convert_kwcoco_to_iarpa(coco_dset,
         >>> import ubelt as ub
         >>> coco_dset = smart_kwcoco_demodata.demo_smart_aligned_kwcoco()
         >>> coco_dset = normalize(coco_dset, track_fn=MonoTrack, overwrite=False)
-        >>> region_id = 'KR_R001'
-        >>> sites = convert_kwcoco_to_iarpa(coco_dset, region_id)
+        >>> region_ids = ['KR_R001', 'KR_R002']
+        >>> coco_dset.videos().set('name', region_ids)
+        >>> sites = convert_kwcoco_to_iarpa(coco_dset)
         >>> print('sites = {}'.format(ub.repr2(sites, nl=7, sort=0)))
         >>> import jsonschema
         >>> import watch
