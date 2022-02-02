@@ -153,7 +153,7 @@ def wv_coreg(wv_catalog, outdir, jobs=1, drop_empty=False, s2_catalog=None):
     # Look for the baseline s2 scenes among the s2 stac items
     def _is_baseline(s2_item):
         return (s2_item.properties.get('constellation') == 'sentinel-2' and
-                's2_coreg_l1c' in s2_item.properties['watch:process_history']
+                'coregistration' in s2_item.properties['watch:process_history']
                 and s2_item.properties['watch:s2_coreg_l1c:is_baseline'])
 
     # TODO does this need parallelized?
@@ -182,7 +182,7 @@ def wv_coreg(wv_catalog, outdir, jobs=1, drop_empty=False, s2_catalog=None):
     return output_catalog
 
 
-@maps
+@maps(history_entry='coregistration')
 def _coreg_map(stac_item, outdir, baseline_s2_items, item_pairs_dct,
                drop_empty):
 
@@ -277,7 +277,7 @@ def _coreg_map(stac_item, outdir, baseline_s2_items, item_pairs_dct,
                                             out_fpath, vrt_fpath, drop_empty)
 
         if drop_empty and not set(fpaths).issubset(output_stac_item.assets):
-            print("** WV item is empty after orthorectification, dropping!")
+            print("** WV item is empty after coregistration, dropping!")
             output_stac_item = None
 
     else:

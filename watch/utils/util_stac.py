@@ -1,4 +1,6 @@
 from concurrent.futures import as_completed
+import sys
+import traceback
 from typing import cast
 
 import os
@@ -87,7 +89,7 @@ def parallel_map_items(catalog,
         except Exception as e:
             if drop_on_error:
                 print("Exception occurred (printed below), dropping item!")
-                print(e)
+                traceback.print_exception(*sys.exc_info())
                 continue
             else:
                 raise e
@@ -113,9 +115,9 @@ def maps(_item_map=None, history_entry=None):
     '''
     General-purpose wrapper for STAC _item_maps.
 
-    An _item_map should take in a STAC item and return a STAC item or None.
-    To support this, it should have an arg 'stac_item' and an arg or kwarg
-    'outdir'.
+    An _item_map should take in a STAC item and return a STAC item, an
+    iterable of STAC items or None.  To support this, it should have
+    an arg 'stac_item' and an arg or kwarg 'outdir'.
 
     This decorator handles the following tasks:
         - add original item link
@@ -163,19 +165,26 @@ def maps(_item_map=None, history_entry=None):
                 }))
         bound_args.arguments['stac_item'] = stac_item
 
-        output_stac_item = _item_map(*bound_args.args, **bound_args.kwargs)
+        output_stac_items = _item_map(*bound_args.args, **bound_args.kwargs)
 
-        if output_stac_item is not None:
-            output_stac_item.set_self_href(
-                os.path.join(item_outdir,
-                             "{}.json".format(output_stac_item.id)))
+        if output_stac_items is None:
+            return []
 
-            # Roughly keeping track of what WATCH processes have been
-            # run on this particular item
-            output_stac_item.properties.setdefault('watch:process_history',
-                                                   []).append(history_entry)
+        if(isinstance(output_stac_items, pystac.Item)):
+            output_stac_items = [output_stac_items]
 
-        return output_stac_item
+        for output_stac_item in output_stac_items:
+            if output_stac_item is not None:
+                output_stac_item.set_self_href(
+                    os.path.join(item_outdir,
+                                 "{}.json".format(output_stac_item.id)))
+
+                # Roughly keeping track of what WATCH processes have been
+                # run on this particular item
+                output_stac_item.properties.setdefault(
+                    'watch:process_history', []).append(history_entry)
+
+        return output_stac_items
 
     return wrapper
 

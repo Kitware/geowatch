@@ -94,6 +94,13 @@ class IngressProcessEgressWrapper:
                 self.aws_base_command,
                 self.dryrun)
 
+            # Stripping the 'root' link here as it usually refers to
+            # the catalog which isn't ingressed when we call
+            # ingress_item directly (can throw exceptions when trying
+            # to convert to dict or serialize when the catalog is
+            # missing)
+            ingressed_item.remove_links('root')
+
             processed_item = self.item_map(
                 ingressed_item,
                 tmpdirname,
