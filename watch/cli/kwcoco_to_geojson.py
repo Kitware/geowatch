@@ -66,12 +66,14 @@ def geojson_feature(img, anns, coco_dset, with_properties=True):
     Group kwcoco annotations in the same track (site) and image
     into one Feature in an IARPA site model
     '''
+    from kwcoco.coco_image import CocoImage
+
     def single_geometry(ann):
         seg_geo = ann['segmentation_geos']
         assert isinstance(seg_geo, dict)
         return _single_geometry(seg_geo)
 
-    def per_image_properties(img):
+    def per_image_properties(coco_img: CocoImage):
         '''
         Properties defined per-img instead of per-ann, to reduce duplicate
         computation.
@@ -82,16 +84,21 @@ def geojson_feature(img, anns, coco_dset, with_properties=True):
         # TODO maybe use misc_info for this instead when STAC id is
         # properly passed through to TA-2?
         source = None
-        for aux in img.get('auxiliary', []):
-            if aux['channels'] in {'r|g|b', 'rgb'}:
-                # source = basename
-                source = os.path.abspath(aux['file_name'])
-        for aux in img.get('auxiliary', []):
-            if aux['channels'] in {'pan', 'panchromatic'}:
-                # source = basename
-                source = os.path.abspath(aux['file_name'])
+        bundle_dpath = ub.Path(coco_img.bundle_dpath)
+        chan_to_aux = {aux['channels']: aux for aux in coco_img.iter_asset_objs()}
+        for want_chan in {'r|g|b', 'rgb', 'pan', 'panchromatic'}:
+            if want_chan in chan_to_aux:
+                aux = chan_to_aux[want_chan]
+                source = bundle_dpath / aux['file_name']
+                break
+
+        if source is None:
+            # Fallback to the "primary" filepath
+            source = os.path.abspath(coco_img.primary_image_filepath())
+
         if source is None:
             try:
+                # Note, this will likely fail
                 # Pick reasonable source image, we don't have a spec for this
                 candidate_keys = [
                     'parent_name', 'parent_file_name', 'name', 'file_name'
@@ -108,11 +115,11 @@ def geojson_feature(img, anns, coco_dset, with_properties=True):
         }
 
     if with_properties:
-        image_properties_dct = {
-            gid: per_image_properties(coco_dset.imgs[gid])
-            for gid in {ann['image_id']
-                        for ann in anns}
-        }
+        image_properties_dct = {}
+        gids = {ann['image_id'] for ann in anns}
+        for gid in gids:
+            coco_img = coco_dset.coco_image(gid).detach()
+            image_properties_dct[gid] = per_image_properties(coco_img)
 
     def single_properties(ann):
 
