@@ -384,7 +384,7 @@ class TMUXMultiQueue(PathIdentifiable):
                 live.update(table)
         return agg_state
 
-    def rprint(self, with_status=False, with_rich=False):
+    def rprint(self, with_status=False, with_rich=0):
         """
         Print info about the commands, optionally with rich
         """

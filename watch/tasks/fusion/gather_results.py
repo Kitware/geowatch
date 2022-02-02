@@ -226,38 +226,46 @@ def prepare_results(all_infos):
 
     if True:
         # TOP CANDIDATE MODELS - FIND TOP K MODELS FOR EVERY METRIC
-        mean_df = pd.DataFrame(mean_rows)
-        class_df = pd.DataFrame(class_rows)
+
         K = 5
         max_per_metric_per_expt = 2
-        class_candidate_indexes = []
-        for class_metric in ['AP', 'AUC']:
-            for catname, group in class_df.groupby('catname'):
+        cand_expt_names = set()
+
+        if len(class_rows):
+            class_df = pd.DataFrame(class_rows)
+            class_candidate_indexes = []
+            for class_metric in ['AP', 'AUC']:
+                for catname, group in class_df.groupby('catname'):
+                    valid_indexes = []
+                    for expt_name, subgroup in group.groupby('expt_name'):
+                        best_subgroup = subgroup.sort_values(class_metric, ascending=False).iloc[0:max_per_metric_per_expt]
+                        valid_indexes.extend(best_subgroup.index.tolist())
+                    valid_indexes = sorted(set(valid_indexes))
+                    valid_group = group.loc[valid_indexes]
+                    top_group = valid_group.sort_values(class_metric, ascending=False).iloc[0:K]
+                    class_candidate_indexes.extend(top_group.index)
+            top_class_indexes = sorted(set(class_candidate_indexes))
+            cand_expt_names.update(set(class_df.loc[top_class_indexes]['pred_fpath'].tolist()))
+        else:
+            top_class_indexes = []
+
+        if len(mean_rows):
+            mean_df = pd.DataFrame(mean_rows)
+            mean_candidate_indexes = []
+            for metric in ['class_mAP', 'class_mAUC', 'salient_AP', 'salient_AUC']:
                 valid_indexes = []
-                for expt_name, subgroup in group.groupby('expt_name'):
-                    best_subgroup = subgroup.sort_values(class_metric, ascending=False).iloc[0:max_per_metric_per_expt]
+                for expt_name, subgroup in mean_df.groupby('expt_name'):
+                    best_subgroup = subgroup.sort_values(metric, ascending=False).iloc[0:max_per_metric_per_expt]
                     valid_indexes.extend(best_subgroup.index.tolist())
                 valid_indexes = sorted(set(valid_indexes))
-                valid_group = group.loc[valid_indexes]
-                top_group = valid_group.sort_values(class_metric, ascending=False).iloc[0:K]
-                class_candidate_indexes.extend(top_group.index)
-        top_class_indexes = sorted(set(class_candidate_indexes))
-        class_df.loc[top_class_indexes]
+                valid_group = mean_df.loc[valid_indexes]
+                top_group = valid_group.sort_values(metric, ascending=False).iloc[0:K]
+                mean_candidate_indexes.extend(top_group.index)
+            top_mean_indexes = sorted(set(mean_candidate_indexes))
+            cand_expt_names.update(set(mean_df.loc[top_mean_indexes]['pred_fpath'].tolist()))
+        else:
+            top_mean_indexes = []
 
-        mean_candidate_indexes = []
-        for metric in ['class_mAP', 'class_mAUC', 'salient_AP', 'salient_AUC']:
-            valid_indexes = []
-            for expt_name, subgroup in mean_df.groupby('expt_name'):
-                best_subgroup = subgroup.sort_values(metric, ascending=False).iloc[0:max_per_metric_per_expt]
-                valid_indexes.extend(best_subgroup.index.tolist())
-            valid_indexes = sorted(set(valid_indexes))
-            valid_group = mean_df.loc[valid_indexes]
-            top_group = valid_group.sort_values(metric, ascending=False).iloc[0:K]
-            mean_candidate_indexes.extend(top_group.index)
-        top_mean_indexes = sorted(set(mean_candidate_indexes))
-
-        cand_expt_names = set(class_df.loc[top_class_indexes]['pred_fpath'].tolist())
-        cand_expt_names.update(set(mean_df.loc[top_mean_indexes]['pred_fpath'].tolist()))
         cand_expt_names = sorted(cand_expt_names)
         print('cand_expt_names = {}'.format(ub.repr2(cand_expt_names, nl=1)))
 
@@ -322,13 +330,14 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
 
     # dataset_key = 'Drop1-Aligned-TA1-2022-01_vali_data_nowv.kwcoco'
     # dataset_key = 'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco'
-    dataset_key = 'combo_DILM.kwcoco_vali'
+    # dataset_key = 'combo_DILM.kwcoco_vali'
     # dataset_key = 'Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco'
 
     # dataset_key = 'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco'
     dataset_keys = [
-        'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco',
-        # 'Drop1-Aligned-TA1-2022-01_vali_data_nowv.kwcoco',
+        # 'Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco',
+        # 'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco',
+        'Drop1-Aligned-TA1-2022-01_vali_data_nowv.kwcoco',
         # 'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco',
     ]
 
@@ -469,7 +478,21 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
     print('\nBest Class Models')
     try:
         best_per_expt = group_by_best(mean_df, 'class_mAP', shrink=True)
+        best_per_expt = best_per_expt[~best_per_expt['class_mAP'].isnull()]
         print(best_per_expt.sort_values('class_mAP').to_string())
+
+        if 1:
+            import dataframe_image as dfi
+            dfi.export(
+                best_per_expt,
+                "./tmp.png",
+                table_conversion="chrome",
+                fontsize=28,
+                max_rows=-1,
+            )
+            import kwplot
+            fig, _ = kwplot.imshow('./tmp.png', fnum=10)
+            fig.tight_layout()
     except ValueError:
         pass
 
@@ -484,12 +507,14 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
     sns = kwplot.autosns()
     plt = kwplot.autoplt()  # NOQA
 
+    dataset_title_part = "-".join(dataset_keys)
+
     def plot_summary_over_epochs(y):
         data = mean_df[~mean_df[y].isnull()]
         ax = sns.lineplot(data=data, x='epoch', y=y, hue='expt_name', marker='o', style='channels')
         h, ell = ax.get_legend_handles_labels()
         ax.legend(h, ell, loc='lower right')
-        ax.set_title(f'Pixelwise {y} metrics: {dataset_key}')  # todo: add train name
+        ax.set_title(f'Pixelwise {y} metrics: {dataset_title_part}')  # todo: add train name
         # ax.set_title('Pixelwise mAP AC metrics: KR_R001 + KR_R002')
 
     kwplot.figure(fnum=1, doclf=True)
@@ -503,6 +528,23 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
     # kwplot.figure(fnum=2, doclf=True)
     # ax = sns.lineplot(data=mean_df, x='epoch', y='class_mAUC', hue='expt_name', marker='o', style='channels')
     # ax.set_title('Pixelwise mAUC AC metrics: KR_R001 + KR_R002')
+
+    import kwimage
+    import kwarray
+    # distinct_colors_selection = kwimage.Color.distinct(255)
+
+    def hash_color(data):
+        print('data = {!r}'.format(data))
+        import distinctipy
+        key_hash = ub.hash_data(data, hasher='blake3')
+        key_tensor = np.frombuffer(memoryview(key_hash.encode()), dtype=np.int32)
+        rng = kwarray.ensure_rng(rng=key_tensor.sum(), api='python')
+        color = distinctipy.get_random_color(rng=rng)
+        # idx = key_tensor[0]
+        # # color = kwimage.Color(key_tensor[0:3]).as01()
+        # color = tuple(distinct_colors_selection[idx])
+        print('color = {!r}'.format(color))
+        return color
 
     def plot_individual_class_curves(catname, fnum, metric='ap'):
         from kwcoco.metrics import drawing
@@ -547,6 +589,9 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
                 prefix = result.meta['title']
             else:
                 prefix = '?label-unknown?'
+
+            color = hash_color(prefix)
+
             kw = {'fnum': fnum}
             if metric == 'ap':
                 drawing.draw_prcurve(measure, prefix=prefix, color=color, **kw)
@@ -554,7 +599,7 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
                 drawing.draw_roc(measure, prefix=prefix, color=color, **kw)
             else:
                 raise KeyError
-        fig.gca().set_title(f'Comparison of runs {metric}: {catname} - {dataset_key}')
+        fig.gca().set_title(f'Comparison of runs {metric}: {catname} -\n{dataset_title_part}')
         return fig
 
     def plot_individual_salient_curves(fnum, metric='ap'):
@@ -565,16 +610,41 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
         fig = kwplot.figure(fnum=fnum, doclf=True)
         relevant_results = [r for r in all_results if r.nocls_measures]
 
+        for result in relevant_results:
+            if 'package_name' in result.meta:
+                prefix = result.meta['package_name']
+            elif 'title' in result.meta:
+                prefix = result.meta['title']
+            else:
+                prefix = '?label-unknown?'
+            result.meta['prefix'] = prefix
+
         def lookup_metric(x):
             return x.nocls_measures[metric]
 
         if 1:
             # Take best per experiment
             groups = ub.group_items(relevant_results, key=lambda x: x.meta['fit_config']['name'])
+
+            if 0:
+                # HACK!!!!
+                groups2 = {}
+                for name in groups.keys():
+                    group = groups[name]
+                    if not ('v53' in name or 'v54' in name):
+                        continue
+                    group2 = []
+                    for g in group:
+                        flag1 = 'v53_epoch=15' in g.meta['prefix']
+                        flag2 = 'v54_epoch=13' in g.meta['prefix']
+                        if flag2 or flag1:
+                            group2.append(g)
+                    group = group2
+                    if group:
+                        groups2[name] = group
+                groups = groups2
             ordered_groups = []
             for name, group in groups.items():
-                # if not ('v53' in name or 'v54' in name):
-                #     continue
                 ordered_group = sorted(group, key=lookup_metric)[::-1][:max_per_expt]
                 ordered_groups.append(ordered_group)
             ordered_groups = sorted(ordered_groups, key=lambda g: lookup_metric(g[0]))[::-1]
@@ -591,12 +661,8 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
             color = colors[idx]
             color = [kwplot.Color(color).as01()]
             measure = result.nocls_measures
-            if 'package_name' in result.meta:
-                prefix = result.meta['package_name']
-            elif 'title' in result.meta:
-                prefix = result.meta['title']
-            else:
-                prefix = '?label-unknown?'
+            prefix = result.meta['prefix']
+            color = hash_color(prefix)
             kw = {'fnum': fnum}
             if metric == 'ap':
                 drawing.draw_prcurve(measure, prefix=prefix, color=color, **kw)
@@ -604,7 +670,7 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
                 drawing.draw_roc(measure, prefix=prefix, color=color, **kw)
             else:
                 raise KeyError
-        fig.gca().set_title(f'Comparison of runs {metric}: Salient -\n{"-".join(dataset_keys)}')
+        fig.gca().set_title(f'Comparison of runs {metric}: Salient -\n{dataset_title_part}')
         return fig
 
     fnum = 3
@@ -622,6 +688,11 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
     if 1:
         fig3.set_size_inches(np.array([6.4, 4.8]) * 2.0)
         fig3.tight_layout()
+        fig4.set_size_inches(np.array([6.4, 4.8]) * 2.0)
+        fig4.tight_layout()
+
+        fig5.set_size_inches(np.array([5.4, 2.8]) * 2.0)
+        fig5.tight_layout()
 
     if 1:
         plt.show()

@@ -61,6 +61,22 @@ NAMEK_TO_EVALUATE_SC = [
 ]
 
 
+
+BEST_MODELS = [
+
+    '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BAS_smt_it_stm_p8_TUNE_L1_RAW_v58/pred_BAS_smt_it_stm_p8_TUNE_L1_RAW_v58_epoch=3-step=81135/Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco/pred.kwcoco.json',
+
+    '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/pred_BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819/Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco/pred.kwcoco.json',
+]
+
+
+TO_EVALUATE = [
+    '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BAS_smt_it_stm_p8_TA1_raw_v54/pred_BAS_smt_it_stm_p8_TA1_raw_v54_epoch=13-step=242605/Drop1-Aligned-TA1-2022-01_vali_data_nowv.kwcoco/pred.kwcoco.json',
+    # '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BAS_smt_it_stm_p8_TA1_raw_v54/pred_BAS_smt_it_stm_p8_TA1_raw_v54_epoch=13-step=242605/Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco/pred.kwcoco.json',
+    # '/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/BAS_smt_it_stm_p8_L1_raw_v53/pred_BAS_smt_it_stm_p8_L1_raw_v53_epoch=15-step=340047/Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco/pred.kwcoco.json',
+
+]
+
 def main():
     run = 1
 
@@ -75,54 +91,69 @@ def main():
         'DVC_DPATH': dvc_dpath,
     }
 
-    IARPA_METRICS_DPATH = ub.cmd('python -c "import iarpa_smart_metrics, os; print(os.path.dirname(os.path.dirname(iarpa_smart_metrics.__file__)))"')['out'].strip()
+    IARPA_METRICS_DPATH = ub.cmd(
+        'python -c "import iarpa_smart_metrics, ubelt; '
+        'print(ubelt.Path(iarpa_smart_metrics.__file__).parent.parent)"')['out'].strip()
 
-    # task = 'bas'
-    task = 'sc'
+    task = 'bas'
+    # task = 'sc'
     recompute_eval = 0
     skip_existing = 1
 
     stamp = ub.timestamp() + '_' + ub.hash_data([])[0:8]
     tq = tmux_queue.TMUXMultiQueue(
-        name=stamp, size=4, environ=environ,
+        name=stamp, size=5, environ=environ,
         dpath=tmux_schedule_dpath)
 
     # if task == 'sc':
     #     TO_EVALUATE = [if 'SC' in TO_EVALUATE]
 
-    for pred_fpath in TO_EVALUATE:
-        pred_fpath = ub.Path(pred_fpath)
-        pred_bundle_dpath = pred_fpath.parent
-        IARPA_EVAL_DPATH = pred_bundle_dpath / f'eval/iarpa-{task}'
-        summary_fpath = IARPA_EVAL_DPATH / 'scores/merged/summary2.json'
+    import numpy as np
+    track_kwargs_basis = {
+        'thresh': np.linspace(0.1, 0.3, 2).round(3).tolist(),
+    }
+    expected_outputs = []
+    for track_kwargs in ub.named_product(track_kwargs_basis):
+        for pred_fpath in TO_EVALUATE:
+            pred_fpath = ub.Path(pred_fpath)
+            pred_bundle_dpath = pred_fpath.parent
 
-        if task == 'bas':
-            bas_args = '--default_track_fn saliency_heatmaps'  # NOQA
-        elif task == 'sc':
-            sc_args = r'--track_fn watch.tasks.tracking.from_heatmap.TimeAggregatedHybrid --track_kwargs "{\"coco_dset_sc\": \"' + str(pred_fpath) + r'\"}"'  # NOQA
-        else:
-            raise KeyError
+            if task == 'bas':
+                import shlex
+                import json
+                track_kwargs_str = shlex.quote(json.dumps(track_kwargs))
+                bas_args = f'--track_fn watch.tasks.tracking.from_heatmap.TimeAggregatedBAS --track_kwargs {track_kwargs_str}'  # NOQA
+                task_args = bas_args
+            elif task == 'sc':
+                sc_args = r'--track_fn watch.tasks.tracking.from_heatmap.TimeAggregatedHybrid --track_kwargs "{\"coco_dset_sc\": \"' + str(pred_fpath) + r'\"}"'  # NOQA
+                task_args = bas_args
+            else:
+                raise KeyError
 
-        task_args = sc_args
+            suffix = 'task-' + ub.repr2(track_kwargs, compact=1)
+            IARPA_EVAL_DPATH = pred_bundle_dpath / f'eval/iarpa-{suffix}'
+            summary_fpath = IARPA_EVAL_DPATH / 'scores/merged/summary2.json'
+            expected_outputs.append(summary_fpath)
 
-        command = ub.codeblock(
-            fr'''
-            python -m watch.cli.kwcoco_to_geojson \
-                "{pred_fpath}" \
-                 {task_args} \
-                score  -- \
-                    --merge \
-                    --gt_dpath "{dvc_dpath}/annotations" \
-                    --metrics_dpath "{IARPA_METRICS_DPATH}" \
-                    --tmp_dir "{IARPA_EVAL_DPATH}/tmp" \
-                    --out_dir "{IARPA_EVAL_DPATH}/scores"
-            ''')
+            command = ub.codeblock(
+                fr'''
+                python -m watch.cli.kwcoco_to_geojson \
+                    "{pred_fpath}" \
+                     {task_args} \
+                    --out_dir "{IARPA_EVAL_DPATH}" \
+                    score  -- \
+                        --merge \
+                        --gt_dpath "{dvc_dpath}/annotations" \
+                        --metrics_dpath "{IARPA_METRICS_DPATH}" \
+                        --tmp_dir "{IARPA_EVAL_DPATH}/tmp" \
+                        --out_dir "{IARPA_EVAL_DPATH}/scores"
+                ''')
 
-        if recompute_eval or not (skip_existing and summary_fpath.exists()):
-            tq.submit(command)
+            if recompute_eval or not (skip_existing and summary_fpath.exists()):
+                tq.submit(command)
 
     print('tq = {!r}'.format(tq))
-    tq.rprint(with_status=0, with_rich=0)
+    tq.rprint()
 
     if run:
         # ub.cmd('bash ' + str(driver_fpath), verbose=3, check=True)
