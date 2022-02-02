@@ -203,6 +203,7 @@ CONFUSION_COLOR_SCHEME = {
     'FP': 'red',
 }
 
+
 def dummy_legend():
     # hack to make a legend for slides
 

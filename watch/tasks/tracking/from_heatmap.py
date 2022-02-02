@@ -148,7 +148,6 @@ def add_tracks_to_dset(coco_dset,
         img_from_vid = vid_from_img.inv()
         return img_from_vid
 
-    @profile
     def make_new_annotation(gid, poly, this_score, track_id, space='video'):
 
         # assign category (key) from max score
@@ -205,7 +204,6 @@ def add_tracks_to_dset(coco_dset,
     return coco_dset
 
 
-@profile
 def time_aggregated_polys(coco_dset,
                           thresh=0.15,
                           morph_kernel=3,
@@ -337,7 +335,6 @@ def time_aggregated_polys(coco_dset,
               len(boundary_tracks))
         return list(filter(None, map(fill_boundary_track, boundary_tracks)))
 
-    @profile
     def tracks_polys_nobounds() -> Iterable[Tuple[Track, Poly]]:
         gids = list(coco_dset.imgs.keys())
         _heatmaps = heatmaps(coco_dset,

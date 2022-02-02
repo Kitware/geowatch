@@ -18,7 +18,6 @@ except Exception:
     profile = ub.identity
 
 
-@profile
 def dedupe_annots(coco_dset):
     '''
     Check for annotations with different aids that are the same geometry
@@ -318,7 +317,6 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
     return coco_dset
 
 
-@profile
 def ensure_videos(coco_dset):
     '''
     Ensure every image belongs to a video, even a dummy video
@@ -349,7 +347,6 @@ def ensure_videos(coco_dset):
     return coco_dset
 
 
-@profile
 def dedupe_tracks(coco_dset):
     '''
     Assuming that videos are made of disjoint images, ensure that trackids
@@ -372,7 +369,6 @@ def dedupe_tracks(coco_dset):
     return coco_dset
 
 
-@profile
 def add_track_index(coco_dset):
     '''
     Ensure each track's track_index is fully populated with strictly
