@@ -12,6 +12,13 @@ from watch.gis.geotiff import geotiff_crs_info
 from watch.tasks.tracking.utils import TrackFunction
 
 
+try:
+    from xdev import profile
+except Exception:
+    profile = ub.identity
+
+
+@profile
 def dedupe_annots(coco_dset):
     '''
     Check for annotations with different aids that are the same geometry
@@ -63,6 +70,7 @@ def dedupe_annots(coco_dset):
     return coco_dset
 
 
+@profile
 def add_geos(coco_dset, overwrite, max_workers=16):
     '''
     Add 'segmentation_geos' to every annotation in coco_dset with a
@@ -126,10 +134,9 @@ def add_geos(coco_dset, overwrite, max_workers=16):
         '''
         img_anns = annots.detections.data['segmentations']
         assert len(img_anns) == len(annots), 'TODO skip anns w/o segmentations'
-        aux_anns = img_anns.warp(
-            kwimage.Affine.coerce(
-                annotated_band(img).get('warp_aux_to_img',
-                                        kwimage.Affine.eye())).inv())
+        warp_aux_to_img = kwimage.Affine.coerce(
+                annotated_band(img).get('warp_aux_to_img', None)).inv()
+        aux_anns = img_anns.warp(warp_aux_to_img)
         wld_anns = aux_anns.warp(info['pxl_to_wld'])
         wgs_anns = wld_anns.warp(info['wld_to_wgs84'])
         geojson_anns = [poly.swap_axes().to_geojson() for poly in wgs_anns]
@@ -145,6 +152,7 @@ def add_geos(coco_dset, overwrite, max_workers=16):
     return coco_dset
 
 
+@profile
 def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
     '''
     There are several reasons for a detection to be too small to keep.
@@ -310,6 +318,7 @@ def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
     return coco_dset
 
 
+@profile
 def ensure_videos(coco_dset):
     '''
     Ensure every image belongs to a video, even a dummy video
@@ -340,6 +349,7 @@ def ensure_videos(coco_dset):
     return coco_dset
 
 
+@profile
 def dedupe_tracks(coco_dset):
     '''
     Assuming that videos are made of disjoint images, ensure that trackids
@@ -362,6 +372,7 @@ def dedupe_tracks(coco_dset):
     return coco_dset
 
 
+@profile
 def add_track_index(coco_dset):
     '''
     Ensure each track's track_index is fully populated with strictly
@@ -379,6 +390,7 @@ def add_track_index(coco_dset):
     return coco_dset
 
 
+@profile
 def normalize_phases(coco_dset, baseline_keys={'salient'}):
     '''
     Convert internal representation of phases to their IARPA standards as well
@@ -569,6 +581,7 @@ def normalize_sensors(coco_dset):
     return coco_dset
 
 
+@profile
 def normalize(coco_dset, track_fn, overwrite, gt_dset=None, **track_kwargs):
     '''
     Driver function to apply all normalizations

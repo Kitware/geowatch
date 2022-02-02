@@ -479,7 +479,7 @@ def ensure_thumbnails(image_root, region_id, sites):
             *site_img_date_dct.values()).items():
         link_path = (region_root / '_'.join(
             (img_date.replace('-', ''), img_path.with_suffix('.jp2').name)))
-        ub.symlink(img_path, link_path, verbose=1)
+        ub.symlink(img_path, link_path, verbose=0)
 
     # build site viz
     for site_id, img_date_dct in site_img_date_dct.items():
@@ -489,7 +489,7 @@ def ensure_thumbnails(image_root, region_id, sites):
             # TODO crop
             link_path = (site_root / '_'.join(
                 (img_date.replace('-', ''), img_path.with_suffix('.tif').name)))
-            ub.symlink(img_path, link_path, verbose=1)
+            ub.symlink(img_path, link_path, verbose=0)
 
 
 def main(args):
@@ -551,7 +551,7 @@ def main(args):
             the cache until this is fixed.
             '''))
 
-    args = parser.parse_args(args)
+    args, _ = parser.parse_known_args(args)
 
     # load sites
     sites = []
@@ -599,6 +599,14 @@ def main(args):
     grouped_sites = ub.group_items(
         sites, lambda site: site['features'][0]['properties']['region_id'])
 
+    try:
+        # Do we have the latest and greatest?
+        import iarpa_smart_metrics
+        from packaging import version
+        METRICS_VERSION = version.Version(iarpa_smart_metrics.__version__)
+    except Exception:
+        METRICS_VERSION = version.Version('0.0.0')
+
     for region_id, region_sites in grouped_sites.items():
 
         site_dpath = (tmp_dpath / 'site' / region_id).ensuredir()
@@ -612,7 +620,7 @@ def main(args):
             cache_dpath = ub.Path(_cache_dir.name)
 
         if args.out_dir is not None:
-            out_dir = ub.Path(args.out_dir) / region_id
+            out_dir = (ub.Path(args.out_dir) / region_id).ensuredir()
         else:
             out_dir = None
 
@@ -631,18 +639,45 @@ def main(args):
 
         ensure_thumbnails(image_dpath, region_id, region_sites)
 
-        # run metrics framework
-        cmd = ub.codeblock(fr'''
-            {virtualenv_cmd} &&
-            python {os.path.join(metrics_dpath, 'run_evaluation.py')} \
-                --roi {region_id} \
-                --gt_path {gt_dpath / 'site_models'} \
-                --rm_path {gt_dpath / 'region_models'} \
-                --sm_path {site_dpath} \
-                --image_dir {image_dpath} \
-                --output_dir {out_dir} \
-                --cache_dir {cache_dpath}
-            ''')
+        if METRICS_VERSION >= version.Version('0.2.0'):
+            if not args.use_cache:
+                cache_dpath = 'None'
+
+            disable_viz_flags = [
+                '--no-viz-slices',
+                '--no-viz-detection-table',
+                '--no-viz-comparison-table',
+                '--no-viz-activity-metrics',
+                '--no-viz-associate-metrics',
+            ]
+            disable_viz_flags_str = ' '.join(disable_viz_flags)
+
+            # run metrics framework
+            cmd = ub.codeblock(fr'''
+                {virtualenv_cmd} &&
+                python {os.path.join(metrics_dpath, 'run_evaluation.py')} \
+                    --roi {region_id} \
+                    --gt_path {gt_dpath / 'site_models'} \
+                    --rm_path {gt_dpath / 'region_models'} \
+                    --sm_path {site_dpath} \
+                    --image_dir {image_dpath} \
+                    --output_dir {out_dir} \
+                    --cache_dir {cache_dpath} \
+                    {disable_viz_flags_str}
+                ''')
+        else:
+            # run metrics framework
+            cmd = ub.codeblock(fr'''
+                {virtualenv_cmd} &&
+                python {os.path.join(metrics_dpath, 'run_evaluation.py')} \
+                    --roi {region_id} \
+                    --gt_path {gt_dpath / 'site_models'} \
+                    --rm_path {gt_dpath / 'region_models'} \
+                    --sm_path {site_dpath} \
+                    --image_dir {image_dpath} \
+                    --output_dir {out_dir} \
+                    --cache_dir {cache_dpath}
+                ''')
 
         (out_dir / 'invocation.sh').write_text(cmd)
 
