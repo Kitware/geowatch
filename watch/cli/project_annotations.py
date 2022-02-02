@@ -175,7 +175,7 @@ def main(cmdline=False, **kwargs):
         import kwplot
         kwplot.autoplt()
         viz_dpath = ub.Path(viz_dpath).ensuredir()
-        for fnum, info in enumerate(ub.ProgIter(all_drawable_infos, desc='draw region')):
+        for fnum, info in enumerate(ub.ProgIter(all_drawable_infos, desc='draw region site propogation', verbose=3)):
             drawable_region_sites = info['drawable_region_sites']
             region_id = info['region_id']
             region_image_dates = info['region_image_dates']
@@ -502,8 +502,9 @@ def plot_image_and_site_times(coco_dset, region_image_dates, drawable_region_sit
             cat_colors = row['category_colors']
             yoffsets = np.linspace(0.5, 0.75, len(cat_colors))[::-1]
 
-            assert len(cat_colors) == len(row['propogated_on'])
             # Draw a line for each "part" of the side at this timestep
+            # Note: some sites seem to have a ton of parts that could be
+            # consolodated? Is this real or is there a bug?
             for yoff, color in zip(yoffsets, cat_colors):
                 for tp in row['propogated_on']:
                     x1 = mpl.dates.date2num(t1)
