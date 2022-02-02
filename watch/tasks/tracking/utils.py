@@ -2,6 +2,7 @@ import kwimage
 import numpy as np
 import kwcoco
 from rasterio import features
+from copy import deepcopy
 import shapely.geometry
 import ubelt as ub
 from dataclasses import dataclass, astuple
@@ -9,7 +10,7 @@ from dataclasses import dataclass, astuple
 import itertools
 import collections
 from abc import abstractmethod
-from typing import Union, Iterable, Optional, Any, Tuple
+from typing import Union, Iterable, Optional, Any, Tuple, List, Dict
 
 Poly = Union[kwimage.Polygon, kwimage.MultiPolygon]
 
@@ -265,6 +266,50 @@ class NewTrackFunction(TrackFunction):
         raise NotImplementedError('must be implemented by subclasses')
 
 
+def pop_tracks(coco_dset: kwcoco.CocoDataset,
+               cnames: Iterable[str],
+               remove: bool = True,
+               score: Optional[kwcoco.ChannelSpec] = None) -> Iterable[Track]:
+    '''
+    Convert kwcoco annotations into Track objects.
+
+    Args:
+        coco_dset
+        cnames: category names
+        remove: remove the annotations from coco_dset
+        score: score the track polygons by image overlap with this channel
+
+    Returns:
+        Track objects.
+        Mutates coco_dset if remove=True.
+    '''
+    # TODO could refactor to work on coco_dset.annots() and integrate
+    cnames = list(set(cnames))
+
+    annots = coco_dset.annots()
+    annots = annots.compress(
+        np.in1d(np.array(annots.cnames, dtype=str), cnames))
+    if len(annots) < 1:
+        print(f'warning: no {cnames} annots in dset {coco_dset.tag}!')
+
+    annots = deepcopy(annots)
+    coco_dset.remove_categories(cnames, keep_annots=(not remove))
+
+    polys = [
+        poly.to_shapely() for poly in
+        annots.detections.data['segmentations'].to_polygon_list()
+    ]
+    assert len(polys) == len(annots), (
+        'TODO handle multipolygon boundaries')
+    for track_id, track_polygids in ub.group_items(
+            zip(polys, annots.gids),
+            annots.get('track_id', None)).items():
+        track_polys, track_gids = zip(*track_polygids)
+        yield Track(list(map(Observation, track_polys, track_gids)),
+                    dset=coco_dset,
+                    track_id=track_id)
+
+
 def score(poly, probs, mode='score', threshold=0, use_rasterio=True):
     '''
     Args:
@@ -417,6 +462,112 @@ def _validate_keys(key, bg_key):
     if not set(key).isdisjoint(set(bg_key)):
         raise ValueError('cannot have a key in foreground and background')
     return key, bg_key
+
+
+def heatmaps(coco_dset: kwcoco.CocoDataset,
+             gids: List[int],
+             keys: Union[List[str], Dict[str, List[str]]],
+             return_chan_probs=False,
+             missing='fill',
+             skipped='interpolate') -> Dict[str, List[np.array]]:
+    '''
+    Vectorized version of watch.tasks.tracking.utils.heatmap across gids.
+
+    Can also sum keys using group names.
+
+    Example:
+        heatmaps(dset, gids=[1,2], ['key1', 'key2', 'key3']) == {
+            'key1': heats1,
+            'key2': heats2,
+            'key3': heats3
+        }
+        heatmaps(dset, gids=[1,2], {'group1': ['key1', 'key2', 'key3']}) == {
+            'key1': heats1,
+            'key2': heats2,
+            'key3': heats3,
+            'group1': heats1 + heats2 + heats3
+        }
+        where len(heats) == len(gids) == 2.
+
+    Restrictions wrt heatmap():
+        - uses video space
+
+    Args:
+        coco_dset: kwcoco.CocoDataset
+        gids: List[image id]
+        key: List[str] list of channel names
+        return_chan_probs:
+            if True, also return a dict {k:heatmap(k) for k in keys}
+        space: 'video' or 'image'
+        missing: behavior for missing keys.
+            'fill': return probs and chan_probs of zeros
+            'skip': return probs of zeros, skip chan_probs
+            'raise': raise exception
+        skipped: behavior for missing keys across gids.
+            'interpolate': use heatmap from last gid
+            'zeros': insert zeros
+            # 'remove': do not return this gid  # TODO w/ different signature
+
+    Returns:
+        {key: [heatmap for each gid]}
+    '''
+    # TODO use ChannelSpec objects
+    # TODO doctest
+
+    if isinstance(keys, list):
+        key_groups = {'__dummy__': keys}
+        _dummy_groups = ['__dummy__']
+    elif isinstance(keys, dict):
+        key_groups = keys
+        _dummy_groups = []
+    else:
+        raise TypeError(type(keys))
+
+    # Would use RunningStats, but it can't support indexed/subsetted access
+    # for multiple site boundaries over different times.
+    # This solution is more efficient when len(tracks) > len(gids).
+    #
+    # running_dct = defaultdict(kwarray.RunningStats)
+    heatmaps_dct = collections.defaultdict(list)
+
+    # record previous heatmaps in video space to propagate thru missing
+    # frames
+    vid = coco_dset.index.videos[coco_dset.imgs[gids[0]]['video_id']]
+    vid_shape = (vid['height'], vid['width'])
+    prev_heatmap_dct = collections.defaultdict(lambda: np.zeros(vid_shape))
+
+    for gid in gids:
+
+        for group, key in key_groups.items():
+
+            # we are working only in vid space, so forget about warping
+            img_probs, chan_probs = heatmap(coco_dset, gid, key,
+                                            space='video',
+                                            return_chan_probs=True)
+            # TODO make this more efficient using missing='skip'
+            if any(np.flatnonzero(img_probs)):
+                heatmaps_dct[group].append(img_probs)
+            elif skipped == 'interpolate':
+                heatmaps_dct[group].append(prev_heatmap_dct[group])
+            elif skipped == 'zeros':
+                heatmaps_dct[group].append(np.zeros(vid_shape))
+            else:
+                raise ValueError(skipped)
+
+            for k in key:
+                if k in chan_probs:
+                    heatmaps_dct[k].append(chan_probs[k])
+                    prev_heatmap_dct[k] = chan_probs[k]
+                elif skipped == 'interpolate':
+                    heatmaps_dct[k].append(prev_heatmap_dct[k])
+                elif skipped == 'zeros':
+                    heatmaps_dct[k].append(np.zeros(vid_shape))
+                else:
+                    raise ValueError(skipped)
+
+    for dummy in _dummy_groups:
+        heatmaps_dct.pop(dummy)
+    return heatmaps_dct
 
 
 def heatmap(dset, gid, key, return_chan_probs=False, space='video',
