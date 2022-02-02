@@ -52,21 +52,21 @@ HUERISTIC_STATUS_DATA = [
     {'name': 'ignore', 'color': 'lightsalmon'},
     {'name': 'seen', 'color': 'cyan'},
     {'name': 'train', 'color': 'cyan'},
-    # ? No colors for these ?
-    # {'name': 'positive_excluded', 'color': 'black'},
-    # {'name': 'negative', 'color': 'orangered'},
-    # {'name': 'negative_unbounded', 'color': 'orangered'},
+    # Note: colors for these status labels are undefined, using neutral gray
+    {'name': 'positive_excluded', 'color': 'gray'},
+    {'name': 'negative', 'color': 'gray'},
+    {'name': 'negative_unbounded', 'color': 'gray'},
 ]
-HUERISTIC_STATUS_DATA = [
-    {'name': 'positive_annotated', 'color': 'olive'},
-    {'name': 'positive_partial', 'color': 'limegreen'},
-    {'name': 'positive_pending', 'color': 'seagreen'},
-    {'name': 'positive_excluded', 'color': 'darkgreen'},
-    {'name': 'positive_unbounded', 'color': 'steelblue'},
-    {'name': 'negative', 'color': 'orangered'},
-    {'name': 'negative_unbounded', 'color': 'deeppink'},
-    {'name': 'ignore', 'color': 'purple'},
-]
+# HUERISTIC_STATUS_DATA = [
+#     {'name': 'positive_annotated', 'color': 'olive'},
+#     {'name': 'positive_partial', 'color': 'limegreen'},
+#     {'name': 'positive_pending', 'color': 'seagreen'},
+#     {'name': 'positive_excluded', 'color': 'darkgreen'},
+#     {'name': 'positive_unbounded', 'color': 'steelblue'},
+#     {'name': 'negative', 'color': 'orangered'},
+#     {'name': 'negative_unbounded', 'color': 'deeppink'},
+#     {'name': 'ignore', 'color': 'purple'},
+# ]
 
 # metrics-and-test-framework/evaluation.py:1684
 CATEGORIES_SCORED = [
