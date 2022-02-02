@@ -535,7 +535,7 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
     # ax = sns.lineplot(data=mean_df, x='epoch', y='class_mAUC', hue='expt_name', marker='o', style='channels')
     # ax.set_title('Pixelwise mAUC AC metrics: KR_R001 + KR_R002')
 
-    import kwimage
+    # import kwimage
     import kwarray
     # distinct_colors_selection = kwimage.Color.distinct(255)
 

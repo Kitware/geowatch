@@ -41,7 +41,22 @@ UNDISTINGUISHED_CLASSES = {
 # }
 
 
+# TODO: ensure consistency with IARPA?
 # https://smartgitlab.com/TE/annotations/-/wikis/Alternate-Site-Type
+# https://smartgitlab.com/TE/metrics-and-test-framework/-/blob/main/evaluation.py#L1205
+HUERISTIC_STATUS_DATA = [
+    {'name': 'positive_annotated', 'color': 'black'},
+    {'name': 'positive_partial', 'color': 'black'},
+    {'name': 'positive_pending', 'color': 'black'},
+    {'name': 'positive_unbounded', 'color': 'darkviolet'},
+    {'name': 'ignore', 'color': 'lightsalmon'},
+    {'name': 'seen', 'color': 'cyan'},
+    {'name': 'train', 'color': 'cyan'},
+    # ? No colors for these ?
+    # {'name': 'positive_excluded', 'color': 'black'},
+    # {'name': 'negative', 'color': 'orangered'},
+    # {'name': 'negative_unbounded', 'color': 'orangered'},
+]
 HUERISTIC_STATUS_DATA = [
     {'name': 'positive_annotated', 'color': 'olive'},
     {'name': 'positive_partial', 'color': 'limegreen'},
