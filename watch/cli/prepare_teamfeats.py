@@ -282,5 +282,12 @@ if __name__ == '__main__':
 
         python -m watch.cli.prepare_teamfeats --gres=0,2 --with_depth=True --keep_sessions=True
         python -m watch.cli.prepare_teamfeats --gres=2 --with_materials=False --keep_sessions=True
+
+
+        # Team Features on Drop2
+        DVC_DPATH=$(python -m watch.cli.find_dvc)
+        python -m watch.cli.prepare_teamfeats \
+            --base_fpath=$DVC_DPATH/smart_watch_dvc/Drop2-Aligned-TA1-2022-01/data.kwcoco.json
+            --gres=0,1 --with_depth=True --with_materials=False --keep_sessions=True
     """
     main(cmdline=True)
