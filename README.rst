@@ -170,24 +170,83 @@ To build the Docker image:
    docker build .
 
 
-Running the Algorithm Toolkit (ATK) example project
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Module Structure
+-----------------
 
-Ensure that you have already setup the WATCH environment.
+The current ``watch`` module struture is as follows:
 
-Then enter the following commands in your terminal to run the ATK
-example project:
 
 .. code:: bash
 
-   cd atk/example
-   alg run
+    ├── watch
+    │   ├── cli
+    │   ├── datacube
+    │   │   ├── cloud
+    │   │   └── registration
+    │   ├── datasets
+    │   ├── demo
+    │   ├── gis
+    │   ├── rc
+    │   ├── tasks
+    │   │   ├── depth
+    │   │   ├── fusion
+    │   │   ├── invariants
+    │   │   ├── landcover
+    │   │   ├── rutgers_material_change_detection
+    │   │   ├── rutgers_material_seg
+    │   │   ├── template
+    │   │   ├── tracking
+    │   │   └── uky_temporal_prediction
+    │   └── utils
 
-Point your browser to http://localhost:5000/. You should see the
-development environment welcome page.
 
-Refer to the `development environment`_ portion of the `atk docs`_ for a
-crash course on how to use the web-based development environment.
+Important WATCH Scripts
+~~~~~~~~~~~~~~~~~~~~~~~
+
+The SMART WATCH module comes with a command line interface (CLI). This can be invoked
+via ``python -m watch --help`` (note: if the module has been pip installed
+``python -m watch`` can be replaced with ``smartwatch`` for primary CLI commands).
+
+The following is a list of the primary CLI commands:
+
+* ``python -m watch find_dvc --help`` - Helper to return the path the the WATCH DVC Repo (if it is a known location)
+
+* ``python -m watch watch_coco_stats --help`` - Print statistics about a kwcoco file with a focus on sensor / channel frequency and region information.
+
+* ``python -m watch coco_intensity_histograms --help`` - Show per-band / per-sensor histograms of pixel intensities. This is useful for acessing the harmonization between sensors. 
+
+* ``python -m watch coco_visualize_videos --help`` - Visualize a video sequence with and without annotations. This can also create an animation of arbitrary feature channels.
+
+* ``python -m watch coco_align_geotiffs --help`` - Crop a set of unstructured kwcoco file (that registers a set of geotiffs) into a TA-2 ready kwcoco file containing cropped video sequences corresponding to each region in a specified set of regions files.
+
+* ``python -m watch project_annotations --help`` - Project annotations from raw site/region models onto the pixel space of a kwcoco file. This also propogates these annotations in time as needed.
+
+* ``python -m watch kwcoco_to_geojson --help`` - Transform "saliency" or "class" heatmaps into tracked geojson site models, and optionally score these with IARPA metrics.
+
+
+Other important commands that are not exposed via the main CLI are:
+
+* ``python -m watch.tasks.fusion.fit --help`` - Train a TA2 fusion model.
+  
+* ``python -m watch.tasks.fusion.predict --help`` - Predict using a pretrained TA2 fusion model on a target dataset.
+
+* ``python -m watch.tasks.fusion.evaluate --help`` - Measure pixel-level quality metrics between a prediction and truth kwcoco file.
+
+
+Note to developers: if an important script exists and is not listed here,
+please submit an MR.
+
+New Python command line scripts can be added under the ``watch/cli``
+directory. New tools can be registered with the ``watch-cli`` tool in the
+``watch/cli/__main__.py`` file, or invoked explicitly via ``python -m
+watch.cli.<script-name>``.
+
+Scripts that don’t quite belong in the WATCH Python module itself
+(e.g. due to a lack of general purpose use, or lack of polish) can be
+added to the ``scripts`` or ``dev`` directory. Generally, the ``scripts``
+directory is for data processing and ``dev`` is for scripts related to
+repository maintenence. 
+  
 
 Running tests
 -------------
@@ -280,55 +339,6 @@ To get your code merged, create an MR from your branch `here <https://gitlab.kit
 
 You can use `markdown <https://docs.gitlab.com/ee/user/markdown.html>`_ to write an informative merge message.
 
-Adding submodules
------------------
-
-Library code can be added to the relevant subdirectory under the
-``watch`` directory. The current submodules are as follows:
-
-
-
-.. code:: bash
-
-
-    watch
-    ├── cli
-    ├── demo
-    ├── datacube
-    │   ├── atmosphere
-    │   ├── cloud
-    │   ├── reflectance
-    │   └── registration
-    ├── sequencing
-    ├── validation
-    ├── datasets
-    ├── tasks
-    │   ├── fusion
-    │   ├── invariants
-    │   ├── landcover
-    │   ├── materials
-    │   ├── reflectance
-    │   ├── semantics
-    │   ├── template
-    │   └── uky_temporal_prediction
-    ├── utils
-    ├── gis
-    └── validation
-
-
-Adding command line tools
--------------------------
-
-New Python command line scripts can be added under the ``watch/cli``
-directory. New tools can be registered with the ``watch-cli`` tool in the
-``watch/cli/__main__.py`` file, or invoked explicitly via ``python -m
-watch.cli.<script-name>``.
-
-Scripts that don’t quite belong in the WATCH Python module itself
-(e.g. due to a lack of general purpose use, or lack of polish) can be
-added to the ``scripts`` or ``dev`` directory. Generally, the ``scripts``
-directory is for data processing and ``dev`` is for scripts related to
-repository maintenence. 
 
 
 .. _development environment: https://algorithm-toolkit.readthedocs.io/en/latest/dev-environment.html#
