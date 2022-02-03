@@ -124,7 +124,7 @@ python -m watch.tasks.fusion.fit \
 python -m watch.tasks.fusion.predict \
     --gpus=1 \
     --write_preds=True \
-    --write_probs=False \
+    --write_probs=True \
     --dump="$PRED_CONFIG_FPATH"
 
 
@@ -138,12 +138,31 @@ python -m watch.tasks.fusion.fit \
          --test_dataset="$TEST_FPATH" \
           --num_workers="4" 
 
+
+
+demo_force_repackage(){
+    # Look at all checkpoints
+    ls "$DEFAULT_ROOT_DIR"/*/*/checkpoints/*.ckpt
+    # Grab the latest checkpoitn
+    CHECKPOINT_FPATH=$(find "$DEFAULT_ROOT_DIR" -iname "*.ckpt" | tail -n 1)
+    echo "CHECKPOINT_FPATH = $CHECKPOINT_FPATH"
+    # Force a paricular checkpoint into a package
+    python -m watch.tasks.fusion.repackage repackage "$CHECKPOINT_FPATH"
+    # Redefine package fpath to be that checkpoint
+    PACKAGE_FPATH=$(python -m watch.tasks.fusion.repackage repackage "$CHECKPOINT_FPATH" | tail -n 1)
+    echo "PACKAGE_FPATH = $PACKAGE_FPATH"
+}
+
 # Predict 
 python -m watch.tasks.fusion.predict \
         --config="$PRED_CONFIG_FPATH" \
         --test_dataset="$TEST_FPATH" \
        --package_fpath="$PACKAGE_FPATH" \
-        --pred_dataset="$PRED_FPATH"
+        --pred_dataset="$PRED_FPATH" \
+        --write_probs=True
+
+kwcoco stats "$TEST_FPATH" "$PRED_FPATH"
+python -m watch stats "$TEST_FPATH" "$PRED_FPATH"
 
 # Evaluate 
 python -m watch.tasks.fusion.evaluate \

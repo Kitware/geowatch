@@ -13,5 +13,19 @@ git clone "https://${DVC_GITLAB_USERNAME}:${DVC_GITLAB_PASSWORD}@gitlab.kitware.
 
 cd "$SMART_DVC_DPATH"
 dvc remote add aws-noprofile s3://kitware-smart-watch-data/dvc
-dvc pull Drop1-Aligned-TA1-2022-01/data.kwcoco.json.dvc -r aws-noprofile --quiet
-dvc checkout Drop1-Aligned-TA1-2022-01/data.kwcoco.json.dvc
+
+# Grab the required datasets that we need
+dvc pull Drop2-Aligned-TA1-2022-01/data.kwcoco.json.dvc -r aws-noprofile --quiet
+
+#dvc checkout Drop1-Aligned-TA1-2022-01/data.kwcoco.json.dvc
+
+
+export DVC_DPATH=$SMART_DVC_DPATH
+export WORKDIR="$DVC_DPATH/training/$HOSTNAME/$USER"
+
+
+# All outputs will be saved in a "workdir"
+# Startup background process that will write data to S3 in realish time
+mkdir -p "$WORKDIR"
+source "$WATCH_REPO_DPATH/aws/smartwatch_s3_sync.sh"
+smartwatch_s3_sync_forever_in_tmux "$WORKDIR"

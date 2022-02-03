@@ -184,10 +184,12 @@ def single_image_segmentation_metrics(true_coco, pred_coco, gid1, gid2,
 
     # Determine what true/predicted categories are in common
     true_classes = list(true_coco.object_categories())
+    print('true_classes = {!r}'.format(true_classes))
     predicted_classes = []
     for stream in pred_coco_img.channels.streams():
         have = stream.intersection(true_classes)
         predicted_classes.extend(have.parsed)
+    print('predicted_classes = {!r}'.format(predicted_classes))
     classes_of_interest = ub.oset(predicted_classes) - (
         background_classes | ignore_classes | undistinguished_classes)
 
@@ -460,7 +462,10 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, heatmap_dpath,
         legend_img_saliency_cfsn = kwimage.ensure_uint255(legend_img_saliency_cfsn)
         legend_images.append(legend_img_saliency_cfsn)
 
-    legend_img = kwimage.stack_images(legend_images, axis=0, pad=5)
+    if len(legend_images):
+        legend_img = kwimage.stack_images(legend_images, axis=0, pad=5)
+    else:
+        legend_img = None
 
     # Draw predictions on each frame
     parts = []
@@ -673,8 +678,9 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, heatmap_dpath,
 
     plot_canvas = kwimage.stack_images(parts, axis=1, overlap=-10)
 
-    plot_canvas = kwimage.stack_images(
-        [plot_canvas, legend_img], axis=1, overlap=-10)
+    if legend_img is not None:
+        plot_canvas = kwimage.stack_images(
+            [plot_canvas, legend_img], axis=1, overlap=-10)
 
     header = kwimage.draw_header_text(
         {'width': plot_canvas.shape[1]}, canvas_title)
