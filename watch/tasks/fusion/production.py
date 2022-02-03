@@ -23,3 +23,6 @@ PRODUCTION_MODELS = [
         'train_dataset': 'Drop1-Aligned-L1-2022-01/combo_DILM_train.kwcoco.json',
     },
 ]
+
+
+# TODO Investigate v53 epoch 3. It might have a really good recall
