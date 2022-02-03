@@ -96,42 +96,11 @@ METRICS_DPATH=~/smart/metrics-and-test-framework
 # workaround to get conda commands running in a subprocess
 # https://github.com/conda/conda/issues/7980#issuecomment-901423711
 METRICS_VENV_CMD="eval \"\$(conda shell.`basename -- \$SHELL` hook)\" && conda activate te"
-# ----------------------------
 
-
-#
 # Choose data to run on (here, KR for validation)
-# Not always needed; use the existing train/vali spit where available
-#
-
-_="
-REGIONS_VALI=(
-    KR_R001
-    KR_R002
-)
-REGIONS_TRAIN=(
-    US_R001
-    BR_R001
-    BR_R002
-    LT_R001
-    BH_R001
-    NZ_R001
-)
-REGIONS=("${REGIONS_VALI[@]}")
-# REGIONS=("${REGIONS_TRAIN[@]}")
-
-
-# DSET_FPATH=$DSET_DPATH/train_data.kwcoco.json
-DSET_FPATH=$DSET_DPATH/vali_data.kwcoco.json
-
-if ![ -e "$DSET_FPATH" ]; then
-    for REGION in "${REGIONS[@]}"; do
-        REGION_PATHS+=($DSET_DPATH/$REGION/subdata.kwcoco.json)
-    done
-    kwcoco union --src $REGION_PATHS --dst $DSET_FPATH --absolute 1
-fi
-"
+# see watch/scripts/dataset_splits.sh to generate these
 DSET_FPATH=$DSET_DPATH/vali_data_nowv.kwcoco.json
+# ----------------------------
 
 
 #
