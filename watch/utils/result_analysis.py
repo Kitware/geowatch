@@ -177,7 +177,13 @@ class ResultAnalysis:
         self = cls(results)
         return self
 
+    def run(self):
+        self.build()
+        self.report()
+
     def analysis(self):
+        # alias for run
+        return self.run()
         self.build()
         self.report()
 
@@ -298,35 +304,51 @@ class ResultAnalysis:
                 statistics.append(stats_row)
 
                 metric_stats[metric_key] = stats_row
+        self.stats_table = pd.DataFrame([
+            ub.dict_diff(d, {'pairwise', 'param_values', 'moments'})
+            for d in self.statistics]).sort_values('anova_rank_p')
 
     def report(self):
-        for metric_key in self.metrics:
-            for param_name, stat_groups in ub.group_items(self.statistics, key=lambda x: x['param_name']).items():
-                stats_row = ub.group_items(stat_groups, key=lambda x: x['metric'])[metric_key][0]
-                title = ('PARAMETER {!r} - {}'.format(param_name, metric_key))
-                print('\n\n')
-                print(title)
-                print('=' * len(title))
-                print(stats_row['moments'])
-                anova_rank_p = stats_row['anova_rank_p']
-                anova_mean_p = stats_row['anova_mean_p']
-                # Rougly speaking
-                p_threshold = 0.05
-                print('')
-                print(f'ANOVA hypothesis (roughly): the param {param_name!r} has no effect on the metric')
-                print('    Reject this hypothesis if the p value is less than a threshold')
-                print(ub.color_text(f'  Rank-ANOVA: p={anova_rank_p:0.4f}', 'green' if anova_rank_p < p_threshold else None))
-                print(ub.color_text(f'  Mean-ANOVA: p={anova_mean_p:0.4f}', 'green' if anova_mean_p < p_threshold else None))
-                print('')
-                print('Pairwise T-Tests')
-                for pairstat in stats_row['pairwise']:
-                    value1 = pairstat['value1']
-                    value2 = pairstat['value2']
-                    # n1 = pairstat['n1']
-                    print(f'  Is {param_name}={value1} about as good as {param_name}={value2}?')
-                    if 'ttest_ind' in pairstat:
-                        ttest_ind_result = pairstat['ttest_ind']
-                        print(ub.color_text(f'    ttest_ind:  p={ttest_ind_result.pvalue:0.4f}', 'green' if ttest_ind_result.pvalue < p_threshold else None))
-                    if 'ttest_rel' in pairstat:
-                        ttest_rel_result = pairstat['ttest_ind']
-                        print(ub.color_text(f'    ttest_rel:  p={ttest_rel_result.pvalue:0.4f}', 'green' if ttest_rel_result.pvalue < p_threshold else None))
+        stat_groups = ub.group_items(self.statistics, key=lambda x: x['param_name'])
+        stat_groups_items = list(stat_groups.items())
+
+        # Modify this order to change the grouping pattern
+        grid = ub.named_product({
+            'stat_group_item': stat_groups_items,
+            'metrics': self.metrics,
+        })
+        for grid_item in grid:
+            metric_key = grid_item['metrics']
+            stat_groups_item = grid_item['stat_group_item']
+
+            param_name, stat_group = stat_groups_item
+            stats_row = ub.group_items(stat_group, key=lambda x: x['metric'])[metric_key][0]
+            title = ('PARAMETER {!r} - {}'.format(param_name, metric_key))
+            print('\n\n')
+            print(title)
+            print('=' * len(title))
+            print(stats_row['moments'])
+            anova_rank_p = stats_row['anova_rank_p']
+            anova_mean_p = stats_row['anova_mean_p']
+            # Rougly speaking
+            p_threshold = 0.05
+            print('')
+            print(f'ANOVA hypothesis (roughly): the param {param_name!r} has no effect on the metric')
+            print('    Reject this hypothesis if the p value is less than a threshold')
+            print(ub.color_text(f'  Rank-ANOVA: p={anova_rank_p:0.4f}', 'green' if anova_rank_p < p_threshold else None))
+            print(ub.color_text(f'  Mean-ANOVA: p={anova_mean_p:0.4f}', 'green' if anova_mean_p < p_threshold else None))
+            print('')
+            print('Pairwise T-Tests')
+            for pairstat in stats_row['pairwise']:
+                value1 = pairstat['value1']
+                value2 = pairstat['value2']
+                # n1 = pairstat['n1']
+                print(f'  Is {param_name}={value1} about as good as {param_name}={value2}?')
+                if 'ttest_ind' in pairstat:
+                    ttest_ind_result = pairstat['ttest_ind']
+                    print(ub.color_text(f'    ttest_ind:  p={ttest_ind_result.pvalue:0.4f}', 'green' if ttest_ind_result.pvalue < p_threshold else None))
+                if 'ttest_rel' in pairstat:
+                    ttest_rel_result = pairstat['ttest_ind']
+                    print(ub.color_text(f'    ttest_rel:  p={ttest_rel_result.pvalue:0.4f}', 'green' if ttest_rel_result.pvalue < p_threshold else None))
+
+        print(self.stats_table)

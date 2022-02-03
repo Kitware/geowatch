@@ -1562,3 +1562,98 @@ python -m watch.tasks.fusion.fit \
     --normalize_inputs=1024 \
     --arch_name=$ARCH \
     --temporal_dropout=0.5 
+
+
+
+# Fine Tune For BAS TA-1 Transfer Learning - 2022-02-02
+BAS_PRETRAINED_MODEL_FPATH="$DVC_DPATH/models/fusion/SC-20201117/BAS_smt_it_stm_p8_L1_raw_v53/BAS_smt_it_stm_p8_L1_raw_v53_epoch=3-step=85011.pt"
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-01
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
+__check__='
+smartwatch stats $VALI_FPATH $TRAIN_FPATH
+'
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop1-20201117
+ARCH=smt_it_stm_p8
+CHANNELS="blue|green|red|nir|swir16|swir22"
+EXPERIMENT_NAME=BAS_${ARCH}_TA1_xfer53_v65
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
+export CUDA_VISIBLE_DEVICES="0"
+python -m watch.tasks.fusion.fit \
+    --config "$WORKDIR/configs/common_20201117.yaml"  \
+    --channels=${CHANNELS} \
+    --name=$EXPERIMENT_NAME \
+    --chip_size=416 \
+    --time_steps=9 \
+    --learning_rate=1e-4 \
+    --optimizer=SGD \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --method="MultimodalTransformer" \
+    --gpus "1" \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --amp_backend=apex \
+    --attention_impl=exact \
+    --tokenizer=linconv \
+    --use_grid_positives=True \
+    --use_centered_positives=True \
+    --neg_to_pos_ratio=0.25 \
+    --global_class_weight=0.0 \
+    --global_saliency_weight=1.0 \
+    --time_span=1y \
+    --time_sampling=hardish \
+    --num_workers=8 \
+    --arch_name=$ARCH \
+    --init="$BAS_PRETRAINED_MODEL_FPATH"
+
+
+# Fine Tune For SC TA-1 Transfer Learning - 2022-02-02
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-01
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
+__check__='
+smartwatch stats $VALI_FPATH $TRAIN_FPATH
+'
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop1-20201117
+ARCH=smt_it_stm_p8
+CHANNELS="blue|green|red|nir|swir16|swir22"
+SC_PRETRAINED_MODEL_FPATH="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819.pt"
+EXPERIMENT_NAME=SC_${ARCH}_TA1_xfer55_v66
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
+export CUDA_VISIBLE_DEVICES="1"
+python -m watch.tasks.fusion.fit \
+    --config "$WORKDIR/configs/common_20201117.yaml"  \
+    --channels=${CHANNELS} \
+    --name=$EXPERIMENT_NAME \
+    --chip_size=320 \
+    --time_steps=21 \
+    --learning_rate=1e-4 \
+    --optimizer=SGD \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --method="MultimodalTransformer" \
+    --gpus "1" \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --amp_backend=apex \
+    --attention_impl=exact \
+    --tokenizer=linconv \
+    --use_centered_positives=True \
+    --use_grid_positives=True \
+    --num_workers=8 \
+    --global_saliency_weight=0.00 \
+    --global_class_weight=1.00 \
+    --time_span=1y \
+    --time_sampling=hardish \
+    --batch_size=1 \
+    --arch_name=$ARCH \
+    --init="$SC_PRETRAINED_MODEL_FPATH"

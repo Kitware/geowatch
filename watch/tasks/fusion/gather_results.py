@@ -432,7 +432,7 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
         metrics=['class_mAP', 'salient_AP'],
         ignore_metrics=ignore_metrics,
     )
-    analysis.analysis()
+    analysis.run()
     print('analysis.varied = {}'.format(ub.repr2(analysis.varied, nl=2)))
     stats_table = pd.DataFrame([ub.dict_diff(d, {'pairwise', 'param_values', 'moments'}) for d in analysis.statistics])
     stats_table = stats_table.sort_values('anova_rank_p')

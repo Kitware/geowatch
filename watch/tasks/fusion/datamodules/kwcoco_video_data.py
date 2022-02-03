@@ -2067,7 +2067,7 @@ class BatchVisualizationBuilder:
             combinable_channels = combinable_channels.copy()
             combinable_channels += list(map(ub.oset, combinable_extra))
         builder.combinable_channels = combinable_channels
-        print('builder.combinable_channels = {}'.format(ub.repr2(builder.combinable_channels, nl=1)))
+        # print('builder.combinable_channels = {}'.format(ub.repr2(builder.combinable_channels, nl=1)))
 
     def build(builder):
         builder._prepare_frame_metadata()
