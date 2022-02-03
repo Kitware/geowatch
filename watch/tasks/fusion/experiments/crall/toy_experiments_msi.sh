@@ -81,7 +81,6 @@ echo "CHANNELS = $CHANNELS"
 EXPERIMENT_NAME=ToyFusion_${ARCH}_v001
 DATASET_NAME=ToyDataMSI
 
-
 # Place training inside of our DVC directory
 DVC_DPATH=$(python -m watch.cli.find_dvc)
 
@@ -146,7 +145,6 @@ python -m watch.tasks.fusion.fit \
           --num_workers="4" 
 
 
-
 demo_force_repackage(){
     # Look at all checkpoints
     ls "$DEFAULT_ROOT_DIR"/*/*/checkpoints/*.ckpt
@@ -160,7 +158,7 @@ demo_force_repackage(){
     echo "PACKAGE_FPATH = $PACKAGE_FPATH"
 }
 
-# Predict 
+# Predict using one of the packaged models
 python -m watch.tasks.fusion.predict \
         --config="$PRED_CONFIG_FPATH" \
         --test_dataset="$TEST_FPATH" \
@@ -168,10 +166,12 @@ python -m watch.tasks.fusion.predict \
         --pred_dataset="$PRED_FPATH" \
         --write_probs=True
 
-kwcoco stats "$TEST_FPATH" "$PRED_FPATH"
+# Dump stats of truth vs prediction.
+# We should see soft segmentation masks in pred, but not in truth
+python -m kwcoco stats "$TEST_FPATH" "$PRED_FPATH"
 python -m watch stats "$TEST_FPATH" "$PRED_FPATH"
 
-# Evaluate 
+# Evaluate the predictions
 python -m watch.tasks.fusion.evaluate \
         --true_dataset="$TEST_FPATH" \
         --pred_dataset="$PRED_FPATH" \
