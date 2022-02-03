@@ -22,9 +22,12 @@ set -x
 cd "$WATCH_REPO_DPATH"
 
 # Add remote with our secret credentials and then pull from it
-git remote add custom "https://${DVC_GITLAB_USERNAME}:${DVC_GITLAB_PASSWORD}@gitlab.kitware.com/smart/watch.git"
+git remote add custom "https://${WATCH_REPO_GITLAB_RO_DEPLOY_USERNAME}:${WATCH_REPO_GITLAB_RO_DEPLOY_PASSWORD}@gitlab.kitware.com/smart/watch.git"
 #git fetch custom
-git pull
+
+BRANCH_NAME=$(git branch --show)
+echo "BRANCH_NAME = $BRANCH_NAME"
+git pull custom "$BRANCH_NAME"
 
 # Execute the latest and greatest entrypoint
 source "$WATCH_REPO_DPATH/aws/train_remote_entrypoint.sh"

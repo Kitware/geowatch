@@ -41,7 +41,6 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
     Example:
         >>> # Demo of the data module on auto-generated toy data
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
-        >>> from os.path import join
         >>> import watch
         >>> import kwcoco
         >>> coco_dset = watch.coerce_kwcoco('vidshapes8-watch')
@@ -75,11 +74,10 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> # Run the following tests on real watch data if DVC is available
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
-        >>> from os.path import join
         >>> import watch
-        >>> dvc_dpath = watch.find_smart_dvc_dpath()
-        >>> coco_fpath = dvc_dpath / 'drop1-S2-L8-aligned/data.kwcoco.json'
         >>> import kwcoco
+        >>> dvc_dpath = watch.find_smart_dvc_dpath()
+        >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/combo_DILM.kwcoco_wv_train.json'
         >>> dset = train_dataset = kwcoco.CocoDataset(coco_fpath)
         >>> test_dataset = None
         >>> img = ub.peek(train_dataset.imgs.values())
@@ -161,11 +159,9 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         neg_to_pos_ratio=1.0,
         time_sampling='contiguous',
         time_span='2y',
-        exclude_sensors=['L8'],  # NOQA
+        exclude_sensors=None,
         channels=None,
         batch_size=4,
-        preprocessing_step=None,
-        tfms_channel_subset=None,  # DEPRECATE
         normalize_inputs=False,
         normalize_perframe=False,
         match_histograms=False,
@@ -210,7 +206,6 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.chip_overlap = chip_overlap
         self.neg_to_pos_ratio = neg_to_pos_ratio
         self.batch_size = batch_size
-        self.preprocessing_step = preprocessing_step
         self.normalize_inputs = normalize_inputs
         self.time_span = time_span
 
@@ -311,7 +306,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         parser.add_argument('--batch_size', default=4, type=int)
         parser.add_argument('--time_span', default='2y', type=str, help='how long a time window should roughly span by default')
         parser.add_argument('--resample_invalid_frames', default=True, help='if True, will attempt to resample any frame without valid data')
-        parser.add_argument('--temporal_dropout', default=0.0, help='Drops frames in a fraction of training batches'),
+        parser.add_argument('--temporal_dropout', default=0.0, type=float, help='Drops frames in a fraction of training batches'),
 
         parser.add_argument(
             '--normalize_inputs', default=True, type=smartcast, help=ub.paragraph(
@@ -1027,7 +1022,7 @@ class KWCocoVideoDataset(data.Dataset):
             tr_['gids'] = list(ub.take(valid_gids, time_sampler.sample(tr_['main_idx'])))
 
             temporal_dropout_rate = self.temporal_dropout
-            do_temporal_dropout = rng.rand() > temporal_dropout_rate
+            do_temporal_dropout = rng.rand() < temporal_dropout_rate
             if do_temporal_dropout:
                 # Temporal dropout
                 gids = tr_['gids']
@@ -1204,7 +1199,7 @@ class KWCocoVideoDataset(data.Dataset):
 
         NEW_TRUE_MULTIMODAL = self.true_multimodal
         ALLOW_RESAMPLE = self.resample_invalid_frames
-        ALLOW_FEWER_FRAMES = True
+        ALLOW_FEWER_FRAMES = 0
 
         if not NEW_TRUE_MULTIMODAL:
             raise NotImplementedError('old mode is gone')
@@ -2069,8 +2064,10 @@ class BatchVisualizationBuilder:
 
         combinable_channels = default_combinable_channels
         if combinable_extra is not None:
+            combinable_channels = combinable_channels.copy()
             combinable_channels += list(map(ub.oset, combinable_extra))
         builder.combinable_channels = combinable_channels
+        print('builder.combinable_channels = {}'.format(ub.repr2(builder.combinable_channels, nl=1)))
 
     def build(builder):
         builder._prepare_frame_metadata()
@@ -3161,108 +3158,3 @@ def make_track_based_spatial_samples(coco_dset):
             negative_boxes.draw(setlim=1, color='red', fill=True)
             positives.draw(color='limegreen')
             positives_samples.draw(color='green')
-
-
-def visualize_tokenization():
-    """
-    Helper for slides
-    """
-    import watch
-    dvc_dpath = watch.find_smart_dvc_dpath()
-    coco_fpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/combo_DILM_train.kwcoco.json'
-    coco_dset = kwcoco.CocoDataset(coco_fpath)
-
-    sampler = ndsampler.CocoSampler(coco_dset)
-    channels = 'red|green|blue,nir,bare_ground,panchromatic'
-    sample_shape = (2, 96, 96)
-    self = KWCocoVideoDataset(sampler, sample_shape=sample_shape,
-                              channels=channels,
-                              time_sampling='soft2+distribute',
-                              resample_invalid_frames=False)
-    self.requested_tasks['change'] = False
-
-    vidid = coco_dset.index.name_to_video['NZ_R001']['id']
-    # vidid = list(coco_dset.videos())[3]
-    coco_dset.index.videos[vidid]
-    images = coco_dset.images(vidid=vidid)
-    sensor_gids = {
-    }
-    for coco_img in images.coco_images:
-        sensor = coco_img.img.get('sensor_coarse')
-        if sensor_gids.get(sensor) is None:
-            sensor_gids[sensor] = coco_img.img['id']
-
-    gids = list(sensor_gids.values())
-    print('gids = {!r}'.format(gids))
-
-    tr = {
-        'main_idx': 0,
-        'video_id': vidid,
-        # 'space_slice': (slice(0, 96, None), slice(0, 96, None)),
-        'space_slice': (slice(200, 296, None), slice(200, 296, None)),
-        'gids': gids,
-    }
-    self.disable_augmenter = True
-    item = self[tr]
-
-    canvas = self.draw_item(item)
-    import kwplot
-    kwplot.autompl()
-    kwplot.imshow(canvas, fnum=1)
-
-    to_stack_modes = []
-    to_stack_flats = []
-
-    for frame in item['frames']:
-
-        frame_stack_modes = []
-        frame_stack_flats = []
-
-        for mode_key, mode in frame['modes'].items():
-            imtensor = mode.numpy()
-            img = einops.rearrange(imtensor, 'c h w -> h w c')
-            img = kwimage.normalize_intensity(img)
-
-            chunks1 = einops.rearrange(img, '(wh h) (ww w) c -> (wh ww) h w c', ww=8, wh=8)
-
-            grid_stack = kwimage.stack_images_grid(chunks1, pad=4, axis=0)
-            grid_stack = kwimage.imresize(grid_stack, scale=2.0, interpolation='nearest')
-
-            # chunks1 = einops.rearrange(img, '(wh h) (ww w) c -> (wh ww) (c h) w 1', ww=8, wh=8)
-            # chunks1 = einops.rearrange(img, '(wh h) (ww w) c -> (wh ww) (h w) 1 c', ww=8, wh=8)
-            chunks2 = einops.rearrange(img, '(wh h) (ww f w) c -> (wh ww) (h w) f c', ww=8, wh=8, f=4)
-
-            flat_stack = kwimage.stack_images(chunks2, pad=4, axis=1)
-
-            flat_stack = kwimage.ensure_uint255(flat_stack)
-            flat_stack = kwimage.draw_header_text(flat_stack, f'{mode_key}', fit='shrink')
-
-            grid_stack = kwimage.ensure_uint255(grid_stack)
-            grid_stack = kwimage.draw_header_text(grid_stack, f'{mode_key}', fit='shrink')
-
-            frame_stack_modes.append(grid_stack)
-            frame_stack_flats.append(flat_stack)
-
-        frame_mode_canvas = kwimage.stack_images(frame_stack_modes, axis=1, pad=16, bg_value=(0, 0, 0))
-        frame_flat_canvas = kwimage.stack_images(frame_stack_flats, pad=16, axis=1, bg_value=(0, 0, 0))
-
-        sensor = frame['sensor']
-        time_index = frame['time_index']
-        time_offset = np.array(frame['time_offset']).ravel()[0]
-
-        frame_mode_canvas = kwimage.draw_header_text(frame_mode_canvas, f'{time_index=}', fit='shrink')
-        frame_mode_canvas = kwimage.draw_header_text(frame_mode_canvas, f'{time_offset=}', fit='shrink')
-        frame_mode_canvas = kwimage.draw_header_text(frame_mode_canvas, f'{sensor=}', fit='shrink')
-
-        frame_flat_canvas = kwimage.draw_header_text(frame_flat_canvas, f'{time_index=}', fit='shrink')
-        frame_flat_canvas = kwimage.draw_header_text(frame_flat_canvas, f'{time_offset=}', fit='shrink')
-        frame_flat_canvas = kwimage.draw_header_text(frame_flat_canvas, f'{sensor=}', fit='shrink')
-
-        to_stack_modes.append(frame_mode_canvas)
-        to_stack_flats.append(frame_flat_canvas)
-
-    canvas_modes = kwimage.stack_images(to_stack_modes, axis=1, pad=16, bg_value=(255, 255, 255))
-    canvas_flats = kwimage.stack_images(to_stack_flats, pad=16, axis=1, bg_value=(255, 255, 255))
-
-    kwplot.imshow(canvas_modes, fnum=2)
-    kwplot.imshow(canvas_flats, fnum=3)

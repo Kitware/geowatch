@@ -274,7 +274,7 @@ class TMUXMultiQueue(PathIdentifiable):
             # run_command_in_tmux_queue(command, name)
             part = ub.codeblock(
                 f'''
-                ### Run Queue: {queue.pathid}
+                ### Run Queue: {queue.pathid} with {len(queue.commands)} jobs
                 tmux new-session -d -s {queue.pathid} "bash"
                 tmux send -t {queue.pathid} "source {queue.fpath}" Enter
                 ''').format()
@@ -384,7 +384,7 @@ class TMUXMultiQueue(PathIdentifiable):
                 live.update(table)
         return agg_state
 
-    def rprint(self, with_status=False, with_rich=False):
+    def rprint(self, with_status=False, with_rich=0):
         """
         Print info about the commands, optionally with rich
         """

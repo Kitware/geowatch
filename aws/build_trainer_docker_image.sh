@@ -5,6 +5,10 @@ docker login gitlab.kitware.com:4567 --username "$GITLAB_KITWARE_USERNAME" --pas
 '
 
 cd "$HOME/code/watch/"
+
+# Ensure credentials are flushed
+transcrypt -f
+
 docker build -t "smart/watch/ta2_training_v2" -f ./dockerfiles/ta2_training_v2.Dockerfile --build-arg BUILD_STRICT=1 .
 
 docker tag smart/watch/ta2_training_v2 gitlab.kitware.com:4567/smart/watch/ta2_training_v2

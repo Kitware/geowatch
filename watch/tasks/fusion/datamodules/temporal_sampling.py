@@ -202,6 +202,7 @@ class TimeWindowSampler:
         >>> import os
         >>> from watch.tasks.fusion.datamodules.temporal_sampling import *  # NOQA
         >>> import watch
+        >>> import kwcoco
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/data.kwcoco.json'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
@@ -212,7 +213,7 @@ class TimeWindowSampler:
         >>>     affinity_type='soft2', time_span='1y',
         >>>     update_rule='distribute')
         >>> self.determenistic = False
-        >>> self.show_summary(samples_per_frame=3, fnum=1)
+        >>> self.show_summary(samples_per_frame=1, fnum=1)
         >>> self.determenistic = True
         >>> self.show_summary(samples_per_frame=3, fnum=2)
     """

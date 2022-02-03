@@ -14,6 +14,12 @@ from watch.tasks.tracking.utils import (Track, PolygonFilter, NewTrackFunction,
                                         Observation, pop_tracks, heatmaps)
 
 
+try:
+    from xdev import profile
+except Exception:
+    profile = ub.identity
+
+
 @dataclass
 class SmallPolygonFilter(PolygonFilter):
     min_area_px: float = 80
@@ -111,6 +117,7 @@ class ResponsePolygonFilter(CocoDsetFilter):
                 yield obs
 
 
+@profile
 def add_tracks_to_dset(coco_dset,
                        tracks,
                        thresh,
@@ -133,7 +140,15 @@ def add_tracks_to_dset(coco_dset,
                                        space=space)
         return probs_dct
 
-    def add_annotation(gid, poly, this_score, track_id, space='video'):
+    @ub.memoize
+    def _warp_img_from_vid(gid):
+        # Memoize the conversion to a matrix
+        img = coco_dset_sc.imgs[gid]
+        vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
+        img_from_vid = vid_from_img.inv()
+        return img_from_vid
+
+    def make_new_annotation(gid, poly, this_score, track_id, space='video'):
 
         # assign category (key) from max score
         if this_score > thresh or len(bg_key) == 0:
@@ -153,22 +168,23 @@ def add_tracks_to_dset(coco_dset,
         assert space in {'image', 'video'}
         if space == 'video':
             # Transform the video polygon into image space
-            img = coco_dset_sc.imgs[gid]
-            vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
-            img_from_vid = vid_from_img.inv()
+            img_from_vid = _warp_img_from_vid(gid)
             poly = poly.warp(img_from_vid)
 
         bbox = list(poly.bounding_box().to_coco())[0]
+        segmentation = poly.to_coco(style='new')
         # Add the polygon as an annotation on the image
-        coco_dset.add_annotation(image_id=gid,
-                                 category_id=cid,
-                                 bbox=bbox,
-                                 segmentation=poly,
-                                 score=this_score,
-                                 track_id=track_id)
+        new_ann = dict(image_id=gid,
+                       category_id=cid,
+                       bbox=bbox,
+                       segmentation=segmentation,
+                       score=this_score,
+                       track_id=track_id)
+        return new_ann
 
     new_trackids = kwcoco_extensions.TrackidGenerator(coco_dset)
 
+    new_anns = []
     for track in tracks:
         if track.track_id is not None:
             track_id = track.track_id
@@ -177,8 +193,14 @@ def add_tracks_to_dset(coco_dset,
             track_id = next(new_trackids)
         track_id = next(new_trackids)
         for obs in track.observations:
-            add_annotation(obs.gid, obs.poly, obs.score, track_id)
+            new_ann = make_new_annotation(obs.gid, obs.poly, obs.score, track_id)
+            new_anns.append(new_ann)
 
+    for new_ann in new_anns:
+        coco_dset.add_annotation(**new_ann)
+    # TODO: Faster to add annotations in bulk, but we need to construct the
+    # "ids" first
+    # coco_dset.add_annotations(new_anns)
     return coco_dset
 
 

@@ -57,10 +57,10 @@ class ProjectAnnotationsConfig(scfg.Config):
             directory.
             ''')),
 
-        # 'viz_dpath': scfg.Value(None, help=ub.paragraph(
-        #     '''
-        #     if specified, visualizations will be written to this directory
-        #     ''')),
+        'viz_dpath': scfg.Value(None, help=ub.paragraph(
+            '''
+            if specified, visualizations will be written to this directory
+            ''')),
 
         'verbose': scfg.Value(1, help=ub.paragraph(
             '''
@@ -108,12 +108,17 @@ def main(cmdline=False, **kwargs):
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from watch.cli.project_annotations import *  # NOQA
         >>> from watch.utils import util_data
+        >>> import tempfile
         >>> dvc_dpath = util_data.find_smart_dvc_dpath()
-        >>> bundle_dpath = dvc_dpath / 'Drop1-Aligned-L1/'
+        >>> bundle_dpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/'
+        >>> dpath = ub.Path(ub.ensure_app_cache_dir('watch/tests/project_annots'))
         >>> cmdline = False
+        >>> output_fpath = dpath / 'data.kwcoco.json'
+        >>> viz_dpath = (dpath / 'viz').ensuredir()
         >>> kwargs = {
         >>>     'src': bundle_dpath / 'data.kwcoco.json',
-        >>>     'dst': None,
+        >>>     'dst': output_fpath,
+        >>>     'viz_dpath': viz_dpath,
         >>>     'site_models': dvc_dpath / 'drop1/site_models',
         >>> }
         >>> main(**kwargs)
@@ -165,17 +170,24 @@ def main(cmdline=False, **kwargs):
     print('dump coco_dset.fpath = {!r}'.format(coco_dset.fpath))
     coco_dset.dump(coco_dset.fpath)
 
-    if 0:
-        # TODO: hookup visualization logic in a sane way
+    viz_dpath = config['viz_dpath']
+    if viz_dpath:
         import kwplot
         kwplot.autoplt()
-        for fnum, info in enumerate(all_drawable_infos):
+        viz_dpath = ub.Path(viz_dpath).ensuredir()
+        for fnum, info in enumerate(ub.ProgIter(all_drawable_infos, desc='draw region site propogation', verbose=3)):
             drawable_region_sites = info['drawable_region_sites']
             region_id = info['region_id']
             region_image_dates = info['region_image_dates']
-            kwplot.figure(fnum=fnum)
+            fig = kwplot.figure(fnum=fnum)
+            ax = fig.gca()
             plot_image_and_site_times(coco_dset, region_image_dates,
-                                      drawable_region_sites, region_id)
+                                      drawable_region_sites, region_id, ax=ax)
+
+            fig.set_size_inches(np.array([16, 9]) * 1)
+            plot_fpath = viz_dpath / f'time_propogation_{region_id}.png'
+            fig.tight_layout()
+            fig.savefig(plot_fpath)
 
 
 def assign_sites_to_images(coco_dset, sites, propogate, geospace_lookup='auto'):
@@ -427,11 +439,20 @@ def assign_sites_to_images(coco_dset, sites, propogate, geospace_lookup='auto'):
     return propogated_annotations, all_drawable_infos
 
 
-def plot_image_and_site_times(coco_dset, region_image_dates, drawable_region_sites, region_id):
+def plot_image_and_site_times(coco_dset, region_image_dates, drawable_region_sites, region_id, ax=None):
+    """
+    References:
+        .. [HandleDates] https://stackoverflow.com/questions/44642966/how-to-plot-multi-color-line-if-x-axis-is-date-time-index-of-pandas
+    """
     import kwplot
-    plt = kwplot.autoplt()
+    if ax is None:
+        plt = kwplot.autoplt()
+        ax = plt.gca()
+
+    ax.cla()
 
     from watch.tasks.fusion import heuristics
+    import matplotlib as mpl
     hueristic_status_data = heuristics.HUERISTIC_STATUS_DATA
 
     status_to_color = {d['name']: kwimage.Color(d['color']).as01()
@@ -446,14 +467,30 @@ def plot_image_and_site_times(coco_dset, region_image_dates, drawable_region_sit
     # status_to_color = {d['name']: kwimage.Color(d['color']).as01()
     #                    for d in hueristic_status_data}
 
-    ax = plt.gca()
-    ax.cla()
-    for t in region_image_dates:
-        ax.plot([t, t], [0, len(drawable_region_sites) + 1], color='darkblue', alpha=0.5)
+    bounds_segments = []
+    for t in ub.ProgIter(region_image_dates, desc='plot bounds'):
+        y2 = len(drawable_region_sites) + 1
+        x1 = mpl.dates.date2num(t)
+        xy1 = (x1, 0)
+        xy2 = (x1, y2)
+        segment = [xy1, xy2]
+        bounds_segments.append(segment)
+        # ax.plot([t, t], [0, y2], color='darkblue', alpha=0.5)
+    line_group = mpl.collections.LineCollection(
+        bounds_segments, color='darkblue', alpha=0.5)
+    ax.add_collection(line_group)
+
+    if 1:
+        ax.autoscale_view()
+        ax.xaxis_date()
 
     all_times = []
 
-    for summary_idx, drawable_summary in enumerate(drawable_region_sites):
+    propogate_attrs = {
+        'segments': [],
+        'colors': [],
+    }
+    for summary_idx, drawable_summary in enumerate(ub.ProgIter(drawable_region_sites, desc='plot region')):
         site_dates = [r['site_row_datetime'] for r in drawable_summary]
         all_times.extend(site_dates)
         yloc = summary_idx
@@ -464,14 +501,32 @@ def plot_image_and_site_times(coco_dset, region_image_dates, drawable_region_sit
             t1 = row['site_row_datetime']
             cat_colors = row['category_colors']
             yoffsets = np.linspace(0.5, 0.75, len(cat_colors))[::-1]
-            # if len(yoffsets) > 1:
-            #     raise Exception
+
+            # Draw a line for each "part" of the side at this timestep
+            # Note: some sites seem to have a ton of parts that could be
+            # consolodated? Is this real or is there a bug?
             for yoff, color in zip(yoffsets, cat_colors):
                 for tp in row['propogated_on']:
-                    ax.plot([t1, tp], [yloc, yloc + yoff], '-', color=color)
+                    x1 = mpl.dates.date2num(t1)
+                    x2 = mpl.dates.date2num(tp)
+                    y1 = yloc
+                    y2 = yloc + yoff
+                    segment = [(x1, y1), (x2, y2)]
+                    propogate_attrs['segments'].append(segment)
+                    propogate_attrs['colors'].append(color)
+                    # ax.plot([x1, x2], [y1, y2], '-', color=color)
 
         # Draw site keyframes
         ax.plot(site_dates, [yloc] * len(site_dates), '-o', color=status_color, alpha=0.5)
+
+    propogate_group = mpl.collections.LineCollection(
+        propogate_attrs['segments'],
+        color=propogate_attrs['colors'],
+        alpha=0.5)
+    ax.add_collection(propogate_group)
+
+    propogate_attrs['segments']
+    propogate_attrs['colors']
 
     ax.set_xlim(min(all_times), max(all_times))
     ax.set_ylim(0, len(drawable_region_sites))
