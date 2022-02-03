@@ -7,16 +7,16 @@ output if you run this should end with something like
 """
 
 # Generate toy datasets
-DATA_DPATH=$HOME/data/work/toy_change
-TRAIN_FPATH=$DATA_DPATH/vidshapes_msi_train100/data.kwcoco.json
-VALI_FPATH=$DATA_DPATH/vidshapes_msi_vali/data.kwcoco.json
-TEST_FPATH=$DATA_DPATH/vidshapes_msi_test/data.kwcoco.json 
+TOY_DATA_DPATH=$HOME/data/work/toy_change
+TRAIN_FPATH=$TOY_DATA_DPATH/vidshapes_msi_train100/data.kwcoco.json
+VALI_FPATH=$TOY_DATA_DPATH/vidshapes_msi_vali/data.kwcoco.json
+TEST_FPATH=$TOY_DATA_DPATH/vidshapes_msi_test/data.kwcoco.json 
 
 generate_data(){
-    mkdir -p "$DATA_DPATH"
-    kwcoco toydata --key=vidshapes-videos100-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$DATA_DPATH/vidshapes_msi_train100" --verbose=5
-    kwcoco toydata --key=vidshapes-videos5-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$DATA_DPATH/vidshapes_msi_vali"  --verbose=5
-    kwcoco toydata --key=vidshapes-videos2-frames6-randgsize-speed0.2-msi-multisensor --bundle_dpath "$DATA_DPATH/vidshapes_msi_test" --verbose=5 
+    mkdir -p "$TOY_DATA_DPATH"
+    kwcoco toydata --key=vidshapes-videos100-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_train100" --verbose=5
+    kwcoco toydata --key=vidshapes-videos5-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_vali"  --verbose=5
+    kwcoco toydata --key=vidshapes-videos2-frames6-randgsize-speed0.2-msi-multisensor --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_test" --verbose=5 
 }
 
 
@@ -40,17 +40,20 @@ Should look like
 """
 
 
-#kwcoco toydata --key=vidshapes-videos1-frames5-speed0.001-msi --bundle_dpath "$(realpath ./tmp)" --verbose=5 --use_cache=False
-#python -m watch.cli.coco_visualize_videos \
-#    --src "$(realpath ./tmp/data.kwcoco.json)" \
-#    --channels="B1|B8|b" \
-#    --viz_dpath="$(realpath ./tmp)/_viz" \
-#    --animate=True
 
-#python -m watch.cli.coco_visualize_videos \
-#    --src "$DATA_DPATH/vidshapes_msi_train/data.kwcoco.json" \
-#    --channels="gauss|B11,r|g|b,B1|B8|B11" \
-#    --viz_dpath="$DATA_DPATH/vidshapes_msi_train/_viz" --animate=True
+demo_visualize_toydata(){
+    kwcoco toydata --key=vidshapes-videos1-frames5-speed0.001-msi --bundle_dpath "$(realpath ./tmp)" --verbose=5 --use_cache=False
+    python -m watch.cli.coco_visualize_videos \
+        --src "$(realpath ./tmp/data.kwcoco.json)" \
+        --channels="B1|B8|b" \
+        --viz_dpath="$(realpath ./tmp)/_viz" \
+        --animate=True
+
+    python -m watch.cli.coco_visualize_videos \
+        --src "$TOY_DATA_DPATH/vidshapes_msi_train/data.kwcoco.json" \
+        --channels="gauss|B11,r|g|b,B1|B8|B11" \
+        --viz_dpath="$TOY_DATA_DPATH/vidshapes_msi_train/_viz" --animate=True
+}
 
 
 function join_by {
@@ -78,7 +81,11 @@ echo "CHANNELS = $CHANNELS"
 EXPERIMENT_NAME=ToyFusion_${ARCH}_v001
 DATASET_NAME=ToyDataMSI
 
-WORKDIR=$DATA_DPATH/training/$HOSTNAME/$USER
+
+# Place training inside of our DVC directory
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_NAME/runs/$EXPERIMENT_NAME
 
 # Specify the expected input / output files

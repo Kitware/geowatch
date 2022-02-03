@@ -1614,6 +1614,7 @@ python -m watch.tasks.fusion.fit \
 
 # Fine Tune For SC TA-1 Transfer Learning - 2022-02-02
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-01
 TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
@@ -1621,7 +1622,6 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 __check__='
 smartwatch stats $VALI_FPATH $TRAIN_FPATH
 '
-WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DATASET_CODE=Drop1-20201117
 ARCH=smt_it_stm_p8
 CHANNELS="blue|green|red|nir|swir16|swir22"
