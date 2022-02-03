@@ -33,15 +33,39 @@ smartwatch_s3_sync_single(){
     LOCAL_DPATH=$1
 
     S3_ROOT=s3://kitware-smart-watch-data
-    S3_DPATH=$S3_ROOT/sync_root
+    S3_DPATH_ROOT=$S3_ROOT/sync_root
+
+    if [[ "$HOSTNAME" == "" ]]; then 
+        export HOSTNAME="unknown"
+    fi
+
+    PART2=$HOSTNAME/$USER
+
+    # TODO: respect the "./" syntax like rsync, for now lets just hack it
+    #STR="/fds/fds/./fd33s"
+    #PART1="${STR%/./*}"
+    #PART2="${STR#*/./}"
+    #echo "PART1 = $PART1"
+    #echo "PART2 = $PART2"
+    ##PART1=$(echo /fds/fds/./fd33s | cut -f1 -d'./')
+    ##echo "PART1 = $PART1"
+    ##PART2=$(echo $STR | cut -f2 -d'./')
+
+    if [[ "$PART2" != "" ]]; then
+        S3_DPATH_FULL=$S3_DPATH_ROOT/$PART2/
+    else
+        S3_DPATH_FULL=$S3_DPATH_ROOT/
+    fi
 
     echo "
     LOCAL_DPATH='$LOCAL_DPATH'
     S3_ROOT='$S3_ROOT'
-    S3_DPATH='$S3_DPATH'
+    S3_DPATH_ROOT='$S3_DPATH_ROOT'
+    S3_DPATH_FULL='$S3_DPATH_FULL'
     "
-    aws s3 --profile iarpa sync \
-        "$LOCAL_DPATH" "$S3_DPATH"
+    #aws s3 --profile iarpa sync \
+    aws s3 sync \
+        "$LOCAL_DPATH" "$S3_DPATH_FULL"
 }
 
 

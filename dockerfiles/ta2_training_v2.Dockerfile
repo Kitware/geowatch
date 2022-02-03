@@ -1,4 +1,5 @@
-FROM nvidia/cuda:11.5.1-cudnn8-devel-ubuntu20.04
+#FROM nvidia/cuda:11.5.1-cudnn8-devel-ubuntu20.04
+FROM nvidia/cuda:10.2-cudnn8-devel-ubuntu18.04
 
 ARG BUILD_STRICT=0
 
@@ -14,7 +15,7 @@ RUN apt-get update -q && \
         libxrender1 \
         mercurial \
         subversion \
-        wget \
+        wget jq \
         ssh tmux tree curl iputils-ping \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*

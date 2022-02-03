@@ -14,9 +14,9 @@ TEST_FPATH=$TOY_DATA_DPATH/vidshapes_msi_test/data.kwcoco.json
 
 generate_data(){
     mkdir -p "$TOY_DATA_DPATH"
-    kwcoco toydata --key=vidshapes-videos100-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_train100" --verbose=5
-    kwcoco toydata --key=vidshapes-videos5-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_vali"  --verbose=5
-    kwcoco toydata --key=vidshapes-videos2-frames6-randgsize-speed0.2-msi-multisensor --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_test" --verbose=5 
+    kwcoco toydata --key=vidshapes-videos100-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_train100" --verbose=1
+    kwcoco toydata --key=vidshapes-videos5-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_vali"  --verbose=1
+    kwcoco toydata --key=vidshapes-videos2-frames6-randgsize-speed0.2-msi-multisensor --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_test" --verbose=1 
 }
 
 
@@ -142,7 +142,7 @@ python -m watch.tasks.fusion.fit \
         --train_dataset="$TRAIN_FPATH" \
          --vali_dataset="$VALI_FPATH" \
          --test_dataset="$TEST_FPATH" \
-          --num_workers="4" 
+          --num_workers="0" || nvidia-smi
 
 
 demo_force_repackage(){

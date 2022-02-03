@@ -266,7 +266,6 @@ def main(cmdline=True, **kwargs):
             ''')
         tq.submit(command)
     tq.rprint()
-    print('FIRST TQ PRINT')
 
     if config['run']:
         follow = config['follow']
@@ -318,8 +317,7 @@ if __name__ == '__main__':
         DVC_DPATH=$(python -m watch.cli.find_dvc)
         python -m watch project_annotations \
             --src $DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json \
-            --dst $DVC_DPATH/Drop2-Aligned-TA1-2022-01/data_20220203.kwcoco.json \
-            --viz_dpath $DVC_DPATH/Drop2-Aligned-TA1-2022-01/_viz_propogate \
+            --dst $DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json \
             --site_models="$DVC_DPATH/annotations/site_models/*.geojson"
 
         kwcoco stats $DVC_DPATH/Drop2-Aligned-TA1-2022-01/data_20220203.kwcoco.json $DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json
@@ -328,7 +326,8 @@ if __name__ == '__main__':
         DVC_DPATH=$(python -m watch.cli.find_dvc)
         python -m watch.cli.prepare_teamfeats \
             --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json \
-            --gres=0,1 --with_depth=True --with_materials=False --keep_sessions=True --run=0 --workers=0
+            --gres=0,1 --with_depth=True --with_materials=False --keep_sessions=True --run=0 --workers=0 --do_splits=False --cache=False
+
 
         DVC_DPATH=$(python -m watch.cli.find_dvc)
         python -m watch.cli.prepare_teamfeats \
