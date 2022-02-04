@@ -248,11 +248,13 @@ def collate_item(stac_item,
     if platform in SUPPORTED_LS_PLATFORMS:
         platform_collation_fn = partial(generic_collate_item,
                                         L8_ASSET_NAME_MAP,
-                                        L8_SSH_ASSET_NAME_MAP)
+                                        L8_SSH_ASSET_NAME_MAP,
+                                        util_bands.LANDSAT8)
     elif platform in SUPPORTED_S2_PLATFORMS:
         platform_collation_fn = partial(generic_collate_item,
                                         S2_ASSET_NAME_MAP,
                                         S2_SSH_ASSET_NAME_MAP,
+                                        util_bands.SENTINEL2,
                                         additional_ssh_qa_resolutions=[10])
     elif platform in SUPPORTED_WV_PLATFORMS:
         platform_collation_fn = collate_wv_item
@@ -308,8 +310,24 @@ def convert_to_cog(input_filepath, resampling='AVERAGE'):
     return output_filepath
 
 
+def _get_eo_bands_info(asset_name, eo_bands_list, replacement_name=None):
+    band_name = asset_name.replace('image-', '')
+
+    for b in eo_bands_list:
+        if b['name'] == band_name:
+            out_b = b.copy()
+
+            if replacement_name is not None:
+                out_b['name'] = replacement_name
+
+            return [out_b]
+
+    return None
+
+
 def generic_collate_item(asset_name_map,
                          ssh_asset_name_map,
+                         eo_bands_list,
                          stac_item,
                          aws_base_command,
                          original_id,
@@ -332,14 +350,22 @@ def generic_collate_item(asset_name_map,
         stac_asset_outpath = '/'.join(
             (item_outdir, stac_asset_outpath_basename))
 
+        eo_bands_info = _get_eo_bands_info(asset_name,
+                                           eo_bands_list,
+                                           replacement_name=asset_suffix)
+
         # Default to asset_suffix if a map isn't found
         output_asset_name = ASSET_SUFFIX_TO_NAME_MAP.get(
             asset_suffix, asset_suffix)
-        output_assets[output_asset_name] = pystac.Asset.from_dict(
-            {'href': stac_asset_outpath,
-             'title': '/'.join((item_outdir_base,
-                                stac_asset_outpath_basename)),
-             'roles': ['data']})
+        output_asset_dict = {'href': stac_asset_outpath,
+                             'title': '/'.join((item_outdir_base,
+                                                stac_asset_outpath_basename)),
+                             'roles': ['data']}
+        if eo_bands_info is not None:
+            output_asset_dict['eo:bands'] = eo_bands_info
+
+        output_assets[output_asset_name] =\
+            pystac.Asset.from_dict(output_asset_dict)
 
         # Copy assets up to S3
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -434,7 +460,7 @@ def collate_wv_item(stac_item,
         return None
 
     def _out_bands(band_dicts):
-        return [_reformat_bandname(b['name'])
+        return [(_reformat_bandname(b['name']), b.copy())
                 for b in band_dicts]
 
     bands = gdal.Info(data_asset.href, format='json')['bands']
@@ -451,7 +477,9 @@ def collate_wv_item(stac_item,
 
     item_outdir_base = os.path.basename(item_outdir)
     output_assets = {}
-    for band_i, asset_suffix in enumerate(output_bands, start=1):
+    for band_i, band in enumerate(output_bands, start=1):
+        asset_suffix, eo_band_dict = band
+        eo_band_dict['name'] = asset_suffix
         with tempfile.NamedTemporaryFile(suffix='.tif') as temporary_file:
             if len(output_bands) > 1:
                 # Extract band as a seperate image
@@ -483,7 +511,8 @@ def collate_wv_item(stac_item,
                 {'href': stac_asset_outpath,
                  'title': '/'.join((item_outdir_base,
                                     stac_asset_outpath_basename)),
-                 'roles': ['data']})
+                 'roles': ['data'],
+                 'eo:bands': [eo_band_dict]})
 
             # Copy assets up to S3
             subprocess.run([*aws_base_command,
