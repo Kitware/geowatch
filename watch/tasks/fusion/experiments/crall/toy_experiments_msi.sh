@@ -101,7 +101,7 @@ EVAL_DPATH="$(echo "$SUGGESTIONS" | jq -r .eval_dpath)"
 TRAIN_CONFIG_FPATH=$WORKDIR/$DATASET_NAME/configs/train_$EXPERIMENT_NAME.yml 
 PRED_CONFIG_FPATH=$WORKDIR/$DATASET_NAME/configs/predict_$EXPERIMENT_NAME.yml 
 
-export CUDA_VISIBLE_DEVICES="1"
+#export CUDA_VISIBLE_DEVICES="0"
 
 # Configure training hyperparameters
 python -m watch.tasks.fusion.fit \
@@ -142,7 +142,7 @@ python -m watch.tasks.fusion.fit \
         --train_dataset="$TRAIN_FPATH" \
          --vali_dataset="$VALI_FPATH" \
          --test_dataset="$TEST_FPATH" \
-          --num_workers="0" || nvidia-smi
+          --num_workers="2"
 
 
 demo_force_repackage(){

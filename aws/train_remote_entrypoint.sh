@@ -22,6 +22,16 @@ To submit these jobs run something like:
     # to use the UI to access the old logs)
     # This is not 100% reliable has race conditions
 
+    WORKFLOW_NAME=$(argo list --running | head -n 2 | tail -n 1 | cut -d" " -f1)
+    # Get a shell in the pod
+    kubectl exec $WORKFLOW_NAME -- ls -al /root
+    
+    kubectl exec --stdin --tty shell-demo -- /bin/bash
+    kubectl exec --stdin --tty ta2-train-cdkc4 -- /bin/bash
+
+    kubectl -n argo exec ta2-train-vxqb7 -- bash
+    
+
 
     # Use this to check outputs
     aws s3 --profile iarpa ls s3://kitware-smart-watch-data/sync_root/
@@ -65,8 +75,7 @@ mkdir -p "$WORKDIR"
 # Startup background process that will write data to S3 in realish time
 source "$WATCH_REPO_DPATH/aws/smartwatch_s3_sync.sh"
 
-mkdir -p "$WORKDIR/init_logs"
-CHECKIN_FPATH=$WORKDIR/init_logs/ACK-$(date +"%Y%m%dT%H%M%S").txt
+CHECKIN_FPATH=$WORKDIR/ACK-$(date +"%Y%m%dT%H%M%S").txt
 echo "check-in" > "$CHECKIN_FPATH"
 cat /proc/cpuinfo >> "$CHECKIN_FPATH" || echo "no cpuinfo" >> "$CHECKIN_FPATH"
 nvidia-smi >> "$CHECKIN_FPATH" || echo "no nvidia-smi" >> "$CHECKIN_FPATH"
@@ -84,4 +93,12 @@ smartwatch_s3_sync_forever_in_tmux "$WORKDIR"
 
 # The following script should run the toy experiments end-to-end
 export NDSAMPLER_DISABLE_OPTIONAL_WARNINGS=1
+
+#pip install pytorch_lightning -U
+nvidia-smi
+python -c "import torch; print('torch.__version__ = {}'.format(torch.__version__))"
+python -c "import torch; print('torch.__file__ = {}'.format(torch.__file__))"
+python -c "import torch; print(torch.cuda.is_available())"
+python -c "import torch; print(torch.cuda.device_count())"
+
 source "$WATCH_REPO_DPATH/watch/tasks/fusion/experiments/crall/toy_experiments_msi.sh"
