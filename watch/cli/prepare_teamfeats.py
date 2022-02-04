@@ -37,8 +37,11 @@ class TeamFeaturePipelineConfig(scfg.Config):
         'data_workers': scfg.Value(2, help='dataloader workers for each proc'),
         'keep_sessions': scfg.Value(False, help='if True does not close tmux sessions'),
 
+        'workers': scfg.Value('auto', help='Maximum number of parallel jobs, 0 is no-nonsense serial mode. '),
         'run': scfg.Value(True, help='if True execute the pipeline'),
         'cache': scfg.Value(True, help='if True skip completed results'),
+
+        'follow': scfg.Value(False),
     }
 
 
@@ -57,8 +60,6 @@ def main(cmdline=True, **kwargs):
 
     config = TeamFeaturePipelineConfig(cmdline=cmdline, data=kwargs)
 
-    data_workers = util_globals.coerce_num_workers(config['data_workers'])
-
     gres = config['gres']
     gres = smartcast(gres)
     print('gres = {!r}'.format(gres))
@@ -70,6 +71,14 @@ def main(cmdline=True, **kwargs):
                 gres.append(gpu_idx)
     elif not ub.iterable(gres):
         gres = [gres]
+
+    workers = config['workers']
+    if workers == 'auto':
+        if gres is None:
+            workers = 0
+        else:
+            workers = len(gres)
+    data_workers = util_globals.coerce_num_workers(config['data_workers'])
 
     if config['dvc_dpath'] == 'auto':
         import watch
@@ -108,8 +117,6 @@ def main(cmdline=True, **kwargs):
         'with_invariants': 'I',
     }
 
-    with_rich = 0
-
     tasks = []
     # tmux queue is still limited. The order of submission matters.
 
@@ -126,7 +133,7 @@ def main(cmdline=True, **kwargs):
                 --deployed="{model_fpaths['dzyne_landcover']}" \
                 --output="{task['output_fpath']}" \
                 --num_workers="{data_workers}" \
-                --device=0 \
+                --device=0
             ''')
         combo_code_parts.append(codes[key])
         tasks.append(task)
@@ -192,8 +199,14 @@ def main(cmdline=True, **kwargs):
         combo_code_parts.append(codes[key])
         tasks.append(task)
 
-    # gres = [0, 1]
-    size = min(len(tasks), len(gres))
+    if workers == 0:
+        gres = None
+
+    if gres is None:
+        size = min(len(tasks), max(1, workers))
+    else:
+        size = min(len(tasks), len(gres))
+
     tq = tmux_queue.TMUXMultiQueue(name='teamfeat', size=size, gres=gres)
     if config['virtualenv_cmd']:
         tq.add_header_command(config['virtualenv_cmd'])
@@ -206,24 +219,29 @@ def main(cmdline=True, **kwargs):
         else:
             tq.submit(task['command'])
 
-    tq.rprint(with_rich=with_rich)
-    tq.write()
+    if workers > 0:
+        # Launch this TQ if there are parallel workers, otherwise just make a
+        # longer serial script
+        tq.rprint()
+        tq.write()
 
-    # TODO: make the monitor spawn in a new tmux session. The monitor could
-    # actually be the scheduler process.
-    if config['run']:
-        import subprocess
-        try:
-            agg_state = tq.run(block=True)
-        except subprocess.CalledProcessError as ex:
-            print('ex.stdout = {!r}'.format(ex.stdout))
-            print('ex.stderr = {!r}'.format(ex.stderr))
-            print('ex.returncode = {!r}'.format(ex.returncode))
-            raise
-        else:
-            if not config['keep_sessions']:
-                if not agg_state['errored']:
-                    tq.kill()
+        # TODO: make the monitor spawn in a new tmux session. The monitor could
+        # actually be the scheduler process.
+        if config['run']:
+            import subprocess
+            try:
+                agg_state = tq.run(block=True)
+            except subprocess.CalledProcessError as ex:
+                print('ex.stdout = {!r}'.format(ex.stdout))
+                print('ex.stderr = {!r}'.format(ex.stderr))
+                print('ex.returncode = {!r}'.format(ex.returncode))
+                raise
+            else:
+                if not config['keep_sessions']:
+                    if not agg_state['errored']:
+                        tq.kill()
+
+        tq = tmux_queue.TMUXMultiQueue(name='combine-feats', size=2)
 
     if 1:
         # Finalize features by combining them all into combo.kwcoco.json
@@ -232,7 +250,6 @@ def main(cmdline=True, **kwargs):
 
         base_combo_fpath = aligned_bundle_dpath / f'combo_{combo_code}.kwcoco.json'
 
-        tq = tmux_queue.TMUXMultiQueue(name='combine-feats', size=2)
         if config['virtualenv_cmd']:
             tq.add_header_command(config['virtualenv_cmd'])
 
@@ -248,19 +265,28 @@ def main(cmdline=True, **kwargs):
                 ''')
             tq.submit(command)
 
-        tq.rprint(with_rich=with_rich)
+        tq.rprint()
+
         if config['run']:
-            agg_state = tq.run(block=True)
+            follow = config['follow']
+            if follow and workers == 0 and len(tq.workers) == 1:
+                queue = tq.workers[0]
+                fpath = queue.write()
+                ub.cmd(f'bash {fpath}', verbose=3, check=True)
+            else:
+                agg_state = tq.run(block=True)
+                if config['follow']:
+                    tq.monitor()
             if not config['keep_sessions']:
                 if not agg_state['errored']:
                     tq.kill()
 
-        # Also call the prepare-splits script
-        from watch.cli import prepare_splits
-        split_config = ub.dict_isect(
-            config, prepare_splits.PrepareSplitsConfig.default)
-        split_config['base_fpath'] = base_combo_fpath
-        prepare_splits.main()
+            # Also call the prepare-splits script
+            from watch.cli import prepare_splits
+            split_config = ub.dict_isect(
+                config, prepare_splits.PrepareSplitsConfig.default)
+            split_config['base_fpath'] = base_combo_fpath
+            prepare_splits.main()
 
     """
     Ignore:
@@ -283,11 +309,24 @@ if __name__ == '__main__':
         python -m watch.cli.prepare_teamfeats --gres=0,2 --with_depth=True --keep_sessions=True
         python -m watch.cli.prepare_teamfeats --gres=2 --with_materials=False --keep_sessions=True
 
+        # TODO: rename to schedule teamfeatures
+
+        # TO UPDATE ANNOTS
+        # Update to whatever the state of the annotations submodule is
+        DVC_DPATH=$(python -m watch.cli.find_dvc)
+        python -m watch project_annotations \
+            --src $DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json \
+            --dst $DVC_DPATH/Drop2-Aligned-TA1-2022-01/data_20220203.kwcoco.json \
+            --viz_dpath $DVC_DPATH/Drop2-Aligned-TA1-2022-01/_viz_propogate \
+            --site_models="$DVC_DPATH/annotations/site_models/*.geojson"
+
+        kwcoco stats $DVC_DPATH/Drop2-Aligned-TA1-2022-01/data_20220203.kwcoco.json $DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json
 
         # Team Features on Drop2
         DVC_DPATH=$(python -m watch.cli.find_dvc)
         python -m watch.cli.prepare_teamfeats \
-            --base_fpath=$DVC_DPATH/smart_watch_dvc/Drop2-Aligned-TA1-2022-01/data.kwcoco.json
-            --gres=0,1 --with_depth=True --with_materials=False --keep_sessions=True
+            --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/data_20220203.kwcoco.json \
+            --gres=0,1 --with_depth=True --with_materials=False --keep_sessions=True --run=1
+
     """
     main(cmdline=True)

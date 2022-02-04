@@ -13,7 +13,7 @@ spec:
   imagePullSecrets:
     - name: gitlab-pull-secret
   nodeSelector:
-    kitware.com/node-pool: standard
+    kitware.com/node-pool: gpu
   volumes:
     - name: dvc-access-secret-volume
       secret:
@@ -32,6 +32,7 @@ spec:
         requests:
           memory: "32G"
           cpu: "15000m"
+          nvidia.com/gpu: 1
         limits:
           memory: "64G"
           cpu: "15000m"
