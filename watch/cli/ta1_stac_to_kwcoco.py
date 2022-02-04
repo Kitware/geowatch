@@ -36,6 +36,11 @@ def main():
                         action='store_true',
                         default=False,
                         help="Populate video / watch fields")
+    parser.add_argument("--from-collated",
+                        action='store_true',
+                        default=False,
+                        help="Data to convert has been run through TA-1 "
+                             "collation")
     parser.add_argument("-j", "--jobs",
                         type=int,
                         default=1,
@@ -53,7 +58,9 @@ SUPPORTED_S2_PLATFORMS = {'S2A',
                           'sentinel-2b'}  # Sentinel
 SUPPORTED_LS_PLATFORMS = {'OLI_TIRS',
                           'LANDSAT_8'}  # Landsat
-SUPPORTED_WV_PLATFORMS = {'DigitalGlobe'}  # Worldview
+SUPPORTED_WV_PLATFORMS = {'DigitalGlobe',
+                          'worldview-2',
+                          'worldview-3'}  # Worldview
 SUPPORTED_PLATFORMS = (SUPPORTED_S2_PLATFORMS |
                        SUPPORTED_LS_PLATFORMS |
                        SUPPORTED_WV_PLATFORMS)
@@ -71,7 +78,17 @@ S2_CHANNEL_ALIAS = {band['name']: band['common_name']
 S2_CHANNEL_ALIAS.update({'TCI': 'tci:3'})
 
 
-def _determine_s2_channels(asset_dict):
+def _determine_channels_collated(asset_name, asset_dict):
+    eo_band_names = [eob.get('common_name', eob['name'])
+                     for eob in asset_dict.get('eo:bands', ())]
+
+    if len(eo_band_names) > 0:
+        return '|'.join(eo_band_names)
+    elif asset_name == 'quality':
+        return 'cloudmask'
+
+
+def _determine_s2_channels(asset_name, asset_dict):
     asset_href = asset_dict['href']
     eo_band_names = [eob['name'] for eob in asset_dict.get('eo:bands', ())]
 
@@ -90,7 +107,7 @@ def _determine_s2_channels(asset_dict):
         return None
 
 
-def _determine_l8_channels(asset_dict):
+def _determine_l8_channels(asset_name, asset_dict):
     asset_href = asset_dict['href']
     eo_band_names = [eob['name'] for eob in asset_dict.get('eo:bands', ())]
 
@@ -108,7 +125,7 @@ def _determine_l8_channels(asset_dict):
         return None
 
 
-def _determine_wv_channels(asset_dict):
+def _determine_wv_channels(asset_name, asset_dict):
     asset_href = asset_dict['href']
     bands = gdal.Info(asset_href, format='json')['bands']
 
@@ -130,11 +147,13 @@ def _determine_wv_channels(asset_dict):
     return channels
 
 
-def make_coco_img_from_stac_asset(asset_dict,
+def make_coco_img_from_stac_asset(asset_name,
+                                  asset_dict,
                                   platform,
                                   name=None,
                                   force_affine=True,
-                                  assume_relative=False):
+                                  assume_relative=False,
+                                  from_collated=False):
     img = {}
     if name is not None:
         img['name'] = name
@@ -176,12 +195,16 @@ def make_coco_img_from_stac_asset(asset_dict,
     warp_pxl_to_wld = kwimage.Affine.coerce(info['pxl_to_wld'])
     height, width = info['img_shape']
 
-    if platform in SUPPORTED_S2_PLATFORMS:
-        channels = _determine_s2_channels(asset_dict)
+    if from_collated and platform in (SUPPORTED_S2_PLATFORMS |
+                                      SUPPORTED_LS_PLATFORMS |
+                                      SUPPORTED_WV_PLATFORMS):
+        channels = _determine_channels_collated(asset_name, asset_dict)
+    elif platform in SUPPORTED_S2_PLATFORMS:
+        channels = _determine_s2_channels(asset_name, asset_dict)
     elif platform in SUPPORTED_LS_PLATFORMS:
-        channels = _determine_l8_channels(asset_dict)
+        channels = _determine_l8_channels(asset_name, asset_dict)
     elif platform in SUPPORTED_WV_PLATFORMS:
-        channels = _determine_wv_channels(asset_dict)
+        channels = _determine_wv_channels(asset_name, asset_dict)
     else:
         raise NotImplementedError(
             "Unsupported platform '{}'".format(platform))
@@ -216,7 +239,9 @@ def make_coco_img_from_stac_asset(asset_dict,
     return img
 
 
-def _stac_item_to_kwcoco_image(stac_item, assume_relative=False):
+def _stac_item_to_kwcoco_image(stac_item,
+                               assume_relative=False,
+                               from_collated=False):
     stac_item_dict = stac_item.to_dict()
 
     platform = stac_item_dict['properties']['platform']
@@ -234,10 +259,12 @@ def _stac_item_to_kwcoco_image(stac_item, assume_relative=False):
 
     for asset_name, asset in stac_item_dict.get('assets', {}).items():
         aux = make_coco_img_from_stac_asset(
+            asset_name,
             asset,
             platform,
             force_affine=True,
-            assume_relative=assume_relative)
+            assume_relative=assume_relative,
+            from_collated=from_collated)
         if aux is None:
             continue
         auxiliary.append(aux)
@@ -279,7 +306,8 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
                        outpath,
                        assume_relative=False,
                        populate_watch_fields=False,
-                       jobs=1):
+                       jobs=1,
+                       from_collated=False):
     if isinstance(input_stac_catalog, str):
         catalog = pystac.read_file(href=input_stac_catalog).full_copy()
     elif isinstance(input_stac_catalog, dict):
@@ -294,7 +322,9 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
                            max_workers=jobs)
 
     jobs = [executor.submit(_stac_item_to_kwcoco_image,
-                            stac_item, assume_relative=assume_relative)
+                            stac_item,
+                            assume_relative=assume_relative,
+                            from_collated=from_collated)
             for stac_item in catalog.get_all_items()]
 
     output_dset = kwcoco.CocoDataset()
