@@ -184,12 +184,10 @@ def single_image_segmentation_metrics(true_coco, pred_coco, gid1, gid2,
 
     # Determine what true/predicted categories are in common
     true_classes = list(true_coco.object_categories())
-    print('true_classes = {!r}'.format(true_classes))
     predicted_classes = []
     for stream in pred_coco_img.channels.streams():
         have = stream.intersection(true_classes)
         predicted_classes.extend(have.parsed)
-    print('predicted_classes = {!r}'.format(predicted_classes))
     classes_of_interest = ub.oset(predicted_classes) - (
         background_classes | ignore_classes | undistinguished_classes)
 

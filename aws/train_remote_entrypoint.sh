@@ -26,7 +26,11 @@ To submit these jobs run something like:
     # Get a shell in the pod
     kubectl exec $WORKFLOW_NAME -- ls -al /root
     
-    kubectl exec --stdin --tty shell-demo -- /bin/bash
+    kubectl exec --stdin --tty ta2-train-sd8qs -- /bin/bash
+
+kubectl exec -it ta2-train-sd8qs -c main -- /bin/bash
+
+
     kubectl exec --stdin --tty ta2-train-cdkc4 -- /bin/bash
 
     kubectl -n argo exec ta2-train-vxqb7 -- bash

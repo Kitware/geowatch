@@ -40,7 +40,7 @@ def predict(args):
     else:
         segmentation_dim = 0
 
-    if 'pretext' in args.tasks:
+    if 'pretext' in args.tasks or before_after_dim:
         pretext_model = pretext.load_from_checkpoint(args.pretext_ckpt_path, train_dataset=None, vali_dataset=None)
         pretext_model = pretext_model.eval().to(device)
         pretext_hparams = pretext_model.hparams

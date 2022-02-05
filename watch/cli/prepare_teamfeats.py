@@ -38,10 +38,10 @@ class TeamFeaturePipelineConfig(scfg.Config):
         'keep_sessions': scfg.Value(False, help='if True does not close tmux sessions'),
 
         'workers': scfg.Value('auto', help='Maximum number of parallel jobs, 0 is no-nonsense serial mode. '),
-        'run': scfg.Value(True, help='if True execute the pipeline'),
+        'run': scfg.Value(0, help='if True execute the pipeline'),
         'cache': scfg.Value(True, help='if True skip completed results'),
 
-        'do_splits': scfg.Value(False, help='if True also make splits'),
+        'do_splits': scfg.Value(True, help='if True also make splits'),
 
         'follow': scfg.Value(False),
     }
@@ -184,6 +184,7 @@ def main(cmdline=True, **kwargs):
     key = 'with_invariants'
     if config[key]:
         task = {}
+        # all_tasks = 'before_after segmentation pretext'
         task['output_fpath'] = outputs['uky_invariants']
         task['command'] = ub.codeblock(
             fr'''
@@ -192,11 +193,11 @@ def main(cmdline=True, **kwargs):
                 --output_kwcoco "{task['output_fpath']}" \
                 --pretext_ckpt_path "{model_fpaths['uky_pretext']}" \
                 --segmentation_ckpt "{model_fpaths['uky_segmentation']}" \
-                --do_pca 1 \
+                --do_pca 0 \
                 --num_dim 8 \
                 --num_workers="{data_workers}" \
                 --write_workers 2 \
-                --tasks all
+                --tasks segmentation
             ''')
         combo_code_parts.append(codes[key])
         tasks.append(task)
@@ -326,8 +327,8 @@ if __name__ == '__main__':
         DVC_DPATH=$(python -m watch.cli.find_dvc)
         python -m watch.cli.prepare_teamfeats \
             --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json \
-            --gres=0,1 --with_depth=True --with_materials=False --keep_sessions=True --run=0 --workers=0 --do_splits=False --cache=False
-
+            --gres=0,1 --with_depth=0 --with_materials=False  --with_invariants=False \
+            --run=1 --do_splits=True
 
         DVC_DPATH=$(python -m watch.cli.find_dvc)
         python -m watch.cli.prepare_teamfeats \
