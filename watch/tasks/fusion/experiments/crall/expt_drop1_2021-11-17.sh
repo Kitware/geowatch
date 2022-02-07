@@ -1920,6 +1920,7 @@ PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt
 export CUDA_VISIBLE_DEVICES="0"
 python -m watch.tasks.fusion.fit \
     --default_root_dir=$DEFAULT_ROOT_DIR \
+    --name=$EXPERIMENT_NAME \
     --config $WORKDIR/configs/BAS_20220205.yaml  \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --optim=AdamW
@@ -1933,6 +1934,7 @@ PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt
 export CUDA_VISIBLE_DEVICES="1"
 python -m watch.tasks.fusion.fit \
     --default_root_dir=$DEFAULT_ROOT_DIR \
+    --name=$EXPERIMENT_NAME \
     --config $WORKDIR/configs/BAS_20220205.yaml  \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --optim=SGD
@@ -1946,6 +1948,7 @@ PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt
 export CUDA_VISIBLE_DEVICES="2"
 python -m watch.tasks.fusion.fit \
     --default_root_dir=$DEFAULT_ROOT_DIR \
+    --name=$EXPERIMENT_NAME \
     --config $WORKDIR/configs/BAS_20220205.yaml  \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --optim=AdamW \
@@ -1960,6 +1963,7 @@ PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt
 export CUDA_VISIBLE_DEVICES="3"
 python -m watch.tasks.fusion.fit \
     --default_root_dir=$DEFAULT_ROOT_DIR \
+    --name=$EXPERIMENT_NAME \
     --config $WORKDIR/configs/BAS_20220205.yaml  \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --optim=SGD \
@@ -2105,3 +2109,69 @@ python -m watch.tasks.fusion.fit \
     --arch_name=$ARCH \
     --num_draw=1 \
     --init="/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_TA1_xfer55_v70/SC_smt_it_stm_p8_TA1_xfer55_v70_epoch=42-step=88063.pt"
+
+
+# Horologic linconv
+
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+EXPERIMENT_NAME=BAS_TA1_c001_v079
+DATASET_CODE=Drop1-20201117
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
+export CUDA_VISIBLE_DEVICES="0"
+python -m watch.tasks.fusion.fit \
+    --default_root_dir=$DEFAULT_ROOT_DIR \
+    --name=$EXPERIMENT_NAME \
+    --tokenizer=linconv \
+    --config $WORKDIR/configs/BAS_20220205.yaml  \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --optim=AdamW
+
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+EXPERIMENT_NAME=BAS_TA1_c001_v080
+DATASET_CODE=Drop1-20201117
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
+export CUDA_VISIBLE_DEVICES="1"
+python -m watch.tasks.fusion.fit \
+    --default_root_dir=$DEFAULT_ROOT_DIR \
+    --name=$EXPERIMENT_NAME \
+    --tokenizer=linconv \
+    --config $WORKDIR/configs/BAS_20220205.yaml  \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --optim=SGD
+
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+EXPERIMENT_NAME=BAS_TA1_c001_v081
+DATASET_CODE=Drop1-20201117
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
+export CUDA_VISIBLE_DEVICES="2"
+python -m watch.tasks.fusion.fit \
+    --default_root_dir=$DEFAULT_ROOT_DIR \
+    --name=$EXPERIMENT_NAME \
+    --tokenizer=linconv \
+    --config $WORKDIR/configs/BAS_20220205.yaml  \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --optim=AdamW \
+    --init="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819.pt"
+
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+EXPERIMENT_NAME=BAS_TA1_c001_v082
+DATASET_CODE=Drop1-20201117
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
+export CUDA_VISIBLE_DEVICES="3"
+python -m watch.tasks.fusion.fit \
+    --default_root_dir=$DEFAULT_ROOT_DIR \
+    --name=$EXPERIMENT_NAME \
+    --tokenizer=linconv \
+    --config $WORKDIR/configs/BAS_20220205.yaml  \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --optim=SGD \
+    --init="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819.pt"
+
