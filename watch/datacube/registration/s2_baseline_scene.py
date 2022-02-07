@@ -180,8 +180,9 @@ def find_baseline_scene(xmls, return_paths=False):
                     arr = None
 
         if coverage is None:
-            raise RuntimeError("Couldn't determine coverage for '{}'".format(
+            print("Couldn't determine coverage for '{}', setting to 0.".format(
                 granule_id))
+            coverage = 0.
 
         tmp_dict['coverage'] = coverage
 
