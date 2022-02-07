@@ -8,7 +8,7 @@ easier for us to go back and make the code robust.
 import ubelt as ub
 
 
-# Might need to split this up into a finger-grained structure
+# Might need to split this up into a finer-grained structure
 IGNORE_CLASSNAMES = {
     'clouds', 'occluded',
     'ignore', 'unknown', 'Unknown',
@@ -105,6 +105,10 @@ CNAMES_DCT = {
          for k2, cats in dct.items()}
     for k1, dct in CATEGORIES_DCT.items()
 }
+
+
+# For passing site summaries from BAS to SC
+SITE_SUMMARY_CNAME = 'Site Boundary'
 
 
 def ensure_heuristic_coco_colors(coco_dset, force=False):

@@ -1,5 +1,6 @@
 from watch.utils import kwcoco_extensions
 from watch.utils import util_kwimage
+from watch.heuristics import SITE_SUMMARY_CNAME, CNAMES_DCT
 import kwarray
 import kwimage
 import kwcoco
@@ -405,7 +406,8 @@ def add_tracks_to_dset(coco_dset,
 
         new_anns = []
         for obs in track.observations:
-            new_ann = make_new_annotation(obs.gid, obs.poly, obs.score, track_id)
+            new_ann = make_new_annotation(obs.gid, obs.poly, obs.score,
+                                          track_id)
             new_anns.append(new_ann)
 
         for new_ann in new_anns:
@@ -509,7 +511,7 @@ def time_aggregated_polys(coco_dset,
 
     def tracks_polys_bounds() -> Iterable[Tuple[Track, Poly]]:
         import shapely.ops
-        boundary_tracks = list(pop_tracks(coco_dset, ['Site Boundary']))
+        boundary_tracks = list(pop_tracks(coco_dset, [SITE_SUMMARY_CNAME]))
         assert len(boundary_tracks) > 0, 'need valid site boundaries!'
         '''
         # TODO these obnoxious fors will be removed with gpd support in Track
@@ -655,9 +657,8 @@ class TimeAggregatedSC(NewTrackFunction):
     morph_kernel: int = 3
     time_filtering: bool = False
     response_filtering: bool = False
-    key: Tuple[str] = ('Site Preparation', 'Active Construction',
-                       'Post Construction')
-    bg_key: Tuple[str] = ('No Activity')
+    key: Tuple[str] = CNAMES_DCT['positive']['scored']  # TODO unscored?
+    bg_key: Tuple[str] = ('No Activity')  # TODO other negative classes?
     boundaries_as: Literal['bounds', 'polys', 'none'] = 'bounds'
 
     def create_tracks(self, coco_dset):
@@ -670,7 +671,7 @@ class TimeAggregatedSC(NewTrackFunction):
         if self.boundaries_as == 'polys':
             tracks = pop_tracks(
                 coco_dset,
-                cnames=['Site Boundary'],
+                cnames=[SITE_SUMMARY_CNAME],
                 # these are SC scores, not BAS, so this is not a
                 # true reproduction of hybrid.
                 score_chan=kwcoco.ChannelSpec('|'.join(self.key)))

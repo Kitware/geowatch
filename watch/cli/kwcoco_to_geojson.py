@@ -501,7 +501,7 @@ def add_site_summary_to_kwcoco(possible_summaries,
 
     # write site summaries
     print('warping site boundaries to pxl space...')
-    cid = coco_dset.ensure_category('Site Boundary')
+    cid = coco_dset.ensure_category(watch.heuristics.SITE_SUMMARY_CNAME)
     new_trackids = watch.utils.kwcoco_extensions.TrackidGenerator(coco_dset)
     for region_id, site_summary in site_summaries:
 
@@ -799,7 +799,7 @@ def main(args):
             raise ValueError('--site_summary cannot be used in --bas_mode')
         coco_dset = add_site_summary_to_kwcoco(
                 args.site_summary, coco_dset, args.region_id)
-        cid = coco_dset.name_to_cat['Site Boundary']['id']
+        cid = coco_dset.name_to_cat[watch.heuristics.SITE_SUMMARY_CNAME]['id']
         coco_dset = coco_dset.subset(coco_dset.index.cid_to_gids[cid])
         print('restricting dset to videos with site_summary annots: ',
               set(coco_dset.index.name_to_video))

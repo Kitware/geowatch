@@ -418,7 +418,7 @@ def normalize_phases(coco_dset, baseline_keys={'salient'}):
         >>>      (['Active Construction'] * 9) +
         >>>      (['Post Construction'])))
     '''
-    from watch.heuristics import CATEGORIES, CNAMES_DCT
+    from watch.heuristics import CATEGORIES, CNAMES_DCT, SITE_SUMMARY_CNAME
 
     for cat in CATEGORIES:
         coco_dset.ensure_category(**cat)
@@ -426,7 +426,7 @@ def normalize_phases(coco_dset, baseline_keys={'salient'}):
     baseline_keys = set(baseline_keys)
     unknown_cnames = coco_dset.name_to_cat.keys() - (
         {cat['name']
-         for cat in CATEGORIES} | {'Site Boundary'} | baseline_keys)
+         for cat in CATEGORIES} | {SITE_SUMMARY_CNAME} | baseline_keys)
     if unknown_cnames:
         print('removing unknown categories {unknown_cnames}')
         coco_dset.remove_categories(unknown_cnames, keep_annots=False)
@@ -435,7 +435,7 @@ def normalize_phases(coco_dset, baseline_keys={'salient'}):
         # negative examples, no longer needed
         CNAMES_DCT['negative']['scored'] + CNAMES_DCT['negative']['unscored'] +
         # should have been consumed by track_fn, TODO more robust check
-        ['Site Boundary'])
+        [SITE_SUMMARY_CNAME])
     coco_dset.remove_categories(cnames_to_remove, keep_annots=False)
 
     cnames_to_replace = (
