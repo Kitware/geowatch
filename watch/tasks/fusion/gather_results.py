@@ -340,7 +340,7 @@ def shrink_notations(df, drop=0):
         drop_cols = set(df.columns) & {
             'title', 'catname', 'normalize_perframe', 'normalize_inputs',
             'train_remote', 'step', 'arch_name', 'package_name',
-            'pred_fpath',
+            'pred_fpath', 'model_fpath',
         }
         df = df.drop(drop_cols, axis=1)
     return df
@@ -371,7 +371,7 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
         import watch
         dvc_dpath = watch.find_smart_dvc_dpath()
         measure_globstr = 'models/fusion/SC-20201117/*/*/*/eval/curves/measures2.json'
-        measure_globstr = 'models/fusion/SC-20201117/*xfer*/*/*/eval/curves/measures2.json'
+        measure_globstr = 'models/fusion/SC-20201117/*_TA1*/*/*/eval/curves/measures2.json'
 
         if 0:
             remote = 'namek'
@@ -492,6 +492,7 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
     class_df = class_df.drop(set(class_df.columns) & {'title', 'pred_fpath', 'package_name'}, axis=1)
     mean_df = mean_df.drop(set(mean_df.columns) & {'title', 'pred_fpath', 'package_name'}, axis=1)
 
+    class_df = shrink_notations(class_df)
     mean_df = shrink_notations(mean_df)
 
     print('\nSort by class_mAPUC')
@@ -604,7 +605,7 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
         from kwcoco.metrics import drawing
         max_num_curves = 16
         max_per_expt = None
-        max_per_expt = 1
+        max_per_expt = 10
         fig = kwplot.figure(fnum=fnum, doclf=True)
 
         def lookup_metric(x):
@@ -660,7 +661,7 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
         from kwcoco.metrics import drawing
         max_num_curves = 16
         max_per_expt = None
-        max_per_expt = 1
+        max_per_expt = 10
         fig = kwplot.figure(fnum=fnum, doclf=True)
         relevant_results = [r for r in all_results if r.nocls_measures and r.nocls_measures['nsupport'] > 0]
 
