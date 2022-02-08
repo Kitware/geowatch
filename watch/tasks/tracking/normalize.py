@@ -668,8 +668,8 @@ def normalize(coco_dset, track_fn, overwrite, gt_dset=None, **track_kwargs):
 
     if gt_dset is not None:
         # visualize predicted sites with true sites
-        out_dir = './_assets/1b_official_BR_small'
-        from visualize import visualize_videos
+        out_dir = './_assets/tracking_visualization'
+        from .visualize import visualize_videos
         visualize_videos(coco_dset,
                          gt_dset,
                          out_dir,
