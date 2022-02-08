@@ -310,9 +310,13 @@ class ResultAnalysis:
                 statistics.append(stats_row)
 
                 metric_stats[metric_key] = stats_row
+
         self.stats_table = pd.DataFrame([
             ub.dict_diff(d, {'pairwise', 'param_values', 'moments'})
-            for d in self.statistics]).sort_values('anova_rank_p')
+            for d in self.statistics])
+
+        if len(self.stats_table):
+            self.stats_table = self.stats_table.sort_values('anova_rank_p')
 
     def report(self):
         stat_groups = ub.group_items(self.statistics, key=lambda x: x['param_name'])

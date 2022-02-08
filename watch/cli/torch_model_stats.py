@@ -50,6 +50,7 @@ def main(cmdline=False, **kwargs):
     package_rows = []
     for package_fpath in package_paths:
 
+        package_fpath = ub.Path(package_fpath)
         file_stat = package_fpath.stat()
 
         # TODO: generalize the load-package

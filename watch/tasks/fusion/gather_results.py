@@ -269,6 +269,7 @@ def best_candidates(class_rows, mean_rows):
         subsets['class'] = class_subset = class_subset.sort_values('AP')
         cand_expt_names.update(set(class_subset['model_fpath'].tolist()))
     else:
+        class_subset = []
         top_class_indexes = []
 
     if len(mean_rows):
@@ -288,33 +289,42 @@ def best_candidates(class_rows, mean_rows):
         subsets['mean'] = mean_subset = mean_subset.sort_values('class_mAPUC')
         cand_expt_names.update(set(mean_subset['model_fpath'].tolist()))
     else:
+        mean_subset = []
         top_mean_indexes = []
 
     sc_mean_subset = mean_subset[~mean_subset['class_mAPUC'].isnull()].sort_values('class_mAPUC')
     bas_mean_subset = mean_subset[~mean_subset['salient_APUC'].isnull()].sort_values('salient_APUC')
 
-    print('Best Subset Table (Per-Class):')
-    print(class_subset[class_metrics + ['package_name']].to_string())
-    print('Best Subset Table (Mean-BAS):')
-    print(bas_mean_subset[mean_metrics + ['package_name']].to_string())
-    print('Best Subset Table (Mean-SC):')
-    print(sc_mean_subset[mean_metrics + ['package_name']].to_string())
+    model_candidates = ub.ddict(list)
+    pred_candidates = ub.ddict(list)
+
+    if len(class_subset):
+        print('Best Subset Table (Per-Class):')
+        print(class_subset[class_metrics + ['package_name']].to_string())
+        model_candidates['sc'].append(class_subset['model_fpath'].values.tolist())
+        pred_candidates['sc'].append(class_subset['pred_fpath'].values.tolist())
+
+    if len(bas_mean_subset):
+        print('Best Subset Table (Mean-BAS):')
+        print(bas_mean_subset[mean_metrics + ['package_name']].to_string())
+        model_candidates['bas'].append(bas_mean_subset['model_fpath'].values.tolist())
+        pred_candidates['bas'].append(bas_mean_subset['pred_fpath'].values.tolist())
+
+    if len(sc_mean_subset):
+        print('Best Subset Table (Mean-SC):')
+        print(sc_mean_subset[mean_metrics + ['package_name']].to_string())
+        model_candidates['sc'].append(sc_mean_subset['model_fpath'].values.tolist())
+        pred_candidates['sc'].append(sc_mean_subset['pred_fpath'].values.tolist())
 
     for n, s in subsets.items():
         print('n = {!r}'.format(n))
         print(shrink_notations(s, drop=1))
 
-    sc_model_candidates = list(ub.unique(
-        class_subset['model_fpath'].values.tolist() +
-        sc_mean_subset['model_fpath'].values.tolist()
-    ))
-    bas_model_candidates = bas_mean_subset['model_fpath'].values.tolist()
+    sc_model_candidates = list(ub.unique(ub.flatten(model_candidates['sc'])))
+    bas_model_candidates = list(ub.unique(ub.flatten(model_candidates['bas'])))
 
-    sc_pred_candidates = list(ub.unique(
-        class_subset['pred_fpath'].values.tolist() +
-        sc_mean_subset['pred_fpath'].values.tolist()
-    ))
-    bas_pred_candidates = bas_mean_subset['pred_fpath'].values.tolist()
+    sc_pred_candidates = list(ub.unique(ub.flatten(pred_candidates['sc'])))
+    bas_pred_candidates = list(ub.unique(ub.flatten(pred_candidates['bas'])))
 
     print('sc_model_candidates = {}'.format(ub.repr2(sc_model_candidates, nl=1)))
     print('bas_model_candidates = {}'.format(ub.repr2(bas_model_candidates, nl=1)))
@@ -444,11 +454,12 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
         # 'Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco',
         # 'Drop1-Aligned-TA1-2022-01_vali_data_nowv.kwcoco',
         # 'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco',
-        'Drop2-Aligned-TA1-2022-01_combo_L_nowv_vali.kwcoco',
+        # 'Drop2-Aligned-TA1-2022-01_combo_L_nowv_vali.kwcoco',
         # 'Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco',
         # 'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco'
         # 'Drop1-Aligned-TA1-2022-01_vali_data_nowv.kwcoco',
         # 'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco',
+        'Drop2-Aligned-TA1-2022-01_combo_L_nowv.kwcoco',
     ]
 
     # dataset_key = 'combo_vali_nowv.kwcoco'
@@ -520,9 +531,9 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
     )
     analysis.run()
     print('analysis.varied = {}'.format(ub.repr2(analysis.varied, nl=2)))
-    stats_table = pd.DataFrame([ub.dict_diff(d, {'pairwise', 'param_values', 'moments'}) for d in analysis.statistics])
-    stats_table = stats_table.sort_values('anova_rank_p')
-    print(stats_table)
+    if len(analysis.stats_table):
+        analysis.stats_table = analysis.stats_table.sort_values('anova_rank_p')
+        print(analysis.stats_table)
 
     class_df = pd.DataFrame(class_rows)
     mean_df = pd.DataFrame(mean_rows)
