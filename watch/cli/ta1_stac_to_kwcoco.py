@@ -42,7 +42,8 @@ def main():
                         help="Data to convert has been run through TA-1 "
                              "collation")
     parser.add_argument("-j", "--jobs",
-                        type=int,
+                        # type=int,
+                        type=str,
                         default=1,
                         required=False,
                         help="Number of jobs to run in parallel")
@@ -308,6 +309,10 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
                        populate_watch_fields=False,
                        jobs=1,
                        from_collated=False):
+
+    from watch.utils.lightning_ext import util_globals
+    jobs = util_globals.coerce_num_workers(jobs)
+
     if isinstance(input_stac_catalog, str):
         catalog = pystac.read_file(href=input_stac_catalog).full_copy()
     elif isinstance(input_stac_catalog, dict):
@@ -321,11 +326,22 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
     executor = ub.JobPool(mode='process' if jobs > 1 else 'serial',
                           max_workers=jobs)
 
-    jobs = [executor.submit(_stac_item_to_kwcoco_image,
-                            stac_item,
-                            assume_relative=assume_relative,
-                            from_collated=from_collated)
-            for stac_item in catalog.get_all_items()]
+    all_items = [stac_item for stac_item in catalog.get_all_items()]
+    dup_items = []
+    for key, dups in ub.group_items(all_items, key=lambda x: x.id).items():
+        if len(dups) > 1:
+            dup_items.append(key)
+            for item in dups:
+                item_dict = item.to_dict()
+                print('item_dict = {}'.format(ub.repr2(item_dict, nl=1)))
+            for item in dups:
+                item_dict = item.to_dict()
+                print(ub.hash_data(item_dict))
+
+    for stac_item in all_items:
+        executor.submit(_stac_item_to_kwcoco_image, stac_item,
+                        assume_relative=assume_relative,
+                        from_collated=from_collated)
 
     output_dset = kwcoco.CocoDataset()
     output_dset.fpath = outpath
