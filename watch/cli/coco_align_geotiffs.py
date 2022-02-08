@@ -53,7 +53,7 @@ Notes:
         --aux_workers=2 \
         --context_factor=1 \
         --visualize=False \
-        --skip_geo_preprop True \
+        --geo_preprop=False \
         --include_sensors=WV \
         --keep img
 
@@ -367,6 +367,8 @@ def main(cmdline=True, **kw):
 
     geo_preprop = config['geo_preprop']
     if config['skip_geo_preprop']:
+        import warnings
+        warnings.warn('skip_geo_preprop is deprecated', DeprecationWarning)
         geo_preprop = False
     if geo_preprop == 'auto':
         coco_img = coco_dset.coco_image(ub.peek(valid_gids))

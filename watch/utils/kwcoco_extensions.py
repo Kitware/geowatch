@@ -192,9 +192,9 @@ def coco_populate_geo_heuristics(coco_dset, gids=None, overwrite=False,
         raise NotImplementedError(ub.paragraph(
             '''
             Cannot keep keep geotiff metadata when using process parallelism.
-            Need to serialize gdal objects (i.e. RPC transforms) potentially
-            returned from ``watch.gis.geotiff.geotiff_metadata`` to be able do
-            this.
+            Need to serialize gdal objects (i.e. RPC transforms and
+            SwigPyObject) returned from ``watch.gis.geotiff.geotiff_metadata``
+            to be able do this.
             '''))
     executor = ub.JobPool(mode, max_workers=workers)
     # executor = ub.JobPool('process', max_workers=workers)
