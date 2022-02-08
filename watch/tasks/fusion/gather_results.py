@@ -243,12 +243,12 @@ def prepare_results(all_infos):
 
 def best_candidates(class_rows, mean_rows):
     # TOP CANDIDATE MODELS - FIND TOP K MODELS FOR EVERY METRIC
-    K = 5
-    max_per_metric_per_expt = 2
+    K = 7
+    max_per_metric_per_expt = 3
     cand_expt_names = set()
 
     mean_metrics = ['class_mAP', 'class_mAUC', 'salient_AP', 'salient_AUC', 'class_mAPUC', 'salient_APUC']
-    class_metrics = ['AP', 'AUC', 'APUC']
+    class_metrics = ['AP', 'AUC', 'APUC', 'catname']
 
     subsets = {}
     if len(class_rows):
@@ -290,14 +290,37 @@ def best_candidates(class_rows, mean_rows):
     else:
         top_mean_indexes = []
 
-    print(class_subset[class_metrics + ['package_name']].to_string())
-    print(mean_subset[mean_metrics + ['package_name']].to_string())
+    sc_mean_subset = mean_subset[~mean_subset['class_mAPUC'].isnull()].sort_values('class_mAPUC')
+    bas_mean_subset = mean_subset[~mean_subset['salient_APUC'].isnull()].sort_values('salient_APUC')
 
-    mean_subset.T
+    print('Best Subset Table (Per-Class):')
+    print(class_subset[class_metrics + ['package_name']].to_string())
+    print('Best Subset Table (Mean-BAS):')
+    print(bas_mean_subset[mean_metrics + ['package_name']].to_string())
+    print('Best Subset Table (Mean-SC):')
+    print(sc_mean_subset[mean_metrics + ['package_name']].to_string())
 
     for n, s in subsets.items():
         print('n = {!r}'.format(n))
         print(shrink_notations(s, drop=1))
+
+    sc_model_candidates = list(ub.unique(
+        class_subset['model_fpath'].values.tolist() +
+        sc_mean_subset['model_fpath'].values.tolist()
+    ))
+    bas_model_candidates = bas_mean_subset['model_fpath'].values.tolist()
+
+    sc_pred_candidates = list(ub.unique(
+        class_subset['pred_fpath'].values.tolist() +
+        sc_mean_subset['pred_fpath'].values.tolist()
+    ))
+    bas_pred_candidates = bas_mean_subset['pred_fpath'].values.tolist()
+
+    print('sc_model_candidates = {}'.format(ub.repr2(sc_model_candidates, nl=1)))
+    print('bas_model_candidates = {}'.format(ub.repr2(bas_model_candidates, nl=1)))
+
+    print('sc_pred_candidates = {}'.format(ub.repr2(sc_pred_candidates, nl=1)))
+    print('bas_pred_candidates = {}'.format(ub.repr2(bas_pred_candidates, nl=1)))
 
     cand_expt_names = sorted(cand_expt_names)
     print('cand_expt_names = {}'.format(ub.repr2(cand_expt_names, nl=1)))
@@ -454,6 +477,19 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
             print('Failed job.measure_fpath = {!r}'.format(job.measure_fpath))
             pass
 
+    if 0:
+        to_unlink = []
+        for fpath in failed_jobs:
+            if 'Drop2' in fpath.parent.parent.parent.name:
+                dvc_fpath = ub.Path(str(fpath) + '.dvc')
+                if dvc_fpath.exists():
+                    to_unlink.append(fpath)
+                    to_unlink.append(dvc_fpath)
+                    print('fpath = {!r}'.format(fpath))
+            print(len(list(fpath.parent.parent.parent.glob('*'))))
+        for p in to_unlink:
+            p.unlink()
+
     print(f'Failed Jobs {len(failed_jobs)=}/{len(jobs)}')
 
     class_rows, mean_rows, all_results, results_list2 = prepare_results(all_infos)
@@ -478,7 +514,8 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
 
     analysis = result_analysis.ResultAnalysis(
         results_list2, ignore_params=ignore_params,
-        metrics=['class_mAPUC', 'salient_APUC'],
+        # metrics=['class_mAPUC', 'salient_APUC'],
+        metrics=['salient_AP'],
         ignore_metrics=ignore_metrics,
     )
     analysis.run()
@@ -492,8 +529,8 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
     class_df = class_df.drop(set(class_df.columns) & {'title', 'pred_fpath', 'package_name'}, axis=1)
     mean_df = mean_df.drop(set(mean_df.columns) & {'title', 'pred_fpath', 'package_name'}, axis=1)
 
-    class_df = shrink_notations(class_df)
-    mean_df = shrink_notations(mean_df)
+    class_df = shrink_notations(class_df, drop=1)
+    mean_df = shrink_notations(mean_df, drop=1)
 
     print('\nSort by class_mAPUC')
     print(mean_df.sort_values('class_mAPUC').to_string())
@@ -589,16 +626,11 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
     # distinct_colors_selection = kwimage.Color.distinct(255)
 
     def hash_color(data):
-        print('data = {!r}'.format(data))
         import distinctipy
         key_hash = ub.hash_data(data, hasher='blake3')
         key_tensor = np.frombuffer(memoryview(key_hash.encode()), dtype=np.int32)
         rng = kwarray.ensure_rng(rng=key_tensor.sum(), api='python')
         color = distinctipy.get_random_color(rng=rng)
-        # idx = key_tensor[0]
-        # # color = kwimage.Color(key_tensor[0:3]).as01()
-        # color = tuple(distinct_colors_selection[idx])
-        print('color = {!r}'.format(color))
         return color
 
     def plot_individual_class_curves(catname, fnum, metric='ap'):

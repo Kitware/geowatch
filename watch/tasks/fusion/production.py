@@ -25,9 +25,27 @@ PRODUCTION_MODELS = [
 
     {
         'name': 'SC_smt_it_stm_p8_TA1_xfer55_v70_epoch=34-step=71679',
-        'file_name': 'models/fusion/SC-20201117/SC_smt_it_stm_p8_TA1_xfer55_v70/SC_smt_it_stm_p8_TA1_xfer55_v70_epoch=34-step=71679.pt'
+        'file_name': 'models/fusion/SC-20201117/SC_smt_it_stm_p8_TA1_xfer55_v70/SC_smt_it_stm_p8_TA1_xfer55_v70_epoch=34-step=71679.pt',
         'task': 'SC',
         'train_dataset': 'Drop2-Aligned-L1-2022-01/combo_L_nowv_train.kwcoco.json',
+        'sensors': ['L8', 'S2'],
+        'input_channels': 'blue|green|red|nir|swir16|swir22,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field',
+    },
+
+    {
+        'name': 'BAS_TA1_c001_v076_epoch=90-step=186367',
+        'file_name': 'models/fusion/SC-20201117/BAS_TA1_c001_v076/BAS_TA1_c001_v076_epoch=90-step=186367.pt',
+        'task': 'BAS',
+        'train_dataset': 'Drop2-Aligned-L1-2022-01/combo_L_nowv_train.kwcoco.json',
+        'sensors': ['L8', 'S2'],
+        'input_channels': 'blue|green|red|nir|swir16|swir22,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field',
+    },
+
+    {
+        'name': 'BAS_TA1_ALL_REGIONS_v084_epoch=5-step=51917',
+        'file_name': 'models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=5-step=51917.pt',
+        'task': 'BAS',
+        'train_dataset': 'Drop2-Aligned-L1-2022-01/combo_L_nowv.kwcoco.json',
         'sensors': ['L8', 'S2'],
         'input_channels': 'blue|green|red|nir|swir16|swir22,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field',
     }

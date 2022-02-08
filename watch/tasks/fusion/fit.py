@@ -350,27 +350,12 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
 
     method_var_dict = ub.compatible(method_var_dict, method_class.__init__)
 
-    if hasattr(datamodule, 'dataset_stats'):
-        # Compute mean/std
-        # TODO: allow for hardcoding per-sensor/channel mean/std in the
-        # heuristics and then using those to have the option to skip computing
-        # them for new datasets.
-        print('datamodule.dataset_stats = {}'.format(
-            ub.repr2(datamodule.dataset_stats, nl=3, sort=0)))
-        method_var_dict['dataset_stats'] = datamodule.dataset_stats
-        method_var_dict['input_channels'] = datamodule.input_channels
-
-    method_var_dict['classes'] = datamodule.classes
-    # Note: Changed name from method to model
-    model = method_class(**method_var_dict)
-
-    # Tell the datamodule what tasks the datasets will need to generate data
-    # for.
-    datamodule._notify_about_tasks(model=model)
-
+    _needs_transfer = False
     if args.resume_from_checkpoint is None:
+        _needs_transfer = True
         import netharn as nh
         init_cls, init_kw = nh.api.Initializer.coerce(init=args.init)
+        other_model = None
         if 'fpath' in init_kw:
             # Hack: try and add support for torch.package
             # from torch import package
@@ -385,8 +370,38 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
                 tfile = tempfile.NamedTemporaryFile()
                 torch.save(other_model.state_dict(), tfile.name)
                 init_kw['fpath'] = tfile.name
-
         initializer = init_cls(**init_kw)
+
+    if hasattr(datamodule, 'dataset_stats'):
+        # Compute mean/std
+        # TODO: allow for hardcoding per-sensor/channel mean/std in the
+        # heuristics and then using those to have the option to skip computing
+        # them for new datasets.
+        method_var_dict['input_channels'] = datamodule.input_channels
+
+        if args.normalize_inputs == 'transfer':
+            assert other_model is not None
+            method_var_dict['dataset_stats'] = other_model.dataset_stats
+            print('other_model.dataset_stats = {}'.format(
+                ub.repr2(other_model.dataset_stats, nl=3, sort=0)))
+        else:
+            print('datamodule.dataset_stats = {}'.format(
+                ub.repr2(datamodule.dataset_stats, nl=3, sort=0)))
+            method_var_dict['dataset_stats'] = datamodule.dataset_stats
+
+    method_var_dict['classes'] = datamodule.classes
+    # Note: Changed name from method to model
+    model = method_class(**method_var_dict)
+
+    # Tell the datamodule what tasks the datasets will need to generate data
+    # for.
+    datamodule._notify_about_tasks(model=model)
+
+    if _needs_transfer:
+        # Execute transfer
+        # NOTE: This will overwrite any new dataset mean/std
+        # TODO: allow the user to specify if they want to use new stats or old
+        # stats when training this model.
         info = initializer(model)  # NOQA
 
     # init trainer from args

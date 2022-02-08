@@ -1983,6 +1983,7 @@ python -m watch.tasks.fusion.fit \
     --global_class_weight=1.0 \
     --global_saliency_weight=1.00 \
     --saliency_loss='focal' \
+    --name=$EXPERIMENT_NAME \
     --class_loss='dicefocal' \
     --config $WORKDIR/configs/BAS_20220205.yaml  \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
@@ -2001,6 +2002,7 @@ python -m watch.tasks.fusion.fit \
     --global_saliency_weight=1.00 \
     --saliency_loss='dicefocal' \
     --class_loss='dicefocal' \
+    --name=$EXPERIMENT_NAME \
     --config $WORKDIR/configs/BAS_20220205.yaml  \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --optim=AdamW \
@@ -2174,4 +2176,70 @@ python -m watch.tasks.fusion.fit \
     --default_root_dir="$DEFAULT_ROOT_DIR" \
     --optim=SGD \
     --init="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819.pt"
+
+
+# toothbrush - fine-tune on korea
+
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-01
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+EXPERIMENT_NAME=BAS_TA1_KOREA_v083
+DATASET_CODE=Drop1-20201117
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
+export CUDA_VISIBLE_DEVICES="1"
+python -m watch.tasks.fusion.fit \
+    --default_root_dir=$DEFAULT_ROOT_DIR \
+    --train_dataset=$TRAIN_FPATH \
+    --vali_dataset=$VALI_FPATH \
+    --test_dataset=$TEST_FPATH \
+    --global_class_weight=0.0 \
+    --global_saliency_weight=1.00 \
+    --learning_rate=3e-4 \
+    --saliency_loss='dicefocal' \
+    --class_loss='dicefocal' \
+    --name=$EXPERIMENT_NAME \
+    --config $WORKDIR/configs/BAS_20220205.yaml  \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --num_draw=8 \
+    --optim=AdamW \
+    --normalize_inputs='transfer' \
+    --init="$DVC_DPATH/models/fusion/SC-20201117/BAS_TA1_c001_v076/BAS_TA1_c001_v076_epoch=90-step=186367.pt"
+
+
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-01
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_nowv_vali.kwcoco.json
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+EXPERIMENT_NAME=BAS_TA1_ALL_REGIONS_v084
+DATASET_CODE=Drop1-20201117
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
+export CUDA_VISIBLE_DEVICES="1"
+python -m watch.tasks.fusion.fit \
+    --default_root_dir=$DEFAULT_ROOT_DIR \
+    --train_dataset=$TRAIN_FPATH \
+    --vali_dataset=$VALI_FPATH \
+    --test_dataset=$TEST_FPATH \
+    --global_class_weight=0.0 \
+    --global_saliency_weight=1.00 \
+    --learning_rate=3e-4 \
+    --saliency_loss='dicefocal' \
+    --class_loss='dicefocal' \
+    --name=$EXPERIMENT_NAME \
+    --config $WORKDIR/configs/BAS_20220205.yaml  \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --num_draw=8 \
+    --optim=AdamW \
+    --normalize_inputs='transfer' \
+    --init="$DVC_DPATH/models/fusion/SC-20201117/BAS_TA1_KOREA_v083/BAS_TA1_KOREA_v083_epoch=5-step=11189.pt"
 

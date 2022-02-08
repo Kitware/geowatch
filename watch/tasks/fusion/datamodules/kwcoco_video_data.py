@@ -176,6 +176,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         use_grid_positives=True,
         use_centered_positives=False,
         temporal_dropout=0.0,
+        max_epoch_length=None,
     ):
         """
         Args:
@@ -208,6 +209,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.normalize_inputs = normalize_inputs
         self.time_span = time_span
+        self.max_epoch_length = max_epoch_length
 
         # self.channels = channels
         # self.time_sampling = time_sampling
@@ -236,6 +238,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             use_centered_positives=use_centered_positives,
             use_grid_positives=use_grid_positives,
             temporal_dropout=temporal_dropout,
+            max_epoch_length=max_epoch_length,
         )
         for _k, _v in self.common_dataset_kwargs.items():
             setattr(self, _k, _v)
@@ -307,6 +310,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         parser.add_argument('--time_span', default='2y', type=str, help='how long a time window should roughly span by default')
         parser.add_argument('--resample_invalid_frames', default=True, help='if True, will attempt to resample any frame without valid data')
         parser.add_argument('--temporal_dropout', default=0.0, type=float, help='Drops frames in a fraction of training batches'),
+
+        parser.add_argument('--max_epoch_length', default=None, type=int, help='If specified, restricts number of steps per epoch'),
 
         parser.add_argument(
             '--normalize_inputs', default=True, type=smartcast, help=ub.paragraph(
@@ -428,9 +433,14 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             }
             if self.normalize_inputs:
                 if isinstance(self.normalize_inputs, str):
-                    raise NotImplementedError(
-                        'TODO: handle special normalization keys, '
-                        'e.g. imagenet')
+                    if self.normalize_inputs == 'transfer':
+                        # THIS MEANS WE EXPECT THAT WE CAN TRANSFER FROM AN
+                        # EXISTING MODEL. THE FIT METHOD MUST HANDLE THIS
+                        stats_params = None
+                    else:
+                        raise NotImplementedError(
+                            'TODO: handle special normalization keys, '
+                            'e.g. imagenet')
                 else:
                     if isinstance(self.normalize_inputs, int):
                         stats_params['num'] = self.normalize_inputs
@@ -770,6 +780,7 @@ class KWCocoVideoDataset(data.Dataset):
         use_grid_positives=True,
         use_centered_positives=False,
         temporal_dropout=0.0,
+        max_epoch_length=None,
     ):
 
         # TODO: the set of "valid" background classnames should be defined
@@ -785,6 +796,7 @@ class KWCocoVideoDataset(data.Dataset):
         self.resample_invalid_frames = resample_invalid_frames
         self.upweight_centers = upweight_centers
         self.temporal_dropout = temporal_dropout
+        self.max_epoch_length = max_epoch_length
 
         if channels is None:
             # Hack to use all channels in the first image.
@@ -854,8 +866,9 @@ class KWCocoVideoDataset(data.Dataset):
             self.n_neg = len(self.negative_pool)
             self.length = self.n_pos + self.n_neg
 
-            # Hack:
-            self.length = min(self.length, 2048)
+            if max_epoch_length is not None:
+                self.length = min(self.length, max_epoch_length)
+
             # print('len(neg_pool) ' + str(len(self.negative_pool)))
             # print('self.n_pos = {!r}'.format(self.n_pos))
             # print('self.n_neg = {!r}'.format(self.n_neg))
@@ -1450,8 +1463,9 @@ class KWCocoVideoDataset(data.Dataset):
                 # Dilate ignore masks (dont care about the surrounding area
                 # either)
                 ignore_dilate = 11
-                frame_saliency = util_kwimage.morphology(frame_saliency, 'dilate', kernel=ignore_dilate)
+                # frame_saliency = util_kwimage.morphology(frame_saliency, 'dilate', kernel=ignore_dilate)
                 saliency_ignore = util_kwimage.morphology(saliency_ignore, 'dilate', kernel=ignore_dilate)
+                frame_class_ignore = util_kwimage.morphology(frame_class_ignore, 'dilate', kernel=ignore_dilate)
 
                 saliency_weights = frame_weights * (1 - saliency_ignore)
                 class_weights = frame_weights * (1 - frame_class_ignore)

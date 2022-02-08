@@ -719,9 +719,15 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         >>> print('eval_dpath = {!r}'.format(eval_dpath))
         >>> evaluate_segmentations(true_coco, pred_coco, eval_dpath)
     """
+    import platform
     # Extract metadata about the predictions to persist
     meta = {}
     meta['info'] = info = []
+
+    # Add info about where and when evaluation happened
+    meta['hostname'] = platform.node()
+    meta['user'] = ub.Path(ub.userhome()).name
+    meta['time'] = ub.timestamp()
 
     if pred_coco.fpath is not None:
         pred_fpath = ub.Path(pred_coco.fpath)

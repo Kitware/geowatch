@@ -158,6 +158,7 @@ class ResultAnalysis:
             'ap': 'max',
             'acc': 'max',
             'f1': 'max',
+            #
             'loss': 'min',
             'brier': 'min',
         }
@@ -209,8 +210,9 @@ class ResultAnalysis:
 
         # Analyze the impact of each parameter
         self.statistics = statistics = []
-        for param_name, param_values in varied.items():
+        for param_name in varied.keys():
             for metric_key in self.metrics:
+                param_values = varied[param_name]
                 stats_row = {
                     'param_name': param_name,
                     'param_values': param_values,
@@ -230,17 +232,21 @@ class ResultAnalysis:
                 value_to_metric = {}
                 for param_value, group in table.groupby(param_name):
                     metric_group = group[['name', metric_key, param_name]]
-                    metric_stats = pd.Series({
-                        'mean' : metric_group[metric_key].mean(),
-                        'std': metric_group[metric_key].std(),
-                        'max': metric_group[metric_key].max(),
-                        'min': metric_group[metric_key].min(),
-                        'num': len(metric_group),
-                    })
+                    metric_vals = metric_group[metric_key]
+                    metric_vals = metric_vals.dropna()
+                    metric_stats = metric_vals.describe()
+                    # pd.Series({
+                    #     'mean' : metric_vals.mean(),
+                    #     'std': metric_vals.std(),
+                    #     'max': metric_vals.max(),
+                    #     'min': metric_vals.min(),
+                    #     'num': len(metric_vals),
+                    # })
                     metric_stats['best'] = metric_stats[objective]
                     value_to_metric_stats[param_value] = metric_stats
                     value_to_metric_group[param_value] = metric_group
-                    value_to_metric[param_value] = metric_group[metric_key].values
+
+                    value_to_metric[param_value] = metric_vals.values
 
                 moments = pd.DataFrame(value_to_metric_stats).T
                 moments = moments.sort_values(objective, ascending=ascending)
