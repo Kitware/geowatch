@@ -307,10 +307,12 @@ def pop_tracks(
                 heatmaps(coco_dset, gids,
                          {score_chan.spec: list(score_chan.unique())
                           })[score_chan.spec]))
-        scores = [
-            score(poly, heatmaps_by_gid[gid])
-            for poly, gid in zip(polys, annots.gids)
-        ]
+        import xdev
+        with xdev.embed_on_exception_context():
+            scores = [
+                score(poly, heatmaps_by_gid[gid])
+                for poly, gid in zip(polys, annots.gids)
+            ]
     else:
         scores = [None] * len(annots)
         # scores = annots.get('score', None)
@@ -356,6 +358,9 @@ def score(poly, probs, mode='score', threshold=0, use_rasterio=True):
         # Ensure box is inside probs
         ymax, xmax = probs.shape[:2]
         box = box.clip(0, 0, xmax, ymax).to_xywh()
+        if box.area[0][0] == 0:
+            print('warning: scoring a polygon against an img with no overlap!')
+            return 0
         x, y, w, h = box.data[0]
         if use_rasterio:  # rasterio inverse
             rel_poly = poly.translate((0.5 - x, 0.5 - y))
