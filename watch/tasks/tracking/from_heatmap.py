@@ -415,16 +415,17 @@ def add_tracks_to_dset(coco_dset,
         # coco_dset.add_annotations(new_anns)
 
         # --- apply viterbi decoding ---
-        anns_in_track = coco_dset.annots(trackid=track_id)
-        categories_in_track = anns_in_track.cnames
-        name_to_cat = coco_dset.name_to_cat
-        # Viterbi decoding
-        new_categories = class_label_smoothing(anns_in_track, categories_in_track, name_to_cat)
+        if 0:
+            anns_in_track = coco_dset.annots(trackid=track_id)
+            categories_in_track = anns_in_track.cnames
+            name_to_cat = coco_dset.name_to_cat
+            # Viterbi decoding
+            new_categories = class_label_smoothing(anns_in_track, categories_in_track, name_to_cat)
 
-        # baseline: no smoothing uncomment the following line to skip viterbi decoding
-        # new_categories = categories_in_track.copy()
+            # baseline: no smoothing uncomment the following line to skip viterbi decoding
+            # new_categories = categories_in_track.copy()
 
-        anns_in_track.set('category_id', [coco_dset.name_to_cat[name]['id'] for name in new_categories])
+            anns_in_track.set('category_id', [coco_dset.name_to_cat[name]['id'] for name in new_categories])
         # ------------------------------
 
     return coco_dset
