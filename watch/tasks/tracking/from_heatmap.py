@@ -214,7 +214,8 @@ def time_aggregated_polys(coco_dset,
                           bg_key=None,
                           time_filtering=False,
                           response_filtering=False,
-                          use_boundaries=False):
+                          use_boundaries=False,
+                          norm_ord=1):
     '''
     Track function.
 
@@ -232,6 +233,12 @@ def time_aggregated_polys(coco_dset,
             else, class is max(background keys).
 
         morph_kernel (int): height/width in px of close or dilate kernel
+
+        norm_ord: order of norm to aggregate heatmap pixels across time.
+            1: average [default]
+            2: euclidean
+            0: sum
+            np.inf, 'inf', or None: max
 
     Example:
         >>> # test interpolation
@@ -269,13 +276,18 @@ def time_aggregated_polys(coco_dset,
         print(f'warning: {n_missing} imgs in dset {coco_dset.tag} '
               f'have no keys {key} or {bg_key}. Interpolating...')
 
+    if norm_ord in {'inf', None}:
+        norm_ord = np.inf
+
     #
     # --- utilities ---
     #
 
     # turn heatmaps into polygons
-    def probs(heatmaps, weights=None):
-        probs = np.average(heatmaps, axis=0, weights=weights)
+    def probs(heatmaps):
+        probs = np.linalg.norm(np.stack(heatmaps, axis=0), norm_ord, axis=0)
+        if 0 < norm_ord < np.inf:
+            probs /= np.power(len(heatmaps), 1/norm_ord)
 
         hard_probs = util_kwimage.morphology(probs > thresh, 'dilate',
                                              morph_kernel)
@@ -311,8 +323,12 @@ def time_aggregated_polys(coco_dset,
             # time-varying.
             track_bounds = shapely.ops.unary_union(
                 [obs.poly.to_shapely() for obs in track.observations])
-            gid_ixs = np.in1d(gids, [obs.gid for obs in track.observations])
-            track_polys = mask_to_polygons(probs(_heatmaps, weights=gid_ixs),
+            _heatmaps_in_track = np.compress(
+                np.in1d(gids, [obs.gid for obs in track.observations]),
+                _heatmaps,
+                axis=0)
+
+            track_polys = mask_to_polygons(probs(_heatmaps_in_track),
                                            thresh,
                                            bounds=track_bounds)
             poly = shapely.ops.unary_union(
@@ -405,6 +421,7 @@ class TimeAggregatedBAS(NewTrackFunction):
     time_filtering: bool = True
     response_filtering: bool = False
     key: str = 'salient'
+    norm_ord: Optional[Union[int, str]] = 1
 
     def create_tracks(self, coco_dset):
         tracks = time_aggregated_polys(
@@ -413,7 +430,8 @@ class TimeAggregatedBAS(NewTrackFunction):
             self.morph_kernel,
             key=self.key,
             time_filtering=self.time_filtering,
-            response_filtering=self.response_filtering)
+            response_filtering=self.response_filtering,
+            norm_ord=self.norm_ord)
         return tracks
 
     def add_tracks_to_dset(self, coco_dset, tracks):
@@ -434,6 +452,7 @@ class TimeAggregatedSC(NewTrackFunction):
     key: Tuple[str] = tuple(CNAMES_DCT['positive']['scored'])  # TODO unscored?
     bg_key: Tuple[str] = ('No Activity')  # TODO other negative classes?
     boundaries_as: Literal['bounds', 'polys', 'none'] = 'bounds'
+    norm_ord: Optional[Union[int, str]] = 1
 
     def create_tracks(self, coco_dset):
         '''
@@ -467,7 +486,8 @@ class TimeAggregatedSC(NewTrackFunction):
                 bg_key=self.bg_key,
                 time_filtering=self.time_filtering,
                 response_filtering=self.response_filtering,
-                use_boundaries=(self.boundaries_as != 'none'))
+                use_boundaries=(self.boundaries_as != 'none'),
+                norm_ord=self.norm_ord)
 
         return tracks
 
