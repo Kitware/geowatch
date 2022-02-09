@@ -83,3 +83,11 @@ https://github.com/argoproj/argo-workflows/releases/tag/v3.2.6
    git remote --verbose
 
    argo list --running
+
+
+
+To list Secrets
+
+.. code:: bash
+
+   kubectl get secrets

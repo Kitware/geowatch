@@ -1,7 +1,7 @@
 # TODO: need to change name to indicate this is training.
 
 cd "$HOME/code/watch/aws"
-argo submit $HOME/code/watch/aws/ta2_train_workflow.yml --watch
+argo submit "$HOME/code/watch/aws/ta2_train_workflow.yml" --watch
 
 argo submit dvc_check_workflow.yml --watch
 

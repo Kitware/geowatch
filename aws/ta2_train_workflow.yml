@@ -45,6 +45,16 @@ spec:
             secretKeyRef:
               name: dvc-gitlab-access-token
               key: password
+        - name: WATCH_REPO_GITLAB_RO_DEPLOY_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: watch-repo-gitlab-ro-deploy-token
+              key: username
+        - name: WATCH_REPO_GITLAB_RO_DEPLOY_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: watch-repo-gitlab-ro-deploy-token
+              key: password
       volumeMounts:
         - name: dvc-access-secret-volume
           mountPath: "/secret/dvc-access-secret-mountpath"

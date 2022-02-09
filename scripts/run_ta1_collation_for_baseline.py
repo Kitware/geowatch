@@ -2,6 +2,7 @@ import argparse
 import sys
 
 from watch.cli.collate_ta1_output import collate_ta1_output
+from watch.cli.baseline_framework_ingress import baseline_framework_ingress
 
 
 def main():
@@ -62,9 +63,19 @@ def run_ta1_collation_for_baseline(input_path,
                                    performer_code='kit',
                                    eval_num='1',
                                    jobs=1):
+    print("* Running ingress *")
+    ingress_catalog = baseline_framework_ingress(
+        input_path,
+        '/tmp/ingress',
+        aws_profile=aws_profile,
+        dryrun=dryrun,
+        requester_pays=requester_pays,
+        relative=False,
+        jobs=jobs)
+
     print("* Running TA-1 Collation *")
     collate_ta1_output(
-        input_path,
+        ingress_catalog,
         outbucket,
         aws_profile=aws_profile,
         dryrun=dryrun,

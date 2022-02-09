@@ -41,17 +41,32 @@ UNDISTINGUISHED_CLASSES = {
 # }
 
 
+# TODO: ensure consistency with IARPA?
 # https://smartgitlab.com/TE/annotations/-/wikis/Alternate-Site-Type
+# https://smartgitlab.com/TE/metrics-and-test-framework/-/blob/main/evaluation.py#L1205
 HUERISTIC_STATUS_DATA = [
-    {'name': 'positive_annotated', 'color': 'olive'},
-    {'name': 'positive_partial', 'color': 'limegreen'},
-    {'name': 'positive_pending', 'color': 'seagreen'},
-    {'name': 'positive_excluded', 'color': 'darkgreen'},
-    {'name': 'positive_unbounded', 'color': 'steelblue'},
-    {'name': 'negative', 'color': 'orangered'},
-    {'name': 'negative_unbounded', 'color': 'deeppink'},
-    {'name': 'ignore', 'color': 'purple'},
+    {'name': 'positive_annotated', 'color': 'black'},
+    {'name': 'positive_partial', 'color': 'black'},
+    {'name': 'positive_pending', 'color': 'black'},
+    {'name': 'positive_unbounded', 'color': 'darkviolet'},
+    {'name': 'ignore', 'color': 'lightsalmon'},
+    {'name': 'seen', 'color': 'cyan'},
+    {'name': 'train', 'color': 'cyan'},
+    # Note: colors for these status labels are undefined, using neutral gray
+    {'name': 'positive_excluded', 'color': 'gray'},
+    {'name': 'negative', 'color': 'gray'},
+    {'name': 'negative_unbounded', 'color': 'gray'},
 ]
+# HUERISTIC_STATUS_DATA = [
+#     {'name': 'positive_annotated', 'color': 'olive'},
+#     {'name': 'positive_partial', 'color': 'limegreen'},
+#     {'name': 'positive_pending', 'color': 'seagreen'},
+#     {'name': 'positive_excluded', 'color': 'darkgreen'},
+#     {'name': 'positive_unbounded', 'color': 'steelblue'},
+#     {'name': 'negative', 'color': 'orangered'},
+#     {'name': 'negative_unbounded', 'color': 'deeppink'},
+#     {'name': 'ignore', 'color': 'purple'},
+# ]
 
 # metrics-and-test-framework/evaluation.py:1684
 CATEGORIES_SCORED = [
@@ -161,8 +176,8 @@ def _ensure_distinct_dict_colors(data_dicts, force=False):
 
 HUERISTIC_COMBINABLE_CHANNELS = [
     ub.oset(['B04', 'B03', 'B02']),  # for onera
-    ub.oset(['matset_1', 'matset_2', 'matset_3']),  # hack
-    ub.oset(['snow_or_ice_field', 'built_up', 'grassland']),  # hack
+    ub.oset(['matseg_1', 'matseg_2', 'matseg_3']),  # hack
+    # ub.oset(['snow_or_ice_field', 'built_up', 'grassland']),  # hack
 ]
 
 
@@ -187,3 +202,18 @@ CONFUSION_COLOR_SCHEME = {
     'FN': 'teal',
     'FP': 'red',
 }
+
+
+def dummy_legend():
+    # hack to make a legend for slides
+
+    label_to_color = {
+        cat['name']: cat['color']
+        for cat in CATEGORIES
+    }
+    label_to_color = ub.dict_subset(label_to_color, {
+        'Site Preparation', 'Active Construction', 'positive'})
+
+    import kwplot
+    kwplot.autompl()
+    kwplot.make_legend_img()

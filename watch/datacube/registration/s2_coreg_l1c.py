@@ -203,7 +203,7 @@ def s2_coregister(granuledirs, output_folder, baseline_scene, tile):
         path_out_data = os.path.join(output_folder, "T{}".format(tile), scene_id)
         os.makedirs(path_out_data, exist_ok=True)
 
-        if x == pfname_master:
+        if fname_base == os.path.basename(pfname_master):
             print('This is a master scene - just copy/translate to GTiff %s' %
                   (fname_base))
             for b in itertools.chain(S2_BANDS,

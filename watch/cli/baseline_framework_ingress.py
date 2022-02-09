@@ -7,6 +7,7 @@ import subprocess
 from urllib.parse import urlparse
 from datetime import datetime
 from concurrent.futures import as_completed
+import traceback
 
 import ubelt
 import requests
@@ -50,6 +51,11 @@ def main():
                         default=1,
                         required=False,
                         help='Number of jobs to run in parallel')
+    parser.add_argument('--virtual',
+                        action='store_true',
+                        default=False,
+                        help='Replace asset hrefs with GDAL Virtual File '
+                             'System links')
 
     parser.add_argument('--relative', default=False,
                         action='store_true', help='if true use relative paths')
@@ -60,7 +66,21 @@ def main():
     return 0
 
 
-def ingress_item(feature, outdir, aws_base_command, dryrun, relative=False):
+def _default_asset_selector(asset_name, asset):
+    return True
+
+
+def _default_item_selector(stac_item):
+    return True
+
+
+def ingress_item(feature,
+                 outdir,
+                 aws_base_command,
+                 dryrun,
+                 relative=False,
+                 asset_selector=_default_asset_selector,
+                 virtual=False):
     # Adding a reference back to the original STAC
     # item if not already present
     self_link = None
@@ -116,6 +136,12 @@ def ingress_item(feature, outdir, aws_base_command, dryrun, relative=False):
         except KeyError:
             pass
 
+        # Only download assets that pass the `asset_selector` filter.
+        # Note that the sentinel MTD_TL.xml that may be downloaded
+        # above will not have to pass through this filter
+        if not asset_selector(asset_name, asset):
+            continue
+
         local_asset_href = os.path.abspath(asset_outpath)
         if relative:
             local_asset_href = os.path.relpath(asset_outpath, outdir)
@@ -130,30 +156,44 @@ def ingress_item(feature, outdir, aws_base_command, dryrun, relative=False):
             asset['href'] = local_asset_href
         else:
             # Prefer to pull asset from S3 if available
-            if(urlparse(asset_href).scheme != 's3'
+            parsed_asset_href = urlparse(asset_href)
+            if(parsed_asset_href.scheme != 's3'
                and 'alternate' in asset and 's3' in asset['alternate']):
                 asset_href_for_download = asset['alternate']['s3']['href']
             else:
                 asset_href_for_download = asset_href
 
-            try:
-                success = download_file(asset_href_for_download,
-                                        asset_outpath,
-                                        aws_base_command,
-                                        dryrun)
-            except subprocess.CalledProcessError:
-                print("* Error * Couldn't download asset from href: '{}', "
-                      "removing asset from item!".format(
-                          asset_href_for_download))
-                assets_to_remove.add(asset_name)
-                continue
-            else:
-                if success:
-                    asset['href'] = local_asset_href
+            if virtual:
+                if parsed_asset_href.scheme == 's3':
+                    asset['href'] = '/vsis3/{}{}'.format(
+                        parsed_asset_href.netloc,
+                        parsed_asset_href.path)
+                elif parsed_asset_href.scheme in {'http', 'https'}:
+                    asset['href'] = '/vsicurl/{}'.format(asset_href)
                 else:
-                    print('Warning unrecognized scheme for asset href: {!r}, '
-                          'skipping!'.format(asset_href_for_download))
+                    print("* Unsupported URI scheme '{}' for virtual ingress; "
+                          "not updating href: {}".format(
+                              parsed_asset_href.scheme, asset_href))
+            else:
+                try:
+                    success = download_file(asset_href_for_download,
+                                            asset_outpath,
+                                            aws_base_command,
+                                            dryrun)
+                except subprocess.CalledProcessError:
+                    print("* Error * Couldn't download asset from href: '{}', "
+                          "removing asset from item!".format(
+                              asset_href_for_download))
+                    assets_to_remove.add(asset_name)
                     continue
+                else:
+                    if success:
+                        asset['href'] = local_asset_href
+                    else:
+                        print('Warning unrecognized scheme for asset href: '
+                              '{!r}, skipping!'.format(
+                                  asset_href_for_download))
+                        continue
 
     for asset_name in assets_to_remove:
         del assets[asset_name]
@@ -207,7 +247,10 @@ def baseline_framework_ingress(input_path,
                                show_progress=False,
                                requester_pays=False,
                                relative=False,
-                               jobs=1):
+                               jobs=1,
+                               item_selector=_default_item_selector,
+                               asset_selector=_default_asset_selector,
+                               virtual=False):
     os.makedirs(outdir, exist_ok=True)
 
     if relative:
@@ -246,15 +289,16 @@ def baseline_framework_ingress(input_path,
                               max_workers=jobs)
 
     jobs = [executor.submit(ingress_item, feature, outdir, aws_base_command,
-                            dryrun, relative)
-            for feature in input_stac_items]
+                            dryrun, relative, asset_selector, virtual)
+            for feature in input_stac_items
+            if item_selector(feature)]
 
     for job in as_completed(jobs):
         try:
             mapped_item = job.result()
-        except Exception as e:
+        except Exception:
             print("Exception occurred (printed below), dropping item!")
-            print(e)
+            traceback.print_exception(*sys.exc_info())
             continue
         else:
             catalog.add_item(mapped_item)
@@ -306,7 +350,7 @@ def download_mtd_msil1c(product_id,
     except ValueError:
         # Support for older format product ID format, e.g.:
         # "S2A_OPER_PRD_MSIL1C_PDMC_20160413T135705_R065_V20160412T102058_20160412T102058"
-        dt = datetime.strptime(product_id.split('_')[5], '%Y%m%dT%H%M%S')
+        dt = datetime.strptime(product_id.split('_')[7][1:], '%Y%m%dT%H%M%S')
 
     scheme, netloc, path, *_ = urlparse(metadata_href)
     index = path.find('tiles')

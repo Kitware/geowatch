@@ -182,7 +182,7 @@ def wv_ortho(stac_catalog,
     return output_catalog
 
 
-@maps
+@maps(history_entry='wv_ortho')
 def _ortho_map(stac_item, outdir, drop_empty=False, *args, **kwargs):
     def is_empty(fpath):
         '''

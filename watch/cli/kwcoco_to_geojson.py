@@ -33,15 +33,26 @@ import json
 import os
 import sys
 import argparse
+import jsonschema
 import kwcoco
+import kwimage
 import dateutil.parser
 import watch
 import shapely
 import shapely.ops
 from mgrs import MGRS
+from osgeo import osr
+from glob import glob
 import numpy as np
 import ubelt as ub
+from kwcoco.coco_image import CocoImage
 # import colored_traceback.auto  # noqa
+
+
+try:
+    from xdev import profile
+except Exception:
+    profile = ub.identity
 
 
 def _single_geometry(geom):
@@ -57,17 +68,20 @@ def _normalize_date(date_str):
     return dateutil.parser.parse(date_str).date().isoformat()
 
 
+@profile
 def geojson_feature(img, anns, coco_dset, with_properties=True):
     '''
     Group kwcoco annotations in the same track (site) and image
     into one Feature in an IARPA site model
     '''
+
     def single_geometry(ann):
         seg_geo = ann['segmentation_geos']
         assert isinstance(seg_geo, dict)
         return _single_geometry(seg_geo)
 
-    def per_image_properties(img):
+    @profile
+    def _per_image_properties(coco_img: CocoImage):
         '''
         Properties defined per-img instead of per-ann, to reduce duplicate
         computation.
@@ -78,16 +92,22 @@ def geojson_feature(img, anns, coco_dset, with_properties=True):
         # TODO maybe use misc_info for this instead when STAC id is
         # properly passed through to TA-2?
         source = None
-        for aux in img.get('auxiliary', []):
-            if aux['channels'] in {'r|g|b', 'rgb'}:
-                # source = basename
-                source = os.path.abspath(aux['file_name'])
-        for aux in img.get('auxiliary', []):
-            if aux['channels'] in {'pan', 'panchromatic'}:
-                # source = basename
-                source = os.path.abspath(aux['file_name'])
+        img = coco_img.img
+        bundle_dpath = ub.Path(coco_img.bundle_dpath)
+        chan_to_aux = {aux['channels']: aux for aux in coco_img.iter_asset_objs()}
+        for want_chan in {'r|g|b', 'rgb', 'pan', 'panchromatic', 'green', 'blue'}:
+            if want_chan in chan_to_aux:
+                aux = chan_to_aux[want_chan]
+                source = bundle_dpath / aux['file_name']
+                break
+
+        # if source is None:
+        #     # Fallback to the "primary" filepath (too slow)
+        #     source = os.path.abspath(coco_img.primary_image_filepath())
+
         if source is None:
             try:
+                # Note, this will likely fail
                 # Pick reasonable source image, we don't have a spec for this
                 candidate_keys = [
                     'parent_name', 'parent_file_name', 'name', 'file_name'
@@ -96,19 +116,21 @@ def geojson_feature(img, anns, coco_dset, with_properties=True):
             except StopIteration:
                 raise Exception(f'can\'t determine source of gid {img["gid"]}')
 
+        date = _normalize_date(img['date_captured'])
+
         return {
             'source': source,
-            'observation_date': _normalize_date(img['date_captured']),
+            'observation_date': date,
             'is_occluded': False,  # HACK
             'sensor_name': img['sensor_coarse']
         }
 
     if with_properties:
-        image_properties_dct = {
-            gid: per_image_properties(coco_dset.imgs[gid])
-            for gid in {ann['image_id']
-                        for ann in anns}
-        }
+        image_properties_dct = {}
+        gids = {ann['image_id'] for ann in anns}
+        for gid in gids:
+            coco_img = coco_dset.coco_image(gid).detach()
+            image_properties_dct[gid] = _per_image_properties(coco_img)
 
     def single_properties(ann):
 
@@ -199,6 +221,7 @@ def geojson_feature(img, anns, coco_dset, with_properties=True):
                            properties=properties)
 
 
+@profile
 def track_to_site(coco_dset,
                   trackid,
                   region_id,
@@ -285,7 +308,7 @@ def track_to_site(coco_dset,
         geometry = _combined_geometries(
             [_single_geometry(feat['geometry']) for feat in features])
 
-        centroid_latlon = np.array(geometry.centroid)[::-1]
+        centroid_latlon = np.array(geometry.centroid.coords)[0][::-1]
 
         # these are strings, but sorting should be correct in isoformat
         dates = sorted(
@@ -327,7 +350,9 @@ def track_to_site(coco_dset,
         return geojson.FeatureCollection([site_feature()] + features)
 
 
-def convert_kwcoco_to_iarpa(coco_dset, region_id=None, as_summary=False):
+def convert_kwcoco_to_iarpa(coco_dset,
+                            default_region_id=None,
+                            as_summary=False):
     """
     Convert a kwcoco coco_dset to the IARPA JSON format
 
@@ -348,8 +373,9 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id=None, as_summary=False):
         >>> import ubelt as ub
         >>> coco_dset = smart_kwcoco_demodata.demo_smart_aligned_kwcoco()
         >>> coco_dset = normalize(coco_dset, track_fn=MonoTrack, overwrite=False)
-        >>> region_id = 'KR_R001'
-        >>> sites = convert_kwcoco_to_iarpa(coco_dset, region_id)
+        >>> region_ids = ['KR_R001', 'KR_R002']
+        >>> coco_dset.videos().set('name', region_ids)
+        >>> sites = convert_kwcoco_to_iarpa(coco_dset)
         >>> print('sites = {}'.format(ub.repr2(sites, nl=7, sort=0)))
         >>> import jsonschema
         >>> import watch
@@ -359,69 +385,111 @@ def convert_kwcoco_to_iarpa(coco_dset, region_id=None, as_summary=False):
 
     """
     sites = []
-
     for vidid, video in coco_dset.index.videos.items():
-        if region_id is None:
-            _region_id = video['name']
-        else:
-            _region_id = region_id
+        region_id = video.get('name', default_region_id)
 
         sub_dset = coco_dset.subset(gids=coco_dset.index.vidid_to_gids[vidid])
 
         for site_idx, trackid in enumerate(sub_dset.index.trackid_to_aids):
 
-            site = track_to_site(sub_dset, trackid, _region_id, site_idx,
+            site = track_to_site(sub_dset, trackid, region_id, site_idx,
                                  as_summary)
             sites.append(site)
 
     return sites
 
 
-def add_site_summary_to_kwcoco(site_summary_or_region_model,
+def _validate_summary(site_summary_or_region_model,
+                      default_region_id=None,
+                      raises=True):
+    '''
+    Possible input formats:
+        - file path
+        - globbed file paths
+        - stringified json blob
+    Leading to a:
+        - site summary
+        - region model containing site summaries
+
+    Args:
+        default_region_id: for summaries.
+            Region models should already have a region_id.
+        raises: if True, raise error on unknown input
+
+    Returns:
+        List[Tuple[region_id: str, site_summary: Dict]]
+    '''
+
+    # open the filepath(s)
+    summaries_or_rms = []
+
+    if isinstance(site_summary_or_region_model, str):
+        paths = glob(site_summary_or_region_model)
+        if len(paths) > 0:
+            for path in paths:
+                with open(path) as f:
+                    summaries_or_rms.append(json.load(f))
+        else:
+            try:
+                summaries_or_rms.append(
+                    json.loads(site_summary_or_region_model))
+            except json.JSONDecodeError as err:
+                if raises:
+                    raise err
+
+    # validate the json
+    summaries = []
+
+    for site_summary_or_region_model in summaries_or_rms:
+
+        if raises:
+            assert isinstance(
+                site_summary_or_region_model, dict
+            ), ('unknown site summary dtype ' +
+                str(type(site_summary_or_region_model)))
+
+        try:  # is this a region model?
+            region_model_schema = watch.rc.load_region_model_schema()
+            region_model = site_summary_or_region_model
+            jsonschema.validate(region_model, schema=region_model_schema)
+            site_summaries = [
+                f for f in region_model['features']
+                if (f['properties']['type'] == 'site_summary'
+                    # TODO handle positive_partial
+                    and f['properties']['status'] == 'positive_annotated')
+            ]
+            region_feat = region_model['features'][0]
+            assert region_feat['properties']['type'] == 'region'
+            region_id = region_feat['properties'].get('region_id',
+                                                      default_region_id)
+            summaries.extend([(region_id, s) for s in site_summaries])
+
+        except jsonschema.ValidationError:  # or a site model?
+            # TODO validate this
+            site_summary = site_summary_or_region_model
+            summaries.append((default_region_id, site_summary))
+
+    return summaries
+
+
+def add_site_summary_to_kwcoco(possible_summaries,
                                coco_dset,
-                               region_id=None):
+                               default_region_id=None):
     """
     Add a site summary(s) to a kwcoco dataset as a set of polygon annotations.
     These annotations will have category "Site Boundary", 1 track per summary.
     """
-    import json
-    import jsonschema
-    import kwimage
+
     # input validation
-    if isinstance(site_summary_or_region_model, str):
-        if os.path.isfile(site_summary_or_region_model):
-            with open(site_summary_or_region_model) as f:
-                site_summary_or_region_model = json.load(f)
-        else:
-            site_summary_or_region_model = json.loads(
-                site_summary_or_region_model)
-    assert isinstance(
-        site_summary_or_region_model, dict
-    ), f'unknown site summary dtype {type(site_summary_or_region_model)}'
-    try:
-        region_model_schema = watch.rc.load_region_model_schema()
-        region_model = site_summary_or_region_model
-        jsonschema.validate(region_model, schema=region_model_schema)
-        site_summaries = [
-            f for f in region_model['features']
-            if (f['properties']['type'] == 'site_summary'
-                # TODO handle positive_partial
-                and f['properties']['status'] == 'positive_annotated')
-        ]
-        if region_id is None:
-            region_feat = region_model['features'][0]
-            assert region_feat['properties']['type'] == 'region'
-            region_id = region_feat['properties']['region_id']
-    except jsonschema.ValidationError:
-        # TODO validate this
-        site_summary = site_summary_or_region_model
-        site_summaries = [site_summary]
-        if region_id is None:
-            assert len(coco_dset.index.name_to_video) == 1, 'ambiguous video'
-            region_id = ub.peek(coco_dset.index.name_to_video)
+
+    if default_region_id is None:
+        default_region_id = ub.peek(coco_dset.index.name_to_video)
+
+    site_summaries = _validate_summary(
+        possible_summaries,
+        default_region_id)
 
     # TODO use pyproj instead, make sure it works with kwimage.warp
-    from osgeo import osr
 
     @ub.memoize
     def transform_wgs84_to(target_epsg_code):
@@ -435,7 +503,7 @@ def add_site_summary_to_kwcoco(site_summary_or_region_model,
     print('warping site boundaries to pxl space...')
     cid = coco_dset.ensure_category('Site Boundary')
     new_trackids = watch.utils.kwcoco_extensions.TrackidGenerator(coco_dset)
-    for site_summary in site_summaries:
+    for region_id, site_summary in site_summaries:
 
         track_id = next(new_trackids)
 
@@ -476,6 +544,7 @@ def add_site_summary_to_kwcoco(site_summary_or_region_model,
     return coco_dset
 
 
+@profile
 def create_region_feature(region_id, site_summaries):
     geometry = _combined_geometries([
         _single_geometry(summary['geometry']) for summary in site_summaries
@@ -498,6 +567,7 @@ def create_region_feature(region_id, site_summaries):
     return geojson.Feature(geometry=geometry, properties=properties)
 
 
+@profile
 def main(args):
     """
     Example:
@@ -641,9 +711,9 @@ def main(args):
     behavior_args.add_argument('--site_summary',
                                default=None,
                                help=ub.paragraph('''
-        File path or serialized json object containing either a site_summary
+        A filepath glob or json blob containing either a site_summary
         or a region_model that includes site summaries. Each summary found will
-        be added to in_file to use in site characterization.
+        be added to in_file as 'Site Boundary' annotations.
         '''))
     # call run_metrics_framework as an optional subcommand
     # https://stackoverflow.com/a/4575792
@@ -672,8 +742,10 @@ def main(args):
         track_kwargs = json.loads(args.track_kwargs)
     assert isinstance(track_kwargs, dict)
 
-    # Read the kwcoco file(s)
+    # Read the kwcoco file
     coco_dset = kwcoco.CocoDataset.coerce(args.in_file)
+    # HACK read auxiliary kwcoco files
+    # these aren't used for core tracking algos, supported for legacy
     if args.in_file_gt is not None:
         gt_dset = kwcoco.CocoDataset.coerce(args.in_file_gt)
     else:
@@ -686,23 +758,40 @@ def main(args):
                 pass
 
     # Pick a track_fn
+    # HACK remove potentially conflicting annotations as well
+    # we shouldn't have saliency annots when we want class or vice versa
+    CLEAN_DSET = 1
+    class_cats = [cat['name'] for cat in watch.heuristics.CATEGORIES]
+    saliency_cats = ['salient']
     if args.default_track_fn is not None:
         from watch.tasks.tracking import from_heatmap, from_polygon
         if args.default_track_fn == 'saliency_heatmaps':
             track_fn = from_heatmap.TimeAggregatedBAS
+            if CLEAN_DSET:
+                coco_dset.remove_categories(class_cats)
         elif args.default_track_fn == 'saliency_polys':
             track_fn = from_polygon.OverlapTrack
+            if CLEAN_DSET:
+                coco_dset.remove_categories(class_cats)
         elif args.default_track_fn == 'class_heatmaps':
             track_fn = from_heatmap.TimeAggregatedSC
+            if CLEAN_DSET:
+                coco_dset.remove_categories(saliency_cats)
         elif args.default_track_fn == 'class_polys':
             track_fn = from_polygon.OverlapTrack
+            if CLEAN_DSET:
+                coco_dset.remove_categories(saliency_cats)
         else:
             track_fn = from_heatmap.TimeAggregatedBAS
             track_kwargs['key'] = [args.default_track_fn]
+            if CLEAN_DSET:
+                coco_dset.remove_categories(class_cats)
     elif args.track_fn is None:
         track_fn = watch.tasks.tracking.utils.NoOpTrackFunction
     else:
         track_fn = eval(args.track_fn)
+        if CLEAN_DSET:
+            print('warning: could not check for invalid cats!')
 
     # add site summaries (site boundary annotations)
     if args.site_summary is not None:
@@ -754,14 +843,14 @@ def main(args):
                 geojson.dump(region, f, indent=2)
 
     else:  # write sites to disk
-        for site in sites:
+        for site in ub.ProgIter(sites, desc='writing sites', verbose=verbose):
             site_props = site['features'][0]['properties']
             assert site_props['type'] == 'site'
             site_fpath = os.path.join(out_dir,
                                       site_props['site_id'] + '.geojson')
-            if verbose:
-                print(f'writing site {site_props["site_id"]} to new '
-                      f'site {site_fpath}')
+            # if verbose:
+            #     print(f'writing site {site_props["site_id"]} to new '
+            #           f'site {site_fpath}')
             with open(os.path.join(site_fpath), 'w') as f:
                 geojson.dump(site, f, indent=2)
 
@@ -831,7 +920,7 @@ def demo(coco_dset,
                 print('running site ' + site['properties']['site_id'])
                 main([
                     sub_dset.fpath,
-                    '--track_kwargs', '{"use_boundary_annots": false}'
+                    '--track_kwargs', '{"boundaries_as": "none"}'
                 ] + sc_args)
                 # '--site_summary', json.dumps(site)])
     if cleanup:

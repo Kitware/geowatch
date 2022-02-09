@@ -12,6 +12,12 @@ from watch.gis.geotiff import geotiff_crs_info
 from watch.tasks.tracking.utils import TrackFunction
 
 
+try:
+    from xdev import profile
+except Exception:
+    profile = ub.identity
+
+
 def dedupe_annots(coco_dset):
     '''
     Check for annotations with different aids that are the same geometry
@@ -63,6 +69,7 @@ def dedupe_annots(coco_dset):
     return coco_dset
 
 
+@profile
 def add_geos(coco_dset, overwrite, max_workers=16):
     '''
     Add 'segmentation_geos' to every annotation in coco_dset with a
@@ -87,6 +94,8 @@ def add_geos(coco_dset, overwrite, max_workers=16):
         if img['file_name'] is not None:
             return img
         aux_ix = img.get('aux_annotated_candidate', 0)
+        if aux_ix is None:
+            aux_ix = 0
         return img['auxiliary'][aux_ix]
 
     def fpath(img):
@@ -124,10 +133,9 @@ def add_geos(coco_dset, overwrite, max_workers=16):
         '''
         img_anns = annots.detections.data['segmentations']
         assert len(img_anns) == len(annots), 'TODO skip anns w/o segmentations'
-        aux_anns = img_anns.warp(
-            kwimage.Affine.coerce(
-                annotated_band(img).get('warp_aux_to_img',
-                                        kwimage.Affine.eye())).inv())
+        warp_aux_to_img = kwimage.Affine.coerce(
+                annotated_band(img).get('warp_aux_to_img', None)).inv()
+        aux_anns = img_anns.warp(warp_aux_to_img)
         wld_anns = aux_anns.warp(info['pxl_to_wld'])
         wgs_anns = wld_anns.warp(info['wld_to_wgs84'])
         geojson_anns = [poly.swap_axes().to_geojson() for poly in wgs_anns]
@@ -143,6 +151,7 @@ def add_geos(coco_dset, overwrite, max_workers=16):
     return coco_dset
 
 
+@profile
 def remove_small_annots(coco_dset, min_area_px=1, min_geo_precision=6):
     '''
     There are several reasons for a detection to be too small to keep.
@@ -377,10 +386,12 @@ def add_track_index(coco_dset):
     return coco_dset
 
 
+@profile
 def normalize_phases(coco_dset, baseline_keys={'salient'}):
     '''
-    Convert internal representation of phases to their IARPA standards
-    as well as inserting a baseline guess for activity classification
+    Convert internal representation of phases to their IARPA standards as well
+    as inserting a baseline guess for activity classification and removing
+    empty tracks.
 
     HACK: add a Post Construction frame at the end of every track
     until we support partial sites
@@ -489,49 +500,51 @@ def normalize_phases(coco_dset, baseline_keys={'salient'}):
         # ss2    AC  AC
         # it is ambiguous whether ss2 ends on AC or merges with ss1.
         # Ignore this edge case for now.
-        last_gid = coco_dset.index._set_sorted_by_frame_index(
-            coco_dset.annots(trackid=trackid).gids)[-1]
-        vidid = coco_dset.imgs[last_gid].get('video_id', None)
-        if vidid is None:
-            gids = coco_dset.index._set_sorted_by_frame_index(
-                coco_dset.images().gids)
-        else:
-            gids = coco_dset.index._set_sorted_by_frame_index(
-                coco_dset.images(vidid=vidid).gids)
-        current_gid = gids[-1]
+        if len(coco_dset.annots(trackid=trackid)) > 1:
+            last_gid = coco_dset.index._set_sorted_by_frame_index(
+                coco_dset.annots(trackid=trackid).gids)[-1]
+            vidid = coco_dset.imgs[last_gid].get('video_id', None)
+            if vidid is None:
+                gids = coco_dset.index._set_sorted_by_frame_index(
+                    coco_dset.images().gids)
+            else:
+                gids = coco_dset.index._set_sorted_by_frame_index(
+                    coco_dset.images(vidid=vidid).gids)
+            current_gid = gids[-1]
 
-        def img_to_vid(gid):
-            return kwimage.Affine.coerce(coco_dset.imgs[gid].get(
-                'warp_img_to_vid', {'scale': 1}))
+            def img_to_vid(gid):
+                return kwimage.Affine.coerce(coco_dset.imgs[gid].get(
+                    'warp_img_to_vid', {'scale': 1}))
 
-        if last_gid != current_gid:
-            next_gid = gids[gids.index(last_gid) + 1]
+            if last_gid != current_gid:
+                next_gid = gids[gids.index(last_gid) + 1]
 
-            post_cid = coco_dset.name_to_cat['Post Construction']['id']
+                post_cid = coco_dset.name_to_cat['Post Construction']['id']
 
-            # TODO make this work as expected - intersection instead of union
-            # coco_dset.annots(trackid=trackid, gid=last_gid)
-            anns = coco_dset.annots(aids=[
-                ann['id'] for ann in coco_dset.annots(gid=last_gid).objs if
-                ann['track_id'] == trackid and ann['category_id'] != post_cid
-            ])
-            dets = anns.detections.warp(img_to_vid(last_gid)).warp(
-                img_to_vid(next_gid).inv())
-            for ann, seg, bbox in zip(
-                    anns.objs, dets.data['segmentations'].to_coco(style='new'),
-                    dets.boxes.to_coco(style='new')):
+                # TODO make this work as expected intersection instead of union
+                # coco_dset.annots(trackid=trackid, gid=last_gid)
+                anns = coco_dset.annots(aids=[
+                    ann['id'] for ann in coco_dset.annots(gid=last_gid).objs
+                    if ann['track_id'] == trackid
+                    and ann['category_id'] != post_cid
+                ])
+                dets = anns.detections.warp(img_to_vid(last_gid)).warp(
+                    img_to_vid(next_gid).inv())
+                for ann, seg, bbox in zip(
+                        anns.objs,
+                        dets.data['segmentations'].to_coco(style='new'),
+                        dets.boxes.to_coco(style='new')):
 
-                post_ann = ann.copy()
-                post_ann.pop('id')
-                if 'track_index' in post_ann:
-                    post_ann['track_index'] += 1
-                post_ann.update(
-                    dict(image_id=next_gid,
-                         category_id=post_cid,
-                         segmentation=seg,
-                         bbox=bbox))
-                # import xdev; xdev.embed()
-                coco_dset.add_annotation(**post_ann)
+                    post_ann = ann.copy()
+                    post_ann.pop('id')
+                    if 'track_index' in post_ann:
+                        post_ann['track_index'] += 1
+                    post_ann.update(
+                        dict(image_id=next_gid,
+                             category_id=post_cid,
+                             segmentation=seg,
+                             bbox=bbox))
+                    coco_dset.add_annotation(**post_ann)
 
     print('label status of tracks: ', log)
     return coco_dset
@@ -564,6 +577,7 @@ def normalize_sensors(coco_dset):
     return coco_dset
 
 
+@profile
 def normalize(coco_dset, track_fn, overwrite, gt_dset=None, **track_kwargs):
     '''
     Driver function to apply all normalizations
@@ -654,8 +668,8 @@ def normalize(coco_dset, track_fn, overwrite, gt_dset=None, **track_kwargs):
 
     if gt_dset is not None:
         # visualize predicted sites with true sites
-        out_dir = './_assets/1b_official_BR_small'
-        from visualize import visualize_videos
+        out_dir = './_assets/tracking_visualization'
+        from .visualize import visualize_videos
         visualize_videos(coco_dset,
                          gt_dset,
                          out_dir,

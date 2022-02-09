@@ -194,7 +194,7 @@ rm -r $DSET_DPATH/scores
 python -m watch.cli.kwcoco_to_geojson \
     $DSET_DPATH/sc.kwcoco.json \
     --default_track_fn class_heatmaps \
-    --track_kwargs "{\"use_boundary_annots\": false}" \
+    --track_kwargs "{\"boundaries_as\": \"none\"}" \
     score  -- \
         --metrics_dpath $METRICS_DPATH \
         --virtualenv_cmd $METRICS_VENV_CMD \
@@ -218,7 +218,8 @@ python -m watch.cli.kwcoco_to_geojson \
 
 
 #
-# DEMO: Run BAS to propose potential sites in a region, then run SC on each site
+# DEMO: Run BAS to propose potential sites in a region, then run SC on each
+# site
 # 
 
 
@@ -232,16 +233,21 @@ python -m watch.cli.kwcoco_to_geojson \
 # creates sites/[sites].geojson and scores/*
 rm -r $DSET_DPATH/sites
 rm -r $DSET_DPATH/scores
-for REGION_FILE in $DSET_DPATH/regions/*geojson; do
-    python -m watch.cli.kwcoco_to_geojson \
-        $DSET_DPATH/sc.kwcoco.json \
-        --default_track_fn class_heatmaps \
-        --site_summary $REGION_FILE \
-        score -- \
-            --metrics_dpath $METRICS_DPATH \
-            --virtualenv_cmd $METRICS_VENV_CMD \
-            --out_dir $DSET_DPATH/scores/
-done
+
+# optional arg for behavior like TimeAggregatedHybrid
+#     --track_kwargs "{\"boundaries_as\": \"polys\"}" \
+
+# quotes around --site_summary needed for glob escaping
+
+python -m watch.cli.kwcoco_to_geojson \
+    $DSET_DPATH/sc.kwcoco.json \
+    --default_track_fn class_heatmaps \
+    --site_summary "$DSET_DPATH/regions/*.geojson" \
+    --track_kwargs "{\"boundaries_as\": \"polys\"}" \
+    score -- \
+        --metrics_dpath $METRICS_DPATH \
+        --virtualenv_cmd $METRICS_VENV_CMD \
+        --out_dir $DSET_DPATH/scores/ \
 
 
 #
@@ -254,14 +260,11 @@ done
 # creates sites/[sites].geojson and scores/*
 rm -r $DSET_DPATH/sites
 rm -r $DSET_DPATH/scores
-for REGION_FILE in $DVC_DPATH/annotations/region_models/KR_*.geojson; do
     python -m watch.cli.kwcoco_to_geojson \
         $DSET_DPATH/sc.kwcoco.json \
         --default_track_fn class_heatmaps \
-        --site_summary $REGION_FILE \
+        --site_summary $DVC_DPATH/annotations/region_models/KR_*.geojson \
         score -- \
             --metrics_dpath $METRICS_DPATH \
             --virtualenv_cmd $METRICS_VENV_CMD \
-            --out_dir $DSET_DPATH/scores/ \
-done
-
+            --out_dir $DSET_DPATH/scores/
