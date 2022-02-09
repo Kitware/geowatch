@@ -120,16 +120,22 @@ python -m watch.tasks.fusion.predict \
 _debug(){
 
     python -m watch visualize \
-        --src "$ALIGNED_KWCOCO_BUNDLE/combo_L_s2.kwcoco.json" \
+        --src "$ALIGNED_KWCOCO_BUNDLE/combo_L.kwcoco.json" \
         --space="video" \
         --num_workers=avail \
         --channels="red|green|blue,forest|brush|bare_ground" \
-        --viz_dpath="$ALIGNED_KWCOCO_BUNDLE/_viz" \
+        --viz_dpath="$ALIGNED_KWCOCO_BUNDLE/_viz_combo_L" \
         --draw_anns=False \
         --animate=True \
         --any3=False \
         --fixed_normalization_scheme=scaled_raw_25percentile
 
+    python -m watch intensity_histograms \
+        --src "$ALIGNED_KWCOCO_BUNDLE/combo_L.kwcoco.json" \
+        --dst="$ALIGNED_KWCOCO_BUNDLE/_viz_combo_L/intensity.png" \
+        --exclude_channels="forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field" \
+        --valid_range="0;10000" \
+        --workers="avail/2" 
 
     python -m kwcoco stats "$INPUT_DATASET"
     python -m watch stats "$INPUT_DATASET"

@@ -29,7 +29,7 @@ class IntensityHistogramConfig(scfg.Config):
     default = {
         'src': scfg.Value('in.geojson.json', help='input dataset to chip', position=1),
 
-        'dst': scfg.Value(None, help='if specified dump the figure to disk at this path'),
+        'dst': scfg.Value(None, help='if specified dump the figure to disk at this file path (e.g. with a jpg or png suffix)'),
 
         'show': scfg.Value(False, help='if True, do a plt.show()'),
 
@@ -473,7 +473,7 @@ def ensure_intensity_stats(coco_img, recompute=False, include_channels=None, exc
         if exclude_channels:
             requested_channels = requested_channels - exclude_channels
 
-        if len(requested_channels) > 0:
+        if requested_channels.numel() > 0:
             stats_fpath = ensure_intensity_sidecar(fpath, recompute=recompute)
             try:
                 with open(stats_fpath, 'rb') as file:
