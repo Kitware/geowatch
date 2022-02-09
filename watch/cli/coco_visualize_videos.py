@@ -516,19 +516,17 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     date_captured = img.get('date_captured', '')
     frame_index = img.get('frame_index', None)
     gid = img.get('id', None)
+    image_name = img.get('name', '')
 
     image_id_parts = []
-    image_name = img.get('name', '')
-    name_part = f'gname={image_name}'
-    image_id_parts.append(name_part)
-    image_id_parts.append(f'frame_index={frame_index}')
     image_id_parts.append(f'gid={gid}')
+    image_id_parts.append(f'frame_index={frame_index}')
     image_id_part = ', '.join(image_id_parts)
 
-    header_line_infos = [
-        [vidname, image_id_part, _header_extra],
-        [sensor_coarse, date_captured],
-    ]
+    header_line_infos = []
+    header_line_infos.append([vidname, image_id_part, _header_extra])
+    header_line_infos.append([image_name])
+    header_line_infos.append([sensor_coarse, date_captured])
     header_lines = []
     for line_info in header_line_infos:
         header_line = ' '.join([p for p in line_info if p])
