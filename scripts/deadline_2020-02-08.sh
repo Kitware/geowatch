@@ -118,6 +118,50 @@ python -m watch.tasks.fusion.predict \
 
 
 _debug(){
+    __notes__="
+
+    Drop2 train set:
+
+        'L8': {                                                                                                                                                                     
+            'coastal|lwir11|lwir12|blue|green|red|nir|swir16|swir22|pan|cirrus|QA_PIXEL|QA_RADSAT|SAA|SEA4|SEZ4|SOA4|SOZ4|SZA|VAA|VZA|cloudmask|forest|brush|bare_ground|built_up|cr
+opland|wetland|water|snow_or_ice_field': 344,                                                                                                                                       
+            'coastal|lwir11|lwir12|blue|green|red|nir|swir16|swir22|pan|cirrus|QA_PIXEL|QA_RADSAT|SAA|SZA|VAA|VZA|cloudmask|forest|brush|bare_ground|built_up|cropland|wetland|water
+|snow_or_ice_field': 66,                                                                                                                                                            
+        },                                                                                                                                                                          
+        'S2': {                                                                                                                                                                     
+            'coastal|blue|green|red|B05|B06|B07|nir|B09|cirrus|swir16|swir22|B8A|SEA4|SEZ4|SOA4|SOZ4|cloudmask|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_
+field': 593,                                                                                                                                                                        
+            'coastal|blue|green|red|B05|B06|B07|nir|B09|cirrus|swir16|swir22|B8A|cloudmask|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field': 66,         
+        },                                                                                                                                                                          
+        'WV': {                                                                                                                                                                     
+            'blue|green|red|near-ir1': 29,                                                                                                                                          
+            'blue|green|red|near-ir1|panchromatic': 5,                                                                                                                              
+            'coastal|blue|green|yellow|red|red-edge|near-ir1|near-ir2': 197,                                                                                                        
+            'coastal|blue|green|yellow|red|red-edge|near-ir1|near-ir2|panchromatic': 5,                                                                                             
+            'panchromatic': 12,                                                                                                                                                     
+            'panchromatic|blue|green|red|near-ir1': 1,                                                                                                                              
+            'panchromatic|coastal|blue|green|yellow|red|red-edge|near-ir1|near-ir2': 2,                                                                                             
+        },                                                                                                                                                                          
+    
+    "
+
+    python -m watch visualize \
+        --src "$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L.kwcoco.json" \
+        --space="video" \
+        --num_workers=avail \
+        --channels="red|green|blue,forest|brush|bare_ground" \
+        --viz_dpath="$DVC_DPATH/Drop2-Aligned-TA1-2022-01/_viz_combo_L" \
+        --draw_anns=False \
+        --animate=True \
+        --workers=4 \
+        --any3=False 
+
+    python -m watch intensity_histograms \
+        --src "$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L.kwcoco.json" \
+        --dst="$DVC_DPATH/Drop2-Aligned-TA1-2022-01/_viz_combo_L/intensity.png" \
+        --exclude_channels="cirrus|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field" \
+        --valid_range="1:6000" \
+        --workers="avail" 
 
     python -m watch visualize \
         --src "$ALIGNED_KWCOCO_BUNDLE/combo_L.kwcoco.json" \
@@ -127,18 +171,17 @@ _debug(){
         --viz_dpath="$ALIGNED_KWCOCO_BUNDLE/_viz_combo_L" \
         --draw_anns=False \
         --animate=True \
-        --any3=False \
-        --fixed_normalization_scheme=scaled_raw_25percentile
+        --any3=False 
 
     python -m watch intensity_histograms \
         --src "$ALIGNED_KWCOCO_BUNDLE/combo_L.kwcoco.json" \
         --dst="$ALIGNED_KWCOCO_BUNDLE/_viz_combo_L/intensity.png" \
-        --exclude_channels="forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field" \
-        --valid_range="0;10000" \
-        --workers="avail/2" 
+        --exclude_channels="cirrus|forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field" \
+        --valid_range="1:6000" \
+        --workers="avail" 
 
-    python -m kwcoco stats "$INPUT_DATASET"
-    python -m watch stats "$INPUT_DATASET"
+
+    python -m kwcoco stats "$INPUT_DATASET" python -m watch stats "$INPUT_DATASET"
     python -m watch.cli.torch_model_stats "$BAS_MODEL_PATH"
 
     #jq .images[0] "$INPUT_DATASET"
