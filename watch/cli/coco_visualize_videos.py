@@ -69,7 +69,7 @@ class CocoVisualizeConfig(scfg.Config):
 
         'channels': scfg.Value(None, type=str, help='only viz these channels'),
 
-        'any3': scfg.Value(True, help='if True, ensure the "any3" channels are drawn. If set to "only", then other per-channel visualizations are supressed. TODO: better name?'),
+        'any3': scfg.Value(False, help='if True, ensure the "any3" channels are drawn. If set to "only", then other per-channel visualizations are supressed. TODO: better name?'),
 
         'draw_imgs': scfg.Value(True),
         'draw_anns': scfg.Value(True),
@@ -516,8 +516,17 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     date_captured = img.get('date_captured', '')
     frame_index = img.get('frame_index', None)
     gid = img.get('id', None)
+
+    image_id_parts = []
+    image_name = img.get('name', '')
+    name_part = f'gname={image_name}'
+    image_id_parts.append(name_part)
+    image_id_parts.append(f'frame_index={frame_index}')
+    image_id_parts.append(f'gid={gid}')
+    image_id_part = ', '.join(image_id_parts)
+
     header_line_infos = [
-        [vidname, f'gid={gid}, frame={frame_index}', _header_extra],
+        [vidname, image_id_part, _header_extra],
         [sensor_coarse, date_captured],
     ]
     header_lines = []
