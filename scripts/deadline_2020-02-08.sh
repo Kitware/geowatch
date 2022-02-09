@@ -1,14 +1,19 @@
 #!/bin/bash
 __doc__="
 If you need to regenerate the regions use:
-
 "
+
+DATASET_SUFFIX=TA1_FULL_SEQ_KR_S001_CLOUD_LT_10
+S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/eval2/master_collation_working/KR_S001.unique.fixed_ls_ids.cloudcover_lt_10.output
+
+DATASET_SUFFIX=TA1_FULL_SEQ_KR_S001
+S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/eval2/master_collation_working/KR_S001.unique.fixed_ls_ids.output
+
 
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 #DVC_DPATH=$(python -m watch.cli.find_dvc)
-DATASET_SUFFIX=TA1_FULL_SEQ_KR_S001
-S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/eval2/master_collation_working/KR_S001.unique.fixed_ls_ids.output
-S3_DPATH=s3://kitware-smart-watch-data/processed/ta1/eval2/master_collation_working
+#S3_DPATH=s3://kitware-smart-watch-data/processed/ta1/eval2/master_collation_working
+QUERY_BASENAME=$(basename "$S3_FPATH")
 ALIGNED_BUNDLE_NAME=Aligned-$DATASET_SUFFIX
 UNCROPPED_BUNDLE_NAME=Uncropped-$DATASET_SUFFIX
 #REGION_MODELS=$DVC_DPATH'/annotations/region_models/*.geojson'
@@ -20,14 +25,16 @@ UNCROPPED_INGRESS_DPATH=$UNCROPPED_DPATH/ingress
 UNCROPPED_KWCOCO_FPATH=$UNCROPPED_DPATH/data.kwcoco.json
 ALIGNED_KWCOCO_BUNDLE=$DVC_DPATH/$ALIGNED_BUNDLE_NAME
 ALIGNED_KWCOCO_FPATH=$ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json
-UNCROPPED_QUERY_FPATH=$UNCROPPED_QUERY_DPATH/KR_S001.unique.fixed_ls_ids.output
+UNCROPPED_QUERY_FPATH=$UNCROPPED_QUERY_DPATH/$QUERY_BASENAME
 UNCROPPED_CATALOG_FPATH=$UNCROPPED_INGRESS_DPATH/catalog.json
+
+
 
 export AWS_DEFAULT_PROFILE=iarpa
 
 
 mkdir -p "$UNCROPPED_QUERY_DPATH"
-aws s3 --profile iarpa ls "$S3_DPATH/"
+#aws s3 --profile iarpa ls "$S3_DPATH/"
 aws s3 --profile iarpa cp $S3_FPATH "$UNCROPPED_QUERY_DPATH"
 ls -al "$UNCROPPED_QUERY_DPATH"
 
@@ -90,19 +97,19 @@ python -m watch.cli.coco_combine_features \
 
 
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc/
-#BAS_MODEL_SUFFIX=models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=5-step=51917.pt
+INPUT_DATASET=$ALIGNED_KWCOCO_BUNDLE/combo_L.kwcoco.json
+
+
+BAS_MODEL_SUFFIX=models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=5-step=51917.pt
+BAS_MODEL_SUFFIX=models/fusion/SC-20201117/BAS_TA1_c001_v076/BAS_TA1_c001_v076_epoch=90-step=186367.pt
 #BAS_MODEL_SUFFIX=models/fusion/SC-20201117/BAS_TA1_c001_v082/BAS_TA1_c001_v082_epoch=42-step=88063.pt
 BAS_MODEL_PATH=$DVC_DPATH/$BAS_MODEL_SUFFIX
 [[ -f "$BAS_MODEL_PATH" ]] || (cd "$DVC_DPATH" && dvc pull "$BAS_MODEL_SUFFIX")
-
-
-INPUT_DATASET=$ALIGNED_KWCOCO_BUNDLE/combo_L.kwcoco.json
 SUGGESTIONS=$(
     python -m watch.tasks.fusion.organize suggest_paths  \
         --package_fpath="$BAS_MODEL_PATH"  \
         --test_dataset="$INPUT_DATASET")
 OUTPUT_BAS_DATASET="$(echo "$SUGGESTIONS" | jq -r .pred_dataset)"
-
 
 python -m watch.tasks.fusion.predict \
        --write_preds False \
@@ -116,16 +123,29 @@ python -m watch.tasks.fusion.predict \
        --batch_size 8 \
        --gpus 1
 
+# Site characterization
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc/
+SC_MODEL_SUFFIX=models/fusion/SC-20201117/SC_smt_it_stm_p8_TA1_xfer55_v70/SC_smt_it_stm_p8_TA1_xfer55_v70_epoch=34-step=71679.pt
+SC_MODEL_PATH=$DVC_DPATH/$SC_MODEL_SUFFIX
+[[ -f "$SC_MODEL_PATH" ]] || (cd "$DVC_DPATH" && dvc pull "$SC_MODEL_PATH")
+SUGGESTIONS=$(
+    python -m watch.tasks.fusion.organize suggest_paths  \
+        --package_fpath="$SC_MODEL_PATH"  \
+        --test_dataset="$INPUT_DATASET")
+OUTPUT_SC_DATASET="$(echo "$SUGGESTIONS" | jq -r .pred_dataset)"
 
-python -m watch visualize \
-    --src "$OUTPUT_BAS_DATASET" \
-    --space="video" \
-    --num_workers=2 \
-    --channels="salient" \
-    --draw_anns=False \
-    --animate=True \
-    --workers=4 \
-    --any3=False 
+python -m watch.tasks.fusion.predict \
+       --write_preds False \
+       --write_probs True \
+       --with_change False \
+       --with_saliency False \
+       --with_class True \
+       --num_workers=4 \
+       --test_dataset "$INPUT_DATASET" \
+       --package_fpath "$SC_MODEL_PATH" \
+       --pred_dataset "$OUTPUT_SC_DATASET" \
+       --batch_size 32 \
+       --gpus 1
 
 
 _debug(){
@@ -158,6 +178,16 @@ field': 593,
     #kwcoco subset --src "$ALIGNED_KWCOCO_BUNDLE/combo_L.kwcoco.json" \
     #        --dst "$ALIGNED_KWCOCO_BUNDLE/combo_L_s2.kwcoco.json" \
     #        --select_images '.sensor_coarse == "S2"'
+
+    python -m watch visualize \
+        --src "$OUTPUT_BAS_DATASET" \
+        --space="video" \
+        --num_workers=2 \
+        --channels="salient" \
+        --draw_anns=False \
+        --animate=True \
+        --workers=4 \
+        --any3=False 
 
 
     smartwatch stats "$DVC_DPATH/Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json"
@@ -262,5 +292,15 @@ field': 593,
         --batch_size=1
 
     #jq .images[0] "$INPUT_DATASET"
+
+
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc/
+    python -m watch visualize \
+        "$DVC_DPATH/models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/pred_BAS_TA1_ALL_REGIONS_v084_epoch=5-step=51917/Drop2-Aligned-TA1-2022-01_combo_L_nowv_vali.kwcoco/pred.kwcoco.json" \
+        --workers=4 \
+        --channels="salient" \
+        --draw_anns=False  \
+        --animate=True \
+        --extra_header="pred_BAS_TA1_ALL_REGIONS_v084_epoch=5-step=51917"
 }
 

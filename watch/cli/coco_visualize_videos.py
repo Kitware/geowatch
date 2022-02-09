@@ -25,7 +25,6 @@ CommandLine:
 """
 import kwcoco
 import kwimage
-import pathlib
 import scriptconfig as scfg
 import numpy as np
 import ubelt as ub
@@ -73,6 +72,8 @@ class CocoVisualizeConfig(scfg.Config):
 
         'draw_imgs': scfg.Value(True),
         'draw_anns': scfg.Value(True),
+
+        'cmap': scfg.Value('viridis', help='colormap for single channel data'),
 
         'animate': scfg.Value(False, help='if True, make an animated gif from the output'),
 
@@ -138,6 +139,14 @@ class CocoVisualizeConfig(scfg.Config):
     }
 
 
+def _dataset_id(coco_dset):
+    """ A possible good default for a coco candidate name """
+    hashid = coco_dset._build_hashid()
+    coco_fpath = ub.Path(coco_dset.fpath)
+    name = '_'.join([coco_fpath.parent.stem, coco_fpath.stem, hashid[0:8]])
+    return name
+
+
 def main(cmdline=True, **kwargs):
     """
 
@@ -187,11 +196,13 @@ def main(cmdline=True, **kwargs):
     print('coco_dset.fpath = {!r}'.format(coco_dset.fpath))
     print('coco_dset = {!r}'.format(coco_dset))
 
-    bundle_dpath = pathlib.Path(coco_dset.bundle_dpath)
+    bundle_dpath = ub.Path(coco_dset.bundle_dpath)
+    dset_idstr = _dataset_id(coco_dset)
     if config['viz_dpath'] is not None:
-        viz_dpath = pathlib.Path(config['viz_dpath'])
+        viz_dpath = ub.Path(config['viz_dpath'])
     else:
-        viz_dpath = bundle_dpath / '_viz'
+        viz_dpath = bundle_dpath / '_viz_{}'.format(dset_idstr)
+    print('viz_dpath = {!r}'.format(viz_dpath))
 
     prog = ub.ProgIter(
         coco_dset.index.videos.items(), total=len(coco_dset.index.videos),
@@ -265,7 +276,7 @@ def main(cmdline=True, **kwargs):
             print(f'Skip {video["name"]=!r} with no selected images')
             continue
 
-        sub_dpath.mkdir(parents=True, exist_ok=1)
+        sub_dpath.ensuredir()
         video_names.append(video['name'])
 
         norm_over_time = config['norm_over_time']
@@ -323,7 +334,7 @@ def main(cmdline=True, **kwargs):
             tid_to_info = video_track_info(coco_dset, vidid)
             for tid, track_info in tid_to_info.items():
                 track_dpath = sub_dpath / '_tracks' / 'tid_{:04d}'.format(tid)
-                track_dpath.mkdir(parents=True, exist_ok=1)
+                track_dpath.ensuredir()
                 vid_crop_box = track_info['full_vid_box']
 
                 # Add context (todo: parameterize how much)
@@ -351,7 +362,8 @@ def main(cmdline=True, **kwargs):
                                 fixed_normalization_scheme=config.get(
                                     'fixed_normalization_scheme'),
                                 nodata=config['nodata'],
-                                any3=config['any3'])
+                                cmap=config['cmap'],
+                                any3=config['any3'], dset_idstr=dset_idstr)
 
         else:
             gid_subset = gids[start_frame:end_frame]
@@ -370,11 +382,12 @@ def main(cmdline=True, **kwargs):
                             draw_imgs=config['draw_imgs'],
                             draw_anns=config['draw_anns'],
                             _header_extra=_header_extra,
+                            cmap=config['cmap'],
                             chan_to_normalizer=chan_to_normalizer,
                             fixed_normalization_scheme=config.get(
                                 'fixed_normalization_scheme'),
                             nodata=config['nodata'],
-                            any3=config['any3'])
+                            any3=config['any3'], dset_idstr=dset_idstr)
 
         for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):
             job.result()
@@ -498,7 +511,8 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                draw_anns=True, _header_extra=None,
                                chan_to_normalizer=None,
                                fixed_normalization_scheme=None,
-                               nodata=0, any3=True):
+                               nodata=0, any3=True, dset_idstr='',
+                               cmap='viridis'):
     """
     Dumps an intensity normalized "space-aligned" kwcoco image visualization
     (with or without annotation overlays) for specific bands to disk.
@@ -525,6 +539,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
     header_line_infos = []
     header_line_infos.append([vidname, image_id_part, _header_extra])
+    header_line_infos.append([dset_idstr])
     header_line_infos.append([image_name])
     header_line_infos.append([sensor_coarse, date_captured])
     header_lines = []
@@ -664,8 +679,12 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         # spec = str(chan.channels.spec)
         img_chan_dpath = img_view_dpath / chan_pname
         ann_chan_dpath = ann_view_dpath / chan_pname
-        ann_chan_dpath.mkdir(parents=True, exist_ok=1)
-        img_chan_dpath.mkdir(parents=True, exist_ok=1)
+
+        if draw_anns:
+            ann_chan_dpath.ensuredir()
+
+        if draw_imgs:
+            img_chan_dpath.ensuredir()
 
         if len(chan_pname) > 10:
             # Hack to prevent long names for docker (limit is 242 chars)
@@ -697,18 +716,21 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         # kwarray.atleast_nd(canvas, 3)
 
         if chan_to_normalizer is None:
+            dmax = canvas.max()
+            # dmin = canvas.min()
+            needs_norm = dmax > 1.0
             # if canvas.max() <= 0 or canvas.min() >= 255:
             # Hack to only do noramlization on "non-standard" data ranges
-            norm_canvas = normalize_intensity(canvas, nodata=nodata, params={
-                'high': 0.90,
-                'mid': 0.5,
-                'low': 0.01,
-                'mode': 'linear',
-            })
-            canvas = norm_canvas
+            if needs_norm:
+                norm_canvas = normalize_intensity(canvas, nodata=nodata, params={
+                    'high': 0.90,
+                    'mid': 0.5,
+                    'low': 0.01,
+                    'mode': 'linear',
+                })
+                canvas = norm_canvas
         else:
             from watch.utils import util_kwarray
-            import numpy as np
             new_parts = []
             for cx, c in enumerate(chan_list):
                 normalizer = chan_to_normalizer.get(c, None)
@@ -722,18 +744,24 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                     })
                 else:
                     mask = (data != nodata)
-                    import xdev
-                    with xdev.embed_on_exception_context:
-                        p = util_kwarray.apply_normalizer(data, normalizer, mask=mask, set_value_at_mask=0.)
+                    p = util_kwarray.apply_normalizer(data, normalizer, mask=mask, set_value_at_mask=0.)
                 new_parts.append(p)
             canvas = np.stack(new_parts, axis=2)
+
+        if cmap is not None:
+            if kwimage.num_channels(canvas) == 1:
+                import matplotlib as mpl
+                import matplotlib.cm  # NOQA
+                cmap_ = mpl.cm.get_cmap(cmap)
+                if len(canvas.shape) == 3:
+                    canvas = canvas[..., 0]
+                    canvas = cmap_(canvas)[..., 0:3].astype(np.float32)
+
         canvas = util_kwimage.ensure_false_color(canvas)
 
         if len(canvas.shape) > 2 and canvas.shape[2] > 4:
             # hack for wv
             canvas = canvas[..., 0]
-
-        canvas = kwimage.ensure_float01(canvas)
 
         chan_header_lines = header_lines.copy()
         chan_header_lines.append(chan_group)
@@ -748,6 +776,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             kwimage.imwrite(view_img_fpath, img_canvas)
 
         if draw_anns:
+            canvas = kwimage.ensure_float01(canvas)
             try:
                 ann_canvas = dets.draw_on(canvas, color='classes')
             except Exception:
