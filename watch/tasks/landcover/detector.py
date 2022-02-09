@@ -87,10 +87,19 @@ def normalize(image, low=2, high=98) -> np.array:
     normalized_bands = []
     for band in range(image.shape[2]):
         local_band = image[:, :, band]
-        local_band = local_band[local_band != 0]
-        a = np.percentile(local_band, low)
-        b = np.percentile(local_band, high)
-        local_band = (image[:, :, band] - a) / (b - a)
+        # local_band = local_band[local_band != 0]
+        local_band = local_band[local_band > 0]
+        if len(local_band) > 0:
+            a = np.percentile(local_band, low)
+            b = np.percentile(local_band, high)
+        else:
+            a = b = 0
+        denom = (b - a)
+        numer = (image[:, :, band] - a)
+        if denom > 0:
+            local_band = numer / denom
+        else:
+            local_band = numer
         local_band = np.clip(local_band, 0, 1)
         normalized_bands.append(local_band)
     return np.stack(normalized_bands, 2)
