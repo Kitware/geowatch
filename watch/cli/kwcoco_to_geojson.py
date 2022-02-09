@@ -37,6 +37,7 @@ import jsonschema
 import kwcoco
 import kwimage
 import dateutil.parser
+import datetime
 import watch
 import shapely
 import shapely.ops
@@ -253,56 +254,72 @@ def track_to_site(coco_dset,
         for gid, _anns in ub.group_items(anns, gids).items()
     ]
 
-    def predict_phase_changes():
-        '''
-        add prediction field to each feature
-        > A “Polygon” should define the foreign members “current_phase”,
-        > “predicted_next_phase”, and “predicted_next_phase_date”.
-        TODO we need to figure out how to link individual polygons across
-        frames within a track when we have >1 polygon per track_index
-        (from MultiPolygon or multiple annotations) to handle splitting/merging
-        This is because this prediction foreign field is defined wrt the
-        CURRENT polygon, not per-observation.
-        '''
-        for ix, feat in enumerate(features):
-
-            current_phase = feat['properties']['current_phase']
-            sep = ','
-            n_polys = len(current_phase.split(sep))
-            prediction = {
-                'predicted_phase': None,
-                'predicted_phase_start_date': None,
-            }
-            for future_feat in features[ix + 1:]:
-                future_phase = future_feat['properties']['current_phase']
-                future_date = future_feat['properties']['observation_date']
-                # HACK need to let these vary between polys in an observation
-                if future_phase != current_phase:
-                    current_phases = current_phase.split(sep)
-                    future_phases = future_phase.split(sep)
-                    n_diff = len(current_phases) - len(future_phases)
-                    if n_diff > 0:
-                        predicted_phase = sep.join(
-                            future_phases +
-                            current_phases[len(future_phases):])
-                    else:
-                        predicted_phase = sep.join(
-                            future_phases[:len(current_phases)])
-                    prediction = {
-                        'predicted_phase':
-                        predicted_phase,
-                        'predicted_phase_start_date':
-                        sep.join([future_date] * n_polys),
-                    }
-                    break
-
-            feat['properties'].update(prediction)
-
-    if not as_summary:
-        predict_phase_changes()
-
     if site_idx is None:
         site_idx = trackid
+    site_id = '_'.join((region_id, str(site_idx).zfill(4)))
+
+    def predict_phase_changes():
+        '''
+        Set predicted_phase_transition and predicted_phase_transition_date.
+        Return (average days in current_phase - elapsed days in current_phase)
+
+        https://smartgitlab.com/TE/standards/-/wikis/Site-Model-Specification
+        '''
+        # from watch.dev.check_transition_probs
+        phase_avg_days = {
+            # 'No Activity': 60,
+            'Site Preparation': 57,
+            'Active Construction': 56,
+            'Post Construction': 58
+        }
+
+        # per metrics definition doc v2.2, the site enters <phase> on the date
+        # when the last subsite enters <phase>, unless only some subsites are
+        # in <phase> on <current_date>, in which case it is the first date a
+        # subsite enters <phase>.
+        # this doesn't make any sense.
+        # ignore this, and just take the first subsite date.
+        first_date = {}
+        sep = ','
+        for feat in features:
+            phases = set(feat['properties']['current_phase'].split(sep))
+            date = dateutil.parser.parse(
+                feat['properties']['observation_date']).date()
+            missing_phases = set(phase_avg_days) - set(first_date)
+            if missing_phases:
+                for phase in phases.intersection(missing_phases):
+                    first_date[phase] = date
+            else:
+                break
+        current_date = dateutil.parser.parse(
+            features[-1]['properties']['observation_date']).date()
+
+        if 'Post Construction' in first_date:
+            return {}
+        elif 'Active Construction' in first_date:
+            return {
+                'predicted_phase_transition':
+                'Post Construction',
+                'predicted_phase_transition_date':
+                max(
+                    current_date,
+                    first_date['Active Construction'] + datetime.timedelta(
+                        days=phase_avg_days['Active Construction'])
+                ).isoformat()
+            }
+        elif 'Site Preparation' in first_date:
+            return {
+                'predicted_phase_transition':
+                'Active Construction',
+                'predicted_phase_transition_date':
+                max(
+                    current_date,
+                    first_date['Site Preparation'] + datetime.timedelta(
+                        days=phase_avg_days['Site Preparation'])
+                ).isoformat()
+            }
+        else:
+            raise ValueError(f'missing phases in site {site_id}! {first_date}')
 
     def site_feature():
         '''
@@ -317,8 +334,6 @@ def track_to_site(coco_dset,
         dates = sorted(
             map(_normalize_date,
                 coco_dset.images(set(gids)).lookup('date_captured')))
-
-        site_id = '_'.join((region_id, str(site_idx).zfill(4)))
 
         properties = {
             'site_id': site_id,
@@ -340,11 +355,12 @@ def track_to_site(coco_dset,
                     'region_id': region_id,  # HACK to passthrough to main
                 })
         else:
-            properties.update(**{
-                'type': 'site',
-                'region_id': region_id,
-                'misc_info': {}
-            })
+            properties.update(
+                **{
+                    'type': 'site',
+                    'region_id': region_id,
+                    **predict_phase_changes(), 'misc_info': {}
+                })
 
         return geojson.Feature(geometry=geometry, properties=properties)
 
