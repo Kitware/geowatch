@@ -6,8 +6,8 @@ If you need to regenerate the regions use:
 DATASET_SUFFIX=TA1_FULL_SEQ_KR_S001_CLOUD_LT_10
 S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/eval2/master_collation_working/KR_S001.unique.fixed_ls_ids.cloudcover_lt_10.output
 
-DATASET_SUFFIX=TA1_FULL_SEQ_KR_S001
-S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/eval2/master_collation_working/KR_S001.unique.fixed_ls_ids.output
+#DATASET_SUFFIX=TA1_FULL_SEQ_KR_S001
+#S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/eval2/master_collation_working/KR_S001.unique.fixed_ls_ids.output
 
 
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
@@ -87,7 +87,7 @@ python -m watch.tasks.landcover.predict \
     --dataset="$ALIGNED_KWCOCO_BUNDLE/data.kwcoco.json" \
     --deployed="$LANDCOVER_MODEL_FPATH" \
     --output="$ALIGNED_KWCOCO_BUNDLE/dzyne_landcover.kwcoco.json" \
-    --num_workers="4" \
+    --num_workers="avail/4" \
     --device=0
 
 python -m watch.cli.coco_combine_features \
@@ -100,9 +100,12 @@ DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc/
 INPUT_DATASET=$ALIGNED_KWCOCO_BUNDLE/combo_L.kwcoco.json
 
 
-BAS_MODEL_SUFFIX=models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=5-step=51917.pt
 BAS_MODEL_SUFFIX=models/fusion/SC-20201117/BAS_TA1_c001_v076/BAS_TA1_c001_v076_epoch=90-step=186367.pt
 #BAS_MODEL_SUFFIX=models/fusion/SC-20201117/BAS_TA1_c001_v082/BAS_TA1_c001_v082_epoch=42-step=88063.pt
+#BAS_MODEL_SUFFIX=models/fusion/SC-20201117/BAS_TA1_c001_v073/BAS_TA1_c001_v073_epoch=13-step=28671.pt
+#BAS_MODEL_SUFFIX=models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=5-step=51917.pt
+
+
 BAS_MODEL_PATH=$DVC_DPATH/$BAS_MODEL_SUFFIX
 [[ -f "$BAS_MODEL_PATH" ]] || (cd "$DVC_DPATH" && dvc pull "$BAS_MODEL_SUFFIX")
 SUGGESTIONS=$(
@@ -123,6 +126,13 @@ python -m watch.tasks.fusion.predict \
        --batch_size 8 \
        --gpus 1
 
+_debug(){
+    python -m watch visualize \
+        --src "$OUTPUT_BAS_DATASET" --channels="salient" \
+        --extra_header="$(basename "$BAS_MODEL_PATH")" \
+        --draw_anns=False --animate=True --workers=4 
+}
+
 # Site characterization
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc/
 SC_MODEL_SUFFIX=models/fusion/SC-20201117/SC_smt_it_stm_p8_TA1_xfer55_v70/SC_smt_it_stm_p8_TA1_xfer55_v70_epoch=34-step=71679.pt
@@ -134,6 +144,7 @@ SUGGESTIONS=$(
         --test_dataset="$INPUT_DATASET")
 OUTPUT_SC_DATASET="$(echo "$SUGGESTIONS" | jq -r .pred_dataset)"
 
+export CUDA_VISIBLE_DEVICES=1
 python -m watch.tasks.fusion.predict \
        --write_preds False \
        --write_probs True \
@@ -146,6 +157,12 @@ python -m watch.tasks.fusion.predict \
        --pred_dataset "$OUTPUT_SC_DATASET" \
        --batch_size 32 \
        --gpus 1
+_debug(){
+    python -m watch visualize \
+        --src "$OUTPUT_SC_DATASET" --channels="No Activity|Active Construction|Site Preparation" \
+        --extra_header="$(basename "$SC_MODEL_PATH")" \
+        --draw_anns=False --animate=True --workers=4 
+}
 
 
 _debug(){
@@ -302,5 +319,32 @@ field': 593,
         --draw_anns=False  \
         --animate=True \
         --extra_header="pred_BAS_TA1_ALL_REGIONS_v084_epoch=5-step=51917"
+
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc/
+    python -m watch visualize \
+        "$DVC_DPATH/models/fusion/SC-20201117/BAS_TA1_c001_v076/pred_BAS_TA1_c001_v076_epoch=90-step=186367/Aligned-TA1_FULL_SEQ_KR_S001_combo_L.kwcoco/pred.kwcoco.json" \
+        --workers=4 \
+        --channels="salient" \
+        --draw_anns=False  \
+        --animate=True \
+        --extra_header="BAS_TA1_c001_v076_epoch=90-step=186367.pt"
+
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc/
+    python -m watch visualize \
+        "$DVC_DPATH/models/fusion/SC-20201117/BAS_TA1_c001_v082/pred_BAS_TA1_c001_v082_epoch=42-step=88063/Aligned-TA1_FULL_SEQ_KR_S001_combo_L.kwcoco/pred.kwcoco.json" \
+        --workers=4 \
+        --channels="salient" \
+        --draw_anns=False  \
+        --animate=True \
+        --extra_header="BAS_TA1_c001_v082_epoch=42-step=88063.pt"
+
+    smartwatch visualize \
+        "$HOME/data/dvc-repos/smart_watch_dvc/Aligned-TA1_FULL_SEQ_KR_S001_CLOUD_LT_10/dzyne_landcover.kwcoco.json" \
+        --channels="red|green|blue,bare_ground|forest|wetland" --animate=True --with_anns=False
+
+        smartwatch stats "$HOME/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_TA1_xfer55_v70/pred_SC_smt_it_stm_p8_TA1_xfer55_v70_epoch=34-step=71679/Aligned-TA1_FULL_SEQ_KR_S001_combo_L.kwcoco/pred.kwcoco.json" 
+    smartwatch visualize \
+        "$HOME/data/dvc-repos/smart_watch_dvc/models/fusion/SC-20201117/SC_smt_it_stm_p8_TA1_xfer55_v70/pred_SC_smt_it_stm_p8_TA1_xfer55_v70_epoch=34-step=71679/Aligned-TA1_FULL_SEQ_KR_S001_combo_L.kwcoco/pred.kwcoco.json" \
+        --channels="No Activity|Active Construction|Site Preparation" --animate=True 
 }
 

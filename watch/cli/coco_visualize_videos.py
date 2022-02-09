@@ -729,6 +729,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                     'mode': 'linear',
                 })
                 canvas = norm_canvas
+            canvas = np.clip(canvas, 0, None)
         else:
             from watch.utils import util_kwarray
             new_parts = []

@@ -105,6 +105,11 @@ class WatchCocoStats(scfg.Config):
         summary = summary.rename(col_name_map, axis=1)
         print(summary.to_string())
 
+        print('Other helpful commands:')
+        for fpath in fpaths:
+            'smartwatch visualize {fpath:!r} --channels='
+            pass
+
 
 def coco_watch_stats(dset):
     """
