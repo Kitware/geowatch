@@ -56,12 +56,17 @@ def pad(fn):
 
 @pad
 def predict_image(img, model):
-    dtype = np.int8
+    dtype = np.float32
 
     mask = get_nodata_mask(img)
 
     if not np.any(mask):
-        pred = np.full(img.shape[:2], PRED_NODATA, dtype=dtype)
+        try:
+            num_classes = model.finalconv3.out_channels
+        except Exception:
+            num_classes = 1
+        h, w = img.shape[:2]
+        pred = np.full((h, w, num_classes), PRED_NODATA, dtype=dtype)
         return pred
 
     device = get_model_device(model)
@@ -111,7 +116,8 @@ def get_nodata_mask(img, nodata=0):
     Return an numpy array with values True for data, False for no data
     """
     mask = np.ones(img.shape[:2], bool)
-    img_nodata = img == nodata
+    # img_nodata = img == nodata
+    img_nodata = img <= nodata  # HACK!
     for i in range(img.shape[0]):
         if np.all(img_nodata[i, :]):
             mask[i, :] = False

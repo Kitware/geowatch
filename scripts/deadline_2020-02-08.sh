@@ -91,7 +91,7 @@ python -m watch.cli.coco_combine_features \
 
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc/
 #BAS_MODEL_SUFFIX=models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=5-step=51917.pt
-BAS_MODEL_SUFFIX=models/fusion/SC-20201117/BAS_TA1_c001_v082/BAS_TA1_c001_v082_epoch=42-step=88063.pt
+#BAS_MODEL_SUFFIX=models/fusion/SC-20201117/BAS_TA1_c001_v082/BAS_TA1_c001_v082_epoch=42-step=88063.pt
 BAS_MODEL_PATH=$DVC_DPATH/$BAS_MODEL_SUFFIX
 [[ -f "$BAS_MODEL_PATH" ]] || (cd "$DVC_DPATH" && dvc pull $BAS_MODEL_SUFFIX)
 
@@ -226,7 +226,6 @@ field': 593,
            --gpus 1
             
 
-
     python -m kwcoco stats "$INPUT_DATASET" python -m watch stats "$INPUT_DATASET"
     python -m watch.cli.torch_model_stats "$BAS_MODEL_PATH"
 
@@ -245,6 +244,8 @@ field': 593,
     #--package_fpath="$DVC_DPATH/models/fusion/SC-20201117/BAS_TA1_c001_v080/BAS_TA1_c001_v080_epoch=54-step=112639.pt" \
     #--package_fpath="$DVC_DPATH/models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=5-step=51917.pt" \
 
+    python -m watch stats "$DVC_DPATH/Aligned-TA1_FULL_SEQ_KR_S001/combo_L.kwcoco.json"
+
     DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc/
     python -m watch.tasks.fusion.predict \
         --write_probs=True \
@@ -253,7 +254,7 @@ field': 593,
         --with_saliency=auto \
         --with_change=False \
         --pred_dataset="$DVC_DPATH/tmp2/pred.kwcoco.json" \
-        --test_dataset="$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L_nowv_vali.kwcoco.json" \
+        --test_dataset="$DVC_DPATH/Aligned-TA1_FULL_SEQ_KR_S001/combo_L.kwcoco.json" \
         --package_fpath="$DVC_DPATH/models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=5-step=51917.pt" \
         --num_workers=5 \
         --compress=DEFLATE \
