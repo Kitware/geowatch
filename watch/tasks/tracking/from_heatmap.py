@@ -7,13 +7,12 @@ import kwcoco
 import numpy as np
 import ubelt as ub
 import itertools
-from typing import Iterable, Tuple, Set, Union, Optional, Literal
-from dataclasses import dataclass
+from typing import Iterable, Tuple, Set, Union, Optional, Literal, Dict
+from dataclasses import dataclass, field
 from watch.tasks.tracking.utils import (Track, PolygonFilter, NewTrackFunction,
                                         mask_to_polygons, heatmap, score, Poly,
                                         CocoDsetFilter, _validate_keys,
                                         Observation, pop_tracks, heatmaps)
-
 
 try:
     from xdev import profile
@@ -287,7 +286,7 @@ def time_aggregated_polys(coco_dset,
     def probs(heatmaps):
         probs = np.linalg.norm(np.stack(heatmaps, axis=0), norm_ord, axis=0)
         if 0 < norm_ord < np.inf:
-            probs /= np.power(len(heatmaps), 1/norm_ord)
+            probs /= np.power(len(heatmaps), 1 / norm_ord)
 
         hard_probs = util_kwimage.morphology(probs > thresh, 'dilate',
                                              morph_kernel)
@@ -323,10 +322,10 @@ def time_aggregated_polys(coco_dset,
             # time-varying.
             track_bounds = shapely.ops.unary_union(
                 [obs.poly.to_shapely() for obs in track.observations])
-            _heatmaps_in_track = np.compress(
-                np.in1d(gids, [obs.gid for obs in track.observations]),
-                _heatmaps,
-                axis=0)
+            _heatmaps_in_track = np.compress(np.in1d(
+                gids, [obs.gid for obs in track.observations]),
+                                             _heatmaps,
+                                             axis=0)
 
             track_polys = mask_to_polygons(probs(_heatmaps_in_track),
                                            thresh,
@@ -474,9 +473,9 @@ class TimeAggregatedSC(NewTrackFunction):
                     for obs in track.observations:
                         obs.score = 1
 
-            tracks = list(filter(
-                lambda track: len(list(track.observations)) > 0,
-                tracks))
+            tracks = list(
+                filter(lambda track: len(list(track.observations)) > 0,
+                       tracks))
         else:
             tracks = time_aggregated_polys(
                 coco_dset,
@@ -508,17 +507,22 @@ class TimeAggregatedHybrid(NewTrackFunction):
     coco_dset_sc: KWCOCO file with site characterization predictions
     '''
     coco_dset_sc: Union[str, kwcoco.CocoDataset]
+    bas_kwargs: Optional[Dict] = field(default_factory=dict)
+    sc_kwargs: Optional[Dict] = field(default_factory=dict)
 
     def __post_init__(self):
         if isinstance(self.coco_dset_sc, str):
             self.coco_dset_sc = kwcoco.CocoDataset.coerce(self.coco_dset_sc)
 
     def create_tracks(self, coco_dset):
-        return TimeAggregatedBAS().create_tracks(coco_dset)
+        return TimeAggregatedBAS(**self.bas_kwargs).create_tracks(coco_dset)
 
     def add_tracks_to_dset(self, coco_dset, tracks):
-        return TimeAggregatedSC(use_boundary_annots=False).add_tracks_to_dset(
-            coco_dset, tracks, coco_dset_sc=self.coco_dset_sc)
+        return TimeAggregatedSC(**self.sc_kwargs,
+                                use_boundary_annots=False).add_tracks_to_dset(
+                                    coco_dset,
+                                    tracks,
+                                    coco_dset_sc=self.coco_dset_sc)
 
     def safe_apply(self, coco_dset, gids, overwrite):
         '''
