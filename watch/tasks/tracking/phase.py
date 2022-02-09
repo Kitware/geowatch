@@ -37,7 +37,7 @@ def viterbi(input_sequence, transition_probs, emission_probs):
     Example:
         >>> # Demo based loosely on a star's simplified life sequence
         >>> import numpy as np
-        >>> improt pandas as pd
+        >>> import pandas as pd
         >>> states = ['cloud', 'small', 'giant', 'dwarf', 'large',
         >>>           'supergiant', 'supernova', 'neutron_star', 'black_hole']
         >>> # How likely is it for a state to change at any given time?
