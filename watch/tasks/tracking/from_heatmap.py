@@ -22,15 +22,102 @@ except Exception:
 
 def viterbi(input_sequence, transition_probs, emission_probs):
     """
-    Viterbi decoding function. Sources:
-    - https://en.wikipedia.org/wiki/Viterbi_algorithm#Pseudocode
-    - https://stackoverflow.com/questions/9729968/python-implementation-of-viterbi-algorithm
+    Viterbi decoding function.
 
-    input_sequence: input sequence of length T
-    transition_probs: probabilities of transition from state (i-1) to i
-    emission_probs: probabilities of observing true state from observation
+    Obtain a MAP estimate for the most likely sequence of hidden states using a
+    hidden Markov model.
 
-    return best_path, that is the sequence of most likely true states
+    Args:
+        input_sequence (ndarray[int]):
+            Input sequence of shape (T,) encoding the sequence we believe we
+            observed. Items are integers ranging from 0 to (S - 1), where S is
+            the number of possible states. These indicate the "observed" state.
+
+        transition_probs (ndarray[float]):
+            Transition probabilities of shape (S, S), where
+            ``transition_probs[i, j]`` indicates the probability that state
+            ``i`` transitions to state ``j``. Rows should sum to 1.
+
+        emission_probs (ndarray[float]):
+            Emission probabilities of shape (S, S), where
+            ``transition_probs[i, j]`` indicates the probability that
+            when we observed state ``i`` the real state was actually ``j``.
+            This encodes now noisy we believe the observations are.
+
+    Returns:
+        ndarray[int]: best_path
+            The sequence of most likely true states
+
+    References:
+        - https://en.wikipedia.org/wiki/Viterbi_algorithm#Pseudocode
+        - https://stackoverflow.com/questions/9729968/python-implementation-of-viterbi-algorithm
+
+    Example:
+        >>> # Demo based loosely on a star's simplified life sequence
+        >>> states = ['cloud', 'small', 'giant', 'dwarf', 'large',
+        >>>           'supergiant', 'supernova', 'neutron_star', 'black_hole']
+        >>> # How likely is it for a state to change at any given time?
+        >>> transitions = [
+        >>>     {'src': 'cloud',        'dst': 'cloud',        'prob': 0.9},
+        >>>     {'src': 'small',        'dst': 'small',        'prob': 0.9},
+        >>>     {'src': 'giant',        'dst': 'giant',        'prob': 0.9},
+        >>>     {'src': 'dwarf',        'dst': 'dwarf',        'prob': 0.9},
+        >>>     {'src': 'large',        'dst': 'large',        'prob': 0.9},
+        >>>     {'src': 'supergiant',   'dst': 'supergiant',   'prob': 0.9},
+        >>>     {'src': 'supernova',    'dst': 'supernova',    'prob': 0.9},
+        >>>     {'src': 'neutron_star', 'dst': 'neutron_star', 'prob': 0.9},
+        >>>     {'src': 'black_hole',   'dst': 'black_hole',   'prob': 0.9},
+        >>>     #
+        >>>     {'src': 'cloud',      'dst': 'small',        'prob': 0.8},
+        >>>     {'src': 'cloud',      'dst': 'large',        'prob': 0.2},
+        >>>     {'src': 'small',      'dst': 'giant',        'prob': 1.0},
+        >>>     {'src': 'giant',      'dst': 'dwarf',        'prob': 1.0},
+        >>>     {'src': 'large',      'dst': 'supergiant',   'prob': 1.0},
+        >>>     {'src': 'supergiant', 'dst': 'supernova',    'prob': 1.0},
+        >>>     {'src': 'supernova',  'dst': 'neutron_star', 'prob': 6.0},
+        >>>     {'src': 'supernova',  'dst': 'black_hole',   'prob': 4.0},
+        >>> ]
+        >>> # How likely is it that we made an error in observation?
+        >>> emissions = [
+        >>>     {'obs': 'cloud',        'real': 'cloud',        'prob': 0.5},
+        >>>     {'obs': 'small',        'real': 'small',        'prob': 0.5},
+        >>>     {'obs': 'giant',        'real': 'giant',        'prob': 0.5},
+        >>>     {'obs': 'dwarf',        'real': 'dwarf',        'prob': 0.5},
+        >>>     {'obs': 'large',        'real': 'large',        'prob': 0.5},
+        >>>     {'obs': 'supergiant',   'real': 'supergiant',   'prob': 0.5},
+        >>>     {'obs': 'supernova',    'real': 'supernova',    'prob': 0.5},
+        >>>     {'obs': 'neutron_star', 'real': 'neutron_star', 'prob': 0.5},
+        >>>     {'obs': 'black_hole',   'real': 'black_hole',   'prob': 0.5},
+        >>> ]
+        >>> emission_table = pd.DataFrame.from_dict(emissions)
+        >>> emission_df = emission_table.pivot(['obs'], ['real'], ['prob'])
+        >>> # Fill unspecified values in pairwise probability tables
+        >>> import kwarray
+        >>> rng = kwarray.ensure_rng(42110)
+        >>> randfill = rng.rand(*emission_df.shape) * 0.01
+        >>> flags = emission_df.isnull().astype(int)
+        >>> emission_df = emission_df.fillna(0) + randfill * flags
+        >>> transition_table = pd.DataFrame.from_dict(transitions)
+        >>> transition_df = transition_table.pivot(['src'], ['dst'], ['prob']).fillna(0)
+        >>> # Normalize probs
+        >>> emission_df = emission_df.div(emission_df.groupby(axis=1, level=0).sum(), level=0)
+        >>> transition_df = transition_df.div(transition_df.groupby(axis=1, level=0).sum(), level=0)
+        >>> # Reorder indexes so we can use integer states
+        >>> transition_df2 = transition_df.droplevel(axis=1, level=0)
+        >>> emission_df2 = emission_df.droplevel(axis=1, level=0)
+        >>> transition_df2 = transition_df2[states].loc[states]
+        >>> emission_df2 = emission_df2[states].loc[states]
+        >>> #
+        >>> # Convert to ndarrays
+        >>> transition_probs = transition_df2.values
+        >>> emission_probs = emission_df2.values
+        >>> #
+        >>> observed_states = ['cloud', 'small', 'cloud', 'small', 'large', 'supergiant', 'black_hole', 'giant', 'dwarf', 'dwarf']
+        >>> input_sequence = np.array([states.index(s) for s in observed_states], dtype=int)
+        >>> best_path = viterbi(input_sequence, transition_probs, emission_probs)
+        >>> predicted_states = [states[idx] for idx in best_path]
+        >>> print('predicted_states = {!r}'.format(predicted_states))
+        predicted_states = ['cloud', 'small', 'small', 'small', 'small', 'small', 'giant', 'giant', 'dwarf', 'dwarf']
     """
     # total number of states
     num_states = transition_probs.shape[0]
