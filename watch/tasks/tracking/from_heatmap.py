@@ -20,6 +20,218 @@ except Exception:
     profile = ub.identity
 
 
+def viterbi(input_sequence, transition_probs, emission_probs):
+    """
+    Viterbi decoding function.
+
+    Obtain a MAP estimate for the most likely sequence of hidden states using a
+    hidden Markov model.
+
+    Args:
+        input_sequence (ndarray[int]):
+            Input sequence of shape (T,) encoding the sequence we believe we
+            observed. Items are integers ranging from 0 to (S - 1), where S is
+            the number of possible states. These indicate the "observed" state.
+
+        transition_probs (ndarray[float]):
+            Transition probabilities of shape (S, S), where
+            ``transition_probs[i, j]`` indicates the probability that state
+            ``i`` transitions to state ``j``. Rows should sum to 1.
+
+        emission_probs (ndarray[float]):
+            Emission probabilities of shape (S, S), where
+            ``transition_probs[i, j]`` indicates the probability that
+            when we observed state ``i`` the real state was actually ``j``.
+            This encodes now noisy we believe the observations are.
+
+    Returns:
+        ndarray[int]: best_path
+            The sequence of most likely true states
+
+    References:
+        - https://en.wikipedia.org/wiki/Viterbi_algorithm#Pseudocode
+        - https://stackoverflow.com/questions/9729968/python-implementation-of-viterbi-algorithm
+
+    Example:
+        >>> # Demo based loosely on a star's simplified life sequence
+        >>> states = ['cloud', 'small', 'giant', 'dwarf', 'large',
+        >>>           'supergiant', 'supernova', 'neutron_star', 'black_hole']
+        >>> # How likely is it for a state to change at any given time?
+        >>> transitions = [
+        >>>     {'src': 'cloud',        'dst': 'cloud',        'prob': 0.9},
+        >>>     {'src': 'small',        'dst': 'small',        'prob': 0.9},
+        >>>     {'src': 'giant',        'dst': 'giant',        'prob': 0.9},
+        >>>     {'src': 'dwarf',        'dst': 'dwarf',        'prob': 0.9},
+        >>>     {'src': 'large',        'dst': 'large',        'prob': 0.9},
+        >>>     {'src': 'supergiant',   'dst': 'supergiant',   'prob': 0.9},
+        >>>     {'src': 'supernova',    'dst': 'supernova',    'prob': 0.9},
+        >>>     {'src': 'neutron_star', 'dst': 'neutron_star', 'prob': 0.9},
+        >>>     {'src': 'black_hole',   'dst': 'black_hole',   'prob': 0.9},
+        >>>     #
+        >>>     {'src': 'cloud',      'dst': 'small',        'prob': 0.8},
+        >>>     {'src': 'cloud',      'dst': 'large',        'prob': 0.2},
+        >>>     {'src': 'small',      'dst': 'giant',        'prob': 1.0},
+        >>>     {'src': 'giant',      'dst': 'dwarf',        'prob': 1.0},
+        >>>     {'src': 'large',      'dst': 'supergiant',   'prob': 1.0},
+        >>>     {'src': 'supergiant', 'dst': 'supernova',    'prob': 1.0},
+        >>>     {'src': 'supernova',  'dst': 'neutron_star', 'prob': 6.0},
+        >>>     {'src': 'supernova',  'dst': 'black_hole',   'prob': 4.0},
+        >>> ]
+        >>> # How likely is it that we made an error in observation?
+        >>> emissions = [
+        >>>     {'obs': 'cloud',        'real': 'cloud',        'prob': 0.5},
+        >>>     {'obs': 'small',        'real': 'small',        'prob': 0.5},
+        >>>     {'obs': 'giant',        'real': 'giant',        'prob': 0.5},
+        >>>     {'obs': 'dwarf',        'real': 'dwarf',        'prob': 0.5},
+        >>>     {'obs': 'large',        'real': 'large',        'prob': 0.5},
+        >>>     {'obs': 'supergiant',   'real': 'supergiant',   'prob': 0.5},
+        >>>     {'obs': 'supernova',    'real': 'supernova',    'prob': 0.5},
+        >>>     {'obs': 'neutron_star', 'real': 'neutron_star', 'prob': 0.5},
+        >>>     {'obs': 'black_hole',   'real': 'black_hole',   'prob': 0.5},
+        >>> ]
+        >>> emission_table = pd.DataFrame.from_dict(emissions)
+        >>> emission_df = emission_table.pivot(['obs'], ['real'], ['prob'])
+        >>> # Fill unspecified values in pairwise probability tables
+        >>> import kwarray
+        >>> rng = kwarray.ensure_rng(42110)
+        >>> randfill = rng.rand(*emission_df.shape) * 0.01
+        >>> flags = emission_df.isnull().astype(int)
+        >>> emission_df = emission_df.fillna(0) + randfill * flags
+        >>> transition_table = pd.DataFrame.from_dict(transitions)
+        >>> transition_df = transition_table.pivot(['src'], ['dst'], ['prob']).fillna(0)
+        >>> # Normalize probs
+        >>> emission_df = emission_df.div(emission_df.groupby(axis=1, level=0).sum(), level=0)
+        >>> transition_df = transition_df.div(transition_df.groupby(axis=1, level=0).sum(), level=0)
+        >>> # Reorder indexes so we can use integer states
+        >>> transition_df2 = transition_df.droplevel(axis=1, level=0)
+        >>> emission_df2 = emission_df.droplevel(axis=1, level=0)
+        >>> transition_df2 = transition_df2[states].loc[states]
+        >>> emission_df2 = emission_df2[states].loc[states]
+        >>> #
+        >>> # Convert to ndarrays
+        >>> transition_probs = transition_df2.values
+        >>> emission_probs = emission_df2.values
+        >>> #
+        >>> observed_states = ['cloud', 'small', 'cloud', 'small', 'large', 'supergiant', 'black_hole', 'giant', 'dwarf', 'dwarf']
+        >>> input_sequence = np.array([states.index(s) for s in observed_states], dtype=int)
+        >>> best_path = viterbi(input_sequence, transition_probs, emission_probs)
+        >>> predicted_states = [states[idx] for idx in best_path]
+        >>> print('predicted_states = {!r}'.format(predicted_states))
+        predicted_states = ['cloud', 'small', 'small', 'small', 'small', 'small', 'giant', 'giant', 'dwarf', 'dwarf']
+    """
+    # total number of states
+    num_states = transition_probs.shape[0]
+
+    # initialize prior from a uniform distribution
+    Pi = (1 / num_states) * np.ones(num_states)
+
+    # sequence length
+    T = len(input_sequence)
+
+    # probs of most likely path
+    trellis = np.empty((num_states, T), dtype=np.float)
+
+    # previous state of the most likely path
+    pointers = np.empty((num_states, T), dtype=int)
+
+    # determine each stat's prob at time 0
+    trellis[:, 0] = Pi * emission_probs[:, input_sequence[0]]
+    pointers[:, 0] = 0
+
+    # track each state's most likely prior state
+    for i in range(1, T):
+        trellis[:, i] = np.max(trellis[:, i - 1] * transition_probs.T * emission_probs[np.newaxis, :, input_sequence[i]].T, 1)
+        pointers[:, i] = np.argmax(trellis[:, i - 1] * transition_probs.T, 1)
+
+    # best path
+    best_path = np.empty(T, dtype=int)
+    best_path[-1] = np.argmax(trellis[:, T - 1])
+    for i in reversed(range(1, T)):
+        best_path[i - 1] = pointers[best_path[i], i]
+
+    return best_path
+
+
+def class_label_smoothing(anns_in_track, categories_in_track, name_to_cat):
+    """
+    Given a sequence of class labels from SC model, perform smoothing on this sequence
+    """
+    # make class ids
+    cid_no_activity = name_to_cat['No Activity']['id']
+    cid_site_prep = name_to_cat['Site Preparation']['id']
+    cid_active = name_to_cat['Active Construction']['id']
+    cid_post = name_to_cat['Post Construction']['id']
+
+    id_to_names = ['', 'No Activity', 'Site Preparation', 'Active Construction', 'Post Construction']
+    #
+    # Set up Viterbi Decoding
+    #
+
+    input_sequence = anns_in_track.cids
+
+    # mapping of cids to canonical indices
+    mapping_to_canonical = {
+        cid_no_activity: 0,
+        cid_site_prep: 1,
+        cid_active: 2,
+        cid_post: 3}
+
+    # mapping from canonical to original cids
+    mapping_to_original = {
+        0: cid_no_activity,
+        1: cid_site_prep,
+        2: cid_active,
+        3: cid_post}
+
+    def replace(original_list, existing_val, desired_val):
+        return [desired_val if i == existing_val else i for i in original_list]
+
+    canonical_sequence = [mapping_to_canonical.get(number, number) for number in input_sequence]
+
+    # Pre-processing: add post construction label at the end IF
+    # 1) there was at least one active construction AND
+    # 2) if the last frame is not active construction
+    if (canonical_sequence[-1] != 2) and (2 in canonical_sequence):
+        # canonical index of active construction is 2
+        active_indices = [i for i, x in enumerate(canonical_sequence) if x == 2]
+        last_active_ind = max(active_indices)
+
+        # assign the frame after the last Active construction as Post Construction
+        canonical_sequence[last_active_ind + 1] = 3
+
+    # transition matrix
+    transition_probs = np.array([
+        [0.7, 0.1, 0.10, 0.10],
+        [0.0, 0.7, 0.15, 0.15],
+        [0.25, 0.0, 0.7, 0.05],
+        [0.0, 0.0, 0.00, 1.00]
+    ])
+
+    # emission probability matrix
+    emission_probs = np.array([
+        [0.75, 0.10, 0.10, 0.10],
+        [0.10, 0.75, 0.10, 0.10],
+        [0.10, 0.10, 0.75, 0.10],
+        [0.25, 0.25, 0.25, 0.75]
+    ])
+
+    smoothed_sequence = list(viterbi(canonical_sequence, transition_probs, emission_probs))
+
+    # keep first post construction, mark others as no activity
+    post_indices = [i for i, x in enumerate(smoothed_sequence) if x == 3]
+    if (len(post_indices) > 0):
+        for index in post_indices:
+            smoothed_sequence[index] = 0
+
+    # map canonical IDs back to original category IDs
+    smoothed_fixed_cids = [mapping_to_original.get(number, number) for number in smoothed_sequence]
+
+    smoothed_categories = []
+    for cid in smoothed_fixed_cids:
+        smoothed_categories.append(id_to_names[cid])
+    return smoothed_categories
+
+
 @dataclass
 class SmallPolygonFilter(PolygonFilter):
     min_area_px: float = 80
@@ -184,23 +396,38 @@ def add_tracks_to_dset(coco_dset,
 
     new_trackids = kwcoco_extensions.TrackidGenerator(coco_dset)
 
-    new_anns = []
     for track in tracks:
         if track.track_id is not None:
             track_id = track.track_id
             new_trackids.exclude_trackids([track_id])
         else:
             track_id = next(new_trackids)
-        track_id = next(new_trackids)
+
+        new_anns = []
         for obs in track.observations:
             new_ann = make_new_annotation(obs.gid, obs.poly, obs.score, track_id)
             new_anns.append(new_ann)
 
-    for new_ann in new_anns:
-        coco_dset.add_annotation(**new_ann)
-    # TODO: Faster to add annotations in bulk, but we need to construct the
-    # "ids" first
-    # coco_dset.add_annotations(new_anns)
+        for new_ann in new_anns:
+            coco_dset.add_annotation(**new_ann)
+        # TODO: Faster to add annotations in bulk, but we need to construct the
+        # "ids" first
+        # coco_dset.add_annotations(new_anns)
+
+        # --- apply viterbi decoding ---
+        if 0:
+            anns_in_track = coco_dset.annots(trackid=track_id)
+            categories_in_track = anns_in_track.cnames
+            name_to_cat = coco_dset.name_to_cat
+            # Viterbi decoding
+            new_categories = class_label_smoothing(anns_in_track, categories_in_track, name_to_cat)
+
+            # baseline: no smoothing uncomment the following line to skip viterbi decoding
+            # new_categories = categories_in_track.copy()
+
+            anns_in_track.set('category_id', [coco_dset.name_to_cat[name]['id'] for name in new_categories])
+        # ------------------------------
+
     return coco_dset
 
 
