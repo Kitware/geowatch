@@ -36,6 +36,8 @@ def viterbi(input_sequence, transition_probs, emission_probs):
         - https://stackoverflow.com/q/9729968
     Example:
         >>> # Demo based loosely on a star's simplified life sequence
+        >>> import numpy as np
+        >>> improt pandas as pd
         >>> states = ['cloud', 'small', 'giant', 'dwarf', 'large',
         >>>           'supergiant', 'supernova', 'neutron_star', 'black_hole']
         >>> # How likely is it for a state to change at any given time?
@@ -101,6 +103,7 @@ def viterbi(input_sequence, transition_probs, emission_probs):
         >>>     'supergiant', 'black_hole', 'giant', 'dwarf', 'dwarf']
         >>> input_sequence = np.array(
         >>>     [states.index(s) for s in observed_states], dtype=int)
+        >>> from watch.tasks.tracking.phase import viterbi
         >>> best_path = viterbi(
         >>>     input_sequence, transition_probs, emission_probs)
         >>> predicted_states = [states[idx] for idx in best_path]

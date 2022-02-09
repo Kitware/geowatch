@@ -48,7 +48,6 @@ import ubelt as ub
 from kwcoco.coco_image import CocoImage
 # import colored_traceback.auto  # noqa
 
-
 try:
     from xdev import profile
 except Exception:
@@ -74,7 +73,6 @@ def geojson_feature(img, anns, coco_dset, with_properties=True):
     Group kwcoco annotations in the same track (site) and image
     into one Feature in an IARPA site model
     '''
-
     def single_geometry(ann):
         seg_geo = ann['segmentation_geos']
         assert isinstance(seg_geo, dict)
@@ -94,8 +92,13 @@ def geojson_feature(img, anns, coco_dset, with_properties=True):
         source = None
         img = coco_img.img
         bundle_dpath = ub.Path(coco_img.bundle_dpath)
-        chan_to_aux = {aux['channels']: aux for aux in coco_img.iter_asset_objs()}
-        for want_chan in {'r|g|b', 'rgb', 'pan', 'panchromatic', 'green', 'blue'}:
+        chan_to_aux = {
+            aux['channels']: aux
+            for aux in coco_img.iter_asset_objs()
+        }
+        for want_chan in {
+                'r|g|b', 'rgb', 'pan', 'panchromatic', 'green', 'blue'
+        }:
             if want_chan in chan_to_aux:
                 aux = chan_to_aux[want_chan]
                 source = bundle_dpath / aux['file_name']
@@ -331,10 +334,11 @@ def track_to_site(coco_dset,
         }
 
         if as_summary:
-            properties.update(**{
-                'type': 'site_summary',
-                'region_id': region_id,  # HACK to passthrough to main
-            })
+            properties.update(
+                **{
+                    'type': 'site_summary',
+                    'region_id': region_id,  # HACK to passthrough to main
+                })
         else:
             properties.update(**{
                 'type': 'site',
@@ -443,10 +447,9 @@ def _validate_summary(site_summary_or_region_model,
     for site_summary_or_region_model in summaries_or_rms:
 
         if raises:
-            assert isinstance(
-                site_summary_or_region_model, dict
-            ), ('unknown site summary dtype ' +
-                str(type(site_summary_or_region_model)))
+            assert isinstance(site_summary_or_region_model,
+                              dict), ('unknown site summary dtype ' +
+                                      str(type(site_summary_or_region_model)))
 
         try:  # is this a region model?
             region_model_schema = watch.rc.load_region_model_schema()
@@ -485,9 +488,7 @@ def add_site_summary_to_kwcoco(possible_summaries,
     if default_region_id is None:
         default_region_id = ub.peek(coco_dset.index.name_to_video)
 
-    site_summaries = _validate_summary(
-        possible_summaries,
-        default_region_id)
+    site_summaries = _validate_summary(possible_summaries, default_region_id)
 
     # TODO use pyproj instead, make sure it works with kwimage.warp
 
@@ -528,11 +529,11 @@ def add_site_summary_to_kwcoco(possible_summaries,
             else:
                 utm_epsg_code = 4326
             transform_utm_to_pxl = kwimage.Affine.coerce(
-                            img.get('wld_to_pxl', {'scale': 1}))
-            img_poly = (geo_poly
-                        .swap_axes()  # TODO bookkeep this convention
-                        .warp(transform_wgs84_to(utm_epsg_code))
-                        .warp(transform_utm_to_pxl))
+                img.get('wld_to_pxl', {'scale': 1}))
+            img_poly = (
+                geo_poly.swap_axes()  # TODO bookkeep this convention
+                .warp(transform_wgs84_to(utm_epsg_code)).warp(
+                    transform_utm_to_pxl))
             bbox = list(img_poly.bounding_box().to_coco())[0]
             coco_dset.add_annotation(image_id=img['id'],
                                      category_id=cid,
@@ -647,8 +648,7 @@ def main(args):
     parser = argparse.ArgumentParser(
         description='Convert KWCOCO to IARPA GeoJSON')
     required_args = parser.add_argument_group('required')
-    required_args.add_argument('in_file',
-                               help='Input KWCOCO to convert')
+    required_args.add_argument('in_file', help='Input KWCOCO to convert')
     required_args.add_argument('--out_dir',
                                help=ub.paragraph('''
         Output directory where GeoJSON files will be written.
@@ -699,8 +699,8 @@ def main(args):
         Any file paths will be loaded as CocoDatasets if possible.
         '''))
     behavior_args = parser.add_argument_group(
-            'behavior',
-            '--bas_mode is mutually exclusive with other behavior args.')
+        'behavior',
+        '--bas_mode is mutually exclusive with other behavior args.')
     behavior_args.add_argument('--bas_mode',
                                action='store_true',
                                help=ub.paragraph('''
@@ -724,15 +724,13 @@ def main(args):
         Additional arguments to this script will be passed to:
             python -m watch.cli.run_metrics_framework --help
         '''))
-    score_parser.add_argument('score_args',
-                              nargs=argparse.REMAINDER)
+    score_parser.add_argument('score_args', nargs=argparse.REMAINDER)
     args = parser.parse_args(args)
 
     # set the out dir
-    out_dir = (args.out_dir if args.out_dir is not None else
-               os.path.join(
-                      os.path.dirname(args.in_file),
-                      'regions' if args.bas_mode else 'sites'))
+    out_dir = (args.out_dir if args.out_dir is not None else os.path.join(
+        os.path.dirname(args.in_file),
+        'regions' if args.bas_mode else 'sites'))
     os.makedirs(out_dir, exist_ok=True)
 
     # load the track kwargs
@@ -797,20 +795,19 @@ def main(args):
     if args.site_summary is not None:
         if args.bas_mode:
             raise ValueError('--site_summary cannot be used in --bas_mode')
-        coco_dset = add_site_summary_to_kwcoco(
-                args.site_summary, coco_dset, args.region_id)
+        coco_dset = add_site_summary_to_kwcoco(args.site_summary, coco_dset,
+                                               args.region_id)
         cid = coco_dset.name_to_cat[watch.heuristics.SITE_SUMMARY_CNAME]['id']
         coco_dset = coco_dset.subset(coco_dset.index.cid_to_gids[cid])
         print('restricting dset to videos with site_summary annots: ',
               set(coco_dset.index.name_to_video))
         assert coco_dset.n_images > 0, 'no valid videos!'
 
-    coco_dset = watch.tasks.tracking.normalize.normalize(
-        coco_dset,
-        track_fn=track_fn,
-        overwrite=False,
-        gt_dset=gt_dset,
-        **track_kwargs)
+    coco_dset = watch.tasks.tracking.normalize.normalize(coco_dset,
+                                                         track_fn=track_fn,
+                                                         overwrite=False,
+                                                         gt_dset=gt_dset,
+                                                         **track_kwargs)
 
     if args.write_in_file:
         coco_dset.dump(args.in_file, indent=2)
@@ -824,16 +821,15 @@ def main(args):
         for region_id, site_summaries in ub.group_items(
                 sites,
                 lambda site: site['properties'].pop('region_id')).items():
-            region_fpath = os.path.join(out_dir,
-                                        region_id + '.geojson')
+            region_fpath = os.path.join(out_dir, region_id + '.geojson')
             if os.path.isfile(region_fpath):
                 with open(region_fpath, 'r') as f:
                     region = geojson.load(f)
                 if verbose:
                     print(f'writing to existing region {region_fpath}')
             else:
-                region = geojson.FeatureCollection([
-                        create_region_feature(region_id, site_summaries)])
+                region = geojson.FeatureCollection(
+                    [create_region_feature(region_id, site_summaries)])
                 if verbose:
                     print(f'writing to new region {region_fpath}')
             for site_summary in site_summaries:
@@ -877,8 +873,7 @@ def demo(coco_dset,
         '--out_dir',
         regions_dir,
         '--track_fn',
-        'watch.tasks.tracking.from_heatmap.'
-        'TimeAggregatedBAS',
+        'watch.tasks.tracking.from_heatmap.TimeAggregatedBAS',
         '--bas_mode',
         # '--write_in_file'
     ]
@@ -902,8 +897,7 @@ def demo(coco_dset,
             '--out_dir',
             sites_dir,
             '--track_fn',
-            'watch.tasks.tracking.from_heatmap.'
-            'TimeAggregatedSC',
+            'watch.tasks.tracking.from_heatmap.TimeAggregatedSC',
         ]
         for vid_name, vid in coco_dset_sc.index.name_to_video.items():
             gids = coco_dset_sc.index.vidid_to_gids[vid['id']]
@@ -919,8 +913,8 @@ def demo(coco_dset,
             ]:
                 print('running site ' + site['properties']['site_id'])
                 main([
-                    sub_dset.fpath,
-                    '--track_kwargs', '{"boundaries_as": "none"}'
+                    sub_dset.fpath, '--track_kwargs',
+                    '{"boundaries_as": "none"}'
                 ] + sc_args)
                 # '--site_summary', json.dumps(site)])
     if cleanup:

@@ -388,10 +388,10 @@ def add_track_index(coco_dset):
 
 @profile
 def normalize_phases(coco_dset,
-                     baseline_keys={'salient'},
                      use_viterbi=False,
                      t_probs=None,
-                     e_probs=None):
+                     e_probs=None,
+                     baseline_keys={'salient'}):
     '''
     Convert internal representation of phases to their IARPA standards as well
     as inserting a baseline guess for activity classification and removing
@@ -432,13 +432,12 @@ def normalize_phases(coco_dset,
 
     for cat in CATEGORIES:
         coco_dset.ensure_category(**cat)
-
     baseline_keys = set(baseline_keys)
     unknown_cnames = coco_dset.name_to_cat.keys() - (
         {cat['name']
          for cat in CATEGORIES} | {SITE_SUMMARY_CNAME} | baseline_keys)
     if unknown_cnames:
-        print('removing unknown categories {unknown_cnames}')
+        print(f'removing unknown categories {unknown_cnames}')
         coco_dset.remove_categories(unknown_cnames, keep_annots=False)
 
     cnames_to_remove = set(
@@ -618,10 +617,9 @@ def normalize(coco_dset,
         viz_track_scores(coco_dset, SITE_SUMMARY_CNAME, keys_to_score_sc,
                          viz_out_dir / 'track_scores.jpg')
 
-    phase_args = []
+    phase_args = [use_viterbi, t_probs, e_probs]
     if 'key' in track_kwargs:  # assume this is a baseline (saliency) key
         phase_args.append(set(track_kwargs['key']))
-    phase_args += [use_viterbi, t_probs, e_probs]
     coco_dset = normalize_phases(coco_dset, phase_args)
 
     coco_dset = normalize_sensors(coco_dset)
