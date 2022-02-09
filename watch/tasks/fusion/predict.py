@@ -60,6 +60,7 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.add_argument('--with_saliency', type=smartcast, default='auto')
 
     parser.add_argument('--compress', type=str, default='RAW', help='type of compression for prob images')
+    parser.add_argument('--track_emissions', type=smartcast, default=True, help='set to false to disable emission tracking')
 
     parser.add_argument(
         '--write_preds', default=True, type=smartcast, help=ub.paragraph(
@@ -332,6 +333,8 @@ def predict(cmdline=False, **kwargs):
             else:
                 walker[problem['loc']] = '<IN_MEMORY_DATASET: {}>'.format(bad_data._build_hashid())
 
+    start_timestamp = ub.timestamp()
+
     info.append({
         'type': 'process',
         'properties': {
@@ -340,7 +343,7 @@ def predict(cmdline=False, **kwargs):
             'hostname': socket.gethostname(),
             'cwd': os.getcwd(),
             'userhome': ub.userhome(),
-            'timestamp': ub.timestamp(),
+            'timestamp': start_timestamp,
             'fit_config': traintime_params,
         }
     })
@@ -459,6 +462,18 @@ def predict(cmdline=False, **kwargs):
 
     prog = ub.ProgIter(batch_iter, desc='predicting', verbose=1)
 
+    try:
+        if args.track_emissions:
+            from codecarbon import EmissionsTracker
+            emissions_tracker = EmissionsTracker()
+            emissions_tracker.start()
+        else:
+            emissions_tracker = None
+    except Exception as ex:
+        if args.track_emissions:
+            print('ex = {!r}'.format(ex))
+        emissions_tracker = None
+
     with torch.set_grad_enabled(False):
         # prog.set_extra(' <will populate stats after first video>')
         for batch in prog:
@@ -530,6 +545,49 @@ def predict(cmdline=False, **kwargs):
                 # finalize_ready(head_stitcher, gid)
                 writer_queue.submit(head_stitcher.finalize_image, gid)
         writer_queue.wait_until_finished()
+
+    # TODO: carbon footprint
+
+    try:
+        device_info = {
+            'total_vram': torch.cuda.get_device_properties(device).total_memory,
+            'reserved_vram': torch.cuda.memory_reserved(device),
+            'allocated_vram': torch.cuda.memory_allocated(device),
+            'device_index': device.index,
+            'device_type': device.type,
+        }
+    except Exception:
+        device_info = None
+
+    if emissions_tracker is not None:
+        co2_kg = emissions_tracker.stop()
+        emissions = {
+            'co2_kg': co2_kg,
+        }
+        try:
+            import pint
+        except Exception as ex:
+            print('ex = {!r}'.format(ex))
+        else:
+            reg = pint.UnitRegistry()
+            co2_ton = (co2_kg * reg.kg).to(reg.metric_ton)
+            dollar_per_ton = 15 / reg.metric_ton  # cotap rate
+            emissions['co2_ton'] = co2_ton.m
+            emissions['est_dollar_to_offset'] = (co2_ton * dollar_per_ton).m
+        print('emissions = {}'.format(ub.repr2(emissions, nl=1)))
+    else:
+        emissions = None
+
+    info.append({
+        'type': 'measure',
+        'properties': {
+            'iters_per_second': prog._iters_per_second,
+            'start_timestamp': start_timestamp,
+            'end_timestamp': ub.timestamp(),
+            'device_info': device_info,
+            'emissions': emissions,
+        }
+    })
 
     # prog.set_extra('found {}'.format(nanns))
     # print('Predicted total nanns = {!r}'.format(nanns))
