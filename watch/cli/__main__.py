@@ -32,6 +32,7 @@ def main(cmdline=True, **kw):
         'find_dvc',
         'kwcoco_to_geojson',
         'run_metrics_framework',
+        'torch_model_stats',
     ]
     module_lut = {}
     for name in modnames:
