@@ -1045,9 +1045,7 @@ class SimpleDataCube(object):
 
         sub_new_gids = []
         sub_new_aids = []
-        Prog = ub.ProgIter
-        for job in Prog(pool.as_completed(), total=len(pool),
-                        desc='collect extract jobs'):
+        for job in pool.as_completed(desc='collect extract jobs'):
             new_img, new_anns = job.result()
 
             # Hack, the next ids dont update when new images are added
