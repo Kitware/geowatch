@@ -54,7 +54,7 @@ class segmentation_model(pl.LightningModule):
             segmentations = torch.clamp(segmentations, 0, 1)
 
         if self.hparams.positional_encoding:
-            positions = batch['time_steps']
+            positions = batch['normalized_date']
         else:
             positions = None
 
@@ -83,7 +83,7 @@ class segmentation_model(pl.LightningModule):
         images = [batch[key] for key in batch if key[:5] == 'image']
         images = torch.stack(images, dim=1).to(self.device)
         if self.hparams.positional_encoding:
-            positions = batch['time_steps'].to(self.device)
+            positions = batch['normalized_date'].to(self.device)
         else:
             positions = None
         forward = self.forward(images, positions)
@@ -142,7 +142,7 @@ class segmentation_model(pl.LightningModule):
             if self.hparams.binary:
                 segmentations = torch.clamp(segmentations, 0, 1)
             if self.hparams.positional_encoding:
-                positions = batch['time_steps'].to(self.device)
+                positions = batch['normalized_date'].to(self.device)
             else:
                 positions = None
             output = self.forward(images, positions)['predictions']

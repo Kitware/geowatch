@@ -4,8 +4,10 @@ from torch.utils.data import DataLoader
 from argparse import Namespace
 import pytorch_lightning as pl
 from torchmetrics.classification.accuracy import Accuracy
+from tqdm import tqdm
+from torch import pca_lowrank as pca
 
-from .data.datasets import kwcoco_dataset
+from .data.datasets import kwcoco_dataset, gridded_dataset
 from .utils.attention_unet import attention_unet
 
 
@@ -25,11 +27,17 @@ class pretext(pl.LightningModule):
         self.save_hyperparameters(hparams)
 
         if hparams.train_dataset is not None:
-            self.trainset = kwcoco_dataset(hparams.train_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size)
+            if hparams.use_gridded_dataset:
+                self.trainset = gridded_dataset(hparams.train_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size)
+            else:
+                self.trainset = kwcoco_dataset(hparams.train_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size)
         else:
             self.trainset = None
         if hparams.vali_dataset is not None:
-            self.valset = kwcoco_dataset(hparams.vali_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size)
+            if hparams.use_gridded_dataset:
+                self.valset = gridded_dataset(hparams.vali_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size)
+            else:
+                self.valset = kwcoco_dataset(hparams.vali_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size)
         else:
             self.valset = None
 
@@ -69,7 +77,7 @@ class pretext(pl.LightningModule):
 
         # task specific necks
         self.necks = [
-            self.task_neck(self.hparams.feature_dim_shared, self.hparams.feature_dim_each_task),  # sort task
+            self.task_neck(2 * self.hparams.feature_dim_shared, self.hparams.feature_dim_each_task),  # sort task
             self.task_neck(self.hparams.feature_dim_shared, self.hparams.feature_dim_each_task),  # augment task
             self.task_neck(self.hparams.feature_dim_shared, self.hparams.feature_dim_each_task),  # overlap task
         ]
@@ -77,7 +85,7 @@ class pretext(pl.LightningModule):
 
         # task specific heads
         self.heads = [
-            self.pixel_classification_head(2 * self.hparams.feature_dim_each_task, num_classes=2),  # sort task
+            self.pixel_classification_head(self.hparams.feature_dim_each_task, num_classes=2),  # sort task
             self.image_classification_head( self.hparams.feature_dim_each_task),  # augment task
             self.image_classification_head( self.hparams.feature_dim_each_task),  # overlap task
         ]
@@ -100,7 +108,7 @@ class pretext(pl.LightningModule):
 
     def shared_step(self, batch):
         # get features of each image from shared model body
-        image_stack = torch.stack([batch['image1'], batch['image2'], batch['offset_image1'], batch['augmented_image1']], dim=1).to(self.device)
+        image_stack = torch.stack([batch['image1'], batch['image2'], batch['offset_image1'], batch['augmented_image1']], dim=1).to(self.device).float()
         # positional_encoding must be set to none to produce viable pretext task results
         out = self(image_stack, positional_encoding=None)
         image1_features = out[:, 0, :, :, :]
@@ -118,7 +126,8 @@ class pretext(pl.LightningModule):
         # Time Sort task
         if 0 in self.task_indices:
             module_list_idx = self.task_indices.index(0)
-            time_sort_prediction = self.heads[module_list_idx](torch.cat((image1_features, image2_features), dim=1))
+            time_sort_prediction = self.necks[module_list_idx](torch.cat((image1_features, image2_features), dim=1))
+            time_sort_prediction = self.heads[module_list_idx](time_sort_prediction)
             # evaluate
             loss_time = self.criteria[module_list_idx](time_sort_prediction.flatten(2).float(), time_sort_labels.flatten(1).long())
             time_accuracy = self.sort_accuracy((torch.max(time_sort_prediction.data, 1)[1]), time_sort_labels.int())
@@ -193,11 +202,11 @@ class pretext(pl.LightningModule):
         return feats['shared']
 
     def train_dataloader(self):
-        return DataLoader(self.trainset, batch_size=self.hparams.batch_size, num_workers=self.hparams.workers, shuffle=True)
+        return DataLoader(self.trainset, batch_size=self.hparams.batch_size, num_workers=self.hparams.workers, shuffle=True, pin_memory=True)
 
     def val_dataloader(self):
         if self.hparams.vali_dataset is not None:
-            return DataLoader(self.valset, batch_size=self.hparams.batch_size, num_workers=self.hparams.workers)
+            return DataLoader(self.valset, batch_size=self.hparams.batch_size, num_workers=self.hparams.workers, pin_memory=True)
 
     def configure_optimizers(self):
         opt = torch.optim.AdamW(
@@ -244,3 +253,29 @@ class pretext(pl.LightningModule):
                              nn.Flatten(1, -1),
                              nn.Linear(in_chan, 2),
                             )
+
+    def generate_pca_matrix(self, save_path, loader, reduction_dim=6):
+        feature_collection = []
+        print('Calculating projection matrix based on pca.')
+
+        with torch.set_grad_enabled(False):
+            # TODO: option to cache or specify a specific projection matrix?
+            for batch in tqdm(loader, desc='Calculating PCA matrix'):
+                image_stack = torch.stack([batch['image1'], batch['image2'], batch['offset_image1'], batch['augmented_image1']], dim=1)
+                features = self.forward(image_stack.to(self.device))
+                feature_collection.append(features.cpu())
+            features = None
+            image_stack = None
+            stack = torch.cat(feature_collection, dim=0).permute(0, 1, 3, 4, 2).reshape(-1, 64)
+            _, _, projector = pca(stack, q=reduction_dim)
+            stack = None
+
+        projector = projector.permute(1, 0)
+
+        if save_path:
+            torch.save(projector, save_path)
+
+        return projector
+
+    def on_save_checkpoint(self, checkpoint):
+        self.generate_pca_matrix(save_path=self.hparams.pca_projection_path, loader=self.train_dataloader(), reduction_dim=self.hparams.reduction_dim)
