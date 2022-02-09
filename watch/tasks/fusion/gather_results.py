@@ -453,13 +453,14 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
         # 'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco',
         # 'Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco',
         # 'Drop1-Aligned-TA1-2022-01_vali_data_nowv.kwcoco',
-        # 'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco',
-        # 'Drop2-Aligned-TA1-2022-01_combo_L_nowv_vali.kwcoco',
         # 'Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco',
         # 'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco'
         # 'Drop1-Aligned-TA1-2022-01_vali_data_nowv.kwcoco',
         # 'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco',
-        'Drop2-Aligned-TA1-2022-01_combo_L_nowv.kwcoco',
+
+        # 'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco',
+        'Drop2-Aligned-TA1-2022-01_combo_L_nowv_vali.kwcoco',
+        # 'Drop2-Aligned-TA1-2022-01_combo_L_nowv.kwcoco',
     ]
 
     # dataset_key = 'combo_vali_nowv.kwcoco'

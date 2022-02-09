@@ -42,6 +42,15 @@ PRODUCTION_MODELS = [
     },
 
     {
+        'name': 'BAS_TA1_c001_v082_epoch=42-step=88063',
+        'file_name': 'models/fusion/SC-20201117/BAS_TA1_c001_v082/BAS_TA1_c001_v082_epoch=42-step=88063.pt',
+        'task': 'BAS',
+        'train_dataset': 'Drop2-Aligned-L1-2022-01/combo_L_nowv_train.kwcoco.json',
+        'sensors': ['L8', 'S2'],
+        'input_channels': 'blue|green|red|nir|swir16|swir22,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field',
+    },
+
+    {
         'name': 'BAS_TA1_ALL_REGIONS_v084_epoch=5-step=51917',
         'file_name': 'models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=5-step=51917.pt',
         'task': 'BAS',
