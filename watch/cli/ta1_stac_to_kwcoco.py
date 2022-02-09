@@ -318,8 +318,8 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
     outdir = os.path.dirname(outpath)
     os.makedirs(outdir, exist_ok=True)
 
-    executor = ub.Executor(mode='process' if jobs > 1 else 'serial',
-                           max_workers=jobs)
+    executor = ub.JobPool(mode='process' if jobs > 1 else 'serial',
+                          max_workers=jobs)
 
     jobs = [executor.submit(_stac_item_to_kwcoco_image,
                             stac_item,
@@ -331,9 +331,7 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
     output_dset.fpath = outpath
 
     # TODO: Should make this name the MGRS tile
-    for job in ub.ProgIter(as_completed(jobs),
-                           total=len(jobs),
-                           desc='collect jobs'):
+    for job in executor.as_completed(desc='collect jobs'):
         kwcoco_img = job.result()
         if kwcoco_img is not None:
             output_dset.add_image(**kwcoco_img)
