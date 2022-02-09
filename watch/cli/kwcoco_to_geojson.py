@@ -37,6 +37,7 @@ import jsonschema
 import kwcoco
 import kwimage
 import dateutil.parser
+import datetime
 import watch
 import shapely
 import shapely.ops
@@ -47,7 +48,6 @@ import numpy as np
 import ubelt as ub
 from kwcoco.coco_image import CocoImage
 # import colored_traceback.auto  # noqa
-
 
 try:
     from xdev import profile
@@ -74,7 +74,6 @@ def geojson_feature(img, anns, coco_dset, with_properties=True):
     Group kwcoco annotations in the same track (site) and image
     into one Feature in an IARPA site model
     '''
-
     def single_geometry(ann):
         seg_geo = ann['segmentation_geos']
         assert isinstance(seg_geo, dict)
@@ -94,8 +93,13 @@ def geojson_feature(img, anns, coco_dset, with_properties=True):
         source = None
         img = coco_img.img
         bundle_dpath = ub.Path(coco_img.bundle_dpath)
-        chan_to_aux = {aux['channels']: aux for aux in coco_img.iter_asset_objs()}
-        for want_chan in {'r|g|b', 'rgb', 'pan', 'panchromatic', 'green', 'blue'}:
+        chan_to_aux = {
+            aux['channels']: aux
+            for aux in coco_img.iter_asset_objs()
+        }
+        for want_chan in {
+                'r|g|b', 'rgb', 'pan', 'panchromatic', 'green', 'blue'
+        }:
             if want_chan in chan_to_aux:
                 aux = chan_to_aux[want_chan]
                 source = bundle_dpath / aux['file_name']
@@ -250,56 +254,72 @@ def track_to_site(coco_dset,
         for gid, _anns in ub.group_items(anns, gids).items()
     ]
 
-    def predict_phase_changes():
-        '''
-        add prediction field to each feature
-        > A “Polygon” should define the foreign members “current_phase”,
-        > “predicted_next_phase”, and “predicted_next_phase_date”.
-        TODO we need to figure out how to link individual polygons across
-        frames within a track when we have >1 polygon per track_index
-        (from MultiPolygon or multiple annotations) to handle splitting/merging
-        This is because this prediction foreign field is defined wrt the
-        CURRENT polygon, not per-observation.
-        '''
-        for ix, feat in enumerate(features):
-
-            current_phase = feat['properties']['current_phase']
-            sep = ','
-            n_polys = len(current_phase.split(sep))
-            prediction = {
-                'predicted_phase': None,
-                'predicted_phase_start_date': None,
-            }
-            for future_feat in features[ix + 1:]:
-                future_phase = future_feat['properties']['current_phase']
-                future_date = future_feat['properties']['observation_date']
-                # HACK need to let these vary between polys in an observation
-                if future_phase != current_phase:
-                    current_phases = current_phase.split(sep)
-                    future_phases = future_phase.split(sep)
-                    n_diff = len(current_phases) - len(future_phases)
-                    if n_diff > 0:
-                        predicted_phase = sep.join(
-                            future_phases +
-                            current_phases[len(future_phases):])
-                    else:
-                        predicted_phase = sep.join(
-                            future_phases[:len(current_phases)])
-                    prediction = {
-                        'predicted_phase':
-                        predicted_phase,
-                        'predicted_phase_start_date':
-                        sep.join([future_date] * n_polys),
-                    }
-                    break
-
-            feat['properties'].update(prediction)
-
-    if not as_summary:
-        predict_phase_changes()
-
     if site_idx is None:
         site_idx = trackid
+    site_id = '_'.join((region_id, str(site_idx).zfill(4)))
+
+    def predict_phase_changes():
+        '''
+        Set predicted_phase_transition and predicted_phase_transition_date.
+        Return (average days in current_phase - elapsed days in current_phase)
+
+        https://smartgitlab.com/TE/standards/-/wikis/Site-Model-Specification
+        '''
+        # from watch.dev.check_transition_probs
+        phase_avg_days = {
+            # 'No Activity': 60,
+            'Site Preparation': 57,
+            'Active Construction': 56,
+            'Post Construction': 58
+        }
+
+        # per metrics definition doc v2.2, the site enters <phase> on the date
+        # when the last subsite enters <phase>, unless only some subsites are
+        # in <phase> on <current_date>, in which case it is the first date a
+        # subsite enters <phase>.
+        # this doesn't make any sense.
+        # ignore this, and just take the first subsite date.
+        first_date = {}
+        sep = ','
+        for feat in features:
+            phases = set(feat['properties']['current_phase'].split(sep))
+            date = dateutil.parser.parse(
+                feat['properties']['observation_date']).date()
+            missing_phases = set(phase_avg_days) - set(first_date)
+            if missing_phases:
+                for phase in phases.intersection(missing_phases):
+                    first_date[phase] = date
+            else:
+                break
+        current_date = dateutil.parser.parse(
+            features[-1]['properties']['observation_date']).date()
+
+        if 'Post Construction' in first_date:
+            return {}
+        elif 'Active Construction' in first_date:
+            return {
+                'predicted_phase_transition':
+                'Post Construction',
+                'predicted_phase_transition_date':
+                max(
+                    current_date,
+                    first_date['Active Construction'] + datetime.timedelta(
+                        days=phase_avg_days['Active Construction'])
+                ).isoformat()
+            }
+        elif 'Site Preparation' in first_date:
+            return {
+                'predicted_phase_transition':
+                'Active Construction',
+                'predicted_phase_transition_date':
+                max(
+                    current_date,
+                    first_date['Site Preparation'] + datetime.timedelta(
+                        days=phase_avg_days['Site Preparation'])
+                ).isoformat()
+            }
+        else:
+            raise ValueError(f'missing phases in site {site_id}! {first_date}')
 
     def site_feature():
         '''
@@ -315,8 +335,6 @@ def track_to_site(coco_dset,
             map(_normalize_date,
                 coco_dset.images(set(gids)).lookup('date_captured')))
 
-        site_id = '_'.join((region_id, str(site_idx).zfill(4)))
-
         properties = {
             'site_id': site_id,
             'version': watch.__version__,
@@ -331,16 +349,18 @@ def track_to_site(coco_dset,
         }
 
         if as_summary:
-            properties.update(**{
-                'type': 'site_summary',
-                'region_id': region_id,  # HACK to passthrough to main
-            })
+            properties.update(
+                **{
+                    'type': 'site_summary',
+                    'region_id': region_id,  # HACK to passthrough to main
+                })
         else:
-            properties.update(**{
-                'type': 'site',
-                'region_id': region_id,
-                'misc_info': {}
-            })
+            properties.update(
+                **{
+                    'type': 'site',
+                    'region_id': region_id,
+                    **predict_phase_changes(), 'misc_info': {}
+                })
 
         return geojson.Feature(geometry=geometry, properties=properties)
 
@@ -443,10 +463,9 @@ def _validate_summary(site_summary_or_region_model,
     for site_summary_or_region_model in summaries_or_rms:
 
         if raises:
-            assert isinstance(
-                site_summary_or_region_model, dict
-            ), ('unknown site summary dtype ' +
-                str(type(site_summary_or_region_model)))
+            assert isinstance(site_summary_or_region_model,
+                              dict), ('unknown site summary dtype ' +
+                                      str(type(site_summary_or_region_model)))
 
         try:  # is this a region model?
             region_model_schema = watch.rc.load_region_model_schema()
@@ -485,9 +504,7 @@ def add_site_summary_to_kwcoco(possible_summaries,
     if default_region_id is None:
         default_region_id = ub.peek(coco_dset.index.name_to_video)
 
-    site_summaries = _validate_summary(
-        possible_summaries,
-        default_region_id)
+    site_summaries = _validate_summary(possible_summaries, default_region_id)
 
     # TODO use pyproj instead, make sure it works with kwimage.warp
 
@@ -501,7 +518,7 @@ def add_site_summary_to_kwcoco(possible_summaries,
 
     # write site summaries
     print('warping site boundaries to pxl space...')
-    cid = coco_dset.ensure_category('Site Boundary')
+    cid = coco_dset.ensure_category(watch.heuristics.SITE_SUMMARY_CNAME)
     new_trackids = watch.utils.kwcoco_extensions.TrackidGenerator(coco_dset)
     for region_id, site_summary in site_summaries:
 
@@ -528,11 +545,11 @@ def add_site_summary_to_kwcoco(possible_summaries,
             else:
                 utm_epsg_code = 4326
             transform_utm_to_pxl = kwimage.Affine.coerce(
-                            img.get('wld_to_pxl', {'scale': 1}))
-            img_poly = (geo_poly
-                        .swap_axes()  # TODO bookkeep this convention
-                        .warp(transform_wgs84_to(utm_epsg_code))
-                        .warp(transform_utm_to_pxl))
+                img.get('wld_to_pxl', {'scale': 1}))
+            img_poly = (
+                geo_poly.swap_axes()  # TODO bookkeep this convention
+                .warp(transform_wgs84_to(utm_epsg_code)).warp(
+                    transform_utm_to_pxl))
             bbox = list(img_poly.bounding_box().to_coco())[0]
             coco_dset.add_annotation(image_id=img['id'],
                                      category_id=cid,
@@ -647,8 +664,7 @@ def main(args):
     parser = argparse.ArgumentParser(
         description='Convert KWCOCO to IARPA GeoJSON')
     required_args = parser.add_argument_group('required')
-    required_args.add_argument('in_file',
-                               help='Input KWCOCO to convert')
+    required_args.add_argument('in_file', help='Input KWCOCO to convert')
     required_args.add_argument('--out_dir',
                                help=ub.paragraph('''
         Output directory where GeoJSON files will be written.
@@ -699,8 +715,8 @@ def main(args):
         Any file paths will be loaded as CocoDatasets if possible.
         '''))
     behavior_args = parser.add_argument_group(
-            'behavior',
-            '--bas_mode is mutually exclusive with other behavior args.')
+        'behavior',
+        '--bas_mode is mutually exclusive with other behavior args.')
     behavior_args.add_argument('--bas_mode',
                                action='store_true',
                                help=ub.paragraph('''
@@ -724,15 +740,13 @@ def main(args):
         Additional arguments to this script will be passed to:
             python -m watch.cli.run_metrics_framework --help
         '''))
-    score_parser.add_argument('score_args',
-                              nargs=argparse.REMAINDER)
+    score_parser.add_argument('score_args', nargs=argparse.REMAINDER)
     args = parser.parse_args(args)
 
     # set the out dir
-    out_dir = (args.out_dir if args.out_dir is not None else
-               os.path.join(
-                      os.path.dirname(args.in_file),
-                      'regions' if args.bas_mode else 'sites'))
+    out_dir = (args.out_dir if args.out_dir is not None else os.path.join(
+        os.path.dirname(args.in_file),
+        'regions' if args.bas_mode else 'sites'))
     os.makedirs(out_dir, exist_ok=True)
 
     # load the track kwargs
@@ -797,20 +811,19 @@ def main(args):
     if args.site_summary is not None:
         if args.bas_mode:
             raise ValueError('--site_summary cannot be used in --bas_mode')
-        coco_dset = add_site_summary_to_kwcoco(
-                args.site_summary, coco_dset, args.region_id)
-        cid = coco_dset.name_to_cat['Site Boundary']['id']
+        coco_dset = add_site_summary_to_kwcoco(args.site_summary, coco_dset,
+                                               args.region_id)
+        cid = coco_dset.name_to_cat[watch.heuristics.SITE_SUMMARY_CNAME]['id']
         coco_dset = coco_dset.subset(coco_dset.index.cid_to_gids[cid])
         print('restricting dset to videos with site_summary annots: ',
               set(coco_dset.index.name_to_video))
         assert coco_dset.n_images > 0, 'no valid videos!'
 
-    coco_dset = watch.tasks.tracking.normalize.normalize(
-        coco_dset,
-        track_fn=track_fn,
-        overwrite=False,
-        gt_dset=gt_dset,
-        **track_kwargs)
+    coco_dset = watch.tasks.tracking.normalize.normalize(coco_dset,
+                                                         track_fn=track_fn,
+                                                         overwrite=False,
+                                                         gt_dset=gt_dset,
+                                                         **track_kwargs)
 
     if args.write_in_file:
         coco_dset.dump(args.in_file, indent=2)
@@ -824,16 +837,15 @@ def main(args):
         for region_id, site_summaries in ub.group_items(
                 sites,
                 lambda site: site['properties'].pop('region_id')).items():
-            region_fpath = os.path.join(out_dir,
-                                        region_id + '.geojson')
+            region_fpath = os.path.join(out_dir, region_id + '.geojson')
             if os.path.isfile(region_fpath):
                 with open(region_fpath, 'r') as f:
                     region = geojson.load(f)
                 if verbose:
                     print(f'writing to existing region {region_fpath}')
             else:
-                region = geojson.FeatureCollection([
-                        create_region_feature(region_id, site_summaries)])
+                region = geojson.FeatureCollection(
+                    [create_region_feature(region_id, site_summaries)])
                 if verbose:
                     print(f'writing to new region {region_fpath}')
             for site_summary in site_summaries:
@@ -877,8 +889,7 @@ def demo(coco_dset,
         '--out_dir',
         regions_dir,
         '--track_fn',
-        'watch.tasks.tracking.from_heatmap.'
-        'TimeAggregatedBAS',
+        'watch.tasks.tracking.from_heatmap.TimeAggregatedBAS',
         '--bas_mode',
         # '--write_in_file'
     ]
@@ -902,8 +913,7 @@ def demo(coco_dset,
             '--out_dir',
             sites_dir,
             '--track_fn',
-            'watch.tasks.tracking.from_heatmap.'
-            'TimeAggregatedSC',
+            'watch.tasks.tracking.from_heatmap.TimeAggregatedSC',
         ]
         for vid_name, vid in coco_dset_sc.index.name_to_video.items():
             gids = coco_dset_sc.index.vidid_to_gids[vid['id']]
@@ -919,8 +929,8 @@ def demo(coco_dset,
             ]:
                 print('running site ' + site['properties']['site_id'])
                 main([
-                    sub_dset.fpath,
-                    '--track_kwargs', '{"boundaries_as": "none"}'
+                    sub_dset.fpath, '--track_kwargs',
+                    '{"boundaries_as": "none"}'
                 ] + sc_args)
                 # '--site_summary', json.dumps(site)])
     if cleanup:
