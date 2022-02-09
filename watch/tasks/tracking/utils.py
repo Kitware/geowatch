@@ -307,12 +307,10 @@ def pop_tracks(
                 heatmaps(coco_dset, gids,
                          {score_chan.spec: list(score_chan.unique())
                           })[score_chan.spec]))
-        import xdev
-        with xdev.embed_on_exception_context():
-            scores = [
-                score(poly, heatmaps_by_gid[gid])
-                for poly, gid in zip(polys, annots.gids)
-            ]
+        scores = [
+            score(poly, heatmaps_by_gid[gid])
+            for poly, gid in zip(polys, annots.gids)
+        ]
     else:
         scores = [None] * len(annots)
         # scores = annots.get('score', None)

@@ -10,7 +10,7 @@ import ubelt as ub
 from watch.utils.kwcoco_extensions import TrackidGenerator
 from watch.gis.geotiff import geotiff_crs_info
 from watch.tasks.tracking.utils import TrackFunction
-
+from watch.heuristics import SITE_SUMMARY_CNAME
 
 try:
     from xdev import profile
@@ -134,7 +134,7 @@ def add_geos(coco_dset, overwrite, max_workers=16):
         img_anns = annots.detections.data['segmentations']
         assert len(img_anns) == len(annots), 'TODO skip anns w/o segmentations'
         warp_aux_to_img = kwimage.Affine.coerce(
-                annotated_band(img).get('warp_aux_to_img', None)).inv()
+            annotated_band(img).get('warp_aux_to_img', None)).inv()
         aux_anns = img_anns.warp(warp_aux_to_img)
         wld_anns = aux_anns.warp(info['pxl_to_wld'])
         wgs_anns = wld_anns.warp(info['wld_to_wgs84'])
@@ -578,7 +578,12 @@ def normalize_sensors(coco_dset):
 
 
 @profile
-def normalize(coco_dset, track_fn, overwrite, gt_dset=None, **track_kwargs):
+def normalize(coco_dset,
+              track_fn,
+              overwrite,
+              gt_dset=None,
+              viz_sc_bounds=False,
+              **track_kwargs):
     '''
     Driver function to apply all normalizations
 
@@ -656,6 +661,11 @@ def normalize(coco_dset, track_fn, overwrite, gt_dset=None, **track_kwargs):
 
     coco_dset = dedupe_tracks(coco_dset)
     coco_dset = add_track_index(coco_dset)
+
+    if viz_sc_bounds:
+        from .visualize import keys_to_score_sc, viz_track_scores
+        viz_track_scores(coco_dset, SITE_SUMMARY_CNAME,
+                         keys_to_score_sc, './track_scores.jpg')
     if 'key' in track_kwargs:  # assume this is a baseline (saliency) key
         coco_dset = normalize_phases(coco_dset,
                                      baseline_keys=set(track_kwargs['key']))

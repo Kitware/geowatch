@@ -657,7 +657,7 @@ class TimeAggregatedSC(NewTrackFunction):
     morph_kernel: int = 3
     time_filtering: bool = False
     response_filtering: bool = False
-    key: Tuple[str] = CNAMES_DCT['positive']['scored']  # TODO unscored?
+    key: Tuple[str] = tuple(CNAMES_DCT['positive']['scored'])  # TODO unscored?
     bg_key: Tuple[str] = ('No Activity')  # TODO other negative classes?
     boundaries_as: Literal['bounds', 'polys', 'none'] = 'bounds'
 
