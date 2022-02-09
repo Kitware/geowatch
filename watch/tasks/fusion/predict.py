@@ -475,6 +475,11 @@ def predict(cmdline=False, **kwargs):
         emissions_tracker = None
 
     with torch.set_grad_enabled(False):
+
+        # FIXME: that data loader should not be producing incorrect sensor/mode
+        # pairs in the first place!
+        EMERGENCY_INPUT_AGREEMENT_HACK = True
+
         # prog.set_extra(' <will populate stats after first video>')
         for batch in prog:
             batch_regions = []
@@ -488,16 +493,32 @@ def predict(cmdline=False, **kwargs):
                 if position_tensors is not None:
                     for k, v in position_tensors.items():
                         position_tensors[k] = v.to(device)
+
+                filtered_frames = []
                 for frame in item['frames']:
+                    sensor = frame['sensor']
+                    if EMERGENCY_INPUT_AGREEMENT_HACK:
+                        try:
+                            known_sensor_modes = method.input_norms[sensor]
+                        except KeyError:
+                            known_sensor_modes = None
+                            continue
+                    filtered_modes = {}
                     modes = frame['modes']
                     for key, mode in modes.items():
-                        modes[key] = mode.to(device)
+                        if EMERGENCY_INPUT_AGREEMENT_HACK:
+                            if key not in known_sensor_modes:
+                                continue
+                            filtered_modes[key] = mode.to(device)
+                    frame['modes'] = filtered_modes
+                    filtered_frames.append(frame)
+                item['frames'] = filtered_frames
 
             # Predict on the batch
-            import xdev
-            with xdev.embed_on_exception_context:
-                outputs = method.forward_step(batch, with_loss=False)
-                outputs = {head_key_mapping.get(k, k): v for k, v in outputs.items()}
+            # import xdev
+            # with xdev.embed_on_exception_context:
+            outputs = method.forward_step(batch, with_loss=False)
+            outputs = {head_key_mapping.get(k, k): v for k, v in outputs.items()}
 
             if got_outputs is None:
                 got_outputs = list(outputs.keys())
