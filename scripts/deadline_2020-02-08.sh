@@ -93,7 +93,7 @@ DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc/
 #BAS_MODEL_SUFFIX=models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=5-step=51917.pt
 #BAS_MODEL_SUFFIX=models/fusion/SC-20201117/BAS_TA1_c001_v082/BAS_TA1_c001_v082_epoch=42-step=88063.pt
 BAS_MODEL_PATH=$DVC_DPATH/$BAS_MODEL_SUFFIX
-[[ -f "$BAS_MODEL_PATH" ]] || (cd "$DVC_DPATH" && dvc pull $BAS_MODEL_SUFFIX)
+[[ -f "$BAS_MODEL_PATH" ]] || (cd "$DVC_DPATH" && dvc pull "$BAS_MODEL_SUFFIX")
 
 
 INPUT_DATASET=$ALIGNED_KWCOCO_BUNDLE/combo_L.kwcoco.json

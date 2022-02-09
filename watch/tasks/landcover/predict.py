@@ -105,21 +105,19 @@ def _predict_single(img_info, model, model_outputs,
 
     pred_filename = output_dir.joinpath('_assets', dir, name + '_landcover.tif')
 
-    import xdev
-    with xdev.embed_on_exception_context:
-        info = {
-            'file_name': str(pred_filename.relative_to(output_dir)),
-            'channels': "|".join(model_outputs),
-            'height': pred.shape[0],
-            'width': pred.shape[1],
-            'num_bands': pred.shape[2],
-            'warp_aux_to_img': {'scale': [img_info['width'] / pred.shape[1],
-                                          img_info['height'] / pred.shape[0]],
-                                'type': 'affine'}
-        }
+    info = {
+        'file_name': str(pred_filename.relative_to(output_dir)),
+        'channels': "|".join(model_outputs),
+        'height': pred.shape[0],
+        'width': pred.shape[1],
+        'num_bands': pred.shape[2],
+        'warp_aux_to_img': {'scale': [img_info['width'] / pred.shape[1],
+                                      img_info['height'] / pred.shape[0]],
+                            'type': 'affine'}
+    }
 
-        output_dset.imgs[gid]['auxiliary'].append(info)
-        return (pred_filename, pred)
+    output_dset.imgs[gid]['auxiliary'].append(info)
+    return (pred_filename, pred)
 
 
 def _write_worker(pred_filename, pred):
