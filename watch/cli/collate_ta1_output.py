@@ -224,7 +224,19 @@ def collate_item(stac_item,
         else:
             original_id = stac_item.id
 
-    output_item_id = "{}_{}".format(original_id, performer_code)
+    mgrs_utm_zone = str(stac_item.properties.get('mgrs:utm_zone', 'ZZ'))
+    mgrs_lat_band = str(stac_item.properties.get('mgrs:latitude_band', 'B'))
+    mgrs_grid_square = str(stac_item.properties.get('mgrs:grid_square', 'SS'))
+
+    if platform in SUPPORTED_LS_PLATFORMS:
+        output_item_id = "{}_{}{}{}_{}".format(
+            original_id,
+            mgrs_utm_zone,
+            mgrs_lat_band,
+            mgrs_grid_square,
+            performer_code)
+    else:
+        output_item_id = "{}_{}".format(original_id, performer_code)
 
     item_datetime = parse(stac_item.properties['datetime'])
     # NOTE ** Assumes that we're compliant with the MGRS STAC
@@ -233,9 +245,9 @@ def collate_item(stac_item,
     item_s3_outdir = '/'.join((
         output_bucket,
         output_stac_collection_id,
-        str(stac_item.properties.get('mgrs:utm_zone', 'ZZ')),
-        str(stac_item.properties.get('mgrs:latitude_band', 'B')),
-        str(stac_item.properties.get('mgrs:grid_square', 'SS')),
+        mgrs_utm_zone,
+        mgrs_lat_band,
+        mgrs_grid_square,
         "{:0>4}".format(item_datetime.year),
         "{:0>2}".format(item_datetime.month),
         "{:0>2}".format(item_datetime.day),
