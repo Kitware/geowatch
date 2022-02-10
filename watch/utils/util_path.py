@@ -69,8 +69,7 @@ def coerce_patterned_paths(data, expected_extension=None):
     Coerce input to a list of paths.
 
     Example:
-        >>> import sys, ubelt
-        >>> sys.path.append(ubelt.expandpath('~/code/watch'))
+        >>> # xdoctest: +SKIP
         >>> import watch
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
         >>> data = [dvc_dpath / 'annotations/region_models/*.geojson']

@@ -6,8 +6,8 @@ If you need to regenerate the regions use:
 DATASET_SUFFIX=TA1_FULL_SEQ_KR_S001_CLOUD_LT_10
 S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/eval2/master_collation_working/KR_S001.unique.fixed_ls_ids.cloudcover_lt_10.output
 
-DATASET_SUFFIX=TA1_FULL_SEQ_KR_S001
-S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/eval2/master_collation_working/KR_S001.unique.fixed_ls_ids.output
+#DATASET_SUFFIX=TA1_FULL_SEQ_KR_S001
+#S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/eval2/master_collation_working/KR_S001.unique.fixed_ls_ids.output
 
 
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
@@ -110,7 +110,7 @@ DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc/
 INPUT_DATASET=$ALIGNED_KWCOCO_BUNDLE/combo_L.kwcoco.json
 
 BAS_MODEL_SUFFIX=models/fusion/SC-20201117/BAS_TA1_c001_v076/BAS_TA1_c001_v076_epoch=90-step=186367.pt
-BAS_MODEL_SUFFIX=models/fusion/SC-20201117/BAS_TA1_c001_v082/BAS_TA1_c001_v082_epoch=42-step=88063.pt
+#BAS_MODEL_SUFFIX=models/fusion/SC-20201117/BAS_TA1_c001_v082/BAS_TA1_c001_v082_epoch=42-step=88063.pt
 #BAS_MODEL_SUFFIX=models/fusion/SC-20201117/BAS_TA1_c001_v073/BAS_TA1_c001_v073_epoch=13-step=28671.pt
 #BAS_MODEL_SUFFIX=models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=5-step=51917.pt
 
