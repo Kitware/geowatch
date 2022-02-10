@@ -50,7 +50,7 @@ class gridded_dataset(torch.utils.data.Dataset):
                 lambda x: tuple(
                     [x['vidid']] + [gid for gid in x['gids']]
                 )
-            )
+                )
         grouped = ub.sorted_keys(grouped)
         self.patches = list(ub.flatten(grouped.values()))
 
@@ -61,22 +61,22 @@ class gridded_dataset(torch.utils.data.Dataset):
         self.bands = []
         # no channels selected
         if len(bands) < 1:
-            raise ValueError(f'bands must be specified. Options are {", ".join(all_channels)}, or all')
+            raise ValueError(f'bands must be specified. Options are {", ".join(all_bands)}, or all')
         # all channels selected
         elif len(bands) == 1:
             if bands[0].lower() == 'all':
-                self.bands = all_channels
+                self.bands = all_bands
             elif bands[0].lower() == 'shared':
                 self.bands = ['red', 'green', 'blue', 'nir', 'swir16', 'swir22']
             elif bands[0] == 'r|g|b':
                 self.bands.append('r|g|b')
         else:
             for band in bands:
-                if band in all_channels:
+                if band in all_bands:
                     self.bands.append(band)
         self.num_channels = len(self.bands)
         self.bands = "|".join(self.bands)
-        
+
         # define augmentations
         additional_targets = dict()
         self.num_images = num_images
@@ -84,7 +84,6 @@ class gridded_dataset(torch.utils.data.Dataset):
         for i in range(self.num_images):
             additional_targets['image{}'.format(1 + i)] = 'image'
             additional_targets['seg{}'.format(i + 1)] = 'mask'
-
 
         self.transforms = A.Compose([A.OneOf([
                         A.MotionBlur(p=0.75),
@@ -103,7 +102,7 @@ class gridded_dataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         tr = self.patches[idx]
         tr['channels'] = self.bands
-        vidid = tr['vidid']        
+        vidid = tr['vidid']
 
         offset_idx = idx
         offset_vidid = None
@@ -112,7 +111,7 @@ class gridded_dataset(torch.utils.data.Dataset):
             offset_tr = self.patches[offset_idx]
             offset_vidid = offset_tr['vidid']
         offset_tr['channels'] = self.bands
-        
+
         if self.segmentation:
             sample = self.sampler.load_sample(tr, with_annots='segmentation')
             det_list = sample['annots']['frame_dets']
@@ -120,10 +119,10 @@ class gridded_dataset(torch.utils.data.Dataset):
             for det in det_list:
                 frame_mask = np.full([128, 128], dtype=np.int32, fill_value=0)
                 ann_polys = det.data['segmentations'].to_polygon_list()
-                ann_aids = det.data['aids']
-                ann_cids = det.data['cids']
-                for poly, aid, cid in zip(ann_polys, ann_aids, ann_cids):
-                    cidx = self.sampler.classes.id_to_idx[cid]
+                # ann_aids = det.data['aids']
+                # ann_cids = det.data['cids']
+                for poly in ann_polys:
+                    # cidx = self.sampler.classes.id_to_idx[cid]
                     poly.fill(frame_mask, value=1)
                 segmentation_masks.append(frame_mask)
         else:
@@ -151,7 +150,6 @@ class gridded_dataset(torch.utils.data.Dataset):
 
         gids = tr['gids']
         date_list = []
-        img1_info = self.coco_dset.index.imgs[gids[0]]
         for gid in gids:
             date = self.coco_dset.index.imgs[gid]['date_captured']
             date_list.append((int(date[:4]), int(date[5:7])))
@@ -164,12 +162,14 @@ class gridded_dataset(torch.utils.data.Dataset):
         out['normalized_date'] = normalized_date.float()
         out['time_sort_label'] = float(normalized_date[0] < normalized_date[1])
         out['img1_id'] = gids[0]
+        # img1_info = self.coco_dset.index.imgs[gids[0]]
         # out['img1_info'] = img1_info
         # out['tr'] = ItemContainer(tr, stack=False)
         if self.segmentation:
             for k in range(self.num_images):
                 out['segmentation{}'.format(1 + k)] = segmentation_masks[k]
         return out
+
 
 class kwcoco_dataset(Dataset):
     S2_l2a_channel_names = [

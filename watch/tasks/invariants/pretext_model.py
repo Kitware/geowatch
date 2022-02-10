@@ -256,12 +256,11 @@ class pretext(pl.LightningModule):
 
     def generate_pca_matrix(self, save_path, loader, reduction_dim=6):
         feature_collection = []
-        print('Calculating projection matrix based on pca.')
 
         with torch.set_grad_enabled(False):
             # TODO: option to cache or specify a specific projection matrix?
-            for n, batch in tqdm(enumerate(loader), desc='Calculating PCA matrix', max=50):
-                if n==50:
+            for n, batch in tqdm(enumerate(loader), desc='Calculating PCA matrix', total=50):
+                if n == 50:
                     break
                 image_stack = torch.stack([batch['image1'], batch['image2'], batch['offset_image1'], batch['augmented_image1']], dim=1)
                 features = self.forward(image_stack.to(self.device))
@@ -281,4 +280,5 @@ class pretext(pl.LightningModule):
         return projector
 
     def on_save_checkpoint(self, checkpoint):
-        self.generate_pca_matrix(save_path=self.hparams.pca_projection_path, loader=self.pca_dataloader(), reduction_dim=self.hparams.reduction_dim)
+        save_path = self.hparams.pca_projection_path[:-3] + '_{}'.format(str(self.current_epoch)) + '.pt'
+        self.generate_pca_matrix(save_path=save_path, loader=self.train_dataloader(), reduction_dim=self.hparams.reduction_dim)

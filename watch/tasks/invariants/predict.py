@@ -1,162 +1,197 @@
-#!/usr/bin/env python
-"""
-This is a Template for writing training logic.
-"""
-# package imports
 import kwimage
+import kwarray
 import torch
 import ubelt as ub
 from argparse import ArgumentParser, RawTextHelpFormatter
 from tqdm import tqdm
-
+import os
 # local imports
 from .pretext_model import pretext
-from .data.datasets import kwcoco_dataset
-from .data.multi_image_datasets import kwcoco_dataset as multi_image_dataset
+from .data.datasets import gridded_dataset
 from watch.utils.lightning_ext import util_globals
 from .segmentation_model import segmentation_model as seg_model
+from watch.utils import util_kwimage
 
 
-def predict(args):
-    try:
-        device = int(args.device)
-    except Exception:
-        device = args.device
-    num_workers = util_globals.coerce_num_workers(args.num_workers)
-    print('num_workers = {!r}'.format(num_workers))
+class predict(object):
+    def __init__(self, args):
+        ###
+        self.finalized_gids = set()
+        self.stitcher_dict = {}
+        if 'all' in args.tasks:
+            self.tasks = ['segmentation', 'before_after', 'pretext']
+        else:
+            self.tasks = args.tasks
+        ### Define tasks
+        if 'segmentation' in self.tasks:
+            segmentation_model = seg_model.load_from_checkpoint(args.segmentation_ckpt_path, dataset=None)
+            segmentation_model = segmentation_model.to(args.device)
 
-    ### Define tasks
-    if 'segmentation' in args.tasks:
-        segmentation_model = seg_model.load_from_checkpoint(args.segmentation_ckpt_path, dataset=None)
-        segmentation_model = segmentation_model.to(device)
+        if 'pretext' in self.tasks:
+            pretext_model = pretext.load_from_checkpoint(args.pretext_ckpt_path, train_dataset=None, vali_dataset=None)
+            pretext_model = pretext_model.eval().to(args.device)
+            # pretext_hparams = pretext_model.hparams
 
-    if 'pretext' in args.tasks:
-        pretext_model = pretext.load_from_checkpoint(args.pretext_ckpt_path, train_dataset=None, vali_dataset=None)
-        pretext_model = pretext_model.eval().to(device)
-        # pretext_hparams = pretext_model.hparams
-
+        self.in_feature_dims = pretext_model.hparams.feature_dim_shared
         if args.do_pca:
-            ### Define projector
-            print('Loading projection matrix based on pca.')
-            projector = torch.load(args.pca_projection_path)
-            projector = projector.to(device)
+            self.pca_projector = torch.load(args.pca_projection_path)
+            self.out_feature_dims = self.pca_projector.shape[0]
+        else:
+            self.out_feature_dims = self.in_feature_dims
 
-    dataset = multi_image_dataset(args.input_kwcoco, args.sensor, args.bands, mode='test')
+        self.num_out_channels = self.out_feature_dims
+        if 'segmentation' in self.tasks:
+            self.num_out_channels +=1
+        if 'before_after' in self.tasks:
+            self.num_out_channels +=1
 
-    loader = torch.utils.data.DataLoader(
-        dataset, num_workers=num_workers, batch_size=1)
-    num_batches = len(loader)
-
-    # Start background processes
-    # Build a task queue for background write results workers (Not currently using this)
-    # queue = util_parallel.BlockingJobQueue(max_workers=0)
-    from watch.utils import util_parallel
-    write_workers = util_globals.coerce_num_workers(args.write_workers)
-    queue = util_parallel.BlockingJobQueue(max_workers=write_workers)
-
-    output_dset = dataset.dset.copy()
-    output_dset.reroot(absolute=True)  # Make all paths absolute
-    output_dset.fpath = args.output_kwcoco  # Change output file path and bundle path
-    output_dset.reroot(absolute=False)  # Reroot in the new bundle path
-
-    bundle_dpath = ub.Path(output_dset.bundle_dpath)
-
-    save_dpath = (bundle_dpath / 'uky_invariants').ensuredir()
-
-    imwrite_kw = {
+        self.save_channels = f'invariants:{self.num_out_channels}'
+        self.output_kwcoco_path = args.output_kwcoco
+        out_folder, _ = os.path.split(self.output_kwcoco_path)
+        self.output_feat_dpath = os.path.join(out_folder, 'uky_invariants')
+        self.imwrite_kw = {
         'compress': 'DEFLATE',
         'backend': 'gdal',
         'blocksize': 64,
-    }
+        }
 
-    print('Evaluating and saving features')
+    def finalize_image(self, gid):
+        self.finalized_gids.add(gid)
+        stitcher = self.stitcher_dict[gid]
+        recon = stitcher.finalize()
+        self.stitcher_dict.pop(gid)
 
-    with torch.set_grad_enabled(False):
-        for batch in tqdm(loader, total=num_batches, desc='Compute features'):
-            image_id = int(batch['img1_id'].item())
-            image_info = dataset.dset.index.imgs[image_id]
-            video_info = dataset.dset.index.videos[image_info['video_id']]
+        save_path = os.path.join(self.output_feat_dpath, f'invariants_{gid}.tif')
+        save_path = os.fspath(save_path)
+        kwimage.imwrite(save_path, recon, backend='gdal', space=None,
+                        **self.imwrite_kw)
 
-            video_folder = (save_dpath / video_info['name']).ensuredir()
+        aux_height, aux_width = recon.shape[0:2]
+        img = self.output_coco_dataset.index.imgs[gid]
+        warp_aux_to_img = kwimage.Affine.scale(
+            (img['width'] / aux_width,
+             img['height'] / aux_height))
 
-            # Predictions are saved in 'video space', so warp_aux_to_img is the inverse of warp_img_to_vid
-            warp_img_to_vid = kwimage.Affine.coerce(image_info.get('warp_img_to_vid', None))
-            warp_aux_to_img = warp_img_to_vid.inv().concise()
+        aux = {
+            'file_name': save_path,
+            'height': aux_height,
+            'width': aux_width,
+            'channels': self.save_channels,
+            'warp_aux_to_img': warp_aux_to_img.concise(),
+        }
+        auxiliary = img.setdefault('auxiliary', [])
+        auxiliary.append(aux)
 
-            # Get the output image dictionary to be added to
-            output_img = output_dset.index.imgs[image_id]
+    def forward(self, args):
+        try:
+            device = int(args.device)
+        except Exception:
+            device = args.device
+        num_workers = util_globals.coerce_num_workers(args.num_workers)
+        print('num_workers = {!r}'.format(num_workers))
 
-            if 'pretext' in args.tasks:
-                image_stack = torch.stack([batch['image1'], batch['image2'], batch['offset_image1'], batch['augmented_image1']], dim=1)
-                image_stack = image_stack.to(device)
+        dataset = gridded_dataset(args.input_kwcoco, args.bands, mode='test')
 
-                #select features corresponding to first image
-                features = pretext_model(image_stack)[:, 0, :, :, :]
+        loader = torch.utils.data.DataLoader(
+            dataset, num_workers=num_workers, batch_size=1, shuffle=False)
+        num_batches = len(loader)
 
-                if args.do_pca:
-                    features = torch.einsum('xy,byhw->bxhw', projector, features)
+        # Start background processes
+        # Build a task queue for background write results workers (Not currently using this)
+        # queue = util_parallel.BlockingJobQueue(max_workers=0)
+        from watch.utils import util_parallel
+        write_workers = util_globals.coerce_num_workers(args.write_workers)
+        writer = util_parallel.BlockingJobQueue(max_workers=write_workers)
 
-                feat = features.squeeze().permute(1, 2, 0).cpu().numpy()
-                fname = image_info['name'] + '_invariants.tif'
-                fpath = video_folder / fname
+        output_dset = dataset.dset.copy()
+        output_dset.reroot(absolute=True)  # Make all paths absolute
+        output_dset.fpath = args.output_kwcoco  # Change output file path and bundle path
+        output_dset.reroot(absolute=False)  # Reroot in the new bundle path
 
-                # kwimage.imwrite(fpath, feat, **imwrite_kw)
-                queue.submit(kwimage.imwrite, fpath, feat, **imwrite_kw)
+        bundle_dpath = ub.Path(output_dset.bundle_dpath)
 
-                info = {}
-                info['file_name'] = str(fpath.relative_to(bundle_dpath))
-                info['height'] = feat.shape[0]
-                info['width'] = feat.shape[1]
-                info['num_bands'] = feat.shape[2]
-                info['channels'] = f'invariants:{feat.shape[-1]}'
-                info['warp_aux_to_img'] = warp_aux_to_img
-                output_img['auxiliary'].append(info)
+        # save_dpath = (bundle_dpath / 'uky_invariants').ensuredir()
 
-            if 'before_after' in args.tasks:
-                ### TO DO: Set to output of separate model.
-                before_after_heatmap = pretext_model.shared_step(batch)['before_after_heatmap'][0].permute(1, 2, 0)
-                before_after_heatmap = torch.sigmoid(before_after_heatmap[:, :, 1] - before_after_heatmap[:, :, 0]).unsqueeze(-1).cpu().numpy()
+        self.imwrite_kw = {
+            'compress': 'DEFLATE',
+            'backend': 'gdal',
+            'blocksize': 64,
+        }
 
-                fname = image_info['name'] + '_before_after_heatmap.tif'
-                fpath = video_folder / fname
+        print('Evaluating and saving features')
 
-                # kwimage.imwrite(fpath, before_after_heatmap, **imwrite_kw)
-                queue.submit(kwimage.imwrite, fpath, before_after_heatmap, **imwrite_kw)
+        with torch.set_grad_enabled(False):
+            seen_images = set()
 
-                info = {}
-                info['file_name'] = str(fpath.relative_to(bundle_dpath))
-                info['height'] = before_after_heatmap.shape[0]
-                info['width'] = before_after_heatmap.shape[1]
-                info['num_bands'] = before_after_heatmap.shape[2]
-                info['channels'] = 'before_after_heatmap'
-                info['warp_aux_to_img'] = warp_aux_to_img
-                output_img['auxiliary'].append(info)
+            for idx, batch in tqdm(enumerate(loader), total=num_batches, desc='Compute features'):
+                save_feat = []
+                if 'pretext' in args.tasks:
+                    image_stack = torch.stack([batch['image1'], batch['image2'], batch['offset_image1'], batch['augmented_image1']], dim=1)
+                    image_stack = image_stack.to(device)
 
-            if 'segmentation' in args.tasks:
-                image_stack = [batch[key] for key in batch if key[:5] == 'image']
-                image_stack = torch.stack(image_stack, dim=1).to(args.device)
-                segmentation_heatmap = torch.sigmoid(segmentation_model(image_stack)['predictions'][0, 0, 1, :, :] - segmentation_model(image_stack)['predictions'][0, 0, 0, :, :]).unsqueeze(0).permute(1, 2, 0).cpu().numpy()
+                    #select features corresponding to first image
+                    features = self.pretext_model(image_stack)[:, 0, :, :, :]
 
-                fname = image_info['name'] + '_segmentation_heatmap.tif'
-                fpath = video_folder / fname
+                    if args.do_pca:
+                        features = torch.einsum('xy,byhw->bxhw', self.pca_projector, features)
 
-                # kwimage.imwrite(fpath, segmentation_heatmap, **imwrite_kw)
-                queue.submit(kwimage.imwrite, fpath, segmentation_heatmap, **imwrite_kw)
+                    save_feat.append(features.squeeze().permute(1, 2, 0).cpu().numpy())
 
-                info = {}
-                info['file_name'] = str(fpath.relative_to(bundle_dpath))
-                info['height'] = segmentation_heatmap.shape[0]
-                info['width'] = segmentation_heatmap.shape[1]
-                info['num_bands'] = segmentation_heatmap.shape[2]
-                info['channels'] = 'segmentation_heatmap'
-                info['warp_aux_to_img'] = warp_aux_to_img
-                output_img['auxiliary'].append(info)
+                if 'before_after' in args.tasks:
+                    ### TO DO: Set to output of separate model.
+                    before_after_heatmap = self.pretext_model.shared_step(batch)['before_after_heatmap'][0].permute(1, 2, 0)
+                    before_after_heatmap = torch.sigmoid(before_after_heatmap[:, :, 1] - before_after_heatmap[:, :, 0]).unsqueeze(-1).cpu().numpy()
+                    save_feat.append(before_after_heatmap)
+                if 'segmentation' in args.tasks:
+                    image_stack = [batch[key] for key in batch if key[:5] == 'image']
+                    image_stack = torch.stack(image_stack, dim=1).to(args.device)
+                    segmentation_heatmap = torch.sigmoid(self.segmentation_model(image_stack)['predictions'][0, 0, 1, :, :] - self.segmentation_model(image_stack)['predictions'][0, 0, 0, :, :]).unsqueeze(0).permute(1, 2, 0).cpu().numpy()
+                    save_feat.append(segmentation_heatmap)
 
-    # queue.wait_until_finished()
+                save_feat = torch.cat(save_feat, dim=-1)
+                # image_id = int(batch['img1_id'].item())
+                # image_info = output_dset.index.imgs[image_id]
+                # video_info = output_dset.index.videos[image_info['video_id']]
 
-    print('Write to dset.fpath = {!r}'.format(output_dset.fpath))
-    output_dset.dump(output_dset.fpath, newlines=True)
-    print('Done')
+                # video_folder = (save_dpath / video_info['name']).ensuredir()
+
+                # # Predictions are saved in 'video space', so warp_aux_to_img is the inverse of warp_img_to_vid
+                # warp_img_to_vid = kwimage.Affine.coerce(image_info.get('warp_img_to_vid', None))
+                # warp_aux_to_img = warp_img_to_vid.inv().concise()
+
+                # # Get the output image dictionary to be added to
+                # output_img = output_dset.index.imgs[image_id]
+
+                tr = dataset.patches[idx]
+                sample = dataset.sampler.load_sample(tr)
+                tr = sample['tr']
+
+                if len(current_gids) == 0:
+                    current_gids = tr['gids'][0]
+                else:
+                    previous_gids = current_gids
+                    current_gids = tr['gids']
+                    mutually_exclusive = (set(previous_gids) - set(current_gids))
+                    for gid in mutually_exclusive:
+                        seen_images.add(gid)
+                        writer.submit(self.finalize_image, gid)
+
+                    for gid in current_gids:
+                        if gid not in self.stitcher_dict.keys():
+                            self.stitcher_dict[gid] = kwarray.Stitcher(
+                                tr['space_dims'], device='numpy')
+                        slice_ = tr['space_slice']
+                        weights = util_kwimage.upweight_center_mask(save_feat.shape[0:2])[..., None]
+                        self.stitcher_dict[gid].add(slice_, features, weight=weights)
+
+                writer.wait_until_finished()
+
+                for gid in self.stitcher_dict.keys():
+                    writer.submit(self.finalize_image, gid)
+
+        print('Write to dset.fpath = {!r}'.format(output_dset.fpath))
+        output_dset.dump(output_dset.fpath, newlines=True)
+        print('Done')
 
 
 def main():
