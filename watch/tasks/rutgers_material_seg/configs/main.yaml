@@ -1,4 +1,4 @@
-dataset: onera # onera, iarpa, s2self
+dataset: iarpa # onera, iarpa, s2self, deepglobe, bigearthnet, dynamicearthnet, inria, hrscd, spacenet2
 use_cuda: True
 seed: 128
 
@@ -7,21 +7,21 @@ visualization:
   train_visualizer: True
   val_visualizer: True
   visualize_training_every: 2
-  visualize_val_every: 2
+  visualize_val_every: 1
   train_visualization_divisor: 1000
   val_visualization_divisor: 114
   save_individual_plots: False
   save_individual_plots_train: False
-  save_individual_plots_path: /home/native/projects/data/smart_watch/visualization/research_deep_dive_presentation_3/
+  save_individual_plots_path: /home/native/projects/data/smart_watch/visualization/spacenet_ours/
   titles: True
   train_imshow: False
-  log_scatters: False
   val_imshow: False
-  fg_alpha: 0.6
+  log_scatters: False
+  fg_alpha: 0.8
   bg_alpha: 0.5
   font_size: 10
-  fig_size: 15
-  dpi: 200
+  fig_size: 10
+  dpi: 100
 
 cometml:
   api_key: 9GTK1r9PK4NzMAoLsnC6XxI7p  # YIKES! LEAKAGE!

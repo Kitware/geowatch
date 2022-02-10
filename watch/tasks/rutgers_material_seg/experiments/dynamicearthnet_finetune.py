@@ -37,7 +37,6 @@ import torch
 import cv2
 import gc
 import matplotlib
-from watch.tasks.rutgers_material_seg.models.tex_refine import TeRN
 matplotlib.use('Agg')
 
 import sys
@@ -85,11 +84,10 @@ class Trainer(object):
         self.contrastive_loss = SupConLoss()
         self.quadrupletloss = QuadrupletLoss()
         self.triplet_margit_loss_snr = losses.TripletMarginLoss(margin=0.05, swap=False, smooth_loss=False, triplets_per_anchor="all", distance=SNRDistance())
-        self._aff = TeRN(num_iter=10, dilations=[1, 1, 2, 2, 6, 12, 12]).to(device)
         # self.k = config['training']['out_features_dim']
         self.k = config['data']['num_classes']
         self.kmeans = KMeans(n_clusters=self.k, mode='euclidean', verbose=0, minibatch=None)
-        self.max_label = 5
+        self.max_label = config['data']['num_classes']
         self.all_crops_params = [tuple([i, j, config['data']['window_size'], config['data']['window_size']]) for i in range(config['data']['window_size'], config['data']
                                                                                                                             ['image_size']-config['data']['window_size']) for j in range(config['data']['window_size'], config['data']['image_size']-config['data']['window_size'])]
         self.inference_all_crops_params = [tuple([i, j, config['evaluation']['inference_window'], config['evaluation']['inference_window']]) for i in range(0, config['data']['image_size']) for j in range(0, config['data']['image_size'])]
@@ -109,28 +107,9 @@ class Trainer(object):
                           config['data']['window_size'])
 
         self.cmap = visualization.n_distinguishable_colors(nlabels=self.max_label,
-                                                           first_color_black=True, last_color_black=False,
+                                                           first_color_black=True, last_color_black=True,
                                                            bg_alpha=config['visualization']['bg_alpha'],
                                                            fg_alpha=config['visualization']['fg_alpha'])
-
-        # self.cmap = visualization.n_distinguishable_colors(nlabels=self.max_label,
-        #                                             first_color_black=True, last_color_black=False,
-        #                                             bg_alpha=1.0,
-        #                                             fg_alpha=1.0)
-
-    def run_pamr(self, im: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-        """pixel-adaptive convolution network run
-
-        Args:
-            im (torch.Tensor): image
-            mask (torch.Tensor): coarse mask
-
-        Returns:
-            torch.Tensor: refined mask
-        """
-        im = F.interpolate(im, mask.size()[-2:], mode="bilinear", align_corners=True)
-        masks_dec = self._aff(im, mask)
-        return masks_dec
 
     def high_confidence_filter(self, features: torch.Tensor, cutoff_top: float = 0.75,
                                cutoff_low: float = 0.0, eps: float = 1e-8) -> torch.Tensor:
@@ -192,52 +171,40 @@ class Trainer(object):
         for batch_index, batch in pbar:
             random_crop = transforms.RandomCrop(self.crop_size)
             outputs = batch
-            images, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0]
-            negative_images = outputs['inputs']['negative_im'].data[0]
-            image_name = f"{str(outputs['tr'].data[0][batch_index_to_show]['gids'])}_{str(outputs['tr'].data[0][batch_index_to_show]['slices'])}"
+
+            image1, image2, mask = outputs['image1'], outputs['image2'], batch['mask']
+            # image_name = f"{str(outputs['tr'].data[0][batch_index_to_show]['gids'])}_{str(outputs['tr'].data[0][batch_index_to_show]['slices'])}"
+
             # original_width, original_height = outputs['tr'].data[0][batch_index_to_show]['space_dims']
-            mask = torch.stack(mask)
+            # mask = torch.stack(mask)
             mask = mask.long().squeeze(1)
 
-            bs, c, t, h, w = images.shape
-            image1 = images[:, :, 0, :, :]
-            image2 = images[:, :, 1, :, :]
-            negative_image1 = negative_images[:, :, 0, :, :]
-            mask1 = mask[:, 0, :, :]
-            mask1[mask1 == -1] = 0
+            mask[mask == -1] = 0
 
             class_to_show = max(0, torch.unique(mask)[-1]-1)
             image1 = image1.to(device)
             image2 = image2.to(device)
-            mask1 = mask1.to(device)
+            mask = mask.to(device)
 
+            # print(f"image1: {image1.shape}")
+            print(f"image1 min: {image1.min()}, max: {image1.max()}")
+            # print(f"mask uniques: {torch.unique(mask)}")
             image1 = utils.stad_image(image1)
             image2 = utils.stad_image(image2)
 
             # image1 = F.normalize(image1, dim=1, p=1) 
             # image2 = F.normalize(image2, dim=1, p=1) 
 
-            if config['training']['model_single_input']:
-                output1, features1 = self.model(image1)  # [B,22,150,150]
-                output2, features2 = self.model(image2)
-
-                outputs_positive = torch.cat([output1, output2], dim=1)
-                loss = 50*F.cross_entropy(outputs_positive,
-                                        mask1,
-                                        # weight=torch.Tensor((0.1,1.15)).float().cuda(),
-                                        ignore_index=-100,
-                                        reduction="mean")
+            if config['training']['model_diff_input']:
+                output = self.model(image1, image2)
             else:
-                if config['training']['model_diff_input']:
-                    output = self.model(image1, image2)
-                else:
-                    images = torch.cat([image1, image2], dim=1)
-                    output = self.model(images)
-                loss = 50*F.cross_entropy(output,
-                                      mask1,
-                                      weight=self.class_weights,
-                                    #   ignore_index=0,
-                                      reduction="mean")
+                images = torch.cat([image1, image2], dim=1)
+                output = self.model(images)
+            loss = 50*F.cross_entropy(output,
+                                    mask,
+                                    weight=self.class_weights,
+                                    # ignore_index=-100,
+                                    reduction="mean")
 
 
             start = time.time()
@@ -248,71 +215,31 @@ class Trainer(object):
 
             backprop_time = time.time() - start
 
-            if config['training']['model_single_input']:
-                output = torch.sqrt(torch.pow(output1 - output2, 2))#.view(bs,h,w)
-                output = FT.gaussian_blur(output, kernel_size=config['evaluation']['inference_window'])
-                masks = F.softmax(output, dim=1)
-
-
-                inference_otsu_coeff = 1.0
-                hist_inference_otsu_coeff = 1.0
-
-                # l1 region-wise inference raw features
-                l1_patched_diff_change_features = torch.abs((output1 - output2).sum(axis=1))#.view(bs,h,w)
-                l1_patched_diff_change_features = FT.gaussian_blur(l1_patched_diff_change_features, kernel_size=config['evaluation']['inference_window'])
-                l1_dist_change_feats_pred = torch.zeros_like(l1_patched_diff_change_features)
-                l1_inference_otsu_threshold = inference_otsu_coeff*otsu(l1_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
-                l1_dist_change_feats_pred[l1_patched_diff_change_features > l1_inference_otsu_threshold] = 1
-                l1_dist_change_feats_pred = l1_dist_change_feats_pred.cpu().detach().type(torch.uint8)
-
-                # # l2 region-wise inference raw features
-                l2_patched_diff_change_features = torch.sqrt(torch.pow(output1 - output2, 2).sum(axis=1))#.view(bs,h,w)
-                l2_patched_diff_change_features = FT.gaussian_blur(l2_patched_diff_change_features, kernel_size=config['evaluation']['inference_window'])
-                l2_dist_change_feats_pred = torch.zeros_like(l2_patched_diff_change_features)
-                l2_inference_otsu_threshold = inference_otsu_coeff*otsu(l2_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
-                l2_dist_change_feats_pred[l2_patched_diff_change_features > l2_inference_otsu_threshold] = 1
-                l2_dist_change_feats_pred = l2_dist_change_feats_pred.cpu().detach().type(torch.uint8)
-
-                # diff_change_features = torch.sqrt(torch.pow(output1 - output2, 2).sum(axis=1))#.view(bs,h,w)
-                # inference_otsu_threshold = inference_otsu_coeff*otsu(histograms_intersection.cpu().detach().numpy(), nbins=40)
-                # diff_change_thresholded = torch.zeros_like(histograms_intersection)
-                # diff_change_thresholded[histograms_intersection < inference_otsu_threshold] = 1
-                pred1 = masks.max(1)[1].cpu().detach()  # .numpy()
-                # print(masks.shape)
-                # print(pred1.shape)
-                # pred2 = masks2.max(1)[1].cpu().detach()  # .numpy()
-                # change_detection_prediction = l2_dist_change_feats_pred
-
-                
-                # histogram_distance.append(histc_int_change_feats_pred)
-                l1_dist.append(l1_dist_change_feats_pred)
-                l2_dist.append(l2_dist_change_feats_pred)
-            else:
-                masks = F.softmax(output, dim=1)
-                pred1 = masks.max(1)[1].cpu().detach()  # .numpy()
+            masks = F.softmax(output, dim=1)
+            pred1 = masks.max(1)[1].cpu().detach()  # .numpy()
 
             total_loss += loss.item()
-            mask1[mask1 == -1] = 0
+            mask[mask == -1] = 0
             preds.append(pred1)
-            targets.append(mask1.cpu())  # .numpy())
+            targets.append(mask.cpu())  # .numpy())
 
             if config['visualization']['train_visualizer']:
                 if (epoch) % config['visualization']['visualize_training_every'] == 0:
                     if (batch_index % iter_visualization) == 0:
                         figure = plt.figure(figsize=(config['visualization']['fig_size'], config['visualization']['fig_size']),
                                             dpi=config['visualization']['dpi'])
-                        ax1 = figure.add_subplot(3, 4, 1)
-                        ax2 = figure.add_subplot(3, 4, 2)
-                        ax3 = figure.add_subplot(3, 4, 3)
-                        ax4 = figure.add_subplot(3, 4, 4)
-                        ax5 = figure.add_subplot(3, 4, 5)
-                        ax6 = figure.add_subplot(3, 4, 6)
-                        ax7 = figure.add_subplot(3, 4, 7)
-                        ax8 = figure.add_subplot(3, 4, 8)
-                        ax9 = figure.add_subplot(3, 4, 9)
-                        ax10 = figure.add_subplot(3, 4, 10)
-                        ax11 = figure.add_subplot(3, 4, 11)
-                        ax12 = figure.add_subplot(3, 4, 12)
+                        ax1 = figure.add_subplot(1, 5, 1)
+                        ax2 = figure.add_subplot(1, 5, 2)
+                        ax3 = figure.add_subplot(1, 5, 3)
+                        ax4 = figure.add_subplot(1, 5, 4)
+                        ax5 = figure.add_subplot(1, 5, 5)
+                        # ax6 = figure.add_subplot(3, 4, 6)
+                        # ax7 = figure.add_subplot(3, 4, 7)
+                        # ax8 = figure.add_subplot(3, 4, 8)
+                        # ax9 = figure.add_subplot(3, 4, 9)
+                        # ax10 = figure.add_subplot(3, 4, 10)
+                        # ax11 = figure.add_subplot(3, 4, 11)
+                        # ax12 = figure.add_subplot(3, 4, 12)
 
                         cmap_gradients = plt.cm.get_cmap('jet')
                         # image_show = np.transpose(image1.cpu().detach().numpy()[batch_index_to_show,:,:,:],(1,2,0))[:,:1:4,:3]
@@ -322,21 +249,16 @@ class Trainer(object):
                         image_show2 = np.transpose(image2.cpu().detach().numpy()[batch_index_to_show, :, :, :], (1, 2, 0))[:, :, :3]
                         image_show2 = np.flip(image_show2, axis=2)
 
-                        negative_image1_show = np.transpose(negative_image1.cpu().detach().numpy()[batch_index_to_show, :, :, :], (1, 2, 0))[:, :, :3]
-                        negative_image1_show = np.flip(negative_image1_show, axis=2)
-
                         image_show1 = (image_show1 - image_show1.min()) / (image_show1.max() - image_show1.min())
                         image_show2 = (image_show2 - image_show2.min()) / (image_show2.max() - image_show2.min())
-                        negative_image1_show = (negative_image1_show - negative_image1_show.min())/(negative_image1_show.max() - negative_image1_show.min())
-                        gt_mask_show1 = mask1.cpu().detach()[batch_index_to_show, :, :].numpy().squeeze()
+
+                        gt_mask_show1 = mask.cpu().detach()[batch_index_to_show, :, :].numpy().squeeze()
 
                         # histograms_intersection_show = (histograms_intersection_show - histograms_intersection_show.min())/(histograms_intersection_show.max() - histograms_intersection_show.min())
 
                         pred1_show = masks.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
                         # pred2_show = masks2.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
 
-                        # histc_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*histc_int_change_feats_pred_show)
-                        pred1_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*pred1_show)
 
 
                         classes_in_gt = np.unique(gt_mask_show1)
@@ -347,36 +269,12 @@ class Trainer(object):
                         ax3.imshow(image_show1)
                         ax3.imshow(gt_mask_show1, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
-                        ax4.imshow(negative_image1_show)
+                        # ax4.imshow(negative_image1_show)
 
-                        if config['training']['model_single_input']:
+                        masks_show = masks.cpu().detach().numpy()[batch_index_to_show,1,:,:]
+                        ax4.imshow(masks_show)
 
-                            l1_dist_change_feats_pred_show = l1_dist_change_feats_pred.numpy()[batch_index_to_show, :, :]
-                            l2_dist_change_feats_pred_show = l2_dist_change_feats_pred.numpy()[batch_index_to_show, :, :]
-                            # histc_int_change_feats_pred_show = histc_int_change_feats_pred.numpy()[batch_index_to_show, :, :]
-
-                            l1_patched_diff_change_features_show = l1_patched_diff_change_features.cpu().detach().numpy()[batch_index_to_show, :, :]
-                            l2_patched_diff_change_features_show = l2_patched_diff_change_features.cpu().detach().numpy()[batch_index_to_show, :, :]
-                            # histograms_intersection_show = histograms_intersection_features.cpu().detach().numpy()[batch_index_to_show, :, :]
-
-                            l1_patched_diff_change_features_show = (l1_patched_diff_change_features_show - l1_patched_diff_change_features_show.min())/(l1_patched_diff_change_features_show.max() - l1_patched_diff_change_features_show.min())
-                            l2_patched_diff_change_features_show = (l2_patched_diff_change_features_show - l2_patched_diff_change_features_show.min())/(l2_patched_diff_change_features_show.max() - l2_patched_diff_change_features_show.min())
-                            l1_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*l1_dist_change_feats_pred_show)
-                            l2_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*l2_dist_change_feats_pred_show)
-                            ax5.imshow(l1_patched_diff_change_features_show)
-
-                            ax6.imshow(l2_patched_diff_change_features_show)
-
-
-                            ax7.imshow(l1_fp_tp_fn_prediction_mask, cmap=self.cmap, vmin=0, vmax=self.max_label)
-
-                            ax8.imshow(l2_fp_tp_fn_prediction_mask, cmap=self.cmap, vmin=0, vmax=self.max_label)
-                        else:
-                            masks_show = masks.cpu().detach().numpy()[batch_index_to_show,1,:,:]
-                            ax5.imshow(masks_show)
-
-                        ax9.imshow(pred1_fp_tp_fn_prediction_mask, cmap=self.cmap, vmin=0, vmax=self.max_label)
-                        ax11.imshow(pred1_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
+                        ax5.imshow(pred1_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
                         # ax12.imshow(vw_dis_fp_tp_fn_prediction_mask, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
@@ -385,29 +283,29 @@ class Trainer(object):
                         ax3.axis('off')
                         ax4.axis('off')
                         ax5.axis('off')
-                        ax6.axis('off')
-                        ax7.axis('off')
-                        ax8.axis('off')
+                        # ax6.axis('off')
+                        # ax7.axis('off')
+                        # ax8.axis('off')
                         # ax9.axis('off')
 
                         if config['visualization']['titles']:
                             ax1.set_title(f"Input Image 1", fontsize=config['visualization']['font_size'])
                             ax2.set_title(f"Input Image 2", fontsize=config['visualization']['font_size'])
-                            ax3.set_title(f"Change GT Mask overlaid", fontsize=config['visualization']['font_size'])
-                            ax4.set_title(f"Negative Sample", fontsize=config['visualization']['font_size'])
-                            ax5.set_title(f"l1_patched_diff_change_features_show", fontsize=config['visualization']['font_size'])
-                            ax6.set_title(f"l2_patched_diff_change_features_show", fontsize=config['visualization']['font_size'])
-                            ax7.set_title(f"histograms_intersection_show", fontsize=config['visualization']['font_size'])
-                            ax8.set_title(f"dictionary2_show", fontsize=config['visualization']['font_size'])
-                            ax9.set_title(f"l1_fp_tp_fn_prediction_mask", fontsize=config['visualization']['font_size'])
-                            ax10.set_title(f"l2_fp_tp_fn_prediction_mask", fontsize=config['visualization']['font_size'])
-                            ax11.set_title(f"histc_fp_tp_fn_prediction_mask", fontsize=config['visualization']['font_size'])
+                            ax3.set_title(f"Change GT Mask overlaid, uniques: {np.unique(gt_mask_show1)}", fontsize=config['visualization']['font_size'])
+                            ax4.set_title(f"Features of class 1", fontsize=config['visualization']['font_size'])
+                            ax5.set_title(f"Prediction. uniques: {np.unique(pred1_show)}", fontsize=config['visualization']['font_size'])
+                            # ax6.set_title(f"l2_patched_diff_change_features_show", fontsize=config['visualization']['font_size'])
+                            # ax7.set_title(f"histograms_intersection_show", fontsize=config['visualization']['font_size'])
+                            # ax8.set_title(f"dictionary2_show", fontsize=config['visualization']['font_size'])
+                            # ax9.set_title(f"l1_fp_tp_fn_prediction_mask", fontsize=config['visualization']['font_size'])
+                            # ax10.set_title(f"l2_fp_tp_fn_prediction_mask", fontsize=config['visualization']['font_size'])
+                            # ax11.set_title(f"histc_fp_tp_fn_prediction_mask", fontsize=config['visualization']['font_size'])
                             # figure.suptitle(
                             #     f"Epoch: {epoch+1}\nGT labels for classification: {classes_in_gt}, \nunique in change predictions: {np.unique(change_detection_show)}\nunique in predictions1: {np.unique(logits_show1)}", fontsize=config['visualization']['font_size'])
 
                         # cometml_experiemnt.log_figure(figure_name=f"Training, image name: {image_name}, epoch: {epoch}, classes in gt: {classes_in_gt}, classifier predictions: {labels_predicted_indices}",figure=figure)
-                        cometml_experiemnt.log_figure(figure_name=f"Training, image name: {image_name}", figure=figure)
-                        # figure.tight_layout()
+                        cometml_experiemnt.log_figure(figure_name=f"Training, image name", figure=figure)
+                        figure.tight_layout()
 
                         if config['visualization']['train_imshow']:
                             plt.show()
@@ -425,11 +323,11 @@ class Trainer(object):
             # pbar.set_description(
             #     f"(timing, secs) crop_collection: {crop_collection_time:0.3f}, run_network: {run_network_time:0.3f}, clustering: {clustering_time:0.3f}, backprob: {backprop_time:0.3f}, log: {logging_time:0.3f}")
 
-        mean_iou, precision, recall = eval_utils.compute_jaccard(preds, targets, num_classes=2)
+        mean_iou, precision, recall = eval_utils.compute_jaccard(preds, targets, num_classes=config['data']['num_classes'])
         
-        hist_mean_iou, hist_precision, hist_recall = eval_utils.compute_jaccard(histogram_distance, targets, num_classes=2)
-        l1_mean_iou, l1_precision, l1_recall = eval_utils.compute_jaccard(l1_dist, targets, num_classes=2)
-        l2_mean_iou, l2_precision, l2_recall = eval_utils.compute_jaccard(l2_dist, targets, num_classes=2)
+        hist_mean_iou, hist_precision, hist_recall = eval_utils.compute_jaccard(histogram_distance, targets, num_classes=config['data']['num_classes'])
+        l1_mean_iou, l1_precision, l1_recall = eval_utils.compute_jaccard(l1_dist, targets, num_classes=config['data']['num_classes'])
+        l2_mean_iou, l2_precision, l2_recall = eval_utils.compute_jaccard(l2_dist, targets, num_classes=config['data']['num_classes'])
 
         l1_precision = np.array(l1_precision)
         l1_recall = np.array(l1_recall)
@@ -514,239 +412,146 @@ class Trainer(object):
             pbar = tqdm(enumerate(loader), total=len(loader))
             for batch_index, batch in pbar:
                 outputs = batch
-                images, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0]
+                image1, image2, mask = outputs['image1'], outputs['image2'], batch['mask']
                 # original_width, original_height = outputs['tr'].data[0][batch_index_to_show]['space_dims']
-                
 
-                mask = torch.stack(mask)
                 mask = mask.long().squeeze(1)
 
-                bs, c, t, h, w = images.shape
-                image1 = images[:, :, 0, :, :]
-                image2 = images[:, :, 1, :, :]
-                mask1 = mask[:, 0, :, :]
-                mask2 = mask[:, 1, :, :]
+                mask[mask == -1] = 0
 
-                images = images.to(device)
-                image1_raw = image1.to(device)
-                image2_raw = image2.to(device)
+                class_to_show = max(0, torch.unique(mask)[-1]-1)
+                image1 = image1.to(device)
+                image2 = image2.to(device)
                 mask = mask.to(device)
 
-                image1 = utils.stad_image(image1_raw)
-                image2 = utils.stad_image(image2_raw)
+                image1 = utils.stad_image(image1)
+                image2 = utils.stad_image(image2)
                 # image1 = F.normalize(image1, dim=1, p=1) 
                 # image2 = F.normalize(image2, dim=1, p=1) 
 
-                if config['training']['model_single_input']:
-                    output1, features1 = self.model(image1)  # [B,22,150,150]
-                    output2, features2 = self.model(image2)
-                    # output1 = F.normalize(output1, dim=1, p=1) #[bs*ps, c*h*w]
-                    # output2 = F.normalize(output2, dim=1, p=1)
-                    masks1 = F.softmax(output1, dim=1)  # .detach()
-                    masks2 = F.softmax(output2, dim=1)  # .detach()
 
-                    output = torch.sqrt(torch.pow(output1 - output2, 2))#.view(bs,h,w)
-                    output = FT.gaussian_blur(output, kernel_size=config['evaluation']['inference_window'])
-                    masks = F.softmax(output, dim=1)
-
-                    #region-wise inference
-                    inference_otsu_coeff = 1.0
-
-                    # l1 region-wise inference raw features
-                    l1_patched_diff_change_features = torch.abs((output1 - output2).sum(axis=1))#.view(bs,h,w)
-                    l1_patched_diff_change_features = FT.gaussian_blur(l1_patched_diff_change_features, kernel_size=config['evaluation']['inference_window'])
-                    l1_dist_change_feats_pred = torch.zeros_like(l1_patched_diff_change_features)
-                    l1_inference_otsu_threshold = inference_otsu_coeff*otsu(l1_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
-                    l1_dist_change_feats_pred[l1_patched_diff_change_features > l1_inference_otsu_threshold] = 1
-                    l1_dist_change_feats_pred = l1_dist_change_feats_pred.cpu().detach().type(torch.uint8)
-
-                    # l2 region-wise inference raw features
-                    l2_patched_diff_change_features = torch.sqrt(torch.pow(output1 - output2, 2).sum(axis=1))#.view(bs,h,w)
-                    l2_patched_diff_change_features = FT.gaussian_blur(l2_patched_diff_change_features, kernel_size=config['evaluation']['inference_window'])
-                    l2_dist_change_feats_pred = torch.zeros_like(l2_patched_diff_change_features)
-                    l2_inference_otsu_threshold = inference_otsu_coeff*otsu(l2_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
-                    l2_dist_change_feats_pred[l2_patched_diff_change_features > l2_inference_otsu_threshold] = 1
-                    l2_dist_change_feats_pred = l2_dist_change_feats_pred.cpu().detach().type(torch.uint8)
-
-                    pred1 = masks.max(1)[1].cpu().detach()  # .numpy()
-                    l1_dist.append(l1_dist_change_feats_pred)
-                    l2_dist.append(l2_dist_change_feats_pred)
-                    preds.append(l2_dist_change_feats_pred)
+                if config['training']['model_diff_input']:
+                    output = self.model(image1, image2)
                 else:
-                    if config['training']['model_diff_input']:
-                        output = self.model(image1, image2)
-                    else:
-                        images = torch.cat([image1, image2], dim=1)
-                        output = self.model(images)
-                    masks = F.softmax(output, dim=1)
-                    # images = torch.cat([image1_raw, image2_raw], dim=1)
-                    # images = torch.cat([image1, image2], dim=1)
-                    # masks_refined1 = self.run_pamr(image1_raw, masks.detach()) # torch.Size([B, C+1, H, W])
-                    # masks_refined1 = self.run_pamr(images, masks.detach()) # torch.Size([B, C+1, H, W])
-                    # masks_refined2 = self.run_pamr(image2_raw, masks.detach()) # torch.Size([B, C+1, H, W])
-                    pred1 = masks.max(1)[1].cpu().detach()  # .numpy()
-                    preds.append(pred1)
+                    images = torch.cat([image1, image2], dim=1)
+                    output = self.model(images)
+                masks = F.softmax(output, dim=1)
+                pred1 = masks.max(1)[1].cpu().detach()  # .numpy()
+                preds.append(pred1)
+                targets.append(mask.cpu())  # .numpy())
 
-                mask1[mask1 == -1] = 0
-                targets.append(mask1.cpu())  # .numpy())
-                for b in range(bs):
-                    batch_index_to_show = b
-                    image_name = f"{str(outputs['tr'].data[0][batch_index_to_show]['gids'])}_{str(outputs['tr'].data[0][batch_index_to_show]['slices'])}"
-                    if config['visualization']['val_visualizer'] or (config['visualization']['save_individual_plots'] and save_individual_plots_specific):
-                        if (epoch) % config['visualization']['visualize_val_every'] == 0:
-                            if (batch_index % iter_visualization) == 0:
-                                visualize_crops_params = [tuple([i, j, 32, 32]) for i in range(0, config['data']['image_size'], 32) for j in range(0, config['data']['image_size'], 32)]
-                                # print(visualize_crops_params)
-                                # for params in visualize_crops_params:
-                                figure = plt.figure(figsize=(config['visualization']['fig_size'], config['visualization']['fig_size']),
-                                                    dpi=config['visualization']['dpi'])
-                                ax1 = figure.add_subplot(3, 3, 1)
-                                ax2 = figure.add_subplot(3, 3, 2)
-                                ax3 = figure.add_subplot(3, 3, 3)
-                                ax4 = figure.add_subplot(3, 3, 4)
-                                ax5 = figure.add_subplot(3, 3, 5)
-                                ax6 = figure.add_subplot(3, 3, 6)
-                                ax7 = figure.add_subplot(3, 3, 7)
-                                ax8 = figure.add_subplot(3, 3, 8)
-                                ax9 = figure.add_subplot(3, 3, 9)
-                                # ax10 = figure.add_subplot(3, 4, 10)
-                                # ax11 = figure.add_subplot(3, 4, 11)
-                                # ax12 = figure.add_subplot(3, 4, 12)
+                if config['visualization']['val_visualizer'] or (config['visualization']['save_individual_plots'] and save_individual_plots_specific):
+                    if (epoch) % config['visualization']['visualize_val_every'] == 0:
+                        if (batch_index % iter_visualization) == 0:
+                            figure = plt.figure(figsize=(config['visualization']['fig_size'], config['visualization']['fig_size']),
+                                                dpi=config['visualization']['dpi'])
+                            ax1 = figure.add_subplot(1, 5, 1)
+                            ax2 = figure.add_subplot(1, 5, 2)
+                            ax3 = figure.add_subplot(1, 5, 3)
+                            ax4 = figure.add_subplot(1, 5, 4)
+                            ax5 = figure.add_subplot(1, 5, 5)
+                            # ax6 = figure.add_subplot(3, 3, 6)
+                            # ax7 = figure.add_subplot(3, 3, 7)
+                            # ax8 = figure.add_subplot(3, 3, 8)
+                            # ax9 = figure.add_subplot(3, 3, 9)
+                            # ax10 = figure.add_subplot(3, 4, 10)
+                            # ax11 = figure.add_subplot(3, 4, 11)
+                            # ax12 = figure.add_subplot(3, 4, 12)
 
-                                cmap_gradients = plt.cm.get_cmap('jet')
+                            cmap_gradients = plt.cm.get_cmap('jet')
+                            # image_show = np.transpose(image1.cpu().detach().numpy()[batch_index_to_show,:,:,:],(1,2,0))[:,:1:4,:3]
+                            image_show1 = np.transpose(image1.cpu().detach().numpy()[batch_index_to_show, :, :, :], (1, 2, 0))[:, :, :3]
+                            image_show1 = np.flip(image_show1, axis=2)
 
-                                    # cimage1 = transforms.functional.crop(image1, *params)
-                                    # cimage2 = transforms.functional.crop(image2, *params)
-                                    # cmask = transforms.functional.crop(mask1, *params)
-                                    # cmasks = transforms.functional.crop(masks, *params)
-                                    # image_name_params = f"{image_name}_{str(params)}"
-                                    # image_show1 = np.transpose(cimage1.cpu().detach().numpy()[batch_index_to_show, :, :, :], (1, 2, 0))[:, :, :3]
-                                    # image_show1 = np.flip(image_show1, axis=2)
-
-                                    # image_show2 = np.transpose(cimage2.cpu().detach().numpy()[batch_index_to_show, :, :, :], (1, 2, 0))[:, :, :3]
-                                    # image_show2 = np.flip(image_show2, axis=2)
-
-                                    # image_show1 = (image_show1 - image_show1.min()) / (image_show1.max() - image_show1.min())
-                                    # image_show2 = (image_show2 - image_show2.min()) / (image_show2.max() - image_show2.min())
-
-                                    # gt_mask_show1 = cmask.cpu().detach()[batch_index_to_show, :, :].numpy().squeeze()
-                                    # pred1_show = cmasks.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
-                                    # pred_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*pred1_show)
-
-                                image_show1 = np.transpose(image1.cpu().detach().numpy()[batch_index_to_show, :, :, :], (1, 2, 0))[:, :, :3]
-                                image_show1 = np.flip(image_show1, axis=2)
-
-                                image_show2 = np.transpose(image2.cpu().detach().numpy()[batch_index_to_show, :, :, :], (1, 2, 0))[:, :, :3]
-                                image_show2 = np.flip(image_show2, axis=2)
+                            image_show2 = np.transpose(image2.cpu().detach().numpy()[batch_index_to_show, :, :, :], (1, 2, 0))[:, :, :3]
+                            image_show2 = np.flip(image_show2, axis=2)
 
 
-                                image_show1 = (image_show1 - image_show1.min()) / (image_show1.max() - image_show1.min())
-                                image_show2 = (image_show2 - image_show2.min()) / (image_show2.max() - image_show2.min())
-                                gt_mask_show1 = mask1.cpu().detach()[batch_index_to_show, :, :].numpy().squeeze()
+                            image_show1 = (image_show1 - image_show1.min()) / (image_show1.max() - image_show1.min())
+                            image_show2 = (image_show2 - image_show2.min()) / (image_show2.max() - image_show2.min())
+                            gt_mask_show1 = mask.cpu().detach()[batch_index_to_show, :, :].numpy().squeeze()
+
+                            # histograms_intersection_show = (histograms_intersection_show - histograms_intersection_show.min())/(histograms_intersection_show.max() - histograms_intersection_show.min())
+
+                            pred1_show = masks.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
+                            pred_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*pred1_show)
 
 
-                                masks_show = masks.cpu().detach().numpy()[batch_index_to_show,1,:,:]
-                                # masks_refined1_show = masks_refined1.cpu().detach().numpy()[batch_index_to_show,1,:,:]
-                                # masks_refined2_show = masks_refined2.cpu().detach().numpy()[batch_index_to_show,1,:,:]
-                                pred1_show = masks.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
-                                # pred_refined1_show = masks_refined1.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
-                                # pred_refined2_show = masks_refined2.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
+                            classes_in_gt = np.unique(gt_mask_show1)
+                            ax1.imshow(image_show1)
 
-                                pred_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*pred1_show)
-                                # pred_refined1_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*pred_refined1_show)
-                                # pred_refined2_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*pred_refined2_show)
+                            ax2.imshow(image_show2)
 
-                                # print(np.unique(pred_fp_tp_fn_prediction_mask))
-                                # print([x for x in self.cmap])
+                            ax3.imshow(image_show1)
+                            ax3.imshow(gt_mask_show1, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
-                                classes_in_gt = np.unique(gt_mask_show1)
-                                ax1.imshow(image_show1)
+                            masks_show = masks.cpu().detach().numpy()[batch_index_to_show,1,:,:]
+                            ax4.imshow(masks_show)
 
-                                ax2.imshow(image_show2)
-
-                                ax3.imshow(image_show1)
-                                ax3.imshow(gt_mask_show1, cmap=self.cmap, vmin=0, vmax=self.max_label, alpha=config['visualization']['fg_alpha'])
-
-                                # ax4.imshow(masks_refined1_show, cmap=cmap_gradients)
-
-                                # ax5.imshow(masks_refined2_show, cmap=cmap_gradients)
-                                # masks_show = cmasks.cpu().detach().numpy()[batch_index_to_show,1,:,:]
-                                ax6.imshow(masks_show, cmap=cmap_gradients)
-
-                                # ax7.imshow(pred_refined1_fp_tp_fn_prediction_mask, cmap=self.cmap, vmin=0, vmax=self.max_label, alpha=config['visualization']['fg_alpha'])
-
-                                # ax8.imshow(pred_refined2_fp_tp_fn_prediction_mask, cmap=self.cmap, vmin=0, vmax=self.max_label, alpha=config['visualization']['fg_alpha'])
-
-                                ax9.imshow(pred_fp_tp_fn_prediction_mask, cmap=self.cmap, vmin=0, vmax=self.max_label, alpha=config['visualization']['fg_alpha'])
+                            ax5.imshow(pred1_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
 
 
-                                ax1.axis('off')
-                                ax2.axis('off')
-                                ax3.axis('off')
-                                ax4.axis('off')
-                                ax5.axis('off')
-                                ax6.axis('off')
-                                ax7.axis('off')
-                                ax8.axis('off')
-                                ax9.axis('off')
 
-                                if config['visualization']['titles']:
-                                    ax1.set_title(f"Input Image 1", fontsize=config['visualization']['font_size'])
-                                    ax2.set_title(f"Input Image 2", fontsize=config['visualization']['font_size'])
-                                    ax3.set_title(f"Change GT Mask overlaid", fontsize=config['visualization']['font_size'])
-                                    ax4.set_title(f"l1_patched_diff_change_features_show", fontsize=config['visualization']['font_size'])
-                                    ax5.set_title(f"l2_patched_diff_change_features_show", fontsize=config['visualization']['font_size'])
-                                    ax6.set_title(f"histograms_intersection_show", fontsize=config['visualization']['font_size'])
-                                    ax7.set_title(f"l1_fp_tp_fn_prediction_mask", fontsize=config['visualization']['font_size'])
-                                    ax8.set_title(f"l2_fp_tp_fn_prediction_mask", fontsize=config['visualization']['font_size'])
-                                    ax9.set_title(f"histc_fp_tp_fn_prediction_mask", fontsize=config['visualization']['font_size'])
-                                    # figure.suptitle(
-                                    #     f"Epoch: {epoch+1}\nGT labels for classification: {classes_in_gt}, \nunique in change predictions: {np.unique(change_detection_show)}\nunique in predictions1: {np.unique(logits_show1)}", fontsize=config['visualization']['font_size'])
+                            # ax1.axis('off')
+                            # ax2.axis('off')
+                            # ax3.axis('off')
+                            # ax4.axis('off')
+                            # ax5.axis('off')
+                            # ax6.axis('off')
+                            # ax7.axis('off')
+                            # ax8.axis('off')
+                            # ax9.axis('off')
 
-                                figure.tight_layout()
-                                if config['visualization']['val_imshow']:
-                                    plt.show()
-                                
-                                if (config['visualization']['save_individual_plots'] or save_individual_plots_specific):
+                            if config['visualization']['titles']:
+                                ax1.set_title(f"Input Image 1", fontsize=config['visualization']['font_size'])
+                                ax2.set_title(f"Input Image 2", fontsize=config['visualization']['font_size'])
+                                ax3.set_title(f"Change GT Mask overlaid, uniques: {np.unique(gt_mask_show1)}", fontsize=config['visualization']['font_size'])
+                                ax4.set_title(f"Features of class 1", fontsize=config['visualization']['font_size'])
+                                ax5.set_title(f"Prediction. uniques: {np.unique(pred1_show)}", fontsize=config['visualization']['font_size'])
+                                # ax6.set_title(f"histograms_intersection_show", fontsize=config['visualization']['font_size'])
+                                # ax7.set_title(f"l1_fp_tp_fn_prediction_mask", fontsize=config['visualization']['font_size'])
+                                # ax8.set_title(f"l2_fp_tp_fn_prediction_mask", fontsize=config['visualization']['font_size'])
+                                # ax9.set_title(f"histc_fp_tp_fn_prediction_mask", fontsize=config['visualization']['font_size'])
+                                # figure.suptitle(
+                                #     f"Epoch: {epoch+1}\nGT labels for classification: {classes_in_gt}, \nunique in change predictions: {np.unique(change_detection_show)}\nunique in predictions1: {np.unique(logits_show1)}", fontsize=config['visualization']['font_size'])
 
-                                    plots_path_save = f"{config['visualization']['save_individual_plots_path']}"
-                                    fig_save_image_root = (f"{plots_path_save}/image_root/", ax1)
-                                    fig_save_image2_root = (f"{plots_path_save}/image2/", ax2)
-                                    fig_save_gt_root = (f"{plots_path_save}/gt/", ax3)
-                                    # fig_save_preds_refined1_root = (f"{plots_path_save}/preds_refined1/", ax7)
-                                    # fig_save_preds_refined2_root = (f"{plots_path_save}/preds_refined2/", ax8)
-                                    fig_save_preds_root = (f"{plots_path_save}/preds/", ax9)
+                            figure.tight_layout()
+                            if config['visualization']['val_imshow']:
+                                plt.show()
+                            
+                            if (config['visualization']['save_individual_plots'] and save_individual_plots_specific):
 
-                                    roots = [
-                                        fig_save_image_root,
-                                        fig_save_image2_root,
-                                        fig_save_gt_root,
-                                        fig_save_preds_root,
-                                        # fig_save_preds_refined1_root,
-                                        # fig_save_preds_refined2_root
-                                    ]
-                                    figure.savefig(
-                                        f"{plots_path_save}/figs/{image_name}_{str(b)}.png", bbox_inches='tight')
-                                    for root, ax in roots:
-                                        utils.create_dir_if_doesnt_exist(root)
-                                        file_path = f"{root}/{image_name}_{str(b)}.png"
-                                        # extent = ax.get_window_extent().transformed(figure.dpi_scale_trans.inverted())
-                                        extent = ax.get_tightbbox(figure.canvas.get_renderer()).transformed(figure.dpi_scale_trans.inverted())
-                                        figure.savefig(file_path, bbox_inches=extent)
+                                plots_path_save = f"{config['visualization']['save_individual_plots_path']}{config['dataset']}/"
+                                fig_save_image_root = (f"{plots_path_save}/image_root/", ax1)
+                                fig_save_prediction_root = (f"{plots_path_save}/predictions/", ax3)
+                                fig_save_overlaid_full_supervised_mask_on_image_alpha_with_bg = (f"{plots_path_save}/overlaid_full_alpha_w_bg/", ax2)
+                                roots = [
+                                    fig_save_image_root,
+                                    fig_save_prediction_root,
+                                    fig_save_overlaid_full_supervised_mask_on_image_alpha_with_bg
+                                ]
+                                figure.savefig(
+                                    f"{plots_path_save}/figs/{image_name}.png", bbox_inches='tight')
+                                for root, ax in roots:
+                                    utils.create_dir_if_doesnt_exist(root)
+                                    file_path = f"{root}/{image_name}.png"
+                                    # extent = ax.get_window_extent().transformed(figure.dpi_scale_trans.inverted())
+                                    extent = ax.get_tightbbox(figure.canvas.get_renderer()).transformed(figure.dpi_scale_trans.inverted())
+                                    figure.savefig(file_path, bbox_inches=extent)
 
-                                cometml_experiemnt.log_figure(figure_name=f"Validation, Image name: {image_name}", figure=figure)
-                                figure.clear()
-                                plt.cla()
-                                plt.clf()
-                                plt.close('all')
-                                plt.close(figure)
-                                gc.collect()
+                            cometml_experiemnt.log_figure(figure_name=f"Validation, Image name", figure=figure)
+                            figure.clear()
+                            plt.cla()
+                            plt.clf()
+                            plt.close('all')
+                            plt.close(figure)
+                            gc.collect()
 
-        mean_iou, precision, recall = eval_utils.compute_jaccard(preds, targets, num_classes=2)
+        mean_iou, precision, recall = eval_utils.compute_jaccard(preds, targets, num_classes=config['data']['num_classes'])
 
-        hist_mean_iou, hist_precision, hist_recall = eval_utils.compute_jaccard(histogram_distance, targets, num_classes=2)
-        l1_mean_iou, l1_precision, l1_recall = eval_utils.compute_jaccard(l1_dist, targets, num_classes=2)
-        l2_mean_iou, l2_precision, l2_recall = eval_utils.compute_jaccard(l2_dist, targets, num_classes=2)
+        hist_mean_iou, hist_precision, hist_recall = eval_utils.compute_jaccard(histogram_distance, targets, num_classes=config['data']['num_classes'])
+        l1_mean_iou, l1_precision, l1_recall = eval_utils.compute_jaccard(l1_dist, targets, num_classes=config['data']['num_classes'])
+        l2_mean_iou, l2_precision, l2_recall = eval_utils.compute_jaccard(l2_dist, targets, num_classes=config['data']['num_classes'])
 
         l1_precision = np.array(l1_precision)
         l1_recall = np.array(l1_recall)
@@ -815,9 +620,8 @@ class Trainer(object):
         best_val_mean_f1, val_mean_f1 = 0, 0
         best_val_change_f1, val_change_f1 = 0, 0
 
-        # model_save_dir = config['data'][config['location']]['model_save_dir'] + \
-        #     f"{current_path[-1]}_{config['dataset']}/{cometml_experiment.project_name}_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}/"
-        model_save_dir = config['data'][config['location']]['model_save_dir'] + f"{current_path[-1]}_{config['dataset']}/{cometml_experiment.project_name}_trainWin_{config['data']['window_size']}_modelName_{config['training']['model_name']}_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}/"
+        model_save_dir = config['data'][config['location']]['model_save_dir'] + \
+            f"{current_path[-1]}_{config['dataset']}/{cometml_experiment.project_name}_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}/"
         utils.create_dir_if_doesnt_exist(model_save_dir)
         for epoch in range(0, self.epochs):
             if config['procedures']['train']:
@@ -830,8 +634,6 @@ class Trainer(object):
                     val_mean_f1 = val_cw_f1.mean()
                     val_change_f1 = val_cw_f1[1]
             self.scheduler.step()
-
-            
 
             if (train_loss <= best_train_loss) or (val_mean_f1 >= best_val_mean_f1) or (val_change_f1 >= best_val_change_f1):
 
@@ -857,8 +659,6 @@ class Trainer(object):
                                 'scheduler': self.scheduler.state_dict(),
                                 'loss': train_loss},
                                model_save_dir+model_save_name)
-                else:
-                    exit()
                 if config['visualization']['save_individual_plots']:
                     _, _ = self.validate(
                         epoch, cometml_experiment, save_individual_plots_specific=True)
@@ -932,7 +732,6 @@ if __name__ == "__main__":
         config['data']['num_classes'] = pretrain_config['data']['num_classes']
         config['training']['model_feats_channels'] = pretrain_config['training']['model_feats_channels']
 
-
     if config['data']['name'] == 'watch' or config['data']['name'] == 'onera':
         coco_fpath = ub.expandpath(config['data'][config['location']]['train_coco_json'])
         dset = kwcoco.CocoDataset(coco_fpath)
@@ -963,21 +762,18 @@ if __name__ == "__main__":
                                         crop_size=config['data']['image_size'],
                                         channels=config['data']['channels'],
                                         )
+
+        test_dataloader = build_dataset(dataset_name=config['data']['name'], 
+                                        root=config['data'][config['location']]['train_dir'], 
+                                        batch_size=config['evaluation']['batch_size'],
+                                        num_workers=config['training']['num_workers'], 
+                                        split='valid',
+                                        crop_size=config['data']['image_size'],
+                                        channels=config['data']['channels'],
+                                        )
         
-        channels = config['data']['channels']
-        num_channels = len(channels.split('|'))
-        config['training']['num_channels'] = num_channels
-        window_dims = (config['data']['time_steps'], config['data']['image_size'], config['data']['image_size'])  # [t,h,w]
-        input_dims = (config['data']['image_size'], config['data']['image_size'])
 
-        test_coco_fpath = ub.expandpath(config['data'][config['location']]['test_coco_json'])
-        test_dset = kwcoco.CocoDataset(test_coco_fpath)
-        test_sampler = ndsampler.CocoSampler(test_dset)
-
-        test_dataset = SequenceDataset(test_sampler, window_dims, input_dims, channels)
-        test_dataloader = test_dataset.make_loader(batch_size=config['evaluation']['batch_size'])
-
-    if not config['training']['model_single_input'] and not config['training']['model_diff_input']:
+    if not config['training']['model_diff_input']:
         config['training']['num_channels'] = 2*config['training']['num_channels']
 
     model = build_model(model_name=config['training']['model_name'],

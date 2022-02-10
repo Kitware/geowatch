@@ -88,7 +88,7 @@ class SequenceDataset(torch.utils.data.Dataset):
             # print(ann_polys)
             ann_aids = dets.data['aids']
             ann_cids = dets.data['cids']
-
+            # print(ann_cids)
             for poly, aid, cid in zip(ann_polys, ann_aids, ann_cids):
                 cidx = self.classes.id_to_idx[cid]
                 poly.fill(frame_mask, value=cidx)
