@@ -448,8 +448,8 @@ class TimeAggregatedSC(NewTrackFunction):
     morph_kernel: int = 3
     time_filtering: bool = False
     response_filtering: bool = False
-    key: Tuple[str] = tuple(CNAMES_DCT['positive']['scored'])  # TODO unscored?
-    bg_key: Tuple[str] = ('No Activity')  # TODO other negative classes?
+    key: Tuple[str] = tuple(CNAMES_DCT['positive']['scored'])
+    bg_key: Tuple[str] = ('No Activity')
     boundaries_as: Literal['bounds', 'polys', 'none'] = 'bounds'
     norm_ord: Optional[Union[int, str]] = 1
 
@@ -519,7 +519,7 @@ class TimeAggregatedHybrid(NewTrackFunction):
 
     def add_tracks_to_dset(self, coco_dset, tracks):
         return TimeAggregatedSC(**self.sc_kwargs,
-                                use_boundary_annots=False).add_tracks_to_dset(
+                                boundaries_as='none').add_tracks_to_dset(
                                     coco_dset,
                                     tracks,
                                     coco_dset_sc=self.coco_dset_sc)
