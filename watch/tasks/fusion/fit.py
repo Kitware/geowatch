@@ -69,7 +69,6 @@ import pytorch_lightning as pl
 import ubelt as ub
 import platform
 import getpass
-import pathlib
 from os.path import join
 
 from watch.utils import lightning_ext as pl_ext
@@ -203,7 +202,7 @@ def make_fit_config(cmdline=False, **kwargs):
     ENABLE_SMART_DEFAULT_WORKDIR = 1
     if ENABLE_SMART_DEFAULT_WORKDIR:
         # Write to a sensible default location instead of CWD
-        dvc_repos_dpath = pathlib.Path('~/data/dvc-repos/').expanduser()
+        dvc_repos_dpath = ub.Path('~/data/dvc-repos/').expanduser()
         if dvc_repos_dpath.exists():
             smart_dvc_dpath = dvc_repos_dpath / 'smart_watch_dvc'
             if smart_dvc_dpath.exists():
@@ -300,7 +299,7 @@ def make_fit_config(cmdline=False, **kwargs):
     args.train_name = '{method}-{train_hashid}'.format(**args.__dict__)
 
     if args.default_root_dir is None:
-        args.default_root_dir = pathlib.Path(args.workdir) / args.train_name
+        args.default_root_dir = ub.Path(args.workdir) / args.train_name
     return args, parser
 
 
@@ -329,7 +328,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
     print('{train_name}\n===================='.format(**args_dict))
     print('args_dict = {}'.format(ub.repr2(args_dict, nl=1, sort=0)))
 
-    pathlib.Path(args.workdir).mkdir(exist_ok=True, parents=True)
+    ub.Path(args.workdir).ensuredir()
 
     method_class = getattr(methods, args.method)
     datamodule_class = getattr(datamodules, args.datamodule)

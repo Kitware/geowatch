@@ -69,7 +69,6 @@ import scriptconfig as scfg
 import socket
 import ubelt as ub
 import dateutil.parser
-import pathlib
 import warnings
 from os.path import join, exists
 from watch.cli.coco_visualize_videos import _write_ann_visualizations2
@@ -327,7 +326,7 @@ def main(cmdline=True, **kw):
     print('max_workers = {!r}'.format(max_workers))
     print('aux_workers = {!r}'.format(aux_workers))
 
-    dst = pathlib.Path(ub.expandpath(dst))
+    dst = ub.Path(ub.expandpath(dst))
     # TODO: handle this coercion of directories or bundles in kwcoco itself
     if 'json' in dst.name.split('.'):
         output_bundle_dpath = str(dst.parent)
@@ -894,7 +893,7 @@ class SimpleDataCube(object):
                             'score': score,
                             'gid': gid,
                             'valid_iooa': valid_iooa,
-                            'fname': pathlib.Path(fpath).name,
+                            'fname': ub.Path(fpath).name,
                             'geometry': sh_valid_region_local,
                         })
 
@@ -919,7 +918,7 @@ class SimpleDataCube(object):
                         print('\n\n')
                         print(group_local_df)
 
-                        debug_dpath = pathlib.Path(extract_dpath) / '_debug_regions'
+                        debug_dpath = ub.Path(extract_dpath) / '_debug_regions'
                         debug_dpath.mkdir(exist_ok=True)
                         with kwplot.BackendContext('agg'):
 
@@ -1121,7 +1120,7 @@ class SimpleDataCube(object):
             for new_gid in ub.ProgIter(sub_new_gids, desc='visualizing'):
                 new_img = new_dset.imgs[new_gid]
                 new_anns = new_dset.annots(gid=new_gid).objs
-                viz_dpath = pathlib.Path(sub_bundle_dpath) / '_viz'
+                viz_dpath = ub.Path(sub_bundle_dpath) / '_viz'
                 # Use false color for special groups
                 request_grouped_bands = [
                     'red|green|blue',

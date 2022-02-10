@@ -33,7 +33,7 @@ def suggest_paths(test_dataset=None, package_fpath=None, pred_root=None):
         >>> suggestion_text = suggest_paths(test_dataset, package_fpath)
         >>> print(suggestion_text)
     """
-    import pathlib
+    import ubelt as ub
     import json
 
     suggestions = {}
@@ -41,20 +41,20 @@ def suggest_paths(test_dataset=None, package_fpath=None, pred_root=None):
     if test_dataset is not None:
         # TODO: better way to choose the test-dataset-identifier - needs a
         # hashid
-        test_dataset = pathlib.Path(test_dataset)
+        test_dataset = ub.Path(test_dataset)
         test_dset_name = '_'.join((list(test_dataset.parts[-2:-1]) + [test_dataset.stem]))
         # test_dset_name = test_dataset.stem
     else:
         test_dset_name = 'unknown_test_dset'
 
     if package_fpath is not None:
-        package_fpath = pathlib.Path(package_fpath)
+        package_fpath = ub.Path(package_fpath)
         pred_dname = 'pred_' + package_fpath.stem
 
         if pred_root is None:
             pred_root = package_fpath.parent
         else:
-            pred_root = pathlib.Path(pred_root)
+            pred_root = ub.Path(pred_root)
 
         pred_dpath = pred_root / pred_dname / test_dset_name
         pred_dataset = pred_dpath / 'pred.kwcoco.json'
@@ -74,7 +74,6 @@ def suggest_paths(test_dataset=None, package_fpath=None, pred_root=None):
 def make_nice_dirs():
     from watch.utils import util_data
     import ubelt as ub
-    import pathlib  # NOQA
     dvc_dpath = util_data.find_smart_dvc_dpath()
     train_base = dvc_dpath / 'training'
     dataset_names = [
@@ -110,7 +109,6 @@ def make_eval_symlinks():
     """
     from watch.utils import util_data
     import ubelt as ub
-    import pathlib  # NOQA
     dvc_dpath = util_data.find_smart_dvc_dpath()
 
     # HACK: HARD CODED
@@ -132,7 +130,6 @@ def make_pred_symlinks():
     """
     from watch.utils import util_data
     import ubelt as ub
-    import pathlib  # NOQA
     dvc_dpath = util_data.find_smart_dvc_dpath()
 
     # HACK: HARD CODED

@@ -209,8 +209,7 @@ def coco_watch_stats(dset):
     info = kwcoco_extensions.coco_channel_stats(dset)
     print(ub.repr2(info, nl=4))
 
-    import pathlib
-    dset_bundle_suffix = '/'.join(pathlib.Path(dset.fpath).parts[-2:])
+    dset_bundle_suffix = '/'.join(ub.Path(dset.fpath).parts[-2:])
 
     stat_info = {
         'dset': dset_bundle_suffix,
