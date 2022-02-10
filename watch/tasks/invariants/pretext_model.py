@@ -202,11 +202,11 @@ class pretext(pl.LightningModule):
         return feats['shared']
 
     def train_dataloader(self):
-        return DataLoader(self.trainset, batch_size=self.hparams.batch_size, num_workers=self.hparams.workers, shuffle=True, pin_memory=True)
+        return DataLoader(self.trainset, batch_size=self.hparams.batch_size, num_workers=self.hparams.workers, shuffle=True, pin_memory=False)
 
     def val_dataloader(self):
         if self.hparams.vali_dataset is not None:
-            return DataLoader(self.valset, batch_size=self.hparams.batch_size, num_workers=self.hparams.workers, pin_memory=True)
+            return DataLoader(self.valset, batch_size=self.hparams.batch_size, num_workers=self.hparams.workers, pin_memory=False)
 
     def configure_optimizers(self):
         opt = torch.optim.AdamW(
@@ -260,10 +260,13 @@ class pretext(pl.LightningModule):
 
         with torch.set_grad_enabled(False):
             # TODO: option to cache or specify a specific projection matrix?
-            for batch in tqdm(loader, desc='Calculating PCA matrix'):
+            for n, batch in tqdm(enumerate(loader), desc='Calculating PCA matrix', max=50):
+                if n==50:
+                    break
                 image_stack = torch.stack([batch['image1'], batch['image2'], batch['offset_image1'], batch['augmented_image1']], dim=1)
                 features = self.forward(image_stack.to(self.device))
                 feature_collection.append(features.cpu())
+
             features = None
             image_stack = None
             stack = torch.cat(feature_collection, dim=0).permute(0, 1, 3, 4, 2).reshape(-1, 64)
@@ -278,4 +281,4 @@ class pretext(pl.LightningModule):
         return projector
 
     def on_save_checkpoint(self, checkpoint):
-        self.generate_pca_matrix(save_path=self.hparams.pca_projection_path, loader=self.train_dataloader(), reduction_dim=self.hparams.reduction_dim)
+        self.generate_pca_matrix(save_path=self.hparams.pca_projection_path, loader=self.pca_dataloader(), reduction_dim=self.hparams.reduction_dim)
