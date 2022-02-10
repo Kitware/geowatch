@@ -10,15 +10,17 @@ CommandLine:
     # annotations script multiple times, preloading this work will make it
     # faster
     python -m watch add_fields \
-        --src $DVC_DPATH/drop1-S2-L8-aligned/data.kwcoco.json \
-        --dst $DVC_DPATH/drop1-S2-L8-aligned/data.fielded.kwcoco.json \
+        --src $DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json \
+        --dst $DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json \
         --overwrite=warp --workers 10
 
+    # Update to whatever the state of the annotations submodule is
     DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
     python -m watch project_annotations \
-        --src $DVC_DPATH/drop1-S2-L8-aligned/data.fielded.kwcoco.json \
-        --dst $DVC_DPATH/drop1-S2-L8-aligned/data-updated-20211110.kwcoco.json \
-        --site_models="$DVC_DPATH/drop1/site_models/*.geojson"
+        --src $DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json \
+        --dst $DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json \
+        --viz_dpath $DVC_DPATH/Drop2-Aligned-TA1-2022-01/_viz_propogate \
+        --site_models="$DVC_DPATH/annotations/site_models/*.geojson"
 """
 import dateutil
 import kwcoco

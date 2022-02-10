@@ -1,6 +1,47 @@
 #!/bin/bash
-# Assume that all repos and permissions are setup.
-# This is called by the train init script.
+__doc__='
+This script assumes that the repo and permissions are setup.
+
+The entrypoint will update the repo to the latest version of whatever branch
+the Docker image was created with. 
+
+Note: you must edit "ta2_train_workflow.yml" to specify the branch should be
+used.
+
+To submit these jobs run something like:
+
+    cd "$HOME/code/watch/aws"
+    argo submit "$HOME/code/watch/aws/ta2_train_workflow.yml" --watch
+
+    WORKFLOW_NAME=$(argo list --running | head -n 2 | tail -n 1 | cut -d" " -f1) && argo logs "${WORKFLOW_NAME}" --follow
+
+    # NOTE: It usually takes ~12-15 minutes for a job to startup after being
+    # submitted
+
+    # And then view the logs in real time (note: if the workflow ends, you need
+    # to use the UI to access the old logs)
+    # This is not 100% reliable has race conditions
+
+    WORKFLOW_NAME=$(argo list --running | head -n 2 | tail -n 1 | cut -d" " -f1)
+    # Get a shell in the pod
+    kubectl exec $WORKFLOW_NAME -- ls -al /root
+    
+    kubectl exec --stdin --tty ta2-train-sd8qs -- /bin/bash
+
+kubectl exec -it ta2-train-sd8qs -c main -- /bin/bash
+
+
+    kubectl exec --stdin --tty ta2-train-cdkc4 -- /bin/bash
+
+    kubectl -n argo exec ta2-train-vxqb7 -- bash
+    
+
+
+    # Use this to check outputs
+    aws s3 --profile iarpa ls s3://kitware-smart-watch-data/sync_root/
+
+'
+set -e
 
 export SMART_DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 export WATCH_REPO_DPATH=$HOME/code/watch
@@ -13,5 +54,55 @@ git clone "https://${DVC_GITLAB_USERNAME}:${DVC_GITLAB_PASSWORD}@gitlab.kitware.
 
 cd "$SMART_DVC_DPATH"
 dvc remote add aws-noprofile s3://kitware-smart-watch-data/dvc
-dvc pull Drop1-Aligned-TA1-2022-01/data.kwcoco.json.dvc -r aws-noprofile --quiet
-dvc checkout Drop1-Aligned-TA1-2022-01/data.kwcoco.json.dvc
+
+# Grab the required datasets that we need
+dvc pull Drop2-Aligned-TA1-2022-01/data.kwcoco.json.dvc -r aws-noprofile --quiet
+
+#dvc checkout Drop1-Aligned-TA1-2022-01/data.kwcoco.json.dvc
+
+if [[ "$HOSTNAME" == "" ]]; then 
+    export HOSTNAME="unknown-host"
+fi
+if [[ "$USER" == "" ]]; then 
+    export USER="unknown-user"
+fi
+
+
+export DVC_DPATH=$SMART_DVC_DPATH
+export WORKDIR="$DVC_DPATH/training/$HOSTNAME/$USER"
+
+mkdir -p "$WORKDIR"
+
+#cat ~/.aws/config
+
+# All outputs will be saved in a "workdir"
+# Startup background process that will write data to S3 in realish time
+source "$WATCH_REPO_DPATH/aws/smartwatch_s3_sync.sh"
+
+CHECKIN_FPATH=$WORKDIR/ACK-$(date +"%Y%m%dT%H%M%S").txt
+echo "check-in" > "$CHECKIN_FPATH"
+cat /proc/cpuinfo >> "$CHECKIN_FPATH" || echo "no cpuinfo" >> "$CHECKIN_FPATH"
+nvidia-smi >> "$CHECKIN_FPATH" || echo "no nvidia-smi" >> "$CHECKIN_FPATH"
+echo "CHECKIN_FPATH='$CHECKIN_FPATH'"
+#cat "$CHECKIN_FPATH"
+smartwatch_s3_sync_single "$WORKDIR"
+
+
+# HACK: how to specify dont use a profile to a --profile command?
+aws s3 ls s3://kitware-smart-watch-data/sync_root/
+#aws s3 --profile iarpa ls s3://kitware-smart-watch-data/sync_root/
+
+smartwatch_s3_sync_forever_in_tmux "$WORKDIR"
+
+
+# The following script should run the toy experiments end-to-end
+export NDSAMPLER_DISABLE_OPTIONAL_WARNINGS=1
+
+#pip install pytorch_lightning -U
+nvidia-smi
+python -c "import torch; print('torch.__version__ = {}'.format(torch.__version__))"
+python -c "import torch; print('torch.__file__ = {}'.format(torch.__file__))"
+python -c "import torch; print(torch.cuda.is_available())"
+python -c "import torch; print(torch.cuda.device_count())"
+
+source "$WATCH_REPO_DPATH/watch/tasks/fusion/experiments/crall/toy_experiments_msi.sh"

@@ -6,6 +6,7 @@ import albumentations as A
 import kwcoco
 import kwimage
 import random
+import ubelt as ub
 import tifffile as tif
 
 
@@ -30,21 +31,33 @@ class kwcoco_dataset(Dataset):
 
         self.num_images = num_images
 
+        if not ub.iterable(sensor):
+            sensor = [sensor]
+        if not ub.iterable(bands):
+            bands = [sensor]
+
+        requested_sensors = set(sensor)
+
         if type(sensor) is not list:
             sensor = [sensor]
         if type(bands) is not list:
             bands = [bands]
 
         # handle if there are multiple sensors
-        if 'sensor_coarse' in self.images._id_to_obj[self.images._ids[0]].keys():
-            # get available sensors
-            avail_sensors = set(self.images.lookup('sensor_coarse'))
-            # filter images by desired sensor
-            self.images = self.images.compress([x in sensor for x in self.images.lookup('sensor_coarse')])
-            assert(self.images)
-        else:
-            avail_sensors = None
-        print('Using sensors:', avail_sensors)
+        image_sensors = self.images.lookup('sensor_coarse', default=None)
+        avail_sensors = set(image_sensors)
+        flags = [x in requested_sensors for x in  image_sensors]
+        self.images = self.images.compress(flags)
+
+        # if 'sensor_coarse' in self.images._id_to_obj[self.images._ids[0]].keys():
+        #     # get available sensors
+        #     # filter images by desired sensor
+        #     self.images = self.images.compress([x in sensor for x in self.images.lookup('sensor_coarse')])
+        #     assert(self.images)
+        # else:
+        #     avail_sensors = None
+        print('avail_sensors:', avail_sensors)
+        print('requested_sensors:', requested_sensors)
         self.dset_ids = self.images.gids
         self.videos = [x['id'] for x in self.dset.videos().objs]
 

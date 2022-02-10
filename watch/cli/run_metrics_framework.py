@@ -605,6 +605,7 @@ def main(args):
         from packaging import version
         METRICS_VERSION = version.Version(iarpa_smart_metrics.__version__)
     except Exception:
+        from packaging import version
         METRICS_VERSION = version.Version('0.0.0')
 
     for region_id, region_sites in grouped_sites.items():

@@ -1,11 +1,4 @@
 #!/usr/bin/env python
-
-# This linter is complaining about this file in the CI, but not on my local
-# machine. I have no idea why. I just get:
-# watch/cli/animate_visualizations.py:1:7: E999 SyntaxError: invalid syntax
-# 1     E999 SyntaxError: invalid syntax
-
-
 __notes__ = r"""
 .. :code: bash
 
@@ -72,7 +65,6 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
         >>> from watch.cli.animate_visualizations import *  # NOQA
         >>> animate_visualizations(viz_dpath, verbose=1, workers=0)
     """
-    import pathlib
     from watch.cli import gifify
     import ubelt as ub
     import kwcoco
@@ -82,7 +74,7 @@ def animate_visualizations(viz_dpath, channels=None, video_names=None,
         channels = kwcoco.ChannelSpec.coerce(channels)
 
     workers = util_globals.coerce_num_workers(workers)
-    viz_dpath = pathlib.Path(viz_dpath)
+    viz_dpath = ub.Path(viz_dpath)
 
     if video_names is None:
         video_dpaths = [p for p in viz_dpath.glob('*') if p.is_dir()]

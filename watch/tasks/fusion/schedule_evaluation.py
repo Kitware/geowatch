@@ -81,12 +81,36 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
             --run=0 --skip_existing=1
 
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-        KWCOCO_TEST_FPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/data_nowv_vali.kwcoco.json
+        KWCOCO_TEST_FPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L_nowv_vali.kwcoco.json
         python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="0,1" \
-            --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/BAS_smt_it_stm_p8_L1_raw_v53/*.pt" \
+            --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/*xfer*/*.pt" \
             --test_dataset="$KWCOCO_TEST_FPATH" \
-            --run=1  --skip_existing=True
+            --run=0 --skip_existing=True
+
+        DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+        KWCOCO_TEST_FPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L_nowv_vali.kwcoco.json
+        python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="0,1" \
+            --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/SC_TA1_*/*.pt" \
+            --test_dataset="$KWCOCO_TEST_FPATH" \
+            --run=1 --skip_existing=True
+
+        DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+        KWCOCO_TEST_FPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L_nowv_vali.kwcoco.json
+        python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="0," \
+            --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/BAS_TA1_ALL*/*.pt" \
+            --test_dataset="$KWCOCO_TEST_FPATH" \
+            --run=0 --skip_existing=True
+
+        DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+        KWCOCO_ALL_FPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L_nowv.kwcoco.json
+        python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="0,1" \
+            --model_globstr="special:HARDCODED" \
+            --test_dataset="$KWCOCO_ALL_FPATH" \
+            --run=0 --skip_existing=True
 
     TODO:
         - [ ] Specify the model_dpath as an arg
@@ -116,6 +140,19 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
         dvc_dpath / 'models/fusion/SC-20201117/BAS_smt_it_stm_p8_L1_raw_v53/BAS_smt_it_stm_p8_L1_raw_v53_epoch=15-step=340047.pt',
         dvc_dpath / 'models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v55/BOTH_smt_it_stm_p8_L1_DIL_v55_epoch=5-step=53819.pt',
     ]
+
+    HARDCODED = list(map(ub.Path, [
+        dvc_dpath / 'models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=1-step=17305.pt',
+        dvc_dpath / 'models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=4-step=43264.pt',
+        dvc_dpath / 'models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=5-step=51917.pt',
+        dvc_dpath / 'models/fusion/SC-20201117/BAS_TA1_ALL_REGIONS_v084/BAS_TA1_ALL_REGIONS_v084_epoch=30-step=268242.pt',
+        dvc_dpath / 'models/fusion/SC-20201117/BAS_TA1_KOREA_v083/BAS_TA1_KOREA_v083_epoch=3-step=7459.pt',
+        dvc_dpath / 'models/fusion/SC-20201117/BAS_TA1_KOREA_v083/BAS_TA1_KOREA_v083_epoch=4-step=9324.pt',
+        dvc_dpath / 'models/fusion/SC-20201117/BAS_TA1_KOREA_v083/BAS_TA1_KOREA_v083_epoch=5-step=11189.pt',
+        dvc_dpath / 'models/fusion/SC-20201117/BAS_TA1_c001_v076/BAS_TA1_c001_v076_epoch=90-step=186367.pt',
+        dvc_dpath / 'models/fusion/SC-20201117/BAS_TA1_c001_v076/BAS_TA1_c001_v076_epoch=12-step=26623.pt',
+        dvc_dpath / 'models/fusion/SC-20201117/BAS_TA1_c001_v082/BAS_TA1_c001_v082_epoch=42-step=88063.pt',
+    ]))
 
     # with_saliency = 'auto'
     # with_class = 'auto'
@@ -157,6 +194,11 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
     if model_globstr == 'special:HISTORY':
         for package_fpath in HISTORICAL_MODELS_OF_INTEREST:
             assert package_fpath.exists()
+            package_info = package_metadata(ub.Path(package_fpath))
+            packages_to_eval.append(package_info)
+    if model_globstr == 'special:HARDCODED':
+        for package_fpath in HARDCODED:
+            assert package_fpath.exists(), f'{package_fpath}'
             package_info = package_metadata(ub.Path(package_fpath))
             packages_to_eval.append(package_info)
     else:
@@ -221,6 +263,7 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
 
         pred_dataset_fpath = ub.Path(suggestions['pred_dataset'])  # NOQA
         eval_metrics_fpath = ub.Path(suggestions['eval_dpath']) / 'curves/measures2.json'
+        eval_metrics_dvc_fpath = ub.Path(suggestions['eval_dpath']) / 'curves/measures2.json.dvc'
 
         suggestions['eval_metrics'] = eval_metrics_fpath
         suggestions['test_dataset'] = test_dataset_fpath
@@ -233,6 +276,12 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
         predictkw = {
             'workers_per_queue': workers_per_queue,
         }
+
+        print('pred_dataset_fpath = {!r}'.format(pred_dataset_fpath))
+        has_eval = eval_metrics_dvc_fpath.exists() or eval_metrics_fpath.exists()
+        has_pred = pred_dataset_fpath.exists()
+        print('has_eval = {!r}'.format(has_eval))
+        print('has_pred = {!r}'.format(has_pred))
 
         if with_pred:
             pred_command = ub.codeblock(
@@ -258,8 +307,9 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
                     pred_command
                 )
 
-            if recompute_pred or not (skip_existing and pred_dataset_fpath.exists()):
-                queue.submit(pred_command)
+            if recompute_pred or not (skip_existing and (has_pred or has_eval)):
+                if not has_eval:
+                    queue.submit(pred_command)
 
         if with_eval:
             eval_command = ub.codeblock(
@@ -279,7 +329,7 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
                     '[[ -f "{eval_metrics}" ]] || '.format(**suggestions) +
                     eval_command
                 )
-            if recompute_eval or not (skip_existing and eval_metrics_fpath.exists()):
+            if recompute_eval or not (skip_existing and has_eval):
                 queue.submit(eval_command)
 
     print('tq = {!r}'.format(tq))
@@ -290,7 +340,9 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
     if run:
         # ub.cmd('bash ' + str(driver_fpath), verbose=3, check=True)
         tq.run()
-        tq.monitor()
+        agg_state = tq.monitor()
+        if not agg_state['errored']:
+            tq.kill()
     else:
         driver_fpath = tq.write()
         print('Wrote script: to run execute:\n{}'.format(driver_fpath))
@@ -313,6 +365,64 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
     feh models/fusion/unevaluated-activity-2021-11-12/eval_links/*/curves/ovr_roc.png
     feh models/fusion/unevaluated-activity-2021-11-12/eval_links/*/curves/ovr_ap.png
     """
+
+
+def updates_dvc_measures():
+    """
+    Add results of pixel evaluations to DVC
+    """
+    import watch
+    # import functools
+    import os
+    dvc_dpath = watch.find_smart_dvc_dpath()
+    dpath = dvc_dpath / 'models/fusion/SC-20201117'
+    measures_fpaths = list(dpath.glob('*/*/*/eval/curves/measures2.json'))
+
+    is_symlink = ub.memoize(os.path.islink)
+    # is_symlink = functools.cache(os.path.islink)
+    # import timerit
+    # ti = timerit.Timerit(100, bestof=10, verbose=2)
+    # for timer in ti.reset('time'):
+    #     with timer:
+    #         is_symlink(fpath))
+
+    def check_if_contained_in_symlink(fpath, dvc_dpath):
+        rel_fpath = fpath.relative_to(dvc_dpath)
+        parts = rel_fpath.parts
+        curr = fpath.parent
+        for i in range(len(parts)):
+            if is_symlink(curr):
+                return True
+            curr = curr.parent
+
+    needs_add = []
+    for fpath in measures_fpaths:
+        dvc_fpath = ub.Path(str(fpath) + '.dvc')
+        if not dvc_fpath.exists():
+            if not fpath.is_symlink():
+                if not check_if_contained_in_symlink(fpath, dvc_dpath):
+                    rel_fpath = fpath.relative_to(dvc_dpath)
+                    needs_add.append(rel_fpath)
+
+    print(f'Need to add {len(needs_add)} summaries')
+    rel_fpaths = [str(p) for p in needs_add]
+
+    import os
+    import dvc.main
+    push_dpath = '/'.join(os.path.commonprefix([
+        ub.Path(p).parts for p in rel_fpaths]))
+    # from dvc import main
+    saved_cwd = os.getcwd()
+    try:
+        os.chdir(dvc_dpath)
+        dvc_command = ['add'] + rel_fpaths
+        dvc.main.main(dvc_command)
+
+        remote = 'horologic'
+        dvc_command = ['push', '-r', remote, '--recursive', str(push_dpath)]
+        dvc.main.main(dvc_command)
+    finally:
+        os.chdir(saved_cwd)
 
 
 if __name__ == '__main__':

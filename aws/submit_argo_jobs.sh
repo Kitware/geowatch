@@ -1,3 +1,4 @@
+#!/bin/bash
 # TODO: need to change name to indicate this is training.
 
 cd "$HOME/code/watch/aws"

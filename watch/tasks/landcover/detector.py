@@ -56,12 +56,17 @@ def pad(fn):
 
 @pad
 def predict_image(img, model):
-    dtype = np.int8
+    dtype = np.float32
 
     mask = get_nodata_mask(img)
 
     if not np.any(mask):
-        pred = np.full(img.shape[:2], PRED_NODATA, dtype=dtype)
+        try:
+            num_classes = model.finalconv3.out_channels
+        except Exception:
+            num_classes = 1
+        h, w = img.shape[:2]
+        pred = np.full((h, w, num_classes), PRED_NODATA, dtype=dtype)
         return pred
 
     device = get_model_device(model)
@@ -87,10 +92,19 @@ def normalize(image, low=2, high=98) -> np.array:
     normalized_bands = []
     for band in range(image.shape[2]):
         local_band = image[:, :, band]
-        local_band = local_band[local_band != 0]
-        a = np.percentile(local_band, low)
-        b = np.percentile(local_band, high)
-        local_band = (image[:, :, band] - a) / (b - a)
+        # local_band = local_band[local_band != 0]
+        local_band = local_band[local_band > 0]
+        if len(local_band) > 0:
+            a = np.percentile(local_band, low)
+            b = np.percentile(local_band, high)
+        else:
+            a = b = 0
+        denom = (b - a)
+        numer = (image[:, :, band] - a)
+        if denom > 0:
+            local_band = numer / denom
+        else:
+            local_band = numer
         local_band = np.clip(local_band, 0, 1)
         normalized_bands.append(local_band)
     return np.stack(normalized_bands, 2)
@@ -102,7 +116,8 @@ def get_nodata_mask(img, nodata=0):
     Return an numpy array with values True for data, False for no data
     """
     mask = np.ones(img.shape[:2], bool)
-    img_nodata = img == nodata
+    # img_nodata = img == nodata
+    img_nodata = img <= nodata  # HACK!
     for i in range(img.shape[0]):
         if np.all(img_nodata[i, :]):
             mask[i, :] = False

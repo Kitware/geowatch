@@ -351,6 +351,24 @@ To get your code merged, create an MR from your branch `here <https://gitlab.kit
 You can use `markdown <https://docs.gitlab.com/ee/user/markdown.html>`_ to write an informative merge message.
 
 
+Non-Python Requirements
+~~~~~~~~~~~~~~~~~~~~~~~
+
+There are several binary libraries that some components of the watch module
+might assume exist, but don't have Python distributions. These are:
+
+* ffmpeg - for making animated gifs
+* tmux - for the tmux queue (to be replaced by slurm)
+* jq - for special kwcoco json queries
+
+
+On Debian-based systems install these via:
+
+.. code:: bash
+
+   sudo apt install ffmpeg tmux jq
+
+
 
 .. _development environment: https://algorithm-toolkit.readthedocs.io/en/latest/dev-environment.html#
 .. _atk docs: https://algorithm-toolkit.readthedocs.io/en/latest/index.html

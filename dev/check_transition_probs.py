@@ -8,27 +8,78 @@ from watch import heuristics
 
 
 def build_emperical_transition_probs():
+
+    import numpy as np
+
     dvc_dpath = watch.find_smart_dvc_dpath()
-    coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data_train.kwcoco.json'
+    # coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data_train.kwcoco.json'
+    coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
     dset = kwcoco.CocoDataset(coco_fpath)
+
+    force_sequence = ['No Activity', 'Site Preparation', 'Active Construction', 'Post Construction']
 
     transitions = []
 
+    deltas = ub.ddict(list)
+
+    import kwarray
     for tid, aids in ub.ProgIter(list(dset.index.trackid_to_aids.items()), desc='build transition probs'):
-        track_annots = dset.annots(aids)
-        states = track_annots.cnames
-        times = [parse(d) for d in track_annots.images.lookup('date_captured')]
+        _track_annots = dset.annots(list(aids))
+        times = [parse(d) for d in _track_annots.images.lookup('date_captured')]
         sorted_idx = ub.argsort(times)
-        times = list(ub.take(times, sorted_idx))
-        states = list(ub.take(states, sorted_idx))
-        for i in range(1, len(states)):
-            src = states[i - 1]
-            dst = states[i]
-            src_time = times[i - 1]
-            dst_time = times[i]
-            assert dst_time >= src_time
-            delta = (dst_time - src_time)
-            transitions.append({'src': src, 'dst': dst, 'delta': delta})
+        track_annots = _track_annots.take(sorted_idx)
+
+        frame_indexes = track_annots.images.lookup('frame_index')
+        frame_diffs = np.diff(frame_indexes)
+        assert np.all(frame_diffs >= 0), 'check'
+
+        times = [parse(d) for d in track_annots.images.lookup('date_captured')]
+        states = track_annots.cnames
+
+        seq = kwarray.DataFrameLight({
+            'state': states,
+            'time': times,
+            'frame_indexes': frame_indexes,
+        })
+
+        prev_states = None
+        for idx, curr_states in seq.groupby('frame_indexes'):
+            if prev_states is not None:
+                curr_rows = [r for _, r in curr_states.iterrows()]
+                prev_rows = [r for _, r in prev_states.iterrows()]
+
+                for src, dst in it.product(prev_rows, curr_rows):
+                    delta = dst['time'] - src['time']
+                    assert delta.total_seconds() >= 0
+                    transitions.append({
+                        'src': src['state'],
+                        'dst': dst['state'],
+                        'delta': delta
+                    })
+
+            prev_states = curr_states
+
+        for catname in force_sequence:
+            flags = [s == catname for s in states]
+            if any(flags):
+                _times = list(ub.take(times, flags))
+                _delta = max(_times) - min(_times)
+                deltas[catname].append(_delta)
+
+        # for i in range(1, len(states)):
+        #     src = states[i - 1]
+        #     dst = states[i]
+        #     src_time = times[i - 1]
+        #     dst_time = times[i]
+        #     assert dst_time >= src_time
+        #     delta = (dst_time - src_time)
+        #     transitions.append({'src': src, 'dst': dst, 'delta': delta})
+
+    for k, ds in deltas.items():
+        secs = np.array([d.total_seconds() for d in ds])
+        secs = secs[secs > 60 * 60 * 24]
+        average_days = np.mean(secs) / (60 * 60 * 24)
+        print(f'{k} {average_days=!r}')
 
     valid_states = {c['name'] for c in heuristics.CATEGORIES_SCORED}
     valid_states.add('No Activity')  # hard coded

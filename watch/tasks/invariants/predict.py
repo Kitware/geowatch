@@ -40,34 +40,48 @@ def predict(args):
     else:
         segmentation_dim = 0
 
-    if 'pretext' in args.tasks:
+    if 'pretext' in args.tasks or before_after_dim:
         pretext_model = pretext.load_from_checkpoint(args.pretext_ckpt_path, train_dataset=None, vali_dataset=None)
         pretext_model = pretext_model.eval().to(device)
         pretext_hparams = pretext_model.hparams
 
         if args.do_pca:
-            ###Slightly reduced dataset for pca
-            dataset = kwcoco_dataset(args.input_kwcoco, sensor=pretext_hparams.sensor, bands=pretext_hparams.bands, patch_size=32, change_labels=False, display=False)
+            depends = [
+                args.input_kwcoco,
+                pretext_hparams.bands,
+                pretext_hparams.sensor
+            ]
+            cacher = ub.Cacher('invariants_pca', depends=depends, appname='watch')
+            projector = cacher.tryload()
+            if projector is None:
+                ###Slightly reduced dataset for pca
+                dataset = kwcoco_dataset(args.input_kwcoco,
+                                         sensor=pretext_hparams.sensor,
+                                         bands=pretext_hparams.bands,
+                                         patch_size=32, change_labels=False,
+                                         display=False)
 
-            ### Define projector
-            dl = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, num_workers=num_workers)
-            feature_collection = []
-            print('Calculating projection matrix based on pca.')
+                ### Define projector
+                dl = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, num_workers=num_workers)
+                feature_collection = []
+                print('Calculating projection matrix based on pca.')
 
-            with torch.set_grad_enabled(False):
-                # TODO: option to cache or specify a specific projection matrix?
-                for batch in tqdm(dl, desc='Calculating PCA matrix'):
-                    image_stack = torch.stack([batch['image1'], batch['image2'], batch['offset_image1'], batch['augmented_image1']], dim=1)
-                    features = pretext_model(image_stack.to(pretext_model.device))
-                    feature_collection.append(features.cpu())
-                features = None
-                image_stack = None
-                stack = torch.cat(feature_collection, dim=0).permute(0, 1, 3, 4, 2).reshape(-1, 64)
-                reduction_dim = args.num_dim - before_after_dim - segmentation_dim
-                _, _, projector = pca(stack, q=reduction_dim)
-                stack = None
+                with torch.set_grad_enabled(False):
+                    # TODO: option to cache or specify a specific projection matrix?
+                    for batch in tqdm(dl, desc='Calculating PCA matrix'):
+                        image_stack = torch.stack([batch['image1'], batch['image2'], batch['offset_image1'], batch['augmented_image1']], dim=1)
+                        features = pretext_model(image_stack.to(pretext_model.device))
+                        feature_collection.append(features.cpu())
+                    features = None
+                    image_stack = None
+                    stack = torch.cat(feature_collection, dim=0).permute(0, 1, 3, 4, 2).reshape(-1, 64)
+                    reduction_dim = args.num_dim - before_after_dim - segmentation_dim
+                    _, _, raw_projector = pca(stack, q=reduction_dim)
+                    stack = None
+                    projector = raw_projector.permute(1, 0)
+                cacher.save(projector)
 
-            projector = projector.permute(1, 0).to(device)
+            projector = projector.to(device)
 
     dataset = multi_image_dataset(args.input_kwcoco, args.sensor, args.bands, mode='test')
 

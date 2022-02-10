@@ -20,7 +20,7 @@ class PrepareSplitsConfig(scfg.Config):
     }
 
 
-def main(cmdline=True, **kwargs):
+def main(cmdline=False, **kwargs):
     """
     The idea is that we should have a lightweight scheduler.  I think something
     fairly minimal can be implemented with tmux, but it would be nice to have a
@@ -30,9 +30,9 @@ def main(cmdline=True, **kwargs):
         - [ ] Option to just dump the serial bash script that does everything.
     """
     from watch.utils import tmux_queue
-    with_rich = 0
 
-    config = PrepareSplitsConfig(cmdline=cmdline, data=kwargs)
+    config = PrepareSplitsConfig(cmdline=cmdline)
+    config.update(kwargs)
 
     if config['base_fpath'] == 'auto':
         # Auto hack.
@@ -51,6 +51,7 @@ def main(cmdline=True, **kwargs):
         'nowv_vali': base_fpath.augment(suffix='_nowv_vali', multidot=True),
         'wv_vali': base_fpath.augment(suffix='_wv_vali', multidot=True),
     }
+    print('splits = {!r}'.format(splits))
 
     tq = tmux_queue.TMUXMultiQueue(name='watch-splits', size=2)
     if config['virtualenv_cmd']:
@@ -112,7 +113,7 @@ def main(cmdline=True, **kwargs):
         ''')
     tq.submit(command, index=1)
 
-    tq.rprint(with_rich=with_rich)
+    tq.rprint()
 
     if config['run']:
         agg_state = tq.run(block=True)
