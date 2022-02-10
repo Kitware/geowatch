@@ -1,6 +1,7 @@
 import argparse
 import sys
 import json
+import traceback
 import os
 import tempfile
 import subprocess
@@ -113,6 +114,15 @@ def main():
                         action='store_true',
                         default=False,
                         help="Run AWS CLI commands with --dryrun flag")
+    parser.add_argument("-u", "--upload-collections",
+                        action='store_true',
+                        default=False,
+                        help="Build and upload STAC Collections from "
+                             "collated items")
+    parser.add_argument('-s', '--show-progress',
+                        action='store_true',
+                        default=False,
+                        help='Show progress for AWS CLI commands')
     parser.add_argument("--performer_code",
                         default='kit',
                         type=str,
@@ -234,9 +244,9 @@ def collate_item(stac_item,
             mgrs_utm_zone,
             mgrs_lat_band,
             mgrs_grid_square,
-            performer_code)
+            performer_code.upper())
     else:
-        output_item_id = "{}_{}".format(original_id, performer_code)
+        output_item_id = "{}_{}".format(original_id, performer_code.upper())
 
     item_datetime = parse(stac_item.properties['datetime'])
     # NOTE ** Assumes that we're compliant with the MGRS STAC
@@ -273,17 +283,16 @@ def collate_item(stac_item,
 
     output_stac_item = platform_collation_fn(stac_item,
                                              aws_base_command,
-                                             original_id,
+                                             output_item_id,
                                              item_s3_outdir,
-                                             ssh_outdir,
-                                             performer_code)
+                                             ssh_outdir)
 
     # Completely discard item if platform collation fails
     if output_stac_item is None:
         return None
 
     stac_item_outpath = '/'.join((item_s3_outdir,
-                                  '{}.json'.format(original_id)))
+                                  '{}.json'.format(output_item_id)))
     output_stac_item.set_self_href(stac_item_outpath)
 
     original_links = output_stac_item.get_links('original')
@@ -297,6 +306,39 @@ def collate_item(stac_item,
     output_stac_item.properties['smart:evaluation'] = eval_num
     output_stac_item.properties['smart:source'] = original_stac_item_uri
     output_stac_item.collection_id = output_stac_collection_id
+
+    collection_output_path = '/'.join((
+        output_bucket,
+        output_stac_collection_id,
+        'collection.json'))
+
+    # Replace all relevant links to point to the output collection for
+    # the given item
+    link_types = ('root', 'collection', 'parent')
+    for link_type in link_types:
+        output_stac_item.remove_links(link_type)
+
+        # Don't attempt to re-set the 'root' link as `.to_dict()`
+        # fails if it can't resolve it (will get set during indexing
+        # or ingressing)
+        if link_type == 'root':
+            continue
+
+        output_stac_item.links.append(
+            pystac.Link.from_dict({
+                'rel': link_type,
+                'href': collection_output_path,
+                'type': 'application/json'}))
+
+    with tempfile.NamedTemporaryFile() as temporary_file:
+        with open(temporary_file.name, 'w') as f:
+            json.dump(output_stac_item.to_dict(), f, indent=2)
+
+        # Assumes that the STAC item's self href has been set
+        # in the per item collation function(s)
+        subprocess.run([*aws_base_command,
+                        temporary_file.name,
+                        output_stac_item.get_self_href()], check=True)
 
     return output_stac_item
 
@@ -342,10 +384,9 @@ def generic_collate_item(asset_name_map,
                          eo_bands_list,
                          stac_item,
                          aws_base_command,
-                         original_id,
+                         output_item_id,
                          item_outdir,
                          ssh_outdir,
-                         performer_code,
                          additional_ssh_qa_resolutions=[]):
     item_outdir_base = os.path.basename(item_outdir)
     output_assets = {}
@@ -357,8 +398,8 @@ def generic_collate_item(asset_name_map,
         if asset_suffix is None:
             continue
 
-        stac_asset_outpath_basename = "{}_{}_{}.tif".format(
-            original_id, performer_code, asset_suffix)
+        stac_asset_outpath_basename = "{}_{}.tif".format(
+            output_item_id, asset_suffix)
         stac_asset_outpath = '/'.join(
             (item_outdir, stac_asset_outpath_basename))
 
@@ -408,9 +449,8 @@ def generic_collate_item(asset_name_map,
                         resampling='NEAREST')
 
                     resized_qa_ssh_outpath = '/'.join(
-                        (ssh_outdir, "{}_{}_SSH_{}m_{}.tif".format(
-                            original_id,
-                            performer_code,
+                        (ssh_outdir, "{}_SSH_{}m_{}.tif".format(
+                            output_item_id,
                             int(qa_res),
                             ssh_asset_suffix)))
                     subprocess.run([*aws_base_command,
@@ -426,8 +466,8 @@ def generic_collate_item(asset_name_map,
 
             if ssh_asset_suffix is not None:
                 ssh_asset_outpath = '/'.join(
-                    (ssh_outdir, "{}_{}_SSH_{}.tif".format(
-                        original_id, performer_code, ssh_asset_suffix)))
+                    (ssh_outdir, "{}_SSH_{}.tif".format(
+                        output_item_id, ssh_asset_suffix)))
 
                 subprocess.run([*aws_base_command,
                                 asset_href, ssh_asset_outpath], check=True)
@@ -439,15 +479,14 @@ def generic_collate_item(asset_name_map,
             print(datetime, file=f)
 
         datetime_outpath = '/'.join(
-                    (ssh_outdir, "{}_{}_SSH_datetime.txt".format(
-                            original_id, performer_code)))
+                    (ssh_outdir, "{}_SSH_datetime.txt".format(output_item_id)))
         subprocess.run([*aws_base_command,
                         temporary_file.name, datetime_outpath], check=True)
 
         for qa_res in additional_ssh_qa_resolutions:
             qa_res_datetime_outpath = '/'.join(
-                (ssh_outdir, "{}_{}_SSH_{}m_datetime.txt".format(
-                    original_id, performer_code, qa_res)))
+                (ssh_outdir, "{}_SSH_{}m_datetime.txt".format(
+                    output_item_id, qa_res)))
 
             subprocess.run([*aws_base_command,
                             temporary_file.name, qa_res_datetime_outpath],
@@ -460,10 +499,9 @@ def generic_collate_item(asset_name_map,
 
 def collate_wv_item(stac_item,
                     aws_base_command,
-                    original_id,
+                    output_item_id,
                     item_outdir,
-                    ssh_outdir,
-                    performer_code):
+                    ssh_outdir):
     # WV items only have a single "data" asset containing all bands
     data_asset = stac_item.assets.get('data')
     if data_asset is None:
@@ -511,8 +549,8 @@ def collate_wv_item(stac_item,
             output_band_path = convert_to_cog(output_band_path,
                                               resampling='AVERAGE')
 
-            stac_asset_outpath_basename = "{}_{}_{}.tif".format(
-                original_id, performer_code, asset_suffix)
+            stac_asset_outpath_basename = "{}_{}.tif".format(
+                output_item_id, asset_suffix)
             stac_asset_outpath = '/'.join(
                 (item_outdir, stac_asset_outpath_basename))
 
@@ -560,16 +598,6 @@ def build_and_upload_stac_collections(stac_items_by_collection,
             # changes it
             stac_item.set_self_href(prior_self_href)
 
-            with tempfile.NamedTemporaryFile() as temporary_file:
-                with open(temporary_file.name, 'w') as f:
-                    json.dump(stac_item.to_dict(), f, indent=2)
-
-                # Assumes that the STAC item's self href has been set
-                # in the per item collation function(s)
-                subprocess.run([*aws_base_command,
-                                temporary_file.name,
-                                stac_item.get_self_href()], check=True)
-
         with tempfile.NamedTemporaryFile() as temporary_file:
             with open(temporary_file.name, 'w') as f:
                 json.dump(output_collection.to_dict(), f, indent=2)
@@ -585,7 +613,9 @@ def collate_ta1_output(stac_catalog,
                        dryrun=False,
                        performer_code='kit',
                        eval_num='1',
-                       jobs=1):
+                       jobs=1,
+                       upload_collections=False,
+                       show_progress=False):
     if isinstance(stac_catalog, str):
         catalog = pystac.read_file(href=stac_catalog).full_copy()
     else:
@@ -599,6 +629,9 @@ def collate_ta1_output(stac_catalog,
 
     if dryrun:
         aws_base_command.append('--dryrun')
+
+    if not show_progress:
+        aws_base_command.append('--no-progress')
 
     input_stac_items = [item.to_dict() for item in catalog.get_all_items()]
 
@@ -618,19 +651,20 @@ def collate_ta1_output(stac_catalog,
                                      desc='collation jobs'):
         try:
             stac_item = collation_job.result()
-        except Exception as e:
+        except Exception:
             print("Exception occurred (printed below), dropping item!")
-            print(e)
+            traceback.print_exception(*sys.exc_info())
             continue
         else:
             if stac_item is not None:
                 output_stac_items_by_collection.setdefault(
                     stac_item.collection_id, []).append(stac_item)
 
-    build_and_upload_stac_collections(output_stac_items_by_collection,
-                                      aws_base_command,
-                                      output_bucket,
-                                      performer_code)
+    if upload_collections:
+        build_and_upload_stac_collections(output_stac_items_by_collection,
+                                          aws_base_command,
+                                          output_bucket,
+                                          performer_code)
 
 
 if __name__ == "__main__":

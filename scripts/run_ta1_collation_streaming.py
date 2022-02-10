@@ -37,6 +37,11 @@ def main():
                         action='store_true',
                         default=False,
                         help="Run AWS CLI commands with --dryrun flag")
+    parser.add_argument("-u", "--upload-collections",
+                        action='store_true',
+                        default=False,
+                        help="Build and upload STAC Collections from "
+                             "collated items")
     parser.add_argument('-s', '--show-progress',
                         action='store_true',
                         default=False,
@@ -89,6 +94,7 @@ def run_ta1_collation_streaming(input_path,
                                 working_outbucket,
                                 aws_profile=None,
                                 dryrun=False,
+                                upload_collections=False,
                                 show_progress=False,
                                 requester_pays=False,
                                 performer_code='kit',
@@ -161,10 +167,11 @@ def run_ta1_collation_streaming(input_path,
                         output_stac_items_by_collection.setdefault(
                             si.collection_id, []).append(si)
 
-    build_and_upload_stac_collections(output_stac_items_by_collection,
-                                      aws_base_command,
-                                      destination_outbucket,
-                                      performer_code)
+    if upload_collections:
+        build_and_upload_stac_collections(output_stac_items_by_collection,
+                                          aws_base_command,
+                                          destination_outbucket,
+                                          performer_code)
 
     output_stac_items = [item.to_dict() for item in
                          itertools.chain(
