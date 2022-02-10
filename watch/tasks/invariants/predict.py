@@ -16,6 +16,13 @@ from watch.utils import util_kwimage
 class predict(object):
     def __init__(self, args):
         ###
+        self.dataset = gridded_dataset(args.input_kwcoco, args.bands, patch_size=args.patch_size, mode='test')
+
+        self.output_dset = self.dataset.coco_dset.copy()
+        self.output_dset.reroot(absolute=True)  # Make all paths absolute
+        self.output_dset.fpath = args.output_kwcoco  # Change output file path and bundle path
+        self.output_dset.reroot(absolute=False)  # Reroot in the new bundle path
+
         self.finalized_gids = set()
         self.stitcher_dict = {}
         if 'all' in args.tasks:
@@ -24,17 +31,17 @@ class predict(object):
             self.tasks = args.tasks
         ### Define tasks
         if 'segmentation' in self.tasks:
-            segmentation_model = seg_model.load_from_checkpoint(args.segmentation_ckpt_path, dataset=None)
-            segmentation_model = segmentation_model.to(args.device)
+            self.segmentation_model = seg_model.load_from_checkpoint(args.segmentation_ckpt_path, dataset=None)
+            self.segmentation_model = self.segmentation_model.to(args.device)
 
         if 'pretext' in self.tasks:
-            pretext_model = pretext.load_from_checkpoint(args.pretext_ckpt_path, train_dataset=None, vali_dataset=None)
-            pretext_model = pretext_model.eval().to(args.device)
+            self.pretext_model = pretext.load_from_checkpoint(args.pretext_ckpt_path, train_dataset=None, vali_dataset=None)
+            self.pretext_model = self.pretext_model.eval().to(args.device)
             # pretext_hparams = pretext_model.hparams
 
-        self.in_feature_dims = pretext_model.hparams.feature_dim_shared
+        self.in_feature_dims = self.pretext_model.hparams.feature_dim_shared
         if args.do_pca:
-            self.pca_projector = torch.load(args.pca_projection_path)
+            self.pca_projector = torch.load(args.pca_projection_path).to(args.device)
             self.out_feature_dims = self.pca_projector.shape[0]
         else:
             self.out_feature_dims = self.in_feature_dims
@@ -48,7 +55,8 @@ class predict(object):
         self.save_channels = f'invariants:{self.num_out_channels}'
         self.output_kwcoco_path = args.output_kwcoco
         out_folder, _ = os.path.split(self.output_kwcoco_path)
-        self.output_feat_dpath = os.path.join(out_folder, 'uky_invariants')
+        self.output_feat_dpath = ub.ensuredir(os.path.join(out_folder, 'uky_invariants'))
+
         self.imwrite_kw = {
         'compress': 'DEFLATE',
         'backend': 'gdal',
@@ -63,11 +71,11 @@ class predict(object):
 
         save_path = os.path.join(self.output_feat_dpath, f'invariants_{gid}.tif')
         save_path = os.fspath(save_path)
-        kwimage.imwrite(save_path, recon, backend='gdal', space=None,
+        kwimage.imwrite(save_path, recon,  space=None,
                         **self.imwrite_kw)
 
         aux_height, aux_width = recon.shape[0:2]
-        img = self.output_coco_dataset.index.imgs[gid]
+        img = self.output_dset.index.imgs[gid]
         warp_aux_to_img = kwimage.Affine.scale(
             (img['width'] / aux_width,
              img['height'] / aux_height))
@@ -90,10 +98,8 @@ class predict(object):
         num_workers = util_globals.coerce_num_workers(args.num_workers)
         print('num_workers = {!r}'.format(num_workers))
 
-        dataset = gridded_dataset(args.input_kwcoco, args.bands, mode='test')
-
         loader = torch.utils.data.DataLoader(
-            dataset, num_workers=num_workers, batch_size=1, shuffle=False)
+            self.dataset, num_workers=num_workers, batch_size=1, shuffle=False)
         num_batches = len(loader)
 
         # Start background processes
@@ -103,12 +109,7 @@ class predict(object):
         write_workers = util_globals.coerce_num_workers(args.write_workers)
         writer = util_parallel.BlockingJobQueue(max_workers=write_workers)
 
-        output_dset = dataset.dset.copy()
-        output_dset.reroot(absolute=True)  # Make all paths absolute
-        output_dset.fpath = args.output_kwcoco  # Change output file path and bundle path
-        output_dset.reroot(absolute=False)  # Reroot in the new bundle path
-
-        bundle_dpath = ub.Path(output_dset.bundle_dpath)
+        bundle_dpath = ub.Path(self.output_dset.bundle_dpath)
 
         # save_dpath = (bundle_dpath / 'uky_invariants').ensuredir()
 
@@ -122,7 +123,7 @@ class predict(object):
 
         with torch.set_grad_enabled(False):
             seen_images = set()
-
+            current_gids = set()
             for idx, batch in tqdm(enumerate(loader), total=num_batches, desc='Compute features'):
                 save_feat = []
                 if 'pretext' in args.tasks:
@@ -135,20 +136,20 @@ class predict(object):
                     if args.do_pca:
                         features = torch.einsum('xy,byhw->bxhw', self.pca_projector, features)
 
-                    save_feat.append(features.squeeze().permute(1, 2, 0).cpu().numpy())
+                    save_feat.append(torch.sigmoid(features.squeeze()).permute(1, 2, 0).cpu())
 
                 if 'before_after' in args.tasks:
                     ### TO DO: Set to output of separate model.
                     before_after_heatmap = self.pretext_model.shared_step(batch)['before_after_heatmap'][0].permute(1, 2, 0)
-                    before_after_heatmap = torch.sigmoid(before_after_heatmap[:, :, 1] - before_after_heatmap[:, :, 0]).unsqueeze(-1).cpu().numpy()
+                    before_after_heatmap = torch.sigmoid(before_after_heatmap[:, :, 1] - before_after_heatmap[:, :, 0]).unsqueeze(-1).cpu()
                     save_feat.append(before_after_heatmap)
                 if 'segmentation' in args.tasks:
                     image_stack = [batch[key] for key in batch if key[:5] == 'image']
                     image_stack = torch.stack(image_stack, dim=1).to(args.device)
-                    segmentation_heatmap = torch.sigmoid(self.segmentation_model(image_stack)['predictions'][0, 0, 1, :, :] - self.segmentation_model(image_stack)['predictions'][0, 0, 0, :, :]).unsqueeze(0).permute(1, 2, 0).cpu().numpy()
+                    segmentation_heatmap = torch.sigmoid(self.segmentation_model(image_stack)['predictions'][0, 0, 1, :, :] - self.segmentation_model(image_stack)['predictions'][0, 0, 0, :, :]).unsqueeze(0).permute(1, 2, 0).cpu()
                     save_feat.append(segmentation_heatmap)
 
-                save_feat = torch.cat(save_feat, dim=-1)
+                save_feat = torch.cat(save_feat, dim=-1).numpy()
                 # image_id = int(batch['img1_id'].item())
                 # image_info = output_dset.index.imgs[image_id]
                 # video_info = output_dset.index.videos[image_info['video_id']]
@@ -162,12 +163,12 @@ class predict(object):
                 # # Get the output image dictionary to be added to
                 # output_img = output_dset.index.imgs[image_id]
 
-                tr = dataset.patches[idx]
-                sample = dataset.sampler.load_sample(tr)
+                tr = self.dataset.patches[idx]
+                sample = self.dataset.sampler.load_sample(tr)
                 tr = sample['tr']
 
                 if len(current_gids) == 0:
-                    current_gids = tr['gids'][0]
+                    current_gids = tr['gids']
                 else:
                     previous_gids = current_gids
                     current_gids = tr['gids']
@@ -179,18 +180,20 @@ class predict(object):
                     for gid in current_gids:
                         if gid not in self.stitcher_dict.keys():
                             self.stitcher_dict[gid] = kwarray.Stitcher(
-                                tr['space_dims'], device='numpy')
-                        slice_ = tr['space_slice']
+                                tr['space_dims'] + (self.num_out_channels,), device='numpy')
+                        slice_ = tr['space_slice'] 
                         weights = util_kwimage.upweight_center_mask(save_feat.shape[0:2])[..., None]
-                        self.stitcher_dict[gid].add(slice_, features, weight=weights)
+                        self.stitcher_dict[gid].add(slice_, save_feat, weight=weights)
 
-                writer.wait_until_finished()
+            writer.wait_until_finished()
 
-                for gid in self.stitcher_dict.keys():
-                    writer.submit(self.finalize_image, gid)
+            for gid in list(self.stitcher_dict.keys()):
+                writer.submit(self.finalize_image, gid)
 
-        print('Write to dset.fpath = {!r}'.format(output_dset.fpath))
-        output_dset.dump(output_dset.fpath, newlines=True)
+            writer.wait_until_finished()
+
+        print('Write to dset.fpath = {!r}'.format(self.output_dset.fpath))
+        self.output_dset.dump(self.output_dset.fpath, newlines=True)
         print('Done')
 
 
@@ -211,6 +214,7 @@ def main():
     parser.add_argument('--sensor', type=smartcast, nargs='+', default=['S2', 'L8'])
     parser.add_argument('--bands', type=str, help='Choose bands on which to train. Can specify \'all\' for all bands from given sensor, or \'share\' to use common bands when using both S2 and L8 sensors', nargs='+', default=['shared'])
     # output flags
+    parser.add_argument('--patch_size', type=int, default=256)
     parser.add_argument('--input_kwcoco', type=str, help='Path to kwcoco dataset with images to generate feature for', required=True)
     parser.add_argument('--output_kwcoco', type=str, help='Path to write an output kwcoco file. Output file will be a copy of input_kwcoco with addition feature fields generated by predict.py rerooted to point to the original data.', required=True)
     parser.add_argument('--tasks', nargs='+', help='Specify which tasks to choose from (segmentation, before_after, or pretext. Can also specify \'all\')', default=['all'])
@@ -226,7 +230,7 @@ def main():
     if 'all' in args.tasks:
         args.tasks = ['segmentation', 'before_after', 'pretext']
 
-    predict(args)
+    predict(args).forward(args)
 
 
 if __name__ == '__main__':
