@@ -64,6 +64,11 @@ def predict_image(img, model):
         try:
             num_classes = model.finalconv3.out_channels
         except Exception:
+            log.error(
+                'Model does not have the expected attributes for '
+                'inferring the number of output channels. '
+                'Did the model change?')
+            raise  # unsure if we should raise or default to 1
             num_classes = 1
         h, w = img.shape[:2]
         pred = np.full((h, w, num_classes), PRED_NODATA, dtype=dtype)
@@ -117,6 +122,8 @@ def get_nodata_mask(img, nodata=0):
     """
     mask = np.ones(img.shape[:2], bool)
     # img_nodata = img == nodata
+    # Ideally nodata is just a single value, hacking this to assume that any
+    # data <= 0 will be considered as nodata.
     img_nodata = img <= nodata  # HACK!
     for i in range(img.shape[0]):
         if np.all(img_nodata[i, :]):
