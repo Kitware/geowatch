@@ -300,19 +300,25 @@ def hardcoded_default_configs(default_config_key):
     return config
 
 
-def main(cmdline=True, **kwargs):
+def main(cmdline=False, **kwargs):
     """
-    Ignore:
-        # Hack in overrides because none of this is parameterized
-        # state_dict = torch.load(checkpoint_fpath)
-        checkpoint_fpath = ub.expandpath("$HOME/data/dvc-repos/smart_watch_dvc/models/rutgers/experiments_epoch_30_loss_0.05691597167379317_valmIoU_0.5694727912477856_time_2021-08-07-09:01:01.pth")
-        cmdline = False
-        kwargs = dict(
-            default_config_key='iarpa',
-            checkpoint_fpath=checkpoint_fpath,
-            test_dataset=ub.expandpath("$HOME/data/dvc-repos/smart_watch_dvc/drop1-S2-L8-aligned/data.kwcoco.json"),
-            pred_dataset='./test-pred/pred.kwcoco.json',
-        )
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> from watch.tasks.rutgers_material_seg.predict import *  # NOQA
+        >>> import watch
+        >>> dvc_dpath = watch.find_smart_dvc_dpath()
+        >>> #checkpoint_fpath = dvc_dpath / 'models/rutgers/rutgers_peri_materials_v3/experiments_epoch_18_loss_59.014100193977356_valmF1_0.18694573888313187_valChangeF1_0.0_time_2022-02-01-01:53:20.pth'
+        >>> checkpoint_fpath = dvc_dpath / 'models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_2021101T16277.pth'
+        >>> src_coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
+        >>> dst_coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/mat_test.kwcoco.json'
+        >>> cmdline = False
+        >>> kwargs = dict(
+        >>>     default_config_key='iarpa',
+        >>>     checkpoint_fpath=checkpoint_fpath,
+        >>>     test_dataset=src_coco_fpath,
+        >>>     pred_dataset=dst_coco_fpath,
+        >>> )
+        >>> main(**kwargs)
     """
     args = make_predict_config(cmdline=cmdline, **kwargs)
     print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
@@ -369,7 +375,7 @@ def main(cmdline=True, **kwargs):
     # config['data']['num_classes'] = num_classes
     # config['training']['out_features_dim'] = out_features_dim
 
-    base_path = '/'.join(args.checkpoint_fpath.split('/')[:-1])
+    base_path = '/'.join(str(args.checkpoint_fpath).split('/')[:-1])
     pretrain_config_path = f"{base_path}/config.yaml"
     if os.path.isfile(pretrain_config_path):
         pretrain_config = utils.load_yaml_as_dict(pretrain_config_path)
@@ -438,4 +444,4 @@ def main(cmdline=True, **kwargs):
     evaler.forward()
 
 if __name__ == "__main__":
-    main()
+    main(cmdline=True)
