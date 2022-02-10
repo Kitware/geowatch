@@ -154,8 +154,6 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
         dvc_dpath / 'models/fusion/SC-20201117/BAS_TA1_c001_v082/BAS_TA1_c001_v082_epoch=42-step=88063.pt',
     ]))
 
-
-
     # with_saliency = 'auto'
     # with_class = 'auto'
     with_saliency = 'auto'
@@ -374,13 +372,13 @@ def updates_dvc_measures():
     Add results of pixel evaluations to DVC
     """
     import watch
-    import functools
+    # import functools
     import os
     dvc_dpath = watch.find_smart_dvc_dpath()
     dpath = dvc_dpath / 'models/fusion/SC-20201117'
     measures_fpaths = list(dpath.glob('*/*/*/eval/curves/measures2.json'))
 
-    # is_symlink = ub.memoize(os.path.islink)
+    is_symlink = ub.memoize(os.path.islink)
     # is_symlink = functools.cache(os.path.islink)
     # import timerit
     # ti = timerit.Timerit(100, bestof=10, verbose=2)

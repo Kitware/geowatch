@@ -1,7 +1,6 @@
 import argparse
 import sys
 from dateutil.parser import isoparse, parse
-from concurrent.futures import as_completed
 import os
 import json
 import re
