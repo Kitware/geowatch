@@ -35,10 +35,9 @@ def main(args):
 
     if args.vali_dataset is None:
         ckpt_monitors = (
-            ModelCheckpoint(monitor='loss', mode='min', save_top_k=1, save_last=True),
+            ModelCheckpoint(monitor='val_time_accuracy', mode='max', save_top_k=1, save_last=True),
         )
     else:
-        args.vali_dataset = args.train_dataset
         ckpt_monitors = (
             ModelCheckpoint(monitor='val_time_accuracy', mode='max', save_top_k=1, save_last=True),
         )
@@ -104,7 +103,7 @@ if __name__ == '__main__':
 
     parser.set_defaults(
         terminate_on_nan=True,
-        log_every_n_steps=1,
+        log_every_n_steps=100,
         progress_bar_refresh_rate=1
         )
 
