@@ -48,6 +48,9 @@ class LinkNet34(nn.Module):
     def __init__(self, num_outputs, num_channels=3):
         super().__init__()
 
+        self.in_channels = num_channels
+        self.out_channels = num_outputs
+
         filters = [64, 128, 256, 512]
         resnet = models.resnet34(pretrained=True)
 
