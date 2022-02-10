@@ -614,7 +614,9 @@ class SimpleDataCube(object):
         ridx_to_gidsx = util_gis.geopandas_pairwise_overlaps(region_df, cube.img_geos_df)
 
         print('candidate query overlaps')
-        print('ridx_to_gidsx = {}'.format(ub.repr2(ridx_to_gidsx, nl=1)))
+        ridx_to_num_matches = ub.map_vals(len, ridx_to_gidsx)
+        print('ridx_to_num_matches = {}'.format(ub.repr2(ridx_to_num_matches, nl=1)))
+        # print('ridx_to_gidsx = {}'.format(ub.repr2(ridx_to_gidsx, nl=1)))
 
         to_extract = []
         for ridx, gidxs in ridx_to_gidsx.items():
@@ -672,7 +674,7 @@ class SimpleDataCube(object):
                     print('WARNING: No temporal matches to {}'.format(video_name))
                 else:
                     datetime_to_gids = ub.group_items(cand_gids, cand_datetimes)
-                    print('datetime_to_gids = {}'.format(ub.repr2(datetime_to_gids, nl=1)))
+                    # print('datetime_to_gids = {}'.format(ub.repr2(datetime_to_gids, nl=1)))
                     dates = sorted(datetime_to_gids)
                     print('Found {:>4} overlaps for {} from {} to {}'.format(
                         len(cand_gids),

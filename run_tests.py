@@ -16,8 +16,8 @@ if __name__ == '__main__':
         '--cov-report', 'html',
         '--cov-report', 'term',
         '--cov=' + package_name,
-        '-s',
-        '--durations=0',
+        # '-s',
+        '--durations=10',
     ]
 
     # if not sys.argv[1:]:
