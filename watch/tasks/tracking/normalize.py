@@ -682,7 +682,7 @@ def normalize(
 
     # doesn't need gt anymore
     # TODO make flag
-    if 1:
+    if 0:
         # visualize predicted sites with true sites
         from .visualize import visualize_videos
         visualize_videos(coco_dset,
