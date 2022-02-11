@@ -35,9 +35,9 @@ def main():
                         required=True,
                         type=str,
                         help="File path to SC fusion model")
-    parser.add_argument("--track_fn",
+    parser.add_argument("--sc_track_fn",
                         required=False,
-                        default='watch.tasks.tracking.from_heatmap.time_aggregated_polys_hybrid',  # noqa: 501
+                        default='watch.tasks.tracking.from_heatmap.TimeAggregatedHybrid',  # noqa: 501
                         type=str,
                         help="Tracking function to use for generating sites")
     parser.add_argument("--aws_profile",
@@ -66,6 +66,11 @@ def main():
                         action='store_true',
                         default=False,
                         help="Force predict scripts to use --num_workers=0")
+    parser.add_argument("--sc_thresh",
+                        default=0.01,
+                        type=float,
+                        required=False,
+                        help="Threshold for SC tracking (kwarg 'thresh')")
     parser.add_argument("--ta2_s3_collation_bucket",
                         type=str,
                         required=False,
@@ -188,13 +193,14 @@ def run_bas_fusion_for_baseline(
         bas_fusion_model_path,
         sc_fusion_model_path,
         outbucket,
-        track_fn='watch.tasks.tracking.from_heatmap.time_aggregated_polys_hybrid',  # noqa: E501
+        sc_track_fn='watch.tasks.tracking.from_heatmap.TimeAggregatedHybrid',  # noqa: E501
         aws_profile=None,
         dryrun=False,
         newline=False,
         jobs=1,
         force_zero_num_workers=False,
-        ta2_s3_collation_bucket=None):
+        ta2_s3_collation_bucket=None,
+        sc_thresh=0.01):
     if aws_profile is not None:
         aws_base_command =\
             ['aws', 's3', '--profile', aws_profile, 'cp']
@@ -266,22 +272,42 @@ def run_bas_fusion_for_baseline(
     shutil.copy(local_region_path,
                 os.path.join(region_models_outdir,
                              "{}.geojson".format(region_id)))
+
+    bas_track_kwargs = {'use_viterbi': False,
+                        'thresh': 0.3,
+                        'morph_kernel': 3,
+                        'time_filtering': True,
+                        'response_filtering': False,
+                        'norm_ord': 1}
     subprocess.run(['python', '-m', 'watch.cli.kwcoco_to_geojson',
-                    '--in_file', bas_fusion_kwcoco_path,
-                    '--in_file_sc', sc_fusion_kwcoco_path,
+                    bas_fusion_kwcoco_path,
                     '--out_dir', region_models_outdir,
-                    '--track_fn', track_fn,
-                    '--bas_mode'],
+                    '--bas_mode',
+                    '--default_track_fn', 'saliency_heatmaps',
+                    '--track_kwargs', json.dumps(bas_track_kwargs)],
                    check=True)
 
     # 4.2. Compute tracks (SC)
     print("* Computing tracks (SC) *")
     site_models_outdir = os.path.join(ingress_dir, 'site_models')
+
+    sc_track_kwargs = {'coco_dset_sc': '$OUTPUT_SC_DATASET',
+                       'use_viterbi': False,
+                       'bas_kwargs': {'thresh': 0.3,
+                                      'morph_kernel': 3,
+                                      'time_filtering': True,
+                                      'response_filtering': False,
+                                      'norm_ord': 1},
+                       'sc_kwargs': {'thresh': sc_thresh,
+                                     'morph_kernel': 3,
+                                     'time_filtering': False,
+                                     'response_filtering': False,
+                                     'norm_ord': 1}}
     subprocess.run(['python', '-m', 'watch.cli.kwcoco_to_geojson',
-                    '--in_file', bas_fusion_kwcoco_path,
-                    '--in_file_sc', sc_fusion_kwcoco_path,
+                    bas_fusion_kwcoco_path,
                     '--out_dir', site_models_outdir,
-                    '--track_fn', track_fn],
+                    '--track_fn', sc_track_fn,
+                    '--track_kwargs', json.dumps(sc_track_kwargs)],
                    check=True)
 
     # 5. Update region model with computed sites
