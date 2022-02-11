@@ -334,7 +334,6 @@ def time_aggregated_polys(coco_dset,
 
         return modulated_probs
 
-
     def tracks_polys_bounds() -> Iterable[Tuple[Track, Poly]]:
         import shapely.ops
         boundary_tracks = list(pop_tracks(coco_dset, [SITE_SUMMARY_CNAME]))
