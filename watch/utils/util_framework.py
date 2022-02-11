@@ -2,6 +2,7 @@ import tempfile
 import subprocess
 import json
 import os
+from urllib.parse import urlparse
 
 import pystac
 
@@ -141,3 +142,46 @@ class IngressProcessEgressWrapper:
 
             # Returning a list here
             return output_items
+
+
+def download_region(input_region_path,
+                    output_region_path,
+                    aws_profile=None,
+                    strip_nonregions=False):
+    if aws_profile is not None:
+        aws_base_command =\
+            ['aws', 's3', '--profile', aws_profile, 'cp']
+    else:
+        aws_base_command = ['aws', 's3', 'cp']
+
+    scheme, *_ = urlparse(input_region_path)
+    if scheme == 's3':
+        with tempfile.NamedTemporaryFile() as temporary_file:
+            command = [*aws_base_command,
+                       input_region_path,
+                       temporary_file.name]
+
+            print("Running: {}".format(' '.join(command)))
+            # TODO: Manually check return code / output
+            subprocess.run(command, check=True)
+
+            with open(temporary_file.name) as f:
+                out_region_data = json.load(f)
+    elif scheme == '':
+        with open(input_region_path) as f:
+            out_region_data = json.load(f)
+    else:
+        raise NotImplementedError("Don't know how to pull down region file "
+                                  "with URI scheme: '{}'".format(scheme))
+
+    if strip_nonregions:
+        out_region_data['features'] =\
+            [feature
+             for feature in out_region_data.get('features', ())
+             if ('properties' in feature
+                 and feature['properties'].get('type') == 'region')]
+
+    with open(output_region_path, 'w') as f:
+        print(json.dumps(out_region_data, indent=2), file=f)
+
+    return output_region_path
