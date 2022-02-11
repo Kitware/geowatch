@@ -295,9 +295,7 @@ def baseline(coco_dset,
     if len(set(annots.gids)) > 1:
 
         gids_first_half, gids_second_half = np.array_split(
-            np.array(
-                coco_dset.index._set_sorted_by_frame_index(
-                    annots.gids)),
+            np.array(coco_dset.index._set_sorted_by_frame_index(annots.gids)),
             len(cnames_to_insert) - 1)
         gids = np.array(annots.gids)
         cids = np.where([g in gids_first_half for g in gids], siteprep_cid,
@@ -464,11 +462,23 @@ def phase_prediction_baseline(annots) -> List[float]:
     predicted = np.array(
         [first_date[phase] + phase_avg_days[phase] for phase in annots.cnames])
 
-    return np.where(
-        predicted > today,
-        (predicted - today).astype('timedelta64[D]').astype(float),
-        1)
+    return np.where(predicted > today,
+                    (predicted - today).astype('timedelta64[D]').astype(float),
+                    1)
 
 
-def phase_prediction_heatmap(annots, coco_dset, key):
-    return NotImplemented
+def phase_prediction_heatmap(annots, coco_dset, key) -> List[float]:
+    '''
+    Get phase prediction heatmaps from model output and score them against
+    annotation polygons to get predicted dates
+    '''
+    gids = list(set(annots.gids))
+    heatmaps_dct = dict(
+        zip(gids,
+            heatmaps(coco_dset, gids, [key], skipped='interpolate')[key]))
+    # TODO generalize this as annots.detections.responses()?
+    return [
+        score(poly, heatmaps_dct[gid]) for poly, gid in zip(
+            annots.detections.data['segmentations'].to_polygon_list(),
+            annots.gids)
+    ]

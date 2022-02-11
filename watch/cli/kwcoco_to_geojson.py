@@ -192,12 +192,13 @@ def geojson_feature(img, anns, coco_dset, with_properties=True):
         properties['score'] = np.average(
             list(map(float, properties_list['score'])),
             weights=[geom.area for geom in geometry_list])
-        return properties
 
         properties['misc_info'] = defaultdict(list)
         for misc_info in properties_list['misc_info']:
             for k, v in misc_info.items():
                 properties['misc_info'][k].append(v)
+
+        return properties
 
     if with_properties:
         properties = combined_properties(properties_list, geometry_list)
@@ -256,9 +257,8 @@ def track_to_site(coco_dset,
         ]
 
         def transition_date_from(phase):
-            for i, phases in enumerate(reversed(all_phases)):
+            for feat, phases in zip(reversed(features), reversed(all_phases)):
                 if phase in phases:
-                    feat = features[-(i + 1)]
                     return (dateutil.parser.parse(
                         feat['properties']['observation_date']) +
                             datetime.timedelta(
