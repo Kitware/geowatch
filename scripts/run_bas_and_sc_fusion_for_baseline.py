@@ -228,6 +228,7 @@ def run_bas_fusion_for_baseline(
         ingress_dir, 'bas_fusion_kwcoco.json')
 
     subprocess.run(['python', '-m', 'watch.tasks.fusion.predict',
+                    '--gpus', '1',
                     '--write_preds', 'False',
                     '--write_probs', 'True',
                     '--with_change', 'False',
@@ -237,14 +238,14 @@ def run_bas_fusion_for_baseline(
                     '--package_fpath', bas_fusion_model_path,
                     '--pred_dataset', bas_fusion_kwcoco_path,
                     '--num_workers', '0' if force_zero_num_workers else str(jobs),  # noqa: 501
-                    '--batch_size', '8',
-                    '--gpus', '0'], check=True)
+                    '--batch_size', '8'], check=True)
 
     print("* Running SC fusion *")
     sc_fusion_kwcoco_path = os.path.join(
         ingress_dir, 'sc_fusion_kwcoco.json')
 
     subprocess.run(['python', '-m', 'watch.tasks.fusion.predict',
+                    '--gpus', '1',
                     '--write_preds', 'False',
                     '--write_probs', 'True',
                     '--with_change', 'False',
@@ -254,8 +255,7 @@ def run_bas_fusion_for_baseline(
                     '--package_fpath', sc_fusion_model_path,
                     '--pred_dataset', sc_fusion_kwcoco_path,
                     '--num_workers', '0' if force_zero_num_workers else str(jobs),  # noqa: 501
-                    '--batch_size', '8',
-                    '--gpus', '0'], check=True)
+                    '--batch_size', '8'], check=True)
 
     # 4.1. Compute tracks (BAS)
     print("* Computing tracks (BAS) *")
