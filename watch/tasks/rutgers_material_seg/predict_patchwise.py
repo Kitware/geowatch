@@ -32,11 +32,8 @@ import torch
 import datetime
 import random
 import kwcoco
-# import kwimage
-# import kwarray
 import ndsampler
 import numpy as np
-from tqdm import tqdm  # NOQA
 import ubelt as ub
 import pathlib
 import watch.tasks.rutgers_material_seg.utils.utils as utils

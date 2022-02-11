@@ -307,18 +307,20 @@ def main(cmdline=False, **kwargs):
         >>> from watch.tasks.rutgers_material_seg.predict import *  # NOQA
         >>> import watch
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
-        >>> #checkpoint_fpath = dvc_dpath / 'models/rutgers/rutgers_peri_materials_v3/experiments_epoch_18_loss_59.014100193977356_valmF1_0.18694573888313187_valChangeF1_0.0_time_2022-02-01-01:53:20.pth'
-        >>> checkpoint_fpath = dvc_dpath / 'models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_2021101T16277.pth'
+        >>> checkpoint_fpath = dvc_dpath / 'models/rutgers/rutgers_peri_materials_v3/experiments_epoch_18_loss_59.014100193977356_valmF1_0.18694573888313187_valChangeF1_0.0_time_2022-02-01-01:53:20.pth'
+        >>> #checkpoint_fpath = dvc_dpath / 'models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_2021101T16277.pth'
         >>> src_coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
         >>> dst_coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/mat_test.kwcoco.json'
         >>> cmdline = False
+        >>> num_workers = 'avail'
+        >>> # num_workers = 0
         >>> kwargs = dict(
         >>>     default_config_key='iarpa',
         >>>     checkpoint_fpath=checkpoint_fpath,
         >>>     test_dataset=src_coco_fpath,
         >>>     pred_dataset=dst_coco_fpath,
         >>> )
-        >>> main(**kwargs)
+        >>> main(cmdline=cmdline, **kwargs)
     """
     args = make_predict_config(cmdline=cmdline, **kwargs)
     print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
@@ -368,6 +370,7 @@ def main(cmdline=False, **kwargs):
     # HACK!!!!
     # THIS IS WHY WE SAVE METADATA WITH THE MODEL!
     # WE DONT WANT TO HAVE TO FUDGE RECONSTRUCTION IN PRODUCTION!!!
+    args.checkpoint_fpath = os.fspath(args.checkpoint_fpath)
     checkpoint_state = torch.load(args.checkpoint_fpath)
 
     # num_classes = checkpoint_state['model']['module.outc.conv.weight'].shape[0]
