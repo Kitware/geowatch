@@ -73,29 +73,37 @@ CATEGORIES_SCORED = [
     {'name': 'Site Preparation', 'color': 'gold'},
     {'name': 'Active Construction', 'color': 'lime'},
     {'name': 'Post Construction', 'color': 'darkturquoise'},
-]
-
-CATEGORIES_POSITIVE = CATEGORIES_SCORED + [
-    {'name': 'positive', 'color': 'olive'},
-]
-
-CATEGORIES_NEGATIVE = [
     {'name': 'No Activity', 'color': 'tomato'},
+]
+
+CATEGORIES = CATEGORIES_SCORED + [
+    {'name': 'positive', 'color': 'olive'},
     {'name': 'Unknown', 'color': 'blueviolet'},
     {'name': 'ignore', 'color': 'slategray'},
     {'name': 'negative', 'color': 'orangered'},
 ]
 
-CATEGORIES = CATEGORIES_POSITIVE + CATEGORIES_NEGATIVE
-
 CATEGORIES_DCT = {
         'positive': {
-            'scored': CATEGORIES_SCORED,
-            'unscored': CATEGORIES_POSITIVE[len(CATEGORIES_SCORED):],
+            'scored': [
+                {'name': 'Site Preparation', 'color': 'gold'},
+                {'name': 'Active Construction', 'color': 'lime'},
+                {'name': 'Post Construction', 'color': 'darkturquoise'},
+
+            ],
+            'unscored': [
+                {'name': 'positive', 'color': 'olive'},
+            ],
         },
         'negative': {
-            'scored': [],
-            'unscored': CATEGORIES_NEGATIVE
+            'scored': [
+                {'name': 'No Activity', 'color': 'tomato'},
+            ],
+            'unscored': [
+                {'name': 'Unknown', 'color': 'blueviolet'},
+                {'name': 'ignore', 'color': 'slategray'},
+                {'name': 'negative', 'color': 'orangered'},
+            ],
         }
 }
 
