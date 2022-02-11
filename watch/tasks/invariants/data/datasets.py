@@ -95,6 +95,7 @@ class gridded_dataset(torch.utils.data.Dataset):
 
         self.mode = mode
         self.segmentation = segmentation
+        self.patch_size = patch_size
 
     def __len__(self):
         return len(self.patches)
@@ -117,7 +118,7 @@ class gridded_dataset(torch.utils.data.Dataset):
             det_list = sample['annots']['frame_dets']
             segmentation_masks = []
             for det in det_list:
-                frame_mask = np.full([128, 128], dtype=np.int32, fill_value=0)
+                frame_mask = np.full([self.patch_size, self.patch_size], dtype=np.int32, fill_value=0)
                 ann_polys = det.data['segmentations'].to_polygon_list()
                 # ann_aids = det.data['aids']
                 # ann_cids = det.data['cids']

@@ -4,6 +4,7 @@ import numpy as np
 import pytorch_lightning as pl
 from argparse import Namespace
 from .utils.attention_unet import attention_unet
+from .data.datasets import gridded_dataset
 from .data.multi_image_datasets import kwcoco_dataset, SpaceNet7
 import warnings
 
@@ -20,9 +21,15 @@ class segmentation_model(pl.LightningModule):
         ##### define dataset
         if hparams.dataset == 'kwcoco':
             if hparams.train_dataset is not None:
-                self.trainset = kwcoco_dataset(hparams.train_dataset, hparams.sensor, hparams.bands, hparams.patch_size, segmentation_labels=True, num_images=hparams.num_images)
+                if hparams.dataset_style == 'gridded':
+                    self.trainset = gridded_dataset(hparams.train_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size, segmentation=True, num_images=hparams.num_images)
+                else:
+                    self.trainset = kwcoco_dataset(hparams.train_dataset, hparams.sensor, hparams.bands, hparams.patch_size, segmentation_labels=True, num_images=hparams.num_images)
             if hparams.vali_dataset is not None:
-                self.valset = kwcoco_dataset(hparams.vali_dataset, hparams.sensor, hparams.bands, hparams.patch_size, segmentation_labels=True, num_images=hparams.num_images)
+                if hparams.dataset_style == 'gridded':
+                    self.valset = gridded_dataset(hparams.vali_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size, segmentation=True, num_images=hparams.num_images)
+                else:
+                    self.valset = kwcoco_dataset(hparams.vali_dataset, hparams.sensor, hparams.bands, hparams.patch_size, segmentation_labels=True, num_images=hparams.num_images)
         elif hparams.dataset == 'spacenet':
             self.trainset = SpaceNet7(hparams.patch_size, segmentation_labels=True, num_images=hparams.num_images, train=True)
             self.valset = SpaceNet7(hparams.patch_size, segmentation_labels=True, num_images=hparams.num_images, train=False)
@@ -60,6 +67,7 @@ class segmentation_model(pl.LightningModule):
 
         forward = self.forward(images, positions)
         predictions = forward['predictions']
+
         loss = self.criterion(predictions.reshape(-1, 2, self.hparams.patch_size, self.hparams.patch_size), segmentations.long().reshape(-1, self.hparams.patch_size, self.hparams.patch_size))
 
         output = {  'predicted_class': forward['predicted_class'],
