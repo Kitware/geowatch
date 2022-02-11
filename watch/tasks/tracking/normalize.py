@@ -680,7 +680,9 @@ def normalize(
     # HACK, ensure coco_dset.index is up to date
     coco_dset._build_index()
 
-    if gt_dset is not None:
+    # doesn't need gt anymore
+    # TODO make flag
+    if 1:
         # visualize predicted sites with true sites
         from .visualize import visualize_videos
         visualize_videos(coco_dset,

@@ -334,6 +334,7 @@ def time_aggregated_polys(coco_dset,
 
         return modulated_probs
 
+
     def tracks_polys_bounds() -> Iterable[Tuple[Track, Poly]]:
         import shapely.ops
         boundary_tracks = list(pop_tracks(coco_dset, [SITE_SUMMARY_CNAME]))
@@ -402,8 +403,6 @@ def time_aggregated_polys(coco_dset,
         # TURN ON NEW AGGREGATION
         # polys = list(mask_to_polygons(probs(_heatmaps), thresh))
         polys = list(mask_to_polygons(mean_normalized(_heatmaps), thresh))
-
-
 
         # turn each polygon into a list of polygons (map them across gids)
         tracks = [
