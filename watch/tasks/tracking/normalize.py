@@ -475,18 +475,20 @@ def normalize_phases(coco_dset, baseline_keys={'salient'}):
             # with post construction on the last frame
             else:
                 log.update(['no class labels'])
-                gids_first_half, gids_second_half = np.array_split(
-                    np.array(
-                        coco_dset.index._set_sorted_by_frame_index(
-                            coco_dset.annots(trackid=trackid).gids)), 2)
-                siteprep_cid = coco_dset.name_to_cat['Site Preparation']['id']
-                active_cid = coco_dset.name_to_cat['Active Construction']['id']
-                post_cid = coco_dset.name_to_cat['Post Construction']['id']
-                gids = np.array(annots.gids)
-                cids = np.where([g in gids_first_half for g in gids],
-                                siteprep_cid, active_cid)
-                cids = np.where(gids == gids_second_half[-1], post_cid, cids)
-                annots.set('category_id', cids)
+                annots = coco_dset.annots(trackid=trackid)
+                if len(set(annots.gids)) > 1:
+                    gids_first_half, gids_second_half = np.array_split(
+                        np.array(
+                            coco_dset.index._set_sorted_by_frame_index(
+                                coco_dset.annots(trackid=trackid).gids)), 2)
+                    siteprep_cid = coco_dset.name_to_cat['Site Preparation']['id']
+                    active_cid = coco_dset.name_to_cat['Active Construction']['id']
+                    post_cid = coco_dset.name_to_cat['Post Construction']['id']
+                    gids = np.array(annots.gids)
+                    cids = np.where([g in gids_first_half for g in gids],
+                                    siteprep_cid, active_cid)
+                    cids = np.where(gids == gids_second_half[-1], post_cid, cids)
+                    annots.set('category_id', cids)
         else:
             log.update(['full class labels'])
 
@@ -666,13 +668,13 @@ def normalize(coco_dset, track_fn, overwrite, gt_dset=None, **track_kwargs):
     # HACK, ensure coco_dset.index is up to date
     coco_dset._build_index()
 
-    if gt_dset is not None:
-        # visualize predicted sites with true sites
-        out_dir = './_assets/tracking_visualization'
-        from .visualize import visualize_videos
-        visualize_videos(coco_dset,
-                         gt_dset,
-                         out_dir,
-                         coco_dset_sc=track_kwargs.get('coco_dset_sc'))
+    #if gt_dset is not None:
+    # visualize predicted sites with true sites
+    out_dir = './_assets/tracking_visualization'
+    from .visualize import visualize_videos
+    visualize_videos(coco_dset,
+                     gt_dset,
+                     out_dir,
+                     coco_dset_sc=track_kwargs.get('coco_dset_sc'))
 
     return coco_dset
