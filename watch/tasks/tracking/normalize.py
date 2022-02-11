@@ -580,6 +580,7 @@ def normalize(
         overwrite,
         gt_dset=None,
         viz_sc_bounds=False,
+        viz_videos=False,
         use_viterbi=False,
         t_probs=None,  # for viterbi
         e_probs=None,  # for viterbi
@@ -680,9 +681,7 @@ def normalize(
     # HACK, ensure coco_dset.index is up to date
     coco_dset._build_index()
 
-    # doesn't need gt anymore
-    # TODO make flag
-    if 1:
+    if viz_videos:
         # visualize predicted sites with true sites
         from .visualize import visualize_videos
         visualize_videos(coco_dset,
