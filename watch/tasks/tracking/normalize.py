@@ -464,23 +464,26 @@ def normalize_phases(coco_dset,
     #
 
     log = Counter()
-    for trackid in coco_dset.index.trackid_to_aids.keys():
-        annots = coco_dset.annots(trackid=trackid)
-        has_missing_labels = bool(set(annots.cnames) - cnames_to_score)
-        has_good_labels = bool(set(annots.cnames) - cnames_to_replace)
-        if has_missing_labels and has_good_labels:
-            # if we have partial coverage, interpolate from good labels
-            log.update(['partial class labels'])
-            coco_dset = phase.interpolate(coco_dset, trackid)
-        else:
-            if has_missing_labels:
-                # else, predict site prep for the first half of the track and
-                # then active construction for the second half with post
-                # construction on the last frame
-                log.update(['no class labels'])
-                coco_dset = phase.baseline(coco_dset, trackid)
+    for trackid, n_anns in ub.map_vals(
+            len, coco_dset.index.trackid_to_aids).items():
+        if n_anns > 1:
+
+            annots = coco_dset.annots(trackid=trackid)
+            has_missing_labels = bool(set(annots.cnames) - cnames_to_score)
+            has_good_labels = bool(set(annots.cnames) - cnames_to_replace)
+            if has_missing_labels and has_good_labels:
+                # if we have partial coverage, interpolate from good labels
+                log.update(['partial class labels'])
+                coco_dset = phase.interpolate(coco_dset, trackid)
             else:
-                log.update(['full class labels'])
+                if has_missing_labels:
+                    # else, predict site prep for the first half of the track
+                    # and then active construction for the second half with
+                    # post construction on the last frame
+                    log.update(['no class labels'])
+                    coco_dset = phase.baseline(coco_dset, trackid)
+                else:
+                    log.update(['full class labels'])
     print('label status of tracks: ', log)
 
     #
@@ -516,20 +519,24 @@ def normalize_phases(coco_dset,
     # Continue transforming phase labels, now with smoothing and deduping
     #
 
-    for trackid in coco_dset.index.trackid_to_aids.keys():
-        if use_viterbi:
+    for trackid, n_anns in ub.map_vals(
+            len, coco_dset.index.trackid_to_aids).items():
+        if n_anns > 1:
 
-            smoothed_cnames = phase.class_label_smoothing(
-                annots.cnames, t_probs, e_probs)
-            annots.set('category_id', [
-                coco_dset.name_to_cat[name]['id'] for name in smoothed_cnames
-            ])
-        # after viterbi, the sequence of phases is in the correct order
+            if use_viterbi:
 
-        # If the track ends before the end of the video, and the last frame is
-        # not post construction, add another frame of post construction
-        coco_dset = phase.dedupe_background_anns(coco_dset, trackid)
-        coco_dset = phase.ensure_post(coco_dset, trackid)
+                smoothed_cnames = phase.class_label_smoothing(
+                    annots.cnames, t_probs, e_probs)
+                annots.set('category_id', [
+                    coco_dset.name_to_cat[name]['id']
+                    for name in smoothed_cnames
+                ])
+            # after viterbi, the sequence of phases is in the correct order
+
+            # If the track ends before the end of the video, and the last frame
+            # is not post construction, add another frame of post construction
+            coco_dset = phase.dedupe_background_anns(coco_dset, trackid)
+            coco_dset = phase.ensure_post(coco_dset, trackid)
 
     #
     # Fixup phase prediction
