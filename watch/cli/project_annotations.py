@@ -21,6 +21,12 @@ CommandLine:
         --dst $DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json \
         --viz_dpath $DVC_DPATH/Drop2-Aligned-TA1-2022-01/_viz_propogate \
         --site_models="$DVC_DPATH/annotations/site_models/*.geojson"
+
+    python -m watch visualize \
+        --src $DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json \
+        --space="video" \
+        --num_workers=avail \
+        --any3="only" --draw_anns=True --draw_imgs=False --animate=True
 """
 import dateutil
 import kwcoco
@@ -81,22 +87,6 @@ class ProjectAnnotationsConfig(scfg.Config):
         'geospace_lookup': scfg.Value('auto', help='if False assumes region-ids can be used to lookup association'),
 
         'workers': scfg.Value(0, help='number of workers for geo-preprop if done'),
-
-        # Do we need these?
-        # 'validate': scfg.Value(1, help=ub.paragraph(
-        #     '''
-        #     Validate spatial and temporal AOI of each site after propagating
-        #     ''')),
-        # 'crop': scfg.Value(1, help=ub.paragraph(
-        #     '''
-        #     Crop propagated annotations to the valid data mask of the new image
-        #     ''')),
-
-        # 'max_workers': scfg.Value(None, help=ub.paragraph(
-        #     '''
-        #     Max. number of workers to parallelize over, up to the number of
-        #     regions/ROIs. None is auto; 0 is serial.
-        #     '''))
     }
 
 
