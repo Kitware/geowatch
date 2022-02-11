@@ -1098,17 +1098,19 @@ class KWCocoVideoDataset(data.Dataset):
             >>> import kwcoco
             >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
             >>> dvc_dpath = os.environ.get('DVC_DPATH', _default)
-            >>> coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/data.kwcoco.json')
+            >>> coco_fpath = join(dvc_dpath, 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json')
             >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> self = KWCocoVideoDataset(
             >>>     sampler,
-            >>>     sample_shape=(2, 128, 128),
+            >>>     sample_shape=(7, 224, 224),
             >>>     window_overlap=0,
-            >>>     channels="ASI|MF_Norm|AF|EVI|red|green|blue|swir16|swir22|nir",
+            >>>     #channels="ASI|MF_Norm|AF|EVI|red|green|blue|swir16|swir22|nir",
+            >>>     channels="red|green|blue|swir16|swir22|nir",
             >>>     neg_to_pos_ratio=0, time_sampling='auto', diff_inputs=0,
             >>> )
             >>> item = self[5]
+            >>> self.requested_tasks['change'] = False
             >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0)
             >>> # xdoctest: +REQUIRES(--show)
             >>> import kwplot
@@ -2195,6 +2197,34 @@ class BatchVisualizationBuilder:
             frame_meta['chan_rows'] = chan_rows
             assert len(chan_rows) > 0, 'no channels to draw on'
 
+        if builder.draw_weights:
+            # Normalize weights for visualization
+            all_weight_overlays = []
+            for frame_meta in frame_metas:
+                frame_meta['weight_overlays'] = {}
+                for weight_key, weight_data in frame_meta['frame_weight'].items():
+                    overlay_row = {
+                        'weight_key': weight_key,
+                        'raw': weight_data,
+                    }
+                    frame_meta['weight_overlays'][weight_key] = overlay_row
+                    all_weight_overlays.append(overlay_row)
+
+            for weight_key, group in ub.group_items(all_weight_overlays, lambda x: x['weight_key']).items():
+                # print('weight_key = {!r}'.format(weight_key))
+                # maxval = -float('inf')
+                # minval = float('inf')
+                # for cell in group:
+                #     maxval = max(maxval, cell['raw'].max())
+                #     minval = min(minval, cell['raw'].min())
+                # print('maxval = {!r}'.format(maxval))
+                # print('minval = {!r}'.format(minval))
+                for cell in group:
+                    weight_overlay = kwimage.atleast_3channels(cell['raw'])
+                    # weight_overlay = kwimage.ensure_alpha_channel(weight_overlay)
+                    # weight_overlay[:, 3] = 0.5
+                    cell['overlay'] = weight_overlay
+
         # Normalize raw signal into visualizable range
         if builder.norm_over_time:
             # Normalize all cells with the same channel code across time
@@ -2229,34 +2259,6 @@ class BatchVisualizationBuilder:
                     norm_signal = util_kwimage.ensure_false_color(norm_signal)
                     norm_signal = kwimage.atleast_3channels(norm_signal)
                     row['norm_signal'] = norm_signal
-
-        if builder.draw_weights:
-            # Normalize weights for visualization
-            all_weight_overlays = []
-            for frame_meta in frame_metas:
-                frame_meta['weight_overlays'] = {}
-                for weight_key, weight_data in frame_meta['frame_weight'].items():
-                    overlay_row = {
-                        'weight_key': weight_key,
-                        'raw': weight_data,
-                    }
-                    frame_meta['weight_overlays'][weight_key] = overlay_row
-                    all_weight_overlays.append(overlay_row)
-
-            for weight_key, group in ub.group_items(all_weight_overlays, lambda x: x['weight_key']).items():
-                # print('weight_key = {!r}'.format(weight_key))
-                # maxval = -float('inf')
-                # minval = float('inf')
-                # for cell in group:
-                #     maxval = max(maxval, cell['raw'].max())
-                #     minval = min(minval, cell['raw'].min())
-                # print('maxval = {!r}'.format(maxval))
-                # print('minval = {!r}'.format(minval))
-                for cell in group:
-                    weight_overlay = kwimage.atleast_3channels(cell['raw'])
-                    # weight_overlay = kwimage.ensure_alpha_channel(weight_overlay)
-                    # weight_overlay[:, 3] = 0.5
-                    cell['overlay'] = weight_overlay
 
         builder.frame_metas = frame_metas
 
@@ -2506,6 +2508,18 @@ class BatchVisualizationBuilder:
                     valign='top', color='lime', border=3)
                 vertical_stack.append(row_canvas)
 
+        for overlay_info in weight_items:
+            label_text = overlay_info['label_text']
+            row_canvas = overlay_info['overlay'][..., 0:3]
+            row_canvas = row_canvas.copy()
+            row_canvas = kwimage.imresize(row_canvas, **resizekw).clip(0, 1)
+            signal_bottom_y = 1  # hack: hardcoded
+            row_canvas = kwimage.ensure_uint255(row_canvas)
+            row_canvas = kwimage.draw_text_on_image(
+                row_canvas, label_text, (1, signal_bottom_y + 1),
+                valign='top', color='lime', border=3)
+            vertical_stack.append(row_canvas)
+
         for iterx, row in enumerate(chan_rows):
             layers = []
             label_text = None
@@ -2532,18 +2546,6 @@ class BatchVisualizationBuilder:
                 row_canvas = kwimage.draw_text_on_image(
                     row_canvas, label_text, (1, signal_bottom_y + 1),
                     valign='top', color='lime', border=3)
-            vertical_stack.append(row_canvas)
-
-        for overlay_info in weight_items:
-            label_text = overlay_info['label_text']
-            row_canvas = overlay_info['overlay'][..., 0:3]
-            row_canvas = row_canvas.copy()
-            row_canvas = kwimage.imresize(row_canvas, **resizekw).clip(0, 1)
-            signal_bottom_y = 1  # hack: hardcoded
-            row_canvas = kwimage.ensure_uint255(row_canvas)
-            row_canvas = kwimage.draw_text_on_image(
-                row_canvas, label_text, (1, signal_bottom_y + 1),
-                valign='top', color='lime', border=3)
             vertical_stack.append(row_canvas)
 
         vertical_stack = [kwimage.ensure_uint255(p) for p in vertical_stack]

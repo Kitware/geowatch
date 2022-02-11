@@ -16,7 +16,17 @@ IGNORE_CLASSNAMES = {
 }
 
 BACKGROUND_CLASSES = {
-    'background', 'No Activity', 'Post Construction', 'negative',
+    'background',
+    'No Activity',
+    # 'Post Construction',
+    # 'negative',
+}
+
+
+SPECIAL_CONTEXT_CLASSES = {
+    # 'No Activity',
+    'Post Construction',
+    'negative',
 }
 
 
