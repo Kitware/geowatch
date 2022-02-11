@@ -287,9 +287,9 @@ class TMUXMultiQueue(PathIdentifiable):
         return driver_text
 
     def write(self):
-        text = self.finalize_text()
         for queue in self.workers:
             queue.write()
+        text = self.finalize_text()
         with open(self.fpath, 'w') as file:
             file.write(text)
         os.chmod(self.fpath, (
@@ -304,6 +304,18 @@ class TMUXMultiQueue(PathIdentifiable):
         ub.cmd(f'bash {self.fpath}', verbose=3, check=True)
         if block:
             return self.monitor()
+
+    def serial_run(self):
+        """
+        Hack to run everything without tmux. This really should be a different
+        "queue" backend.
+        """
+        queue_fpaths = []
+        for queue in self.workers:
+            fpath = queue.write()
+            queue_fpaths.append(fpath)
+        for fpath in queue_fpaths:
+            ub.cmd(f'{fpath}', verbose=3, check=True)
 
     def monitor(self, refresh_rate=0.4):
         """

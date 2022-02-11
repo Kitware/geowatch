@@ -44,6 +44,8 @@ class TeamFeaturePipelineConfig(scfg.Config):
         'do_splits': scfg.Value(True, help='if True also make splits'),
 
         'follow': scfg.Value(False),
+
+        'serial': scfg.Value(False, help='if True use serial mode')
     }
 
 
@@ -238,7 +240,11 @@ def main(cmdline=True, **kwargs):
         if config['run']:
             import subprocess
             try:
-                agg_state = tq.run(block=True)
+                if config['serial']:
+                    tq.serial_run()
+                else:
+                    tq.run()
+                agg_state = tq.monitor()
             except subprocess.CalledProcessError as ex:
                 print('ex.stdout = {!r}'.format(ex.stdout))
                 print('ex.stderr = {!r}'.format(ex.stderr))
@@ -274,17 +280,21 @@ def main(cmdline=True, **kwargs):
     tq.rprint()
 
     if config['run']:
+        agg_state = None
         follow = config['follow']
         if follow and workers == 0 and len(tq.workers) == 1:
             queue = tq.workers[0]
             fpath = queue.write()
             ub.cmd(f'bash {fpath}', verbose=3, check=True)
         else:
-            agg_state = tq.run(block=True)
+            if config['serial']:
+                tq.serial_run()
+            else:
+                tq.run()
             if config['follow']:
-                tq.monitor()
+                agg_state = tq.monitor()
         if not config['keep_sessions']:
-            if not agg_state['errored']:
+            if agg_state is not None and not agg_state['errored']:
                 tq.kill()
 
     if config['do_splits']:
