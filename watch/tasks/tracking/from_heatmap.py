@@ -449,7 +449,7 @@ class TimeAggregatedSC(NewTrackFunction):
     time_filtering: bool = False
     response_filtering: bool = False
     key: Tuple[str] = tuple(CNAMES_DCT['positive']['scored'])
-    bg_key: Tuple[str] = ('No Activity')
+    bg_key: Tuple[str] = tuple(CNAMES_DCT['negative']['scored'])
     boundaries_as: Literal['bounds', 'polys', 'none'] = 'bounds'
     norm_ord: Optional[Union[int, str]] = 1
 

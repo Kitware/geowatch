@@ -4,19 +4,6 @@ This file contains logic to convert a kwcoco file into an IARPA Site Model.
 At a glance the IARPA Site Model is a GeoJSON FeatureCollection with the
 following informal schema:
 
-list of json dictionaries, where each
-"site" has the following has the following informal schema:
-
-TODO:
-    - [ ] Is our computation of the "site-boundary" correct?
-    - [x] Do we have a complete list of IARPA category names?
-    - [x] Do we have a complete list of IARPA sensor names?
-    - [ ] Is our computation of the "predicted_phase" correct?
-    - [ ] How do we compute "is_occluded"?
-    - [x] Document details about is_site_boundary
-    - [x] Document details about is_occluded
-
-
 For official documentation about the KWCOCO json format see [1]_. A formal
 json-schema can be found in ``kwcoco.coco_schema``
 

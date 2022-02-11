@@ -621,7 +621,7 @@ def normalize(coco_dset,
     phase_args = [use_viterbi, t_probs, e_probs]
     if 'key' in track_kwargs:  # assume this is a baseline (saliency) key
         phase_args.append(set(track_kwargs['key']))
-    coco_dset = normalize_phases(coco_dset, phase_args)
+    coco_dset = normalize_phases(coco_dset, *phase_args)
 
     coco_dset = normalize_sensors(coco_dset)
 

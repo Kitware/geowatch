@@ -159,6 +159,17 @@ phase_classes = (CNAMES_DCT['negative']['scored'] +
 index_to_class = dict(zip(range(len(phase_classes)), phase_classes))
 class_to_index = {v: k for k, v in index_to_class.items()}
 
+# sanity check: allowed transitions in the finite state machine of states
+# (rows x cols) == (from_states x to_states)
+# post construction to post construction is seen in the data, but should really
+# only exist for 1 frame outside the edge case of subsite merging.
+post_to_post = 0
+allowed_transition_matrix = np.array([[1, 1, 1, 0],
+                                      [1, 1, 0, 0],
+                                      [1, 0, 1, 1],
+                                      [1, 0, 0, post_to_post]],
+                                     dtype=bool)
+
 # transition matrix
 default_transition_probs = np.array([[0.7, 0.1, 0.10, 0.10],
                                      [0.0, 0.7, 0.15, 0.15],
@@ -314,18 +325,16 @@ def sort_by_gid(coco_dset, track_id, prune=True):
             kwcoco.coco_objects1d.AnnotGroups([
                 coco_dset.annots(aids.intersection(img_aids))
                 for img_aids in images.aids
-            ]))
+            ], coco_dset))
 
 
 def ensure_post(coco_dset,
                 track_id,
-                post_cname=CNAMES_DCT['positive']['scored'][-1]):
+                post_cname=CNAMES_DCT['positive']['scored'][-1],
+                neg_cnames=CNAMES_DCT['negative']['scored']):
     '''
     If the track ends before the end of the video, and the last frame is
     not post construction, add another frame of post construction
-
-    Also chop off extra Post Construction and No Activity annots from the end
-    so they don't count as FPs.
 
     TODO this is not a perfect approach, since we don't have per-subsite
     tracking across frames. We can run into a case where:
@@ -334,11 +343,9 @@ def ensure_post(coco_dset,
     ss2    AC  AC
     it is ambiguous whether ss2 ends on AC or merges with ss1.
     Ignore this edge case (assume merge) for now.
-
-    TODO vectorize these across trackids
     '''
     images, annot_groups = sort_by_gid(coco_dset, track_id)
-    if len(annot_groups) > 1:
+    if len(list(annot_groups)) > 1:
         last_gid = images.gids[-1]
         gids = coco_dset.index._set_sorted_by_frame_index(
             coco_dset.images(vidid=images.get('vidid', None)[0]).gids)
@@ -380,10 +387,16 @@ def dedupe_background_anns(coco_dset,
                            track_id,
                            post_cname=CNAMES_DCT['positive']['scored'][-1],
                            neg_cnames=CNAMES_DCT['negative']['scored']):
+    '''
+    Chop off extra Post Construction and No Activity annots from the end of the
+    track so they don't count as FPs.
+
+    TODO same edge case as ensure_post() for lack of subsite tracking
+    '''
     images, annot_groups = sort_by_gid(coco_dset, track_id)
     relevant_cnames = set(neg_cnames + [post_cname])
     end_annots = []
-    for annots in reversed(annot_groups):
+    for annots in reversed(list(annot_groups)):
         if set(annots.cnames).issubset(relevant_cnames):
             end_annots.append(annots)
         else:
@@ -393,7 +406,7 @@ def dedupe_background_anns(coco_dset,
             itertools.chain.from_iterable(
                 [annots.aids for annots in end_annots[:-1]])))
     n_removed = removed_dct['annotations']
-    if n_removed > 0:
+    if (n_removed or 0) > 0:
         print(
             f'removed {n_removed} background anns from end of track {track_id}'
         )
