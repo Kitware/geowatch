@@ -26,6 +26,10 @@ def main():
                         action='store_true',
                         default=False,
                         help="Run AWS CLI commands with --dryrun flag")
+    parser.add_argument('-s', '--show-progress',
+                        action='store_true',
+                        default=False,
+                        help='Show progress for AWS CLI commands')
 
     baseline_framework_kwcoco_ingress(**vars(parser.parse_args()))
 
@@ -35,7 +39,8 @@ def main():
 def baseline_framework_kwcoco_ingress(input_path,
                                       outdir,
                                       aws_profile=None,
-                                      dryrun=False):
+                                      dryrun=False,
+                                      show_progress=False):
     os.makedirs(outdir, exist_ok=True)
 
     if aws_profile is not None:
@@ -46,6 +51,9 @@ def baseline_framework_kwcoco_ingress(input_path,
 
     if dryrun:
         aws_base_command.append('--dryrun')
+
+    if not show_progress:
+        aws_base_command.append('--no-progress')
 
     def _load_input(path):
         try:

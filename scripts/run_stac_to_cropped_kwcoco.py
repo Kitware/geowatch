@@ -60,6 +60,11 @@ def main():
                         default=1,
                         required=False,
                         help="Number of jobs to run in parallel")
+    parser.add_argument("--dont-recompute",
+                        action='store_true',
+                        default=False,
+                        help="Will not recompute if output_path "
+                             "already exists")
 
     run_stac_to_cropped_kwcoco(**vars(parser.parse_args()))
 
@@ -76,7 +81,23 @@ def run_stac_to_cropped_kwcoco(input_path,
                                requester_pays=False,
                                newline=False,
                                jobs=1,
-                               virtual=False):
+                               virtual=False,
+                               dont_recompute=False):
+    if dont_recompute:
+        if aws_profile is not None:
+            aws_ls_command = ['aws', 's3', '--profile', aws_profile, 'ls']
+        else:
+            aws_ls_command = ['aws', 's3', 'ls']
+
+        try:
+            subprocess.run([*aws_ls_command, output_path], check=True)
+        except subprocess.CalledProcessError:
+            # Continue processing
+            pass
+        else:
+            # If output_path file was there, nothing to do
+            return
+
     # 1. Ingress data
     print("* Running baseline framework ingress *")
     ingress_dir = '/tmp/ingress'
