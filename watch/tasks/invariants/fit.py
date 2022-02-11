@@ -39,7 +39,7 @@ def main(args):
         )
     else:
         ckpt_monitors = (
-            ModelCheckpoint(monitor='val_time_accuracy', mode='max', save_top_k=1),
+            ModelCheckpoint(monitor='val_time_accuracy', mode='max', save_top_k=1, save_last=True),
         )
 
     lr_logger = LearningRateMonitor(logging_interval='epoch')
