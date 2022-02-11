@@ -263,6 +263,10 @@ def track_to_site(coco_dset,
         Set predicted_phase_transition and predicted_phase_transition_date.
         Return (average days in current_phase - elapsed days in current_phase)
 
+        This should only kick in when the site does not end before the current
+        day (latest available image). See tracking.normalize.normalize_phases
+        for what happens if the site has ended.
+
         https://smartgitlab.com/TE/standards/-/wikis/Site-Model-Specification
         '''
         # from watch.dev.check_transition_probs

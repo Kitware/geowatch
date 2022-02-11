@@ -426,8 +426,7 @@ def normalize_phases(coco_dset,
         >>> dset = normalize_phases(dset, use_viterbi=True)
     '''
     from watch.heuristics import CATEGORIES, CNAMES_DCT, SITE_SUMMARY_CNAME
-    from watch.tasks.tracking.phase import (interpolate, baseline, ensure_post,
-                                            class_label_smoothing)
+    from watch.tasks.tracking import phase
     from collections import Counter
 
     for cat in CATEGORIES:
@@ -459,37 +458,39 @@ def normalize_phases(coco_dset,
     assert set(coco_dset.name_to_cat).issubset(cnames_to_replace
                                                | cnames_to_score)
 
-    # Replace positive annots of unknown class with a baseline guess class
-    # TODO break out these heuristics
+    # Transform phase labels of each track
     log = Counter()
     for trackid in coco_dset.index.trackid_to_aids.keys():
         annots = coco_dset.annots(trackid=trackid)
-        cnames = annots.cnames
-        if set(cnames) - cnames_to_score:
+        has_missing_labels = bool(set(annots.cnames) - cnames_to_score)
+        has_good_labels = bool(set(annots.cnames) - cnames_to_replace)
+        if has_missing_labels and has_good_labels:
             # if we have partial coverage, interpolate from good labels
-            if set(cnames) - cnames_to_replace:
-                log.update(['partial class labels'])
-                coco_dset = interpolate(coco_dset, trackid)
-            # else, predict site prep for the first half of the track and then
-            # active construction for the second half
-            # with post construction on the last frame
-            else:
-                log.update(['no class labels'])
-                coco_dset = baseline(coco_dset, trackid)
+            log.update(['partial class labels'])
+            coco_dset = phase.interpolate(coco_dset, trackid)
         else:
-            if use_viterbi:
-                smoothed_cnames = class_label_smoothing(
-                    cnames, t_probs, e_probs)
-                annots.set('category_id', [
-                    coco_dset.name_to_cat[name]['id']
-                    for name in smoothed_cnames
-                ])
+            if has_missing_labels:
+                # else, predict site prep for the first half of the track and
+                # then active construction for the second half with post
+                # construction on the last frame
+                log.update(['no class labels'])
+                coco_dset = phase.baseline(coco_dset, trackid)
+            else:
+                log.update(['full class labels'])
 
-            log.update(['full class labels'])
+        if use_viterbi:
+            smoothed_cnames = phase.class_label_smoothing(
+                annots.cnames, t_probs, e_probs)
+            annots.set('category_id', [
+                coco_dset.name_to_cat[name]['id']
+                for name in smoothed_cnames
+            ])
+        # after viterbi, the sequence of phases is in the correct order
 
         # If the track ends before the end of the video, and the last frame is
         # not post construction, add another frame of post construction
-        coco_dset = ensure_post(coco_dset, trackid)
+        coco_dset = phase.dedupe_background_anns(coco_dset, trackid)
+        coco_dset = phase.ensure_post(coco_dset, trackid)
 
     print('label status of tracks: ', log)
     return coco_dset

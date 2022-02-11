@@ -1,4 +1,6 @@
+import itertools
 import numpy as np
+import kwcoco
 import kwimage
 from watch.heuristics import CNAMES_DCT
 
@@ -237,9 +239,8 @@ def class_label_smoothing(track_cats,
 
     # keep first post construction, mark others as no activity
     post_indices = [i for i, x in enumerate(smoothed_sequence) if x == 3]
-    if (len(post_indices) > 0):
-        for index in post_indices:
-            smoothed_sequence[index] = 0
+    for index in post_indices[1:]:
+        smoothed_sequence[index] = 0
 
     smoothed_cats = [index_to_class[i] for i in smoothed_sequence]
     return smoothed_cats
@@ -290,53 +291,75 @@ def baseline(coco_dset,
     return coco_dset
 
 
+def sort_by_gid(coco_dset, track_id, prune=True):
+    '''
+    Group annots by image and return in sorted order by frame_index.
+
+    Args:
+        prune: if True, remove gids with no anns, else, return whole video
+
+    Returns:
+        (Images, AnnotGroups)
+    '''
+    images = coco_dset.images(
+        coco_dset.index._set_sorted_by_frame_index(
+            coco_dset.annots(trackid=track_id).gids))
+    vidids = np.unique(images.get('video_id', None))
+    assert len(vidids) == 1, f'track {track_id} spans multiple videos {vidids}'
+    vidid = vidids[0]
+    aids = set(coco_dset.index.trackid_to_aids[track_id])
+    if not prune:
+        images = coco_dset.images(vidid=vidid)
+    return (images,
+            kwcoco.coco_objects1d.AnnotGroups([
+                coco_dset.annots(aids.intersection(img_aids))
+                for img_aids in images.aids
+            ]))
+
+
 def ensure_post(coco_dset,
                 track_id,
                 post_cname=CNAMES_DCT['positive']['scored'][-1]):
     '''
     If the track ends before the end of the video, and the last frame is
     not post construction, add another frame of post construction
+
+    Also chop off extra Post Construction and No Activity annots from the end
+    so they don't count as FPs.
+
     TODO this is not a perfect approach, since we don't have per-subsite
     tracking across frames. We can run into a case where:
     frame  1   2   3
     ss1    AC  AC  PC
     ss2    AC  AC
     it is ambiguous whether ss2 ends on AC or merges with ss1.
-    Ignore this edge case for now.
+    Ignore this edge case (assume merge) for now.
 
     TODO vectorize these across trackids
     '''
-    if len(coco_dset.annots(trackid=track_id)) > 1:
-        last_gid = coco_dset.index._set_sorted_by_frame_index(
-            coco_dset.annots(trackid=track_id).gids)[-1]
-        vidid = coco_dset.imgs[last_gid].get('video_id', None)
-        if vidid is None:
-            gids = coco_dset.index._set_sorted_by_frame_index(
-                coco_dset.images().gids)
-        else:
-            gids = coco_dset.index._set_sorted_by_frame_index(
-                coco_dset.images(vidid=vidid).gids)
+    images, annot_groups = sort_by_gid(coco_dset, track_id)
+    if len(annot_groups) > 1:
+        last_gid = images.gids[-1]
+        gids = coco_dset.index._set_sorted_by_frame_index(
+            coco_dset.images(vidid=images.get('vidid', None)[0]).gids)
         current_gid = gids[-1]
 
         def img_to_vid(gid):
             return kwimage.Affine.coerce(coco_dset.imgs[gid].get(
                 'warp_img_to_vid', {'scale': 1}))
 
+        post_cid = coco_dset.ensure_category(post_cname)
+
         if last_gid != current_gid:
             next_gid = gids[gids.index(last_gid) + 1]
 
-            post_cid = coco_dset.ensure_category(post_cname)
-
-            # TODO make this work as expected intersection instead of union
-            # coco_dset.annots(trackid=trackid, gid=last_gid)
-            anns = coco_dset.annots(aids=[
-                ann['id'] for ann in coco_dset.annots(gid=last_gid).objs if
-                ann['track_id'] == track_id and ann['category_id'] != post_cid
-            ])
-            dets = anns.detections.warp(img_to_vid(last_gid)).warp(
+            annots = annot_groups[-1]
+            annots = annots.compress(np.array(annots.cnames) == post_cname)
+            dets = annots.detections.warp(img_to_vid(last_gid)).warp(
                 img_to_vid(next_gid).inv())
             for ann, seg, bbox in zip(
-                    anns.objs, dets.data['segmentations'].to_coco(style='new'),
+                    annots.objs,
+                    dets.data['segmentations'].to_coco(style='new'),
                     dets.boxes.to_coco(style='new')):
 
                 post_ann = ann.copy()
@@ -349,5 +372,30 @@ def ensure_post(coco_dset,
                          segmentation=seg,
                          bbox=bbox))
                 coco_dset.add_annotation(**post_ann)
+
+    return coco_dset
+
+
+def dedupe_background_anns(coco_dset,
+                           track_id,
+                           post_cname=CNAMES_DCT['positive']['scored'][-1],
+                           neg_cnames=CNAMES_DCT['negative']['scored']):
+    images, annot_groups = sort_by_gid(coco_dset, track_id)
+    relevant_cnames = set(neg_cnames + [post_cname])
+    end_annots = []
+    for annots in reversed(annot_groups):
+        if set(annots.cnames).issubset(relevant_cnames):
+            end_annots.append(annots)
+        else:
+            break
+    removed_dct = coco_dset.remove_annotations(
+        list(
+            itertools.chain.from_iterable(
+                [annots.aids for annots in end_annots[:-1]])))
+    n_removed = removed_dct['annotations']
+    if n_removed > 0:
+        print(
+            f'removed {n_removed} background anns from end of track {track_id}'
+        )
 
     return coco_dset
