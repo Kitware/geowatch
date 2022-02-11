@@ -1,5 +1,7 @@
 FROM nvidia/cuda:10.2-cudnn8-devel-ubuntu18.04
 
+ARG BUILD_STRICT=0
+
 RUN apt-get update -q && \
     apt-get install -q -y --no-install-recommends \
         bzip2 \
