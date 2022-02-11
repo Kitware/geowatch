@@ -422,7 +422,7 @@ def current_date(annots):
     current_date_dct = dict(
         zip(annots.images.gids, [
             dateutil.parser.parse(dt).date()
-            for dt in annots.images.get('date_captured')
+            for dt in annots.images.get('date_captured', '1970-01-01')
         ]))
     return np.array([current_date_dct[gid] for gid in annots.gids])
 

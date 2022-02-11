@@ -605,6 +605,7 @@ def normalize(
         >>> d.remove_categories(range(2,9))
         >>> d.cats[1]['supercategory'] = None
         >>> d.cats[1]['name'] = 'change'
+        >>> d.images().set('channels', 'rgb')
         >>> # test everything except geo-info
         >>> overwrite = False
         >>> def _normalize_annots(coco_dset, overwrite):
