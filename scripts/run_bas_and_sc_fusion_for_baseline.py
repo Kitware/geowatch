@@ -291,7 +291,7 @@ def run_bas_fusion_for_baseline(
     print("* Computing tracks (SC) *")
     site_models_outdir = os.path.join(ingress_dir, 'site_models')
 
-    sc_track_kwargs = {'coco_dset_sc': '$OUTPUT_SC_DATASET',
+    sc_track_kwargs = {'coco_dset_sc': sc_fusion_kwcoco_path,
                        'use_viterbi': False,
                        'bas_kwargs': {'thresh': 0.3,
                                       'morph_kernel': 3,
