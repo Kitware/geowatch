@@ -26,7 +26,7 @@ def mean_normalized(heatmaps):
     '''
     average = np.average(heatmaps, axis=0)
 
-    scale_factor = np.max(heatmaps)/(np.max(average)+1e-9)
+    scale_factor = np.max(heatmaps) / (np.max(average) + 1e-9)
     print('max heatmaps', np.max(heatmaps))
     print('max average', np.max(average))
 
@@ -44,18 +44,17 @@ def frequency_weighted_mean(heatmaps, mask_thresh, morph_kernel=3):
     '''
     heatmaps = np.array(heatmaps)
 
-    masks = 1*(heatmaps > mask_thresh)
+    masks = 1 * (heatmaps > mask_thresh)
     pixel_wise_samples = masks.sum(0) + 1e-9
     print('pixel_wise_samples', pixel_wise_samples)
 
     # compute sum
-    aggregated_probs = (masks*heatmaps).sum(0)
+    aggregated_probs = (masks * heatmaps).sum(0)
 
     # divide by number of samples for every pixel
     aggregated_probs /= pixel_wise_samples
 
-    aggregated_probs = util_kwimage.morphology(aggregated_probs, 'dilate',
-                                             morph_kernel)
+    aggregated_probs = util_kwimage.morphology(aggregated_probs, 'dilate', morph_kernel)
 
     return aggregated_probs
 
@@ -546,7 +545,6 @@ def time_aggregated_polys(coco_dset,
         modulated_probs = probs * hard_probs
 
         return modulated_probs
-
 
     def tracks_polys_bounds() -> Iterable[Tuple[Track, Poly]]:
         import shapely.ops

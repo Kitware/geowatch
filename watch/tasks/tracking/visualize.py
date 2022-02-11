@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 from watch.tasks.tracking.utils import heatmaps
-from watch.tasks.tracking.from_heatmap import mean_normalized
+
 
 def get_rgb(dset, gid):
     coco_img = dset.coco_image(gid)
@@ -99,7 +99,7 @@ def get_heatmap(dset, gid, key):
     coco_img = dset.coco_image(gid)
     heatmap = coco_img.delay(key, space='video').finalize()
     if len(heatmap.shape) == 3:
-        heatmap = heatmap[:,:,0]
+        heatmap = heatmap[:, :, 0]
     return heatmap
 
 
@@ -117,7 +117,7 @@ def visualize_videos(pred_dset, true_dset, out_dir='./_assets', hide_axis=False,
         plt.figure()
         plt.imshow(mean_heatmap, vmin=0, vmax=1)
         plt.colorbar()
-        plt.savefig(os.path.join(out_dir, 'average_heatmap_'+ str(vidid) +'.jpg'))
+        plt.savefig(os.path.join(out_dir, 'average_heatmap_' + str(vidid) + '.jpg'))
         plt.close()
 
         # visualize pred and GT polygons
@@ -161,8 +161,8 @@ def visualize_videos(pred_dset, true_dset, out_dir='./_assets', hide_axis=False,
         thresholds = np.linspace(start=0.15, stop=0.4, num=5)
         plt.figure(figsize=(20, 15))
         for j in range(n_images_to_visualize):
-            plt.subplot(6, n_images_to_visualize, j+1)
-            pred_canvas = get_heatmap(pred_dset, gids[gid_list[j]], key='salient')>thresholds[0]
+            plt.subplot(6, n_images_to_visualize, j + 1)
+            pred_canvas = get_heatmap(pred_dset, gids[gid_list[j]], key='salient') > thresholds[0]
             if true_dset is not None:
                 gt_canvas = get_gt_seg(true_dset, gid=gids[gid_list[j]], shape=shape)
                 coded_canvas = render_pred_gt(pred_canvas, gt_canvas)
@@ -170,12 +170,12 @@ def visualize_videos(pred_dset, true_dset, out_dir='./_assets', hide_axis=False,
                 coded_canvas = pred_canvas
 
             plt.imshow(coded_canvas, interpolation='nearest')
-            plt.title('image:'+str(gid_list[j]))
+            plt.title('image:' + str(gid_list[j]))
 
-            if (n_images_to_visualize/(j+1)) == 2:
-                plt.title('image:'+str(gid_list[j])+', threshold'+'{0:.2f}'.format(thresholds[0]))
+            if (n_images_to_visualize / (j + 1)) == 2:
+                plt.title('image :' + str(gid_list[j]) + ', threshold' + '{0:.2f}'.format(thresholds[0]))
 
-            plt.subplot(6, n_images_to_visualize, j+1+n_images_to_visualize)
+            plt.subplot(6, n_images_to_visualize, j + 1 + n_images_to_visualize)
             pred_canvas = get_heatmap(pred_dset, gids[gid_list[j]], key='salient') > thresholds[1]
             if true_dset is not None:
                 gt_canvas = get_gt_seg(true_dset, gid=gids[gid_list[j]], shape=shape)
@@ -184,10 +184,10 @@ def visualize_videos(pred_dset, true_dset, out_dir='./_assets', hide_axis=False,
                 coded_canvas = pred_canvas
             plt.imshow(coded_canvas, interpolation='nearest')
 
-            if (n_images_to_visualize/(j+1)) == 2:
-                plt.title('image:'+str(gid_list[j])+', threshold'+'{0:.2f}'.format(thresholds[1]))
+            if (n_images_to_visualize / (j + 1)) == 2:
+                plt.title('image:' + str(gid_list[j]) + ', threshold' + '{0:.2f}'.format(thresholds[1]))
 
-            plt.subplot(6, n_images_to_visualize, j+1+2*n_images_to_visualize)
+            plt.subplot(6, n_images_to_visualize, j + 1 + 2 * n_images_to_visualize)
             pred_canvas = get_heatmap(pred_dset, gids[gid_list[j]], key='salient') > thresholds[2]
             if true_dset is not None:
                 gt_canvas = get_gt_seg(true_dset, gid=gids[gid_list[j]], shape=shape)
@@ -196,10 +196,10 @@ def visualize_videos(pred_dset, true_dset, out_dir='./_assets', hide_axis=False,
                 coded_canvas = pred_canvas
             plt.imshow(coded_canvas, interpolation='nearest')
 
-            if (n_images_to_visualize/(j+1)) == 2:
-                plt.title('image:'+str(gid_list[j])+', threshold'+'{0:.2f}'.format(thresholds[2]))
+            if (n_images_to_visualize / (j + 1)) == 2:
+                plt.title('image:' + str(gid_list[j]) + ', threshold' + '{0:.2f}'.format(thresholds[2]))
 
-            plt.subplot(6, n_images_to_visualize, j+1+3*n_images_to_visualize)
+            plt.subplot(6, n_images_to_visualize, j + 1 + 3 * n_images_to_visualize)
             pred_canvas = get_heatmap(pred_dset, gids[gid_list[j]], key='salient') > thresholds[3]
             if true_dset is not None:
                 gt_canvas = get_gt_seg(true_dset, gid=gids[gid_list[j]], shape=shape)
@@ -208,10 +208,10 @@ def visualize_videos(pred_dset, true_dset, out_dir='./_assets', hide_axis=False,
                 coded_canvas = pred_canvas
             plt.imshow(coded_canvas, interpolation='nearest')
 
-            if (n_images_to_visualize/(j+1)) == 2:
-                plt.title('image:'+str(gid_list[j])+', threshold'+'{0:.2f}'.format(thresholds[3]))
+            if (n_images_to_visualize / (j + 1)) == 2:
+                plt.title('image:' + str(gid_list[j]) + ', threshold' + '{0:.2f}'.format(thresholds[3]))
 
-            plt.subplot(6, n_images_to_visualize, j+1+4*n_images_to_visualize)
+            plt.subplot(6, n_images_to_visualize, j + 1 + 4 * n_images_to_visualize)
             pred_canvas = get_heatmap(pred_dset, gids[gid_list[j]], key='salient') > thresholds[4]
             if true_dset is not None:
                 gt_canvas = get_gt_seg(true_dset, gid=gids[gid_list[j]], shape=shape)
@@ -220,16 +220,15 @@ def visualize_videos(pred_dset, true_dset, out_dir='./_assets', hide_axis=False,
                 coded_canvas = pred_canvas
             plt.imshow(coded_canvas, interpolation='nearest')
 
-            if (n_images_to_visualize/(j+1)) == 2:
-                plt.title('image:'+str(gid_list[j])+', threshold'+'{0:.2f}'.format(thresholds[4]))
+            if (n_images_to_visualize / (j + 1)) == 2:
+                plt.title('image:' + str(gid_list[j]) + ', threshold' + '{0:.2f}'.format(thresholds[4]))
 
             # RGB
             plt.subplot(6, n_images_to_visualize, j + 1 + 5 * n_images_to_visualize)
             rgb = get_rgb(pred_dset, gids[gid_list[j]])
             plt.imshow(rgb)
 
-
-        fname = out_dir+'/video_'+str(vidid)+'thresholds.jpg'
+        fname = out_dir + '/video_' + str(vidid) + 'thresholds.jpg'
         plt.tight_layout()
         plt.savefig(fname, bbox_inches='tight')
 
