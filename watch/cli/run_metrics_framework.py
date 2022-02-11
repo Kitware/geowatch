@@ -14,6 +14,7 @@ from glob import glob
 from typing import List, Dict
 import ubelt as ub
 import subprocess
+from packaging import version
 
 
 @dataclass(frozen=True)
@@ -602,7 +603,6 @@ def main(args):
     try:
         # Do we have the latest and greatest?
         import iarpa_smart_metrics
-        from packaging import version
         METRICS_VERSION = version.Version(iarpa_smart_metrics.__version__)
     except Exception:
         from packaging import version

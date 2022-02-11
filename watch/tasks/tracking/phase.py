@@ -1,5 +1,12 @@
+import dateutil.parser
+from datetime import timedelta
+from typing import List
+import itertools
 import numpy as np
+import kwcoco
 import kwimage
+
+from watch.tasks.tracking.utils import heatmaps, score
 from watch.heuristics import CNAMES_DCT
 
 
@@ -157,6 +164,15 @@ phase_classes = (CNAMES_DCT['negative']['scored'] +
 index_to_class = dict(zip(range(len(phase_classes)), phase_classes))
 class_to_index = {v: k for k, v in index_to_class.items()}
 
+# sanity check: allowed transitions in the finite state machine of states
+# (rows x cols) == (from_states x to_states)
+# post construction to post construction is seen in the data, but should really
+# only exist for 1 frame outside the edge case of subsite merging.
+post_to_post = 0
+allowed_transition_matrix = np.array(
+    [[1, 1, 1, 0], [1, 1, 0, 0], [1, 0, 1, 1], [1, 0, 0, post_to_post]],
+    dtype=bool)
+
 # transition matrix
 default_transition_probs = np.array([[0.7, 0.1, 0.10, 0.10],
                                      [0.0, 0.7, 0.15, 0.15],
@@ -237,9 +253,8 @@ def class_label_smoothing(track_cats,
 
     # keep first post construction, mark others as no activity
     post_indices = [i for i, x in enumerate(smoothed_sequence) if x == 3]
-    if (len(post_indices) > 0):
-        for index in post_indices:
-            smoothed_sequence[index] = 0
+    for index in post_indices[1:]:
+        smoothed_sequence[index] = 0
 
     smoothed_cats = [index_to_class[i] for i in smoothed_sequence]
     return smoothed_cats
@@ -277,66 +292,85 @@ def baseline(coco_dset,
     siteprep_cid, active_cid, post_cid = map(coco_dset.ensure_category,
                                              cnames_to_insert)
 
-    gids_first_half, gids_second_half = np.array_split(
-        np.array(
-            coco_dset.index._set_sorted_by_frame_index(
-                coco_dset.annots(trackid=track_id).gids)),
-        len(cnames_to_insert) - 1)
-    gids = np.array(annots.gids)
-    cids = np.where([g in gids_first_half for g in gids], siteprep_cid,
-                    active_cid)
-    cids = np.where(gids == gids_second_half[-1], post_cid, cids)
-    annots.set('category_id', cids)
+    if len(set(annots.gids)) > 1:
+
+        gids_first_half, gids_second_half = np.array_split(
+            np.array(coco_dset.index._set_sorted_by_frame_index(annots.gids)),
+            len(cnames_to_insert) - 1)
+        gids = np.array(annots.gids)
+        cids = np.where([g in gids_first_half for g in gids], siteprep_cid,
+                        active_cid)
+        cids = np.where(gids == gids_second_half[-1], post_cid, cids)
+        annots.set('category_id', cids)
+
     return coco_dset
+
+
+def sort_by_gid(coco_dset, track_id, prune=True):
+    '''
+    Group annots by image and return in sorted order by frame_index.
+
+    Args:
+        prune: if True, remove gids with no anns, else, return whole video
+
+    Returns:
+        (Images, AnnotGroups)
+    '''
+    images = coco_dset.images(
+        coco_dset.index._set_sorted_by_frame_index(
+            coco_dset.annots(trackid=track_id).gids))
+    vidids = np.unique(images.get('video_id', None))
+    assert len(vidids) == 1, f'track {track_id} spans multiple videos {vidids}'
+    vidid = vidids[0]
+    aids = set(coco_dset.index.trackid_to_aids[track_id])
+    if not prune:
+        images = coco_dset.images(vidid=vidid)
+    return (images,
+            kwcoco.coco_objects1d.AnnotGroups([
+                coco_dset.annots(aids.intersection(img_aids))
+                for img_aids in images.aids
+            ], coco_dset))
 
 
 def ensure_post(coco_dset,
                 track_id,
-                post_cname=CNAMES_DCT['positive']['scored'][-1]):
+                post_cname=CNAMES_DCT['positive']['scored'][-1],
+                neg_cnames=CNAMES_DCT['negative']['scored']):
     '''
     If the track ends before the end of the video, and the last frame is
     not post construction, add another frame of post construction
+
     TODO this is not a perfect approach, since we don't have per-subsite
     tracking across frames. We can run into a case where:
     frame  1   2   3
     ss1    AC  AC  PC
     ss2    AC  AC
     it is ambiguous whether ss2 ends on AC or merges with ss1.
-    Ignore this edge case for now.
-
-    TODO vectorize these across trackids
+    Ignore this edge case (assume merge) for now.
     '''
-    if len(coco_dset.annots(trackid=track_id)) > 1:
-        last_gid = coco_dset.index._set_sorted_by_frame_index(
-            coco_dset.annots(trackid=track_id).gids)[-1]
-        vidid = coco_dset.imgs[last_gid].get('video_id', None)
-        if vidid is None:
-            gids = coco_dset.index._set_sorted_by_frame_index(
-                coco_dset.images().gids)
-        else:
-            gids = coco_dset.index._set_sorted_by_frame_index(
-                coco_dset.images(vidid=vidid).gids)
+    images, annot_groups = sort_by_gid(coco_dset, track_id)
+    if len(list(annot_groups)) > 1:
+        last_gid = images.gids[-1]
+        gids = coco_dset.index._set_sorted_by_frame_index(
+            coco_dset.images(vidid=images.get('vidid', None)[0]).gids)
         current_gid = gids[-1]
 
         def img_to_vid(gid):
             return kwimage.Affine.coerce(coco_dset.imgs[gid].get(
                 'warp_img_to_vid', {'scale': 1}))
 
+        post_cid = coco_dset.ensure_category(post_cname)
+
         if last_gid != current_gid:
             next_gid = gids[gids.index(last_gid) + 1]
 
-            post_cid = coco_dset.ensure_category(post_cname)
-
-            # TODO make this work as expected intersection instead of union
-            # coco_dset.annots(trackid=trackid, gid=last_gid)
-            anns = coco_dset.annots(aids=[
-                ann['id'] for ann in coco_dset.annots(gid=last_gid).objs if
-                ann['track_id'] == track_id and ann['category_id'] != post_cid
-            ])
-            dets = anns.detections.warp(img_to_vid(last_gid)).warp(
+            annots = annot_groups[-1]
+            annots = annots.compress(np.array(annots.cnames) == post_cname)
+            dets = annots.detections.warp(img_to_vid(last_gid)).warp(
                 img_to_vid(next_gid).inv())
             for ann, seg, bbox in zip(
-                    anns.objs, dets.data['segmentations'].to_coco(style='new'),
+                    annots.objs,
+                    dets.data['segmentations'].to_coco(style='new'),
                     dets.boxes.to_coco(style='new')):
 
                 post_ann = ann.copy()
@@ -351,3 +385,100 @@ def ensure_post(coco_dset,
                 coco_dset.add_annotation(**post_ann)
 
     return coco_dset
+
+
+def dedupe_background_anns(coco_dset,
+                           track_id,
+                           post_cname=CNAMES_DCT['positive']['scored'][-1],
+                           neg_cnames=CNAMES_DCT['negative']['scored']):
+    '''
+    Chop off extra Post Construction and No Activity annots from the end of the
+    track so they don't count as FPs.
+
+    TODO same edge case as ensure_post() for lack of subsite tracking
+    '''
+    images, annot_groups = sort_by_gid(coco_dset, track_id)
+    relevant_cnames = set(neg_cnames + [post_cname])
+    end_annots = []
+    for annots in reversed(list(annot_groups)):
+        if set(annots.cnames).issubset(relevant_cnames):
+            end_annots.append(annots)
+        else:
+            break
+    removed_dct = coco_dset.remove_annotations(
+        list(
+            itertools.chain.from_iterable(
+                [annots.aids for annots in end_annots[:-1]])))
+    n_removed = removed_dct['annotations']
+    if (n_removed or 0) > 0:
+        print(
+            f'removed {n_removed} background anns from end of track {track_id}'
+        )
+
+    return coco_dset
+
+
+def current_date(annots):
+    current_date_dct = dict(
+        zip(annots.images.gids, [
+            dateutil.parser.parse(dt).date()
+            for dt in annots.images.get('date_captured', '1970-01-01')
+        ]))
+    return np.array([current_date_dct[gid] for gid in annots.gids])
+
+
+def phase_prediction_baseline(annots) -> List[float]:
+    '''
+    Number of days until the next expected activity phase transition.
+
+    Baseline: (average days in current_phase - elapsed days in current_phase)
+    '''
+    # from watch.dev.check_transition_probs
+    phase_avg_days = {
+        'No Activity': 60,
+        'Site Preparation': 57,
+        'Active Construction': 56,
+        'Post Construction': 58
+    }
+    phase_avg_days = {k: timedelta(v) for k, v in phase_avg_days.items()}
+
+    today = current_date(annots)
+
+    # per metrics definition doc v2.2, the site enters <phase> on the date
+    # when the last subsite enters <phase>, unless only some subsites are
+    # in <phase> on <current_date>, in which case it is the first date a
+    # subsite enters <phase>.
+    # this doesn't make any sense.
+    # ignore this, and just take the first subsite date.
+    first_date = dict()
+    for phase, date in zip(annots.cnames, today):
+        missing_phases = set(phase_avg_days) - set(first_date)
+        if missing_phases:
+            if phase in missing_phases:
+                first_date[phase] = date
+        else:
+            break
+
+    predicted = np.array(
+        [first_date[phase] + phase_avg_days[phase] for phase in annots.cnames])
+
+    return np.where(predicted > today,
+                    (predicted - today).astype('timedelta64[D]').astype(float),
+                    1)
+
+
+def phase_prediction_heatmap(annots, coco_dset, key) -> List[float]:
+    '''
+    Get phase prediction heatmaps from model output and score them against
+    annotation polygons to get predicted dates
+    '''
+    gids = list(set(annots.gids))
+    heatmaps_dct = dict(
+        zip(gids,
+            heatmaps(coco_dset, gids, [key], skipped='interpolate')[key]))
+    # TODO generalize this as annots.detections.responses()?
+    return [
+        score(poly, heatmaps_dct[gid]) for poly, gid in zip(
+            annots.detections.data['segmentations'].to_polygon_list(),
+            annots.gids)
+    ]
