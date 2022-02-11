@@ -65,6 +65,10 @@ def main():
                         default=False,
                         help="Will not recompute if output_path "
                              "already exists")
+    parser.add_argument("--force_one_job_for_cropping",
+                        action='store_true',
+                        default=False,
+                        help="Force jobs=1 for cropping")
 
     run_stac_to_cropped_kwcoco(**vars(parser.parse_args()))
 
@@ -82,7 +86,8 @@ def run_stac_to_cropped_kwcoco(input_path,
                                newline=False,
                                jobs=1,
                                virtual=False,
-                               dont_recompute=False):
+                               dont_recompute=False,
+                               force_one_job_for_cropping=False):
     if dont_recompute:
         if aws_profile is not None:
             aws_ls_command = ['aws', 's3', '--profile', aws_profile, 'ls']
@@ -142,7 +147,7 @@ def run_stac_to_cropped_kwcoco(input_path,
                     '--geo_preprop', 'auto',
                     '--keep', 'none',
                     '--context_factor', '1',
-                    '--workers', str(jobs),
+                    '--workers', '1' if force_one_job_for_cropping else str(jobs),  # noqa: 501
                     '--rpc_align_method', 'affine_warp'], check=True)
 
     # 5. Egress (envelop KWCOCO dataset in a STAC item and egress;
