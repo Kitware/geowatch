@@ -1,4 +1,5 @@
 import itertools
+import kwcoco
 import kwimage
 import shapely
 import shapely.ops
@@ -391,7 +392,8 @@ def normalize_phases(coco_dset,
                      use_viterbi=False,
                      t_probs=None,
                      e_probs=None,
-                     baseline_keys={'salient'}):
+                     baseline_keys={'salient'},
+                     prediction_key='phase_transition_days'):
     '''
     Convert internal representation of phases to their IARPA standards as well
     as inserting a baseline guess for activity classification and removing
@@ -457,8 +459,10 @@ def normalize_phases(coco_dset,
 
     assert set(coco_dset.name_to_cat).issubset(cnames_to_replace
                                                | cnames_to_score)
-
+    #
     # Transform phase labels of each track
+    #
+
     log = Counter()
     for trackid in coco_dset.index.trackid_to_aids.keys():
         annots = coco_dset.annots(trackid=trackid)
@@ -477,13 +481,48 @@ def normalize_phases(coco_dset,
                 coco_dset = phase.baseline(coco_dset, trackid)
             else:
                 log.update(['full class labels'])
+    print('label status of tracks: ', log)
 
+    #
+    # Phase prediction - do it all at once for efficiency
+    # Do this before viterbi so we can use this as an input in the future
+    #
+
+    ann_field = 'phase_transition_days'
+
+    # exclude untracked annots which might be unrelated
+    annots = coco_dset.annots(
+        list(
+            itertools.chain.from_iterable(
+                coco_dset.index.trackid_to_aids.values())))
+
+    has_prediction_heatmaps = all(
+        kwcoco.FusedChannelSpec.coerce(prediction_key).as_set().issubset(
+            coco_dset.coco_image(gid).channels.fuse().as_set())
+        for gid in set(annots.gids))
+    if has_prediction_heatmaps:
+        phase_transition_days = phase.phase_prediction_heatmap(
+            annots, coco_dset, prediction_key)
+        annots.set(ann_field, phase_transition_days)
+    else:
+        for trackid in coco_dset.index.trackid_to_aids.keys():
+            _annots = coco_dset.annots(trackid=trackid)
+            phase_transition_days = phase.phase_prediction_baseline(_annots)
+            _annots.set(ann_field, phase_transition_days)
+
+    old_cnames_dct = dict(zip(annots.aids, annots.cnames))
+
+    #
+    # Continue transforming phase labels, now with smoothing and deduping
+    #
+
+    for trackid in coco_dset.index.trackid_to_aids.keys():
         if use_viterbi:
+
             smoothed_cnames = phase.class_label_smoothing(
                 annots.cnames, t_probs, e_probs)
             annots.set('category_id', [
-                coco_dset.name_to_cat[name]['id']
-                for name in smoothed_cnames
+                coco_dset.name_to_cat[name]['id'] for name in smoothed_cnames
             ])
         # after viterbi, the sequence of phases is in the correct order
 
@@ -492,7 +531,18 @@ def normalize_phases(coco_dset,
         coco_dset = phase.dedupe_background_anns(coco_dset, trackid)
         coco_dset = phase.ensure_post(coco_dset, trackid)
 
-    print('label status of tracks: ', log)
+    #
+    # Fixup phase prediction
+    #
+
+    # TODO do something with transition preds for phases which were altered
+    FIXUP_TRANSITION_PRED = 0
+    if FIXUP_TRANSITION_PRED:
+        n_diff_annots = sum(
+            np.array(annots.cnames) == np.array(old_cnames_dct.values()))
+        if n_diff_annots > 0:
+            raise NotImplementedError
+
     return coco_dset
 
 
@@ -524,15 +574,16 @@ def normalize_sensors(coco_dset):
 
 
 @profile
-def normalize(coco_dset,
-              track_fn,
-              overwrite,
-              gt_dset=None,
-              viz_sc_bounds=False,
-              use_viterbi=False,
-              t_probs=None,  # for viterbi
-              e_probs=None,  # for viterbi
-              **track_kwargs):
+def normalize(
+        coco_dset,
+        track_fn,
+        overwrite,
+        gt_dset=None,
+        viz_sc_bounds=False,
+        use_viterbi=False,
+        t_probs=None,  # for viterbi
+        e_probs=None,  # for viterbi
+        **track_kwargs):
     '''
     Driver function to apply all normalizations
 

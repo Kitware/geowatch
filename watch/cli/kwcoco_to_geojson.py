@@ -25,12 +25,14 @@ import kwcoco
 import kwimage
 import dateutil.parser
 import datetime
+import itertools
 import watch
 import shapely
 import shapely.ops
 from mgrs import MGRS
 from osgeo import osr
 from glob import glob
+from collections import defaultdict
 import numpy as np
 import ubelt as ub
 from kwcoco.coco_image import CocoImage
@@ -53,6 +55,10 @@ def _combined_geometries(geometry_list):
 
 def _normalize_date(date_str):
     return dateutil.parser.parse(date_str).date().isoformat()
+
+
+# For MultiPolygon observations. Could be ', '?
+sep = ','
 
 
 @profile
@@ -132,25 +138,15 @@ def geojson_feature(img, anns, coco_dset, with_properties=True):
             'current_phase': current_phase,
             'is_site_boundary': True,  # HACK
             'score': ann.get('score', 1.0),
-            'misc_info': {},
+            'misc_info': {
+                'phase_transition_days': ann.get('phase_transition_days', None)
+            },
             **image_properties_dct[ann['image_id']]
         }
 
     geometry_list = list(map(single_geometry, anns))
     if with_properties:
         properties_list = list(map(single_properties, anns))
-
-    def combined_geometries(geometry_list):
-        '''
-        # TODO should annotations be disjoint before being combined?
-        # this is not true in general
-        for geom1, geom2 in itertools.combinations(geometry_list, 2):
-            try:
-                assert geom1.disjoint(geom2), [ann['id'] for ann in anns]
-            except AssertionError:
-                xdev.embed()
-        '''
-        return _combined_geometries(geometry_list)
 
     def combined_properties(properties_list, geometry_list):
         # list of dicts -> dict of lists for easy indexing
@@ -170,7 +166,6 @@ def geojson_feature(img, anns, coco_dset, with_properties=True):
                 raise TypeError(type(geom))
 
         # per-polygon properties
-        sep = ','
         for key in ['current_phase', 'is_occluded', 'is_site_boundary']:
             value = []
             for prop, geom in zip(properties_list[key], geometry_list):
@@ -199,16 +194,17 @@ def geojson_feature(img, anns, coco_dset, with_properties=True):
             weights=[geom.area for geom in geometry_list])
         return properties
 
-        # currently unused
-        # dict_union will tkae the first val for each key
-        properties['misc_info'] = ub.dict_union(properties_list['misc_info'])
+        properties['misc_info'] = defaultdict(list)
+        for misc_info in properties_list['misc_info']:
+            for k, v in misc_info.items():
+                properties['misc_info'][k].append(v)
 
     if with_properties:
         properties = combined_properties(properties_list, geometry_list)
     else:
         properties = {}
 
-    return geojson.Feature(geometry=combined_geometries(geometry_list),
+    return geojson.Feature(geometry=_combined_geometries(geometry_list),
                            properties=properties)
 
 
@@ -248,7 +244,6 @@ def track_to_site(coco_dset,
     def predict_phase_changes():
         '''
         Set predicted_phase_transition and predicted_phase_transition_date.
-        Return (average days in current_phase - elapsed days in current_phase)
 
         This should only kick in when the site does not end before the current
         day (latest available image). See tracking.normalize.normalize_phases
@@ -256,61 +251,42 @@ def track_to_site(coco_dset,
 
         https://smartgitlab.com/TE/standards/-/wikis/Site-Model-Specification
         '''
-        # from watch.dev.check_transition_probs
-        phase_avg_days = {
-            # 'No Activity': 60,
-            'Site Preparation': 57,
-            'Active Construction': 56,
-            'Post Construction': 58
-        }
+        all_phases = [
+            feat['properties']['current_phase'].split(sep) for feat in features
+        ]
 
-        # per metrics definition doc v2.2, the site enters <phase> on the date
-        # when the last subsite enters <phase>, unless only some subsites are
-        # in <phase> on <current_date>, in which case it is the first date a
-        # subsite enters <phase>.
-        # this doesn't make any sense.
-        # ignore this, and just take the first subsite date.
-        first_date = {}
-        sep = ','
-        for feat in features:
-            phases = set(feat['properties']['current_phase'].split(sep))
-            date = dateutil.parser.parse(
-                feat['properties']['observation_date']).date()
-            missing_phases = set(phase_avg_days) - set(first_date)
-            if missing_phases:
-                for phase in phases.intersection(missing_phases):
-                    first_date[phase] = date
-            else:
-                break
-        current_date = dateutil.parser.parse(
-            features[-1]['properties']['observation_date']).date()
+        def transition_date_from(phase):
+            for i, phases in enumerate(reversed(all_phases)):
+                if phase in phases:
+                    feat = features[-(i + 1)]
+                    return (dateutil.parser.parse(
+                        feat['properties']['observation_date']) +
+                            datetime.timedelta(
+                                int(feat['properties']['misc_info']
+                                    ['phase_transition_days'][phases.index(
+                                        phase)]))).isoformat()
+            raise ValueError('missing phase')
 
-        if 'Post Construction' in first_date:
+        all_phases_set = set(itertools.chain.from_iterable(all_phases))
+
+        if 'Post Construction' in all_phases_set:
             return {}
-        elif 'Active Construction' in first_date:
+        elif 'Active Construction' in all_phases_set:
             return {
                 'predicted_phase_transition':
                 'Post Construction',
                 'predicted_phase_transition_date':
-                max(
-                    current_date,
-                    first_date['Active Construction'] + datetime.timedelta(
-                        days=phase_avg_days['Active Construction'])
-                ).isoformat()
+                transition_date_from('Active Construction')
             }
-        elif 'Site Preparation' in first_date:
+        elif 'Site Preparation' in all_phases_set:
             return {
                 'predicted_phase_transition':
                 'Active Construction',
                 'predicted_phase_transition_date':
-                max(
-                    current_date,
-                    first_date['Site Preparation'] + datetime.timedelta(
-                        days=phase_avg_days['Site Preparation'])
-                ).isoformat()
+                transition_date_from('Active Construction')
             }
         else:
-            raise ValueError(f'missing phases in site {site_id}! {first_date}')
+            raise ValueError(f'missing phases: {site_id=} {all_phases_set=}')
 
     def site_feature():
         '''

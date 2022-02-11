@@ -1,7 +1,12 @@
+import dateutil.parser
+from datetime import timedelta
+from typing import List
 import itertools
 import numpy as np
 import kwcoco
 import kwimage
+
+from watch.tasks.tracking.utils import heatmaps, score
 from watch.heuristics import CNAMES_DCT
 
 
@@ -164,11 +169,9 @@ class_to_index = {v: k for k, v in index_to_class.items()}
 # post construction to post construction is seen in the data, but should really
 # only exist for 1 frame outside the edge case of subsite merging.
 post_to_post = 0
-allowed_transition_matrix = np.array([[1, 1, 1, 0],
-                                      [1, 1, 0, 0],
-                                      [1, 0, 1, 1],
-                                      [1, 0, 0, post_to_post]],
-                                     dtype=bool)
+allowed_transition_matrix = np.array(
+    [[1, 1, 1, 0], [1, 1, 0, 0], [1, 0, 1, 1], [1, 0, 0, post_to_post]],
+    dtype=bool)
 
 # transition matrix
 default_transition_probs = np.array([[0.7, 0.1, 0.10, 0.10],
@@ -289,16 +292,19 @@ def baseline(coco_dset,
     siteprep_cid, active_cid, post_cid = map(coco_dset.ensure_category,
                                              cnames_to_insert)
 
-    gids_first_half, gids_second_half = np.array_split(
-        np.array(
-            coco_dset.index._set_sorted_by_frame_index(
-                coco_dset.annots(trackid=track_id).gids)),
-        len(cnames_to_insert) - 1)
-    gids = np.array(annots.gids)
-    cids = np.where([g in gids_first_half for g in gids], siteprep_cid,
-                    active_cid)
-    cids = np.where(gids == gids_second_half[-1], post_cid, cids)
-    annots.set('category_id', cids)
+    if len(set(annots.gids)) > 1:
+
+        gids_first_half, gids_second_half = np.array_split(
+            np.array(
+                coco_dset.index._set_sorted_by_frame_index(
+                    annots.gids)),
+            len(cnames_to_insert) - 1)
+        gids = np.array(annots.gids)
+        cids = np.where([g in gids_first_half for g in gids], siteprep_cid,
+                        active_cid)
+        cids = np.where(gids == gids_second_half[-1], post_cid, cids)
+        annots.set('category_id', cids)
+
     return coco_dset
 
 
@@ -412,3 +418,57 @@ def dedupe_background_anns(coco_dset,
         )
 
     return coco_dset
+
+
+def current_date(annots):
+    current_date_dct = dict(
+        zip(annots.images.gids, [
+            dateutil.parser.parse(dt).date()
+            for dt in annots.images.get('date_captured')
+        ]))
+    return np.array([current_date_dct[gid] for gid in annots.gids])
+
+
+def phase_prediction_baseline(annots) -> List[float]:
+    '''
+    Number of days until the next expected activity phase transition.
+
+    Baseline: (average days in current_phase - elapsed days in current_phase)
+    '''
+    # from watch.dev.check_transition_probs
+    phase_avg_days = {
+        'No Activity': 60,
+        'Site Preparation': 57,
+        'Active Construction': 56,
+        'Post Construction': 58
+    }
+    phase_avg_days = {k: timedelta(v) for k, v in phase_avg_days.items()}
+
+    today = current_date(annots)
+
+    # per metrics definition doc v2.2, the site enters <phase> on the date
+    # when the last subsite enters <phase>, unless only some subsites are
+    # in <phase> on <current_date>, in which case it is the first date a
+    # subsite enters <phase>.
+    # this doesn't make any sense.
+    # ignore this, and just take the first subsite date.
+    first_date = dict()
+    for phase, date in zip(annots.cnames, today):
+        missing_phases = set(phase_avg_days) - set(first_date)
+        if missing_phases:
+            if phase in missing_phases:
+                first_date[phase] = date
+        else:
+            break
+
+    predicted = np.array(
+        [first_date[phase] + phase_avg_days[phase] for phase in annots.cnames])
+
+    return np.where(
+        predicted > today,
+        (predicted - today).astype('timedelta64[D]').astype(float),
+        1)
+
+
+def phase_prediction_heatmap(annots, coco_dset, key):
+    return NotImplemented
