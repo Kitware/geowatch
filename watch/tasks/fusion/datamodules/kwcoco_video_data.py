@@ -177,6 +177,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         use_centered_positives=False,
         temporal_dropout=0.0,
         max_epoch_length=None,
+        use_special_classes=False,
     ):
         """
         Args:
@@ -210,6 +211,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.normalize_inputs = normalize_inputs
         self.time_span = time_span
         self.max_epoch_length = max_epoch_length
+        self.use_special_classes = use_special_classes
 
         # self.channels = channels
         # self.time_sampling = time_sampling
@@ -239,6 +241,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             use_grid_positives=use_grid_positives,
             temporal_dropout=temporal_dropout,
             max_epoch_length=max_epoch_length,
+            use_special_classes=use_special_classes,
         )
         for _k, _v in self.common_dataset_kwargs.items():
             setattr(self, _k, _v)
@@ -358,6 +361,12 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 '''
                 Enables new logic for sampling multimodal data.
                 Old logic probably doesn't work anymore.
+                '''))
+
+        parser.add_argument(
+            '--use_special_classes', default=True, type=smartcast, help=ub.paragraph(
+                '''
+                Include no-activity, post-construction
                 '''))
 
         parser.add_argument(
@@ -781,15 +790,8 @@ class KWCocoVideoDataset(data.Dataset):
         use_centered_positives=False,
         temporal_dropout=0.0,
         max_epoch_length=None,
+        use_special_classes=True,
     ):
-
-        # TODO: the set of "valid" background classnames should be defined
-        # by the inputs, not hard-coded in the dataloader. This can either be a
-        # list of names provided to the training config, or something baked
-        # into the kwcoco spec marking a class as some type of "background"
-        self._hueristic_background_classnames = heuristics.BACKGROUND_CLASSES
-        self._heuristic_ignore_classnames = heuristics.IGNORE_CLASSNAMES
-        self._heuristic_undistinguished_classnames = heuristics.UNDISTINGUISHED_CLASSES
 
         self.match_histograms = match_histograms
         self.normalize_perframe = normalize_perframe
@@ -797,6 +799,18 @@ class KWCocoVideoDataset(data.Dataset):
         self.upweight_centers = upweight_centers
         self.temporal_dropout = temporal_dropout
         self.max_epoch_length = max_epoch_length
+        self.use_special_classes = use_special_classes
+
+        # TODO: the set of "valid" background classnames should be defined
+        # by the inputs, not hard-coded in the dataloader. This can either be a
+        # list of names provided to the training config, or something baked
+        # into the kwcoco spec marking a class as some type of "background"
+        if not self.use_special_classes:
+            # TODO: SPECIAL_CONTEXT_CLASSES
+            raise NotImplementedError
+        self._hueristic_background_classnames = heuristics.BACKGROUND_CLASSES
+        self._heuristic_ignore_classnames = heuristics.IGNORE_CLASSNAMES
+        self._heuristic_undistinguished_classnames = heuristics.UNDISTINGUISHED_CLASSES
 
         if channels is None:
             # Hack to use all channels in the first image.
@@ -1054,6 +1068,35 @@ class KWCocoVideoDataset(data.Dataset):
     @profile
     def __getitem__(self, index):
         """
+
+        Ignore:
+            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+            >>> # Debug issues seen in training
+            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+            >>> import watch
+            >>> import ndsampler
+            >>> import kwcoco
+            >>> dvc_dpath = watch.find_smart_dvc_dpath()
+            >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
+            >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+            >>> sampler = ndsampler.CocoSampler(coco_dset)
+            >>> self = KWCocoVideoDataset(
+            >>>     sampler,
+            >>>     sample_shape=(3, 224, 224),
+            >>>     window_overlap=0,
+            >>>     #channels="ASI|MF_Norm|AF|EVI|red|green|blue|swir16|swir22|nir",
+            >>>     channels="red|green|blue|nir",
+            >>>     neg_to_pos_ratio=0, time_sampling='auto', diff_inputs=0,
+            >>> )
+            >>> self.requested_tasks['change'] = False
+            >>> item = self[5]
+            >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0)
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas)
+            >>> kwplot.show_if_requested()
+
         Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
             >>> import ndsampler
@@ -1082,36 +1125,6 @@ class KWCocoVideoDataset(data.Dataset):
             >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, neg_to_pos_ratio=0.1, true_multimodal=True)
             >>> item = self[self.n_pos + 1]
             >>> canvas = self.draw_item(item)
-            >>> # xdoctest: +REQUIRES(--show)
-            >>> import kwplot
-            >>> kwplot.autompl()
-            >>> kwplot.imshow(canvas)
-            >>> kwplot.show_if_requested()
-
-        Ignore:
-            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-            >>> # Debug issues seen in training
-            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
-            >>> import os
-            >>> from os.path import join
-            >>> import ndsampler
-            >>> import kwcoco
-            >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
-            >>> dvc_dpath = os.environ.get('DVC_DPATH', _default)
-            >>> coco_fpath = join(dvc_dpath, 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json')
-            >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
-            >>> sampler = ndsampler.CocoSampler(coco_dset)
-            >>> self = KWCocoVideoDataset(
-            >>>     sampler,
-            >>>     sample_shape=(7, 224, 224),
-            >>>     window_overlap=0,
-            >>>     #channels="ASI|MF_Norm|AF|EVI|red|green|blue|swir16|swir22|nir",
-            >>>     channels="red|green|blue|swir16|swir22|nir",
-            >>>     neg_to_pos_ratio=0, time_sampling='auto', diff_inputs=0,
-            >>> )
-            >>> item = self[5]
-            >>> self.requested_tasks['change'] = False
-            >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0)
             >>> # xdoctest: +REQUIRES(--show)
             >>> import kwplot
             >>> kwplot.autompl()

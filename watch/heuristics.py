@@ -17,14 +17,14 @@ IGNORE_CLASSNAMES = {
 
 BACKGROUND_CLASSES = {
     'background',
-    'No Activity',
+    # 'No Activity',
     # 'Post Construction',
     # 'negative',
 }
 
 
 SPECIAL_CONTEXT_CLASSES = {
-    # 'No Activity',
+    'No Activity',
     'Post Construction',
     'negative',
 }
@@ -88,9 +88,17 @@ CATEGORIES_SCORED = [
 
 CATEGORIES = CATEGORIES_SCORED + [
     {'name': 'positive', 'color': 'olive'},
+]
+
+CATEGORIES_SPECIAL = [
+]
+
+CATEGORIES_NEGATIVE = [
+    {'name': 'No Activity', 'color': 'orange'},
     {'name': 'Unknown', 'color': 'blueviolet'},
-    {'name': 'ignore', 'color': 'slategray'},
-    {'name': 'negative', 'color': 'orangered'},
+    {'name': 'ignore', 'color': 'lightsalmon'},
+    {'name': 'negative', 'color': 'gray'},
+    {'name': 'background', 'color': 'black'},
 ]
 
 CATEGORIES_DCT = {

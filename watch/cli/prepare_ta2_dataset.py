@@ -62,7 +62,7 @@ def main(cmdline=False, **kwargs):
         }
 
     """
-    import shlex
+    # import shlex
     config = PrepareTA2Config(cmdline=cmdline, data=kwargs)
 
     dvc_dpath = config['dvc_dpath']
@@ -76,7 +76,7 @@ def main(cmdline=False, **kwargs):
     uncropped_bundle_name = f'Uncropped-{config["dataset_suffix"]}'
 
     region_dpath = dvc_dpath / 'annotations/region_models'
-    region_models = list(region_dpath.glob('*.geojson'))
+    # region_models = list(region_dpath.glob('*.geojson'))
 
     uncropped_dpath = dvc_dpath / uncropped_bundle_name
     uncropped_query_dpath = uncropped_dpath / '_query/items'
@@ -90,17 +90,17 @@ def main(cmdline=False, **kwargs):
     aligned_kwcoco_bundle = dvc_dpath / aligned_bundle_name
     aligned_kwcoco_fpath = aligned_kwcoco_bundle / 'data.kwcoco.json'
 
-    region_dpath = region_dpath.shrinkuser()
-    uncropped_dpath = uncropped_dpath.shrinkuser()
-    uncropped_query_dpath = uncropped_query_dpath.shrinkuser()
-    uncropped_query_dpath = uncropped_query_dpath.shrinkuser()
-    uncropped_query_dpath = uncropped_query_dpath.shrinkuser()
-    uncropped_query_fpath = uncropped_query_fpath.shrinkuser()
-    uncropped_kwcoco_fpath = uncropped_kwcoco_fpath.shrinkuser()
-    uncropped_ingress_dpath = uncropped_ingress_dpath.shrinkuser()
-    uncropped_catalog_fpath = uncropped_catalog_fpath.shrinkuser()
-    aligned_kwcoco_bundle = aligned_kwcoco_bundle.shrinkuser()
-    aligned_kwcoco_fpath = aligned_kwcoco_fpath.shrinkuser()
+    region_dpath = region_dpath.shrinkuser(home='$HOME')
+    uncropped_dpath = uncropped_dpath.shrinkuser(home='$HOME')
+    uncropped_query_dpath = uncropped_query_dpath.shrinkuser(home='$HOME')
+    uncropped_query_dpath = uncropped_query_dpath.shrinkuser(home='$HOME')
+    uncropped_query_dpath = uncropped_query_dpath.shrinkuser(home='$HOME')
+    uncropped_query_fpath = uncropped_query_fpath.shrinkuser(home='$HOME')
+    uncropped_kwcoco_fpath = uncropped_kwcoco_fpath.shrinkuser(home='$HOME')
+    uncropped_ingress_dpath = uncropped_ingress_dpath.shrinkuser(home='$HOME')
+    uncropped_catalog_fpath = uncropped_catalog_fpath.shrinkuser(home='$HOME')
+    aligned_kwcoco_bundle = aligned_kwcoco_bundle.shrinkuser(home='$HOME')
+    aligned_kwcoco_fpath = aligned_kwcoco_fpath.shrinkuser(home='$HOME')
 
     queue = SerialQueue()
 
@@ -114,7 +114,7 @@ def main(cmdline=False, **kwargs):
 
     queue.submit(ub.codeblock(
         rf'''
-        python -m watch.cli.baseline_framework_ingress \
+        [[ -f {uncropped_catalog_fpath} ]] || python -m watch.cli.baseline_framework_ingress \
             --aws_profile {aws_profile} \
             --jobs avail \
             --virtual \
@@ -127,7 +127,7 @@ def main(cmdline=False, **kwargs):
 
     queue.submit(ub.codeblock(
         rf'''
-        AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.ta1_stac_to_kwcoco \
+        [[ -f {uncropped_kwcoco_fpath} ]] || AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.ta1_stac_to_kwcoco \
             "{uncropped_catalog_fpath}" \
             --outpath="{uncropped_kwcoco_fpath}" \
             --populate-watch-fields \
@@ -135,14 +135,14 @@ def main(cmdline=False, **kwargs):
             --jobs avail
         '''))
 
-    region_model_str = ' '.join([shlex.quote(str(p)) for p in region_models])
+    # region_model_str = ' '.join([shlex.quote(str(p)) for p in region_models])
 
     queue.submit(ub.codeblock(
         rf'''
-        python -m watch.cli.coco_align_geotiffs \
+        AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.coco_align_geotiffs \
             --src "{uncropped_kwcoco_fpath}" \
             --dst "{aligned_kwcoco_fpath}" \
-            --regions {region_model_str} \
+            --regions "{region_dpath / '*.geojson'}" \
             --workers=avail \
             --context_factor=1 \
             --geo_preprop=auto \
