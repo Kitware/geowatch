@@ -11,7 +11,6 @@ from tqdm import tqdm
 
 # local imports
 from .pretext_model import pretext
-from .data.datasets import kwcoco_dataset
 from .data.multi_image_datasets import kwcoco_dataset as multi_image_dataset
 from watch.utils.lightning_ext import util_globals
 from .segmentation_model import segmentation_model as seg_model

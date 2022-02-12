@@ -10,9 +10,8 @@ import warnings
 
 import json
 import torch.package
-from datetime import date
 import ubelt as ub
-from os.path import join
+import os
 
 
 class segmentation_model(pl.LightningModule):
@@ -221,8 +220,7 @@ class segmentation_model(pl.LightningModule):
     def save_package(self, package_path):
         model = self
 
-        package_path = join(package_path, 'segmentation_package.pt')
-
+        package_path = os.path.join(package_path, 'segmentation_package.pt')
 
         backup_attributes = {}
         unsaved_attributes = [
@@ -276,8 +274,6 @@ class segmentation_model(pl.LightningModule):
 
     @classmethod
     def load_package(cls, package_path):
-        from os.path import join
-
         """
         DEPRECATE IN FAVOR OF watch.tasks.fusion.utils.load_model_from_package
 

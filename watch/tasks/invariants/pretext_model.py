@@ -9,10 +9,9 @@ from torch import pca_lowrank as pca
 
 import json
 import torch.package
-from datetime import date
 import ubelt as ub
-from os.path import join
- 
+import os
+
 from .data.datasets import kwcoco_dataset, gridded_dataset
 from .utils.attention_unet import attention_unet
 
@@ -288,11 +287,11 @@ class pretext(pl.LightningModule):
     def on_save_checkpoint(self, checkpoint):
         save_path = self.hparams.pca_projection_path[:-3] + '_{}'.format(str(self.current_epoch)) + '.pt'
         self.generate_pca_matrix(save_path=save_path, loader=self.train_dataloader(), reduction_dim=self.hparams.reduction_dim)
- 
+
     def save_package(self, package_path='$DVC_DPATH/models/uky/uky_invariants_2022_02_11/TA1_pretext_model'):
         model = self
 
-        package_path = join(package_path, 'pretext_package.pt')
+        package_path = os.path.join(package_path, 'pretext_package.pt')
 
         backup_attributes = {}
         unsaved_attributes = [
@@ -345,9 +344,7 @@ class pretext(pl.LightningModule):
                 setattr(model, key, val)
 
     @classmethod
-    def load_package(cls):
-        from os.path import join
-
+    def load_package(cls, package_path):
         """
         DEPRECATE IN FAVOR OF watch.tasks.fusion.utils.load_model_from_package
 
@@ -362,7 +359,5 @@ class pretext(pl.LightningModule):
         # This classmethod existing is a convinience more than anything else
         from watch.tasks.fusion.utils import load_model_from_package
 
-        DVC_DPATH = '/localdisk0/SCRATCH/watch/ben/smart_watch_dvc/models/uky/uky_invariants_2022_02_11/TA1_segmentation_model'
-        package_path = join(DVC_DPATH, 'my_package.pt')
         self = load_model_from_package(package_path)
         return self

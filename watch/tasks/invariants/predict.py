@@ -32,14 +32,14 @@ class predict(object):
         ### Define tasks
         if 'segmentation' in self.tasks:
             if args.use_torch_package:
-                self.segmentation_model = seg_model.load_package(seg_model, args.segmentation_package_path)
+                self.segmentation_model = seg_model.load_package(args.segmentation_package_path)
             else:
                 self.segmentation_model = seg_model.load_from_checkpoint(args.segmentation_ckpt_path, dataset=None)
             self.segmentation_model = self.segmentation_model.to(args.device)
 
         if 'pretext' in self.tasks:
             if args.use_torch_package:
-                self.pretext_model = pretext.load(package(pretext, args.pretext_package_path))
+                self.pretext_model = pretext.load_package(args.pretext_package_path)
             else:
                 self.pretext_model = pretext.load_from_checkpoint(args.pretext_ckpt_path, train_dataset=None, vali_dataset=None)
             self.pretext_model = self.pretext_model.eval().to(args.device)
@@ -54,9 +54,9 @@ class predict(object):
 
         self.num_out_channels = self.out_feature_dims
         if 'segmentation' in self.tasks:
-            self.num_out_channels +=1
+            self.num_out_channels += 1
         if 'before_after' in self.tasks:
-            self.num_out_channels +=1
+            self.num_out_channels += 1
 
         self.save_channels = f'invariants:{self.num_out_channels}'
         self.output_kwcoco_path = args.output_kwcoco
@@ -64,9 +64,9 @@ class predict(object):
         self.output_feat_dpath = ub.ensuredir(os.path.join(out_folder, 'uky_invariants'))
 
         self.imwrite_kw = {
-        'compress': 'DEFLATE',
-        'backend': 'gdal',
-        'blocksize': 64,
+            'compress': 'DEFLATE',
+            'backend': 'gdal',
+            'blocksize': 64,
         }
 
     def finalize_image(self, gid):
@@ -115,8 +115,7 @@ class predict(object):
         write_workers = util_globals.coerce_num_workers(args.write_workers)
         writer = util_parallel.BlockingJobQueue(max_workers=write_workers)
 
-        bundle_dpath = ub.Path(self.output_dset.bundle_dpath)
-
+        # bundle_dpath = ub.Path(self.output_dset.bundle_dpath)
         # save_dpath = (bundle_dpath / 'uky_invariants').ensuredir()
 
         self.imwrite_kw = {
@@ -187,7 +186,7 @@ class predict(object):
                         if gid not in self.stitcher_dict.keys():
                             self.stitcher_dict[gid] = kwarray.Stitcher(
                                 tr['space_dims'] + (self.num_out_channels,), device='numpy')
-                        slice_ = tr['space_slice'] 
+                        slice_ = tr['space_slice']
                         weights = util_kwimage.upweight_center_mask(save_feat.shape[0:2])[..., None]
                         self.stitcher_dict[gid].add(slice_, save_feat, weight=weights)
 
@@ -246,7 +245,13 @@ if __name__ == '__main__':
     CommandLine:
         python -m watch.tasks.template.predict --help
 
-        python -m watch.tasks.template.predict \
-            --input_kwcoco=path/to/data.kwcoco.json
+        python -m watch.tasks.invariants.predict \
+            --pretext_package_path $DVC_DPATH/models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pretext_package.pt \
+            --segmentation_package_path $DVC_DPATH/models/uky/uky_invariants_2022_02_11/TA1_segmentation_model/segmentation_package.pt \
+            --input_kwcoco $DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json \
+            --do_pca 1 \
+            --pca_projection_path $DVC_DPATH/models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pca_projection_matrix.pt \
+            --use_torch_package \
+            --output_kwcoco $DVC_DPATH/uky_invariants/Drop2-Aligned_TA1-2022-01/invariants.kwcoco.json
     """
     main()
