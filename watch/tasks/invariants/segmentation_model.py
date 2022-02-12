@@ -218,12 +218,10 @@ class segmentation_model(pl.LightningModule):
         lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=self.hparams.step_size, gamma=self.hparams.lr_gamma)
         return {'optimizer': optimizer, 'lr_scheduler': lr_scheduler}
 
-    def save_package(self):
+    def save_package(self, package_path):
         model = self
 
-        DVC_DPATH = '/localdisk0/SCRATCH/watch/ben/smart_watch_dvc/models/uky/uky_invariants_2022_02_11/TA1_segmentation_model'
-
-        package_path = join(DVC_DPATH, 'my_package.pt')
+        package_path = join(package_path, 'segmentation_package.pt')
 
 
         backup_attributes = {}
@@ -241,7 +239,7 @@ class segmentation_model(pl.LightningModule):
             if val is not None:
                 backup_attributes[key] = val
 
-        log_path = DVC_DPATH
+        log_path = package_path
         log_path = ub.Path(log_path)
 
         metadata_fpaths = []
@@ -277,7 +275,7 @@ class segmentation_model(pl.LightningModule):
                 setattr(model, key, val)
 
     @classmethod
-    def load_package(cls):
+    def load_package(cls, package_path):
         from os.path import join
 
         """
@@ -294,7 +292,5 @@ class segmentation_model(pl.LightningModule):
         # This classmethod existing is a convinience more than anything else
         from watch.tasks.fusion.utils import load_model_from_package
 
-        DVC_DPATH = '/localdisk0/SCRATCH/watch/ben/smart_watch_dvc/models/uky/uky_invariants_2022_02_11/TA1_segmentation_model'
-        package_path = join(DVC_DPATH, 'my_package.pt')
         self = load_model_from_package(package_path)
         return self

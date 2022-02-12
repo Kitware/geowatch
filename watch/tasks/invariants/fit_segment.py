@@ -76,7 +76,7 @@ if __name__ == '__main__':
     ### main argument
     parser.add_argument('--patch_size', type=int, default=64)
     parser.add_argument('--num_channels', type=int, default=6)
-    parser.add_argument('--pos_class_weight', type=float, help='Weight on positive class for segmentation. Only used on binary labels.', default=10)
+    parser.add_argument('--pos_class_weight', type=float, help='Weight on positive class for segmentation. Only used on binary labels.', default=1)
     parser.add_argument('--num_images', type=int, default=2)
     parser.add_argument('--num_attention_layers', type=int, default=4)
     parser.add_argument('--positional_encoding', action='store_true')

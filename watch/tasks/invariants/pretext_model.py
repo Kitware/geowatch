@@ -289,13 +289,10 @@ class pretext(pl.LightningModule):
         save_path = self.hparams.pca_projection_path[:-3] + '_{}'.format(str(self.current_epoch)) + '.pt'
         self.generate_pca_matrix(save_path=save_path, loader=self.train_dataloader(), reduction_dim=self.hparams.reduction_dim)
  
-    def save_package(self):
+    def save_package(self, package_path='$DVC_DPATH/models/uky/uky_invariants_2022_02_11/TA1_pretext_model'):
         model = self
 
-        DVC_DPATH = '/localdisk0/SCRATCH/watch/ben/smart_watch_dvc/models/uky/uky_invariants_2022_02_11/TA1_pretext_model'
-
-        package_path = join(DVC_DPATH, 'my_package.pt')
-
+        package_path = join(package_path, 'pretext_package.pt')
 
         backup_attributes = {}
         unsaved_attributes = [
@@ -312,7 +309,7 @@ class pretext(pl.LightningModule):
             if val is not None:
                 backup_attributes[key] = val
 
-        log_path = DVC_DPATH
+        log_path = package_path
         log_path = ub.Path(log_path)
 
         metadata_fpaths = []

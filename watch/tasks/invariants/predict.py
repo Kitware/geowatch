@@ -31,11 +31,17 @@ class predict(object):
             self.tasks = args.tasks
         ### Define tasks
         if 'segmentation' in self.tasks:
-            self.segmentation_model = seg_model.load_from_checkpoint(args.segmentation_ckpt_path, dataset=None)
+            if args.use_torch_package:
+                self.segmentation_model = seg_model.load_package(seg_model, args.segmentation_package_path)
+            else:
+                self.segmentation_model = seg_model.load_from_checkpoint(args.segmentation_ckpt_path, dataset=None)
             self.segmentation_model = self.segmentation_model.to(args.device)
 
         if 'pretext' in self.tasks:
-            self.pretext_model = pretext.load_from_checkpoint(args.pretext_ckpt_path, train_dataset=None, vali_dataset=None)
+            if args.use_torch_package:
+                self.pretext_model = pretext.load(package(pretext, args.pretext_package_path))
+            else:
+                self.pretext_model = pretext.load_from_checkpoint(args.pretext_ckpt_path, train_dataset=None, vali_dataset=None)
             self.pretext_model = self.pretext_model.eval().to(args.device)
             # pretext_hparams = pretext_model.hparams
 
@@ -205,7 +211,8 @@ def main():
     # pytorch lightning checkpoint
     parser.add_argument('--pretext_ckpt_path', type=str)
     parser.add_argument('--segmentation_ckpt_path', type=str)
-    parser.add_argument('--before_after_ckpt_path', type=str)
+    parser.add_argument('--pretext_package_path', type=str)
+    parser.add_argument('--segmentation_package_path', type=str)
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--num_workers', default=4, help='number of background data loading workers')
     parser.add_argument('--write_workers', default=0, help='number of background data writing workers')
@@ -220,6 +227,7 @@ def main():
     parser.add_argument('--tasks', nargs='+', help='Specify which tasks to choose from (segmentation, before_after, or pretext. Can also specify \'all\')', default=['all'])
     parser.add_argument('--do_pca', type=int, help='Set to 1 to perform pca. Choose output dimension in num_dim argument.', default=1)
     parser.add_argument('--pca_projection_path', type=str, help='Path to pca projection matrix', default='')
+    parser.add_argument('--use_torch_package', action='store_true')
 
     parser.set_defaults(
         terminate_on_nan=True
