@@ -15,8 +15,8 @@ CommandLine:
     smartwatch intensity_histograms --src special:shapes8 --show=True --stat=count --cumulative=True --multiple=stack
 
     DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-    KWCOCO_FPATH=$DVC_DPATH/Drop1-Aligned-L1/vali_data_nowv.kwcoco.json
-    smartwatch intensity_histograms --src $KWCOCO_FPATH --show=True --show=True
+    KWCOCO_FPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L_nowv_vali.kwcoco.json
+    smartwatch intensity_histograms --src $KWCOCO_FPATH --show=True --show=True --include_channels="forest|water|bare_ground"
 """
 import kwcoco
 import pickle
