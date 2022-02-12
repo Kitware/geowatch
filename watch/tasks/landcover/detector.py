@@ -61,10 +61,7 @@ def predict_image(img, model):
     mask = get_nodata_mask(img)
 
     if not np.any(mask):
-        try:
-            num_classes = model.finalconv3.out_channels
-        except Exception:
-            num_classes = 1
+        num_classes = model.out_channels
         h, w = img.shape[:2]
         pred = np.full((h, w, num_classes), PRED_NODATA, dtype=dtype)
         return pred
@@ -117,6 +114,8 @@ def get_nodata_mask(img, nodata=0):
     """
     mask = np.ones(img.shape[:2], bool)
     # img_nodata = img == nodata
+    # Ideally nodata is just a single value, hacking this to assume that any
+    # data <= 0 will be considered as nodata.
     img_nodata = img <= nodata  # HACK!
     for i in range(img.shape[0]):
         if np.all(img_nodata[i, :]):
