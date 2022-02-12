@@ -6,6 +6,10 @@ TODO:
     - [ ] Option to interpret a channel as a heatmap and overlay it on top of
           another set of channels interpreted as a grayscale image.
 
+    - [ ] Migrate to kwcoco proper
+
+    - [ ] Show valid image regions
+
 CommandLine:
     # A demo of this script on toydata is as follows
 
@@ -141,6 +145,8 @@ class CocoVisualizeConfig(scfg.Config):
 
 def _dataset_id(coco_dset):
     """ A possible good default for a coco candidate name """
+    if hasattr(coco_dset, '_dataset_id'):
+        return coco_dset._dataset_id()
     hashid = coco_dset._build_hashid()
     coco_fpath = ub.Path(coco_dset.fpath)
     name = '_'.join([coco_fpath.parent.stem, coco_fpath.stem, hashid[0:8]])
@@ -606,6 +612,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                 })
 
     # sanatize channel paths (todo: kwcoco helper for this)
+    # new in 0.2.21 ChannelSpec.path_sanitize
     def sanatize_chan_pnams(cs):
         return cs.replace('|', '_').replace(':', '-')
 

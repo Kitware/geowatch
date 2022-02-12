@@ -509,29 +509,8 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
         # TODO: determine nodata defaults based on sensor_coarse
 
         if enable_intensity_stats:
-            # TODO: rectify with code in cli/coco_intensity_histogram
-            # Use a sidecar file for now
-            import pathlib
-            import pickle
-            stats_fpath = pathlib.Path(fpath + '.stats.pkl')
-            # if _is_writeable(stats_fpath.parent):
-            #     pass
-            if not stats_fpath.exists():
-                import kwarray
-                imdata = kwimage.imread(fpath)
-                imdata = kwarray.atleast_nd(imdata, 3)
-                stats_info = {'bands': []}
-                for imband in imdata.transpose(2, 0, 1):
-                    data = imband.ravel()
-                    intensity_hist = ub.dict_hist(data)
-                    intensity_hist = ub.sorted_keys(intensity_hist)
-                    stats_info['bands'].append({
-                        'intensity_hist': intensity_hist,
-                    })
-                with open(stats_fpath, 'wb') as file:
-                    pickle.dump(stats_info, file)
-            else:
-                pass
+            from watch.cli import coco_intensity_histogram
+            coco_intensity_histogram.ensure_intensity_sidecar(fpath)
 
         return errors
 
