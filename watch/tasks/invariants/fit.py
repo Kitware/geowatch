@@ -32,6 +32,7 @@ def main(args):
         )
 
     model = pretext(hparams=args)
+    model.save_package()
 
     if args.vali_dataset is None:
         ckpt_monitors = (

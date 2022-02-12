@@ -7,6 +7,12 @@ from torchmetrics.classification.accuracy import Accuracy
 from tqdm import tqdm
 from torch import pca_lowrank as pca
 
+import json
+import torch.package
+from datetime import date
+import ubelt as ub
+from os.path import join
+ 
 from .data.datasets import kwcoco_dataset, gridded_dataset
 from .utils.attention_unet import attention_unet
 
@@ -282,3 +288,84 @@ class pretext(pl.LightningModule):
     def on_save_checkpoint(self, checkpoint):
         save_path = self.hparams.pca_projection_path[:-3] + '_{}'.format(str(self.current_epoch)) + '.pt'
         self.generate_pca_matrix(save_path=save_path, loader=self.train_dataloader(), reduction_dim=self.hparams.reduction_dim)
+ 
+    def save_package(self):
+        model = self
+
+        DVC_DPATH = '/localdisk0/SCRATCH/watch/ben/smart_watch_dvc/models/uky/uky_invariants_2022_02_11/TA1_pretext_model'
+
+        package_path = join(DVC_DPATH, 'my_package.pt')
+
+
+        backup_attributes = {}
+        unsaved_attributes = [
+            'trainer',
+            'train_dataloader',
+            'val_dataloader',
+            'test_dataloader',
+            '_load_state_dict_pre_hooks',
+        ]
+        for key in unsaved_attributes:
+
+            val = getattr(model, key)
+            #print(val)
+            if val is not None:
+                backup_attributes[key] = val
+
+        log_path = DVC_DPATH
+        log_path = ub.Path(log_path)
+
+        metadata_fpaths = []
+
+        metadata_fpaths += list(log_path.glob('hparams.yaml'))
+        try:
+            for key in backup_attributes.keys():
+                setattr(model, key, None)
+            arch_name = 'pretext_model.pkl'
+            module_name = 'watch_tasks_invariants'
+
+            with torch.package.PackageExporter(package_path) as exp:
+                exp.extern('**', exclude=['watch.tasks.invariants.**'])
+                exp.intern('watch.tasks.invariants.**', allow_empty=False)
+
+                package_header = {
+                    'version': '0.1.0',
+                    'arch_name': arch_name,
+                    'module_name': module_name,
+                }
+                exp.save_text(
+                    'package_header', 'package_header.json',
+                    json.dumps(package_header)
+                )
+                exp.save_pickle(module_name, arch_name, model)
+                for meta_fpath in metadata_fpaths:
+                    with open(meta_fpath, 'r') as file:
+                        text = file.read()
+                    exp.save_text('package_header', meta_fpath.name, text)
+        finally:
+
+            for key, val in backup_attributes.items():
+                setattr(model, key, val)
+
+    @classmethod
+    def load_package(cls):
+        from os.path import join
+
+        """
+        DEPRECATE IN FAVOR OF watch.tasks.fusion.utils.load_model_from_package
+
+        TODO:
+            - [ ] Make the logic that defines the save_package and load_package
+                methods with appropriate package header data a lightning
+                abstraction.
+        """
+        # NOTE: there is no gaurentee that this loads an instance of THIS
+        # model, the model is defined by the package and the tool that loads it
+        # is agnostic to the model contained in said package.
+        # This classmethod existing is a convinience more than anything else
+        from watch.tasks.fusion.utils import load_model_from_package
+
+        DVC_DPATH = '/localdisk0/SCRATCH/watch/ben/smart_watch_dvc/models/uky/uky_invariants_2022_02_11/TA1_segmentation_model'
+        package_path = join(DVC_DPATH, 'my_package.pt')
+        self = load_model_from_package(package_path)
+        return self

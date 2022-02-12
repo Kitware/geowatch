@@ -22,6 +22,7 @@ def main(args):
     logger = TensorBoardLogger(log_dir)
 
     model = segmentation_model(hparams=args)
+    model.save_package()
 
     checkpoint_callback = ModelCheckpoint(monitor='val_epoch_f1', mode='max', save_top_k=1, save_last=True)
     lr_logger = LearningRateMonitor(logging_interval='step')
