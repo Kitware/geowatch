@@ -91,3 +91,16 @@ To list Secrets
 .. code:: bash
 
    kubectl get secrets
+
+
+Web UI
+
+.. code:: bash
+
+    # Start server
+    kubectl -n argo port-forward svc/argo-server 2746:2746
+
+    # Generate auth token, will need to copy it into gui
+    argo auth token 
+    # Login to server
+    google-chrome https://127.0.0.1:2746/

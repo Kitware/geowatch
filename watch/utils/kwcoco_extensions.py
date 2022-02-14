@@ -187,6 +187,15 @@ def coco_populate_geo_heuristics(coco_dset, gids=None, overwrite=False,
     gids = coco_dset.images(gids)._ids
     # Cant multiprocess because of SwigPyObjects... bleh
     # keep_geotiff_metadata must be False to use mode=process
+    keep_geotiff_metadata = kw.get('keep_geotiff_metadata', False)
+    if keep_geotiff_metadata and mode == 'process':
+        raise NotImplementedError(ub.paragraph(
+            '''
+            Cannot keep keep geotiff metadata when using process parallelism.
+            Need to serialize gdal objects (i.e. RPC transforms and
+            SwigPyObject) returned from ``watch.gis.geotiff.geotiff_metadata``
+            to be able do this.
+            '''))
     executor = ub.JobPool(mode, max_workers=workers)
     # executor = ub.JobPool('process', max_workers=workers)
     for gid in ub.ProgIter(gids, desc='submit populate imgs'):

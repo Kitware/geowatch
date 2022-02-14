@@ -460,7 +460,10 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, heatmap_dpath,
         legend_img_saliency_cfsn = kwimage.ensure_uint255(legend_img_saliency_cfsn)
         legend_images.append(legend_img_saliency_cfsn)
 
-    legend_img = kwimage.stack_images(legend_images, axis=0, pad=5)
+    if len(legend_images):
+        legend_img = kwimage.stack_images(legend_images, axis=0, pad=5)
+    else:
+        legend_img = None
 
     # Draw predictions on each frame
     parts = []
@@ -673,8 +676,9 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, heatmap_dpath,
 
     plot_canvas = kwimage.stack_images(parts, axis=1, overlap=-10)
 
-    plot_canvas = kwimage.stack_images(
-        [plot_canvas, legend_img], axis=1, overlap=-10)
+    if legend_img is not None:
+        plot_canvas = kwimage.stack_images(
+            [plot_canvas, legend_img], axis=1, overlap=-10)
 
     header = kwimage.draw_header_text(
         {'width': plot_canvas.shape[1]}, canvas_title)
@@ -715,9 +719,15 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         >>> print('eval_dpath = {!r}'.format(eval_dpath))
         >>> evaluate_segmentations(true_coco, pred_coco, eval_dpath)
     """
+    import platform
     # Extract metadata about the predictions to persist
     meta = {}
     meta['info'] = info = []
+
+    # Add info about where and when evaluation happened
+    meta['hostname'] = platform.node()
+    meta['user'] = ub.Path(ub.userhome()).name
+    meta['time'] = ub.timestamp()
 
     if pred_coco.fpath is not None:
         pred_fpath = ub.Path(pred_coco.fpath)

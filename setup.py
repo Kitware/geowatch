@@ -80,20 +80,19 @@ except Exception as ex:
 setup(
     author="WATCH developers",
     author_email='kitware@kitware.com',
-    python_requires='>=3.7',
+    python_requires='>=3.8',
+    # https://pypi.org/classifiers/
     classifiers=[
-        'Development Status :: 2 - Pre-Alpha',
+        'Development Status :: 3 - Alpha',
         'Intended Audience :: Developers',
         'Natural Language :: English',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
     ],
     description="",
     entry_points={
         'console_scripts': [
-            'watch_hello_world=watch.cli.hello_world:main',
             'watch-cli = watch.cli.__main__:main',
             'smartwatch= watch.cli.__main__:main',
         ],

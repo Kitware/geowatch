@@ -53,7 +53,7 @@ Notes:
         --aux_workers=2 \
         --context_factor=1 \
         --visualize=False \
-        --skip_geo_preprop True \
+        --geo_preprop=False \
         --include_sensors=WV \
         --keep img
 
@@ -69,7 +69,6 @@ import scriptconfig as scfg
 import socket
 import ubelt as ub
 import dateutil.parser
-import pathlib
 import warnings
 from os.path import join, exists
 from watch.cli.coco_visualize_videos import _write_ann_visualizations2
@@ -327,7 +326,7 @@ def main(cmdline=True, **kw):
     print('max_workers = {!r}'.format(max_workers))
     print('aux_workers = {!r}'.format(aux_workers))
 
-    dst = pathlib.Path(ub.expandpath(dst))
+    dst = ub.Path(ub.expandpath(dst))
     # TODO: handle this coercion of directories or bundles in kwcoco itself
     if 'json' in dst.name.split('.'):
         output_bundle_dpath = str(dst.parent)
@@ -367,6 +366,8 @@ def main(cmdline=True, **kw):
 
     geo_preprop = config['geo_preprop']
     if config['skip_geo_preprop']:
+        import warnings
+        warnings.warn('skip_geo_preprop is deprecated', DeprecationWarning)
         geo_preprop = False
     if geo_preprop == 'auto':
         coco_img = coco_dset.coco_image(ub.peek(valid_gids))
@@ -612,7 +613,9 @@ class SimpleDataCube(object):
         ridx_to_gidsx = util_gis.geopandas_pairwise_overlaps(region_df, cube.img_geos_df)
 
         print('candidate query overlaps')
-        print('ridx_to_gidsx = {}'.format(ub.repr2(ridx_to_gidsx, nl=1)))
+        ridx_to_num_matches = ub.map_vals(len, ridx_to_gidsx)
+        print('ridx_to_num_matches = {}'.format(ub.repr2(ridx_to_num_matches, nl=1)))
+        # print('ridx_to_gidsx = {}'.format(ub.repr2(ridx_to_gidsx, nl=1)))
 
         to_extract = []
         for ridx, gidxs in ridx_to_gidsx.items():
@@ -670,7 +673,7 @@ class SimpleDataCube(object):
                     print('WARNING: No temporal matches to {}'.format(video_name))
                 else:
                     datetime_to_gids = ub.group_items(cand_gids, cand_datetimes)
-                    print('datetime_to_gids = {}'.format(ub.repr2(datetime_to_gids, nl=1)))
+                    # print('datetime_to_gids = {}'.format(ub.repr2(datetime_to_gids, nl=1)))
                     dates = sorted(datetime_to_gids)
                     print('Found {:>4} overlaps for {} from {} to {}'.format(
                         len(cand_gids),
@@ -890,7 +893,7 @@ class SimpleDataCube(object):
                             'score': score,
                             'gid': gid,
                             'valid_iooa': valid_iooa,
-                            'fname': pathlib.Path(fpath).name,
+                            'fname': ub.Path(fpath).name,
                             'geometry': sh_valid_region_local,
                         })
 
@@ -915,7 +918,7 @@ class SimpleDataCube(object):
                         print('\n\n')
                         print(group_local_df)
 
-                        debug_dpath = pathlib.Path(extract_dpath) / '_debug_regions'
+                        debug_dpath = ub.Path(extract_dpath) / '_debug_regions'
                         debug_dpath.mkdir(exist_ok=True)
                         with kwplot.BackendContext('agg'):
 
@@ -1045,9 +1048,7 @@ class SimpleDataCube(object):
 
         sub_new_gids = []
         sub_new_aids = []
-        Prog = ub.ProgIter
-        for job in Prog(pool.as_completed(), total=len(pool),
-                        desc='collect extract jobs'):
+        for job in pool.as_completed(desc='collect extract jobs'):
             new_img, new_anns = job.result()
 
             # Hack, the next ids dont update when new images are added
@@ -1119,7 +1120,7 @@ class SimpleDataCube(object):
             for new_gid in ub.ProgIter(sub_new_gids, desc='visualizing'):
                 new_img = new_dset.imgs[new_gid]
                 new_anns = new_dset.annots(gid=new_gid).objs
-                viz_dpath = pathlib.Path(sub_bundle_dpath) / '_viz'
+                viz_dpath = ub.Path(sub_bundle_dpath) / '_viz'
                 # Use false color for special groups
                 request_grouped_bands = [
                     'red|green|blue',

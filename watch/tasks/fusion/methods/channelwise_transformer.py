@@ -60,7 +60,6 @@ import kwcoco
 import ubelt as ub
 import torch
 import torchmetrics
-import pathlib
 # import math
 
 import numpy as np
@@ -1307,7 +1306,7 @@ class MultimodalTransformer(pl.LightningModule):
 
         metadata_fpaths = []
         if train_dpath_hint is not None:
-            train_dpath_hint = pathlib.Path(train_dpath_hint)
+            train_dpath_hint = ub.Path(train_dpath_hint)
             metadata_fpaths += list(train_dpath_hint.glob('hparams.yaml'))
             metadata_fpaths += list(train_dpath_hint.glob('fit_config.yaml'))
 

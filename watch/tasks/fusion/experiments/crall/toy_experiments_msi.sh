@@ -7,16 +7,16 @@ output if you run this should end with something like
 """
 
 # Generate toy datasets
-DATA_DPATH=$HOME/data/work/toy_change
-TRAIN_FPATH=$DATA_DPATH/vidshapes_msi_train100/data.kwcoco.json
-VALI_FPATH=$DATA_DPATH/vidshapes_msi_vali/data.kwcoco.json
-TEST_FPATH=$DATA_DPATH/vidshapes_msi_test/data.kwcoco.json 
+TOY_DATA_DPATH=$HOME/data/work/toy_change
+TRAIN_FPATH=$TOY_DATA_DPATH/vidshapes_msi_train100/data.kwcoco.json
+VALI_FPATH=$TOY_DATA_DPATH/vidshapes_msi_vali/data.kwcoco.json
+TEST_FPATH=$TOY_DATA_DPATH/vidshapes_msi_test/data.kwcoco.json 
 
 generate_data(){
-    mkdir -p "$DATA_DPATH"
-    kwcoco toydata --key=vidshapes-videos100-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$DATA_DPATH/vidshapes_msi_train100" --verbose=5
-    kwcoco toydata --key=vidshapes-videos5-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$DATA_DPATH/vidshapes_msi_vali"  --verbose=5
-    kwcoco toydata --key=vidshapes-videos2-frames6-randgsize-speed0.2-msi-multisensor --bundle_dpath "$DATA_DPATH/vidshapes_msi_test" --verbose=5 
+    mkdir -p "$TOY_DATA_DPATH"
+    kwcoco toydata --key=vidshapes-videos100-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_train100" --verbose=1
+    kwcoco toydata --key=vidshapes-videos5-frames5-randgsize-speed0.2-msi-multisensor --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_vali"  --verbose=1
+    kwcoco toydata --key=vidshapes-videos2-frames6-randgsize-speed0.2-msi-multisensor --bundle_dpath "$TOY_DATA_DPATH/vidshapes_msi_test" --verbose=1 
 }
 
 
@@ -40,17 +40,20 @@ Should look like
 """
 
 
-#kwcoco toydata --key=vidshapes-videos1-frames5-speed0.001-msi --bundle_dpath "$(realpath ./tmp)" --verbose=5 --use_cache=False
-#python -m watch.cli.coco_visualize_videos \
-#    --src "$(realpath ./tmp/data.kwcoco.json)" \
-#    --channels="B1|B8|b" \
-#    --viz_dpath="$(realpath ./tmp)/_viz" \
-#    --animate=True
 
-#python -m watch.cli.coco_visualize_videos \
-#    --src "$DATA_DPATH/vidshapes_msi_train/data.kwcoco.json" \
-#    --channels="gauss|B11,r|g|b,B1|B8|B11" \
-#    --viz_dpath="$DATA_DPATH/vidshapes_msi_train/_viz" --animate=True
+demo_visualize_toydata(){
+    kwcoco toydata --key=vidshapes-videos1-frames5-speed0.001-msi --bundle_dpath "$(realpath ./tmp)" --verbose=5 --use_cache=False
+    python -m watch.cli.coco_visualize_videos \
+        --src "$(realpath ./tmp/data.kwcoco.json)" \
+        --channels="B1|B8|b" \
+        --viz_dpath="$(realpath ./tmp)/_viz" \
+        --animate=True
+
+    python -m watch.cli.coco_visualize_videos \
+        --src "$TOY_DATA_DPATH/vidshapes_msi_train/data.kwcoco.json" \
+        --channels="gauss|B11,r|g|b,B1|B8|B11" \
+        --viz_dpath="$TOY_DATA_DPATH/vidshapes_msi_train/_viz" --animate=True
+}
 
 
 function join_by {
@@ -78,7 +81,10 @@ echo "CHANNELS = $CHANNELS"
 EXPERIMENT_NAME=ToyFusion_${ARCH}_v001
 DATASET_NAME=ToyDataMSI
 
-WORKDIR=$DATA_DPATH/training/$HOSTNAME/$USER
+# Place training inside of our DVC directory
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_NAME/runs/$EXPERIMENT_NAME
 
 # Specify the expected input / output files
@@ -95,7 +101,7 @@ EVAL_DPATH="$(echo "$SUGGESTIONS" | jq -r .eval_dpath)"
 TRAIN_CONFIG_FPATH=$WORKDIR/$DATASET_NAME/configs/train_$EXPERIMENT_NAME.yml 
 PRED_CONFIG_FPATH=$WORKDIR/$DATASET_NAME/configs/predict_$EXPERIMENT_NAME.yml 
 
-export CUDA_VISIBLE_DEVICES="1"
+#export CUDA_VISIBLE_DEVICES="0"
 
 # Configure training hyperparameters
 python -m watch.tasks.fusion.fit \
@@ -124,7 +130,7 @@ python -m watch.tasks.fusion.fit \
 python -m watch.tasks.fusion.predict \
     --gpus=1 \
     --write_preds=True \
-    --write_probs=False \
+    --write_probs=True \
     --dump="$PRED_CONFIG_FPATH"
 
 
@@ -136,16 +142,36 @@ python -m watch.tasks.fusion.fit \
         --train_dataset="$TRAIN_FPATH" \
          --vali_dataset="$VALI_FPATH" \
          --test_dataset="$TEST_FPATH" \
-          --num_workers="4" 
+          --num_workers="2"
 
-# Predict 
+
+demo_force_repackage(){
+    # Look at all checkpoints
+    ls "$DEFAULT_ROOT_DIR"/*/*/checkpoints/*.ckpt
+    # Grab the latest checkpoitn
+    CHECKPOINT_FPATH=$(find "$DEFAULT_ROOT_DIR" -iname "*.ckpt" | tail -n 1)
+    echo "CHECKPOINT_FPATH = $CHECKPOINT_FPATH"
+    # Force a paricular checkpoint into a package
+    python -m watch.tasks.fusion.repackage repackage "$CHECKPOINT_FPATH"
+    # Redefine package fpath to be that checkpoint
+    PACKAGE_FPATH=$(python -m watch.tasks.fusion.repackage repackage "$CHECKPOINT_FPATH" | tail -n 1)
+    echo "PACKAGE_FPATH = $PACKAGE_FPATH"
+}
+
+# Predict using one of the packaged models
 python -m watch.tasks.fusion.predict \
         --config="$PRED_CONFIG_FPATH" \
         --test_dataset="$TEST_FPATH" \
        --package_fpath="$PACKAGE_FPATH" \
-        --pred_dataset="$PRED_FPATH"
+        --pred_dataset="$PRED_FPATH" \
+        --write_probs=True
 
-# Evaluate 
+# Dump stats of truth vs prediction.
+# We should see soft segmentation masks in pred, but not in truth
+python -m kwcoco stats "$TEST_FPATH" "$PRED_FPATH"
+python -m watch stats "$TEST_FPATH" "$PRED_FPATH"
+
+# Evaluate the predictions
 python -m watch.tasks.fusion.evaluate \
         --true_dataset="$TEST_FPATH" \
         --pred_dataset="$PRED_FPATH" \

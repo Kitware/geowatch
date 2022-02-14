@@ -17,16 +17,20 @@ source /opt/conda/etc/profile.d/conda.sh
 
 set -x
 
-
 # Update the watch code repo
 cd "$WATCH_REPO_DPATH"
 
 # Add remote with our secret credentials and then pull from it
 git remote add custom "https://${WATCH_REPO_GITLAB_RO_DEPLOY_USERNAME}:${WATCH_REPO_GITLAB_RO_DEPLOY_PASSWORD}@gitlab.kitware.com/smart/watch.git"
-#git fetch custom
+git fetch custom
 
-BRANCH_NAME=$(git branch --show)
+BRANCH_NAME=$1
+if [[ "$BRANCH_NAME" == "" ]]; then 
+    BRANCH_NAME=$(git branch --show)
+fi
+
 echo "BRANCH_NAME = $BRANCH_NAME"
+git checkout "$BRANCH_NAME"
 git pull custom "$BRANCH_NAME"
 
 # Execute the latest and greatest entrypoint
