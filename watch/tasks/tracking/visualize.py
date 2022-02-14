@@ -1,9 +1,15 @@
 import kwimage
+import kwcoco
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-from watch.tasks.tracking.utils import heatmaps
-
+import seaborn as sns
+import shapely.ops
+import pandas as pd
+from collections import defaultdict
+from watch.tasks.tracking.utils import pop_tracks, heatmaps
+from watch.heuristics import CNAMES_DCT
+from watch.tasks.tracking.from_heatmap import mean_normalized
 
 def get_rgb(dset, gid):
     coco_img = dset.coco_image(gid)
@@ -103,7 +109,11 @@ def get_heatmap(dset, gid, key):
     return heatmap
 
 
-def visualize_videos(pred_dset, true_dset, out_dir='./_assets', hide_axis=False, coco_dset_sc=None):
+def visualize_videos(pred_dset,
+                     true_dset,
+                     out_dir='./_assets',
+                     hide_axis=False,
+                     coco_dset_sc=None):
     os.makedirs(out_dir, exist_ok=True)
     for vidid, _ in pred_dset.index.videos.items():
         gids = pred_dset.index.vidid_to_gids[vidid]
@@ -144,7 +154,8 @@ def visualize_videos(pred_dset, true_dset, out_dir='./_assets', hide_axis=False,
                 ax.axes.yaxis.set_visible(False)
 
             # RGB
-            plt.subplot(2, n_images_to_visualize, j + 1 + n_images_to_visualize)
+            plt.subplot(2, n_images_to_visualize,
+                        j + 1 + n_images_to_visualize)
             rgb = get_rgb(pred_dset, gids[gid_list[j]])
             plt.imshow(rgb)
             if hide_axis:
@@ -237,7 +248,10 @@ def visualize_videos(pred_dset, true_dset, out_dir='./_assets', hide_axis=False,
             plt.figure(figsize=(20, 15))
             for j in range(n_images_to_visualize):
                 plt.subplot(6, n_images_to_visualize, j + 1)
-                keys = ['Site Preparation', 'Active Construction', 'Post Construction', 'No Activity']
+                keys = [
+                    'Site Preparation', 'Active Construction',
+                    'Post Construction', 'No Activity'
+                ]
                 heatmap = get_heatmap(coco_dset_sc, gids[gid_list[j]], keys[0])
                 plt.imshow(heatmap, vmin=0, vmax=1)
                 if j == 3:
@@ -245,19 +259,22 @@ def visualize_videos(pred_dset, true_dset, out_dir='./_assets', hide_axis=False,
                 else:
                     plt.title('image:' + str(gid_list[j]))
 
-                plt.subplot(6, n_images_to_visualize, n_images_to_visualize + j + 1)
+                plt.subplot(6, n_images_to_visualize,
+                            n_images_to_visualize + j + 1)
                 heatmap = get_heatmap(coco_dset_sc, gids[gid_list[j]], keys[1])
                 plt.imshow(heatmap, vmin=0, vmax=1)
                 if j == 3:
                     plt.title('Active')
 
-                plt.subplot(6, n_images_to_visualize, 2 * n_images_to_visualize + j + 1)
+                plt.subplot(6, n_images_to_visualize,
+                            2 * n_images_to_visualize + j + 1)
                 heatmap = get_heatmap(coco_dset_sc, gids[gid_list[j]], keys[2])
                 plt.imshow(heatmap, vmin=0, vmax=1)
                 if j == 3:
                     plt.title('Post')
 
-                plt.subplot(6, n_images_to_visualize, 3 * n_images_to_visualize + j + 1)
+                plt.subplot(6, n_images_to_visualize,
+                            3 * n_images_to_visualize + j + 1)
                 heatmap = get_heatmap(coco_dset_sc, gids[gid_list[j]], keys[3])
                 plt.imshow(heatmap, vmin=0, vmax=1)
                 if j == 3:
@@ -275,7 +292,8 @@ def visualize_videos(pred_dset, true_dset, out_dir='./_assets', hide_axis=False,
                     ax.axes.yaxis.set_visible(False)
 
                 # RGB
-                plt.subplot(6, n_images_to_visualize, j + 1 + 5 * n_images_to_visualize)
+                plt.subplot(6, n_images_to_visualize,
+                            j + 1 + 5 * n_images_to_visualize)
                 rgb = get_rgb(pred_dset, gids[gid_list[j]])
                 plt.imshow(rgb)
                 if hide_axis:
@@ -313,3 +331,99 @@ def visualize_videos(pred_dset, true_dset, out_dir='./_assets', hide_axis=False,
             fname = os.path.join(out_dir_track, str(tid) + '_track.jpg')
             plt.savefig(fname)
             plt.close()
+
+
+keys_to_score_bas = kwcoco.ChannelSpec('salient')
+keys_to_score_sc = kwcoco.ChannelSpec(
+    '|'.join(CNAMES_DCT['positive']['scored']))
+
+
+def viz_track_scores(coco_dset, track_cats, keys_to_score, out_pth):
+    '''
+    Example:
+        >>> # xdoctest: +SKIP
+        >>> import kwcoco as kc
+        >>> from watch.cli.kwcoco_to_geojson import add_site_summary_to_kwcoco
+        >>> from watch.heuristics import SITE_SUMMARY_CNAME
+        >>> from watch.tasks.tracking.visualize import (
+        >>>     viz_track_scores, keys_to_score_sc)
+        >>> d = kc.CocoDataset(
+        >>>     '/home/local/KHQ/matthew.bernstein/smart/data/smart_watch_dvc/'
+        >>>     'Drop1-Aligned-TA1-2022-01/sc.kwcoco.json')
+        >>> d = d.subset(d.index.vidid_to_gids[6])
+        >>> kr_r002_path = (
+        >>>     '/home/local/KHQ/matthew.bernstein/smart/data/smart_watch_dvc/'
+        >>>     'annotations/region_models/KR_R002.geojson')
+        >>> d = add_site_summary_to_kwcoco(kr_r002_path, d)
+        >>> viz_track_scores(d, [SITE_SUMMARY_CNAME], keys_to_score_sc)
+    '''
+    def _score_track(track, gids=None):
+        if gids is None:  # include only gids in track
+            gids = [obs.gid for obs in track.observations]
+        # dct = defaultdict(lambda: 0)
+        dct = defaultdict(lambda: pd.NA)
+        for obs in track.observations:
+            dct[obs.gid] = obs.score
+        return [dct[g] for g in gids]
+
+    def _area_track(track):
+        return shapely.ops.unary_union(
+            [obs.poly.to_shapely() for obs in track.observations]).area
+
+    def _img_to_poly(img):
+        return kwimage.Boxes([[0, 0, *img.shape[::-1]]],
+                             'xywh').to_polygons()[0]
+
+    known_gids = set()  # hack to dedupe from melt()
+
+    def _add_lines(gids, sensor_coarses, **kwargs):
+        colors = dict(zip(['S2', 'L8', 'WV'], kwimage.Color.distinct(3)))
+        nonlocal known_gids  # hack to dedupe from melt()
+        for gid, sensor_coarse in zip(gids, sensor_coarses):
+            if gid not in known_gids:
+                known_gids.add(gid)
+                plt.axvspan(gid - 0.45,
+                            gid + 0.45,
+                            color=colors[sensor_coarse],
+                            alpha=0.1)
+
+    dfs = []
+    for i, (vidid, gids) in enumerate(coco_dset.index.vidid_to_gids.items()):
+        vid_name = coco_dset.index.videos[vidid]['name']
+        sub_dset = coco_dset.subset(gids, copy=True)
+        tracks = pop_tracks(sub_dset,
+                            cnames=track_cats,
+                            score_chan=keys_to_score,
+                            remove=False)
+        df = pd.DataFrame({
+            'gid':
+            gids,
+            'vid_name':
+            vid_name,
+            'sensor_coarse':
+            coco_dset.images(gids).get('sensor_coarse'),
+            **{
+                f'track {i:3} area={_area_track(t):.2f}': _score_track(
+                    t, gids)
+                for i, t in enumerate(tracks)
+            },
+        })
+        dfs.append(df)
+
+    sns.set_context('paper')
+
+    df = pd.concat(dfs)
+    df = pd.melt(df, ['gid', 'vid_name', 'sensor_coarse']).dropna()
+    g = sns.FacetGrid(df,
+                      row='vid_name',
+                      hue='variable',
+                      aspect=3,
+                      sharex=False)
+    g = g.map(sns.lineplot, 'gid', 'value').add_legend()
+    g = g.map(_add_lines, 'gid', 'sensor_coarse')
+
+    plt.yscale('log')
+    plt.ylabel('mean foreground response')
+    plt.ylim(1e-10, 5)
+
+    plt.savefig(out_pth)

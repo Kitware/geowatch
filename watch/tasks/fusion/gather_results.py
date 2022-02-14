@@ -115,6 +115,9 @@ def prepare_results(all_infos):
 
         pred_fpath = predict_meta['properties']['args']['pred_dataset']
 
+        _ = ub.Path(pred_fpath)
+        model_fpath = (_.parent.parent.parent / (_.parent.parent.name.split('pred_')[-1] + '.pt'))
+
         title = meta['title']
 
         if 'package_name' not in meta:
@@ -140,6 +143,7 @@ def prepare_results(all_infos):
             class_row = {}
             class_row['AP'] = bin_measure['ap']
             class_row['AUC'] = bin_measure['auc']
+            class_row['APUC'] = np.nanmean([bin_measure['ap'], bin_measure['auc']])
             class_row['catname'] = catname
             class_row['title'] = title
             class_row['package_name'] = package_name
@@ -147,14 +151,19 @@ def prepare_results(all_infos):
             class_row['epoch'] = epoch
             class_row['step'] = step
             class_row['pred_fpath'] = pred_fpath
+            class_row['model_fpath'] = str(model_fpath)
             expt_class_rows.append(class_row)
         class_rows.extend(expt_class_rows)
 
         row = {}
         row['class_mAP'] = np.nanmean(class_aps) if len(class_aps) else np.nan
         row['class_mAUC'] = np.nanmean(class_aucs) if len(class_aucs) else np.nan
+        row['class_mAPUC'] = np.nanmean([row['class_mAUC'], row['class_mAP']])
+
         row['salient_AP'] = salient_measures['ap']
         row['salient_AUC'] = salient_measures['auc']
+        row['salient_APUC'] = np.nanmean([row['salient_AP'], row['salient_AUC']])
+
         row['catname'] = 'all'
         row['package_name'] = package_name
         row['title'] = title
@@ -162,6 +171,7 @@ def prepare_results(all_infos):
         row['epoch'] = epoch
         row['step'] = step
         row['pred_fpath'] = pred_fpath
+        row['model_fpath'] = str(model_fpath)
 
         mean_rows.append(row)
 
@@ -181,8 +191,10 @@ def prepare_results(all_infos):
             metrics = {
                 'class_mAP': row['class_mAP'],
                 'class_mAUC': row['class_mAUC'],
+                'class_mAPUC': row['class_mAPUC'],
                 'salient_AP': row['salient_AP'],
                 'salient_AUC': row['salient_AUC'],
+                'salient_APUC': row['salient_APUC'],
             }
             for class_row in expt_class_rows:
                 metrics[class_row['catname'] + '_AP'] = class_row['AP']
@@ -224,52 +236,165 @@ def prepare_results(all_infos):
             )
             results_list2.append(result2)
 
-    if True:
-        # TOP CANDIDATE MODELS - FIND TOP K MODELS FOR EVERY METRIC
-
-        K = 5
-        max_per_metric_per_expt = 2
-        cand_expt_names = set()
-
-        if len(class_rows):
-            class_df = pd.DataFrame(class_rows)
-            class_candidate_indexes = []
-            for class_metric in ['AP', 'AUC']:
-                for catname, group in class_df.groupby('catname'):
-                    valid_indexes = []
-                    for expt_name, subgroup in group.groupby('expt_name'):
-                        best_subgroup = subgroup.sort_values(class_metric, ascending=False).iloc[0:max_per_metric_per_expt]
-                        valid_indexes.extend(best_subgroup.index.tolist())
-                    valid_indexes = sorted(set(valid_indexes))
-                    valid_group = group.loc[valid_indexes]
-                    top_group = valid_group.sort_values(class_metric, ascending=False).iloc[0:K]
-                    class_candidate_indexes.extend(top_group.index)
-            top_class_indexes = sorted(set(class_candidate_indexes))
-            cand_expt_names.update(set(class_df.loc[top_class_indexes]['pred_fpath'].tolist()))
-        else:
-            top_class_indexes = []
-
-        if len(mean_rows):
-            mean_df = pd.DataFrame(mean_rows)
-            mean_candidate_indexes = []
-            for metric in ['class_mAP', 'class_mAUC', 'salient_AP', 'salient_AUC']:
-                valid_indexes = []
-                for expt_name, subgroup in mean_df.groupby('expt_name'):
-                    best_subgroup = subgroup.sort_values(metric, ascending=False).iloc[0:max_per_metric_per_expt]
-                    valid_indexes.extend(best_subgroup.index.tolist())
-                valid_indexes = sorted(set(valid_indexes))
-                valid_group = mean_df.loc[valid_indexes]
-                top_group = valid_group.sort_values(metric, ascending=False).iloc[0:K]
-                mean_candidate_indexes.extend(top_group.index)
-            top_mean_indexes = sorted(set(mean_candidate_indexes))
-            cand_expt_names.update(set(mean_df.loc[top_mean_indexes]['pred_fpath'].tolist()))
-        else:
-            top_mean_indexes = []
-
-        cand_expt_names = sorted(cand_expt_names)
-        print('cand_expt_names = {}'.format(ub.repr2(cand_expt_names, nl=1)))
+    best_candidates(class_rows, mean_rows)
 
     return class_rows, mean_rows, all_results, results_list2
+
+
+def best_candidates(class_rows, mean_rows):
+    # TOP CANDIDATE MODELS - FIND TOP K MODELS FOR EVERY METRIC
+    K = 7
+    max_per_metric_per_expt = 3
+    cand_expt_names = set()
+
+    mean_metrics = ['class_mAP', 'class_mAUC', 'salient_AP', 'salient_AUC', 'class_mAPUC', 'salient_APUC']
+    class_metrics = ['AP', 'AUC', 'APUC', 'catname']
+
+    subsets = {}
+    if len(class_rows):
+        class_df = pd.DataFrame(class_rows)
+        class_candidate_indexes = []
+        for class_metric in class_metrics:
+            for catname, group in class_df.groupby('catname'):
+                valid_indexes = []
+                for expt_name, subgroup in group.groupby('expt_name'):
+                    best_subgroup = subgroup.sort_values(class_metric, ascending=False).iloc[0:max_per_metric_per_expt]
+                    valid_indexes.extend(best_subgroup.index.tolist())
+                valid_indexes = sorted(set(valid_indexes))
+                valid_group = group.loc[valid_indexes]
+                top_group = valid_group.sort_values(class_metric, ascending=False).iloc[0:K]
+                class_candidate_indexes.extend(top_group.index)
+        top_class_indexes = sorted(set(class_candidate_indexes))
+        class_subset = class_df.loc[top_class_indexes]
+        subsets['class'] = class_subset = class_subset.sort_values('AP')
+        cand_expt_names.update(set(class_subset['model_fpath'].tolist()))
+    else:
+        class_subset = []
+        top_class_indexes = []
+
+    if len(mean_rows):
+        mean_df = pd.DataFrame(mean_rows)
+        mean_candidate_indexes = []
+        for metric in mean_metrics:
+            valid_indexes = []
+            for expt_name, subgroup in mean_df.groupby('expt_name'):
+                best_subgroup = subgroup.sort_values(metric, ascending=False).iloc[0:max_per_metric_per_expt]
+                valid_indexes.extend(best_subgroup.index.tolist())
+            valid_indexes = sorted(set(valid_indexes))
+            valid_group = mean_df.loc[valid_indexes]
+            top_group = valid_group.sort_values(metric, ascending=False).iloc[0:K]
+            mean_candidate_indexes.extend(top_group.index)
+        top_mean_indexes = sorted(set(mean_candidate_indexes))
+        mean_subset = mean_df.loc[top_mean_indexes]
+        subsets['mean'] = mean_subset = mean_subset.sort_values('class_mAPUC')
+        cand_expt_names.update(set(mean_subset['model_fpath'].tolist()))
+    else:
+        mean_subset = []
+        top_mean_indexes = []
+
+    sc_mean_subset = mean_subset[~mean_subset['class_mAPUC'].isnull()].sort_values('class_mAPUC')
+    bas_mean_subset = mean_subset[~mean_subset['salient_APUC'].isnull()].sort_values('salient_APUC')
+
+    model_candidates = ub.ddict(list)
+    pred_candidates = ub.ddict(list)
+
+    if len(class_subset):
+        print('Best Subset Table (Per-Class):')
+        print(class_subset[class_metrics + ['package_name']].to_string())
+        model_candidates['sc'].append(class_subset['model_fpath'].values.tolist())
+        pred_candidates['sc'].append(class_subset['pred_fpath'].values.tolist())
+
+    if len(bas_mean_subset):
+        print('Best Subset Table (Mean-BAS):')
+        print(bas_mean_subset[mean_metrics + ['package_name']].to_string())
+        model_candidates['bas'].append(bas_mean_subset['model_fpath'].values.tolist())
+        pred_candidates['bas'].append(bas_mean_subset['pred_fpath'].values.tolist())
+
+    if len(sc_mean_subset):
+        print('Best Subset Table (Mean-SC):')
+        print(sc_mean_subset[mean_metrics + ['package_name']].to_string())
+        model_candidates['sc'].append(sc_mean_subset['model_fpath'].values.tolist())
+        pred_candidates['sc'].append(sc_mean_subset['pred_fpath'].values.tolist())
+
+    for n, s in subsets.items():
+        print('n = {!r}'.format(n))
+        print(shrink_notations(s, drop=1))
+
+    sc_model_candidates = list(ub.unique(ub.flatten(model_candidates['sc'])))
+    bas_model_candidates = list(ub.unique(ub.flatten(model_candidates['bas'])))
+
+    sc_pred_candidates = list(ub.unique(ub.flatten(pred_candidates['sc'])))
+    bas_pred_candidates = list(ub.unique(ub.flatten(pred_candidates['bas'])))
+
+    print('sc_model_candidates = {}'.format(ub.repr2(sc_model_candidates, nl=1)))
+    print('bas_model_candidates = {}'.format(ub.repr2(bas_model_candidates, nl=1)))
+
+    print('sc_pred_candidates = {}'.format(ub.repr2(sc_pred_candidates, nl=1)))
+    print('bas_pred_candidates = {}'.format(ub.repr2(bas_pred_candidates, nl=1)))
+
+    cand_expt_names = sorted(cand_expt_names)
+    print('cand_expt_names = {}'.format(ub.repr2(cand_expt_names, nl=1)))
+    return cand_expt_names
+
+
+def shrink_notations(df, drop=0):
+    import kwcoco
+    import re
+    from watch.utils import util_regex
+    b = util_regex.PythonRegexBuilder()
+    pat0 = r'v\d+'
+    pat1 = '^{pat}$'.format(pat=pat0)
+    pat2 = b.lookbehind('_') + pat0 + b.optional(b.lookahead('_'))
+    pat_text = b.oneof(*map(b.group, (pat1, pat2)))
+    pat = re.compile(pat_text)
+
+    df = df.copy()
+
+    if 0:
+        df['expt_name'] = (
+            df['expt_name'].apply(
+                lambda x: pat.search(x).group()
+            ))
+    if 'channels' in df:
+        df['channels'] = (
+            df['channels'].apply(
+                lambda x: kwcoco.ChannelSpec.coerce(x.replace('matseg_', 'matseg.')).concise().spec
+            ))
+        df['channels'] = (
+            df['channels'].apply(
+                lambda x: x.replace('blue|green|red|nir|swir16|swir22', 'BGRNSH'))
+        )
+        df['channels'] = (
+            df['channels'].apply(
+                lambda x: x.replace('brush|bare_ground|built_up', 'seg:3'))
+        )
+
+    if drop:
+        drop_cols = set(df.columns) & {
+            'title', 'catname', 'normalize_perframe', 'normalize_inputs',
+            'train_remote', 'step', 'arch_name', 'package_name',
+            'pred_fpath', 'model_fpath',
+        }
+        df = df.drop(drop_cols, axis=1)
+    return df
+
+
+def _oldhack():
+    """
+    if 0:
+        # Hack to move over data into a comparable eval
+        k1 = 'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco'
+        k2 = 'combo_DILM_nowv_vali.kwcoco'
+        a = sorted(dset_groups[k1])
+        b = sorted(dset_groups[k2])
+        for x in b:
+            y = ub.Path(str(x).replace(k2, k1))
+            print(y in a)
+            if not y.exists():
+                p1 = x.parent.parent.parent
+                p2 = y.parent.parent.parent
+                ub.symlink(p1, p2, verbose=1)
+    """
 
 
 def gather_measures(dvc_dpath=None, measure_globstr=None):
@@ -279,6 +404,7 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
         import watch
         dvc_dpath = watch.find_smart_dvc_dpath()
         measure_globstr = 'models/fusion/SC-20201117/*/*/*/eval/curves/measures2.json'
+        measure_globstr = 'models/fusion/SC-20201117/*_TA1*/*/*/eval/curves/measures2.json'
 
         if 0:
             remote = 'namek'
@@ -305,20 +431,6 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
     dset_groups = ub.group_items(measure_fpaths, lambda x: x.parent.parent.parent.name)
     print('dset_groups = {}'.format(ub.repr2(dset_groups, nl=2)))
 
-    if 0:
-        # Hack to move over data into a comparable eval
-        k1 = 'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco'
-        k2 = 'combo_DILM_nowv_vali.kwcoco'
-        a = sorted(dset_groups[k1])
-        b = sorted(dset_groups[k2])
-        for x in b:
-            y = ub.Path(str(x).replace(k2, k1))
-            print(y in a)
-            if not y.exists():
-                p1 = x.parent.parent.parent
-                p2 = y.parent.parent.parent
-                ub.symlink(p1, p2, verbose=1)
-
     predict_group_freq = ub.map_vals(len, dset_groups)
     print('These are the different datasets prediction was run on.')
     print('TODO: need to choose exactly 1 or a compatible set of them')
@@ -333,18 +445,22 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
     # dataset_key = 'combo_DILM.kwcoco_vali'
     # dataset_key = 'Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco'
 
+    # TODO: this makes this script non-portable. Need to parameterize
+
     # dataset_key = 'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco'
     dataset_keys = [
 
-        'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco',
-        'Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco',
-        'Drop1-Aligned-TA1-2022-01_vali_data_nowv.kwcoco',
-        'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco',
-
-        # 'Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco',
         # 'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco',
+        # 'Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco',
+        # 'Drop1-Aligned-TA1-2022-01_vali_data_nowv.kwcoco',
+        # 'Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco',
+        # 'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco'
         # 'Drop1-Aligned-TA1-2022-01_vali_data_nowv.kwcoco',
         # 'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco',
+
+        # 'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco',
+        'Drop2-Aligned-TA1-2022-01_combo_L_nowv_vali.kwcoco',
+        # 'Drop2-Aligned-TA1-2022-01_combo_L_nowv.kwcoco',
     ]
 
     # dataset_key = 'combo_vali_nowv.kwcoco'
@@ -373,6 +489,19 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
             print('Failed job.measure_fpath = {!r}'.format(job.measure_fpath))
             pass
 
+    if 0:
+        to_unlink = []
+        for fpath in failed_jobs:
+            if 'Drop2' in fpath.parent.parent.parent.name:
+                dvc_fpath = ub.Path(str(fpath) + '.dvc')
+                if dvc_fpath.exists():
+                    to_unlink.append(fpath)
+                    to_unlink.append(dvc_fpath)
+                    print('fpath = {!r}'.format(fpath))
+            print(len(list(fpath.parent.parent.parent.glob('*'))))
+        for p in to_unlink:
+            p.unlink()
+
     print(f'Failed Jobs {len(failed_jobs)=}/{len(jobs)}')
 
     class_rows, mean_rows, all_results, results_list2 = prepare_results(all_infos)
@@ -395,61 +524,31 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
         # 'mauc',
     }
 
-    def shrink_notations(df):
-        import kwcoco
-        import re
-        from watch.utils import util_regex
-        b = util_regex.PythonRegexBuilder()
-        pat0 = r'v\d+'
-        pat1 = '^{pat}$'.format(pat=pat0)
-        pat2 = b.lookbehind('_') + pat0 + b.optional(b.lookahead('_'))
-        pat_text = b.oneof(*map(b.group, (pat1, pat2)))
-        pat = re.compile(pat_text)
-
-        df = df.copy()
-
-        if 0:
-            df['expt_name'] = (
-                df['expt_name'].apply(
-                    lambda x: pat.search(x).group()
-                ))
-        df['channels'] = (
-            df['channels'].apply(
-                lambda x: kwcoco.ChannelSpec.coerce(x.replace('matseg_', 'matseg.')).concise().spec
-            ))
-        df['channels'] = (
-            df['channels'].apply(
-                lambda x: x.replace('blue|green|red|nir|swir16|swir22', 'BGRNSH'))
-        )
-        df['channels'] = (
-            df['channels'].apply(
-                lambda x: x.replace('brush|bare_ground|built_up', 'seg:3'))
-        )
-        return df
-
     analysis = result_analysis.ResultAnalysis(
         results_list2, ignore_params=ignore_params,
-        metrics=['class_mAP', 'salient_AP'],
+        # metrics=['class_mAPUC', 'salient_APUC'],
+        metrics=['salient_AP'],
         ignore_metrics=ignore_metrics,
     )
-    analysis.analysis()
+    analysis.run()
     print('analysis.varied = {}'.format(ub.repr2(analysis.varied, nl=2)))
-    stats_table = pd.DataFrame([ub.dict_diff(d, {'pairwise', 'param_values', 'moments'}) for d in analysis.statistics])
-    stats_table = stats_table.sort_values('anova_rank_p')
-    print(stats_table)
+    if len(analysis.stats_table):
+        analysis.stats_table = analysis.stats_table.sort_values('anova_rank_p')
+        print(analysis.stats_table)
 
     class_df = pd.DataFrame(class_rows)
     mean_df = pd.DataFrame(mean_rows)
     class_df = class_df.drop(set(class_df.columns) & {'title', 'pred_fpath', 'package_name'}, axis=1)
     mean_df = mean_df.drop(set(mean_df.columns) & {'title', 'pred_fpath', 'package_name'}, axis=1)
 
-    mean_df = shrink_notations(mean_df)
+    class_df = shrink_notations(class_df, drop=1)
+    mean_df = shrink_notations(mean_df, drop=1)
 
-    print('\nSort by class_mAP')
-    print(mean_df.sort_values('class_mAP').to_string())
+    print('\nSort by class_mAPUC')
+    print(mean_df.sort_values('class_mAPUC').to_string())
 
-    print('\nSort by salient_AP')
-    print(mean_df.sort_values('salient_AP').to_string())
+    print('\nSort by salient_APUC')
+    print(mean_df.sort_values('salient_APUC').to_string())
 
     try:
         print('\nClass: Sort by AP')
@@ -471,13 +570,7 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
                 bests.append(best)
         best_per_expt = pd.concat(bests)
         if shrink:
-            best_per_expt = shrink_notations(best_per_expt)
-            drop_cols = set(best_per_expt.columns) & {
-                'title', 'catname', 'normalize_perframe', 'normalize_inputs',
-                'train_remote', 'step', 'arch_name', 'package_name',
-                'pred_fpath',
-            }
-            best_per_expt = best_per_expt.drop(drop_cols, axis=1)
+            best_per_expt = shrink_notations(best_per_expt, drop=1)
             best_per_expt = best_per_expt.rename({'time_steps': 'time', 'chip_size': 'space'}, axis=1)
         return best_per_expt
 
@@ -487,7 +580,7 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
         best_per_expt = best_per_expt[~best_per_expt['class_mAP'].isnull()]
         print(best_per_expt.sort_values('class_mAP').to_string())
 
-        if 1:
+        if 0:
             import dataframe_image as dfi
             dfi.export(
                 best_per_expt,
@@ -502,10 +595,15 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
     except ValueError:
         pass
 
+    # salient_metric = 'salient_APUC'
+    # class_metric = 'class_mAPUC'
+    salient_metric = 'salient_AP'
+    class_metric = 'class_mAP'
+
     try:
         print('\nBest Salient Models')
-        best_per_expt = group_by_best(mean_df, 'salient_AP', shrink=True)
-        print(best_per_expt.sort_values('salient_AP').to_string())
+        best_per_expt = group_by_best(mean_df, salient_metric, shrink=True)
+        print(best_per_expt.sort_values(salient_metric).to_string())
     except ValueError:
         pass
 
@@ -524,11 +622,11 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
         # ax.set_title('Pixelwise mAP AC metrics: KR_R001 + KR_R002')
 
     kwplot.figure(fnum=1, doclf=True)
-    y = 'class_mAP'
+    y = class_metric
     plot_summary_over_epochs(y)
 
     kwplot.figure(fnum=2, doclf=True)
-    y = 'salient_AP'
+    y = salient_metric
     plot_summary_over_epochs(y)
 
     # kwplot.figure(fnum=2, doclf=True)
@@ -540,23 +638,18 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
     # distinct_colors_selection = kwimage.Color.distinct(255)
 
     def hash_color(data):
-        print('data = {!r}'.format(data))
         import distinctipy
         key_hash = ub.hash_data(data, hasher='blake3')
         key_tensor = np.frombuffer(memoryview(key_hash.encode()), dtype=np.int32)
         rng = kwarray.ensure_rng(rng=key_tensor.sum(), api='python')
         color = distinctipy.get_random_color(rng=rng)
-        # idx = key_tensor[0]
-        # # color = kwimage.Color(key_tensor[0:3]).as01()
-        # color = tuple(distinct_colors_selection[idx])
-        print('color = {!r}'.format(color))
         return color
 
     def plot_individual_class_curves(catname, fnum, metric='ap'):
         from kwcoco.metrics import drawing
         max_num_curves = 16
         max_per_expt = None
-        max_per_expt = 1
+        max_per_expt = 10
         fig = kwplot.figure(fnum=fnum, doclf=True)
 
         def lookup_metric(x):
@@ -612,7 +705,7 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
         from kwcoco.metrics import drawing
         max_num_curves = 16
         max_per_expt = None
-        max_per_expt = 1
+        max_per_expt = 10
         fig = kwplot.figure(fnum=fnum, doclf=True)
         relevant_results = [r for r in all_results if r.nocls_measures and r.nocls_measures['nsupport'] > 0]
 
@@ -699,6 +792,8 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
 
         fig5.set_size_inches(np.array([5.4, 2.8]) * 2.0)
         fig5.tight_layout()
+
+    _ = best_candidates(class_rows, mean_rows)
 
     if 1:
         plt.show()

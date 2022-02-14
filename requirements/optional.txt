@@ -11,3 +11,5 @@ mkinit >= 0.3.3
 
 timerit >= 0.3.0
 pint >= 0.17
+
+codecarbon >= 1.2.0

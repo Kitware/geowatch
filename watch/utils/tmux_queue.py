@@ -128,7 +128,9 @@ class TMUXLinearQueue(PathIdentifiable):
                 f'export {k}="{v}"' for k, v in self.environ.items()])
 
         for command in self.header_commands:
+            script.append('set -x')
             script.append(command)
+            script.append('set +x')
 
         for num, command in enumerate(self.commands):
             _mark_status('run')
@@ -137,6 +139,7 @@ class TMUXLinearQueue(PathIdentifiable):
                 #
                 # Command {} / {}
                 ''').format(num + 1, total))
+            script.append('set -x')
             script.append(command)
             # Check command status and update the bash state
             if with_status:
@@ -148,6 +151,7 @@ class TMUXLinearQueue(PathIdentifiable):
                         let "_QUEUE_NUM_ERRORED=_QUEUE_NUM_ERRORED+1"
                     fi
                     '''))
+            script.append('set +x')
 
         _mark_status('done')
         text = '\n'.join(script)
@@ -231,7 +235,6 @@ class TMUXMultiQueue(PathIdentifiable):
             )
             for worker_idx, e in enumerate(per_worker_environs)
         ]
-        print('per_worker_environs = {!r}'.format(per_worker_environs))
         self._worker_cycle = it.cycle(self.workers)
 
     def __nice__(self):

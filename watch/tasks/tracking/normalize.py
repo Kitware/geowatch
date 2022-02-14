@@ -1,4 +1,5 @@
 import itertools
+import kwcoco
 import kwimage
 import shapely
 import shapely.ops
@@ -10,7 +11,7 @@ import ubelt as ub
 from watch.utils.kwcoco_extensions import TrackidGenerator
 from watch.gis.geotiff import geotiff_crs_info
 from watch.tasks.tracking.utils import TrackFunction
-
+from watch.heuristics import SITE_SUMMARY_CNAME
 
 try:
     from xdev import profile
@@ -134,7 +135,7 @@ def add_geos(coco_dset, overwrite, max_workers=16):
         img_anns = annots.detections.data['segmentations']
         assert len(img_anns) == len(annots), 'TODO skip anns w/o segmentations'
         warp_aux_to_img = kwimage.Affine.coerce(
-                annotated_band(img).get('warp_aux_to_img', None)).inv()
+            annotated_band(img).get('warp_aux_to_img', None)).inv()
         aux_anns = img_anns.warp(warp_aux_to_img)
         wld_anns = aux_anns.warp(info['pxl_to_wld'])
         wgs_anns = wld_anns.warp(info['wld_to_wgs84'])
@@ -387,7 +388,12 @@ def add_track_index(coco_dset):
 
 
 @profile
-def normalize_phases(coco_dset, baseline_keys={'salient'}):
+def normalize_phases(coco_dset,
+                     use_viterbi=False,
+                     t_probs=None,
+                     e_probs=None,
+                     baseline_keys={'salient'},
+                     prediction_key='phase_transition_days'):
     '''
     Convert internal representation of phases to their IARPA standards as well
     as inserting a baseline guess for activity classification and removing
@@ -401,6 +407,7 @@ def normalize_phases(coco_dset, baseline_keys={'salient'}):
         Active Construction
         Post Construction
 
+    TODO make this a step in track_fn to take advantage of heatmap info?
     Example:
         >>> # test baseline guess
         >>> from watch.tasks.tracking.normalize import normalize_phases
@@ -417,25 +424,28 @@ def normalize_phases(coco_dset, baseline_keys={'salient'}):
         >>>     ((['Site Preparation'] * 10) +
         >>>      (['Active Construction'] * 9) +
         >>>      (['Post Construction'])))
+        >>> # try again with smoothing
+        >>> dset = normalize_phases(dset, use_viterbi=True)
     '''
-    from watch.heuristics import CATEGORIES, CNAMES_DCT
+    from watch.heuristics import CATEGORIES, CNAMES_DCT, SITE_SUMMARY_CNAME
+    from watch.tasks.tracking import phase
+    from collections import Counter
 
     for cat in CATEGORIES:
         coco_dset.ensure_category(**cat)
-
     baseline_keys = set(baseline_keys)
     unknown_cnames = coco_dset.name_to_cat.keys() - (
         {cat['name']
-         for cat in CATEGORIES} | {'Site Boundary'} | baseline_keys)
+         for cat in CATEGORIES} | {SITE_SUMMARY_CNAME} | baseline_keys)
     if unknown_cnames:
-        print('removing unknown categories {unknown_cnames}')
+        print(f'removing unknown categories {unknown_cnames}')
         coco_dset.remove_categories(unknown_cnames, keep_annots=False)
 
     cnames_to_remove = set(
         # negative examples, no longer needed
         CNAMES_DCT['negative']['scored'] + CNAMES_DCT['negative']['unscored'] +
         # should have been consumed by track_fn, TODO more robust check
-        ['Site Boundary'])
+        [SITE_SUMMARY_CNAME])
     coco_dset.remove_categories(cnames_to_remove, keep_annots=False)
 
     cnames_to_replace = (
@@ -449,106 +459,97 @@ def normalize_phases(coco_dset, baseline_keys={'salient'}):
 
     assert set(coco_dset.name_to_cat).issubset(cnames_to_replace
                                                | cnames_to_score)
+    #
+    # Transform phase labels of each track
+    #
 
-    # Replace positive annots of unknown class with a baseline guess class
-    # TODO break out these heuristics
-    from collections import Counter
     log = Counter()
-    for trackid in coco_dset.index.trackid_to_aids.keys():
-        annots = coco_dset.annots(trackid=trackid)
-        cnames = annots.cnames
-        if set(cnames) - cnames_to_score:
-            # if we have partial coverage, interpolate from good labels
-            if set(cnames) - cnames_to_replace:
+    for trackid, n_anns in ub.map_vals(
+            len, coco_dset.index.trackid_to_aids).items():
+        if n_anns > 1:
+
+            annots = coco_dset.annots(trackid=trackid)
+            has_missing_labels = bool(set(annots.cnames) - cnames_to_score)
+            has_good_labels = bool(set(annots.cnames) - cnames_to_replace)
+            if has_missing_labels and has_good_labels:
+                # if we have partial coverage, interpolate from good labels
                 log.update(['partial class labels'])
-                cids = np.array(annots.cids)
-                good_ixs = np.in1d(cnames,
-                                   list(cnames_to_replace),
-                                   invert=True)
-                ix_to_cid = dict(zip(range(len(good_ixs)), cids[good_ixs]))
-                interp = np.interp(range(len(cnames)), good_ixs,
-                                   range(len(good_ixs)))
-                annots.set('category_id',
-                           [ix_to_cid[int(ix)] for ix in np.round(interp)])
-            # else, predict site prep for the first half of the track and then
-            # active construction for the second half
-            # with post construction on the last frame
+                coco_dset = phase.interpolate(coco_dset, trackid)
             else:
-                log.update(['no class labels'])
-                annots = coco_dset.annots(trackid=trackid)
-                if len(set(annots.gids)) > 1:
-                    gids_first_half, gids_second_half = np.array_split(
-                        np.array(
-                            coco_dset.index._set_sorted_by_frame_index(
-                                coco_dset.annots(trackid=trackid).gids)), 2)
-                    siteprep_cid = coco_dset.name_to_cat['Site Preparation']['id']
-                    active_cid = coco_dset.name_to_cat['Active Construction']['id']
-                    post_cid = coco_dset.name_to_cat['Post Construction']['id']
-                    gids = np.array(annots.gids)
-                    cids = np.where([g in gids_first_half for g in gids],
-                                    siteprep_cid, active_cid)
-                    cids = np.where(gids == gids_second_half[-1], post_cid, cids)
-                    annots.set('category_id', cids)
-        else:
-            log.update(['full class labels'])
-
-        # HACK
-        # If the track ends before the end of the video, and the last frame is
-        # not post construction, add another frame of post construction
-        # TODO this is not a perfect approach, since we don't have per-subsite
-        # tracking across frames. We can run into a case where:
-        # frame  1   2   3
-        # ss1    AC  AC  PC
-        # ss2    AC  AC
-        # it is ambiguous whether ss2 ends on AC or merges with ss1.
-        # Ignore this edge case for now.
-        if len(coco_dset.annots(trackid=trackid)) > 1:
-            last_gid = coco_dset.index._set_sorted_by_frame_index(
-                coco_dset.annots(trackid=trackid).gids)[-1]
-            vidid = coco_dset.imgs[last_gid].get('video_id', None)
-            if vidid is None:
-                gids = coco_dset.index._set_sorted_by_frame_index(
-                    coco_dset.images().gids)
-            else:
-                gids = coco_dset.index._set_sorted_by_frame_index(
-                    coco_dset.images(vidid=vidid).gids)
-            current_gid = gids[-1]
-
-            def img_to_vid(gid):
-                return kwimage.Affine.coerce(coco_dset.imgs[gid].get(
-                    'warp_img_to_vid', {'scale': 1}))
-
-            if last_gid != current_gid:
-                next_gid = gids[gids.index(last_gid) + 1]
-
-                post_cid = coco_dset.name_to_cat['Post Construction']['id']
-
-                # TODO make this work as expected intersection instead of union
-                # coco_dset.annots(trackid=trackid, gid=last_gid)
-                anns = coco_dset.annots(aids=[
-                    ann['id'] for ann in coco_dset.annots(gid=last_gid).objs
-                    if ann['track_id'] == trackid
-                    and ann['category_id'] != post_cid
-                ])
-                dets = anns.detections.warp(img_to_vid(last_gid)).warp(
-                    img_to_vid(next_gid).inv())
-                for ann, seg, bbox in zip(
-                        anns.objs,
-                        dets.data['segmentations'].to_coco(style='new'),
-                        dets.boxes.to_coco(style='new')):
-
-                    post_ann = ann.copy()
-                    post_ann.pop('id')
-                    if 'track_index' in post_ann:
-                        post_ann['track_index'] += 1
-                    post_ann.update(
-                        dict(image_id=next_gid,
-                             category_id=post_cid,
-                             segmentation=seg,
-                             bbox=bbox))
-                    coco_dset.add_annotation(**post_ann)
-
+                if has_missing_labels:
+                    # else, predict site prep for the first half of the track
+                    # and then active construction for the second half with
+                    # post construction on the last frame
+                    log.update(['no class labels'])
+                    coco_dset = phase.baseline(coco_dset, trackid)
+                else:
+                    log.update(['full class labels'])
     print('label status of tracks: ', log)
+
+    #
+    # Phase prediction - do it all at once for efficiency
+    # Do this before viterbi so we can use this as an input in the future
+    #
+
+    ann_field = 'phase_transition_days'
+
+    # exclude untracked annots which might be unrelated
+    annots = coco_dset.annots(
+        list(
+            itertools.chain.from_iterable(
+                coco_dset.index.trackid_to_aids.values())))
+
+    has_prediction_heatmaps = all(
+        kwcoco.FusedChannelSpec.coerce(prediction_key).as_set().issubset(
+            coco_dset.coco_image(gid).channels.fuse().as_set())
+        for gid in set(annots.gids))
+    if has_prediction_heatmaps:
+        phase_transition_days = phase.phase_prediction_heatmap(
+            annots, coco_dset, prediction_key)
+        annots.set(ann_field, phase_transition_days)
+    else:
+        for trackid in coco_dset.index.trackid_to_aids.keys():
+            _annots = coco_dset.annots(trackid=trackid)
+            phase_transition_days = phase.phase_prediction_baseline(_annots)
+            _annots.set(ann_field, phase_transition_days)
+
+    old_cnames_dct = dict(zip(annots.aids, annots.cnames))
+
+    #
+    # Continue transforming phase labels, now with smoothing and deduping
+    #
+
+    for trackid, n_anns in ub.map_vals(
+            len, coco_dset.index.trackid_to_aids).items():
+        if n_anns > 1:
+
+            if use_viterbi:
+
+                smoothed_cnames = phase.class_label_smoothing(
+                    annots.cnames, t_probs, e_probs)
+                annots.set('category_id', [
+                    coco_dset.name_to_cat[name]['id']
+                    for name in smoothed_cnames
+                ])
+            # after viterbi, the sequence of phases is in the correct order
+
+            # If the track ends before the end of the video, and the last frame
+            # is not post construction, add another frame of post construction
+            coco_dset = phase.dedupe_background_anns(coco_dset, trackid)
+            coco_dset = phase.ensure_post(coco_dset, trackid)
+
+    #
+    # Fixup phase prediction
+    #
+
+    # TODO do something with transition preds for phases which were altered
+    FIXUP_TRANSITION_PRED = 0
+    if FIXUP_TRANSITION_PRED:
+        n_diff_annots = sum(
+            np.array(annots.cnames) == np.array(old_cnames_dct.values()))
+        if n_diff_annots > 0:
+            raise NotImplementedError
+
     return coco_dset
 
 
@@ -580,7 +581,17 @@ def normalize_sensors(coco_dset):
 
 
 @profile
-def normalize(coco_dset, track_fn, overwrite, gt_dset=None, **track_kwargs):
+def normalize(
+        coco_dset,
+        track_fn,
+        overwrite,
+        gt_dset=None,
+        viz_sc_bounds=False,
+        viz_videos=False,
+        use_viterbi=False,
+        t_probs=None,  # for viterbi
+        e_probs=None,  # for viterbi
+        **track_kwargs):
     '''
     Driver function to apply all normalizations
 
@@ -602,6 +613,7 @@ def normalize(coco_dset, track_fn, overwrite, gt_dset=None, **track_kwargs):
         >>> d.remove_categories(range(2,9))
         >>> d.cats[1]['supercategory'] = None
         >>> d.cats[1]['name'] = 'change'
+        >>> d.images().set('channels', 'rgb')
         >>> # test everything except geo-info
         >>> overwrite = False
         >>> def _normalize_annots(coco_dset, overwrite):
@@ -633,6 +645,8 @@ def normalize(coco_dset, track_fn, overwrite, gt_dset=None, **track_kwargs):
 
 
     '''
+    viz_out_dir = ub.Path('_assets/tracking_visualization')
+
     def _normalize_annots(coco_dset, overwrite):
         coco_dset = dedupe_annots(coco_dset)
         coco_dset = add_geos(coco_dset, overwrite)
@@ -658,23 +672,28 @@ def normalize(coco_dset, track_fn, overwrite, gt_dset=None, **track_kwargs):
 
     coco_dset = dedupe_tracks(coco_dset)
     coco_dset = add_track_index(coco_dset)
+
+    if viz_sc_bounds:
+        from .visualize import keys_to_score_sc, viz_track_scores
+        viz_track_scores(coco_dset, SITE_SUMMARY_CNAME, keys_to_score_sc,
+                         viz_out_dir / 'track_scores.jpg')
+
+    phase_args = [use_viterbi, t_probs, e_probs]
     if 'key' in track_kwargs:  # assume this is a baseline (saliency) key
-        coco_dset = normalize_phases(coco_dset,
-                                     baseline_keys=set(track_kwargs['key']))
-    else:
-        coco_dset = normalize_phases(coco_dset)
+        phase_args.append(set(track_kwargs['key']))
+    coco_dset = normalize_phases(coco_dset, *phase_args)
+
     coco_dset = normalize_sensors(coco_dset)
 
     # HACK, ensure coco_dset.index is up to date
     coco_dset._build_index()
 
-    #if gt_dset is not None:
-    # visualize predicted sites with true sites
-    out_dir = './_assets/tracking_visualization'
-    from .visualize import visualize_videos
-    visualize_videos(coco_dset,
-                     gt_dset,
-                     out_dir,
-                     coco_dset_sc=track_kwargs.get('coco_dset_sc'))
+    if viz_videos:
+        # visualize predicted sites with true sites
+        from .visualize import visualize_videos
+        visualize_videos(coco_dset,
+                         gt_dset,
+                         viz_out_dir,
+                         coco_dset_sc=track_kwargs.get('coco_dset_sc'))
 
     return coco_dset
