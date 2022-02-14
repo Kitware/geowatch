@@ -163,7 +163,7 @@ def visualize_videos(pred_dset,
                 ax.axes.xaxis.set_visible(False)
                 ax.axes.yaxis.set_visible(False)
 
-        fname = out_dir + '/video_' + str(vidid) + '_tracks.jpg'
+        fname = os.path.join(out_dir, 'video_' + str(vidid) + '_tracks.jpg')
         plt.tight_layout()
         plt.savefig(fname, bbox_inches='tight')
         plt.close()
@@ -239,7 +239,7 @@ def visualize_videos(pred_dset,
             rgb = get_rgb(pred_dset, gids[gid_list[j]])
             plt.imshow(rgb)
 
-        fname = out_dir + '/video_' + str(vidid) + 'thresholds.jpg'
+        fname = os.path.join(out_dir, 'video_' + str(vidid) + 'thresholds.jpg')
         plt.tight_layout()
         plt.savefig(fname, bbox_inches='tight')
 
@@ -301,7 +301,7 @@ def visualize_videos(pred_dset,
                     ax.axes.xaxis.set_visible(False)
                     ax.axes.yaxis.set_visible(False)
 
-            fname = out_dir + '/video_' + str(vidid) + '_sc_heatmaps.jpg'
+            fname = os.path.join(out_dir, 'video_' + str(vidid) + '_sc_heatmaps.jpg')
             plt.tight_layout()
             plt.savefig(fname, bbox_inches='tight')
             plt.close()
