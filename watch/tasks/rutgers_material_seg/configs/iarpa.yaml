@@ -15,8 +15,8 @@ data:
     model_save_dir: /home/native/projects/data/smart_watch/models/
     train_dir: /media/native/data/data/smart_watch_dvc/Drop1-Aligned-L1-2022-01/
     test_dir: /media/native/data/data/smart_watch_dvc/Drop1-Aligned-L1-2022-01/
-    train_coco_json: /media/native/data/data/smart_watch_dvc/Drop2-Aligned-TA1-2022-01/data_wv_train.kwcoco.json
-    test_coco_json: /media/native/data/data/smart_watch_dvc/Drop2-Aligned-TA1-2022-01/data_wv_vali.kwcoco.json
+    train_coco_json: /media/native/data/data/smart_watch_dvc/Drop2-Aligned-TA1-2022-01/data_nowv_train.kwcoco.json
+    test_coco_json: /media/native/data/data/smart_watch_dvc/Drop2-Aligned-TA1-2022-01/data_nowv_vali.kwcoco.json
     val_dir:
   server:
     model_save_dir: /data4/peri/smart_watch/models/
@@ -35,7 +35,8 @@ training:
   out_features_dim: 10
   weight_std: True
   beta: False
-  pretrained: /home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_trainWin_7_modelName_resnet_2021-10-18-13:27/experiments_epoch_0_loss_11.28138166103723_valmF1_0.6866047574166068_valChangeF1_0.49019877611815305_time_2021-10-18-14:15:27.pth
+  # pretrained: /home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_trainWin_7_modelName_resnet_2021-10-18-13:27/experiments_epoch_0_loss_11.28138166103723_valmF1_0.6866047574166068_valChangeF1_0.49019877611815305_time_2021-10-18-14:15:27.pth
+  pretrained: False
   distributed: False
   learning_rate: 0.005 # best: 0.00007
   # resume: /home/native/projects/data/smart_watch/models/experiments_iarpa/tasks_experiments_iarpa_2022-01-27-17:08/experiments_epoch_28_loss_55.225655170587395_valmF1_nan_valChangeF1_0.0031579150989931425_time_2022-01-28-08:57:52.pth
