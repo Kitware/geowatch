@@ -311,7 +311,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         parser.add_argument('--resample_invalid_frames', default=True, help='if True, will attempt to resample any frame without valid data')
         parser.add_argument('--temporal_dropout', default=0.0, type=float, help='Drops frames in a fraction of training batches'),
 
-        parser.add_argument('--max_epoch_length', default=None, type=int, help='If specified, restricts number of steps per epoch'),
+        parser.add_argument('--max_epoch_length', default=None, type=smartcast, help='If specified, restricts number of steps per epoch'),
 
         parser.add_argument(
             '--normalize_inputs', default=True, type=smartcast, help=ub.paragraph(
