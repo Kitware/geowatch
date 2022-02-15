@@ -11,10 +11,10 @@ CommandLine:
     # RUTGERS_MATERIAL_MODEL_FPATH="/home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-10-20-17:15/experiments_epoch_37_loss_7.454268312454223_valmF1_0.7629152048972937_valChangeF1_0.5579948695099214_time_2021-10-20-18:04:59.pth"
 
     DVC_DPATH=${DVC_DPATH:-/media/native/data/data/smart_watch_dvc}
-    KWCOCO_BUNDLE_DPATH=${KWCOCO_BUNDLE_DPATH:-$DVC_DPATH/drop1-S2-L8-aligned}
-    BASE_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json
-    RUTGERS_MATERIAL_MODEL_FPATH="/home/native/projects/data/smart_watch/models/experiments_iarpa/tasks_experiments_iarpa_2021-10-23-13:23/experiments_epoch_1_loss_34.30951297569275_valmF1_nan_valChangeF1_nan_time_2021-10-23-14:14:21.pth"
-    RUTGERS_MATERIAL_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/rutgers_material_seg.kwcoco.json
+    KWCOCO_BUNDLE_DPATH=${KWCOCO_BUNDLE_DPATH:-$DVC_DPATH/Drop2-Aligned-TA1-2022-01}
+    BASE_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json
+    RUTGERS_MATERIAL_MODEL_FPATH="/home/native/projects/data/smart_watch/models/experiments_iarpa/tasks_experiments_iarpa_2022-01-31-14:32/experiments_epoch_18_loss_59.014100193977356_valmF1_0.18694573888313187_valChangeF1_0.0_time_2022-02-01-01:53:20.pth"
+    RUTGERS_MATERIAL_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/rutgers_material_seg_v2.kwcoco.json
 
 
     # Generate Rutgers Features
