@@ -190,55 +190,57 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         if not package_dvc_fpath.exists() and package_fpath.is_file():
             dvc_to_add.append(str(package_fpath.relative_to(dvc_dpath)))
 
-    print('New models to add to DVC: {}'.format(ub.repr2(dvc_to_add)))
-    dvc_info = ub.cmd(['dvc', 'add'] + dvc_to_add, cwd=dvc_dpath, verbose=3, check=True)
+    if 0:
+        # Broken parts
+        print('New models to add to DVC: {}'.format(ub.repr2(dvc_to_add)))
+        dvc_info = ub.cmd(['dvc', 'add'] + dvc_to_add, cwd=dvc_dpath, verbose=3, check=True)
 
-    # Determine if DVC will autostage the new files
-    # (It should for SMART)
-    has_autostage = ub.cmd('dvc config core.autostage', cwd=dvc_dpath, check=True)['out'].split() == 'true'
+        # Determine if DVC will autostage the new files
+        # (It should for SMART)
+        has_autostage = ub.cmd('dvc config core.autostage', cwd=dvc_dpath, check=True)['out'].split() == 'true'
 
-    if not has_autostage:
-        # Note: Using autostageadd means we do not need this, check
-        # the setting and disable if necessary
-        start = False
-        gitlines = []
-        for line in dvc_info['out'].split('\n'):
-            if start:
-                gitlines.append(line.strip())
-            if 'To track the changes with git, run:' in line:
-                start = True
-        gitcmd = ''.join(gitlines)
-        if gitcmd:
-            git_info1 = ub.cmd(gitcmd, verbose=3, check=True, cwd=dvc_dpath)
-            assert git_info1['ret'] == 0
+        if not has_autostage:
+            # Note: Using autostageadd means we do not need this, check
+            # the setting and disable if necessary
+            start = False
+            gitlines = []
+            for line in dvc_info['out'].split('\n'):
+                if start:
+                    gitlines.append(line.strip())
+                if 'To track the changes with git, run:' in line:
+                    start = True
+            gitcmd = ''.join(gitlines)
+            if gitcmd:
+                git_info1 = ub.cmd(gitcmd, verbose=3, check=True, cwd=dvc_dpath)
+                assert git_info1['ret'] == 0
 
-    if git_commit:
-        git_info3 = ub.cmd('git commit -am "new models"', verbose=3, check=True, cwd=dvc_dpath)  # dangerous?
-        assert git_info3['ret'] == 0
-        git_info2 = ub.cmd('git push', verbose=3, check=True, cwd=dvc_dpath)
-        assert git_info2['ret'] == 0
+        if git_commit:
+            git_info3 = ub.cmd('git commit -am "new models"', verbose=3, check=True, cwd=dvc_dpath)  # dangerous?
+            assert git_info3['ret'] == 0
+            git_info2 = ub.cmd('git push', verbose=3, check=True, cwd=dvc_dpath)
+            assert git_info2['ret'] == 0
 
-    import dvc.main
-    # from dvc import main
-    saved_cwd = os.getcwd()
-    try:
-        os.chdir(dvc_dpath)
-        remote = 'aws'
-        dvc_command = ['push', '-r', remote, '--recursive', str(storage_dpath.relative_to(dvc_dpath))]
-        dvc.main.main(dvc_command)
-    finally:
-        os.chdir(saved_cwd)
+        import dvc.main
+        # from dvc import main
+        saved_cwd = os.getcwd()
+        try:
+            os.chdir(dvc_dpath)
+            remote = 'aws'
+            dvc_command = ['push', '-r', remote, '--recursive', str(storage_dpath.relative_to(dvc_dpath))]
+            dvc.main.main(dvc_command)
+        finally:
+            os.chdir(saved_cwd)
 
-    print(ub.codeblock(
-        """
-        # On the evaluation remote you need to run something like:
-        DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-        cd $DVC_DPATH
-        git pull
-        dvc pull -r aws --recursive models/fusion/SC-20201117
+        print(ub.codeblock(
+            """
+            # On the evaluation remote you need to run something like:
+            DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+            cd $DVC_DPATH
+            git pull
+            dvc pull -r aws --recursive models/fusion/SC-20201117
 
-        python ~/code/watch/watch/tasks/fusion/schedule_inference.py schedule_evaluation --gpus=auto --run=True
-        """))
+            python ~/code/watch/watch/tasks/fusion/schedule_inference.py schedule_evaluation --gpus=auto --run=True
+            """))
 
 
 if __name__ == '__main__':

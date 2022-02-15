@@ -30,22 +30,6 @@ class PrepareTA2Config(scfg.Config):
     }
 
 
-class SerialQueue:
-    def __init__(self):
-        self.commands = []
-
-    def submit(self, command):
-        self.commands.append(command)
-
-    def finalize_text(self):
-        text = '\n\n'.join(self.commands)
-        return text
-
-    def rprint(self):
-        text = self.finalize_text()
-        print(ub.highlight_code(text, 'bash'))
-
-
 def main(cmdline=False, **kwargs):
     """
     Example:
@@ -62,6 +46,7 @@ def main(cmdline=False, **kwargs):
         }
 
     """
+    from watch.utils.tmux_queue import SerialQueue
     # import shlex
     config = PrepareTA2Config(cmdline=cmdline, data=kwargs)
 
