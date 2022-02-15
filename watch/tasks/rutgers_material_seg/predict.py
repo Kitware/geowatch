@@ -3,19 +3,16 @@ Prediction script for Rutgers Material Semenatic Segmentation Models
 
 CommandLine:
 
-    DVC_DPATH=${DVC_DPATH:-$HOME/data/dvc-repos/smart_watch_dvc}
-    KWCOCO_BUNDLE_DPATH=${KWCOCO_BUNDLE_DPATH:-$DVC_DPATH/drop1-S2-L8-aligned}
+    export CUDA_VISIBLE_DEVICES=1
+
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+
+    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15
     BASE_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json
-    RUTGERS_MATERIAL_MODEL_FPATH="$DVC_DPATH/models/rutgers/experiments_epoch_30_loss_0.05691597167379317_valmIoU_0.5694727912477856_time_2021-08-07-09:01:01.pth"
-    RUTGERS_MATERIAL_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/rutgers_material_seg.kwcoco.json
-    # RUTGERS_MATERIAL_MODEL_FPATH="/home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-10-20-17:15/experiments_epoch_37_loss_7.454268312454223_valmF1_0.7629152048972937_valChangeF1_0.5579948695099214_time_2021-10-20-18:04:59.pth"
 
-    DVC_DPATH=${DVC_DPATH:-/media/native/data/data/smart_watch_dvc}
-    KWCOCO_BUNDLE_DPATH=${KWCOCO_BUNDLE_DPATH:-$DVC_DPATH/Drop2-Aligned-TA1-2022-01}
-    BASE_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json
-    RUTGERS_MATERIAL_MODEL_FPATH="/home/native/projects/data/smart_watch/models/experiments_iarpa/tasks_experiments_iarpa_2022-01-31-14:32/experiments_epoch_18_loss_59.014100193977356_valmF1_0.18694573888313187_valChangeF1_0.0_time_2022-02-01-01:53:20.pth"
-    RUTGERS_MATERIAL_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/rutgers_material_seg_v2.kwcoco.json
+    RUTGERS_MATERIAL_MODEL_FPATH="$DVC_DPATH/models/rutgers/rutgers_peri_materials_v3/experiments_epoch_18_loss_59.014100193977356_valmF1_0.18694573888313187_valChangeF1_0.0_time_2022-02-01-01:53:20.pth"
 
+    RUTGERS_MATERIAL_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/rutgers_material_seg_v3.kwcoco.json
 
     # Generate Rutgers Features
     python -m watch.tasks.rutgers_material_seg.predict \
@@ -23,8 +20,8 @@ CommandLine:
         --checkpoint_fpath=$RUTGERS_MATERIAL_MODEL_FPATH  \
         --default_config_key=iarpa \
         --pred_dataset=$RUTGERS_MATERIAL_COCO_FPATH \
-        --num_workers=8 \
-        --batch_size=4 --gpus 0
+        --num_workers=avail \
+        --batch_size=4 --gpus 1
 
 """
 import os
@@ -408,6 +405,7 @@ def main(cmdline=False, **kwargs):
     # print(f"loadded model succeffuly from: {pretrain_config_path}")
     # print(f"Missing keys from loaded model: {missing_keys}, unexpected keys: {unexpexted_keys}")
 
+    print('device = {!r}'.format(device))
     model.to(device)
 
     output_coco_fpath = pathlib.Path(args.pred_dataset)
