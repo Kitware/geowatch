@@ -162,7 +162,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         frame_data = np.concatenate([f[None, ...] for f in frame_ims], axis=0)
         class_masks = np.concatenate([m[None, ...] for m in frame_masks], axis=0)
         cthw_im = frame_data.transpose(3, 0, 1, 2)
-
+        # print(f"image min:{cthw_im.min()}, max:{cthw_im.max()}")
         inputs = {
             'im': ItemContainer(torch.from_numpy(cthw_im), stack=True),
         }

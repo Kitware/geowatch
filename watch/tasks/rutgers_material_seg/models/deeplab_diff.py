@@ -9,7 +9,7 @@ Adapted from: https://github.com/bearpaw/pytorch-classification
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from watch.tasks.rutgers_material_seg.models.encoding import Encoding
+from watch.tasks.rutgers_material_seg.models.tex_refine import TeRN
 
 class ASPP(nn.Module):
 
@@ -69,6 +69,55 @@ class ASPP(nn.Module):
         x = self.conv3(x)
 
         return x
+
+class DoubleConv(nn.Module):
+    """(convolution => [BN] => ReLU) * 2"""
+
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.double_conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1),
+            nn.GroupNorm(32, out_channels),
+            nn.LeakyReLU(0.2),
+            nn.Dropout(0.5),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1),
+            nn.GroupNorm(32, out_channels),
+            nn.LeakyReLU(0.2),
+        )
+
+    def forward(self, x):
+        return self.double_conv(x)
+
+class Up(nn.Module):
+    """Upscaling then double conv"""
+
+    def __init__(self, in_channels, out_channels, bilinear=True):
+        super().__init__()
+
+        # if bilinear, use the normal convolutions to reduce the number of
+        # channels
+        if bilinear:
+            self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+        else:
+            self.up = nn.ConvTranspose2d(in_channels // 2, in_channels // 2, kernel_size=2, stride=2)
+
+        self.conv = DoubleConv(in_channels, out_channels)
+        # Given transposed=1, weight of size [48, 48, 2, 2], 48 -> 32+64//2, instead,
+        # expected input[4, 64, 128, 128] to have 48 channels, but got 64
+        # channels instead
+
+    def forward(self, x1, x2):
+        # print(x1.shape)
+        x1 = self.up(x1)
+        # input is CHW
+        diffY = x2.size()[2] - x1.size()[2]
+        diffX = x2.size()[3] - x1.size()[3]
+
+        x1 = F.pad(x1, [diffX // 2, diffX - diffX // 2,
+                        diffY // 2, diffY - diffY // 2])
+
+        x = torch.cat([x2, x1], dim=1)
+        return self.conv(x)
 
 class BasicBlock(nn.Module):
     expansion = 1
@@ -136,22 +185,36 @@ class Bottleneck(nn.Module):
 class ResNet(nn.Module):
     def __init__(self, block, num_blocks, num_channels=3, zero_init_residual=False, 
                 pretrained=False, num_classes=None, beta=False, weight_std=False,
-                num_groups=32, out_dim=128, feats=[64, 64, 128, 256, 512]):
+                num_groups=32, out_dim=128, feats=[64, 128, 256, 512, 256]):
         super(ResNet, self).__init__()
         self.in_planes = 64
 
-        self.conv1 = nn.Conv2d(num_channels, 64, kernel_size=3, stride=1, 
-                               padding=1, bias=False)
+        self.conv1_diff = nn.Conv2d(num_channels, 64, kernel_size=3, stride=1, padding=1,
+                               bias=False)
+        self.conv1_cat = nn.Conv2d(num_channels, 64, kernel_size=3, stride=1, padding=1,
+                               bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1)
         self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2)
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
+        self.drop1 = nn.Dropout(0.35)
+        self.drop2 = nn.Dropout(0.2)
+        self.drop3 = nn.Dropout(0.35)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         # self.fc = nn.Linear(512 * block.expansion, num_classes)
-        # self.out = nn.Conv2d(512, num_classes, kernel_size=1, stride=1, bias=False)
-        # self.aspp = ASPP(512, 256, 256)
+        # def _norm(planes, momentum=0.05):
+        #     return nn.BatchNorm2d(planes, momentum=momentum)
+        # self.norm = _norm
+        # self.conv = nn.Conv2d
+        self.aspp = ASPP(feats[3], 256, 256)
+        self._aff = TeRN(num_iter=10, dilations=[1,1,2,4,6,8])
 
+        self.up1 = Up(feats[4] + feats[3], feats[3], bilinear=True)
+        self.up2 = Up(feats[2] + feats[3], feats[2], bilinear=True)
+        self.up3 = Up(feats[1] + feats[2], feats[1], bilinear=True)
+        self.up4 = Up(feats[0] + feats[1], feats[0], bilinear=True)
+        self.outconv = nn.Conv2d(feats[0], num_classes, kernel_size=1, stride=1, bias=False)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -179,19 +242,61 @@ class ResNet(nn.Module):
             layers.append(block(self.in_planes, planes, stride))
             self.in_planes = planes * block.expansion
         return nn.Sequential(*layers)
+    
+    def forward(self, img1, img2, layer=100):
+        x1_1 = F.relu(self.bn1(self.conv1_diff(img1)))
+        x1_2 = F.relu(self.bn1(self.conv1_diff(img2)))
+        # x1_cont = torch.abs(x1_1 - x1_2)
+        x11_1 = self.layer1(x1_1)
+        x11_2 = self.layer1(x1_2)
+        x1_cont = torch.abs(x11_1 - x11_2)
+        
+        # x2 = self.layer2(x1)
+        x2_1 = self.layer2(x11_1)
+        x2_2 = self.layer2(x11_2)
+        x2_cont = torch.abs(x2_1 - x2_2)
+        x3_1 = self.layer3(x2_1)
+        x3_2 = self.layer3(x2_2)
+        x3_cont = torch.abs(x3_1 - x3_2)
+        x4_1 = self.layer4(x3_1)
+        x4_2 = self.layer4(x3_2)
+        x4_cont = torch.abs(x4_1 - x4_2)
+        x4_cont = self.avgpool(x4_cont)
+        x_feats = torch.flatten(x4_cont, 1)
+        x_aspp = self.aspp(x4_cont)
+        x = self.up1(x_aspp, x4_cont)
+        x = self.drop1(x)
+        x = self.up2(x, x3_cont)
+        # x = self.drop2(x)
+        x = self.up3(x, x2_cont)
+        # x = self.drop3(x)
+        x = self.up4(x, x1_cont)
+        x = self.outconv(x)
+        # classifer = self.fc(x)
 
-    def forward(self, x, layer=100):
-        out = F.relu(self.bn1(self.conv1(x)))
-        out = self.layer1(out)
-        out = self.layer2(out)
-        out = self.layer3(out)
-        out = self.layer4(out)
-        out = self.avgpool(out)
-        # out = self.aspp(out)
-        # classifer = self.out(out)
-        # classifer = torch.flatten(classifer, 1)
-        out = torch.flatten(out, 1)
-        return out#, classifer
+        return x#, x_feats
+
+    # def forward(self, x, layer=100):
+    #     # x1 = F.relu(self.bn1(self.conv1(x)))
+    #     x1 = F.relu(self.bn1(self.conv1_cat(x)))
+        
+    #     # x1 = self._aff(x, x1)
+
+    #     x1 = self.layer1(x1)
+    #     x2 = self.layer2(x1)
+    #     x3 = self.layer3(x2)
+    #     x4 = self.layer4(x3)
+    #     x4 = self.avgpool(x4)
+    #     x_feats = torch.flatten(x4, 1)
+    #     x_aspp = self.aspp(x4)
+    #     x = self.up1(x_aspp, x4)
+    #     x = self.up2(x, x3)
+    #     x = self.up3(x, x2)
+    #     x = self.up4(x, x1)
+    #     x = self.outconv(x)
+    #     # classifer = self.fc(x)
+
+    #     return x, x_feats
 
 
 def resnet18(**kwargs):
@@ -199,19 +304,26 @@ def resnet18(**kwargs):
 
 
 def resnet34(pretrained=False, **kwargs):
-    # return ResNet(BasicBlock, [3, 4, 6, 3], **kwargs)
+    """Constructs a ResNet-34 model.
+
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+    """
     model = ResNet(BasicBlock, [3, 4, 6, 3], **kwargs)
+    # if pretrained:
+    #     model.load_state_dict(model_zoo.load_url(model_urls['resnet50']))
     if pretrained:
         model_dict = model.state_dict()
         # /home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-10-18-13:27/experiments_epoch_0_loss_11.28138166103723_valmF1_0.6866047574166068_valChangeF1_0.49019877611815305_time_2021-10-18-14:15:27.pth
+# 
         # pretrained_path = "/home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-10-07-10:23/experiments_epoch_8_loss_3394.9326448260613_valmIoU_0.5388350590429163_time_2021-10-07-22:05:00.pth"
-        # pretrained_path = "/home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-10-18-13:27/experiments_epoch_0_loss_11.28138166103723_valmF1_0.6866047574166068_valChangeF1_0.49019877611815305_time_2021-10-18-14:15:27.pth"
-        pretrained_dict = torch.load(pretrained)['model']
+        pretrained_path = "/home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-10-18-13:27/experiments_epoch_0_loss_11.28138166103723_valmF1_0.6866047574166068_valChangeF1_0.49019877611815305_time_2021-10-18-14:15:27.pth"
+        pretrained_dict = torch.load(pretrained_path)['model']
         # pretrained_dict = model_zoo.load_url(model_urls['resnet50'])
         overlap_dict = {k[7:]: v for k, v in pretrained_dict.items()
                         if k[7:] in model_dict}
-        for k, v in overlap_dict.items():
-            v.requires_grad=False
+        # for k, v in overlap_dict.items():
+        #     v.requires_grad=False
         model_dict.update(overlap_dict)
         model.load_state_dict(model_dict)
         print(f"loaded {len(overlap_dict)}/{len(pretrained_dict)} layers")
@@ -233,63 +345,3 @@ model_dict = {
     'resnet101': [resnet101, 2048],
 }
 
-
-class LinearBatchNorm(nn.Module):
-    """Implements BatchNorm1d by BatchNorm2d, for SyncBN purpose"""
-    def __init__(self, dim, affine=True):
-        super(LinearBatchNorm, self).__init__()
-        self.dim = dim
-        self.bn = nn.BatchNorm2d(dim, affine=affine)
-
-    def forward(self, x):
-        x = x.view(-1, self.dim, 1, 1)
-        x = self.bn(x)
-        x = x.view(-1, self.dim)
-        return x
-
-
-class SupConResNet(nn.Module):
-    """backbone + projection head"""
-    def __init__(self, name='resnet50', head='mlp', feat_dim=128):
-        super(SupConResNet, self).__init__()
-        model_fun, dim_in = model_dict[name]
-        self.encoder = model_fun()
-        if head == 'linear':
-            self.head = nn.Linear(dim_in, feat_dim)
-        elif head == 'mlp':
-            self.head = nn.Sequential(
-                nn.Linear(dim_in, dim_in),
-                nn.ReLU(inplace=True),
-                nn.Linear(dim_in, feat_dim)
-            )
-        else:
-            raise NotImplementedError(
-                'head not supported: {}'.format(head))
-
-    def forward(self, x):
-        feat = self.encoder(x)
-        feat = F.normalize(self.head(feat), dim=1)
-        return feat
-
-
-class SupCEResNet(nn.Module):
-    """encoder + classifier"""
-    def __init__(self, name='resnet50', num_classes=10):
-        super(SupCEResNet, self).__init__()
-        model_fun, dim_in = model_dict[name]
-        self.encoder = model_fun()
-        self.fc = nn.Linear(dim_in, num_classes)
-
-    def forward(self, x):
-        return self.fc(self.encoder(x))
-
-
-class LinearClassifier(nn.Module):
-    """Linear classifier"""
-    def __init__(self, name='resnet50', num_classes=10):
-        super(LinearClassifier, self).__init__()
-        _, feat_dim = model_dict[name]
-        self.fc = nn.Linear(feat_dim, num_classes)
-
-    def forward(self, features):
-        return self.fc(features)

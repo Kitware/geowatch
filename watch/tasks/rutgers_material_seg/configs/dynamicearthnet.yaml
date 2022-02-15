@@ -3,18 +3,18 @@
 location: local
 data:
   type: semantic_seg
-  name: onera
-  num_classes: 2
+  name: dynamicearthnet
+  num_classes: 7
   window_size: 7
-  image_size: 32 #pre-train: 32, fine_tune: 128
+  image_size: 256 #pre-train: 32, fine_tune: 96
   time_steps: 2
-  weights: [0.15, 1.0]
+  weights: [0.1, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
   # channels: B02|B03|B04|B05|B06|B07|B08|B11|B12|B8A
-  channels: B02|B03|B04|B05|B06|B07|B08|B11|B12
+  channels: B02|B03|B04|B05|B06|B07|B08
   local:
     model_save_dir: /home/native/projects/data/smart_watch/models/
-    train_dir: /media/native/data/data/smart_watch_dvc/extern/onera_2018/
-    test_dir: /media/native/data/data/smart_watch_dvc/extern/onera_2018/
+    train_dir: /media/native/data2/data/dynearthnet_challenge/
+    test_dir: /media/native/data2/data/dynearthnet_challenge/
     train_coco_json: /media/native/data/data/smart_watch_dvc/extern/onera_2018/onera_train.kwcoco.json
     test_coco_json: /media/native/data/data/smart_watch_dvc/extern/onera_2018/onera_test.kwcoco.json
     val_dir:
@@ -27,37 +27,33 @@ data:
     test_coco_json: /data4/datasets/smart_watch_dvc/extern/onera_2018/onera_test.kwcoco.json
 
 training:
-  backbone: resnet101 #resnet18 #resnet101, resnet50, resnet34
-  model_name: resnet_enc #shallow_seg, deeplabWS, deeplab, resnet, resnet_enc, resnetGNWS, deeplab_diff
+  backbone: resnet34 #resnet18 #resnet101, resnet50, resnet34
+  model_name: deeplab_diff #shallow_seg, deeplabWS, deeplab, resnet, resnet_enc, resnetGNWS, deeplab_diff
   model_feats_channels: [64, 128, 256, 512, 256] #[32, 32, 64, 64, 128], [64, 64, 128, 256, 512], [32, 32, 64, 128, 256], [64, 128, 256, 512, 1024] # this needs to match the correct number of layers in the model
   gn_n_groups: 32
-  num_channels: 9
+  num_channels: 7
   out_features_dim: 10
   weight_std: True
   beta: False
-  # pretrained: /home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_trainWin_7_modelName_resnet_2021-10-18-13:27/experiments_epoch_0_loss_11.28138166103723_valmF1_0.6866047574166068_valChangeF1_0.49019877611815305_time_2021-10-18-14:15:27.pth
-  pretrained: False
+  pretrained: /home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-10-18-13:27/experiments_epoch_0_loss_11.28138166103723_valmF1_0.6866047574166068_valChangeF1_0.49019877611815305_time_2021-10-18-14:15:27.pth
   distributed: False
-  learning_rate: 0.0085 # best: 
+  learning_rate: 0.005 # best: 
   # resume: /home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-10-07-10:23/experiments_epoch_7_loss_3440.9182313163324_valmIoU_0.5437659117662471_time_2021-10-07-20:47:20.pth
   # resume: /home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-10-20-17:15/experiments_epoch_37_loss_7.454268312454223_valmF1_0.7629152048972937_valChangeF1_0.5579948695099214_time_2021-10-20-18:04:59.pth
   # resume: /home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-10-19-21:07/experiments_epoch_5_loss_2.1330662268512652_valmF1_0.6782787764504841_valChangeF1_0.47969179367601383_time_2021-10-20-03:39:36.pth
-  # resume: /home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_trainWin_11_modelName_resnet_enc_2021-11-06-09:43/experiments_epoch_7_loss_12.406291961669922_valmF1_0.6657271284686177_valChangeF1_0.46656415450485705_time_2021-11-06-19:08:36.pth
-  # resume: /home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_trainWin_7_modelName_deeplab_diff_2021-11-02-10:34/experiments_epoch_42_loss_5.6316434144973755_valmF1_0.7405813741467706_valChangeF1_0.5134420483315918_time_2021-11-02-12:15:54.pth
-  # resume: /home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_trainWin_7_modelName_resnet_2021-10-18-13:27/experiments_epoch_0_loss_11.28138166103723_valmF1_0.6866047574166068_valChangeF1_0.49019877611815305_time_2021-10-18-14:15:27.pth
   resume: False
   train_val_test_split: [0.95, 0.02, 0.03]
   epochs: 200
   start_epoch: 0
-  batch_size: 16
+  batch_size: 4
   drop_last_batch: True
-  momentum: 0.5
+  momentum: 0.9
   weight_decay: 0.0001
-  num_workers: 4
+  num_workers: 0
   test_with_full_supervision: 1
   model_single_input: False
   model_diff_input: True
-  n_samples: 100
+  n_samples: 5
 
 high_confidence_threshold:
   train_cutoff: 0.4
@@ -70,7 +66,7 @@ evaluation:
   crf_t: 1
   crf_scale_factor: 1
   inference_window: 13
-  batch_size: 32
+  batch_size: 2
 
 procedures:
   train:  True

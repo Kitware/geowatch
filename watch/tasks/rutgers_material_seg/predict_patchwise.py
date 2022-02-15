@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 r"""
 Prediction script for Rutgers Material Semenatic Segmentation Models
 
@@ -8,23 +9,22 @@ CommandLine:
     BASE_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json
     RUTGERS_MATERIAL_MODEL_FPATH="$DVC_DPATH/models/rutgers/experiments_epoch_30_loss_0.05691597167379317_valmIoU_0.5694727912477856_time_2021-08-07-09:01:01.pth"
     RUTGERS_MATERIAL_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/rutgers_material_seg.kwcoco.json
-    # RUTGERS_MATERIAL_MODEL_FPATH="/home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-10-20-17:15/experiments_epoch_37_loss_7.454268312454223_valmF1_0.7629152048972937_valChangeF1_0.5579948695099214_time_2021-10-20-18:04:59.pth"
 
     DVC_DPATH=${DVC_DPATH:-/media/native/data/data/smart_watch_dvc}
     KWCOCO_BUNDLE_DPATH=${KWCOCO_BUNDLE_DPATH:-$DVC_DPATH/drop1-S2-L8-aligned}
     BASE_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json
-    RUTGERS_MATERIAL_MODEL_FPATH="/home/native/projects/data/smart_watch/models/experiments_iarpa/tasks_experiments_iarpa_2021-10-23-13:23/experiments_epoch_1_loss_34.30951297569275_valmF1_nan_valChangeF1_nan_time_2021-10-23-14:14:21.pth"
+    RUTGERS_MATERIAL_MODEL_FPATH="/home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-10-20-17:15/experiments_epoch_37_loss_7.454268312454223_valmF1_0.7629152048972937_valChangeF1_0.5579948695099214_time_2021-10-20-18:04:59.pth"
     RUTGERS_MATERIAL_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/rutgers_material_seg.kwcoco.json
 
 
     # Generate Rutgers Features
-    python -m watch.tasks.rutgers_material_seg.predict \
+    python -m watch.tasks.rutgers_material_seg.predict_test \
         --test_dataset=$BASE_COCO_FPATH \
         --checkpoint_fpath=$RUTGERS_MATERIAL_MODEL_FPATH  \
         --default_config_key=iarpa \
         --pred_dataset=$RUTGERS_MATERIAL_COCO_FPATH \
         --num_workers=8 \
-        --batch_size=4 --gpus 0
+        --batch_size=32 --gpus 0
 
 """
 import os
@@ -32,36 +32,25 @@ import torch
 import datetime
 import random
 import kwcoco
-import kwimage
-import kwarray
 import ndsampler
 import numpy as np
-from tqdm import tqdm  # NOQA
 import ubelt as ub
 import pathlib
 import watch.tasks.rutgers_material_seg.utils.utils as utils
-from watch.utils import util_parallel
 from watch.tasks.rutgers_material_seg.models import build_model
 from watch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import SequenceDataset
-import torch.nn.functional as F
-
-try:
-    from xdev import profile
-except Exception:
-    profile = ub.identity
 
 
 class Evaluator(object):
     def __init__(self,
                  model: object,
+                 dataset: object,
                  eval_loader: torch.utils.data.DataLoader,
                  output_coco_dataset: kwcoco.CocoDataset,
                  write_probs : bool = True,
                  device=None,
                  config : dict = None,
-                 output_feat_dpath : pathlib.Path = None,
-                 imwrite_kw={},
-                 num_workers=0):
+                 output_feat_dpath : pathlib.Path = None):
         """Evaluator class
 
         Args:
@@ -72,8 +61,8 @@ class Evaluator(object):
         """
 
         self.model = model
+        self.dataset = dataset
         self.eval_loader = eval_loader
-        self.num_workers = num_workers
         self.output_coco_dataset = output_coco_dataset
         self.write_probs = write_probs
         self.device = device
@@ -82,41 +71,11 @@ class Evaluator(object):
         self.output_feat_dpath = output_feat_dpath
         self.stitcher_dict = {}
         self.finalized_gids = set()
-        self.imwrite_kw = imwrite_kw
+        self.sensors = ['S2', 'L8']
 
         # Hack together a channel code
         self.chan_code = '|'.join(['matseg_{}'.format(i) for i in range(self.num_classes)])
 
-    @profile
-    def finalize_image(self, gid):
-        self.finalized_gids.add(gid)
-        stitcher = self.stitcher_dict[gid]
-        recon = stitcher.finalize()
-        self.stitcher_dict.pop(gid)
-
-        save_path = self.output_feat_dpath / f'{gid}.tif'
-
-        save_path = os.fspath(save_path)
-        kwimage.imwrite(save_path, recon, backend='gdal', space=None,
-                        **self.imwrite_kw)
-
-        aux_height, aux_width = recon.shape[0:2]
-        img = self.output_coco_dataset.index.imgs[gid]
-        warp_aux_to_img = kwimage.Affine.scale(
-            (img['width'] / aux_width,
-             img['height'] / aux_height))
-
-        aux = {
-            'file_name': save_path,
-            'height': aux_height,
-            'width': aux_width,
-            'channels': self.chan_code,
-            'warp_aux_to_img': warp_aux_to_img.concise(),
-        }
-        auxiliary = img.setdefault('auxiliary', [])
-        auxiliary.append(aux)
-
-    @profile
     def eval(self) -> tuple:
         """evaluate a single epoch
 
@@ -125,103 +84,63 @@ class Evaluator(object):
         Returns:
             None
         """
-        current_gids = []
-        previous_gids = []
+        # current_gids = []
+        # previous_gids = []
 
         self.model.eval()
-
-        dataloader_iter = iter(self.eval_loader)
-        writer = util_parallel.BlockingJobQueue(max_workers=self.num_workers)
-
-        seen = set()
-
+        image_ids = list(self.dataset.index.imgs.keys())
+        valid_images = self.dataset.images(image_ids)
+        sensor = 'S2'
+        flags = [sensor == _ for _ in valid_images.lookup('sensor_coarse')]
+        image_ids = valid_images.compress(flags)
         with torch.no_grad():
             # Prog = ub.ProgIter
-            Prog = tqdm
-            pbar = Prog(enumerate(dataloader_iter), total=len(self.eval_loader), desc='predict rutgers')
-            for batch_index, batch in pbar:
-                outputs = batch
-                images, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0][0]  # NOQA
-                original_width, original_height = outputs['tr'].data[0][0]['space_dims']
+            # Prog = tqdm
+            # pbar = Prog(enumerate(self.eval_loader), total=len(self.eval_loader), desc='predict rutgers')
+            # for batch_index, batch in pbar:
+            for gid in image_ids:
+                # outputs = batch
+                # images, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0][0]
+                # original_width, original_height = outputs['tr'].data[0][0]['space_dims']
 
-                # print(f"images: {images.shape}")
+                # img = self.dataset.index.imgs[gid]
+                delayed_image = self.dataset.delayed_load(gid)
+                im = delayed_image.finalize()
+                image = torch.from_numpy(im.astype('float32')).to(self.device)
+                print(f"images: {image.shape}")
+                image = image.permute(2, 0, 1)
+                image = image.unsqueeze(0)[:, :6, :, :]
+                inference_all_crops_params = [tuple([i, j, self.config['evaluation']['inference_window'], self.config['evaluation']['inference_window']]) for i in range(0, image.shape[2]) for j in range(0, image.shape[1])]
+                print(f"images: {image.shape}")
                 # print(f"mask: {mask.shape}")
 
                 # mask = torch.stack(mask)
                 # mask = mask.long().squeeze(1)
 
-                bs, c, t, h, w = images.shape
+                # bs, c, t, h, w = images.shape
 
-                image1 = images[:, :, 0, :, :]
+                # image1 = images[:, :, 0, :, :]
                 # mask1 = mask[:, 0, :, :]  # NOQA
 
-                image1 = image1.to(self.device)
+                # image1 = image1.to(self.device)
                 # mask = mask.to(self.device)
 
-                # image1 = utils.stad_image(image1)
-                # image2 = utils.stad_image(image2)
-                image1 = F.normalize(image1, dim=1, p=2)
+                # # image1 = utils.stad_image(image1)
+                # # image2 = utils.stad_image(image2)
 
-                output1 = self.model(image1)  # [B,22,150,150]
-                # print(f"output: {output1.shape}, type: {output1.dtype}")
-
-                bs, c, h, w = output1.shape
-                output1_to_save = output1.permute(0, 2, 3, 1).cpu().detach().numpy()
-                # print(f"output1_to_save: {output1_to_save.shape}")
-                # print(f"output1_to_save min: {output1_to_save.min()}, max: {output1_to_save.max()}")
-                # output_show = (output1_to_save - output1_to_save.min()) / (output1_to_save.max() - output1_to_save.min())
-                # image_show1 = np.transpose(image1.cpu().detach().numpy()[0, :, :, :], (1, 2, 0))[:, :, :3]
-                # image_show1 = (image_show1 - image_show1.min()) / (image_show1.max() - image_show1.min())
+                output1 = self.model(image, image, inference_all_crops_params)
                 # import matplotlib.pyplot as plt
-                # fig = plt.figure()
-                # ax1 = fig.add_subplot(1,2,1)
-                # ax2 = fig.add_subplot(1,2,2)
-                # ax1.imshow(image_show1)
-                # ax2.imshow(output_show[0,:,:,:3])
+                print(f"output: {output1.shape}")
+                # output_show = output1[0,1,:,:].cpu().detach().numpy()
+                # plt.imshow(output_show)
                 # plt.show()
 
-                if self.write_probs:
-                    for b in range(bs):
-                        if len(current_gids) == 0:
-                            current_gids = outputs['tr'].data[0][b]['gids']
-                        else:
-                            previous_gids = current_gids
-                            current_gids = outputs['tr'].data[0][b]['gids']
-                            mutually_exclusive = (set(previous_gids) - set(current_gids))
-                            for gid in mutually_exclusive:
-                                pbar.set_postfix_str('finalized {}'.format(len(self.finalized_gids)))
-                                seen.add(gid)
-                                writer.submit(self.finalize_image, gid)
-                                # self.finalize_image(gid)
+                # bs, c, h, w = output1.shape
+                # output1_to_save = output1.permute(0, 2, 3, 1).cpu().detach().numpy()
 
-                        for gid in current_gids:
-                            output = output1_to_save[b, :, :, :]
-                            if gid not in self.stitcher_dict.keys():
-                                self.stitcher_dict[gid] = kwarray.Stitcher(
-                                    (*outputs['tr'].data[0][b]['space_dims'],
-                                     self.num_classes),
-                                    device='numpy')
-                            slice_ = outputs['tr'].data[0][b]['space_slice']
-
-                            from watch.utils import util_kwimage
-                            weights = util_kwimage.upweight_center_mask(output.shape[0:2])[..., None]
-                            self.stitcher_dict[gid].add(slice_, output, weight=weights)
-
-                            # weights = kwimage.gaussian_patch(output.shape[0:2])[..., None]
-                            # self.stitcher_dict[gid].add(slice_, output, weight=weights)
-
-        if self.write_probs:
-            # Finalize any remaining images
-            for gid in Prog(list(self.stitcher_dict.keys()), desc='finish finalization'):
-                # self.finalize_image(gid)
-                writer.submit(self.finalize_image, gid)
-                pbar.set_postfix_str('finalized {}'.format(len(self.finalized_gids)))
-
-        writer.wait_until_finished()
-
-        # export predictions to a new kwcoco file
-        self.output_coco_dataset._invalidate_hashid()
-        self.output_coco_dataset.dump(self.output_coco_dataset.fpath, newlines=True)
+        # # export predictions to a new kwcoco file
+        # self.output_coco_dataset._invalidate_hashid()
+        # self.output_coco_dataset.dump(self.output_coco_dataset.fpath, newlines=True)
 
         return
 
@@ -269,9 +188,6 @@ def make_predict_config(cmdline=False, **kwargs):
 
     parser.add_argument("--batch_size", default=1, type=int, help="prediction batch size")
     parser.add_argument("--num_workers", default=0, type=str, help="data loader workers, can be set to auto")
-
-    parser.add_argument("--compress", default='RAW', type=str, help="type of gdal compression to use")
-    parser.add_argument("--blocksize", default=64, type=str, help="gdal COG blocksize")
     # parser.add_argument("--thresh", type=float, default=0.01)
 
     parser.set_defaults(**kwargs)
@@ -300,27 +216,19 @@ def hardcoded_default_configs(default_config_key):
     return config
 
 
-def main(cmdline=False, **kwargs):
+def main(cmdline=True, **kwargs):
     """
-    Example:
-        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-        >>> from watch.tasks.rutgers_material_seg.predict import *  # NOQA
-        >>> import watch
-        >>> dvc_dpath = watch.find_smart_dvc_dpath()
-        >>> checkpoint_fpath = dvc_dpath / 'models/rutgers/rutgers_peri_materials_v3/experiments_epoch_18_loss_59.014100193977356_valmF1_0.18694573888313187_valChangeF1_0.0_time_2022-02-01-01:53:20.pth'
-        >>> #checkpoint_fpath = dvc_dpath / 'models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_2021101T16277.pth'
-        >>> src_coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
-        >>> dst_coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/mat_test.kwcoco.json'
-        >>> cmdline = False
-        >>> num_workers = 'avail'
-        >>> # num_workers = 0
-        >>> kwargs = dict(
-        >>>     default_config_key='iarpa',
-        >>>     checkpoint_fpath=checkpoint_fpath,
-        >>>     test_dataset=src_coco_fpath,
-        >>>     pred_dataset=dst_coco_fpath,
-        >>> )
-        >>> main(cmdline=cmdline, **kwargs)
+    Ignore:
+        # Hack in overrides because none of this is parameterized
+        # state_dict = torch.load(checkpoint_fpath)
+        checkpoint_fpath = ub.expandpath("$HOME/data/dvc-repos/smart_watch_dvc/models/rutgers/experiments_epoch_30_loss_0.05691597167379317_valmIoU_0.5694727912477856_time_2021-08-07-09:01:01.pth")
+        cmdline = False
+        kwargs = dict(
+            default_config_key='iarpa',
+            checkpoint_fpath=checkpoint_fpath,
+            test_dataset=ub.expandpath("$HOME/data/dvc-repos/smart_watch_dvc/drop1-S2-L8-aligned/data.kwcoco.json"),
+            pred_dataset='./test-pred/pred.kwcoco.json',
+        )
     """
     args = make_predict_config(cmdline=cmdline, **kwargs)
     print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
@@ -354,7 +262,7 @@ def main(cmdline=False, **kwargs):
     num_channels = len(channels.split('|'))
     config['training']['num_channels'] = num_channels
     dataset = SequenceDataset(sampler, window_dims, input_dims, channels,
-                              training=False, window_overlap=0.3)
+                              training=False)
     print(dataset.__len__())
 
     from watch.utils.lightning_ext import util_globals
@@ -370,15 +278,14 @@ def main(cmdline=False, **kwargs):
     # HACK!!!!
     # THIS IS WHY WE SAVE METADATA WITH THE MODEL!
     # WE DONT WANT TO HAVE TO FUDGE RECONSTRUCTION IN PRODUCTION!!!
-    args.checkpoint_fpath = os.fspath(args.checkpoint_fpath)
-    checkpoint_state = torch.load(args.checkpoint_fpath)
+    checkpoint_state = torch.load(args.checkpoint_fpath)  # NOQA
 
     # num_classes = checkpoint_state['model']['module.outc.conv.weight'].shape[0]
     # out_features_dim = checkpoint_state['model']['module.features_outc.conv.weight'].shape[0]
     # config['data']['num_classes'] = num_classes
     # config['training']['out_features_dim'] = out_features_dim
 
-    base_path = '/'.join(str(args.checkpoint_fpath).split('/')[:-1])
+    base_path = '/'.join(args.checkpoint_fpath.split('/')[:-1])
     pretrain_config_path = f"{base_path}/config.yaml"
     if os.path.isfile(pretrain_config_path):
         pretrain_config = utils.load_yaml_as_dict(pretrain_config_path)
@@ -404,9 +311,7 @@ def main(cmdline=False, **kwargs):
     print("model has {} trainable parameters".format(num_params))
     model = mounted_model_cls(model)
 
-    model.load_state_dict(checkpoint_state['model'])
-    # print(f"loadded model succeffuly from: {pretrain_config_path}")
-    # print(f"Missing keys from loaded model: {missing_keys}, unexpected keys: {unexpexted_keys}")
+    # model.load_state_dict(checkpoint_state['model'])
 
     model.to(device)
 
@@ -428,23 +333,17 @@ def main(cmdline=False, **kwargs):
     output_coco_dataset.reroot(absolute=True)
     output_coco_dataset.fpath = os.fspath(output_coco_fpath)
 
-    imwrite_kw = {
-        'compress': args.compress,
-        'blocksize': args.blocksize,
-    }
-
     evaler = Evaluator(
         model,
-        eval_dataloader,
+        dataset=input_coco_dset,
+        eval_loader=eval_dataloader,
         output_coco_dataset=output_coco_dataset,
         config=config,
         device=device,
-        num_workers=num_workers,
         output_feat_dpath=output_feat_dpath,
-        imwrite_kw=imwrite_kw,
     )
     self = evaler  # NOQA
     evaler.forward()
 
 if __name__ == "__main__":
-    main(cmdline=True)
+    main()

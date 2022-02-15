@@ -84,19 +84,10 @@ class S2MCPDataset(object):
         new_image2 = self.transforms(img2)
         new_negative_image = self.transforms(negative_img)
 
-        print(new_image1.max())
-
         crop_params = self.randomcrop_transform.get_params(new_image1, output_size=(self.crop_size, self.crop_size))
         new_image1 = FT.crop(new_image1, *crop_params)
         new_image2 = FT.crop(new_image2, *crop_params)
         new_negative_image = FT.crop(new_negative_image, *crop_params)
-
-        # print(new_image1.dtype)
-        # new_image1 = new_image1.double()
-        print(new_image1.dtype)
-        # import matplotlib.pyplot as plt
-        # plt.imshow(mask)
-        # plt.show()
 
         outputs = {}
         outputs['visuals'] = {'image1': new_image1, 'image2':new_image2, 'image_name': image_name}
