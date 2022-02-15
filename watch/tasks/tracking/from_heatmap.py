@@ -20,6 +20,46 @@ except Exception:
     profile = ub.identity
 
 
+def mean_normalized(heatmaps):
+    '''
+    Normalize average_heatmap by applying a scaling based on max(heatmaps) and max(average_heatmap)
+    '''
+    average = np.average(heatmaps, axis=0)
+
+    scale_factor = np.max(heatmaps) / (np.max(average) + 1e-9)
+    print('max heatmaps', np.max(heatmaps))
+    print('max average', np.max(average))
+
+    #average *= scale_factor
+    average = 0.75 * average * scale_factor
+    print('scale_factor', scale_factor)
+    print('After scaling, max:', np.max(average))
+
+    return average
+
+
+def frequency_weighted_mean(heatmaps, mask_thresh, morph_kernel=3):
+    '''
+    Convert a list of heatmaps to an aggregated score, averaging is computed based on samples for every pixel
+    '''
+    heatmaps = np.array(heatmaps)
+
+    masks = 1 * (heatmaps > mask_thresh)
+    pixel_wise_samples = masks.sum(0) + 1e-9
+    print('pixel_wise_samples', pixel_wise_samples)
+
+    # compute sum
+    aggregated_probs = (masks * heatmaps).sum(0)
+
+    # divide by number of samples for every pixel
+    aggregated_probs /= pixel_wise_samples
+
+    aggregated_probs = util_kwimage.morphology(aggregated_probs, 'dilate', morph_kernel)
+
+    return aggregated_probs
+
+
+
 @dataclass
 class SmallPolygonFilter(PolygonFilter):
     min_area_px: float = 80
@@ -359,7 +399,9 @@ def time_aggregated_polys(coco_dset,
                              gids, {'fg': key},
                              skipped='interpolate')['fg']
 
-        polys = list(mask_to_polygons(probs(_heatmaps), thresh))
+        # TURN ON NEW AGGREGATION
+        # polys = list(mask_to_polygons(probs(_heatmaps), thresh))
+        polys = list(mask_to_polygons(mean_normalized(_heatmaps), thresh))
 
         # turn each polygon into a list of polygons (map them across gids)
         tracks = [
