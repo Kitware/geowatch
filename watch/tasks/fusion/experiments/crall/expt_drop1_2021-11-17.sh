@@ -47,7 +47,7 @@ prep_and_inspect(){
         --num_workers="16" \
         --output=$KWCOCO_BUNDLE_DPATH/data_nowv_dzyne_landcover.kwcoco.json
 
-    python ~/code/watch/watch/cli/coco_combine_features.py \
+    python -m watch.cli.coco_combine_features \
         --src $KWCOCO_BUNDLE_DPATH/data_nowv.kwcoco.json \
               $KWCOCO_BUNDLE_DPATH/data_nowv_rutgers_mat_seg.kwcoco.json \
               $KWCOCO_BUNDLE_DPATH/data_nowv_dzyne_landcover.kwcoco.json \

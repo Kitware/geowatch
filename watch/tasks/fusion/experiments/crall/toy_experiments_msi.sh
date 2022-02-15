@@ -146,14 +146,20 @@ python -m watch.tasks.fusion.fit \
 
 
 demo_force_repackage(){
+    # NOTE: The above fit script might not produce the "best" checkpoint as the
+    # final output package. To evaluate a different checkpoint it must first be
+    # packaged.  (note this can be done while training is running so
+    # intermediate checkpoints can be evaluated while the model is still
+    # learning). The following is logic for how to "package" a single checkpoint.
+    #
     # Look at all checkpoints
     ls "$DEFAULT_ROOT_DIR"/*/*/checkpoints/*.ckpt
-    # Grab the latest checkpoitn
+    # Grab the latest checkpoint (this is an arbitrary choice)
     CHECKPOINT_FPATH=$(find "$DEFAULT_ROOT_DIR" -iname "*.ckpt" | tail -n 1)
     echo "CHECKPOINT_FPATH = $CHECKPOINT_FPATH"
-    # Force a paricular checkpoint into a package
+    # Repackage a particular checkpoint as a torch.package .pt file.
     python -m watch.tasks.fusion.repackage repackage "$CHECKPOINT_FPATH"
-    # Redefine package fpath to be that checkpoint
+    # Redefine package fpath variable to be that checkpoint
     PACKAGE_FPATH=$(python -m watch.tasks.fusion.repackage repackage "$CHECKPOINT_FPATH" | tail -n 1)
     echo "PACKAGE_FPATH = $PACKAGE_FPATH"
 }

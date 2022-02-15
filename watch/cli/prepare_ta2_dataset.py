@@ -136,6 +136,30 @@ def main(cmdline=False, **kwargs):
             --rpc_align_method affine_warp
         '''))
 
+    # TODO:
+    # Project annotation from latest annotations subdir
+    # Prepare splits
+    # Add baseline datasets to DVC
+
+    '''
+    # Update to whatever the state of the annotations submodule is
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+    python -m watch project_annotations \
+        --src $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
+        --dst $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
+        --site_models="$DVC_DPATH/annotations/site_models/*.geojson"
+
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    python -m watch.cli.prepare_splits \
+        --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
+        --run=1 --serial=True
+
+    dvc add Drop2-Aligned-TA1-2022-02-15/data_*.kwcoco.json
+
+
+
+    '''
+
     queue.rprint()
 
 

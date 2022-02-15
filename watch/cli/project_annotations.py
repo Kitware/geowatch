@@ -17,9 +17,9 @@ CommandLine:
     # Update to whatever the state of the annotations submodule is
     DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
     python -m watch project_annotations \
-        --src $DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json \
-        --dst $DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json \
-        --viz_dpath $DVC_DPATH/Drop2-Aligned-TA1-2022-01/_viz_propogate \
+        --src $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
+        --dst $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
+        --viz_dpath $DVC_DPATH/Drop2-Aligned-TA1-2022-02/_viz_propogate \
         --site_models="$DVC_DPATH/annotations/site_models/*.geojson"
 
     python -m watch visualize \
