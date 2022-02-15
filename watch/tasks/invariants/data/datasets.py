@@ -10,7 +10,6 @@ import random
 from pandas import read_csv
 import ndsampler
 import ubelt as ub
-from netharn.data.data_containers import ItemContainer
 from ..utils.read_sentinel_images import read_sentinel_img_trio
 
 
