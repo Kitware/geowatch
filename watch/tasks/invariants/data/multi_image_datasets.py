@@ -171,15 +171,21 @@ class kwcoco_dataset(Dataset):
         # randomly select image2 id from the same video (could be before or after image1)
         # make sure image2 is not image1 and image2 is in the set of filtered images by desired sensor
         id_list = [img1_id]
-        frame_index = {1: self.dset.index.imgs[img1_id]['frame_index']}
-        sensor_list = [self.dset.index.imgs[img1_id]['sensor_coarse']]
+        img1_info = self.dset.index.imgs[img1_id]
+        frame_index = {1: img1_info['frame_index']}
+        sensor_list = [img1_info['sensor_coarse']]
+        date = img1_info['date_captured']
+        date_list = [torch.tensor([int(date[:4]), int(date[5:7])])]
         for j in range(1, self.num_images):
             new_img_id = img1_id
             while (new_img_id in id_list) or (new_img_id not in self.dset_ids):
                 new_img_id = random.choice(self.dset.index.vidid_to_gids[video])
             id_list.append(new_img_id)
-            frame_index[1 + j] = self.dset.index.imgs[new_img_id]['frame_index']
-            sensor_list.append(self.dset.index.imgs[new_img_id]['sensor_coarse'])
+            info = self.dset.index.imgs[new_img_id]
+            frame_index[1 + j] = info['frame_index']
+            sensor_list.append(info['sensor_coarse'])
+            date = info['date_captured']
+            date_list.append(torch.tensor([int(date[:4]), int(date[5:7])]))
         # load images
         image_dict = dict()
         for k in range(self.num_images):
@@ -248,9 +254,6 @@ class kwcoco_dataset(Dataset):
 
             out['display_image1'] = display_image1
             out['display_image2'] = display_image2
-            out['order'] = [x[0] for x in sorted(frame_index.items(), key=lambda item: item[1])]
-            out['sensors'] = sensor_list
-            out['time_steps'] = torch.tensor([out[key] for key in out if 'frame_number' in key])
 
         else:
             aids = [self.dset.index.gid_to_aids[n] for n in id_list]
@@ -295,8 +298,9 @@ class kwcoco_dataset(Dataset):
             images = [transformed[key] for key in transformed if 'image' in key]
 
             images = [torch.tensor(x).permute(2, 0, 1) for x in images]
-            segmentations = [transformed[key] for key in transformed if 'seg' in key or 'mask' in key]
-            segmentations = [torch.tensor(x) for x in segmentations]
+            all_segmentations = [transformed[key] for key in transformed if 'seg' in key or 'mask' in key]
+            all_segmentations = [torch.tensor(x) for x in all_segmentations]
+            segmentations = [torch.where(seg == 2, 1, 0) + torch.where(seg == 3, 1, 0) + torch.where(seg == 8, 1, 0) - torch.where(seg == 5, 1, 0) - torch.where(seg == 6, 1, 0) for seg in all_segmentations]
 
             if self.display:
                 if self.num_channels == 3:
@@ -322,10 +326,11 @@ class kwcoco_dataset(Dataset):
             out['display_image2'] = display_image2
             out['order'] = [x[0] for x in sorted(frame_index.items(), key=lambda item: item[1])]
 
-            out['time_steps'] = torch.tensor([out[key] for key in out if 'frame_number' in key])
-            out['sensors'] = sensor_list
-            # out['img1_info'] = img1_info
-            out['img1_id'] = img1_id
+        out['frame_number'] = torch.tensor([out[key] for key in out if 'frame_number' in key])
+        out['normalized_date'] = torch.tensor([date_[0] - 2018 + date_[1] / 12 for date_ in date_list])
+        out['sensors'] = sensor_list
+        # out['img1_info'] = img1_info
+        out['img1_id'] = img1_id
         return out
 
 

@@ -32,15 +32,16 @@ def main(args):
         )
 
     model = pretext(hparams=args)
+    model.save_package()
 
     if args.vali_dataset is None:
         ckpt_monitors = (
-            ModelCheckpoint(monitor='loss', mode='min', save_top_k=1, save_last=True),
+            ModelCheckpoint(monitor='val_time_accuracy', mode='max', save_top_k=1),
         )
     else:
-        args.vali_dataset = args.train_dataset
         ckpt_monitors = (
-            ModelCheckpoint(monitor='val_loss', mode='min', save_top_k=1, save_last=True),
+            ModelCheckpoint(monitor='val_time_accuracy', mode='max', save_top_k=1, save_last=True),
+            ModelCheckpoint(monitor='val_loss', mode='min', save_top_k=1),
         )
 
     lr_logger = LearningRateMonitor(logging_interval='epoch')
@@ -90,18 +91,21 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--workers', type=int, default=8)
     parser.add_argument('--learning_rate', type=float, default=.001)
-    parser.add_argument('--step_size', type=int, default=30)
+    parser.add_argument('--step_size', type=int, default=50)
     parser.add_argument('--lr_gamma', type=float, default=.1)
     parser.add_argument('--weight_decay', type=float, default=1e-5)
     ###output
     parser.add_argument('--save_dir', type=str, default=None)
+    parser.add_argument('--pca_projection_path', type=str, default='')
+    parser.add_argument('--reduction_dim', type=int, default=6)
+    parser.add_argument('--use_gridded_dataset', type=int, default=1)
     ###device
     parser.add_argument('--device', type=str, default='gpu')
     parser.add_argument('--gpus', type=int, help='gpu(s) to run on', default=1)
 
     parser.set_defaults(
         terminate_on_nan=True,
-        log_every_n_steps=1,
+        log_every_n_steps=100,
         progress_bar_refresh_rate=1
         )
 
