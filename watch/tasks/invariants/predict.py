@@ -226,7 +226,6 @@ def main():
     parser.add_argument('--tasks', nargs='+', help='Specify which tasks to choose from (segmentation, before_after, or pretext. Can also specify \'all\')', default=['all'])
     parser.add_argument('--do_pca', type=int, help='Set to 1 to perform pca. Choose output dimension in num_dim argument.', default=1)
     parser.add_argument('--pca_projection_path', type=str, help='Path to pca projection matrix', default='')
-    parser.add_argument('--use_torch_package', action='store_true')
 
     parser.set_defaults(
         terminate_on_nan=True
