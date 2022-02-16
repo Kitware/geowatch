@@ -23,7 +23,9 @@ class gridded_dataset(torch.utils.data.Dataset):
     L8_channel_names = [
         'coastal', 'lwir11', 'lwir12', 'blue', 'green', 'red', 'nir', 'swir16', 'swir22', 'pan', 'cirrus'
     ]
-    def __init__(self, coco_dset, sensor=['S2', 'L8'], bands=['shared'], segmentation=False, patch_size=128, num_images=2, mode='train'):
+    def __init__(self, coco_dset, sensor=['S2', 'L8'], bands=['shared'],
+                 segmentation=False, patch_size=128, num_images=2,
+                 mode='train', patch_overlap=0.0):
         super().__init__()
         # initialize dataset
         self.coco_dset = kwcoco.CocoDataset.coerce(coco_dset)
@@ -37,7 +39,7 @@ class gridded_dataset(torch.utils.data.Dataset):
         grid = self.sampler.new_sample_grid(**{
             'task': 'video_detection',
             'window_dims': [num_images, patch_size, patch_size],
-            'window_overlap': 0.,
+            'window_overlap': patch_overlap,
         }
         )
         if segmentation:
@@ -142,6 +144,7 @@ class gridded_dataset(torch.utils.data.Dataset):
             offset_image = (offset_image - offset_image.mean()) / offset_image.std()
         else:
             offset_image = np.zeros_like(offset_image)
+
         augmented_image = self.transforms(image=image_dict[1])['image']
         for key in image_dict:
             image_dict[key] = torch.tensor(image_dict[key]).permute(2, 0, 1)
