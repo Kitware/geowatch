@@ -22,60 +22,65 @@ def repackage(checkpoint_fpath, force=False):
     # For now there is only one model, but in the future we will need
     # some sort of modal switch to package the correct metadata
     from watch.tasks.fusion import methods
-    # If we have a checkpoint path we can load it if we make assumptions
-    # init method from checkpoint.
-    checkpoint_fpath = os.fspath(checkpoint_fpath)
+    from watch.utils import util_path
+    checkpoint_fpaths = util_path.coerce_patterned_paths(checkpoint_fpath)
+    package_fpaths = []
+    for checkpoint_fpath in checkpoint_fpaths:
+        # If we have a checkpoint path we can load it if we make assumptions
+        # init method from checkpoint.
+        checkpoint_fpath = os.fspath(checkpoint_fpath)
 
-    x = ub.Path(ub.augpath(checkpoint_fpath, ext='.pt'))
-    package_name = x.name
+        x = ub.Path(ub.augpath(checkpoint_fpath, ext='.pt'))
+        package_name = x.name
 
-    # Can we precompute the package name of this checkpoint?
-    train_dpath_hint = None
-    if checkpoint_fpath.endswith('.ckpt'):
-        path_ = ub.Path(checkpoint_fpath)
-        if path_.parent.stem == 'checkpoints':
-            train_dpath_hint = path_.parent.parent
-
-    if train_dpath_hint is not None:
-        candidates = list(train_dpath_hint.glob('fit_config.yaml'))
-        if len(candidates) == 1:
-            meta_fpath = candidates[0]
-            with open(meta_fpath, 'r') as file:
-                data = yaml.safe_load(file)
-            # Hack to put experiment name in package name
-            expt_name = ub.Path(data['default_root_dir']).name
-            if expt_name not in package_name:
-                package_name = expt_name + '_' + package_name
-
-    package_fpath = x.parent / package_name
-
-    if force or not package_fpath.exists():
-        import netharn as nh
-        xpu = nh.XPU.coerce('cpu')
-        checkpoint = xpu.load(checkpoint_fpath)
-
-        # checkpoint = torch.load(checkpoint_fpath)
-        print(list(checkpoint.keys()))
-        hparams = checkpoint['hyper_parameters']
-        if 'input_channels' in hparams:
-            from kwcoco.channel_spec import ChannelSpec
-            # Hack for strange pickle issue
-            chan = hparams['input_channels']
-            if not hasattr(chan, '_spec') and hasattr(chan, '_info'):
-                chan = ChannelSpec.coerce(chan._info['spec'])
-                hparams['input_channels'] = chan
-            else:
-                hparams['input_channels'] = ChannelSpec.coerce(chan.spec)
-
-        method = methods.MultimodalTransformer(**hparams)
-        state_dict = checkpoint['state_dict']
-        method.load_state_dict(state_dict)
+        # Can we precompute the package name of this checkpoint?
+        train_dpath_hint = None
+        if checkpoint_fpath.endswith('.ckpt'):
+            path_ = ub.Path(checkpoint_fpath)
+            if path_.parent.stem == 'checkpoints':
+                train_dpath_hint = path_.parent.parent
 
         if train_dpath_hint is not None:
-            method.train_dpath_hint = train_dpath_hint
+            candidates = list(train_dpath_hint.glob('fit_config.yaml'))
+            if len(candidates) == 1:
+                meta_fpath = candidates[0]
+                with open(meta_fpath, 'r') as file:
+                    data = yaml.safe_load(file)
+                # Hack to put experiment name in package name
+                expt_name = ub.Path(data['default_root_dir']).name
+                if expt_name not in package_name:
+                    package_name = expt_name + '_' + package_name
 
-        method.save_package(str(package_fpath))
-    return str(package_fpath)
+        package_fpath = x.parent / package_name
+
+        if force or not package_fpath.exists():
+            import netharn as nh
+            xpu = nh.XPU.coerce('cpu')
+            checkpoint = xpu.load(checkpoint_fpath)
+
+            # checkpoint = torch.load(checkpoint_fpath)
+            print(list(checkpoint.keys()))
+            hparams = checkpoint['hyper_parameters']
+            if 'input_channels' in hparams:
+                from kwcoco.channel_spec import ChannelSpec
+                # Hack for strange pickle issue
+                chan = hparams['input_channels']
+                if not hasattr(chan, '_spec') and hasattr(chan, '_info'):
+                    chan = ChannelSpec.coerce(chan._info['spec'])
+                    hparams['input_channels'] = chan
+                else:
+                    hparams['input_channels'] = ChannelSpec.coerce(chan.spec)
+
+            method = methods.MultimodalTransformer(**hparams)
+            state_dict = checkpoint['state_dict']
+            method.load_state_dict(state_dict)
+
+            if train_dpath_hint is not None:
+                method.train_dpath_hint = train_dpath_hint
+
+            method.save_package(str(package_fpath))
+        package_fpaths.append(str(package_fpath))
+    return package_fpaths
 
 
 def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
@@ -239,25 +244,14 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
 if __name__ == '__main__':
     """
     CommandLine:
-        python ~/code/watch/watch/tasks/fusion/repackage.py /home/joncrall/data/dvc-repos/smart_watch_dvc/training/toothbrush/joncrall/Drop1_Raw_Holdout/runs/ActivityClf_smt_it_joint_p8_raw_v019/lightning_logs/version_0/checkpoints/epoch=9-step=2299.ckpt
+        ls $HOME/data/dvc-repos/smart_watch_dvc/training/namek/joncrall/Drop2-Aligned-TA1-2022-02-15/runs/BASELINE_EXPERIMENT_V001/lightning_logs/version_0/checkpoints/*.ckpt
 
-        python -m watch.tasks.fusion.repackage repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=53-step=28457.ckpt
+        python -m watch.tasks.fusion.repackage
 
-        python -m watch.tasks.fusion.repackage repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=98-step=52172.ckpt
-
-        python -m watch.tasks.fusion.repackage repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=21-step=11593.ckpt
-
-        python -m watch.tasks.fusion.repackage repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=31-step=16863.ckpt
-        python -m watch.tasks.fusion.repackage repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=43-step=23187.ckpt
-
-        python -m watch.tasks.fusion.repackage repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_raw_v001/lightning_logs/version_1/checkpoints/epoch=145-step=76941.ckpt
-
+        python -m watch.tasks.fusion.repackage repackage "$HOME/data/dvc-repos/smart_watch_dvc/training/*/*/Drop1-20201117/runs/BAS_TA1_KOREA_v083/lightning_logs/*/checkpoints/*.ckpt"
 
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
         ls $DVC_DPATH/training/*/*/Drop1_October2021/runs/*/lightning_logs
-
-
-
     """
     import fire
     fire.Fire()

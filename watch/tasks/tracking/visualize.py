@@ -9,7 +9,8 @@ import pandas as pd
 from collections import defaultdict
 from watch.tasks.tracking.utils import pop_tracks, heatmaps
 from watch.heuristics import CNAMES_DCT
-from watch.tasks.tracking.from_heatmap import mean_normalized
+from watch.tasks.tracking.from_heatmap import mean_normalized  # NOQA
+
 
 def get_rgb(dset, gid):
     coco_img = dset.coco_image(gid)

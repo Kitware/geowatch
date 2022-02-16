@@ -203,4 +203,9 @@ def main():
 
 
 if __name__ == '__main__':
+    """
+    CommandLine:
+        WATCH_DATA_DPATH=$(python -m watch.cli.find_dvc)
+
+    """
     main()

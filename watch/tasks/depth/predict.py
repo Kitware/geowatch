@@ -197,26 +197,35 @@ if __name__ == '__main__':
     r"""
     # Notes:
 
-    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+    # VRAM usage with weights_v2_gray
+    # window_size=512:   4.951 GB
+    # window_size=640:   7.406 GB
+    # window_size=704:   8.912 GB
+    # window_size=736:   9.310 GB
+    # window_size=768:  10.099 GB
+    # window_size=1024: 17.111 GB
+    # window_size=1152: 21.007 GB
 
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15
     python -m watch.tasks.depth.predict \
-        --dataset="$DVC_DPATH/Drop1-Aligned-L1-2022-01/data.kwcoco.json" \
-        --output="$DVC_DPATH/Drop1-Aligned-L1-2022-01/dzyne_depth.kwcoco.json" \
-        --deployed="$DVC_DPATH/models/depth/weights_v1.pt" \
+        --dataset="$KWCOCO_BUNDLE_DPATH/data.kwcoco.json" \
+        --output="$KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json" \
+        --deployed="$DVC_DPATH/models/depth/weights_v2_gray.pt" \
         --dump_shards=True \
         --data_workers=2 \
-        --window_size=1536
+        --window_size=736
 
-    python -m watch visualize $DVC_DPATH/Drop1-Aligned-L1-2022-01/dzyne_depth.kwcoco.json \
+    python -m watch visualize $KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json \
         --viz_dpath $DVC_DPATH/Drop1-Aligned-L1-2022-01/_viz_depth \
         --animate=True --channels=depth --skip_missing=True
 
-    python -m watch stats $DVC_DPATH/Drop1-Aligned-L1-2022-01/dzyne_depth.kwcoco.json
+    python -m watch stats $KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json
 
-    python -m kwcoco stats $DVC_DPATH/Drop1-Aligned-L1-2022-01/dzyne_depth.kwcoco.json
+    python -m kwcoco stats $KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json
 
-    python -m watch visualize $DVC_DPATH/Drop1-Aligned-L1-2022-01/dzyne_depth.kwcoco.json \
-        --viz_dpath $DVC_DPATH/Drop1-Aligned-L1-2022-01/_viz_depth \
+    python -m watch visualize $KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json \
+        --viz_dpath $KWCOCO_BUNDLE_DPATH/_viz_depth \
         --animate=True --channels="red|green|blue" --skip_missing=True \
         --select_images '.sensor_coarse == "WV"' --workers=4
 

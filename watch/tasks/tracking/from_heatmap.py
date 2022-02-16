@@ -59,7 +59,6 @@ def frequency_weighted_mean(heatmaps, mask_thresh, morph_kernel=3):
     return aggregated_probs
 
 
-
 @dataclass
 class SmallPolygonFilter(PolygonFilter):
     min_area_px: float = 80
