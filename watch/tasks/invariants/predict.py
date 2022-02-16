@@ -266,6 +266,7 @@ if __name__ == '__main__':
             --segmentation_package_path "$PRETEXT_PATH" \
             --pca_projection_path "$PCA_FPATH" \
             --input_kwcoco $KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
+            --num_workers=avail \
             --do_pca 1 \
             --output_kwcoco $KWCOCO_BUNDLE_DPATH/uky_invariants/invariants.kwcoco.json
     """
