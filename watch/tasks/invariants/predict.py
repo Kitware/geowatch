@@ -269,16 +269,16 @@ if __name__ == '__main__':
             --pretext_package_path "$PRETEXT_PATH" \
             --segmentation_package_path "$SSEG_PATH" \
             --pca_projection_path "$PCA_FPATH" \
-            --input_kwcoco $KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json \
+            --input_kwcoco $KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
             --num_workers=avail \
             --do_pca 1 \
             --patch_overlap=0.5 \
-            --output_kwcoco $KWCOCO_BUNDLE_DPATH/uky_invariants/invariants_nowv_vali.kwcoco.json
+            --output_kwcoco $KWCOCO_BUNDLE_DPATH/uky_invariants.kwcoco.json
 
-        python -m watch stats $KWCOCO_BUNDLE_DPATH/uky_invariants/invariants.kwcoco.json
+        python -m watch stats $KWCOCO_BUNDLE_DPATH/uky_invariants.kwcoco.json
 
-        python -m watch visualize $KWCOCO_BUNDLE_DPATH/uky_invariants/invariants.kwcoco.json \
+        python -m watch visualize $KWCOCO_BUNDLE_DPATH/uky_invariants.kwcoco.json \
             --channels "invariants.0:3,invariants.3:6,invariants.5:8" --animate=True \
-            --select_images '.sensor_coarse != "WV"'
+            --select_images '.sensor_coarse != "WV"' --draw_anns=False
     """
     main()
