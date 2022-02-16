@@ -168,7 +168,7 @@ def wv_coreg(wv_catalog, outdir, jobs=1, drop_empty=False, s2_catalog=None):
 
     output_catalog = parallel_map_items(
         wv_catalog,
-        _coreg_map,
+        coreg_map,
         max_workers=jobs,
         mode='process' if jobs > 1 else 'serial',
         extra_kwargs=dict(outdir=outdir,
@@ -183,8 +183,8 @@ def wv_coreg(wv_catalog, outdir, jobs=1, drop_empty=False, s2_catalog=None):
 
 
 @maps(history_entry='coregistration')
-def _coreg_map(stac_item, outdir, baseline_s2_items, item_pairs_dct,
-               drop_empty):
+def coreg_map(stac_item, outdir, baseline_s2_items, item_pairs_dct,
+              drop_empty):
 
     print("* Coregistering WV item: '{}'".format(stac_item.id))
 

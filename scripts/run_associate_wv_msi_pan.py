@@ -68,6 +68,8 @@ def run_associate_wv_msi_pan(input_path,
     input_stac_items = load_input_stac_items(input_path, aws_base_command)
     input_stac_items_dict = {item['id']: item for item in input_stac_items}
 
+    # Establish the MSI-PAN mapping in the WV catalog
+    # and remove the paired PAN items so they don't get duplicated
     item_pairs_dict = associate_msi_pan(input_stac_items)
     for item in item_pairs_dict.values():
         del input_stac_items_dict[item.id]
@@ -79,7 +81,7 @@ def run_associate_wv_msi_pan(input_path,
         subprocess.run([*aws_base_command,
                         temporary_file.name,
                         '/'.join((outbucket,
-                                  'associated_msi_pan_items.json'))],
+                                  'associated_wv_msi_and_pan_items.json'))],
                        check=True)
 
     te_output = upload_output_stac_items(

@@ -153,7 +153,7 @@ def wv_ortho(stac_catalog,
     else:
         orthorectified_catalog = parallel_map_items(
             catalog,
-            _ortho_map,
+            ortho_map,
             max_workers=jobs,
             mode='process' if jobs > 1 else 'serial',
             extra_kwargs=dict(outdir=outdir,
@@ -184,7 +184,7 @@ def wv_ortho(stac_catalog,
 
 
 @maps(history_entry='wv_ortho')
-def _ortho_map(stac_item, outdir, drop_empty=False, *args, **kwargs):
+def ortho_map(stac_item, outdir, drop_empty=False, *args, **kwargs):
     def is_empty(fpath):
         '''
         Check for a failed gdalwarp resulting in an image of all zeros
