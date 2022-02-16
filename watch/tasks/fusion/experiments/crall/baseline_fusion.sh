@@ -101,3 +101,14 @@ python -m watch.tasks.fusion.fit \
     --num_draw=1 \
     --amp_backend=apex \
     --init="$INITIAL_STATE"
+
+
+gather_checkpoint_notes(){
+    __doc__="
+    Every so often, I run the repackage command and gather the packaged
+    checkpoints for evaluation.
+    "
+
+    python -m watch.tasks.fusion.repackage "$DEFAULT_ROOT_DIR/lightning_logs/version_*/checkpoints/*.ckpt"
+
+}

@@ -277,8 +277,8 @@ if __name__ == '__main__':
 
         python -m watch stats $KWCOCO_BUNDLE_DPATH/uky_invariants.kwcoco.json
 
-        python -m watch visualize $KWCOCO_BUNDLE_DPATH/uky_invariants.kwcoco.json \
-            --channels "invariants.0:3,invariants.3:6,invariants.5:8" --animate=True \
+        python -m watch visualize $KWCOCO_BUNDLE_DPATH/uky_invariants/invariants_nowv_vali.kwcoco.json \
+            --channels "invariants.7,invariants.6,invariants.5" --animate=True \
             --select_images '.sensor_coarse != "WV"' --draw_anns=False
     """
     main()
