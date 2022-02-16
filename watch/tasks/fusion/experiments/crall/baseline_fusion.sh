@@ -109,6 +109,47 @@ gather_checkpoint_notes(){
     checkpoints for evaluation.
     "
 
-    python -m watch.tasks.fusion.repackage "$DEFAULT_ROOT_DIR/lightning_logs/version_*/checkpoints/*.ckpt"
+    # This method only works for the current fusion model
+    # It would be better if the fit command was able to take care of this
+    python -m watch.tasks.fusion.repackage repackage "$DEFAULT_ROOT_DIR/lightning_logs/version_*/checkpoints/*.ckpt"
 
+    # To ensure the results of our experiments are maintained, we copy them to
+    # the DVC directory.
+    BASE_SAVE_DPATH=$DVC_DPATH/models/fusion/baseline
+    EXPT_SAVE_DPATH=$BASE_SAVE_DPATH/$EXPERIMENT_NAME
+    mkdir -p "$BASE_SAVE_DPATH"
+    mkdir -p "$EXPT_SAVE_DPATH"
+
+    cp "$DEFAULT_ROOT_DIR"/lightning_logs/version_*/checkpoints/*.pt "$EXPT_SAVE_DPATH"
+
+}
+
+
+predict_and_evaluate_checkpoints(){
+    __doc__='
+    Given the checkpoint candidates, we can "schedule" them for evaluation.
+    This schedule evaluations script is a work in progress.
+    There are two ways of using it:
+
+    1. If run=0, all it does is build the appropriate bash commands to run 
+       prediction and evaluation
+
+    2. If run=1, it will launch the jobs via the hacky tmux-queue, which really
+       should be a slurm queue. The number of jobs will depend on the setting
+       of "--gpus". E.g. specify the index of the gpus to use --gpus="0,1,2,3"
+
+    Note:
+        This whole queueing system is a work in progress and if anyone knows
+        any good libraries for Python that let you submit a bash job, specify
+        how many concurrent jobs can be running at the same time, and allow
+        jobs to depend on other jobs, let me know.  If this doesnt exist I want
+        to make it with multiprocessing, tmux, and slurm backends.
+
+
+    '
+    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="0," \
+            --model_globstr="$EXPT_SAVE_DPATH/*.pt" \
+            --test_dataset="$VALI_FPATH" \
+            --run=0 --skip_existing=True
 }
