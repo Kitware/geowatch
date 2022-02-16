@@ -22,7 +22,7 @@ def repackage(checkpoint_fpath, force=False):
     # For now there is only one model, but in the future we will need
     # some sort of modal switch to package the correct metadata
     from watch.tasks.fusion import methods
-    from watch.util import util_path
+    from watch.utils import util_path
     checkpoint_fpaths = util_path.coerce_patterned_paths(checkpoint_fpath)
     package_fpaths = []
     for checkpoint_fpath in checkpoint_fpaths:
@@ -79,7 +79,7 @@ def repackage(checkpoint_fpath, force=False):
                 method.train_dpath_hint = train_dpath_hint
 
             method.save_package(str(package_fpath))
-        package_fpaths.append(str(package_fpaths))
+        package_fpaths.append(str(package_fpath))
     return package_fpaths
 
 
@@ -248,23 +248,10 @@ if __name__ == '__main__':
 
         python -m watch.tasks.fusion.repackage
 
-        python -m watch.tasks.fusion.repackage repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=53-step=28457.ckpt
-
-        python -m watch.tasks.fusion.repackage repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=98-step=52172.ckpt
-
-        python -m watch.tasks.fusion.repackage repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=21-step=11593.ckpt
-
-        python -m watch.tasks.fusion.repackage repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=31-step=16863.ckpt
-        python -m watch.tasks.fusion.repackage repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_rgb_uconn_ukyshared_v001/lightning_logs/version_1/checkpoints/epoch=43-step=23187.ckpt
-
-        python -m watch.tasks.fusion.repackage repackage /home/joncrall/remote/namek/smart_watch_dvc/training/namek/joncrall/Drop1_October2021/runs/Saliency_smt_it_joint_p8_raw_v001/lightning_logs/version_1/checkpoints/epoch=145-step=76941.ckpt
-
+        python -m watch.tasks.fusion.repackage repackage "$HOME/data/dvc-repos/smart_watch_dvc/training/*/*/Drop1-20201117/runs/BAS_TA1_KOREA_v083/lightning_logs/*/checkpoints/*.ckpt"
 
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
         ls $DVC_DPATH/training/*/*/Drop1_October2021/runs/*/lightning_logs
-
-
-
     """
     import fire
     fire.Fire()
