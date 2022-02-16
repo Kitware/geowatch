@@ -12,7 +12,8 @@ Requirements:
 "
 #export CUDA_VISIBLE_DEVICES="1"
 
-DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+#DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+DVC_DPATH=$(python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 
 # Point to latest dataset version
