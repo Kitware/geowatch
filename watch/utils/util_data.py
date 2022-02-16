@@ -10,7 +10,7 @@ def find_smart_dvc_dpath(on_error='raise'):
     NOTE: other team members can add their "standard" locations if they want.
 
     SeeAlso:
-        python -m watch.cli.find_dvc
+        WATCH_DATA_DPATH=$(python -m watch.cli.find_dvc)
 
         python ~/code/watch/watch/cli/find_dvc.py
     """
@@ -21,7 +21,8 @@ def find_smart_dvc_dpath(on_error='raise'):
         # Fallback to candidate DVC paths
         candidate_dpaths = [
             ub.Path('$HOME/data/dvc-repos/smart_watch_dvc').expand(),
-            ub.Path('/media/native/data/data/smart_watch_dvc'),
+            ub.Path('/media/native/data/data/smart_watch_dvc'),  # Rutgers
+            ub.Path('/localdisk0/SCRATCH/watch/ben/smart_watch_dvc'),  # UKY
         ]
         for cand_dpath in candidate_dpaths:
             if cand_dpath.exists():

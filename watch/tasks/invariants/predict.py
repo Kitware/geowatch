@@ -31,14 +31,14 @@ class predict(object):
             self.tasks = args.tasks
         ### Define tasks
         if 'segmentation' in self.tasks:
-            if args.use_torch_package:
+            if args.segmentation_package_path:
                 self.segmentation_model = seg_model.load_package(args.segmentation_package_path)
             else:
                 self.segmentation_model = seg_model.load_from_checkpoint(args.segmentation_ckpt_path, dataset=None)
             self.segmentation_model = self.segmentation_model.to(args.device)
 
         if 'pretext' in self.tasks:
-            if args.use_torch_package:
+            if args.pretext_package_path:
                 self.pretext_model = pretext.load_package(args.pretext_package_path)
             else:
                 self.pretext_model = pretext.load_from_checkpoint(args.pretext_ckpt_path, train_dataset=None, vali_dataset=None)
@@ -59,9 +59,9 @@ class predict(object):
             self.num_out_channels += 1
 
         self.save_channels = f'invariants:{self.num_out_channels}'
-        self.output_kwcoco_path = args.output_kwcoco
-        out_folder, _ = os.path.split(self.output_kwcoco_path)
-        self.output_feat_dpath = ub.ensuredir(os.path.join(out_folder, 'uky_invariants'))
+        self.output_kwcoco_path = ub.Path(args.output_kwcoco)
+        out_folder = self.output_kwcoco_path.parent
+        self.output_feat_dpath = (out_folder / 'uky_invariants').ensuredir()
 
         self.imwrite_kw = {
             'compress': 'DEFLATE',
@@ -75,7 +75,7 @@ class predict(object):
         recon = stitcher.finalize()
         self.stitcher_dict.pop(gid)
 
-        save_path = os.path.join(self.output_feat_dpath, f'invariants_{gid}.tif')
+        save_path = self.output_feat_dpath / f'invariants_{gid}.tif'
         save_path = os.fspath(save_path)
         kwimage.imwrite(save_path, recon,  space=None,
                         **self.imwrite_kw)
@@ -208,10 +208,10 @@ def main():
     parser.add_argument('--device', type=str, default='cuda')
 
     # pytorch lightning checkpoint
-    parser.add_argument('--pretext_ckpt_path', type=str)
-    parser.add_argument('--segmentation_ckpt_path', type=str)
-    parser.add_argument('--pretext_package_path', type=str)
-    parser.add_argument('--segmentation_package_path', type=str)
+    parser.add_argument('--pretext_ckpt_path', type=str, default=None)
+    parser.add_argument('--segmentation_ckpt_path', type=str, default=None)
+    parser.add_argument('--pretext_package_path', type=str, default=None)
+    parser.add_argument('--segmentation_package_path', type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--num_workers', default=4, help='number of background data loading workers')
     parser.add_argument('--write_workers', default=0, help='number of background data writing workers')
@@ -242,16 +242,32 @@ def main():
 
 if __name__ == '__main__':
     """
+    SeeAlso:
+        ../../cli/prepare_teamfeats.py
+
+        # Team Features on Drop2
+        DVC_DPATH=$(python -m watch.cli.find_dvc)
+        python -m watch.cli.prepare_teamfeats \
+            --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
+            --with_depth=0 --with_materials=0  --with_invariants=1 \
+            --gres=0 --run=0 --do_splits=True
+
     CommandLine:
         python -m watch.tasks.template.predict --help
 
+        DVC_DPATH=$(python -m watch.cli.find_dvc)
+        SSEG_PATH=$DVC_DPATH/models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pretext_package.pt
+        PRETEXT_PATH=$DVC_DPATH/models/uky/uky_invariants_2022_02_11/TA1_segmentation_model/segmentation_package.pt
+        PCA_FPATH=$DVC_DPATH/models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pca_projection_matrix.pt
+
+        KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15
+
         python -m watch.tasks.invariants.predict \
-            --pretext_package_path $DVC_DPATH/models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pretext_package.pt \
-            --segmentation_package_path $DVC_DPATH/models/uky/uky_invariants_2022_02_11/TA1_segmentation_model/segmentation_package.pt \
-            --input_kwcoco $DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json \
+            --pretext_package_path "$SSEG_PATH" \
+            --segmentation_package_path "$PRETEXT_PATH" \
+            --pca_projection_path "$PCA_FPATH" \
+            --input_kwcoco $KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
             --do_pca 1 \
-            --pca_projection_path $DVC_DPATH/models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pca_projection_matrix.pt \
-            --use_torch_package \
-            --output_kwcoco $DVC_DPATH/uky_invariants/Drop2-Aligned_TA1-2022-01/invariants.kwcoco.json
+            --output_kwcoco $KWCOCO_BUNDLE_DPATH/uky_invariants/invariants.kwcoco.json
     """
     main()
