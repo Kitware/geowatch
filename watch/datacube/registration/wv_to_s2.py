@@ -33,7 +33,7 @@ import sys
 import numpy as np
 from skimage.registration import phase_cross_correlation
 
-from watch.utils.util_raster import gdalwarp_performance_opts
+from watch.utils.util_gdal import gdalwarp_performance_opts
 import ubelt as ub
 
 
