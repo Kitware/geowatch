@@ -298,6 +298,7 @@ def best_candidates(class_rows, mean_rows):
         class_subset = class_df.loc[top_class_indexes]
         subsets['class'] = class_subset = class_subset.sort_values('AP')
         cand_expt_names.update(set(class_subset['model_fpath'].tolist()))
+
     else:
         class_subset = []
         top_class_indexes = []
@@ -318,12 +319,14 @@ def best_candidates(class_rows, mean_rows):
         mean_subset = mean_df.loc[top_mean_indexes]
         subsets['mean'] = mean_subset = mean_subset.sort_values('class_mAPUC')
         cand_expt_names.update(set(mean_subset['model_fpath'].tolist()))
+
+        sc_mean_subset = mean_subset[~mean_subset['class_mAPUC'].isnull()].sort_values('class_mAPUC')
+        bas_mean_subset = mean_subset[~mean_subset['salient_APUC'].isnull()].sort_values('salient_APUC')
     else:
         mean_subset = []
         top_mean_indexes = []
-
-    sc_mean_subset = mean_subset[~mean_subset['class_mAPUC'].isnull()].sort_values('class_mAPUC')
-    bas_mean_subset = mean_subset[~mean_subset['salient_APUC'].isnull()].sort_values('salient_APUC')
+        sc_mean_subset = []
+        bas_mean_subset = []
 
     model_candidates = ub.ddict(list)
     pred_candidates = ub.ddict(list)
@@ -855,11 +858,11 @@ if __name__ == '__main__':
     CommandLine:
         # DVC_DPATH=$(python -m watch.cli.find_dvc)
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-        BASE_SAVE_DPATH=$DVC_DPATH/models/fusion/SC-20201117/*_TA1*/*/*/eval/curves/measures2.json
-        # ls $BASE_SAVE_DPATH
-        # echo "$BASE_SAVE_DPATH"
+        MEASURE_GLOBSTR=$DVC_DPATH/models/fusion/SC-20201117/*_TA1*/*/*/eval/curves/measures2.json
+        # ls $MEASURE_GLOBSTR
+        # echo "$MEASURE_GLOBSTR"
         python -m watch.tasks.fusion.gather_results \
-            --measure_globstr="$BASE_SAVE_DPATH" \
+            --measure_globstr="$MEASURE_GLOBSTR" \
             --out_dpath="$DVC_DPATH/agg_results"
     """
     gather_measures(cmdline=True)

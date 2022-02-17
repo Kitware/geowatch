@@ -12,7 +12,7 @@ Requirements:
 "
 #export CUDA_VISIBLE_DEVICES="1"
 
-#DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 DVC_DPATH=$(python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 
@@ -152,8 +152,26 @@ predict_and_evaluate_checkpoints(){
             --run=0 --skip_existing=True
 
     python -m watch.tasks.fusion.gather_results \
-            --gpus="0," \
-            --model_globstr="$EXPT_SAVE_DPATH/*.pt" \
+            --measure_globstr="$EXPT_SAVE_DPATH/*.pt" \
             --test_dataset="$VALI_FPATH" \
             --run=0 --skip_existing=True
+}
+
+
+aggregate_multiple_evaluations(){
+    __doc__="
+
+    "
+
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+
+    EXPT_NAME_PAT="BASELINE_EXPERIMENT_V001"
+    MODEL_EPOCH_PAT="*"
+    PRED_DSET_PAT="*"
+    MEASURE_GLOBSTR=$DVC_DPATH/models/fusion/baseline/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/eval/curves/measures2.json
+    python -m watch.tasks.fusion.gather_results \
+        --measure_globstr="$MEASURE_GLOBSTR" \
+        --out_dpath="$DVC_DPATH/agg_results/baseline"
+
 }
