@@ -33,6 +33,7 @@ from mgrs import MGRS
 from osgeo import osr
 from glob import glob
 from collections import defaultdict
+from typing import Union
 import numpy as np
 import ubelt as ub
 from kwcoco.coco_image import CocoImage
@@ -48,8 +49,18 @@ def _single_geometry(geom):
     return shapely.geometry.shape(geom).buffer(0)
 
 
+def _ensure_multi(
+    poly: Union[shapely.geometry.Polygon, shapely.geometry.MultiPolygon]
+) -> shapely.geometry.MultiPolygon:
+    if isinstance(poly, shapely.geometry.MultiPolygon):
+        return poly
+    elif isinstance(poly, shapely.geometry.Polygon):
+        return shapely.geometry.MultiPolygon([poly])
+    else:
+        raise TypeError(f'{poly} of type {type(poly)}')
+
+
 def _combined_geometries(geometry_list):
-    # TODO does this respect ordering for disjoint polys?
     return shapely.ops.unary_union(geometry_list).buffer(0)
 
 
@@ -62,11 +73,12 @@ sep = ','
 
 
 @profile
-def geojson_feature(img, anns, coco_dset, with_properties=True):
+def geojson_feature(anns, coco_dset, with_properties=True):
     '''
     Group kwcoco annotations in the same track (site) and image
     into one Feature in an IARPA site model
     '''
+
     def single_geometry(ann):
         seg_geo = ann['segmentation_geos']
         assert isinstance(seg_geo, dict)
@@ -201,12 +213,13 @@ def geojson_feature(img, anns, coco_dset, with_properties=True):
         return properties
 
     if with_properties:
+        geometry = _ensure_multi(_combined_geometries(geometry_list))
         properties = combined_properties(properties_list, geometry_list)
     else:
+        geometry = _combined_geometries(geometry_list)
         properties = {}
 
-    return geojson.Feature(geometry=_combined_geometries(geometry_list),
-                           properties=properties)
+    return geojson.Feature(geometry=geometry, properties=properties)
 
 
 @profile
@@ -231,8 +244,7 @@ def track_to_site(coco_dset,
         # if track_index is missing, assume they're already sorted
         gids, anns = annots.gids, annots.objs
     features = [
-        geojson_feature(coco_dset.imgs[gid],
-                        _anns,
+        geojson_feature( _anns,
                         coco_dset,
                         with_properties=(not as_summary))
         for gid, _anns in ub.group_items(anns, gids).items()
@@ -306,12 +318,12 @@ def track_to_site(coco_dset,
             'site_id': site_id,
             'version': watch.__version__,
             'mgrs': MGRS().toMGRS(*centroid_latlon, MGRSPrecision=0),
-            'status': 'positive_annotated',
+            'status': 'system_confirmed',  # TODO system_proposed pre val-net
             'model_content': 'proposed',
             'score': 1.0,  # TODO does this matter?
             'start_date': min(dates),
             'end_date': max(dates),
-            'originator': 'kitware',
+            'originator': 'kit',
             'validated': 'False'
         }
 
