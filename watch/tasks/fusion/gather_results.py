@@ -591,20 +591,21 @@ def gather_measures(cmdline=False, **kwargs):
     class_df = shrink_notations(class_df, drop=1)
     mean_df = shrink_notations(mean_df, drop=1)
 
-    print('\nSort by class_mAPUC')
-    print(mean_df.sort_values('class_mAPUC').to_string())
+    if 'class_mAPUC' in mean_df.columns:
+        print('\nSort by class_mAPUC')
+        print(mean_df.sort_values('class_mAPUC').to_string())
 
-    print('\nSort by salient_APUC')
-    print(mean_df.sort_values('salient_APUC').to_string())
+    if 'salient_APUC' in mean_df.columns:
+        print('\nSort by salient_APUC')
+        print(mean_df.sort_values('salient_APUC').to_string())
 
-    try:
+    if 'AP' in class_df.columns:
         print('\nClass: Sort by AP')
         print(class_df[~class_df['AP'].isnull()].sort_values('AP').to_string())
 
+    if 'AUC' in class_df.columns:
         print('\nClass: Sort by AUC')
         print(class_df[~class_df['AUC'].isnull()].sort_values('AUC').to_string())
-    except KeyError:
-        pass
 
     # mean_df['title'].apply(lambda x: int(x.split('epoch=')[1].split('-')[0]))
     def group_by_best(mean_df, metric_key, shrink=False):
