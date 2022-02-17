@@ -2,7 +2,7 @@
 # TODO fix
 # NOTE: from Jon C, wrt the above fix, the underlying issue is C libraries, and
 # there is some logic to work around this in the watch.__init__ module.
-from osgeo import gdal  # NOQA
+from osgeo import gdal
 import json
 import logging
 import warnings
@@ -155,7 +155,15 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False, data
             img_info = torch_dataset.dset.imgs[gid]
             pred_filename = _image_pred_filename(torch_dataset,
                                                  output_data_dir, img_info)
-            pred_shape = kwimage.load_image_shape(pred_filename)
+
+            gdal_img = gdal.Open(str(pred_filename), gdal.GA_ReadOnly)
+            if gdal_img is None:
+                raise Exception(gdal.GetLastErrorMsg())
+            pred_shape = (gdal_img.RasterYSize, gdal_img.RasterXSize,
+                          gdal_img.RasterCount)
+            gdal_img = None
+
+            # pred_shape = kwimage.load_image_shape(pred_filename)
             info = _build_aux_info(img_info, pred_shape, pred_filename, output_bundle_dpath)
             aux = output_dset.imgs[gid].get('auxiliary', [])
             aux.append(info)
