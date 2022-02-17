@@ -7,7 +7,7 @@ import json
 import logging
 import warnings
 from functools import partial
-from pathlib import Path
+import ubelt as ub
 
 import os
 import click
@@ -39,8 +39,8 @@ log = logging.getLogger(__name__)
 @click.option('--window_size', required=False, type=int, default=1024, help='sliding window size')
 @click.option('--dump_shards', required=False, default=False, help='if True, output partial kwcoco files as they are completed')
 @click.option('--data_workers', required=False, default=0, help='background data loaders')
-def predict(dataset, deployed, output, window_size=2048, dump_shards=False, data_workers=0):
-    weights_filename = Path(deployed)
+def predict(dataset, deployed, output, window_size=2048, dump_shards=False, data_workers=0, ):
+    weights_filename = ub.Path(deployed)
 
     output_dset_filename = get_output_file(output)
 
@@ -53,7 +53,7 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False, data
     log.info('Output Images:  {}'.format(output_data_dir))
 
     input_dset = kwcoco.CocoDataset.coerce(dataset)
-    input_bundle_dpath = Path(input_dset.bundle_dpath)
+    input_bundle_dpath = ub.Path(input_dset.bundle_dpath)
 
     output_dset = input_dset.copy()
     if input_bundle_dpath != output_bundle_dpath:
@@ -70,10 +70,34 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False, data
 
     # input data
     torch_dataset = WVRgbDataset(input_dset)
+    cache = 1
+
+    if cache:
+        log.debug('checking for cached files')
+
+        # Remove any image ids that are already computed
+        gid_to_pred_filename = {}
+        miss_gids = []
+        hit_gids = []
+        for gid in torch_dataset.gids:
+            img_info = torch_dataset.dset.imgs[gid]
+            pred_filename = _image_pred_filename(torch_dataset,
+                                                 output_data_dir, img_info)
+            gid_to_pred_filename[gid] = pred_filename
+            if pred_filename.exists():
+                hit_gids.append(gid)
+            else:
+                miss_gids.append(gid)
+
+        log.info(f'Found {len(hit_gids)} / {len(gid_to_pred_filename)} cached depth maps')
+        # Might be a better way to indicate a subset, but this works
+        torch_dataset.gids = miss_gids
 
     # model
     log.debug('loading model')
-    model = MultiTaskModel(config=_load_config())
+    config = _load_config()
+    config['backbone_params']['pretrained'] = False  # dont download on predict
+    model = MultiTaskModel(config=config)
     state_dict = torch.load(weights_filename, map_location=lambda storage, loc: storage)
     model.load_state_dict(state_dict)
 
@@ -86,28 +110,24 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False, data
     with torch.no_grad():
         for batch in tqdm(dataloader, miniters=1, unit='image', disable=False):
             assert len(batch) == 1
-            img_info = batch[0]
-            gid = img_info['id']
+            batch_item = batch[0]
+            gid = batch_item['id']
+
+            # get clean img_info
+            img_info = torch_dataset.dset.imgs[gid]
+
+            pred_filename = _image_pred_filename(torch_dataset,
+                                                 output_data_dir, img_info)
+            if cache and pred_filename.exists():
+                continue
+
             try:
                 S = window_size
-                image = img_info['imgdata']
+                image = batch_item['imgdata']
                 pred = process_image_chunked(
                     image, partial(run_inference, model=model),
                     chip_size=(S, S, 3),
                 )
-
-                # get clean img_info
-                img_info = torch_dataset.dset.imgs[gid]
-
-                # Construct an output file name based on the video and image name
-                imgname = img_info['name']
-                vidid = img_info.get('video_id', None)
-                if vidid is not None:
-                    vidname = torch_dataset.dset.index.videos[vidid]['name']
-                    output_dpath = output_data_dir / vidname
-                else:
-                    output_dpath = output_data_dir
-                pred_filename = output_dpath / (imgname + '_depth.tif')
 
                 info = _write_output(img_info, pred, pred_filename, output_bundle_dpath)
                 aux = output_dset.imgs[gid].get('auxiliary', [])
@@ -119,7 +139,8 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False, data
                     # reruns)
                     shard_dset = output_dset.subset([gid])
                     shard_dset.reroot(absolute=True)
-                    shard_dset.fpath = output_dpath / (imgname + '_depth.kwcoco.json')
+                    shard_dset.fpath = pred_filename.augment(ext='.kwcoco.json')
+                    # output_dpath / (imgname + '_depth.kwcoco.json')
                     shard_dset.dump(shard_dset.fpath, indent=2)
 
             except KeyboardInterrupt:
@@ -128,9 +149,26 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False, data
             except Exception:
                 log.exception('Unable to load id:{} - {}'.format(img_info['id'], img_info['name']))
 
+    if cache and hit_gids:
+        # TODO: add metadata
+        pass
+
     output_dset.dump(str(output_dset_filename), indent=2)
     output_dset.validate()
     log.info('output written to {}'.format(output_dset_filename))
+
+
+def _image_pred_filename(torch_dataset, output_data_dir, img_info):
+    # Construct an output file name based on the video and image name
+    imgname = img_info['name']
+    vidid = img_info.get('video_id', None)
+    if vidid is not None:
+        vidname = torch_dataset.dset.index.videos[vidid]['name']
+        output_dpath = output_data_dir / vidname
+    else:
+        output_dpath = output_data_dir
+    pred_filename = output_dpath / (imgname + '_depth.tif')
+    return pred_filename
 
 
 def run_inference(image, model):
@@ -213,7 +251,7 @@ if __name__ == '__main__':
         --output="$KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json" \
         --deployed="$DVC_DPATH/models/depth/weights_v2_gray.pt" \
         --dump_shards=True \
-        --data_workers=2 \
+        --data_workers=4 \
         --window_size=736
 
     python -m watch visualize $KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json \
