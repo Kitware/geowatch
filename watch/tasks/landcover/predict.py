@@ -142,5 +142,18 @@ def get_output_file(output):
 
 
 if __name__ == '__main__':
+    """
+    CommandLine:
+        export CUDA_VISIBLE_DEVICES="1"
+        DVC_DPATH=$(python -m watch.cli.find_dvc)
+        KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15
+        DZYNE_LANDCOVER_MODEL_FPATH="$DVC_DPATH/models/landcover/visnav_remap_s2_subset.pt"
+        python -m watch.tasks.landcover.predict \
+            --dataset=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
+            --deployed=$DZYNE_LANDCOVER_MODEL_FPATH  \
+            --device=0 \
+            --num_workers="avail" \
+            --output=$KWCOCO_BUNDLE_DPATH/data_dzyne_landcover.kwcoco.json
+    """
     setup_logging()
     predict()
