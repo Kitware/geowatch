@@ -10,10 +10,40 @@ import numpy as np
 import ubelt as ub
 import yaml
 import shutil
+import scriptconfig as scfg
+
+
+class GatherResultsConfig(scfg.Config):
+    """
+    TODO: write good docs for the gather command line tool.
+
+    Basic idea:
+
+        Grabs a selection of precomputed metrics on a particular dataset
+
+        Compares models against each other with statistical tests and plots.
+
+        Tries to figure out which configs did best.
+    """
+    default = {
+        'measure_globstr': scfg.Value('measures2.json', help='a group of measures2.json files from kwcoco metrics, specified by list or glob pattern'),
+        'out_dpath': scfg.Value('./agg_results', help='A location where aggregate results can be written and compared'),
+        'show': scfg.Value(False, help='if true, does a plt.show')
+    }
 
 
 class Found(Exception):
     pass
+
+
+def _writefig(fig, dpath, fname, figsize, verbose, tight):
+    fig_fpath = dpath / fname
+    if verbose:
+        print('write fig_fpath = {!r}'.format(fig_fpath))
+    fig.set_size_inches(figsize)
+    if tight:
+        fig.tight_layout()
+    fig.savefig(fig_fpath)
 
 
 def load_measure(measure_fpath):
@@ -397,7 +427,7 @@ def _oldhack():
     """
 
 
-def gather_measures(dvc_dpath=None, measure_globstr=None):
+def gather_measures(cmdline=False, **kwargs):
     """
     Ignore:
         from watch.tasks.fusion.gather_results import *  # NOQA
@@ -405,6 +435,7 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
         dvc_dpath = watch.find_smart_dvc_dpath()
         measure_globstr = 'models/fusion/SC-20201117/*/*/*/eval/curves/measures2.json'
         measure_globstr = 'models/fusion/SC-20201117/*_TA1*/*/*/eval/curves/measures2.json'
+        kwargs['measure_globstr'] = dvc_dpath / measure_globstr
 
         if 0:
             remote = 'namek'
@@ -413,21 +444,30 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
     """
     import watch
     from watch.utils import result_analysis
+    from watch.utils import util_path
+    import matplotlib as mpl
+
+    config = GatherResultsConfig(cmdline=cmdline, **kwargs)
+    print('config = {}'.format(ub.repr2(config.asdict(), nl=1)))
+
+    measure_globstr = config['measure_globstr']
+    out_dpath = ub.Path(config['out_dpath']).ensuredir()
 
     # TODO: high level results for a model should be serialized to DVC
-
-    if dvc_dpath is None:
-        dvc_dpath = watch.find_smart_dvc_dpath()
-
     if measure_globstr is None:
         # model_dpath = ub.Path(dvc_dpath) / 'models/fusion/unevaluated-activity-2021-11-12'
         # model_dpath = fusion_model_dpath / 'unevaluated-activity-2021-11-12'
         # fusion_model_dpath = dvc_dpath / 'models/fusion/'
         # model_dpath = fusion_model_dpath / 'SC-20201117'
         # measure_fpaths = list(model_dpath.glob('eval_links/*/curves/measures2.json'))
+        dvc_dpath = watch.find_smart_dvc_dpath()
         measure_globstr = 'models/fusion/SC-20201117/*/*/*/eval/curves/measures2.json'
+        measure_fpaths = list(dvc_dpath.glob(measure_globstr))
+    else:
+        measure_fpaths = util_path.coerce_patterned_paths(measure_globstr)
 
-    measure_fpaths = list(dvc_dpath.glob(measure_globstr))
+    measure_fpaths = [ub.Path(p) for p in measure_fpaths]
+
     dset_groups = ub.group_items(measure_fpaths, lambda x: x.parent.parent.parent.name)
     print('dset_groups = {}'.format(ub.repr2(dset_groups, nl=2)))
 
@@ -620,14 +660,23 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
         ax.legend(h, ell, loc='lower right')
         ax.set_title(f'Pixelwise {y} metrics: {dataset_title_part}')  # todo: add train name
         # ax.set_title('Pixelwise mAP AC metrics: KR_R001 + KR_R002')
+        fig = ax.figure
+        return fig
+
+    figsize = 'auto'
+    verbose = 1
+    if figsize == 'auto':
+        figsize = (9, 7)
 
     kwplot.figure(fnum=1, doclf=True)
     y = class_metric
-    plot_summary_over_epochs(y)
+    fig1 = plot_summary_over_epochs(y)
+    _writefig(fig1, out_dpath, 'epoch_summary_class.png', figsize, verbose, tight=True)
 
     kwplot.figure(fnum=2, doclf=True)
     y = salient_metric
-    plot_summary_over_epochs(y)
+    fig2 = plot_summary_over_epochs(y)
+    _writefig(fig2, out_dpath, 'epoch_summary_salient.png', figsize, verbose, tight=True)
 
     # kwplot.figure(fnum=2, doclf=True)
     # ax = sns.lineplot(data=mean_df, x='epoch', y='class_mAUC', hue='expt_name', marker='o', style='channels')
@@ -775,35 +824,42 @@ def gather_measures(dvc_dpath=None, measure_globstr=None):
     fnum = 3
     catname = 'Active Construction'
     fig3 = plot_individual_class_curves(catname, fnum, 'ap')
+    _writefig(fig3, out_dpath, f'{catname}_ap_curve.png', figsize, verbose, tight=True)
 
     fnum = 4
     catname = 'Site Preparation'
-    fig4 = plot_individual_class_curves(catname, fnum, 'ap')
+    fig4: mpl.figure.Figure = plot_individual_class_curves(catname, fnum, 'ap')
+    _writefig(fig4, out_dpath, f'{catname}_ap_curve.png', figsize, verbose, tight=True)
 
     fnum = 5
     fig5 = plot_individual_salient_curves(fnum, metric='ap')
+    _writefig(fig5, out_dpath, 'salient_ap_curve.png', figsize, verbose, tight=True)
     # print(best_per_expt.sort_values('mAP').to_string())
 
-    if 1:
-        fig3.set_size_inches(np.array([6.4, 4.8]) * 2.0)
-        fig3.tight_layout()
-        fig4.set_size_inches(np.array([6.4, 4.8]) * 2.0)
-        fig4.tight_layout()
-
-        fig5.set_size_inches(np.array([5.4, 2.8]) * 2.0)
-        fig5.tight_layout()
+    # # if 1:
+    #     # fig3.set_size_inches(np.array([6.4, 4.8]) * 2.0)
+    #     # fig3.tight_layout()
+    #     # fig4.set_size_inches(np.array([6.4, 4.8]) * 2.0)
+    #     # fig4.tight_layout()
+    #     # fig5.set_size_inches(np.array([5.4, 2.8]) * 2.0)
+    #     # fig5.tight_layout()
 
     _ = best_candidates(class_rows, mean_rows)
 
-    if 1:
+    if config['show']:
         plt.show()
 
 
 if __name__ == '__main__':
     """
     CommandLine:
-        python -m watch.tasks.fusion.gather_results
+        # DVC_DPATH=$(python -m watch.cli.find_dvc)
+        DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+        BASE_SAVE_DPATH=$DVC_DPATH/models/fusion/SC-20201117/*_TA1*/*/*/eval/curves/measures2.json
+        # ls $BASE_SAVE_DPATH
+        # echo "$BASE_SAVE_DPATH"
+        python -m watch.tasks.fusion.gather_results \
+            --measure_globstr="$BASE_SAVE_DPATH" \
+            --out_dpath="$DVC_DPATH/agg_results"
     """
-    gather_measures()
-    import xdoctest
-    xdoctest.doctest_module(__file__)
+    gather_measures(cmdline=True)

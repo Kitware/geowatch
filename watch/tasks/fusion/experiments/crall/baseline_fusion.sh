@@ -122,7 +122,6 @@ gather_checkpoint_notes(){
     mkdir -p "$EXPT_SAVE_DPATH"
 
     cp "$DEFAULT_ROOT_DIR"/lightning_logs/version_*/checkpoints/*.pt "$EXPT_SAVE_DPATH"
-
 }
 
 
@@ -145,10 +144,14 @@ predict_and_evaluate_checkpoints(){
         how many concurrent jobs can be running at the same time, and allow
         jobs to depend on other jobs, let me know.  If this doesnt exist I want
         to make it with multiprocessing, tmux, and slurm backends.
-
-
     '
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="0," \
+            --model_globstr="$EXPT_SAVE_DPATH/*.pt" \
+            --test_dataset="$VALI_FPATH" \
+            --run=0 --skip_existing=True
+
+    python -m watch.tasks.fusion.gather_results \
             --gpus="0," \
             --model_globstr="$EXPT_SAVE_DPATH/*.pt" \
             --test_dataset="$VALI_FPATH" \
