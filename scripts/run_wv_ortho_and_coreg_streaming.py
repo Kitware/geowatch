@@ -7,6 +7,7 @@ import subprocess
 from concurrent.futures import as_completed
 import tempfile
 import re
+from glob import glob
 
 import ubelt
 import pystac
@@ -88,10 +89,27 @@ def _item_selector(stac_item):
     return stac_item['properties'].get('platform') in SUPPORTED_PLATFORMS
 
 
-def _item_map(stac_item, working_dir, baseline_s2_items, item_pairs_dict):
+def _item_map(stac_item,
+              working_dir,
+              baseline_s2_items,
+              item_pairs_dict,
+              aws_base_command):
     ortho_item = ortho_map(stac_item,
                            os.path.join(working_dir, 'ortho'),
                            drop_empty=True)
+
+    # Ingress any associated PAN item
+    if stac_item.id in item_pairs_dict:
+        pan_item = item_pairs_dict[stac_item.id]
+
+        ingressed_pan_item = ingress_item(
+            pan_item,
+            os.path.join(working_dir, 'ingress'),
+            aws_base_command,
+            dryrun=False,
+            relative=False)
+
+        item_pairs_dict[stac_item.id] = ingressed_pan_item
 
     coreg_item = coreg_map(ortho_item,
                            os.path.join(working_dir, 'wv_coreg'),
@@ -141,22 +159,25 @@ def run_wv_ortho_and_coreg_streaming(input_path,
 
     input_stac_items = load_input_stac_items(input_path, aws_base_command)
 
-    baseline_s2_items = []
-    for input_item in input_stac_items:
-        if input_item['properties'].get(
-                'watch:s2_coreg_l1c:is_baseline') is True:
-            baseline_s2_items.append(input_item)
-
     baseline_scenes_outdir = os.path.join(
         '/tmp', 'coreg_baseline_scenes')
+    os.makedirs(baseline_scenes_outdir, exist_ok=True)
+    subprocess.run([*aws_base_command, '--recursive',
+                    baseline_scenes_bucket, baseline_scenes_outdir],
+                   check=True)
+
     # Build list of baseline S2 items
-    for stac_item in baseline_s2_items:
-        ingress_item(stac_item.to_dict(),
-                     baseline_scenes_outdir,
-                     aws_base_command,
-                     dryrun=dryrun,
-                     relative=False,
-                     asset_selector=b04_asset_filter)
+    baseline_s2_items = []
+    for stac_item_filepath in glob(os.path.join(baseline_scenes_outdir,
+                                                '*', '*.json')):
+        with open(stac_item_filepath) as f:
+            baseline_s2_items.append(
+                ingress_item(json.load(f),
+                             baseline_scenes_outdir,
+                             aws_base_command,
+                             dryrun=dryrun,
+                             relative=False,
+                             asset_selector=b04_asset_filter))
 
     with tempfile.NamedTemporaryFile() as temporary_file:
         subprocess.run([*aws_base_command,
