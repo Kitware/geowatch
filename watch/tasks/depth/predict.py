@@ -42,7 +42,7 @@ log = logging.getLogger(__name__)
 def predict(dataset, deployed, output, window_size=2048, dump_shards=False, data_workers=0, ):
     weights_filename = ub.Path(deployed)
 
-    output_dset_filename = get_output_file(output)
+    output_dset_filename = ub.Path(get_output_file(output))
 
     output_bundle_dpath = output_dset_filename.parent
     output_data_dir = output_bundle_dpath / 'dzyne_depth'
