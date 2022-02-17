@@ -154,6 +154,12 @@ if __name__ == '__main__':
             --device=0 \
             --num_workers="avail" \
             --output=$KWCOCO_BUNDLE_DPATH/data_dzyne_landcover.kwcoco.json
+
+        python -m watch stats $KWCOCO_BUNDLE_DPATH/data_dzyne_landcover.kwcoco.json
+
+        python -m watch visualize $KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json \
+            --animate=True --channels="built_up|forest|water" --skip_missing=True \
+            --workers=4 --draw_anns=False
     """
     setup_logging()
     predict()
