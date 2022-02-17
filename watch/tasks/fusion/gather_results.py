@@ -28,7 +28,8 @@ class GatherResultsConfig(scfg.Config):
     default = {
         'measure_globstr': scfg.Value('measures2.json', help='a group of measures2.json files from kwcoco metrics, specified by list or glob pattern'),
         'out_dpath': scfg.Value('./agg_results', help='A location where aggregate results can be written and compared'),
-        'show': scfg.Value(False, help='if true, does a plt.show')
+        'show': scfg.Value(False, help='if true, does a plt.show'),
+        'dset_group_key': scfg.Value('*', help='if there is more than one dataset group, you will need to choose one'),
     }
 
 
@@ -491,20 +492,29 @@ def gather_measures(cmdline=False, **kwargs):
     # TODO: this makes this script non-portable. Need to parameterize
 
     # dataset_key = 'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco'
-    dataset_keys = [
+    # dataset_keys = [
 
-        # 'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco',
-        # 'Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco',
-        # 'Drop1-Aligned-TA1-2022-01_vali_data_nowv.kwcoco',
-        # 'Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco',
-        # 'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco'
-        # 'Drop1-Aligned-TA1-2022-01_vali_data_nowv.kwcoco',
-        # 'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco',
+    #     # 'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco',
+    #     # 'Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco',
+    #     # 'Drop1-Aligned-TA1-2022-01_vali_data_nowv.kwcoco',
+    #     # 'Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco',
+    #     # 'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco'
+    #     # 'Drop1-Aligned-TA1-2022-01_vali_data_nowv.kwcoco',
+    #     # 'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco',
 
-        # 'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco',
-        'Drop2-Aligned-TA1-2022-01_combo_L_nowv_vali.kwcoco',
-        # 'Drop2-Aligned-TA1-2022-01_combo_L_nowv.kwcoco',
-    ]
+    #     # 'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco',
+    #     'Drop2-Aligned-TA1-2022-01_combo_L_nowv_vali.kwcoco',
+    #     # 'Drop2-Aligned-TA1-2022-01_combo_L_nowv.kwcoco',
+    # ]
+
+    # import
+    # TODO: xdev pattern
+    dset_group_key = config['dset_group_key']
+    import fnmatch
+    dataset_keys = []
+    for k in dset_groups.keys():
+        if fnmatch.fnmatch(k, dset_group_key):
+            dataset_keys.append(k)
 
     # dataset_key = 'combo_vali_nowv.kwcoco'
 
@@ -869,5 +879,6 @@ if __name__ == '__main__':
         python -m watch.tasks.fusion.gather_results \
             --measure_globstr="$MEASURE_GLOBSTR" \
             --out_dpath="$DVC_DPATH/agg_results"
+            --dset_group_key="Drop2-Aligned-TA1-2022-01_*.kwcoco"
     """
     gather_measures(cmdline=True)
