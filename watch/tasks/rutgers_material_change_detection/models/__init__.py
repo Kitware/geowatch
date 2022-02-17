@@ -1,5 +1,4 @@
 import os
-from collections import OrderedDict
 
 import torch
 import torch.nn as nn
@@ -417,73 +416,6 @@ def compute_encoder_output_sizes(framework_name, encoder, n_in_channels, video_s
         raise NotImplementedError(f'Get feature size for framework "{framework_name}" not implemented.')
 
     return feat_sizes
-
-
-def load_pretrained_weights_old(encoder_name, encoder, decoder, attention, sequence, pretrain, weights_load):
-    """Load pretrain weights and overwrite weights of encoder.
-
-    Args:
-        encoder (nn.Module): [description]
-        pretrain (str): [description]
-
-    Returns:
-        encoder (nn.Module):
-    """
-
-    if pretrain is None:
-        print("No pretrained weights requested to be loaded.")
-        return encoder, decoder, attention, sequence
-
-    if (pretrain == "imagenet") and (encoder_name.beginswith("resnet")):
-        # Already handled in load resnet weights.
-        return encoder, decoder, attention, sequence
-
-    if (pretrain == "imagenet") and not (encoder_name.beginswith("resnet")):
-        raise NotImplementedError(f"Loading imagenet weights on non-resnet model not currently implemented.")
-
-    # Load weights from saved model.
-    if os.path.isdir(pretrain):
-        # Load weights from best model.
-        weight_path = os.path.join(pretrain, "best_model.pth.tar")
-        weights = torch.load(weight_path)
-
-        # Filter keys to only get the encoder keys.
-        updated_state_dict = OrderedDict()
-        for key, value in weights["state_dict"].items():
-            if key.startswith("encoder"):
-                new_key_name = ".".join(key.split(".")[1:])
-                updated_state_dict[new_key_name] = value
-
-        encoder.load_state_dict(updated_state_dict)
-
-        if weights_load == "all":
-            weight_path = os.path.join(pretrain, "best_model.pth.tar")
-            weights = torch.load(weight_path)
-
-            # Filter keys to only get the decoder keys.
-            decoder_state_dict = OrderedDict()
-            for key, value in weights["state_dict"].items():
-                if key.startswith("decoder"):
-                    new_key_name = ".".join(key.split(".")[1:])
-                    decoder_state_dict[new_key_name] = value
-
-            decoder.load_state_dict(decoder_state_dict)
-        elif weights_load == "encoder":
-            pass
-        else:
-            raise NotImplementedError(f'Loading weights in mode "{weights_load}" not implemented.')
-
-        if weights_load == "encoder":
-            print("\nLoad only encoder weights:")
-        elif weights_load == "all":
-            print("\nLoad all model weights:")
-        else:
-            raise NotImplementedError
-        print(f"Dir: {pretrain}")
-        print(f"Weights: {weights_load}")
-        print(f'Epoch: {weights["epoch"]}\n')
-
-    return encoder, decoder, attention, sequence
 
 
 def get_sequence_model(seq_model_name, cfg, max_frames, feat_sizes, device=None):

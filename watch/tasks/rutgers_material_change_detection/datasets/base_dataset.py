@@ -553,7 +553,7 @@ class BaseDataset(Dataset):
         example = self.__getitem__(index)
 
         if "datetimes" not in example.keys():
-            raise KeyError(f"Dataset does not contain datetimes in example.")
+            raise KeyError("Dataset does not contain datetimes in example.")
 
         # Get unique years in datetimes.
         dates = example["datetimes"]
