@@ -317,7 +317,7 @@ class PatchTransformer(nn.Module):
 
     def forward(self, data):
         if self.out_mode == "features":
-            raise NotImplementedError(f"Patch Transformer forward: Output mode featues not implemnted.")
+            raise NotImplementedError("Patch Transformer forward: Output mode featues not implemnted.")
             # return self.feature_refinement(data)
         elif self.out_mode == "token_output":
             pred = self.token_output(data["video"], data["active_frames"])
