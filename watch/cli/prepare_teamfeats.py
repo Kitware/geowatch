@@ -108,7 +108,8 @@ def main(cmdline=True, **kwargs):
         'uky_segmentation': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_segmentation_model/segmentation_package.pt',
         'uky_pca': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pca_projection_matrix.pt',
 
-        'dzyne_depth': dvc_dpath / 'models/depth/weights_v1.pt',
+        # 'dzyne_depth': dvc_dpath / 'models/depth/weights_v1.pt',
+        'dzyne_depth': dvc_dpath / 'models/depth/weights_v2_gray.pt',
     }
 
     outputs = {
@@ -151,8 +152,8 @@ def main(cmdline=True, **kwargs):
         # Landcover is fairly fast to run, do it first
         task = {}
         # Only need 1 worker to minimize lag between images, task is GPU bound
-        depth_data_workers = max(2, data_workers)
-        depth_window_size = 1536  # takes 18GB
+        depth_data_workers = min(2, data_workers)
+        depth_window_size = 736  # takes 18GB
         task['output_fpath'] = outputs['dzyne_depth']
         task['command'] = ub.codeblock(
             fr'''
@@ -180,7 +181,7 @@ def main(cmdline=True, **kwargs):
                 --default_config_key=iarpa \
                 --num_workers="{data_workers}" \
                 --batch_size=32 --gpus "0" \
-                --compress=DEFLATE --blocksize=64
+                --compress=DEFLATE --blocksize=128
             ''')
         combo_code_parts.append(codes[key])
         tasks.append(task)
@@ -356,7 +357,7 @@ if __name__ == '__main__':
 
         python -m watch.cli.prepare_teamfeats \
             --base_fpath=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
-            --gres=0,1 --with_depth=1 --with_materials=1 --keep_sessions=True --run=0 --do_splits=True --cache=1
+            --gres=0,1 --with_depth=1 --with_materials=1 --keep_sessions=True --run=0 --do_splits=True --cache=0
 
     """
     main(cmdline=True)

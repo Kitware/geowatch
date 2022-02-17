@@ -272,8 +272,7 @@ if __name__ == '__main__':
         --dataset="$KWCOCO_BUNDLE_DPATH/data.kwcoco.json" \
         --output="$KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json" \
         --deployed="$DVC_DPATH/models/depth/weights_v2_gray.pt" \
-        --dump_shards=True \
-        --data_workers=4 \
+        --data_workers=2 \
         --window_size=736
 
     python -m watch visualize $KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json \

@@ -2509,7 +2509,6 @@ TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_train.kwcoco.json
 VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_L_vali.kwcoco.json
 DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 EXPERIMENT_NAME=BAS_TA1_v090
 DATASET_CODE=Drop1-20201117
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
@@ -2552,3 +2551,135 @@ python -m watch.tasks.fusion.fit \
     --amp_backend=apex \
     --init="noop"
 
+
+# ------ toothbrush -2020-02-17
+
+
+aggregate_multiple_evaluations(){
+    __doc__="
+    This script will aggregate results over all packaged checkpoints with
+    computed metrics. You can run this while the schedule_evaluation script is
+    running. It will dump aggregate stats into the 'out_dpath' folder.
+    "
+
+    smartwatch stats "$VALI_FPATH"
+
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+    DVC_DPATH=$HOME/flash1/smart_watch_dvc
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+
+    EXPT_NAME_PAT="*"
+    MODEL_EPOCH_PAT="*"
+    PRED_DSET_PAT="*"
+    MEASURE_GLOBSTR=$DVC_DPATH/models/fusion/SC-20201117/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/eval/curves/measures2.json
+    python -m watch.tasks.fusion.gather_results \
+        --measure_globstr="$MEASURE_GLOBSTR" \
+        --out_dpath="$DVC_DPATH/agg_results/baseline" \
+        --dset_group_key="*_vali.kwcoco" --show=True
+}
+
+
+
+export CUDA_VISIBLE_DEVICES=0
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_vali.kwcoco.json
+CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,invariants.0:7,invariants.7,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
+INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v52/BOTH_smt_it_stm_p8_L1_DIL_v52_epoch=13-step=55215.pt"
+EXPERIMENT_NAME=BOTH_TA1_COMBO_TINY_p1_v0100
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+
+python -m watch.tasks.fusion.fit \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --channels="$CHANNELS" \
+    --global_class_weight=0.001 \
+    --global_saliency_weight=1.00 \
+    --neg_to_pos_ratio=1.0 \
+    --saliency_loss='dicefocal' \
+    --class_loss='dicefocal' \
+    --num_workers=8 \
+    --gpus "1" \
+    --batch_size=1 \
+    --accumulate_grad_batches=1 \
+    --learning_rate=1e-4 \
+    --weight_decay=1e-5 \
+    --dropout=0.1 \
+    --attention_impl=exact \
+    --chip_size=380 \
+    --time_steps=5 \
+    --chip_overlap=0.5 \
+    --time_sampling=soft+distribute \
+    --time_span=7m \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --method="MultimodalTransformer" \
+    --arch_name=smt_it_stm_p1 \
+    --normalize_inputs=1024 \
+    --max_epochs=160 \
+    --patience=160 \
+    --max_epoch_length=1024 \
+    --draw_interval=5000m \
+    --num_draw=2 \
+    --amp_backend=apex \
+    --num_sanity_val_steps=0 \
+    --init="$INITIAL_STATE"
+
+
+export CUDA_VISIBLE_DEVICES=1
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_vali.kwcoco.json
+CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,invariants.0:8,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
+INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v52/BOTH_smt_it_stm_p8_L1_DIL_v52_epoch=13-step=55215.pt"
+EXPERIMENT_NAME=BOTH_TA1_COMBO_TINY_p2w_v0101
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --channels="$CHANNELS" \
+    --global_class_weight=0.001 \
+    --global_saliency_weight=1.00 \
+    --neg_to_pos_ratio=1.0 \
+    --saliency_loss='dicefocal' \
+    --class_loss='dicefocal' \
+    --num_workers=8 \
+    --gpus "1" \
+    --batch_size=1 \
+    --accumulate_grad_batches=1 \
+    --learning_rate=1e-4 \
+    --weight_decay=1e-5 \
+    --dropout=0.1 \
+    --attention_impl=exact \
+    --chip_size=380 \
+    --time_steps=5 \
+    --chip_overlap=0.5 \
+    --time_sampling=soft+distribute \
+    --time_span=7m \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --method="MultimodalTransformer" \
+    --arch_name=smt_it_stm_p2w \
+    --normalize_inputs=1024 \
+    --max_epochs=160 \
+    --patience=160 \
+    --max_epoch_length=1024 \
+    --draw_interval=5000m \
+    --num_draw=2 \
+    --amp_backend=apex \
+    --num_sanity_val_steps=0 \
+    --init="$INITIAL_STATE"
