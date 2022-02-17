@@ -277,17 +277,12 @@ if __name__ == '__main__':
         --window_size=736
 
     python -m watch visualize $KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json \
-        --viz_dpath $DVC_DPATH/Drop1-Aligned-L1-2022-01/_viz_depth \
-        --animate=True --channels=depth --skip_missing=True
+        --animate=True --channels="depth,red|green|blue" --skip_missing=True \
+        --select_images '.sensor_coarse == "WV"' --workers=4 --draw_anns=False
 
     python -m watch stats $KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json
 
     python -m kwcoco stats $KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json
-
-    python -m watch visualize $KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json \
-        --viz_dpath $KWCOCO_BUNDLE_DPATH/_viz_depth \
-        --animate=True --channels="red|green|blue" --skip_missing=True \
-        --select_images '.sensor_coarse == "WV"' --workers=4
 
     """
     setup_logging()
