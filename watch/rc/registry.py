@@ -2,6 +2,9 @@
 A registry of resource files bundled with the watch package
 
 Schemas are taken from
+https://smartgitlab.com/TE/standards/-/snippets/18
+
+Previous:
 https://smartgitlab.com/infrastructure/docs/-/tree/main/pages/schemas
 commit fe4343521d05e433d4ccfcf080d9bcf46c9d2e83
 """
