@@ -150,17 +150,14 @@ predict_and_evaluate_checkpoints(){
             --model_globstr="$EXPT_SAVE_DPATH/*.pt" \
             --test_dataset="$VALI_FPATH" \
             --run=0 --skip_existing=True
-
-    python -m watch.tasks.fusion.gather_results \
-            --measure_globstr="$EXPT_SAVE_DPATH/*.pt" \
-            --test_dataset="$VALI_FPATH" \
-            --run=0 --skip_existing=True
 }
 
 
 aggregate_multiple_evaluations(){
     __doc__="
-
+    This script will aggregate results over all packaged checkpoints with
+    computed metrics. You can run this while the schedule_evaluation script is
+    running. It will dump aggregate stats into the 'out_dpath' folder.
     "
 
     DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
