@@ -150,8 +150,16 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False, data
                 log.exception('Unable to load id:{} - {}'.format(img_info['id'], img_info['name']))
 
     if cache and hit_gids:
-        # TODO: add metadata
-        pass
+        # add metadata for cache items
+        for gid in hit_gids:
+            img_info = torch_dataset.dset.imgs[gid]
+            pred_filename = _image_pred_filename(torch_dataset,
+                                                 output_data_dir, img_info)
+            pred_shape = kwimage.load_image_shape(pred_filename)
+            info = _build_aux_info(img_info, pred_shape, pred_filename, output_bundle_dpath)
+            aux = output_dset.imgs[gid].get('auxiliary', [])
+            aux.append(info)
+            output_dset.imgs[gid]['auxiliary'] = aux
 
     output_dset.dump(str(output_dset_filename), indent=2)
     output_dset.validate()
@@ -203,17 +211,23 @@ def run_inference(image, model):
     return weighted_final
 
 
-def _write_output(img_info, pred, pred_filename, output_bundle_dpath):
+def _build_aux_info(img_info, pred_shape, pred_filename, output_bundle_dpath):
     info = {
         'file_name': str(pred_filename.relative_to(output_bundle_dpath)),
         'channels': 'depth',
-        'height': pred.shape[0],
-        'width': pred.shape[1],
+        'height': pred_shape[0],
+        'width': pred_shape[1],
         'num_bands': 1,
-        'warp_aux_to_img': {'scale': [img_info['width'] / pred.shape[1],
-                                      img_info['height'] / pred.shape[0]],
+        'warp_aux_to_img': {'scale': [img_info['width'] / pred_shape[1],
+                                      img_info['height'] / pred_shape[0]],
                             'type': 'affine'}
     }
+    return info
+
+
+def _write_output(img_info, pred, pred_filename, output_bundle_dpath):
+    pred_shape = pred.shape
+    info = _build_aux_info(img_info, pred_shape, pred_filename, output_bundle_dpath)
     pred_filename.parent.mkdir(parents=True, exist_ok=True)
 
     with warnings.catch_warnings():
