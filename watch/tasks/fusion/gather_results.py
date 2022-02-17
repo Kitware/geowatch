@@ -573,11 +573,15 @@ def gather_measures(cmdline=False, **kwargs):
         metrics=['salient_AP'],
         ignore_metrics=ignore_metrics,
     )
-    analysis.run()
-    print('analysis.varied = {}'.format(ub.repr2(analysis.varied, nl=2)))
-    if len(analysis.stats_table):
-        analysis.stats_table = analysis.stats_table.sort_values('anova_rank_p')
-        print(analysis.stats_table)
+    try:
+        analysis.run()
+    except Exception:
+        print('Warning: Statistical analysis failed. Probably needs more data.')
+    else:
+        print('analysis.varied = {}'.format(ub.repr2(analysis.varied, nl=2)))
+        if len(analysis.stats_table):
+            analysis.stats_table = analysis.stats_table.sort_values('anova_rank_p')
+            print(analysis.stats_table)
 
     class_df = pd.DataFrame(class_rows)
     mean_df = pd.DataFrame(mean_rows)
