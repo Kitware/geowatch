@@ -22,6 +22,7 @@ import numpy as np
 import ubelt as ub
 import torch.optim as optim
 import torch.nn.functional as F
+import torchvision.transforms.functional as FT
 from scipy import ndimage
 from torch import nn
 from tqdm import tqdm
@@ -78,7 +79,7 @@ class Trainer(object):
         # self.k = config['training']['out_features_dim']
         self.k = config['data']['num_classes']
         self.kmeans = KMeans(n_clusters=self.k, mode='euclidean', verbose=0, minibatch=None)
-        self.max_label = self.k
+        self.max_label = 5
         # self.all_crops_params = [tuple([i,j,config['data']['window_size'], config['data']['window_size']]) for i in range(config['data']['window_size'],config['data']['image_size']-config['data']['window_size']) for j in range(config['data']['window_size'],config['data']['image_size']-config['data']['window_size'])]
         self.all_crops_params = [tuple([i,j,config['data']['window_size'], config['data']['window_size']]) for i in range(0,config['data']['image_size']) for j in range(0,config['data']['image_size'])]
         self.inference_all_crops_params = [tuple([i, j, config['evaluation']['inference_window'], config['evaluation']['inference_window']]) for i in range(0, config['data']['image_size']) for j in range(0, config['data']['image_size'])]
@@ -185,7 +186,7 @@ class Trainer(object):
             image2 = utils.stad_image(image1).float()
             negative_image1 = utils.stad_image(negative_image1).float()
         
-            sampled_crops = random.sample(self.all_crops_params, 300)
+            sampled_crops = random.sample(self.all_crops_params, config['training']['n_samples'])
             patched_image1 = torch.stack([transforms.functional.crop(image1, *params) for params in sampled_crops],dim=1)
             patched_image2 = torch.stack([transforms.functional.crop(image2, *params) for params in sampled_crops],dim=1)
             patched_negative_image1 = torch.stack([transforms.functional.crop(negative_image1, *params) for params in sampled_crops],dim=1)
@@ -197,7 +198,7 @@ class Trainer(object):
             
             output1 = self.model(patched_image1)  ## [B,22,150,150]
             output2 = self.model(patched_image2)  ## [B,22,150,150]
-            # negative_output1 = self.model(patched_negative_image1)  ## [B,22,150,150]
+            negative_output1 = self.model(patched_negative_image1)  ## [B,22,150,150]
             
             # print(features1.shape)
 
@@ -232,10 +233,13 @@ class Trainer(object):
             #                                 p=1,
             #                                 reduction='mean'
             #                                 )
-            targets = torch.zeros(output1.shape[0], dtype=torch.long).to(device)
-            outputs = torch.cat([output1, output2], dim=1) 
+            targets_positive = torch.zeros(output1.shape[0], dtype=torch.long).to(device)
+            targets_negative = torch.ones(output1.shape[0], dtype=torch.long).to(device)
+            outputs_positive = torch.cat([output1, output2], dim=1) 
+            outputs_negative = torch.cat([output1, negative_output1], dim=1) 
 
-            loss = F.cross_entropy(outputs.float(), targets.long())
+            loss = F.cross_entropy(outputs_positive.float(), targets_positive.long(), reduction='mean')
+            loss += F.cross_entropy(outputs_negative.float(), targets_negative.long(), reduction='mean')
             # loss += 30*F.triplet_margin_loss(features1,#.unsqueeze(0), 
             #                                 features2,#.unsqueeze(0), 
             #                                 negative_features1
@@ -458,8 +462,7 @@ class Trainer(object):
                 if self.test_with_full_supervision == 1:
                     images, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0]
                     # original_width, original_height = outputs['tr'].data[0][batch_index_to_show]['space_dims']
-                    image_name = str(outputs['tr'].data[0]
-                                    [batch_index_to_show]['gids'][0])
+                    image_name = f"{str(outputs['tr'].data[0][batch_index_to_show]['gids'])}_{str(outputs['tr'].data[0][batch_index_to_show]['slices'])}"
 
                     mask = torch.stack(mask)
                     mask = mask.long().squeeze(1)
@@ -508,14 +511,13 @@ class Trainer(object):
                 output2 = torch.stack(torch.chunk(output2, chunks=bs, dim=0), dim=0)
 
                 chunking_time = time.time() - start
-                print(output1.shape)
                 # output1 = F.normalize(output1, dim=1, p=1) #[bs*ps, c*h*w]
                 # output2 = F.normalize(output2, dim=1, p=1)
                 masks1 = F.softmax(output1, dim=2)  # .detach()
                 masks2 = F.softmax(output2, dim=2)  # .detach()
 
                 #region-wise inference
-                inference_otsu_coeff = 1.4
+                inference_otsu_coeff = 1.0
                 hist_inference_otsu_coeff = 1.0
                 topk = 33
 
@@ -539,9 +541,8 @@ class Trainer(object):
                 # patched_padded_mask1_distributions = patched_padded_mask1_distributions.sum(axis=3) #[bs, n_patches, k]
                 # patched_padded_mask2_distributions = patched_padded_mask2_distributions.sum(axis=3) #[bs, n_patches, k]     
 
-                
-                # topk_patched_output1_post_distributions, largest_elements_post_inds = torch.topk(patched_padded_mask1_distributions, k=topk, sorted=False, dim=2)
-                # topk_patched_output2_post_distributions = torch.gather(patched_padded_mask2_distributions, dim=2, index=largest_elements_post_inds)
+                # topk_patched_output1_post_distributions, largest_elements_post_inds = torch.topk(masks1, k=topk, sorted=False, dim=2)
+                # topk_patched_output2_post_distributions = torch.gather(masks2, dim=2, index=largest_elements_post_inds)
 
                 # normalized_patched_padded_output1_distributions = (patched_padded_output1_distributions - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output1_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output1_distributions.min(dim=2, keepdim=True)[0])
                 # normalized_patched_padded_output2_distributions = (patched_padded_output2_distributions - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])/(patched_padded_output2_distributions.max(dim=2, keepdim=True)[0] - patched_padded_output2_distributions.min(dim=2, keepdim=True)[0])            
@@ -549,6 +550,7 @@ class Trainer(object):
                 # histogram intersection raw features
                 minima = torch.minimum(masks1, masks2)
                 histograms_intersection_features = torch.true_divide(minima.sum(axis=2), masks2.sum(axis=2)).view(bs,h,w)
+                histograms_intersection_features = FT.gaussian_blur(histograms_intersection_features, kernel_size=config['evaluation']['inference_window'])
                 histc_int_change_feats_pred = torch.zeros_like(histograms_intersection_features)
                 histc_int_inference_otsu_threshold = hist_inference_otsu_coeff*otsu(histograms_intersection_features.cpu().detach().numpy(), nbins=256)
                 histc_int_change_feats_pred[histograms_intersection_features < histc_int_inference_otsu_threshold] = 1
@@ -556,6 +558,7 @@ class Trainer(object):
 
                 # l1 region-wise inference raw features
                 l1_patched_diff_change_features = torch.abs((output1 - output2).sum(axis=2)).view(bs,h,w)
+                l1_patched_diff_change_features = FT.gaussian_blur(l1_patched_diff_change_features, kernel_size=config['evaluation']['inference_window'])
                 l1_dist_change_feats_pred = torch.zeros_like(l1_patched_diff_change_features)
                 l1_inference_otsu_threshold = inference_otsu_coeff*otsu(l1_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
                 l1_dist_change_feats_pred[l1_patched_diff_change_features > l1_inference_otsu_threshold] = 1
@@ -563,6 +566,7 @@ class Trainer(object):
 
                 # l2 region-wise inference raw features
                 l2_patched_diff_change_features = torch.sqrt(torch.pow(output1 - output2, 2).sum(axis=2)).view(bs,h,w)
+                l2_patched_diff_change_features = FT.gaussian_blur(l2_patched_diff_change_features, kernel_size=config['evaluation']['inference_window'])
                 l2_dist_change_feats_pred = torch.zeros_like(l2_patched_diff_change_features)
                 l2_inference_otsu_threshold = inference_otsu_coeff*otsu(l2_patched_diff_change_features.cpu().detach().numpy(), nbins=256)
                 l2_dist_change_feats_pred[l2_patched_diff_change_features > l2_inference_otsu_threshold] = 1
@@ -590,122 +594,166 @@ class Trainer(object):
                 targets.append(mask1.cpu())  # .numpy())
 
                 pbar.set_description(f"(timing, secs) crop_collection: {crop_collection_time:0.3f}, network_run: {network_run_time:0.3f}, chunking_time: {chunking_time:0.3f}")
-
                 if config['visualization']['val_visualizer'] or (config['visualization']['save_individual_plots'] and save_individual_plots_specific):
-                    if (epoch) % config['visualization']['visualize_val_every'] == 0:
-                        if (batch_index % iter_visualization) == 0:
-                            figure = plt.figure(figsize=(config['visualization']['fig_size'], config['visualization']['fig_size']),
-                                                dpi=config['visualization']['dpi'])
-                            ax1 = figure.add_subplot(3, 3, 1)
-                            ax2 = figure.add_subplot(3, 3, 2)
-                            ax3 = figure.add_subplot(3, 3, 3)
-                            ax4 = figure.add_subplot(3, 3, 4)
-                            ax5 = figure.add_subplot(3, 3, 5)
-                            ax6 = figure.add_subplot(3, 3, 6)
-                            ax7 = figure.add_subplot(3, 3, 7)
-                            ax8 = figure.add_subplot(3, 3, 8)
-                            ax9 = figure.add_subplot(3, 3, 9)
-                            # ax10 = figure.add_subplot(3, 4, 10)
-                            # ax11 = figure.add_subplot(3, 4, 11)
-                            # ax12 = figure.add_subplot(3, 4, 12)
+                    for b in range(bs):
+                        batch_index_to_show = b
+                        if (epoch) % config['visualization']['visualize_val_every'] == 0:
+                            if (batch_index % iter_visualization) == 0:
+                                figure = plt.figure(figsize=(config['visualization']['fig_size'], config['visualization']['fig_size']),
+                                                    dpi=config['visualization']['dpi'])
+                                ax1 = figure.add_subplot(3, 3, 1)
+                                ax2 = figure.add_subplot(3, 3, 2)
+                                ax3 = figure.add_subplot(3, 3, 3)
+                                ax4 = figure.add_subplot(3, 3, 4)
+                                ax5 = figure.add_subplot(3, 3, 5)
+                                ax6 = figure.add_subplot(3, 3, 6)
+                                ax7 = figure.add_subplot(3, 3, 7)
+                                ax8 = figure.add_subplot(3, 3, 8)
+                                ax9 = figure.add_subplot(3, 3, 9)
+                                # ax10 = figure.add_subplot(3, 4, 10)
+                                # ax11 = figure.add_subplot(3, 4, 11)
+                                # ax12 = figure.add_subplot(3, 4, 12)
 
-                            cmap_gradients = plt.cm.get_cmap('jet')
-                            # image_show = np.transpose(image1.cpu().detach().numpy()[batch_index_to_show,:,:,:],(1,2,0))[:,:1:4,:3]
-                            image_show1 = np.transpose(image1.cpu().detach().numpy()[batch_index_to_show, :, :, :], (1, 2, 0))[:, :, :3]
-                            image_show1 = np.flip(image_show1, axis=2)
+                                cmap_gradients = plt.cm.get_cmap('jet')
+                                # image_show = np.transpose(image1.cpu().detach().numpy()[batch_index_to_show,:,:,:],(1,2,0))[:,:1:4,:3]
+                                image_show1 = np.transpose(image1.cpu().detach().numpy()[batch_index_to_show, :, :, :], (1, 2, 0))[:, :, :3]
+                                image_show1 = np.flip(image_show1, axis=2)
 
-                            image_show2 = np.transpose(image2.cpu().detach().numpy()[batch_index_to_show, :, :, :], (1, 2, 0))[:, :, :3]
-                            image_show2 = np.flip(image_show2, axis=2)
-
-
-                            image_show1 = (image_show1 - image_show1.min()) / (image_show1.max() - image_show1.min())
-                            image_show2 = (image_show2 - image_show2.min()) / (image_show2.max() - image_show2.min())
-                            gt_mask_show1 = mask1.cpu().detach()[batch_index_to_show, :, :].numpy().squeeze()
-
-                            l1_dist_change_feats_pred_show = l1_dist_change_feats_pred.numpy()[batch_index_to_show, :, :]
-                            l2_dist_change_feats_pred_show = l2_dist_change_feats_pred.numpy()[batch_index_to_show, :, :]
-                            histc_int_change_feats_pred_show = histc_int_change_feats_pred.numpy()[batch_index_to_show, :, :]
-
-                            l1_patched_diff_change_features_show = l1_patched_diff_change_features.cpu().detach().numpy()[batch_index_to_show, :, :]
-                            l2_patched_diff_change_features_show = l2_patched_diff_change_features.cpu().detach().numpy()[batch_index_to_show, :, :]
-                            histograms_intersection_show = histograms_intersection_features.cpu().detach().numpy()[batch_index_to_show, :, :]
-
-                            l1_patched_diff_change_features_show = (l1_patched_diff_change_features_show - l1_patched_diff_change_features_show.min())/(l1_patched_diff_change_features_show.max() - l1_patched_diff_change_features_show.min())
-                            l2_patched_diff_change_features_show = (l2_patched_diff_change_features_show - l2_patched_diff_change_features_show.min())/(l2_patched_diff_change_features_show.max() - l2_patched_diff_change_features_show.min())
-                            histograms_intersection_show = (histograms_intersection_show - histograms_intersection_show.min())/(histograms_intersection_show.max() - histograms_intersection_show.min())
-
-                            # pred1_show = masks1.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
-                            # pred2_show = masks2.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
-
-                            l1_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*l1_dist_change_feats_pred_show)
-                            l2_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*l2_dist_change_feats_pred_show)
-                            histc_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*histc_int_change_feats_pred_show)
-
-                            # vca_pseudomask_show = image_change_magnitude_binary.cpu().detach()[batch_index_to_show, :, :].numpy()
-                            # vca_pseudomask_crop_show = cm_binary_crop.cpu().detach()[batch_index_to_show,:,:].numpy()
-                            # dictionary_show = dictionary1.cpu().detach()[batch_index_to_show,:,:].numpy()
-                            # dictionary_show = dictionary2_post_assignment.cpu().detach()[batch_index_to_show, :, :].numpy()
-                            # dictionary2_show = dictionary1_post_assignment.cpu().detach()[batch_index_to_show, :, :].numpy()
-
-                            classes_in_gt = np.unique(gt_mask_show1)
-                            ax1.imshow(image_show1)
-
-                            ax2.imshow(image_show2)
-
-                            ax3.imshow(image_show1)
-                            ax3.imshow(gt_mask_show1, cmap=self.cmap, vmin=0, vmax=self.max_label)
+                                image_show2 = np.transpose(image2.cpu().detach().numpy()[batch_index_to_show, :, :, :], (1, 2, 0))[:, :, :3]
+                                image_show2 = np.flip(image_show2, axis=2)
 
 
-                            ax4.imshow(l1_patched_diff_change_features_show)
+                                image_show1 = (image_show1 - image_show1.min()) / (image_show1.max() - image_show1.min())
+                                image_show2 = (image_show2 - image_show2.min()) / (image_show2.max() - image_show2.min())
+                                gt_mask_show1 = mask1.cpu().detach()[batch_index_to_show, :, :].numpy().squeeze()
 
-                            ax5.imshow(l2_patched_diff_change_features_show)
+                                l1_dist_change_feats_pred_show = l1_dist_change_feats_pred.numpy()[batch_index_to_show, :, :]
+                                l2_dist_change_feats_pred_show = l2_dist_change_feats_pred.numpy()[batch_index_to_show, :, :]
+                                histc_int_change_feats_pred_show = histc_int_change_feats_pred.numpy()[batch_index_to_show, :, :]
 
-                            ax6.imshow(histograms_intersection_show)
+                                l1_patched_diff_change_features_show = l1_patched_diff_change_features.cpu().detach().numpy()[batch_index_to_show, :, :]
+                                l2_patched_diff_change_features_show = l2_patched_diff_change_features.cpu().detach().numpy()[batch_index_to_show, :, :]
+                                histograms_intersection_show = histograms_intersection_features.cpu().detach().numpy()[batch_index_to_show, :, :]
 
-                            # ax8.imshow(dictionary2_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
+                                l1_patched_diff_change_features_show = (l1_patched_diff_change_features_show - l1_patched_diff_change_features_show.min())/(l1_patched_diff_change_features_show.max() - l1_patched_diff_change_features_show.min())
+                                l2_patched_diff_change_features_show = (l2_patched_diff_change_features_show - l2_patched_diff_change_features_show.min())/(l2_patched_diff_change_features_show.max() - l2_patched_diff_change_features_show.min())
+                                histograms_intersection_show = (histograms_intersection_show - histograms_intersection_show.min())/(histograms_intersection_show.max() - histograms_intersection_show.min())
 
-                            ax7.imshow(l1_fp_tp_fn_prediction_mask, cmap=self.cmap, vmin=0, vmax=self.max_label)
+                                # pred1_show = masks1.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
+                                # pred2_show = masks2.max(1)[1].cpu().detach().numpy()[batch_index_to_show, :, :]
 
-                            ax8.imshow(l2_fp_tp_fn_prediction_mask, cmap=self.cmap, vmin=0, vmax=self.max_label)
+                                l1_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*l1_dist_change_feats_pred_show)
+                                l2_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*l2_dist_change_feats_pred_show)
+                                histc_fp_tp_fn_prediction_mask = gt_mask_show1 + (2*histc_int_change_feats_pred_show)
 
-                            ax9.imshow(histc_fp_tp_fn_prediction_mask, cmap=self.cmap, vmin=0, vmax=self.max_label)
+                                # vca_pseudomask_show = image_change_magnitude_binary.cpu().detach()[batch_index_to_show, :, :].numpy()
+                                # vca_pseudomask_crop_show = cm_binary_crop.cpu().detach()[batch_index_to_show,:,:].numpy()
+                                # dictionary_show = dictionary1.cpu().detach()[batch_index_to_show,:,:].numpy()
+                                # dictionary_show = dictionary2_post_assignment.cpu().detach()[batch_index_to_show, :, :].numpy()
+                                # dictionary2_show = dictionary1_post_assignment.cpu().detach()[batch_index_to_show, :, :].numpy()
 
-                            # ax12.imshow(vw_dis_fp_tp_fn_prediction_mask, cmap=self.cmap, vmin=0, vmax=self.max_label)
+                                classes_in_gt = np.unique(gt_mask_show1)
+                                ax1.imshow(image_show1)
 
-                            ax1.axis('off')
-                            ax2.axis('off')
-                            ax3.axis('off')
-                            ax4.axis('off')
-                            ax5.axis('off')
-                            ax6.axis('off')
-                            ax7.axis('off')
-                            ax8.axis('off')
-                            # ax9.axis('off')
+                                ax2.imshow(image_show2)
 
-                            if config['visualization']['titles']:
-                                ax1.set_title(f"Input Image 1", fontsize=config['visualization']['font_size'])
-                                ax2.set_title(f"Input Image 2", fontsize=config['visualization']['font_size'])
-                                ax3.set_title(f"Change GT Mask overlaid", fontsize=config['visualization']['font_size'])
-                                ax4.set_title(f"l1_patched_diff_change_features_show", fontsize=config['visualization']['font_size'])
-                                ax5.set_title(f"l2_patched_diff_change_features_show", fontsize=config['visualization']['font_size'])
-                                ax6.set_title(f"histograms_intersection_show", fontsize=config['visualization']['font_size'])
-                                ax7.set_title(f"l1_fp_tp_fn_prediction_mask", fontsize=config['visualization']['font_size'])
-                                ax8.set_title(f"l2_fp_tp_fn_prediction_mask", fontsize=config['visualization']['font_size'])
-                                ax9.set_title(f"histc_fp_tp_fn_prediction_mask", fontsize=config['visualization']['font_size'])
-                                # figure.suptitle(
-                                #     f"Epoch: {epoch+1}\nGT labels for classification: {classes_in_gt}, \nunique in change predictions: {np.unique(change_detection_show)}\nunique in predictions1: {np.unique(logits_show1)}", fontsize=config['visualization']['font_size'])
+                                ax3.imshow(image_show1)
+                                ax3.imshow(gt_mask_show1, cmap=self.cmap, vmin=0, vmax=self.max_label, alpha=config['visualization']['fg_alpha'])
 
-                            figure.tight_layout()
-                            if config['visualization']['val_imshow']:
-                                plt.show()
 
-                            cometml_experiemnt.log_figure(figure_name=f"Validation, Image name: {image_name}", figure=figure)
-                            figure.clear()
-                            plt.cla()
-                            plt.clf()
-                            plt.close('all')
-                            plt.close(figure)
-                            gc.collect()
+                                ax4.imshow(l1_patched_diff_change_features_show, cmap=cmap_gradients)
+
+                                ax5.imshow(l2_patched_diff_change_features_show, cmap=cmap_gradients)
+
+                                ax6.imshow(histograms_intersection_show, cmap=cmap_gradients)
+
+                                # ax8.imshow(dictionary2_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
+
+                                ax7.imshow(l1_fp_tp_fn_prediction_mask, cmap=self.cmap, vmin=0, vmax=self.max_label, alpha=config['visualization']['fg_alpha'])
+
+                                ax8.imshow(l2_fp_tp_fn_prediction_mask, cmap=self.cmap, vmin=0, vmax=self.max_label, alpha=config['visualization']['fg_alpha'])
+
+                                ax9.imshow(histc_fp_tp_fn_prediction_mask, cmap=self.cmap, vmin=0, vmax=self.max_label, alpha=config['visualization']['fg_alpha'])
+
+                                # ax12.imshow(vw_dis_fp_tp_fn_prediction_mask, cmap=self.cmap, vmin=0, vmax=self.max_label)
+                                # ax10.imshow(l1_dist_change_feats_pred_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
+
+                                # ax11.imshow(l2_dist_change_feats_pred_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
+
+                                # ax12.imshow(histc_int_change_feats_pred_show, cmap=self.cmap, vmin=0, vmax=self.max_label)
+
+                                ax1.axis('off')
+                                ax2.axis('off')
+                                ax3.axis('off')
+                                ax4.axis('off')
+                                ax5.axis('off')
+                                ax6.axis('off')
+                                ax7.axis('off')
+                                ax8.axis('off')
+                                ax9.axis('off')
+                                # ax10.axis('off')
+                                # ax11.axis('off')
+                                # ax12.axis('off')
+
+                                if config['visualization']['titles']:
+                                    ax1.set_title(f"Input Image 1", fontsize=config['visualization']['font_size'])
+                                    ax2.set_title(f"Input Image 2", fontsize=config['visualization']['font_size'])
+                                    ax3.set_title(f"Change GT Mask overlaid", fontsize=config['visualization']['font_size'])
+                                    ax4.set_title(f"l1_patched_diff_change_features_show", fontsize=config['visualization']['font_size'])
+                                    ax5.set_title(f"l2_patched_diff_change_features_show", fontsize=config['visualization']['font_size'])
+                                    ax6.set_title(f"histograms_intersection_show", fontsize=config['visualization']['font_size'])
+                                    ax7.set_title(f"l1_fp_tp_fn_prediction_mask", fontsize=config['visualization']['font_size'])
+                                    ax8.set_title(f"l2_fp_tp_fn_prediction_mask", fontsize=config['visualization']['font_size'])
+                                    ax9.set_title(f"histc_fp_tp_fn_prediction_mask", fontsize=config['visualization']['font_size'])
+                                    # figure.suptitle(
+                                    #     f"Epoch: {epoch+1}\nGT labels for classification: {classes_in_gt}, \nunique in change predictions: {np.unique(change_detection_show)}\nunique in predictions1: {np.unique(logits_show1)}", fontsize=config['visualization']['font_size'])
+
+                                figure.tight_layout()
+                                if config['visualization']['val_imshow']:
+                                    plt.show()
+
+                                if (config['visualization']['save_individual_plots'] or save_individual_plots_specific):
+
+                                        plots_path_save = f"{config['visualization']['save_individual_plots_path']}"
+                                        fig_save_image_root = (f"{plots_path_save}/image_root/", ax1)
+                                        fig_save_image2_root = (f"{plots_path_save}/image2/", ax2)
+                                        fig_save_gt_root = (f"{plots_path_save}/gt/", ax3)
+                                        fig_save_l1_diff_features_root = (f"{plots_path_save}/l1_diff_features/", ax4)
+                                        fig_save_l2_diff_features_root = (f"{plots_path_save}/l2_diff_features/", ax5)
+                                        fig_save_histogram_diff_features_root = (f"{plots_path_save}/histogram_diff_features/", ax6)
+                                        fig_save_l1_preds_root = (f"{plots_path_save}/l1_preds/", ax7)
+                                        fig_save_l2_preds_root = (f"{plots_path_save}/l2_preds/", ax8)
+                                        fig_save_hist_preds_root = (f"{plots_path_save}/hist_preds/", ax9)
+
+                                        roots = [
+                                            fig_save_image_root,
+                                            fig_save_image2_root,
+                                            fig_save_gt_root,
+                                            fig_save_l1_diff_features_root,
+                                            fig_save_l2_diff_features_root,
+                                            fig_save_histogram_diff_features_root,
+                                            fig_save_l1_preds_root,
+                                            fig_save_l2_preds_root,
+                                            fig_save_hist_preds_root,
+                                        ]
+
+
+                                        figure.savefig(
+                                            f"{plots_path_save}figs/{image_name}_{str(b)}.png", bbox_inches='tight')
+                                        for root, ax in roots:
+                                            utils.create_dir_if_doesnt_exist(root)
+                                            file_path = f"{root}/{image_name}_{str(b)}.png"
+                                            # extent = ax.get_window_extent().transformed(figure.dpi_scale_trans.inverted())
+                                            extent = ax.get_tightbbox(figure.canvas.get_renderer()).transformed(figure.dpi_scale_trans.inverted())
+                                            figure.savefig(file_path, bbox_inches=extent)
+
+                                cometml_experiemnt.log_figure(figure_name=f"Validation, Image name: {image_name}", figure=figure)
+                                figure.clear()
+                                plt.cla()
+                                plt.clf()
+                                plt.close('all')
+                                plt.close(figure)
+                                gc.collect()
 
         mean_iou, precision, recall = eval_utils.compute_jaccard(preds, targets, num_classes=2)
 
@@ -734,6 +782,7 @@ class Trainer(object):
         overall_miou = mean_iou.mean()
         classwise_f1_score = 2 * (precision * recall) / (precision + recall)
         mean_f1_score = classwise_f1_score.mean()
+        
 
         # print("Validation Epoch {0:2d} average loss: {1:1.2f}".format(epoch+1, total_loss/loader.__len__()))
         cometml_experiemnt.log_metric("Validation mIoU", overall_miou, epoch=epoch+1)
@@ -742,6 +791,7 @@ class Trainer(object):
         cometml_experiemnt.log_metric("Validation mean f1_score", mean_f1_score, epoch=epoch+1)
         print({f"Recall class {str(x)}": recall[x] for x in range(len(recall))})
         print({f"Precision class {str(x)}": precision[x] for x in range(len(precision))})
+        print({f"F1 class {str(x)}": classwise_f1_score[x] for x in range(len(classwise_f1_score))})
 
         # cometml_experiemnt.log_metrics({f"Recall class {str(x)}": recall[x] for x in range(len(recall))}, epoch=epoch+1)
         # cometml_experiemnt.log_metrics({f"Precision class {str(x)}": precision[x] for x in range(len(precision))}, epoch=epoch+1)
@@ -760,7 +810,7 @@ class Trainer(object):
         cometml_experiemnt.log_metrics({f"Histogram Distance Training F1_score class {str(x)}": hist_f1[x] for x in range(len(hist_f1))}, epoch=epoch+1)
         cometml_experiemnt.log_metric("Validation Average Loss", total_loss/loader.__len__(), epoch=epoch+1)
 
-        return total_loss/loader.__len__(), overall_miou
+        return total_loss/loader.__len__(), classwise_f1_score
 
     def forward(self, cometml_experiment: object, world_size: int =8) -> tuple:
         """forward pass for all epochs
@@ -774,10 +824,12 @@ class Trainer(object):
         """
         train_losses, val_losses = [], []
         mean_ious_val,mean_ious_val_list,count_metrics_list = [], [], []
-        best_val_loss, best_train_loss = np.infty, np.infty
-        best_val_mean_iou, val_mean_iou = 0, 0
+        best_val_loss, best_train_loss, train_loss = np.infty, np.infty, np.infty
+        best_val_mean_f1, val_mean_f1 = 0, 0
+        best_val_change_f1, val_change_f1 = 0, 0
 
-        model_save_dir = config['data'][config['location']]['model_save_dir'] + f"{current_path[-1]}_{config['dataset']}/{cometml_experiment.project_name}_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}/"
+        # model_save_dir = config['data'][config['location']]['model_save_dir'] + f"{current_path[-1]}_{config['dataset']}/{cometml_experiment.project_name}_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}/"
+        model_save_dir = config['data'][config['location']]['model_save_dir'] + f"{current_path[-1]}_{config['dataset']}/{cometml_experiment.project_name}_trainWin_{config['data']['window_size']}_modelName_{config['training']['model_name']}_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M')}/"
         utils.create_dir_if_doesnt_exist(model_save_dir)
         for epoch in range(0, self.epochs):
             if config['procedures']['train']:
@@ -785,14 +837,21 @@ class Trainer(object):
                     train_loss = self.train(epoch, cometml_experiment)
             if config['procedures']['validate']:
                 with cometml_experiment.validate():
-                    val_loss, val_mean_iou = self.validate(epoch, cometml_experiment)
+                    val_loss, val_cw_f1 = self.validate(epoch, cometml_experiment)
+                    val_mean_f1 = val_cw_f1.mean()
+                    val_change_f1 = val_cw_f1[1]
             self.scheduler.step()
 
-            if train_loss <= best_train_loss:
-                best_train_loss = train_loss
-                # best_val_mean_iou = val_mean_iou
-                model_save_name = f"{current_path[-1]}_epoch_{epoch}_loss_{train_loss}_valmIoU_{val_mean_iou}_time_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M:%S')}.pth"
+            if (train_loss <= best_train_loss) or (val_mean_f1 >= best_val_mean_f1) or (val_change_f1 >= best_val_change_f1):
 
+                if train_loss <= best_train_loss:
+                    best_train_loss = train_loss
+                if val_mean_f1 >= best_val_mean_f1:
+                    best_val_mean_f1 = val_mean_f1
+                if val_change_f1 >= best_val_change_f1:
+                    best_val_change_f1 = val_change_f1
+                
+                model_save_name = f"{current_path[-1]}_epoch_{epoch}_loss_{train_loss}_valmF1_{val_mean_f1}_valChangeF1_{val_change_f1}_time_{datetime.datetime.today().strftime('%Y-%m-%d-%H:%M:%S')}.pth"
                 if config['procedures']['train']:
                     with open(model_save_dir + "config.yaml", 'w') as file:
                         yaml.dump(config, file)
@@ -803,6 +862,8 @@ class Trainer(object):
                                 'scheduler': self.scheduler.state_dict(),
                                 'loss': train_loss},
                                 model_save_dir + model_save_name)
+                else:
+                    exit()
                 if config['visualization']['save_individual_plots']:
                     _, _ = self.validate(epoch, cometml_experiment, save_individual_plots_specific=True)
 
@@ -830,6 +891,9 @@ if __name__ == "__main__":
                                      project_name=project_name,
                                      workspace=config['cometml']['workspace'],
                                      display_summary_level=0)
+
+    config['experiment_url'] = str(experiment.url)
+
     experiment.set_name(experiment_name)
 
     torch.manual_seed(config['seed'])
@@ -963,7 +1027,7 @@ if __name__ == "__main__":
         if os.path.isfile(config['training']['resume']):
             checkpoint = torch.load(config['training']['resume'])
             start_epoch = checkpoint['epoch']
-            model.load_state_dict(checkpoint['model'], strict= False)
+            model.load_state_dict(checkpoint['model'], strict= True)
             optimizer.load_state_dict(checkpoint['optimizer'])
             scheduler.load_state_dict(checkpoint['scheduler'])
             print(f"loaded model from {config['training']['resume']}")
@@ -973,7 +1037,7 @@ if __name__ == "__main__":
 
     trainer = Trainer(model,
                       train_dataloader,
-                      train_dataloader,
+                      test_dataloader,
                       config['training']['epochs'],
                       optimizer,
                       scheduler,

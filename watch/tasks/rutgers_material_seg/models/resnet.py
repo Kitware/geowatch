@@ -9,7 +9,66 @@ Adapted from: https://github.com/bearpaw/pytorch-classification
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from watch.tasks.rutgers_material_seg.models.encoding import Encoding
 
+class ASPP(nn.Module):
+
+    def __init__(self, C, depth, num_classes, conv=nn.Conv2d,
+                 norm=nn.BatchNorm2d, momentum=0.0003, mult=1):
+        super(ASPP, self).__init__()
+        self._C = C
+        self._depth = depth
+        self._num_classes = num_classes
+
+        self.global_pooling = nn.AdaptiveAvgPool2d(1)
+        self.relu = nn.ReLU(inplace=True)
+        self.aspp1 = conv(C, depth, kernel_size=1, stride=1, bias=False)
+        self.aspp2 = conv(C, depth, kernel_size=3, stride=1,
+                          dilation=int(6 * mult), padding=int(6 * mult),
+                          bias=False)
+        self.aspp3 = conv(C, depth, kernel_size=3, stride=1,
+                          dilation=int(12 * mult), padding=int(12 * mult),
+                          bias=False)
+        self.aspp4 = conv(C, depth, kernel_size=3, stride=1,
+                          dilation=int(18 * mult), padding=int(18 * mult),
+                          bias=False)
+        self.aspp5 = conv(C, depth, kernel_size=1, stride=1, bias=False)
+        self.aspp1_bn = norm(depth, momentum)
+        self.aspp2_bn = norm(depth, momentum)
+        self.aspp3_bn = norm(depth, momentum)
+        self.aspp4_bn = norm(depth, momentum)
+        self.aspp5_bn = norm(depth, momentum)
+        self.conv2 = conv(depth * 5, depth, kernel_size=1, stride=1,
+                          bias=False)
+        self.bn2 = norm(depth, momentum)
+        self.conv3 = nn.Conv2d(depth, num_classes, kernel_size=1, stride=1)
+
+    def forward(self, x):
+        x1 = self.aspp1(x)
+        x1 = self.aspp1_bn(x1)
+        x1 = self.relu(x1)
+        x2 = self.aspp2(x)
+        x2 = self.aspp2_bn(x2)
+        x2 = self.relu(x2)
+        x3 = self.aspp3(x)
+        x3 = self.aspp3_bn(x3)
+        x3 = self.relu(x3)
+        x4 = self.aspp4(x)
+        x4 = self.aspp4_bn(x4)
+        x4 = self.relu(x4)
+        x5 = self.global_pooling(x)
+        x5 = self.aspp5(x5)
+        x5 = self.aspp5_bn(x5)
+        x5 = self.relu(x5)
+        x5 = nn.Upsample((x.shape[2], x.shape[3]), mode='bilinear',
+                         align_corners=True)(x5)
+        x = torch.cat((x1, x2, x3, x4, x5), 1)
+        x = self.conv2(x)
+        x = self.bn2(x)
+        x = self.relu(x)
+        x = self.conv3(x)
+
+        return x
 
 class BasicBlock(nn.Module):
     expansion = 1
@@ -81,14 +140,18 @@ class ResNet(nn.Module):
         super(ResNet, self).__init__()
         self.in_planes = 64
 
-        self.conv1 = nn.Conv2d(num_channels, 64, kernel_size=3, stride=1, padding=1,
-                               bias=False)
+        self.conv1 = nn.Conv2d(num_channels, 64, kernel_size=3, stride=1, 
+                               padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1)
         self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2)
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        # self.fc = nn.Linear(512 * block.expansion, num_classes)
+        # self.out = nn.Conv2d(512, num_classes, kernel_size=1, stride=1, bias=False)
+        # self.aspp = ASPP(512, 256, 256)
+
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -124,16 +187,35 @@ class ResNet(nn.Module):
         out = self.layer3(out)
         out = self.layer4(out)
         out = self.avgpool(out)
+        # out = self.aspp(out)
+        # classifer = self.out(out)
+        # classifer = torch.flatten(classifer, 1)
         out = torch.flatten(out, 1)
-        return out
+        return out#, classifer
 
 
 def resnet18(**kwargs):
     return ResNet(BasicBlock, [2, 2, 2, 2], **kwargs)
 
 
-def resnet34(**kwargs):
-    return ResNet(BasicBlock, [3, 4, 6, 3], **kwargs)
+def resnet34(pretrained=False, **kwargs):
+    # return ResNet(BasicBlock, [3, 4, 6, 3], **kwargs)
+    model = ResNet(BasicBlock, [3, 4, 6, 3], **kwargs)
+    if pretrained:
+        model_dict = model.state_dict()
+        # /home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-10-18-13:27/experiments_epoch_0_loss_11.28138166103723_valmF1_0.6866047574166068_valChangeF1_0.49019877611815305_time_2021-10-18-14:15:27.pth
+        # pretrained_path = "/home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-10-07-10:23/experiments_epoch_8_loss_3394.9326448260613_valmIoU_0.5388350590429163_time_2021-10-07-22:05:00.pth"
+        # pretrained_path = "/home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-10-18-13:27/experiments_epoch_0_loss_11.28138166103723_valmF1_0.6866047574166068_valChangeF1_0.49019877611815305_time_2021-10-18-14:15:27.pth"
+        pretrained_dict = torch.load(pretrained)['model']
+        # pretrained_dict = model_zoo.load_url(model_urls['resnet50'])
+        overlap_dict = {k[7:]: v for k, v in pretrained_dict.items()
+                        if k[7:] in model_dict}
+        for k, v in overlap_dict.items():
+            v.requires_grad=False
+        model_dict.update(overlap_dict)
+        model.load_state_dict(model_dict)
+        print(f"loaded {len(overlap_dict)}/{len(pretrained_dict)} layers")
+    return model
 
 
 def resnet50(**kwargs):

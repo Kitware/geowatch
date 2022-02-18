@@ -90,23 +90,27 @@ def main(cmdline=True, **kwargs):
 
     if config['base_fpath'] == 'auto':
         # Auto hack.
-        base_fpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/data.kwcoco.json'
-        # base_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
+        # base_fpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/data.kwcoco.json'
+        base_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
     else:
         base_fpath = ub.Path(config['base_fpath'])
 
     aligned_bundle_dpath = base_fpath.parent
 
     model_fpaths = {
-        'rutgers_materials': dvc_dpath / 'models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_2021101T16277.pth',
+        'rutgers_materials': dvc_dpath / 'models/rutgers/rutgers_peri_materials_v3/experiments_epoch_18_loss_59.014100193977356_valmF1_0.18694573888313187_valChangeF1_0.0_time_2022-02-01-01:53:20.pth',
+        # 'rutgers_materials': dvc_dpath / 'models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_2021101T16277.pth',
         'dzyne_landcover': dvc_dpath / 'models/landcover/visnav_remap_s2_subset.pt',
-        'uky_pretext': dvc_dpath / 'models/uky/uky_invariants_2022_01/pretext/pretext.ckpt',
-        'uky_segmentation': dvc_dpath / 'models/uky/uky_invariants_2022_01/segmentation/segmentation.ckpt',
+
+        'uky_pretext': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pretext_package.pt',
+        'uky_segmentation': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_segmentation_model/segmentation_package.pt',
+        'uky_pca': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pca_projection_matrix.pt',
+
         'dzyne_depth': dvc_dpath / 'models/depth/weights_v1.pt',
     }
 
     outputs = {
-        'rutgers_materials': aligned_bundle_dpath / 'rutgers_mat_seg.kwcoco.json',
+        'rutgers_materials': aligned_bundle_dpath / 'rutgers_material_seg_v3.kwcoco.json',
         'dzyne_landcover': aligned_bundle_dpath / 'dzyne_landcover.kwcoco.json',
         'dzyne_depth': aligned_bundle_dpath / 'dzyne_depth.kwcoco.json',
         'uky_invariants': aligned_bundle_dpath / 'uky_invariants.kwcoco.json',
@@ -191,8 +195,9 @@ def main(cmdline=True, **kwargs):
             python -m watch.tasks.invariants.predict \
                 --input_kwcoco "{base_fpath}" \
                 --output_kwcoco "{task['output_fpath']}" \
-                --pretext_ckpt_path "{model_fpaths['uky_pretext']}" \
-                --segmentation_ckpt "{model_fpaths['uky_segmentation']}" \
+                --pretext_package_path "{model_fpaths['uky_pretext']}" \
+                --segmentation_package_path "{model_fpaths['uky_segmentation']}" \
+                --pca_projection_path  "{model_fpaths['uky_pca']}" \
                 --do_pca 0 \
                 --num_dim 8 \
                 --num_workers="{data_workers}" \
@@ -302,7 +307,7 @@ if __name__ == '__main__':
     CommandLine:
         DVC_DPATH=$(python -m watch.cli.find_dvc)
         python -m watch.cli.prepare_teamfeats \
-            --base_fpath="$DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json" \
+            --base_fpath="$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json" \
             --gres=0 \
             --with_depth=True \
             --keep_sessions=False \
@@ -317,23 +322,31 @@ if __name__ == '__main__':
         # Update to whatever the state of the annotations submodule is
         DVC_DPATH=$(python -m watch.cli.find_dvc)
         python -m watch project_annotations \
-            --src $DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json \
-            --dst $DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json \
+            --src $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
+            --dst $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
             --site_models="$DVC_DPATH/annotations/site_models/*.geojson"
 
-        kwcoco stats $DVC_DPATH/Drop2-Aligned-TA1-2022-01/data_20220203.kwcoco.json $DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json
+        kwcoco stats $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data_20220203.kwcoco.json $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json
 
         # Team Features on Drop2
         DVC_DPATH=$(python -m watch.cli.find_dvc)
         python -m watch.cli.prepare_teamfeats \
-            --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json \
+            --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
             --gres=0,1 --with_depth=0 --with_materials=False  --with_invariants=False \
             --run=1 --do_splits=True
 
-        DVC_DPATH=$(python -m watch.cli.find_dvc)
+
+
+
+
+        ###
+        DVC_DPATH=$HOME/flash1/smart_watch_dvc
+        DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+        KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+
         python -m watch.cli.prepare_teamfeats \
-            --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json \
-            --gres=0,1 --with_depth=True --with_materials=False --keep_sessions=True --run=0 --workers=0 --do_splits=True
+            --base_fpath=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
+            --gres=0,1 --with_depth=1 --with_materials=1 --keep_sessions=True --run=0 --do_splits=True --cache=1
 
     """
     main(cmdline=True)

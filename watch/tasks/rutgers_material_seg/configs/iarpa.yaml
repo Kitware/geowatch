@@ -3,49 +3,56 @@
 location: local
 data:
   type: semantic_seg
-  name: iarpa
-  num_classes: 40
+  name: watch
+  num_classes: 4
   window_size: 7
   image_size: 128
-  time_steps: 2
-  weights: []
+  time_steps: 1
+  weights: [0.01, 3, 1, 2]
   channels: red|green|blue|nir|swir16|swir22
+  # channels: B02|B03|B04|B05|B06|B07|B08|B11|B12
   local:
     model_save_dir: /home/native/projects/data/smart_watch/models/
-    train_dir: /media/native/data/data/smart_watch_dvc/drop0_aligned_msi/
-    test_dir: /media/native/data/data/smart_watch_dvc/drop0_aligned_msi/
-    coco_json: /home/native/core534_data/datasets/smart_watch_dvc/drop0_aligned_msi_cf6/train.kwcoco.json
+    train_dir: /media/native/data/data/smart_watch_dvc/Drop1-Aligned-L1-2022-01/
+    test_dir: /media/native/data/data/smart_watch_dvc/Drop1-Aligned-L1-2022-01/
+    train_coco_json: /media/native/data/data/smart_watch_dvc/Drop2-Aligned-TA1-2022-01/data_nowv_train.kwcoco.json
+    test_coco_json: /media/native/data/data/smart_watch_dvc/Drop2-Aligned-TA1-2022-01/data_nowv_vali.kwcoco.json
     val_dir:
   server:
     model_save_dir: /data4/peri/smart_watch/models/
     train_dir: /data4/peri/datasets/smart_watch/processed/drop0_aligned_v2.1/
     test_dir: /data4/peri/datasets/smart_watch/processed/drop0_aligned_v2.1/
     val_dir: /data4/peri/datasets/smart_watch/processed/drop0_aligned_v2.1/
-    coco_json:  /data4/datasets/smart_watch/processed/drop0_aligned_v2.1/material_labels.kwcoco.json
+    rain_coco_json: /data4/datasets/smart_watch_dvc/extern/onera_2018/onera_train.kwcoco.json
+    test_coco_json: /data4/datasets/smart_watch_dvc/extern/onera_2018/onera_test.kwcoco.json
 
 training:
-  backbone: #resnet18 #resnet101, resnet50
-  model_name: shallow_seg #shallow_seg, deeplabWS
-  model_feats_channels: [32, 32, 64, 64, 128] #[32, 32, 64, 64, 128], [64, 64, 128, 256, 512], [32, 32, 64, 128, 256] # this needs to match the correct number of layers in the model
+  backbone: resnet34 #resnet18 #resnet101, resnet50
+  model_name: deeplab #shallow_seg, deeplabWS, resnet_enc, deeplab
+  model_feats_channels: [64, 128, 256, 512, 256] #[64, 128, 256, 512, 256], [32, 32, 64, 64, 128], [64, 64, 128, 256, 512], [32, 32, 64, 128, 256], [64, 128, 256, 512, 256, 256] # this needs to match the correct number of layers in the model
   gn_n_groups: 32
   num_channels: 13
   out_features_dim: 10
   weight_std: True
   beta: False
+  # pretrained: /home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_trainWin_7_modelName_resnet_2021-10-18-13:27/experiments_epoch_0_loss_11.28138166103723_valmF1_0.6866047574166068_valChangeF1_0.49019877611815305_time_2021-10-18-14:15:27.pth
   pretrained: False
   distributed: False
-  learning_rate: 0.002 # best: 0.00007
-  # resume: /home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-08-06-22:35_baseline/experiments_epoch_49_loss_0.04315589724482366_valmIoU_0.5678595403613368_time_2021-08-07-15:25:56.pth
+  learning_rate: 0.005 # best: 0.00007
+  # resume: /home/native/projects/data/smart_watch/models/experiments_iarpa/tasks_experiments_iarpa_2022-01-27-17:08/experiments_epoch_28_loss_55.225655170587395_valmF1_nan_valChangeF1_0.0031579150989931425_time_2022-01-28-08:57:52.pth
   resume: False
   train_val_test_split: [0.95, 0.02, 0.03]
   epochs: 200
   start_epoch: 0
-  batch_size: 2
+  batch_size: 64
   drop_last_batch: True
   momentum: 0.9
   weight_decay: 0.0001
-  num_workers: 4
+  num_workers: 0
   test_with_full_supervision: 1
+  model_single_input: False
+  model_diff_input: False
+  n_samples: 5
 
 high_confidence_threshold:
   train_cutoff: 0.4
@@ -58,7 +65,8 @@ evaluation:
   crf_t: 1
   crf_scale_factor: 1
   inference_window: 7
+  batch_size: 1
 
 procedures:
-  train:  False
+  train:  True
   validate: True

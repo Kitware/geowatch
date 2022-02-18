@@ -8,7 +8,170 @@ import kwcoco
 import kwimage
 import random
 from pandas import read_csv
+import ndsampler
+import ubelt as ub
 from ..utils.read_sentinel_images import read_sentinel_img_trio
+
+
+class gridded_dataset(torch.utils.data.Dataset):
+    S2_l2a_channel_names = [
+        'B02.tif', 'B01.tif', 'B03.tif', 'B04.tif', 'B05.tif', 'B06.tif', 'B07.tif', 'B08.tif', 'B09.tif', 'B11.tif', 'B12.tif', 'B8A.tif'
+    ]
+    S2_channel_names = [
+        'coastal', 'blue', 'green', 'red', 'B05', 'B06', 'B07', 'nir', 'B09', 'cirrus', 'swir16', 'swir22', 'B8A'
+    ]
+    L8_channel_names = [
+        'coastal', 'lwir11', 'lwir12', 'blue', 'green', 'red', 'nir', 'swir16', 'swir22', 'pan', 'cirrus'
+    ]
+    def __init__(self, coco_dset, sensor=['S2', 'L8'], bands=['shared'],
+                 segmentation=False, patch_size=128, num_images=2,
+                 mode='train', patch_overlap=0.0):
+        super().__init__()
+        # initialize dataset
+        self.coco_dset = kwcoco.CocoDataset.coerce(coco_dset)
+        wv_image_ids = []
+        for x in self.coco_dset.index.imgs:
+            if self.coco_dset.index.imgs[x]['sensor_coarse'] == 'WV':
+                wv_image_ids.append(x)
+        self.coco_dset.remove_images(wv_image_ids)
+        self.images = self.coco_dset.images()
+        self.sampler = ndsampler.CocoSampler(self.coco_dset)
+        grid = self.sampler.new_sample_grid(**{
+            'task': 'video_detection',
+            'window_dims': [num_images, patch_size, patch_size],
+            'window_overlap': patch_overlap,
+        }
+        )
+        if segmentation:
+            samples = grid['positives']
+        else:
+            samples = grid['positives'] + grid['negatives']
+        grouped = ub.group_items(
+                samples,
+                lambda x: tuple(
+                    [x['vidid']] + [gid for gid in x['gids']]
+                )
+                )
+        grouped = ub.sorted_keys(grouped)
+        self.patches = list(ub.flatten(grouped.values()))
+
+        all_bands = [aux.get('channels', None) for aux in self.coco_dset.index.imgs[self.images._ids[0]].get('auxiliary', [])]
+
+        if 'r|g|b' in all_bands:
+            all_bands.remove('r|g|b')
+        self.bands = []
+        # no channels selected
+        if len(bands) < 1:
+            raise ValueError(f'bands must be specified. Options are {", ".join(all_bands)}, or all')
+        # all channels selected
+        elif len(bands) == 1:
+            if bands[0].lower() == 'all':
+                self.bands = all_bands
+            elif bands[0].lower() == 'shared':
+                self.bands = ['red', 'green', 'blue', 'nir', 'swir16', 'swir22']
+            elif bands[0] == 'r|g|b':
+                self.bands.append('r|g|b')
+        else:
+            for band in bands:
+                if band in all_bands:
+                    self.bands.append(band)
+        self.num_channels = len(self.bands)
+        self.bands = "|".join(self.bands)
+
+        # define augmentations
+        additional_targets = dict()
+        self.num_images = num_images
+
+        for i in range(self.num_images):
+            additional_targets['image{}'.format(1 + i)] = 'image'
+            additional_targets['seg{}'.format(i + 1)] = 'mask'
+
+        self.transforms = A.Compose([A.OneOf([
+                        A.MotionBlur(p=0.75),
+                        A.Blur(blur_limit=3, p=0.75),
+                    ], p=0.2),
+                    A.RandomBrightnessContrast(brightness_by_max=False, always_apply=True)
+                ],
+                additional_targets=additional_targets)
+
+        self.mode = mode
+        self.segmentation = segmentation
+        self.patch_size = patch_size
+
+    def __len__(self):
+        return len(self.patches)
+
+    def __getitem__(self, idx):
+        tr = self.patches[idx]
+        tr['channels'] = self.bands
+        vidid = tr['vidid']
+
+        offset_idx = idx
+        offset_vidid = None
+        while (vidid != offset_vidid) or (offset_idx == idx):
+            offset_idx = random.randint(0, self.__len__() - 2)
+            offset_tr = self.patches[offset_idx]
+            offset_vidid = offset_tr['vidid']
+        offset_tr['channels'] = self.bands
+
+        if self.segmentation:
+            sample = self.sampler.load_sample(tr, with_annots='segmentation')
+            det_list = sample['annots']['frame_dets']
+            segmentation_masks = []
+            for det in det_list:
+                frame_mask = np.full([self.patch_size, self.patch_size], dtype=np.int32, fill_value=0)
+                ann_polys = det.data['segmentations'].to_polygon_list()
+                # ann_aids = det.data['aids']
+                # ann_cids = det.data['cids']
+                for poly in ann_polys:
+                    # cidx = self.sampler.classes.id_to_idx[cid]
+                    poly.fill(frame_mask, value=1)
+                segmentation_masks.append(frame_mask)
+        else:
+            sample = self.sampler.load_sample(tr)
+        offset_sample = self.sampler.load_sample(offset_tr)
+
+        images = sample['im']
+        offset_image = offset_sample['im'][0]
+        image_dict = {}
+        for k, image in enumerate(images):
+            if image.std() != 0.:
+                image = (image - image.mean()) / image.std()
+            else:
+                image = np.zeros_like(image)
+            image_dict[1 + k] = image
+        if offset_image.std() != 0:
+            offset_image = (offset_image - offset_image.mean()) / offset_image.std()
+        else:
+            offset_image = np.zeros_like(offset_image)
+
+        augmented_image = self.transforms(image=image_dict[1])['image']
+        for key in image_dict:
+            image_dict[key] = torch.tensor(image_dict[key]).permute(2, 0, 1)
+        offset_image = torch.tensor(offset_image).permute(2, 0, 1)
+        augmented_image = torch.tensor(augmented_image).permute(2, 0, 1)
+
+        gids = tr['gids']
+        date_list = []
+        for gid in gids:
+            date = self.coco_dset.index.imgs[gid]['date_captured']
+            date_list.append((int(date[:4]), int(date[5:7])))
+        normalized_date = torch.tensor([date_[0] - 2018 + date_[1] / 12 for date_ in date_list])
+        out = dict()
+        for m in range(self.num_images):
+            out['image{}'.format(1 + m)] = image_dict[1 + m].float()
+        out['offset_image1'] = offset_image.float()
+        out['augmented_image1'] = augmented_image.float()
+        out['normalized_date'] = normalized_date.float()
+        out['time_sort_label'] = float(normalized_date[0] < normalized_date[1])
+        out['img1_id'] = gids[0]
+        # img1_info = self.coco_dset.index.imgs[gids[0]]
+        # out['img1_info'] = img1_info
+        # out['tr'] = ItemContainer(tr, stack=False)
+        if self.segmentation:
+            for k in range(self.num_images):
+                out['segmentation{}'.format(1 + k)] = segmentation_masks[k]
+        return out
 
 
 class kwcoco_dataset(Dataset):

@@ -64,7 +64,7 @@ class RandomCrop(object):
 
 
 class DeepGlobeDataset(object):
-    def __init__(self, root, transforms, split=False, crop_size=64):
+    def __init__(self, root, transforms, channels=None, split=False, crop_size=64):
         self.root = root
         self.transforms = transforms
         self.split = split
@@ -83,13 +83,6 @@ class DeepGlobeDataset(object):
                              29: 5,   # 29, water
                              255: 6}  # 255, barren land, mountain, rock, dessert
 
-        self.possible_combinations = [list(i) for i in itertools.product([0, 1], repeat=len(self.mask_mapping.keys()))]
-        # possible_combinations = map(lambda x: x/len(self.mask_mapping.keys()), possible_combinations)
-        for index, item in enumerate(self.possible_combinations):
-            num_labels = len(np.argwhere(np.array(item) == 1))
-            if num_labels == 0:
-                continue
-            self.possible_combinations[index] = np.divide(self.possible_combinations[index], num_labels)
 
     def __getitem__(self, idx):
 
@@ -97,7 +90,6 @@ class DeepGlobeDataset(object):
         image_name = mask_path.split('/')[-1].split('.')[0]
         img_path = f"{self.images_root}/{image_name}.png"
 
-        labels = torch.zeros(size=(1, len(self.mask_mapping.keys())))
         img = Image.open(img_path).convert("RGB")
         mask = Image.open(mask_path)  # .convert("L"))
         img, mask = self.randomcrop_transform(img, mask)
@@ -106,21 +98,22 @@ class DeepGlobeDataset(object):
         # import matplotlib.pyplot as plt
         # plt.imshow(mask)
         # plt.show()
-
+        
         new_mask = FT.to_tensor(mask) * 255
-        total_pixels = new_mask.shape[2] * new_mask.shape[1]
-        label_inds, label_counts = torch.unique(new_mask, return_counts=True)
-        label_inds = label_inds.long()
-        distribution = label_counts / total_pixels  # NOQA
+        
+        # total_pixels = new_mask.shape[2] * new_mask.shape[1]
+        # label_inds, label_counts = torch.unique(new_mask, return_counts=True)
+        # label_inds = label_inds.long()
+        # distribution = label_counts / total_pixels  # NOQA
 
-        for label_ind, label_count in zip(label_inds, label_counts):
-            labels[0, label_ind] = label_count / total_pixels
+        # for label_ind, label_count in zip(label_inds, label_counts):
+        #     labels[0, label_ind] = label_count / total_pixels
 
-        distances = distance.cdist(self.possible_combinations, labels, 'cityblock')
-        label = np.argmin(distances).item()
+        # distances = distance.cdist(self.possible_combinations, labels, 'cityblock')
+        # label = np.argmin(distances).item()
         outputs = {}
         outputs['visuals'] = {'image': new_image, 'mask': new_mask, 'image_name': image_name}
-        outputs['inputs'] = {'image': new_image, 'mask': new_mask, 'labels': label}
+        outputs['inputs'] = {'image': new_image, 'mask': new_mask}
 
         return outputs
 

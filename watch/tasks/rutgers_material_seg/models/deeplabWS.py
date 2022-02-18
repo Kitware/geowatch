@@ -192,9 +192,9 @@ class Up(nn.Module):
 class ResNet(nn.Module):
 
     def __init__(self, block, layers, num_classes, num_groups=None,
-                 weight_std=False, beta=False, num_channels=3 ,feats=None, out_dim=None):
+                 weight_std=True, beta=False, num_channels=3 ,feats=None, out_dim=None):
         self.inplanes = 64
-        feats = [128, 128, 256, 512, 256]
+        feats = [256, 512, 1024, 2048, 256]
         def _norm(planes, momentum=0.05):
             if num_groups is None:
                 return nn.BatchNorm2d(planes, momentum=momentum)
@@ -205,8 +205,8 @@ class ResNet(nn.Module):
 
         super(ResNet, self).__init__()
         if not beta:
-            self.conv1_ = self.conv(num_channels, 64, kernel_size=7, stride=1,
-                                   padding=3, bias=False)
+            self.conv1_ = self.conv(num_channels, 64, kernel_size=3, stride=1,
+                                   padding=1, bias=False)
         else:
             self.conv1_ = nn.Sequential(
                 self.conv(num_channels, 64, 3, stride=1, padding=1, bias=False),
@@ -217,11 +217,10 @@ class ResNet(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
         self.layer1 = self._make_layer(block, feats[0]//block.expansion, layers[0])
-        self.layer2 = self._make_layer(block, feats[1]//block.expansion, layers[1], stride=1)
-        self.layer3 = self._make_layer(block, feats[2]//block.expansion, layers[2], stride=1)
-        self.layer4 = self._make_layer(block, feats[3]//block.expansion, layers[3], stride=1, dilation=2)
+        self.layer2 = self._make_layer(block, feats[1]//block.expansion, layers[1], stride=2)
+        self.layer3 = self._make_layer(block, feats[2]//block.expansion, layers[2], stride=2)
+        self.layer4 = self._make_layer(block, feats[3]//block.expansion, layers[3], stride=2, dilation=2)
         # self.aspp = ASPP(512 * block.expansion, 256, num_classes, conv=self.conv, norm=self.norm)
-        print(block.expansion)
         self.aspp = ASPP(feats[3], 256, 256, conv=self.conv, norm=self.norm)
 
         for m in self.modules():
@@ -317,7 +316,7 @@ class ResNet(nn.Module):
         # x = self.sg(x, x2, alpha_rate=0.3)
         # x = self.last_conv(x)
         # x = nn.Upsample(size, mode='bilinear', align_corners=True)(x)
-        return x, x_feats
+        return x, x4
 
 
 def resnet50(pretrained=False, **kwargs):
@@ -331,11 +330,38 @@ def resnet50(pretrained=False, **kwargs):
     #     model.load_state_dict(model_zoo.load_url(model_urls['resnet50']))
     if pretrained:
         model_dict = model.state_dict()
-        pretrained_dict = model_zoo.load_url(model_urls['resnet50'])
+        pretrained_path = "/home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-10-07-10:23/experiments_epoch_34_loss_2151.7745061910377_valmIoU_0.5357620684181676_time_2021-10-09-07:21:41.pth"
+        pretrained_dict = torch.load(pretrained_path)
+        # pretrained_dict = model_zoo.load_url(model_urls['resnet50'])
         overlap_dict = {k: v for k, v in pretrained_dict.items()
                         if k in model_dict}
         model_dict.update(overlap_dict)
         model.load_state_dict(model_dict)
+    return model
+
+def resnet34(pretrained=False, **kwargs):
+    """Constructs a ResNet-34 model.
+
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+    """
+    model = ResNet(Bottleneck, [3, 4, 6, 3], **kwargs)
+    # if pretrained:
+    #     model.load_state_dict(model_zoo.load_url(model_urls['resnet50']))
+    if pretrained:
+        model_dict = model.state_dict()
+        pretrained_path = "/home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-10-07-10:23/experiments_epoch_34_loss_2151.7745061910377_valmIoU_0.5357620684181676_time_2021-10-09-07:21:41.pth"
+        pretrained_dict = torch.load(pretrained_path)['model']
+        print(pretrained_dict.keys())
+        # print(pretrained_dict.values())
+        print(model_dict.keys())
+        # pretrained_dict = model_zoo.load_url(model_urls['resnet50'])
+        overlap_dict = {k[7:]: v for k, v in pretrained_dict.items()
+                        if k[7:] in model_dict}
+        print(f"loaded {len(overlap_dict)} layers")
+        model_dict.update(overlap_dict)
+        model.load_state_dict(model_dict)
+    exit()
     return model
 
 def resnet18(pretrained=False, **kwargs):
@@ -367,7 +393,9 @@ def resnet101(pretrained=False, num_groups=None, weight_std=False, **kwargs):
     if pretrained:
         model_dict = model.state_dict()
         if num_groups and weight_std:
-            pretrained_dict = torch.load('/home/native/projects/data/smart_watch/models/R-101-GN-WS.pth.tar')
+            pretrained_path = '/home/native/projects/data/smart_watch/models/R-101-GN-WS.pth.tar'
+            # pretrained_path = "/home/native/projects/data/smart_watch/models/experiments_onera/tasks_experiments_onera_2021-10-07-10:23/experiments_epoch_34_loss_2151.7745061910377_valmIoU_0.5357620684181676_time_2021-10-09-07:21:41.pth"
+            pretrained_dict = torch.load(pretrained_path)
             # print(pretrained_dict['conv1'])
             overlap_dict = {k[7:]: v for k, v in pretrained_dict.items()
                             if k[7:] in model_dict}

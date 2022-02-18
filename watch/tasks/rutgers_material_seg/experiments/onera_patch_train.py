@@ -248,6 +248,7 @@ class Trainer(object):
             # negative_image1_flat = torch.flatten(negative_image1, start_dim=2, end_dim=3)
 
             cropped_image1_flat = F.normalize(torch.flatten(cropped_image1, start_dim=2, end_dim=4), dim=1)
+            print(cropped_image1_flat.shape)
             # cropped_image2_flat = torch.flatten(cropped_image2, start_dim=2, end_dim=4)
             # cropped_negative_image1_flat = torch.flatten(cropped_negative_image1, start_dim=2, end_dim=4)
 
@@ -292,18 +293,19 @@ class Trainer(object):
             centroids = torch.zeros((bs, cropped_image1_flat.shape[2], self.k)).to(device)
             # centroid_distances = torch.zeros((bs, self.k, self.k)).to(device)
             residuals1 = torch.zeros((bs, self.k, cropped_image1_flat.shape[1])).to(device)
+            print(residuals1.shape)
             # residuals2 = torch.zeros((bs, self.k, texton_h*texton_w)).to(device)
             # negative_residuals = torch.zeros((bs, self.k, texton_h*texton_w)).to(device)
             # residuals_distances = torch.zeros((bs, image1_flat.shape[2], image1_flat.shape[2])).to(device)
             run_network_time = time.time() - start
-
+            print(cropped_image1_flat.shape)
             start = time.time()
             for b in range(bs):
                 b_input1_flat = cropped_image1_flat[b, :, :]
                 # b_input2_flat = cropped_image2_flat[b,:,:]
                 # b_input1_flat = features1_flat[b,:,:]
                 b_test_full_image1 = patched_image1_flat[b, :, :]
-
+                # print(b_input1_flat.shape)
                 b_dictionary1 = self.kmeans.fit_predict(
                     b_input1_flat)  # .to(device)
                 dictionary1[b, :] = b_dictionary1[:patch_max]
@@ -340,6 +342,7 @@ class Trainer(object):
                 # print(b_centroids1.shape)
                 # b_centroid_distances = torch.cdist(b_centroids.T, b_centroids.T) # [k, k]
                 b_residual1 = torch.cdist(b_input1_flat, b_centroids1.T).T #[k, window_size**2]
+                print(b_residual1.shape)
                 # b_residual_distances = torch.cdist(b_residual.T, b_residual.T) #[window_size**2, window_size**2]
                 # print(b_residual1.shape)
                 # residuals_distances[b,:,:] = b_residual_distances

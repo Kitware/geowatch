@@ -10,6 +10,11 @@ from watch.tasks.rutgers_material_seg.datasets.iarpa_dataset import (
 from watch.tasks.rutgers_material_seg.datasets.sysucd import SYSUCDDataset
 from watch.tasks.rutgers_material_seg.datasets.s2mcp import S2MCPDataset
 from watch.tasks.rutgers_material_seg.datasets.s2_self import S2SelfCollectDataset
+from watch.tasks.rutgers_material_seg.datasets.bigearthnet import BigEarthNetDataset
+from watch.tasks.rutgers_material_seg.datasets.dynamicearthnet import DynEarthNetDataset
+from watch.tasks.rutgers_material_seg.datasets.hrscd import HRSCDDataset
+from watch.tasks.rutgers_material_seg.datasets.inria import InriaDataset
+from watch.tasks.rutgers_material_seg.datasets.spacenet2 import SpaceNet2Dataset
 
 from torchvision import transforms
 from torch.utils.data import DataLoader
@@ -18,7 +23,11 @@ datasets = {'deepglobe': DeepGlobeDataset,
             'iarpa': SequenceDataset,
             'sysucd': SYSUCDDataset,
             's2mcp': S2MCPDataset,
-            's2self':S2SelfCollectDataset,
+            's2self': S2SelfCollectDataset,
+            'bigearthnet': BigEarthNetDataset,
+            'dynamicearthnet': DynEarthNetDataset,
+            'hrscd': HRSCDDataset,
+            'spacenet2': SpaceNet2Dataset
             }
 
 

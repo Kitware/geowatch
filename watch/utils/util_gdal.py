@@ -3,7 +3,32 @@ import os
 import ubelt as ub
 
 
-def gdal_multi_warp(in_fpaths, out_fpath, space_box, local_epsg, nodata=None, rpcs=None):
+'''
+References:
+    https://gdal.org/programs/gdalwarp.html#cmdoption-gdalwarp-multi
+    https://gis.stackexchange.com/a/241810
+    https://trac.osgeo.org/gdal/wiki/UserDocs/GdalWarp#WillincreasingRAMincreasethespeedofgdalwarp
+    https://github.com/OpenDroneMap/ODM/issues/778
+
+TODO test this and see if it's safe to add:
+    --config GDAL_PAM_ENABLED NO
+Removes .aux.xml sidecar files and puts them in the geotiff metadata
+ex. histogram from fmask
+https://stackoverflow.com/a/51075774
+https://trac.osgeo.org/gdal/wiki/ConfigOptions#GDAL_PAM_ENABLED
+https://gdal.org/drivers/raster/gtiff.html#georeferencing
+'''
+gdalwarp_performance_opts = ub.paragraph('''
+        -multi
+        --config GDAL_CACHEMAX 15%
+        -wm 15%
+        -co NUM_THREADS=ALL_CPUS
+        -wo NUM_THREADS=1
+        ''')
+
+
+def gdal_multi_warp(in_fpaths, out_fpath, space_box, local_epsg, nodata=None, rpcs=None,
+                    blocksize=256, compress='NONE', use_perf_opts=False):
     """
     Ignore:
         # Uses data from the data cube with extra=1
@@ -33,7 +58,8 @@ def gdal_multi_warp(in_fpaths, out_fpath, space_box, local_epsg, nodata=None, rp
         tempfiles.append(tmpfile)
         tmp_out = tmpfile.name
         gdal_single_warp(in_fpath, tmp_out, space_box, local_epsg, rpcs=rpcs,
-                         nodata=nodata)
+                         nodata=nodata, blocksize=blocksize, compress=compress,
+                         use_perf_opts=use_perf_opts)
         warped_gpaths.append(tmp_out)
 
     if nodata is not None:
@@ -88,8 +114,11 @@ def gdal_multi_warp(in_fpaths, out_fpath, space_box, local_epsg, nodata=None, rp
         kwplot.imshow(kwimage.stack_images(datas2, axis=1), fnum=2)
 
 
-def gdal_single_warp(in_fpath, out_fpath, space_box, local_epsg, nodata=None, rpcs=None):
+def gdal_single_warp(in_fpath, out_fpath, space_box, local_epsg, nodata=None, rpcs=None,
+                     blocksize=256, compress='NONE', use_perf_opts=False):
     r"""
+    use COMPRESS='DEFLATE' for full TA1 tiles
+
     TODO:
         - [ ] This should be a kwgeo function?
 
@@ -151,9 +180,6 @@ def gdal_single_warp(in_fpath, out_fpath, space_box, local_epsg, nodata=None, rp
     # te_srs = spatial reference of query points
     crop_coordinate_srs = 'epsg:4326'
 
-    # TODO: parametarize
-    compress = 'NONE'
-    blocksize = 64
     # NUM_THREADS=2
 
     # Coordinate Reference System of the "target" destination image
@@ -167,8 +193,6 @@ def gdal_single_warp(in_fpath, out_fpath, space_box, local_epsg, nodata=None, rp
     template_parts = [
         '''
         gdalwarp
-        -multi
-        --config GDAL_CACHEMAX 500 -wm 500
         --debug off
         -te {xmin} {ymin} {xmax} {ymax}
         -te_srs {crop_coordinate_srs}
@@ -177,7 +201,6 @@ def gdal_single_warp(in_fpath, out_fpath, space_box, local_epsg, nodata=None, rp
         -co OVERVIEWS=AUTO
         -co BLOCKSIZE={blocksize}
         -co COMPRESS={compress}
-        -co NUM_THREADS=2
         -overwrite
         '''
     ]
@@ -220,6 +243,18 @@ def gdal_single_warp(in_fpath, out_fpath, space_box, local_epsg, nodata=None, rp
 
     if compress == 'RAW':
         compress = 'NONE'
+
+    if use_perf_opts:
+        template_parts.append(gdalwarp_performance_opts)
+    else:
+        # use existing options
+        template_parts.append(ub.paragraph(
+            '''
+            -multi
+            --config GDAL_CACHEMAX 500
+            -wm 500
+            -co NUM_THREADS=2
+            '''))
 
     template_parts.append('{SRC} {DST}')
     template = ' '.join(template_parts)

@@ -1,9 +1,11 @@
 import matplotlib
-import matplotlib as mpl
+# import matplotlib as mpl
+import numpy as np
 
-distinct_colors = ["#FFFF00", "#1CE6FF", "#FF34FF", "#FF4A46", "#008941", "#006FA6", "#A30059",
-                   "#FFDBE5", "#7A4900", "#0000A6", "#63FFAC", "#B79762", "#004D43", "#8FB0FF", "#997D87",
-                   "#5A0007", "#809693", "#FEFFE6", "#1B4400", "#4FC601", "#3B5DFF", "#4A3B53", "#FF2F80",
+distinct_colors = ["#FFFF00", "#FF4A46", "#FF34FF", "#1CE6FF", "#008941", "#006FA6", "#A30059",
+                   "#00FF23", "#7A4900", "#0000A6", "#63FFAC", "#B79762", "#004D43", "#8FB0FF", "#997D87",
+                   "#5A0007", "#809693",  # "#FEFFE6",
+                   "#1B4400", "#4FC601", "#3B5DFF", "#4A3B53", "#FF2F80",
                    "#61615A", "#BA0900", "#6B7900", "#00C2A0", "#FFAA92", "#FF90C9", "#B903AA", "#D16100",
                    "#DDEFFF", "#000035", "#7B4F4B", "#A1C299", "#300018", "#0AA6D8", "#013349", "#00846F",
                    "#372101", "#FFB500", "#C2FFED", "#A079BF", "#CC0744", "#C0B9B2", "#C2FF99", "#001E09",
@@ -40,7 +42,6 @@ def hex_to_rgb(hex):
     hlen = len(hex)
     rgb = tuple(int(hex[i:i + hlen // 3], 16)
                 for i in range(0, hlen, hlen // 3))
-    # print(rgb)
     return rgb
 
 
@@ -52,15 +53,16 @@ def n_distinguishable_colors(nlabels: int = 10, first_color_black=True, last_col
     for hex_item in hex_list:
         rgb = hex_to_rgb(hex_item)
         rgb_list.append((rgb[0], rgb[1], rgb[2], fg_alpha))
-    # print(rgb_list)
-    # if first_color_black:
-    #     rgb_list[0] = (0,0,0, bg_alpha)
+
+    if first_color_black:
+        hex_list[0] = "#000000"
 
     # if last_color_black:
     #     rgb_list[-1] = (0, 0, 0, bg_alpha)
 
-    # cmap = LinearSegmentedColormap.from_list('cmap', rgb_list, N=n)
-    cmap = mpl.colors.ListedColormap(rgb_list)
+    cmap = matplotlib.colors.ListedColormap(hex_list, name='cmap')
+    # cmap = mpl.colors.ListedColormap(rgb_list, N=nlabels)
+    # cmap = cmap.from_list('Custom cmap', cmaplist[0:], cmap.N)
     return cmap
 
 
@@ -140,3 +142,58 @@ def rand_cmap(nlabels, type='bright', first_color_black=True, last_color_black=F
                                    orientation=u'horizontal')
 
     return random_colormap
+
+
+def plot_grad_flow(named_parameters):
+    import matplotlib.pyplot as plt
+    ave_grads = []
+    layers = []
+    for n, p in named_parameters:
+        if(p.requires_grad) and ("bias" not in n):
+            layers.append(n)
+            ave_grads.append(p.grad.abs().mean().cpu().detach().numpy())
+    fig = plt.figure()
+    ax1 = fig.add_subplot(1, 1, 1)
+    ax1.plot(ave_grads, alpha=0.3, color="b")
+    ax1.set_hlines(0, 0, len(ave_grads) + 1, linewidth=1, color="k" )
+    ax1.set_xticks(range(0, len(ave_grads), 1), layers, rotation="vertical")
+    ax1.set_xlim(xmin=0, xmax=len(ave_grads))
+    ax1.set_xlabel("Layers")
+    ax1.set_ylabel("average gradient")
+    ax1.set_title("Gradient flow")
+    ax1.grid(True)
+    return fig
+
+
+def plot_grad_flow_v2(named_parameters):
+    '''Plots the gradients flowing through different layers in the net during training.
+    Can be used for checking for possible gradient vanishing / exploding problems.
+
+    Usage: Plug this function in Trainer class after loss.backwards() as
+    "plot_grad_flow(self.model.named_parameters())" to visualize the gradient flow'''
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+    ave_grads = []
+    max_grads = []
+    layers = []
+    for n, p in named_parameters:
+        if(p.requires_grad) and ("bias" not in n):
+            layers.append(n)
+            ave_grads.append(p.grad.abs().mean())
+            max_grads.append(p.grad.abs().max())
+    fig = plt.figure()
+    ax1 = fig.add_subplot(1, 1, 1)
+    ax1.bar(np.arange(len(max_grads)), max_grads, alpha=0.1, lw=1, color="c")
+    ax1.bar(np.arange(len(max_grads)), ave_grads, alpha=0.1, lw=1, color="b")
+    ax1.set_hlines(0, 0, len(ave_grads) + 1, lw=2, color="k" )
+    ax1.set_xticks(range(0, len(ave_grads), 1), layers, rotation="vertical")
+    ax1.set_xlim(left=0, right=len(ave_grads))
+    ax1.set_ylim(bottom=-0.001, top=0.02)  # zoom in on the lower gradient regions
+    ax1.set_xlabel("Layers")
+    ax1.set_ylabel("average gradient")
+    ax1.set_title("Gradient flow")
+    ax1.set_grid(True)
+    ax1.legend([Line2D([0], [0], color="c", lw=4),
+                Line2D([0], [0], color="b", lw=4),
+                Line2D([0], [0], color="k", lw=4)], ['max-gradient', 'mean-gradient', 'zero-gradient'])
+    return fig

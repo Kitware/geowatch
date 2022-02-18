@@ -319,6 +319,9 @@ def sort_by_gid(coco_dset, track_id, prune=True):
     images = coco_dset.images(
         coco_dset.index._set_sorted_by_frame_index(
             coco_dset.annots(trackid=track_id).gids))
+    if len(images) == 0:
+        print('warning: {track_id=} in {coco_dset.tag=} is empty')
+        return images, []
     vidids = np.unique(images.get('video_id', None))
     assert len(vidids) == 1, f'track {track_id} spans multiple videos {vidids}'
     vidid = vidids[0]

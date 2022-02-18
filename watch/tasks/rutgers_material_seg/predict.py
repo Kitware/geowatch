@@ -3,11 +3,16 @@ Prediction script for Rutgers Material Semenatic Segmentation Models
 
 CommandLine:
 
-    DVC_DPATH=${DVC_DPATH:-$HOME/data/dvc-repos/smart_watch_dvc}
-    KWCOCO_BUNDLE_DPATH=${KWCOCO_BUNDLE_DPATH:-$DVC_DPATH/drop1-S2-L8-aligned}
+    export CUDA_VISIBLE_DEVICES=1
+
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+
+    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15
     BASE_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json
-    RUTGERS_MATERIAL_MODEL_FPATH="$DVC_DPATH/models/rutgers/experiments_epoch_30_loss_0.05691597167379317_valmIoU_0.5694727912477856_time_2021-08-07-09:01:01.pth"
-    RUTGERS_MATERIAL_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/rutgers_material_seg.kwcoco.json
+
+    RUTGERS_MATERIAL_MODEL_FPATH="$DVC_DPATH/models/rutgers/rutgers_peri_materials_v3/experiments_epoch_18_loss_59.014100193977356_valmF1_0.18694573888313187_valChangeF1_0.0_time_2022-02-01-01:53:20.pth"
+
+    RUTGERS_MATERIAL_COCO_FPATH=$KWCOCO_BUNDLE_DPATH/rutgers_material_seg_v3.kwcoco.json
 
     # Generate Rutgers Features
     python -m watch.tasks.rutgers_material_seg.predict \
@@ -15,8 +20,8 @@ CommandLine:
         --checkpoint_fpath=$RUTGERS_MATERIAL_MODEL_FPATH  \
         --default_config_key=iarpa \
         --pred_dataset=$RUTGERS_MATERIAL_COCO_FPATH \
-        --num_workers=8 \
-        --batch_size=32 --gpus 0
+        --num_workers=avail \
+        --batch_size=4 --gpus 1
 
 """
 import os
@@ -35,6 +40,7 @@ import watch.tasks.rutgers_material_seg.utils.utils as utils
 from watch.utils import util_parallel
 from watch.tasks.rutgers_material_seg.models import build_model
 from watch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import SequenceDataset
+import torch.nn.functional as F
 
 try:
     from xdev import profile
@@ -86,6 +92,7 @@ class Evaluator(object):
         self.stitcher_dict.pop(gid)
 
         save_path = self.output_feat_dpath / f'{gid}.tif'
+
         save_path = os.fspath(save_path)
         kwimage.imwrite(save_path, recon, backend='gdal', space=None,
                         **self.imwrite_kw)
@@ -131,37 +138,44 @@ class Evaluator(object):
             pbar = Prog(enumerate(dataloader_iter), total=len(self.eval_loader), desc='predict rutgers')
             for batch_index, batch in pbar:
                 outputs = batch
-                images, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0]
+                images, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0][0]  # NOQA
                 original_width, original_height = outputs['tr'].data[0][0]['space_dims']
 
-                # print(outputs['tr'].data[0])
+                # print(f"images: {images.shape}")
+                # print(f"mask: {mask.shape}")
 
-                mask = torch.stack(mask)
-                mask = mask.long().squeeze(1)
+                # mask = torch.stack(mask)
+                # mask = mask.long().squeeze(1)
 
                 bs, c, t, h, w = images.shape
 
-                assert images.shape[2] == 2, 'only handles 2 frames'
-
                 image1 = images[:, :, 0, :, :]
-                image2 = images[:, :, 1, :, :]
-                mask1 = mask[:, 0, :, :]  # NOQA
-                mask2 = mask[:, 1, :, :]  # NOQA
+                # mask1 = mask[:, 0, :, :]  # NOQA
 
-                images = images.to(self.device)
                 image1 = image1.to(self.device)
-                image2 = image2.to(self.device)
-                mask = mask.to(self.device)
+                # mask = mask.to(self.device)
 
                 # image1 = utils.stad_image(image1)
                 # image2 = utils.stad_image(image2)
+                image1 = F.normalize(image1, dim=1, p=2)
 
-                output1, features1 = self.model(image1)  # [B,22,150,150]
-                output2, features2 = self.model(image2)
+                output1 = self.model(image1)  # [B,22,150,150]
+                # print(f"output: {output1.shape}, type: {output1.dtype}")
 
                 bs, c, h, w = output1.shape
                 output1_to_save = output1.permute(0, 2, 3, 1).cpu().detach().numpy()
-                output2_to_save = output2.permute(0, 2, 3, 1).cpu().detach().numpy()
+                # print(f"output1_to_save: {output1_to_save.shape}")
+                # print(f"output1_to_save min: {output1_to_save.min()}, max: {output1_to_save.max()}")
+                # output_show = (output1_to_save - output1_to_save.min()) / (output1_to_save.max() - output1_to_save.min())
+                # image_show1 = np.transpose(image1.cpu().detach().numpy()[0, :, :, :], (1, 2, 0))[:, :, :3]
+                # image_show1 = (image_show1 - image_show1.min()) / (image_show1.max() - image_show1.min())
+                # import matplotlib.pyplot as plt
+                # fig = plt.figure()
+                # ax1 = fig.add_subplot(1,2,1)
+                # ax2 = fig.add_subplot(1,2,2)
+                # ax1.imshow(image_show1)
+                # ax2.imshow(output_show[0,:,:,:3])
+                # plt.show()
 
                 if self.write_probs:
                     for b in range(bs):
@@ -177,7 +191,8 @@ class Evaluator(object):
                                 writer.submit(self.finalize_image, gid)
                                 # self.finalize_image(gid)
 
-                        for gid, output in zip(current_gids, [output1_to_save[b, :, :, :], output2_to_save[b, :, :, :]]):
+                        for gid in current_gids:
+                            output = output1_to_save[b, :, :, :]
                             if gid not in self.stitcher_dict.keys():
                                 self.stitcher_dict[gid] = kwarray.Stitcher(
                                     (*outputs['tr'].data[0][b]['space_dims'],
@@ -189,7 +204,8 @@ class Evaluator(object):
                             weights = util_kwimage.upweight_center_mask(output.shape[0:2])[..., None]
                             self.stitcher_dict[gid].add(slice_, output, weight=weights)
 
-        writer.wait_until_finished()
+                            # weights = kwimage.gaussian_patch(output.shape[0:2])[..., None]
+                            # self.stitcher_dict[gid].add(slice_, output, weight=weights)
 
         if self.write_probs:
             # Finalize any remaining images
@@ -281,19 +297,27 @@ def hardcoded_default_configs(default_config_key):
     return config
 
 
-def main(cmdline=True, **kwargs):
+def main(cmdline=False, **kwargs):
     """
-    Ignore:
-        # Hack in overrides because none of this is parameterized
-        # state_dict = torch.load(checkpoint_fpath)
-        checkpoint_fpath = ub.expandpath("$HOME/data/dvc-repos/smart_watch_dvc/models/rutgers/experiments_epoch_30_loss_0.05691597167379317_valmIoU_0.5694727912477856_time_2021-08-07-09:01:01.pth")
-        cmdline = False
-        kwargs = dict(
-            default_config_key='iarpa',
-            checkpoint_fpath=checkpoint_fpath,
-            test_dataset=ub.expandpath("$HOME/data/dvc-repos/smart_watch_dvc/drop1-S2-L8-aligned/data.kwcoco.json"),
-            pred_dataset='./test-pred/pred.kwcoco.json',
-        )
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> from watch.tasks.rutgers_material_seg.predict import *  # NOQA
+        >>> import watch
+        >>> dvc_dpath = watch.find_smart_dvc_dpath()
+        >>> checkpoint_fpath = dvc_dpath / 'models/rutgers/rutgers_peri_materials_v3/experiments_epoch_18_loss_59.014100193977356_valmF1_0.18694573888313187_valChangeF1_0.0_time_2022-02-01-01:53:20.pth'
+        >>> #checkpoint_fpath = dvc_dpath / 'models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_2021101T16277.pth'
+        >>> src_coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
+        >>> dst_coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/mat_test.kwcoco.json'
+        >>> cmdline = False
+        >>> num_workers = 'avail'
+        >>> # num_workers = 0
+        >>> kwargs = dict(
+        >>>     default_config_key='iarpa',
+        >>>     checkpoint_fpath=checkpoint_fpath,
+        >>>     test_dataset=src_coco_fpath,
+        >>>     pred_dataset=dst_coco_fpath,
+        >>> )
+        >>> main(cmdline=cmdline, **kwargs)
     """
     args = make_predict_config(cmdline=cmdline, **kwargs)
     print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
@@ -343,19 +367,20 @@ def main(cmdline=True, **kwargs):
     # HACK!!!!
     # THIS IS WHY WE SAVE METADATA WITH THE MODEL!
     # WE DONT WANT TO HAVE TO FUDGE RECONSTRUCTION IN PRODUCTION!!!
+    args.checkpoint_fpath = os.fspath(args.checkpoint_fpath)
     checkpoint_state = torch.load(args.checkpoint_fpath)
 
-    num_classes = checkpoint_state['model']['module.outc.conv.weight'].shape[0]
-    out_features_dim = checkpoint_state['model']['module.features_outc.conv.weight'].shape[0]
-    config['data']['num_classes'] = num_classes
-    config['training']['out_features_dim'] = out_features_dim
+    # num_classes = checkpoint_state['model']['module.outc.conv.weight'].shape[0]
+    # out_features_dim = checkpoint_state['model']['module.features_outc.conv.weight'].shape[0]
+    # config['data']['num_classes'] = num_classes
+    # config['training']['out_features_dim'] = out_features_dim
 
-    base_path = '/'.join(args.checkpoint_fpath.split('/')[:-1])
+    base_path = '/'.join(str(args.checkpoint_fpath).split('/')[:-1])
     pretrain_config_path = f"{base_path}/config.yaml"
     if os.path.isfile(pretrain_config_path):
         pretrain_config = utils.load_yaml_as_dict(pretrain_config_path)
         config['data']['channels'] = pretrain_config['data']['channels']
-        config['training']['model_feats_channels'] = pretrain_config_path['training']['model_feats_channels']
+        # config['training']['model_feats_channels'] = pretrain_config_path['training']['model_feats_channels']
 
     model = build_model(model_name=config['training']['model_name'],
                         backbone=config['training']['backbone'],
@@ -377,7 +402,10 @@ def main(cmdline=True, **kwargs):
     model = mounted_model_cls(model)
 
     model.load_state_dict(checkpoint_state['model'])
+    # print(f"loadded model succeffuly from: {pretrain_config_path}")
+    # print(f"Missing keys from loaded model: {missing_keys}, unexpected keys: {unexpexted_keys}")
 
+    print('device = {!r}'.format(device))
     model.to(device)
 
     output_coco_fpath = pathlib.Path(args.pred_dataset)
@@ -417,4 +445,4 @@ def main(cmdline=True, **kwargs):
     evaler.forward()
 
 if __name__ == "__main__":
-    main()
+    main(cmdline=True)
