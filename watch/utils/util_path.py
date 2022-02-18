@@ -68,6 +68,13 @@ def coerce_patterned_paths(data, expected_extension=None):
     """
     Coerce input to a list of paths.
 
+    Args:
+        data (str | List[str]):
+            a glob pattern or list of glob patterns
+
+    Returns:
+        List[ubelt.Path]: Multiple paths that match the query
+
     Example:
         >>> # xdoctest: +SKIP
         >>> import watch
@@ -89,6 +96,7 @@ def coerce_patterned_paths(data, expected_extension=None):
         else:
             globpat = data_
         paths.extend(list(glob.glob(globpat, recursive=True)))
+    paths = [ub.Path(p) for p in paths]
     return paths
 
 

@@ -110,6 +110,7 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
             --git_commit=True
     """
     from watch.utils import util_data
+    from watch.utils import util_path
     import ubelt as ub
     import shutil
     import os
@@ -126,36 +127,30 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
         storage_dpath = ub.Path(storage_dpath)
 
     if train_dpath is None:
-        dataset_names = [
-            # 'Drop1_October2021',
-            # 'Drop1_November2021',
-            'Drop1-20201117',
+        train_dpath = [
+            dvc_dpath / 'training/*/*/Drop1-20201117'
         ]
-        train_base = dvc_dpath / 'training'
-        user_machine_dpaths = list(train_base.glob('*/*'))
-        dset_dpaths = []
-        for um_dpath in user_machine_dpaths:
-            for dset_name in dataset_names:
-                dset_dpath = um_dpath / dset_name
-                dset_dpaths.append(dset_dpath)
-    else:
-        dset_dpaths = [ub.Path(train_dpath)]
 
+    dset_dpaths = util_path.coerce_patterned_paths(train_dpath)
+    dset_dpaths = [ub.Path(p) for p in dset_dpaths]
+
+    all_checkpoint_paths = [p / 'runs/*/lightning_logs/' for p in dset_dpaths]
+    lightning_log_dpaths = util_path.coerce_patterned_paths(all_checkpoint_paths)
+    lightning_log_dpaths = [ub.Path(p) for p in lightning_log_dpaths]
+
+    # Collect checkpoints from the training path
     all_checkpoint_paths = []
-    for dset_dpath in dset_dpaths:
-        # Find all paths with lightning logs
-        lightning_log_dpaths = list((dset_dpath / 'runs').glob('*/lightning_logs'))
-        for ll_dpath in lightning_log_dpaths:
-            if not ll_dpath.parent.name.startswith(('Activity', 'SC_', 'BOTH_', 'BAS_')):  # HACK
-                continue
-            checkpoint_fpaths = list((ll_dpath).glob('*/checkpoints/*.ckpt'))
-            for checkpoint_fpath in checkpoint_fpaths:
-                parts = checkpoint_fpath.name.split('-')
-                epoch = int(parts[0].split('epoch=')[1])
-                # Dont add the -v2 versions
-                if epoch >= 0 and parts[-1].startswith('step='):
-                    print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
-                    all_checkpoint_paths.append(checkpoint_fpath)
+    for ll_dpath in lightning_log_dpaths:
+        checkpoint_fpaths = util_path.coerce_patterned_paths(
+            ll_dpath / '*/checkpoints/*.ckpt')
+        for checkpoint_fpath in checkpoint_fpaths:
+            checkpoint_fpath = ub.Path(checkpoint_fpath)
+            parts = checkpoint_fpath.name.split('-')
+            epoch = int(parts[0].split('epoch=')[1])
+            # Dont add the -v2 versions
+            if epoch >= 0 and parts[-1].startswith('step='):
+                # print('checkpoint_fpath = {!r}'.format(checkpoint_fpath))
+                all_checkpoint_paths.append(checkpoint_fpath)
 
     storage_dpath.ensuredir()
 
@@ -163,7 +158,7 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
     failed = []
     for p in ub.ProgIter(all_checkpoint_paths):
         try:
-            package_fpath = repackage(p)
+            package_fpath = repackage(str(p))[0]
             package_fpath = ub.Path(package_fpath)
             name = package_fpath.name.split('_epoch')[0]
             name_dpath = storage_dpath / name
@@ -184,13 +179,66 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
     for package_fpath, name_fpath in ub.ProgIter(to_copy):
         shutil.copy(package_fpath, name_fpath)
 
-    dvc_to_add = []
-    for package_fpath in list(storage_dpath.glob('*/*.pt')):
-        package_dvc_fpath = ub.Path(str(package_fpath) + '.dvc')
-        if not package_dvc_fpath.exists() and package_fpath.is_file():
-            dvc_to_add.append(str(package_fpath.relative_to(dvc_dpath)))
+    def find_dvc_root(path):
+        max_parts = len(path.parts)
+        curr = path
+        found = None
+        for _ in range(max_parts):
+            cand = curr / '.dvc'
+            if cand.exists():
+                found = curr
+                break
+            curr = curr.parent
+        return found
+
+    class ChDir:
+        """
+        Context manager that changes the current working directory and then
+        returns you to where you were.
+        """
+        def __init__(self, dpath):
+            self.context_dpath = dpath
+            self.orig_dpath = None
+
+        def __enter__(self):
+            self.orig_dpath = os.getcwd()
+            os.chdir(dvc_dpath)
+            return self
+
+        def __exit__(self, a, b, c):
+            os.chdir(self.orig_dpath)
+
+    def dvc_add(paths):
+        from os.path import commonprefix
+        common = ub.Path(*commonprefix([p.parts for p in paths]))
+        dvc_root = find_dvc_root(common)
+        rel_paths = [os.fspath(p.relative_to(dvc_root)) for p in paths]
+        dvc_info = ub.cmd(['dvc', 'add', '-v'] + rel_paths, cwd=dvc_root, verbose=3, check=True)
+
+        has_autostage = ub.cmd('dvc config core.autostage', cwd=dvc_dpath, check=True)['out'].split() == 'true'
+        if has_autostage:
+            raise NotImplementedError('Need autostage to complete the git commit')
+
+    def dvc_push(path):
+        import dvc.main
+        # from dvc import main
+        dvc_root = find_dvc_root(path)
+        with ChDir(dvc_dpath):
+            remote = 'aws'
+            dvc_command = ['push', '-r', remote, '--recursive', str(path.relative_to(dvc_root))]
+            dvc.main.main(dvc_command)
+
+    needs_dvc_readd = sorted(set([d for s, d in to_copy]))
+
+    dvc_add(needs_dvc_readd)
+    dvc_push(storage_dpath)
 
     if 0:
+        dvc_to_add = []
+        for package_fpath in list(storage_dpath.glob('*/*.pt')):
+            package_dvc_fpath = ub.Path(str(package_fpath) + '.dvc')
+            if not package_dvc_fpath.exists() and package_fpath.is_file():
+                dvc_to_add.append(str(package_fpath.relative_to(dvc_dpath)))
         # Broken parts
         print('New models to add to DVC: {}'.format(ub.repr2(dvc_to_add)))
         dvc_info = ub.cmd(['dvc', 'add'] + dvc_to_add, cwd=dvc_dpath, verbose=3, check=True)
