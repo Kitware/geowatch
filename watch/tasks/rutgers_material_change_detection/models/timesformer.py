@@ -73,6 +73,8 @@ def trunc_normal_(tensor, mean=0.0, std=1.0, a=-2.0, b=2.0):
         a: the minimum cutoff value
         b: the maximum cutoff value
     Examples:
+        >>> tensor = torch.rand(1,4)
+        >>> trunc_normal_(tensor)
     """
     return _no_grad_trunc_normal_(tensor, mean, std, a, b)
 

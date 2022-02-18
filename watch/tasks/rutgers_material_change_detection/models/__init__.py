@@ -24,7 +24,6 @@ from watch.tasks.rutgers_material_change_detection.models.patch_transformer impo
 from watch.tasks.rutgers_material_change_detection.models.self_attention import (
     SelfAttention,
     AsymmetricPyramidSelfAttention,
-    SelfAxialAttention,
 )
 
 
@@ -498,8 +497,8 @@ def get_attention(framework_name, feat_sizes, cfg):
         n_heads = cfg.framework.attention_n_heads
         if cfg.framework.attention_name == "self_attention":
             attention_modules = SelfAttention(framework_name, feat_sizes, cfg.framework.attention_layers, n_heads)
-        elif cfg.framework.attention_name == "axial_attention":
-            attention_modules = SelfAxialAttention(framework_name, feat_sizes, cfg.framework.attention_layers, n_heads)
+        # elif cfg.framework.attention_name == "axial_attention":
+        #     attention_modules = SelfAxialAttention(framework_name, feat_sizes, cfg.framework.attention_layers, n_heads)
         elif cfg.framework.attention_name == "pymd_self_attention":
             attention_modules = AsymmetricPyramidSelfAttention(
                 framework_name, feat_sizes, cfg.framework.attention_layers, n_heads
