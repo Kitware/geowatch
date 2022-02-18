@@ -287,9 +287,14 @@ class pretext(pl.LightningModule):
 
     def on_save_checkpoint(self, checkpoint):
         if self.hparams.pca_projection_path:
+<<<<<<< HEAD
             save_dir = self.hparams.pca_projection_path
             save_path = os.path.join(save_dir, 'pretext_pca_{}'.format(str(self.current_epoch)) + '.pt')
             os.makedirs(save_dir, exist_ok=True)
+=======
+            save_path = os.path.join(self.hparams.pca_projection_path, 'pretext_pca_{}'.format(str(self.current_epoch)) + '.pt')
+            os.makedirs(save_path, exist_ok=True)
+>>>>>>> d45de2a6... mkdir to makedirs
             self.generate_pca_matrix(save_path=save_path, loader=self.train_dataloader(), reduction_dim=self.hparams.reduction_dim)
 
     def save_package(self, package_path):
