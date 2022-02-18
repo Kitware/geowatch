@@ -874,11 +874,17 @@ if __name__ == '__main__':
         # DVC_DPATH=$(python -m watch.cli.find_dvc)
         DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
         MEASURE_GLOBSTR=$DVC_DPATH/models/fusion/SC-20201117/*_TA1*/*/*/eval/curves/measures2.json
-        # ls $MEASURE_GLOBSTR
-        # echo "$MEASURE_GLOBSTR"
         python -m watch.tasks.fusion.gather_results \
             --measure_globstr="$MEASURE_GLOBSTR" \
             --out_dpath="$DVC_DPATH/agg_results"
             --dset_group_key="Drop2-Aligned-TA1-2022-01_*.kwcoco"
+
+
+        DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+        cd $DVC_DPATH/models/fusion/SC-20201117
+        python -m watch.tasks.fusion.gather_results \
+            --measure_globstr="*/*/*/eval/curves/measures2.json" \
+            --out_dpath="$DVC_DPATH/agg_results" \
+            --dset_group_key="*" --show=True
     """
     gather_measures(cmdline=True)

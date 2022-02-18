@@ -110,7 +110,7 @@ def main(cmdline=True, **kwargs):
     }
 
     outputs = {
-        'rutgers_materials': aligned_bundle_dpath / 'rutgers_mat_seg.kwcoco.json',
+        'rutgers_materials': aligned_bundle_dpath / 'rutgers_material_seg_v3.kwcoco.json',
         'dzyne_landcover': aligned_bundle_dpath / 'dzyne_landcover.kwcoco.json',
         'dzyne_depth': aligned_bundle_dpath / 'dzyne_depth.kwcoco.json',
         'uky_invariants': aligned_bundle_dpath / 'uky_invariants.kwcoco.json',
@@ -335,10 +335,18 @@ if __name__ == '__main__':
             --gres=0,1 --with_depth=0 --with_materials=False  --with_invariants=False \
             --run=1 --do_splits=True
 
-        DVC_DPATH=$(python -m watch.cli.find_dvc)
+
+
+
+
+        ###
+        DVC_DPATH=$HOME/flash1/smart_watch_dvc
+        DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+        KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+
         python -m watch.cli.prepare_teamfeats \
-            --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
-            --gres=0,1 --with_depth=True --with_materials=False --keep_sessions=True --run=0 --workers=0 --do_splits=True
+            --base_fpath=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
+            --gres=0,1 --with_depth=1 --with_materials=1 --keep_sessions=True --run=0 --do_splits=True --cache=1
 
     """
     main(cmdline=True)
