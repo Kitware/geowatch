@@ -223,7 +223,7 @@ def orthorectify(stac_item, outdir, te_dems, as_vrt, as_utm):
     else:
         out_fpath = os.path.splitext(
             os.path.join(outdir, os.path.basename(in_fpath)))[0] + '.tif'
-        cmd_str_out = '-of COG -co BLOCKSIZE=64 -co COMPRESS=DEFLATE'
+        cmd_str_out = '-of COG -co BLOCKSIZE=256 -co COMPRESS=DEFLATE'
 
     lon, lat = np.concatenate(
         shapely.geometry.shape(stac_item.geometry).centroid.xy)
@@ -292,7 +292,7 @@ def pansharpen(stac_item_pan, stac_item_msi, outdir, as_rgb):
         -threads ALL_CPUS
         -nodata 0
         -of COG
-        -co BLOCKSIZE=64
+        -co BLOCKSIZE=256
         -co COMPRESS=NONE
         --config GDAL_CACHEMAX 10%
         -co NUM_THREADS=ALL_CPUS
@@ -307,7 +307,7 @@ def pansharpen(stac_item_pan, stac_item_msi, outdir, as_rgb):
         'nodata_value': 0,
         'driver_name': 'COG',
         'creation_options': {
-            'BLOCKSIZE': 64,
+            'BLOCKSIZE': 256,
             'COMPRESS': 'NONE',
             'NUM_THREADS': 'ALL_CPUS'
         },
