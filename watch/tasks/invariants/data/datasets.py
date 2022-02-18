@@ -25,8 +25,13 @@ class gridded_dataset(torch.utils.data.Dataset):
         'coastal', 'lwir11', 'lwir12', 'blue', 'green', 'red', 'nir', 'swir16', 'swir22', 'pan', 'cirrus'
     ]
     def __init__(self, coco_dset, sensor=['S2', 'L8'], bands=['shared'],
+<<<<<<< HEAD
                  segmentation=False, patch_size=128, num_images=2, returned_images=None,
                  mode='train', patch_overlap=.25, bas=True, rng=None):
+=======
+                 segmentation=False, patch_size=128, num_images=2,
+                 mode='train', patch_overlap=0.0, bas=True):
+>>>>>>> 90e353cf... cleaning annotations for site classification
         super().__init__()
 
         self.rng = kwarray.ensure_rng(rng)
@@ -115,12 +120,16 @@ class gridded_dataset(torch.utils.data.Dataset):
         self.segmentation = segmentation
         self.patch_size = patch_size
         self.bas = bas
+<<<<<<< HEAD
         if self.bas:
             self.positive_indices = [0, 1, 3]
             self.ignore_indices = [2, 6]
         else:
             self.positive_indices = [0, 1, 2, 3]
             self.ignore_indices = [6]
+=======
+        self.positive_indices = [0, 1, 2, 3]
+>>>>>>> 90e353cf... cleaning annotations for site classification
 
     def __len__(self):
         return len(self.patches)
@@ -164,8 +173,11 @@ class gridded_dataset(torch.utils.data.Dataset):
                         else:
                             cidx = self.sampler.classes.id_to_idx[cid]
                             poly.fill(frame_mask, value=cidx)
+<<<<<<< HEAD
                     elif cid in self.ignore_indices:
                         poly.fill(frame_mask, value=-1)
+=======
+>>>>>>> 90e353cf... cleaning annotations for site classification
                 segmentation_masks.append(frame_mask)
         else:
             sample = self.sampler.load_sample(tr)
