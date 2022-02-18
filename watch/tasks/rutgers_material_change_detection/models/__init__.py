@@ -517,8 +517,8 @@ def get_attention(framework_name, feat_sizes, cfg):
         ), "Attention not compatible with patch transformer features."
         if cfg.framework.attention_name == "self_attention":
             attention_modules = SelfAttention(framework_name, feat_sizes, cfg.framework.attention_layers, n_heads)
-        elif cfg.framework.attention_name == "axial_attention":
-            attention_modules = SelfAxialAttention(framework_name, feat_sizes, cfg.framework.attention_layers, n_heads)
+        # elif cfg.framework.attention_name == "axial_attention":
+        #     attention_modules = SelfAxialAttention(framework_name, feat_sizes, cfg.framework.attention_layers, n_heads)
         elif cfg.framework.attention_name == "pymd_self_attention":
             attention_modules = AsymmetricPyramidSelfAttention(
                 framework_name, feat_sizes, cfg.framework.attention_layers, n_heads
