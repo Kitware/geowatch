@@ -25,7 +25,7 @@ class gridded_dataset(torch.utils.data.Dataset):
     ]
     def __init__(self, coco_dset, sensor=['S2', 'L8'], bands=['shared'],
                  segmentation=False, patch_size=128, num_images=2,
-                 mode='train', patch_overlap=0.0):
+                 mode='train', patch_overlap=0.0, bas=True):
         super().__init__()
         # initialize dataset
         self.coco_dset = kwcoco.CocoDataset.coerce(coco_dset)
@@ -97,6 +97,8 @@ class gridded_dataset(torch.utils.data.Dataset):
         self.mode = mode
         self.segmentation = segmentation
         self.patch_size = patch_size
+        self.bas = bas
+        self.positive_indices = [0, 1, 2, 3]
 
     def __len__(self):
         return len(self.patches)
@@ -121,11 +123,15 @@ class gridded_dataset(torch.utils.data.Dataset):
             for det in det_list:
                 frame_mask = np.full([self.patch_size, self.patch_size], dtype=np.int32, fill_value=0)
                 ann_polys = det.data['segmentations'].to_polygon_list()
-                # ann_aids = det.data['aids']
-                # ann_cids = det.data['cids']
-                for poly in ann_polys:
-                    # cidx = self.sampler.classes.id_to_idx[cid]
-                    poly.fill(frame_mask, value=1)
+                ann_aids = det.data['aids']
+                ann_cids = det.data['cids']
+                for poly, aid, cid in zip(ann_polys, ann_aids, ann_cids):
+                    if cid in self.positive_indices:
+                        if self.bas:
+                            poly.fill(frame_mask, value=1)
+                        else:
+                            cidx = self.sampler.classes.id_to_idx[cid]
+                            poly.fill(frame_mask, value=cidx)
                 segmentation_masks.append(frame_mask)
         else:
             sample = self.sampler.load_sample(tr)
@@ -170,7 +176,7 @@ class gridded_dataset(torch.utils.data.Dataset):
         # out['tr'] = ItemContainer(tr, stack=False)
         if self.segmentation:
             for k in range(self.num_images):
-                out['segmentation{}'.format(1 + k)] = segmentation_masks[k]
+                out['segmentation{}'.format(1 + k)] = torch.tensor(segmentation_masks[k])
         return out
 
 

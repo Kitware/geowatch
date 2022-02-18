@@ -27,12 +27,12 @@ class segmentation_model(pl.LightningModule):
         if hparams.dataset == 'kwcoco':
             if hparams.train_dataset is not None:
                 if hparams.dataset_style == 'gridded':
-                    self.trainset = gridded_dataset(hparams.train_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size, segmentation=True, num_images=hparams.num_images)
+                    self.trainset = gridded_dataset(hparams.train_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size, segmentation=True, num_images=hparams.num_images, bas=hparams.bas)
                 else:
                     self.trainset = kwcoco_dataset(hparams.train_dataset, hparams.sensor, hparams.bands, hparams.patch_size, segmentation_labels=True, num_images=hparams.num_images)
             if hparams.vali_dataset is not None:
                 if hparams.dataset_style == 'gridded':
-                    self.valset = gridded_dataset(hparams.vali_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size, segmentation=True, num_images=hparams.num_images)
+                    self.valset = gridded_dataset(hparams.vali_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size, segmentation=True, num_images=hparams.num_images, bas=hparams.bas)
                 else:
                     self.valset = kwcoco_dataset(hparams.vali_dataset, hparams.sensor, hparams.bands, hparams.patch_size, segmentation_labels=True, num_images=hparams.num_images)
         elif hparams.dataset == 'spacenet':
@@ -43,7 +43,7 @@ class segmentation_model(pl.LightningModule):
             weight = torch.FloatTensor([1, hparams.pos_class_weight])
         else:
             warnings.warn('Classes/Ignore Classes/Background need to be re-checked before succesfully training on site classification models.')
-            weight = torch.FloatTensor([0, 1, 1, 1, 1, 1])
+            weight = None
 
         self.criterion = nn.NLLLoss(weight=weight)
         self.save_hyperparameters(hparams)

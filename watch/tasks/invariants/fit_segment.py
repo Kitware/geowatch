@@ -85,6 +85,7 @@ if __name__ == '__main__':
     parser.add_argument('--check_val_every_n_epoch', type=int, default=10)
     parser.add_argument('--dataset_style', type=str, default='gridded')
     parser.add_argument('--ignore_boundary', type=int, default=3)
+    parser.add_argument('--bas', default=1)
 
     args = parser.parse_args()
     main(args)
