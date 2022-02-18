@@ -65,6 +65,11 @@ def main():
                         action='store_true',
                         default=False,
                         help="Force predict scripts to use --num_workers=0")
+    parser.add_argument("--bas_thresh",
+                        default=0.3,
+                        type=float,
+                        required=False,
+                        help="Threshold for BAS tracking (kwarg 'thresh')")
     parser.add_argument("--sc_thresh",
                         default=0.01,
                         type=float,
@@ -199,6 +204,7 @@ def run_bas_fusion_for_baseline(
         jobs=1,
         force_zero_num_workers=False,
         ta2_s3_collation_bucket=None,
+        bas_thresh=0.3,
         sc_thresh=0.01):
     if aws_profile is not None:
         aws_base_command =\
@@ -268,7 +274,7 @@ def run_bas_fusion_for_baseline(
     os.makedirs(region_models_outdir, exist_ok=True)
 
     bas_track_kwargs = {'use_viterbi': False,
-                        'thresh': 0.3,
+                        'thresh': bas_thresh,
                         'morph_kernel': 3,
                         'time_filtering': True,
                         'response_filtering': False,
@@ -287,7 +293,7 @@ def run_bas_fusion_for_baseline(
 
     sc_track_kwargs = {'coco_dset_sc': sc_fusion_kwcoco_path,
                        'use_viterbi': False,
-                       'bas_kwargs': {'thresh': 0.3,
+                       'bas_kwargs': {'thresh': bas_thresh,
                                       'morph_kernel': 3,
                                       'time_filtering': True,
                                       'response_filtering': False,
