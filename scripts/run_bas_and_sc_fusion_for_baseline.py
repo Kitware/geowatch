@@ -6,7 +6,6 @@ import subprocess
 import tempfile
 import json
 from glob import glob
-import shutil
 
 from watch.cli.baseline_framework_kwcoco_egress import baseline_framework_kwcoco_egress  # noqa: 501
 from watch.cli.baseline_framework_kwcoco_ingress import baseline_framework_kwcoco_ingress  # noqa: 501
@@ -118,7 +117,7 @@ def _download_region(aws_base_command,
     if replace_originator:
         for feature in out_region_data.get('features', ()):
             if feature['properties']['type'] == 'region':
-                feature['properties']['originator'] = 'kitware'
+                feature['properties']['originator'] = 'kit'
 
     region_id = None
     for feature in out_region_data.get('features', ()):
@@ -266,12 +265,7 @@ def run_bas_fusion_for_baseline(
     # 4.1. Compute tracks (BAS)
     print("* Computing tracks (BAS) *")
     region_models_outdir = os.path.join(ingress_dir, 'region_models')
-    # Copy local region file into region_models_outdir to be updated
-    # by tracking code
     os.makedirs(region_models_outdir, exist_ok=True)
-    shutil.copy(local_region_path,
-                os.path.join(region_models_outdir,
-                             "{}.geojson".format(region_id)))
 
     bas_track_kwargs = {'use_viterbi': False,
                         'thresh': 0.3,
