@@ -12,7 +12,7 @@ Requirements:
 "
 #export CUDA_VISIBLE_DEVICES="1"
 
-#DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
 DVC_DPATH=$(python -m watch.cli.find_dvc)
 WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
 
@@ -122,7 +122,6 @@ gather_checkpoint_notes(){
     mkdir -p "$EXPT_SAVE_DPATH"
 
     cp "$DEFAULT_ROOT_DIR"/lightning_logs/version_*/checkpoints/*.pt "$EXPT_SAVE_DPATH"
-
 }
 
 
@@ -145,12 +144,32 @@ predict_and_evaluate_checkpoints(){
         how many concurrent jobs can be running at the same time, and allow
         jobs to depend on other jobs, let me know.  If this doesnt exist I want
         to make it with multiprocessing, tmux, and slurm backends.
-
-
     '
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="0," \
             --model_globstr="$EXPT_SAVE_DPATH/*.pt" \
             --test_dataset="$VALI_FPATH" \
             --run=0 --skip_existing=True
+}
+
+
+aggregate_multiple_evaluations(){
+    __doc__="
+    This script will aggregate results over all packaged checkpoints with
+    computed metrics. You can run this while the schedule_evaluation script is
+    running. It will dump aggregate stats into the 'out_dpath' folder.
+    "
+
+    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+
+    EXPT_NAME_PAT="BASELINE_EXPERIMENT_V001"
+    MODEL_EPOCH_PAT="*"
+    PRED_DSET_PAT="*"
+    MEASURE_GLOBSTR=$DVC_DPATH/models/fusion/baseline/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/eval/curves/measures2.json
+    python -m watch.tasks.fusion.gather_results \
+        --measure_globstr="$MEASURE_GLOBSTR" \
+        --out_dpath="$DVC_DPATH/agg_results/baseline" \
+        --dset_group_key="Drop2-Aligned-TA1-2022-02-15_data_vali.kwcoco"
+
 }
