@@ -158,7 +158,8 @@ class predict(object):
                 if 'segmentation' in args.tasks:
                     image_stack = [batch[key] for key in batch if key[:5] == 'image']
                     image_stack = torch.stack(image_stack, dim=1).to(args.device)
-                    segmentation_heatmap = torch.sigmoid(self.segmentation_model(image_stack)['predictions'][0, 0, 1, :, :] - self.segmentation_model(image_stack)['predictions'][0, 0, 0, :, :]).unsqueeze(0).permute(1, 2, 0).cpu()
+                    predictions = torch.exp(self.segmentation_model(image_stack)['predictions'])
+                    segmentation_heatmap = torch.sigmoid(predictions[0, 0, 1, :, :] - predictions[0, 0, 0, :, :]).unsqueeze(0).permute(1, 2, 0).cpu()
                     save_feat.append(segmentation_heatmap)
 
                 save_feat = torch.cat(save_feat, dim=-1)
