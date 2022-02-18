@@ -84,6 +84,7 @@ if __name__ == '__main__':
     parser.add_argument('--binary', help='Condense annotations to binary as opposed to site classification. Choose 0 to use classification labels.', type=int, default=1)
     parser.add_argument('--check_val_every_n_epoch', type=int, default=10)
     parser.add_argument('--dataset_style', type=str, default='gridded')
+    parser.add_argument('--ignore_boundary', type=int, default=3)
 
     args = parser.parse_args()
     main(args)

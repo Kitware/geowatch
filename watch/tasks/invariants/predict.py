@@ -161,7 +161,10 @@ class predict(object):
                     segmentation_heatmap = torch.sigmoid(self.segmentation_model(image_stack)['predictions'][0, 0, 1, :, :] - self.segmentation_model(image_stack)['predictions'][0, 0, 0, :, :]).unsqueeze(0).permute(1, 2, 0).cpu()
                     save_feat.append(segmentation_heatmap)
 
-                save_feat = torch.cat(save_feat, dim=-1).numpy()
+                save_feat = torch.cat(save_feat, dim=-1)
+                save_feat = (save_feat - save_feat.mean(dim=(0, 1))) / save_feat.std(dim=(0, 1))
+                save_feat = save_feat.numpy()
+    
                 # image_id = int(batch['img1_id'].item())
                 # image_info = output_dset.index.imgs[image_id]
                 # video_info = output_dset.index.videos[image_info['video_id']]

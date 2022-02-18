@@ -98,14 +98,14 @@ class pretext(pl.LightningModule):
         # task specific criterion
         self.criteria = [
             # BinaryFocalLoss(gamma=self.hparams.focal_gamma),  # sort task
-            nn.NLLLoss(), #sort task
+            nn.NLLLoss(ignore_index=99), #sort task
             nn.TripletMarginLoss(),  # augment task
             nn.TripletMarginLoss(),  # overlap task
         ]
         self.criteria = [ self.criteria[i] for i in self.task_indices ]
 
         # task specific metrics
-        self.sort_accuracy = Accuracy()
+        self.sort_accuracy = Accuracy(ignore_index=99)
 
     def forward(self, image_stack, positional_encoding=None):
         # pass through shared model body
@@ -121,9 +121,11 @@ class pretext(pl.LightningModule):
         offset_image1_features = out[:, 2, :, :, :]
         augmented_image1_features = out[:, 3, :, :, :]
         # get time sort labels
-        time_sort_labels = batch['time_sort_label']
+        time_labels = batch['time_sort_label']
 
-        time_sort_labels = time_sort_labels.unsqueeze(1).unsqueeze(1).repeat(1, image_stack.shape[-2], image_stack.shape[-1]).to(self.device)
+        time_labels = time_labels.unsqueeze(1).unsqueeze(1).repeat(1, image_stack.shape[-2], image_stack.shape[-1]).to(self.device)
+        time_sort_labels = 99 * torch.ones_like(time_labels)
+        time_sort_labels[:, self.hparams.ignore_boundary:-self.hparams.ignore_boundary, self.hparams.ignore_boundary:-self.hparams.ignore_boundary]
 
         losses = []
         output = {}
@@ -229,7 +231,6 @@ class pretext(pl.LightningModule):
         stride = 1
         padding = int((kernel_size - 1) / 2)
         return nn.Sequential(
-            nn.Conv2d(in_chan, in_chan, kernel_size, stride, padding),
             nn.BatchNorm2d(in_chan),
             nn.ReLU(inplace=True),
             nn.Conv2d(in_chan, out_chan, kernel_size, stride, padding),
@@ -285,10 +286,12 @@ class pretext(pl.LightningModule):
         return projector
 
     def on_save_checkpoint(self, checkpoint):
-        save_path = self.hparams.pca_projection_path[:-3] + '_{}'.format(str(self.current_epoch)) + '.pt'
-        self.generate_pca_matrix(save_path=save_path, loader=self.train_dataloader(), reduction_dim=self.hparams.reduction_dim)
+        if self.hparams.pca_projection_path:
+            save_path = os.path.join(self.hparams.pca_projection_path, 'pretext_pca_{}'.format(str(self.current_epoch)) + '.pt')
+            os.mkdir(save_path, exist_ok=True)
+            self.generate_pca_matrix(save_path=save_path, loader=self.train_dataloader(), reduction_dim=self.hparams.reduction_dim)
 
-    def save_package(self, package_path='$DVC_DPATH/models/uky/uky_invariants_2022_02_11/TA1_pretext_model'):
+    def save_package(self, package_path):
         model = self
 
         package_path = os.path.join(package_path, 'pretext_package.pt')

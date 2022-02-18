@@ -30,9 +30,9 @@ def main(args):
         dataset_name,
         sensor,
         )
-
+    
     model = pretext(hparams=args)
-    model.save_package()
+    # model.save_package()
 
     if args.vali_dataset is None:
         ckpt_monitors = (
@@ -70,7 +70,7 @@ if __name__ == '__main__':
     ###model hparams
     parser.add_argument('--num_attention_layers', help='Number of attention layers between down convolutions. There can be up to 4 corresponding to each down convolution of the UNet.', type=int, default=4)
     parser.add_argument('--positional_encoding', help='Use positional encoding of time stamps in model. Note: This option should remain False for all currently implemented pretext tasks since the network can learn to cheat based on date information.', action='store_true')
-    parser.add_argument('--positional_encoding_mode', help='addition or concatenation.', type=str, default='concatenation')
+    parser.add_argument('--positional_encoding_mode', help='addition or concatenation.', type=str, default='addition')
     ###dataset hparams
     parser.add_argument('--train_dataset', type=str, help="path/to/train.kwcoco.json", required=True)
     parser.add_argument('--vali_dataset', type=str, help="path/to/vali.kwcoco.json", default=None)
@@ -90,10 +90,11 @@ if __name__ == '__main__':
     parser.add_argument('--check_val_every_n_epoch', type=int, default=3)
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--workers', type=int, default=8)
-    parser.add_argument('--learning_rate', type=float, default=.001)
-    parser.add_argument('--step_size', type=int, default=50)
+    parser.add_argument('--learning_rate', type=float, default=.0001)
+    parser.add_argument('--step_size', type=int, default=30)
     parser.add_argument('--lr_gamma', type=float, default=.1)
     parser.add_argument('--weight_decay', type=float, default=1e-5)
+    parser.add_argument('--ignore_boundary', type=int, default=3)
     ###output
     parser.add_argument('--save_dir', type=str, default=None)
     parser.add_argument('--pca_projection_path', type=str, default='')

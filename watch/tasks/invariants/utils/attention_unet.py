@@ -17,7 +17,7 @@ class positional_encoding(nn.Module):
 
 
 class attention_unet(nn.Module):
-    def __init__(self, in_channels, out_channels, dropout_rate=.5, pos_encode=False, num_attention_layers=1, mode='addition'):
+    def __init__(self, in_channels, out_channels, dropout_rate=.2, pos_encode=False, num_attention_layers=1, mode='addition'):
         super(attention_unet, self).__init__()
 
         assert(num_attention_layers <= 4)
