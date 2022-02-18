@@ -32,6 +32,10 @@ def main(args):
         )
     
     model = pretext(hparams=args)
+<<<<<<< HEAD
+=======
+    # model.save_package()
+>>>>>>> 4c3946a9... ignore boundary pixels in loss, normalization saved features
 
     if args.vali_dataset is None:
         ckpt_monitors = (
@@ -90,7 +94,11 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=64)
     parser.add_argument('--workers', type=int, default=8)
     parser.add_argument('--learning_rate', type=float, default=.0001)
+<<<<<<< HEAD
     parser.add_argument('--step_size', type=int, default=80)
+=======
+    parser.add_argument('--step_size', type=int, default=30)
+>>>>>>> 4c3946a9... ignore boundary pixels in loss, normalization saved features
     parser.add_argument('--lr_gamma', type=float, default=.1)
     parser.add_argument('--weight_decay', type=float, default=1e-5)
     parser.add_argument('--ignore_boundary', type=int, default=3)
