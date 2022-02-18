@@ -400,7 +400,7 @@ def time_aggregated_polys(coco_dset,
 
         # TURN ON NEW AGGREGATION
         # polys = list(mask_to_polygons(probs(_heatmaps), thresh))
-        polys = list(mask_to_polygons(mean_normalized(_heatmaps), thresh))
+        polys = list(mask_to_polygons(mean_normalized(_heatmaps), thresh, use_hysteresis=True, thresh_hyst=0.3))
 
         # turn each polygon into a list of polygons (map them across gids)
         tracks = [
@@ -456,7 +456,7 @@ class TimeAggregatedBAS(NewTrackFunction):
     '''
     Wrapper for BAS that looks for change heatmaps.
     '''
-    thresh: float = 0.3
+    thresh: float = 0.2
     morph_kernel: int = 3
     time_filtering: bool = True
     response_filtering: bool = False

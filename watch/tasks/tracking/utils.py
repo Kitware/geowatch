@@ -2,6 +2,7 @@ import kwimage
 import numpy as np
 import kwcoco
 from rasterio import features
+import scipy.ndimage.measurements as ndm
 from copy import deepcopy
 import shapely.geometry
 import ubelt as ub
@@ -395,7 +396,9 @@ def mask_to_polygons(probs,
                      thresh,
                      bounds=None,
                      scored=False,
-                     use_rasterio=True):
+                     use_rasterio=True,
+                     use_hysteresis=False,
+                     thresh_hyst=0.0):
     """
     Args:
         probs: aka heatmap, image of probability values
@@ -421,7 +424,14 @@ def mask_to_polygons(probs,
         >>> kwplot.imshow(probs > 0.5)
     """
     # Threshold scores
-    binary_mask = (probs > thresh).astype(np.uint8)
+    if not use_hysteresis:
+        binary_mask = (probs > thresh).astype(np.uint8)
+    else:
+        mask = probs > thresh
+        seeds = probs > thresh_hyst
+        label_img = ndm.label(mask)[0]
+        selected = np.unique(np.extract(seeds, label_img))
+        binary_mask = np.isin(label_img, selected).astype(np.uint8)
     if bounds is not None:
         try:  # is this a shapely or geojson object?
             # asShape is being deprecated:
