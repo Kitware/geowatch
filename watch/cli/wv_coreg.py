@@ -292,7 +292,7 @@ def band_path(s2_item):
     Get href to S2 band 4 from STAC item
     '''
     def _is_b04(asset):
-        eo_bands = asset.extra_fields.get('eo:bands', [])
+        eo_bands = asset.properties.get('eo:bands', [])
         if any(i.get('name') in {'B4', 'B04'} for i in eo_bands):
             return True
         return any(i.get('common_name') == 'red' for i in eo_bands)

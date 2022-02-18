@@ -1,7 +1,10 @@
+import sys
 import argparse
 import json
 import subprocess
 import tempfile
+
+import pystac
 
 from watch.cli.baseline_framework_egress import upload_output_stac_items
 from watch.cli.baseline_framework_ingress import load_input_stac_items
@@ -65,8 +68,12 @@ def run_associate_wv_msi_pan(input_path,
     if requester_pays:
         aws_base_command.extend(['--request-payer', 'requester'])
 
-    input_stac_items = load_input_stac_items(input_path, aws_base_command)
-    input_stac_items_dict = {item['id']: item for item in input_stac_items}
+    input_stac_items = [pystac.Item.from_dict(item) for item in
+                        load_input_stac_items(input_path, aws_base_command)]
+    input_stac_items_dict = {}
+    for item in input_stac_items:
+        item.remove_links('root')
+        input_stac_items_dict[item.id] = item.to_dict()
 
     # Establish the MSI-PAN mapping in the WV catalog
     # and remove the paired PAN items so they don't get duplicated
@@ -74,9 +81,16 @@ def run_associate_wv_msi_pan(input_path,
     for item in item_pairs_dict.values():
         del input_stac_items_dict[item.id]
 
+    # Remove 'root' link (can cause errors with `.to_dict()` calls)
+    # and convert pystac.Item values to dicts
+    output_item_pairs_dict = {}
+    for item_id, paired_item in item_pairs_dict.items():
+        paired_item.remove_links('root')
+        output_item_pairs_dict[item_id] = paired_item.to_dict()
+
     with tempfile.NamedTemporaryFile() as temporary_file:
-        with open(temporary_file, 'w') as f:
-            json.dump(item_pairs_dict, f, indent=2)
+        with open(temporary_file.name, 'w') as f:
+            json.dump(output_item_pairs_dict, f, indent=2)
 
         subprocess.run([*aws_base_command,
                         temporary_file.name,
@@ -85,9 +99,13 @@ def run_associate_wv_msi_pan(input_path,
                        check=True)
 
     te_output = upload_output_stac_items(
-        input_stac_items_dict.keys(),
+        list(input_stac_items_dict.values()),
         output_path,
         aws_base_command,
         newline=newline)
 
     return te_output
+
+
+if __name__ == "__main__":
+    sys.exit(main())

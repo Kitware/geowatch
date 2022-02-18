@@ -94,11 +94,7 @@ def _item_map(stac_item,
               baseline_s2_items,
               item_pairs_dict,
               aws_base_command):
-    ortho_item = ortho_map(stac_item,
-                           os.path.join(working_dir, 'ortho'),
-                           drop_empty=True)
-
-    # Ingress any associated PAN item
+    # Ingress and orthorectify any associated PAN item
     if stac_item.id in item_pairs_dict:
         pan_item = item_pairs_dict[stac_item.id]
 
@@ -109,15 +105,34 @@ def _item_map(stac_item,
             dryrun=False,
             relative=False)
 
-        item_pairs_dict[stac_item.id] = ingressed_pan_item
+        ortho_pan_items = ortho_map(
+            ingressed_pan_item,
+            os.path.join(working_dir, 'wv_ortho'),
+            drop_empty=True,
+            te_dems=False,
+            as_vrt=False,
+            as_utm=True)
 
-    coreg_item = coreg_map(ortho_item,
-                           os.path.join(working_dir, 'wv_coreg'),
-                           baseline_s2_items,
-                           item_pairs_dict,
-                           drop_empty=False)
+        # `ortho_map` returns a list of one item; hence the [0]
+        item_pairs_dict[stac_item.id] = ortho_pan_items[0]
 
-    return [coreg_item]
+    ortho_items = ortho_map(stac_item,
+                            os.path.join(working_dir, 'wv_ortho'),
+                            drop_empty=True,
+                            te_dems=False,
+                            as_vrt=False,
+                            as_utm=True)
+
+    output_coreg_items = []
+    for ortho_item in ortho_items:
+        output_coreg_items.extend(
+            coreg_map(ortho_item,
+                      os.path.join(working_dir, 'wv_coreg'),
+                      baseline_s2_items,
+                      item_pairs_dict,
+                      drop_empty=False))
+
+    return output_coreg_items
 
 
 def b04_asset_filter(asset_name, asset):
@@ -203,7 +218,8 @@ def run_wv_ortho_and_coreg_streaming(input_path,
     coreg_jobs = [executor.submit(caching_item_map,
                                   stac_item,
                                   baseline_s2_items,
-                                  item_pairs_dict)
+                                  item_pairs_dict,
+                                  aws_base_command)
                   for stac_item in input_stac_items]
 
     output_stac_items = []
