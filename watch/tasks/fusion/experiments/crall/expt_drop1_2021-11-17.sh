@@ -2555,7 +2555,7 @@ python -m watch.tasks.fusion.fit \
 # ------ toothbrush -2020-02-17
 
 
-aggregate_multiple_evaluations(){
+multiple_evaluations_schedule_and_agg(){
     __doc__="
     This script will aggregate results over all packaged checkpoints with
     computed metrics. You can run this while the schedule_evaluation script is
@@ -2564,8 +2564,15 @@ aggregate_multiple_evaluations(){
 
     smartwatch stats "$VALI_FPATH"
 
-    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-    DVC_DPATH=$HOME/flash1/smart_watch_dvc
+
+    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="0,1" \
+            --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/BAS_TA1_v0*/*.pt" \
+            --test_dataset="$VALI_FPATH" \
+            --run=1 --skip_existing=True
+
+    #DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+    #DVC_DPATH=$HOME/flash1/smart_watch_dvc
     DVC_DPATH=$(python -m watch.cli.find_dvc)
 
     EXPT_NAME_PAT="*"
@@ -2576,6 +2583,41 @@ aggregate_multiple_evaluations(){
         --measure_globstr="$MEASURE_GLOBSTR" \
         --out_dpath="$DVC_DPATH/agg_results/baseline" \
         --dset_group_key="*_vali.kwcoco" --show=True
+}
+
+
+gather_checkpoint_notes(){
+    __doc__="
+    Every so often, I run the repackage command and gather the packaged
+    checkpoints for evaluation.
+
+    Requires:
+        * DVC_DPATH
+        * DEFAULT_ROOT_DIR
+        * DATASET_CODE
+        * EXPERIMENT_NAME
+
+    "
+    echo "DVC_DPATH = $DVC_DPATH"
+    echo "DEFAULT_ROOT_DIR = $DEFAULT_ROOT_DIR"
+    echo "DATASET_CODE = $DATASET_CODE"
+    echo "EXPERIMENT_NAME = $EXPERIMENT_NAME"
+
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    CHECKPOINT_GLOBSTR="$DEFAULT_ROOT_DIR/lightning_logs/version_*/checkpoints/*.ckpt"
+
+    # This method only works for the current fusion model
+    # It would be better if the fit command was able to take care of this
+    python -m watch.tasks.fusion.repackage repackage "$CHECKPOINT_GLOBSTR"
+
+    # To ensure the results of our experiments are maintained, we copy them to
+    # the DVC directory.
+    BASE_SAVE_DPATH=$DVC_DPATH/models/fusion/$DATASET_CODE
+    EXPT_SAVE_DPATH=$BASE_SAVE_DPATH/$EXPERIMENT_NAME
+    mkdir -p "$BASE_SAVE_DPATH"
+    mkdir -p "$EXPT_SAVE_DPATH"
+
+    cp "$DEFAULT_ROOT_DIR"/lightning_logs/version_*/checkpoints/*.pt "$EXPT_SAVE_DPATH"
 }
 
 
