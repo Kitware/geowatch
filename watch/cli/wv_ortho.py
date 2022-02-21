@@ -38,6 +38,19 @@ def main():
                         dest='te_dems',
                         action='store_false',
                         help='Use GTOP30 DEMs instead of IARPA T&E DEMs')
+    parser.add_argument('--drop_empty',
+                        action='store_true',
+                        help='Remove empty items from the catalog after '
+                        'orthorectification')
+    parser.add_argument('--as_vrt',
+                        action='store_true',
+                        help='use VRT instead of COG as ortho output format')
+    parser.add_argument('--as_utm',
+                        action='store_true',
+                        help='Use UTM instead of WGS84 as ortho output CRS')
+    parser.add_argument('--skip_ortho',
+                        action='store_true',
+                        help='Skip orthorectification.')
     parser.add_argument('--pansharpen',
                         action='store_true',
                         help='Additionally pan-sharpen any MSI images')
