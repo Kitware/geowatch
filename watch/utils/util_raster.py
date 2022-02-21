@@ -15,11 +15,13 @@ from dataclasses import dataclass
 from lxml import etree
 from tempenv import TemporaryEnvironment
 from tempfile import NamedTemporaryFile
-from typing import Union
+from typing import Union, List, Literal, Optional
 from osgeo import gdal, osr
+import pyproj
 
 import rasterio
 import rasterio.features
+import rasterio.mask
 from rasterio import Affine, MemoryFile
 from rasterio.enums import Resampling
 
@@ -31,9 +33,94 @@ except Exception:
     profile = ub.identity
 
 
+def _ensure_open(
+        raster: Union[rasterio.DatasetReader, str]) -> rasterio.DatasetReader:
+    if not isinstance(raster, rasterio.DatasetReader) or raster.closed:
+        # workaround for
+        # https://rasterio.readthedocs.io/en/latest/faq.html#why-can-t-rasterio-find-proj-db-rasterio-from-pypi-versions-1-2-0
+        with TemporaryEnvironment({'PROJ_LIB': None}):
+            return rasterio.open(raster)
+    else:
+        return raster
+
+
+def _swapxy(poly: shp.geometry.Polygon) -> shp.geometry.Polygon:
+    return kwimage.Polygon.from_shapely(poly).swap_axes().to_shapely()
+
+
+def open_cropped(raster: Union[rasterio.DatasetReader, str],
+                 poly: shp.geometry.Polygon,
+                 rect=True,
+                 out_fpath=None) -> np.ndarray:
+    '''
+    Open and return the part of raster that falls within poly. Essentially the
+    opposite of watch.util.util_raster.crop_to().
+
+    This is safe to use on a remote path (eg s3 or WMS); rasterio will
+    correctly only download the tiles needed instead of the entire file.
+
+    Args:
+        raster: Path to a dataset poly: to crop raster to in geo-space.
+            Expressed in WGS84 lon-lat units.
+        rect: if True, return the full rectangular data window that includes
+            poly; else, the data will be tightly cropped to poly and filled
+            outside it with nodata.
+        out_fpath: if given, save the cropped data to this local path as a new
+            image.
+
+    Returns:
+        data: the contents of the cropped raster.
+    '''
+    poly_epsg = 4326  # only true after swapping from lon-lat to lat-lon!
+    poly = _swapxy(poly)
+
+    raster = _ensure_open(raster)
+    profile = raster.profile.copy()
+    profile.pop('driver')
+
+    # these methods return near-identical data and transform (+/- rounding
+    # errors in data.shape and sigfigs in transform) for a rectangular polygon.
+    if rect:  # use windowed read
+        # https://rasterio.readthedocs.io/en/latest/topics/windowed-rw.html
+        bounds = pyproj.Transformer.from_crs(
+            poly_epsg, raster.crs).transform_bounds(*poly.bounds,
+                                                    errcheck=True)
+        window = rasterio.windows.from_bounds(*bounds, raster.transform)
+        transform = rasterio.windows.transform(window, raster.transform)
+        data = raster.read(window=window)
+        profile.update(transform=transform,
+                       height=window.height,
+                       width=window.width)
+
+    else:  # use mask
+        # https://automating-gis-processes.github.io/CSC18/lessons/L6/clipping-raster.html
+        # https://gis.stackexchange.com/a/127432
+        tfm = pyproj.Transformer.from_crs(poly_epsg, raster.crs).transform
+        bounds = shapely.ops.transform(tfm, poly)
+        data, transform = rasterio.mask.mask(raster,
+                                             shapes=[bounds],
+                                             crop=True)
+        profile.update(transform=transform,
+                       height=data.shape[1],
+                       width=data.shape[2])
+
+    # TODO option to use MemoryFile?
+    # Or is that handled by passing out_fpath=/vsimem/... ?
+    if out_fpath is not None:
+        with rasterio.open(out_fpath, **profile) as f:
+            f.write(data)
+
+    return data
+
+
 @profile
-def mask(raster, default_nodata=None, save=False, convex_hull=False, as_poly=True,
-         tolerance=None, max_polys=None):
+def mask(raster: Union[rasterio.DatasetReader, str],
+         default_nodata=None,
+         save=False,
+         convex_hull=False,
+         as_poly=True,
+         tolerance=None,
+         max_polys=None):
     """
     Compute a raster's valid data mask in pixel coordinates.
 
@@ -44,7 +131,7 @@ def mask(raster, default_nodata=None, save=False, convex_hull=False, as_poly=Tru
     Args:
         raster (str): Path to a dataset (raster image file)
 
-        nodata (int): if raster's nodata value is None, default to this
+        default_nodata (int): if raster's nodata value is None, default to this
 
         save (bool): if True and raster's nodata value is None, write the
             default to it. If False, performance overhead is incurred from
@@ -67,7 +154,7 @@ def mask(raster, default_nodata=None, save=False, convex_hull=False, as_poly=Tru
         255 == valid and 0 == invalid.
 
     Ignore:
-        raster = '/home/joncrall/data/dvc-repos/smart_watch_dvc/drop1/../drop1/_assets/google-cloud/LS/LC08_L1TP_016039_20160216_20170224_01_T1/LC08_L1TP_016039_20160216_20170224_01_T1_B1.TIF'
+        raster = '/home/joncrall/data/dvc-repos/smart_watch_dvc/drop1/../drop1/_assets/google-cloud/LS/LC08_L1TP_016039_20160216_20170224_01_T1/LC08_L1TP_016039_20160216_20170224_01_T1_B1.TIF'  # noqa
         from watch.utils.util_raster import *
         mask_img = mask(raster, as_poly=False)
 
@@ -122,14 +209,19 @@ def mask(raster, default_nodata=None, save=False, convex_hull=False, as_poly=Tru
     scale_factor = None
 
     with warnings.catch_warnings():
-        warnings.filterwarnings('ignore', category=rasterio.errors.NotGeoreferencedWarning)
+        warnings.filterwarnings(
+            'ignore', category=rasterio.errors.NotGeoreferencedWarning)
         # workaround for
         # https://rasterio.readthedocs.io/en/latest/faq.html#why-can-t-rasterio-find-proj-db-rasterio-from-pypi-versions-1-2-0
         with TemporaryEnvironment({'PROJ_LIB': None}):
-            img = rasterio.open(raster, 'r')
+
+            img = _ensure_open(raster)
 
             # Work at the coarsest overview level for speed
-            overviews = {tuple(img.overviews(bandx)) for bandx in range(1, img.count + 1)}
+            overviews = {
+                tuple(img.overviews(bandx))
+                for bandx in range(1, img.count + 1)
+            }
             if len(overviews) == 1:
                 overview_levels = ub.peek(overviews)
                 if len(overview_levels):
@@ -137,7 +229,9 @@ def mask(raster, default_nodata=None, save=False, convex_hull=False, as_poly=Tru
                     # Open image with a higher overview level
                     # https://github.com/rasterio/rasterio/issues/1504
                     requested_overview = len(overview_levels) - 1
-                    img = rasterio.open(raster, 'r', overview_level=requested_overview)
+                    img = rasterio.open(img.name,
+                                        'r',
+                                        overview_level=requested_overview)
                     scale_factor = overview_levels[requested_overview]
 
             try:
@@ -156,7 +250,8 @@ def mask(raster, default_nodata=None, save=False, convex_hull=False, as_poly=Tru
                     #     pass
                     # else:
                     mask_img = np.full((img.height, img.width),
-                                       fill_value=255, dtype=np.uint8)
+                                       fill_value=255,
+                                       dtype=np.uint8)
 
                 else:
                     if save:
@@ -189,7 +284,10 @@ def mask(raster, default_nodata=None, save=False, convex_hull=False, as_poly=Tru
                         # simulate 0 = nodata, 255=valid data
                         # operate inplace when possible
                         imdata = img.read(1, out_dtype=np.uint8)
-                        np.not_equal(imdata, nodata, dtype=np.uint8, out=imdata)
+                        np.not_equal(imdata,
+                                     nodata,
+                                     dtype=np.uint8,
+                                     out=imdata)
                         np.multiply(imdata, 255, out=imdata)
                         mask_img = imdata
 
@@ -224,14 +322,20 @@ def mask(raster, default_nodata=None, save=False, convex_hull=False, as_poly=Tru
             mask_poly = mask_poly.convex_hull
 
         if scale_factor is not None:
-            mask_poly = shapely.affinity.scale(
-                mask_poly, xfact=scale_factor, yfact=scale_factor,
-                origin=(0, 0))
+            mask_poly = shapely.affinity.scale(mask_poly,
+                                               xfact=scale_factor,
+                                               yfact=scale_factor,
+                                               origin=(0, 0))
 
     return mask_poly
 
 
-def crop_to(pxl_polys, raster, bounds_policy, intersect_policy='crop'):
+def crop_to(
+    pxl_polys: List[shp.geometry.Polygon],
+    raster: str,
+    bounds_policy: Literal['none', 'bounds', 'valid'],
+    intersect_policy: Literal['keep', 'crop', 'discard'] = 'crop'
+) -> List[Optional[shp.geometry.Polygon]]:
     """
     Crop pxl_polys to raster in one of several ways.
 
@@ -317,10 +421,8 @@ def crop_to(pxl_polys, raster, bounds_policy, intersect_policy='crop'):
     # I don't see an obvious way to vectorize this part
     # due to the branching
     result = []
-    for poly, c, o, inter in zip(pygeos.to_shapely(pxl_polys),
-                                 contains,
-                                 overlaps,
-                                 pygeos.to_shapely(intersections)):
+    for poly, c, o, inter in zip(pygeos.to_shapely(pxl_polys), contains,
+                                 overlaps, pygeos.to_shapely(intersections)):
         if c:
             result.append(poly)
         elif o:
@@ -373,13 +475,16 @@ class ResampledRaster(ExitStack):
     """
     Context manager to rescale a raster on the fly using rasterio
 
-    This changes the number of pixels in the raster while maintaining its geographic bounds, that is, it changes the raster's GSD.
+    This changes the number of pixels in the raster while maintaining its
+    geographic bounds, that is, it changes the raster's GSD.
 
     Args:
-        raster: a DatasetReader (the object returned by rasterio.open) or path to a dataset
+        raster: a DatasetReader (the object returned by rasterio.open) or path
+            to a dataset
         scale: factor to upscale the resolution, aka downscale the GSD, by
-        read: if True, read and return the resampled data (an expensive operation if scale>1)
-            else, return the resampled dataset's .profile attribute (metadata)
+        read: if True, read and return the resampled data (an expensive
+            operation if scale>1) else, return the resampled dataset's .profile
+            attribute (metadata)
         resampling: resampling algorithm, from rasterio.enums.Resampling [1]
 
     Example:
@@ -430,13 +535,7 @@ class ResampledRaster(ExitStack):
         super().__init__()
 
     def __enter__(self):
-        if not isinstance(self.raster,
-                          rasterio.DatasetReader) or self.raster.closed:
-            # workaround for
-            # https://rasterio.readthedocs.io/en/latest/faq.html#why-can-t-rasterio-find-proj-db-rasterio-from-pypi-versions-1-2-0
-            with TemporaryEnvironment({'PROJ_LIB': None}):
-                self.raster = rasterio.open(self.raster)
-
+        self.raster = _ensure_open(self.raster)
         t = self.raster.transform
 
         # rescale the metadata
@@ -453,12 +552,15 @@ class ResampledRaster(ExitStack):
 
         if self.read:
 
-            data = self.raster.read(  # Note changed order of indexes, arrays are band, row, col order not row, col, band
+            # Note changed order of indexes, arrays are band, row, col order
+            # not row, col, band
+            data = self.raster.read(
                 out_shape=(self.raster.count, height, width),
                 resampling=self.resampling,
             )
 
-            # enter_context is from contextlib.ExitStack, which takes care of closing these
+            # enter_context is from contextlib.ExitStack, which takes care of
+            # closing these
             memfile = self.enter_context(MemoryFile())
             with memfile.open(**profile) as dataset:  # Open as DatasetWriter
                 dataset.write(data)
@@ -575,11 +677,15 @@ def make_vrt(in_paths, out_path, mode, relative_to_path=None, **kwargs):
 
     Args:
         in_paths: list(path)
-        out_path: path to save to; standard is '*.vrt'. If None, a path will be generated.
+        out_path: path to save to; standard is '*.vrt'. If None, a path will be
+            generated.
         mode:
             'stacked': Stack multiple band files covering the same area
-            'mosaicked': Mosaic/merge scenes with overlapping areas. Content will be taken from the first in_path without nodata.
-        relative_to_path: if this function is being called from another process, pass in the cwd of the calling process, to trick gdal into creating a rerootable VRT
+            'mosaicked': Mosaic/merge scenes with overlapping areas. Content
+                will be taken from the first in_path without nodata.
+        relative_to_path: if this function is being called from another
+            process, pass in the cwd of the calling process, to trick gdal into
+            creating a rerootable VRT
         kwargs: passed to gdal.BuildVRTOptions [1,2]
 
     Returns:
@@ -650,9 +756,10 @@ def make_vrt(in_paths, out_path, mode, relative_to_path=None, **kwargs):
                             mode='r+',
                             delete=(out_path is not None)) as f:
 
-        # First, create VRT in a place where it can definitely see the input files.
-        # Use a relative instead of absolute path to ensure that
-        # <SourceFilename> refs are relative, and therefore the VRT is rerootable
+        # First, create VRT in a place where it can definitely see the input
+        # files.  Use a relative instead of absolute path to ensure that
+        # <SourceFilename> refs are relative, and therefore the VRT is
+        # rerootable
         vrt = gdal.BuildVRT(os.path.relpath(f.name, start=relative_to_path),
                             in_paths,
                             options=opts)
@@ -671,7 +778,8 @@ def make_vrt(in_paths, out_path, mode, relative_to_path=None, **kwargs):
 
 def scenes_to_vrt(scenes, vrt_root, relative_to_path):
     """
-    Search for band files from compatible scenes and stack them in a single mosaicked VRT
+    Search for band files from compatible scenes and stack them in a single
+    mosaicked VRT
 
     A simple wrapper around watch.utils.util_raster.make_vrt that performs both
     the 'stacked' and 'mosaicked' modes
@@ -729,12 +837,14 @@ def reproject_crop(in_path, aoi, code=None, out_path=None, vrt_root=None):
 
     Unfortunately, this cannot be done in a single step in scenes_to_vrt
     because gdal.BuildVRT does not support warping between CRS.
-    Cropping alone could be done in scenes_to_vrt. Note gdal.BuildVRTOptions has
-    an outputBounds(=-te) kwarg for cropping, but not an equivalent of -te_srs.
+    Cropping alone could be done in scenes_to_vrt. Note gdal.BuildVRTOptions
+    has an outputBounds(=-te) kwarg for cropping, but not an equivalent of
+    -te_srs.
 
     This means another intermediate file is necessary for each warp operation.
 
-    TODO check for this quantization error: https://gis.stackexchange.com/q/139906
+    TODO check for this quantization error:
+        https://gis.stackexchange.com/q/139906
 
     Args:
         in_path: A georeferenced image. GTiff, VRT, etc.
