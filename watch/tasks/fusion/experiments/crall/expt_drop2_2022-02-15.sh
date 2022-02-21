@@ -40,6 +40,8 @@ aggregate_multiple_evaluations(){
         --dset_group_key="*_vali.kwcoco" --show=True
 }
 
+[[ -f '/home/joncrall/data/dvc-repos/smart_watch_dvc/Drop2-Aligned-TA1-2022-01/rutgers_material_seg_v3.kwcoco.json' ]] || python -m watch.tasks.rutgers_material_seg.predict --test_dataset="/home/joncrall/data/dvc-repos/smart_watch_dvc/Drop2-Aligned-TA1-2022-01/data.kwcoco.json" --checkpoint_fpath="/home/joncrall/data/dvc-repos/smart_watch_dvc/models/rutgers/rutgers_peri_materials_v3/experiments_epoch_18_loss_59.014100193977356_valmF1_0.18694573888313187_valChangeF1_0.0_time_2022-02-01-01:53:20.pth" --pred_dataset="/home/joncrall/data/dvc-repos/smart_watch_dvc/Drop2-Aligned-TA1-2022-01/rutgers_material_seg_v3.kwcoco.json" --default_config_key=iarpa --num_workers="2" --batch_size=32 --gpus "0" --compress=DEFLATE --blocksize=128
+
 
 
 # Transfer BAS+SC WV+L1 With Few Features Toothbrush LinConv - 2022-01-27

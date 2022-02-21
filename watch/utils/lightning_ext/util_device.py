@@ -1,5 +1,5 @@
 
-def coerce_gpus(gpus, auto_select_gpus=False):
+def coerce_gpus(gpus, auto_select_gpus=False, mode='netharn'):
     """
     Args:
         gpus (List[int] | str, int):
@@ -7,15 +7,23 @@ def coerce_gpus(gpus, auto_select_gpus=False):
     References:
         https://pytorch-lightning.readthedocs.io/en/stable/advanced/multi_gpu.html
     """
-    from pytorch_lightning.utilities import device_parser
-    from pytorch_lightning.tuner import auto_gpu_select
-    if auto_select_gpus and isinstance(gpus, int):
-        gpus = auto_gpu_select.pick_multiple_gpus(gpus)
-    gpu_ids = device_parser.parse_gpu_ids(gpus)
+    if mode == 'lightning':
+        from pytorch_lightning.utilities import device_parser
+        from pytorch_lightning.tuner import auto_gpu_select
+        if auto_select_gpus and isinstance(gpus, int):
+            gpus = auto_gpu_select.pick_multiple_gpus(gpus)
+        gpu_ids = device_parser.parse_gpu_ids(gpus)
+    elif mode == 'netharn':
+        import netharn as nh
+        xpu = nh.XPU.coerce(gpus)
+        if xpu.is_gpu():
+            gpu_ids = [d.index for d in xpu.devices]
+        else:
+            gpu_ids = ['cpu']
     return gpu_ids
 
 
-def coerce_devices(gpus, auto_select_gpus=False):
+def coerce_devices(gpus, auto_select_gpus=False, mode='netharn'):
     """
     Coerce a command line argument or GPUs into a valid set of torch devices
 
@@ -62,7 +70,7 @@ def coerce_devices(gpus, auto_select_gpus=False):
                 gpus = int(parts[1])
 
     if needs_gpu_coerce:
-        gpu_ids = coerce_gpus(gpus, auto_select_gpus=auto_select_gpus)
+        gpu_ids = coerce_gpus(gpus, auto_select_gpus=auto_select_gpus, mode=mode)
 
     if gpu_ids is None:
         devices = [torch.device('cpu')]
