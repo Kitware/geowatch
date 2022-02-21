@@ -12,7 +12,7 @@ from osgeo_utils.gdal_pansharpen import gdal_pansharpen
 
 import watch
 from watch.utils.util_stac import parallel_map_items, maps, associate_msi_pan
-from watch.utils.util_gdal import gdalwarp_performance_opts
+from watch.utils.util_gdal import gdal_single_warp
 
 
 def main():
@@ -259,10 +259,8 @@ def orthorectify(in_fpath, out_fpath, geometry: shapely.geometry.Polygon,
     '''
     if as_vrt:
         out_fpath = ub.Path(out_fpath).with_suffix('.vrt')
-        cmd_str_out = '-of VRT'
     else:
         out_fpath = ub.Path(out_fpath).with_suffix('.tif')
-        cmd_str_out = '-of COG -co BLOCKSIZE=256 -co COMPRESS=DEFLATE'
 
     lon, lat = np.concatenate(geometry.centroid.xy)
 
@@ -288,26 +286,15 @@ def orthorectify(in_fpath, out_fpath, geometry: shapely.geometry.Polygon,
     else:
         epsg = 4326
 
-    # https://smartgitlab.com/TE/annotations/-/wikis/WorldView-Annotations#notes-on-the-egm96-geoidgrid-file
-    if 1:
-        from watch.rc import geoidgrid_path
-        s_srs = ('-s_srs "+proj=longlat +datum=WGS84 +no_defs '
-                 f'+geoidgrids={geoidgrid_path()}"')
-    else:
-        s_srs = ''
-
-    cmd_str = ub.paragraph(f'''
-        gdalwarp
-        --debug off
-        {cmd_str_out}
-        -t_srs EPSG:{epsg} -et 0
-        -rpc -to RPC_DEM={dem_fpath} {s_srs}
-        -overwrite
-        -srcnodata 0 -dstnodata 0
-        {gdalwarp_performance_opts}
-        {in_fpath} {out_fpath}
-        ''')
-    cmd = ub.cmd(cmd_str, check=True, verbose=0)  # noqa
+    gdal_single_warp(in_fpath,
+                     out_fpath,
+                     local_epsg=epsg,
+                     nodata=0,
+                     rpcs=True,
+                     use_perf_opts=True,
+                     as_vrt=as_vrt,
+                     use_te_geoidgrid=True,
+                     dem_fpath=dem_fpath)
     return out_fpath
 
 
