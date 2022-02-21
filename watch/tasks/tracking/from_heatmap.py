@@ -49,7 +49,8 @@ def mean_normalized(heatmaps, norm_ord=1, morph_kernel=1, thresh=None):
     Normalize average_heatmap by applying a scaling based on max(heatmaps) and
     max(average_heatmap)
     '''
-    average = _norm(heatmaps, norm_ord)
+    # average = _norm(heatmaps, norm_ord)
+    average = np.average(heatmaps, axis=0)
 
     scale_factor = np.max(heatmaps) / (np.max(average) + 1e-9)
     print('max heatmaps', np.max(heatmaps))
@@ -60,7 +61,7 @@ def mean_normalized(heatmaps, norm_ord=1, morph_kernel=1, thresh=None):
     print('scale_factor', scale_factor)
     print('After scaling, max:', np.max(average))
 
-    average = util_kwimage.morphology(average, 'dilate', morph_kernel)
+    # average = util_kwimage.morphology(average, 'dilate', morph_kernel)
 
     return average
 
@@ -509,12 +510,12 @@ class TimeAggregatedBAS(NewTrackFunction):
     Wrapper for BAS that looks for change heatmaps.
     '''
     thresh: float = 0.2
-    morph_kernel: int = 3
+    morph_kernel: int = 1
     time_filtering: bool = True
     response_filtering: bool = False
     key: str = 'salient'
     norm_ord: Optional[Union[int, str]] = 1
-    agg_fn: str = 'probs'
+    agg_fn: str = 'mean_normalized'
     thresh_hysteresis: Optional[float] = None
 
     def create_tracks(self, coco_dset):
