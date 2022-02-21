@@ -45,7 +45,8 @@ class WVRgbDataset(_CocoTorchDataset):
         #     img = self.dset.load_image(gid, WV_CHANNELS)
         # img = img[:, :, [4, 2, 1]]
 
-        img = 255 * normalizeRGB(np.asarray(img), (3, 97))
+        img = normalizeRGB(np.asarray(img), (3, 97))
+        img *= 255
         img = img.astype(np.uint8)
 
         # TODO original images are too big to fit in 12GB CUDA memory.

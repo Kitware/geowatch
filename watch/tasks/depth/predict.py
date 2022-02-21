@@ -128,6 +128,9 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False, data
                     image, partial(run_inference, model=model),
                     chip_size=(S, S, 3),
                 )
+                # Dereference items after we are done with them
+                batch_item = None
+                image = None
 
                 info = _write_output(img_info, pred, pred_filename, output_bundle_dpath)
                 aux = output_dset.imgs[gid].get('auxiliary', [])
