@@ -35,6 +35,8 @@ class TeamFeaturePipelineConfig(scfg.Config):
             does not start it by default.''')),
 
         'data_workers': scfg.Value(2, help='dataloader workers for each proc'),
+        'depth_workers': scfg.Value(2, help='workers for depth only. On systems with < 32GB RAM might need to set to 0'),
+
         'keep_sessions': scfg.Value(False, help='if True does not close tmux sessions'),
 
         'workers': scfg.Value('auto', help='Maximum number of parallel jobs, 0 is no-nonsense serial mode. '),
@@ -152,7 +154,8 @@ def main(cmdline=True, **kwargs):
         # Landcover is fairly fast to run, do it first
         task = {}
         # Only need 1 worker to minimize lag between images, task is GPU bound
-        depth_data_workers = min(1, data_workers)
+        depth_data_workers = config['depth_workers']
+        # depth_data_workers = min(2, data_workers)
         depth_window_size = 736  # takes 18GB
         task['output_fpath'] = outputs['dzyne_depth']
         task['command'] = ub.codeblock(
@@ -351,13 +354,19 @@ if __name__ == '__main__':
 
 
         ###
-        DVC_DPATH=$HOME/flash1/smart_watch_dvc
+        DVC_DPATH=$(python -m watch.cli.find_dvc)
         DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
         KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
 
         python -m watch.cli.prepare_teamfeats \
             --base_fpath=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
-            --gres=0,1 --with_depth=1 --with_materials=1 --keep_sessions=True --run=0 --do_splits=True --cache=0
+            --gres=0,1 \
+            --with_depth=1 \
+            --with_landcover=1 \
+            --with_invariants=1 \
+            --with_materials=1 \
+            --depth_workers=0 \
+            --do_splits=1  --run=0 --cache=1
 
     """
     main(cmdline=True)
