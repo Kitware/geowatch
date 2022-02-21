@@ -20,6 +20,28 @@ prep_teamfeat_drop2(){
 }
 
 
+repackage_checkpoints_and_evaluate(){
+    __doc__='
+    Prepare existing checkpoints for DVC storage and evaluation
+    '
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+    python -m watch.tasks.fusion.repackage gather_checkpoints \
+        --dvc_dpath="$DVC_DPATH" \
+        --storage_dpath="$DVC_DPATH/models/fusion/$DATASET_CODE" \
+        --train_dpath="$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE" \
+        --mode=list
+
+
+    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="0," \
+            --model_globstr="$DVC_DPATH/models/fusion/$DATASET_CODE/*/*.pt" \
+            --test_dataset="$VALI_FPATH" \
+            --run=0 --skip_existing=True
+    
+}
+
+
 aggregate_multiple_evaluations(){
     __doc__="
     This script will aggregate results over all packaged checkpoints with
@@ -37,6 +59,7 @@ aggregate_multiple_evaluations(){
     MODEL_EPOCH_PAT="*"
     PRED_DSET_PAT="*"
     MEASURE_GLOBSTR=$DVC_DPATH/models/fusion/SC-20201117/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/eval/curves/measures2.json
+
     python -m watch.tasks.fusion.gather_results \
         --measure_globstr="$MEASURE_GLOBSTR" \
         --out_dpath="$DVC_DPATH/agg_results/baseline" \

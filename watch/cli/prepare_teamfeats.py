@@ -373,7 +373,6 @@ if __name__ == '__main__':
         DVC_DPATH=$(python -m watch.cli.find_dvc)
         DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
         KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
-
         python -m watch.cli.prepare_teamfeats \
             --base_fpath=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
             --gres=0,1 \
@@ -381,8 +380,8 @@ if __name__ == '__main__':
             --with_landcover=1 \
             --with_invariants=1 \
             --with_materials=1 \
-            --depth_workers=0 \
-            --do_splits=1  --run=0 --cache=1
+            --depth_workers=auto \
+            --do_splits=1  --cache=1 --run=0
 
     """
     main(cmdline=True)

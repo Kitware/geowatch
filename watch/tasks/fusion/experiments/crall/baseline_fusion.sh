@@ -122,6 +122,16 @@ gather_checkpoint_notes(){
     mkdir -p "$EXPT_SAVE_DPATH"
 
     cp "$DEFAULT_ROOT_DIR"/lightning_logs/version_*/checkpoints/*.pt "$EXPT_SAVE_DPATH"
+
+
+    ### OR
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    python -m watch.tasks.fusion.repackage gather_checkpoints \
+        --dvc_dpath="$DVC_DPATH" \
+        --storage_dpath="$DVC_DPATH/models/fusion/baseline" \
+        --train_dpath="$DVC_DPATH/training/$HOSTNAME/$USER/baseline" \
+        --mode=copy
+    
 }
 
 
