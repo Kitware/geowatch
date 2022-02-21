@@ -155,6 +155,22 @@ def main(cmdline=True, **kwargs):
         task = {}
         # Only need 1 worker to minimize lag between images, task is GPU bound
         depth_data_workers = config['depth_workers']
+        if depth_data_workers == 'auto':
+            import psutil
+            import pint
+            reg = pint.UnitRegistry()
+            vmem_info = psutil.virtual_memory()
+            total_gb = (vmem_info.total * reg.byte).to(reg.gigabyte).m
+            avail_gb = (vmem_info.available * reg.byte).to(reg.gigabyte).m
+            if avail_gb < 32:
+                depth_data_workers = 0
+            elif avail_gb < 64:
+                depth_data_workers = 1
+            else:
+                depth_data_workers = 2
+            print('total_gb = {!r}'.format(total_gb))
+            print('avail_gb = {!r}'.format(avail_gb))
+
         # depth_data_workers = min(2, data_workers)
         depth_window_size = 736  # takes 18GB
         task['output_fpath'] = outputs['dzyne_depth']

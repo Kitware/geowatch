@@ -1,16 +1,19 @@
+#!/bin/bash
 
 prep_teamfeat_drop2(){
     # Team Features on Drop2
     DVC_DPATH=$(python -m watch.cli.find_dvc)
     WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+    DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
     python -m watch.cli.prepare_teamfeats \
-        --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json \
+        --base_fpath="$DVC_DPATH/$DATASET_CODE/data.kwcoco.json" \
         --gres=0,1 \
         --with_landcover=1 \
         --with_depth=1 \
         --with_materials=1 \
         --with_invariants=1 \
         --do_splits=1 \
+        --depth_workers='auto' \
         --run=0 --cache=1
     #python -m watch.cli.prepare_splits --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L.kwcoco.json --run=False
 
