@@ -1,8 +1,6 @@
 import kwimage
 import os
 import ubelt as ub
-
-
 '''
 References:
     https://gdal.org/programs/gdalwarp.html#cmdoption-gdalwarp-multi
@@ -58,19 +56,21 @@ def gdal_multi_warp(in_fpaths, out_fpath, *args, nodata=None, **kwargs):
         tmpfile = tempfile.NamedTemporaryFile(suffix='.tif')
         tempfiles.append(tmpfile)
         tmp_out = tmpfile.name
-        gdal_single_warp(in_fpath, tmp_out, *args, **kwargs)
+        gdal_single_warp(in_fpath, tmp_out, *args, nodata=nodata, **kwargs)
         warped_gpaths.append(tmp_out)
 
     if nodata is not None:
         from watch.utils import util_raster
         valid_polygons = []
         for tmp_out in warped_gpaths:
-            sh_poly = util_raster.mask(tmp_out, tolerance=10,
+            sh_poly = util_raster.mask(tmp_out,
+                                       tolerance=10,
                                        default_nodata=nodata)
             valid_polygons.append(sh_poly)
         valid_areas = [p.area for p in valid_polygons]
         # Determine order by valid data
-        warped_gpaths = list(ub.sorted_vals(ub.dzip(warped_gpaths, valid_areas)).keys())
+        warped_gpaths = list(
+            ub.sorted_vals(ub.dzip(warped_gpaths, valid_areas)).keys())
         warped_gpaths = warped_gpaths[::-1]
     else:
         # Last image is copied over earlier ones, but we expect first image to
@@ -113,8 +113,18 @@ def gdal_multi_warp(in_fpaths, out_fpath, *args, nodata=None, **kwargs):
         kwplot.imshow(kwimage.stack_images(datas2, axis=1), fnum=2)
 
 
-def gdal_single_warp(in_fpath, out_fpath, space_box=None, local_epsg=4326, nodata=None, rpcs=None,
-                     blocksize=256, compress='DEFLATE', use_perf_opts=False, as_vrt=False, use_te_geoidgrid=False, dem_fpath=None):
+def gdal_single_warp(in_fpath,
+                     out_fpath,
+                     space_box=None,
+                     local_epsg=4326,
+                     nodata=None,
+                     rpcs=None,
+                     blocksize=256,
+                     compress='DEFLATE',
+                     use_perf_opts=False,
+                     as_vrt=False,
+                     use_te_geoidgrid=False,
+                     dem_fpath=None):
     r"""
     TODO:
         - [ ] This should be a kwgeo function?
@@ -194,8 +204,7 @@ def gdal_single_warp(in_fpath, out_fpath, space_box=None, local_epsg=4326, nodat
     }
 
     if as_vrt:
-        template_parts.append(
-            '''
+        template_parts.append('''
             -of VRT'
             ''')
     else:
@@ -203,8 +212,7 @@ def gdal_single_warp(in_fpath, out_fpath, space_box=None, local_epsg=4326, nodat
             compress = 'NONE'
 
         # Use the new COG output driver
-        template_parts.append(
-            '''
+        template_parts.append('''
             -of COG
             -co OVERVIEWS=AUTO
             -co BLOCKSIZE={blocksize}
@@ -223,23 +231,22 @@ def gdal_single_warp(in_fpath, out_fpath, space_box=None, local_epsg=4326, nodat
         # te_srs = spatial reference of query points
         crop_coordinate_srs = 'epsg:4326'
 
-        template_parts.append(
-            '''
+        template_parts.append('''
             -te {xmin} {ymin} {xmax} {ymax}
             -te_srs {crop_coordinate_srs}
             ''')
-        template_kw.update(**{
-            'crop_coordinate_srs': crop_coordinate_srs,
-            'ymin': latmin,
-            'xmin': lonmin,
-            'ymax': latmax,
-            'xmax': lonmax,
-        })
+        template_kw.update(
+            **{
+                'crop_coordinate_srs': crop_coordinate_srs,
+                'ymin': latmin,
+                'xmin': lonmin,
+                'ymax': latmax,
+                'xmax': lonmax,
+            })
 
     if nodata is not None:
         # TODO: Use cloudmask?
-        template_parts.append(
-            '''
+        template_parts.append('''
             -srcnodata {NODATA_VALUE} -dstnodata {NODATA_VALUE}
             ''')
         template_kw['NODATA_VALUE'] = nodata
@@ -247,8 +254,8 @@ def gdal_single_warp(in_fpath, out_fpath, space_box=None, local_epsg=4326, nodat
     # HACK TO FIND an appropriate DEM file
     if rpcs is not None:
         if dem_fpath is not None:
-            template_parts.append(ub.paragraph(
-                '''
+            template_parts.append(
+                ub.paragraph('''
                 -rpc -et 0
                 -to RPC_DEM={dem_fpath}
                 '''))
@@ -258,8 +265,8 @@ def gdal_single_warp(in_fpath, out_fpath, space_box=None, local_epsg=4326, nodat
             if hasattr(dems, 'find_reference_fpath'):
                 # TODO: get a better DEM path for this image if possible
                 dem_fpath, dem_info = dems.find_reference_fpath(latmin, lonmin)
-                template_parts.append(ub.paragraph(
-                    '''
+                template_parts.append(
+                    ub.paragraph('''
                     -rpc -et 0
                     -to RPC_DEM={dem_fpath}
                     '''))
@@ -272,8 +279,7 @@ def gdal_single_warp(in_fpath, out_fpath, space_box=None, local_epsg=4326, nodat
         # assumes source CRS is WGS84
         # https://smartgitlab.com/TE/annotations/-/wikis/WorldView-Annotations#notes-on-the-egm96-geoidgrid-file
         from watch.rc import geoidgrid_path
-        template_parts.append(
-            '''
+        template_parts.append('''
             -s_srs "+proj=longlat +datum=WGS84 +no_defs +geoidgrids={geoidgrid_path}"
             ''')
         template_kw['geoidgrid_path'] = geoidgrid_path()
@@ -282,8 +288,8 @@ def gdal_single_warp(in_fpath, out_fpath, space_box=None, local_epsg=4326, nodat
         template_parts.append(gdalwarp_performance_opts)
     else:
         # use existing options
-        template_parts.append(ub.paragraph(
-            '''
+        template_parts.append(
+            ub.paragraph('''
             -multi
             --config GDAL_CACHEMAX 500
             -wm 500
