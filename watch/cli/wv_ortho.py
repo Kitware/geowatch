@@ -366,7 +366,7 @@ def pansharpen(stac_item_pan, stac_item_msi, outdir, as_rgb):
         },
     }
 
-    eo_bands = deepcopy(stac_item_msi.assets['data'].properties['eo:bands'])
+    eo_bands = deepcopy(stac_item_msi.assets['data'].extra_fields['eo:bands'])
 
     if as_rgb:
         try:
@@ -413,10 +413,10 @@ def pansharpen(stac_item_pan, stac_item_msi, outdir, as_rgb):
 
     item.assets['data_pansharpened'] = item.assets['data'].clone()
     item.assets['data_pansharpened'].href = out_fpath
-    item.assets['data_pansharpened'].properties['eo:bands'] = eo_bands
-    item.assets['data_pansharpened'].properties[
+    item.assets['data_pansharpened'].extra_fields['eo:bands'] = eo_bands
+    item.assets['data_pansharpened'].extra_fields[
         'pansharpened_to_item'] = stac_item_pan.id
-    item.assets['data_pansharpened'].properties[
+    item.assets['data_pansharpened'].extra_fields[
         'pansharpened_to_gsd'] = stac_item_pan.properties['gsd']
 
     return item
