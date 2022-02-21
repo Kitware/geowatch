@@ -28,7 +28,7 @@ gdalwarp_performance_opts = ub.paragraph('''
 
 
 def gdal_multi_warp(in_fpaths, out_fpath, space_box, local_epsg, nodata=None, rpcs=None,
-                    blocksize=256, compress='NONE', use_perf_opts=False):
+                    blocksize=256, compress='DEFLATE', use_perf_opts=False):
     """
     Ignore:
         # Uses data from the data cube with extra=1
@@ -115,10 +115,8 @@ def gdal_multi_warp(in_fpaths, out_fpath, space_box, local_epsg, nodata=None, rp
 
 
 def gdal_single_warp(in_fpath, out_fpath, space_box, local_epsg, nodata=None, rpcs=None,
-                     blocksize=256, compress='NONE', use_perf_opts=False):
+                     blocksize=256, compress='DEFLATE', use_perf_opts=False):
     r"""
-    use COMPRESS='DEFLATE' for full TA1 tiles
-
     TODO:
         - [ ] This should be a kwgeo function?
 
