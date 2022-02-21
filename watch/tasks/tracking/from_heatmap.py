@@ -19,12 +19,37 @@ try:
 except Exception:
     profile = ub.identity
 
+#
+# --- aggregation functions for heatmaps ---
+#
 
-def mean_normalized(heatmaps):
+
+def _norm(heatmaps, norm_ord):
+    probs = np.linalg.norm(heatmaps, norm_ord, axis=0)
+    if 0 < norm_ord < np.inf:
+        probs /= np.power(len(heatmaps), 1 / norm_ord)
+    return probs
+
+
+# give all these the same signature so they can be swapped out
+
+
+def probs(heatmaps, norm_ord, morph_kernel, thresh):
+    probs = _norm(heatmaps, norm_ord)
+
+    hard_probs = util_kwimage.morphology(probs > thresh, 'dilate',
+                                         morph_kernel)
+    modulated_probs = probs * hard_probs
+
+    return modulated_probs
+
+
+def mean_normalized(heatmaps, norm_ord=1, morph_kernel=1, thresh=None):
     '''
-    Normalize average_heatmap by applying a scaling based on max(heatmaps) and max(average_heatmap)
+    Normalize average_heatmap by applying a scaling based on max(heatmaps) and
+    max(average_heatmap)
     '''
-    average = np.average(heatmaps, axis=0)
+    average = _norm(heatmaps, norm_ord)
 
     scale_factor = np.max(heatmaps) / (np.max(average) + 1e-9)
     print('max heatmaps', np.max(heatmaps))
@@ -35,28 +60,37 @@ def mean_normalized(heatmaps):
     print('scale_factor', scale_factor)
     print('After scaling, max:', np.max(average))
 
+    average = util_kwimage.morphology(average, 'dilate', morph_kernel)
+
     return average
 
 
-def frequency_weighted_mean(heatmaps, mask_thresh, morph_kernel=3):
+def frequency_weighted_mean(heatmaps, thresh, norm_ord=0, morph_kernel=3):
     '''
-    Convert a list of heatmaps to an aggregated score, averaging is computed based on samples for every pixel
+    Convert a list of heatmaps to an aggregated score, averaging is computed
+    based on samples for every pixel
     '''
     heatmaps = np.array(heatmaps)
 
-    masks = 1 * (heatmaps > mask_thresh)
+    masks = 1 * (heatmaps > thresh)
     pixel_wise_samples = masks.sum(0) + 1e-9
     print('pixel_wise_samples', pixel_wise_samples)
 
     # compute sum
-    aggregated_probs = (masks * heatmaps).sum(0)
+    aggregated_probs = _norm(masks * heatmaps, norm_ord)
 
     # divide by number of samples for every pixel
     aggregated_probs /= pixel_wise_samples
 
-    aggregated_probs = util_kwimage.morphology(aggregated_probs, 'dilate', morph_kernel)
+    aggregated_probs = util_kwimage.morphology(aggregated_probs, 'dilate',
+                                               morph_kernel)
 
     return aggregated_probs
+
+
+#
+# --- track/polygon filters ---
+#
 
 
 @dataclass
@@ -70,6 +104,7 @@ class SmallPolygonFilter(PolygonFilter):
 
 
 class TimePolygonFilter(CocoDsetFilter):
+
     def get_poly_time_ind(self, gids_polys: Iterable[Tuple[int, Poly]]):
         """
         Given a potential track, compute index of the first match of the track
@@ -119,7 +154,7 @@ class ResponsePolygonFilter(CocoDsetFilter):
         assert len(dsets) == 1, 'Tracks refer to different CocoDatasets!'
         self.dset = dsets.pop()
 
-        self.gids = {}
+        self.gids = set()
         all_responses = kwarray.RunningStats()
         for track in tracks:  # could disambiguate these for better stats
             for obs in track.observation:
@@ -154,6 +189,11 @@ class ResponsePolygonFilter(CocoDsetFilter):
             if self.response(obs.poly,
                              obs.gid) / self.mean_response > threshold:
                 yield obs
+
+
+#
+# --- main logic ---
+#
 
 
 @profile
@@ -246,14 +286,16 @@ def add_tracks_to_dset(coco_dset,
 
 
 def time_aggregated_polys(coco_dset,
-                          thresh=0.15,
+                          thresh,
                           morph_kernel=3,
                           key='salient',
                           bg_key=None,
                           time_filtering=False,
                           response_filtering=False,
                           use_boundaries=False,
-                          norm_ord=1):
+                          norm_ord=1,
+                          agg_fn='probs',
+                          thresh_hysteresis=None):
     '''
     Track function.
 
@@ -277,6 +319,8 @@ def time_aggregated_polys(coco_dset,
             2: euclidean
             0: sum
             np.inf, 'inf', or None: max
+
+        agg_fn: (3d heatmaps -> 2d heatmaps), calling convention TBD
 
     Example:
         >>> # test interpolation
@@ -321,17 +365,19 @@ def time_aggregated_polys(coco_dset,
     # --- utilities ---
     #
 
-    # turn heatmaps into polygons
-    def probs(heatmaps):
-        probs = np.linalg.norm(np.stack(heatmaps, axis=0), norm_ord, axis=0)
-        if 0 < norm_ord < np.inf:
-            probs /= np.power(len(heatmaps), 1 / norm_ord)
-
-        hard_probs = util_kwimage.morphology(probs > thresh, 'dilate',
-                                             morph_kernel)
-        modulated_probs = probs * hard_probs
-
-        return modulated_probs
+    def _heatmaps_to_polys(heatmaps, bounds):
+        '''
+        Use parameters: agg_fn, thresh, morph_kernel, thresh_hysteresis, norm_ord
+        '''
+        _agg_fn = eval(agg_fn)
+        return list(
+            mask_to_polygons(_agg_fn(heatmaps,
+                                     thresh=thresh,
+                                     morph_kernel=morph_kernel,
+                                     norm_ord=norm_ord),
+                             thresh,
+                             thresh_hysteresis=thresh_hysteresis,
+                             bounds=bounds))
 
     def tracks_polys_bounds() -> Iterable[Tuple[Track, Poly]]:
         import shapely.ops
@@ -366,9 +412,9 @@ def time_aggregated_polys(coco_dset,
                                              _heatmaps,
                                              axis=0)
 
-            track_polys = mask_to_polygons(probs(_heatmaps_in_track),
-                                           thresh,
-                                           bounds=track_bounds)
+            track_polys = _heatmaps_to_polys(_heatmaps_in_track,
+                                             bounds=track_bounds)
+
             poly = shapely.ops.unary_union(
                 [p.to_shapely() for p in track_polys])
             if poly.is_valid and not poly.is_empty:
@@ -398,9 +444,7 @@ def time_aggregated_polys(coco_dset,
                              gids, {'fg': key},
                              skipped='interpolate')['fg']
 
-        # TURN ON NEW AGGREGATION
-        # polys = list(mask_to_polygons(probs(_heatmaps), thresh))
-        polys = list(mask_to_polygons(mean_normalized(_heatmaps), thresh, use_hysteresis=True, thresh_hyst=0.3))
+        polys = _heatmaps_to_polys(_heatmaps, bounds=None)
 
         # turn each polygon into a list of polygons (map them across gids)
         tracks = [
@@ -451,6 +495,11 @@ def time_aggregated_polys(coco_dset,
     return tracks
 
 
+#
+# --- wrappers ---
+#
+
+
 @dataclass
 class TimeAggregatedBAS(NewTrackFunction):
     '''
@@ -462,6 +511,8 @@ class TimeAggregatedBAS(NewTrackFunction):
     response_filtering: bool = False
     key: str = 'salient'
     norm_ord: Optional[Union[int, str]] = 1
+    agg_fn: str = 'probs'
+    thresh_hysteresis: Optional[float] = None
 
     def create_tracks(self, coco_dset):
         tracks = time_aggregated_polys(
@@ -471,7 +522,9 @@ class TimeAggregatedBAS(NewTrackFunction):
             key=self.key,
             time_filtering=self.time_filtering,
             response_filtering=self.response_filtering,
-            norm_ord=self.norm_ord)
+            norm_ord=self.norm_ord,
+            agg_fn=self.agg_fn,
+            thresh_hysteresis=self.thresh_hysteresis)
         return tracks
 
     def add_tracks_to_dset(self, coco_dset, tracks):
@@ -493,6 +546,8 @@ class TimeAggregatedSC(NewTrackFunction):
     bg_key: Tuple[str] = tuple(CNAMES_DCT['negative']['scored'])
     boundaries_as: Literal['bounds', 'polys', 'none'] = 'bounds'
     norm_ord: Optional[Union[int, str]] = 1
+    agg_fn: str = 'probs'
+    thresh_hysteresis: Optional[float] = None
 
     def create_tracks(self, coco_dset):
         '''
@@ -527,7 +582,9 @@ class TimeAggregatedSC(NewTrackFunction):
                 time_filtering=self.time_filtering,
                 response_filtering=self.response_filtering,
                 use_boundaries=(self.boundaries_as != 'none'),
-                norm_ord=self.norm_ord)
+                norm_ord=self.norm_ord,
+                agg_fn=self.agg_fn,
+                thresh_hysteresis=self.thresh_hysteresis)
 
         return tracks
 
