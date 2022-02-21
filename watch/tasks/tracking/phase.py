@@ -386,6 +386,8 @@ def ensure_post(coco_dset,
                          segmentation=seg,
                          bbox=bbox))
                 coco_dset.add_annotation(**post_ann)
+                print(f'ensure_post {track_id=}: duplicating {ann["id"]=} '
+                      f'from {last_gid=} to {next_gid=}')
 
     return coco_dset
 
