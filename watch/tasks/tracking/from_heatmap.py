@@ -327,12 +327,12 @@ def time_aggregated_polys(coco_dset,
         >>> from watch.tasks.tracking.from_heatmap import time_aggregated_polys
         >>> from watch.demo import demo_kwcoco_with_heatmaps
         >>> d = demo_kwcoco_with_heatmaps(num_frames=5, image_size=(480, 640))
-        >>> orig_track = time_aggregated_polys(d)[0].observations
+        >>> orig_track = time_aggregated_polys(d, thresh=0.15)[0].observations
         >>> skip_gids = [1,3]
         >>> for gid in skip_gids:
         >>>      # remove salient channel
         >>>      d.imgs[gid]['auxiliary'].pop()
-        >>> inter_track = time_aggregated_polys(d)[0].observations
+        >>> inter_track = time_aggregated_polys(d, thresh=0.15)[0].observations
         >>> assert inter_track[0].score == 0, inter_track[1].score > 0
     '''
 
