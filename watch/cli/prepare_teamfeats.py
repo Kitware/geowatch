@@ -152,7 +152,7 @@ def main(cmdline=True, **kwargs):
         # Landcover is fairly fast to run, do it first
         task = {}
         # Only need 1 worker to minimize lag between images, task is GPU bound
-        depth_data_workers = min(2, data_workers)
+        depth_data_workers = min(1, data_workers)
         depth_window_size = 736  # takes 18GB
         task['output_fpath'] = outputs['dzyne_depth']
         task['command'] = ub.codeblock(
@@ -201,11 +201,11 @@ def main(cmdline=True, **kwargs):
                 --pretext_package_path "{model_fpaths['uky_pretext']}" \
                 --segmentation_package_path "{model_fpaths['uky_segmentation']}" \
                 --pca_projection_path  "{model_fpaths['uky_pca']}" \
-                --do_pca 0 \
-                --num_dim 8 \
+                --do_pca 1 \
+                --patch_overlap=0.5 \
                 --num_workers="{data_workers}" \
                 --write_workers 2 \
-                --tasks segmentation
+                --tasks all
             ''')
         combo_code_parts.append(codes[key])
         tasks.append(task)
