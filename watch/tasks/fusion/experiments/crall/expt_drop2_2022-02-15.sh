@@ -29,6 +29,9 @@ repackage_checkpoints_and_evaluate(){
     DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
     VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_vali.kwcoco.json
+
+    python -m watch stats "$VALI_FPATH"
+
     python -m watch.tasks.fusion.repackage gather_checkpoints \
         --dvc_dpath="$DVC_DPATH" \
         --storage_dpath="$DVC_DPATH/models/fusion/$DATASET_CODE" \
@@ -40,7 +43,7 @@ repackage_checkpoints_and_evaluate(){
             --gpus="0,1" \
             --model_globstr="$DVC_DPATH/models/fusion/$DATASET_CODE/*/*.pt" \
             --test_dataset="$VALI_FPATH" \
-            --run=1 --skip_existing=True
+            --run=0 --skip_existing=True
     
 }
 
@@ -52,25 +55,18 @@ aggregate_multiple_evaluations(){
     running. It will dump aggregate stats into the 'out_dpath' folder.
     "
 
-    smartwatch stats "$VALI_FPATH"
-
-    #DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-    #DVC_DPATH=$HOME/flash1/smart_watch_dvc
     DVC_DPATH=$(python -m watch.cli.find_dvc)
-
+    DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
     EXPT_NAME_PAT="*"
     MODEL_EPOCH_PAT="*"
     PRED_DSET_PAT="*"
-    MEASURE_GLOBSTR=$DVC_DPATH/models/fusion/SC-20201117/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/eval/curves/measures2.json
+    MEASURE_GLOBSTR=${DVC_DPATH}/models/fusion/${DATASET_CODE}/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/eval/curves/measures2.json
 
     python -m watch.tasks.fusion.gather_results \
         --measure_globstr="$MEASURE_GLOBSTR" \
-        --out_dpath="$DVC_DPATH/agg_results/baseline" \
+        --out_dpath="$DVC_DPATH/agg_results/$MEASURE_GLOBSTR" \
         --dset_group_key="*_vali.kwcoco" --show=True
 }
-
-[[ -f '/home/joncrall/data/dvc-repos/smart_watch_dvc/Drop2-Aligned-TA1-2022-01/rutgers_material_seg_v3.kwcoco.json' ]] || python -m watch.tasks.rutgers_material_seg.predict --test_dataset="/home/joncrall/data/dvc-repos/smart_watch_dvc/Drop2-Aligned-TA1-2022-01/data.kwcoco.json" --checkpoint_fpath="/home/joncrall/data/dvc-repos/smart_watch_dvc/models/rutgers/rutgers_peri_materials_v3/experiments_epoch_18_loss_59.014100193977356_valmF1_0.18694573888313187_valChangeF1_0.0_time_2022-02-01-01:53:20.pth" --pred_dataset="/home/joncrall/data/dvc-repos/smart_watch_dvc/Drop2-Aligned-TA1-2022-01/rutgers_material_seg_v3.kwcoco.json" --default_config_key=iarpa --num_workers="2" --batch_size=32 --gpus "0" --compress=DEFLATE --blocksize=128
-
 
 
 # Transfer BAS+SC WV+L1 With Few Features Toothbrush LinConv - 2022-01-27

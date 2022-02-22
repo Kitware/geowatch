@@ -27,6 +27,7 @@ TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_vali.kwcoco.json
 
 ### TODO: CHANGE INPUT CHANNELS TO NETWORK.
 CHANNELS="blue|green|red|nir|swir16|swir22"
+CHANNELS="myfeat.0:8"
 ### e.g. "blue|green|red|nir|swir16|swir22,myfeat.0:8"
 
 # Set initial state to a noop to train from scratch, or set it to an existing

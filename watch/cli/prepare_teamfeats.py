@@ -381,7 +381,7 @@ if __name__ == '__main__':
             --with_invariants=1 \
             --with_materials=1 \
             --depth_workers=auto \
-            --do_splits=1  --cache=1 --run=0
+            --do_splits=1  --cache=0 --run=0
 
     """
     main(cmdline=True)
