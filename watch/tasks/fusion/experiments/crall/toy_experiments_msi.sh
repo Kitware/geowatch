@@ -50,9 +50,9 @@ demo_visualize_toydata(){
         --animate=True
 
     python -m watch.cli.coco_visualize_videos \
-        --src "$TOY_DATA_DPATH/vidshapes_msi_train/data.kwcoco.json" \
+        --src "$TOY_DATA_DPATH/vidshapes_msi_train100/data.kwcoco.json" \
         --channels="gauss|B11,r|g|b,B1|B8|B11" \
-        --viz_dpath="$TOY_DATA_DPATH/vidshapes_msi_train/_viz" --animate=True
+        --viz_dpath="$TOY_DATA_DPATH/vidshapes_msi_train100/_viz" --animate=True
 }
 
 
