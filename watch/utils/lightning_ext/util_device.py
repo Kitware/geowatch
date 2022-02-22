@@ -23,7 +23,7 @@ def coerce_gpus(gpus, auto_select_gpus=False, mode='netharn'):
     return gpu_ids
 
 
-def coerce_devices(gpus, auto_select_gpus=False, mode='netharn'):
+def coerce_devices(gpus, auto_select_gpus=False, mode='auto'):
     """
     Coerce a command line argument or GPUs into a valid set of torch devices
 
@@ -45,29 +45,40 @@ def coerce_devices(gpus, auto_select_gpus=False, mode='netharn'):
         >>> from watch.utils.lightning_ext import util_device
         >>> #print(util_device.coerce_devices("0"))
         >>> print(util_device.coerce_devices("1"))
+        >>> print(util_device.coerce_devices("0,"))
         >>> print(util_device.coerce_devices(1))
         >>> print(util_device.coerce_devices([0, 1]))
         >>> print(util_device.coerce_devices("0, 1"))
         >>> print(util_device.coerce_devices("auto"))
-        >>> print(util_device.coerce_devices("auto:1"))
-        >>> print(util_device.coerce_devices("auto:2"))
-        >>> #print(util_device.coerce_devices("auto:3"))
+        >>> if torch.cuda.device_count() > 0:
+        >>>     print(util_device.coerce_devices("auto:1"))
+        >>> if torch.cuda.device_count() > 1:
+        >>>     print(util_device.coerce_devices("auto:2"))
+        >>> if torch.cuda.device_count() > 2:
+        >>>     print(util_device.coerce_devices("auto:3"))
     """
     import torch
 
     needs_gpu_coerce = True
+    mode = 'netharn'
 
     if isinstance(gpus, str):
         if gpus == 'cpu':
             gpu_ids = None
             needs_gpu_coerce = False
         elif gpus.startswith('auto'):
+            mode = 'lightning'
             auto_select_gpus = True
             parts = gpus.split(':')
             if len(parts) == 1:
                 gpus = -1
             else:
                 gpus = int(parts[1])
+        else:
+            # hack: netharn XPU should handle trailing commas
+            # Should XPU move here and not live in netharn?
+            # Or does netharn get paired down and moved to its own util?
+            gpus = gpus.strip(',')
 
     if needs_gpu_coerce:
         gpu_ids = coerce_gpus(gpus, auto_select_gpus=auto_select_gpus, mode=mode)

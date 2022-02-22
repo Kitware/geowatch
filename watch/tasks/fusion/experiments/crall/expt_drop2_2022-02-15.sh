@@ -24,20 +24,23 @@ repackage_checkpoints_and_evaluate(){
     __doc__='
     Prepare existing checkpoints for DVC storage and evaluation
     '
+
     DVC_DPATH=$(python -m watch.cli.find_dvc)
     DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_vali.kwcoco.json
     python -m watch.tasks.fusion.repackage gather_checkpoints \
         --dvc_dpath="$DVC_DPATH" \
         --storage_dpath="$DVC_DPATH/models/fusion/$DATASET_CODE" \
         --train_dpath="$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE" \
-        --mode=list
+        --mode=commit
 
 
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="0," \
+            --gpus="0,1" \
             --model_globstr="$DVC_DPATH/models/fusion/$DATASET_CODE/*/*.pt" \
             --test_dataset="$VALI_FPATH" \
-            --run=0 --skip_existing=True
+            --run=1 --skip_existing=True
     
 }
 
