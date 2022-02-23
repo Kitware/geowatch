@@ -244,9 +244,7 @@ def track_to_site(coco_dset,
         # if track_index is missing, assume they're already sorted
         gids, anns = annots.gids, annots.objs
     features = [
-        geojson_feature( _anns,
-                        coco_dset,
-                        with_properties=(not as_summary))
+        geojson_feature(_anns, coco_dset, with_properties=(not as_summary))
         for gid, _anns in ub.group_items(anns, gids).items()
     ]
 
@@ -268,6 +266,10 @@ def track_to_site(coco_dset,
             feat['properties']['current_phase'].split(sep) for feat in features
         ]
 
+        tomorrow = (dateutil.parser.parse(
+            features[-1]['properties']['observation_date']) +
+                    datetime.timedelta(days=1)).isoformat()
+
         def transition_date_from(phase):
             for feat, phases in zip(reversed(features), reversed(all_phases)):
                 if phase in phases:
@@ -277,7 +279,8 @@ def track_to_site(coco_dset,
                                 int(feat['properties']['misc_info']
                                     ['phase_transition_days'][phases.index(
                                         phase)]))).isoformat()
-            raise ValueError('missing phase')
+            print(f'warning: {site_id=} is missing {phase=}')
+            return tomorrow
 
         all_phases_set = set(itertools.chain.from_iterable(all_phases))
 
@@ -295,7 +298,7 @@ def track_to_site(coco_dset,
                 'predicted_phase_transition':
                 'Active Construction',
                 'predicted_phase_transition_date':
-                transition_date_from('Active Construction')
+                transition_date_from('Site Preparation')
             }
         else:
             raise ValueError(f'missing phases: {site_id=} {all_phases_set=}')
