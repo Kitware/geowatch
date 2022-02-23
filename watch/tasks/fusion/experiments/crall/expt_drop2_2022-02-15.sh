@@ -14,7 +14,7 @@ prep_teamfeat_drop2(){
         --with_invariants=1 \
         --do_splits=1 \
         --depth_workers=0 \
-        --cache=1 --run=0 
+        --cache=1 --run=0
     #python -m watch.cli.prepare_splits --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L.kwcoco.json --run=False
 
 }

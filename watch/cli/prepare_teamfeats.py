@@ -68,8 +68,10 @@ def main(cmdline=True, **kwargs):
 
     gres = config['gres']
     gres = smartcast(gres)
-    print('gres = {!r}'.format(gres))
     if gres is None:
+        gres = 'auto'
+    print('gres = {!r}'.format(gres))
+    if gres  == 'auto':
         import netharn as nh
         gres = []
         for gpu_idx, gpu_info in nh.device.gpu_info().items():

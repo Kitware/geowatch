@@ -126,8 +126,12 @@ class LinearBashQueue(PathIdentifiable):
         _mark_status('init')
         if self.environ:
             _mark_status('set_environ')
+            if with_gaurds:
+                script.append('set -x')
             script.extend([
                 f'export {k}="{v}"' for k, v in self.environ.items()])
+            if with_gaurds:
+                script.append('set +x')
 
         if self.cwd:
             script.append(f'cd {self.cwd}')
