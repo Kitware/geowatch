@@ -292,6 +292,11 @@ def band_path(s2_item):
     Get href to S2 band 4 from STAC item
     '''
     def _is_b04(asset):
+        # Ignore "overview" (TCI) asset
+        if('overview' in asset.roles or
+           asset.title == 'True color image'):
+            return False
+
         eo_bands = asset.extra_fields.get('eo:bands', [])
         if any(i.get('name') in {'B4', 'B04'} for i in eo_bands):
             return True
