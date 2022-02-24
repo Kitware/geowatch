@@ -19,7 +19,8 @@ def geopandas_pairwise_overlaps(gdf1, gdf2, predicate='intersects'):
 
     Returns:
         dict:
-            mapping from pandas-indexes in gdf1 to overlapping pandas-indexes in gdf2
+            mapping from integer-indexes in gdf1 to
+            overlapping integer-indexes in gdf2
 
     Example:
         >>> from watch.utils.util_gis import *  # NOQA
@@ -31,6 +32,8 @@ def geopandas_pairwise_overlaps(gdf1, gdf2, predicate='intersects'):
         >>> gdf2 = gpd.read_file(
         >>>     gpd.datasets.get_path('naturalearth_cities')
         >>> )
+        >>> gdf1 = gdf1.set_index('name')
+        >>> gdf2 = gdf2.set_index('name')
         >>> mapping = geopandas_pairwise_overlaps(gdf1, gdf2)
 
     Benchmark:
@@ -62,7 +65,7 @@ def geopandas_pairwise_overlaps(gdf1, gdf2, predicate='intersects'):
     sindex2 = gdf2.sindex
     # For each query polygon, lookup intersecting polygons in the spatial index
     idx1_to_idxs2 = {}
-    for idx1, row1 in gdf1.iterrows():
+    for idx1, (rowid, row1) in enumerate(gdf1.iterrows()):
         idxs2 = sindex2.query(row1.geometry, predicate=predicate)
         # Record result indexes that "match" given the geometric predicate
         idx1_to_idxs2[idx1] = idxs2
