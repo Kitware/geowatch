@@ -140,6 +140,8 @@ def coerce_num_workers(num_workers='auto', minimum=0):
         >>> print(coerce_num_workers('all-2'))
         >>> print(coerce_num_workers('avail-2'))
         >>> print(coerce_num_workers('all/2'))
+        >>> print(coerce_num_workers('max(all,2)'))
+        >>> print(coerce_num_workers('[max(all,2)][0]'))
         >>> import pytest
         >>> with pytest.raises(Exception):
         >>>     print(coerce_num_workers('all + 1' + (' + 1' * 100)))
@@ -179,20 +181,82 @@ def coerce_num_workers(num_workers='auto', minimum=0):
             num_workers = None
         else:
             expr = num_workers.replace('all', 'all_')
-            if len(expr) > 32:
-                raise Exception(
-                    'num-workers-hueristic should be small text. '
-                    'We want to disallow attempts at crashing python '
-                    'by feeding nasty input into eval'
-                )
             # note: eval is not safe, using numexpr instead
             # limit chars even futher if eval is used
-            # evaluated = eval(expr, local_dict, local_dict)
-            import numexpr
-            num_workers = numexpr.evaluate(expr, local_dict=local_dict,
-                                           global_dict=local_dict)
+            if 1:
+                # Mitigate attack surface by restricting builtin usage
+                max_chars = 32
+                builtins_passlist = ['min', 'max', 'round', 'sum']
+                num_workers = restricted_eval(expr, max_chars, local_dict,
+                                              builtins_passlist)
+            else:
+                import numexpr
+                num_workers = numexpr.evaluate(expr, local_dict=local_dict,
+                                               global_dict=local_dict)
 
     if num_workers is not None:
         num_workers = max(int(num_workers), minimum)
 
     return num_workers
+
+
+class RestrictedSyntaxError(Exception):
+    """
+    An exception raised by restricted_eval if a disallowed expression is given
+    """
+    pass
+
+
+def restricted_eval(expr, max_chars=32, local_dict=None, builtins_passlist=None):
+    """
+    A restricted form of Python's eval that is meant to be slightly safer
+
+    Args:
+        max_char (int): expression cannot be more than this many characters
+        builtins_passlist : if specified, only allow use of certain builtins
+
+    References:
+        https://realpython.com/python-eval-function/#minimizing-the-security-issues-of-eval
+
+    Example:
+        >>> from watch.utils.lightning_ext.util_globals import *  # NOQA
+        >>> builtins_passlist = ['min', 'max', 'round', 'sum']
+        >>> local_dict = {}
+        >>> max_chars = 32
+        >>> expr = 'max(3 + 2, 9)'
+        >>> result = restricted_eval(expr, max_chars, local_dict, builtins_passlist)
+        >>> expr = '3 + 2'
+        >>> result = restricted_eval(expr, max_chars, local_dict, builtins_passlist)
+        >>> expr = '3 + 2'
+        >>> result = restricted_eval(expr, max_chars)
+        >>> import pytest
+        >>> with pytest.raises(RestrictedSyntaxError):
+        >>>     expr = 'max(a + 2, 3)'
+        >>>     result = restricted_eval(expr, max_chars, dict(a=3))
+    """
+    import builtins
+    import ubelt as ub
+    if len(expr) > max_chars:
+        raise RestrictedSyntaxError(
+            'num-workers-hueristic should be small text. '
+            'We want to disallow attempts at crashing python '
+            'by feeding nasty input into eval. But this is still '
+            'dangerous'
+        )
+    if local_dict is None:
+        local_dict = {}
+
+    if builtins_passlist is None:
+        builtins_passlist = []
+
+    allowed_builtins = ub.dict_isect(builtins.__dict__, builtins_passlist)
+
+    local_dict['__builtins__'] = allowed_builtins
+    allowed_names = list(allowed_builtins.keys()) + list(local_dict.keys())
+    code = compile(expr, "<string>", "eval")
+    # Step 3
+    for name in code.co_names:
+        if name not in allowed_names:
+            raise RestrictedSyntaxError(f"Use of {name} not allowed")
+    result = eval(code, local_dict, local_dict)
+    return result
