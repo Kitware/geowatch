@@ -15,6 +15,17 @@ Examples:
 DATASET_SUFFIX=TA1_FULL_SEQ_KR_S001_CLOUD_LT_10
 S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/eval2/master_collation_working/KR_S001.unique.fixed_ls_ids.cloudcover_lt_10.output
 
+
+
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/ALL_ANNOTATED_REGIONS_TA-1_PROCESSED_20220222.unique.input
+DATASET_SUFFIX=Drop2-TA1-2022-02-24
+python -m watch.cli.prepare_ta2_dataset \
+    --dataset_suffix=$DATASET_SUFFIX \
+    --s3_fpath=$S3_FPATH \
+    --dvc_dpath=$DVC_DPATH \
+    --collated=True \
+    --serial=True --run=0
 """
 
 
@@ -27,6 +38,9 @@ class PrepareTA2Config(scfg.Config):
         'dataset_suffix': scfg.Value(None, help=''),
         's3_fpath': scfg.Value(None, help=''),
         'dvc_dpath': scfg.Value('auto', help=''),
+        'run': scfg.Value('0', help=''),
+        'collated': scfg.Value(True, help='set to false if the input data is not collated'),
+        'serial': scfg.Value(False, help='if True use serial mode'),
     }
 
 
@@ -46,7 +60,7 @@ def main(cmdline=False, **kwargs):
         }
 
     """
-    from watch.utils.tmux_queue import SerialQueue
+    from watch.utils import tmux_queue
     # import shlex
     config = PrepareTA2Config(cmdline=cmdline, data=kwargs)
 
@@ -54,6 +68,7 @@ def main(cmdline=False, **kwargs):
     if dvc_dpath == 'auto':
         import watch
         dvc_dpath = watch.find_smart_dvc_dpath()
+    dvc_dpath = ub.Path(dvc_dpath)
 
     s3_fpath = config['s3_fpath']
 
@@ -87,7 +102,8 @@ def main(cmdline=False, **kwargs):
     aligned_kwcoco_bundle = aligned_kwcoco_bundle.shrinkuser(home='$HOME')
     aligned_kwcoco_fpath = aligned_kwcoco_fpath.shrinkuser(home='$HOME')
 
-    queue = SerialQueue()
+    # queue = tmux_queue.SerialQueue()
+    queue = tmux_queue.TMUXMultiQueue(name='teamfeat', size=1, gres=None)
 
     aws_profile = 'iarpa'
 
@@ -107,8 +123,10 @@ def main(cmdline=False, **kwargs):
             "{uncropped_query_fpath}"
         '''))
 
-    collated_str = '--from-collated'
-    collated_str = ''
+    if config['collated']:
+        collated_str = '--from-collated'
+    else:
+        collated_str = ''
 
     queue.submit(ub.codeblock(
         rf'''
@@ -128,7 +146,7 @@ def main(cmdline=False, **kwargs):
             --src "{uncropped_kwcoco_fpath}" \
             --dst "{aligned_kwcoco_fpath}" \
             --regions "{region_dpath / '*.geojson'}" \
-            --workers=avail \
+            --workers="max(avail,4)" \
             --context_factor=1 \
             --geo_preprop=auto \
             --visualize False \
@@ -162,6 +180,18 @@ def main(cmdline=False, **kwargs):
 
     queue.rprint()
 
+    if config['run']:
+        agg_state = None
+        if config['serial']:
+            queue.serial_run()
+        else:
+            queue.run()
+        if config['follow']:
+            agg_state = queue.monitor()
+        if not config['keep_sessions']:
+            if agg_state is not None and not agg_state['errored']:
+                queue.kill()
+
 
 # dvc_dpath=$home/data/dvc-repos/smart_watch_dvc
 # #dvc_dpath=$(python -m watch.cli.find_dvc)
@@ -184,3 +214,10 @@ def main(cmdline=False, **kwargs):
 
 # export AWS_DEFAULT_PROFILE=iarpa
 #     pass
+
+if __name__ == '__main__':
+    """
+    CommandLine:
+        python ~/code/watch/watch/cli/prepare_ta2_dataset.py
+    """
+    main(cmdline=True)
