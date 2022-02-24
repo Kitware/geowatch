@@ -87,10 +87,11 @@ class gridded_dataset(torch.utils.data.Dataset):
             additional_targets['seg{}'.format(i + 1)] = 'mask'
 
         self.transforms = A.Compose([A.OneOf([
-                        A.MotionBlur(p=0.75),
-                        A.Blur(blur_limit=3, p=0.75),
-                    ], p=0.2),
-                    A.RandomBrightnessContrast(brightness_by_max=False, always_apply=True)
+                        A.MotionBlur(p=1),
+                        A.Blur(blur_limit=3, p=1),
+                    ], p=0.5),
+                    A.GaussNoise(var_limit=.005),
+                    A.RandomBrightnessContrast(brightness_limit=.3, contrast_limit=.3, brightness_by_max=False, always_apply=True)
                 ],
                 additional_targets=additional_targets)
 
@@ -139,6 +140,8 @@ class gridded_dataset(torch.utils.data.Dataset):
 
         images = sample['im']
         offset_image = offset_sample['im'][0]
+        augmented_image = self.transforms(image=images[0] / images[0].max())['image'] * images[0].max()
+        
         image_dict = {}
         for k, image in enumerate(images):
             if image.std() != 0.:
@@ -150,8 +153,11 @@ class gridded_dataset(torch.utils.data.Dataset):
             offset_image = (offset_image - offset_image.mean()) / offset_image.std()
         else:
             offset_image = np.zeros_like(offset_image)
+        if augmented_image.std() != 0:
+            augmented_image = (augmented_image - augmented_image.mean()) / augmented_image.std()
+        else:
+            augmented_image = np.zeros_like(augmented_image)
 
-        augmented_image = self.transforms(image=image_dict[1])['image']
         for key in image_dict:
             image_dict[key] = torch.tensor(image_dict[key]).permute(2, 0, 1)
         offset_image = torch.tensor(offset_image).permute(2, 0, 1)
