@@ -101,9 +101,9 @@ class CocoAlignGeotiffConfig(scfg.Config):
 
         'dst': scfg.Value(None, help='bundle directory or kwcoco json file for the output'),
 
-        'workers': scfg.Value(0, help='number of parallel procs'),
-        'max_workers': scfg.Value(None, help='DEPRECATED USE workers'),
-        'aux_workers': scfg.Value(0, help='additional inner threads for aux imgs'),
+        'workers': scfg.Value(0, type=str, help='number of parallel procs'),
+        'max_workers': scfg.Value(None, type=str, help='DEPRECATED USE workers'),
+        'aux_workers': scfg.Value(0, type=str, help='additional inner threads for aux imgs'),
 
         'context_factor': scfg.Value(1.0, help=ub.paragraph(
             '''

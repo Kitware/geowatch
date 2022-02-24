@@ -135,7 +135,7 @@ def main(cmdline=False, **kwargs):
             --outpath="{uncropped_kwcoco_fpath}" \
             --populate-watch-fields \
             {collated_str} \
-            --jobs avail
+            --jobs "min(avail,8)"
         '''))
 
     # region_model_str = ' '.join([shlex.quote(str(p)) for p in region_models])
@@ -146,7 +146,7 @@ def main(cmdline=False, **kwargs):
             --src "{uncropped_kwcoco_fpath}" \
             --dst "{aligned_kwcoco_fpath}" \
             --regions "{region_dpath / '*.geojson'}" \
-            --workers="max(avail,4)" \
+            --workers="min(avail,4)" \
             --context_factor=1 \
             --geo_preprop=auto \
             --visualize False \

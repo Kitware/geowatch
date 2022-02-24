@@ -140,7 +140,7 @@ def coerce_num_workers(num_workers='auto', minimum=0):
         >>> print(coerce_num_workers('all-2'))
         >>> print(coerce_num_workers('avail-2'))
         >>> print(coerce_num_workers('all/2'))
-        >>> print(coerce_num_workers('max(all,2)'))
+        >>> print(coerce_num_workers('min(all,2)'))
         >>> print(coerce_num_workers('[max(all,2)][0]'))
         >>> import pytest
         >>> with pytest.raises(Exception):
@@ -212,11 +212,19 @@ def restricted_eval(expr, max_chars=32, local_dict=None, builtins_passlist=None)
     A restricted form of Python's eval that is meant to be slightly safer
 
     Args:
+        expr (str): the expression to evaluate
         max_char (int): expression cannot be more than this many characters
+        local_dict (Dict[str, Any]): a list of variables allowed to be used
         builtins_passlist : if specified, only allow use of certain builtins
 
     References:
         https://realpython.com/python-eval-function/#minimizing-the-security-issues-of-eval
+
+    Notes:
+        This function may not be safe, but it has as many mitigation measures
+        that I know about. This function should be audited and possibly made
+        even more restricted. The idea is that this should just be used to
+        evaluate numeric expressions.
 
     Example:
         >>> from watch.utils.lightning_ext.util_globals import *  # NOQA
@@ -240,8 +248,8 @@ def restricted_eval(expr, max_chars=32, local_dict=None, builtins_passlist=None)
         raise RestrictedSyntaxError(
             'num-workers-hueristic should be small text. '
             'We want to disallow attempts at crashing python '
-            'by feeding nasty input into eval. But this is still '
-            'dangerous'
+            'by feeding nasty input into eval. But this may still '
+            'be dangerous.'
         )
     if local_dict is None:
         local_dict = {}
