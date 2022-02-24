@@ -146,7 +146,7 @@ def main(cmdline=False, **kwargs):
             --src "{uncropped_kwcoco_fpath}" \
             --dst "{aligned_kwcoco_fpath}" \
             --regions "{region_dpath / '*.geojson'}" \
-            --workers="min(avail,4)" \
+            --workers="min(avail,max(all/2,8))" \
             --context_factor=1 \
             --geo_preprop=auto \
             --visualize False \

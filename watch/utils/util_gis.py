@@ -18,7 +18,8 @@ def geopandas_pairwise_overlaps(gdf1, gdf2, predicate='intersects'):
         - [ ] This can move to watch.utils
 
     Returns:
-        dict: mapping from indexes in gdf1 to overlapping indexes in gdf2
+        dict:
+            mapping from pandas-indexes in gdf1 to overlapping pandas-indexes in gdf2
 
     Example:
         >>> from watch.utils.util_gis import *  # NOQA
@@ -54,6 +55,9 @@ def geopandas_pairwise_overlaps(gdf1, gdf2, predicate='intersects'):
             fast_idx2s = fast_mapping[idx1]
             assert sorted(fast_idx2s) == sorted(slow_idx2s)
     """
+    assert gdf1.index.is_unique, 'GeoDataFrame indexes must be unique'
+    assert gdf2.index.is_unique, 'GeoDataFrame indexes must be unique'
+
     # Construct the spatial index (requires pygeos and/or rtree)
     sindex2 = gdf2.sindex
     # For each query polygon, lookup intersecting polygons in the spatial index

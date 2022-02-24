@@ -101,7 +101,7 @@ class CocoAlignGeotiffConfig(scfg.Config):
 
         'dst': scfg.Value(None, help='bundle directory or kwcoco json file for the output'),
 
-        'workers': scfg.Value(0, type=str, help='number of parallel procs'),
+        'workers': scfg.Value(0, type=str, help='number of parallel procs. This can also be an expression accepted by coerce_num_workers.'),
         'max_workers': scfg.Value(None, type=str, help='DEPRECATED USE workers'),
         'aux_workers': scfg.Value(0, type=str, help='additional inner threads for aux imgs'),
 
@@ -402,6 +402,9 @@ def main(cmdline=True, **kw):
         region_df['geometry'] = region_df['geometry'].scale(
             xfact=context_factor, yfact=context_factor, origin='center')
 
+    # Ensure all indexes are unique
+    region_df = region_df.reset_index()
+
     # For each ROI extract the aligned regions to the target path
     extract_dpath = ub.ensuredir(output_bundle_dpath)
 
@@ -610,7 +613,8 @@ class SimpleDataCube(object):
         import watch
 
         # Quickly find overlaps using a spatial index
-        ridx_to_gidsx = util_gis.geopandas_pairwise_overlaps(region_df, cube.img_geos_df)
+        ridx_to_gidsx = util_gis.geopandas_pairwise_overlaps(
+            region_df, cube.img_geos_df)
 
         print('candidate query overlaps')
         ridx_to_num_matches = ub.map_vals(len, ridx_to_gidsx)
@@ -619,7 +623,7 @@ class SimpleDataCube(object):
 
         to_extract = []
         for ridx, gidxs in ridx_to_gidsx.items():
-            region_row = region_df.iloc[ridx]
+            region_row = region_df.loc[ridx]
 
             crs = gpd.GeoDataFrame([region_row], crs=region_df.crs).estimate_utm_crs()
             utm_epsg_zone_v1 = crs.to_epsg()
@@ -653,7 +657,7 @@ class SimpleDataCube(object):
                 query_start_date = region_row.get('start_date', None)
                 query_end_date = region_row.get('end_date', None)
 
-                cand_gids = cube.img_geos_df.iloc[gidxs].gid
+                cand_gids = cube.img_geos_df.loc[gidxs].gid
                 cand_datecaptured = cube.coco_dset.images(cand_gids).lookup('date_captured')
                 cand_datetimes = [util_time.coerce_datetime(c) for c in cand_datecaptured]
 
