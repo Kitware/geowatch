@@ -61,6 +61,13 @@ Notes:
 TODO:
     - [ ] Add method for extracting "negative ROIs" that are nearby
         "positive ROIs".
+
+    - [ ] Diagnose and Fix PROJ errors:
+
+        ```
+        ERROR 1: PROJ: proj_create: unrecognized format / unknown name
+        ERROR 1: PROJ: proj_create_from_database: Cannot find proj.db
+        ```
 """
 import kwcoco
 import kwimage
@@ -346,7 +353,7 @@ def main(cmdline=True, **kw):
         # when I pass the glob path to all the regions
         # I need to use the merged region script. Very strange.
         paths = util_path.coerce_patterned_paths(regions)
-        print('paths = {!r}'.format(paths))
+        print('paths = {}'.format(ub.repr2(paths, nl=1)))
         if len(paths) == 0:
             raise KeyError(regions)
         parts = []
@@ -393,6 +400,9 @@ def main(cmdline=True, **kw):
     else:
         assert region_df is not None, 'must have been given regions some other way'
 
+    # Ensure all indexes are unique
+    region_df = region_df.reset_index(drop=True)
+
     print('query region_df =\n{}'.format(region_df))
     print('cube.img_geos_df =\n{}'.format(cube.img_geos_df))
 
@@ -401,9 +411,6 @@ def main(cmdline=True, **kw):
     if context_factor != 1:
         region_df['geometry'] = region_df['geometry'].scale(
             xfact=context_factor, yfact=context_factor, origin='center')
-
-    # Ensure all indexes are unique
-    region_df = region_df.reset_index()
 
     # For each ROI extract the aligned regions to the target path
     extract_dpath = ub.ensuredir(output_bundle_dpath)
@@ -648,7 +655,7 @@ class SimpleDataCube(object):
                 video_name = space_str
 
             if len(gidxs) == 0:
-                print('WARNING: No spatial matches to {}'.format(video_name))
+                print('Warning: No spatial matches to {}'.format(video_name))
             else:
                 from watch.utils import util_time
 
@@ -673,7 +680,7 @@ class SimpleDataCube(object):
                     cand_gids = list(ub.compress(cand_gids, flags))
 
                 if len(cand_gids) == 0:
-                    print('WARNING: No temporal matches to {}'.format(video_name))
+                    print('Warning: No temporal matches to {}'.format(video_name))
                 else:
                     datetime_to_gids = ub.group_items(cand_gids, cand_datetimes)
                     # print('datetime_to_gids = {}'.format(ub.repr2(datetime_to_gids, nl=1)))
@@ -784,7 +791,7 @@ class SimpleDataCube(object):
         # import watch
         coco_dset = cube.coco_dset
 
-        print('image_overlaps = {}'.format(ub.repr2(image_overlaps, nl=1)))
+        # print('image_overlaps = {}'.format(ub.repr2(image_overlaps, nl=1)))
         datetime_to_gids = image_overlaps['datetime_to_gids']
         space_str = image_overlaps['space_str']
         space_box = image_overlaps['space_box']
@@ -792,6 +799,12 @@ class SimpleDataCube(object):
         video_name = image_overlaps['video_name']
         video_props = image_overlaps['properties']
         local_epsg = image_overlaps['local_epsg']
+        print('space_str = {}'.format(ub.repr2(space_str, nl=1)))
+        print('space_box = {}'.format(ub.repr2(space_box, nl=1)))
+        print('space_region = {}'.format(ub.repr2(space_region, nl=1)))
+        print('video_name = {}'.format(ub.repr2(video_name, nl=1)))
+        print('video_props = {}'.format(ub.repr2(video_props, nl=1)))
+        print('local_epsg = {}'.format(ub.repr2(local_epsg, nl=1)))
 
         if new_dset is None:
             new_dset = kwcoco.CocoDataset()

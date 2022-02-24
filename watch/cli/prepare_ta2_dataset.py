@@ -26,6 +26,30 @@ python -m watch.cli.prepare_ta2_dataset \
     --dvc_dpath=$DVC_DPATH \
     --collated=True \
     --serial=True --run=0
+
+
+python -m watch.cli.coco_add_watch_fields \
+    --src $INPUT_COCO_FPATH \
+    --dst $INPUT_COCO_FPATH.prepped \
+    --workers 16 \
+    --target_gsd=10
+
+kwcoco subset \
+    --src="$HOME/data/dvc-repos/smart_watch_dvc/Uncropped-Drop2-TA1-2022-02-24/data.kwcoco.json" \
+    --dst="$HOME/data/dvc-repos/smart_watch_dvc/Uncropped-Drop2-TA1-2022-02-24/small_data.kwcoco.json" \
+    --select_images '.id < 20'
+
+AWS_DEFAULT_PROFILE=iarpa python -m watch.cli.coco_align_geotiffs \
+    --src "$HOME/data/dvc-repos/smart_watch_dvc/Uncropped-Drop2-TA1-2022-02-24/small_data.kwcoco.json" \
+    --dst "$HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop2-TA1-2022-02-24/small_data.kwcoco.json" \
+    --regions "$HOME/data/dvc-repos/smart_watch_dvc/annotations/region_models/*.geojson" \
+    --workers="min(avail,max(all/2,8))" \
+    --context_factor=1 \
+    --geo_preprop=auto \
+    --visualize False \
+    --keep none \
+    --rpc_align_method affine_warp
+
 """
 
 
@@ -83,6 +107,7 @@ def main(cmdline=False, **kwargs):
 
     uncropped_query_fpath = uncropped_query_dpath / ub.Path(s3_fpath).name
     uncropped_kwcoco_fpath = uncropped_dpath / 'data.kwcoco.json'
+    uncropped_prep_kwcoco_fpath = uncropped_dpath / 'data_prepped.kwcoco.json'
 
     uncropped_ingress_dpath = uncropped_dpath / 'ingress'
     uncropped_catalog_fpath = uncropped_ingress_dpath / 'catalog.json'
@@ -97,6 +122,7 @@ def main(cmdline=False, **kwargs):
     uncropped_query_dpath = uncropped_query_dpath.shrinkuser(home='$HOME')
     uncropped_query_fpath = uncropped_query_fpath.shrinkuser(home='$HOME')
     uncropped_kwcoco_fpath = uncropped_kwcoco_fpath.shrinkuser(home='$HOME')
+    uncropped_prep_kwcoco_fpath = uncropped_prep_kwcoco_fpath.shrinkuser(home='$HOME')
     uncropped_ingress_dpath = uncropped_ingress_dpath.shrinkuser(home='$HOME')
     uncropped_catalog_fpath = uncropped_catalog_fpath.shrinkuser(home='$HOME')
     aligned_kwcoco_bundle = aligned_kwcoco_bundle.shrinkuser(home='$HOME')
@@ -138,12 +164,23 @@ def main(cmdline=False, **kwargs):
             --jobs "min(avail,8)"
         '''))
 
+    queue.submit(ub.codeblock(
+        rf'''
+        [[ -f {uncropped_prep_kwcoco_fpath} ]] || AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.coco_add_watch_fields \
+            --src "{uncropped_kwcoco_fpath}" \
+            --dst "{uncropped_prep_kwcoco_fpath}" \
+            --workers="min(avail,max(all/2,8))" \
+            --enable_video_stats=False \
+            --overwrite=warp \
+            --target_gsd=10
+        '''))
+
     # region_model_str = ' '.join([shlex.quote(str(p)) for p in region_models])
 
     queue.submit(ub.codeblock(
         rf'''
         AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.coco_align_geotiffs \
-            --src "{uncropped_kwcoco_fpath}" \
+            --src "{uncropped_prep_kwcoco_fpath}" \
             --dst "{aligned_kwcoco_fpath}" \
             --regions "{region_dpath / '*.geojson'}" \
             --workers="min(avail,max(all/2,8))" \
