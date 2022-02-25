@@ -226,7 +226,8 @@ def ortho_map(stac_item, outdir, drop_empty=False, *args, **kwargs):
 
 
 def orthorectify(in_fpath, out_fpath, geometry: shapely.geometry.Polygon,
-                 te_dems: bool, as_vrt: bool, as_utm: bool):
+                 te_dems: bool, as_vrt: bool, as_utm: bool,
+                 te_dem_cache_dir: str = None):
     '''
     Orthorectify a WV image to a DEM using RPCs.
 
@@ -284,7 +285,7 @@ def orthorectify(in_fpath, out_fpath, geometry: shapely.geometry.Polygon,
         # the DEM to the image first. But see
         # watch.utils.util_raster.open_cropped() for those tests.
         from watch.rc import dem_path
-        dem_fpath = dem_path()
+        dem_fpath = dem_path(cache_dir=te_dem_cache_dir)
 
     else:
 

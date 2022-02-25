@@ -69,6 +69,14 @@ def main():
                         action='store_true',
                         default=False,
                         help="Output as simple newline separated STAC items")
+    parser.add_argument('--no_te_dems',
+                        dest='te_dems',
+                        action='store_false',
+                        help='Use GTOP30 DEMs instead of IARPA T&E DEMs')
+    parser.add_argument('--te_dem_cache_dir',
+                        type=str,
+                        required=False,
+                        help='Override default cache dir used for T&E DEMs')
     parser.add_argument("-j", "--jobs",
                         type=int,
                         default=1,
@@ -93,7 +101,9 @@ def _item_map(stac_item,
               working_dir,
               baseline_s2_items,
               item_pairs_dict,
-              aws_base_command):
+              aws_base_command,
+              te_dems,
+              te_dem_cache_dir):
     # Ingress and orthorectify any associated PAN item
     if stac_item.id in item_pairs_dict:
         pan_item = item_pairs_dict[stac_item.id]
@@ -109,9 +119,10 @@ def _item_map(stac_item,
             ingressed_pan_item,
             os.path.join(working_dir, 'wv_ortho'),
             drop_empty=True,
-            te_dems=False,
+            te_dems=te_dems,
             as_vrt=False,
-            as_utm=True)
+            as_utm=True,
+            te_dem_cache_dir=te_dem_cache_dir)
 
         # `ortho_map` returns a list of one item; hence the [0]
         item_pairs_dict[stac_item.id] = ortho_pan_items[0]
@@ -119,9 +130,10 @@ def _item_map(stac_item,
     ortho_items = ortho_map(stac_item,
                             os.path.join(working_dir, 'wv_ortho'),
                             drop_empty=True,
-                            te_dems=False,
+                            te_dems=te_dems,
                             as_vrt=False,
-                            as_utm=True)
+                            as_utm=True,
+                            te_dem_cache_dir=te_dem_cache_dir)
 
     output_coreg_items = []
     for ortho_item in ortho_items:
@@ -153,6 +165,8 @@ def run_wv_ortho_and_coreg_streaming(input_path,
                                      show_progress=False,
                                      requester_pays=False,
                                      newline=False,
+                                     te_dems=True,
+                                     te_dem_cache_dir=None,
                                      jobs=1):
     if aws_profile is not None:
         aws_base_command =\
@@ -219,7 +233,9 @@ def run_wv_ortho_and_coreg_streaming(input_path,
                                   stac_item,
                                   baseline_s2_items,
                                   item_pairs_dict,
-                                  aws_base_command)
+                                  aws_base_command,
+                                  te_dems,
+                                  te_dem_cache_dir)
                   for stac_item in input_stac_items]
 
     output_stac_items = []
