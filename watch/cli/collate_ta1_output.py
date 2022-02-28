@@ -133,6 +133,10 @@ def main():
                         type=str,
                         help="Evaluation number string for building "
                              "output paths (default: '1')")
+    parser.add_argument('--ssh-only',
+                        action='store_true',
+                        default=False,
+                        help='Only upload output for SSH scoring')
     parser.add_argument("-j", "--jobs",
                         type=int,
                         default=1,
@@ -203,7 +207,8 @@ def collate_item(stac_item,
                  aws_base_command,
                  output_bucket,
                  performer_code,
-                 eval_num):
+                 eval_num,
+                 ssh_only=False):
     # TODO: Make use of `working_dir` argument here; not currently
     # used but expected by streaming decorators (in util_framework)
     if isinstance(stac_item, dict):
@@ -285,7 +290,8 @@ def collate_item(stac_item,
                                              aws_base_command,
                                              output_item_id,
                                              item_s3_outdir,
-                                             ssh_outdir)
+                                             ssh_outdir,
+                                             ssh_only=ssh_only)
 
     # Completely discard item if platform collation fails
     if output_stac_item is None:
@@ -330,15 +336,16 @@ def collate_item(stac_item,
                 'href': collection_output_path,
                 'type': 'application/json'}))
 
-    with tempfile.NamedTemporaryFile() as temporary_file:
-        with open(temporary_file.name, 'w') as f:
-            json.dump(output_stac_item.to_dict(), f, indent=2)
+    if not ssh_only:
+        with tempfile.NamedTemporaryFile() as temporary_file:
+            with open(temporary_file.name, 'w') as f:
+                json.dump(output_stac_item.to_dict(), f, indent=2)
 
-        # Assumes that the STAC item's self href has been set
-        # in the per item collation function(s)
-        subprocess.run([*aws_base_command,
-                        temporary_file.name,
-                        output_stac_item.get_self_href()], check=True)
+            # Assumes that the STAC item's self href has been set
+            # in the per item collation function(s)
+            subprocess.run([*aws_base_command,
+                            temporary_file.name,
+                            output_stac_item.get_self_href()], check=True)
 
     return output_stac_item
 
@@ -387,7 +394,8 @@ def generic_collate_item(asset_name_map,
                          output_item_id,
                          item_outdir,
                          ssh_outdir,
-                         additional_ssh_qa_resolutions=[]):
+                         additional_ssh_qa_resolutions=[],
+                         ssh_only=False):
     item_outdir_base = os.path.basename(item_outdir)
     output_assets = {}
     for asset_name, asset in stac_item.assets.items():
@@ -396,6 +404,9 @@ def generic_collate_item(asset_name_map,
         ssh_asset_suffix = ssh_asset_name_map.get(asset_name)
 
         if asset_suffix is None:
+            continue
+
+        if ssh_only and ssh_asset_suffix is None:
             continue
 
         stac_asset_outpath_basename = "{}_{}.tif".format(
@@ -461,8 +472,9 @@ def generic_collate_item(asset_name_map,
             else:
                 asset_href = convert_to_cog(asset_href, resampling='AVERAGE')
 
-            subprocess.run([*aws_base_command,
-                            asset_href, stac_asset_outpath], check=True)
+            if not ssh_only:
+                subprocess.run([*aws_base_command,
+                                asset_href, stac_asset_outpath], check=True)
 
             if ssh_asset_suffix is not None:
                 ssh_asset_outpath = '/'.join(
@@ -501,7 +513,8 @@ def collate_wv_item(stac_item,
                     aws_base_command,
                     output_item_id,
                     item_outdir,
-                    ssh_outdir):
+                    ssh_outdir,
+                    ssh_only=False):
     # WV items only have a single "data" asset containing all bands
     data_asset = stac_item.assets.get('data')
     if data_asset is None:
@@ -565,9 +578,10 @@ def collate_wv_item(stac_item,
                  'eo:bands': [eo_band_dict]})
 
             # Copy assets up to S3
-            subprocess.run([*aws_base_command,
-                            output_band_path, stac_asset_outpath],
-                           check=True)
+            if not ssh_only:
+                subprocess.run([*aws_base_command,
+                                output_band_path, stac_asset_outpath],
+                               check=True)
 
     stac_item.assets = output_assets
 
@@ -615,7 +629,8 @@ def collate_ta1_output(stac_catalog,
                        eval_num='1',
                        jobs=1,
                        upload_collections=False,
-                       show_progress=False):
+                       show_progress=False,
+                       ssh_only=False):
     if isinstance(stac_catalog, str):
         catalog = pystac.read_file(href=stac_catalog).full_copy()
     else:
@@ -642,7 +657,8 @@ def collate_ta1_output(stac_catalog,
                                       aws_base_command,
                                       output_bucket,
                                       performer_code,
-                                      eval_num)
+                                      eval_num,
+                                      ssh_only)
                       for stac_item_dict in input_stac_items]
 
     output_stac_items_by_collection = {}

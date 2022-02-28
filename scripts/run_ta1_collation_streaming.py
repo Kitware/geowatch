@@ -12,7 +12,9 @@ from watch.cli.collate_ta1_output import (
     collate_item,
     build_and_upload_stac_collections,
     S2_ASSET_NAME_MAP,
+    S2_SSH_ASSET_NAME_MAP,
     L8_ASSET_NAME_MAP,
+    L8_SSH_ASSET_NAME_MAP,
     ASSET_SUFFIX_TO_NAME_MAP)
 from watch.utils.util_framework import (CacheItemOutputS3Wrapper,
                                         IngressProcessEgressWrapper)
@@ -69,6 +71,10 @@ def main():
                         type=str,
                         help="Evaluation number string for building "
                              "output paths (default: '1')")
+    parser.add_argument('--ssh-only',
+                        action='store_true',
+                        default=False,
+                        help='Only upload output for SSH scoring')
     parser.add_argument("-j", "--jobs",
                         type=int,
                         default=1,
@@ -80,12 +86,33 @@ def main():
     return 0
 
 
+SSH_ONLY_PLATFORMS = {'S2A',
+                      'S2B',
+                      'sentinel-2a',
+                      'sentinel-2b',
+                      'LANDSAT_8',
+                      'OLI_TIRS'}
+
+
 def _asset_selector(asset_name, asset):
     # WV items only have a single "data" asset containing all bands
     return (asset_name in S2_ASSET_NAME_MAP or
             asset_name in L8_ASSET_NAME_MAP or
             asset_name in ASSET_SUFFIX_TO_NAME_MAP or
             asset_name == 'data')
+
+
+def _ssh_only_asset_selector(asset_name, asset):
+    return (asset_name in S2_SSH_ASSET_NAME_MAP or
+            asset_name in L8_SSH_ASSET_NAME_MAP)
+
+
+def _default_item_selector(stac_item):
+    return True
+
+
+def _ssh_only_item_selector(stac_item):
+    return stac_item['properties'].get('platform') in SSH_ONLY_PLATFORMS
 
 
 def run_ta1_collation_streaming(input_path,
@@ -99,6 +126,7 @@ def run_ta1_collation_streaming(input_path,
                                 requester_pays=False,
                                 performer_code='kit',
                                 eval_num='1',
+                                ssh_only=False,
                                 jobs=1):
     if aws_profile is not None:
         aws_base_command =\
@@ -120,6 +148,13 @@ def run_ta1_collation_streaming(input_path,
     executor = ubelt.Executor(mode='process' if jobs > 1 else 'serial',
                               max_workers=jobs)
 
+    if ssh_only:
+        asset_selector = _ssh_only_asset_selector
+        item_selector = _ssh_only_item_selector
+    else:
+        asset_selector = _asset_selector
+        item_selector = _default_item_selector
+
     # Skipping ingress / egress here as the collation function performs a
     # specialized ingress / egress
     ingress_process_egress_map = IngressProcessEgressWrapper(
@@ -127,7 +162,8 @@ def run_ta1_collation_streaming(input_path,
         working_outbucket,
         aws_base_command,
         dryrun=dryrun,
-        asset_selector=_asset_selector,
+        stac_item_selector=item_selector,
+        asset_selector=asset_selector,
         skip_egress=True)
     caching_item_map = CacheItemOutputS3Wrapper(
         ingress_process_egress_map,
@@ -138,7 +174,8 @@ def run_ta1_collation_streaming(input_path,
                                       aws_base_command,
                                       destination_outbucket,
                                       performer_code,
-                                      eval_num)
+                                      eval_num,
+                                      ssh_only=ssh_only)
                       for stac_item in input_stac_items]
 
     output_stac_items_by_collection = {}
