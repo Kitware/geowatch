@@ -147,7 +147,8 @@ class predict(object):
 
                     if args.do_pca:
                         features = torch.einsum('xy,byhw->bxhw', self.pca_projector, features)
-
+                    ###normalize features
+                    features = (features - features.mean(dim=(3, 4))) / features.std(dim=(3, 4))
                     save_feat.append(torch.sigmoid(features.squeeze()).permute(1, 2, 0).cpu())
 
                 if 'before_after' in args.tasks:
