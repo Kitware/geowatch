@@ -47,7 +47,7 @@ AWS_DEFAULT_PROFILE=iarpa python -m watch.cli.coco_align_geotiffs \
     --context_factor=1 \
     --geo_preprop=auto \
     --visualize False \
-    --keep none \
+    --keep img \
     --rpc_align_method affine_warp
 
 """
@@ -187,7 +187,7 @@ def main(cmdline=False, **kwargs):
             --context_factor=1 \
             --geo_preprop=auto \
             --visualize False \
-            --keep none \
+            --keep img \
             --rpc_align_method affine_warp
         '''))
 

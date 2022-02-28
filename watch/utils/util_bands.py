@@ -69,6 +69,8 @@ References:
     https://gisgeography.com/sentinel-2-bands-combinations/
     https://earth.esa.int/eogateway/missions/worldview-3
     https://www.usgs.gov/faqs/what-are-band-designations-landsat-satellites?qt-news_science_products=0#qt-news_science_products
+    .. [MODIS-SPEC] https://modis.gsfc.nasa.gov/about/specifications.php
+    .. [SentinelHub] https://apps.sentinel-hub.com/eo-browser/?zoom=15&lat=42.87425&lng=-73.83164&themeId=DEFAULT-THEME&visualizationUrl=https%3A%2F%2Fservices.sentinel-hub.com%2Fogc%2Fwms%2Fbd86bcc0-f318-402b-a145-015f85b9427e&datasetId=S2L2A&fromTime=2022-02-16T00%3A00%3A00.000Z&toTime=2022-02-16T23%3A59%3A59.999Z&layerId=4-FALSE-COLOR-URBAN
 """
 
 
@@ -388,6 +390,82 @@ Example:
     >>>     b = Band.create(**band)
 '''
 
+
+# https://modis.gsfc.nasa.gov/about/specifications.php
+MODIS = {
+    'name': 'MODIS',
+    'quantization': '12 bits',
+    'bands': [
+        {'band': 1, 'gsd': '250m', 'bandwidth': '620-670nm', 'spectral_radiance': 21.8, 'required_snr': 128, 'primary_use': 'Land/Cloud/Aerosols Boundaries'},
+        {'band': 2, 'gsd': '250m', 'bandwidth': '841-876nm', 'spectral_radiance': 24.7, 'required_snr': 201, 'primary_use': 'Land/Cloud/Aerosols Boundaries'},
+
+        {'band': 3, 'gsd': '500m', 'bandwidth': '459 - 479nm', 'spectral_radiance': 35.3, 'required_snr': 243, 'primary_use': 'Land/Cloud/Aerosols Properties'},
+        {'band': 5, 'gsd': '500m', 'bandwidth': '545 - 565nm', 'spectral_radiance': 29.0, 'required_snr': 228, 'primary_use': 'Land/Cloud/Aerosols Properties'},
+        {'band': 5, 'gsd': '500m', 'bandwidth': '1230 - 1250nm', 'spectral_radiance': 5.4, 'required_snr': 74, 'primary_use': 'Land/Cloud/Aerosols Properties'},
+        {'band': 6, 'gsd': '500m', 'bandwidth': '1628 - 1652nm', 'spectral_radiance': 7.3, 'required_snr': 275, 'primary_use': 'Land/Cloud/Aerosols Properties'},
+        {'band': 7, 'gsd': '500m', 'bandwidth': '2105 - 2155nm', 'spectral_radiance': 1.0, 'required_snr': 110, 'primary_use': 'Land/Cloud/Aerosols Properties'},
+
+        {'band': 8, 'gsd': '1000m', 'bandwidth': '405 - 420nm', 'primary_use': 'Ocean Color/Phytoplankton/Biogeochemistry'},
+        {'band': 9, 'gsd': '1000m', 'primary_use': 'Ocean Color/Phytoplankton/Biogeochemistry'},
+        {'band': 10, 'gsd': '1000m', 'primary_use': 'Ocean Color/Phytoplankton/Biogeochemistry'},
+        {'band': 11, 'gsd': '1000m', 'primary_use': 'Ocean Color/Phytoplankton/Biogeochemistry'},
+        {'band': 12, 'gsd': '1000m', 'primary_use': 'Ocean Color/Phytoplankton/Biogeochemistry'},
+        {'band': 13, 'gsd': '1000m', 'primary_use': 'Ocean Color/Phytoplankton/Biogeochemistry'},
+        {'band': 14, 'gsd': '1000m', 'primary_use': 'Ocean Color/Phytoplankton/Biogeochemistry'},
+        {'band': 15, 'gsd': '1000m', 'primary_use': 'Ocean Color/Phytoplankton/Biogeochemistry'},
+        {'band': 16, 'gsd': '1000m', 'bandwidth': '862 - 877nm', 'primary_use': 'Ocean Color/Phytoplankton/Biogeochemistry'},
+    ]
+}
+
+
+# https://ladsweb.modaps.eosdis.nasa.gov/missions-and-measurements/viirs/
+# https://lpdaac.usgs.gov/data/get-started-data/collection-overview/missions/s-npp-nasa-viirs-overview/
+# https://rammb.cira.colostate.edu/projects/npp/VIIRS_bands_and_bandwidths.pdf
+# The VIIRS instrument provides 22 spectral bands from 412 nanometers (nm) to 12
+# micrometers (µm) at two spatial resolutions, 375 meters (m) and 750 m, which
+# are resampled to 500 m, 1 km, and 0.05 degrees in the NASA produced data
+# products to promote consistency with the MODIS heritage.
+VIIRS = {
+    'name': 'VIIRS',
+    'quantization': '12 bits',
+    'gds': '750m',
+    'bands': [
+        {'name': 'I1', 'gsd': '375m', 'reflected_range': '0.6 - 0.68um', 'desc': 'Near Infrared', 'common_name': 'blue'},
+        {'name': 'I2', 'gsd': '375m', 'common_name': 'green'},
+        {'name': 'I3', 'gsd': '375m', 'common_name': 'red'},
+        {'name': 'I4', 'gsd': '375m'},
+        {'name': 'I5', 'gsd': '375m'},
+
+        {'name': 'M1', 'gsd': '750m'},
+        {'name': 'M2', 'gsd': '750m'},
+        {'name': 'M3', 'gsd': '750m'},
+        {'name': 'M4', 'gsd': '750m'},
+        {'name': 'M5', 'gsd': '750m'},
+        {'name': 'M6', 'gsd': '750m'},
+        {'name': 'M7', 'gsd': '750m'},
+        {'name': 'M8', 'gsd': '750m'},
+        {'name': 'M9', 'gsd': '750m'},
+        {'name': 'M10', 'gsd': '750m'},
+        {'name': 'M11', 'gsd': '750m'},
+        {'name': 'M12', 'gsd': '750m'},
+        {'name': 'M13', 'gsd': '750m'},
+        {'name': 'M14', 'gsd': '750m'},
+        {'name': 'M15', 'gsd': '750m'},
+        {'name': 'M16', 'gsd': '750m', 'reflected_range': '11.54 - 12.49um'},
+
+        {'name': 'DNB', 'gsd': '750m', 'reflected_range': '0.5 - 0.9um', 'desc': 'Visible/Reflective'},
+    ]
+}
+
+
+SENTINEL1 = {
+    'name': 'Sentinel1',
+    'notes': 'SAR',
+    'gsd': '1.7x4.3m - 3.6x4.9m',
+}
+
+
+# TODO: move to a new "Spectral-Index" module
 
 def specialized_index_bands(bands=None, coco_img=None, symbolic=False):
     r"""
@@ -713,7 +791,7 @@ SPECIALIZED_BANDS = {
 }
 
 
-def specialized_index_bands2(coco_img=None):
+def specialized_index_bands2(delayed=None):
     r"""
     Ported from code from by (Yongquan Zhao on 26 April 2017)
 
@@ -737,8 +815,9 @@ def specialized_index_bands2(coco_img=None):
         >>> gid = ub.peek(dset.index.imgs.keys())
         >>> coco_img = dset.coco_image(gid)
         >>> print('coco_img.channels = {!r}'.format(coco_img.channels))
+        >>> delayed = coco_img.delay()
         >>> symbolic = False
-        >>> indexes = specialized_index_bands2(coco_img=coco_img)
+        >>> indexes = specialized_index_bands2(delayed)
         >>> import kwarray
         >>> print(ub.repr2(ub.map_vals(kwarray.stats_dict, indexes), nl=1))
         >>> import pandas as pd
@@ -754,6 +833,26 @@ def specialized_index_bands2(coco_img=None):
         >>>     value = value.astype(np.float32)
         >>>     #value = kwimage.normalize(value.astype(np.float32))
         >>>     kwplot.imshow(value, title=key, pnum=pnum_(), cmap=None if key == 'MaskValid' else 'viridis', data_colorbar=True)
+
+    Ignore:
+        >>> from watch.utils.util_bands import *  # NOQA
+        >>> import watch
+        >>> dset = watch.demo.demo_smart_raw_kwcoco()
+        >>> coco_img = [img for img in dset.images().coco_images if img.get('sensor_coarse', None) == 'L8'][0]
+        >>> delayed = coco_img.delay().crop((slice(4000, 5000), slice(4000, 5000)))
+        >>> indexes = specialized_index_bands2(delayed)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> import kwimage
+        >>> kwplot.autompl()
+        >>> pnum_ = kwplot.PlotNums(nSubplots=len(indexes))
+        >>> kwplot.figure(fnum=3)
+        >>> indexes['MaskValid'] = indexes['MaskValid'].astype(np.float32)
+        >>> for key, value in indexes.items():
+        >>>     value = value.astype(np.float32)
+        >>>     #value = kwimage.normalize(value.astype(np.float32))
+        >>>     kwplot.imshow(value, title=key, pnum=pnum_(), cmap=None if key == 'MaskValid' else 'viridis', data_colorbar=True)
+
 
     Ignore:
         >>> delayed = coco_img.delay()
@@ -794,7 +893,6 @@ def specialized_index_bands2(coco_img=None):
     #     Blue, Green, Red, SWIR1, SWIR2, NIR = sym.symbols(
     #         'Blue, Green, Red, SWIR1, SWIR2, NIR')
     # else:
-    delayed = coco_img.delay()
     rgbir123 = delayed.take_channels('blue|green|red|swir16|swir22|nir')
     chw = rgbir123.finalize().transpose(2, 0, 1).astype(np.float32)
     Blue, Green, Red, SWIR1, SWIR2, NIR = chw
