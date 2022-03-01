@@ -2782,7 +2782,11 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
     window_space_dims = window_dims[1:3]
     window_time_dims = window_dims[0]
     print('window_time_dims = {!r}'.format(window_time_dims))
-    keepbound = False
+
+    # It is important that keepbound is True at test time, otherwise
+    # we may not predict on the bottom right of the image.
+    keepbound = True
+
     vidid_to_space_slider = {}
     for vidid, video in dset.index.videos.items():
         full_dims = [video['height'], video['width']]

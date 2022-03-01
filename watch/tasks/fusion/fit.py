@@ -445,6 +445,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
                     verbose=True, strict=False),
                 pl.callbacks.ModelCheckpoint(
                     monitor='val_loss', mode='min', save_top_k=8),
+                pl.callbacks.ModelCheckpoint(every_n_epochs=10),
             ]
 
             if datamodule.requested_tasks['change']:

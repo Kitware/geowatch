@@ -245,6 +245,9 @@ def gather_checkpoints(dvc_dpath=None, storage_dpath=None, train_dpath=None,
     if 1:
         import pandas as pd
         df = pd.DataFrame(gathered)
+        if len(df) == 0:
+            print(df)
+            raise Exception('No data gathered')
         print(df.groupby('name')['needs_copy', 'needs_repackage'].sum())
 
     if mode == 'list':

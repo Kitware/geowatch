@@ -2566,3 +2566,171 @@ python -m watch.tasks.fusion.fit \
     --amp_backend=apex \
     --num_sanity_val_steps=0 \
     --init="$INITIAL_STATE"
+
+### Horologic 2022-03-01
+
+
+DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
+KWCOCO_BUNDLE_DPATH=${KWCOCO_BUNDLE_DPATH:-$DVC_DPATH/Drop1-Aligned-L1}
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_train_nowv.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_nowv.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_vali_nowv.kwcoco.json
+#python -m watch stats $VALI_FPATH
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop1_November2021
+ARCH=smt_it_joint_p8
+CHANNELS="blue|green|red|nir|swir16|swir22"
+EXPERIMENT_NAME=ActivityTemplate
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+PACKAGE_FPATH=$DEFAULT_ROOT_DIR/final_package_$EXPERIMENT_NAME.pt 
+export CUDA_VISIBLE_DEVICES="0"
+python -m watch.tasks.fusion.fit \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --channels="$CHANNELS" \
+    --global_change_weight=0.00 \
+    --global_class_weight=1.0 \
+    --global_saliency_weight=1.00 \
+    --neg_to_pos_ratio=1.0 \
+    --saliency_loss='dicefocal' \
+    --class_loss='dicefocal' \
+    --num_workers=8 \
+    --gpus "1" \
+    --batch_size=1 \
+    --accumulate_grad_batches=1 \
+    --learning_rate=3e-5 \
+    --weight_decay=1e-5 \
+    --dropout=0.1 \
+    --attention_impl=exact \
+    --chip_size=380 \
+    --time_steps=5 \
+    --chip_overlap=0.5 \
+    --time_sampling=soft+distribute \
+    --time_span=7m \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --method="MultimodalTransformer" \
+    --arch_name=smt_it_stm_p8 \
+    --normalize_inputs=1024 \
+    --max_epochs=160 \
+    --patience=160 \
+    --max_epoch_length=256 \
+    --draw_interval=5000m \
+    --num_draw=2 \
+    --amp_backend=apex \
+    --num_sanity_val_steps=0 \
+    --init="noop"
+       --package_fpath=$PACKAGE_FPATH \
+        --train_dataset=$TRAIN_FPATH \
+         --vali_dataset=$VALI_FPATH \
+         --test_dataset=$TEST_FPATH \
+         --num_sanity_val_steps=0 \
+         --dump $WORKDIR/configs/common_20220301.yaml
+
+export CUDA_VISIBLE_DEVICES=0
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_nowv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_nowv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_nowv_vali.kwcoco.json
+CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3"
+INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v52/BOTH_smt_it_stm_p8_L1_DIL_v52_epoch=13-step=55215.pt"
+EXPERIMENT_NAME=FUSION_EXPERIMENT_M_late_nowv_p8_shorter_V124
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --channels="$CHANNELS" \
+    --global_class_weight=0.0 \
+    --global_saliency_weight=1.00 \
+    --neg_to_pos_ratio=1.0 \
+    --saliency_loss='dicefocal' \
+    --class_loss='dicefocal' \
+    --num_workers=8 \
+    --gpus "1" \
+    --batch_size=1 \
+    --accumulate_grad_batches=1 \
+    --learning_rate=3e-5 \
+    --weight_decay=1e-5 \
+    --dropout=0.1 \
+    --attention_impl=exact \
+    --chip_size=380 \
+    --time_steps=5 \
+    --chip_overlap=0.5 \
+    --time_sampling=soft+distribute \
+    --time_span=7m \
+    --tokenizer=linconv \
+    --optimizer=AdamW \
+    --method="MultimodalTransformer" \
+    --arch_name=smt_it_stm_p8 \
+    --normalize_inputs=1024 \
+    --max_epochs=160 \
+    --patience=160 \
+    --max_epoch_length=256 \
+    --draw_interval=5000m \
+    --num_draw=2 \
+    --amp_backend=apex \
+    --num_sanity_val_steps=0 \
+    --init="$INITIAL_STATE"
+
+
+export CUDA_VISIBLE_DEVICES=1
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/data_nowv_vali.kwcoco.json
+CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3,forest|brush|bare_ground|built_up|cropland|wetland|water|snow_or_ice_field"
+INITIAL_STATE="$DVC_DPATH/models/fusion/SC-20201117/BOTH_smt_it_stm_p8_L1_DIL_v52/BOTH_smt_it_stm_p8_L1_DIL_v52_epoch=13-step=55215.pt"
+EXPERIMENT_NAME=FUSION_EXPERIMENT_late_ML_nowv_p8_shorter_V125
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --channels="$CHANNELS" \
+    --global_class_weight=0.0 \
+    --global_saliency_weight=1.00 \
+    --neg_to_pos_ratio=1.0 \
+    --saliency_loss='dicefocal' \
+    --class_loss='dicefocal' \
+    --num_workers=8 \
+    --gpus "1" \
+    --batch_size=1 \
+    --accumulate_grad_batches=1 \
+    --learning_rate=1e-3 \
+    --weight_decay=1e-5 \
+    --dropout=0.1 \
+    --attention_impl=exact \
+    --chip_size=380 \
+    --time_steps=5 \
+    --chip_overlap=0.5 \
+    --time_sampling=soft+distribute \
+    --time_span=7m \
+    --tokenizer=linconv \
+    --optimizer=SGD \
+    --method="MultimodalTransformer" \
+    --arch_name=smt_it_stm_p8 \
+    --normalize_inputs=1024 \
+    --max_epochs=160 \
+    --patience=160 \
+    --max_epoch_length=256 \
+    --draw_interval=5000m \
+    --num_draw=2 \
+    --amp_backend=apex \
+    --num_sanity_val_steps=0 \
+    --init="$INITIAL_STATE"
+
+
