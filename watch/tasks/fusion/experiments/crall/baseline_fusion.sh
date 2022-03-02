@@ -1,6 +1,9 @@
 #!/bin/bash
 __doc__="
 
+SeeAlso:
+    https://docs.google.com/document/d/1blsL71Zabs5IKjq6U3V8wc7fePmmt3MhEfWra2SqkEY/edit
+
 Requirements:
 
     * The SMART WATCH Python repo must be installed in the current python virtualenv

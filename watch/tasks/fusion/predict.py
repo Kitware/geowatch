@@ -14,7 +14,6 @@ from os.path import relpath
 import kwimage
 import kwarray
 import kwcoco
-from watch import heuristics
 from watch.tasks.fusion import datamodules
 from watch.tasks.fusion import utils
 from watch.tasks.tracking.utils import mask_to_polygons
@@ -401,6 +400,7 @@ def predict(cmdline=False, **kwargs):
         if hasattr(method, 'foreground_classes'):
             foreground_classes = method.foreground_classes
         else:
+            from watch import heuristics
             not_foreground = (heuristics.BACKGROUND_CLASSES | heuristics.IGNORE_CLASSNAMES)
             foreground_classes = ub.oset(method.classes) - not_foreground
             # hueristics.B
@@ -568,8 +568,6 @@ def predict(cmdline=False, **kwargs):
                 # finalize_ready(head_stitcher, gid)
                 writer_queue.submit(head_stitcher.finalize_image, gid)
         writer_queue.wait_until_finished()
-
-    # TODO: carbon footprint
 
     try:
         device_info = {

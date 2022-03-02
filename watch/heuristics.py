@@ -8,34 +8,6 @@ easier for us to go back and make the code robust.
 import ubelt as ub
 
 
-# Might need to split this up into a finer-grained structure
-IGNORE_CLASSNAMES = {
-    'clouds', 'occluded',
-    'ignore', 'unknown', 'Unknown',
-
-}
-
-BACKGROUND_CLASSES = {
-    'background',
-    # 'No Activity',
-    # 'Post Construction',
-    # 'negative',
-}
-
-
-SPECIAL_CONTEXT_CLASSES = {
-    'No Activity',
-    'Post Construction',
-    'negative',
-}
-
-
-# These classes are used in BAS, but not in AC/SC
-UNDISTINGUISHED_CLASSES = {
-    'positive',
-}
-
-
 # # FIXME: Hard-coded category aliases.
 # # The correct way to handle these would be to have some information in the
 # # kwcoco category dictionary that specifies how the categories should be
@@ -69,50 +41,132 @@ HUERISTIC_STATUS_DATA = [
 
 
 # metrics-and-test-framework/evaluation.py:1684
-CATEGORIES_SCORED = [
-    {'name': 'Site Preparation', 'color': 'gold'},
-    {'name': 'Active Construction', 'color': 'lime'},
-    {'name': 'Post Construction', 'color': 'darkturquoise'},
-    {'name': 'No Activity', 'color': 'tomato'},
+# Note: the condition field is in development the idea is to
+# encode when a category should be added as a label.
+
+def CONDITION(op, args):
+    return {'type': 'condition', 'op': op, 'args': args}
+
+
+CATEGORIES = [
+    # TODO: clouds
+    {'name': 'background', 'color': 'black', 'scored': False, 'required': True, 'tags': ['background']},
+    # 'color' lightsalmon
+    {'name': 'ignore', 'color': 'blueviolet', 'scored': False, 'required': True, 'tags': ['ignore']},
+    # {'name': 'clouds', 'color': 'offwhite', 'scored': False},
+    {'name': 'Unknown', 'color': 'blueviolet', 'scored': False, 'tags': ['ignore']},
+
+    {'name': 'positive', 'color': 'olive', 'scored': False, 'tags': ['salient']},
+    {'name': 'negative', 'color': 'gray', 'scored': False, 'tags': ['background']},
+
+    {'name': 'Site Preparation', 'color': 'gold', 'scored': True},
+    {'name': 'Active Construction', 'color': 'lime', 'scored': True},
+    # Conditional classes
+    {
+        'name': 'Post Construction',
+        'color': 'darkturquoise',
+        'scored': True,
+        'condition': CONDITION('ALSO_HAS', [
+            'Site Preparation', 'Active Construction', 'No Activity'],
+        )
+    },
+    {
+        'name': 'No Activity',
+        'color': 'tomato',
+        'scored': True,
+        'condition': CONDITION('ALSO_HAS', [
+            'Site Preparation', 'Active Construction', 'No Activity'],
+        ),
+    },
 ]
 
-CATEGORIES_UNSCORED = [
-    {'name': 'positive', 'color': 'olive'},
-]
 
-CATEGORIES = CATEGORIES_SCORED + CATEGORIES_UNSCORED
+def category_condition(condition, track_catnames):
+    """
+    Example:
+        >>> from watch.heuristics import *  # NOQA
+        >>> # usage of category conditions
+        >>> condition = CONDITION('ALSO_HAS', ['Site Preparation', 'Active Construction', 'Post Construction'])
+        >>> track_catnames = ['No Activity']
+        >>> print(category_condition(condition, track_catnames))
+        False
+        >>> track_catnames = ['Post Construction']
+        >>> print(category_condition(condition, track_catnames))
+        True
+        >>> track_catnames = ['No Activity', 'Post Construction']
+        >>> print(category_condition(condition, track_catnames))
+        True
+    """
+    # Might want to make a real parser for this mini-language, or find an
+    # existing mini-language that works
+    op = condition['op']
+    # TODO: normalize classes
+    # TODO: make label conditionals as part of kwcoco
+    if op == 'ALSO_HAS':
+        track_catnames = set(track_catnames)
+        flag = any(arg in track_catnames for arg in condition['args'])
+        return flag
+    else:
+        raise NotImplementedError(op)
+
+# Backwards compat (remove if nothing uses them)
+CATEGORIES_SCORED = [c for c in CATEGORIES if c.get('scored', False)]
+CATEGORIES_UNSCORED = [c for c in CATEGORIES if not c.get('scored', False)]
+
+# CATEGORIES_UNSCORED = [
+#     {'name': 'positive', 'color': 'olive', 'scored': False},
+# ]
+# CATEGORIES = CATEGORIES_SCORED + CATEGORIES_UNSCORED
 
 
-CATEGORIES_NEGATIVE = [
-    {'name': 'No Activity', 'color': 'orange'},
-    {'name': 'Unknown', 'color': 'blueviolet'},
-    {'name': 'ignore', 'color': 'lightsalmon'},
-    {'name': 'negative', 'color': 'gray'},
-    {'name': 'background', 'color': 'black'},
-]
+# Might need to split this up into a finer-grained structure
+IGNORE_CLASSNAMES = {
+    'clouds', 'occluded',
+    'ignore', 'unknown', 'Unknown',
+
+}
+BACKGROUND_CLASSES = {c['name'] for c in CATEGORIES if 'background' in c.get('tags', {})}
+UNDISTINGUISHED_CLASSES = {c['name'] for c in CATEGORIES if 'salient' in c.get('tags', {})}
+# 'background',
+# 'No Activity',
+# 'Post Construction',
+# 'negative',
+# }
+# SPECIAL_CONTEXT_CLASSES = {
+#     'No Activity',
+#     'Post Construction',
+#     'negative',
+# }
+
+
+# # These classes are used in BAS, but not in AC/SC
+# UNDISTINGUISHED_CLASSES = {
+#     'positive',
+# }
+
 
 CATEGORIES_DCT = {
-        'positive': {
-            'scored': [
-                {'name': 'Site Preparation', 'color': 'gold'},
-                {'name': 'Active Construction', 'color': 'lime'},
-                {'name': 'Post Construction', 'color': 'darkturquoise'},
+    'positive': {
+        'scored': [
+            {'name': 'Site Preparation', 'color': 'gold'},
+            {'name': 'Active Construction', 'color': 'lime'},
+            {'name': 'Post Construction', 'color': 'darkturquoise'},
 
-            ],
-            'unscored': [
-                {'name': 'positive', 'color': 'olive'},
-            ],
-        },
-        'negative': {
-            'scored': [
-                {'name': 'No Activity', 'color': 'tomato'},
-            ],
-            'unscored': [
-                {'name': 'Unknown', 'color': 'blueviolet'},
-                {'name': 'ignore', 'color': 'slategray'},
-                {'name': 'negative', 'color': 'orangered'},
-            ],
-        }
+        ],
+        'unscored': [
+            {'name': 'positive', 'color': 'olive'},
+        ],
+    },
+    'negative': {
+        'scored': [
+            {'name': 'No Activity', 'color': 'tomato'},
+        ],
+        'unscored': [
+            {'name': 'Unknown', 'color': 'blueviolet'},
+            {'name': 'ignore', 'color': 'slategray'},
+            {'name': 'negative', 'color': 'orangered'},
+        ],
+    }
 }
 
 # 'name' field only
