@@ -208,7 +208,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         max_epoch_length=None,
         use_conditional_classes=True,
         ignore_dilate=11,
-        min_spacetime_weight=0.1,
+        min_spacetime_weight=0.5,
     ):
         """
         Args:
@@ -424,7 +424,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         parser.add_argument(
             '--ignore_dilate', default=11, type=smartcast, help=ub.paragraph('Dilation applied to ignore masks.'))
         parser.add_argument(
-            '--min_spacetime_weight', default=0.1, type=smartcast, help=ub.paragraph('Minimum space-time dilation weight'))
+            '--min_spacetime_weight', default=0.5, type=smartcast, help=ub.paragraph('Minimum space-time dilation weight'))
 
         return parent_parser
 
@@ -1438,8 +1438,8 @@ class KWCocoVideoDataset(data.Dataset):
             for tid, cnames in tid_to_frame_cnames.items():
                 task_tid_to_cnames['class'][tid] = heuristics.hack_track_categories(cnames, 'class')
                 task_tid_to_cnames['saliency'][tid] = heuristics.hack_track_categories(cnames, 'saliency')
-            print('task_tid_to_cnames = {}'.format(ub.repr2(task_tid_to_cnames, nl=3)))
-            print('tid_to_frame_cnames = {}'.format(ub.repr2(tid_to_frame_cnames, nl=2)))
+            # print('task_tid_to_cnames = {}'.format(ub.repr2(task_tid_to_cnames, nl=3)))
+            # print('tid_to_frame_cnames = {}'.format(ub.repr2(tid_to_frame_cnames, nl=2)))
 
         # TODO: handle all augmentation before we construct any labels
         frame_items = []
