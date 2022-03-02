@@ -109,6 +109,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         >>> self.setup('fit')
         >>> dl = self.train_dataloader()
         >>> dataset = dl.dataset
+        >>> dataset.requested_tasks['change'] = False
         >>> batch = next(iter(dl))
         >>> # Visualize
         >>> canvas = self.draw_batch(batch)
