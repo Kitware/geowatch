@@ -201,13 +201,16 @@ def prepare_results(all_infos):
         class_rows.extend(expt_class_rows)
 
         row = {}
-        row['class_mAP'] = np.nanmean(class_aps) if len(class_aps) else np.nan
-        row['class_mAUC'] = np.nanmean(class_aucs) if len(class_aucs) else np.nan
-        row['class_mAPUC'] = np.nanmean([row['class_mAUC'], row['class_mAP']])
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', 'Mean of empty slice')
+            row['class_mAP'] = np.nanmean(class_aps) if len(class_aps) else np.nan
+            row['class_mAUC'] = np.nanmean(class_aucs) if len(class_aucs) else np.nan
+            row['class_mAPUC'] = np.nanmean([row['class_mAUC'], row['class_mAP']])
 
-        row['salient_AP'] = salient_measures['ap']
-        row['salient_AUC'] = salient_measures['auc']
-        row['salient_APUC'] = np.nanmean([row['salient_AP'], row['salient_AUC']])
+            row['salient_AP'] = salient_measures['ap']
+            row['salient_AUC'] = salient_measures['auc']
+            row['salient_APUC'] = np.nanmean([row['salient_AP'], row['salient_AUC']])
 
         row['catname'] = 'all'
         row['package_name'] = package_name
@@ -261,13 +264,19 @@ def prepare_results(all_infos):
                     pass
 
             from scriptconfig import smartcast
-            # hack
+            # hack, rectify different values of known parameters that mean the
+            # same thing
             fit_config2 = {}
             for k, v in fit_config.items():
                 if k not in {'channels', 'init'}:
                     fit_config2[k] = smartcast.smartcast(v)
                 else:
                     fit_config2[k] = v
+
+            if 'init' in fit_config2:
+                # hack to make init only use the filename
+                fit_config2['init'] = fit_config2['init'].split('/')[-1]
+
             fit_config = fit_config2
             # fit_config = ub.map_vals(smartcast.smartcast, fit_config)
 
@@ -280,9 +289,6 @@ def prepare_results(all_infos):
                  metrics=metrics,
             )
             results_list2.append(result2)
-
-    best_candidates(class_rows, mean_rows)
-
     return class_rows, mean_rows, all_results, results_list2
 
 
@@ -453,6 +459,7 @@ def gather_measures(cmdline=False, **kwargs):
         dvc_dpath = watch.find_smart_dvc_dpath()
         measure_globstr = 'models/fusion/SC-20201117/*/*/*/eval/curves/measures2.json'
         measure_globstr = 'models/fusion/SC-20201117/*_TA1*/*/*/eval/curves/measures2.json'
+        cmdline = False
         kwargs['measure_globstr'] = dvc_dpath / measure_globstr
 
         if 0:
@@ -465,7 +472,7 @@ def gather_measures(cmdline=False, **kwargs):
     from watch.utils import util_path
     import matplotlib as mpl
 
-    config = GatherResultsConfig(cmdline=cmdline, **kwargs)
+    config = GatherResultsConfig(cmdline=cmdline, data=kwargs)
     print('config = {}'.format(ub.repr2(config.asdict(), nl=1)))
 
     measure_globstr = config['measure_globstr']
@@ -572,6 +579,8 @@ def gather_measures(cmdline=False, **kwargs):
     print(f'Failed Jobs {len(failed_jobs)=}/{len(jobs)}')
 
     class_rows, mean_rows, all_results, results_list2 = prepare_results(all_infos)
+    if 0:
+        best_candidates(class_rows, mean_rows)
 
     ignore_params = {
         'default_root_dir', 'name', 'enable_progress_bar'
@@ -581,6 +590,7 @@ def gather_measures(cmdline=False, **kwargs):
         'enable_progress_bar', 'flush_logs_every_n_steps',
         'enable_checkpointing', 'prepare_data_per_node', 'amp_level',
         'vali_dataset', 'test_dataset', 'package_fpath',
+        'num_draw',
     }
     ignore_metrics = {
         'positive_AUC',
@@ -591,11 +601,13 @@ def gather_measures(cmdline=False, **kwargs):
         # 'mauc',
     }
 
+    abalation_orders = {1, 2}
     analysis = result_analysis.ResultAnalysis(
         results_list2, ignore_params=ignore_params,
         # metrics=['class_mAPUC', 'salient_APUC'],
         metrics=['salient_AP'],
         ignore_metrics=ignore_metrics,
+        abalation_orders=abalation_orders
     )
     try:
         analysis.run()

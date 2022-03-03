@@ -19,7 +19,7 @@ except Exception:
 
 
 @profile
-def geotiff_metadata(gpath, elevation='gtop30'):
+def geotiff_metadata(gpath, elevation='gtop30', strict=False):
     """
     Extract all relevant metadata we know how to extract.
 
@@ -59,6 +59,8 @@ def geotiff_metadata(gpath, elevation='gtop30'):
     try:
         infos['crs'] = geotiff_crs_info(ref, elevation=elevation)
     except Exception as ex:
+        if strict:
+            raise
         infos['crs'] = {'crs_error': str(ex)}
     infos['header'] = geotiff_header_info(ref)
 

@@ -25,9 +25,15 @@ python -m watch.cli.prepare_ta2_dataset \
     --s3_fpath=$S3_FPATH \
     --dvc_dpath=$DVC_DPATH \
     --collated=True \
-    --debug=True --select_images '.id % 1200 == 0'  \
-    --align_workers=2 \
+    --debug=False --select_images '.id % 1200 == 0'  \
+    --align_workers=1 \
     --serial=True --run=1
+
+
+jq .images[0] $HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop2-TA1-2022-02-24/data.kwcoco_c9ea8bb9.json
+
+
+kwcoco visualize $HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop2-TA1-2022-02-24/data.kwcoco_c9ea8bb9.json
 
 """
 
@@ -43,7 +49,7 @@ class PrepareTA2Config(scfg.Config):
         'dvc_dpath': scfg.Value('auto', help=''),
         'run': scfg.Value('0', help=''),
         'collated': scfg.Value(True, help='set to false if the input data is not collated'),
-        'serial': scfg.Value(False, help='if True use serial mode'),
+        'serial': scfg.Value(True, help='if True use serial mode'),
         'aws_profile': scfg.Value('iarpa', help='AWS profile to use for remote data access'),
         'align_workers': scfg.Value(0, help='workers for align script'),
 
@@ -190,7 +196,7 @@ def main(cmdline=False, **kwargs):
     align_visualize = config['debug']
     queue.submit(ub.codeblock(
         rf'''
-        AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.coco_align_geotiffs \
+        PROJ_DEBUG=3 AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.coco_align_geotiffs \
             --src "{uncropped_prep_kwcoco_fpath}" \
             --dst "{aligned_kwcoco_fpath}" \
             --regions "{region_dpath / '*.geojson'}" \
@@ -235,11 +241,11 @@ def main(cmdline=False, **kwargs):
             queue.serial_run()
         else:
             queue.run()
-        if config['follow']:
-            agg_state = queue.monitor()
-        if not config['keep_sessions']:
-            if agg_state is not None and not agg_state['errored']:
-                queue.kill()
+        # if config['follow']:
+        agg_state = queue.monitor()
+        # if not config['keep_sessions']:
+        if agg_state is not None and not agg_state['errored']:
+            queue.kill()
 
 
 # dvc_dpath=$home/data/dvc-repos/smart_watch_dvc

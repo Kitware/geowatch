@@ -412,17 +412,19 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
 
         # TODO: ensure real nodata exists (maybe write helper file to disk?)
         sensor_coarse = obj.get('sensor_coarse', None)
-        if sensor_coarse in {'S2', 'L8', 'WV'}:
-            default_nodata = 0
-        else:
-            default_nodata = None
-        # Heuristic for no-data
-        obj['default_nodata'] = default_nodata
+        # if sensor_coarse in {'S2', 'L8', 'WV'}:
+        #     default_nodata = 0
+        # else:
+        #     default_nodata = None
+        # # Heuristic for no-data
+        # obj['default_nodata'] = default_nodata
 
         if 'warp' in overwrite or warp_to_wld is None or approx_meter_gsd is None:
             try:
                 if info is None:
-                    info = watch.gis.geotiff.geotiff_metadata(fpath, **metakw)
+                    info = watch.gis.geotiff.geotiff_metadata(fpath,
+                                                              strict=True,
+                                                              **metakw)
                 if keep_geotiff_metadata:
                     obj['geotiff_metadata'] = info
                 height, width = info['img_shape'][0:2]
@@ -472,6 +474,7 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
 
                 approx_meter_gsd = info['approx_meter_gsd']
             except Exception as ex:
+                raise
                 if default_gsd is not None:
                     obj['approx_meter_gsd'] = default_gsd
                     obj['warp_to_wld'] = kwimage.Affine.eye().__json__()
@@ -1390,11 +1393,15 @@ def _recompute_auxiliary_transforms(img):
     Uses geotiff info to repopulate metadata
     """
     import kwimage
-    auxiliary = img.get('auxiliary', [])
-    idx = ub.argmax(auxiliary, lambda x: (x['width'] * x['height']))
-    # TODO: use the "primary" object coco-image heuristic?
-    base = auxiliary[idx]
-    warp_img_to_wld = kwimage.Affine.coerce(base['warp_to_wld'])
+    from kwcoco.coco_image import CocoImage
+    coco_img = CocoImage(img)
+    base = coco_img.primary_asset()
+    try:
+        warp_img_to_wld = kwimage.Affine.coerce(base['warp_to_wld'])
+    except Exception:
+        print('img = {}'.format(ub.repr2(img, nl=2)))
+        raise
+
     warp_wld_to_img = warp_img_to_wld.inv()
     img.update(ub.dict_isect(base, {
         'utm_corners', 'wld_crs_info', 'utm_crs_info',
@@ -1405,7 +1412,7 @@ def _recompute_auxiliary_transforms(img):
         if 'width' in base and 'height' in base:
             img['width'] = base['width']
             img['height'] = base['height']
-    for aux in auxiliary:
+    for aux in img.get('auxiliary', []):
         warp_aux_to_wld = kwimage.Affine.coerce(aux['warp_to_wld'])
         warp_aux_to_img = warp_wld_to_img @ warp_aux_to_wld
         aux['warp_aux_to_img'] = warp_aux_to_img.concise()

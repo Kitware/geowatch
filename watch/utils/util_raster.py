@@ -38,7 +38,7 @@ def _ensure_open(
     if not isinstance(raster, rasterio.DatasetReader) or raster.closed:
         # workaround for
         # https://rasterio.readthedocs.io/en/latest/faq.html#why-can-t-rasterio-find-proj-db-rasterio-from-pypi-versions-1-2-0
-        with TemporaryEnvironment({'PROJ_LIB': None}):
+        with TemporaryEnvironment({'PROJ_LIB': None, 'PROJ_DEBUG': '3'}):
             return rasterio.open(raster)
     else:
         return raster
@@ -213,7 +213,7 @@ def mask(raster: Union[rasterio.DatasetReader, str],
             'ignore', category=rasterio.errors.NotGeoreferencedWarning)
         # workaround for
         # https://rasterio.readthedocs.io/en/latest/faq.html#why-can-t-rasterio-find-proj-db-rasterio-from-pypi-versions-1-2-0
-        with TemporaryEnvironment({'PROJ_LIB': None}):
+        with TemporaryEnvironment({'PROJ_LIB': None, 'PROJ_DEBUG': '3'}):
 
             img = _ensure_open(raster)
 
