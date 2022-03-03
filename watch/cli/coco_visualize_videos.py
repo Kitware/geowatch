@@ -145,12 +145,11 @@ class CocoVisualizeConfig(scfg.Config):
 
 def _dataset_id(coco_dset):
     """ A possible good default for a coco candidate name """
-    if hasattr(coco_dset, '_dataset_id'):
-        return coco_dset._dataset_id()
-    hashid = coco_dset._build_hashid()
-    coco_fpath = ub.Path(coco_dset.fpath)
-    name = '_'.join([coco_fpath.parent.stem, coco_fpath.stem, hashid[0:8]])
-    return name
+    try:
+        if hasattr(coco_dset, '_dataset_id'):
+            return coco_dset._dataset_id()
+    except Exception:
+        return _hack_dataset_id(coco_dset)
 
 
 def main(cmdline=True, **kwargs):
@@ -796,6 +795,61 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                                        stack=True,
                                                        fit='shrink')
             kwimage.imwrite(view_ann_fpath, ann_canvas)
+
+
+def _hack_cached_hashid(self):
+    """
+    TODO: remove when kwcoco 0.22 is out
+    """
+    cache_miss = True
+    import json
+    enable_cache = (
+        self._state['was_loaded'] and
+        not self._state['was_modified']
+    )
+    if enable_cache:
+        coco_fpath = ub.Path(self.fpath)
+        enable_cache = coco_fpath.exists()
+
+    if enable_cache:
+        hashid_sidecar_fpath = ub.Path(str(coco_fpath) + '.hashid.cache')
+        # Generate current lookup key
+        fpath_stat = coco_fpath.stat()
+        status_key = {
+            'st_size': fpath_stat.st_size,
+            'st_mtime': fpath_stat.st_mtime
+        }
+        if hashid_sidecar_fpath.exists():
+            cached_data = json.loads(hashid_sidecar_fpath.read_text())
+            if cached_data['status_key'] == status_key:
+                self.hashid = cached_data['hashid']
+                self.hashid_parts = cached_data['hashid_parts']
+                cache_miss = False
+
+    if cache_miss:
+        self._build_hashid()
+        if enable_cache:
+            hashid_cache_data = {
+                'hashid': self.hashid,
+                'hashid_parts': self.hashid_parts,
+                'status_key': status_key,
+            }
+            hashid_sidecar_fpath.write_text(json.dumps(hashid_cache_data))
+    return self.hashid
+
+
+def _hack_dataset_id(self):
+    """
+    A human interpretable name that can be used to uniquely identify the
+    dataset.
+
+    Note:
+        This function is currently subject to change.
+    """
+    hashid = _hack_cached_hashid(self)
+    coco_fpath = ub.Path(self.fpath)
+    dset_id = '_'.join([coco_fpath.parent.stem, coco_fpath.stem, hashid[0:8]])
+    return dset_id
 
 
 if __name__ == '__main__':
