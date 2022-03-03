@@ -27,29 +27,6 @@ python -m watch.cli.prepare_ta2_dataset \
     --collated=True \
     --serial=True --run=0
 
-
-python -m watch.cli.coco_add_watch_fields \
-    --src $INPUT_COCO_FPATH \
-    --dst $INPUT_COCO_FPATH.prepped \
-    --workers 16 \
-    --target_gsd=10
-
-kwcoco subset \
-    --src="$HOME/data/dvc-repos/smart_watch_dvc/Uncropped-Drop2-TA1-2022-02-24/data.kwcoco.json" \
-    --dst="$HOME/data/dvc-repos/smart_watch_dvc/Uncropped-Drop2-TA1-2022-02-24/small_data.kwcoco.json" \
-    --select_images '.id < 20'
-
-AWS_DEFAULT_PROFILE=iarpa python -m watch.cli.coco_align_geotiffs \
-    --src "$HOME/data/dvc-repos/smart_watch_dvc/Uncropped-Drop2-TA1-2022-02-24/small_data.kwcoco.json" \
-    --dst "$HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop2-TA1-2022-02-24/small_data.kwcoco.json" \
-    --regions "$HOME/data/dvc-repos/smart_watch_dvc/annotations/region_models/*.geojson" \
-    --workers="min(avail,max(all/2,8))" \
-    --context_factor=1 \
-    --geo_preprop=auto \
-    --visualize False \
-    --keep img \
-    --rpc_align_method affine_warp
-
 """
 
 
@@ -65,6 +42,7 @@ class PrepareTA2Config(scfg.Config):
         'run': scfg.Value('0', help=''),
         'collated': scfg.Value(True, help='set to false if the input data is not collated'),
         'serial': scfg.Value(False, help='if True use serial mode'),
+        'aws_profile': scfg.Value('iarpa', help='AWS profile to use for remote data access'),
     }
 
 
@@ -159,10 +137,26 @@ def main(cmdline=False, **kwargs):
         [[ -f {uncropped_kwcoco_fpath} ]] || AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.ta1_stac_to_kwcoco \
             "{uncropped_catalog_fpath}" \
             --outpath="{uncropped_kwcoco_fpath}" \
-            --populate-watch-fields \
             {collated_str} \
             --jobs "min(avail,8)"
         '''))
+
+    SMALL_DEBUG = 1
+    if SMALL_DEBUG:
+        # Debugging
+        small_uncropped_kwcoco_fpath = uncropped_kwcoco_fpath.augment(suffix='_small')
+        queue.submit(ub.codeblock(
+            rf'''
+            python -m kwcoco subset \
+                --src="{uncropped_kwcoco_fpath}" \
+                --dst="{small_uncropped_kwcoco_fpath}" \
+                --select_images='.id % 300 == 0'
+            '''))
+
+        uncropped_kwcoco_fpath = small_uncropped_kwcoco_fpath
+        uncropped_prep_kwcoco_fpath = uncropped_prep_kwcoco_fpath.augment(suffix='_small')
+        aligned_kwcoco_fpath = aligned_kwcoco_fpath.augment(suffix='_small')
+        # --populate-watch-fields \
 
     queue.submit(ub.codeblock(
         rf'''
@@ -177,6 +171,12 @@ def main(cmdline=False, **kwargs):
 
     # region_model_str = ' '.join([shlex.quote(str(p)) for p in region_models])
 
+    cache_crops = 1
+    if cache_crops:
+        keep_flag = '--keep img'
+    else:
+        keep_flag = '--keep none'
+
     queue.submit(ub.codeblock(
         rf'''
         AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.coco_align_geotiffs \
@@ -187,7 +187,7 @@ def main(cmdline=False, **kwargs):
             --context_factor=1 \
             --geo_preprop=auto \
             --visualize False \
-            --keep img \
+            {keep_flag} \
             --rpc_align_method affine_warp
         '''))
 

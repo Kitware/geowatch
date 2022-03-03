@@ -310,6 +310,10 @@ def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
     if 'default_nodata' not in img:
         img['default_nodata'] = primary_obj['default_nodata']
 
+    if 'width' not in img or 'height' not in img:
+        # TODO: better test to see if we need to recompute auxiliary transforms
+        _recompute_auxiliary_transforms(img)
+
     valid_region_utm = img.get('valid_region_utm', None)
     if enable_valid_region and (valid_region_utm is None or 'warp' in overwrite):
         _populate_valid_region(coco_img)
@@ -433,8 +437,7 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
                 # FIXME: FOR NOW JUST USE THIS BIG HACK
                 xy1_man = info['pxl_corners'].data.astype(np.float64)
                 xy2_man = info['utm_corners'].data.astype(np.float64)
-                hack_aff = kwimage.Affine.coerce(
-                    fit_affine_matrix(xy1_man, xy2_man))
+                hack_aff = kwimage.Affine.fit(xy1_man, xy2_man)
                 obj_to_wld = kwimage.Affine.coerce(hack_aff)
                 # cv2.getAffineTransform(utm_corners, pxl_corners)
 
@@ -1219,72 +1222,6 @@ def _make_coco_img_from_geotiff(tiff_fpath, name=None):
     return obj
 
 
-@profile
-def fit_affine_matrix(xy1_man, xy2_man):
-    """
-    Sympy:
-        import sympy as sym
-        x1, y1, x2, y2 = sym.symbols('x1, y1, x2, y2')
-        A = sym.Matrix([
-            [x1, y1,  0,  0, 1, 0],
-            [ 0,  0, x1, y1, 0, 1],
-        ])
-        b = sym.Matrix([[x2], [y2]])
-        x = (A.T.multiply(A)).inv().multiply(A.T.multiply(b))
-        x = (A.T.multiply(A)).pinv().multiply(A.T.multiply(b))
-
-    References:
-        https://www.cs.ubc.ca/~lowe/papers/ijcv04.pdf page 22
-    """
-    x1_mn = xy1_man.T[0]
-    y1_mn = xy1_man.T[1]
-    x2_mn = xy2_man.T[0]
-    y2_mn = xy2_man.T[1]
-    num_pts = x1_mn.shape[0]
-    Mx6 = np.empty((2 * num_pts, 6), dtype=np.float64)
-    b = np.empty((2 * num_pts, 1), dtype=np.float64)
-    for ix in range(num_pts):  # Loop over inliers
-        # Concatenate all 2x9 matrices into an Mx6 matrix
-        x1 = x1_mn[ix]
-        x2 = x2_mn[ix]
-        y1 = y1_mn[ix]
-        y2 = y2_mn[ix]
-        Mx6[ix * 2]     = (x1, y1, 0, 0, 1, 0)
-        Mx6[ix * 2 + 1] = ( 0, 0, x1, y1, 0, 1)
-        b[ix * 2] = x2
-        b[ix * 2 + 1] = y2
-
-    M = Mx6
-    try:
-        USVt = np.linalg.svd(M, full_matrices=True, compute_uv=True)
-    except MemoryError:
-        import scipy.sparse as sps
-        import scipy.sparse.linalg as spsl
-        M_sparse = sps.lil_matrix(M)
-        USVt = spsl.svds(M_sparse)
-    except np.linalg.LinAlgError:
-        raise
-    except Exception:
-        raise
-
-    U, s, Vt = USVt
-
-    # Inefficient, but I think the math works
-    # We want to solve Ax=b (where A is the Mx6 in this case)
-    # Ax = b
-    # (U S V.T) x = b
-    # x = (U.T inv(S) V) b
-    Sinv = np.zeros((len(Vt), len(U)))
-    Sinv[np.diag_indices(len(s))] = 1 / s
-    a = Vt.T.dot(Sinv).dot(U.T).dot(b).T[0]
-    A = np.array([
-        [a[0], a[1], a[4]],
-        [a[2], a[3], a[5]],
-        [   0, 0, 1],
-    ])
-    return A
-
-
 def _sensor_channel_hueristic(sensor_coarse, num_bands):
     """
     Given a sensor and the number of bands in the image, return likely channel
@@ -1455,6 +1392,7 @@ def _recompute_auxiliary_transforms(img):
     import kwimage
     auxiliary = img.get('auxiliary', [])
     idx = ub.argmax(auxiliary, lambda x: (x['width'] * x['height']))
+    # TODO: use the "primary" object coco-image heuristic?
     base = auxiliary[idx]
     warp_img_to_wld = kwimage.Affine.coerce(base['warp_to_wld'])
     warp_wld_to_img = warp_img_to_wld.inv()
@@ -1463,6 +1401,10 @@ def _recompute_auxiliary_transforms(img):
         'width', 'height', 'wgs84_to_wld',
         'wld_to_pxl',
     }))
+    if 'width' not in img and 'height' not in img:
+        if 'width' in base and 'height' in base:
+            img['width'] = base['width']
+            img['height'] = base['height']
     for aux in auxiliary:
         warp_aux_to_wld = kwimage.Affine.coerce(aux['warp_to_wld'])
         warp_aux_to_img = warp_wld_to_img @ warp_aux_to_wld

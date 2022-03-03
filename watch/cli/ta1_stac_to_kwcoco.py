@@ -15,6 +15,11 @@ import watch
 from watch.utils import util_bands
 from watch.utils import kwcoco_extensions
 
+try:
+    from xdev import profile
+except Exception:
+    profile = ub.probile
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -41,7 +46,6 @@ def main():
                         help="Data to convert has been run through TA-1 "
                              "collation")
     parser.add_argument("-j", "--jobs",
-                        # type=int,
                         type=str,
                         default=1,
                         required=False,
@@ -147,13 +151,15 @@ def _determine_wv_channels(asset_name, asset_dict):
     return channels
 
 
+@profile
 def make_coco_img_from_stac_asset(asset_name,
                                   asset_dict,
                                   platform,
                                   name=None,
                                   force_affine=True,
                                   assume_relative=False,
-                                  from_collated=False):
+                                  from_collated=False,
+                                  populate_watch_fields=True):
     img = {}
     if name is not None:
         img['name'] = name
@@ -163,37 +169,6 @@ def make_coco_img_from_stac_asset(asset_name,
     # Skip assets with metadata or thumbnail extensions
     if re.search(r'\.(txt|csv|json|xml|vrt|jpe?g)$', asset_href, re.I):
         return None
-
-    # Largely a copy-paste of
-    # `watch.gis.geotiff.geotiff_metadata(asset_href)` without
-    # attempting to parse metadata from the filename / path
-    infos = {}
-    try:
-        ref = gdal.Open(asset_href, gdal.GA_ReadOnly)
-        if ref is None:
-            msg = gdal.GetLastErrorMsg()
-            # gdal.GetLastErrorType()
-            # gdal.GetLastErrorNo()
-            print("* Warning * Couldn't open asset_href '{}' with "
-                  "GDAL:".format(asset_href))
-            print(msg)
-            return None
-
-        infos['crs'] = watch.gis.geotiff.geotiff_crs_info(
-            ref, force_affine=force_affine)
-        infos['header'] = watch.gis.geotiff.geotiff_header_info(ref)
-    finally:
-        ref = None
-
-    # Combine sensor candidates
-    sensor_candidates = list(ub.flatten([
-        v.get('sensor_candidates', []) for v in infos.values()]))
-
-    info = ub.dict_union(*infos.values())
-    info['sensor_candidates'] = sensor_candidates
-
-    warp_pxl_to_wld = kwimage.Affine.coerce(info['pxl_to_wld'])
-    height, width = info['img_shape']
 
     if from_collated and platform in (SUPPORTED_S2_PLATFORMS |
                                       SUPPORTED_LS_PLATFORMS |
@@ -214,34 +189,72 @@ def make_coco_img_from_stac_asset(asset_name,
               "at: '{}'".format(asset_href))
         return None
 
-    wld_crs_info = ub.dict_diff(info['wld_crs_info'], {'type'})
-    utm_crs_info = ub.dict_diff(info['utm_crs_info'], {'type'})
-
     if assume_relative:
         file_name = os.path.join(os.path.basename(os.path.dirname(asset_href)),
                                  os.path.basename(asset_href))
     else:
         file_name = asset_href
+    print('----')
+    print('platform   = {!r}'.format(platform))
+    print('asset_href = {!r}'.format(asset_href))
+    print('file_name  = {!r}'.format(file_name))
+    print('channels   = {!r}'.format(channels))
 
     img.update({
         'file_name': file_name,
-        'width': width,
-        'height': height,
         'channels': channels,
-        'num_bands': info['num_bands'],
-        'approx_meter_gsd': info['approx_meter_gsd'],
-        'warp_pxl_to_wld': warp_pxl_to_wld,
-        'utm_corners': info['utm_corners'].data.tolist(),
-        'wld_crs_info': wld_crs_info,
-        'utm_crs_info': utm_crs_info,
     })
+
+    if populate_watch_fields:
+        # Largely a copy-paste of
+        # `watch.gis.geotiff.geotiff_metadata(asset_href)` without
+        # attempting to parse metadata from the filename / path
+        infos = {}
+        try:
+            ref = gdal.Open(asset_href, gdal.GA_ReadOnly)
+            if ref is None:
+                msg = gdal.GetLastErrorMsg()
+                # gdal.GetLastErrorType()
+                # gdal.GetLastErrorNo()
+                print("* Warning * Couldn't open asset_href '{}' with "
+                      "GDAL:".format(asset_href))
+                print(msg)
+                return None
+
+            infos['crs'] = watch.gis.geotiff.geotiff_crs_info(
+                ref, force_affine=force_affine)
+            infos['header'] = watch.gis.geotiff.geotiff_header_info(ref)
+        finally:
+            ref = None
+
+        # Combine sensor candidates
+        sensor_candidates = list(ub.flatten([
+            v.get('sensor_candidates', []) for v in infos.values()]))
+        info = ub.dict_union(*infos.values())
+        info['sensor_candidates'] = sensor_candidates
+        warp_pxl_to_wld = kwimage.Affine.coerce(info['pxl_to_wld'])
+        height, width = info['img_shape']
+        wld_crs_info = ub.dict_diff(info['wld_crs_info'], {'type'})
+        utm_crs_info = ub.dict_diff(info['utm_crs_info'], {'type'})
+        img.update({
+            'width': width,
+            'height': height,
+            'num_bands': info['num_bands'],
+            'approx_meter_gsd': info['approx_meter_gsd'],
+            'warp_pxl_to_wld': warp_pxl_to_wld,
+            'utm_corners': info['utm_corners'].data.tolist(),
+            'wld_crs_info': wld_crs_info,
+            'utm_crs_info': utm_crs_info,
+        })
 
     return img
 
 
+@profile
 def _stac_item_to_kwcoco_image(stac_item,
                                assume_relative=False,
-                               from_collated=False):
+                               from_collated=False,
+                               populate_watch_fields=True):
     stac_item_dict = stac_item.to_dict()
 
     platform = stac_item_dict['properties']['platform']
@@ -264,32 +277,35 @@ def _stac_item_to_kwcoco_image(stac_item,
             platform,
             force_affine=True,
             assume_relative=assume_relative,
-            from_collated=from_collated)
-        if aux is None:
-            continue
-        auxiliary.append(aux)
+            from_collated=from_collated,
+            populate_watch_fields=populate_watch_fields
+        )
+        if aux is not None:
+            auxiliary.append(aux)
 
     # Choose a base image canvas and the relationship between auxiliary images
-    idx = ub.argmax(auxiliary, lambda x: (x['width'] * x['height']))
-    base = auxiliary[idx]
-    warp_img_to_wld = base['warp_pxl_to_wld']
-    warp_wld_to_img = warp_img_to_wld.inv()
-    img['warp_img_to_wld'] = warp_img_to_wld.concise()
-    img['warp_to_wld'] = warp_img_to_wld.concise()
-    img['approx_meter_gsd'] = base['approx_meter_gsd']
-    img.update(ub.dict_isect(base,
-                             {'utm_corners', 'wld_crs_info', 'utm_crs_info'}))
+    if populate_watch_fields:
+        idx = ub.argmax(auxiliary, lambda x: (x['width'] * x['height']))
+        base = auxiliary[idx]
+        warp_img_to_wld = base['warp_pxl_to_wld']
+        warp_wld_to_img = warp_img_to_wld.inv()
+        img['warp_img_to_wld'] = warp_img_to_wld.concise()
+        img['warp_to_wld'] = warp_img_to_wld.concise()
+        img['approx_meter_gsd'] = base['approx_meter_gsd']
+        img.update(ub.dict_isect(base,
+                                 {'utm_corners', 'wld_crs_info', 'utm_crs_info'}))
 
-    for aux in auxiliary:
-        aux.pop('utm_corners')
-        aux.pop('utm_crs_info')
-        aux.pop('wld_crs_info')
-        aux['warp_to_wld'] = aux['warp_pxl_to_wld'].concise()
-        warp_aux_to_img = warp_wld_to_img @ aux.pop('warp_pxl_to_wld')
-        aux['warp_aux_to_img'] = warp_aux_to_img.concise()
+        for aux in auxiliary:
+            aux.pop('utm_corners')
+            aux.pop('utm_crs_info')
+            aux.pop('wld_crs_info')
+            aux['warp_to_wld'] = aux['warp_pxl_to_wld'].concise()
+            warp_aux_to_img = warp_wld_to_img @ aux.pop('warp_pxl_to_wld')
+            aux['warp_aux_to_img'] = warp_aux_to_img.concise()
 
-    img['width'] = base['width']
-    img['height'] = base['height']
+        img['width'] = base['width']
+        img['height'] = base['height']
+
     img['auxiliary'] = auxiliary
 
     date = stac_item_dict['properties']['datetime']
@@ -302,6 +318,7 @@ def _stac_item_to_kwcoco_image(stac_item,
     return img
 
 
+@profile
 def ta1_stac_to_kwcoco(input_stac_catalog,
                        outpath,
                        assume_relative=False,
@@ -340,7 +357,8 @@ def ta1_stac_to_kwcoco(input_stac_catalog,
     for stac_item in all_items:
         executor.submit(_stac_item_to_kwcoco_image, stac_item,
                         assume_relative=assume_relative,
-                        from_collated=from_collated)
+                        from_collated=from_collated,
+                        populate_watch_fields=populate_watch_fields)
 
     output_dset = kwcoco.CocoDataset()
     output_dset.fpath = outpath
