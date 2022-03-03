@@ -47,6 +47,8 @@ __getattr__ = lazy_import(
             'load_site_model_schema',
             'load_region_model_schema',
             'load_job_schema',
+            'geoidgrid_path',
+            'dem_path',
         ],
     },
 )
@@ -58,5 +60,5 @@ def __dir__():
 
 __all__ = [
     'load_site_model_schema', 'load_region_model_schema', 'load_job_schema',
-    'registry'
+    'geoidgrid_path', 'dem_path', 'registry'
 ]

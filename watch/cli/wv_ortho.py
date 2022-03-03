@@ -12,13 +12,13 @@ from osgeo_utils.gdal_pansharpen import gdal_pansharpen
 
 import watch
 from watch.utils.util_stac import parallel_map_items, maps, associate_msi_pan
-from watch.utils.util_gdal import gdalwarp_performance_opts
+from watch.utils.util_gdal import gdal_single_warp
 
 
 def main():
     parser = argparse.ArgumentParser(
         description='Orthorectify WorldView images to a DEM, '
-                    'and merge matching PAN and MSI items.')
+        'and merge matching PAN and MSI items.')
 
     parser.add_argument('stac_catalog',
                         type=str,
@@ -34,9 +34,10 @@ def main():
                         default=1,
                         required=False,
                         help='Number of jobs to run in parallel')
-    parser.add_argument('--te_dems',
-                        action='store_true',
-                        help='Use IARPA T&E DEMs instead of GTOP30 DEMs')
+    parser.add_argument('--no_te_dems',
+                        dest='te_dems',
+                        action='store_false',
+                        help='Use GTOP30 DEMs instead of IARPA T&E DEMs')
     parser.add_argument('--drop_empty',
                         action='store_true',
                         help='Remove empty items from the catalog after '
@@ -52,7 +53,7 @@ def main():
                         help='Skip orthorectification.')
     parser.add_argument('--pansharpen',
                         action='store_true',
-                        help='Additionally pan-sharpen any MSI images.')
+                        help='Additionally pan-sharpen any MSI images')
     parser.add_argument('--as_rgb',
                         action='store_true',
                         help='Create pansharpened image as 3-band RGB instead '
@@ -66,7 +67,7 @@ def main():
 def wv_ortho(stac_catalog,
              outdir,
              jobs=1,
-             te_dems=False,
+             te_dems=True,
              drop_empty=False,
              as_vrt=False,
              as_utm=False,
@@ -199,10 +200,20 @@ def _ortho_map(stac_item, outdir, drop_empty=False, *args, **kwargs):
 
     print("* Orthorectifying WV item: '{}'".format(stac_item.id))
 
-    if(stac_item.properties.get('constellation') == 'worldview' and
-       stac_item.properties.get('nitf:image_preprocessing_level') == '1R'):
+    if (stac_item.properties.get('constellation') == 'worldview'
+            and stac_item.properties.get('nitf:image_preprocessing_level')
+            == '1R'):
 
-        output_stac_item = orthorectify(stac_item, outdir, *args, **kwargs)
+        in_fpath = ub.Path(stac_item.assets['data'].href)
+        out_fpath = ub.Path(outdir) / in_fpath.name
+        geometry = shapely.geometry.shape(stac_item.geometry)
+
+        # warning: can change out_fpath's extension
+        out_fpath = orthorectify(in_fpath, out_fpath, geometry, *args,
+                                 **kwargs)
+
+        output_stac_item = deepcopy(stac_item)
+        output_stac_item.assets['data'].href = str(out_fpath)
 
         if drop_empty and is_empty(output_stac_item.assets['data'].href):
             output_stac_item = None
@@ -214,48 +225,90 @@ def _ortho_map(stac_item, outdir, drop_empty=False, *args, **kwargs):
     return output_stac_item
 
 
-def orthorectify(stac_item, outdir, te_dems, as_vrt, as_utm):
-    in_fpath = stac_item.assets['data'].href
-    if as_vrt:
-        out_fpath = os.path.splitext(
-            os.path.join(outdir, os.path.basename(in_fpath)))[0] + '.vrt'
-        cmd_str_out = '-of VRT'
-    else:
-        out_fpath = os.path.splitext(
-            os.path.join(outdir, os.path.basename(in_fpath)))[0] + '.tif'
-        cmd_str_out = '-of COG -co BLOCKSIZE=64 -co COMPRESS=DEFLATE'
+def orthorectify(in_fpath, out_fpath, geometry: shapely.geometry.Polygon,
+                 te_dems: bool, as_vrt: bool, as_utm: bool):
+    '''
+    Orthorectify a WV image to a DEM using RPCs.
 
-    lon, lat = np.concatenate(
-        shapely.geometry.shape(stac_item.geometry).centroid.xy)
-    if te_dems:
-        raise NotImplementedError
+    Example:
+        >>> # xdoctest: +SKIP
+        >>> import seaborn_image as isns
+        >>> import matplotlib.pyplot as plt
+        >>> from pystac import Item
+        >>> import ubelt as ub
+        >>> import os
+        >>> import rasterio
+        >>> import shapely.geometry
+        >>> from watch.utils.util_raster import mask, ResampledRaster
+        >>> from watch.cli.wv_ortho import orthorectify
+        >>> stac_item = Item.from_file(
+        >>>     'original_18JAN07023100-M1BS-014525269010_01_P001.json')
+        >>> href = ub.Path(stac_item.assets['data'].href)
+        >>> in_fpath = ub.Path(href.name)
+        >>> if not in_fpath.is_file():
+        >>>    os.system(f'aws s3 cp {href} {in_fpath} --profile iarpa')
+        >>> with ResampledRaster(in_fpath, scale=0.1) as f:
+        >>>     arr1 = f.read()
+        >>>     img1 = f
+        >>> geometry = shapely.geometry.shape(stac_item.geometry)
+        >>> out_fpath = ub.Path('ortho') / ('gtx' + in_fpath.name)
+        >>> out_fpath = orthorectify(in_fpath, out_fpath, geometry,
+        >>>                          te_dems=False, as_vrt=False, as_utm=True)
+        >>> with ResampledRaster(out_fpath, scale=0.1) as f:
+        >>>     arr2 = f.read()
+        >>>     img2 = f
+        >>> out_fpath = ub.Path('ortho') / ('gtxte' + in_fpath.name)
+        >>> out_fpath = orthorectify(in_fpath, out_fpath, geometry,
+        >>>                          te_dems=True, as_vrt=False, as_utm=True)
+        >>> with ResampledRaster(out_fpath, scale=0.1) as f:
+        >>>     arr3 = f.read()
+        >>>     img3 = f
+        >>> m1 = mask(img1.files[0], save=False, as_poly=False)
+        >>> m2 = mask(img2.files[0], save=False, as_poly=False)
+        >>> m3 = mask(img3.files[0], save=False, as_poly=False)
+        >>> isns.ImageGrid([m1, m2, m3, arr1[0], arr2[0], arr3[0]],
+        >>>                col_wrap=3, axis=0)
+        >>> plt.show()
+    '''
+    if as_vrt:
+        out_fpath = ub.Path(out_fpath).with_suffix('.vrt')
     else:
+        out_fpath = ub.Path(out_fpath).with_suffix('.tif')
+
+    lon, lat = np.concatenate(geometry.centroid.xy)
+
+    if te_dems:
+
+        # TODO should geoidgrid s_srs be used for DEM too? If so, how?
+        # Surprisingly, passing in the WMS xml file just works! No need to crop
+        # the DEM to the image first. But see
+        # watch.utils.util_raster.open_cropped() for those tests.
+        from watch.rc import dem_path
+        dem_fpath = dem_path()
+
+    else:
+
         dems = watch.gis.elevation.girder_gtop30_elevation_dem()
         dem_fpath, dem_info = dems.find_reference_fpath(lat, lon)
 
     # TODO: is this necessary for epsg=utm?
     # https://gis.stackexchange.com/questions/193094/can-gdalwarp-reproject-from-espg4326-wgs84-to-utm
-    # '+proj=utm +zone=12 +datum=WGS84 +units=m +no_defs'
+    # -t_srs '+proj=utm +zone=12 +datum=WGS84 +units=m +no_defs'
     if as_utm:
         epsg = watch.gis.spatial_reference.utm_epsg_from_latlon(lat, lon)
     else:
         epsg = 4326
 
-    cmd_str = ub.paragraph(f'''
-        gdalwarp
-        --debug off
-        {cmd_str_out}
-        -t_srs EPSG:{epsg} -et 0
-        -rpc -to RPC_DEM={dem_fpath}
-        -overwrite
-        -srcnodata 0 -dstnodata 0
-        {gdalwarp_performance_opts}
-        {in_fpath} {out_fpath}
-        ''')
-    cmd = ub.cmd(cmd_str, check=True, verbose=0)  # noqa
-    item = deepcopy(stac_item)
-    item.assets['data'].href = out_fpath
-    return item
+    gdal_single_warp(in_fpath,
+                     out_fpath,
+                     local_epsg=epsg,
+                     nodata=0,
+                     rpcs=True,
+                     use_perf_opts=True,
+                     as_vrt=as_vrt,
+                     use_te_geoidgrid=True,
+                     dem_fpath=dem_fpath)
+    return out_fpath
 
 
 @maps
@@ -292,7 +345,7 @@ def pansharpen(stac_item_pan, stac_item_msi, outdir, as_rgb):
         -threads ALL_CPUS
         -nodata 0
         -of COG
-        -co BLOCKSIZE=64
+        -co BLOCKSIZE=256
         -co COMPRESS=NONE
         --config GDAL_CACHEMAX 10%
         -co NUM_THREADS=ALL_CPUS
@@ -307,7 +360,7 @@ def pansharpen(stac_item_pan, stac_item_msi, outdir, as_rgb):
         'nodata_value': 0,
         'driver_name': 'COG',
         'creation_options': {
-            'BLOCKSIZE': 64,
+            'BLOCKSIZE': 256,
             'COMPRESS': 'NONE',
             'NUM_THREADS': 'ALL_CPUS'
         },
