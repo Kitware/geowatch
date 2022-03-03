@@ -265,7 +265,7 @@ def make_fit_config(cmdline=False, **kwargs):
         'accumulate_grad_batches': 1,
 
         'max_epochs': None,
-        'max_steps': None,
+        'max_steps': -1,
         'max_time': None,
 
         'check_val_every_n_epoch': 1,
@@ -290,6 +290,9 @@ def make_fit_config(cmdline=False, **kwargs):
         args.normalize_inputs = True
     if args.normalize_inputs == 'False':
         args.normalize_inputs = False
+
+    if args.max_steps is None:
+        args.max_steps = -1  # Hack to supress warning
 
     # print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
     learning_config = ub.dict_diff(args.__dict__, learning_irrelevant)
@@ -326,7 +329,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
 
     args_dict = args.__dict__
     print('{train_name}\n===================='.format(**args_dict))
-    print('args_dict = {}'.format(ub.repr2(args_dict, nl=1, sort=0)))
+    print('args_dict = {}'.format(ub.repr2(args_dict, nl=1, sort=1)))
 
     ub.Path(args.workdir).ensuredir()
 
@@ -367,11 +370,27 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
                 import torch
                 import tempfile
                 tfile = tempfile.NamedTemporaryFile()
-                torch.save(other_model.state_dict(), tfile.name)
+
+                state_dict = other_model.state_dict()
+
+                # HACK:
+                # Remove the normalization keys, we don't want to transfer them
+                # in this step. They will be set correctly depending on if
+                # normalize_inputs=transfer or not.
+                bad_keys = [key for key in state_dict if 'input_norms' in key]
+                for k in bad_keys:
+                    state_dict.pop(k)
+                print(ub.repr2(sorted(state_dict.keys())))
+
+                torch.save(state_dict, tfile.name)
                 init_kw['fpath'] = tfile.name
         initializer = init_cls(**init_kw)
 
     if hasattr(datamodule, 'dataset_stats'):
+
+        # TODO: Allow manual override of any of the dataset stats or allow them
+        # to be combined with a prior with some level of confidence.
+
         # Compute mean/std
         # TODO: allow for hardcoding per-sensor/channel mean/std in the
         # heuristics and then using those to have the option to skip computing
@@ -429,6 +448,7 @@ def make_lightning_modules(args=None, cmdline=False, **kwargs):
                     verbose=True, strict=False),
                 pl.callbacks.ModelCheckpoint(
                     monitor='val_loss', mode='min', save_top_k=8),
+                pl.callbacks.ModelCheckpoint(every_n_epochs=10),
             ]
 
             if datamodule.requested_tasks['change']:

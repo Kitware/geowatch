@@ -36,10 +36,13 @@ def predict(dataset, deployed, output, num_workers=0, device='auto'):
     log.info('Output:         {}'.format(output_dset_filename))
     log.info('Output Images:  {}'.format(output_data_dir))
 
-    try:
-        device = int(device)
-    except Exception:
-        pass
+    # try:
+    #     device = int(device)
+    # except Exception:
+    from watch.utils.lightning_ext import util_device
+    device = util_device.coerce_devices(device)[0]
+
+    log.info('device = {}'.format(device))
 
     num_workers = util_globals.coerce_num_workers(num_workers)
 

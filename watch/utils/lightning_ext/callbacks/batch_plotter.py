@@ -170,8 +170,13 @@ class BatchPlotter(pl.callbacks.Callback):
             self.draw_batch(trainer, outputs, batch, batch_idx)
             self.draw_timer.tic()
 
-    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
+    #  New
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
         self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx)
+
+    #  Old sig
+    # def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
+    #     self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx)
 
     def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
         self.draw_if_ready(trainer, pl_module, outputs, batch, batch_idx)

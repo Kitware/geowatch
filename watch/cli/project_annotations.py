@@ -17,10 +17,16 @@ CommandLine:
     # Update to whatever the state of the annotations submodule is
     DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
     python -m watch project_annotations \
-        --src $DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json \
-        --dst $DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json \
-        --viz_dpath $DVC_DPATH/Drop2-Aligned-TA1-2022-01/_viz_propogate \
+        --src $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
+        --dst $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
+        --viz_dpath $DVC_DPATH/Drop2-Aligned-TA1-2022-02/_viz_propogate \
         --site_models="$DVC_DPATH/annotations/site_models/*.geojson"
+
+    python -m watch visualize \
+        --src $DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json \
+        --space="video" \
+        --num_workers=avail \
+        --any3="only" --draw_anns=True --draw_imgs=False --animate=True
 """
 import dateutil
 import kwcoco
@@ -81,22 +87,6 @@ class ProjectAnnotationsConfig(scfg.Config):
         'geospace_lookup': scfg.Value('auto', help='if False assumes region-ids can be used to lookup association'),
 
         'workers': scfg.Value(0, help='number of workers for geo-preprop if done'),
-
-        # Do we need these?
-        # 'validate': scfg.Value(1, help=ub.paragraph(
-        #     '''
-        #     Validate spatial and temporal AOI of each site after propagating
-        #     ''')),
-        # 'crop': scfg.Value(1, help=ub.paragraph(
-        #     '''
-        #     Crop propagated annotations to the valid data mask of the new image
-        #     ''')),
-
-        # 'max_workers': scfg.Value(None, help=ub.paragraph(
-        #     '''
-        #     Max. number of workers to parallelize over, up to the number of
-        #     regions/ROIs. None is auto; 0 is serial.
-        #     '''))
     }
 
 
@@ -112,16 +102,17 @@ def main(cmdline=False, **kwargs):
         >>> from watch.utils import util_data
         >>> import tempfile
         >>> dvc_dpath = util_data.find_smart_dvc_dpath()
-        >>> bundle_dpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/'
+        >>> #kwcoco_fpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/data.kwcoco.json'
+        >>> kwcoco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
         >>> dpath = ub.Path(ub.ensure_app_cache_dir('watch/tests/project_annots'))
         >>> cmdline = False
         >>> output_fpath = dpath / 'data.kwcoco.json'
         >>> viz_dpath = (dpath / 'viz').ensuredir()
         >>> kwargs = {
-        >>>     'src': bundle_dpath / 'data.kwcoco.json',
+        >>>     'src': kwcoco_fpath,
         >>>     'dst': output_fpath,
         >>>     'viz_dpath': viz_dpath,
-        >>>     'site_models': dvc_dpath / 'drop1/site_models',
+        >>>     'site_models': dvc_dpath / 'site_models',
         >>> }
         >>> main(**kwargs)
     """
@@ -251,14 +242,14 @@ def assign_sites_to_images(coco_dset, sites, propogate, geospace_lookup='auto'):
     from watch import heuristics
     status_to_color = {d['name']: kwimage.Color(d['color']).as01()
                        for d in heuristics.HUERISTIC_STATUS_DATA}
-    print(coco_dset.dataset['categories'])
+    print('coco_dset categories = {}'.format(ub.repr2(coco_dset.dataset['categories'], nl=2)))
     for cat in heuristics.CATEGORIES:
         coco_dset.ensure_category(**cat)
     # hack in heuristic colors
     heuristics.ensure_heuristic_coco_colors(coco_dset)
     # handle any other colors
     kwcoco_extensions.category_category_colors(coco_dset)
-    print(coco_dset.dataset['categories'])
+    print('coco_dset categories = {}'.format(ub.repr2(coco_dset.dataset['categories'], nl=2)))
 
     all_drawable_infos = []  # helper if we are going to draw
 

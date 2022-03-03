@@ -118,6 +118,8 @@ def main():
     tmux_schedule_dpath = dvc_dpath / '_tmp_tmux_schedule'
     tmux_schedule_dpath.ensuredir()
 
+    serial = False
+
     environ = {
         'DVC_DPATH': dvc_dpath,
     }
@@ -188,7 +190,10 @@ def main():
 
     if run:
         # ub.cmd('bash ' + str(driver_fpath), verbose=3, check=True)
-        tq.run()
+        if serial:
+            tq.serial_run()
+        else:
+            tq.run()
         agg_state = tq.monitor()
         if not agg_state['errored']:
             tq.kill()

@@ -35,6 +35,8 @@ class TeamFeaturePipelineConfig(scfg.Config):
             does not start it by default.''')),
 
         'data_workers': scfg.Value(2, help='dataloader workers for each proc'),
+        'depth_workers': scfg.Value(2, help='workers for depth only. On systems with < 32GB RAM might need to set to 0'),
+
         'keep_sessions': scfg.Value(False, help='if True does not close tmux sessions'),
 
         'workers': scfg.Value('auto', help='Maximum number of parallel jobs, 0 is no-nonsense serial mode. '),
@@ -44,6 +46,8 @@ class TeamFeaturePipelineConfig(scfg.Config):
         'do_splits': scfg.Value(True, help='if True also make splits'),
 
         'follow': scfg.Value(False),
+
+        'serial': scfg.Value(False, help='if True use serial mode')
     }
 
 
@@ -64,8 +68,10 @@ def main(cmdline=True, **kwargs):
 
     gres = config['gres']
     gres = smartcast(gres)
-    print('gres = {!r}'.format(gres))
     if gres is None:
+        gres = 'auto'
+    print('gres = {!r}'.format(gres))
+    if gres  == 'auto':
         import netharn as nh
         gres = []
         for gpu_idx, gpu_info in nh.device.gpu_info().items():
@@ -106,7 +112,8 @@ def main(cmdline=True, **kwargs):
         'uky_segmentation': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_segmentation_model/segmentation_package.pt',
         'uky_pca': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pca_projection_matrix.pt',
 
-        'dzyne_depth': dvc_dpath / 'models/depth/weights_v1.pt',
+        # 'dzyne_depth': dvc_dpath / 'models/depth/weights_v1.pt',
+        'dzyne_depth': dvc_dpath / 'models/depth/weights_v2_gray.pt',
     }
 
     outputs = {
@@ -149,8 +156,25 @@ def main(cmdline=True, **kwargs):
         # Landcover is fairly fast to run, do it first
         task = {}
         # Only need 1 worker to minimize lag between images, task is GPU bound
-        depth_data_workers = max(2, data_workers)
-        depth_window_size = 1536  # takes 18GB
+        depth_data_workers = config['depth_workers']
+        if depth_data_workers == 'auto':
+            import psutil
+            import pint
+            reg = pint.UnitRegistry()
+            vmem_info = psutil.virtual_memory()
+            total_gb = (vmem_info.total * reg.byte).to(reg.gigabyte).m
+            avail_gb = (vmem_info.available * reg.byte).to(reg.gigabyte).m
+            if avail_gb < 32:
+                depth_data_workers = 0
+            elif avail_gb < 64:
+                depth_data_workers = 1
+            else:
+                depth_data_workers = 2
+            print('total_gb = {!r}'.format(total_gb))
+            print('avail_gb = {!r}'.format(avail_gb))
+
+        # depth_data_workers = min(2, data_workers)
+        depth_window_size = 736  # takes 18GB
         task['output_fpath'] = outputs['dzyne_depth']
         task['command'] = ub.codeblock(
             fr'''
@@ -178,7 +202,7 @@ def main(cmdline=True, **kwargs):
                 --default_config_key=iarpa \
                 --num_workers="{data_workers}" \
                 --batch_size=32 --gpus "0" \
-                --compress=DEFLATE --blocksize=64
+                --compress=DEFLATE --blocksize=128
             ''')
         combo_code_parts.append(codes[key])
         tasks.append(task)
@@ -198,11 +222,11 @@ def main(cmdline=True, **kwargs):
                 --pretext_package_path "{model_fpaths['uky_pretext']}" \
                 --segmentation_package_path "{model_fpaths['uky_segmentation']}" \
                 --pca_projection_path  "{model_fpaths['uky_pca']}" \
-                --do_pca 0 \
-                --num_dim 8 \
+                --do_pca 1 \
+                --patch_overlap=0.5 \
                 --num_workers="{data_workers}" \
                 --write_workers 2 \
-                --tasks segmentation
+                --tasks all
             ''')
         combo_code_parts.append(codes[key])
         tasks.append(task)
@@ -238,7 +262,11 @@ def main(cmdline=True, **kwargs):
         if config['run']:
             import subprocess
             try:
-                agg_state = tq.run(block=True)
+                if config['serial']:
+                    tq.serial_run()
+                else:
+                    tq.run()
+                agg_state = tq.monitor()
             except subprocess.CalledProcessError as ex:
                 print('ex.stdout = {!r}'.format(ex.stdout))
                 print('ex.stderr = {!r}'.format(ex.stderr))
@@ -274,17 +302,21 @@ def main(cmdline=True, **kwargs):
     tq.rprint()
 
     if config['run']:
+        agg_state = None
         follow = config['follow']
         if follow and workers == 0 and len(tq.workers) == 1:
             queue = tq.workers[0]
             fpath = queue.write()
             ub.cmd(f'bash {fpath}', verbose=3, check=True)
         else:
-            agg_state = tq.run(block=True)
+            if config['serial']:
+                tq.serial_run()
+            else:
+                tq.run()
             if config['follow']:
-                tq.monitor()
+                agg_state = tq.monitor()
         if not config['keep_sessions']:
-            if not agg_state['errored']:
+            if agg_state is not None and not agg_state['errored']:
                 tq.kill()
 
     if config['do_splits']:
@@ -340,13 +372,19 @@ if __name__ == '__main__':
 
 
         ###
-        DVC_DPATH=$HOME/flash1/smart_watch_dvc
+        DVC_DPATH=$(python -m watch.cli.find_dvc)
         DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+        DATASET_CODE=Aligned-Drop2-TA1-2022-02-24
         KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
-
         python -m watch.cli.prepare_teamfeats \
             --base_fpath=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
-            --gres=0,1 --with_depth=1 --with_materials=1 --keep_sessions=True --run=0 --do_splits=True --cache=1
+            --gres=0,1 \
+            --with_depth=0 \
+            --with_landcover=1 \
+            --with_invariants=0 \
+            --with_materials=1 \
+            --depth_workers=auto \
+            --do_splits=1  --cache=0 --run=0
 
     """
     main(cmdline=True)

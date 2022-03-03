@@ -32,7 +32,7 @@ class AddWatchFieldsConfig(scfg.Config):
 
         'default_gsd': scfg.Value(None, help='if specified, assumed any images without geo-metadata have this GSD'),
 
-        'workers': scfg.Value(0, help='number of io threads'),
+        'workers': scfg.Value(0, type=str, help='number of io threads'),
 
         'mode': scfg.Value('process', help='can be thread, process, or serial'),
 

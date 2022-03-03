@@ -100,7 +100,7 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
         KWCOCO_TEST_FPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L_nowv_vali.kwcoco.json
         python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
             --gpus="0," \
-            --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/BAS_TA1_ALL*/*.pt" \
+            --model_globstr="$DVC_DPATH/models/fusion/SC-20201117/BAS_TA1_v08*/*.pt" \
             --test_dataset="$KWCOCO_TEST_FPATH" \
             --run=0 --skip_existing=True
 

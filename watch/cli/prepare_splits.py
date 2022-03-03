@@ -17,6 +17,7 @@ class PrepareSplitsConfig(scfg.Config):
         'keep_sessions': scfg.Value(False, help='if True does not close tmux sessions'),
         'run': scfg.Value(True, help='if True execute the pipeline'),
         'cache': scfg.Value(True, help='if True skip completed results'),
+        'serial': scfg.Value(False, help='if True use serial mode')
     }
 
 
@@ -43,6 +44,8 @@ def main(cmdline=False, **kwargs):
         base_fpath = ub.Path(config['base_fpath'])
 
     splits = {
+        'nowv': base_fpath.augment(suffix='_nowv', multidot=True),
+
         'train': base_fpath.augment(suffix='_train', multidot=True),
         'nowv_train': base_fpath.augment(suffix='_nowv_train', multidot=True),
         'wv_train': base_fpath.augment(suffix='_wv_train', multidot=True),
@@ -113,10 +116,24 @@ def main(cmdline=False, **kwargs):
         ''')
     tq.submit(command, index=1)
 
+    # Add in additional no-worldview full dataset
+    command = ub.codeblock(
+        fr'''
+        python -m kwcoco subset \
+            --src {base_fpath} \
+            --dst {splits['nowv']} \
+            --select_images '.sensor_coarse != "WV"'
+        ''')
+    tq.submit(command, index=1)
+
     tq.rprint()
 
     if config['run']:
-        agg_state = tq.run(block=True)
+        if config['serial']:
+            tq.serial_run()
+        else:
+            tq.run()
+        agg_state = tq.monitor()
         if not config['keep_sessions']:
             if not agg_state['errored']:
                 tq.kill()
@@ -126,6 +143,8 @@ if __name__ == '__main__':
     """
     CommandLine:
         DVC_DPATH=$(python -m watch.cli.find_dvc)
-        python -m watch.cli.prepare_splits --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/data.kwcoco.json --run=False
+        python -m watch.cli.prepare_splits \
+            --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
+            --run=0 --serial=True
     """
     main(cmdline=True)

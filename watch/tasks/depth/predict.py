@@ -128,6 +128,9 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False, data
                     image, partial(run_inference, model=model),
                     chip_size=(S, S, 3),
                 )
+                # Dereference items after we are done with them
+                batch_item = None
+                image = None
 
                 info = _write_output(img_info, pred, pred_filename, output_bundle_dpath)
                 aux = output_dset.imgs[gid].get('auxiliary', [])
@@ -272,8 +275,7 @@ if __name__ == '__main__':
         --dataset="$KWCOCO_BUNDLE_DPATH/data.kwcoco.json" \
         --output="$KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json" \
         --deployed="$DVC_DPATH/models/depth/weights_v2_gray.pt" \
-        --dump_shards=True \
-        --data_workers=4 \
+        --data_workers=2 \
         --window_size=736
 
     python -m watch visualize $KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json \

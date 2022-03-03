@@ -8,35 +8,14 @@ easier for us to go back and make the code robust.
 import ubelt as ub
 
 
-# Might need to split this up into a finer-grained structure
-IGNORE_CLASSNAMES = {
-    'clouds', 'occluded',
-    'ignore', 'unknown', 'Unknown',
-
-}
-
-BACKGROUND_CLASSES = {
-    'background', 'No Activity', 'Post Construction', 'negative',
-}
-
-
-# These classes are used in BAS, but not in AC/SC
-UNDISTINGUISHED_CLASSES = {
-    'positive',
-}
-
-
 # # FIXME: Hard-coded category aliases.
 # # The correct way to handle these would be to have some information in the
 # # kwcoco category dictionary that specifies how the categories should be
 # # interpreted.
 # _HEURISTIC_CATEGORIES = {
-
 #     'background': {'background', 'No Activity', 'Post Construction'},
-
 #     'pre_background': {'No Activity'},
 #     'post_background': {'Post Construction'},
-
 #     'ignore': {'ignore', 'Unknown', 'clouds'},
 # }
 
@@ -44,6 +23,8 @@ UNDISTINGUISHED_CLASSES = {
 # TODO: ensure consistency with IARPA?
 # https://smartgitlab.com/TE/annotations/-/wikis/Alternate-Site-Type
 # https://smartgitlab.com/TE/metrics-and-test-framework/-/blob/main/evaluation.py#L1205
+# NOTE: A "Status" is not a category.
+# It indicates what sort of annotation detail is available.
 HUERISTIC_STATUS_DATA = [
     {'name': 'positive_annotated', 'color': 'black'},
     {'name': 'positive_partial', 'color': 'black'},
@@ -57,54 +38,258 @@ HUERISTIC_STATUS_DATA = [
     {'name': 'negative', 'color': 'gray'},
     {'name': 'negative_unbounded', 'color': 'gray'},
 ]
-# HUERISTIC_STATUS_DATA = [
-#     {'name': 'positive_annotated', 'color': 'olive'},
-#     {'name': 'positive_partial', 'color': 'limegreen'},
-#     {'name': 'positive_pending', 'color': 'seagreen'},
-#     {'name': 'positive_excluded', 'color': 'darkgreen'},
-#     {'name': 'positive_unbounded', 'color': 'steelblue'},
-#     {'name': 'negative', 'color': 'orangered'},
-#     {'name': 'negative_unbounded', 'color': 'deeppink'},
-#     {'name': 'ignore', 'color': 'purple'},
-# ]
+
 
 # metrics-and-test-framework/evaluation.py:1684
-CATEGORIES_SCORED = [
-    {'name': 'Site Preparation', 'color': 'gold'},
-    {'name': 'Active Construction', 'color': 'lime'},
-    {'name': 'Post Construction', 'color': 'darkturquoise'},
-    {'name': 'No Activity', 'color': 'tomato'},
+# Note: the condition field is in development the idea is to
+# encode when a category should be added as a label.
+
+def TAG_IF(tag, condition):
+    return {'type': 'condition', 'op': 'tag_if', 'tag': tag, 'condition': condition}
+
+
+def CONDITION(op, args):
+    return {'type': 'condition', 'op': op, 'args': args}
+
+
+def ALL(*args):
+    return {'type': 'condition', 'op': 'all', 'args': args}
+
+
+CATEGORIES = [
+    # TODO: clouds
+    {
+        'name': 'background',
+        'color': 'black',
+        'scored': False,
+        'required': True,
+        'tags': ['background']
+    },
+
+    # 'color' lightsalmon
+    {
+        'name': 'ignore',
+        'color': 'violet',
+        'scored': False,
+        'required': True,
+        'tags': ['ignore']
+    },
+
+    # {'name': 'clouds', 'color': 'offwhite', 'scored': False},
+    {
+        'name': 'Unknown',
+        'color': 'blueviolet',
+        'scored': False,
+        'tags': ['ignore'],
+    },
+
+    {
+        'name': 'positive',
+        'color': 'palegreen',
+        'scored': False,
+        'conditional_tags': [
+            TAG_IF('positive', CONDITION('TASK_EQ', 'saliency')),
+            TAG_IF('ignore', CONDITION('TASK_EQ', 'class')),
+        ],
+    },
+
+    {
+        'name': 'negative',
+        'color': 'gray',
+        'scored': False,
+        'tags': ['background'],
+        'conditional_tags': [
+            TAG_IF('hard_negative', CONDITION('TASK_EQ', 'class')),
+        ],
+    },
+
+    {
+        'name': 'Site Preparation',
+        'color': 'gold',
+        'scored': True,
+        'tags': ['positive'],
+    },
+    {
+        'name': 'Active Construction',
+        'color': 'lime',
+        'scored': True,
+        'tags': ['positive'],
+    },
+    # Conditional classes
+    {
+        'name': 'Post Construction',
+        'color': 'darkturquoise',
+        'scored': True,
+        'tags': ['positive'],
+        'conditional_tags': [
+            TAG_IF('background', CONDITION('TASK_EQ', 'saliency')),
+            # Only positive if task=CLASS and has context
+            TAG_IF('positive', ALL(
+                CONDITION('TASK_EQ', 'class'),
+                CONDITION('ALSO_HAS', [
+                    'Site Preparation', 'Active Construction', 'No Activity'],
+                )
+            )),
+        ],
+    },
+    {
+        'name': 'No Activity',
+        'color': 'tomato',
+        'scored': True,
+        'tags': ['saliency'],
+        'conditional_tags': [
+            TAG_IF('background', CONDITION('TASK_EQ', 'saliency')),
+            # Only positive if task=CLASS and has context
+            TAG_IF('positive', ALL(
+                CONDITION('TASK_EQ', 'class'),
+                CONDITION('ALSO_HAS', [
+                    'Site Preparation', 'Active Construction', 'No Activity'],
+                )
+            )),
+        ],
+    },
 ]
 
-CATEGORIES = CATEGORIES_SCORED + [
-    {'name': 'positive', 'color': 'olive'},
-    {'name': 'Unknown', 'color': 'blueviolet'},
-    {'name': 'ignore', 'color': 'slategray'},
-    {'name': 'negative', 'color': 'orangered'},
-]
+
+def hack_track_categories(track_catnames, task):
+    """
+    Example:
+        >>> from watch.heuristics import *  # NOQA
+        >>> basis = {
+        >>>     #'task': ['class', 'saliency'],
+        >>>     'task': ['class'],
+        >>>     'track_catnames': [
+        >>>         ['No Activity'],
+        >>>         ['Post Construction'],
+        >>>         ['Post Construction', 'Post Construction', ],
+        >>>         ['No Activity', 'ignore', 'ignore'],
+        >>>         ['No Activity', 'Post Construction'],
+        >>>         ['No Activity', 'Site Preparation', 'Post Construction'],
+        >>>     ],
+        >>> }
+        >>> for kw in ub.named_product(basis):
+        >>>     task = kw['task']
+        >>>     track_catnames = kw['track_catnames']
+        >>>     print('kw = {}'.format(ub.repr2(kw, nl=1)))
+        >>>     print(hack_track_categories(track_catnames, task))
+    """
+    # FIXME! This is hard coded nonsense, need to come up with a general
+    # way to encode these conditions in the categories themselves. Getting
+    # this right is harder than I want it to be, so I'm hacking it.
+
+    # Might want to make a real parser for this mini-language, or find an
+    # existing mini-language that works
+
+    main_classes = {'No Activity', 'Site Preparation', 'Post Construction', 'Post Construction'}
+
+    # This is some of the uggliest code I've ever written
+    new_catnames = []
+    if task == 'saliency':
+        for catname in track_catnames:
+            if catname == 'No Activity':
+                catname = 'background'
+            elif catname == 'Post Construction':
+                catname = 'background'
+            elif catname == 'Unknown':
+                catname = 'ignore'
+            new_catnames.append(catname)
+    elif task == 'class':
+        unique_catnames = set(track_catnames)
+        for catname in track_catnames:
+            if catname == 'No Activity':
+                remain = unique_catnames - {catname, None}
+                if len(remain & main_classes) > 0:
+                    catname = catname
+                elif len(remain) == 0:
+                    catname = 'background'
+                elif remain.issubset({'background', 'ignore', 'Unknown'}):
+                    catname = 'ignore'
+            elif catname == 'Post Construction':
+                remain = unique_catnames - {catname, None}
+                if len(remain & main_classes) > 0:
+                    catname = catname
+                elif len(remain) == 0:
+                    catname = 'background'
+                elif remain.issubset({'background', 'ignore'}):
+                    catname = 'ignore'
+            elif catname == 'positive':
+                catname = 'ignore'
+            elif catname == 'negative':
+                catname = 'background'
+            elif catname == 'Unknown':
+                catname = 'ignore'
+            new_catnames.append(catname)
+    else:
+        raise KeyError(task)
+        # op = condition['op']
+        # # TODO: normalize classes
+        # # TODO: make label conditionals as part of kwcoco
+        # if op == 'ALSO_HAS':
+        #     track_catnames = set(track_catnames)
+        #     flag = any(arg in track_catnames for arg in condition['args'])
+        #     return flag
+        # else:
+        #     raise NotImplementedError(op)
+    return new_catnames
+
+# Backwards compat (remove if nothing uses them)
+CATEGORIES_SCORED = [c for c in CATEGORIES if c.get('scored', False)]
+CATEGORIES_UNSCORED = [c for c in CATEGORIES if not c.get('scored', False)]
+
+# CATEGORIES_UNSCORED = [
+#     {'name': 'positive', 'color': 'olive', 'scored': False},
+# ]
+# CATEGORIES = CATEGORIES_SCORED + CATEGORIES_UNSCORED
+
+
+# Might need to split this up into a finer-grained structure
+# IGNORE_CLASSNAMES = {'clouds', 'occluded', 'ignore', 'unknown', 'Unknown'}
+# BACKGROUND_CLASSES = {c['name'] for c in CATEGORIES if 'background' in c.get('tags', {})}
+# UNDISTINGUISHED_CLASSES =  {c['name'] for c in CATEGORIES if 'saliency' in c.get('tags', {})}
+IGNORE_CLASSNAMES = {'ignore', 'Unknown'}
+BACKGROUND_CLASSES = {'background'}
+UNDISTINGUISHED_CLASSES =  {'positive'}
+# 'background',
+# 'No Activity',
+# 'Post Construction',
+# 'negative',
+# }
+# SPECIAL_CONTEXT_CLASSES = {
+#     'No Activity',
+#     'Post Construction',
+#     'negative',
+# }
+
+
+# # These classes are used in BAS, but not in AC/SC
+# UNDISTINGUISHED_CLASSES = {
+#     'positive',
+# }
+
 
 CATEGORIES_DCT = {
-        'positive': {
-            'scored': [
-                {'name': 'Site Preparation', 'color': 'gold'},
-                {'name': 'Active Construction', 'color': 'lime'},
-                {'name': 'Post Construction', 'color': 'darkturquoise'},
+    'positive': {
+        'scored': [
+            {'name': 'Site Preparation', 'color': 'gold'},
+            {'name': 'Active Construction', 'color': 'lime'},
+            {'name': 'Post Construction', 'color': 'darkturquoise'},
 
-            ],
-            'unscored': [
-                {'name': 'positive', 'color': 'olive'},
-            ],
-        },
-        'negative': {
-            'scored': [
-                {'name': 'No Activity', 'color': 'tomato'},
-            ],
-            'unscored': [
-                {'name': 'Unknown', 'color': 'blueviolet'},
-                {'name': 'ignore', 'color': 'slategray'},
-                {'name': 'negative', 'color': 'orangered'},
-            ],
-        }
+        ],
+        'unscored': [
+            {'name': 'positive', 'color': 'green'},
+        ],
+    },
+    'negative': {
+        'scored': [
+            {'name': 'No Activity', 'color': 'tomato'},
+        ],
+        'unscored': [
+            {'name': 'Unknown', 'color': 'blueviolet'},
+            {'name': 'ignore', 'color': 'slategray'},
+            {'name': 'negative', 'color': 'orangered'},
+            {'name': 'background', 'color': 'black'},
+        ],
+    }
 }
 
 # 'name' field only

@@ -687,7 +687,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     channels="B11,r|g|b,B1|B8|B11"
             >>> if 1:
             >>>     dvc_dpath = find_smart_dvc_dpath()
-            >>>     coco_dset = join(dvc_dpath, 'drop1-S2-L8-aligned/data.kwcoco.json')
+            >>>     coco_dset = join(dvc_dpath, 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json')
             >>>     channels='swir16|swir22|blue|green|red|nir'
             >>> if 0:
             >>>     import watch
@@ -698,11 +698,11 @@ class MultimodalTransformer(pl.LightningModule):
             >>> coco_dset = kwcoco.CocoDataset.coerce(coco_dset)
             >>> datamodule = datamodules.KWCocoVideoDataModule(
             >>>     train_dataset=coco_dset,
-            >>>     chip_size=128, batch_size=4, time_steps=5,
+            >>>     chip_size=128, batch_size=1, time_steps=3,
             >>>     channels=channels,
             >>>     normalize_inputs=1, neg_to_pos_ratio=0,
             >>>     num_workers='avail/2', true_multimodal=True,
-            >>>     use_grid_positives=False, use_centered_positives=True,
+            >>>     use_grid_positives=False, use_centered_positives=True, use_special_classes=1,
             >>> )
             >>> datamodule.setup('fit')
             >>> dataset = torch_dset = datamodule.torch_datasets['train']
@@ -717,8 +717,9 @@ class MultimodalTransformer(pl.LightningModule):
             >>> self = methods.MultimodalTransformer(
             >>>     # ===========
             >>>     # Backbone
-            >>>     arch_name='smt_it_joint_p8',
-            >>>     #arch_name='smt_it_stm_p8',
+            >>>     #arch_name='smt_it_joint_p2',
+            >>>     arch_name='smt_it_stm_p1',
+            >>>     learning_rate=1e-6,
             >>>     #attention_impl='performer',
             >>>     attention_impl='exact',
             >>>     #arch_name='deit',
@@ -733,7 +734,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     negative_change_weight=0.05,
             >>>     # ===========
             >>>     # Class Loss
-            >>>     global_class_weight=1.00,
+            >>>     global_class_weight=0.00,
             >>>     global_saliency_weight=1.00,
             >>>     class_weights='auto',
             >>>     # ===========
@@ -810,6 +811,7 @@ class MultimodalTransformer(pl.LightningModule):
         for _frame_idx in xdev.InteractiveIter(list(range(_frame_idx + 1, 1000))):
             # for _frame_idx in list(range(_frame_idx, 1000)):
             num_steps = 20
+            ex = None
             for _i in ub.ProgIter(range(num_steps), desc='overfit'):
                 optim.zero_grad()
                 outputs = self.training_step(batch)
@@ -818,7 +820,8 @@ class MultimodalTransformer(pl.LightningModule):
                 if torch.any(torch.isnan(loss)):
                     print('loss = {!r}'.format(loss))
                     print('prev = {!r}'.format(prev))
-                    raise Exception('prev = {!r}'.format(prev))
+                    ex = Exception('prev = {!r}'.format(prev))
+                    break
                 prev = loss
                 item_losses_ = nh.data.collate.default_collate(outputs['item_losses'])
                 item_losses = ub.map_vals(lambda x: sum(x).item(), item_losses_)
@@ -838,6 +841,8 @@ class MultimodalTransformer(pl.LightningModule):
             # fpath = join(dpath, 'frame_{:04d}.png'.format(_frame_idx))
             #kwimage.imwrite(fpath, img)
             xdev.InteractiveIter.draw()
+            if ex:
+                raise ex
         # TODO: can we get this batch to update in real time?
         # TODO: start a server process that listens for new images
         # as it gets new images, it starts playing through the animation

@@ -68,14 +68,15 @@ class PathIdentifiable(ub.NiceRepr):
         return '{}_{}'.format(self.name, self.rootid)
 
 
-class TMUXLinearQueue(PathIdentifiable):
+class LinearBashQueue(PathIdentifiable):
     """
-    A linear job queue
+    A linear job queue written to a single bash file
 
     Example:
-        >>> TMUXLinearQueue('foo', 'foo')
+        >>> self = LinearBashQueue('foo', 'foo')
+        >>> self.rprint()
     """
-    def __init__(self, name='', dpath=None, rootid=None, environ=None):
+    def __init__(self, name='', dpath=None, rootid=None, environ=None, cwd=None):
         super().__init__(name=name, dpath=dpath, rootid=rootid)
         self.fpath = self.dpath / (self.pathid + '.sh')
         self.state_fpath = self.dpath / 'job_state_{}.txt'.format(self.pathid)
@@ -83,11 +84,12 @@ class TMUXLinearQueue(PathIdentifiable):
         self.header = '#!/bin/bash'
         self.header_commands = []
         self.commands = []
+        self.cwd = cwd
 
     def __nice__(self):
         return f'{self.pathid} - {len(self.commands)}'
 
-    def finalize_text(self, with_status=True):
+    def finalize_text(self, with_status=True, with_gaurds=True):
         script = [self.header]
 
         total = len(self.commands)
@@ -124,13 +126,22 @@ class TMUXLinearQueue(PathIdentifiable):
         _mark_status('init')
         if self.environ:
             _mark_status('set_environ')
+            if with_gaurds:
+                script.append('set -x')
             script.extend([
                 f'export {k}="{v}"' for k, v in self.environ.items()])
+            if with_gaurds:
+                script.append('set +x')
+
+        if self.cwd:
+            script.append(f'cd {self.cwd}')
 
         for command in self.header_commands:
-            script.append('set -x')
+            if with_gaurds:
+                script.append('set -x')
             script.append(command)
-            script.append('set +x')
+            if with_gaurds:
+                script.append('set +x')
 
         for num, command in enumerate(self.commands):
             _mark_status('run')
@@ -139,7 +150,8 @@ class TMUXLinearQueue(PathIdentifiable):
                 #
                 # Command {} / {}
                 ''').format(num + 1, total))
-            script.append('set -x')
+            if with_gaurds:
+                script.append('set -x')
             script.append(command)
             # Check command status and update the bash state
             if with_status:
@@ -151,7 +163,8 @@ class TMUXLinearQueue(PathIdentifiable):
                         let "_QUEUE_NUM_ERRORED=_QUEUE_NUM_ERRORED+1"
                     fi
                     '''))
-            script.append('set +x')
+            if with_gaurds:
+                script.append('set +x')
 
         _mark_status('done')
         text = '\n'.join(script)
@@ -174,6 +187,23 @@ class TMUXLinearQueue(PathIdentifiable):
             stat.S_IXUSR | stat.S_IXGRP | stat.S_IRUSR |
             stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP))
         return self.fpath
+
+    def rprint(self, with_status=False, with_gaurds=False, with_rich=0):
+        """
+        Print info about the commands, optionally with rich
+        """
+        code = self.finalize_text(with_status=with_status,
+                                  with_gaurds=with_gaurds)
+        if with_rich:
+            from rich.panel import Panel
+            from rich.syntax import Syntax
+            from rich.console import Console
+            console = Console()
+            console.print(Panel(Syntax(code, 'bash'), title=str(self.fpath)))
+            # console.print(Syntax(code, 'bash'))
+        else:
+            print(ub.highlight_code(f'# --- {str(self.fpath)}', 'bash'))
+            print(ub.highlight_code(code, 'bash'))
 
 
 class TMUXMultiQueue(PathIdentifiable):
@@ -227,7 +257,7 @@ class TMUXMultiQueue(PathIdentifiable):
                 for cvd, e in zip(self.gres, per_worker_environs)]
 
         self.workers = [
-            TMUXLinearQueue(
+            LinearBashQueue(
                 name='queue_{}_{}'.format(self.name, worker_idx),
                 rootid=self.rootid,
                 dpath=self.dpath,
@@ -287,9 +317,9 @@ class TMUXMultiQueue(PathIdentifiable):
         return driver_text
 
     def write(self):
-        text = self.finalize_text()
         for queue in self.workers:
             queue.write()
+        text = self.finalize_text()
         with open(self.fpath, 'w') as file:
             file.write(text)
         os.chmod(self.fpath, (
@@ -304,6 +334,18 @@ class TMUXMultiQueue(PathIdentifiable):
         ub.cmd(f'bash {self.fpath}', verbose=3, check=True)
         if block:
             return self.monitor()
+
+    def serial_run(self):
+        """
+        Hack to run everything without tmux. This really should be a different
+        "queue" backend.
+        """
+        queue_fpaths = []
+        for queue in self.workers:
+            fpath = queue.write()
+            queue_fpaths.append(fpath)
+        for fpath in queue_fpaths:
+            ub.cmd(f'{fpath}', verbose=3, check=True)
 
     def monitor(self, refresh_rate=0.4):
         """
@@ -429,6 +471,29 @@ class TMUXMultiQueue(PathIdentifiable):
                     'rest': rest
                 })
         return sessions
+
+
+class SerialQueue:
+    """
+    Serial drop-in replacement for the tmux queue.
+
+    TODO:
+        - [ ] Move to a different file
+        - [ ] Parallel non-tmux version
+    """
+    def __init__(self):
+        self.commands = []
+
+    def submit(self, command):
+        self.commands.append(command)
+
+    def finalize_text(self):
+        text = '\n\n'.join(self.commands)
+        return text
+
+    def rprint(self):
+        text = self.finalize_text()
+        print(ub.highlight_code(text, 'bash'))
 
 
 if 0:
