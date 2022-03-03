@@ -102,16 +102,17 @@ def main(cmdline=False, **kwargs):
         >>> from watch.utils import util_data
         >>> import tempfile
         >>> dvc_dpath = util_data.find_smart_dvc_dpath()
-        >>> bundle_dpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/'
+        >>> #kwcoco_fpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/data.kwcoco.json'
+        >>> kwcoco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
         >>> dpath = ub.Path(ub.ensure_app_cache_dir('watch/tests/project_annots'))
         >>> cmdline = False
         >>> output_fpath = dpath / 'data.kwcoco.json'
         >>> viz_dpath = (dpath / 'viz').ensuredir()
         >>> kwargs = {
-        >>>     'src': bundle_dpath / 'data.kwcoco.json',
+        >>>     'src': kwcoco_fpath,
         >>>     'dst': output_fpath,
         >>>     'viz_dpath': viz_dpath,
-        >>>     'site_models': dvc_dpath / 'drop1/site_models',
+        >>>     'site_models': dvc_dpath / 'site_models',
         >>> }
         >>> main(**kwargs)
     """
@@ -241,14 +242,14 @@ def assign_sites_to_images(coco_dset, sites, propogate, geospace_lookup='auto'):
     from watch import heuristics
     status_to_color = {d['name']: kwimage.Color(d['color']).as01()
                        for d in heuristics.HUERISTIC_STATUS_DATA}
-    print(coco_dset.dataset['categories'])
+    print('coco_dset categories = {}'.format(ub.repr2(coco_dset.dataset['categories'], nl=2)))
     for cat in heuristics.CATEGORIES:
         coco_dset.ensure_category(**cat)
     # hack in heuristic colors
     heuristics.ensure_heuristic_coco_colors(coco_dset)
     # handle any other colors
     kwcoco_extensions.category_category_colors(coco_dset)
-    print(coco_dset.dataset['categories'])
+    print('coco_dset categories = {}'.format(ub.repr2(coco_dset.dataset['categories'], nl=2)))
 
     all_drawable_infos = []  # helper if we are going to draw
 

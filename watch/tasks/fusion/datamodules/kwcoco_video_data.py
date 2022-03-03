@@ -865,7 +865,7 @@ class KWCocoVideoDataset(data.Dataset):
             exists_flag = name in graph.nodes
             if not exists_flag and _catinfo.get('required'):
                 graph.add_node(name, **_catinfo)
-            else:
+            if exists_flag:
                 graph.nodes[name].update(**_catinfo)
 
         self.background_classes = set(heuristics.BACKGROUND_CLASSES) & set(graph.nodes)
@@ -2137,7 +2137,12 @@ class KWCocoVideoDataset(data.Dataset):
 
 class BatchVisualizationBuilder:
     """
-    Helper object to build a batch visualization
+    Helper object to build a batch visualization.
+
+    The basic logic is that we will build a column for each timestep and then
+    arrange them from left to right to show how the scene changes over time.
+    Each column will be made of "cells" which could show either the truth, a
+    prediction, loss weights, or raw input channels.
 
     Example:
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
@@ -2231,7 +2236,6 @@ class BatchVisualizationBuilder:
                 frame_weight_shape = ub.map_vals(lambda x: x.shape, frame_meta['frame_weight'])
                 print('frame_weight_shape = {}'.format(ub.repr2(frame_weight_shape, nl=1)))
                 frame_meta['frame_weight']
-                pass
         canvas = builder._build_canvas(frame_metas)
         return canvas
 
@@ -2250,11 +2254,6 @@ class BatchVisualizationBuilder:
         if builder.requested_tasks['change']:
             truth_keys.append('change')
             weight_keys.append('change_weights')
-
-        # truth_keys = ['class_idxs', 'change']
-        # weight_keys = ['class_weights', 'saliency_weights']
-        # print('builder.requested_tasks = {!r}'.format(builder.requested_tasks))
-        # print('weight_keys = {!r}'.format(weight_keys))
 
         # Prepare metadata on each frame
         frame_metas = []

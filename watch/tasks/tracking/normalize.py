@@ -457,9 +457,17 @@ def normalize_phases(coco_dset,
     # metrics-and-test-framework/evaluation.py:1684
     cnames_to_score = set(CNAMES_DCT['positive']['scored'])
 
-    assert set(coco_dset.name_to_cat).issubset(cnames_to_replace
-                                               | cnames_to_score)
-    #
+    allowed_cnames = cnames_to_replace | cnames_to_score
+    have_cnames = set(coco_dset.name_to_cat)
+    if not have_cnames.issubset(allowed_cnames):
+        raise AssertionError(ub.paragraph(
+            f'''
+            Unhandled Class Names
+            {allowed_cnames=}
+            {have_cnames=}
+            unknown={have_cnames - allowed_cnames}
+            '''))
+
     # Transform phase labels of each track
     #
 

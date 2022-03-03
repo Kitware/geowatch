@@ -287,6 +287,7 @@ CATEGORIES_DCT = {
             {'name': 'Unknown', 'color': 'blueviolet'},
             {'name': 'ignore', 'color': 'slategray'},
             {'name': 'negative', 'color': 'orangered'},
+            {'name': 'background', 'color': 'black'},
         ],
     }
 }

@@ -265,7 +265,7 @@ def make_fit_config(cmdline=False, **kwargs):
         'accumulate_grad_batches': 1,
 
         'max_epochs': None,
-        'max_steps': None,
+        'max_steps': -1,
         'max_time': None,
 
         'check_val_every_n_epoch': 1,
@@ -290,6 +290,9 @@ def make_fit_config(cmdline=False, **kwargs):
         args.normalize_inputs = True
     if args.normalize_inputs == 'False':
         args.normalize_inputs = False
+
+    if args.max_steps is None:
+        args.max_steps = -1  # Hack to supress warning
 
     # print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
     learning_config = ub.dict_diff(args.__dict__, learning_irrelevant)
