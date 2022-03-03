@@ -25,7 +25,9 @@ python -m watch.cli.prepare_ta2_dataset \
     --s3_fpath=$S3_FPATH \
     --dvc_dpath=$DVC_DPATH \
     --collated=True \
-    --serial=True --run=0
+    --debug=True --select_images '.id % 1200 == 0'  \
+    --align_workers=2 \
+    --serial=True --run=1
 
 """
 
@@ -43,6 +45,10 @@ class PrepareTA2Config(scfg.Config):
         'collated': scfg.Value(True, help='set to false if the input data is not collated'),
         'serial': scfg.Value(False, help='if True use serial mode'),
         'aws_profile': scfg.Value('iarpa', help='AWS profile to use for remote data access'),
+        'align_workers': scfg.Value(0, help='workers for align script'),
+
+        'debug': scfg.Value(False, help='if enabled, turns on debug visualizations'),
+        'select_images': scfg.Value(False, help='if enabled only uses select images')
     }
 
 
@@ -72,6 +78,7 @@ def main(cmdline=False, **kwargs):
         dvc_dpath = watch.find_smart_dvc_dpath()
     dvc_dpath = ub.Path(dvc_dpath)
 
+    aws_profile = config['aws_profile']
     s3_fpath = config['s3_fpath']
 
     aligned_bundle_name = f'Aligned-{config["dataset_suffix"]}'
@@ -109,8 +116,6 @@ def main(cmdline=False, **kwargs):
     # queue = tmux_queue.SerialQueue()
     queue = tmux_queue.TMUXMultiQueue(name='teamfeat', size=1, gres=None)
 
-    aws_profile = 'iarpa'
-
     queue.submit(ub.codeblock(
         f'''
         mkdir -p {uncropped_query_dpath}
@@ -141,21 +146,22 @@ def main(cmdline=False, **kwargs):
             --jobs "min(avail,8)"
         '''))
 
-    SMALL_DEBUG = 1
-    if SMALL_DEBUG:
+    select_images_query = config['select_images']
+    if select_images_query:
+        suffix = '_' + ub.hash_data(select_images_query)[0:8]
         # Debugging
-        small_uncropped_kwcoco_fpath = uncropped_kwcoco_fpath.augment(suffix='_small')
+        small_uncropped_kwcoco_fpath = uncropped_kwcoco_fpath.augment(suffix=suffix)
         queue.submit(ub.codeblock(
             rf'''
             python -m kwcoco subset \
                 --src="{uncropped_kwcoco_fpath}" \
                 --dst="{small_uncropped_kwcoco_fpath}" \
-                --select_images='.id % 300 == 0'
+                --select_images='{select_images_query}'
             '''))
 
         uncropped_kwcoco_fpath = small_uncropped_kwcoco_fpath
-        uncropped_prep_kwcoco_fpath = uncropped_prep_kwcoco_fpath.augment(suffix='_small')
-        aligned_kwcoco_fpath = aligned_kwcoco_fpath.augment(suffix='_small')
+        uncropped_prep_kwcoco_fpath = uncropped_prep_kwcoco_fpath.augment(suffix=suffix)
+        aligned_kwcoco_fpath = aligned_kwcoco_fpath.augment(suffix=suffix)
         # --populate-watch-fields \
 
     queue.submit(ub.codeblock(
@@ -173,21 +179,27 @@ def main(cmdline=False, **kwargs):
 
     cache_crops = 1
     if cache_crops:
-        keep_flag = '--keep img'
+        align_keep = 'img'
     else:
-        keep_flag = '--keep none'
+        align_keep = 'none'
 
+    # align_workers = '"min(avail,max(all/2,8))"'
+    align_workers = config['align_workers']
+
+    debug_valid_regions = config['debug']
+    align_visualize = config['debug']
     queue.submit(ub.codeblock(
         rf'''
         AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.coco_align_geotiffs \
             --src "{uncropped_prep_kwcoco_fpath}" \
             --dst "{aligned_kwcoco_fpath}" \
             --regions "{region_dpath / '*.geojson'}" \
-            --workers="min(avail,max(all/2,8))" \
+            --workers={align_workers} \
             --context_factor=1 \
             --geo_preprop=auto \
-            --visualize False \
-            {keep_flag} \
+            --keep={align_keep} \
+            --visualize={align_visualize} \
+            --debug_valid_regions={debug_valid_regions} \
             --rpc_align_method affine_warp
         '''))
 
