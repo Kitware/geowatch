@@ -57,7 +57,8 @@ aggregate_multiple_evaluations(){
 
     DVC_DPATH=$(python -m watch.cli.find_dvc)
     DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
-    EXPT_NAME_PAT="*"
+    #EXPT_NAME_PAT="*"
+    EXPT_NAME_PAT="BOTH_TA1_COMBO_TINY_p2w_raw*"
     MODEL_EPOCH_PAT="*"
     PRED_DSET_PAT="*"
     MEASURE_GLOBSTR=${DVC_DPATH}/models/fusion/${DATASET_CODE}/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/eval/curves/measures2.json
@@ -2904,3 +2905,4 @@ python -m watch.tasks.fusion.fit \
     --num_draw=8 \
     --draw_interval=10m \
     --init="$INITIAL_STATE" 
+    --auto_lr_find=True

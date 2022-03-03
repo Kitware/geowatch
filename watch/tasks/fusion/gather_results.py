@@ -1,6 +1,20 @@
 """
 Loads and summarizes pre-computed metrics over multiple experiments
 
+TODO:
+
+    AUTO-ABALATION
+
+    - [ ] Group experiments into "variance" groups where params are exactly the
+          same in all members of the group.
+
+    - [ ] Group experiments into 1-abalateable groups where params are only 1
+          param is different between any two members in the group.
+
+    - [ ] Group experiments into 2-abalateable groups where params are only 2
+          params are different between any two members in the group. (must be the
+          same param between all members of the groups).
+
 
 The main function is :func:`gather_measures`.
 """

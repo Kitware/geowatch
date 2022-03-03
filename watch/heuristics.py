@@ -44,70 +44,193 @@ HUERISTIC_STATUS_DATA = [
 # Note: the condition field is in development the idea is to
 # encode when a category should be added as a label.
 
+def TAG_IF(tag, condition):
+    return {'type': 'condition', 'op': 'tag_if', 'tag': tag, 'condition': condition}
+
+
 def CONDITION(op, args):
     return {'type': 'condition', 'op': op, 'args': args}
 
 
+def ALL(*args):
+    return {'type': 'condition', 'op': 'all', 'args': args}
+
+
 CATEGORIES = [
     # TODO: clouds
-    {'name': 'background', 'color': 'black', 'scored': False, 'required': True, 'tags': ['background']},
+    {
+        'name': 'background',
+        'color': 'black',
+        'scored': False,
+        'required': True,
+        'tags': ['background']
+    },
+
     # 'color' lightsalmon
-    {'name': 'ignore', 'color': 'blueviolet', 'scored': False, 'required': True, 'tags': ['ignore']},
+    {
+        'name': 'ignore',
+        'color': 'violet',
+        'scored': False,
+        'required': True,
+        'tags': ['ignore']
+    },
+
     # {'name': 'clouds', 'color': 'offwhite', 'scored': False},
-    {'name': 'Unknown', 'color': 'blueviolet', 'scored': False, 'tags': ['ignore']},
+    {
+        'name': 'Unknown',
+        'color': 'blueviolet',
+        'scored': False,
+        'tags': ['ignore'],
+    },
 
-    {'name': 'positive', 'color': 'olive', 'scored': False, 'tags': ['salient']},
-    {'name': 'negative', 'color': 'gray', 'scored': False, 'tags': ['background']},
+    {
+        'name': 'positive',
+        'color': 'palegreen',
+        'scored': False,
+        'conditional_tags': [
+            TAG_IF('positive', CONDITION('TASK_EQ', 'saliency')),
+            TAG_IF('ignore', CONDITION('TASK_EQ', 'class')),
+        ],
+    },
 
-    {'name': 'Site Preparation', 'color': 'gold', 'scored': True},
-    {'name': 'Active Construction', 'color': 'lime', 'scored': True},
+    {
+        'name': 'negative',
+        'color': 'gray',
+        'scored': False,
+        'tags': ['background'],
+        'conditional_tags': [
+            TAG_IF('hard_negative', CONDITION('TASK_EQ', 'class')),
+        ],
+    },
+
+    {
+        'name': 'Site Preparation',
+        'color': 'gold',
+        'scored': True,
+        'tags': ['positive'],
+    },
+    {
+        'name': 'Active Construction',
+        'color': 'lime',
+        'scored': True,
+        'tags': ['positive'],
+    },
     # Conditional classes
     {
         'name': 'Post Construction',
         'color': 'darkturquoise',
         'scored': True,
-        'condition': CONDITION('ALSO_HAS', [
-            'Site Preparation', 'Active Construction', 'No Activity'],
-        )
+        'tags': ['positive'],
+        'conditional_tags': [
+            TAG_IF('background', CONDITION('TASK_EQ', 'saliency')),
+            # Only positive if task=CLASS and has context
+            TAG_IF('positive', ALL(
+                CONDITION('TASK_EQ', 'class'),
+                CONDITION('ALSO_HAS', [
+                    'Site Preparation', 'Active Construction', 'No Activity'],
+                )
+            )),
+        ],
     },
     {
         'name': 'No Activity',
         'color': 'tomato',
         'scored': True,
-        'condition': CONDITION('ALSO_HAS', [
-            'Site Preparation', 'Active Construction', 'No Activity'],
-        ),
+        'tags': ['saliency'],
+        'conditional_tags': [
+            TAG_IF('background', CONDITION('TASK_EQ', 'saliency')),
+            # Only positive if task=CLASS and has context
+            TAG_IF('positive', ALL(
+                CONDITION('TASK_EQ', 'class'),
+                CONDITION('ALSO_HAS', [
+                    'Site Preparation', 'Active Construction', 'No Activity'],
+                )
+            )),
+        ],
     },
 ]
 
 
-def category_condition(condition, track_catnames):
+def hack_track_categories(track_catnames, task):
     """
     Example:
         >>> from watch.heuristics import *  # NOQA
-        >>> # usage of category conditions
-        >>> condition = CONDITION('ALSO_HAS', ['Site Preparation', 'Active Construction', 'Post Construction'])
-        >>> track_catnames = ['No Activity']
-        >>> print(category_condition(condition, track_catnames))
-        False
-        >>> track_catnames = ['Post Construction']
-        >>> print(category_condition(condition, track_catnames))
-        True
-        >>> track_catnames = ['No Activity', 'Post Construction']
-        >>> print(category_condition(condition, track_catnames))
-        True
+        >>> basis = {
+        >>>     #'task': ['class', 'saliency'],
+        >>>     'task': ['class'],
+        >>>     'track_catnames': [
+        >>>         ['No Activity'],
+        >>>         ['Post Construction'],
+        >>>         ['Post Construction', 'Post Construction', ],
+        >>>         ['No Activity', 'ignore', 'ignore'],
+        >>>         ['No Activity', 'Post Construction'],
+        >>>         ['No Activity', 'Site Preparation', 'Post Construction'],
+        >>>     ],
+        >>> }
+        >>> for kw in ub.named_product(basis):
+        >>>     task = kw['task']
+        >>>     track_catnames = kw['track_catnames']
+        >>>     print('kw = {}'.format(ub.repr2(kw, nl=1)))
+        >>>     print(hack_track_categories(track_catnames, task))
     """
+    # FIXME! This is hard coded nonsense, need to come up with a general
+    # way to encode these conditions in the categories themselves. Getting
+    # this right is harder than I want it to be, so I'm hacking it.
+
     # Might want to make a real parser for this mini-language, or find an
     # existing mini-language that works
-    op = condition['op']
-    # TODO: normalize classes
-    # TODO: make label conditionals as part of kwcoco
-    if op == 'ALSO_HAS':
-        track_catnames = set(track_catnames)
-        flag = any(arg in track_catnames for arg in condition['args'])
-        return flag
+
+    main_classes = {'No Activity', 'Site Preparation', 'Post Construction', 'Post Construction'}
+
+    # This is some of the uggliest code I've ever written
+    new_catnames = []
+    if task == 'saliency':
+        for catname in track_catnames:
+            if catname == 'No Activity':
+                catname = 'background'
+            elif catname == 'Post Construction':
+                catname = 'background'
+            elif catname == 'Unknown':
+                catname = 'ignore'
+            new_catnames.append(catname)
+    elif task == 'class':
+        unique_catnames = set(track_catnames)
+        for catname in track_catnames:
+            if catname == 'No Activity':
+                remain = unique_catnames - {catname, None}
+                if len(remain & main_classes) > 0:
+                    catname = catname
+                elif len(remain) == 0:
+                    catname = 'background'
+                elif remain.issubset({'background', 'ignore', 'Unknown'}):
+                    catname = 'ignore'
+            elif catname == 'Post Construction':
+                remain = unique_catnames - {catname, None}
+                if len(remain & main_classes) > 0:
+                    catname = catname
+                elif len(remain) == 0:
+                    catname = 'background'
+                elif remain.issubset({'background', 'ignore'}):
+                    catname = 'ignore'
+            elif catname == 'positive':
+                catname = 'ignore'
+            elif catname == 'negative':
+                catname = 'background'
+            elif catname == 'Unknown':
+                catname = 'ignore'
+            new_catnames.append(catname)
     else:
-        raise NotImplementedError(op)
+        raise KeyError(task)
+        # op = condition['op']
+        # # TODO: normalize classes
+        # # TODO: make label conditionals as part of kwcoco
+        # if op == 'ALSO_HAS':
+        #     track_catnames = set(track_catnames)
+        #     flag = any(arg in track_catnames for arg in condition['args'])
+        #     return flag
+        # else:
+        #     raise NotImplementedError(op)
+    return new_catnames
 
 # Backwards compat (remove if nothing uses them)
 CATEGORIES_SCORED = [c for c in CATEGORIES if c.get('scored', False)]
@@ -120,13 +243,12 @@ CATEGORIES_UNSCORED = [c for c in CATEGORIES if not c.get('scored', False)]
 
 
 # Might need to split this up into a finer-grained structure
-IGNORE_CLASSNAMES = {
-    'clouds', 'occluded',
-    'ignore', 'unknown', 'Unknown',
-
-}
-BACKGROUND_CLASSES = {c['name'] for c in CATEGORIES if 'background' in c.get('tags', {})}
-UNDISTINGUISHED_CLASSES = {c['name'] for c in CATEGORIES if 'salient' in c.get('tags', {})}
+# IGNORE_CLASSNAMES = {'clouds', 'occluded', 'ignore', 'unknown', 'Unknown'}
+# BACKGROUND_CLASSES = {c['name'] for c in CATEGORIES if 'background' in c.get('tags', {})}
+# UNDISTINGUISHED_CLASSES =  {c['name'] for c in CATEGORIES if 'saliency' in c.get('tags', {})}
+IGNORE_CLASSNAMES = {'ignore', 'Unknown'}
+BACKGROUND_CLASSES = {'background'}
+UNDISTINGUISHED_CLASSES =  {'positive'}
 # 'background',
 # 'No Activity',
 # 'Post Construction',
@@ -154,7 +276,7 @@ CATEGORIES_DCT = {
 
         ],
         'unscored': [
-            {'name': 'positive', 'color': 'olive'},
+            {'name': 'positive', 'color': 'green'},
         ],
     },
     'negative': {
