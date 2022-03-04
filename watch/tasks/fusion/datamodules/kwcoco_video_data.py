@@ -20,7 +20,7 @@ from watch.utils import util_bands
 from watch.utils import util_iter
 from watch.utils import util_kwimage
 from watch.utils import util_time
-from watch.utils import util_norm
+# from watch.utils import util_norm
 from watch.utils.lightning_ext import util_globals
 from watch.tasks.fusion import utils
 from typing import Dict, List  # NOQA
@@ -1284,6 +1284,7 @@ class KWCocoVideoDataset(data.Dataset):
                 # TODO: FIXME: Use the correct nodata value here!
                 sample = sampler.load_sample(
                     tr_frame, with_annots=first_with_annot,
+                    nodata='float',
                     padkw={'constant_values': np.nan},
                     dtype=np.float32
                 )
@@ -1296,8 +1297,14 @@ class KWCocoVideoDataset(data.Dataset):
             gid_to_isbad[gid] = len(sample_streams) == 0
             gid_to_sample[gid] = sample_streams
 
+        # import xdev
+        # xdev.embed()
         for gid in tr_['gids']:
             sample_one_frame(gid)
+            # for sample in gid_to_sample[gid].values():
+            #     if np.any(np.isnan(sample['im'])) and not np.all(np.isnan(sample['im'])):
+            #         import xdev
+            #         xdev.embed()
 
         if 'video_id' not in tr_:
             arbitrary_sample = ub.peek(ub.peek(gid_to_sample.values()).values())
@@ -1377,6 +1384,27 @@ class KWCocoVideoDataset(data.Dataset):
             time_weights = np.maximum(time_weights, self.min_spacetime_weight)
             space_weights = util_kwimage.upweight_center_mask(input_dsize[::-1])
             space_weights = np.maximum(space_weights, self.min_spacetime_weight)
+
+        if 1:
+            # Replace nans with windows stats
+            # TODO: handle nans outside of the dataloader
+            # The dataloader **should** return nan values, it is up to the
+            # method to handle them. So we have to fix RunningStats
+            for gid in final_gids:
+                stream_sample = gid_to_sample[gid]
+                for sample in stream_sample.values():
+                    im = sample['im']
+                    mask = np.isnan(im)
+                    if np.any(mask):
+                        if np.all(mask):
+                            im[:] = 0
+                        else:
+                            # TODO: Should use the global stream mean/std for this
+                            # If that is not available, use in-window means
+                            window_chan_med = np.nanmedian(im, axis=(0, 1, 2))
+                            window_chan_mean = np.nanmean(im, axis=(0, 1, 2))
+                            window_chan_ave = (window_chan_med + window_chan_mean) / 2
+                            im[mask.any(axis=3), :] = window_chan_ave[None, None, None, :]
 
         if self.special_inputs:
             raise NotImplementedError(f'{self.special_inputs=}')
@@ -1769,7 +1797,7 @@ class KWCocoVideoDataset(data.Dataset):
             ('normalize_perframe', self.normalize_perframe),
             ('with_intensity', with_intensity),
             ('with_class', with_class),
-            ('depends_version', 13),  # bump if `compute_dataset_stats` changes
+            ('depends_version', 15),  # bump if `compute_dataset_stats` changes
         ])
         workdir = None
         cacher = ub.Cacher('dset_mean', dpath=workdir, depends=depends)
