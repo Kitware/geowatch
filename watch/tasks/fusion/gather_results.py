@@ -601,11 +601,15 @@ def gather_measures(cmdline=False, **kwargs):
         # 'mauc',
     }
 
-    abalation_orders = {1, 2}
+    abalation_orders = {1}
     analysis = result_analysis.ResultAnalysis(
         results_list2, ignore_params=ignore_params,
         # metrics=['class_mAPUC', 'salient_APUC'],
         metrics=['salient_AP'],
+        metric_objectives={
+            'salient_AP': 'max',
+            'class_mAP': 'max',
+        },
         ignore_metrics=ignore_metrics,
         abalation_orders=abalation_orders
     )

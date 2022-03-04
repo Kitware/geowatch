@@ -338,6 +338,11 @@ def _populate_valid_region(coco_img):
     img = coco_img.img
     primary_obj = coco_img.primary_asset()
     primary_fname = primary_obj.get('file_name', None)
+
+    # if '20200109T070235Z_N24.794658E054.975771_N24.943015E055.139412' in primary_fname:
+    #     import xdev
+    #     xdev.embed()
+
     primary_fpath = join(bundle_dpath, primary_fname)
 
     sh_poly = util_raster.mask(

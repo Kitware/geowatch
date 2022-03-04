@@ -524,7 +524,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     """
     # See if we can look at what we made
     from kwcoco import channel_spec
-    from watch.utils.util_norm import normalize_intensity
+    # from watch.utils.util_norm import normalize_intensity
     from watch.utils import util_kwimage
 
     sensor_coarse = img.get('sensor_coarse', 'unknown')
@@ -714,44 +714,72 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             chan_row['stats'] = kwarray.stats_dict(chan)
             print('chan_row = {}'.format(ub.repr2(chan_row, nl=-1)))
 
+        '''
+        import kwcoco
+        dset = kwcoco.CocoDataset('/home/joncrall/data/dvc-repos/smart_watch_dvc/Aligned-Drop2-TA1-2022-02-24/data.kwcoco_c9ea8bb9.json')
+        coco_img = dset.videos(names=['AE_C002']).images[0].coco_images[3]
+        imdata = coco_img.delay('red').finalize(nodata='auto')
+
+        import kwplot
+        import kwimage
+        kwplot.autompl()
+        imdata_norm = kwimage.normalize_intensity(imdata)
+        kwplot.imshow(imdata_norm)
+        '''
+
         # Note: Using 'nearest' here since we're just visualizing (and
         # otherwise nodata values can affect interpolated pixel
         # values)
-        canvas = chan.finalize(interpolation='nearest', nodata=nodata)
+        # canvas = chan.finalize(interpolation='nearest', nodata='auto')
+        raw_canvas = canvas = chan.finalize(interpolation='linear', nodata='float')
+
+        FLAG = np.any(np.isnan(canvas)) and not np.all(np.isnan(canvas))
+        if FLAG:
+            print('input nans', np.nansum(raw_canvas))
+            print('input nans', np.isnan(raw_canvas).sum())
+
+        # canvas = chan.finalize(, nodata='auto')
         # import kwarray
         # kwarray.atleast_nd(canvas, 3)
 
         if chan_to_normalizer is None:
-            dmax = canvas.max()
+            dmax = np.nanmax(raw_canvas)
             # dmin = canvas.min()
             needs_norm = dmax > 1.0
             # if canvas.max() <= 0 or canvas.min() >= 255:
             # Hack to only do noramlization on "non-standard" data ranges
             if needs_norm:
-                norm_canvas = normalize_intensity(canvas, nodata=nodata, params={
+                mask = ~np.isnan(raw_canvas)
+                # from watch.utils import util_norm
+                norm_canvas = kwimage.normalize_intensity(raw_canvas, mask=mask, params={
                     'high': 0.90,
                     'mid': 0.5,
                     'low': 0.01,
                     'mode': 'linear',
                 })
+                if FLAG:
+                    print('norm nans', np.isnan(norm_canvas).sum())
+                    print('norm canvas', np.nansum(norm_canvas))
                 canvas = norm_canvas
             canvas = np.clip(canvas, 0, None)
         else:
-            from watch.utils import util_kwarray
+            # from watch.utils import util_kwarray
             new_parts = []
             for cx, c in enumerate(chan_list):
                 normalizer = chan_to_normalizer.get(c, None)
                 data = canvas[..., cx]
+                mask = ~np.isnan(data)
                 if normalizer is None:
-                    p = normalize_intensity(data, nodata=nodata, params={
+                    p = kwimage.normalize_intensity(data, params={
                         'high': 0.90,
                         'mid': 0.5,
                         'low': 0.01,
                         'mode': 'linear',
                     })
                 else:
-                    mask = (data != nodata)
-                    p = util_kwarray.apply_normalizer(data, normalizer, mask=mask, set_value_at_mask=0.)
+                    # mask = (data != nodata)
+                    p = kwarray.apply_normalizer(data, normalizer, mask=mask,
+                                                 set_value_at_mask=0.)
                 new_parts.append(p)
             canvas = np.stack(new_parts, axis=2)
 
@@ -760,6 +788,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                 import matplotlib as mpl
                 import matplotlib.cm  # NOQA
                 cmap_ = mpl.cm.get_cmap(cmap)
+                canvas = np.nan_to_num(canvas)
                 if len(canvas.shape) == 3:
                     canvas = canvas[..., 0]
                     canvas = cmap_(canvas)[..., 0:3].astype(np.float32)
@@ -773,6 +802,15 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         chan_header_lines = header_lines.copy()
         chan_header_lines.append(chan_group)
         header_text = '\n'.join(chan_header_lines)
+
+        valid_region = img.get('valid_region', None)
+        if valid_region:
+            valid_poly: kwimage.MultiPolygon = kwimage.MultiPolygon.coerce(valid_region)
+            if space == 'video':
+                vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
+                valid_poly = valid_poly.warp(vid_from_img)
+            canvas = valid_poly.draw_on(canvas, color='green', fill=False,
+                                        border=True)
 
         if draw_imgs:
             img_canvas = kwimage.ensure_uint255(canvas)

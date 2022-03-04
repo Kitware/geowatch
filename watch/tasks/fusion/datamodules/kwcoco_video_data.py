@@ -1629,7 +1629,7 @@ class KWCocoVideoDataset(data.Dataset):
                         # TODO: use real nodata values? Ideally they have
                         # already been converted into nans
                         mask = (item != 0) & np.isfinite(item)
-                        norm_item = util_norm.normalize_intensity(item, params={
+                        norm_item = kwimage.normalize_intensity(item, params={
                             'high': 0.90,
                             'mid': 0.5,
                             'low': 0.01,
