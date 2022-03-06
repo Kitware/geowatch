@@ -3320,8 +3320,8 @@ python -m watch.tasks.fusion.fit \
     --test_dataset="$TEST_FPATH" \
     --channels="$CHANNELS" \
     --accumulate_grad_batches=8 \
-    --chip_size=256 \
-    --time_steps=7 \
+    --chip_size=128 \
+    --time_steps=48 \
     --global_class_weight=1.0 \
     --global_saliency_weight=0.00 \
     --num_workers=8 \
@@ -3330,12 +3330,11 @@ python -m watch.tasks.fusion.fit \
     --attention_impl=exact \
     --chip_overlap=0.0 \
     --optimizer=AdamW \
-    --max_epoch_length=none \
+    --max_epoch_length=1024 \
     --arch_name=smt_it_stm_p8 \
     --num_draw=8 \
-    --draw_interval=40m \
-    --init="$INITIAL_STATE" \
-    --auto_lr_find=True
+    --draw_interval=5m \
+    --init="$INITIAL_STATE" 
 
 
 export CUDA_VISIBLE_DEVICES=1
@@ -3359,8 +3358,8 @@ python -m watch.tasks.fusion.fit \
     --test_dataset="$TEST_FPATH" \
     --channels="$CHANNELS" \
     --accumulate_grad_batches=32 \
-    --chip_size=256 \
-    --time_steps=7 \
+    --chip_size=128 \
+    --time_steps=32 \
     --global_class_weight=1.0 \
     --global_saliency_weight=0.00 \
     --num_workers=8 \
@@ -3369,8 +3368,8 @@ python -m watch.tasks.fusion.fit \
     --attention_impl=exact \
     --chip_overlap=0.0 \
     --optimizer=AdamW \
-    --max_epoch_length=none \
+    --max_epoch_length=1024 \
     --arch_name=smt_it_stm_p16 \
     --num_draw=8 \
-    --draw_interval=40m \
+    --draw_interval=5m \
     --init="$INITIAL_STATE" 

@@ -254,8 +254,8 @@ def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
         >>> #print('after_img_attrs = {}'.format(ub.repr2(after_img_attrs, nl=1)))
         >>> #print('after_aux_attr_hist = {}'.format(ub.repr2(after_aux_attr_hist, nl=1)))
         >>> assert 'geos_corners' in img
-        >>> assert 'default_nodata' in img
-        >>> assert 'default_nodata' in new_aux_attrs
+        >>> #assert 'default_nodata' in img
+        >>> #assert 'default_nodata' in new_aux_attrs
         >>> print(ub.varied_values(list(map(lambda x: ub.map_vals(json.dumps, x), coco_img.img['auxiliary']))))
 
     Example:
@@ -307,8 +307,8 @@ def coco_populate_geo_img_heuristics2(coco_img, overwrite=False,
             info = watch.gis.geotiff.geotiff_metadata(primary_fpath, **metakw)
             primary_obj['geotiff_metadata'] = info
 
-    if 'default_nodata' not in img:
-        img['default_nodata'] = primary_obj['default_nodata']
+    # if 'default_nodata' not in img:
+    #     img['default_nodata'] = primary_obj['default_nodata']
 
     if 'width' not in img or 'height' not in img:
         # TODO: better test to see if we need to recompute auxiliary transforms

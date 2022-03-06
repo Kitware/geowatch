@@ -270,7 +270,6 @@ def draw_multispectral_item(item):
     Very basic code to draw an item returned by the dataset
     """
     import kwarray
-    import watch
     import kwimage
     _impl = kwarray.ArrayAPI()
     imdata = _impl.numpy(item['inputs']['im'].data).transpose(1, 2, 3, 0)
@@ -286,7 +285,7 @@ def draw_multispectral_item(item):
         for chanx, chan in enumerate(frame_im.transpose(2, 0, 1)):
             # Normalize to make visible (should work reasonably even with mean subtract)
             if not np.allclose(chan, chan.min()):
-                canvas = np.nan_to_num(watch.utils.util_norm.normalize_intensity(chan))
+                canvas = np.nan_to_num(kwimage.normalize_intensity(chan))
             else:
                 canvas = (chan.astype(np.float32) / max(chan.max(), np.float32(1))).astype(np.float32)
             canvas = canvas.clip(0, 1)
