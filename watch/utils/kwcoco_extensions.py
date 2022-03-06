@@ -427,12 +427,17 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
         if 'warp' in overwrite or warp_to_wld is None or approx_meter_gsd is None:
             try:
                 if info is None:
-                    info = watch.gis.geotiff.geotiff_metadata(fpath,
-                                                              strict=True,
-                                                              **metakw)
+                    info = watch.gis.geotiff.geotiff_metadata(
+                        fpath, strict=True, **metakw)
+
                 if keep_geotiff_metadata:
                     obj['geotiff_metadata'] = info
-                height, width = info['img_shape'][0:2]
+
+                try:
+                    height, width = info['img_shape'][0:2]
+                except Exception:
+                    print('info = {}'.format(ub.repr2(info, nl=1)))
+                    raise
 
                 obj['height'] = height
                 obj['width'] = width
@@ -478,8 +483,7 @@ def _populate_canvas_obj(bundle_dpath, obj, overwrite=False, with_wgs=False,
                     })
 
                 approx_meter_gsd = info['approx_meter_gsd']
-            except Exception as ex:
-                raise
+            except watch.gis.geotiff.MetadataNotFound as ex:
                 if default_gsd is not None:
                     obj['approx_meter_gsd'] = default_gsd
                     obj['warp_to_wld'] = kwimage.Affine.eye().__json__()
