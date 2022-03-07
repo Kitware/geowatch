@@ -194,11 +194,6 @@ def make_coco_img_from_stac_asset(asset_name,
                                  os.path.basename(asset_href))
     else:
         file_name = asset_href
-    print('----')
-    print('platform   = {!r}'.format(platform))
-    print('asset_href = {!r}'.format(asset_href))
-    print('file_name  = {!r}'.format(file_name))
-    print('channels   = {!r}'.format(channels))
 
     img.update({
         'file_name': file_name,

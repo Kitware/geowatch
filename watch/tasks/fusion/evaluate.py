@@ -313,17 +313,18 @@ def single_image_segmentation_metrics(true_coco, pred_coco, gid1, gid2,
 
             # TODO: use salient_measures.maximized_thresholds() in kwcoco 0.2.20
             if 1:
-                maximized_info = {}
-                for k in salient_measures.keys():
-                    if k.startswith('_max_'):
-                        v = salient_measures[k]
-                        metric_value, thresh_value = v
-                        metric_name = k.split('_max_', 1)[1]
-                        maximized_info[metric_name] = {
-                            'thresh': thresh_value,
-                            'metric_value': metric_value,
-                            'metric_name': metric_name,
-                        }
+                maximized_info = salient_measures.maximized_thresholds()
+                # maximized_info = {}
+                # for k in salient_measures.keys():
+                #     if k.startswith('_max_'):
+                #         v = salient_measures[k]
+                #         metric_value, thresh_value = v
+                #         metric_name = k.split('_max_', 1)[1]
+                #         maximized_info[metric_name] = {
+                #             'thresh': thresh_value,
+                #             'metric_value': metric_value,
+                #             'metric_name': metric_name,
+                #         }
 
                 # HACK! This cherry-picks a threshold!
                 cherry_picked_thresh = maximized_info['f1']['thresh']

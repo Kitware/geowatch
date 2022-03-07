@@ -30,6 +30,20 @@ python -m watch.cli.prepare_ta2_dataset \
     --serial=True --run=1
 
 
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/iMERIT_20220120/iMERIT_COMBINED.unique.input
+DATASET_SUFFIX=Drop2-TA1-2022-03-07
+python -m watch.cli.prepare_ta2_dataset \
+    --dataset_suffix=$DATASET_SUFFIX \
+    --s3_fpath=$S3_FPATH \
+    --dvc_dpath=$DVC_DPATH \
+    --collated=False \
+    --align_workers=0 \
+    --serial=True --run=1
+
+
+
+
 jq .images[0] $HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop2-TA1-2022-02-24/data.kwcoco_c9ea8bb9.json
 
 kwcoco visualize $HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop2-TA1-2022-02-24/data.kwcoco_c9ea8bb9.json
