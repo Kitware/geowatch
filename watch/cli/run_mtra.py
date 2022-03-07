@@ -87,8 +87,6 @@ def compute_harmonization(stac_items, outdir):
             os.makedirs(data_dir, exist_ok=True)
 
             for stac_item in stac_items:
-                platform = stac_item.properties.get('platform')
-
                 mtra_preprocessed_asset =\
                     stac_item.get_assets().get('mtra_preprocessed')
 
@@ -99,25 +97,16 @@ def compute_harmonization(stac_items, outdir):
 
                 mtra_pre_path = mtra_preprocessed_asset.get_absolute_href()
 
-                # We can pass globs to the MTRA Matlab binary, so we
-                # prefix based on Landsat or Sentinel as we want to
-                # pass one set as reference and the other as target
-                if platform in SUPPORTED_S2_PLATFORMS:
-                    stacked_outpath = os.path.join(data_dir, "S_{}".format(
-                        os.path.basename(mtra_pre_path)))
-                elif platform in SUPPORTED_LS_PLATFORMS:
-                    stacked_outpath = os.path.join(data_dir, "L_{}".format(
-                        os.path.basename(mtra_pre_path)))
-                else:
-                    print("* Warning * Platform '{}' not supported, "
-                          "skipping!".format(platform))
-                    continue
+                mtra_pre_out_base =\
+                    os.path.basename(mtra_pre_path).replace('_stacked')
+
+                stacked_outpath = os.path.join(data_dir, mtra_pre_out_base)
 
                 os.link(mtra_pre_path, stacked_outpath)
 
             with open(os.path.join(tmpdirname, "MTRA_Dir.txt"), 'w') as f:
-                print(os.path.join(data_dir, "L_*"), file=f)
-                print(os.path.join(data_dir, "S_*"), file=f)
+                print(os.path.join(data_dir, "L*"), file=f)
+                print(os.path.join(data_dir, "S*"), file=f)
                 print(outdir, file=f)
 
             subprocess.run(['mainMTRA_HLS'],

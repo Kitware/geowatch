@@ -122,16 +122,23 @@ def mtra_preprocess_item(stac_item,
                 assets_dict['cloudmask'] = asset_dict['href']
 
     vrts = {}
+    stacked_prefix = None
     for band in selected_bands:
+        asset_basename, asset_ext = os.path.splitext(
+            os.path.basename(assets_dict[band]))
+        vrt_outpath = os.path.join(item_outdir,
+                                   '{}.vrt'.format(asset_basename))
+
         resampling_method = 'cubic'
 
         if band == 'cloudmask':
             resampling_method = 'near'
 
-        asset_basename, asset_ext = os.path.splitext(
-            os.path.basename(assets_dict[band]))
-        vrt_outpath = os.path.join(item_outdir,
-                                   '{}.vrt'.format(asset_basename))
+            # HACK: Setting output stacked prefix based on cloudmask
+            # baseline (should probably use the original ID or
+            # something similar
+            stacked_prefix = asset_basename.replace('_cloudmask', '')
+
         subprocess.run([
             'gdalwarp',
             '-overwrite',
@@ -170,7 +177,7 @@ def mtra_preprocess_item(stac_item,
         vrts[band] = vrt_outpath
 
     # Create merged file
-    output_base = '{}_stack'.format(stac_item.id)
+    output_base = '{}_stacked'.format(stacked_prefix)
     output_filepath = os.path.join(
         item_outdir,
         '{}.tif'.format(output_base))
