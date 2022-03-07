@@ -32,9 +32,9 @@ class pretext(pl.LightningModule):
         self.save_hyperparameters(hparams)
 
         if hparams.train_dataset is not None:
-            if hparams.use_gridded_dataset:
-                self.trainset = gridded_dataset(hparams.train_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size)
-            else:
+            # if hparams.use_gridded_dataset:
+                # self.trainset = gridded_dataset(hparams.train_dataset, sensor=hparams.sensor, num_images=12, returned_images=2, bands=hparams.bands, patch_size=hparams.patch_size)
+            # else:
                 self.trainset = kwcoco_dataset(hparams.train_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size)
         else:
             self.trainset = None
@@ -125,7 +125,7 @@ class pretext(pl.LightningModule):
 
         time_labels = time_labels.unsqueeze(1).unsqueeze(1).repeat(1, image_stack.shape[-2], image_stack.shape[-1]).to(self.device)
         time_sort_labels = 99 * torch.ones_like(time_labels)
-        time_sort_labels[:, self.hparams.ignore_boundary:-self.hparams.ignore_boundary, self.hparams.ignore_boundary:-self.hparams.ignore_boundary]
+        time_sort_labels[:, self.hparams.ignore_boundary:-self.hparams.ignore_boundary, self.hparams.ignore_boundary:-self.hparams.ignore_boundary] = time_labels[:, self.hparams.ignore_boundary:-self.hparams.ignore_boundary, self.hparams.ignore_boundary:-self.hparams.ignore_boundary]
 
         losses = []
         output = {}
@@ -255,10 +255,16 @@ class pretext(pl.LightningModule):
 
     def image_classification_head(self, in_chan):
         return nn.Sequential(
-                             nn.AdaptiveAvgPool2d(output_size=(1, 1)),
-                             nn.Flatten(1, -1),
-                             nn.Linear(in_chan, 2),
+                             nn.Flatten(1, -1)
                             )
+
+    # def image_classification_head(self, in_chan):
+    #     return nn.Sequential(
+    #                          nn.AdaptiveAvgPool2d(output_size=(1, 1)),
+    #                          nn.Flatten(1, -1),
+    #                          nn.Linear(in_chan, 8),
+    #                         )
+
 
     def generate_pca_matrix(self, save_path, loader, reduction_dim=6):
         feature_collection = []

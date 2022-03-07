@@ -24,10 +24,15 @@ class gridded_dataset(torch.utils.data.Dataset):
         'coastal', 'lwir11', 'lwir12', 'blue', 'green', 'red', 'nir', 'swir16', 'swir22', 'pan', 'cirrus'
     ]
     def __init__(self, coco_dset, sensor=['S2', 'L8'], bands=['shared'],
-                 segmentation=False, patch_size=128, num_images=2,
-                 mode='train', patch_overlap=0.0, bas=True):
+                 segmentation=False, patch_size=128, num_images=2, returned_images=None,
+                 mode='train', patch_overlap=.25, bas=True):
         super().__init__()
         # initialize dataset
+        if returned_images:
+            self.returned_images = returned_images
+        else:
+            self.returned_images = num_images
+
         self.coco_dset = kwcoco.CocoDataset.coerce(coco_dset)
         wv_image_ids = []
         for x in self.coco_dset.index.imgs:
@@ -89,8 +94,8 @@ class gridded_dataset(torch.utils.data.Dataset):
         self.transforms = A.Compose([A.OneOf([
                         A.MotionBlur(p=1),
                         A.Blur(blur_limit=3, p=1),
-                    ], p=0.5),
-                    A.GaussNoise(var_limit=.005),
+                    ], p=0.9),
+                    A.GaussNoise(var_limit=.002),
                     A.RandomBrightnessContrast(brightness_limit=.3, contrast_limit=.3, brightness_by_max=False, always_apply=True)
                 ],
                 additional_targets=additional_targets)
@@ -107,14 +112,24 @@ class gridded_dataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         tr = self.patches[idx]
         tr['channels'] = self.bands
-        vidid = tr['vidid']
+        # vidid = tr['vidid']
+        gids = tr['gids']
 
+        if self.returned_images < self.num_images:
+            kept_indices = torch.randperm(self.num_images)[:self.returned_images]
+            im1_id = gids[kept_indices[0]]
+        else:
+            im1_id = gids[0]
         offset_idx = idx
-        offset_vidid = None
-        while (vidid != offset_vidid) or (offset_idx == idx):
+        offset_im_id = None
+
+        while (im1_id != offset_im_id) or (offset_idx == idx):
             offset_idx = random.randint(0, self.__len__() - 2)
             offset_tr = self.patches[offset_idx]
-            offset_vidid = offset_tr['vidid']
+            if self.returned_images < self.num_images:
+                offset_im_id = offset_tr['gids'][kept_indices[0]]
+            else:
+                offset_im_id = offset_tr['gids'][0]
         offset_tr['channels'] = self.bands
 
         if self.segmentation:
@@ -140,8 +155,8 @@ class gridded_dataset(torch.utils.data.Dataset):
 
         images = sample['im']
         offset_image = offset_sample['im'][0]
-        augmented_image = self.transforms(image=images[0] / images[0].max())['image'] * images[0].max()
-        
+        augmented_image = self.transforms(image=images[0].copy() / images[0].max())['image'] * images[0].max()
+
         image_dict = {}
         for k, image in enumerate(images):
             if image.std() != 0.:
@@ -163,15 +178,20 @@ class gridded_dataset(torch.utils.data.Dataset):
         offset_image = torch.tensor(offset_image).permute(2, 0, 1)
         augmented_image = torch.tensor(augmented_image).permute(2, 0, 1)
 
-        gids = tr['gids']
         date_list = []
         for gid in gids:
             date = self.coco_dset.index.imgs[gid]['date_captured']
             date_list.append((int(date[:4]), int(date[5:7])))
         normalized_date = torch.tensor([date_[0] - 2018 + date_[1] / 12 for date_ in date_list])
         out = dict()
-        for m in range(self.num_images):
-            out['image{}'.format(1 + m)] = image_dict[1 + m].float()
+        
+        if self.returned_images < self.num_images:
+            for m in range(len(kept_indices)):
+                out['image{}'.format(1 + m)] = image_dict[kept_indices[m].item()].float()
+            normalized_date = torch.tensor([normalized_date[m] for m in kept_indices])
+        else:
+            for m in range(self.num_images):
+                out['image{}'.format(1 + m)] = image_dict[1 + m].float()
         out['offset_image1'] = offset_image.float()
         out['augmented_image1'] = augmented_image.float()
         out['normalized_date'] = normalized_date.float()
@@ -253,20 +273,23 @@ class kwcoco_dataset(Dataset):
         # define augmentations
         self.transforms = A.Compose([
                 A.RandomCrop(height=patch_size, width=patch_size),
-                A.RandomRotate90(p=.999)
+                A.RandomRotate90(p=1)
                 ],
                 additional_targets={'image2': 'image', 'seg1': 'mask', 'seg2': 'mask'})
 
         self.transforms2 = A.Compose([
                 A.RandomCrop(height=patch_size, width=patch_size),
-                A.RandomRotate90(p=.999),
-                A.HorizontalFlip(p=.999)],
+                A.RandomRotate90(p=1),
+                A.HorizontalFlip(p=1)],
             additional_targets={'image2': 'image'})
 
-        self.transforms3 = A.Compose([
-                A.Blur(p=.75),
-                A.RandomBrightnessContrast(brightness_by_max=False, always_apply=True)
-        ])
+        self.transforms3 = A.Compose([A.OneOf([
+                        A.MotionBlur(p=1),
+                        A.Blur(blur_limit=3, p=1),
+                    ], p=0.9),
+                    A.GaussNoise(var_limit=.002),
+                    A.RandomBrightnessContrast(brightness_limit=.3, contrast_limit=.3, brightness_by_max=False, always_apply=True)
+                ])
         self.num_channels = len(self.channels)
         self.mode = mode
 
@@ -315,12 +338,6 @@ class kwcoco_dataset(Dataset):
         img1 = np.nan_to_num(img1)
         img2 = np.nan_to_num(img2)
 
-        # normalize
-        if img1.std() != 0.0:
-            img1 = (img1 - img1.mean()) / img1.std()
-        if img2.std() != 0.0:
-            img2 = (img2 - img2.mean()) / img2.std()
-
         if not self.change_labels:
             # transformations
             transformed = self.transforms(image=img1, image2=img2)
@@ -345,13 +362,29 @@ class kwcoco_dataset(Dataset):
                 display_image2 = torch.tensor([])
 
             img3 = transformed2['image']
-            transformed3 = self.transforms3(image=img1)
+            img4 = transformed3 = self.transforms3(image=img1.copy() / img1.max())['image'] * img1.max()
             # convert to tensors
             img1 = torch.tensor(img1).permute(2, 0, 1)
             img2 = torch.tensor(img2).permute(2, 0, 1)
-            img4 = transformed3['image']
             img3 = torch.tensor(img3).permute(2, 0, 1)
             img4 = torch.tensor(img4).permute(2, 0, 1)
+            
+            if img1.std() != 0.:
+                img1 = (img1 - img1.mean()) / img1.std()
+            else:
+                img1 = torch.zeros_like(img1)
+            if img2.std() != 0.:
+                img2 = (img2 - img2.mean()) / img2.std()
+            else:
+                img2 = torch.zeros_like(img2)
+            if img3.std() != 0.:
+                img3 = (img3 - img3.mean()) / img3.std()
+            else:
+                img3 = torch.zeros_like(img3)
+            if img4.std() != 0.:
+                img4 = (img4 - img4.mean()) / img4.std()
+            else:
+                img4 = torch.zeros_like(img4)
 
             return {
                 'image1': img1.float(),

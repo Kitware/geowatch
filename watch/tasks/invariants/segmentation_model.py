@@ -45,7 +45,7 @@ class segmentation_model(pl.LightningModule):
             warnings.warn('Classes/Ignore Classes/Background need to be re-checked before succesfully training on site classification models.')
             weight = None
 
-        self.criterion = nn.NLLLoss(weight=weight)
+        self.criterion = nn.NLLLoss(weight=weight, ignore_index=99)
         self.save_hyperparameters(hparams)
 
     def forward(self, x, positions=None):
@@ -73,7 +73,13 @@ class segmentation_model(pl.LightningModule):
         forward = self.forward(images, positions)
         predictions = forward['predictions']
 
-        loss = self.criterion(predictions.reshape(-1, 2, self.hparams.patch_size, self.hparams.patch_size), segmentations.long().reshape(-1, self.hparams.patch_size, self.hparams.patch_size))
+        segmentations = segmentations.long().reshape(-1, self.hparams.patch_size, self.hparams.patch_size)
+        if self.hparams.ignore_boundary:
+            temp_segmentations = 99*torch.ones_like(segmentations)
+            temp_segmentations[:, self.hparams.ignore_boundary:-self.hparams.ignore_boundary, self.hparams.ignore_boundary:-self.hparams.ignore_boundary] = segmentations[:, self.hparams.ignore_boundary:-self.hparams.ignore_boundary, self.hparams.ignore_boundary:-self.hparams.ignore_boundary]
+            segmentations = temp_segmentations
+
+        loss = self.criterion(predictions.reshape(-1, 2, self.hparams.patch_size, self.hparams.patch_size), segmentations)
 
         output = {  'predicted_class': forward['predicted_class'],
                     'prediction_map': predictions,
