@@ -27,6 +27,13 @@ CommandLine:
         --space="video" \
         --num_workers=avail \
         --any3="only" --draw_anns=True --draw_imgs=False --animate=True
+
+
+Notes:
+    To add iMerit regions, we will need to recognize site-summaries from
+    region models instead of site-models themselves.  Code to do this is in:
+        https://gitlab.kitware.com/smart/watch/-/blob/master/watch/cli/kwcoco_to_geojson.py#L476
+    in `add_site_summary_to_kwcoco`.
 """
 import dateutil
 import kwcoco

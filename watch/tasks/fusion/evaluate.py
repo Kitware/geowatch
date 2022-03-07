@@ -147,17 +147,24 @@ def binary_confusion_measures(tn, fp, fn, tp):
 
 
 @profile
-def single_image_segmentation_metrics(true_coco, pred_coco, gid1, gid2,
+def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
+                                      true_classes, true_dets, video1=None,
                                       score_space='video'):
+    """
+    Args:
+        true_coco_img (kwcoco.CocoImage): detatched true coco image
+        pred_coco_img (kwcoco.CocoImage): detatched predicted coco image
+    """
 
-    true_gid = gid1
-    pred_gid = gid2
-    pred_coco_img = pred_coco.coco_image(pred_gid)
-    true_coco_img = true_coco.coco_image(true_gid)
+    # true_gid = gid1
+    # pred_gid = gid2
+    # pred_coco_img = pred_coco.coco_image(pred_gid)
+    # true_coco_img = true_coco.coco_image(true_gid)
 
-    img1 = true_coco.imgs[gid1]
-    vidid1 = true_coco.imgs[gid1]['video_id']
-    video1 = true_coco.index.videos[vidid1]
+    true_gid = true_coco_img.img['id']
+    pred_gid = pred_coco_img.img['id']
+
+    img1 = true_coco_img.img
 
     if score_space == 'image':
         shape = (img1['height'], img1['width'])
@@ -167,10 +174,12 @@ def single_image_segmentation_metrics(true_coco, pred_coco, gid1, gid2,
         raise KeyError(score_space)
 
     row = {
-        'true_gid': gid1,
-        'pred_gid': gid2,
-        'video': video1['name'],
+        'true_gid': true_gid,
+        'pred_gid': pred_gid,
     }
+    if video1 is not None:
+        row['video'] = video1['name']
+
     info = {
         'row': row,
         'shape': shape,
@@ -183,7 +192,6 @@ def single_image_segmentation_metrics(true_coco, pred_coco, gid1, gid2,
     undistinguished_classes = heuristics.UNDISTINGUISHED_CLASSES
 
     # Determine what true/predicted categories are in common
-    true_classes = list(true_coco.object_categories())
     predicted_classes = []
     for stream in pred_coco_img.channels.streams():
         have = stream.intersection(true_classes)
@@ -208,7 +216,6 @@ def single_image_segmentation_metrics(true_coco, pred_coco, gid1, gid2,
     }
     class_weights = np.ones(shape, dtype=np.float32)
 
-    true_dets = true_coco.annots(gid=gid1).detections
     if score_space == 'video':
         warp_img_to_vid = kwimage.Affine.coerce(
             true_coco_img.img['warp_img_to_vid'])
@@ -807,6 +814,10 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     prog = ub.ProgIter(total=total_images, desc='scoring', adjust=False, freq=1)
     prog.begin()
 
+    jobs = ub.JobPool(mode='process', max_workers=8)
+
+    true_classes = list(true_coco.object_categories())
+
     # Handle images in videos
     for video_match in video_matches:
         prog.set_extra('comparing ' + video_match['vidname'])
@@ -823,8 +834,16 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
 
             for gid1, gid2 in chunk:
                 # xxx = set(true_coco.annots(gid=gid1).lookup('category_id'))
+                pred_coco_img = pred_coco.coco_image(gid1)
+                true_coco_img = true_coco.coco_image(gid2)
+                true_dets = true_coco.annots(gid=gid1).detections
+
+                vidid1 = true_coco.imgs[gid1]['video_id']
+                video1 = true_coco.index.videos[vidid1]
+
                 info = single_image_segmentation_metrics(
-                    true_coco, pred_coco, gid1, gid2, score_space=score_space)
+                    pred_coco_img, true_coco_img, true_classes, true_dets,
+                    video1, score_space=score_space)
                 rows.append(info['row'])
 
                 class_measures = info.get('class_measures', None)
@@ -852,30 +871,34 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     # class_measure_combiner.catname_to_combiner['Site Preparation'].queue
 
     # Handle standalone images
-    gids1 = image_matches['match_gids1']
-    gids2 = image_matches['match_gids2']
+    if score_space == 'image':
+        gids1 = image_matches['match_gids1']
+        gids2 = image_matches['match_gids2']
 
-    for gid1, gid2 in zip(gids1, gids2):
-        info = single_image_segmentation_metrics(
-            true_coco, pred_coco, gid1, gid2, score_space=score_space)
-        class_measures = info.get('class_measures', None)
-        salient_measures = info.get('salient_measures', None)
-        if salient_measures is not None:
-            salient_measure_combiner.submit(salient_measures)
-        if class_measures is not None:
-            class_measure_combiner.submit(class_measures)
-        rows.append(info['row'])
-        if draw_heatmaps:
-            chunk_info = [info]
-            dump_chunked_confusion(
-                true_coco, pred_coco, chunk_info, heatmap_dpath,
-                score_space=score_space, title=title)
-        prog.update()
-        # Reduce measures over the chunk
-        if salient_measure_combiner.queue_size > chunk_size:
-            salient_measure_combiner.combine()
-        if class_measure_combiner.queue_size > chunk_size:
-            class_measure_combiner.combine()
+        for gid1, gid2 in zip(gids1, gids2):
+            pred_coco_img = pred_coco.coco_image(gid1)
+            true_coco_img = true_coco.coco_image(gid2)
+            info = single_image_segmentation_metrics(
+                pred_coco_img, true_coco_img, true_classes, true_dets,
+                score_space=score_space)
+            class_measures = info.get('class_measures', None)
+            salient_measures = info.get('salient_measures', None)
+            if salient_measures is not None:
+                salient_measure_combiner.submit(salient_measures)
+            if class_measures is not None:
+                class_measure_combiner.submit(class_measures)
+            rows.append(info['row'])
+            if draw_heatmaps:
+                chunk_info = [info]
+                dump_chunked_confusion(
+                    true_coco, pred_coco, chunk_info, heatmap_dpath,
+                    score_space=score_space, title=title)
+            prog.update()
+            # Reduce measures over the chunk
+            if salient_measure_combiner.queue_size > chunk_size:
+                salient_measure_combiner.combine()
+            if class_measure_combiner.queue_size > chunk_size:
+                class_measure_combiner.combine()
 
     prog.end()
 
