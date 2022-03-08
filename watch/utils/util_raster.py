@@ -368,15 +368,15 @@ def crop_to(
         >>> from watch.utils.util_raster import *
         >>> from watch.demo.landsat_demodata import grab_landsat_product
         >>> path = grab_landsat_product()['bands'][0]
-        >>>
+        >>> #
         >>> # a polygon that partially intersects this image's bounds
         >>> # and valid mask
         >>> import shapely
         >>> poly = shapely.geometry.box(-500, -500, 2000, 2000)
-        >>>
+        >>> #
         >>> # no-op for testing purposes
         >>> assert crop_to([poly], path, bounds_policy='none')[0] == poly
-        >>>
+        >>> #
         >>> # handle intersecting polygons
         >>> assert crop_to([poly], path, bounds_policy='bounds',
         >>>                intersect_policy='keep')[0] == poly
@@ -385,7 +385,7 @@ def crop_to(
         >>> cropped = crop_to([poly], path, bounds_policy='bounds',
         >>>                intersect_policy='crop')[0]  # default
         >>> assert cropped.bounds == (0, 0, 2000, 2000)
-        >>>
+        >>> #
         >>> # same with valid mask
         >>> cropped = crop_to([poly], path, bounds_policy='valid')[0]
         >>> assert cropped.bounds == (924, 14, 2000, 2000)
@@ -406,7 +406,8 @@ def crop_to(
         geom = pygeos.box(0, 0, w, h)
 
     elif bounds_policy == 'valid':
-        geom = pygeos.from_shapely(mask(raster, as_poly=True))
+        mask_poly = mask(raster, as_poly=True)
+        geom = pygeos.from_shapely(mask_poly)
 
     else:
         raise ValueError(bounds_policy)

@@ -227,24 +227,32 @@ def main(cmdline=False, **kwargs):
     # Prepare splits
     # Add baseline datasets to DVC
 
-    '''
-    # Update to whatever the state of the annotations submodule is
-    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-    python -m watch project_annotations \
-        --src $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
-        --dst $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
-        --site_models="$DVC_DPATH/annotations/site_models/*.geojson"
+    if 0:
+        queue.submit(ub.codeblock(
+            rf'''
+            # Update to whatever the state of the annotations submodule is
+            python -m watch visualize \
+                --src "{aligned_kwcoco_fpath}" \
+                --animate=True --workers=auto
+            '''))
 
-    DVC_DPATH=$(python -m watch.cli.find_dvc)
-    python -m watch.cli.prepare_splits \
-        --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
-        --run=1 --serial=True
+    if 0:
+        queue.submit(ub.codeblock(
+            rf'''
+            # Update to whatever the state of the annotations submodule is
+            python -m watch project_annotations \
+                --src "{aligned_kwcoco_fpath}" \
+                --dst "{aligned_kwcoco_fpath}" \
+                --site_models="$DVC_DPATH/annotations/site_models/*.geojson"
+            '''))
 
-    dvc add Drop2-Aligned-TA1-2022-02-15/data_*.kwcoco.json
-
-
-
-    '''
+    # queue.submit(ub.codeblock(
+    #     '''
+    #     DVC_DPATH=$(python -m watch.cli.find_dvc)
+    #     python -m watch.cli.prepare_splits \
+    #         --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
+    #         --run=1 --serial=True
+    #     '''))
 
     queue.rprint()
 
