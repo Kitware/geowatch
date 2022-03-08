@@ -433,8 +433,8 @@ def colorize_class_probs(probs, classes):
 
 
 @profile
-def dump_chunked_confusion(true_coco, pred_coco, chunk_info, heatmap_dpath,
-                           score_space='video', title=None):
+def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
+                           heatmap_dpath, score_space='video', title=None):
     """
     Draw a a sequence of true/pred image predictions
     """
@@ -444,9 +444,7 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, heatmap_dpath,
     # colors = ['blue', 'green', 'yellow', 'red']
     # colors = ['black', 'white', 'yellow', 'red']
     color_lut = np.array([kwimage.Color(c).as255() for c in colors])
-
-    heuristics.ensure_heuristic_coco_colors(true_coco)
-    full_classes: kwcoco.CategoryTree = true_coco.object_categories()
+    # full_classes: kwcoco.CategoryTree = true_coco.object_categories()
 
     # Make a legend
     color01_lut = color_lut / 255.0
@@ -478,13 +476,13 @@ def dump_chunked_confusion(true_coco, pred_coco, chunk_info, heatmap_dpath,
     frame_nums = []
     true_gids = []
     unique_vidnames = set()
-    for info in chunk_info:
+    for info, true_coco_img in zip(chunk_info, true_coco_imgs):
         row = info['row']
         unique_vidnames.add(row['video'])
 
-        true_gid = row['true_gid']
-
-        true_coco_img = true_coco.coco_image(true_gid)
+        # true_gid = row['true_gid']
+        # true_coco_img = true_coco.coco_image(true_gid)
+        true_gid = true_coco_img.img['id']
 
         true_img = true_coco_img.img
         frame_index = true_img['frame_index']
@@ -704,14 +702,15 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                            score_space='video'):
     """
     CommandLine:
-        xdoctest -m watch.tasks.fusion.evaluate evaluate_segmentations
+        XDEV_PROFILE=1 xdoctest -m watch.tasks.fusion.evaluate evaluate_segmentations
 
     Example:
         >>> from watch.tasks.fusion.evaluate import *  # NOQA
         >>> from kwcoco.coco_evaluator import CocoEvaluator
         >>> from kwcoco.demo.perterb import perterb_coco
         >>> import kwcoco
-        >>> true_coco = kwcoco.CocoDataset.demo('vidshapes2')
+        >>> #true_coco = kwcoco.CocoDataset.demo('vidshapes2')
+        >>> true_coco = kwcoco.CocoDataset.demo('vidshapes9')
         >>> kwargs = {
         >>>     'box_noise': 0.5,
         >>>     'n_fp': (0, 10),
@@ -725,6 +724,9 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         >>> pred_coco = perterb_coco(true_coco, **kwargs)
         >>> eval_dpath = ub.ensure_app_cache_dir('watch/tests/fusion_eval')
         >>> print('eval_dpath = {!r}'.format(eval_dpath))
+        >>> score_space = 'video'
+        >>> draw_curves = 'auto'
+        >>> draw_heatmaps = 'auto'
         >>> evaluate_segmentations(true_coco, pred_coco, eval_dpath)
     """
     import platform
@@ -814,9 +816,16 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     prog = ub.ProgIter(total=total_images, desc='scoring', adjust=False, freq=1)
     prog.begin()
 
-    jobs = ub.JobPool(mode='process', max_workers=8)
+    max_workers = 0
+    # max_workers = 0
+    metrics_jobs = ub.JobPool(mode='process', max_workers=max_workers)
+    draw_jobs = ub.JobPool(mode='process', max_workers=max_workers)
+
+    from watch import heuristics
+    heuristics.ensure_heuristic_coco_colors(true_coco)
 
     true_classes = list(true_coco.object_categories())
+    full_classes: kwcoco.CategoryTree = true_coco.object_categories()
 
     # Handle images in videos
     for video_match in video_matches:
@@ -831,45 +840,63 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         pairs = list(zip(gids1, gids2))
         for chunk in ub.chunks(pairs, chunk_size):
             chunk_info = []
-
             for gid1, gid2 in chunk:
                 # xxx = set(true_coco.annots(gid=gid1).lookup('category_id'))
-                pred_coco_img = pred_coco.coco_image(gid1)
-                true_coco_img = true_coco.coco_image(gid2)
+                pred_coco_img = pred_coco.coco_image(gid1).detach()
+                true_coco_img = true_coco.coco_image(gid2).detach()
                 true_dets = true_coco.annots(gid=gid1).detections
 
                 vidid1 = true_coco.imgs[gid1]['video_id']
                 video1 = true_coco.index.videos[vidid1]
 
-                info = single_image_segmentation_metrics(
-                    pred_coco_img, true_coco_img, true_classes, true_dets,
-                    video1, score_space=score_space)
-                rows.append(info['row'])
-
-                class_measures = info.get('class_measures', None)
-                salient_measures = info.get('salient_measures', None)
-                if salient_measures is not None:
-                    salient_measure_combiner.submit(salient_measures)
-                if class_measures is not None:
-                    class_measure_combiner.submit(class_measures)
-
-                if draw_heatmaps:
-                    chunk_info.append(info)
+                metrics_jobs.submit(
+                    single_image_segmentation_metrics, pred_coco_img,
+                    true_coco_img, true_classes, true_dets, video1,
+                    score_space=score_space)
                 prog.update()
 
-            # Reduce measures over the chunk
-            if salient_measure_combiner.queue_size > chunk_size:
-                salient_measure_combiner.combine()
-            if class_measure_combiner.queue_size > chunk_size:
-                class_measure_combiner.combine()
+    job_chunks = ub.chunks(metrics_jobs.jobs, chunk_size)
+
+    for job_chunk in ub.ProgIter(job_chunks, desc='collect score jobs'):
+        chunk_info = []
+        for job in job_chunk:
+            info = job.result()
+            rows.append(info['row'])
+
+            class_measures = info.get('class_measures', None)
+            salient_measures = info.get('salient_measures', None)
+            if salient_measures is not None:
+                salient_measure_combiner.submit(salient_measures)
+            if class_measures is not None:
+                class_measure_combiner.submit(class_measures)
 
             if draw_heatmaps:
-                dump_chunked_confusion(
-                    true_coco, pred_coco, chunk_info, heatmap_dpath,
-                    score_space=score_space, title=title)
+                chunk_info.append(info)
+
+        # Reduce measures over the chunk
+        if salient_measure_combiner.queue_size > chunk_size:
+            salient_measure_combiner.combine()
+        if class_measure_combiner.queue_size > chunk_size:
+            class_measure_combiner.combine()
+
+        if draw_heatmaps:
+            true_gids = [info['row']['true_gid'] for info in chunk_info]
+            true_coco_imgs = true_coco.images(true_gids).coco_images
+            true_coco_imgs = [g.detach() for g in true_coco_imgs]
+            draw_jobs.submit(
+                dump_chunked_confusion, full_classes, true_coco_imgs,
+                chunk_info, heatmap_dpath, score_space=score_space,
+                title=title)
+            # dump_chunked_confusion(
+            #     true_coco, pred_coco, chunk_info, heatmap_dpath,
+            #     score_space=score_space, title=title)
+
+    for job in draw_jobs.as_completed(desc='collect draw jobs'):
+        job.result()
 
     # class_measure_combiner.catname_to_combiner['Site Preparation'].queue
 
+    # TODO: add parallelization here as well.
     # Handle standalone images
     if score_space == 'image':
         gids1 = image_matches['match_gids1']
