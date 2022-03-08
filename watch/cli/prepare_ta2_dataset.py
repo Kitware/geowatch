@@ -39,7 +39,7 @@ python -m watch.cli.prepare_ta2_dataset \
     --dvc_dpath=$DVC_DPATH \
     --collated=False \
     --align_workers=4 \
-    --serial=True --run=1
+    --serial=True --run=0
 
 
 
@@ -65,6 +65,8 @@ class PrepareTA2Config(scfg.Config):
         'serial': scfg.Value(True, help='if True use serial mode'),
         'aws_profile': scfg.Value('iarpa', help='AWS profile to use for remote data access'),
         'align_workers': scfg.Value(0, help='workers for align script'),
+
+        'visualize': scfg.Value(0, help='if True runs visualize'),
 
         'debug': scfg.Value(False, help='if enabled, turns on debug visualizations'),
         'select_images': scfg.Value(False, help='if enabled only uses select images')
@@ -227,7 +229,7 @@ def main(cmdline=False, **kwargs):
     # Prepare splits
     # Add baseline datasets to DVC
 
-    if 0:
+    if config['visualize']:
         queue.submit(ub.codeblock(
             rf'''
             # Update to whatever the state of the annotations submodule is
