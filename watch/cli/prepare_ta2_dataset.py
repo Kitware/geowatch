@@ -246,6 +246,7 @@ def main(cmdline=False, **kwargs):
             python -m watch project_annotations \
                 --src "{aligned_kwcoco_fpath}" \
                 --dst "{aligned_kwcoco_fpath}" \
+                --draw_anns=False \
                 --site_models="$DVC_DPATH/annotations/site_models/*.geojson"
             '''))
 

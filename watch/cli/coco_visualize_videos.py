@@ -96,8 +96,6 @@ class CocoVisualizeConfig(scfg.Config):
         'fixed_normalization_scheme': scfg.Value(
             None, type=str, help='Use a fixed normalization scheme for visualization; e.g. "scaled_25percentile"'),
 
-        'nodata': scfg.Value(0, type=int, help='Nodata value'),
-
         'extra_header': scfg.Value(None, help='extra text to include in the header'),
 
         'select_images': scfg.Value(
@@ -366,7 +364,6 @@ def main(cmdline=True, **kwargs):
                                 chan_to_normalizer=chan_to_normalizer,
                                 fixed_normalization_scheme=config.get(
                                     'fixed_normalization_scheme'),
-                                nodata=config['nodata'],
                                 cmap=config['cmap'],
                                 any3=config['any3'], dset_idstr=dset_idstr)
 
@@ -391,7 +388,6 @@ def main(cmdline=True, **kwargs):
                             chan_to_normalizer=chan_to_normalizer,
                             fixed_normalization_scheme=config.get(
                                 'fixed_normalization_scheme'),
-                            nodata=config['nodata'],
                             any3=config['any3'], dset_idstr=dset_idstr)
 
         for job in ub.ProgIter(pool.as_completed(), total=len(pool), desc='write imgs'):
@@ -516,7 +512,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                draw_anns=True, _header_extra=None,
                                chan_to_normalizer=None,
                                fixed_normalization_scheme=None,
-                               nodata=0, any3=True, dset_idstr='',
+                               any3=True, dset_idstr='',
                                cmap='viridis'):
     """
     Dumps an intensity normalized "space-aligned" kwcoco image visualization
@@ -777,7 +773,6 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                         'mode': 'linear',
                     })
                 else:
-                    # mask = (data != nodata)
                     p = kwarray.apply_normalizer(data, normalizer, mask=mask,
                                                  set_value_at_mask=0.)
                 new_parts.append(p)
