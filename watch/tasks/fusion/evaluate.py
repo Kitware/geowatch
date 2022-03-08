@@ -560,7 +560,8 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
 @profile
 def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                            draw_curves='auto', draw_heatmaps='auto',
-                           score_space='video', workers='auto'):
+                           score_space='video', workers='auto',
+                           draw_workers='auto'):
     """
     CommandLine:
         XDEV_PROFILE=1 xdoctest -m watch.tasks.fusion.evaluate evaluate_segmentations
@@ -571,7 +572,9 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         >>> from kwcoco.demo.perterb import perterb_coco
         >>> import kwcoco
         >>> true_coco1 = kwcoco.CocoDataset.demo('vidshapes2')
-        >>> true_coco2 = kwcoco.CocoDataset.demo('shapes32')
+        >>> true_coco2 = kwcoco.CocoDataset.demo('shapes8')
+        >>> #true_coco1 = kwcoco.CocoDataset.demo('vidshapes9')
+        >>> #true_coco2 = kwcoco.CocoDataset.demo('shapes128')
         >>> true_coco = kwcoco.CocoDataset.union(true_coco1, true_coco2)
         >>> kwargs = {
         >>>     'box_noise': 0.5,
@@ -579,18 +582,21 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         >>>     'n_fn': (0, 10),
         >>>     'with_probs': True,
         >>>     'with_heatmaps': True,
+        >>>     'verbose': 1,
         >>> }
         >>> # TODO: it would be nice to demo the soft metrics
         >>> # functionality by adding "salient_prob" or "class_prob"
         >>> # auxiliary channels to this demodata.
+        >>> print('perterbing')
         >>> pred_coco = perterb_coco(true_coco, **kwargs)
         >>> eval_dpath = ub.ensure_app_cache_dir('watch/tests/fusion_eval')
         >>> print('eval_dpath = {!r}'.format(eval_dpath))
         >>> score_space = 'image'
         >>> draw_curves = 'auto'
         >>> draw_heatmaps = 'auto'
-        >>> #workers = 'auto'
-        >>> workers = 0
+        >>> #draw_heatmaps = False
+        >>> workers = 'min(avail-2,6)'
+        >>> #workers = 0
         >>> evaluate_segmentations(true_coco, pred_coco, eval_dpath,
         >>>                        score_space=score_space,
         >>>                        draw_heatmaps=draw_heatmaps,
@@ -609,6 +615,10 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     heuristics.ensure_heuristic_category_tree_colors(full_classes)
 
     workers = util_globals.coerce_num_workers(workers)
+    if draw_workers == 'auto':
+        draw_workers = min(2, workers)
+    else:
+        draw_workers = util_globals.coerce_num_workers(draw_workers)
 
     # Extract metadata about the predictions to persist
     meta = {}
@@ -694,13 +704,14 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         total_images = None
 
     # Prepare job pools
-    metrics_jobs = ub.Executor(mode='process', max_workers=workers)
-    draw_jobs = ub.JobPool(mode='process', max_workers=workers)
+    metrics_executor = ub.Executor(mode='process', max_workers=workers)
+    draw_executor = ub.Executor(mode='process', max_workers=workers)
 
     prog = ub.ProgIter(total=total_images, desc='submit scoring jobs', adjust=False, freq=1)
     prog.begin()
 
     job_chunks = []
+    draw_jobs = []
 
     # Submit scoring jobs over pairs of true-predicted images in videos
     for video_match in video_matches:
@@ -721,7 +732,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
             vidid1 = true_coco.imgs[gid1]['video_id']
             video1 = true_coco.index.videos[vidid1]
 
-            job = metrics_jobs.submit(
+            job = metrics_executor.submit(
                 single_image_segmentation_metrics, pred_coco_img,
                 true_coco_img, true_classes, true_dets, video1,
                 score_space=score_space)
@@ -745,7 +756,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
             true_coco_img = true_coco.coco_image(gid2)
             true_dets = true_coco.annots(gid=gid1).detections
             video1 = None
-            job = metrics_jobs.submit(
+            job = metrics_executor.submit(
                 single_image_segmentation_metrics, pred_coco_img,
                 true_coco_img, true_classes, true_dets, video1,
                 score_space=score_space)
@@ -762,44 +773,73 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                 '''))
     prog.end()
 
-    for job_chunk in ub.ProgIter(job_chunks, desc='collect score jobs'):
-        chunk_info = []
-        for job in job_chunk:
-            info = job.result()
-            rows.append(info['row'])
+    from rich.progress import Progress
+    with Progress() as progress:
 
-            class_measures = info.get('class_measures', None)
-            salient_measures = info.get('salient_measures', None)
-            if salient_measures is not None:
-                salient_measure_combiner.submit(salient_measures)
-            if class_measures is not None:
-                class_measure_combiner.submit(class_measures)
+        num_jobs = sum(map(len, job_chunks))
+
+        score_task = progress.add_task("[cyan] Scoring...", total=num_jobs)
+        if draw_heatmaps:
+            draw_task = progress.add_task("[green] Drawing...", total=len(job_chunks))
+
+        for job_chunk in job_chunks:
+            chunk_info = []
+            for job in job_chunk:
+                info = job.result()
+                progress.update(score_task, advance=1)
+                rows.append(info['row'])
+
+                class_measures = info.get('class_measures', None)
+                salient_measures = info.get('salient_measures', None)
+                if salient_measures is not None:
+                    salient_measure_combiner.submit(salient_measures)
+                if class_measures is not None:
+                    class_measure_combiner.submit(class_measures)
+                if draw_heatmaps:
+                    chunk_info.append(info)
+
+            # Once a job chunk is done, clear its memory
+            job = None
+            job_chunk.clear()
+
+            # Reduce measures over the chunk
+            if salient_measure_combiner.queue_size > chunk_size:
+                salient_measure_combiner.combine()
+            if class_measure_combiner.queue_size > chunk_size:
+                class_measure_combiner.combine()
+
             if draw_heatmaps:
-                chunk_info.append(info)
+                # Let the draw executor release any memory it can
+                remaining_draw_jobs = []
+                for draw_job in draw_jobs:
+                    if draw_job.done():
+                        draw_job.result()
+                        progress.update(draw_task, advance=1)
+                    else:
+                        remaining_draw_jobs.append(draw_job)
+                draw_job = None
+                draw_jobs = remaining_draw_jobs
 
-        # Once a job chunk is done, clear its memory
-        job_chunk.clear()
+                # As chunks of evaluation jobs complete, submit background jobs to
+                # draw results to disk if requested.
+                true_gids = [info['row']['true_gid'] for info in chunk_info]
+                true_coco_imgs = true_coco.images(true_gids).coco_images
+                true_coco_imgs = [g.detach() for g in true_coco_imgs]
+                draw_job = draw_executor.submit(
+                    dump_chunked_confusion, full_classes, true_coco_imgs,
+                    chunk_info, heatmap_dpath, score_space=score_space,
+                    title=title)
+                draw_jobs.append(draw_job)
 
-        # Reduce measures over the chunk
-        if salient_measure_combiner.queue_size > chunk_size:
-            salient_measure_combiner.combine()
-        if class_measure_combiner.queue_size > chunk_size:
-            class_measure_combiner.combine()
+        metrics_executor.shutdown()
 
         if draw_heatmaps:
-            # As chunks of evaluation jobs complete, submit background jobs to
-            # draw results to disk if requested.
-            true_gids = [info['row']['true_gid'] for info in chunk_info]
-            true_coco_imgs = true_coco.images(true_gids).coco_images
-            true_coco_imgs = [g.detach() for g in true_coco_imgs]
-            draw_jobs.submit(
-                dump_chunked_confusion, full_classes, true_coco_imgs,
-                chunk_info, heatmap_dpath, score_space=score_space,
-                title=title)
-
-    # Allow all drawing jobs to finalize
-    for job in draw_jobs.as_completed(desc='collect draw jobs'):
-        job.result()
+            # Allow all drawing jobs to finalize
+            while draw_jobs:
+                job = draw_jobs.pop()
+                job.result()
+                progress.update(draw_task, advance=1)
+            draw_executor.shutdown()
 
     # Finalize all of the aggregated measures
     print('Finalize salient measures')
@@ -909,7 +949,8 @@ def make_evaluate_config(cmdline=False, **kwargs):
     parser.add_argument('--draw_curves', default='auto', help='flag to draw curves or not')
     parser.add_argument('--draw_heatmaps', default='auto', help='flag to draw heatmaps or not')
     parser.add_argument('--score_space', default='video', help='can score in image or video space')
-    parser.add_argument('--workers', default='auto', help='number of parallel workers')
+    parser.add_argument('--workers', default='auto', help='number of parallel scoring workers')
+    parser.add_argument('--draw_workers', default='auto', help='number of parallel drawing workers')
     parser.set_defaults(**kwargs)
     default_args = None if cmdline else []
     args, _ = parser.parse_known_args(default_args)
@@ -933,7 +974,8 @@ def main(cmdline=True, **kwargs):
     evaluate_segmentations(true_coco, pred_coco, args.eval_dpath,
                            draw_curves=draw_curves,
                            draw_heatmaps=draw_heatmaps,
-                           score_space=args.score_space, workers=args.workers)
+                           score_space=args.score_space, workers=args.workers,
+                           draw_workers=args.draw_workers)
 
 
 if __name__ == '__main__':
