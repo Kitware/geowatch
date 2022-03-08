@@ -1,4 +1,7 @@
 #!/bin/bash
+__notes__="
+https://docs.google.com/spreadsheets/d/1kYseTFyLb-_7BzILtSOWuimRVyLuefaninfNwkg45r4/edit#gid=0
+"
 
 prep_teamfeat_drop2(){
     # Team Features on Drop2

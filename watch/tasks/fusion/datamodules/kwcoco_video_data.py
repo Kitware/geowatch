@@ -1870,21 +1870,23 @@ class KWCocoVideoDataset(data.Dataset):
             >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
             >>> import watch
             >>> from watch.tasks.fusion import datamodules
+            >>> num = 10
             >>> datamodule = datamodules.KWCocoVideoDataModule(
-            >>>     train_dataset='vidshapes-watch', chip_size=256, time_steps=5, num_workers=0, batch_size=3, true_multimodal=True, normalize_inputs=True)
+            >>>     train_dataset='vidshapes-watch', chip_size=64, time_steps=3,
+            >>>     num_workers=0, batch_size=3, true_multimodal=True,
+            >>>     normalize_inputs=num)
             >>> datamodule.setup('fit')
             >>> self = datamodule.torch_datasets['train']
             >>> coco_dset = self.sampler.dset
             >>> print({c.get('sensor_coarse') for c in coco_dset.images().coco_images})
             >>> print({c.channels.spec for c in coco_dset.images().coco_images})
             >>> num_workers = 0
-            >>> num = 10
             >>> batch_size = 6
-            >>> s = (self.compute_dataset_stats())
+            >>> s = (self.compute_dataset_stats(num=num))
             >>> print('s = {}'.format(ub.repr2(s, nl=3)))
-            >>> self.compute_dataset_stats(with_intensity=False)
-            >>> self.compute_dataset_stats(with_class=False)
-            >>> self.compute_dataset_stats(with_class=False, with_intensity=False)
+            >>> self.compute_dataset_stats(num=num, with_intensity=False)
+            >>> self.compute_dataset_stats(num=num, with_class=False)
+            >>> self.compute_dataset_stats(num=num, with_class=False, with_intensity=False)
         """
         num = num if isinstance(num, int) and num is not True else 1000
         if not with_class and not with_intensity:

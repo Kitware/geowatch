@@ -28,125 +28,6 @@ except Exception:
 
 
 @profile
-def binary_confusion_measures(tn, fp, fn, tp):
-    """
-    Metrics derived from a binary confusion matrix
-
-    TODO: just use kwcoco.metrics instead (or pycm)
-
-    Example:
-        >>> from watch.tasks.fusion.evaluate import *  # NOQA
-        >>> import kwarray
-        >>> rng = kwarray.ensure_rng(4732890)
-        >>> confusion_mats = np.vstack([
-        >>>     # Corner cases
-        >>>     np.array([list(map(int, '{:04b}'.format(x)))
-        >>>               for x in range(16)]),
-        >>>     # Random cases
-        >>>     rng.randint(0, 100000, (32, 4)),
-        >>> ])
-        >>> tn, fp, fn, tp = confusion_mats.T
-        >>> measures = binary_confusion_measures(tn, fp, fn, tp)
-        >>> df = pd.DataFrame(measures)
-        >>> print(df)
-    """
-    tn = np.atleast_1d(tn)
-    fp = np.atleast_1d(fp)
-    fn = np.atleast_1d(fn)
-    tp = np.atleast_1d(tp)
-
-    with warnings.catch_warnings():
-        # It is very possible that we will divide by zero in this func
-        warnings.filterwarnings('ignore', message='invalid .* true_divide')
-        warnings.filterwarnings('ignore', message='invalid value')
-
-        real_pos = fn + tp  # number of real positives
-        real_neg = fp + tn  # number of real negatives
-
-        total = real_pos + real_neg
-
-        pred_pos = (fp + tp)  # number of predicted positives
-        pred_neg = (fn + tn)  # number of predicted negatives
-
-        pred_correct = tp + tn  # number of correct predictions
-
-        # Error / Success Rates
-        # https://en.wikipedia.org/wiki/Confusion_matrix
-        # (Ensure denominator parts are non-zero)
-        p_denom = real_pos.copy()
-        p_denom[p_denom == 0] = 1
-        n_denom = real_neg.copy()
-        n_denom[n_denom == 0] = 1
-        tpr = tp / p_denom  # recall
-        tnr = tn / n_denom  # specificity
-        fpr = fp / n_denom  # fall-out
-        fnr = fn / p_denom  # miss-rate
-
-        # predictive values
-        pnv_denom = pred_neg.copy()
-        pnv_denom[pnv_denom == 0] = 1
-        ppv_denom = pred_pos.copy()
-        ppv_denom[ppv_denom == 0] = 1
-        ppv = tp / ppv_denom  # precision
-        npv = tn / pnv_denom  # precision, but for negatives
-
-        # Adjusted predictive values
-        # https://www.researchgate.net/publication/228529307_Evaluation_From_Precision_Recall_and_F-Factor_to_ROC_Informedness_Markedness_Correlation
-        bm = tpr + tnr - 1  # (bookmaker) informedness
-        mk = ppv + npv - 1  # markedness
-
-        # Summary statistics
-        # https://en.wikipedia.org/wiki/Matthews_correlation_coefficient
-        fdr  = 1 - ppv  # false discovery rate
-        fmr  = 1 - npv  # false ommision rate (for)
-        # Note: when there are no true negatives, this goes to zero
-        mcc = np.sqrt(ppv * tpr * tnr * npv) - np.sqrt(fdr * fnr * fpr * fmr)
-
-        # https://erotemic.wordpress.com/2019/10/23/closed-form-of-the-mcc-when-tn-inf/
-        g1 = np.sqrt(ppv * tpr)
-
-        f1_numer = (2 * ppv * tpr)
-        f1_denom = (ppv + tpr)
-        f1_denom[f1_denom == 0] = 1
-        f1 = f1_numer / f1_denom
-
-        total_denom = total.copy()
-        total_denom[total_denom == 0] = 1
-        acc = pred_correct / total_denom
-
-        info = {}
-
-        info['tn'] = tn
-        info['tp'] = tp
-        info['fn'] = fn
-        info['fp'] = fp
-
-        info['real_pos'] = real_pos  # number of real positives
-        info['real_neg'] = real_neg  # number of real negatives
-        info['pred_pos'] = pred_pos  # number of predicted positives
-        info['pred_neg'] = pred_neg  # number of predicted negatives
-        info['total'] = total  # total cases
-
-        info['tpr'] = tpr  # sensitivity, recall, hit rate, pd, or true positive rate (TPR)
-        info['tnr'] = tnr  # specificity, selectivity or true negative rate (TNR)
-        info['fnr'] = fnr  # miss rate or false negative rate (FNR)
-        info['fpr'] = fpr  # false-alarm-rate, far, fall-out or false positive rate (FPR)
-
-        info['ppv'] = ppv  # precision, positive predictive value (PNR)
-        info['npv'] = npv  # negative predictive value (NPV)
-
-        info['bm'] = bm  # (bookmaker) informedness
-        info['mk'] = mk  # markedness
-
-        info['f1'] = f1
-        info['g1'] = g1
-        info['mcc'] = mcc
-        info['acc'] = acc
-
-    return info
-
-
-@profile
 def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
                                       true_classes, true_dets, video1=None,
                                       score_space='video'):
@@ -155,12 +36,6 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
         true_coco_img (kwcoco.CocoImage): detatched true coco image
         pred_coco_img (kwcoco.CocoImage): detatched predicted coco image
     """
-
-    # true_gid = gid1
-    # pred_gid = gid2
-    # pred_coco_img = pred_coco.coco_image(pred_gid)
-    # true_coco_img = true_coco.coco_image(true_gid)
-
     true_gid = true_coco_img.img['id']
     pred_gid = pred_coco_img.img['id']
 
@@ -318,22 +193,10 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
                 'true_saliency': true_saliency,
             })
 
-            # TODO: use salient_measures.maximized_thresholds() in kwcoco 0.2.20
             if 1:
                 maximized_info = salient_measures.maximized_thresholds()
-                # maximized_info = {}
-                # for k in salient_measures.keys():
-                #     if k.startswith('_max_'):
-                #         v = salient_measures[k]
-                #         metric_value, thresh_value = v
-                #         metric_name = k.split('_max_', 1)[1]
-                #         maximized_info[metric_name] = {
-                #             'thresh': thresh_value,
-                #             'metric_value': metric_value,
-                #             'metric_name': metric_name,
-                #         }
 
-                # HACK! This cherry-picks a threshold!
+                # NOTE: This cherry-picks a threshold!
                 cherry_picked_thresh = maximized_info['f1']['thresh']
                 pred_saliency = salient_prob > cherry_picked_thresh
 
@@ -347,10 +210,6 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
                     'pred_saliency': pred_saliency,
                     'saliency_thresh': cherry_picked_thresh,
                 })
-                # tn, fp, fn, tp = mat.ravel()
-                # fg_bin_cfsn = binary_confusion_measures(tn, fp, fn, tp)
-                # fg_bin_cfsn = ub.map_vals(lambda x: x.item(), fg_bin_cfsn)
-                # row.update(fg_bin_cfsn)
         except Exception:
             pass
 
@@ -478,15 +337,17 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
     unique_vidnames = set()
     for info, true_coco_img in zip(chunk_info, true_coco_imgs):
         row = info['row']
-        unique_vidnames.add(row['video'])
+        if row.get('video', ''):
+            unique_vidnames.add(row['video'])
 
         # true_gid = row['true_gid']
         # true_coco_img = true_coco.coco_image(true_gid)
         true_gid = true_coco_img.img['id']
 
         true_img = true_coco_img.img
-        frame_index = true_img['frame_index']
-        frame_nums.append(frame_index)
+        frame_index = true_img.get('frame_index', None)
+        if frame_index is not None:
+            frame_nums.append(frame_index)
         true_gids.append(true_gid)
 
         image_header_text = f'{frame_index} - gid = {true_gid}'
@@ -654,8 +515,8 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
         vert_stack = kwimage.stack_images(vert_parts, axis=0)
         parts.append(vert_stack)
 
-    max_frame = max(frame_nums)
-    min_frame = min(frame_nums)
+    max_frame = None if len(frame_nums) == 0 else max(frame_nums)
+    min_frame = None if len(frame_nums) == 0 else min(frame_nums)
     max_gid = max(true_gids)
     min_gid = min(true_gids)
 
@@ -699,7 +560,7 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
 @profile
 def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                            draw_curves='auto', draw_heatmaps='auto',
-                           score_space='video'):
+                           score_space='video', workers='auto'):
     """
     CommandLine:
         XDEV_PROFILE=1 xdoctest -m watch.tasks.fusion.evaluate evaluate_segmentations
@@ -709,8 +570,9 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         >>> from kwcoco.coco_evaluator import CocoEvaluator
         >>> from kwcoco.demo.perterb import perterb_coco
         >>> import kwcoco
-        >>> #true_coco = kwcoco.CocoDataset.demo('vidshapes2')
-        >>> true_coco = kwcoco.CocoDataset.demo('vidshapes9')
+        >>> true_coco1 = kwcoco.CocoDataset.demo('vidshapes2')
+        >>> true_coco2 = kwcoco.CocoDataset.demo('shapes32')
+        >>> true_coco = kwcoco.CocoDataset.union(true_coco1, true_coco2)
         >>> kwargs = {
         >>>     'box_noise': 0.5,
         >>>     'n_fp': (0, 10),
@@ -724,12 +586,30 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         >>> pred_coco = perterb_coco(true_coco, **kwargs)
         >>> eval_dpath = ub.ensure_app_cache_dir('watch/tests/fusion_eval')
         >>> print('eval_dpath = {!r}'.format(eval_dpath))
-        >>> score_space = 'video'
+        >>> score_space = 'image'
         >>> draw_curves = 'auto'
         >>> draw_heatmaps = 'auto'
-        >>> evaluate_segmentations(true_coco, pred_coco, eval_dpath)
+        >>> #workers = 'auto'
+        >>> workers = 0
+        >>> evaluate_segmentations(true_coco, pred_coco, eval_dpath,
+        >>>                        score_space=score_space,
+        >>>                        draw_heatmaps=draw_heatmaps,
+        >>>                        draw_curves=draw_curves, workers=workers)
     """
     import platform
+    from watch import heuristics
+    from watch.utils.lightning_ext import util_globals
+
+    # Ensure each class has colors.
+    heuristics.ensure_heuristic_coco_colors(true_coco)
+    true_classes = list(true_coco.object_categories())
+    full_classes: kwcoco.CategoryTree = true_coco.object_categories()
+
+    # Sometimes supercategories dont get colors, this fixes that.
+    heuristics.ensure_heuristic_category_tree_colors(full_classes)
+
+    workers = util_globals.coerce_num_workers(workers)
+
     # Extract metadata about the predictions to persist
     meta = {}
     meta['info'] = info = []
@@ -743,7 +623,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         pred_fpath = ub.Path(pred_coco.fpath)
         meta['pred_name'] = '_'.join((list(pred_fpath.parts[-2:-1]) + [pred_fpath.stem]))
 
-    for item in pred_coco.dataset['info']:
+    predicted_info = pred_coco.dataset.get('info', [])
+    for item in predicted_info:
         if item.get('type', None) == 'process':
             proc_name = item.get('properties', {}).get('name', None)
             if proc_name == 'watch.tasks.fusion.predict':
@@ -755,8 +636,6 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                 meta['title'] = item['title']
                 meta['package_name'] = item['package_name']
                 info.append(item)
-
-        pass
 
     # Title contains the model package name if we can infer it
     package_name = meta.get('package_name', '')
@@ -791,11 +670,12 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         heatmap_dpath = ub.Path(eval_dpath) / 'heatmaps'
         heatmap_dpath.mkdir(exist_ok=True, parents=True)
 
+    # Objects that will aggregate confusion across multiple images
     salient_measure_combiner = MeasureCombiner(thresh_bins=thresh_bins)
     class_measure_combiner = OneVersusRestMeasureCombiner(thresh_bins=thresh_bins)
 
+    # Gather the true and predicted image pairs to be scored
     total_images = 0
-
     if required_marked:
         for video_match in video_matches:
             gids1 = video_match['match_gids1']
@@ -813,21 +693,16 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     else:
         total_images = None
 
-    prog = ub.ProgIter(total=total_images, desc='scoring', adjust=False, freq=1)
+    # Prepare job pools
+    metrics_jobs = ub.Executor(mode='process', max_workers=workers)
+    draw_jobs = ub.JobPool(mode='process', max_workers=workers)
+
+    prog = ub.ProgIter(total=total_images, desc='submit scoring jobs', adjust=False, freq=1)
     prog.begin()
 
-    max_workers = 0
-    # max_workers = 0
-    metrics_jobs = ub.JobPool(mode='process', max_workers=max_workers)
-    draw_jobs = ub.JobPool(mode='process', max_workers=max_workers)
+    job_chunks = []
 
-    from watch import heuristics
-    heuristics.ensure_heuristic_coco_colors(true_coco)
-
-    true_classes = list(true_coco.object_categories())
-    full_classes: kwcoco.CategoryTree = true_coco.object_categories()
-
-    # Handle images in videos
+    # Submit scoring jobs over pairs of true-predicted images in videos
     for video_match in video_matches:
         prog.set_extra('comparing ' + video_match['vidname'])
         gids1 = video_match['match_gids1']
@@ -837,25 +712,55 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
             gids1 = list(ub.compress(gids1, flags))
             gids2 = list(ub.compress(gids2, flags))
 
-        pairs = list(zip(gids1, gids2))
-        for chunk in ub.chunks(pairs, chunk_size):
-            chunk_info = []
-            for gid1, gid2 in chunk:
-                # xxx = set(true_coco.annots(gid=gid1).lookup('category_id'))
-                pred_coco_img = pred_coco.coco_image(gid1).detach()
-                true_coco_img = true_coco.coco_image(gid2).detach()
-                true_dets = true_coco.annots(gid=gid1).detections
+        current_chunk = []
+        for gid1, gid2 in zip(gids1, gids2):
+            pred_coco_img = pred_coco.coco_image(gid1).detach()
+            true_coco_img = true_coco.coco_image(gid2).detach()
+            true_dets = true_coco.annots(gid=gid1).detections
 
-                vidid1 = true_coco.imgs[gid1]['video_id']
-                video1 = true_coco.index.videos[vidid1]
+            vidid1 = true_coco.imgs[gid1]['video_id']
+            video1 = true_coco.index.videos[vidid1]
 
-                metrics_jobs.submit(
-                    single_image_segmentation_metrics, pred_coco_img,
-                    true_coco_img, true_classes, true_dets, video1,
-                    score_space=score_space)
-                prog.update()
+            job = metrics_jobs.submit(
+                single_image_segmentation_metrics, pred_coco_img,
+                true_coco_img, true_classes, true_dets, video1,
+                score_space=score_space)
 
-    job_chunks = ub.chunks(metrics_jobs.jobs, chunk_size)
+            if len(current_chunk) >= chunk_size:
+                job_chunks.append(current_chunk)
+                current_chunk = []
+            current_chunk.append(job)
+            prog.update()
+
+        if len(current_chunk) > 0:
+            job_chunks.append(current_chunk)
+
+    # Submit scoring jobs over pairs of true-predicted images without videos
+    if score_space == 'image':
+        gids1 = image_matches['match_gids1']
+        gids2 = image_matches['match_gids2']
+
+        for gid1, gid2 in zip(gids1, gids2):
+            pred_coco_img = pred_coco.coco_image(gid1)
+            true_coco_img = true_coco.coco_image(gid2)
+            true_dets = true_coco.annots(gid=gid1).detections
+            video1 = None
+            job = metrics_jobs.submit(
+                single_image_segmentation_metrics, pred_coco_img,
+                true_coco_img, true_classes, true_dets, video1,
+                score_space=score_space)
+            prog.update()
+            job_chunks.append([job])
+    else:
+        if len(image_matches['match_gids1']) > 0:
+            warnings.warn(ub.paragraph(
+                '''
+                Scoring was requested in video mode, but there are
+                {len(image_matches['match_gids1'])} true/pred image pairs that
+                are unassociated with a video. These pairs will not be included
+                in video space scoring.
+                '''))
+    prog.end()
 
     for job_chunk in ub.ProgIter(job_chunks, desc='collect score jobs'):
         chunk_info = []
@@ -869,9 +774,11 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                 salient_measure_combiner.submit(salient_measures)
             if class_measures is not None:
                 class_measure_combiner.submit(class_measures)
-
             if draw_heatmaps:
                 chunk_info.append(info)
+
+        # Once a job chunk is done, clear its memory
+        job_chunk.clear()
 
         # Reduce measures over the chunk
         if salient_measure_combiner.queue_size > chunk_size:
@@ -880,6 +787,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
             class_measure_combiner.combine()
 
         if draw_heatmaps:
+            # As chunks of evaluation jobs complete, submit background jobs to
+            # draw results to disk if requested.
             true_gids = [info['row']['true_gid'] for info in chunk_info]
             true_coco_imgs = true_coco.images(true_gids).coco_images
             true_coco_imgs = [g.detach() for g in true_coco_imgs]
@@ -887,66 +796,25 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                 dump_chunked_confusion, full_classes, true_coco_imgs,
                 chunk_info, heatmap_dpath, score_space=score_space,
                 title=title)
-            # dump_chunked_confusion(
-            #     true_coco, pred_coco, chunk_info, heatmap_dpath,
-            #     score_space=score_space, title=title)
 
+    # Allow all drawing jobs to finalize
     for job in draw_jobs.as_completed(desc='collect draw jobs'):
         job.result()
 
-    # class_measure_combiner.catname_to_combiner['Site Preparation'].queue
-
-    # TODO: add parallelization here as well.
-    # Handle standalone images
-    if score_space == 'image':
-        gids1 = image_matches['match_gids1']
-        gids2 = image_matches['match_gids2']
-
-        for gid1, gid2 in zip(gids1, gids2):
-            pred_coco_img = pred_coco.coco_image(gid1)
-            true_coco_img = true_coco.coco_image(gid2)
-            info = single_image_segmentation_metrics(
-                pred_coco_img, true_coco_img, true_classes, true_dets,
-                score_space=score_space)
-            class_measures = info.get('class_measures', None)
-            salient_measures = info.get('salient_measures', None)
-            if salient_measures is not None:
-                salient_measure_combiner.submit(salient_measures)
-            if class_measures is not None:
-                class_measure_combiner.submit(class_measures)
-            rows.append(info['row'])
-            if draw_heatmaps:
-                chunk_info = [info]
-                dump_chunked_confusion(
-                    true_coco, pred_coco, chunk_info, heatmap_dpath,
-                    score_space=score_space, title=title)
-            prog.update()
-            # Reduce measures over the chunk
-            if salient_measure_combiner.queue_size > chunk_size:
-                salient_measure_combiner.combine()
-            if class_measure_combiner.queue_size > chunk_size:
-                class_measure_combiner.combine()
-
-    prog.end()
-
-    # Reduce measures over the chunk
+    # Finalize all of the aggregated measures
     print('Finalize salient measures')
     # Note: this will return False if there are no salient measures
     salient_combo_measures = salient_measure_combiner.finalize()
     if salient_combo_measures is False or salient_combo_measures is None:
-        # TODO: should be able to init an empty object
-        salient_combo_measures = BinaryConfusionVectors(
-            kwarray.DataFrameArray({
-                'is_true': np.empty((0,), dtype=bool),
-                'pred_score': np.empty((0,), dtype=float),
-                'weight': np.empty((0,), dtype=float),
-            })).measures()
+        # Use nan measures from empty binary confusion vectors
+        salient_combo_measures = BinaryConfusionVectors(None).measures()
 
     print('Finalize class measures')
     class_combo_measure_dict = class_measure_combiner.finalize()
     ovr_combo_measures = class_combo_measure_dict['perclass']
 
-    # Use the SingleResult container (TODO: better API)
+    # Combine class + salient measures using the "SingleResult" container
+    # (TODO: better API)
     result = CocoSingleResult(
         salient_combo_measures, ovr_combo_measures, None, meta)
     print('result = {}'.format(result))
@@ -960,15 +828,6 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                 salient_combo_measures['meta'] = meta
 
             title = '\n'.join(meta.get('title_parts', [meta.get('title', '')]))
-
-            # if 0:
-            #     measure_info = salient_combo_measures.__json__()
-            #     measures_fpath = curve_dpath / 'measures.json'
-            #     print('Dump measures_fpath={}'.format(measures_fpath))
-            #     with open(measures_fpath, 'w') as file:
-            #         measure_info['meta'] = meta
-            #         json.dump(measure_info, file)
-
             measures_fpath2 = curve_dpath / 'measures2.json'
             print('Dump measures_fpath2={}'.format(measures_fpath2))
             result.dump(os.fspath(measures_fpath2))
@@ -989,10 +848,6 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
 
     df = pd.DataFrame(rows)
     print(df)
-
-    # summary = binary_confusion_measures(
-    #     df.tn.sum(), df.fp.sum(), df.fn.sum(), df.tp.sum())
-    # summary = ub.map_vals(lambda x: x.item() if hasattr(x, 'item') else x, summary)
 
     summary = {}
     if class_combo_measure_dict is not None:
@@ -1054,6 +909,7 @@ def make_evaluate_config(cmdline=False, **kwargs):
     parser.add_argument('--draw_curves', default='auto', help='flag to draw curves or not')
     parser.add_argument('--draw_heatmaps', default='auto', help='flag to draw heatmaps or not')
     parser.add_argument('--score_space', default='video', help='can score in image or video space')
+    parser.add_argument('--workers', default='auto', help='number of parallel workers')
     parser.set_defaults(**kwargs)
     default_args = None if cmdline else []
     args, _ = parser.parse_known_args(default_args)
@@ -1071,15 +927,13 @@ def main(cmdline=True, **kwargs):
         pred_coco = kwcoco.CocoDataset()
         pred_coco.fpath = args.pred_dataset
 
-    eval_dpath = args.eval_dpath
-    score_space = args.score_space
     from scriptconfig.smartcast import smartcast
     draw_heatmaps = smartcast(args.draw_heatmaps)
     draw_curves = smartcast(args.draw_curves)
-    evaluate_segmentations(true_coco, pred_coco, eval_dpath,
+    evaluate_segmentations(true_coco, pred_coco, args.eval_dpath,
                            draw_curves=draw_curves,
                            draw_heatmaps=draw_heatmaps,
-                           score_space=score_space)
+                           score_space=args.score_space, workers=args.workers)
 
 
 if __name__ == '__main__':
