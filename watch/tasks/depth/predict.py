@@ -126,6 +126,9 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False, data
             pred_filename = _image_pred_filename(torch_dataset,
                                                  output_data_dir, img_info)
             if cache and pred_filename.exists():
+                # Dereference items after we are done with them
+                batch_item = None
+                image = None
                 continue
 
             try:
@@ -144,8 +147,7 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False, data
                 output_dset.imgs[gid]['auxiliary'] = aux
 
                 if dump_shards:
-                    # Dump debugging shard (TODO: could cache process for quick
-                    # reruns)
+                    # Dump debugging shard
                     shard_dset = output_dset.subset([gid])
                     shard_dset.reroot(absolute=True)
                     shard_dset.fpath = pred_filename.augment(ext='.kwcoco.json')
