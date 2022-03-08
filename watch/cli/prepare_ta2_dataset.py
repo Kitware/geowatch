@@ -236,6 +236,9 @@ def main(cmdline=False, **kwargs):
             # Update to whatever the state of the annotations submodule is
             python -m watch visualize \
                 --src "{aligned_kwcoco_fpath}" \
+                --draw_anns=False \
+                --draw_imgs=True \
+                --channels="red|green|blue" \
                 --animate=True --workers=auto
             '''))
 
@@ -246,9 +249,6 @@ def main(cmdline=False, **kwargs):
             python -m watch project_annotations \
                 --src "{aligned_kwcoco_fpath}" \
                 --dst "{aligned_kwcoco_fpath}" \
-                --draw_anns=False \
-                --draw_imgs=True \
-                --channels="red|green|blue" \
                 --site_models="$DVC_DPATH/annotations/site_models/*.geojson"
             '''))
 
