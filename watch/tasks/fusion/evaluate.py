@@ -773,8 +773,15 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                 '''))
     prog.end()
 
-    from rich.progress import Progress
-    with Progress() as progress:
+    from rich.progress import Progress, BarColumn, TimeRemainingColumn, TimeElapsedColumn
+    progress = Progress(
+        "[progress.description]{task.description}",
+        BarColumn(),
+        "[progress.percentage]{task.percentage:>3.0f}%",
+        TimeRemainingColumn(),
+        TimeElapsedColumn(),
+    )
+    with progress:
 
         num_jobs = sum(map(len, job_chunks))
 

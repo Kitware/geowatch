@@ -46,7 +46,7 @@ repackage_checkpoints_and_evaluate(){
             --gpus="0,1,2,3" \
             --model_globstr="$DVC_DPATH/models/fusion/$DATASET_CODE/*/*.pt" \
             --test_dataset="$VALI_FPATH" \
-            --run=1 --skip_existing=True
+            --run=0 --skip_existing=True
     
 }
 

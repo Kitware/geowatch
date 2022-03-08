@@ -38,7 +38,7 @@ python -m watch.cli.prepare_ta2_dataset \
     --s3_fpath=$S3_FPATH \
     --dvc_dpath=$DVC_DPATH \
     --collated=False \
-    --align_workers=0 \
+    --align_workers=4 \
     --serial=True --run=1
 
 
