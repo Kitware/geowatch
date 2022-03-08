@@ -183,7 +183,8 @@ def main(cmdline=True, **kwargs):
                 --output="{task['output_fpath']}" \
                 --deployed="{model_fpaths['dzyne_depth']}" \
                 --data_workers={depth_data_workers} \
-                --window_size={depth_window_size}
+                --window_size={depth_window_size} \
+                --cache=1
             ''')
         combo_code_parts.append(codes[key])
         tasks.append(task)

@@ -117,5 +117,4 @@ class WVRgbDataset(_CocoTorchDataset):
         img = normalizeRGB(img, (3, 97))
         img -= self.__imagenet_stats['mean']
         img /= self.__imagenet_stats['std']
-        img = img.transpose((2, 0, 1))
         return img
