@@ -1,4 +1,5 @@
 import numpy as np
+import kwcoco
 from torchvision import transforms
 
 from .demo_transform import Normalize, ToTensor, ToNumpy
@@ -9,21 +10,54 @@ WV_CHANNELS = "coastal|blue|green|yellow|red|red-edge|near-ir1|near-ir2"
 
 
 class WVRgbDataset(_CocoTorchDataset):
+    """
+    Dataset for depth prediction
+
+    Args:
+        dset (kwcoco.CocoDataset):
+            input dataset to wrap
+
+    Example:
+        >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+        >>> from watch.tasks.depth.datasets import *  # NOQA
+        >>> import watch
+        >>> import kwcoco
+        >>> dvc_dpath = watch.find_smart_dvc_dpath()
+        >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
+        >>> input_dset = kwcoco.CocoDataset(coco_fpath)
+        >>> self = WVRgbDataset(input_dset)
+        >>> # Test that the "include" correctly filter to only WorldView
+        >>> images = input_dset.images(self.gids)
+        >>> assert all(s == 'WV' for s in images.lookup('sensor_coarse'))
+        >>> gid = self.gids[0]
+        >>> img = self._load(gid)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(kwarray.normalize(img))
+        >>> kwplot.show_if_requested()
+    """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        __imagenet_stats = {'mean': [0.485, 0.456, 0.406],
-                            'std': [0.229, 0.224, 0.225]}
+        self.__imagenet_stats = {
+            'mean': np.array([0.485, 0.456, 0.406])[None, None, :],
+            'std': np.array([0.229, 0.224, 0.225])[None, None, :],
+        }
 
-        self.transform = transforms.Compose([
-            ToTensor(),
-            Normalize(__imagenet_stats['mean'],
-                      __imagenet_stats['std']),
-            ToNumpy()
-        ])
+        # This makes unnecessary copies, we dont need it
+        # self.transform = transforms.Compose([
+        #     ToTensor(),
+        #     Normalize(__imagenet_stats['mean'],
+        #               __imagenet_stats['std']),
+        #     ToNumpy()
+        # ])
 
     def _include(self, gid):
+        """
+        Used on init to filter to only relevant images
+        """
         img = self.dset.imgs[gid]
         if img['sensor_coarse'] == 'WV':
             if img.get('channels') == WV_CHANNELS:
@@ -36,23 +70,52 @@ class WVRgbDataset(_CocoTorchDataset):
         return False
 
     def _load(self, gid):
-        delayed = self.dset.delayed_load(gid, channels='red|green|blue')
-        img = delayed.finalize()
+        coco_img = self.dset.coco_image(gid)
 
-        # if self.dset.imgs[gid].get('channels') == WV_CHANNELS:
-        #     img = self.dset.load_image(gid)
-        # else:
-        #     img = self.dset.load_image(gid, WV_CHANNELS)
-        # img = img[:, :, [4, 2, 1]]
+        # List all the channels contained in this image
+        have_channels: set = coco_img.channels.fuse().as_set()
 
-        img = normalizeRGB(np.asarray(img), (3, 97))
-        img *= 255
-        img = img.astype(np.uint8)
+        # Work with rgb by default, but fallback on panchromatic
+        # TODO: do we want to coerce panchromatic images to RGB or vis versa?
+        want_channels1 = kwcoco.FusedChannelSpec.coerce('red|green|blue')
+        # want_channels2 = kwcoco.FusedChannelSpec.coerce('panchromatic')
+        has_rgb = want_channels1.as_set().issubset(have_channels)
+        if has_rgb:
+            want_channels = want_channels1
+        if not has_rgb:
+            raise NotImplementedError('We expected to have RGB available')
+            # has_pan = want_channels2.as_set().issubset(have_channels)
+            # if has_pan:
+            #     want_channels = want_channels2
+            # else:
+            #     raise NotImplementedError(f'No Pan or RGB in {have_channels}')
 
-        # TODO original images are too big to fit in 12GB CUDA memory.
-        # Will they be chipped for us when doing broad area search or do I need to chip them?
-        # crop for testing
-        # img = img[:1024, :1024, :]
+        delayed = coco_img.delay(channels=want_channels)
+        img = delayed.finalize(nodata='float')
+        img = np.asarray(img)
 
-        img = self.transform(img)
+        NODATA_HACK = True
+        if NODATA_HACK:
+            # Hack to handle cases where nodata is not in the geotiff metadata.
+            # In these cases assume that zero is the nodata value. This is
+            # not safe in general, and new outputs (March 2022 and later should
+            # correct for this)
+            nodata_values = {}
+            for aux in coco_img.iter_asset_objs():
+                aux_chan = kwcoco.FusedChannelSpec.coerce(aux['channels'])
+                band_metas = aux.get('band_metas', [])
+                if len(band_metas) != aux_chan.numel():
+                    raise AssertionError
+                for meta, chan in zip(band_metas, aux_chan.as_list()):
+                    if chan in want_channels:
+                        nodata_values[chan] = meta['nodata']
+
+            if all(v is None for v in nodata_values.values()):
+                # Nodata was not specified in metadata, assume it is zero
+                img[img == 0] = np.nan
+
+        img = normalizeRGB(img, (3, 97))
+        img -= self.__imagenet_stats['mean']
+        img /= self.__imagenet_stats['std']
+        img = img.transpose((2, 0, 1))
         return img
