@@ -211,6 +211,7 @@ def main(cmdline=False, **kwargs):
     align_visualize = config['debug']
     queue.submit(ub.codeblock(
         rf'''
+        # Crop big images to the geojson regions
         PROJ_DEBUG=3 AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.coco_align_geotiffs \
             --src "{uncropped_prep_kwcoco_fpath}" \
             --dst "{aligned_kwcoco_fpath}" \
