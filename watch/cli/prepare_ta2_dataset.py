@@ -242,14 +242,17 @@ def main(cmdline=False, **kwargs):
                 --animate=True --workers=auto
             '''))
 
-    if 0:
+    if 1:
+
+        site_model_dpath = (dvc_dpath / 'annotations/site_models').shrinkuser(home='$HOME')
+
         queue.submit(ub.codeblock(
             rf'''
             # Update to whatever the state of the annotations submodule is
             python -m watch project_annotations \
                 --src "{aligned_kwcoco_fpath}" \
                 --dst "{aligned_kwcoco_fpath}" \
-                --site_models="$DVC_DPATH/annotations/site_models/*.geojson"
+                --site_models="{site_model_dpath}/*.geojson"
             '''))
 
     # queue.submit(ub.codeblock(

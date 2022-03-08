@@ -119,7 +119,7 @@ def main(cmdline=False, **kwargs):
         >>>     'src': kwcoco_fpath,
         >>>     'dst': output_fpath,
         >>>     'viz_dpath': viz_dpath,
-        >>>     'site_models': dvc_dpath / 'site_models',
+        >>>     'site_models': dvc_dpath / 'annotations/site_models',
         >>> }
         >>> main(**kwargs)
     """
@@ -175,6 +175,7 @@ def main(cmdline=False, **kwargs):
         import kwplot
         kwplot.autoplt()
         viz_dpath = ub.Path(viz_dpath).ensuredir()
+        print('viz_dpath = {!r}'.format(viz_dpath))
         for fnum, info in enumerate(ub.ProgIter(all_drawable_infos, desc='draw region site propogation', verbose=3)):
             drawable_region_sites = info['drawable_region_sites']
             region_id = info['region_id']
