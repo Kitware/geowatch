@@ -733,10 +733,10 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         # canvas = chan.finalize(interpolation='nearest', nodata='auto')
         raw_canvas = canvas = chan.finalize(interpolation='linear', nodata='float')
 
-        FLAG = np.any(np.isnan(canvas)) and not np.all(np.isnan(canvas))
-        if FLAG:
-            print('input nans', np.nansum(raw_canvas))
-            print('input nans', np.isnan(raw_canvas).sum())
+        # FLAG = np.any(np.isnan(canvas)) and not np.all(np.isnan(canvas))
+        # if FLAG:
+        #     print('input nans', np.nansum(raw_canvas))
+        #     print('input nans', np.isnan(raw_canvas).sum())
 
         # canvas = chan.finalize(, nodata='auto')
         # import kwarray
@@ -757,9 +757,9 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                     'low': 0.01,
                     'mode': 'linear',
                 })
-                if FLAG:
-                    print('norm nans', np.isnan(norm_canvas).sum())
-                    print('norm canvas', np.nansum(norm_canvas))
+                # if FLAG:
+                #     print('norm nans', np.isnan(norm_canvas).sum())
+                #     print('norm canvas', np.nansum(norm_canvas))
                 canvas = norm_canvas
             canvas = np.clip(canvas, 0, None)
         else:
