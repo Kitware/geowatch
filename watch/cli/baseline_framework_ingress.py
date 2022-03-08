@@ -47,7 +47,7 @@ def main():
                         help='Run AWS CLI commands with '
                              '`--requestor_payer requester` flag')
     parser.add_argument('-j', '--jobs',
-                        type=int,
+                        type=str,
                         default=1,
                         required=False,
                         help='Number of jobs to run in parallel')
@@ -251,6 +251,10 @@ def baseline_framework_ingress(input_path,
                                item_selector=_default_item_selector,
                                asset_selector=_default_asset_selector,
                                virtual=False):
+
+    from watch.utils.lightning_ext import util_globals
+    jobs = util_globals.coerce_num_workers(jobs)
+
     os.makedirs(outdir, exist_ok=True)
 
     if relative:

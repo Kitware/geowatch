@@ -22,6 +22,8 @@ if 1:
     # hack for sanity
     os.environ['KWIMAGE_DISABLE_TRANSFORM_WARNINGS'] = 'True'
 
+    os.environ['PROJ_DEBUG'] = '3'
+
 WATCH_AUTOHACK_IMPORT_VARIANTS = {
     'variant1': ['geopandas', 'pyproj', 'gdal'],  # align-crs on horologic
     'variant2': ['pyproj', 'gdal'],   # CI machine

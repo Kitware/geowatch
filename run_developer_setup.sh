@@ -14,6 +14,9 @@ fi
 
 #pip install -r requirements/no-deps.txt
 
+# Do everything
+pip install -r requirements.txt
+
 # Install the watch module in development mode
 pip install -e .
 
@@ -67,7 +70,10 @@ torch_on_3090(){
 fix_opencv_conflicts
 
 # Simple tests
+set -x
 echo "Start simple tests"
 EAGER_IMPORT=1 python -c "import watch; print(watch.__version__)"
 EAGER_IMPORT=1 python -m watch --help
 EAGER_IMPORT=1 python -m watch hello_world
+python -c "import torch; print(torch.cuda.is_available())"
+set +x

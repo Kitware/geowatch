@@ -1,14 +1,22 @@
 """
 Compute intensity histograms of the underlying images in this dataset.
 
+TODO:
+
+    - [ ] Migrate to kwcoco proper
+
+    - [ ] Fix accumulation of floating point values
+
+    - [ ] Handle nodata
+
 CommandLine:
     smartwatch intensity_histograms --src special:watch-msi --show=True --stat=density
     smartwatch intensity_histograms --src special:photos --show=True --fill=False
     smartwatch intensity_histograms --src special:shapes8 --show=True --stat=count --cumulative=True --multiple=stack
 
     DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-    KWCOCO_FPATH=$DVC_DPATH/Drop1-Aligned-L1/vali_data_nowv.kwcoco.json
-    smartwatch intensity_histograms --src $KWCOCO_FPATH --show=True --show=True
+    KWCOCO_FPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-01/combo_L_nowv_vali.kwcoco.json
+    smartwatch intensity_histograms --src $KWCOCO_FPATH --show=True --show=True --include_channels="forest|water|bare_ground"
 """
 import kwcoco
 import pickle
@@ -422,14 +430,36 @@ def sensor_stats_tables(full_df):
 def ensure_intensity_sidecar(fpath, recompute=False):
     """
     Write statistics next to the image
-    """
-    stats_fpath = ub.Path(fpath + '.stats.pkl')
 
+    Example:
+        >>> from watch.cli.coco_intensity_histograms import *  # NOQA
+        >>> import kwimage
+        >>> import ubelt as ub
+        >>> dpath = ub.Path(ub.ensure_app_cache_dir('watch/tests/intensity_sidecar'))
+        >>> dpath.delete().ensuredir()
+        >>> img = kwimage.grab_test_image(dsize=(16, 16))
+        >>> img01 = kwimage.ensure_float01(img)
+        >>> img255 = kwimage.ensure_uint255(img)
+        >>> fpath1 = dpath / 'img01.tif'
+        >>> fpath2 = dpath / 'img255.tif'
+        >>> kwimage.imwrite(fpath1, img01)
+        >>> kwimage.imwrite(fpath2, img255)
+        >>> fpath = fpath1
+        >>> stats_fpath1 = ensure_intensity_sidecar(fpath1)
+        >>> fpath = fpath2
+        >>> stats_fpath2 = ensure_intensity_sidecar(fpath1)
+        >>> pickle.loads(stats_fpath1.read_bytes())
+        >>> pickle.loads(stats_fpath2.read_bytes())
+    """
+    import os
+    stats_fpath = ub.Path(os.fspath(fpath) + '.stats.pkl')
     if recompute or not stats_fpath.exists():
         imdata = kwimage.imread(fpath, backend='gdal')
         imdata = kwarray.atleast_nd(imdata, 3)
-        # TODO: better float handling
-        # if imdata.dtype.kind == 'f':
+        # TODO: even better float handling
+        if imdata.dtype.kind == 'f':
+            # Round floats to 3 decimals to keep things semi-managable
+            imdata = imdata.round(3)
         stats_info = {'bands': []}
         for imband in imdata.transpose(2, 0, 1):
             data = imband.ravel()

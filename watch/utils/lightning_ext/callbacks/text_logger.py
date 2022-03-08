@@ -45,41 +45,41 @@ class TextLogger(pl.callbacks.Callback):
         self.log_dir = pathlib.Path(trainer.log_dir)
         self.log_fpath = self.log_dir / 'text_logs.log'
         self._log = _InstanceLogger.from_instance(trainer, self.log_fpath)
-        self._log('on_init_end')
-        self._log('sys.argv = {!r}'.format(sys.argv))
+        self._log.info('on_init_end')
+        self._log.info('sys.argv = {!r}'.format(sys.argv))
         trainer.text_logger = self
         if self.args is not None:
-            self._log('args_dict = {}'.format(ub.repr2(self.args.__dict__, nl=1, sort=0)))
+            self._log.info('args_dict = {}'.format(ub.repr2(self.args.__dict__, nl=1, sort=0)))
 
     def on_fit_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
-        self._log('on_fit_start')
+        self._log.info('on_fit_start')
 
     def on_fit_end(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
-        self._log('on_fit_end')
-
-    def on_train_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
-        self._log('on_train_start')
-
-    def on_train_end(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
-        self._log('on_train_end')
-
-    def on_save_checkpoint(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', checkpoint: Dict[str, Any]) -> dict:
-        self._log('on_save_checkpoint - checkpoint = {}'.format(ub.repr2(checkpoint.keys(), nl=1)))
+        self._log.info('on_fit_end')
 
     def on_load_checkpoint(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', callback_state: Dict[str, Any]) -> None:
-        self._log('on_load_checkpoint - callback_state = {}'.format(ub.repr2(callback_state.keys(), nl=1)))
+        self._log.info('on_load_checkpoint - callback_state = {}'.format(ub.repr2(callback_state.keys(), nl=1)))
+
+    def on_save_checkpoint(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', checkpoint: Dict[str, Any]) -> dict:
+        self._log.debug('on_save_checkpoint - checkpoint = {}'.format(ub.repr2(checkpoint.keys(), nl=1)))
+
+    def on_train_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
+        self._log.debug('on_train_start')
+
+    def on_train_end(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
+        self._log.debug('on_train_end')
 
     def on_sanity_check_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
-        self._log('on_sanity_check_start')
+        self._log.debug('on_sanity_check_start')
 
     def on_sanity_check_end(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
-        self._log('on_sanity_check_end')
+        self._log.debug('on_sanity_check_end')
 
     def on_exception(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule', *args, **kw) -> None:
-        self._log('on_exception')
-        self._log('KEYBOARD INTERUPT')
-        self._log('trainer.default_root_dir = {!r}'.format(trainer.default_root_dir))
-        self._log('trainer.log_dir = {!r}'.format(trainer.log_dir))
+        self._log.info('on_exception')
+        self._log.info('KEYBOARD INTERUPT')
+        self._log.info('trainer.default_root_dir = {!r}'.format(trainer.default_root_dir))
+        self._log.info('trainer.log_dir = {!r}'.format(trainer.log_dir))
 
     def on_epoch_start(self, trainer: 'pl.Trainer', pl_module: 'pl.LightningModule') -> None:
         self._log.debug('on_epoch_start')

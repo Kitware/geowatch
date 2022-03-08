@@ -20,7 +20,6 @@ def find_smart_dvc_dpath(on_error='raise'):
     else:
         # Fallback to candidate DVC paths
         candidate_dpaths = [
-            ub.Path('$HOME/flash1/smart_watch_dvc').expand(),  # Jons fast drives
             ub.Path('/media/native/data/data/smart_watch_dvc'),  # Rutgers
             ub.Path('/localdisk0/SCRATCH/watch/ben/smart_watch_dvc'),  # UKY
             ub.Path('$HOME/data/dvc-repos/smart_watch_dvc').expand(),

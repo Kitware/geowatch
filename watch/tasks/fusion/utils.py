@@ -325,6 +325,7 @@ def category_tree_ensure_color(classes):
 
     TODO:
         - [ ] Add to CategoryTree
+        - [ ] TODO: better function
 
     Example:
         >>> import kwcoco

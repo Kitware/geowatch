@@ -23,7 +23,7 @@ from watch.utils import util_time
 from watch.utils import util_norm
 from watch.utils.lightning_ext import util_globals
 from watch.tasks.fusion import utils
-from typing import Dict
+from typing import Dict, List  # NOQA
 
 # __all__ = ['KWCocoVideoDataModule', 'KWCocoVideoDataset']
 
@@ -77,38 +77,67 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         >>> import watch
         >>> import kwcoco
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
-        >>> coco_fpath = dvc_dpath / 'Drop1-Aligned-L1-2022-01/combo_DILM.kwcoco_wv_train.json'
-        >>> dset = train_dataset = kwcoco.CocoDataset(coco_fpath)
+        >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data_nowv.kwcoco.json'
+        >>> #coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/combo_DILM.kwcoco.json'
+        >>> dset = kwcoco.CocoDataset(coco_fpath)
+        >>> images = dset.images()
+        >>> sub_images = dset.videos(names=['KR_R002']).images[0]
+        >>> train_dataset = dset.subset(sub_images.lookup('id'))
         >>> test_dataset = None
         >>> img = ub.peek(train_dataset.imgs.values())
         >>> chan_info = kwcoco_extensions.coco_channel_stats(dset)
-        >>> channels = chan_info['common_channels']
+        >>> #channels = chan_info['common_channels']
+        >>> channels = 'blue|green|red'
+        >>> #channels = 'blue|green|red|depth'
         >>> #chan_spec = kwcoco.channel_spec.FusedChannelSpec.coerce(channels)
         >>> #channels = None
         >>> #
         >>> batch_size = 1
-        >>> time_steps = 2
-        >>> chip_size = 330
-        >>> self = KWCocoVideoDataModule(
+        >>> time_steps = 8
+        >>> chip_size = 512
+        >>> datamodule = KWCocoVideoDataModule(
         >>>     train_dataset=train_dataset,
         >>>     test_dataset=test_dataset,
         >>>     batch_size=batch_size,
         >>>     channels=channels,
         >>>     num_workers=0,
+        >>>     normalize_inputs=8,
         >>>     time_steps=time_steps,
         >>>     chip_size=chip_size,
         >>>     neg_to_pos_ratio=0,
+        >>>     min_spacetime_weight=0.5,
+        >>>     use_conditional_classes=1,
         >>> )
-        >>> self.setup('fit')
-        >>> dl = self.train_dataloader()
+        >>> datamodule.setup('fit')
+        >>> dl = datamodule.train_dataloader()
+        >>> #batch = next(iter(dl))
         >>> dataset = dl.dataset
-        >>> batch = next(iter(dl))
+        >>> dataset.requested_tasks['change'] = False
+        >>> dataset.disable_augmenter = True
+
+        >>> tr = 0
+
+        if 0:
+            tr = {
+                'gids': ([816, 817, 818, 822, 824, 825, 905]),
+                'space_slice': (slice(0, 512, None), slice(0, 512, None))
+            }
+
+            tr = {
+                'gids': ([816, 817, 818, 822]),
+                'space_slice': (slice(0, 512, None), slice(0, 512, None))}
+
+            tr = {
+                'gids': ([905]),
+                'space_slice': (slice(0, 512, None), slice(0, 512, None))}
+
+        >>> batch = [dataset[tr]]
         >>> # Visualize
-        >>> canvas = self.draw_batch(batch)
+        >>> canvas = datamodule.draw_batch(batch)
         >>> # xdoctest: +REQUIRES(--show)
         >>> import kwplot
         >>> kwplot.autompl()
-        >>> kwplot.imshow(canvas)
+        >>> kwplot.imshow(canvas, doclf=1)
         >>> kwplot.show_if_requested()
 
     Example:
@@ -177,6 +206,9 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         use_centered_positives=False,
         temporal_dropout=0.0,
         max_epoch_length=None,
+        use_conditional_classes=True,
+        ignore_dilate=11,
+        min_spacetime_weight=0.5,
     ):
         """
         Args:
@@ -210,6 +242,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         self.normalize_inputs = normalize_inputs
         self.time_span = time_span
         self.max_epoch_length = max_epoch_length
+        self.use_conditional_classes = use_conditional_classes
 
         # self.channels = channels
         # self.time_sampling = time_sampling
@@ -239,6 +272,9 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             use_grid_positives=use_grid_positives,
             temporal_dropout=temporal_dropout,
             max_epoch_length=max_epoch_length,
+            use_conditional_classes=use_conditional_classes,
+            ignore_dilate=ignore_dilate,
+            min_spacetime_weight=min_spacetime_weight,
         )
         for _k, _v in self.common_dataset_kwargs.items():
             setattr(self, _k, _v)
@@ -361,6 +397,13 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
                 '''))
 
         parser.add_argument(
+            '--use_conditional_classes', default=True, type=smartcast, help=ub.paragraph(
+                '''
+                Include no-activity, post-construction in predictions when
+                their conditions are met.
+                '''))
+
+        parser.add_argument(
             '--torch_sharing_strategy', default='default', help=ub.paragraph(
                 '''
                 Torch multiprocessing sharing strategy.
@@ -378,6 +421,10 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             '--use_centered_positives', default=False, type=smartcast, help=ub.paragraph('Use centers of annotations as window centers'))
         parser.add_argument(
             '--use_grid_positives', default=True, type=smartcast, help=ub.paragraph('Use annotation overlaps with grid as positives'))
+        parser.add_argument(
+            '--ignore_dilate', default=11, type=smartcast, help=ub.paragraph('Dilation applied to ignore masks.'))
+        parser.add_argument(
+            '--min_spacetime_weight', default=0.5, type=smartcast, help=ub.paragraph('Minimum space-time dilation weight'))
 
         return parent_parser
 
@@ -781,15 +828,10 @@ class KWCocoVideoDataset(data.Dataset):
         use_centered_positives=False,
         temporal_dropout=0.0,
         max_epoch_length=None,
+        use_conditional_classes=True,
+        ignore_dilate=11,
+        min_spacetime_weight=0.5,
     ):
-
-        # TODO: the set of "valid" background classnames should be defined
-        # by the inputs, not hard-coded in the dataloader. This can either be a
-        # list of names provided to the training config, or something baked
-        # into the kwcoco spec marking a class as some type of "background"
-        self._hueristic_background_classnames = heuristics.BACKGROUND_CLASSES
-        self._heuristic_ignore_classnames = heuristics.IGNORE_CLASSNAMES
-        self._heuristic_undistinguished_classnames = heuristics.UNDISTINGUISHED_CLASSES
 
         self.match_histograms = match_histograms
         self.normalize_perframe = normalize_perframe
@@ -797,6 +839,39 @@ class KWCocoVideoDataset(data.Dataset):
         self.upweight_centers = upweight_centers
         self.temporal_dropout = temporal_dropout
         self.max_epoch_length = max_epoch_length
+        self.use_conditional_classes = use_conditional_classes
+        self.ignore_dilate = ignore_dilate
+        self.min_spacetime_weight = min_spacetime_weight
+
+        self.sampler = sampler
+        # TODO: the set of "valid" background classnames should be defined
+        # by the inputs, not hard-coded in the dataloader. This can either be a
+        # list of names provided to the training config, or something baked
+        # into the kwcoco spec marking a class as some type of "background"
+        # if not self.use_conditional_classes:
+        #     # TODO: CONDITIONAL
+        #     raise NotImplementedError
+
+        # Add extra categories if we need to and construct a new classes object
+        graph = self.sampler.classes.graph
+        if 0:
+            import networkx as nx
+            print(nx.forest_str(graph, with_labels=True))
+
+        # Update with heuristics
+        # HACK: Overwrite kwcoco data
+        for _catinfo in heuristics.CATEGORIES:
+            name = _catinfo['name']
+            exists_flag = name in graph.nodes
+            if not exists_flag and _catinfo.get('required'):
+                graph.add_node(name, **_catinfo)
+            if exists_flag:
+                graph.nodes[name].update(**_catinfo)
+
+        self.background_classes = set(heuristics.BACKGROUND_CLASSES) & set(graph.nodes)
+        self.ignore_classes = set(heuristics.IGNORE_CLASSNAMES) & set(graph.nodes)
+        self.undistinguished_classes = set(heuristics.UNDISTINGUISHED_CLASSES) & set(graph.nodes)
+        self.classes = kwcoco.CategoryTree(graph)
 
         if channels is None:
             # Hack to use all channels in the first image.
@@ -826,10 +901,7 @@ class KWCocoVideoDataset(data.Dataset):
             )
             self.length = len(new_sample_grid['targets'])
         else:
-            negative_classes = (
-                self._heuristic_ignore_classnames |
-                self._hueristic_background_classnames
-            )
+            negative_classes = (self.ignore_classes | self.background_classes)
             new_sample_grid = sample_video_spacetime_targets(
                 sampler.dset, window_dims=sample_shape,
                 window_overlap=window_overlap,
@@ -876,27 +948,6 @@ class KWCocoVideoDataset(data.Dataset):
         self.new_sample_grid = new_sample_grid
 
         self.window_overlap = window_overlap
-        self.sampler = sampler
-
-        # Add extra categories if we need to and construct a new classes object
-        graph = self.sampler.classes.graph
-        if 0:
-            import networkx as nx
-            print(nx.forest_str(graph, with_labels=True))
-
-        self.background_classes = self._hueristic_background_classnames & set(graph.nodes)
-        if not len(self.background_classes):
-            graph.add_node('background')
-            self.background_classes = self._hueristic_background_classnames & set(graph.nodes)
-
-        self.ignore_classes = self._heuristic_ignore_classnames & set(graph.nodes)
-        if not len(self.ignore_classes):
-            graph.add_node('ignore')
-            self.ignore_classes = self._heuristic_ignore_classnames & set(graph.nodes)
-
-        self.undistinguished_classes = self._heuristic_undistinguished_classnames & set(graph.nodes)
-
-        self.classes = kwcoco.CategoryTree(graph)
 
         bg_catname = ub.peek(sorted(self.background_classes))
         self.bg_idx = self.classes.node_to_idx[bg_catname]
@@ -947,7 +998,6 @@ class KWCocoVideoDataset(data.Dataset):
         self.mode = mode
 
         self.true_multimodal = true_multimodal
-        self.augment = False
         self.disable_augmenter = False
 
         # hidden option for now (todo: expose this)
@@ -1054,6 +1104,35 @@ class KWCocoVideoDataset(data.Dataset):
     @profile
     def __getitem__(self, index):
         """
+
+        Ignore:
+            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
+            >>> # Debug issues seen in training
+            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
+            >>> import watch
+            >>> import ndsampler
+            >>> import kwcoco
+            >>> dvc_dpath = watch.find_smart_dvc_dpath()
+            >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
+            >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
+            >>> sampler = ndsampler.CocoSampler(coco_dset)
+            >>> self = KWCocoVideoDataset(
+            >>>     sampler,
+            >>>     sample_shape=(3, 224, 224),
+            >>>     window_overlap=0,
+            >>>     #channels="ASI|MF_Norm|AF|EVI|red|green|blue|swir16|swir22|nir",
+            >>>     channels="red|green|blue|nir",
+            >>>     neg_to_pos_ratio=0, time_sampling='auto', diff_inputs=0,
+            >>> )
+            >>> self.requested_tasks['change'] = False
+            >>> item = self[5]
+            >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0)
+            >>> # xdoctest: +REQUIRES(--show)
+            >>> import kwplot
+            >>> kwplot.autompl()
+            >>> kwplot.imshow(canvas)
+            >>> kwplot.show_if_requested()
+
         Example:
             >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
             >>> import ndsampler
@@ -1082,34 +1161,6 @@ class KWCocoVideoDataset(data.Dataset):
             >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, neg_to_pos_ratio=0.1, true_multimodal=True)
             >>> item = self[self.n_pos + 1]
             >>> canvas = self.draw_item(item)
-            >>> # xdoctest: +REQUIRES(--show)
-            >>> import kwplot
-            >>> kwplot.autompl()
-            >>> kwplot.imshow(canvas)
-            >>> kwplot.show_if_requested()
-
-        Ignore:
-            >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
-            >>> # Debug issues seen in training
-            >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
-            >>> import os
-            >>> from os.path import join
-            >>> import ndsampler
-            >>> import kwcoco
-            >>> _default = ub.expandpath('$HOME/data/dvc-repos/smart_watch_dvc')
-            >>> dvc_dpath = os.environ.get('DVC_DPATH', _default)
-            >>> coco_fpath = join(dvc_dpath, 'drop1-S2-L8-aligned/data.kwcoco.json')
-            >>> coco_dset = kwcoco.CocoDataset(coco_fpath)
-            >>> sampler = ndsampler.CocoSampler(coco_dset)
-            >>> self = KWCocoVideoDataset(
-            >>>     sampler,
-            >>>     sample_shape=(2, 128, 128),
-            >>>     window_overlap=0,
-            >>>     channels="ASI|MF_Norm|AF|EVI|red|green|blue|swir16|swir22|nir",
-            >>>     neg_to_pos_ratio=0, time_sampling='auto', diff_inputs=0,
-            >>> )
-            >>> item = self[5]
-            >>> canvas = self.draw_item(item, max_channels=10, overlay_on_image=0)
             >>> # xdoctest: +REQUIRES(--show)
             >>> import kwplot
             >>> kwplot.autompl()
@@ -1248,6 +1299,10 @@ class KWCocoVideoDataset(data.Dataset):
         for gid in tr_['gids']:
             sample_one_frame(gid)
 
+        if 'video_id' not in tr_:
+            arbitrary_sample = ub.peek(ub.peek(gid_to_sample.values()).values())
+            tr_['video_id'] = arbitrary_sample['tr']['vidid']
+
         vidid = tr_['video_id']
         video = coco_dset.index.videos[vidid]
         time_sampler = self.new_sample_grid['vidid_to_time_sampler'][vidid]
@@ -1319,8 +1374,9 @@ class KWCocoVideoDataset(data.Dataset):
             time_weights = kwimage.gaussian_patch((1, num_frames))[0]
             time_weights = time_weights / time_weights.max()
             time_weights = time_weights.clip(0, 1)
-            time_weights = np.maximum(time_weights, 0.1)
+            time_weights = np.maximum(time_weights, self.min_spacetime_weight)
             space_weights = util_kwimage.upweight_center_mask(input_dsize[::-1])
+            space_weights = np.maximum(space_weights, self.min_spacetime_weight)
 
         if self.special_inputs:
             raise NotImplementedError(f'{self.special_inputs=}')
@@ -1331,6 +1387,61 @@ class KWCocoVideoDataset(data.Dataset):
         if self.match_histograms:
             raise NotImplementedError(f'{self.match_histograms=}')
 
+        if not self.inference_only:
+            # build up info about the tracks
+            dset = self.sampler.dset
+            gid_to_dets: Dict[int, kwimage.Detections] = {}
+            tid_to_aids = ub.ddict(list)
+            tid_to_cids = ub.ddict(list)
+            # tid_to_catnames = ub.ddict(list)
+            for gid in final_gids:
+                stream_sample = gid_to_sample[gid]
+                for sample in stream_sample.values():
+                    if 'annots' in sample:
+                        frame_dets: kwimage.Detections = sample['annots']['frame_dets'][0]
+                        break
+                gid_to_dets[gid] = frame_dets
+
+            for gid, frame_dets in gid_to_dets.items():
+                aids = frame_dets.data['aids']
+                cids = frame_dets.data['cids']
+                tids = dset.annots(aids).lookup('track_id', None)
+                frame_dets.data['tids'] = tids
+                for tid, aid, cid in zip(tids, aids, cids):
+                    tid_to_aids[tid].append(aid)
+                    tid_to_cids[tid].append(cid)
+
+            # tid_to_cnames = ub.map_vals(
+            #     lambda cids: list(ub.take(self.classes.id_to_node, cids, None)),
+            #     tid_to_cids
+            # )
+
+            tid_to_frame_cids = ub.ddict(list)
+            for gid, frame_dets in gid_to_dets.items():
+                cids = frame_dets.data['cids']
+                tids = frame_dets.data['tids']
+                frame_tid_to_cid = ub.dzip(tids, cids)
+                for tid in tid_to_aids.keys():
+                    cid = frame_tid_to_cid.get(tid, None)
+                    tid_to_frame_cids[tid].append(cid)
+
+            # TODO: be more efficient at this
+            tid_to_frame_cnames = ub.map_vals(
+                lambda cids: list(ub.take(self.classes.id_to_node, cids, None)),
+                tid_to_frame_cids
+            )
+
+            task_tid_to_cnames = {
+                'saliency': {},
+                'class': {},
+            }
+            for tid, cnames in tid_to_frame_cnames.items():
+                task_tid_to_cnames['class'][tid] = heuristics.hack_track_categories(cnames, 'class')
+                task_tid_to_cnames['saliency'][tid] = heuristics.hack_track_categories(cnames, 'saliency')
+            # print('task_tid_to_cnames = {}'.format(ub.repr2(task_tid_to_cnames, nl=3)))
+            # print('tid_to_frame_cnames = {}'.format(ub.repr2(tid_to_frame_cnames, nl=2)))
+
+        # TODO: handle all augmentation before we construct any labels
         frame_items = []
         for time_idx, gid in enumerate(final_gids):
             img = coco_dset.index.imgs[gid]
@@ -1339,8 +1450,6 @@ class KWCocoVideoDataset(data.Dataset):
             assert len(stream_sample) > 0
 
             modes = {}
-
-            frame_dets = None
             for mode_key, sample in stream_sample.items():
                 # TODO: get nodata value here
                 # FIXME: nodata value needs to be handled in the kwcoco delay
@@ -1363,11 +1472,8 @@ class KWCocoVideoDataset(data.Dataset):
                 input_chw = einops.rearrange(frame_hwc, 'h w c -> c h w')
                 modes[mode_key] = input_chw
 
-                if not self.inference_only:
-                    if 'annots' in sample:
-                        frame_dets = frame_dets or sample['annots']['frame_dets'][0]
-
             if not self.inference_only:
+                frame_dets = gid_to_dets[gid]
                 if frame_dets is None:
                     print('frame_dets = {!r}'.format(frame_dets))
                     raise AssertionError
@@ -1420,35 +1526,67 @@ class KWCocoVideoDataset(data.Dataset):
                 saliency_ignore = np.zeros(space_shape, dtype=np.uint8)
                 frame_class_ignore = np.zeros(space_shape, dtype=np.uint8)
 
+                task_target_ohe = {}
+                task_target_ohe['saliency'] = frame_saliency
+                task_target_ohe['class'] = frame_class_ohe
+
+                task_target_ignore = {}
+                task_target_ignore['saliency'] = saliency_ignore
+                task_target_ignore['class'] = frame_class_ignore
+
                 # Rasterize frame targets
                 ann_polys = dets.data['segmentations'].to_polygon_list()
                 ann_aids = dets.data['aids']
                 ann_cids = dets.data['cids']
+                ann_tids = dets.data['tids']
                 # Note: it is important to respect class indexes, ids, and
                 # name mappings
                 # TODO: layer ordering? Multiclass prediction?
-                for poly, aid, cid in zip(ann_polys, ann_aids, ann_cids):  # NOQA
-                    cidx = self.classes.id_to_idx[cid]
-                    catname = self.classes.id_to_node[cid]
-                    if catname in self.background_classes:
-                        pass
-                    elif catname in self.ignore_classes:
-                        poly.fill(saliency_ignore, value=1)
-                        poly.fill(frame_class_ignore, value=1)
-                        # weights should allow us to distinguish ignore
-                        # from background. It shouldn't be learned on in
-                        # any case.
-                        poly.fill(frame_class_ohe[cidx], value=1)
-                        poly.fill(frame_saliency, value=1)
+                for poly, aid, cid, tid in zip(ann_polys, ann_aids, ann_cids, ann_tids):  # NOQA
+
+                    if self.use_conditional_classes:
+                        # VERY HACKY, NEEDS REWRITE
+
+                        if self.requested_tasks['saliency']:
+                            # orig_cname = self.classes.id_to_node[cid]
+                            new_salient_catname = task_tid_to_cnames['saliency'][tid][time_idx]
+                            if new_salient_catname not in self.background_classes:
+                                poly.fill(frame_saliency, value=1)
+                            if new_salient_catname in self.ignore_classes:
+                                poly.fill(saliency_ignore, value=1)
+
+                        if self.requested_tasks['class']:
+                            new_class_catname = task_tid_to_cnames['class'][tid][time_idx]
+                            new_class_cidx = self.classes.node_to_idx[new_class_catname]
+                            orig_cidx = self.classes.id_to_idx[cid]
+                            if new_class_catname in self.ignore_classes:
+                                poly.fill(frame_class_ignore, value=1)
+                                poly.fill(frame_class_ohe[orig_cidx], value=1)
+                            elif new_class_catname not in self.background_classes:
+                                poly.fill(frame_class_ohe[new_class_cidx], value=1)
+
                     else:
-                        # Indistinguishable classes should be ignored
-                        # for classification, but not saliency
-                        if catname in self.undistinguished_classes:
+                        cidx = self.classes.id_to_idx[cid]
+                        catname = self.classes.id_to_node[cid]
+
+                        if catname in self.background_classes:
+                            pass
+                        elif catname in self.ignore_classes:
+                            poly.fill(saliency_ignore, value=1)
                             poly.fill(frame_class_ignore, value=1)
-                            # poly.fill(frame_class_ohe[cidx], value=0)
-                            # poly.fill(frame_class_ohe[cidx], value=0)
-                        poly.fill(frame_class_ohe[cidx], value=1)
-                        poly.fill(frame_saliency, value=1)
+                            # weights should allow us to distinguish ignore from
+                            # background. It shouldn't be learned on in any case.
+                            poly.fill(frame_class_ohe[cidx], value=1)
+                            poly.fill(frame_saliency, value=1)
+                        else:
+                            # Indistinguishable classes should be ignored
+                            # for classification, but not saliency
+                            if catname in self.undistinguished_classes:
+                                poly.fill(frame_class_ignore, value=1)
+                                # poly.fill(frame_class_ohe[cidx], value=0)
+                                # poly.fill(frame_class_ohe[cidx], value=0)
+                            poly.fill(frame_class_ohe[cidx], value=1)
+                            poly.fill(frame_saliency, value=1)
 
                 # Postprocess (Dilate?) the truth map
                 for cidx, class_map in enumerate(frame_class_ohe):
@@ -1462,10 +1600,9 @@ class KWCocoVideoDataset(data.Dataset):
 
                 # Dilate ignore masks (dont care about the surrounding area
                 # either)
-                ignore_dilate = 11
                 # frame_saliency = util_kwimage.morphology(frame_saliency, 'dilate', kernel=ignore_dilate)
-                saliency_ignore = util_kwimage.morphology(saliency_ignore, 'dilate', kernel=ignore_dilate)
-                frame_class_ignore = util_kwimage.morphology(frame_class_ignore, 'dilate', kernel=ignore_dilate)
+                saliency_ignore = util_kwimage.morphology(saliency_ignore, 'dilate', kernel=self.ignore_dilate)
+                frame_class_ignore = util_kwimage.morphology(frame_class_ignore, 'dilate', kernel=self.ignore_dilate)
 
                 saliency_weights = frame_weights * (1 - saliency_ignore)
                 class_weights = frame_weights * (1 - frame_class_ignore)
@@ -1505,6 +1642,8 @@ class KWCocoVideoDataset(data.Dataset):
         # Add in change truth
         if not self.inference_only:
             if self.requested_tasks['change']:
+                if frame_items:
+                    frame1 = frame_items[0]
                 for frame1, frame2 in ub.iter_window(frame_items, 2):
                     frame_change = (frame1['class_idxs'] != frame2['class_idxs']).astype(np.uint8)
                     frame_change = util_kwimage.morphology(frame_change, 'open', kernel=3)
@@ -1998,7 +2137,12 @@ class KWCocoVideoDataset(data.Dataset):
 
 class BatchVisualizationBuilder:
     """
-    Helper object to build a batch visualization
+    Helper object to build a batch visualization.
+
+    The basic logic is that we will build a column for each timestep and then
+    arrange them from left to right to show how the scene changes over time.
+    Each column will be made of "cells" which could show either the truth, a
+    prediction, loss weights, or raw input channels.
 
     Example:
         >>> from watch.tasks.fusion.datamodules.kwcoco_video_data import *  # NOQA
@@ -2084,8 +2228,15 @@ class BatchVisualizationBuilder:
         # print('builder.combinable_channels = {}'.format(ub.repr2(builder.combinable_channels, nl=1)))
 
     def build(builder):
-        builder._prepare_frame_metadata()
-        canvas = builder._build_canvas()
+        frame_metas = builder._prepare_frame_metadata()
+        if 0:
+            for idx, frame_meta in enumerate(frame_metas):
+                print('---')
+                print('idx = {!r}'.format(idx))
+                frame_weight_shape = ub.map_vals(lambda x: x.shape, frame_meta['frame_weight'])
+                print('frame_weight_shape = {}'.format(ub.repr2(frame_weight_shape, nl=1)))
+                frame_meta['frame_weight']
+        canvas = builder._build_canvas(frame_metas)
         return canvas
 
     def _prepare_frame_metadata(builder):
@@ -2104,9 +2255,6 @@ class BatchVisualizationBuilder:
             truth_keys.append('change')
             weight_keys.append('change_weights')
 
-        # truth_keys = ['class_idxs', 'change']
-        # weight_keys = ['class_weights', 'saliency_weights']
-
         # Prepare metadata on each frame
         frame_metas = []
         for frame_idx, frame_item in enumerate(item['frames']):
@@ -2124,6 +2272,10 @@ class BatchVisualizationBuilder:
                 if weight_data is not None:
                     weight_data = weight_data.data.cpu().numpy()
                     frame_weight[weight_key] = weight_data
+                else:
+                    # HACK so saliency weights align correctly
+                    frame_weight[weight_key] = None
+                    # np.full((2, 2), fill_value=np.nan)
 
             # Breakup all of the modes into 1-channel per array
             frame_chan_names = []
@@ -2195,6 +2347,43 @@ class BatchVisualizationBuilder:
             frame_meta['chan_rows'] = chan_rows
             assert len(chan_rows) > 0, 'no channels to draw on'
 
+        if builder.draw_weights:
+            # Normalize weights for visualization
+            all_weight_overlays = []
+            for frame_meta in frame_metas:
+                frame_meta['weight_overlays'] = {}
+                for weight_key, weight_data in frame_meta['frame_weight'].items():
+                    overlay_row = {
+                        'weight_key': weight_key,
+                        'raw': weight_data,
+                    }
+                    frame_meta['weight_overlays'][weight_key] = overlay_row
+                    all_weight_overlays.append(overlay_row)
+
+            for weight_key, group in ub.group_items(all_weight_overlays, lambda x: x['weight_key']).items():
+                # print('weight_key = {!r}'.format(weight_key))
+                # maxval = -float('inf')
+                # minval = float('inf')
+                # for cell in group:
+                #     maxval = max(maxval, cell['raw'].max())
+                #     minval = min(minval, cell['raw'].min())
+                # print('maxval = {!r}'.format(maxval))
+                # print('minval = {!r}'.format(minval))
+                for cell in group:
+                    weight_data = cell['raw']
+                    if weight_data is None:
+                        h = w = builder.max_dim
+                        weight_overlay = kwimage.draw_text_on_image(
+                            {'width': w, 'height': h}, 'X', org=(w // 2, h // 2),
+                            valign='center', halign='center', fontScale=10,
+                            color='red')
+                        weight_overlay = kwimage.ensure_float01(weight_overlay)
+                    else:
+                        weight_overlay = kwimage.atleast_3channels(weight_data)
+                    # weight_overlay = kwimage.ensure_alpha_channel(weight_overlay)
+                    # weight_overlay[:, 3] = 0.5
+                    cell['overlay'] = weight_overlay
+
         # Normalize raw signal into visualizable range
         if builder.norm_over_time:
             # Normalize all cells with the same channel code across time
@@ -2230,38 +2419,9 @@ class BatchVisualizationBuilder:
                     norm_signal = kwimage.atleast_3channels(norm_signal)
                     row['norm_signal'] = norm_signal
 
-        if builder.draw_weights:
-            # Normalize weights for visualization
-            all_weight_overlays = []
-            for frame_meta in frame_metas:
-                frame_meta['weight_overlays'] = {}
-                for weight_key, weight_data in frame_meta['frame_weight'].items():
-                    overlay_row = {
-                        'weight_key': weight_key,
-                        'raw': weight_data,
-                    }
-                    frame_meta['weight_overlays'][weight_key] = overlay_row
-                    all_weight_overlays.append(overlay_row)
+        return frame_metas
 
-            for weight_key, group in ub.group_items(all_weight_overlays, lambda x: x['weight_key']).items():
-                # print('weight_key = {!r}'.format(weight_key))
-                # maxval = -float('inf')
-                # minval = float('inf')
-                # for cell in group:
-                #     maxval = max(maxval, cell['raw'].max())
-                #     minval = min(minval, cell['raw'].min())
-                # print('maxval = {!r}'.format(maxval))
-                # print('minval = {!r}'.format(minval))
-                for cell in group:
-                    weight_overlay = kwimage.atleast_3channels(cell['raw'])
-                    # weight_overlay = kwimage.ensure_alpha_channel(weight_overlay)
-                    # weight_overlay[:, 3] = 0.5
-                    cell['overlay'] = weight_overlay
-
-        builder.frame_metas = frame_metas
-
-    def _build_canvas(builder):
-        frame_metas = builder.frame_metas
+    def _build_canvas(builder, frame_metas):
 
         # Given prepared frame metadata, build a vertical stack of per-chanel
         # information, and then horizontally stack the timesteps.
@@ -2506,6 +2666,18 @@ class BatchVisualizationBuilder:
                     valign='top', color='lime', border=3)
                 vertical_stack.append(row_canvas)
 
+        for overlay_info in weight_items:
+            label_text = overlay_info['label_text']
+            row_canvas = overlay_info['overlay'][..., 0:3]
+            row_canvas = row_canvas.copy()
+            row_canvas = kwimage.imresize(row_canvas, **resizekw).clip(0, 1)
+            signal_bottom_y = 1  # hack: hardcoded
+            row_canvas = kwimage.ensure_uint255(row_canvas)
+            row_canvas = kwimage.draw_text_on_image(
+                row_canvas, label_text, (1, signal_bottom_y + 1),
+                valign='top', color='lime', border=3)
+            vertical_stack.append(row_canvas)
+
         for iterx, row in enumerate(chan_rows):
             layers = []
             label_text = None
@@ -2532,18 +2704,6 @@ class BatchVisualizationBuilder:
                 row_canvas = kwimage.draw_text_on_image(
                     row_canvas, label_text, (1, signal_bottom_y + 1),
                     valign='top', color='lime', border=3)
-            vertical_stack.append(row_canvas)
-
-        for overlay_info in weight_items:
-            label_text = overlay_info['label_text']
-            row_canvas = overlay_info['overlay'][..., 0:3]
-            row_canvas = row_canvas.copy()
-            row_canvas = kwimage.imresize(row_canvas, **resizekw).clip(0, 1)
-            signal_bottom_y = 1  # hack: hardcoded
-            row_canvas = kwimage.ensure_uint255(row_canvas)
-            row_canvas = kwimage.draw_text_on_image(
-                row_canvas, label_text, (1, signal_bottom_y + 1),
-                valign='top', color='lime', border=3)
             vertical_stack.append(row_canvas)
 
         vertical_stack = [kwimage.ensure_uint255(p) for p in vertical_stack]
@@ -2767,7 +2927,11 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
     window_space_dims = window_dims[1:3]
     window_time_dims = window_dims[0]
     print('window_time_dims = {!r}'.format(window_time_dims))
-    keepbound = False
+
+    # It is important that keepbound is True at test time, otherwise
+    # we may not predict on the bottom right of the image.
+    keepbound = True
+
     vidid_to_space_slider = {}
     for vidid, video in dset.index.videos.items():
         full_dims = [video['height'], video['width']]
@@ -2812,9 +2976,8 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
             sh_poly_vid = kw_poly_vid.to_shapely()
         return sh_poly_vid
 
-    background_classes = heuristics.BACKGROUND_CLASSES
-    # heuristics.IGNORE_CLASSNAMES
-    # heuristics.UNDISTINGUISHED_CLASSES
+    if negative_classes is None:
+        negative_classes = heuristics.BACKGROUND_CLASSES
 
     # Given an video
     all_vid_ids = list(dset.index.videos.keys())
@@ -2868,7 +3031,7 @@ def sample_video_spacetime_targets(dset, window_dims, window_overlap=0.0,
                 cnames = dset.categories(cids).name
 
                 for tid, aid, cid, cname in zip(tids, aids, cids, cnames):
-                    if cname not in background_classes:
+                    if cname not in negative_classes:
                         aids_to_track.append(aid)
                         imgspace_box = kwimage.Boxes([dset.index.anns[aid]['bbox']], 'xywh')
                         vidspace_box = imgspace_box.warp(warp_vid_from_img)

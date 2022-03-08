@@ -9,6 +9,7 @@ import os
 from .pretext_model import pretext
 from .data.datasets import gridded_dataset
 from watch.utils.lightning_ext import util_globals
+from watch.utils.lightning_ext import util_device
 from .segmentation_model import segmentation_model as seg_model
 from watch.utils import util_kwimage
 
@@ -26,6 +27,11 @@ class predict(object):
         self.output_dset.fpath = args.output_kwcoco  # Change output file path and bundle path
         self.output_dset.reroot(absolute=False)  # Reroot in the new bundle path
 
+        self.devices = util_device.coerce_devices(args.device)
+        assert len(self.devices) == 1, 'only 1 for now'
+        self.device = device = self.devices[0]
+        print('device = {!r}'.format(device))
+
         self.finalized_gids = set()
         self.stitcher_dict = {}
         if 'all' in args.tasks:
@@ -38,19 +44,19 @@ class predict(object):
                 self.segmentation_model = seg_model.load_package(args.segmentation_package_path)
             else:
                 self.segmentation_model = seg_model.load_from_checkpoint(args.segmentation_ckpt_path, dataset=None)
-            self.segmentation_model = self.segmentation_model.to(args.device)
+            self.segmentation_model = self.segmentation_model.to(device)
 
         if 'pretext' in self.tasks:
             if args.pretext_package_path:
                 self.pretext_model = pretext.load_package(args.pretext_package_path)
             else:
                 self.pretext_model = pretext.load_from_checkpoint(args.pretext_ckpt_path, train_dataset=None, vali_dataset=None)
-            self.pretext_model = self.pretext_model.eval().to(args.device)
+            self.pretext_model = self.pretext_model.eval().to(device)
             # pretext_hparams = pretext_model.hparams
 
         self.in_feature_dims = self.pretext_model.hparams.feature_dim_shared
         if args.do_pca:
-            self.pca_projector = torch.load(args.pca_projection_path).to(args.device)
+            self.pca_projector = torch.load(args.pca_projection_path).to(device)
             self.out_feature_dims = self.pca_projector.shape[0]
         else:
             self.out_feature_dims = self.in_feature_dims
@@ -100,10 +106,8 @@ class predict(object):
         auxiliary.append(aux)
 
     def forward(self, args):
-        try:
-            device = int(args.device)
-        except Exception:
-            device = args.device
+        device = self.device
+        print('device = {!r}'.format(device))
         num_workers = util_globals.coerce_num_workers(args.num_workers)
         print('num_workers = {!r}'.format(num_workers))
 
