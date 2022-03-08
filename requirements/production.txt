@@ -86,5 +86,3 @@ timm>=0.4.12
 # Do we need to pin this?
 kornia<=0.5
 segmentation-models-pytorch>=0.2.0
-
-hydra-core>=1.1.1
