@@ -247,6 +247,8 @@ def main(cmdline=False, **kwargs):
                 --src "{aligned_kwcoco_fpath}" \
                 --dst "{aligned_kwcoco_fpath}" \
                 --draw_anns=False \
+                --draw_imgs=True \
+                --channels="red|green|blue" \
                 --site_models="$DVC_DPATH/annotations/site_models/*.geojson"
             '''))
 
