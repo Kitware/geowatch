@@ -68,8 +68,14 @@ class ProjectAnnotationsConfig(scfg.Config):
 
         'site_models': scfg.Value(None, help=ub.paragraph(
             '''
-            Geospatial geojson annotation files. Either a path to a file, or a
-            directory.
+            Geospatial geojson "site" annotation files. Either a path to a
+            file, or a directory.
+            ''')),
+
+        'region_models': scfg.Value(None, help=ub.paragraph(
+            '''
+            Geospatial geojson "region" annotation files. Containing site
+            summaries.  Either a path to a file, or a directory.
             ''')),
 
         'viz_dpath': scfg.Value(None, help=ub.paragraph(

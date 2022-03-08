@@ -245,6 +245,7 @@ def main(cmdline=False, **kwargs):
     if 1:
 
         site_model_dpath = (dvc_dpath / 'annotations/site_models').shrinkuser(home='$HOME')
+        region_model_dpath = (dvc_dpath / 'annotations/region_models').shrinkuser(home='$HOME')
 
         queue.submit(ub.codeblock(
             rf'''
@@ -252,7 +253,8 @@ def main(cmdline=False, **kwargs):
             python -m watch project_annotations \
                 --src "{aligned_kwcoco_fpath}" \
                 --dst "{aligned_kwcoco_fpath}" \
-                --site_models="{site_model_dpath}/*.geojson"
+                --site_models="{site_model_dpath}/*.geojson" \
+                --region_models="{region_model_dpath}/*.geojson"
             '''))
 
     # queue.submit(ub.codeblock(
