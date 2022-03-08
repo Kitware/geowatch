@@ -3,6 +3,91 @@ Access sample NITF images from [1]_ for testing and demo purposes.
 
 References:
     .. [1] https://gwg.nga.mil/ntb/baseline/software/testfile/Nitfv2_1/scen_2_1.html
+
+
+NOTE:
+    The data provided is no longer available.
+    TODO: Find cached versions of these files and access them via IPFS.
+
+
+added QmfNRAZdn3VtEHQSzXRYdsFCZozMSVUuHv85yjyY6EPmka i_3001a.ntf
+added QmSZkJKidBsWAUyPRFRbHFYxy1d4DBArhXD8utgavNASDp i_3004g.ntf
+added QmVEfXgbQrHYVYbjiek5TEvxmvyWuLSLas5vnCmxBCJ5CG i_3008a.ntf
+added QmPaDjuweukFaDiM44rxkHaSMwcvLu5gM6U8EY2XU6XzAF i_3015a.ntf
+added QmfVBure4Jbmo7ESt5aotYbr5MnesWJxMFfRVLRoHqAfDd i_3018a.ntf
+added QmfKK7NPfggEJAmVfv8VfFrzL6P8rpxTBUtX33YhHqmRF5 i_3025b.ntf
+added QmSRGeqnkmMGfXFDZS22yWt3TAbxun533kNCWjuw6rqqpC i_3034c.ntf
+added QmUHHD92Fecr1wviDihGUkEomVoF7XHSPYgK2vZN26Et9i i_3034f.ntf
+added QmdNAsELfULbtXHTZhmfQ1svZVY24thttPpn4GNCZ9M2PE i_3041a.ntf
+added QmZLE6WudN5ZRCwpMDnpK43BnERds3qNPanzqgCpuX1BZC i_3051e.ntf
+added QmSkjd7DcqE34L8ThpAmpEPJNKa1ewSi2npQhrcjtreHmv i_3052a.ntf
+added QmWCRDnbEkX7Nqju5vfUjetFTDek5GLHLjg2UwvHMsuffy i_3060a.ntf
+added QmUFrYdz5xHrvMbcEWCpMurrqbXago7RK5U76EfnUrdniV i_3063f.ntf
+added QmbxM3NB8iFJs5gQk2QJi4mFHbfFBcexpJEN6WsKq7Rq19 i_3068a.ntf
+added QmUKSJRYKKDhsvZwdFgPnHLwzbEB22TFwwsoGxwCtB1Wne i_3076a.ntf
+added QmXhiB3uFeNHT91PFSbSNEV3zbDrkGKr9FTGA3GeVrMbfU i_3090m.ntf
+added QmYcA5UuwpMu6C7T92tLMMpmkMR69fzv3BdNt7y5KfDnTk i_3090u.ntf
+added QmRSrjcm75KiCw5zjJFvWGJXSKaLLvRNpj7y8Bqd67uBnk i_3113g.ntf
+added QmcAakF7RN533TiU8qnhGSUoKZuScCDXZVLeJmdcq7C9PG i_3114e.ntf
+added QmYw4wppfG4uARMcaNrfrCCwrnTQmBb7cpW7VNZFRM7sXF i_3117ax.ntf
+added QmQrnGbJ8XbUWipiw582WHbvpPqF2gLZsHj2tvRFgudC7H i_3128b.ntf
+added QmNhrFM4SYsqUk333MCdTgzzwN5j1nvmCAu2Kjmq3ohEDm i_3201c.ntf
+added QmeKe7twmNEq5iFTF6RZegVtuLBnm2GaVSnfLdbtLRkanh i_3228c.ntf
+added QmYwNVAaC9bZNCN6T5Qjojjsub2C2sVWy7y5RD3ah7VtA2 i_3228e.ntf
+added QmWqspPteMi38xHoohYLAhSqbcdNepWNNvS4f711uzicp8 i_3301a.ntf
+added QmYYwyHfQnx4jdpsXuwQU1jTtHVWeaLsCq7ftFP6PkLP7H i_3301c.ntf
+added QmSjNfgd2iue4ZoPbhzoTcp7isVK1aVBcDbPqYFsdRwTxg i_3301h.ntf
+added QmZP22WEv6X3Mr5XeyZDP1XeX5u7w7RrHhD3U3de5kbvo9 i_3301k.ntf
+added QmVmCk77Dw4sTHvHKRBDxsto4RDQ1FQrf2roS8ntrALuCv i_3303a.ntf
+added QmTgPnfTaHiz8zma8jDQ9n72yVeWLqApihmgQWrA4Q5wpk i_3309a.ntf
+added QmeQ3y7pAVgP7KxNwwaUuJyZQjvryL4yTisGneAoPS1eyJ i_3311a.ntf
+added QmTYF1Hn9wAUoo8aTbEnnr9ty2NCTAnC82Sys7My9D38mi i_3405a.ntf
+added QmU58g5BUDUc6k5UXX8CBgjUcR6yhvxLwicjdqMWkbADXj i_3430a.ntf
+added QmRiwn3nDxTmsjwiKgbyztMT7vwVqaKo2NP2N7Y42wy5MY i_3450c.ntf
+added QmbgWEVKE78tspn7ZYnmtPs2QYZFpirtEQxGYNQJkVghYw i_5012c.ntf
+
+added QmXNq8HGVk5cMRTPSc9br685tpJqhBvky8Wmd6KGBKGA6t ns3004f.nsf
+added QmViVzFPjWe7KEF1eFDniBDggRrd2V7vAomnghyvtWYjbm ns3005b.nsf
+added QmS8zETJ9fpJqAjSSiTMbTMEDcZJPjs5LG3EMhdGwYURef ns3010a.nsf
+added QmNTmkLffWuu4dKXz7WhAe99ErtvFMpiaogLQaRVDy3GSt ns3017a.nsf
+added QmT3TpNozoLqS96dA5WCiWyZU1j3CwiAtkPmnU4WFNNe5B ns3022b.nsf
+added QmXjnNXcAEwje3VFu6VYgVeeb9PacD6NRSRamV6Pr8z33s ns3033b.nsf
+added QmStHdJpmTtmwP1cV589p8yMr9aGprukNfaKxGWHT2gXLk ns3034d.nsf
+added QmYG9PdWmJLRxZj6Qesv4uAj5gjeq3WZMofaDCQZKRsbaa ns3038a.nsf
+added QmVQgiFEV1w1GGw9AM3abNqU3fhPFbLTrgSLsbGXPzhWXG ns3050a.nsf
+added QmRDMx5yDx8eBWFggj8556ke5iCtuvymLRfhBRonS2usba ns3051v.nsf
+added QmdjWZHsjBKa5YKTcNBaEuxZb1tXzrVy3JSnXfHCGjomBA ns3059a.nsf
+added QmUfNxVJttBDsJcjeQWpk8pY1FgxHkGbepy3WC4zsVTAjs ns3061a.nsf
+added QmcFNheBVnjUVakDi5So5UtpurAaPXxYwdEj6pxqRCX57e ns3063h.nsf
+added QmXUjPur9Cbe1sNgKkPP3sBfqkWfymKuiehNqHu8WuFU3A ns3073a.nsf
+added QmPfNJhP4Ytgx6D566NTt4CYZG2FJDamibNZaZYSLjDVG1 ns3090i.nsf
+added QmZBz5vKwygBtdfmRDG6xrbG2RtU8HWf5L7aAP5h4AF5gV ns3090q.nsf
+added QmTjPsxGvQzdvH9T61ewEuoJKkczRL8U4CSTnqJuZhH6DL ns3101b.nsf
+added QmQKr5fd5cp1b1LYFgYRJKT6jdNHyecEN1XqRMKp4JJ4SM ns3114a.nsf
+added QmS3rjo6yuhGVVMtXpjkoR8HhbzXv9B7nJ3CbE7uZedSrj ns3114i.nsf
+added QmRmjCMyhHYBN5WfXJteTnAxYoJSQ9iK3KWbjDTe6DoTav ns3118b.nsf
+added QmZzY3Vn93xKv5KEh7cSRLUEjFx29k8pxwD49e7fA4zfUx ns3119b.nsf
+added QmTibUeWxAW2YpC5WL6egku4aq95VfXTGC6CiJfcX3KLaJ ns3201a.nsf
+added QmZuqBAUYEtYiRZ8hHoDJ3iYRf86UzcJHfSh5f6HLjmveU ns3228b.nsf
+added QmRrdi31As3dguMeGUZC1CroMmuj4cD3AiBmZXyWJYX6wg ns3228d.nsf
+added QmTJHhqvnMNnTMhDkq3rbRvQ8Bw6by5UUYvH8FrBUTxCqQ ns3229b.nsf
+added QmQxKrj1SppQcXHhAJBv4GccQxjdXfSf8psWH5qAjXnqLc ns3301b.nsf
+added QmVMwtyKUzzeUiHvNPWWhZV91rJbngy9F22wqkdFBBDUpW ns3301e.nsf
+added QmW6Dpgrr2x94DGse6rRVuyAajMPnN7r6U9UgmEzeEQ8Uz ns3301j.nsf
+added QmVysZ9HexrwZ131U8iu4HVXgBtVGXazcJupA3yU7avp7n ns3302a.nsf
+added QmUq7tL1EH2KyByNCFvRQnrCUkds4ZjpoPi78YKc1ZA94o ns3304a.nsf
+added QmfMzFPqdeYvqpk33qRDsuhkzQbqydqXgQkvCMynMAtAnJ ns3310a.nsf
+added Qmf9LVfsMTyFfvLpcXJAqCkZEoGG5KFA4QX8BoaXnz8JjX ns3321a.nsf
+added QmSQBWmZm6WNzzuSySEYvSEiqKt3SpPTuuevVSjQh6g3DT ns3361c.nsf
+added QmQDsLkqiZ2yKbF7qdShEZupiAuuzYsL7UJQoWiakJ6zbL ns3417c.nsf
+added QmQhKDL4S7mr6WkHPx9g2YgpUodUNq5nmYkSEzfKcispYa ns3437a.nsf
+added QmQSNZY3kGTxSCGw3gJftrqUHjdpDnnq9hJL5BFq4aRxbu ns3450e.nsf
+added Qmf6HT32uBxgPnYanYnaBrDyQdob9FuM5dv2mDSDejBxvK ns5600a.nsf
+
+added QmWApzbAX2W8cobWqKPjsM1kj82TvMGvyZ75PnbUeNHktW demo_nitf
+
+
+
 """
 import ssl
 import ubelt as ub
@@ -13,7 +98,7 @@ DEFAULT_KEY = 'i_3034c.ntf'  # use a small image as the default
 
 _TEST_IMAGES = [
     {'key': 'ns3114a.nsf', 'sha512': '5605cd0b0187900c1b43130bf157c6ed', 'size_bytes': 680, 'enabled': False},
-    {'key': 'i_3034c.ntf', 'sha512': '5f42ab1034f20756bdf15043b58c828f', 'size_bytes': 933},
+    {'key': 'i_3034c.ntf', 'sha512': '5f42ab1034f20756bdf15043b58c828f', 'size_bytes': 933, 'CID': 'QmSRGeqnkmMGfXFDZS22yWt3TAbxun533kNCWjuw6rqqpC'},
     {'key': 'ns3034d.nsf', 'sha512': 'aaf65232611bdc53934fa7f58790529a', 'size_bytes': 937},
     {'key': 'i_3034f.ntf', 'sha512': '2c2c3a918fe2805dc78a090164d671dc', 'size_bytes': 948},
     {'key': 'i_3051e.ntf', 'sha512': 'a67e9c4172310faaadf34a0e6ce01a72', 'size_bytes': 1436, 'enabled': False},
@@ -53,7 +138,7 @@ _TEST_IMAGES = [
     {'key': 'ns3301e.nsf', 'sha512': '2659e9f504b2427ebe064fa7bbfceeea', 'size_bytes': 197504},
     {'key': 'ns5600a.nsf', 'sha512': 'f7e27013e66568e02b0c4039120ff155', 'size_bytes': 219974},
     {'key': 'i_3128b.ntf', 'sha512': 'e4fa986099dcfdaaa74e66f68f48abbc', 'size_bytes': 248762},
-    {'key': 'i_3004g.ntf', 'sha512': '5285370808d15ffcbc57a53105ff7a1b', 'size_bytes': 263047, 'has_crs': True, 'has_rpc': False},
+    {'key': 'i_3004g.ntf', 'sha512': '5285370808d15ffcbc57a53105ff7a1b', 'size_bytes': 263047, 'has_crs': True, 'has_rpc': False, 'CID': 'QmSZkJKidBsWAUyPRFRbHFYxy1d4DBArhXD8utgavNASDp'},
     {'key': 'ns3004f.nsf', 'sha512': '0bfbd6d378dfd0f0e8cad703498fa6c8', 'size_bytes': 263047, 'has_crs': True, 'has_rpc': False},
     {'key': 'ns3090i.nsf', 'sha512': '9be0244363bbe63c71b55217a90c346b', 'size_bytes': 264083, 'enabled': False},
     {'key': 'i_3090m.ntf', 'sha512': '30017da0f1c9c41130e79c18f99aba97', 'size_bytes': 264083},
@@ -179,6 +264,7 @@ def grab_nitf_fpath(key=None, safe=True):
             but now they do seem to work with default SSL.
 
     Example:
+        >>> # xdoctest: +SKIP
         >>> # xdoctest: +REQUIRES(--network)
         >>> from watch.demo.nitf_demodata import *  # NOQA
         >>> fpath = grab_nitf_fpath()
@@ -200,12 +286,20 @@ def grab_nitf_fpath(key=None, safe=True):
     else:
         raise KeyError(key)
 
+    if 'CID' in info:
+        # Use IPFS instead
+        base = 'https://ipfs.io/ipfs/'
+        url_fname = info['CID']
+    else:
+        url_fname = info['key']
+        raise Exception('Requires update to IPFS support. Old URLs are dead')
+
     fname = info['key']
     sha512 = info['sha512']
-    url = base + fname
+    url = base + url_fname
     try:
         fpath = ub.grabdata(url, appname='smart_watch/demodata/nitf',
-                            hash_prefix=sha512)
+                            fname=fname, hash_prefix=sha512, redo=1)
     except Exception:
         if safe:
             raise
