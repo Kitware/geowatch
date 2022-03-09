@@ -15,13 +15,15 @@ space.
 
 The following table provides links to relevant resources for the SMART WATCH project:
 
-+-------------------------------+----------------------------------------------------------------+
-| The SMART WATCH Python Module | https://gitlab.kitware.com/smart/watch/                        |
-+-------------------------------+----------------------------------------------------------------+
-| The SMART WATCH DVC Repo      | https://gitlab.kitware.com/smart/smart_watch_dvc/              |
-+-------------------------------+----------------------------------------------------------------+
-| The SMART WATCH Collection    | https://data.kitware.com/#collection/602457272fa25629b95d1718  |
-+-------------------------------+----------------------------------------------------------------+
++------------------------------------+----------------------------------------------------------------+
+| The SMART WATCH Python Module      | https://gitlab.kitware.com/smart/watch/                        |
++------------------------------------+----------------------------------------------------------------+
+| The SMART WATCH DVC Repo           | https://gitlab.kitware.com/smart/smart_watch_dvc/              |
++------------------------------------+----------------------------------------------------------------+
+| The SMART WATCH Infastructure Docs | https://gitlab.kitware.com/smart/watch-infrastructure          |
++------------------------------------+----------------------------------------------------------------+
+| The SMART WATCH Girder Collection  | https://data.kitware.com/#collection/602457272fa25629b95d1718  |
++------------------------------------+----------------------------------------------------------------+
 
 Getting Started
 ---------------

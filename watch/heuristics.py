@@ -21,11 +21,12 @@ import ubelt as ub
 
 
 # TODO: ensure consistency with IARPA?
-# https://smartgitlab.com/TE/annotations/-/wikis/Alternate-Site-Type
-# https://smartgitlab.com/TE/metrics-and-test-framework/-/blob/main/evaluation.py#L1205
+# https://smartgitlab.com/TE/annotations/-/wikis/Annotation-Status-Types
+# https://smartgitlab.com/TE/metrics-and-test-framework/-/blob/main/iarpa_smart_metrics/evaluation.py#L1205
 # NOTE: A "Status" is not a category.
 # It indicates what sort of annotation detail is available.
 HUERISTIC_STATUS_DATA = [
+    {'name': 'positive_annotated_static':
     {'name': 'positive_annotated', 'color': 'black'},
     {'name': 'positive_partial', 'color': 'black'},
     {'name': 'positive_pending', 'color': 'black'},
