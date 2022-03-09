@@ -292,6 +292,7 @@ class MultimodalTransformer(pl.LightningModule):
                  token_norm='auto',
                  name='unnamed_expt',
                  squash_modes=False,
+                 multimodal_reduce='max',
                  classes=10):
 
         super().__init__()
@@ -300,6 +301,7 @@ class MultimodalTransformer(pl.LightningModule):
 
         self.arch_name = arch_name
         self.squash_modes = squash_modes
+        self.multimodal_reduce = multimodal_reduce
 
         if dataset_stats is not None:
             input_stats = dataset_stats['input_stats']
@@ -1006,7 +1008,12 @@ class MultimodalTransformer(pl.LightningModule):
             perframe_stackable_encodings = []
             for encoded_modes in perframe_frame_encodings:
                 # max pool, maybe do something better later
-                frame_space_tokens = encoded_modes.max(dim=2)[0]
+                if self.multimodal_reduce == 'max':
+                    frame_space_tokens = encoded_modes.max(dim=2)[0]
+                elif self.multimodal_reduce == 'mean':
+                    frame_space_tokens = encoded_modes.mean(dim=2)[0]
+                else:
+                    raise Exception(self.multimodal_reduce)
                 perframe_stackable_encodings.append(frame_space_tokens)
 
             perframe_spacetime_tokens = torch.cat(perframe_stackable_encodings, dim=2)[:, 0]

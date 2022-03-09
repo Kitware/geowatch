@@ -183,7 +183,8 @@ def main(cmdline=True, **kwargs):
                 --output="{task['output_fpath']}" \
                 --deployed="{model_fpaths['dzyne_depth']}" \
                 --data_workers={depth_data_workers} \
-                --window_size={depth_window_size}
+                --window_size={depth_window_size} \
+                --cache=1
             ''')
         combo_code_parts.append(codes[key])
         tasks.append(task)
@@ -372,19 +373,19 @@ if __name__ == '__main__':
 
 
         ###
+        DATASET_CODE=Aligned-Drop2-TA1-2022-02-24
         DVC_DPATH=$(python -m watch.cli.find_dvc)
         DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
-        DATASET_CODE=Aligned-Drop2-TA1-2022-02-24
         KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
         python -m watch.cli.prepare_teamfeats \
             --base_fpath=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
-            --gres=0,1 \
-            --with_depth=0 \
+            --gres=0, \
+            --with_depth=1 \
             --with_landcover=1 \
-            --with_invariants=0 \
+            --with_invariants=1 \
             --with_materials=1 \
             --depth_workers=auto \
-            --do_splits=1  --cache=0 --run=0
+            --do_splits=1  --cache=1 --run=1
 
     """
     main(cmdline=True)

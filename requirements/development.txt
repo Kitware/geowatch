@@ -16,7 +16,7 @@ torchmetrics >= 0.4.1
 performer_pytorch >= 1.0.11
 reformer_pytorch >= 1.4.3
 torch_optimizer >= 0.1.0 ;python_version>='3.6'
-hydra-core >= 1.0
+hydra-core>=1.1.1
 
 # GIS
 fels >= 1.4.0

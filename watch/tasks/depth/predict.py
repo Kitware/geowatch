@@ -15,7 +15,7 @@ import kwcoco
 import kwimage
 import numpy as np
 import torch
-import torchvision.transforms
+# import torchvision.transforms
 from medpy.filter.smoothing import anisotropic_diffusion
 from scipy import ndimage
 from torch.utils.data import DataLoader
@@ -23,7 +23,8 @@ from tqdm import tqdm
 
 from . import modules_monkeypatch  # NOQA
 from .datasets import WVRgbDataset
-from .pl_highres_verify import MultiTaskModel, modify_bn, dfactor, local_utils
+# from .pl_highres_verify import MultiTaskModel, modify_bn, dfactor, local_utils
+from .pl_highres_verify import MultiTaskModel, modify_bn, dfactor
 from .utils import process_image_chunked
 from ..landcover.detector import get_device
 from ..landcover.predict import get_output_file
@@ -39,7 +40,8 @@ log = logging.getLogger(__name__)
 @click.option('--window_size', required=False, type=int, default=1024, help='sliding window size')
 @click.option('--dump_shards', required=False, default=False, help='if True, output partial kwcoco files as they are completed')
 @click.option('--data_workers', required=False, default=0, help='background data loaders')
-def predict(dataset, deployed, output, window_size=2048, dump_shards=False, data_workers=0, ):
+@click.option('--cache', required=False, default=0, help='if True, enable caching of results')
+def predict(dataset, deployed, output, window_size=2048, dump_shards=False, data_workers=0, cache=False):
     weights_filename = ub.Path(deployed)
 
     output_dset_filename = ub.Path(get_output_file(output))
@@ -70,8 +72,6 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False, data
 
     # input data
     torch_dataset = WVRgbDataset(input_dset)
-    cache = 1
-
     if cache:
         log.debug('checking for cached files')
 
@@ -105,6 +105,13 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False, data
     model = model.eval()
     model.to(get_device())
 
+    S = window_size
+    chip_size = (S, S, 3)
+    overlap = (128, 128, 0)
+    output_dtype = np.uint8
+
+    process_func = partial(run_inference, model=model)
+
     log.debug('processing images')
     dataloader = DataLoader(torch_dataset, num_workers=data_workers, batch_size=1, collate_fn=lambda x: x)
     with torch.no_grad():
@@ -119,15 +126,17 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False, data
             pred_filename = _image_pred_filename(torch_dataset,
                                                  output_data_dir, img_info)
             if cache and pred_filename.exists():
+                # Dereference items after we are done with them
+                batch_item = None
+                image = None
                 continue
 
             try:
-                S = window_size
                 image = batch_item['imgdata']
-                pred = process_image_chunked(
-                    image, partial(run_inference, model=model),
-                    chip_size=(S, S, 3),
-                )
+                pred = process_image_chunked(image, process_func,
+                                             chip_size=chip_size,
+                                             overlap=overlap,
+                                             output_dtype=output_dtype)
                 # Dereference items after we are done with them
                 batch_item = None
                 image = None
@@ -138,8 +147,7 @@ def predict(dataset, deployed, output, window_size=2048, dump_shards=False, data
                 output_dset.imgs[gid]['auxiliary'] = aux
 
                 if dump_shards:
-                    # Dump debugging shard (TODO: could cache process for quick
-                    # reruns)
+                    # Dump debugging shard
                     shard_dset = output_dset.subset([gid])
                     shard_dset.reroot(absolute=True)
                     shard_dset.fpath = pred_filename.augment(ext='.kwcoco.json')
@@ -192,17 +200,26 @@ def _image_pred_filename(torch_dataset, output_data_dir, img_info):
 
 def run_inference(image, model):
     with torch.no_grad():
-        image_float = image / 255.0
-        mean = np.mean(image_float.reshape(-1, image_float.shape[-1]), axis=0)
-        std = np.std(image_float.reshape(-1, image_float.shape[-1]), axis=0)
+        nodata_mask = np.isnan(image)
+        if np.all(nodata_mask):
+            return np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
+
+        # Replace nans with zeros before going into the network
+        image_float = image / 255.0  # not sure why we want to do this...
+        # image_float = image.copy()
+        image_float[nodata_mask] = 0
+        image_tensor = torch.from_numpy(image_float.transpose((2, 0, 1))).contiguous()
+
+        mean = np.nanmean(image.reshape(-1, image.shape[-1]), axis=0)
+        std = np.nanstd(image.reshape(-1, image.shape[-1]), axis=0)
+
+        device = 0
 
         batch2 = {
-            "image": torchvision.transforms.functional.to_tensor(image)[None, ...],
-            "image_mean": torch.from_numpy(mean)[None, ...],
-            "image_std": torch.from_numpy(std)[None, ...],
+            "image": image_tensor[None, ...].to(device),
+            "image_mean": torch.from_numpy(mean)[None, ...].to(device),
+            "image_std": torch.from_numpy(std)[None, ...].to(device),
         }
-
-        batch2 = local_utils.batch_to_cuda(batch2)
 
         pred2, batch2 = model(batch2, tta=True)
 
@@ -275,8 +292,8 @@ if __name__ == '__main__':
         --dataset="$KWCOCO_BUNDLE_DPATH/data.kwcoco.json" \
         --output="$KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json" \
         --deployed="$DVC_DPATH/models/depth/weights_v2_gray.pt" \
-        --data_workers=2 \
-        --window_size=736
+        --data_workers=0 \
+        --window_size=512
 
     python -m watch visualize $KWCOCO_BUNDLE_DPATH/dzyne_depth.kwcoco.json \
         --animate=True --channels="depth,red|green|blue" --skip_missing=True \

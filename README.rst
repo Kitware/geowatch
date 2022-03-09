@@ -1,12 +1,16 @@
-WATCH
-=====
+WATCH - Wide Area Terrestrial Change Hypercube
+==============================================
 
 |master-pipeline| |master-coverage|
 
-This repository addresses the algorithmic challenges of the IARPA SMART
-program. The goal of this software is analyze space-based imagery to
-perform broad-area search for natural and anthropogenic events and
-characterize their extent and progression in time and space.
+
+This repository addresses the algorithmic challenges of the 
+`IARPA SMART <https://www.iarpa.gov/research-programs/smart>`_ (Space-based
+Machine Automated Recognition Technique) program.  The goal of this software is
+analyze space-based imagery to perform broad-area search for natural and
+anthropogenic events and characterize their extent and progression in time and
+space.
+
 
 
 The following table provides links to relevant resources for the SMART WATCH project:
