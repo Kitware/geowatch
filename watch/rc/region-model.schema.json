@@ -53,13 +53,13 @@
     "region_properties": {
       "properties": {
         "type": {"const": "region", "type": "string"},
-        "region_id": {"type": "string", "pattern": "^[A-Z]{2}_[RCS]\\d{3}$"},
+        "region_id": {"type": "string", "pattern": "^[A-Z]{2}_[RC]\\d{3}$"},
         "version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
         "mgrs": {"type": "string", "pattern": "\\d{2}[A-Z]{3}"},
         "model_content": {"enum": ["empty", "annotation", "proposed"]},
         "start_date": {"oneOf": [{"type": "null"}, {"type": "string", "format": "date"}]},
         "end_date": {"oneOf": [{"type": "null"}, {"type": "string", "format": "date"}]},
-        "originator": {"enum": ["te", "pmo", "acc", "ara", "ast", "bla", "iai", "kit", "str", "iMERIT"]},
+        "originator": {"enum": ["te", "pmo", "accenture", "ara", "astra", "blacksky", "iai", "kitware", "str", "iMERIT", "performer1"]},
         "comments": {"type": ["string", "null"]}
       },
       "required": [
@@ -69,14 +69,14 @@
     "site_summary_properties": {
       "properties": {
         "type": {"const": "site_summary", "type": "string"},
-        "site_id": {"type": "string", "pattern": "^[A-Z]{2}_[RCS]\\d{3}_\\d{4}$"},
+        "site_id": {"type": "string", "pattern": "^[A-Z]{2}_[RC]\\d{3}_\\d{4}$"},
         "version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
         "mgrs": {"type": "string", "pattern": "\\d{2}[A-Z]{3}"},
-        "status": {"enum": ["system_proposed", "system_confirmed", "system_rejected"]},
+        "status": {"type": "string"},
         "model_content": {"enum": ["annotation", "proposed"]},
         "start_date": {"oneOf": [{"type": "null"}, {"type": "string", "format": "date"}]},
         "end_date": {"oneOf": [{"type": "null"}, {"type": "string", "format": "date"}]},
-        "originator": {"enum": ["te", "pmo", "acc", "ast", "ast", "bla", "iai", "kit", "str", "iMERIT"]},
+        "originator": {"enum": ["te", "pmo", "accenture", "ara", "astra", "blacksky", "iai", "kitware", "str", "iMERIT", "performer1"]},
         "score": {"type": "number", "minimum": 0, "maximum": 1},
         "validated": {"enum": ["True", "False"]}
       },

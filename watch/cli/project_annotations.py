@@ -275,6 +275,7 @@ def assign_sites_to_images(coco_dset, sites, regions, propogate, geospace_lookup
         region_df.loc[:, 'region_id'] = region_id
 
     region_id_to_sites = ub.group_items(sites, lambda x: x.iloc[0]['region_id'])
+    region_id_to_sites = dict(region_id_to_sites)
 
     if 1:
         site_rows1 = []
@@ -330,6 +331,17 @@ def assign_sites_to_images(coco_dset, sites, regions, propogate, geospace_lookup
         # Find sites that only have a site-summary
         summary_only_site_ids = sorted(set(site_df2['site_id']) - set(site_df1['site_id']))
         region_id_to_sitesummaries = dict(list(site_df2.loc[summary_only_site_ids].groupby('region_id')))
+
+        # Transform site-summaries into pseudo-site observations
+        # https://smartgitlab.com/TE/standards/-/wikis/Site-Model-Specification
+
+        from watch.rc.registry import load_site_model_schema
+        site_model_schema = load_site_model_schema()
+
+        for region_id, sitesummaries in region_id_to_sitesummaries.items():
+            for _, site_summary in sitesummaries.iterrows():
+                pass
+            pass
 
     if 0:
         site_high_level_summaries = []

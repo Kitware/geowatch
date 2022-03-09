@@ -9,6 +9,7 @@ import ubelt as ub
 
 
 # # FIXME: Hard-coded category aliases.
+# https://smartgitlab.com/TE/standards
 # # The correct way to handle these would be to have some information in the
 # # kwcoco category dictionary that specifies how the categories should be
 # # interpreted.
@@ -26,7 +27,7 @@ import ubelt as ub
 # NOTE: A "Status" is not a category.
 # It indicates what sort of annotation detail is available.
 HUERISTIC_STATUS_DATA = [
-    {'name': 'positive_annotated_static':
+    {'name': 'positive_annotated_static', 'color': 'black'},
     {'name': 'positive_annotated', 'color': 'black'},
     {'name': 'positive_partial', 'color': 'black'},
     {'name': 'positive_pending', 'color': 'black'},
@@ -390,6 +391,7 @@ PHASE_STATUS_TO_KWCOCO_CATNAME = {
     'positive_pending': 'positive',  # Does not have phase labels
     'positive_partial': 'positive',  # Does not have phase labels
     'positive_annotated': None,  # This must have a category already do not map
+    'positive_annotated_static': None,  # This must have a category already do not map
 }
 
 CONFUSION_COLOR_SCHEME = {
