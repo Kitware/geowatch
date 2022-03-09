@@ -621,6 +621,28 @@ def build_and_upload_stac_collections(stac_items_by_collection,
                             collection_output_path], check=True)
 
 
+def dissociate_wv_pan_items(stac_items):
+    output_stac_items = []
+    for stac_item in stac_items:
+        platform = stac_item['properties']['platform']
+
+        if(platform in SUPPORTED_WV_PLATFORMS
+           and 'pan' in stac_item['properties']):
+            pan_item = stac_item['properties'].pop('pan')
+            pan_asset = stac_item['assets'].pop('data_pan')
+
+            if pan_asset is not None:
+                pan_item.setdefault('assets', {})['data'] = pan_asset
+
+                output_stac_items.extend((stac_item, pan_item))
+            else:
+                output_stac_items.append(stac_item)
+        else:
+            output_stac_items.append(stac_item)
+
+    return output_stac_items
+
+
 def collate_ta1_output(stac_catalog,
                        output_bucket,
                        aws_profile=None,
@@ -649,6 +671,10 @@ def collate_ta1_output(stac_catalog,
         aws_base_command.append('--no-progress')
 
     input_stac_items = [item.to_dict() for item in catalog.get_all_items()]
+    # During WV coregistration PAN items may get "associated" and
+    # coregistered along with it's associated MSI item, for the sake
+    # of collation, these should be two separate items
+    input_stac_items = dissociate_wv_pan_items(input_stac_items)
 
     executor = ub.Executor(mode='process' if jobs > 1 else 'serial',
                            max_workers=jobs)

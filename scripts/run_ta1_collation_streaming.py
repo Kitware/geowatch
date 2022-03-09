@@ -11,6 +11,7 @@ from watch.cli.baseline_framework_egress import upload_output_stac_items
 from watch.cli.collate_ta1_output import (
     collate_item,
     build_and_upload_stac_collections,
+    dissociate_wv_pan_items,
     S2_ASSET_NAME_MAP,
     S2_SSH_ASSET_NAME_MAP,
     L8_ASSET_NAME_MAP,
@@ -144,6 +145,10 @@ def run_ta1_collation_streaming(input_path,
         aws_base_command.extend(['--request-payer', 'requester'])
 
     input_stac_items = load_input_stac_items(input_path, aws_base_command)
+    # During WV coregistration PAN items may get "associated" and
+    # coregistered along with it's associated MSI item, for the sake
+    # of collation, these should be two separate items
+    input_stac_items = dissociate_wv_pan_items(input_stac_items)
 
     executor = ubelt.Executor(mode='process' if jobs > 1 else 'serial',
                               max_workers=jobs)
