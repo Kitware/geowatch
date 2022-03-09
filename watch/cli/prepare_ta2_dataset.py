@@ -257,6 +257,18 @@ def main(cmdline=False, **kwargs):
                 --region_models="{region_model_dpath}/*.geojson"
             '''))
 
+    if config['visualize']:
+        queue.submit(ub.codeblock(
+            rf'''
+            # Update to whatever the state of the annotations submodule is
+            python -m watch visualize \
+                --src "{aligned_kwcoco_fpath}" \
+                --draw_anns=True \
+                --draw_imgs=False \
+                --channels="red|green|blue" \
+                --animate=True --workers=auto
+            '''))
+
     # queue.submit(ub.codeblock(
     #     '''
     #     DVC_DPATH=$(python -m watch.cli.find_dvc)

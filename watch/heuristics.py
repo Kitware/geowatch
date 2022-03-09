@@ -89,10 +89,10 @@ CATEGORIES = [
         'name': 'positive',
         'color': 'palegreen',
         'scored': False,
-        'conditional_tags': [
-            TAG_IF('positive', CONDITION('TASK_EQ', 'saliency')),
-            TAG_IF('ignore', CONDITION('TASK_EQ', 'class')),
-        ],
+        # 'conditional_tags': [
+        #     TAG_IF('positive', CONDITION('TASK_EQ', 'saliency')),
+        #     TAG_IF('ignore', CONDITION('TASK_EQ', 'class')),
+        # ],
     },
 
     {
@@ -100,9 +100,9 @@ CATEGORIES = [
         'color': 'gray',
         'scored': False,
         'tags': ['background'],
-        'conditional_tags': [
-            TAG_IF('hard_negative', CONDITION('TASK_EQ', 'class')),
-        ],
+        # 'conditional_tags': [
+        #     TAG_IF('hard_negative', CONDITION('TASK_EQ', 'class')),
+        # ],
     },
 
     {
@@ -123,32 +123,32 @@ CATEGORIES = [
         'color': 'darkturquoise',
         'scored': True,
         'tags': ['positive'],
-        'conditional_tags': [
-            TAG_IF('background', CONDITION('TASK_EQ', 'saliency')),
-            # Only positive if task=CLASS and has context
-            TAG_IF('positive', ALL(
-                CONDITION('TASK_EQ', 'class'),
-                CONDITION('ALSO_HAS', [
-                    'Site Preparation', 'Active Construction', 'No Activity'],
-                )
-            )),
-        ],
+        # 'conditional_tags': [
+        #     TAG_IF('background', CONDITION('TASK_EQ', 'saliency')),
+        #     # Only positive if task=CLASS and has context
+        #     TAG_IF('positive', ALL(
+        #         CONDITION('TASK_EQ', 'class'),
+        #         CONDITION('ALSO_HAS', [
+        #             'Site Preparation', 'Active Construction', 'No Activity'],
+        #         )
+        #     )),
+        # ],
     },
     {
         'name': 'No Activity',
         'color': 'tomato',
         'scored': True,
         'tags': ['saliency'],
-        'conditional_tags': [
-            TAG_IF('background', CONDITION('TASK_EQ', 'saliency')),
-            # Only positive if task=CLASS and has context
-            TAG_IF('positive', ALL(
-                CONDITION('TASK_EQ', 'class'),
-                CONDITION('ALSO_HAS', [
-                    'Site Preparation', 'Active Construction', 'No Activity'],
-                )
-            )),
-        ],
+        # 'conditional_tags': [
+        #     TAG_IF('background', CONDITION('TASK_EQ', 'saliency')),
+        #     # Only positive if task=CLASS and has context
+        #     TAG_IF('positive', ALL(
+        #         CONDITION('TASK_EQ', 'class'),
+        #         CONDITION('ALSO_HAS', [
+        #             'Site Preparation', 'Active Construction', 'No Activity'],
+        #         )
+        #     )),
+        # ],
     },
 ]
 
@@ -283,6 +283,7 @@ CATEGORIES_DCT = {
     },
     'negative': {
         'scored': [
+            # Maybe this should not be marked as "scored", because it isn't
             {'name': 'No Activity', 'color': 'tomato'},
         ],
         'unscored': [

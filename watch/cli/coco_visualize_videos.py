@@ -523,6 +523,8 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     # from watch.utils.util_norm import normalize_intensity
     from watch.utils import util_kwimage
 
+    verbose = 0
+
     sensor_coarse = img.get('sensor_coarse', 'unknown')
     align_method = img.get('align_method', 'unknown')
     name = img.get('name', 'unknown')
@@ -646,7 +648,8 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     ann_view_dpath = sub_dpath / '_anns'
 
     try:
-        dets = kwimage.Detections.from_coco_annots(anns, dset=coco_dset)
+        with ub.Timer('build dets', verbose=verbose):
+            dets = kwimage.Detections.from_coco_annots(anns, dset=coco_dset)
     except Exception:
         # hack
         anns = [ub.dict_diff(ann, ['keypoints']) for ann in anns]
@@ -654,7 +657,8 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
     if space == 'video':
         vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
-        dets = dets.warp(vid_from_img)
+        with ub.Timer('warp dets', verbose=verbose):
+            dets = dets.warp(vid_from_img)
 
     if vid_crop_box is not None:
         # Ensure the crop box is in the proper space
@@ -727,7 +731,8 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         # otherwise nodata values can affect interpolated pixel
         # values)
         # canvas = chan.finalize(interpolation='nearest', nodata='auto')
-        raw_canvas = canvas = chan.finalize(interpolation='linear', nodata='float')
+        with ub.Timer('load channels', verbose=verbose):
+            raw_canvas = canvas = chan.finalize(interpolation='linear', nodata='float')
 
         # FLAG = np.any(np.isnan(canvas)) and not np.all(np.isnan(canvas))
         # if FLAG:
@@ -744,39 +749,41 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             needs_norm = dmax > 1.0
             # if canvas.max() <= 0 or canvas.min() >= 255:
             # Hack to only do noramlization on "non-standard" data ranges
-            if needs_norm:
-                mask = ~np.isnan(raw_canvas)
-                # from watch.utils import util_norm
-                norm_canvas = kwimage.normalize_intensity(raw_canvas, mask=mask, params={
-                    'high': 0.90,
-                    'mid': 0.5,
-                    'low': 0.01,
-                    'mode': 'linear',
-                })
-                # if FLAG:
-                #     print('norm nans', np.isnan(norm_canvas).sum())
-                #     print('norm canvas', np.nansum(norm_canvas))
-                canvas = norm_canvas
-            canvas = np.clip(canvas, 0, None)
-        else:
-            # from watch.utils import util_kwarray
-            new_parts = []
-            for cx, c in enumerate(chan_list):
-                normalizer = chan_to_normalizer.get(c, None)
-                data = canvas[..., cx]
-                mask = ~np.isnan(data)
-                if normalizer is None:
-                    p = kwimage.normalize_intensity(data, params={
+            with ub.Timer('normalize1', verbose=verbose):
+                if needs_norm:
+                    mask = ~np.isnan(raw_canvas)
+                    # from watch.utils import util_norm
+                    norm_canvas = kwimage.normalize_intensity(raw_canvas, mask=mask, params={
                         'high': 0.90,
                         'mid': 0.5,
                         'low': 0.01,
                         'mode': 'linear',
                     })
-                else:
-                    p = kwarray.apply_normalizer(data, normalizer, mask=mask,
-                                                 set_value_at_mask=0.)
-                new_parts.append(p)
-            canvas = np.stack(new_parts, axis=2)
+                    # if FLAG:
+                    #     print('norm nans', np.isnan(norm_canvas).sum())
+                    #     print('norm canvas', np.nansum(norm_canvas))
+                    canvas = norm_canvas
+                canvas = np.clip(canvas, 0, None)
+        else:
+            # from watch.utils import util_kwarray
+            with ub.Timer('normalize2', verbose=verbose):
+                new_parts = []
+                for cx, c in enumerate(chan_list):
+                    normalizer = chan_to_normalizer.get(c, None)
+                    data = canvas[..., cx]
+                    mask = ~np.isnan(data)
+                    if normalizer is None:
+                        p = kwimage.normalize_intensity(data, params={
+                            'high': 0.90,
+                            'mid': 0.5,
+                            'low': 0.01,
+                            'mode': 'linear',
+                        })
+                    else:
+                        p = kwarray.apply_normalizer(data, normalizer, mask=mask,
+                                                     set_value_at_mask=0.)
+                    new_parts.append(p)
+                canvas = np.stack(new_parts, axis=2)
 
         if cmap is not None:
             if kwimage.num_channels(canvas) == 1:
@@ -788,7 +795,8 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                     canvas = canvas[..., 0]
                     canvas = cmap_(canvas)[..., 0:3].astype(np.float32)
 
-        canvas = util_kwimage.ensure_false_color(canvas)
+        with ub.Timer('false color', verbose=verbose):
+            canvas = util_kwimage.ensure_false_color(canvas)
 
         if len(canvas.shape) > 2 and canvas.shape[2] > 4:
             # hack for wv
@@ -800,34 +808,41 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
 
         valid_region = img.get('valid_region', None)
         if valid_region:
-            valid_poly: kwimage.MultiPolygon = kwimage.MultiPolygon.coerce(valid_region)
-            if space == 'video':
-                vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
-                valid_poly = valid_poly.warp(vid_from_img)
-            canvas = valid_poly.draw_on(canvas, color='green', fill=False,
-                                        border=True)
+            with ub.Timer('valid region', verbose=verbose):
+                valid_poly: kwimage.MultiPolygon = kwimage.MultiPolygon.coerce(valid_region)
+                if space == 'video':
+                    vid_from_img = kwimage.Affine.coerce(img['warp_img_to_vid'])
+                    valid_poly = valid_poly.warp(vid_from_img)
+                canvas = valid_poly.draw_on(canvas, color='green', fill=False,
+                                            border=True)
 
         if draw_imgs:
-            img_canvas = kwimage.ensure_uint255(canvas)
-            img_canvas = util_kwimage.draw_header_text(image=img_canvas,
-                                                       text=header_text,
-                                                       stack=True,
-                                                       fit='shrink')
-            kwimage.imwrite(view_img_fpath, img_canvas)
+            with ub.Timer('prep img_canvas', verbose=verbose):
+                img_canvas = kwimage.ensure_uint255(canvas)
+                img_canvas = util_kwimage.draw_header_text(image=img_canvas,
+                                                           text=header_text,
+                                                           stack=True,
+                                                           fit='shrink')
+            with ub.Timer('write img_canvas'):
+                kwimage.imwrite(view_img_fpath, img_canvas)
 
         if draw_anns:
             canvas = kwimage.ensure_float01(canvas)
             try:
-                ann_canvas = dets.draw_on(canvas, color='classes')
+                with ub.Timer('dets.draw_on 1', verbose=verbose):
+                    # ann_canvas = dets.draw_on(canvas, color='classes')
+                    ann_canvas = dets.boxes.draw_on(canvas, color='blue')
             except Exception:
-                ann_canvas = dets.draw_on(canvas)
+                with ub.Timer('dets.draw_on 2', verbose=verbose):
+                    ann_canvas = dets.draw_on(canvas)
             ann_canvas = kwimage.ensure_uint255(ann_canvas)
 
             ann_canvas = util_kwimage.draw_header_text(image=ann_canvas,
                                                        text=header_text,
                                                        stack=True,
                                                        fit='shrink')
-            kwimage.imwrite(view_ann_fpath, ann_canvas)
+            with ub.Timer('write ann_canvas', verbose=verbose):
+                kwimage.imwrite(view_ann_fpath, ann_canvas)
 
 
 def _hack_cached_hashid(self):
