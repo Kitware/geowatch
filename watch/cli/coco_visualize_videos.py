@@ -887,6 +887,14 @@ def _hack_dataset_id(self):
 
 if __name__ == '__main__':
     """
+
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15
+    python -m watch visualize $KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
+        --animate=True --channels="red|green|blue" --skip_missing=True \
+        --select_images '.sensor_coarse != "WV"' --workers=4 --draw_anns=False
+
+
     CommandLine:
         python ~/code/watch/watch/cli/coco_visualize_videos.py
     """
