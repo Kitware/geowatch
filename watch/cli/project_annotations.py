@@ -225,6 +225,7 @@ def assign_sites_to_images(coco_dset, sites, regions, propogate, geospace_lookup
     from shapely.ops import unary_union
     import pandas as pd
     from watch.utils import util_gis
+    import geojson
     # Create a geopandas data frame that contains the CRS84 extent of all images
     img_gdf = kwcoco_extensions.covered_image_geo_regions(coco_dset)
 
@@ -335,13 +336,112 @@ def assign_sites_to_images(coco_dset, sites, regions, propogate, geospace_lookup
         # Transform site-summaries into pseudo-site observations
         # https://smartgitlab.com/TE/standards/-/wikis/Site-Model-Specification
 
+        if 0:
+            # Use the json schema to ensure we are coding this correctly
+            import jsonref
+            from watch.rc.registry import load_site_model_schema
+            site_model_schema = load_site_model_schema()
+            # Expand the schema
+            site_model_schema = jsonref.loads(jsonref.dumps(site_model_schema))
+
+            site_model_schema['definitions']['_site_properties']['properties'].keys()
+
+            list(ub.flatten([list(p['properties'].keys()) for p in site_model_schema['definitions']['unassociated_site_properties']['allOf']]))
+            list(site_model_schema['definitions']['unassociated_site_properties']['properties'].keys())
+
+            list(ub.flatten([list(p['properties'].keys()) for p in site_model_schema['definitions']['associated_site_properties']['allOf']]))
+            list(site_model_schema['definitions']['associated_site_properties']['properties'].keys())
+
+            site_model_schema['definitions']['observation_properties']['properties']
+
         from watch.rc.registry import load_site_model_schema
         site_model_schema = load_site_model_schema()
 
+        # observation_properties = [
+        #     'type', 'observation_date', 'source', 'sensor_name',
+        #     'current_phase', 'is_occluded', 'is_site_boundary', 'score',
+        #     'misc_info'
+        # ]
+        site_properites = [
+            'type', 'version', 'mgrs', 'status', 'model_content', 'start_date',
+            'end_date', 'originator', 'score', 'validated', 'misc_info',
+            'region_id', 'site_id']
+
+        # resolver = jsonschema.RefResolver.from_schema(site_model_schema)
+        # site_model_schema[
+
+        dummy_start_date = '1970-01-01'
+        dummy_end_date = '2101-01-01'
+
         for region_id, sitesummaries in region_id_to_sitesummaries.items():
             for _, site_summary in sitesummaries.iterrows():
-                pass
-            pass
+                geom = site_summary['geometry']
+
+                poly_json = kwimage.Polygon.from_shapely(geom.convex_hull).to_geojson()
+                mpoly_json = kwimage.MultiPolygon.from_shapely(geom).to_geojson()
+
+                has_keys = site_summary.index.intersection(site_properites)
+                # missing_keys = pd.Index(site_properites).difference(site_summary.index)
+                psudo_site_prop = site_summary[has_keys].to_dict()
+                psudo_site_prop['type'] = 'site'
+                # TODO: how to handle missing start / end dates?
+                start_date = site_summary['start_date']
+                end_date = site_summary['end_date']
+                if start_date is None:
+                    start_date = dummy_start_date
+                if end_date is None:
+                    end_date = dummy_end_date
+
+                observation_prop_template = {
+                    'type': 'observation',
+                    'observation_date': None,
+                    # 'source': None,
+                    # 'sensor_name': None,
+                    # 'current_phase': None,
+                    # 'is_occluded': None,
+                    # 'is_site_boundary': None,
+                    'score': float(site_summary['score']),
+                    # 'misc_info': None,
+                }
+
+                psudo_site_features = [
+                    geojson.Feature(
+                        properties=psudo_site_prop, geometry=poly_json,
+                    )
+                ]
+                psudo_site_features.append(
+                    geojson.Feature(
+                        properties=ub.dict_union({
+                            'observation_date': start_date,
+                            'current_phase': None,
+                        }, observation_prop_template),
+                        geometry=mpoly_json)
+                )
+                psudo_site_features.append(
+                    geojson.Feature(
+                        properties=ub.dict_union({
+                            'observation_date': end_date,
+                            'current_phase': None,
+                        }, observation_prop_template),
+                        geometry=mpoly_json)
+                )
+                psudo_site_model = geojson.FeatureCollection(psudo_site_features)
+                print('psudo_site_model = {}'.format(ub.repr2(psudo_site_model, nl=4, sort=0)))
+
+                import io
+                file = io.StringIO()
+                file.write(json.dumps(psudo_site_model))
+                file.seek(0)
+                pseudo_gpd = util_gis.read_geojson(file)
+
+
+                if 1:
+
+                    real_site_model = json.loads(ub.Path('/media/joncrall/flash1/smart_watch_dvc/annotations/site_models/BR_R002_0009.geojson').read_text())
+                    ret = jsonschema.validate(real_site_model, schema=site_model_schema)
+
+                    import jsonschema
+                    ret = jsonschema.validate(psudo_site_model, schema=site_model_schema)
 
     if 0:
         site_high_level_summaries = []
