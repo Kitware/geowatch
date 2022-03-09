@@ -168,6 +168,7 @@ def mtra_preprocess_item(stac_item,
                 'gdal_calc.py',
                 '-A', vrt_outpath,
                 '--outfile', remapped_cloudmask_outpath,
+                '--quiet',
                 '--calc',
                 '0*(A==1)+32*(A==5)+8*(A==3)+16*(A==4)+2*(A==2)+255*(A==0)',
                 '--NoDataValue', '255'], check=True)
