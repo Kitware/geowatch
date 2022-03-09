@@ -217,3 +217,16 @@ def find(pattern=None, dpath=None, include=None, exclude=None, type=None,
 
         if not recursive:
             break
+
+
+def file_from_text(text):
+    """
+    Create a StringIO object from text to use as a file.
+
+    # Probably does not belong in util_path
+    """
+    import io
+    file = io.StringIO()
+    file.write(text)
+    file.seek(0)
+    return file

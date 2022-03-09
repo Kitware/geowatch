@@ -276,7 +276,6 @@ def assign_sites_to_images(coco_dset, sites, regions, propogate, geospace_lookup
         region_df.loc[:, 'region_id'] = region_id
 
     region_id_to_sites = ub.group_items(sites, lambda x: x.iloc[0]['region_id'])
-    region_id_to_sites = dict(region_id_to_sites)
 
     if 1:
         site_rows1 = []
@@ -426,22 +425,15 @@ def assign_sites_to_images(coco_dset, sites, regions, propogate, geospace_lookup
                         geometry=mpoly_json)
                 )
                 psudo_site_model = geojson.FeatureCollection(psudo_site_features)
-                print('psudo_site_model = {}'.format(ub.repr2(psudo_site_model, nl=4, sort=0)))
-
-                import io
-                file = io.StringIO()
-                file.write(json.dumps(psudo_site_model))
-                file.seek(0)
-                pseudo_gpd = util_gis.read_geojson(file)
-
-
-                if 1:
-
-                    real_site_model = json.loads(ub.Path('/media/joncrall/flash1/smart_watch_dvc/annotations/site_models/BR_R002_0009.geojson').read_text())
-                    ret = jsonschema.validate(real_site_model, schema=site_model_schema)
-
-                    import jsonschema
-                    ret = jsonschema.validate(psudo_site_model, schema=site_model_schema)
+                import watch
+                import json
+                pseudo_gpd = util_gis.read_geojson(watch.utils.util_path.file_from_text(json.dumps(psudo_site_model)))
+                region_id_to_sites[region_id].append(pseudo_gpd)
+                # if 1:
+                #     real_site_model = json.loads(ub.Path('/media/joncrall/flash1/smart_watch_dvc/annotations/site_models/BR_R002_0009.geojson').read_text())
+                #     ret = jsonschema.validate(real_site_model, schema=site_model_schema)
+                #     import jsonschema
+                #     ret = jsonschema.validate(psudo_site_model, schema=site_model_schema)
 
     if 0:
         site_high_level_summaries = []
