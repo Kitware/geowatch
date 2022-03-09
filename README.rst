@@ -1,6 +1,11 @@
 WATCH - Wide Area Terrestrial Change Hypercube
 ==============================================
 
+.. The large version wont work because github strips rst image rescaling. 
+.. image:: https://ipfs.io/ipfs/QmYftzG6enTebF2f143KeHiPiJGs66LJf3jT1fNYAiqQvq
+   :height: 100px
+   :align: left
+
 |master-pipeline| |master-coverage|
 
 
@@ -10,7 +15,6 @@ Machine Automated Recognition Technique) program.  The goal of this software is
 analyze space-based imagery to perform broad-area search for natural and
 anthropogenic events and characterize their extent and progression in time and
 space.
-
 
 
 The following table provides links to relevant resources for the SMART WATCH project:
