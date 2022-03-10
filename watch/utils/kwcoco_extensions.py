@@ -382,19 +382,17 @@ def _populate_valid_region(coco_img):
     primary_obj = coco_img.primary_asset()
     primary_fname = primary_obj.get('file_name', None)
 
-    # if '20200109T070235Z_N24.794658E054.975771_N24.943015E055.139412' in primary_fname:
-    #     import xdev
-    #     xdev.embed()
-
     primary_fpath = join(bundle_dpath, primary_fname)
 
+    # NOTE: THIS POLYGON IS COMPUTED VIA RASTERIO, NOT SURE HOW WELL THIS AGREES
+    # WITH OTHER POLYGONS WE DRAW (USUALLY VIA CV2)
     sh_poly = util_raster.mask(
         primary_fpath,
         tolerance=4,
         # tolerance=None,
         default_nodata=primary_obj.get('default_nodata', None),
         # max_polys=100,
-        use_overview=-1,
+        use_overview=2,
         convex_hull=True,
     )
     kw_poly = kwimage.MultiPolygon.from_shapely(sh_poly)

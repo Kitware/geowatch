@@ -230,7 +230,6 @@ def mask(raster: Union[rasterio.DatasetReader, str],
                 tuple(img.overviews(bandx))
                 for bandx in range(1, img.count + 1)
             }
-            print('overviews = {!r}'.format(overviews))
             if len(overviews) == 1:
                 overview_levels = ub.peek(overviews)
                 if len(overview_levels):
@@ -339,7 +338,6 @@ def mask(raster: Union[rasterio.DatasetReader, str],
             mask_poly = mask_poly.convex_hull
 
         if scale_factor is not None:
-            print('scale_factor = {!r}'.format(scale_factor))
             # Move from area space into point space?
             # mask_poly = shapely.affinity.translate(mask_poly, xoff=-0.5, yoff=-0.5)
             mask_poly = shapely.affinity.scale(mask_poly,
