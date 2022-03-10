@@ -138,6 +138,8 @@ class CocoVisualizeConfig(scfg.Config):
 
                 Requries the "jq" python library is installed.
                 ''')),
+
+        'verbose': scfg.Value(0, help='verbosity level')
     }
 
 
@@ -365,6 +367,7 @@ def main(cmdline=True, **kwargs):
                                 fixed_normalization_scheme=config.get(
                                     'fixed_normalization_scheme'),
                                 cmap=config['cmap'],
+                                verbose=config['verbose'],
                                 any3=config['any3'], dset_idstr=dset_idstr)
 
         else:
@@ -386,6 +389,7 @@ def main(cmdline=True, **kwargs):
                             _header_extra=_header_extra,
                             cmap=config['cmap'],
                             chan_to_normalizer=chan_to_normalizer,
+                            verbose=config['verbose'],
                             fixed_normalization_scheme=config.get(
                                 'fixed_normalization_scheme'),
                             any3=config['any3'], dset_idstr=dset_idstr)
@@ -513,7 +517,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                chan_to_normalizer=None,
                                fixed_normalization_scheme=None,
                                any3=True, dset_idstr='',
-                               cmap='viridis'):
+                               cmap='viridis', verbose=0):
     """
     Dumps an intensity normalized "space-aligned" kwcoco image visualization
     (with or without annotation overlays) for specific bands to disk.
@@ -522,8 +526,6 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
     from kwcoco import channel_spec
     # from watch.utils.util_norm import normalize_intensity
     from watch.utils import util_kwimage
-
-    verbose = 0
 
     sensor_coarse = img.get('sensor_coarse', 'unknown')
     align_method = img.get('align_method', 'unknown')
@@ -709,11 +711,6 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
             from kwcoco.util import util_delayed_poc
             chan = util_delayed_poc.DelayedChannelConcat([delayed]).take_channels(chan_group)
 
-        if 0:
-            import kwarray
-            chan_row['stats'] = kwarray.stats_dict(chan)
-            print('chan_row = {}'.format(ub.repr2(chan_row, nl=-1)))
-
         '''
         import kwcoco
         dset = kwcoco.CocoDataset('/home/joncrall/data/dvc-repos/smart_watch_dvc/Aligned-Drop2-TA1-2022-02-24/data.kwcoco_c9ea8bb9.json')
@@ -733,6 +730,12 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
         # canvas = chan.finalize(interpolation='nearest', nodata='auto')
         with ub.Timer('load channels', verbose=verbose):
             raw_canvas = canvas = chan.finalize(interpolation='linear', nodata='float')
+
+        if verbose > 1:
+            import kwarray
+            chan_stats = kwarray.stats_dict(raw_canvas, axis=2, nan=True)
+            print('chan_list = {!r}'.format(chan_list))
+            print('chan_stats = {}'.format(ub.repr2(chan_stats, nl=1)))
 
         # FLAG = np.any(np.isnan(canvas)) and not np.all(np.isnan(canvas))
         # if FLAG:
@@ -823,7 +826,7 @@ def _write_ann_visualizations2(coco_dset : kwcoco.CocoDataset,
                                                            text=header_text,
                                                            stack=True,
                                                            fit='shrink')
-            with ub.Timer('write img_canvas'):
+            with ub.Timer('write img_canvas', verbose=verbose):
                 kwimage.imwrite(view_img_fpath, img_canvas)
 
         if draw_anns:
