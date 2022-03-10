@@ -611,7 +611,7 @@ def build_evaler(cmdline=False, **kwargs):
 
 
 def main(cmdline=False, **kwargs):
-    evaler = build_evaler(cmdline=False, **kwargs)
+    evaler = build_evaler(cmdline=cmdline, **kwargs)
     evaler.forward()
 
 if __name__ == "__main__":
