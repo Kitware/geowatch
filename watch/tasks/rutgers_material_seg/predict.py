@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 r"""
 Prediction script for Rutgers Material Semenatic Segmentation Models
 
@@ -81,24 +82,33 @@ class Evaluator(object):
         self.finalized_gids = set()
         self.imwrite_kw = imwrite_kw
 
+        self.coco_dset = self.eval_loader.dataset.sampler.dset
+
         # Hack together a channel code
         self.chan_code = '|'.join(['matseg_{}'.format(i) for i in range(self.num_classes)])
+        # self.chan_code = '|'.join(['matseg.{}'.format(i) for i in range(self.num_classes)])
+        self.output_channels = kwcoco.FusedChannelSpec.coerce(self.chan_code).concise()
+        self.concise_chan_code = self.output_channels.spec
+        self.concise_chan_path_code = self.output_channels.path_sanitize()
 
     @profile
     def finalize_image(self, gid):
+
+        img = self.output_coco_dataset.index.imgs[gid]
+        img_name = img.get('name', f'gid{gid:08d}')
+
         self.finalized_gids.add(gid)
         stitcher = self.stitcher_dict[gid]
         recon = stitcher.finalize()
         self.stitcher_dict.pop(gid)
 
-        save_path = self.output_feat_dpath / f'{gid}.tif'
+        save_path = self.output_feat_dpath / f'{img_name}_{self.concise_chan_path_code}.tif'
 
         save_path = os.fspath(save_path)
         kwimage.imwrite(save_path, recon, backend='gdal', space=None,
                         **self.imwrite_kw)
 
         aux_height, aux_width = recon.shape[0:2]
-        img = self.output_coco_dataset.index.imgs[gid]
         warp_aux_to_img = kwimage.Affine.scale(
             (img['width'] / aux_width,
              img['height'] / aux_height))
@@ -107,7 +117,7 @@ class Evaluator(object):
             'file_name': save_path,
             'height': aux_height,
             'width': aux_width,
-            'channels': self.chan_code,
+            'channels': self.concise_chan_code,
             'warp_aux_to_img': warp_aux_to_img.concise(),
         }
         auxiliary = img.setdefault('auxiliary', [])
@@ -122,6 +132,7 @@ class Evaluator(object):
         Returns:
             None
         """
+        from watch.utils import util_kwimage
         current_gids = []
         previous_gids = []
 
@@ -138,28 +149,39 @@ class Evaluator(object):
             pbar = Prog(enumerate(dataloader_iter), total=len(self.eval_loader), desc='predict rutgers')
             for batch_index, batch in pbar:
                 outputs = batch
-                images, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0][0]  # NOQA
+
+                images = outputs['inputs']['im'].data[0]
                 original_width, original_height = outputs['tr'].data[0][0]['space_dims']
 
-                # print(f"images: {images.shape}")
-                # print(f"mask: {mask.shape}")
-
-                # mask = torch.stack(mask)
-                # mask = mask.long().squeeze(1)
+                images = images.clone()
 
                 bs, c, t, h, w = images.shape
 
                 image1 = images[:, :, 0, :, :]
-                # mask1 = mask[:, 0, :, :]  # NOQA
-
                 image1 = image1.to(self.device)
-                # mask = mask.to(self.device)
 
+                if 0:
+                    image1[0:2, 0:2, 0:2, 0:2] = np.nan
+
+                input_mask = image1.isnan()
                 # image1 = utils.stad_image(image1)
-                # image2 = utils.stad_image(image2)
-                image1 = F.normalize(image1, dim=1, p=2)
+
+                # NOTE: needs to be modified to handle NaNs
+                # image1 = F.normalize(image1, dim=1, p=2)
+
+                # Cannot input nan values to the model, so keep them as their
+                # imputed value
+                image1 = nan_normalize(
+                    image1, dim=1, p=2,
+                    imputation={'method': 'mean', 'dim': (0, 2, 3)},
+                    keepna=False, mask=input_mask)
 
                 output1 = self.model(image1)  # [B,22,150,150]
+
+                # replace model outputs with nans in spatial locations
+                output_mask = input_mask.any(dim=1, keepdims=True).expand_as(output1)
+                output1[output_mask] = float('nan')
+
                 # print(f"output: {output1.shape}, type: {output1.dtype}")
 
                 bs, c, h, w = output1.shape
@@ -200,12 +222,19 @@ class Evaluator(object):
                                     device='numpy')
                             slice_ = outputs['tr'].data[0][b]['space_slice']
 
-                            from watch.utils import util_kwimage
-                            weights = util_kwimage.upweight_center_mask(output.shape[0:2])[..., None]
-                            self.stitcher_dict[gid].add(slice_, output, weight=weights)
-
+                            # Create output weights to better blend the borders
+                            # when stitching overlapping images.
                             # weights = kwimage.gaussian_patch(output.shape[0:2])[..., None]
-                            # self.stitcher_dict[gid].add(slice_, output, weight=weights)
+                            # NOTE: do not change these inplace, these are memoized!
+                            weights = util_kwimage.upweight_center_mask(output.shape[0:2])[..., None]
+
+                            # Handle stitching nan values
+                            invalid_output_mask = np.isnan(output)
+                            if np.any(invalid_output_mask):
+                                spatial_valid_mask = (1 - invalid_output_mask.any(axis=2, keepdims=True))
+                                weights = weights * spatial_valid_mask
+                                output[invalid_output_mask] = 0
+                            self.stitcher_dict[gid].add(slice_, output, weight=weights)
 
         if self.write_probs:
             # Finalize any remaining images
@@ -238,6 +267,123 @@ class Evaluator(object):
         return
 
 
+def impute(a, imputation='zero', mask=None):
+    """
+    Replaces nan values according to a imputation method
+
+    Args:
+        a (Tensor): input data
+
+        imputation (dict | str):
+            dictionary containing keys:
+                method (str): either zeros or mean
+
+            if this is a string, it becomes the method in an imputation
+            dictionary created with auto defaults.
+
+        mask (Tensor):
+            precomputed nan mask
+    """
+    if mask is None:
+        mask = torch.isnan(a)
+
+    if isinstance(imputation, str):
+        imputation = {
+            'method': imputation
+        }
+    imputation_method = imputation['method']
+    if imputation_method == 'zero':
+        out = torch.nan_to_num(a)
+    elif imputation_method == 'mean':
+        out = a.clone()
+        mean_dims = imputation.get('dim', None)
+        if mean_dims is None:
+            mean = a.nanmean()
+            out[mask] = mean
+        else:
+            fill_values = a.nanmean(dim=mean_dims, keepdims=True).expand_as(out)
+            out[mask] = fill_values[mask]
+    else:
+        raise KeyError(imputation_method)
+    return out
+
+
+def nan_normalize(a, dim, p=2, imputation='zero', assume_nans=False,
+                  keepna=True, mask=None):
+    """
+    Like torch.functional.normalize, but handles nans
+
+    Args:
+        a (Tensor): input data
+
+        dim (int): dimension to normalize over
+
+        p (int): type of norm
+
+        imputation (dict | str):
+
+            See :func:`impute`
+
+            dictionary containing keys:
+                method (str): either zeros or mean
+
+            if this is a string, it becomes the method in an imputation
+            dictionary created with auto defaults.
+
+        assume_nans (bool):
+            If true, skips the check if any nans exist and assume they do.
+            Otherwise we check if there are no nans and just use normal
+            normalize.
+
+        keepna (bool):
+            if False, keep the imputed results rather than re-masking them.
+
+        mask (Tensor):
+            if specified, use these as masked values
+
+    Returns:
+        Tensor: normalized array
+
+    Example:
+        >>> shape = (7, 5, 3)
+        >>> a = data = torch.from_numpy(np.arange(np.prod(shape)).reshape(*shape)).float()
+        >>> a[0:2, 0:2, 0:2] = float('nan')
+        >>> dim = 2
+        >>> p = 2
+        >>> r1 = nan_normalize(a, dim, p, imputation='zero')
+        >>> r2 = nan_normalize(a, dim, p, imputation='mean')
+        >>> assert r1.isnan().sum() == a.isnan().sum()
+        >>> assert r2.isnan().sum() == a.isnan().sum()
+
+        >>> nan_data = torch.full((3, 2), fill_value=float('nan'))
+        >>> dim = 1
+        >>> nan_result = nan_normalize(nan_data, dim, p, imputation='mean')
+        >>> assert torch.isnan(nan_result).all()
+
+        >>> # Ensure this works when no nans exist
+        >>> clean_data = torch.rand(3, 2)
+        >>> v1 = nan_normalize(clean_data, dim, p, imputation='mean')
+        >>> v2 = nan_normalize(clean_data, dim, p, imputation='mean', assume_nans=True)
+    """
+    if mask is None:
+        mask = torch.isnan(a)
+    if assume_nans or mask.any():
+        if isinstance(imputation, str):
+            imputation = {
+                'method': imputation
+            }
+        # mean_dims = imputation.get('dim', 'auto')
+        # if mean_dims == 'auto':
+        #     mean_dims = tuple([i for i in range(len(a.shape)) if i != dim])
+        out = impute(a, imputation=imputation, mask=mask)
+        F.normalize(out, dim=dim, p=p, out=out)
+        if keepna:
+            out[mask] = float('nan')
+    else:
+        out = F.normalize(a, dim=dim, p=p)
+    return out
+
+
 def make_predict_config(cmdline=False, **kwargs):
     """
     Configuration for material prediction
@@ -267,8 +413,8 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.add_argument("--batch_size", default=1, type=int, help="prediction batch size")
     parser.add_argument("--num_workers", default=0, type=str, help="data loader workers, can be set to auto")
 
-    parser.add_argument("--compress", default='RAW', type=str, help="type of gdal compression to use")
-    parser.add_argument("--blocksize", default=64, type=str, help="gdal COG blocksize")
+    parser.add_argument("--compress", default='DEFLATE', type=str, help="type of gdal compression to use")
+    parser.add_argument("--blocksize", default=128, type=str, help="gdal COG blocksize")
     # parser.add_argument("--thresh", type=float, default=0.01)
 
     parser.set_defaults(**kwargs)
@@ -297,8 +443,11 @@ def hardcoded_default_configs(default_config_key):
     return config
 
 
-def main(cmdline=False, **kwargs):
+def build_evaler(cmdline=False, **kwargs):
     """
+    CommandLine:
+        DVC_DPATH=$(python -m watch.cli.find_dvc) xdoctest -m watch.tasks.rutgers_material_seg.predict build_evaler
+
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from watch.tasks.rutgers_material_seg.predict import *  # NOQA
@@ -306,18 +455,22 @@ def main(cmdline=False, **kwargs):
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
         >>> checkpoint_fpath = dvc_dpath / 'models/rutgers/rutgers_peri_materials_v3/experiments_epoch_18_loss_59.014100193977356_valmF1_0.18694573888313187_valChangeF1_0.0_time_2022-02-01-01:53:20.pth'
         >>> #checkpoint_fpath = dvc_dpath / 'models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_2021101T16277.pth'
-        >>> src_coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
-        >>> dst_coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/mat_test.kwcoco.json'
+        >>> src_coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
+        >>> dst_coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/mat_test.kwcoco.json'
         >>> cmdline = False
-        >>> num_workers = 'avail'
-        >>> # num_workers = 0
         >>> kwargs = dict(
         >>>     default_config_key='iarpa',
         >>>     checkpoint_fpath=checkpoint_fpath,
         >>>     test_dataset=src_coco_fpath,
         >>>     pred_dataset=dst_coco_fpath,
+        >>>     gpus='auto:1',
+        >>>     num_workers='avail',
+        >>>     #num_workers=0,
+        >>>     #gpu=None,
         >>> )
-        >>> main(cmdline=cmdline, **kwargs)
+        >>> evaler = build_evaler(cmdline=cmdline, **kwargs)
+        >>> self = evaler
+        >>> evaler.forward()
     """
     args = make_predict_config(cmdline=cmdline, **kwargs)
     print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
@@ -336,12 +489,29 @@ def main(cmdline=False, **kwargs):
         torch.set_default_dtype(torch.float32)
 
     from watch.utils.lightning_ext import util_device
+    from watch.utils.lightning_ext import util_globals
     devices = util_device.coerce_devices(args.gpus)
+    num_workers = util_globals.coerce_num_workers(args.num_workers)
     if len(devices) > 1:
+        print('args.gpus = {!r}'.format(args.gpus))
+        print('devices = {!r}'.format(devices))
         raise NotImplementedError('TODO: handle multiple devices')
     device = devices[0]
+    if num_workers > 0:
+        util_globals.request_nofile_limits()
+    print('device = {!r}'.format(device))
+    print('num_workers = {!r}'.format(num_workers))
 
+    # Load input kwcoco dataset and prepare the sampler
     input_coco_dset = kwcoco.CocoDataset.coerce(args.test_dataset)
+
+    # HACK: Filter to remove WV images
+    invalid_sensors = {'WV'}
+    orig_images = input_coco_dset.images()
+    flags = [s not in invalid_sensors for s in orig_images.lookup('sensor_coarse')]
+    valid_images = orig_images.compress(flags)
+    input_coco_dset = input_coco_dset.subset(valid_images)
+
     sampler = ndsampler.CocoSampler(input_coco_dset)
 
     window_dims = (config['data']['time_steps'], config['data']['image_size'], config['data']['image_size'])  # [t,h,w]
@@ -351,13 +521,9 @@ def main(cmdline=False, **kwargs):
     num_channels = len(channels.split('|'))
     config['training']['num_channels'] = num_channels
     dataset = SequenceDataset(sampler, window_dims, input_dims, channels,
-                              training=False, window_overlap=0.3)
+                              training=False, window_overlap=0.3,
+                              inference_only=True)
     print(dataset.__len__())
-
-    from watch.utils.lightning_ext import util_globals
-    num_workers = util_globals.coerce_num_workers(args.num_workers)
-    if num_workers > 0:
-        util_globals.request_nofile_limits()
 
     eval_dataloader = dataset.make_loader(
         batch_size=args.batch_size,
@@ -382,6 +548,7 @@ def main(cmdline=False, **kwargs):
         config['data']['channels'] = pretrain_config['data']['channels']
         # config['training']['model_feats_channels'] = pretrain_config_path['training']['model_feats_channels']
 
+    # Load the model
     model = build_model(model_name=config['training']['model_name'],
                         backbone=config['training']['backbone'],
                         pretrained=config['training']['pretrained'],
@@ -405,7 +572,6 @@ def main(cmdline=False, **kwargs):
     # print(f"loadded model succeffuly from: {pretrain_config_path}")
     # print(f"Missing keys from loaded model: {missing_keys}, unexpected keys: {unexpexted_keys}")
 
-    print('device = {!r}'.format(device))
     model.to(device)
 
     output_coco_fpath = pathlib.Path(args.pred_dataset)
@@ -441,7 +607,11 @@ def main(cmdline=False, **kwargs):
         output_feat_dpath=output_feat_dpath,
         imwrite_kw=imwrite_kw,
     )
-    self = evaler  # NOQA
+    return evaler
+
+
+def main(cmdline=False, **kwargs):
+    evaler = build_evaler(cmdline=cmdline, **kwargs)
     evaler.forward()
 
 if __name__ == "__main__":
