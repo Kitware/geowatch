@@ -44,6 +44,7 @@ python -m watch.cli.prepare_ta2_dataset \
 
 
 
+
 jq .images[0] $HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop2-TA1-2022-02-24/data.kwcoco_c9ea8bb9.json
 
 kwcoco visualize $HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop2-TA1-2022-02-24/data.kwcoco_c9ea8bb9.json
@@ -290,6 +291,25 @@ def main(cmdline=False, **kwargs):
         # if not config['keep_sessions']:
         if agg_state is not None and not agg_state['errored']:
             queue.kill()
+
+
+    # TODO: team features
+    """
+    DATASET_CODE=Aligned-Drop2-TA1-2022-03-07
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+    python -m watch.cli.prepare_teamfeats \
+        --base_fpath=$KWCOCO_BUNDLE_DPATH/data.kwcoco.json \
+        --gres=0, \
+        --with_depth=0 \
+        --with_landcover=0 \
+        --with_invariants=0 \
+        --with_materials=1 \
+        --depth_workers=auto \
+        --do_splits=1  --cache=1 --run=0
+    """
+
 
 
 # dvc_dpath=$home/data/dvc-repos/smart_watch_dvc
