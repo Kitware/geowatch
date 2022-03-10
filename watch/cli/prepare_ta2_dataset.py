@@ -116,7 +116,6 @@ def main(cmdline=False, **kwargs):
     uncropped_prep_kwcoco_fpath = uncropped_dpath / 'data_prepped.kwcoco.json'
 
     uncropped_ingress_dpath = uncropped_dpath / 'ingress'
-    uncropped_catalog_fpath = uncropped_ingress_dpath / 'catalog.json'
 
     aligned_kwcoco_bundle = dvc_dpath / aligned_bundle_name
     aligned_kwcoco_fpath = aligned_kwcoco_bundle / 'data.kwcoco.json'
@@ -129,7 +128,6 @@ def main(cmdline=False, **kwargs):
     uncropped_kwcoco_fpath = uncropped_kwcoco_fpath.shrinkuser(home='$HOME')
     uncropped_prep_kwcoco_fpath = uncropped_prep_kwcoco_fpath.shrinkuser(home='$HOME')
     uncropped_ingress_dpath = uncropped_ingress_dpath.shrinkuser(home='$HOME')
-    uncropped_catalog_fpath = uncropped_catalog_fpath.shrinkuser(home='$HOME')
     aligned_kwcoco_bundle = aligned_kwcoco_bundle.shrinkuser(home='$HOME')
     aligned_kwcoco_fpath = aligned_kwcoco_fpath.shrinkuser(home='$HOME')
 
@@ -142,8 +140,13 @@ def main(cmdline=False, **kwargs):
         print('Indicate if each s3 path is collated or not')
 
     for s3_fpath, collated in zip(s3_fpath_list, collated_list):
+        s3_name = ub.Path(s3_fpath).name
         uncropped_query_fpath = uncropped_query_dpath / ub.Path(s3_fpath).name
         uncropped_query_fpath = uncropped_query_fpath.shrinkuser(home='$HOME')
+
+        uncropped_catalog_fpath = uncropped_ingress_dpath / f'catalog_{s3_name}.json'
+        uncropped_ingress_dpath = uncropped_ingress_dpath.shrinkuser(home='$HOME')
+
         queue.submit(ub.codeblock(
             f'''
             mkdir -p {uncropped_query_dpath}
@@ -157,6 +160,7 @@ def main(cmdline=False, **kwargs):
                 --jobs avail \
                 --virtual \
                 --outdir "{uncropped_ingress_dpath}" \
+                --catalog_fpath "{uncropped_catalog_fpath}" \
                 "{uncropped_query_fpath}"
             '''))
 

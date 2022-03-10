@@ -247,7 +247,7 @@ def load_input_stac_items(input_path, aws_base_command):
 
 def baseline_framework_ingress(input_path,
                                outdir,
-                               catalog_outpath=None,
+                               catalog_fpath=None,
                                aws_profile=None,
                                dryrun=False,
                                show_progress=False,
@@ -268,11 +268,11 @@ def baseline_framework_ingress(input_path,
     else:
         catalog_type = pystac.CatalogType.ABSOLUTE_PUBLISHED
 
-    if catalog_outpath is None:
-        catalog_outpath = os.path.join(outdir, 'catalog.json')
+    if catalog_fpath is None:
+        catalog_fpath = os.path.join(outdir, 'catalog.json')
     catalog = pystac.Catalog('Baseline Framework ingress catalog',
                              'STAC catalog of SMART search results',
-                             href=catalog_outpath, catalog_type=catalog_type)
+                             href=catalog_fpath, catalog_type=catalog_type)
 
     catalog.set_root(catalog)
 
@@ -315,7 +315,7 @@ def baseline_framework_ingress(input_path,
             catalog.add_item(mapped_item)
 
     catalog.save(catalog_type=catalog_type)
-    print('wrote catalog_outpath = {!r}'.format(catalog_outpath))
+    print('wrote catalog_fpath = {!r}'.format(catalog_fpath))
     return catalog
 
 
