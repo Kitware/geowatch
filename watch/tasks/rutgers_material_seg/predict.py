@@ -84,6 +84,10 @@ class Evaluator(object):
 
         # Hack together a channel code
         self.chan_code = '|'.join(['matseg_{}'.format(i) for i in range(self.num_classes)])
+        # self.chan_code = '|'.join(['matseg.{}'.format(i) for i in range(self.num_classes)])
+        self.output_channels = kwcoco.FusedChannelSpec.coerce(self.chan_code).concise()
+        self.concise_chan_code = self.output_channels.spec
+        self.concise_chan_path_code = self.output_channels.path_sanitize()
 
     @profile
     def finalize_image(self, gid):
@@ -92,7 +96,14 @@ class Evaluator(object):
         recon = stitcher.finalize()
         self.stitcher_dict.pop(gid)
 
-        save_path = self.output_feat_dpath / f'{gid}.tif'
+        # TODO: use a better output filename that encodes the original image
+        # name and the feature chan code
+        save_path = self.output_feat_dpath / f'{gid:08d}_{self.concise_chan_path_code}.tif'
+
+        # if np.any(np.isnan(recon)):
+        #     print('stitcher.sums = {!r}'.format(kwarray.stats_dict(stitcher.sums)))
+        #     print('stitcher.weights = {!r}'.format(kwarray.stats_dict(stitcher.weights)))
+        #     print('NAN SAVE save_path = {!r}'.format(save_path))
 
         save_path = os.fspath(save_path)
         kwimage.imwrite(save_path, recon, backend='gdal', space=None,
@@ -108,7 +119,7 @@ class Evaluator(object):
             'file_name': save_path,
             'height': aux_height,
             'width': aux_width,
-            'channels': self.chan_code,
+            'channels': self.concise_chan_code,
             'warp_aux_to_img': warp_aux_to_img.concise(),
         }
         auxiliary = img.setdefault('auxiliary', [])
@@ -123,6 +134,7 @@ class Evaluator(object):
         Returns:
             None
         """
+        from watch.utils import util_kwimage
         current_gids = []
         previous_gids = []
 
@@ -139,7 +151,6 @@ class Evaluator(object):
             pbar = Prog(enumerate(dataloader_iter), total=len(self.eval_loader), desc='predict rutgers')
             for batch_index, batch in pbar:
                 outputs = batch
-                break
 
                 images = outputs['inputs']['im'].data[0]
                 original_width, original_height = outputs['tr'].data[0][0]['space_dims']
@@ -213,12 +224,19 @@ class Evaluator(object):
                                     device='numpy')
                             slice_ = outputs['tr'].data[0][b]['space_slice']
 
-                            from watch.utils import util_kwimage
-                            weights = util_kwimage.upweight_center_mask(output.shape[0:2])[..., None]
-                            self.stitcher_dict[gid].add(slice_, output, weight=weights)
-
+                            # Create output weights to better blend the borders
+                            # when stitching overlapping images.
                             # weights = kwimage.gaussian_patch(output.shape[0:2])[..., None]
-                            # self.stitcher_dict[gid].add(slice_, output, weight=weights)
+                            # NOTE: do not change these inplace, these are memoized!
+                            weights = util_kwimage.upweight_center_mask(output.shape[0:2])[..., None]
+
+                            # Handle stitching nan values
+                            invalid_output_mask = np.isnan(output)
+                            if np.any(invalid_output_mask):
+                                spatial_valid_mask = (1 - invalid_output_mask.any(axis=2, keepdims=True))
+                                weights = weights * spatial_valid_mask
+                                output[invalid_output_mask] = 0
+                            self.stitcher_dict[gid].add(slice_, output, weight=weights)
 
         if self.write_probs:
             # Finalize any remaining images
@@ -397,8 +415,8 @@ def make_predict_config(cmdline=False, **kwargs):
     parser.add_argument("--batch_size", default=1, type=int, help="prediction batch size")
     parser.add_argument("--num_workers", default=0, type=str, help="data loader workers, can be set to auto")
 
-    parser.add_argument("--compress", default='RAW', type=str, help="type of gdal compression to use")
-    parser.add_argument("--blocksize", default=64, type=str, help="gdal COG blocksize")
+    parser.add_argument("--compress", default='DEFLATE', type=str, help="type of gdal compression to use")
+    parser.add_argument("--blocksize", default=128, type=str, help="gdal COG blocksize")
     # parser.add_argument("--thresh", type=float, default=0.01)
 
     parser.set_defaults(**kwargs)
@@ -429,6 +447,9 @@ def hardcoded_default_configs(default_config_key):
 
 def build_evaler(cmdline=False, **kwargs):
     """
+    CommandLine:
+        DVC_DPATH=$(python -m watch.cli.find_dvc) xdoctest -m watch.tasks.rutgers_material_seg.predict build_evaler
+
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
         >>> from watch.tasks.rutgers_material_seg.predict import *  # NOQA
@@ -439,13 +460,15 @@ def build_evaler(cmdline=False, **kwargs):
         >>> src_coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
         >>> dst_coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/mat_test.kwcoco.json'
         >>> cmdline = False
-        >>> num_workers = 'avail'
-        >>> # num_workers = 0
         >>> kwargs = dict(
         >>>     default_config_key='iarpa',
         >>>     checkpoint_fpath=checkpoint_fpath,
         >>>     test_dataset=src_coco_fpath,
         >>>     pred_dataset=dst_coco_fpath,
+        >>>     gpus='auto:1',
+        >>>     num_workers='avail',
+        >>>     #num_workers=0,
+        >>>     #gpu=None,
         >>> )
         >>> evaler = build_evaler(cmdline=cmdline, **kwargs)
         >>> self = evaler
@@ -472,13 +495,25 @@ def build_evaler(cmdline=False, **kwargs):
     devices = util_device.coerce_devices(args.gpus)
     num_workers = util_globals.coerce_num_workers(args.num_workers)
     if len(devices) > 1:
+        print('args.gpus = {!r}'.format(args.gpus))
+        print('devices = {!r}'.format(devices))
         raise NotImplementedError('TODO: handle multiple devices')
     device = devices[0]
     if num_workers > 0:
         util_globals.request_nofile_limits()
+    print('device = {!r}'.format(device))
+    print('num_workers = {!r}'.format(num_workers))
 
     # Load input kwcoco dataset and prepare the sampler
     input_coco_dset = kwcoco.CocoDataset.coerce(args.test_dataset)
+
+    # HACK: Filter to remove WV images
+    invalid_sensors = {'WV'}
+    orig_images = input_coco_dset.images()
+    flags = [s not in invalid_sensors for s in orig_images.lookup('sensor_coarse')]
+    valid_images = orig_images.compress(flags)
+    input_coco_dset = input_coco_dset.subset(valid_images)
+
     sampler = ndsampler.CocoSampler(input_coco_dset)
 
     window_dims = (config['data']['time_steps'], config['data']['image_size'], config['data']['image_size'])  # [t,h,w]
@@ -539,7 +574,6 @@ def build_evaler(cmdline=False, **kwargs):
     # print(f"loadded model succeffuly from: {pretrain_config_path}")
     # print(f"Missing keys from loaded model: {missing_keys}, unexpected keys: {unexpexted_keys}")
 
-    print('device = {!r}'.format(device))
     model.to(device)
 
     output_coco_fpath = pathlib.Path(args.pred_dataset)
