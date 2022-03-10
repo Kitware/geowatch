@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 r"""
 Prediction script for Rutgers Material Semenatic Segmentation Models
 
@@ -306,8 +307,8 @@ def main(cmdline=False, **kwargs):
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
         >>> checkpoint_fpath = dvc_dpath / 'models/rutgers/rutgers_peri_materials_v3/experiments_epoch_18_loss_59.014100193977356_valmF1_0.18694573888313187_valChangeF1_0.0_time_2022-02-01-01:53:20.pth'
         >>> #checkpoint_fpath = dvc_dpath / 'models/rutgers/experiments_epoch_62_loss_0.09470022770735186_valmIoU_0.5901660531463717_time_2021101T16277.pth'
-        >>> src_coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/data.kwcoco.json'
-        >>> dst_coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-01/mat_test.kwcoco.json'
+        >>> src_coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json'
+        >>> dst_coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/mat_test.kwcoco.json'
         >>> cmdline = False
         >>> num_workers = 'avail'
         >>> # num_workers = 0
@@ -341,6 +342,7 @@ def main(cmdline=False, **kwargs):
         raise NotImplementedError('TODO: handle multiple devices')
     device = devices[0]
 
+    # Load input kwcoco dataset and prepare the sampler
     input_coco_dset = kwcoco.CocoDataset.coerce(args.test_dataset)
     sampler = ndsampler.CocoSampler(input_coco_dset)
 
@@ -382,6 +384,7 @@ def main(cmdline=False, **kwargs):
         config['data']['channels'] = pretrain_config['data']['channels']
         # config['training']['model_feats_channels'] = pretrain_config_path['training']['model_feats_channels']
 
+    # Load the model
     model = build_model(model_name=config['training']['model_name'],
                         backbone=config['training']['backbone'],
                         pretrained=config['training']['pretrained'],

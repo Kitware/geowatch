@@ -1,5 +1,3 @@
-# flake8: noqa
-
 import kwarray
 import kwimage
 import numpy as np
@@ -19,7 +17,7 @@ class SequenceDataset(torch.utils.data.Dataset):
     Example:
         >>> from watch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import *  # NOQA
         >>> import ndsampler
-        >>> sampler = ndsampler.CocoSampler.demo('vidshapes8')
+        >>> sampler = ndsampler.CocoSampler.demo('vidshapes8', image_size=(64, 64))
         >>> channels = 'r|g|b'
         >>> window_dims = (2, 128, 128)
         >>> self = SequenceDataset(sampler, window_dims=window_dims, training=False)
@@ -35,12 +33,13 @@ class SequenceDataset(torch.utils.data.Dataset):
         >>> frames = item['inputs']['im'].data
         >>> frame_masks = item['label']['class_masks'].data
         >>> frames_ = einops.rearrange(frames, 'c t h w -> t c h w').numpy()
+        >>> frames_ = kwimage.normalize_intensity(frames_)
+        >>> frames_ = np.nan_to_num(frames_)
         >>> pnum_ = kwplot.PlotNums(nSubplots=len(frames_))
         >>> for frame, mask in zip(frames_, frame_masks):
         >>>     kwplot.imshow(frame, pnum=pnum_())
         >>>     heatmap = kwimage.Heatmap(class_idx=mask, classes=self.sampler.classes)
         >>>     heatmap.draw(with_alpha=0.3)
-
     """
     def __init__(self, sampler, window_dims, input_dims=None, channels=None,
                  rng=None, training=True, window_overlap=0.0):
@@ -95,7 +94,8 @@ class SequenceDataset(torch.utils.data.Dataset):
         if self.channels:
             tr['channels'] = self.channels
 
-        sample = sampler.load_sample(tr, with_annots="segmentation")
+        sample = sampler.load_sample(tr, with_annots="segmentation",
+                                     nodata='float')
 
         if self.training:
             # Only need to get a "negative" in training
@@ -103,7 +103,9 @@ class SequenceDataset(torch.utils.data.Dataset):
             tr_negative = self.chosen_samples[negative_index]
             if self.channels:
                 tr_negative['channels'] = self.channels
-            negative_sample = sampler.load_sample(tr_negative, with_annots="segmentation")
+            negative_sample = sampler.load_sample(tr_negative,
+                                                  with_annots="segmentation",
+                                                  nodata='float')
 
         # print(sample.keys())
         # print(sample['annots'].keys())
@@ -215,7 +217,7 @@ class SequenceDataset(torch.utils.data.Dataset):
             # UNUSED? FIXME?
             # negative_class_masks = np.concatenate([m[None, ...] for m in negative_frame_masks], axis=0)  # NOQA
 
-            inputs['negative_im']=ItemContainer(torch.from_numpy(negative_cthw_im), stack=True)
+            inputs['negative_im'] = ItemContainer(torch.from_numpy(negative_cthw_im), stack=True)
 
         item = {
             'inputs': inputs,
