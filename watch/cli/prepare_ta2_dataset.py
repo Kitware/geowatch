@@ -59,10 +59,10 @@ import ubelt as ub
 class PrepareTA2Config(scfg.Config):
     default = {
         'dataset_suffix': scfg.Value(None, help=''),
-        's3_fpath': scfg.Value(None, help=''),
+        's3_fpath': scfg.Value(None, nargs='+', help=''),
         'dvc_dpath': scfg.Value('auto', help=''),
         'run': scfg.Value('0', help=''),
-        'collated': scfg.Value(True, help='set to false if the input data is not collated'),
+        'collated': scfg.Value([True], nargs='+', help='set to false if the input data is not collated'),
         'serial': scfg.Value(True, help='if True use serial mode'),
         'aws_profile': scfg.Value('iarpa', help='AWS profile to use for remote data access'),
         'align_workers': scfg.Value(0, help='workers for align script'),
@@ -93,6 +93,7 @@ def main(cmdline=False, **kwargs):
     from watch.utils import tmux_queue
     # import shlex
     config = PrepareTA2Config(cmdline=cmdline, data=kwargs)
+    print('config = {}'.format(ub.repr2(dict(config), nl=1)))
 
     dvc_dpath = config['dvc_dpath']
     if dvc_dpath == 'auto':
@@ -101,7 +102,6 @@ def main(cmdline=False, **kwargs):
     dvc_dpath = ub.Path(dvc_dpath)
 
     aws_profile = config['aws_profile']
-    s3_fpath = config['s3_fpath']
 
     aligned_bundle_name = f'Aligned-{config["dataset_suffix"]}'
     uncropped_bundle_name = f'Uncropped-{config["dataset_suffix"]}'
@@ -112,7 +112,6 @@ def main(cmdline=False, **kwargs):
     uncropped_dpath = dvc_dpath / uncropped_bundle_name
     uncropped_query_dpath = uncropped_dpath / '_query/items'
 
-    uncropped_query_fpath = uncropped_query_dpath / ub.Path(s3_fpath).name
     uncropped_kwcoco_fpath = uncropped_dpath / 'data.kwcoco.json'
     uncropped_prep_kwcoco_fpath = uncropped_dpath / 'data_prepped.kwcoco.json'
 
@@ -127,7 +126,6 @@ def main(cmdline=False, **kwargs):
     uncropped_query_dpath = uncropped_query_dpath.shrinkuser(home='$HOME')
     uncropped_query_dpath = uncropped_query_dpath.shrinkuser(home='$HOME')
     uncropped_query_dpath = uncropped_query_dpath.shrinkuser(home='$HOME')
-    uncropped_query_fpath = uncropped_query_fpath.shrinkuser(home='$HOME')
     uncropped_kwcoco_fpath = uncropped_kwcoco_fpath.shrinkuser(home='$HOME')
     uncropped_prep_kwcoco_fpath = uncropped_prep_kwcoco_fpath.shrinkuser(home='$HOME')
     uncropped_ingress_dpath = uncropped_ingress_dpath.shrinkuser(home='$HOME')
@@ -138,35 +136,43 @@ def main(cmdline=False, **kwargs):
     # queue = tmux_queue.SerialQueue()
     queue = tmux_queue.TMUXMultiQueue(name='teamfeat', size=1, gres=None)
 
-    queue.submit(ub.codeblock(
-        f'''
-        mkdir -p {uncropped_query_dpath}
-        [[ -f {uncropped_query_fpath} ]] || aws s3 --profile {aws_profile} cp "{s3_fpath}" "{uncropped_query_dpath}"
-        '''))
+    s3_fpath_list = config['s3_fpath']
+    collated_list = config['collated']
+    if len(collated_list) != len(s3_fpath_list):
+        print('Indicate if each s3 path is collated or not')
 
-    queue.submit(ub.codeblock(
-        rf'''
-        [[ -f {uncropped_catalog_fpath} ]] || python -m watch.cli.baseline_framework_ingress \
-            --aws_profile {aws_profile} \
-            --jobs avail \
-            --virtual \
-            --outdir "{uncropped_ingress_dpath}" \
-            "{uncropped_query_fpath}"
-        '''))
+    for s3_fpath, collated in zip(s3_fpath_list, collated_list):
+        uncropped_query_fpath = uncropped_query_dpath / ub.Path(s3_fpath).name
+        uncropped_query_fpath = uncropped_query_fpath.shrinkuser(home='$HOME')
+        queue.submit(ub.codeblock(
+            f'''
+            mkdir -p {uncropped_query_dpath}
+            [[ -f {uncropped_query_fpath} ]] || aws s3 --profile {aws_profile} cp "{s3_fpath}" "{uncropped_query_dpath}"
+            '''))
 
-    if config['collated']:
-        collated_str = '--from-collated'
-    else:
-        collated_str = ''
+        queue.submit(ub.codeblock(
+            rf'''
+            [[ -f {uncropped_catalog_fpath} ]] || python -m watch.cli.baseline_framework_ingress \
+                --aws_profile {aws_profile} \
+                --jobs avail \
+                --virtual \
+                --outdir "{uncropped_ingress_dpath}" \
+                "{uncropped_query_fpath}"
+            '''))
 
-    queue.submit(ub.codeblock(
-        rf'''
-        [[ -f {uncropped_kwcoco_fpath} ]] || AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.ta1_stac_to_kwcoco \
-            "{uncropped_catalog_fpath}" \
-            --outpath="{uncropped_kwcoco_fpath}" \
-            {collated_str} \
-            --jobs "min(avail,8)"
-        '''))
+        if collated:
+            collated_str = '--from-collated'
+        else:
+            collated_str = ''
+
+        queue.submit(ub.codeblock(
+            rf'''
+            [[ -f {uncropped_kwcoco_fpath} ]] || AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.ta1_stac_to_kwcoco \
+                "{uncropped_catalog_fpath}" \
+                --outpath="{uncropped_kwcoco_fpath}" \
+                {collated_str} \
+                --jobs "min(avail,8)"
+            '''))
 
     select_images_query = config['select_images']
     if select_images_query:

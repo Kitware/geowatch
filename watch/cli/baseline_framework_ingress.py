@@ -56,6 +56,11 @@ def main():
                         default=False,
                         help='Replace asset hrefs with GDAL Virtual File '
                              'System links')
+    parser.add_argument('--catalog_fpath',
+                        type=str,
+                        default=None,
+                        required=False,
+                        help='Name of the ouptut catalog. Defaults to <outdir>/catalog.json')
 
     parser.add_argument('--relative', default=False,
                         action='store_true', help='if true use relative paths')
@@ -242,6 +247,7 @@ def load_input_stac_items(input_path, aws_base_command):
 
 def baseline_framework_ingress(input_path,
                                outdir,
+                               catalog_outpath=None,
                                aws_profile=None,
                                dryrun=False,
                                show_progress=False,
@@ -262,7 +268,8 @@ def baseline_framework_ingress(input_path,
     else:
         catalog_type = pystac.CatalogType.ABSOLUTE_PUBLISHED
 
-    catalog_outpath = os.path.join(outdir, 'catalog.json')
+    if catalog_outpath is None:
+        catalog_outpath = os.path.join(outdir, 'catalog.json')
     catalog = pystac.Catalog('Baseline Framework ingress catalog',
                              'STAC catalog of SMART search results',
                              href=catalog_outpath, catalog_type=catalog_type)
