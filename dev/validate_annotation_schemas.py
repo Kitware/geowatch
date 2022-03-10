@@ -30,8 +30,8 @@ def main():
     # region_model_schema_fpath = docs_dpath / ('pages/schemas/region-model.schema.json')
     # site_model_schema = json.loads(site_model_schema_fpath.read_text())
     # region_model_schema = json.loads(region_model_schema_fpath.read_text())
-    site_model_schema = watch.rc.registry.load_site_model_schema()
-    region_model_schema = watch.rc.registry.load_region_model_schema()
+    site_schema = site_model_schema = watch.rc.registry.load_site_model_schema()
+    region_schema  = region_model_schema = watch.rc.registry.load_region_model_schema()
 
     site_model_dpath = annotations_dpath / 'site_models'
     region_model_dpath = annotations_dpath / 'region_models'
@@ -42,23 +42,58 @@ def main():
     validate_schemas(site_model_fpaths, region_model_fpaths, site_model_schema,
                      region_model_schema)
 
+    sam_script(site_model_fpaths, region_model_fpaths, site_schema, region_schema)
+
+
+def sam_script(site_model_fpaths, region_model_fpaths, site_schema, region_schema):
+    for test_file in site_model_fpaths + region_model_fpaths:
+        try:
+            model = json.load(ub.Path(test_file).open())
+        except FileNotFoundError:
+            print("Can't find the file {:s}".format(test_file))
+            continue
+        except json.decoder.JSONDecodeError:
+            print("Can't load the JSON content of file {:s}".format(test_file))
+            continue
+
+        try:
+            feature0 = model['features'][0]
+        except IndexError:
+            print('No features in the file {:s}'.format(test_file))
+            continue
+
+        try:
+            feature_properties = feature0['properties']
+        except KeyError:
+            print('Properties missing from the first feature of {:s}'.format(test_file))
+            continue
+
+        try:
+            feature_type = feature_properties['type']
+        except KeyError:
+            print('No feature type specified in the first feature of {:s}'.format(test_file))
+            continue
+
+        try:
+            if feature_type in ['region', 'site_summary']:
+                jsonschema.validate(instance=model, schema=region_schema)
+            elif feature_type in ['site', 'observation']:
+                jsonschema.validate(instance=model, schema=site_schema)
+            else:
+                raise ValueError(feature_type)
+        except jsonschema.ValidationError as e:
+            print('Validation failed for {}'.format(test_file))
+            print(e)
+            continue
+        except ValueError:
+            print('No type inferrable from the feature type {:s}'.format(feature_type))
+            continue
+
+        print('{} is valid'.format(test_file))
+
 
 def validate_schemas(site_model_fpaths, region_model_fpaths, site_model_schema,
                      region_model_schema):
-    site_errors = []
-    prog = ub.ProgIter(site_model_fpaths, desc='check site models')
-    for site_model_fpath in prog:
-        site_model = json.loads(site_model_fpath.read_text())
-        try:
-            jsonschema.validate(site_model, site_model_schema)
-        except jsonschema.ValidationError as ex:
-            error_info = {
-                'type': 'site_model_error',
-                'name': site_model_fpath.stem,
-                'ex': ex,
-            }
-            site_errors.append(error_info)
-            prog.set_description(f'check site models, errors: {len(site_errors)}')
 
     region_errors = []
     prog = ub.ProgIter(region_model_fpaths, desc='check region models')
@@ -74,6 +109,21 @@ def validate_schemas(site_model_fpaths, region_model_fpaths, site_model_schema,
             }
             region_errors.append(error_info)
             prog.set_description(f'check region models, errors: {len(region_errors)}')
+
+    site_errors = []
+    prog = ub.ProgIter(site_model_fpaths, desc='check site models')
+    for site_model_fpath in prog:
+        site_model = json.loads(site_model_fpath.read_text())
+        try:
+            jsonschema.validate(site_model, site_model_schema)
+        except jsonschema.ValidationError as ex:
+            error_info = {
+                'type': 'site_model_error',
+                'name': site_model_fpath.stem,
+                'ex': ex,
+            }
+            site_errors.append(error_info)
+            prog.set_description(f'check site models, errors: {len(site_errors)}')
 
     print('site_errors = {}'.format(ub.repr2(site_errors, nl=1)))
     print('region_errors = {}'.format(ub.repr2(region_errors, nl=1)))

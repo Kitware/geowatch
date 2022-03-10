@@ -78,11 +78,13 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         >>> import kwcoco
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
         >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data_nowv.kwcoco.json'
+        >>> coco_fpath = dvc_dpath / 'Aligned-Drop2-TA1-2022-03-07/data.kwcoco.json'
         >>> #coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/combo_DILM.kwcoco.json'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
         >>> images = dset.images()
-        >>> sub_images = dset.videos(names=['KR_R002']).images[0]
-        >>> train_dataset = dset.subset(sub_images.lookup('id'))
+        >>> train_dataset = dset
+        >>> #sub_images = dset.videos(names=['KR_R002']).images[0]
+        >>> #train_dataset = dset.subset(sub_images.lookup('id'))
         >>> test_dataset = None
         >>> img = ub.peek(train_dataset.imgs.values())
         >>> chan_info = kwcoco_extensions.coco_channel_stats(dset)
@@ -110,12 +112,19 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         >>> )
         >>> datamodule.setup('fit')
         >>> dl = datamodule.train_dataloader()
-        >>> #batch = next(iter(dl))
         >>> dataset = dl.dataset
         >>> dataset.requested_tasks['change'] = False
         >>> dataset.disable_augmenter = True
-
         >>> tr = 0
+        >>> batch = [dataset[tr]]
+        >>> batch = next(iter(dl))
+        >>> # Visualize
+        >>> canvas = datamodule.draw_batch(batch)
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(canvas, doclf=1)
+        >>> kwplot.show_if_requested()
 
         if 0:
             tr = {
@@ -130,15 +139,6 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             tr = {
                 'gids': ([905]),
                 'space_slice': (slice(0, 512, None), slice(0, 512, None))}
-
-        >>> batch = [dataset[tr]]
-        >>> # Visualize
-        >>> canvas = datamodule.draw_batch(batch)
-        >>> # xdoctest: +REQUIRES(--show)
-        >>> import kwplot
-        >>> kwplot.autompl()
-        >>> kwplot.imshow(canvas, doclf=1)
-        >>> kwplot.show_if_requested()
 
     Example:
         >>> # xdoctest: +SKIP
