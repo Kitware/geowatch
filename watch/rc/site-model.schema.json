@@ -78,9 +78,11 @@
         "model_content": {"enum": ["annotation", "proposed"]},
         "start_date": {"oneOf": [{"type": "null"}, {"type": "string", "format": "date"}]},
         "end_date": {"oneOf": [{"type": "null"}, {"type": "string", "format": "date"}]},
-        "originator": {"enum": ["te", "pmo", "accenture", "ara", "astra", "blacksky", "iai", "kitware", "str", "iMERIT", "performer1"]},
+        "originator": {"enum": ["te", "pmo", "acc", "ara", "ast", "bla", "iai", "kit", "str", "iMERIT"]},
         "score": {"type": "number", "minimum": 0, "maximum": 1},
         "validated": {"enum": ["True", "False"]},
+        "predicted_phase_transition": {"enum": ["Active Construction", "Post Construction"]},
+        "predicted_phase_transition_date": {"type": "string", "format": "date"},
         "misc_info": {"type": "object"}
       },
       "required": [
@@ -97,7 +99,7 @@
     "associated_site_properties": {
       "allOf": [{"$ref": "#/definitions/_site_properties"}],
       "properties": {
-        "region_id": {"type": "string", "pattern": "^[A-Z]{2}_[RC][0-9]{3}$"},
+        "region_id": {"type": "string", "pattern": "^[A-Z]{2}_[RCS][0-9]{3}$"},
         "site_id": {"type": "string", "pattern": "^[A-Z]{2}_[RC][0-9]{3}_[0-9]{4}$"}
       }
     },
@@ -105,7 +107,7 @@
       "properties": {
         "type": {"const": "observation", "type": "string"},
         "observation_date": {"oneOf": [{"type": "null"}, {"type": "string", "format": "date"}]},
-        "source": {"type": "string"},
+        "source": {"oneOf": [{"type": "null"}, {"type": "string"}]},
         "sensor_name": {"enum": ["null", "Landsat 8", "Sentinel-2", "WorldView", "Planet"]},
         "current_phase": {"type": "string", "pattern": "^((No Activity|Site Preparation|Active Construction|Post Construction|Unknown),* *)+$"},
         "is_occluded": {"type": "string", "pattern": "^((True|False),* *)+$"},
@@ -132,12 +134,16 @@
                 "oneOf": [
                   {"$ref": "#/definitions/unassociated_site_properties"},
                   {"$ref": "#/definitions/associated_site_properties"}
-                ]}
+                ]},
+              "geometry": {
+                "$ref": "#/definitions/polygon"
+              }
             },
             "required": [
               "type", "geometry", "properties"
             ]
-          }, {
+          },
+          {
             "properties": {
               "type":{
                 "const": "Feature",
@@ -145,6 +151,9 @@
               },
               "properties": {
                 "$ref": "#/definitions/observation_properties"
+              },
+              "geometry": {
+                "$ref": "#/definitions/multipolygon"
               }
             },
             "required": [
@@ -163,6 +172,6 @@
     "type",
     "features"
   ],
-  "title": "Region Model object",
+  "title": "Site Model object",
   "type": "object"
 }

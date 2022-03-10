@@ -17,6 +17,25 @@ TODO:
 
 
 The main function is :func:`gather_measures`.
+
+CommandLine:
+
+    # TODO: - [ ] watch command to "register" which DVC directory to use
+    # Locate a registered DVC directory
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+
+    # Replace with the name of the latest dataset
+    DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+    EXPT_NAME_PAT="*"
+    #EXPT_NAME_PAT="BOTH_TA1_COMBO_TINY_p2w_raw*"
+    MODEL_EPOCH_PAT="*"
+    PRED_DSET_PAT="*"
+    MEASURE_GLOBSTR=${DVC_DPATH}/models/fusion/${DATASET_CODE}/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/eval/curves/measures2.json
+
+    python -m watch.tasks.fusion.gather_results \
+        --measure_globstr="$MEASURE_GLOBSTR" \
+        --out_dpath="$DVC_DPATH/agg_results/$MEASURE_GLOBSTR" \
+        --dset_group_key="*_vali.kwcoco" --show=True
 """
 import json
 import pandas as pd
@@ -480,6 +499,7 @@ def gather_measures(cmdline=False, **kwargs):
 
     # TODO: high level results for a model should be serialized to DVC
     if measure_globstr is None:
+        raise ValueError('Must specify a coercable glob pattern to locate the measures2.json files')
         # model_dpath = ub.Path(dvc_dpath) / 'models/fusion/unevaluated-activity-2021-11-12'
         # model_dpath = fusion_model_dpath / 'unevaluated-activity-2021-11-12'
         # fusion_model_dpath = dvc_dpath / 'models/fusion/'

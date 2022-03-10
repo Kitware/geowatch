@@ -20,14 +20,18 @@ import json
 
 def main():
     # Point to the cloned repos
-    docs_dpath = ub.Path('docs')
+    # docs_dpath = ub.Path('docs')
+    import watch
     annotations_dpath = ub.Path('annotations')
+    annotations_dpath = watch.find_smart_dvc_dpath() / 'annotations'
 
     # Load schemas
-    site_model_schema_fpath = docs_dpath / ('pages/schemas/site-model.schema.json')
-    region_model_schema_fpath = docs_dpath / ('pages/schemas/region-model.schema.json')
-    site_model_schema = json.loads(site_model_schema_fpath.read_text())
-    region_model_schema = json.loads(region_model_schema_fpath.read_text())
+    # site_model_schema_fpath = docs_dpath / ('pages/schemas/site-model.schema.json')
+    # region_model_schema_fpath = docs_dpath / ('pages/schemas/region-model.schema.json')
+    # site_model_schema = json.loads(site_model_schema_fpath.read_text())
+    # region_model_schema = json.loads(region_model_schema_fpath.read_text())
+    site_model_schema = watch.rc.registry.load_site_model_schema()
+    region_model_schema = watch.rc.registry.load_region_model_schema()
 
     site_model_dpath = annotations_dpath / 'site_models'
     region_model_dpath = annotations_dpath / 'region_models'
