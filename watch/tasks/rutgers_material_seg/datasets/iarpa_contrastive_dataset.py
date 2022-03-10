@@ -145,7 +145,11 @@ class SequenceDataset(torch.utils.data.Dataset):
 
         # Access the sampled image and annotation data
         raw_frame_list = sample['im']
-        raw_det_list = sample['annots']['frame_dets']
+
+        if not self.inference_only:
+            raw_det_list = sample['annots']['frame_dets']
+        else:
+            raw_det_list = [None] * len(raw_frame_list)
 
         # Break data down on a per-frame basis so we can apply image-based
         # augmentations.
