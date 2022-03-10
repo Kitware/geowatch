@@ -91,14 +91,22 @@ class gridded_dataset(torch.utils.data.Dataset):
             additional_targets['image{}'.format(1 + i)] = 'image'
             additional_targets['seg{}'.format(i + 1)] = 'mask'
 
-        self.transforms = A.Compose([A.OneOf([
-                        A.MotionBlur(p=1),
-                        A.Blur(blur_limit=3, p=1),
-                    ], p=0.9),
-                    A.GaussNoise(var_limit=.002),
-                    A.RandomBrightnessContrast(brightness_limit=.3, contrast_limit=.3, brightness_by_max=False, always_apply=True)
-                ],
-                additional_targets=additional_targets)
+        if mode == 'train':
+            self.transforms = A.Compose([A.OneOf([
+                            A.MotionBlur(p=.5),
+                            A.Blur(blur_limit=7, p=1),
+                        ], p=.9),
+                        A.GaussNoise(var_limit=.002),
+                        A.RandomBrightnessContrast(brightness_limit=.3, contrast_limit=.3, brightness_by_max=False, always_apply=True)
+                    ],
+                    additional_targets=additional_targets)
+        else:
+            ### deterministic transforms for test mode
+            self.transforms = A.Compose([
+                            A.Blur(blur_limit=[4, 4], p=1),
+                            A.RandomBrightnessContrast(brightness_limit=[.2, .2], contrast_limit=[.2, .2], brightness_by_max=False, always_apply=True)
+                    ],
+                    additional_targets=additional_targets)
 
         self.mode = mode
         self.segmentation = segmentation

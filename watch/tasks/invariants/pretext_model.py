@@ -32,17 +32,11 @@ class pretext(pl.LightningModule):
         self.save_hyperparameters(hparams)
 
         if hparams.train_dataset is not None:
-            # if hparams.use_gridded_dataset:
-                # self.trainset = gridded_dataset(hparams.train_dataset, sensor=hparams.sensor, num_images=12, returned_images=2, bands=hparams.bands, patch_size=hparams.patch_size)
-            # else:
-                self.trainset = kwcoco_dataset(hparams.train_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size)
+            self.trainset = kwcoco_dataset(hparams.train_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size)
         else:
             self.trainset = None
         if hparams.vali_dataset is not None:
-            if hparams.use_gridded_dataset:
-                self.valset = gridded_dataset(hparams.vali_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size)
-            else:
-                self.valset = kwcoco_dataset(hparams.vali_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size)
+            self.valset = gridded_dataset(hparams.vali_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size)
         else:
             self.valset = None
 

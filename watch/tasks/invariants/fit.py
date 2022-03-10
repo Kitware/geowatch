@@ -96,9 +96,8 @@ if __name__ == '__main__':
     parser.add_argument('--ignore_boundary', type=int, default=3)
     ###output
     parser.add_argument('--save_dir', type=str, default=None)
-    parser.add_argument('--pca_projection_path', type=str, default='../pca_2022_03_03')
+    parser.add_argument('--pca_projection_path', type=str, default='../pca_2022_03_10')
     parser.add_argument('--reduction_dim', type=int, default=6)
-    parser.add_argument('--use_gridded_dataset', type=int, default=1)
     ###device
     parser.add_argument('--device', type=str, default='gpu')
     parser.add_argument('--gpus', type=int, help='gpu(s) to run on', default=1)

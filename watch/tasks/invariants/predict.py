@@ -138,34 +138,44 @@ class predict(object):
             current_gids = set()
             for idx, batch in tqdm(enumerate(loader), total=num_batches, desc='Compute features'):
                 save_feat = []
+                save_feat2 = []
                 if 'pretext' in args.tasks:
                     image_stack = torch.stack([batch['image1'], batch['image2'], batch['offset_image1'], batch['augmented_image1']], dim=1)
                     image_stack = image_stack.to(device)
 
                     #select features corresponding to first image
                     features = self.pretext_model(image_stack)[:, 0, :, :, :]
+                    features2 = self.pretext_model(image_stack)[:, 1, :, :, :]
 
                     if args.do_pca:
                         features = torch.einsum('xy,byhw->bxhw', self.pca_projector, features)
+                        features2 = torch.einsum('xy,byhw->bxhw', self.pca_projector, features2)
                     ###normalize features
                     features = (features - features.mean(dim=(2, 3), keepdim=True)) / features.std(dim=(2, 3), keepdim=True)
+                    features2 = (features2 - features2.mean(dim=(2, 3), keepdim=True)) / features2.std(dim=(2, 3), keepdim=True)
                     save_feat.append(torch.sigmoid(features.squeeze()).permute(1, 2, 0).cpu())
+                    save_feat2.append(torch.sigmoid(features2.squeeze()).permute(1, 2, 0).cpu())
 
                 if 'before_after' in args.tasks:
                     ### TO DO: Set to output of separate model.
                     before_after_heatmap = self.pretext_model.shared_step(batch)['before_after_heatmap'][0].permute(1, 2, 0)
-                    before_after_heatmap = torch.sigmoid(before_after_heatmap[:, :, 1] - before_after_heatmap[:, :, 0]).unsqueeze(-1).cpu()
+                    before_after_heatmap = torch.sigmoid(torch.exp(before_after_heatmap[:, :, 1]) - torch.exp(before_after_heatmap[:, :, 0])).unsqueeze(-1).cpu()
                     save_feat.append(before_after_heatmap)
+                    save_feat2.append(before_after_heatmap)
+
                 if 'segmentation' in args.tasks:
                     image_stack = [batch[key] for key in batch if key[:5] == 'image']
                     image_stack = torch.stack(image_stack, dim=1).to(args.device)
                     predictions = torch.exp(self.segmentation_model(image_stack)['predictions'])
                     segmentation_heatmap = torch.sigmoid(predictions[0, 0, 1, :, :] - predictions[0, 0, 0, :, :]).unsqueeze(0).permute(1, 2, 0).cpu()
+                    segmentation_heatmap2 = torch.sigmoid(predictions[0, 1, 1, :, :] - predictions[0, 1, 0, :, :]).unsqueeze(0).permute(1, 2, 0).cpu()
                     save_feat.append(segmentation_heatmap)
+                    save_feat2.append(segmentation_heatmap2)
 
                 save_feat = torch.cat(save_feat, dim=-1)
-                save_feat = (save_feat - save_feat.mean(dim=(0, 1))) / save_feat.std(dim=(0, 1))
                 save_feat = save_feat.numpy()
+                save_feat2 = torch.cat(save_feat2, dim=-1)
+                save_feat2 = save_feat2.numpy()
     
                 # image_id = int(batch['img1_id'].item())
                 # image_info = output_dset.index.imgs[image_id]
@@ -186,21 +196,25 @@ class predict(object):
 
                 if len(current_gids) == 0:
                     current_gids = tr['gids']
-                else:
-                    previous_gids = current_gids
-                    current_gids = tr['gids']
-                    mutually_exclusive = (set(previous_gids) - set(current_gids))
-                    for gid in mutually_exclusive:
-                        seen_images.add(gid)
-                        writer.submit(self.finalize_image, gid)
+                previous_gids = current_gids
+                current_gids = tr['gids']
 
-                    for gid in current_gids:
-                        if gid not in self.stitcher_dict.keys():
-                            self.stitcher_dict[gid] = kwarray.Stitcher(
-                                tr['space_dims'] + (self.num_out_channels,), device='numpy')
-                        slice_ = tr['space_slice']
-                        weights = util_kwimage.upweight_center_mask(save_feat.shape[0:2])[..., None]
-                        self.stitcher_dict[gid].add(slice_, save_feat, weight=weights)
+                mutually_exclusive = (set(previous_gids) - set(current_gids))
+                for gid in mutually_exclusive:
+                    seen_images.add(gid)
+                    writer.submit(self.finalize_image, gid)
+
+                gid1, gid2 = current_gids
+                if gid1 not in self.stitcher_dict.keys():
+                    self.stitcher_dict[gid1] = kwarray.Stitcher(
+                        tr['space_dims'] + (self.num_out_channels,), device='numpy')
+                if gid2 not in self.stitcher_dict.keys():
+                    self.stitcher_dict[gid2] = kwarray.Stitcher(
+                        tr['space_dims'] + (self.num_out_channels,), device='numpy')
+                slice_ = tr['space_slice']
+                weights = util_kwimage.upweight_center_mask(save_feat.shape[0:2])[..., None]
+                self.stitcher_dict[gid1].add(slice_, save_feat, weight=weights)
+                self.stitcher_dict[gid2].add(slice_, save_feat2, weight=weights)
 
             writer.wait_until_finished()
 
