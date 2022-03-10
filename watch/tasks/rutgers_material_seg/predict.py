@@ -139,21 +139,40 @@ class Evaluator(object):
             pbar = Prog(enumerate(dataloader_iter), total=len(self.eval_loader), desc='predict rutgers')
             for batch_index, batch in pbar:
                 outputs = batch
+                break
 
                 images = outputs['inputs']['im'].data[0]
-                # mask = batch['label']['class_masks'].data[0][0]
                 original_width, original_height = outputs['tr'].data[0][0]['space_dims']
+
+                images = images.clone()
 
                 bs, c, t, h, w = images.shape
 
                 image1 = images[:, :, 0, :, :]
                 image1 = image1.to(self.device)
 
+                if 0:
+                    image1[0:2, 0:2, 0:2, 0:2] = np.nan
+
+                input_mask = image1.isnan()
                 # image1 = utils.stad_image(image1)
-                # image2 = utils.stad_image(image2)
-                image1 = F.normalize(image1, dim=1, p=2)
+
+                # NOTE: needs to be modified to handle NaNs
+                # image1 = F.normalize(image1, dim=1, p=2)
+
+                # Cannot input nan values to the model, so keep them as their
+                # imputed value
+                image1 = nan_normalize(
+                    image1, dim=1, p=2,
+                    imputation={'method': 'mean', 'dim': (0, 2, 3)},
+                    keepna=False, mask=input_mask)
 
                 output1 = self.model(image1)  # [B,22,150,150]
+
+                # replace model outputs with nans in spatial locations
+                output_mask = input_mask.any(dim=1, keepdims=True).expand_as(output1)
+                output1[output_mask] = float('nan')
+
                 # print(f"output: {output1.shape}, type: {output1.dtype}")
 
                 bs, c, h, w = output1.shape
@@ -230,6 +249,123 @@ class Evaluator(object):
         if self.config['procedures']['validate']:
             self.eval()
         return
+
+
+def impute(a, imputation='zero', mask=None):
+    """
+    Replaces nan values according to a imputation method
+
+    Args:
+        a (Tensor): input data
+
+        imputation (dict | str):
+            dictionary containing keys:
+                method (str): either zeros or mean
+
+            if this is a string, it becomes the method in an imputation
+            dictionary created with auto defaults.
+
+        mask (Tensor):
+            precomputed nan mask
+    """
+    if mask is None:
+        mask = torch.isnan(a)
+
+    if isinstance(imputation, str):
+        imputation = {
+            'method': imputation
+        }
+    imputation_method = imputation['method']
+    if imputation_method == 'zero':
+        out = torch.nan_to_num(a)
+    elif imputation_method == 'mean':
+        out = a.clone()
+        mean_dims = imputation.get('dim', None)
+        if mean_dims is None:
+            mean = a.nanmean()
+            out[mask] = mean
+        else:
+            fill_values = a.nanmean(dim=mean_dims, keepdims=True).expand_as(out)
+            out[mask] = fill_values[mask]
+    else:
+        raise KeyError(imputation_method)
+    return out
+
+
+def nan_normalize(a, dim, p=2, imputation='zero', assume_nans=False,
+                  keepna=True, mask=None):
+    """
+    Like torch.functional.normalize, but handles nans
+
+    Args:
+        a (Tensor): input data
+
+        dim (int): dimension to normalize over
+
+        p (int): type of norm
+
+        imputation (dict | str):
+
+            See :func:`impute`
+
+            dictionary containing keys:
+                method (str): either zeros or mean
+
+            if this is a string, it becomes the method in an imputation
+            dictionary created with auto defaults.
+
+        assume_nans (bool):
+            If true, skips the check if any nans exist and assume they do.
+            Otherwise we check if there are no nans and just use normal
+            normalize.
+
+        keepna (bool):
+            if False, keep the imputed results rather than re-masking them.
+
+        mask (Tensor):
+            if specified, use these as masked values
+
+    Returns:
+        Tensor: normalized array
+
+    Example:
+        >>> shape = (7, 5, 3)
+        >>> a = data = torch.from_numpy(np.arange(np.prod(shape)).reshape(*shape)).float()
+        >>> a[0:2, 0:2, 0:2] = float('nan')
+        >>> dim = 2
+        >>> p = 2
+        >>> r1 = nan_normalize(a, dim, p, imputation='zero')
+        >>> r2 = nan_normalize(a, dim, p, imputation='mean')
+        >>> assert r1.isnan().sum() == a.isnan().sum()
+        >>> assert r2.isnan().sum() == a.isnan().sum()
+
+        >>> nan_data = torch.full((3, 2), fill_value=float('nan'))
+        >>> dim = 1
+        >>> nan_result = nan_normalize(nan_data, dim, p, imputation='mean')
+        >>> assert torch.isnan(nan_result).all()
+
+        >>> # Ensure this works when no nans exist
+        >>> clean_data = torch.rand(3, 2)
+        >>> v1 = nan_normalize(clean_data, dim, p, imputation='mean')
+        >>> v2 = nan_normalize(clean_data, dim, p, imputation='mean', assume_nans=True)
+    """
+    if mask is None:
+        mask = torch.isnan(a)
+    if assume_nans or mask.any():
+        if isinstance(imputation, str):
+            imputation = {
+                'method': imputation
+            }
+        # mean_dims = imputation.get('dim', 'auto')
+        # if mean_dims == 'auto':
+        #     mean_dims = tuple([i for i in range(len(a.shape)) if i != dim])
+        out = impute(a, imputation=imputation, mask=mask)
+        F.normalize(out, dim=dim, p=p, out=out)
+        if keepna:
+            out[mask] = float('nan')
+    else:
+        out = F.normalize(a, dim=dim, p=p)
+    return out
 
 
 def make_predict_config(cmdline=False, **kwargs):
