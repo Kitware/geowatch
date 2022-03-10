@@ -82,6 +82,8 @@ class Evaluator(object):
         self.finalized_gids = set()
         self.imwrite_kw = imwrite_kw
 
+        self.coco_dset = self.eval_loader.dataset.sampler.dset
+
         # Hack together a channel code
         self.chan_code = '|'.join(['matseg_{}'.format(i) for i in range(self.num_classes)])
         # self.chan_code = '|'.join(['matseg.{}'.format(i) for i in range(self.num_classes)])
@@ -91,26 +93,22 @@ class Evaluator(object):
 
     @profile
     def finalize_image(self, gid):
+
+        img = self.output_coco_dataset.index.imgs[gid]
+        img_name = img.get('name', f'gid{gid:08d}')
+
         self.finalized_gids.add(gid)
         stitcher = self.stitcher_dict[gid]
         recon = stitcher.finalize()
         self.stitcher_dict.pop(gid)
 
-        # TODO: use a better output filename that encodes the original image
-        # name and the feature chan code
-        save_path = self.output_feat_dpath / f'{gid:08d}_{self.concise_chan_path_code}.tif'
-
-        # if np.any(np.isnan(recon)):
-        #     print('stitcher.sums = {!r}'.format(kwarray.stats_dict(stitcher.sums)))
-        #     print('stitcher.weights = {!r}'.format(kwarray.stats_dict(stitcher.weights)))
-        #     print('NAN SAVE save_path = {!r}'.format(save_path))
+        save_path = self.output_feat_dpath / f'{img_name}_{self.concise_chan_path_code}.tif'
 
         save_path = os.fspath(save_path)
         kwimage.imwrite(save_path, recon, backend='gdal', space=None,
                         **self.imwrite_kw)
 
         aux_height, aux_width = recon.shape[0:2]
-        img = self.output_coco_dataset.index.imgs[gid]
         warp_aux_to_img = kwimage.Affine.scale(
             (img['width'] / aux_width,
              img['height'] / aux_height))
