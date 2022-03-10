@@ -139,22 +139,15 @@ class Evaluator(object):
             pbar = Prog(enumerate(dataloader_iter), total=len(self.eval_loader), desc='predict rutgers')
             for batch_index, batch in pbar:
                 outputs = batch
-                images, mask = outputs['inputs']['im'].data[0], batch['label']['class_masks'].data[0][0]  # NOQA
+
+                images = outputs['inputs']['im'].data[0]
+                # mask = batch['label']['class_masks'].data[0][0]
                 original_width, original_height = outputs['tr'].data[0][0]['space_dims']
-
-                # print(f"images: {images.shape}")
-                # print(f"mask: {mask.shape}")
-
-                # mask = torch.stack(mask)
-                # mask = mask.long().squeeze(1)
 
                 bs, c, t, h, w = images.shape
 
                 image1 = images[:, :, 0, :, :]
-                # mask1 = mask[:, 0, :, :]  # NOQA
-
                 image1 = image1.to(self.device)
-                # mask = mask.to(self.device)
 
                 # image1 = utils.stad_image(image1)
                 # image2 = utils.stad_image(image2)
@@ -298,7 +291,7 @@ def hardcoded_default_configs(default_config_key):
     return config
 
 
-def main(cmdline=False, **kwargs):
+def build_evaler(cmdline=False, **kwargs):
     """
     Example:
         >>> # xdoctest: +REQUIRES(env:DVC_DPATH)
@@ -318,7 +311,9 @@ def main(cmdline=False, **kwargs):
         >>>     test_dataset=src_coco_fpath,
         >>>     pred_dataset=dst_coco_fpath,
         >>> )
-        >>> main(cmdline=cmdline, **kwargs)
+        >>> evaler = build_evaler(cmdline=cmdline, **kwargs)
+        >>> self = evaler
+        >>> evaler.forward()
     """
     args = make_predict_config(cmdline=cmdline, **kwargs)
     print('args.__dict__ = {}'.format(ub.repr2(args.__dict__, nl=1)))
@@ -337,10 +332,14 @@ def main(cmdline=False, **kwargs):
         torch.set_default_dtype(torch.float32)
 
     from watch.utils.lightning_ext import util_device
+    from watch.utils.lightning_ext import util_globals
     devices = util_device.coerce_devices(args.gpus)
+    num_workers = util_globals.coerce_num_workers(args.num_workers)
     if len(devices) > 1:
         raise NotImplementedError('TODO: handle multiple devices')
     device = devices[0]
+    if num_workers > 0:
+        util_globals.request_nofile_limits()
 
     # Load input kwcoco dataset and prepare the sampler
     input_coco_dset = kwcoco.CocoDataset.coerce(args.test_dataset)
@@ -353,13 +352,9 @@ def main(cmdline=False, **kwargs):
     num_channels = len(channels.split('|'))
     config['training']['num_channels'] = num_channels
     dataset = SequenceDataset(sampler, window_dims, input_dims, channels,
-                              training=False, window_overlap=0.3)
+                              training=False, window_overlap=0.3,
+                              inference_only=True)
     print(dataset.__len__())
-
-    from watch.utils.lightning_ext import util_globals
-    num_workers = util_globals.coerce_num_workers(args.num_workers)
-    if num_workers > 0:
-        util_globals.request_nofile_limits()
 
     eval_dataloader = dataset.make_loader(
         batch_size=args.batch_size,
@@ -444,7 +439,11 @@ def main(cmdline=False, **kwargs):
         output_feat_dpath=output_feat_dpath,
         imwrite_kw=imwrite_kw,
     )
-    self = evaler  # NOQA
+    return evaler
+
+
+def main(cmdline=False, **kwargs):
+    evaler = build_evaler(cmdline=False, **kwargs)
     evaler.forward()
 
 if __name__ == "__main__":

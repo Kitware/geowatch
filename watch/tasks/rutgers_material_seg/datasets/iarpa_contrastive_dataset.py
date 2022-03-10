@@ -17,11 +17,11 @@ class SequenceDataset(torch.utils.data.Dataset):
     Example:
         >>> from watch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import *  # NOQA
         >>> import ndsampler
+        >>> import itertools as it
         >>> sampler = ndsampler.CocoSampler.demo('vidshapes8', image_size=(64, 64))
         >>> channels = 'r|g|b'
         >>> window_dims = (2, 128, 128)
-        >>> self = SequenceDataset(sampler, window_dims=window_dims, training=False)
-        >>> import itertools as it
+        >>> self = SequenceDataset(sampler, window_dims=window_dims, training=False, channels=channels)
         >>> index_iter = it.count()
         >>> index = next(index_iter)
         >>> item = self[index]
@@ -40,9 +40,35 @@ class SequenceDataset(torch.utils.data.Dataset):
         >>>     kwplot.imshow(frame, pnum=pnum_())
         >>>     heatmap = kwimage.Heatmap(class_idx=mask, classes=self.sampler.classes)
         >>>     heatmap.draw(with_alpha=0.3)
+
+    Example:
+        >>> from watch.tasks.rutgers_material_seg.datasets.iarpa_contrastive_dataset import *  # NOQA
+        >>> import ndsampler
+        >>> import itertools as it
+        >>> sampler = ndsampler.CocoSampler.demo('vidshapes8-msi', image_size=(64, 64))
+        >>> channels = 'B1|B8|B11'
+        >>> window_dims = (2, 128, 128)
+        >>> self = SequenceDataset(sampler, window_dims=window_dims, training=False, inference_only=True, channels=channels)
+        >>> index_iter = it.count()
+        >>> index = next(index_iter)
+        >>> item = self[index]
+        >>> # xdoctest: +REQUIRES(--show)
+        >>> # xdoctest: +REQUIRES(module:kwplot)
+        >>> import kwplot
+        >>> import einops
+        >>> kwplot.autompl()
+        >>> frames = item['inputs']['im'].data
+        >>> assert 'label' not in item
+        >>> frames_ = einops.rearrange(frames, 'c t h w -> t c h w').numpy()
+        >>> frames_ = kwimage.normalize_intensity(frames_)
+        >>> frames_ = np.nan_to_num(frames_)
+        >>> pnum_ = kwplot.PlotNums(nSubplots=len(frames_))
+        >>> for frame in frames_:
+        >>>     kwplot.imshow(frame, pnum=pnum_())
     """
     def __init__(self, sampler, window_dims, input_dims=None, channels=None,
-                 rng=None, training=True, window_overlap=0.0):
+                 rng=None, training=True, window_overlap=0.0,
+                 inference_only=False):
         super().__init__()
         if input_dims is None:
             input_dims = window_dims[-2:]
@@ -54,6 +80,7 @@ class SequenceDataset(torch.utils.data.Dataset):
         self.input_dims = input_dims
         self.classes = self.sampler.classes
         self.channels = channels
+        self.inference_only = inference_only
         # Build a simple space-time-grid
         sample_grid_spec = {
             'task': 'video_detection',
@@ -94,8 +121,17 @@ class SequenceDataset(torch.utils.data.Dataset):
         if self.channels:
             tr['channels'] = self.channels
 
-        sample = sampler.load_sample(tr, with_annots="segmentation",
-                                     nodata='float')
+        if not self.inference_only:
+            with_annots = 'segmentation'
+        else:
+            with_annots = False
+
+        # NOTE: Setting nodata=float ensures this returns data in a floating
+        # format and also ensures any values that need to be masked are filled
+        # with nans.
+        sample: dict = sampler.load_sample(
+            tr, with_annots=with_annots, nodata='float',
+            padkw={'mode': 'constant', 'constant_values': np.nan})
 
         if self.training:
             # Only need to get a "negative" in training
@@ -103,19 +139,10 @@ class SequenceDataset(torch.utils.data.Dataset):
             tr_negative = self.chosen_samples[negative_index]
             if self.channels:
                 tr_negative['channels'] = self.channels
-            negative_sample = sampler.load_sample(tr_negative,
-                                                  with_annots="segmentation",
-                                                  nodata='float')
+            negative_sample: dict = sampler.load_sample(
+                tr_negative, with_annots=with_annots, nodata='float',
+                padkw={'mode': 'constant', 'constant_values': np.nan})
 
-        # print(sample.keys())
-        # print(sample['annots'].keys())
-        # print(sample['annots']['rel_ssegs'])
-        # print(sample['annots']['frame_dets'])
-        # rel_ssegs = sample['annots']['rel_ssegs']
-        # print(rel_ssegs.data)
-        # seg = kwimage.Segmentation.coerce(rel_ssegs.data)
-        # plt.imshow(rel_ssegs)
-        # plt.show()
         # Access the sampled image and annotation data
         raw_frame_list = sample['im']
         raw_det_list = sample['annots']['frame_dets']
@@ -126,53 +153,48 @@ class SequenceDataset(torch.utils.data.Dataset):
         frame_masks = []
         for raw_frame, raw_dets in zip(raw_frame_list, raw_det_list):
             frame = raw_frame.astype(np.float32)
-            dets = raw_dets
             input_dsize = self.input_dims[-2:][::-1]
             # Resize the sampled window to the target space for the network
             frame, info = kwimage.imresize(frame, dsize=input_dsize,
                                            interpolation='linear',
                                            return_info=True)
-            # Remember to apply any transform to the dets as well
-            dets = dets.scale(info['scale'])
-            # print(info)
-            dets = dets.translate(info['offset'])
-            # print(frame.shape[0:2])
-            frame_mask = np.full(frame.shape[0:2], dtype=np.int32, fill_value=-1)
-            ann_polys = dets.data['segmentations'].to_polygon_list()
-            # print(ann_polys)
-            ann_aids = dets.data['aids']
-            ann_cids = dets.data['cids']
-
-            for poly, aid, cid in zip(ann_polys, ann_aids, ann_cids):
-                cidx = self.classes.id_to_idx[cid]
-                poly.fill(frame_mask, value=cidx)
 
             # ensure channel dim is not squeezed
             frame = kwarray.atleast_nd(frame, 3)
-
-            # fig = plt.figure()
-            # ax1 = fig.add_subplot(1,2,1)
-            # ax2 = fig.add_subplot(1,2,2)
-            # ax1.imshow(frame[:,:,:3])
-            # ax2.imshow(frame_mask)
-            # plt.show()
-
-            frame_masks.append(frame_mask)
             frame_ims.append(frame)
+
+            if not self.inference_only:
+                # Remember to apply any transform to the dets as well
+                dets: kwimage.Detections = raw_dets
+                dets = dets.scale(info['scale'])
+                # print(info)
+                dets = dets.translate(info['offset'])
+                # print(frame.shape[0:2])
+                frame_mask = np.full(frame.shape[0:2], dtype=np.int32, fill_value=-1)
+                ann_polys = dets.data['segmentations'].to_polygon_list()
+                # print(ann_polys)
+                ann_aids = dets.data['aids']
+                ann_cids = dets.data['cids']
+
+                for poly, aid, cid in zip(ann_polys, ann_aids, ann_cids):
+                    cidx = self.classes.id_to_idx[cid]
+                    poly.fill(frame_mask, value=cidx)
+                frame_masks.append(frame_mask)
 
         # Perpare data for torch
         frame_data = np.concatenate([f[None, ...] for f in frame_ims], axis=0)
-        class_masks = np.concatenate([m[None, ...] for m in frame_masks], axis=0)
         cthw_im = frame_data.transpose(3, 0, 1, 2)
         # print(f"image min:{cthw_im.min()}, max:{cthw_im.max()}")
         inputs = {
             'im': ItemContainer(torch.from_numpy(cthw_im), stack=True),
         }
 
-        label = {
-            'class_masks': ItemContainer(
-                torch.from_numpy(class_masks), stack=False, cpu_only=True),
-        }
+        if not self.inference_only:
+            class_masks = np.concatenate([m[None, ...] for m in frame_masks], axis=0)
+            label = {
+                'class_masks': ItemContainer(
+                    torch.from_numpy(class_masks), stack=False, cpu_only=True),
+            }
 
         if self.training:
             negative_raw_frame_list = negative_sample['im']
@@ -216,14 +238,14 @@ class SequenceDataset(torch.utils.data.Dataset):
             negative_cthw_im = negative_frame_data.transpose(3, 0, 1, 2)
             # UNUSED? FIXME?
             # negative_class_masks = np.concatenate([m[None, ...] for m in negative_frame_masks], axis=0)  # NOQA
-
             inputs['negative_im'] = ItemContainer(torch.from_numpy(negative_cthw_im), stack=True)
 
         item = {
             'inputs': inputs,
-            'label': label,
             'tr': ItemContainer(sample['tr'], stack=False),
         }
+        if not self.inference_only:
+            item['label'] = label
 
         return item
 
