@@ -112,9 +112,6 @@ def main(cmdline=False, **kwargs):
     uncropped_dpath = dvc_dpath / uncropped_bundle_name
     uncropped_query_dpath = uncropped_dpath / '_query/items'
 
-    uncropped_kwcoco_fpath = uncropped_dpath / 'data.kwcoco.json'
-    uncropped_prep_kwcoco_fpath = uncropped_dpath / 'data_prepped.kwcoco.json'
-
     uncropped_ingress_dpath = uncropped_dpath / 'ingress'
 
     aligned_kwcoco_bundle = dvc_dpath / aligned_bundle_name
@@ -125,8 +122,6 @@ def main(cmdline=False, **kwargs):
     uncropped_query_dpath = uncropped_query_dpath.shrinkuser(home='$HOME')
     uncropped_query_dpath = uncropped_query_dpath.shrinkuser(home='$HOME')
     uncropped_query_dpath = uncropped_query_dpath.shrinkuser(home='$HOME')
-    uncropped_kwcoco_fpath = uncropped_kwcoco_fpath.shrinkuser(home='$HOME')
-    uncropped_prep_kwcoco_fpath = uncropped_prep_kwcoco_fpath.shrinkuser(home='$HOME')
     uncropped_ingress_dpath = uncropped_ingress_dpath.shrinkuser(home='$HOME')
     aligned_kwcoco_bundle = aligned_kwcoco_bundle.shrinkuser(home='$HOME')
     aligned_kwcoco_fpath = aligned_kwcoco_fpath.shrinkuser(home='$HOME')
@@ -139,6 +134,7 @@ def main(cmdline=False, **kwargs):
     if len(collated_list) != len(s3_fpath_list):
         print('Indicate if each s3 path is collated or not')
 
+    uncropped_coco_paths = []
     for s3_fpath, collated in zip(s3_fpath_list, collated_list):
         s3_name = ub.Path(s3_fpath).name
         uncropped_query_fpath = uncropped_query_dpath / ub.Path(s3_fpath).name
@@ -149,6 +145,7 @@ def main(cmdline=False, **kwargs):
 
         queue.submit(ub.codeblock(
             f'''
+            # GRAB Input STAC List
             mkdir -p {uncropped_query_dpath}
             [[ -f {uncropped_query_fpath} ]] || aws s3 --profile {aws_profile} cp "{s3_fpath}" "{uncropped_query_dpath}"
             '''))
@@ -169,6 +166,9 @@ def main(cmdline=False, **kwargs):
         else:
             collated_str = ''
 
+        uncropped_kwcoco_fpath = uncropped_dpath / f'data_{s3_name}.kwcoco.json'
+        uncropped_kwcoco_fpath = uncropped_kwcoco_fpath.shrinkuser(home='$HOME')
+
         queue.submit(ub.codeblock(
             rf'''
             [[ -f {uncropped_kwcoco_fpath} ]] || AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.ta1_stac_to_kwcoco \
@@ -178,6 +178,30 @@ def main(cmdline=False, **kwargs):
                 --jobs "min(avail,8)"
             '''))
 
+        uncropped_coco_paths.append(uncropped_kwcoco_fpath)
+
+    if len(uncropped_coco_paths) == 1:
+        uncropped_final_kwcoco_fpath = uncropped_coco_paths[0]
+    else:
+        union_suffix = ub.hash_data([p.name for p in uncropped_coco_paths])[0:8]
+        uncropped_final_kwcoco_fpath = uncropped_dpath / f'data_{union_suffix}.kwcoco.json'
+        uncropped_final_kwcoco_fpath = uncropped_final_kwcoco_fpath.shrinkuser(home='$HOME')
+        uncropped_multi_src_part = ' '.join(['"{}"'.format(p) for p in uncropped_coco_paths])
+        queue.submit(ub.codeblock(
+            rf'''
+            # COMBINE Uncropped datasets
+            [[ -f {uncropped_final_kwcoco_fpath} ]] || python -m kwcoco union \
+                --src {uncropped_multi_src_part} \
+                --dst "{uncropped_final_kwcoco_fpath}" \
+                --workers="min(avail,max(all/2,8))" \
+                --enable_video_stats=False \
+                --overwrite=warp \
+                --target_gsd=10
+            '''))
+
+    uncropped_prep_kwcoco_fpath = uncropped_dpath / 'data_prepped.kwcoco.json'
+    uncropped_prep_kwcoco_fpath = uncropped_prep_kwcoco_fpath.shrinkuser(home='$HOME')
+
     select_images_query = config['select_images']
     if select_images_query:
         suffix = '_' + ub.hash_data(select_images_query)[0:8]
@@ -185,21 +209,23 @@ def main(cmdline=False, **kwargs):
         small_uncropped_kwcoco_fpath = uncropped_kwcoco_fpath.augment(suffix=suffix)
         queue.submit(ub.codeblock(
             rf'''
+            # SUBSET Uncropped datasets (usually for debugging)
             python -m kwcoco subset \
-                --src="{uncropped_kwcoco_fpath}" \
+                --src="{uncropped_final_kwcoco_fpath}" \
                 --dst="{small_uncropped_kwcoco_fpath}" \
                 --select_images='{select_images_query}'
             '''))
 
-        uncropped_kwcoco_fpath = small_uncropped_kwcoco_fpath
+        uncropped_final_kwcoco_fpath = small_uncropped_kwcoco_fpath
         uncropped_prep_kwcoco_fpath = uncropped_prep_kwcoco_fpath.augment(suffix=suffix)
         aligned_kwcoco_fpath = aligned_kwcoco_fpath.augment(suffix=suffix)
         # --populate-watch-fields \
 
     queue.submit(ub.codeblock(
         rf'''
+        # PREPARE Uncropped datasets (usually for debugging)
         [[ -f {uncropped_prep_kwcoco_fpath} ]] || AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.coco_add_watch_fields \
-            --src "{uncropped_kwcoco_fpath}" \
+            --src "{uncropped_final_kwcoco_fpath}" \
             --dst "{uncropped_prep_kwcoco_fpath}" \
             --workers="min(avail,max(all/2,8))" \
             --enable_video_stats=False \
@@ -222,6 +248,7 @@ def main(cmdline=False, **kwargs):
     align_visualize = config['debug']
     queue.submit(ub.codeblock(
         rf'''
+        # MAIN WORKHORSE CROP IMAGES
         # Crop big images to the geojson regions
         PROJ_DEBUG=3 AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.coco_align_geotiffs \
             --src "{uncropped_prep_kwcoco_fpath}" \
@@ -302,7 +329,6 @@ def main(cmdline=False, **kwargs):
         if agg_state is not None and not agg_state['errored']:
             queue.kill()
 
-
     # TODO: team features
     """
     DATASET_CODE=Aligned-Drop2-TA1-2022-03-07
@@ -319,8 +345,6 @@ def main(cmdline=False, **kwargs):
         --depth_workers=auto \
         --do_splits=1  --cache=1 --run=0
     """
-
-
 
 # dvc_dpath=$home/data/dvc-repos/smart_watch_dvc
 # #dvc_dpath=$(python -m watch.cli.find_dvc)

@@ -290,7 +290,8 @@ def main(cmdline=True, **kwargs):
         tq.add_header_command(config['virtualenv_cmd'])
 
     # TODO: enable forcing if needbe
-    if not base_combo_fpath.exists() or not config['cache']:
+    # if not base_combo_fpath.exists() or not config['cache']:
+    if True:
         #  Indent of this the codeblock matters for this line
         src_lines = ' \\\n                          '.join(tocombine)
         command = ub.codeblock(

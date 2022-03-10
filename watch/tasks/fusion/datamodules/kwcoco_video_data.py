@@ -77,8 +77,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         >>> import watch
         >>> import kwcoco
         >>> dvc_dpath = watch.find_smart_dvc_dpath()
-        >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/data_nowv.kwcoco.json'
-        >>> coco_fpath = dvc_dpath / 'Aligned-Drop2-TA1-2022-03-07/data.kwcoco.json'
+        >>> coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/combo_ILM.kwcoco.json'
+        >>> #coco_fpath = dvc_dpath / 'Aligned-Drop2-TA1-2022-03-07/combo_DILM.kwcoco.json'
         >>> #coco_fpath = dvc_dpath / 'Drop2-Aligned-TA1-2022-02-15/combo_DILM.kwcoco.json'
         >>> dset = kwcoco.CocoDataset(coco_fpath)
         >>> images = dset.images()
@@ -89,7 +89,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         >>> img = ub.peek(train_dataset.imgs.values())
         >>> chan_info = kwcoco_extensions.coco_channel_stats(dset)
         >>> #channels = chan_info['common_channels']
-        >>> channels = 'blue|green|red'
+        >>> channels = 'blue|green|red|nir|swir16|swir22,forest|bare_ground,matseg_0|matseg_1|matseg_2,invariants.0:3,cloudmask'
         >>> #channels = 'blue|green|red|depth'
         >>> #chan_spec = kwcoco.channel_spec.FusedChannelSpec.coerce(channels)
         >>> #channels = None
@@ -116,8 +116,8 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         >>> dataset.requested_tasks['change'] = False
         >>> dataset.disable_augmenter = True
         >>> tr = 0
-        >>> batch = [dataset[tr]]
-        >>> batch = next(iter(dl))
+        >>> item, *_ = batch = [dataset[tr]]
+        >>> #item, *_ = batch = next(iter(dl))
         >>> # Visualize
         >>> canvas = datamodule.draw_batch(batch)
         >>> # xdoctest: +REQUIRES(--show)
@@ -167,7 +167,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         >>> )
         >>> self.setup('fit')
         >>> dl = self.train_dataloader()
-        >>> batch = next(iter(dl))
+        >>> item, *_ = batch = next(iter(dl))
         >>> expect_shape = (batch_size, time_steps, len(chan_spec), chip_size, chip_size)
         >>> assert len(batch) == batch_size
         >>> for item in batch:
@@ -901,6 +901,7 @@ class KWCocoVideoDataset(data.Dataset):
             )
             self.length = len(new_sample_grid['targets'])
         else:
+            # TODO Cache this step
             negative_classes = (self.ignore_classes | self.background_classes)
             new_sample_grid = sample_video_spacetime_targets(
                 sampler.dset, window_dims=sample_shape,
@@ -1288,6 +1289,14 @@ class KWCocoVideoDataset(data.Dataset):
                     padkw={'constant_values': np.nan},
                     dtype=np.float32
                 )
+                WV_NODATA_HACK = 1
+                if WV_NODATA_HACK:
+                    # Should be fixed in drop3
+                    if coco_img.img.get('sensor_coarse') == 'WV':
+                        if set(stream).issubset({'blue', 'green', 'red'}):
+                            mask = (sample['im'] == 0)
+                            sample['im'][mask] = np.nan
+
                 # dont ask for annotations multiple times
                 if not np.all(np.isnan(sample['im'])):
                     sample_streams[stream.spec] = sample
@@ -2135,6 +2144,10 @@ class KWCocoVideoDataset(data.Dataset):
             >>> kwplot.autompl()
             >>> kwplot.imshow(canvas)
             >>> kwplot.show_if_requested()
+
+        Ignore:
+            import xdev
+            globals().update(xdev.get_func_kwargs(KWCocoVideoDataset.draw_item))
         """
         builder = BatchVisualizationBuilder(
             item=item, item_output=item_output,
@@ -2319,14 +2332,27 @@ class BatchVisualizationBuilder:
                     frame_chan_datas.append(chan_data)
             full_mode_code = ','.join(list(frame_item['modes'].keys()))
 
-            unused_frame_chan_names_set = ub.oset(frame_chan_names)
-            frame_available_chans = []
-            for combinable in combinable_channels:
-                if combinable.issubset(unused_frame_chan_names_set):
-                    frame_available_chans.append(tuple(combinable))
-                    unused_frame_chan_names_set.difference_update(combinable)
-            frame_available_chans.extend(
-                [(c,) for c in unused_frame_chan_names_set])
+            # Determine what single and combinable channels exist per stream
+            perstream_available = []
+            for mode_code in frame_modes.keys():
+                code_list = kwcoco.FusedChannelSpec.coerce(mode_code).normalize().as_list()
+                code_set = ub.oset(code_list)
+                print('code_set = {!r}'.format(code_set))
+                stream_combinables = []
+                for combinable in combinable_channels:
+                    if combinable.issubset(code_set):
+                        stream_combinables.append(combinable)
+                remain = code_set - set(ub.flatten(stream_combinables))
+                stream_singletons = [(c,) for c in remain]
+                # Prioritize combinable channels in each stream first
+                stream_available = list(map(tuple, stream_combinables)) + stream_singletons
+                perstream_available.append(stream_available)
+            print('perstream_available = {!r}'.format(perstream_available))
+
+            # Prioritize choosing a balance of channels from each stream
+            import more_itertools
+            frame_available_chans = list(more_itertools.roundrobin(*perstream_available))
+            print('frame_available_chans = {!r}'.format(frame_available_chans))
 
             frame_meta = {
                 'full_mode_code': full_mode_code,
@@ -2350,8 +2376,10 @@ class BatchVisualizationBuilder:
                          in enumerate(chan_freq.items())}
         for frame_meta in frame_metas:
             chan_keys = frame_meta['frame_available_chans']
+            print('chan_keys = {!r}'.format(chan_keys))
             frame_priority = ub.dict_isect(chan_priority, chan_keys)
             chosen = ub.argsort(frame_priority, reverse=True)[0:builder.max_channels]
+            print('chosen = {!r}'.format(chosen))
             frame_meta['chans_to_use'] = chosen
 
         # Gather channels to visualize
@@ -2439,11 +2467,14 @@ class BatchVisualizationBuilder:
             for frame_meta in frame_metas:
                 for row in frame_meta['chan_rows']:
                     raw_signal = row['raw_signal']
-                    try:
-                        norm_signal = kwimage.normalize_intensity(raw_signal, nodata=0).copy()
-                    except Exception:
+                    needs_norm = np.nanmin(raw_signal) < 0 or np.nanmax(raw_signal) > 1
+                    if needs_norm:
+                        try:
+                            norm_signal = kwimage.normalize_intensity(raw_signal).copy()
+                        except Exception:
+                            norm_signal = raw_signal.copy()
+                    else:
                         norm_signal = raw_signal.copy()
-                    # norm_signal = kwimage.normalize(raw_signal).copy()
                     norm_signal = np.nan_to_num(norm_signal)
                     norm_signal = util_kwimage.ensure_false_color(norm_signal)
                     norm_signal = kwimage.atleast_3channels(norm_signal)
