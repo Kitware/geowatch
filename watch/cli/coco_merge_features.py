@@ -37,9 +37,7 @@ def check_kwcoco_file(kwcoco_path, channel_name, sensor_name=None):
 
         # Check that image includes channel.
         if channel_name not in image_channels:
-            print(f"FATAL: Channel '{channel_name}' not found in image {image_id} of kwcoco file {kwcoco_path}")
-            print(f"Only channels found: {image_channels}")
-            exit()
+            raise AssertionError(f"Channel '{channel_name}' not found in image {image_id} of kwcoco file {kwcoco_path}. Only channels found: {image_channels}")
 
 
 def save_image_to_disk(image, channel_name, save_path, geotransform_info=None, projection_info=None):
