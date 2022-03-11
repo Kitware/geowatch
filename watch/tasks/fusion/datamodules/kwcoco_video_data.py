@@ -1662,7 +1662,7 @@ class KWCocoVideoDataset(data.Dataset):
                         # segmenting the inside of the object than the outside.
                         # Effectively boundaries become uncertain.
                         import cv2
-                        poly_mask = np.zeros_like(frame_class_ohe[new_class_cidx])
+                        poly_mask = np.zeros_like(frame_class_ohe[0])
                         poly_mask = poly.fill(poly_mask, value=1)
                         dist = cv2.distanceTransform(poly_mask, cv2.DIST_L2, 3)
                         max_dist = dist.max()

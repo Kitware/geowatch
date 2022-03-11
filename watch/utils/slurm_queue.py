@@ -8,9 +8,10 @@ Notes:
     See git@github.com:Erotemic/local.git init/setup_slurm.sh
     Or ~/local/init/setup_slurm.sh in my local checkout
 
+CommandLine:
+   xdoctest -m watch.utils.slurm_queue __doc__
+
 Example:
-    >>> import sys, ubelt
-    >>> sys.path.append(ubelt.expandpath('~/code/watch'))
     >>> from watch.utils.slurm_queue import *  # NOQA
     >>> dpath = ub.Path.appdir('slurm_queue/tests')
     >>> queue = SlurmQueue()
@@ -18,7 +19,9 @@ Example:
     >>> job1 = queue.submit(f'mkdir {dpath}', depends=[job0])
     >>> job2 = queue.submit(f'echo "result=42" > {dpath}/test.txt ', depends=[job1])
     >>> job3 = queue.submit(f'cat {dpath}/test.txt', depends=[job2])
-    >>> print(queue.finalize_text())
+    >>> queue.rprint()
+    >>> # xdoctest +REQUIRES(--run)
+    >>> queue.run()
 """
 import ubelt as ub
 
@@ -195,7 +198,6 @@ class SlurmQueue:
     def write(self):
         import os
         import stat
-        # self.log_dpath.ensuredir()
         text = self.finalize_text()
         self.fpath.parent.ensuredir()
         with open(self.fpath, 'w') as file:
@@ -250,9 +252,9 @@ class SlurmQueue:
         return text
 
     def run(self, block=False):
-        if not ub.find_exe('tmux'):
-            raise Exception('tmux not found')
-        self.ensuredir()
+        if not ub.find_exe('sbatch'):
+            raise Exception('sbatch not found')
+        self.log_dpath.ensuredir()
         self.write()
         ub.cmd(f'bash {self.fpath}', verbose=3, check=True)
         if block:
