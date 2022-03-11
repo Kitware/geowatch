@@ -21,7 +21,7 @@ class attention_unet(nn.Module):
         super(attention_unet, self).__init__()
 
         self.mode = mode
-        if type(attention_layers) == int:
+        if isinstance(attention_layers, int):
             self.attention_layers = list(range(1, attention_layers + 1))
         else:
             self.attention_layers = list(attention_layers)

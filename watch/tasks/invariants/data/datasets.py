@@ -10,7 +10,6 @@ import random
 from pandas import read_csv
 import ndsampler
 import ubelt as ub
-import kwarray
 from ..utils.read_sentinel_images import read_sentinel_img_trio
 
 
@@ -25,16 +24,11 @@ class gridded_dataset(torch.utils.data.Dataset):
         'coastal', 'lwir11', 'lwir12', 'blue', 'green', 'red', 'nir', 'swir16', 'swir22', 'pan', 'cirrus'
     ]
     def __init__(self, coco_dset, sensor=['S2', 'L8'], bands=['shared'],
-                 segmentation=False, patch_size=128, num_images=2, returned_images=None,
+                 segmentation=False, patch_size=128, num_images=2,
                  mode='train', patch_overlap=.25, bas=True, rng=None):
         super().__init__()
 
-        self.rng = kwarray.ensure_rng(rng)
         # initialize dataset
-        if returned_images:
-            self.returned_images = returned_images
-        else:
-            self.returned_images = num_images
 
         self.coco_dset = kwcoco.CocoDataset.coerce(coco_dset)
         wv_image_ids = []
@@ -131,21 +125,14 @@ class gridded_dataset(torch.utils.data.Dataset):
         # vidid = tr['vidid']
         gids = tr['gids']
 
-        if self.returned_images < self.num_images:
-            kept_indices = torch.randperm(self.num_images)[:self.returned_images]
-            im1_id = gids[kept_indices[0]]
-        else:
-            im1_id = gids[0]
+        im1_id = gids[0]
         offset_idx = idx
         offset_im_id = None
 
         while (im1_id != offset_im_id) or (offset_idx == idx):
             offset_idx = random.randint(0, self.__len__() - 2)
             offset_tr = self.patches[offset_idx]
-            if self.returned_images < self.num_images:
-                offset_im_id = offset_tr['gids'][kept_indices[0]]
-            else:
-                offset_im_id = offset_tr['gids'][0]
+            offset_im_id = offset_tr['gids'][0]
         offset_tr['channels'] = self.bands
 
         if self.segmentation:
@@ -203,13 +190,9 @@ class gridded_dataset(torch.utils.data.Dataset):
         normalized_date = torch.tensor([date_[0] - 2018 + date_[1] / 12 for date_ in date_list])
         out = dict()
 
-        if self.returned_images < self.num_images:
-            for m in range(len(kept_indices)):
-                out['image{}'.format(1 + m)] = image_dict[kept_indices[m].item()].float()
-            normalized_date = torch.tensor([normalized_date[m] for m in kept_indices])
-        else:
-            for m in range(self.num_images):
-                out['image{}'.format(1 + m)] = image_dict[1 + m].float()
+        for m in range(self.num_images):
+            out['image{}'.format(1 + m)] = image_dict[1 + m].float()
+
         out['offset_image1'] = offset_image.float()
         out['augmented_image1'] = augmented_image.float()
         out['normalized_date'] = normalized_date.float()
@@ -317,7 +300,7 @@ class kwcoco_dataset(Dataset):
     def get_img(self, idx, device=None):
         image_id = self.dset_ids[idx]
         image_info = self.dset.index.imgs[image_id]
-        image = self.dset.delayed_load(image_id, channels=self.channels, space='video').finalize(no_data='auto').astype(np.float32)
+        image = self.dset.delayed_load(image_id, channels=self.channels, space='video').finalize().astype(np.float32)
         image = torch.tensor(image)
         if device:
             image = image.to(device)
@@ -351,8 +334,8 @@ class kwcoco_dataset(Dataset):
         im2_sensor = self.dset.index.imgs[img2_id]['sensor_coarse']
 
         # load images
-        img1 = self.dset.delayed_load(img1_id, channels=self.channels, space='video').finalize(no_data='auto').astype(np.float32)
-        img2 = self.dset.delayed_load(img2_id, channels=self.channels, space='video').finalize(no_data='auto').astype(np.float32)
+        img1 = self.dset.delayed_load(img1_id, channels=self.channels, space='video').finalize().astype(np.float32)
+        img2 = self.dset.delayed_load(img2_id, channels=self.channels, space='video').finalize().astype(np.float32)
         img1 = np.nan_to_num(img1)
         img2 = np.nan_to_num(img2)
 
@@ -387,20 +370,24 @@ class kwcoco_dataset(Dataset):
             img3 = torch.tensor(img3).permute(2, 0, 1)
             img4 = torch.tensor(img4).permute(2, 0, 1)
 
-            if img1.std() != 0.:
-                img1 = (img1 - img1.mean()) / img1.std()
+            img1std = img1.nanstd()
+            if img1std != 0.:
+                img1 = (img1 - img1.nanmean()) / img1std
             else:
                 img1 = torch.zeros_like(img1)
-            if img2.std() != 0.:
-                img2 = (img2 - img2.mean()) / img2.std()
+            img2std = img2.nanstd()
+            if img2std != 0.:
+                img2 = (img2 - img2.nanmean()) / img2std
             else:
                 img2 = torch.zeros_like(img2)
-            if img3.std() != 0.:
-                img3 = (img3 - img3.mean()) / img3.std()
+            img3std = img3.nanstd()
+            if img3std != 0.:
+                img3 = (img3 - img3.nanmean()) / img3std
             else:
                 img3 = torch.zeros_like(img3)
-            if img4.std() != 0.:
-                img4 = (img4 - img4.mean()) / img4.std()
+            img4std = img4.std()
+            if img4std != 0.:
+                img4 = (img4 - img4.nanmean()) / img4std
             else:
                 img4 = torch.zeros_like(img4)
 

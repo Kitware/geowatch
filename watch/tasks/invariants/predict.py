@@ -151,11 +151,8 @@ class predict(object):
                         features = torch.einsum('xy,byhw->bxhw', self.pca_projector, features)
                         features2 = torch.einsum('xy,byhw->bxhw', self.pca_projector, features2)
 
-                    ###normalize features
-                    features = (features - features.mean(dim=(2, 3), keepdim=True)) / features.std(dim=(2, 3), keepdim=True)
-                    features2 = (features2 - features2.mean(dim=(2, 3), keepdim=True)) / features2.std(dim=(2, 3), keepdim=True)
-                    save_feat.append(torch.sigmoid(features.squeeze()).permute(1, 2, 0).cpu())
-                    save_feat2.append(torch.sigmoid(features2.squeeze()).permute(1, 2, 0).cpu())
+                    features = features.squeeze().permute(1, 2, 0).cpu()
+                    features2 = features2.squeeze().permute(1, 2, 0).cpu()
 
                 if 'before_after' in args.tasks:
                     ### TO DO: Set to output of separate model.
