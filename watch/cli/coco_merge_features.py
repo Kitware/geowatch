@@ -37,7 +37,9 @@ def check_kwcoco_file(kwcoco_path, channel_name, sensor_name=None):
 
         # Check that image includes channel.
         if channel_name not in image_channels:
-            raise AssertionError(f"Channel '{channel_name}' not found in image {image_id} of kwcoco file {kwcoco_path}. Only channels found: {image_channels}")
+            raise AssertionError(
+                f"Channel '{channel_name}' not found in image {image_id} of kwcoco file {kwcoco_path}. Only channels found: {image_channels}"
+            )
 
 
 def save_image_to_disk(image, channel_name, save_path, geotransform_info=None, projection_info=None):
@@ -140,10 +142,10 @@ def merge_kwcoco_channels(
     print(f"Saved merged kwcoco file to: {output_kwcoco_path}")
 
 
-if __name__ == "__main__":
+def main(cmdline=True):
     """
     Example call:
-    python watch/cli/coco_merge_channels.py --kwcoco_file_paths \
+    python watch/cli/coco_merge_features.py --kwcoco_file_paths \
          /data4/datasets/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/output_iarpa_drop2v2_total_bin_change_early_fusion_0014.kwcoco.json \
          /data4/datasets/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/output_iarpa_drop2v2_total_bin_change_early_fusion_0013.kwcoco.json  \
          --output_kwcoco_path /data4/datasets/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/test_comb.kwcoco.json \
@@ -213,7 +215,7 @@ if __name__ == "__main__":
     ## If no merge_channel_name given then use first
     if args.merge_channel_name is None:
         args.merge_channel_name = args.channel_name[0]
-        print(f"INFO: No channel name, using channel name: {args.channel_name[0]}")
+        print(f"INFO: No output channel name given, using channel name: {args.channel_name[0]}")
 
     ## Check kwcoco files to see that they exist and contain the required channels.
     for kwcoco_file_path, channel_name in zip(args.kwcoco_file_paths, args.channel_name):
@@ -229,3 +231,7 @@ if __name__ == "__main__":
         args.merge_channel_name,
         sensor_name=args.sensor,
     )
+
+
+if __name__ == "__main__":
+    main()
