@@ -71,7 +71,7 @@ class pretext(pl.LightningModule):
         self.backbone = attention_unet(in_channels=num_channels,
                                         out_channels=hparams.feature_dim_shared,
                                         pos_encode=hparams.positional_encoding,
-                                        num_attention_layers=hparams.num_attention_layers,
+                                        attention_layers=hparams.attention_layers,
                                         mode=hparams.positional_encoding_mode)
 
         # task specific necks
@@ -274,7 +274,7 @@ class pretext(pl.LightningModule):
 
             features = None
             image_stack = None
-            stack = torch.cat(feature_collection, dim=0).permute(0, 1, 3, 4, 2).reshape(-1, 64)
+            stack = torch.cat(feature_collection, dim=0).permute(0, 1, 3, 4, 2).reshape(-1, self.hparams.feature_dim_shared)
             _, _, projector = pca(stack, q=reduction_dim)
             stack = None
 
