@@ -42,36 +42,6 @@ def check_kwcoco_file(kwcoco_path, channel_name, sensor_name=None):
             )
 
 
-def save_image_to_disk(image, channel_name, save_path, geotransform_info=None, projection_info=None):
-    """Save image to local disk with geo and projection info.
-
-    Args:
-        image (np.array): A numpy array of shape [height, width, n_channels].
-        channel_name (str): Name of the channel
-        save_path (str): Path to save images to.
-        geotransform_info (_type_, optional): _description_. Default: None
-        projection_info (_type_, optional): _description_. Default: None
-    """
-    height, width, n_channels = image.shape
-    n_channel_names = len(channel_name.split("|"))
-    if n_channel_names != n_channels:
-        print(
-            f"FATAL: Number of channel names ({n_channel_names}) not equal to number of channels in image ({n_channels})."
-        )
-
-    driver = gdal.GetDriverByName("GTiff")
-    outdata = driver.Create(save_path, width, height, n_channels, gdal.GDT_Float64)
-    for channel_index in range(n_channels):
-        band = outdata.GetRasterBand(channel_index + 1)
-        band.WriteArray(image[:, :, channel_index])
-    if geotransform_info is not None:
-        outdata.SetGeoTransform(geotransform_info)
-    if projection_info is not None:
-        outdata.SetProjection(projection_info)
-    outdata.FlushCache()
-    outdata = None
-
-
 def merge_kwcoco_channels(
     kwcoco_file_paths, output_kwcoco_path, channel_names, weights, merged_channel_name, sensor_name=None
 ):
@@ -117,7 +87,7 @@ def merge_kwcoco_channels(
         # Save merged image to disk and onto kwcoco file.
         ## Save merged image onto disk.
         save_path = os.path.join(save_assest_dir, str(image_id) + "_merged.tif")
-        save_image_to_disk(merged_image, merged_channel_name, save_path)
+        kwimage.imwrite(save_path, merged_image, backend="gdal")
 
         ## Get project and geo info.
         unmerged_image = merge_kwcoco.index.imgs[image_id]
