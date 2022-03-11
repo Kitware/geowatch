@@ -234,6 +234,7 @@ class MultimodalTransformer(pl.LightningModule):
         parser.add_argument('--global_class_weight', default=1.0, type=float)
         parser.add_argument('--global_change_weight', default=1.0, type=float)
         parser.add_argument('--global_saliency_weight', default=0.0, type=float)
+        parser.add_argument('--modulate_class_weights', default='', type=str, help='a special syntax that lets the user modulate automatically computed class weights. Should be a comma separated list of name*weight or name*weight+offset. E.g. `negative*0,background*0.001,No Activity*0.1+1`')
 
         parser.add_argument('--change_loss', default='cce')
         parser.add_argument('--class_loss', default='focal')
@@ -293,6 +294,7 @@ class MultimodalTransformer(pl.LightningModule):
                  name='unnamed_expt',
                  squash_modes=False,
                  multimodal_reduce='max',
+                 modulate_class_weights='',
                  classes=10):
 
         super().__init__()
@@ -302,6 +304,7 @@ class MultimodalTransformer(pl.LightningModule):
         self.arch_name = arch_name
         self.squash_modes = squash_modes
         self.multimodal_reduce = multimodal_reduce
+        self.modulate_class_weights = modulate_class_weights
 
         if dataset_stats is not None:
             input_stats = dataset_stats['input_stats']
@@ -433,6 +436,32 @@ class MultimodalTransformer(pl.LightningModule):
                     w = heuristic_weights.get(catname, 1.0)
                     class_weights.append(w)
                 using_class_weights = ub.dzip(self.classes, class_weights)
+
+                # Add in user-specific modulation of the weights
+                if self.modulate_class_weights:
+                    import re
+                    parts = [p.strip() for p in self.modulate_class_weights.split(',')]
+                    parts = [p for p in parts if p]
+                    for part in parts:
+                        toks = re.split('([+*])', part)
+                        catname = toks[0]
+                        rest_iter = iter(toks[1:])
+                        weight = using_class_weights[catname]
+                        nrhtoks = len(toks) - 1
+                        assert nrhtoks % 2 == 0
+                        nstmts = nrhtoks // 2
+                        for _ in range(nstmts):
+                            opcode = next(rest_iter)
+                            arg = float(next(rest_iter))
+                            if opcode == '*':
+                                weight = weight * arg
+                            elif opcode == '+':
+                                weight = weight * arg
+                            else:
+                                raise KeyError(opcode)
+                        # Modulate
+                        using_class_weights[catname] = weight
+
                 print('using_class_weights = {}'.format(ub.repr2(using_class_weights, nl=1, align=':')))
                 class_weights = torch.FloatTensor(class_weights)
             else:
@@ -468,9 +497,7 @@ class MultimodalTransformer(pl.LightningModule):
                 tokenize = ConvTokenizer(in_chan, in_features_raw, norm=None)
             elif tokenizer == 'linconv':
                 in_features_raw = MODAL_AGREEMENT_CHANS * 64
-                import xdev
-                with xdev.embed_on_exception_context:
-                    tokenize = LinearConvTokenizer(in_chan, in_features_raw)
+                tokenize = LinearConvTokenizer(in_chan, in_features_raw)
             elif tokenizer == 'dwcnn':
                 in_features_raw = MODAL_AGREEMENT_CHANS * 64
                 tokenize = DWCNNTokenizer(in_chan, in_features_raw, norm=token_norm)

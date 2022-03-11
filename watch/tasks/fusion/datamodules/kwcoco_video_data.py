@@ -1273,6 +1273,18 @@ class KWCocoVideoDataset(data.Dataset):
         gid_to_sample = {}
         gid_to_isbad = {}
 
+        # NOTES ON CLOUDMASK
+        # https://github.com/GERSL/Fmask#46-version
+        # The cloudmask band is a class-idx based raster with labels
+        # 0 => clear land pixel
+        # 1 => clear water pixel
+        # 2 => cloud shadow
+        # 3 => snow
+        # 4 => cloud
+        # 255 => no observation
+
+        # TODO: this could be a specially handled frame like ASI.
+
         def sample_one_frame(gid):
             coco_img = coco_dset.coco_image(gid)
             sensor_channels = (self.sample_channels & coco_img.channels).normalize()
@@ -1280,6 +1292,7 @@ class KWCocoVideoDataset(data.Dataset):
             tr_frame['gids'] = [gid]
             sample_streams = {}
             first_with_annot = with_annots
+
             for stream in sensor_channels.streams():
                 tr_frame['channels'] = stream
                 # TODO: FIXME: Use the correct nodata value here!
@@ -1298,10 +1311,20 @@ class KWCocoVideoDataset(data.Dataset):
                             sample['im'][mask] = np.nan
 
                 # dont ask for annotations multiple times
-                if not np.all(np.isnan(sample['im'])):
+                invalid_mask = np.isnan(sample['im'])
+                if not np.all(invalid_mask):
                     sample_streams[stream.spec] = sample
                     if 'annots' in sample:
                         first_with_annot = False
+                else:
+                    # HACK: if the red channel is all bad, discard the frame
+                    # This can be removed once nodata is correctly propogated
+                    # in the team features. OR we can add a feature where we
+                    # keep track of an image wide observation mask and use that
+                    # instead of using red as a proxy for it.
+                    if 'red' in set(stream):
+                        sample_streams = []
+                        break
 
             gid_to_isbad[gid] = len(sample_streams) == 0
             gid_to_sample[gid] = sample_streams
@@ -2283,6 +2306,7 @@ class BatchVisualizationBuilder:
         return canvas
 
     def _prepare_frame_metadata(builder):
+        import more_itertools
         item = builder.item
         combinable_channels = builder.combinable_channels
 
@@ -2337,7 +2361,6 @@ class BatchVisualizationBuilder:
             for mode_code in frame_modes.keys():
                 code_list = kwcoco.FusedChannelSpec.coerce(mode_code).normalize().as_list()
                 code_set = ub.oset(code_list)
-                print('code_set = {!r}'.format(code_set))
                 stream_combinables = []
                 for combinable in combinable_channels:
                     if combinable.issubset(code_set):
@@ -2347,12 +2370,9 @@ class BatchVisualizationBuilder:
                 # Prioritize combinable channels in each stream first
                 stream_available = list(map(tuple, stream_combinables)) + stream_singletons
                 perstream_available.append(stream_available)
-            print('perstream_available = {!r}'.format(perstream_available))
 
             # Prioritize choosing a balance of channels from each stream
-            import more_itertools
             frame_available_chans = list(more_itertools.roundrobin(*perstream_available))
-            print('frame_available_chans = {!r}'.format(frame_available_chans))
 
             frame_meta = {
                 'full_mode_code': full_mode_code,
@@ -2370,16 +2390,17 @@ class BatchVisualizationBuilder:
         # Determine which frames to visualize For each frame choose N channels
         # such that common channels are aligned, visualize common channels in
         # the first rows and then fill with whatever is left
-        chan_freq = ub.dict_hist(ub.flatten(frame_meta['frame_available_chans']
-                                            for frame_meta in frame_metas))
-        chan_priority = {k: (v, len(k), -idx) for idx, (k, v)
-                         in enumerate(chan_freq.items())}
+        # chan_freq = ub.dict_hist(ub.flatten(frame_meta['frame_available_chans']
+        #                                     for frame_meta in frame_metas))
+        # chan_priority = {k: (v, len(k), -idx) for idx, (k, v)
+        #                  in enumerate(chan_freq.items())}
         for frame_meta in frame_metas:
             chan_keys = frame_meta['frame_available_chans']
-            print('chan_keys = {!r}'.format(chan_keys))
-            frame_priority = ub.dict_isect(chan_priority, chan_keys)
-            chosen = ub.argsort(frame_priority, reverse=True)[0:builder.max_channels]
-            print('chosen = {!r}'.format(chosen))
+            # print('chan_keys = {!r}'.format(chan_keys))
+            # frame_priority = ub.dict_isect(chan_priority, chan_keys)
+            # chosen = ub.argsort(frame_priority, reverse=True)[0:builder.max_channels]
+            # print('chosen = {!r}'.format(chosen))
+            chosen = chan_keys[0:builder.max_channels]
             frame_meta['chans_to_use'] = chosen
 
         # Gather channels to visualize
