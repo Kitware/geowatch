@@ -1665,9 +1665,11 @@ class KWCocoVideoDataset(data.Dataset):
                         poly_mask = np.zeros_like(frame_class_ohe[new_class_cidx])
                         poly_mask = poly.fill(poly_mask, value=1)
                         dist = cv2.distanceTransform(poly_mask, cv2.DIST_L2, 3)
-                        dist = dist / dist.max()
-                        weight_mask = dist + (1 - poly_mask)
-                        frame_poly_weights = frame_poly_weights * weight_mask
+                        max_dist = dist.max()
+                        if max_dist > 0:
+                            dist_weight = dist / max_dist
+                            weight_mask = dist_weight + (1 - poly_mask)
+                            frame_poly_weights = frame_poly_weights * weight_mask
 
                 frame_poly_weights = np.maximum(frame_poly_weights, self.min_spacetime_weight)
 

@@ -216,6 +216,7 @@ class MultimodalTransformer(pl.LightningModule):
         # Model names define the transformer encoder used by the method
         available_encoders = list(transformer.encoder_configs.keys()) + ['deit']
 
+        parser.add_argument('--stream_channels', default=8, type=int, help='number of channels to normalize each project stream to')
         parser.add_argument(
             '--tokenizer', default='rearrange', type=str,
             choices=['dwcnn', 'rearrange', 'conv7', 'linconv'], help=ub.paragraph(
@@ -295,6 +296,7 @@ class MultimodalTransformer(pl.LightningModule):
                  squash_modes=False,
                  multimodal_reduce='max',
                  modulate_class_weights='',
+                 stream_channels=8,
                  classes=10):
 
         super().__init__()
@@ -305,6 +307,7 @@ class MultimodalTransformer(pl.LightningModule):
         self.squash_modes = squash_modes
         self.multimodal_reduce = multimodal_reduce
         self.modulate_class_weights = modulate_class_weights
+        self.stream_channels = stream_channels
 
         if dataset_stats is not None:
             input_stats = dataset_stats['input_stats']
@@ -476,7 +479,7 @@ class MultimodalTransformer(pl.LightningModule):
             self.positive_change_weight
         ])
 
-        MODAL_AGREEMENT_CHANS = 8
+        MODAL_AGREEMENT_CHANS = self.stream_channels
         self.tokenizer = tokenizer
         self.sensor_channel_tokenizers = RobustModuleDict()
         for s, c in self.unique_sensor_modes:

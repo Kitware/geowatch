@@ -133,6 +133,10 @@ python -m watch.tasks.fusion.fit \
 
 
     #--use_centered_positives=True \ # Should have been true
+    #--multimodal_reduce=max \
+    #--modulate_class_weights="positive*0,negative*0,background*0.001,No Activity*0.0,Post Construction*0.0001" \
+    #--dist_weight=True \
+    #--stream_channels=8
 
 
 
@@ -3655,5 +3659,51 @@ python -m watch.tasks.fusion.fit \
     --arch_name=smt_it_stm_p8 \
     --num_draw=8 \
     --draw_interval=1m \
+    --dist_weight=True \
     --modulate_class_weights="positive*0,negative*0,background*0.001,No Activity*0.0,Post Construction*0.0001" \
+    --init="$INITIAL_STATE" 
+
+
+export CUDA_VISIBLE_DEVICES=1
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+WORKDIR=$DVC_DPATH/training/$HOSTNAME/$USER
+DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+TRAIN_FPATH=$KWCOCO_BUNDLE_DPATH/combo_ILM_nowv_train.kwcoco.json
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_ILM_nowv_vali.kwcoco.json
+TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_ILM_nowv_vali.kwcoco.json
+CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3"
+INITIAL_STATE="noop"
+EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V146
+DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
+python -m watch.tasks.fusion.fit \
+    --config "$WORKDIR/configs/common_20220303.yaml" \
+    --default_root_dir="$DEFAULT_ROOT_DIR" \
+    --name=$EXPERIMENT_NAME \
+    --train_dataset="$TRAIN_FPATH" \
+    --vali_dataset="$VALI_FPATH" \
+    --test_dataset="$TEST_FPATH" \
+    --use_centered_positives=True \
+    --channels="$CHANNELS" \
+    --batch_size=1 \
+    --accumulate_grad_batches=8 \
+    --chip_size=128 \
+    --time_steps=7 \
+    --global_class_weight=1.0 \
+    --global_saliency_weight=0.00 \
+    --num_workers=8 \
+    --gpus "1" \
+    --learning_rate=1e-3 \
+    --attention_impl=exact \
+    --chip_overlap=0.0 \
+    --optimizer=SGD \
+    --max_epoch_length=2048 \
+    --time_sampling=hardish \
+    --arch_name=smt_it_stm_p8 \
+    --multimodal_reduce=mean \
+    --num_draw=8 \
+    --draw_interval=100m \
+    --dist_weight=True \
+    --modulate_class_weights="positive*0,negative*0,background*0.001,No Activity*0.0,Post Construction*0.0001" \
+    --stream_channels=32 \
     --init="$INITIAL_STATE" 
