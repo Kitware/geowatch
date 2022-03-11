@@ -10,11 +10,10 @@ def main(args):
     if type(args) == dict:
         args = Namespace(**args)
 
-    log_dir = '{}/{}/{}/{}/{}/{}'.format(
+    log_dir = '{}/{}/{}/{}/{}'.format(
         args.save_dir,
         args.dataset,
         'multi_image_segment',
-        'attention_layers_' + str(args.attention_layers),
         'position_' + str(args.positional_encoding),
         str(date.today()),
         )
