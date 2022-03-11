@@ -75,14 +75,16 @@ def save_image_to_disk(image, channel_name, save_path, geotransform_info=None, p
 def merge_kwcoco_channels(
     kwcoco_file_paths, output_kwcoco_path, channel_names, weights, merged_channel_name, sensor_name=None
 ):
-    """_summary_
+    """Compute a weighted mean of channels from separate kwcoco file and save into merged kwcoco file.
 
     Args:
-        kwcoco_file_paths (_type_): _description_
-        output_kwcoco_path (_type_): _description_
-        channel_names (_type_): _description_
-        weights (_type_): _description_.
-        sensor_name (_type_, optional): _description_. Defaults to None.
+        kwcoco_file_paths (list(str)): A list of paths representing pathes to kwcoco files to be merged.
+        output_kwcoco_path (str): Local path to the kwcoco file with merged channels.
+        channel_names (list(str)): A list of channel names corresponding to the channel name to merge from each kwcoco
+            file. Note, the length of the channel names be equal to the number of kwcoco file paths.
+        weights (list(int)): A list of floats representing how much weight a particular kwcoco file should contribute
+            to the final merged prediction.
+        sensor_name (str, optional): Only merge images belonging to this sensor. Defaults to None.
     """
     # Load and merge images from kwcoco files.
     ## Load kwcoco files.
