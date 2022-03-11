@@ -209,6 +209,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
         use_conditional_classes=True,
         ignore_dilate=11,
         min_spacetime_weight=0.5,
+        dist_weights=False,
     ):
         """
         Args:
@@ -275,6 +276,7 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             use_conditional_classes=use_conditional_classes,
             ignore_dilate=ignore_dilate,
             min_spacetime_weight=min_spacetime_weight,
+            dist_weights=dist_weights,
         )
         for _k, _v in self.common_dataset_kwargs.items():
             setattr(self, _k, _v)
@@ -425,6 +427,9 @@ class KWCocoVideoDataModule(pl.LightningDataModule):
             '--ignore_dilate', default=11, type=smartcast, help=ub.paragraph('Dilation applied to ignore masks.'))
         parser.add_argument(
             '--min_spacetime_weight', default=0.5, type=smartcast, help=ub.paragraph('Minimum space-time dilation weight'))
+
+        parser.add_argument(
+            '--dist_weights', default=0, type=smartcast, help=ub.paragraph('To use distance-transform based weights on annotations or not'))
 
         return parent_parser
 
@@ -831,8 +836,10 @@ class KWCocoVideoDataset(data.Dataset):
         use_conditional_classes=True,
         ignore_dilate=11,
         min_spacetime_weight=0.5,
+        dist_weights=False
     ):
 
+        self.dist_weights = dist_weights
         self.match_histograms = match_histograms
         self.normalize_perframe = normalize_perframe
         self.resample_invalid_frames = resample_invalid_frames
@@ -1142,7 +1149,7 @@ class KWCocoVideoDataset(data.Dataset):
             >>> sampler = ndsampler.CocoSampler(coco_dset)
             >>> channels = 'B10|B8a|B1|B8'
             >>> sample_shape = (5, 530, 610)
-            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, diff_inputs=0)
+            >>> self = KWCocoVideoDataset(sampler, sample_shape=sample_shape, channels=channels, diff_inputs=0, dist_weights=1)
             >>> item = self[0]
             >>> canvas = self.draw_item(item)
             >>> # xdoctest: +REQUIRES(--show)
@@ -1599,6 +1606,9 @@ class KWCocoVideoDataset(data.Dataset):
                 ann_aids = dets.data['aids']
                 ann_cids = dets.data['cids']
                 ann_tids = dets.data['tids']
+
+                frame_poly_weights = np.ones(space_shape, dtype=np.float32)
+
                 # Note: it is important to respect class indexes, ids, and
                 # name mappings
                 # TODO: layer ordering? Multiclass prediction?
@@ -1624,7 +1634,6 @@ class KWCocoVideoDataset(data.Dataset):
                                 poly.fill(frame_class_ohe[orig_cidx], value=1)
                             elif new_class_catname not in self.background_classes:
                                 poly.fill(frame_class_ohe[new_class_cidx], value=1)
-
                     else:
                         cidx = self.classes.id_to_idx[cid]
                         catname = self.classes.id_to_node[cid]
@@ -1648,15 +1657,29 @@ class KWCocoVideoDataset(data.Dataset):
                             poly.fill(frame_class_ohe[cidx], value=1)
                             poly.fill(frame_saliency, value=1)
 
+                    if self.dist_weights:
+                        # New feature where we encode that we care much more about
+                        # segmenting the inside of the object than the outside.
+                        # Effectively boundaries become uncertain.
+                        import cv2
+                        poly_mask = np.zeros_like(frame_class_ohe[new_class_cidx])
+                        poly_mask = poly.fill(poly_mask, value=1)
+                        dist = cv2.distanceTransform(poly_mask, cv2.DIST_L2, 3)
+                        dist = dist / dist.max()
+                        weight_mask = dist + (1 - poly_mask)
+                        frame_poly_weights = frame_poly_weights * weight_mask
+
+                frame_poly_weights = np.maximum(frame_poly_weights, self.min_spacetime_weight)
+
                 # Postprocess (Dilate?) the truth map
                 for cidx, class_map in enumerate(frame_class_ohe):
                     # class_map = util_kwimage.morphology(class_map, 'dilate', kernel=5)
                     frame_cidxs[class_map > 0] = cidx
 
                 if self.upweight_centers:
-                    frame_weights = space_weights * time_weights[time_idx]
+                    frame_weights = space_weights * time_weights[time_idx] * frame_poly_weights
                 else:
-                    frame_weights = 1.0
+                    frame_weights = frame_poly_weights
 
                 # Dilate ignore masks (dont care about the surrounding area
                 # either)
