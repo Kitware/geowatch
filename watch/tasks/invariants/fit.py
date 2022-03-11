@@ -30,7 +30,7 @@ def main(args):
         dataset_name,
         sensor,
         )
-    
+
     model = pretext(hparams=args)
 
     if args.vali_dataset is None:

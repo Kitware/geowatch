@@ -75,7 +75,7 @@ class segmentation_model(pl.LightningModule):
 
         segmentations = segmentations.long().reshape(-1, self.hparams.patch_size, self.hparams.patch_size)
         if self.hparams.ignore_boundary:
-            temp_segmentations = -1*torch.ones_like(segmentations)
+            temp_segmentations = -1 * torch.ones_like(segmentations)
             temp_segmentations[:, self.hparams.ignore_boundary:-self.hparams.ignore_boundary, self.hparams.ignore_boundary:-self.hparams.ignore_boundary] = segmentations[:, self.hparams.ignore_boundary:-self.hparams.ignore_boundary, self.hparams.ignore_boundary:-self.hparams.ignore_boundary]
             segmentations = temp_segmentations
 

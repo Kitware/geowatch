@@ -202,7 +202,7 @@ class gridded_dataset(torch.utils.data.Dataset):
             date_list.append((int(date[:4]), int(date[5:7])))
         normalized_date = torch.tensor([date_[0] - 2018 + date_[1] / 12 for date_ in date_list])
         out = dict()
-        
+
         if self.returned_images < self.num_images:
             for m in range(len(kept_indices)):
                 out['image{}'.format(1 + m)] = image_dict[kept_indices[m].item()].float()
@@ -380,13 +380,13 @@ class kwcoco_dataset(Dataset):
                 display_image2 = torch.tensor([])
 
             img3 = transformed2['image']
-            img4 = transformed3 = self.transforms3(image=img1.copy() / img1.max())['image'] * img1.max()
+            img4 = self.transforms3(image=img1.copy() / img1.max())['image'] * img1.max()
             # convert to tensors
             img1 = torch.tensor(img1).permute(2, 0, 1)
             img2 = torch.tensor(img2).permute(2, 0, 1)
             img3 = torch.tensor(img3).permute(2, 0, 1)
             img4 = torch.tensor(img4).permute(2, 0, 1)
-            
+
             if img1.std() != 0.:
                 img1 = (img1 - img1.mean()) / img1.std()
             else:

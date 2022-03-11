@@ -147,7 +147,6 @@ class predict(object):
                     features = self.pretext_model(image_stack)[:, 0, :, :, :]
                     #select features corresponding to second image
                     features2 = self.pretext_model(image_stack)[:, 1, :, :, :]
-                    print(features.shape, self.pca_projector.shape)
                     if args.do_pca:
                         features = torch.einsum('xy,byhw->bxhw', self.pca_projector, features)
                         features2 = torch.einsum('xy,byhw->bxhw', self.pca_projector, features2)
@@ -178,7 +177,7 @@ class predict(object):
                 save_feat = save_feat.numpy()
                 save_feat2 = torch.cat(save_feat2, dim=-1)
                 save_feat2 = save_feat2.numpy()
-    
+
                 # image_id = int(batch['img1_id'].item())
                 # image_info = output_dset.index.imgs[image_id]
                 # video_info = output_dset.index.videos[image_info['video_id']]

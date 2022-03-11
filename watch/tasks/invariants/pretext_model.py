@@ -259,7 +259,6 @@ class pretext(pl.LightningModule):
     #                          nn.Linear(in_chan, 8),
     #                         )
 
-
     def generate_pca_matrix(self, save_path, loader, reduction_dim=6):
         feature_collection = []
 
