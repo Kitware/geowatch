@@ -16,29 +16,28 @@ def check_kwcoco_file(kwcoco_path, channel_name, sensor_name=None):
     Args:
         kwcoco_path (str): Path to local kwcoco file.
         channel_name (str): Name of channel thats required to be in kwcoco file.
+        sensor_name (str, optional): Only check images of from this type of sensor. Defaults to None.
     """
 
-    # Check if file exists.
+    # Check if kwcoco file exists.
     if os.path.isfile(kwcoco_path) is False:
         raise FileNotFoundError(f"KWCOCO file not found at {kwcoco_path}")
 
-    # Check that channel exists in kwcoco file.
+    # Load kwcoco file.
     kwcoco_file = kwcoco.CocoDataset(kwcoco_path)
 
-    for image_id, image_info in kwcoco_file.index.imgs.items():
-        if sensor_name is not None:
-            if image_info["sensor_coarse"] != sensor_name:
-                continue
+    # Get all images in kwcoco file.
+    images: kwcoco.coco_dataset.Videos = kwcoco_file.images()
 
-        # Get all channels in image.
-        image_channels = []
-        for band_info in image_info["auxiliary"]:
-            image_channels.append(band_info["channels"])
+    if sensor_name is not None:
+        # Filter to only images with a chosen sensor
+        flags = [s == sensor_name for s in images.lookup("sensor_coarse", None)]
+        images = images.compress(flags)
 
-        # Check that image includes channel.
-        if channel_name not in image_channels:
+    for coco_img in images.coco_images:
+        if channel_name not in list(coco_img.channels.keys()):
             raise AssertionError(
-                f"Channel '{channel_name}' not found in image {image_id} of kwcoco file {kwcoco_path}. Only channels found: {image_channels}"
+                f"Channel '{channel_name}' not found in image {coco_img.img['id']} of kwcoco file {kwcoco_path}. Only channels found: {coco_img.channels}"
             )
 
 
