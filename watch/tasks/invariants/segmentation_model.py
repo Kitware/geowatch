@@ -21,7 +21,7 @@ class segmentation_model(pl.LightningModule):
         if type(hparams) == dict:
             hparams = Namespace(**hparams)
 
-        self.backbone = attention_unet(hparams.num_channels, 2, pos_encode=hparams.positional_encoding, num_attention_layers=hparams.num_attention_layers, mode=hparams.positional_encoding_mode)
+        self.backbone = attention_unet(hparams.num_channels, 2, pos_encode=hparams.positional_encoding, attention_layers=hparams.attention_layers, mode=hparams.positional_encoding_mode)
 
         ##### define dataset
         if hparams.dataset == 'kwcoco':
@@ -45,7 +45,7 @@ class segmentation_model(pl.LightningModule):
             warnings.warn('Classes/Ignore Classes/Background need to be re-checked before succesfully training on site classification models.')
             weight = None
 
-        self.criterion = nn.NLLLoss(weight=weight, ignore_index=99)
+        self.criterion = nn.NLLLoss(weight=weight, ignore_index=-1)
         self.save_hyperparameters(hparams)
 
     def forward(self, x, positions=None):
@@ -75,7 +75,7 @@ class segmentation_model(pl.LightningModule):
 
         segmentations = segmentations.long().reshape(-1, self.hparams.patch_size, self.hparams.patch_size)
         if self.hparams.ignore_boundary:
-            temp_segmentations = 99*torch.ones_like(segmentations)
+            temp_segmentations = -1*torch.ones_like(segmentations)
             temp_segmentations[:, self.hparams.ignore_boundary:-self.hparams.ignore_boundary, self.hparams.ignore_boundary:-self.hparams.ignore_boundary] = segmentations[:, self.hparams.ignore_boundary:-self.hparams.ignore_boundary, self.hparams.ignore_boundary:-self.hparams.ignore_boundary]
             segmentations = temp_segmentations
 

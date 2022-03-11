@@ -145,11 +145,13 @@ class predict(object):
 
                     #select features corresponding to first image
                     features = self.pretext_model(image_stack)[:, 0, :, :, :]
+                    #select features corresponding to second image
                     features2 = self.pretext_model(image_stack)[:, 1, :, :, :]
-
+                    print(features.shape, self.pca_projector.shape)
                     if args.do_pca:
                         features = torch.einsum('xy,byhw->bxhw', self.pca_projector, features)
                         features2 = torch.einsum('xy,byhw->bxhw', self.pca_projector, features2)
+
                     ###normalize features
                     features = (features - features.mean(dim=(2, 3), keepdim=True)) / features.std(dim=(2, 3), keepdim=True)
                     features2 = (features2 - features2.mean(dim=(2, 3), keepdim=True)) / features2.std(dim=(2, 3), keepdim=True)

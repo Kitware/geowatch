@@ -10,6 +10,7 @@ import random
 from pandas import read_csv
 import ndsampler
 import ubelt as ub
+import kwarray
 from ..utils.read_sentinel_images import read_sentinel_img_trio
 
 
@@ -25,8 +26,10 @@ class gridded_dataset(torch.utils.data.Dataset):
     ]
     def __init__(self, coco_dset, sensor=['S2', 'L8'], bands=['shared'],
                  segmentation=False, patch_size=128, num_images=2, returned_images=None,
-                 mode='train', patch_overlap=.25, bas=True):
+                 mode='train', patch_overlap=.25, bas=True, rng=None):
         super().__init__()
+
+        self.rng = kwarray.ensure_rng(rng)
         # initialize dataset
         if returned_images:
             self.returned_images = returned_images
@@ -112,7 +115,12 @@ class gridded_dataset(torch.utils.data.Dataset):
         self.segmentation = segmentation
         self.patch_size = patch_size
         self.bas = bas
-        self.positive_indices = [0, 1, 2, 3]
+        if self.bas:
+            self.positive_indices = [0, 1, 3]
+            self.ignore_indices = [2, 6]
+        else:
+            self.positive_indices = [0, 1, 2, 3]
+            self.ignore_indices = [6]
 
     def __len__(self):
         return len(self.patches)
@@ -156,6 +164,8 @@ class gridded_dataset(torch.utils.data.Dataset):
                         else:
                             cidx = self.sampler.classes.id_to_idx[cid]
                             poly.fill(frame_mask, value=cidx)
+                    elif cid in self.ignore_indices:
+                        poly.fill(frame_mask, value=-1)
                 segmentation_masks.append(frame_mask)
         else:
             sample = self.sampler.load_sample(tr)
@@ -307,7 +317,7 @@ class kwcoco_dataset(Dataset):
     def get_img(self, idx, device=None):
         image_id = self.dset_ids[idx]
         image_info = self.dset.index.imgs[image_id]
-        image = self.dset.delayed_load(image_id, channels=self.channels, space='video').finalize().astype(np.float32)
+        image = self.dset.delayed_load(image_id, channels=self.channels, space='video').finalize(no_data='auto').astype(np.float32)
         image = torch.tensor(image)
         if device:
             image = image.to(device)
@@ -341,8 +351,8 @@ class kwcoco_dataset(Dataset):
         im2_sensor = self.dset.index.imgs[img2_id]['sensor_coarse']
 
         # load images
-        img1 = self.dset.delayed_load(img1_id, channels=self.channels, space='video').finalize().astype(np.float32)
-        img2 = self.dset.delayed_load(img2_id, channels=self.channels, space='video').finalize().astype(np.float32)
+        img1 = self.dset.delayed_load(img1_id, channels=self.channels, space='video').finalize(no_data='auto').astype(np.float32)
+        img2 = self.dset.delayed_load(img2_id, channels=self.channels, space='video').finalize(no_data='auto').astype(np.float32)
         img1 = np.nan_to_num(img1)
         img2 = np.nan_to_num(img2)
 
