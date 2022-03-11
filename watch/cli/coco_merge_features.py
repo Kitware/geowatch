@@ -4,7 +4,6 @@ import argparse
 import kwcoco
 import kwimage
 import numpy as np
-from glob import glob
 from tqdm import tqdm
 from osgeo import gdal
 
