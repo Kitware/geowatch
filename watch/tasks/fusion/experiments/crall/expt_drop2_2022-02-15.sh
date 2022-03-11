@@ -3674,7 +3674,7 @@ VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_ILM_nowv_vali.kwcoco.json
 TEST_FPATH=$KWCOCO_BUNDLE_DPATH/combo_ILM_nowv_vali.kwcoco.json
 CHANNELS="blue|green|red|nir|swir16|swir22,matseg_0|matseg_1|matseg_2|matseg_3"
 INITIAL_STATE="noop"
-EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V146
+EXPERIMENT_NAME=FUSION_EXPERIMENT_ML_V147
 DEFAULT_ROOT_DIR=$WORKDIR/$DATASET_CODE/runs/$EXPERIMENT_NAME
 python -m watch.tasks.fusion.fit \
     --config "$WORKDIR/configs/common_20220303.yaml" \
@@ -3704,6 +3704,6 @@ python -m watch.tasks.fusion.fit \
     --num_draw=8 \
     --draw_interval=100m \
     --dist_weight=True \
-    --modulate_class_weights="positive*0,negative*0,background*0.001,No Activity*0.0,Post Construction*0.0001" \
+    --modulate_class_weights="positive*0,negative*0,background*1e-3,No Activity*1e-9,Post Construction*1e-2" \
     --stream_channels=32 \
     --init="$INITIAL_STATE" 
