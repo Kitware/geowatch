@@ -130,7 +130,11 @@ def normalizeRGB(img, percent_range=(2, 98)):
     for b in range(img.shape[2]):
         img_b = img[:, :, b]
         valid_values = img_b[~np.isnan(img_b)]
-        min, max = np.percentile(valid_values, (min_val, max_val))
+
+        if valid_values.size == 0:
+            min = max = 0
+        else:
+            min, max = np.percentile(valid_values, (min_val, max_val))
 
         img[:, :, b] -= min
         if min != max:
