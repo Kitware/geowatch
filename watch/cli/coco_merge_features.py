@@ -81,7 +81,7 @@ def merge_kwcoco_channels(
             weighted_images.append(image * weights[kwcoco_index])
 
         # Combine images using weight factors.
-        merged_image = np.stack(weighted_images, axis=0).sum(axis=0) / sum(weights)  # [height, width, n_channels]
+        merged_image = np.add.reduce(weighted_images) / sum(weights)  # [height, width, n_channels]
 
         # Save merged image to disk and onto kwcoco file.
         ## Save merged image onto disk.
