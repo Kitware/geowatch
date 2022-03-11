@@ -153,6 +153,8 @@ class predict(object):
 
                     features = features.squeeze().permute(1, 2, 0).cpu()
                     features2 = features2.squeeze().permute(1, 2, 0).cpu()
+                    save_feat.append(features)
+                    save_feat2.append(features2)
 
                 if 'before_after' in args.tasks:
                     ### TO DO: Set to output of separate model.
