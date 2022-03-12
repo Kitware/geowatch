@@ -163,10 +163,13 @@ class SlurmJob(ub.NiceRepr):
 
 class SlurmQueue:
     """
+    CommandLine:
+       xdoctest -m watch.utils.slurm_queue SlurmQueue
+
     Example:
         >>> from watch.utils.slurm_queue import *  # NOQA
         >>> self = SlurmQueue()
-        >>> job0 = self.submit('echo "hi from $SLURM_JOBID"', begin=5)
+        >>> job0 = self.submit('echo "hi from $SLURM_JOBID"', begin=0)
         >>> job1 = self.submit('echo "hi from $SLURM_JOBID"', depends=[job0])
         >>> job2 = self.submit('echo "hi from $SLURM_JOBID"', depends=[job1])
         >>> job3 = self.submit('echo "hi from $SLURM_JOBID"', depends=[job2])
@@ -176,19 +179,23 @@ class SlurmQueue:
         >>> job7 = self.submit('echo "hi from $SLURM_JOBID"', depends=[job5, job6])
         >>> self.write()
         >>> self.rprint()
-        >>> if ub.find_exe('slurm'):
-        >>>     self.run()
+        >>> #if ub.find_exe('slurm'):
+        >>> #    self.run()
     """
     def __init__(self):
         import uuid
+        import time
         self.jobs = []
-        self.name = 'queue-' + ub.hash_data(uuid.uuid4())[0:8]
-        self.dpath = ub.Path.appdir('slurm_queue')
+        stamp = time.strftime('%Y%m%dT%H%M%S')
+        self.name = 'SQ-' + stamp + '-' + ub.hash_data(uuid.uuid4())[0:8]
+        self.dpath = ub.Path.appdir('slurm_queue') / self.name
+        self.log_dpath = self.dpath / 'logs'
         self.fpath = self.dpath / (self.name + '.sh')
 
     def write(self):
         import os
         import stat
+        # self.log_dpath.ensuredir()
         text = self.finalize_text()
         self.fpath.parent.ensuredir()
         with open(self.fpath, 'w') as file:
@@ -218,7 +225,9 @@ class SlurmQueue:
     def submit(self, command, **kwargs):
         name = kwargs.get('name', None)
         if name is None:
-            kwargs['name'] = self.name + '-job-{}'.format(len(self.jobs))
+            name = kwargs['name'] = self.name + '-job-{}'.format(len(self.jobs))
+        if 'output_fpath' not in kwargs:
+            kwargs['output_fpath'] = self.log_dpath / (name + '.sh')
         job = SlurmJob(command, **kwargs)
         self.jobs.append(job)
         return job
@@ -226,6 +235,8 @@ class SlurmQueue:
     def finalize_text(self):
         new_order = self.order_jobs()
         commands = []
+        homevar = '$HOME'
+        commands.append(f'mkdir -p "{self.log_dpath.shrinkuser(homevar)}"')
         jobname_to_varname = {}
         for job in new_order:
             args = job._build_sbatch_args(jobname_to_varname)
@@ -241,6 +252,7 @@ class SlurmQueue:
     def run(self, block=False):
         if not ub.find_exe('tmux'):
             raise Exception('tmux not found')
+        self.ensuredir()
         self.write()
         ub.cmd(f'bash {self.fpath}', verbose=3, check=True)
         if block:
