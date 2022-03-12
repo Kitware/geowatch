@@ -10,9 +10,9 @@ prep_teamfeat_drop2(){
     DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
     python -m watch.cli.prepare_teamfeats \
         --base_fpath="$DVC_DPATH/$DATASET_CODE/data.kwcoco.json" \
-        --gres=auto \
+        --gres="0,1" \
         --with_landcover=1 \
-        --with_depth=0 \
+        --with_depth=1 \
         --with_materials=1 \
         --with_invariants=1 \
         --do_splits=1 \

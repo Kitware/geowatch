@@ -112,8 +112,8 @@ def main(cmdline=True, **kwargs):
         'uky_segmentation': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_segmentation_model/segmentation_package.pt',
         'uky_pca': dvc_dpath / 'models/uky/uky_invariants_2022_02_11/TA1_pretext_model/pca_projection_matrix.pt',
 
-        # 'dzyne_depth': dvc_dpath / 'models/depth/weights_v1.pt',
-        'dzyne_depth': dvc_dpath / 'models/depth/weights_v2_gray.pt',
+        'dzyne_depth': dvc_dpath / 'models/depth/weights_v1.pt',
+        # 'dzyne_depth': dvc_dpath / 'models/depth/weights_v2_gray.pt',
     }
 
     outputs = {
@@ -174,7 +174,7 @@ def main(cmdline=True, **kwargs):
             print('avail_gb = {!r}'.format(avail_gb))
 
         # depth_data_workers = min(2, data_workers)
-        depth_window_size = 736  # takes 18GB
+        depth_window_size = 512  # takes 18GB
         task['output_fpath'] = outputs['dzyne_depth']
         task['command'] = ub.codeblock(
             fr'''
