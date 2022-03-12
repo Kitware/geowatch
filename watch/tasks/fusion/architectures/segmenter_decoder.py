@@ -215,7 +215,12 @@ class MaskTransformerDecoder(nn.Module):
         return {"cls_emb"}
 
     def forward(self, x):
-        x = self.proj_dec(x)
+        """
+        """
+        input_shape = x.shape
+        B, *ST, F = input_shape
+
+        x = self.proj_dec(x.view(B, -1, F))
 
         # Add the special class embedding tokens to the end of the seqeunce
         cls_emb = self.cls_emb.expand(x.size(0), -1, -1)
@@ -236,6 +241,9 @@ class MaskTransformerDecoder(nn.Module):
         masks = patches @ cls_seg_feat.transpose(1, 2)
         masks = self.mask_norm(masks)
         # masks = rearrange(masks, "b (h w) n -> b n h w", h=int(GS))
+
+        # Keep the same shape as the input? (except if we do the hack to make our own output)
+        masks = masks.view(*input_shape[0:-1], -1)
         return masks
 
     def get_attention_map(self, x, layer_id):

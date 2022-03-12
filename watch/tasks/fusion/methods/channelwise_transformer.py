@@ -169,7 +169,7 @@ class MultimodalTransformer(pl.LightningModule):
         >>> self = MultimodalTransformer(arch_name='smt_it_joint_p8',
         >>>                              input_channels=datamodule.input_channels,
         >>>                              dataset_stats=dataset_stats,
-        >>>                              classes=datamodule.classes,
+        >>>                              classes=datamodule.classes, decoder='segmenter',
         >>>                              change_loss='dicefocal',
         >>>                              attention_impl='performer')
         >>> device = nh.XPU.coerce('cpu').main_device
@@ -561,53 +561,52 @@ class MultimodalTransformer(pl.LightningModule):
         self.criterions = torch.nn.ModuleDict()
         self.heads = torch.nn.ModuleDict()
 
-        if self.decoder == 'mlp':
-            pass
-        if self.decoder == 'segmenter':
-            from watch.tasks.fusion.architectures import segmenter_decoder
+        head_properties = [
+            {
+                'name': 'change',
+                'hidden': self.change_head_hidden,
+                'channels': 2,
+                'loss': change_loss,
+                'weights': self.change_weights,
+            },
+            {
+                'name': 'saliency',
+                'hidden': self.saliency_head_hidden,
+                'channels': self.saliency_num_classes,
+                'loss': saliency_loss,
+                'weights': self.saliency_weights,
+            },
+            {
+                'name': 'class',
+                'hidden': self.class_head_hidden,
+                'channels': self.num_classes,
+                'loss': class_loss,
+                'weights': self.class_weights,
+            },
+        ]
 
-            segmenter_decoder.MaskTransformerDecoder(
-                d_model=feat_dim,
-                n_cls=2,
-            )
-            segmenter_decoder.MaskTransformerDecoder(
-                d_model=feat_dim,
-                n_cls=self.num_classes,
-            )
-            segmenter_decoder.MaskTransformerDecoder(
-                d_model=feat_dim,
-                n_cls=self.saliency_num_classes,
-            )
-
-        if self.global_head_weights['change']:
-            self.heads['change'] = nh.layers.MultiLayerPerceptronNd(
-                dim=0,
-                in_channels=feat_dim,
-                hidden_channels=self.change_head_hidden,
-                out_channels=2,
-                norm=None
-            )
-            self.criterions['change'] = coerce_criterion(change_loss, self.change_weights)
-
-        if self.global_head_weights['class']:
-            self.heads['class'] = nh.layers.MultiLayerPerceptronNd(
-                dim=0,
-                in_channels=feat_dim,
-                hidden_channels=self.class_head_hidden,
-                out_channels=self.num_classes,
-                norm=None
-            )
-            self.criterions['class'] = coerce_criterion(class_loss, self.class_weights)
-
-        if self.global_head_weights['saliency']:
-            self.heads['saliency'] = nh.layers.MultiLayerPerceptronNd(
-                dim=0,
-                in_channels=feat_dim,
-                hidden_channels=self.saliency_head_hidden,
-                out_channels=self.saliency_num_classes,  # saliency will be trinary with an "other" class
-                norm=None
-            )
-            self.criterions['saliency'] = coerce_criterion(saliency_loss, self.saliency_weights)
+        for prop in head_properties:
+            head_name = prop['name']
+            global_weight = self.global_head_weights[head_name]
+            if global_weight > 0:
+                self.criterions[head_name] = coerce_criterion(prop['loss'], prop['weights'])
+                if self.decoder == 'mlp':
+                    self.heads[head_name] = nh.layers.MultiLayerPerceptronNd(
+                        dim=0,
+                        in_channels=feat_dim,
+                        hidden_channels=prop['hidden'],
+                        out_channels=prop['channels'],
+                        norm=None
+                    )
+                elif self.decoder == 'segmenter':
+                    from watch.tasks.fusion.architectures import segmenter_decoder
+                    self.heads[head_name] = segmenter_decoder.MaskTransformerDecoder(
+                        d_model=feat_dim,
+                        # hidden_channels=prop['hidden'],
+                        n_cls=prop['channels'],
+                    )
+                else:
+                    raise KeyError(self.decoder)
 
         self.head_metrics = nn.ModuleDict()
         self.head_metrics['class'] = nn.ModuleDict({
@@ -699,6 +698,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     input_channels=input_channels,
             >>>     dataset_stats=dataset_stats,
             >>>     change_loss='dicefocal',
+            >>>     decoder='dicefocal',
             >>>     attention_impl='performer',
             >>>     tokenizer=tokenizer,
             >>> )
@@ -727,7 +727,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> import kwcoco
             >>> from os.path import join
             >>> import os
-            >>> if 0:
+            >>> if 1:
             >>>     '''
             >>>     # Generate toy datasets
             >>>     DATA_DPATH=$HOME/data/work/toy_change
@@ -738,7 +738,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     coco_fpath = ub.expandpath('$HOME/data/work/toy_change/vidshapes_msi_train/data.kwcoco.json')
             >>>     coco_dset = kwcoco.CocoDataset.coerce(coco_fpath)
             >>>     channels="B11,r|g|b,B1|B8|B11"
-            >>> if 1:
+            >>> if 0:
             >>>     dvc_dpath = find_smart_dvc_dpath()
             >>>     coco_dset = join(dvc_dpath, 'Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json')
             >>>     channels='swir16|swir22|blue|green|red|nir'
@@ -755,7 +755,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     channels=channels,
             >>>     normalize_inputs=1, neg_to_pos_ratio=0,
             >>>     num_workers='avail/2', true_multimodal=True,
-            >>>     use_grid_positives=False, use_centered_positives=True, use_special_classes=1,
+            >>>     use_grid_positives=False, use_centered_positives=True,
             >>> )
             >>> datamodule.setup('fit')
             >>> dataset = torch_dset = datamodule.torch_datasets['train']
@@ -775,6 +775,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     learning_rate=1e-6,
             >>>     #attention_impl='performer',
             >>>     attention_impl='exact',
+            >>>     decoder='segmenter',
             >>>     #arch_name='deit',
             >>>     change_loss='focal',
             >>>     #class_loss='cce',
@@ -782,12 +783,12 @@ class MultimodalTransformer(pl.LightningModule):
             >>>     saliency_loss='focal',
             >>>     # ===========
             >>>     # Change Loss
-            >>>     global_change_weight=0.00,
+            >>>     global_change_weight=1.00,
             >>>     positive_change_weight=1.0,
             >>>     negative_change_weight=0.05,
             >>>     # ===========
             >>>     # Class Loss
-            >>>     global_class_weight=0.00,
+            >>>     global_class_weight=1.00,
             >>>     global_saliency_weight=1.00,
             >>>     class_weights='auto',
             >>>     # ===========
@@ -923,6 +924,7 @@ class MultimodalTransformer(pl.LightningModule):
             >>> # Choose subclass to test this with (does not cover all cases)
             >>> self = model = methods.MultimodalTransformer(
             >>>     arch_name='smt_it_joint_p8', tokenizer='rearrange',
+            >>>     decoder='segmenter',
             >>>     dataset_stats=datamodule.dataset_stats, global_saliency_weight=1.0, global_change_weight=1.0, global_class_weight=1.0,
             >>>     classes=datamodule.classes, input_channels=datamodule.input_channels)
             >>> with_loss = True
