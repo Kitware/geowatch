@@ -231,6 +231,7 @@ class MultimodalTransformer(pl.LightningModule):
                             choices=['none', 'auto', 'group', 'batch'])
         parser.add_argument('--arch_name', default='smt_it_joint_p8', type=str,
                             choices=available_encoders)
+        parser.add_argument('--decoder', default='mlp', type=str, choices=['mlp', 'mask'])
         parser.add_argument('--dropout', default=0.1, type=float)
         parser.add_argument('--global_class_weight', default=1.0, type=float)
         parser.add_argument('--global_change_weight', default=1.0, type=float)
@@ -297,11 +298,13 @@ class MultimodalTransformer(pl.LightningModule):
                  multimodal_reduce='max',
                  modulate_class_weights='',
                  stream_channels=8,
+                 decoder='mlp',
                  classes=10):
 
         super().__init__()
         self.save_hyperparameters()
         self.name = name
+        self.decoder = decoder
 
         self.arch_name = arch_name
         self.squash_modes = squash_modes
@@ -557,6 +560,24 @@ class MultimodalTransformer(pl.LightningModule):
 
         self.criterions = torch.nn.ModuleDict()
         self.heads = torch.nn.ModuleDict()
+
+        if self.decoder == 'mlp':
+            pass
+        if self.decoder == 'segmenter':
+            from watch.tasks.fusion.architectures import segmenter_decoder
+
+            segmenter_decoder.MaskTransformerDecoder(
+                d_model=feat_dim,
+                n_cls=2,
+            )
+            segmenter_decoder.MaskTransformerDecoder(
+                d_model=feat_dim,
+                n_cls=self.num_classes,
+            )
+            segmenter_decoder.MaskTransformerDecoder(
+                d_model=feat_dim,
+                n_cls=self.saliency_num_classes,
+            )
 
         if self.global_head_weights['change']:
             self.heads['change'] = nh.layers.MultiLayerPerceptronNd(
