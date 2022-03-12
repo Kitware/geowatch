@@ -908,7 +908,9 @@ class MultimodalTransformer(pl.LightningModule):
             >>> batch = self.demo_batch()
             >>> if 1:
             >>>   print(nh.data.collate._debug_inbatch_shapes(batch))
-            >>> self.forward_step(batch)
+            >>> result = self.forward_step(batch)
+            >>> if 1:
+            >>>   print(nh.data.collate._debug_inbatch_shapes(result))
         """
         B = batch_size
         C = len(self.classes)
@@ -918,7 +920,7 @@ class MultimodalTransformer(pl.LightningModule):
             modes = []
             frames = []
             for time_index in range(T):
-                H, W = 96, 96
+                H, W = height, width
                 modes = {
                     'pan': torch.rand(1, H, W),
                     'red|green|blue': torch.rand(3, H, W),
