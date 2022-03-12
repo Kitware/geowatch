@@ -300,7 +300,7 @@ class kwcoco_dataset(Dataset):
     def get_img(self, idx, device=None):
         image_id = self.dset_ids[idx]
         image_info = self.dset.index.imgs[image_id]
-        image = self.dset.delayed_load(image_id, channels=self.channels, space='video').finalize().astype(np.float32)
+        image = self.dset.delayed_load(image_id, channels=self.channels, space='video').finalize(no_data='float').astype(np.float32)
         image = torch.tensor(image)
         if device:
             image = image.to(device)
@@ -334,10 +334,8 @@ class kwcoco_dataset(Dataset):
         im2_sensor = self.dset.index.imgs[img2_id]['sensor_coarse']
 
         # load images
-        img1 = self.dset.delayed_load(img1_id, channels=self.channels, space='video').finalize().astype(np.float32)
-        img2 = self.dset.delayed_load(img2_id, channels=self.channels, space='video').finalize().astype(np.float32)
-        img1 = np.nan_to_num(img1)
-        img2 = np.nan_to_num(img2)
+        img1 = self.dset.delayed_load(img1_id, channels=self.channels, space='video').finalize(no_data='float').astype(np.float32)
+        img2 = self.dset.delayed_load(img2_id, channels=self.channels, space='video').finalize(no_data='float').astype(np.float32)
 
         if not self.change_labels:
             # transformations
@@ -390,6 +388,11 @@ class kwcoco_dataset(Dataset):
                 img4 = (img4 - img4.nanmean()) / img4std
             else:
                 img4 = torch.zeros_like(img4)
+
+            img1 = np.nan_to_num(img1)
+            img2 = np.nan_to_num(img2)
+            img3 = np.nan_to_num(img3)
+            img4 = np.nan_to_num(img4)
 
             return {
                 'image1': img1.float(),
@@ -484,6 +487,10 @@ class kwcoco_dataset(Dataset):
             segmentation1 = torch.tensor(segmentation1)
             segmentation2 = torch.tensor(segmentation2)
             change_map = torch.clamp(segmentation2 - segmentation1, 0, 1)
+
+            img1 = np.nan_to_num(img1)
+            img2 = np.nan_to_num(img2)
+
             return {
                 'image1': img1.float(),
                 'image2': img2.float(),
