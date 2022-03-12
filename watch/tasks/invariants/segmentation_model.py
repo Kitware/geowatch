@@ -21,18 +21,18 @@ class segmentation_model(pl.LightningModule):
         if type(hparams) == dict:
             hparams = Namespace(**hparams)
 
-        self.backbone = attention_unet(hparams.num_channels, 2, pos_encode=hparams.positional_encoding, num_attention_layers=hparams.num_attention_layers, mode=hparams.positional_encoding_mode)
+        self.backbone = attention_unet(hparams.num_channels, 2, pos_encode=hparams.positional_encoding, attention_layers=hparams.attention_layers, mode=hparams.positional_encoding_mode)
 
         ##### define dataset
         if hparams.dataset == 'kwcoco':
             if hparams.train_dataset is not None:
                 if hparams.dataset_style == 'gridded':
-                    self.trainset = gridded_dataset(hparams.train_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size, segmentation=True, num_images=hparams.num_images)
+                    self.trainset = gridded_dataset(hparams.train_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size, segmentation=True, num_images=hparams.num_images, bas=hparams.bas)
                 else:
                     self.trainset = kwcoco_dataset(hparams.train_dataset, hparams.sensor, hparams.bands, hparams.patch_size, segmentation_labels=True, num_images=hparams.num_images)
             if hparams.vali_dataset is not None:
                 if hparams.dataset_style == 'gridded':
-                    self.valset = gridded_dataset(hparams.vali_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size, segmentation=True, num_images=hparams.num_images)
+                    self.valset = gridded_dataset(hparams.vali_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size, segmentation=True, num_images=hparams.num_images, bas=hparams.bas)
                 else:
                     self.valset = kwcoco_dataset(hparams.vali_dataset, hparams.sensor, hparams.bands, hparams.patch_size, segmentation_labels=True, num_images=hparams.num_images)
         elif hparams.dataset == 'spacenet':
@@ -43,9 +43,9 @@ class segmentation_model(pl.LightningModule):
             weight = torch.FloatTensor([1, hparams.pos_class_weight])
         else:
             warnings.warn('Classes/Ignore Classes/Background need to be re-checked before succesfully training on site classification models.')
-            weight = torch.FloatTensor([0, 1, 1, 1, 1, 1])
+            weight = None
 
-        self.criterion = nn.NLLLoss(weight=weight)
+        self.criterion = nn.NLLLoss(weight=weight, ignore_index=-1)
         self.save_hyperparameters(hparams)
 
     def forward(self, x, positions=None):
@@ -73,7 +73,13 @@ class segmentation_model(pl.LightningModule):
         forward = self.forward(images, positions)
         predictions = forward['predictions']
 
-        loss = self.criterion(predictions.reshape(-1, 2, self.hparams.patch_size, self.hparams.patch_size), segmentations.long().reshape(-1, self.hparams.patch_size, self.hparams.patch_size))
+        segmentations = segmentations.long().reshape(-1, self.hparams.patch_size, self.hparams.patch_size)
+        if self.hparams.ignore_boundary:
+            temp_segmentations = -1 * torch.ones_like(segmentations)
+            temp_segmentations[:, self.hparams.ignore_boundary:-self.hparams.ignore_boundary, self.hparams.ignore_boundary:-self.hparams.ignore_boundary] = segmentations[:, self.hparams.ignore_boundary:-self.hparams.ignore_boundary, self.hparams.ignore_boundary:-self.hparams.ignore_boundary]
+            segmentations = temp_segmentations
+
+        loss = self.criterion(predictions.reshape(-1, 2, self.hparams.patch_size, self.hparams.patch_size), segmentations)
 
         output = {  'predicted_class': forward['predicted_class'],
                     'prediction_map': predictions,

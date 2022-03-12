@@ -25,9 +25,11 @@ class gridded_dataset(torch.utils.data.Dataset):
     ]
     def __init__(self, coco_dset, sensor=['S2', 'L8'], bands=['shared'],
                  segmentation=False, patch_size=128, num_images=2,
-                 mode='train', patch_overlap=0.0):
+                 mode='train', patch_overlap=.25, bas=True, rng=None):
         super().__init__()
+
         # initialize dataset
+
         self.coco_dset = kwcoco.CocoDataset.coerce(coco_dset)
         wv_image_ids = []
         for x in self.coco_dset.index.imgs:
@@ -86,17 +88,33 @@ class gridded_dataset(torch.utils.data.Dataset):
             additional_targets['image{}'.format(1 + i)] = 'image'
             additional_targets['seg{}'.format(i + 1)] = 'mask'
 
-        self.transforms = A.Compose([A.OneOf([
-                        A.MotionBlur(p=0.75),
-                        A.Blur(blur_limit=3, p=0.75),
-                    ], p=0.2),
-                    A.RandomBrightnessContrast(brightness_by_max=False, always_apply=True)
-                ],
-                additional_targets=additional_targets)
+        if mode == 'train':
+            self.transforms = A.Compose([A.OneOf([
+                            A.MotionBlur(p=.5),
+                            A.Blur(blur_limit=7, p=1),
+                        ], p=.9),
+                        A.GaussNoise(var_limit=.002),
+                        A.RandomBrightnessContrast(brightness_limit=.3, contrast_limit=.3, brightness_by_max=False, always_apply=True)
+                    ],
+                    additional_targets=additional_targets)
+        else:
+            ### deterministic transforms for test mode
+            self.transforms = A.Compose([
+                            A.Blur(blur_limit=[4, 4], p=1),
+                            A.RandomBrightnessContrast(brightness_limit=[.2, .2], contrast_limit=[.2, .2], brightness_by_max=False, always_apply=True)
+                    ],
+                    additional_targets=additional_targets)
 
         self.mode = mode
         self.segmentation = segmentation
         self.patch_size = patch_size
+        self.bas = bas
+        if self.bas:
+            self.positive_indices = [0, 1, 3]
+            self.ignore_indices = [2, 6]
+        else:
+            self.positive_indices = [0, 1, 2, 3]
+            self.ignore_indices = [6]
 
     def __len__(self):
         return len(self.patches)
@@ -104,14 +122,17 @@ class gridded_dataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         tr = self.patches[idx]
         tr['channels'] = self.bands
-        vidid = tr['vidid']
+        # vidid = tr['vidid']
+        gids = tr['gids']
 
+        im1_id = gids[0]
         offset_idx = idx
-        offset_vidid = None
-        while (vidid != offset_vidid) or (offset_idx == idx):
+        offset_im_id = None
+
+        while (im1_id != offset_im_id) or (offset_idx == idx):
             offset_idx = random.randint(0, self.__len__() - 2)
             offset_tr = self.patches[offset_idx]
-            offset_vidid = offset_tr['vidid']
+            offset_im_id = offset_tr['gids'][0]
         offset_tr['channels'] = self.bands
 
         if self.segmentation:
@@ -121,11 +142,17 @@ class gridded_dataset(torch.utils.data.Dataset):
             for det in det_list:
                 frame_mask = np.full([self.patch_size, self.patch_size], dtype=np.int32, fill_value=0)
                 ann_polys = det.data['segmentations'].to_polygon_list()
-                # ann_aids = det.data['aids']
-                # ann_cids = det.data['cids']
-                for poly in ann_polys:
-                    # cidx = self.sampler.classes.id_to_idx[cid]
-                    poly.fill(frame_mask, value=1)
+                ann_aids = det.data['aids']
+                ann_cids = det.data['cids']
+                for poly, aid, cid in zip(ann_polys, ann_aids, ann_cids):
+                    if cid in self.positive_indices:
+                        if self.bas:
+                            poly.fill(frame_mask, value=1)
+                        else:
+                            cidx = self.sampler.classes.id_to_idx[cid]
+                            poly.fill(frame_mask, value=cidx)
+                    elif cid in self.ignore_indices:
+                        poly.fill(frame_mask, value=-1)
                 segmentation_masks.append(frame_mask)
         else:
             sample = self.sampler.load_sample(tr)
@@ -133,6 +160,8 @@ class gridded_dataset(torch.utils.data.Dataset):
 
         images = sample['im']
         offset_image = offset_sample['im'][0]
+        augmented_image = self.transforms(image=images[0].copy() / images[0].max())['image'] * images[0].max()
+
         image_dict = {}
         for k, image in enumerate(images):
             if image.std() != 0.:
@@ -144,22 +173,26 @@ class gridded_dataset(torch.utils.data.Dataset):
             offset_image = (offset_image - offset_image.mean()) / offset_image.std()
         else:
             offset_image = np.zeros_like(offset_image)
+        if augmented_image.std() != 0:
+            augmented_image = (augmented_image - augmented_image.mean()) / augmented_image.std()
+        else:
+            augmented_image = np.zeros_like(augmented_image)
 
-        augmented_image = self.transforms(image=image_dict[1])['image']
         for key in image_dict:
             image_dict[key] = torch.tensor(image_dict[key]).permute(2, 0, 1)
         offset_image = torch.tensor(offset_image).permute(2, 0, 1)
         augmented_image = torch.tensor(augmented_image).permute(2, 0, 1)
 
-        gids = tr['gids']
         date_list = []
         for gid in gids:
             date = self.coco_dset.index.imgs[gid]['date_captured']
             date_list.append((int(date[:4]), int(date[5:7])))
         normalized_date = torch.tensor([date_[0] - 2018 + date_[1] / 12 for date_ in date_list])
         out = dict()
+
         for m in range(self.num_images):
             out['image{}'.format(1 + m)] = image_dict[1 + m].float()
+
         out['offset_image1'] = offset_image.float()
         out['augmented_image1'] = augmented_image.float()
         out['normalized_date'] = normalized_date.float()
@@ -170,7 +203,7 @@ class gridded_dataset(torch.utils.data.Dataset):
         # out['tr'] = ItemContainer(tr, stack=False)
         if self.segmentation:
             for k in range(self.num_images):
-                out['segmentation{}'.format(1 + k)] = segmentation_masks[k]
+                out['segmentation{}'.format(1 + k)] = torch.tensor(segmentation_masks[k])
         return out
 
 
@@ -241,20 +274,23 @@ class kwcoco_dataset(Dataset):
         # define augmentations
         self.transforms = A.Compose([
                 A.RandomCrop(height=patch_size, width=patch_size),
-                A.RandomRotate90(p=.999)
+                A.RandomRotate90(p=1)
                 ],
                 additional_targets={'image2': 'image', 'seg1': 'mask', 'seg2': 'mask'})
 
         self.transforms2 = A.Compose([
                 A.RandomCrop(height=patch_size, width=patch_size),
-                A.RandomRotate90(p=.999),
-                A.HorizontalFlip(p=.999)],
+                A.RandomRotate90(p=1),
+                A.HorizontalFlip(p=1)],
             additional_targets={'image2': 'image'})
 
-        self.transforms3 = A.Compose([
-                A.Blur(p=.75),
-                A.RandomBrightnessContrast(brightness_by_max=False, always_apply=True)
-        ])
+        self.transforms3 = A.Compose([A.OneOf([
+                        A.MotionBlur(p=1),
+                        A.Blur(blur_limit=3, p=1),
+                    ], p=0.9),
+                    A.GaussNoise(var_limit=.002),
+                    A.RandomBrightnessContrast(brightness_limit=.3, contrast_limit=.3, brightness_by_max=False, always_apply=True)
+                ])
         self.num_channels = len(self.channels)
         self.mode = mode
 
@@ -264,7 +300,7 @@ class kwcoco_dataset(Dataset):
     def get_img(self, idx, device=None):
         image_id = self.dset_ids[idx]
         image_info = self.dset.index.imgs[image_id]
-        image = self.dset.delayed_load(image_id, channels=self.channels, space='video').finalize().astype(np.float32)
+        image = self.dset.delayed_load(image_id, channels=self.channels, space='video').finalize(no_data='float').astype(np.float32)
         image = torch.tensor(image)
         if device:
             image = image.to(device)
@@ -298,16 +334,8 @@ class kwcoco_dataset(Dataset):
         im2_sensor = self.dset.index.imgs[img2_id]['sensor_coarse']
 
         # load images
-        img1 = self.dset.delayed_load(img1_id, channels=self.channels, space='video').finalize().astype(np.float32)
-        img2 = self.dset.delayed_load(img2_id, channels=self.channels, space='video').finalize().astype(np.float32)
-        img1 = np.nan_to_num(img1)
-        img2 = np.nan_to_num(img2)
-
-        # normalize
-        if img1.std() != 0.0:
-            img1 = (img1 - img1.mean()) / img1.std()
-        if img2.std() != 0.0:
-            img2 = (img2 - img2.mean()) / img2.std()
+        img1 = self.dset.delayed_load(img1_id, channels=self.channels, space='video').finalize(no_data='float').astype(np.float32)
+        img2 = self.dset.delayed_load(img2_id, channels=self.channels, space='video').finalize(no_data='float').astype(np.float32)
 
         if not self.change_labels:
             # transformations
@@ -333,13 +361,38 @@ class kwcoco_dataset(Dataset):
                 display_image2 = torch.tensor([])
 
             img3 = transformed2['image']
-            transformed3 = self.transforms3(image=img1)
+            img4 = self.transforms3(image=img1.copy() / img1.max())['image'] * img1.max()
             # convert to tensors
             img1 = torch.tensor(img1).permute(2, 0, 1)
             img2 = torch.tensor(img2).permute(2, 0, 1)
-            img4 = transformed3['image']
             img3 = torch.tensor(img3).permute(2, 0, 1)
             img4 = torch.tensor(img4).permute(2, 0, 1)
+
+            img1std = img1.nanstd()
+            if img1std != 0.:
+                img1 = (img1 - img1.nanmean()) / img1std
+            else:
+                img1 = torch.zeros_like(img1)
+            img2std = img2.nanstd()
+            if img2std != 0.:
+                img2 = (img2 - img2.nanmean()) / img2std
+            else:
+                img2 = torch.zeros_like(img2)
+            img3std = img3.nanstd()
+            if img3std != 0.:
+                img3 = (img3 - img3.nanmean()) / img3std
+            else:
+                img3 = torch.zeros_like(img3)
+            img4std = img4.std()
+            if img4std != 0.:
+                img4 = (img4 - img4.nanmean()) / img4std
+            else:
+                img4 = torch.zeros_like(img4)
+
+            img1 = np.nan_to_num(img1)
+            img2 = np.nan_to_num(img2)
+            img3 = np.nan_to_num(img3)
+            img4 = np.nan_to_num(img4)
 
             return {
                 'image1': img1.float(),
@@ -434,6 +487,10 @@ class kwcoco_dataset(Dataset):
             segmentation1 = torch.tensor(segmentation1)
             segmentation2 = torch.tensor(segmentation2)
             change_map = torch.clamp(segmentation2 - segmentation1, 0, 1)
+
+            img1 = np.nan_to_num(img1)
+            img2 = np.nan_to_num(img2)
+
             return {
                 'image1': img1.float(),
                 'image2': img2.float(),

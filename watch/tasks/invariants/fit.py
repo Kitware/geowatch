@@ -32,7 +32,6 @@ def main(args):
         )
 
     model = pretext(hparams=args)
-    model.save_package()
 
     if args.vali_dataset is None:
         ckpt_monitors = (
@@ -68,15 +67,15 @@ if __name__ == '__main__':
     parser = ArgumentParser(description='', formatter_class=RawTextHelpFormatter)
     from scriptconfig.smartcast import smartcast
     ###model hparams
-    parser.add_argument('--num_attention_layers', help='Number of attention layers between down convolutions. There can be up to 4 corresponding to each down convolution of the UNet.', type=int, default=4)
+    parser.add_argument('--attention_layers', type=int, nargs='+', default=[1, 2, 3, 4])
     parser.add_argument('--positional_encoding', help='Use positional encoding of time stamps in model. Note: This option should remain False for all currently implemented pretext tasks since the network can learn to cheat based on date information.', action='store_true')
-    parser.add_argument('--positional_encoding_mode', help='addition or concatenation.', type=str, default='concatenation')
+    parser.add_argument('--positional_encoding_mode', help='addition or concatenation.', type=str, default='addition')
     ###dataset hparams
     parser.add_argument('--train_dataset', type=str, help="path/to/train.kwcoco.json", required=True)
     parser.add_argument('--vali_dataset', type=str, help="path/to/vali.kwcoco.json", default=None)
-    parser.add_argument('--feature_dim_shared', type=int, default=64)
+    parser.add_argument('--feature_dim_shared', type=int, default=16)
     ###produced features hparams
-    parser.add_argument('--feature_dim_each_task', type=int, default=64)
+    parser.add_argument('--feature_dim_each_task', type=int, default=4)
     parser.add_argument('--tasks', nargs='+', help=f'specify which tasks to choose from ({", ".join(pretext.TASK_NAMES)}, or all.\nEx: --tasks {pretext.TASK_NAMES[0]} {pretext.TASK_NAMES[1]}', default=['all'])
     parser.add_argument('--focal_gamma', type=float, help='Focal parameter in loss function for arrow of time task. 0 corresponds to binary cross entropy loss', default=0)
     parser.add_argument('--aot_penalty_weight', type=float, help='Weight to apply to difference of feature map regularization in arrow of time task. Set to 0 to ignore calculations.', default=0)
@@ -85,20 +84,20 @@ if __name__ == '__main__':
     parser.add_argument('--sensor', type=smartcast, nargs='+', default=['S2', 'L8'])
     parser.add_argument('--bands', type=smartcast, help='Choose bands on which to train. Can specify \'all\' for all bands from given sensor, or \'shared\' to use common bands when using both S2 and L8 sensors', nargs='+', default=['shared'])
     ###learning hparams
-    parser.add_argument('--patch_size', type=int, default=64)
-    parser.add_argument('--max_epochs', type=int, default=100)
-    parser.add_argument('--check_val_every_n_epoch', type=int, default=3)
-    parser.add_argument('--batch_size', type=int, default=128)
+    parser.add_argument('--patch_size', type=int, default=128)
+    parser.add_argument('--max_epochs', type=int, default=500)
+    parser.add_argument('--check_val_every_n_epoch', type=int, default=5)
+    parser.add_argument('--batch_size', type=int, default=64)
     parser.add_argument('--workers', type=int, default=8)
-    parser.add_argument('--learning_rate', type=float, default=.001)
-    parser.add_argument('--step_size', type=int, default=50)
+    parser.add_argument('--learning_rate', type=float, default=.0001)
+    parser.add_argument('--step_size', type=int, default=80)
     parser.add_argument('--lr_gamma', type=float, default=.1)
     parser.add_argument('--weight_decay', type=float, default=1e-5)
+    parser.add_argument('--ignore_boundary', type=int, default=3)
     ###output
     parser.add_argument('--save_dir', type=str, default=None)
-    parser.add_argument('--pca_projection_path', type=str, default='')
+    parser.add_argument('--pca_projection_path', type=str, default='../pca_2022_03_10')
     parser.add_argument('--reduction_dim', type=int, default=6)
-    parser.add_argument('--use_gridded_dataset', type=int, default=1)
     ###device
     parser.add_argument('--device', type=str, default='gpu')
     parser.add_argument('--gpus', type=int, help='gpu(s) to run on', default=1)

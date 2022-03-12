@@ -32,17 +32,11 @@ class pretext(pl.LightningModule):
         self.save_hyperparameters(hparams)
 
         if hparams.train_dataset is not None:
-            if hparams.use_gridded_dataset:
-                self.trainset = gridded_dataset(hparams.train_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size)
-            else:
-                self.trainset = kwcoco_dataset(hparams.train_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size)
+            self.trainset = kwcoco_dataset(hparams.train_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size)
         else:
             self.trainset = None
         if hparams.vali_dataset is not None:
-            if hparams.use_gridded_dataset:
-                self.valset = gridded_dataset(hparams.vali_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size)
-            else:
-                self.valset = kwcoco_dataset(hparams.vali_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size)
+            self.valset = gridded_dataset(hparams.vali_dataset, sensor=hparams.sensor, bands=hparams.bands, patch_size=hparams.patch_size)
         else:
             self.valset = None
 
@@ -77,7 +71,7 @@ class pretext(pl.LightningModule):
         self.backbone = attention_unet(in_channels=num_channels,
                                         out_channels=hparams.feature_dim_shared,
                                         pos_encode=hparams.positional_encoding,
-                                        num_attention_layers=hparams.num_attention_layers,
+                                        attention_layers=hparams.attention_layers,
                                         mode=hparams.positional_encoding_mode)
 
         # task specific necks
@@ -98,14 +92,14 @@ class pretext(pl.LightningModule):
         # task specific criterion
         self.criteria = [
             # BinaryFocalLoss(gamma=self.hparams.focal_gamma),  # sort task
-            nn.NLLLoss(), #sort task
+            nn.NLLLoss(ignore_index=99), #sort task
             nn.TripletMarginLoss(),  # augment task
             nn.TripletMarginLoss(),  # overlap task
         ]
         self.criteria = [ self.criteria[i] for i in self.task_indices ]
 
         # task specific metrics
-        self.sort_accuracy = Accuracy()
+        self.sort_accuracy = Accuracy(ignore_index=99)
 
     def forward(self, image_stack, positional_encoding=None):
         # pass through shared model body
@@ -121,9 +115,11 @@ class pretext(pl.LightningModule):
         offset_image1_features = out[:, 2, :, :, :]
         augmented_image1_features = out[:, 3, :, :, :]
         # get time sort labels
-        time_sort_labels = batch['time_sort_label']
+        time_labels = batch['time_sort_label']
 
-        time_sort_labels = time_sort_labels.unsqueeze(1).unsqueeze(1).repeat(1, image_stack.shape[-2], image_stack.shape[-1]).to(self.device)
+        time_labels = time_labels.unsqueeze(1).unsqueeze(1).repeat(1, image_stack.shape[-2], image_stack.shape[-1]).to(self.device)
+        time_sort_labels = 99 * torch.ones_like(time_labels)
+        time_sort_labels[:, self.hparams.ignore_boundary:-self.hparams.ignore_boundary, self.hparams.ignore_boundary:-self.hparams.ignore_boundary] = time_labels[:, self.hparams.ignore_boundary:-self.hparams.ignore_boundary, self.hparams.ignore_boundary:-self.hparams.ignore_boundary]
 
         losses = []
         output = {}
@@ -229,7 +225,6 @@ class pretext(pl.LightningModule):
         stride = 1
         padding = int((kernel_size - 1) / 2)
         return nn.Sequential(
-            nn.Conv2d(in_chan, in_chan, kernel_size, stride, padding),
             nn.BatchNorm2d(in_chan),
             nn.ReLU(inplace=True),
             nn.Conv2d(in_chan, out_chan, kernel_size, stride, padding),
@@ -254,10 +249,15 @@ class pretext(pl.LightningModule):
 
     def image_classification_head(self, in_chan):
         return nn.Sequential(
-                             nn.AdaptiveAvgPool2d(output_size=(1, 1)),
-                             nn.Flatten(1, -1),
-                             nn.Linear(in_chan, 2),
+                             nn.Flatten(1, -1)
                             )
+
+    # def image_classification_head(self, in_chan):
+    #     return nn.Sequential(
+    #                          nn.AdaptiveAvgPool2d(output_size=(1, 1)),
+    #                          nn.Flatten(1, -1),
+    #                          nn.Linear(in_chan, 8),
+    #                         )
 
     def generate_pca_matrix(self, save_path, loader, reduction_dim=6):
         feature_collection = []
@@ -273,7 +273,7 @@ class pretext(pl.LightningModule):
 
             features = None
             image_stack = None
-            stack = torch.cat(feature_collection, dim=0).permute(0, 1, 3, 4, 2).reshape(-1, 64)
+            stack = torch.cat(feature_collection, dim=0).permute(0, 1, 3, 4, 2).reshape(-1, self.hparams.feature_dim_shared)
             _, _, projector = pca(stack, q=reduction_dim)
             stack = None
 
@@ -285,10 +285,13 @@ class pretext(pl.LightningModule):
         return projector
 
     def on_save_checkpoint(self, checkpoint):
-        save_path = self.hparams.pca_projection_path[:-3] + '_{}'.format(str(self.current_epoch)) + '.pt'
-        self.generate_pca_matrix(save_path=save_path, loader=self.train_dataloader(), reduction_dim=self.hparams.reduction_dim)
+        if self.hparams.pca_projection_path:
+            save_dir = self.hparams.pca_projection_path
+            save_path = os.path.join(save_dir, 'pretext_pca_{}'.format(str(self.current_epoch)) + '.pt')
+            os.makedirs(save_dir, exist_ok=True)
+            self.generate_pca_matrix(save_path=save_path, loader=self.train_dataloader(), reduction_dim=self.hparams.reduction_dim)
 
-    def save_package(self, package_path='$DVC_DPATH/models/uky/uky_invariants_2022_02_11/TA1_pretext_model'):
+    def save_package(self, package_path):
         model = self
 
         package_path = os.path.join(package_path, 'pretext_package.pt')
