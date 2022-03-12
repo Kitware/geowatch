@@ -59,7 +59,7 @@ class SlurmJob(ub.NiceRepr):
         >>> self = SlurmJob('python -c print("hello world")', 'hi', cpus=5, gpus=1, mem='10GB')
         >>> command = self._build_sbatch_args()
         >>> print('command = {!r}'.format(command))
-        >>> self = SlurmJob('python -c print("hello world")', 'hi', cpus=5, gpus=1, mem='10GB', depends=['job2', 3, self])
+        >>> self = SlurmJob('python -c print("hello world")', 'hi', cpus=5, gpus=1, mem='10GB', depends=[self])
         >>> command = self._build_command()
         >>> print(command)
 
