@@ -231,7 +231,7 @@ class MultimodalTransformer(pl.LightningModule):
                             choices=['none', 'auto', 'group', 'batch'])
         parser.add_argument('--arch_name', default='smt_it_joint_p8', type=str,
                             choices=available_encoders)
-        parser.add_argument('--decoder', default='mlp', type=str, choices=['mlp', 'mask'])
+        parser.add_argument('--decoder', default='mlp', type=str, choices=['mlp', 'segmenter'])
         parser.add_argument('--dropout', default=0.1, type=float)
         parser.add_argument('--global_class_weight', default=1.0, type=float)
         parser.add_argument('--global_change_weight', default=1.0, type=float)
