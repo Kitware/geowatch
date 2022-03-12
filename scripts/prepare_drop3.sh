@@ -40,6 +40,19 @@ extra_debuging(){
         "--channels=red|green|blue" \
         --draw_anns=False --workers=avail
 
+    AWS_DEFAULT_PROFILE=iarpa python -m watch.cli.coco_align_geotiffs \
+        --src "$HOME/data/dvc-repos/smart_watch_dvc/Uncropped-Drop3-TA1-2022-03-10/data_prepped.kwcoco.json" \
+        --dst "$HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop3-TA1-2022-03-10/data.kwcoco.json" \
+        --regions "$HOME/data/dvc-repos/smart_watch_dvc/annotations/region_models/*.geojson" \
+        --workers=0 \
+        --context_factor=1 \
+        --geo_preprop=auto \
+        --keep=img \
+        --visualize=False \
+        --debug_valid_regions=False \
+        --rpc_align_method affine_warp
+
+
 }
 
 

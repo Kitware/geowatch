@@ -7,28 +7,213 @@ Notes:
     # Installing and configuring SLURM
     See git@github.com:Erotemic/local.git init/setup_slurm.sh
     Or ~/local/init/setup_slurm.sh in my local checkout
+
+Example:
+    >>> import sys, ubelt
+    >>> sys.path.append(ubelt.expandpath('~/code/watch'))
+    >>> from watch.utils.slurm_queue import *  # NOQA
+    >>> dpath = ub.Path.appdir('slurm_queue/tests')
+    >>> queue = SlurmQueue()
+    >>> job0 = queue.submit(f'echo "here we go"', name='root job')
+    >>> job1 = queue.submit(f'mkdir {dpath}', depends=[job0])
+    >>> job2 = queue.submit(f'echo "result=42" > {dpath}/test.txt ', depends=[job1])
+    >>> job3 = queue.submit(f'cat {dpath}/test.txt', depends=[job2])
+    >>> print(queue.build_submit_script())
 """
 import ubelt as ub
 
 
-class SlurmQueue:
-    def submit(self, command):
-        pass
+def _coerce_mem(mem):
+    """
+    Args:
+        mem (int | str): integer number of megabytes or a parseable string
 
-    def _slurm_submit_job():
-        job_name = 'todo'
-        output_fpath = '$HOME/.cache/slurm/logs/job-%j-%x.out'
-        command = "python -c 'import sys; sys.exit(1)'"
+    Example:
+        >>> from watch.utils.slurm_queue import *  # NOQA
+        >>> print(_coerce_mem(30602))
+        >>> print(_coerce_mem('4GB'))
+        >>> print(_coerce_mem('32GB'))
+        >>> print(_coerce_mem('300000000 bytes'))
+    """
+    if isinstance(mem, int):
+        assert mem > 0
+    elif isinstance(mem, str):
+        import pint
+        reg = pint.UnitRegistry()
+        mem = reg.parse_expression(mem)
+        mem = int(mem.to('megabytes').m)
+    else:
+        raise TypeError(type(mem))
+    return mem
 
+
+class SlurmJob(ub.NiceRepr):
+    """
+    Represents a slurm job that hasn't been submitted yet
+
+    Example:
+        >>> import sys, ubelt
+        >>> sys.path.append(ubelt.expandpath('~/code/watch'))
+        >>> from watch.utils.slurm_queue import *  # NOQA
+        >>> from watch.utils.slurm_queue import _coerce_mem
+        >>> self = SlurmJob('python -c print("hello world")', 'hi', cpus=5, gpus=1, mem='10GB')
+        >>> command = self._build_sbatch_args()
+        >>> print('command = {!r}'.format(command))
+        >>> self = SlurmJob('python -c print("hello world")', 'hi', cpus=5, gpus=1, mem='10GB', depends=['job2', 3, self])
+        >>> command = self._build_command()
+        >>> print(command)
+
+    """
+    def __init__(self, command, name=None, output_fpath=None, depends=None,
+                 partition=None, cpus=None, gpus=None, mem=None):
+        self.command = command
+        if name is None:
+            import uuid
+            name = 'job-' + str(uuid.uuid4())
+        self.name = name
+        self.output_fpath = output_fpath
+        self.depends = depends
+        self.cpus = cpus
+        self.gpus = gpus
+        self.mem = mem
+        self.jobid = None
+        # --partition=community --cpus-per-task=5 --mem=30602 --gres=gpu:1
+
+    def __nice__(self):
+        return repr(self.command)
+
+    def _build_command(self):
+        return ' '.join(self._build_sbatch_args())
+
+    def _build_sbatch_args(self, jobname_to_varname=None):
+        # job_name = 'todo'
+        # output_fpath = '$HOME/.cache/slurm/logs/job-%j-%x.out'
+        # command = "python -c 'import sys; sys.exit(1)'"
         # -c 2 -p priority --gres=gpu:1
+        sbatch_args = ['sbatch']
+        if self.name:
+            sbatch_args.append(f'--job-name="{self.name}"')
+        if self.cpus:
+            sbatch_args.append(f'--cpus-per-task={self.cpus}')
+        if self.mem:
+            mem = _coerce_mem(self.mem)
+            sbatch_args.append(f'--mem={mem}')
+        if self.gpus:
+            def _coerce_gres(gpus):
+                if isinstance(gpus, str):
+                    gres = gpus
+                elif isinstance(gpus, int):
+                    gres = f'gres:{gpus}'
+                else:
+                    raise TypeError(type(self.gpus))
+                return gres
+            gres = _coerce_gres(self.gpus)
+            sbatch_args.append(f'--gres="{gres}"')
+        if self.output_fpath:
+            sbatch_args.append(f'--output="{self.output_fpath}"')
 
-        sbatch_command = [
-            'sbatch',
-            f'--job-name="{job_name}"'
-            f'--output="{output_fpath}"'
-            f'--warp="{command}"'
-        ]
-        ub.cmd(sbatch_command)
+        import shlex
+        wrp_command = shlex.quote(self.command)
+        sbatch_args.append(f'--wrap {wrp_command}')
+
+        if self.depends:
+            # TODO: other depends parts
+            type_to_dependencies = {
+                'after': [],
+            }
+            depends = self.depends if ub.iterable(self.depends) else [self.depends]
+
+            for item in depends:
+                if isinstance(item, SlurmJob):
+                    jobid = item.jobid
+                    if jobid is None and item.name:
+                        if jobname_to_varname and item.name in jobname_to_varname:
+                            jobid = '${%s}' % jobname_to_varname[item.name]
+                        else:
+                            jobid = f"$(squeue --noheader --format %i --name '{item.name}')"
+                    type_to_dependencies['after'].append(jobid)
+                else:
+                    # if isinstance(item, int):
+                    #     type_to_dependencies['after'].append(item)
+                    # elif isinstance(item, str):
+                    #     name = item
+                    #     item = f"$(squeue --noheader --format %i --name '{name}')"
+                    #     type_to_dependencies['after'].append(item)
+                    # else:
+                    raise TypeError(type(item))
+
+            # squeue --noheader --format %i --name <JOB_NAME>
+            depends_parts = []
+            for type_, jobids in type_to_dependencies.items():
+                if jobids:
+                    part = ':'.join([str(j) for j in jobids])
+                    depends_parts.append(f'{type_}:{part}')
+            depends_part = ','.join(depends_parts)
+            sbatch_args.append(f'"--dependency={depends_part}"')
+
+        sbatch_args.append('"--begin=now+5"')
+        sbatch_args.append('--parsable')
+        return sbatch_args
+
+
+class SlurmQueue:
+    """
+    Example:
+        >>> self = SlurmQueue()
+        >>> job0 = self.submit('echo "hi from $SLURM_JOBID"')
+        >>> job1 = self.submit('echo "hi from $SLURM_JOBID"', depends=[job0])
+        >>> job2 = self.submit('echo "hi from $SLURM_JOBID"', depends=[job1])
+        >>> job3 = self.submit('echo "hi from $SLURM_JOBID"', depends=[job2])
+        >>> job4 = self.submit('echo "hi from $SLURM_JOBID"', depends=[job3])
+        >>> job5 = self.submit('echo "hi from $SLURM_JOBID"', depends=[job4])
+        >>> job6 = self.submit('echo "hi from $SLURM_JOBID"', depends=[job0])
+        >>> job7 = self.submit('echo "hi from $SLURM_JOBID"', depends=[job5, job6])
+        >>> print(self.build_submit_script())
+    """
+    def __init__(self):
+        import uuid
+        self.jobs = []
+        self.name = 'queue-' + ub.hash_data(uuid.uuid4())[0:8]
+
+    def order_jobs(self):
+        import networkx as nx
+        graph = nx.DiGraph()
+        # TODO: crawl dependencies too?
+        for job in self.jobs:
+            graph.add_node(job.name, job=job)
+            if job.depends:
+                for dep in job.depends:
+                    graph.add_edge(dep.name, job.name)
+        if 0:
+            print(nx.forest_str(nx.minimum_spanning_arborescence(graph)))
+        new_order = []
+        for node in nx.topological_sort(graph):
+            job = graph.nodes[node]['job']
+            new_order.append(job)
+        return new_order
+
+    def submit(self, command, **kwargs):
+        name = kwargs.get('name', None)
+        if name is None:
+            kwargs['name'] = self.name + '-job-{}'.format(len(self.jobs))
+        job = SlurmJob(command, **kwargs)
+        self.jobs.append(job)
+        return job
+
+    def build_submit_script(self):
+        new_order = self.order_jobs()
+        commands = []
+        jobname_to_varname = {}
+        for job in new_order:
+            args = job._build_sbatch_args(jobname_to_varname)
+            command = ' '.join(args)
+            if 1:
+                varname = 'JOB_{:03d}'.format(len(jobname_to_varname))
+                command = f'{varname}=$({command})'
+                jobname_to_varname[job.name] = varname
+            commands.append(command)
+        text = '\n'.join(commands)
+        print(text)
 
 
 SLURM_NOTES = """
@@ -93,5 +278,21 @@ scancel --state=RUNNING
 scancel --state=SUSPENDED
 
 sudo scontrol update nodename=namek state=idle
+
+
+
+# How to submit a batch job with a dependency
+
+    sbatch --dependency=<type:job_id[:job_id][,type:job_id[:job_id]]> ...
+
+    Dependency types:
+
+    after:jobid[:jobid...]	job can begin after the specified jobs have started
+    afterany:jobid[:jobid...]	job can begin after the specified jobs have terminated
+    afternotok:jobid[:jobid...]	job can begin after the specified jobs have failed
+    afterok:jobid[:jobid...]	job can begin after the specified jobs have run to completion with an exit code of zero (see the user guide for caveats).
+    singleton	jobs can begin execution after all previously launched jobs with the same name and user have ended. This is useful to collate results of a swarm or to send a notification at the end of a swarm.
+
+
 
 """
