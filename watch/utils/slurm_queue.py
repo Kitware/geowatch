@@ -18,7 +18,7 @@ Example:
     >>> job1 = queue.submit(f'mkdir {dpath}', depends=[job0])
     >>> job2 = queue.submit(f'echo "result=42" > {dpath}/test.txt ', depends=[job1])
     >>> job3 = queue.submit(f'cat {dpath}/test.txt', depends=[job2])
-    >>> print(queue.build_submit_script())
+    >>> print(queue.finalize_text())
 """
 import ubelt as ub
 
@@ -65,7 +65,7 @@ class SlurmJob(ub.NiceRepr):
 
     """
     def __init__(self, command, name=None, output_fpath=None, depends=None,
-                 partition=None, cpus=None, gpus=None, mem=None):
+                 partition=None, cpus=None, gpus=None, mem=None, begin=None):
         self.command = command
         if name is None:
             import uuid
@@ -76,7 +76,9 @@ class SlurmJob(ub.NiceRepr):
         self.cpus = cpus
         self.gpus = gpus
         self.mem = mem
-        self.jobid = None
+        self.begin = begin
+
+        self.jobid = None  # only set once this is run (maybe)
         # --partition=community --cpus-per-task=5 --mem=30602 --gres=gpu:1
 
     def __nice__(self):
@@ -151,16 +153,20 @@ class SlurmJob(ub.NiceRepr):
             depends_part = ','.join(depends_parts)
             sbatch_args.append(f'"--dependency={depends_part}"')
 
-        sbatch_args.append('"--begin=now+5"')
-        sbatch_args.append('--parsable')
+        if self.begin:
+            if isinstance(self.begin, int):
+                sbatch_args.append(f'"--begin=now+{self.begin}"')
+            else:
+                sbatch_args.append(f'"--begin={self.begin}"')
         return sbatch_args
 
 
 class SlurmQueue:
     """
     Example:
+        >>> from watch.utils.slurm_queue import *  # NOQA
         >>> self = SlurmQueue()
-        >>> job0 = self.submit('echo "hi from $SLURM_JOBID"')
+        >>> job0 = self.submit('echo "hi from $SLURM_JOBID"', begin=5)
         >>> job1 = self.submit('echo "hi from $SLURM_JOBID"', depends=[job0])
         >>> job2 = self.submit('echo "hi from $SLURM_JOBID"', depends=[job1])
         >>> job3 = self.submit('echo "hi from $SLURM_JOBID"', depends=[job2])
@@ -168,12 +174,29 @@ class SlurmQueue:
         >>> job5 = self.submit('echo "hi from $SLURM_JOBID"', depends=[job4])
         >>> job6 = self.submit('echo "hi from $SLURM_JOBID"', depends=[job0])
         >>> job7 = self.submit('echo "hi from $SLURM_JOBID"', depends=[job5, job6])
-        >>> print(self.build_submit_script())
+        >>> self.write()
+        >>> self.rprint()
+        >>> if ub.find_exe('slurm'):
+        >>>     self.run()
     """
     def __init__(self):
         import uuid
         self.jobs = []
         self.name = 'queue-' + ub.hash_data(uuid.uuid4())[0:8]
+        self.dpath = ub.Path.appdir('slurm_queue')
+        self.fpath = self.dpath / (self.name + '.sh')
+
+    def write(self):
+        import os
+        import stat
+        text = self.finalize_text()
+        self.fpath.parent.ensuredir()
+        with open(self.fpath, 'w') as file:
+            file.write(text)
+        os.chmod(self.fpath, (
+            stat.S_IXUSR | stat.S_IXGRP | stat.S_IRUSR |
+            stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP))
+        return self.fpath
 
     def order_jobs(self):
         import networkx as nx
@@ -200,7 +223,7 @@ class SlurmQueue:
         self.jobs.append(job)
         return job
 
-    def build_submit_script(self):
+    def finalize_text(self):
         new_order = self.order_jobs()
         commands = []
         jobname_to_varname = {}
@@ -209,11 +232,38 @@ class SlurmQueue:
             command = ' '.join(args)
             if 1:
                 varname = 'JOB_{:03d}'.format(len(jobname_to_varname))
-                command = f'{varname}=$({command})'
+                command = f'{varname}=$({command} --parsable)'
                 jobname_to_varname[job.name] = varname
             commands.append(command)
         text = '\n'.join(commands)
-        print(text)
+        return text
+
+    def run(self, block=False):
+        if not ub.find_exe('tmux'):
+            raise Exception('tmux not found')
+        self.write()
+        ub.cmd(f'bash {self.fpath}', verbose=3, check=True)
+        if block:
+            return self.monitor()
+
+    def monitor(self, refresh_rate=0.4):
+        """
+        Monitor progress until the jobs are done
+        """
+        # ub.cmd('watch squeue')
+
+    def rprint(self, with_status=False, with_rich=0):
+        """
+        Print info about the commands, optionally with rich
+        """
+        # from rich.panel import Panel
+        # from rich.syntax import Syntax
+        # from rich.console import Console
+        # console = Console()
+        code = self.finalize_text()
+        print(ub.highlight_code(f'# --- {str(self.fpath)}', 'bash'))
+        print(ub.highlight_code(code, 'bash'))
+        # console.print(Panel(Syntax(code, 'bash'), title=str(self.fpath)))
 
 
 SLURM_NOTES = """
