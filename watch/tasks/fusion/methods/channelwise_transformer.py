@@ -235,7 +235,7 @@ class MultimodalTransformer(pl.LightningModule):
         parser.add_argument('--dropout', default=0.1, type=float)
         parser.add_argument('--global_class_weight', default=1.0, type=float)
         parser.add_argument('--global_change_weight', default=1.0, type=float)
-        parser.add_argument('--global_saliency_weight', default=0.0, type=float)
+        parser.add_argument('--global_saliency_weight', default=1.0, type=float)
         parser.add_argument('--modulate_class_weights', default='', type=str, help='a special syntax that lets the user modulate automatically computed class weights. Should be a comma separated list of name*weight or name*weight+offset. E.g. `negative*0,background*0.001,No Activity*0.1+1`')
 
         parser.add_argument('--change_loss', default='cce')
@@ -284,7 +284,7 @@ class MultimodalTransformer(pl.LightningModule):
                  window_size=8,
                  global_class_weight=1.0,
                  global_change_weight=1.0,
-                 global_saliency_weight=0.0,
+                 global_saliency_weight=1.0,
                  change_head_hidden=1,
                  class_head_hidden=1,
                  saliency_head_hidden=1,
@@ -672,42 +672,6 @@ class MultimodalTransformer(pl.LightningModule):
             optimizer, T_max=self.trainer.max_epochs)
         return [optimizer], [scheduler]
 
-    @profile
-    def forward(self, images):
-        """
-        Example:
-            >>> import pytest
-            >>> pytest.skip('not currently used')
-            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
-            >>> from watch.tasks.fusion import datamodules
-            >>> channels = 'B1,B8|B8a,B10|B11'
-            >>> channels = 'B1|B8|B10|B8a|B11'
-            >>> datamodule = datamodules.KWCocoVideoDataModule(
-            >>>     train_dataset='special:vidshapes8-multispectral', num_workers=0, channels=channels)
-            >>> datamodule.setup('fit')
-            >>> input_channels = datamodule.input_channels
-            >>> train_dataset = datamodule.torch_datasets['train']
-            >>> dataset_stats = train_dataset.cached_dataset_stats()
-            >>> loader = datamodule.train_dataloader()
-            >>> tokenizer = 'convexpt-v1'
-            >>> tokenizer = 'dwcnn'
-            >>> batch = next(iter(loader))
-            >>> #self = MultimodalTransformer(arch_name='smt_it_joint_p8')
-            >>> self = MultimodalTransformer(
-            >>>     arch_name='smt_it_joint_p8',
-            >>>     input_channels=input_channels,
-            >>>     dataset_stats=dataset_stats,
-            >>>     change_loss='dicefocal',
-            >>>     decoder='dicefocal',
-            >>>     attention_impl='performer',
-            >>>     tokenizer=tokenizer,
-            >>> )
-            >>> images = torch.stack([ub.peek(f['modes'].values()) for f in batch[0]['frames']])[None, :]
-            >>> images.shape
-            >>> self.forward(images)
-        """
-        raise NotImplementedError('see forward_step instad')
-
     def overfit(self, batch):
         """
         Overfit script and demo
@@ -902,6 +866,110 @@ class MultimodalTransformer(pl.LightningModule):
         # as it gets new images, it starts playing through the animation
         # looping as needed
 
+    @classmethod
+    def demo_dataset_stats(cls):
+        channels = kwcoco.ChannelSpec.coerce('pan,red|green|blue,nir|swir16|swir22')
+        unique_sensor_modes = {
+            ('sensor1', 'pan'),
+            ('sensor1', 'red|green|blue'),
+            ('sensor1', 'nir|swir16|swir22'),
+        }
+        input_stats = {k: {
+            'mean': np.random.rand(len(k[1].split('|')), 1, 1),
+            'std': np.random.rand(len(k[1].split('|')), 1, 1),
+        } for k in unique_sensor_modes}
+
+        classes = kwcoco.CategoryTree.coerce(3)
+        dataset_stats = {
+            'unique_sensor_modes': unique_sensor_modes,
+            'input_stats': input_stats,
+            'class_freq': {c: np.random.randint(0, 10000) for c in classes},
+        }
+        # 'sensor_mode_hist': {('sensor3', 'B10|B11|r|g|b|flowx|flowy|distri'): 1,
+        #  ('sensor2', 'B8|B11|r|g|b|disparity|gauss'): 2,
+        #  ('sensor0', 'B1|B8|B8a|B10|B11'): 1},
+        # 'class_freq': {'star': 0,
+        #  'superstar': 5822,
+        #  'eff': 0,
+        #  'negative': 0,
+        #  'ignore': 9216,
+        #  'background': 21826}}
+        return channels, classes, dataset_stats
+
+    def demo_batch(self, batch_size=1, num_timesteps=3, width=8, height=8):
+        """
+        Example:
+            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> channels, clases, dataset_stats = MultimodalTransformer.demo_dataset_stats()
+            >>> self = MultimodalTransformer(
+            >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
+            >>>     decoder='segmenter', classes=clases, global_saliency_weight=1,
+            >>>     dataset_stats=dataset_stats, input_channels=channels)
+            >>> batch = self.demo_batch()
+            >>> if 1:
+            >>>   print(nh.data.collate._debug_inbatch_shapes(batch))
+            >>> self.forward_step(batch)
+        """
+        B = batch_size
+        C = len(self.classes)
+        T = num_timesteps
+        batch = []
+        for bx in range(B):
+            modes = []
+            frames = []
+            for time_index in range(T):
+                H, W = 96, 96
+                modes = {
+                    'pan': torch.rand(1, H, W),
+                    'red|green|blue': torch.rand(3, H, W),
+                    'nir|swir16|swir22': torch.rand(3, H, W),
+                }
+                frame = {}
+                if time_index == 0:
+                    frame['change'] = None
+                    frame['change_weights'] = None
+                else:
+                    frame['change'] = torch.randint(low=0, high=1, size=(H, W))
+                    frame['change_weights'] = torch.rand(H, W)
+
+                frame['class_idxs'] = torch.randint(low=0, high=C - 1, size=(H, W))
+                frame['class_weights'] = torch.rand(H, W)
+
+                frame['saliency'] = torch.randint(low=0, high=1, size=(H, W))
+                frame['saliency_weights'] = torch.rand(H, W)
+
+                frame['date_captured'] = '',
+                frame['gid'] = bx
+                frame['sensor'] = 'sensor1'
+                frame['time_index'] = bx
+                frame['time_offset'] = np.array([1]),
+                frame['timestamp'] = 1
+                frame['modes'] = modes
+                frames.append(frame)
+
+            positional_tensors = {
+                'mode_tensor': torch.rand(T, 16),
+                'sensor': torch.rand(T, 16),
+                'time_index': torch.rand(T, 8),
+                'time_offset': torch.rand(T, 1),
+            }
+            tr = {
+                'gids': list(range(T)),
+                'space_slice': [
+                    slice(0, H),
+                    slice(0, W),
+                ]
+            }
+            item = {
+                'video_id': 3,
+                'video_name': 'toy_video_3',
+                'frames': frames,
+                'positional_tensors': positional_tensors,
+                'tr': tr,
+            }
+            batch.append(item)
+        return batch
+
     @profile
     def forward_step(self, batch, with_loss=False, stage='unspecified'):
         """
@@ -921,6 +989,8 @@ class MultimodalTransformer(pl.LightningModule):
             >>> train_dset = datamodule.torch_datasets['train']
             >>> loader = datamodule.train_dataloader()
             >>> batch = next(iter(loader))
+            >>> if 1:
+            >>>   print(nh.data.collate._debug_inbatch_shapes(batch))
             >>> # Choose subclass to test this with (does not cover all cases)
             >>> self = model = methods.MultimodalTransformer(
             >>>     arch_name='smt_it_joint_p8', tokenizer='rearrange',
@@ -1427,6 +1497,42 @@ class MultimodalTransformer(pl.LightningModule):
             # restore attributes
             for key, val in backup_attributes.items():
                 setattr(model, key, val)
+
+    @profile
+    def forward(self, images):
+        """
+        Example:
+            >>> import pytest
+            >>> pytest.skip('not currently used')
+            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> from watch.tasks.fusion import datamodules
+            >>> channels = 'B1,B8|B8a,B10|B11'
+            >>> channels = 'B1|B8|B10|B8a|B11'
+            >>> datamodule = datamodules.KWCocoVideoDataModule(
+            >>>     train_dataset='special:vidshapes8-multispectral', num_workers=0, channels=channels)
+            >>> datamodule.setup('fit')
+            >>> input_channels = datamodule.input_channels
+            >>> train_dataset = datamodule.torch_datasets['train']
+            >>> dataset_stats = train_dataset.cached_dataset_stats()
+            >>> loader = datamodule.train_dataloader()
+            >>> tokenizer = 'convexpt-v1'
+            >>> tokenizer = 'dwcnn'
+            >>> batch = next(iter(loader))
+            >>> #self = MultimodalTransformer(arch_name='smt_it_joint_p8')
+            >>> self = MultimodalTransformer(
+            >>>     arch_name='smt_it_joint_p8',
+            >>>     input_channels=input_channels,
+            >>>     dataset_stats=dataset_stats,
+            >>>     change_loss='dicefocal',
+            >>>     decoder='dicefocal',
+            >>>     attention_impl='performer',
+            >>>     tokenizer=tokenizer,
+            >>> )
+            >>> images = torch.stack([ub.peek(f['modes'].values()) for f in batch[0]['frames']])[None, :]
+            >>> images.shape
+            >>> self.forward(images)
+        """
+        raise NotImplementedError('see forward_step instad')
 
 
 def _class_weights_from_freq(total_freq, mode='median-idf'):
