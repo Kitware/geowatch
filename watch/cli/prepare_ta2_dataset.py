@@ -246,11 +246,19 @@ def main(cmdline=False, **kwargs):
 
     debug_valid_regions = config['debug']
     align_visualize = config['debug']
+
+    # PROJ_DEBUG=3
+    job_environ_str = ' '.join([
+        # 'PROJ_DEBUG=3',
+        f'AWS_DEFAULT_PROFILE={aws_profile}',
+    ])
+    if job_environ_str:
+        job_environ_str += ' '
     queue.submit(ub.codeblock(
         rf'''
         # MAIN WORKHORSE CROP IMAGES
         # Crop big images to the geojson regions
-        PROJ_DEBUG=3 AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.coco_align_geotiffs \
+        {job_environ_str} python -m watch.cli.coco_align_geotiffs \
             --src "{uncropped_prep_kwcoco_fpath}" \
             --dst "{aligned_kwcoco_fpath}" \
             --regions "{region_dpath / '*.geojson'}" \
