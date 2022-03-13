@@ -74,6 +74,9 @@ from kwcoco import channel_spec
 from torch.optim import lr_scheduler
 from watch import heuristics
 from watch.tasks.fusion import utils
+from timm.models.layers import drop_path
+from torch._jit_internal import _copy_to_script_wrapper
+from torch.nn.modules.container import Module
 from watch.tasks.fusion.architectures import transformer
 
 try:
@@ -81,11 +84,6 @@ try:
     profile = xdev.profile
 except Exception:
     profile = ub.identity
-
-
-from timm.models.layers import drop_path
-from torch._jit_internal import _copy_to_script_wrapper
-from torch.nn.modules.container import Module
 
 
 class RobustModuleDict(torch.nn.ModuleDict):
@@ -624,6 +622,9 @@ class MultimodalTransformer(pl.LightningModule):
             'f1': torchmetrics.F1(),
         })
 
+        self.encode_h = utils.SinePositionalEncoding(3, 1, size=8)
+        self.encode_w = utils.SinePositionalEncoding(3, 2, size=8)
+
     def configure_optimizers(self):
         """
         TODO:
@@ -972,6 +973,9 @@ class MultimodalTransformer(pl.LightningModule):
             batch.append(item)
         return batch
 
+    def prepare_item(self, item):
+        pass
+
     @profile
     def forward_step(self, batch, with_loss=False, stage='unspecified'):
         """
@@ -1007,9 +1011,20 @@ class MultimodalTransformer(pl.LightningModule):
             >>> kwplot.autompl()
             >>> kwplot.imshow(canvas)
             >>> kwplot.show_if_requested()
+
+        Example:
+            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> channels, clases, dataset_stats = MultimodalTransformer.demo_dataset_stats()
+            >>> self = MultimodalTransformer(
+            >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
+            >>>     decoder='segmenter', classes=clases, global_saliency_weight=1,
+            >>>     dataset_stats=dataset_stats, input_channels=channels)
+            >>> batch = self.demo_batch()
+            >>> outputs = self.forward_step(batch, with_loss=True)
+            >>> print(nh.data.collate._debug_inbatch_shapes(batch))
+            >>> print(nh.data.collate._debug_inbatch_shapes(outputs))
         """
         outputs = {}
-        eps_f32 = 1e-9
 
         item_losses = []
 
@@ -1017,230 +1032,14 @@ class MultimodalTransformer(pl.LightningModule):
         batch_head_truths = {k: [] for k in self.heads.keys()}
         batch_head_probs = {k: [] for k in self.heads.keys()}
 
-        encode_h = utils.SinePositionalEncoding(3, 1, size=8)
-        encode_w = utils.SinePositionalEncoding(3, 2, size=8)
-
         for item in batch:
-
-            if 1:
-                # Clean this up
-                positional_tensors = item['positional_tensors']
-                positional_outputs = []
-                key = 'time_offset'
-                pos_input = positional_tensors[key].float()
-                pos_output = self.token_learner1_time_delta(pos_input)
-                positional_outputs.append(pos_output)
-
-                key = 'sensor'
-                pos_input = positional_tensors[key].float()
-                pos_output = self.token_learner2_sensor(pos_input)
-                positional_outputs.append(pos_output)
-
-                key = 'mode_tensor'
-                pos_input = positional_tensors[key].float()
-                pos_output = self.token_learner3_mode(pos_input)
-                positional_outputs.append(pos_output)
-
-                positional_outputs.append(positional_tensors['time_index'])
-
-                per_frame_pos_encoding = torch.concat(positional_outputs, axis=1)
-
-            # For loops are for handing heterogeneous inputs
-            tokenized = []
-            token_frame_idx = []
-
-            item_pixel_weights_list = {
-                k: [] for k, v in self.global_head_weights.items() if v > 0
-            }
-
-            for frame_idx, (frame, frame_enc) in enumerate(zip(item['frames'], per_frame_pos_encoding)):
-                if with_loss:
-                    if 'class' in item_pixel_weights_list:
-                        item_pixel_weights_list['class'].append(frame['class_weights'])
-                    if 'saliency' in item_pixel_weights_list:
-                        item_pixel_weights_list['saliency'].append(frame['saliency_weights'])
-                    if 'change' in item_pixel_weights_list:
-                        if frame_idx > 0:
-                            item_pixel_weights_list['change'].append(frame['change_weights'])
-
-                modes = frame['modes']
-                sensor = frame['sensor']
-                for chan_code, mode_val in modes.items():
-
-                    mode_val = mode_val.float()
-                    if self.input_norms is not None:
-                        try:
-                            mode_norm = self.input_norms[sensor][chan_code]
-                            mode_val = mode_norm(mode_val)
-                        except KeyError:
-                            print(f'Failed to process {sensor=!r} {chan_code=!r}')
-                            print('Expected available norms (note the keys contain escape sequences) are:')
-                            for _s in sorted(self.input_norms.keys()):
-                                for _c in sorted(self.input_norms[_s].keys()):
-                                    print(f'{_s=!r} {_c=!r}')
-                            print('self.unique_sensor_modes = {!r}'.format(self.unique_sensor_modes))
-                            raise
-                        # self.sensor_channel_tokenizers[]
-
-                    # Lookup the "tokenizing" network for this type of input
-                    sensor_chan_tokenizer = self.sensor_channel_tokenizers[sensor][chan_code]
-
-                    # Is it worth gathering and stacking items in batches here?
-
-                    # Reduce spatial dimension and normalize the number of
-                    # features in each input stream.
-                    _mode_val_tokens = sensor_chan_tokenizer(mode_val[None, :])
-
-                    mode_vals_tokens = einops.rearrange(
-                        _mode_val_tokens, 'b c h w -> b h w c')
-
-                    # Add ordinal spatial encoding
-                    x1 = encode_w(encode_h(mode_vals_tokens))
-
-                    # Any tricks needed to handle inputs/outputs at different
-                    # resolutions might go here
-                    encoding_expanded = frame_enc[None, None, None, :].expand(list(x1.shape[0:3]) + [frame_enc.shape[0]])
-
-                    # Mixup the space/time dims into the token dims to make this
-                    # general.
-                    x2 = torch.cat([x1, encoding_expanded.type_as(x1)], dim=3)
-
-                    # frame_sensor_chan_tokens = einops.rearrange(x2, 't hs ws f -> (t hs ws) f')
-
-                    # Keep time/sensor channel separate for now, but we will
-                    # need to flatten it, at which point we need a decoder.
-                    frame_sensor_chan_tokens = einops.rearrange(x2, 't hs ws f -> t (hs ws) f')
-                    tokenized.append(frame_sensor_chan_tokens)
-
-                    # TODO: keep track of heterogeneous offsets
-                    token_frame_idx.append(frame_idx)
-
-            tokens = torch.stack(tokenized, dim=0)[None, None, ...]
-
-            H, W = mode_val.shape[-2:]  # hack
-            hs, ws = mode_vals_tokens.shape[1:3]  # hack
-
-            # TODO: maybe make the encoder return a sequence of 1 less?
-            # Rather than just ignoring the first output?
-            encoded_tokens = self.encoder(tokens)
-
-            split_pts = np.r_[[0], np.where(np.r_[np.diff(token_frame_idx), [-1]])[0] + 1]
-            split_sizes = np.diff(split_pts).tolist()
-            # split_pts.cumsum()
-            # split_pts = torch.from_numpy(split_pts).to(tokens.device)
-            perframe_frame_encodings = encoded_tokens.split(split_sizes, dim=2)
-
-            perframe_stackable_encodings = []
-            for encoded_modes in perframe_frame_encodings:
-                # max pool, maybe do something better later
-                if self.multimodal_reduce == 'max':
-                    frame_space_tokens = encoded_modes.max(dim=2)[0]
-                elif self.multimodal_reduce == 'mean':
-                    frame_space_tokens = encoded_modes.mean(dim=2)[0]
-                else:
-                    raise Exception(self.multimodal_reduce)
-                perframe_stackable_encodings.append(frame_space_tokens)
-
-            perframe_spacetime_tokens = torch.cat(perframe_stackable_encodings, dim=2)[:, 0]
-            spacetime_fused_features = einops.rearrange(perframe_spacetime_tokens, 'b t (hs ws) f -> b t hs ws f', hs=hs, ws=ws)
-
-            # Do we need a decorder now?
-            # Pass the final fused space-time feature to a classifier
-            logits = {}
-            if 'change' in self.heads:
-                # TODO: the change head should take unmodified features as
-                # input and then it can do a dot-product / look at second half
-                # / whatever.
-                # _feats = spacetime_fused_features[:, :-1] - spacetime_fused_features[:, 1:]
-                logits['change'] = self.heads['change'](spacetime_fused_features[:, 1:, :, :, :])
-            if 'class' in self.heads:
-                logits['class'] = self.heads['class'](spacetime_fused_features)
-            if 'saliency' in self.heads:
-                logits['saliency'] = self.heads['saliency'](spacetime_fused_features)
-
-            # TODO: it may be faster to compute loss at the downsampled
-            # resolution.
-            resampled_logits = {}
-            # Loop over change, categories, saliency
-            for logit_key, logit_val in logits.items():
-                _tmp = einops.rearrange(logit_val, 'b t h w c -> b (t c) h w')
-                _tmp2 = nn.functional.interpolate(
-                    _tmp, [H, W], mode='bilinear', align_corners=True)
-                resampled = einops.rearrange(_tmp2, 'b (t c) h w -> b t h w c', c=logit_val.shape[4])
-                resampled_logits[logit_key] = resampled
-
-            # Convert logits into probabilities for output
-            # Remove batch index in both cases
-            probs = {}
-            if 'change' in resampled_logits:
-                probs['change'] = resampled_logits['change'].detach().softmax(dim=4)[0, ..., 1]
-            if 'class' in resampled_logits:
-                probs['class'] = resampled_logits['class'].detach().sigmoid()[0]
-            if 'saliency' in resampled_logits:
-                probs['saliency'] = resampled_logits['saliency'].detach().sigmoid()[0]
-
+            probs, item_loss_parts, item_truths = self.forward_item(item)
+            item_losses.append(item_loss_parts)
+            for k, v in batch_head_truths.items():
+                v.append(item_truths[k])
             # Append the item result to the batch outputs
             for k, v in probs.items():
                 batch_head_probs[k].append(v)
-
-            item_loss_parts = {}
-            if with_loss:
-                # Stack the weights for each item
-                item_weights = {
-                    # Because we are nt collating we need to add a batch dimension
-                    key: torch.stack(_tensors)[None, ...]
-                    for key, _tensors in item_pixel_weights_list.items()
-                }
-
-                item_truths = {}
-                if self.global_head_weights['change']:
-                    # [B, T, H, W]
-                    item_truths['change'] = torch.stack([
-                        frame['change'] for frame in item['frames'][1:]
-                    ])[None, ...]
-
-                if self.global_head_weights['class']:
-                    # [B, T, H, W]
-                    item_truths['class'] = torch.stack([
-                        frame['class_idxs'] for frame in item['frames']
-                    ])[None, ...]
-
-                if self.global_head_weights['saliency']:
-                    item_truths['saliency'] = torch.stack([
-                        frame['saliency'] for frame in item['frames']
-                    ])[None, ...]
-
-                for k, v in batch_head_truths.items():
-                    v.append(item_truths[k])
-
-                # Compute criterion loss for each head
-                for head_key, head_logits in resampled_logits.items():
-
-                    criterion = self.criterions[head_key]
-                    head_truth = item_truths[head_key]
-                    head_weights = item_weights[head_key]
-                    global_head_weight = self.global_head_weights[head_key]
-
-                    head_pred_input = einops.rearrange(head_logits, 'b t h w c -> ' + criterion.logit_shape).contiguous()
-                    head_weights_input = einops.rearrange(head_weights[..., None], 'b t h w c -> ' + criterion.logit_shape).contiguous()
-
-                    if criterion.target_encoding == 'index':
-                        head_true_idxs = head_truth.long()
-                        head_true_input = einops.rearrange(head_true_idxs, 'b t h w -> ' + criterion.target_shape).contiguous()
-                        head_weights_input = head_weights_input[:, 0]
-                    elif criterion.target_encoding == 'onehot':
-                        # Note: 1HE is much easier to work with
-                        head_true_ohe = kwarray.one_hot_embedding(head_truth.long(), criterion.in_channels, dim=-1)
-                        head_true_input = einops.rearrange(head_true_ohe, 'b t h w c -> ' + criterion.target_shape).contiguous()
-                    else:
-                        raise KeyError(criterion.target_encoding)
-                    unreduced_head_loss = criterion(head_pred_input, head_true_input)
-                    full_head_weight = torch.broadcast_to(head_weights_input, unreduced_head_loss.shape)
-                    # Weighted reduction
-                    weighted_head_loss = (full_head_weight * unreduced_head_loss).sum() / (full_head_weight.sum() + eps_f32)
-                    item_loss_parts[head_key] = global_head_weight * weighted_head_loss
-
-                item_losses.append(item_loss_parts)
 
         if 'change' in batch_head_probs:
             outputs['change_probs'] = batch_head_probs['change']
@@ -1296,6 +1095,276 @@ class MultimodalTransformer(pl.LightningModule):
             outputs['loss'] = total_loss
             outputs['item_losses'] = item_losses
         return outputs
+
+    def forward_item(self, item, with_loss=False):
+        """
+        Example:
+            >>> from watch.tasks.fusion.methods.channelwise_transformer import *  # NOQA
+            >>> channels, clases, dataset_stats = MultimodalTransformer.demo_dataset_stats()
+            >>> self = MultimodalTransformer(
+            >>>     arch_name='smt_it_stm_p1', tokenizer='linconv',
+            >>>     decoder='segmenter', classes=clases, global_saliency_weight=1,
+            >>>     dataset_stats=dataset_stats, input_channels=channels)
+            >>> item = self.demo_batch(width=64, height=65)[0]
+            >>> outputs = self.forward_item(item, with_loss=True)
+            >>> print('item')
+            >>> print(nh.data.collate._debug_inbatch_shapes(item))
+            >>> print('outputs')
+            >>> print(nh.data.collate._debug_inbatch_shapes(outputs))
+        """
+        # Clean this up
+        positional_tensors = item['positional_tensors']
+        positional_outputs = []
+        key = 'time_offset'
+        pos_input = positional_tensors[key].float()
+        pos_output = self.token_learner1_time_delta(pos_input)
+        positional_outputs.append(pos_output)
+
+        key = 'sensor'
+        pos_input = positional_tensors[key].float()
+        pos_output = self.token_learner2_sensor(pos_input)
+        positional_outputs.append(pos_output)
+
+        key = 'mode_tensor'
+        pos_input = positional_tensors[key].float()
+        pos_output = self.token_learner3_mode(pos_input)
+        positional_outputs.append(pos_output)
+
+        positional_outputs.append(positional_tensors['time_index'])
+
+        per_frame_pos_encoding = torch.concat(positional_outputs, axis=1)
+
+        # For loops are for handing heterogeneous inputs
+        tokenized = []
+        recon_info = []
+        for frame_idx, (frame, frame_enc) in enumerate(zip(item['frames'], per_frame_pos_encoding)):
+            modes = frame['modes']
+            sensor = frame['sensor']
+            for chan_code, mode_val in modes.items():
+                frame_sensor_chan_tokens, space_shape = self.forward_foot(sensor, chan_code, mode_val, frame_enc)
+                tokenized.append(frame_sensor_chan_tokens)
+                recon_info.append({
+                    'input_space_shape': mode_val.shape[1:3],
+                    'space_shape': space_shape,
+                    'frame_idx': frame_idx,
+                    'chan_code': chan_code,
+                    'sensor': sensor,
+                })
+
+        if 1 and __debug__:
+            print(nh.data.collate._debug_inbatch_shapes(tokenized))
+
+        _tokens = torch.concat(tokenized, dim=0)
+        tokens = _tokens[None, None, None, None, ...]
+        # TODO: maybe make the encoder return a sequence of 1 less?
+        # Rather than just ignoring the first output?
+        encoded_tokens = self.encoder(tokens)[0, 0, 0, 0]
+
+        token_split_points = np.cumsum([t.shape[0] for t in tokenized])
+        token_split_sizes = np.diff(np.r_[[0], token_split_points]).tolist()
+        # split_frames = np.array([r['frame_idx'] for r in recon_info])
+        # frame_split_points = np.where(np.diff(split_frames))[0]
+        # token_frame_split_points = token_split_points[frame_split_points]
+        # sensorchan_shapes = np.array([r['space_shape'] for r in recon_info])
+        # sensorchan_areas = sensorchan_shapes.prod(axis=1)
+        # np.split(sensorchan_shapes, frame_split_points)
+        # np.split(sensorchan_areas, frame_split_points)
+        split_encoding = torch.split(encoded_tokens, token_split_sizes)
+        for info, mode in zip(recon_info, split_encoding):
+            info['mode'] = mode
+        grouped = ub.group_items(recon_info, key=lambda x: x['frame_idx'])
+        perframe_stackable_encodings = []
+        frame_shapes = []
+        for frame_idx, frame_group in sorted(grouped.items()):
+            shapes = [g['space_shape'] for g in frame_group]
+            modes = [g['mode'] for g in frame_group]
+            if ub.allsame(shapes):
+                to_stack = modes
+                frame_shape = shapes[0]
+            else:
+                frame_shape = list(max(shapes, key=lambda x: x[0] * x[1]))
+                to_stack = [
+                    nn.functional.interpolate(
+                        m, frame_shape, mode='bilinear', align_corners=True)
+                    for m in modes
+                ]
+            frame_shapes.append(frame_shape)
+            stack = torch.stack(to_stack, dim=0)
+            if self.multimodal_reduce == 'max':
+                frame_feat = torch.max(stack, dim=0)[0]
+            elif self.multimodal_reduce == 'mean':
+                frame_feat = torch.mean(stack, dim=0)[0]
+            else:
+                raise Exception(self.multimodal_reduce)
+            hs, ws = frame_shape
+            frame_grid = einops.rearrange(
+                frame_feat, '(hs ws) f -> hs ws f', hs=hs, ws=ws)
+            perframe_stackable_encodings.append(frame_grid)
+
+        # FIXME for multiresolution
+        spacetime_features = torch.stack(perframe_stackable_encodings)
+        # H, W = hs, ws
+        # torch.split(torch.from_numpy(sensorchan_shapes), token_split_sizes)
+        # sensorchan_areas
+
+        logits = {}
+        if 'change' in self.heads:
+            # TODO: the change head should take unmodified features as
+            # input and then it can do a dot-product / look at second half
+            # / whatever.
+            # _feats = spacetime_fused_features[:, :-1] - spacetime_fused_features[:, 1:]
+            change_feat = spacetime_features[1:]
+            logits['change'] = self.heads['change'](change_feat)
+        if 'class' in self.heads:
+            logits['class'] = self.heads['class'](spacetime_features)
+        if 'saliency' in self.heads:
+            logits['saliency'] = self.heads['saliency'](spacetime_features)
+
+        # TODO: it may be faster to compute loss at the downsampled
+        # resolution.
+        all_shapes = [g['input_space_shape'] for g in recon_info]
+        H, W = list(max(all_shapes, key=lambda x: x[0] * x[1]))
+        resampled_logits = {}
+        # Loop over change, categories, saliency
+        for logit_key, logit_val in logits.items():
+            _tmp = einops.rearrange(logit_val, 't h w c -> 1 (t c) h w')
+            _tmp2 = nn.functional.interpolate(
+                _tmp, [H, W], mode='bilinear', align_corners=True)
+            resampled = einops.rearrange(_tmp2, 'b (t c) h w -> b t h w c', c=logit_val.shape[3])
+            resampled_logits[logit_key] = resampled
+
+        # Convert logits into probabilities for output
+        # Remove batch index in both cases
+        probs = {}
+        if 'change' in resampled_logits:
+            probs['change'] = resampled_logits['change'].detach().softmax(dim=4)[0, ..., 1]
+        if 'class' in resampled_logits:
+            probs['class'] = resampled_logits['class'].detach().sigmoid()[0]
+        if 'saliency' in resampled_logits:
+            probs['saliency'] = resampled_logits['saliency'].detach().sigmoid()[0]
+
+        if with_loss:
+            item_pixel_weights_list = {
+                k: [] for k, v in self.global_head_weights.items() if v > 0
+            }
+            for frame_idx, (frame, frame_enc) in enumerate(zip(item['frames'], per_frame_pos_encoding)):
+                if 'class' in item_pixel_weights_list:
+                    item_pixel_weights_list['class'].append(frame['class_weights'])
+                if 'saliency' in item_pixel_weights_list:
+                    item_pixel_weights_list['saliency'].append(frame['saliency_weights'])
+                if 'change' in item_pixel_weights_list:
+                    if frame_idx > 0:
+                        item_pixel_weights_list['change'].append(frame['change_weights'])
+
+            item_loss_parts, item_truths = self._build_item_loss_parts(
+                item, resampled_logits, item_pixel_weights_list)
+        else:
+            item_loss_parts = None
+            item_truths = None
+        return probs, item_loss_parts, item_truths
+
+    def forward_foot(self, sensor, chan_code, mode_val, frame_enc):
+        mode_val = mode_val.float()
+        if self.input_norms is not None:
+            try:
+                mode_norm = self.input_norms[sensor][chan_code]
+                mode_val = mode_norm(mode_val)
+            except KeyError:
+                print(f'Failed to process {sensor=!r} {chan_code=!r}')
+                print('Expected available norms (note the keys contain escape sequences) are:')
+                for _s in sorted(self.input_norms.keys()):
+                    for _c in sorted(self.input_norms[_s].keys()):
+                        print(f'{_s=!r} {_c=!r}')
+                print('self.unique_sensor_modes = {!r}'.format(self.unique_sensor_modes))
+                raise
+            # self.sensor_channel_tokenizers[]
+
+        # Lookup the "tokenizing" network for this type of input
+        sensor_chan_tokenizer = self.sensor_channel_tokenizers[sensor][chan_code]
+
+        # Is it worth gathering and stacking items in batches here?
+
+        # Reduce spatial dimension and normalize the number of
+        # features in each input stream.
+        _mode_val_tokens = sensor_chan_tokenizer(mode_val[None, :])
+
+        mode_vals_tokens = einops.rearrange(
+            _mode_val_tokens, 'b c h w -> b h w c')
+
+        # Add ordinal spatial encoding
+        x1 = self.encode_w(self.encode_h(mode_vals_tokens))
+
+        # Any tricks needed to handle inputs/outputs at different
+        # resolutions might go here
+        encoding_expanded = frame_enc[None, None, None, :].expand(list(x1.shape[0:3]) + [frame_enc.shape[0]])
+
+        # Mixup the space/time dims into the token dims to make this
+        # general.
+        x2 = torch.cat([x1, encoding_expanded.type_as(x1)], dim=3)
+
+        # frame_sensor_chan_tokens = einops.rearrange(x2, 't hs ws f -> (t hs ws) f')
+
+        # Keep time/sensor channel separate for now, but we will
+        # need to flatten it, at which point we need a decoder.
+        frame_sensor_chan_tokens = einops.rearrange(x2, '1 hs ws f -> (hs ws) f')
+        space_shape = mode_vals_tokens.shape[1:3]
+        return frame_sensor_chan_tokens, space_shape
+
+    def _build_item_loss_parts(self, item, resampled_logits, item_pixel_weights_list):
+        item_loss_parts = {}
+        item_truths = {}
+        # Stack the weights for each item
+        item_weights = {
+            # Because we are nt collating we need to add a batch dimension
+            key: torch.stack(_tensors)[None, ...]
+            for key, _tensors in item_pixel_weights_list.items()
+        }
+        if self.global_head_weights['change']:
+            # [B, T, H, W]
+            item_truths['change'] = torch.stack([
+                frame['change'] for frame in item['frames'][1:]
+            ])[None, ...]
+
+        if self.global_head_weights['class']:
+            # [B, T, H, W]
+            item_truths['class'] = torch.stack([
+                frame['class_idxs'] for frame in item['frames']
+            ])[None, ...]
+
+        if self.global_head_weights['saliency']:
+            item_truths['saliency'] = torch.stack([
+                frame['saliency'] for frame in item['frames']
+            ])[None, ...]
+
+        # Compute criterion loss for each head
+        for head_key, head_logits in resampled_logits.items():
+
+            criterion = self.criterions[head_key]
+            head_truth = item_truths[head_key]
+            head_weights = item_weights[head_key]
+            global_head_weight = self.global_head_weights[head_key]
+
+            head_pred_input = einops.rearrange(head_logits, 'b t h w c -> ' + criterion.logit_shape).contiguous()
+            head_weights_input = einops.rearrange(head_weights[..., None], 'b t h w c -> ' + criterion.logit_shape).contiguous()
+
+            if criterion.target_encoding == 'index':
+                head_true_idxs = head_truth.long()
+                head_true_input = einops.rearrange(head_true_idxs, 'b t h w -> ' + criterion.target_shape).contiguous()
+                head_weights_input = head_weights_input[:, 0]
+            elif criterion.target_encoding == 'onehot':
+                # Note: 1HE is much easier to work with
+                head_true_ohe = kwarray.one_hot_embedding(head_truth.long(), criterion.in_channels, dim=-1)
+                head_true_input = einops.rearrange(head_true_ohe, 'b t h w c -> ' + criterion.target_shape).contiguous()
+            else:
+                raise KeyError(criterion.target_encoding)
+            unreduced_head_loss = criterion(head_pred_input, head_true_input)
+            full_head_weight = torch.broadcast_to(head_weights_input, unreduced_head_loss.shape)
+            # Weighted reduction
+            EPS_F32 = 1e-9
+            weighted_head_loss = (full_head_weight * unreduced_head_loss).sum() / (full_head_weight.sum() + EPS_F32)
+            item_loss_parts[head_key] = global_head_weight * weighted_head_loss
+
+        return item_loss_parts, item_truths
 
     @profile
     def training_step(self, batch, batch_idx=None):
