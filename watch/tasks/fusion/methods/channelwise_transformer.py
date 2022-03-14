@@ -1034,9 +1034,10 @@ class MultimodalTransformer(pl.LightningModule):
 
         for item in batch:
             probs, item_loss_parts, item_truths = self.forward_item(item)
-            item_losses.append(item_loss_parts)
-            for k, v in batch_head_truths.items():
-                v.append(item_truths[k])
+            if with_loss:
+                item_losses.append(item_loss_parts)
+                for k, v in batch_head_truths.items():
+                    v.append(item_truths[k])
             # Append the item result to the batch outputs
             for k, v in probs.items():
                 batch_head_probs[k].append(v)
