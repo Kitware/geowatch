@@ -1,11 +1,11 @@
 import os
 import argparse
+import ubelt as ub
 
 import kwcoco
 import kwimage
 import numpy as np
 from tqdm import tqdm
-from osgeo import gdal
 
 from watch.utils.kwcoco_extensions import transfer_geo_metadata
 
@@ -42,29 +42,86 @@ def check_kwcoco_file(kwcoco_path, channel_name, sensor_name=None):
 
 
 def merge_kwcoco_channels(
-    kwcoco_file_paths, output_kwcoco_path, channel_names, weights, merged_channel_name, sensor_name=None
+    kwcoco_file_paths, output_kwcoco_path, channel_names, weights,
+    merged_channel_name, sensor_name=None
 ):
-    """Compute a weighted mean of channels from separate kwcoco file and save into merged kwcoco file.
+    """
+    Compute a weighted mean of channels from separate kwcoco file and save into
+    merged kwcoco file.
 
     Args:
-        kwcoco_file_paths (list(str)): A list of paths representing pathes to kwcoco files to be merged.
-        output_kwcoco_path (str): Local path to the kwcoco file with merged channels.
-        channel_names (list(str)): A list of channel names corresponding to the channel name to merge from each kwcoco
-            file. Note, the length of the channel names be equal to the number of kwcoco file paths.
-        weights (list(int)): A list of floats representing how much weight a particular kwcoco file should contribute
-            to the final merged prediction.
-        sensor_name (str, optional): Only merge images belonging to this sensor. Defaults to None.
+        kwcoco_file_paths (list(str)):
+            A list of paths representing pathes to kwcoco files to be merged.
+
+        output_kwcoco_path (str):
+            Local path to the kwcoco file with merged channels.
+
+        channel_names (list(str)):
+            A list of channel names corresponding to the channel name to merge
+            from each kwcoco file. Note, the length of the channel names be
+            equal to the number of kwcoco file paths.
+
+        weights (list(int)):
+            A list of floats representing how much weight a particular kwcoco
+            file should contribute to the final merged prediction.
+
+        sensor_name (str, optional):
+            Only merge images belonging to this sensor. Defaults to None.
+
+    Example:
+        >>> from watch.cli.coco_merge_features import *  # NOQA
+        >>> import watch
+        >>> from kwcoco.demo.perterb import perterb_coco
+        >>> dpath = ub.Path.appdir('watch/test/coco_merge_features')
+        >>> base_dset = watch.demo.coerce_kwcoco('watch-msi')
+        >>> # Construct two copies of the same data with slightly different heatmaps
+        >>> dset1 = perterb_coco(base_dset.copy(), box_noise=0.5, cls_noise=0.5, n_fp=10, n_fn=10)
+        >>> dset2 = perterb_coco(base_dset.copy())
+        >>> dset1.fpath = ub.Path(dset1.fpath).augment(suffix='_heatmap1')
+        >>> dset2.fpath = ub.Path(dset2.fpath).augment(suffix='_heatmap2')
+        >>> watch.demo.smart_kwcoco_demodata.hack_in_heatmaps(dset1, heatmap_dname='dummy_heatmap1', with_nan=True, rng=423432)
+        >>> watch.demo.smart_kwcoco_demodata.hack_in_heatmaps(dset2, heatmap_dname='dummy_heatmap2', with_nan=True, rng=132129)
+        >>> dset1.dump(dset1.fpath)
+        >>> dset2.dump(dset2.fpath)
+        >>> # Build method args
+        >>> kwcoco_file_paths = [dset1.fpath, dset2.fpath]
+        >>> output_bundle_dpath = (dpath / 'merge_bundle').delete().ensuredir()
+        >>> output_kwcoco_path = output_bundle_dpath / 'data.kwcoco.json'
+        >>> channel_names = ['notsalient|salient'] * 2
+        >>> weights = [1.0, 1.0]
+        >>> merged_channel_name = 'notsalient|salient'
+        >>> sensor_name = None
+        >>> # Execute merge
+        >>> merge_kwcoco_channels(kwcoco_file_paths, output_kwcoco_path,
+        >>>                       channel_names, weights, merged_channel_name,
+        >>>                       sensor_name)
+        >>> # Check results
+        >>> output_dset = kwcoco.CocoDataset(output_kwcoco_path)
+        >>> imdata1 = dset1.coco_image(1).delay('salient').finalize()
+        >>> imdata2 = dset2.coco_image(1).delay('salient').finalize()
+        >>> imdataM = output_dset.coco_image(1).delay('salient').finalize()
+        >>> import kwplot
+        >>> kwplot.autompl()
+        >>> kwplot.imshow(kwimage.normalize_intensity(imdata1), title='img1', pnum=(1, 3, 1), fnum=1)
+        >>> kwplot.imshow(kwimage.normalize_intensity(imdata2), title='img2', pnum=(1, 3, 2), fnum=1)
+        >>> kwplot.imshow(kwimage.normalize_intensity(imdataM), title='mean', pnum=(1, 3, 3), fnum=1)
     """
     # Load and merge images from kwcoco files.
     ## Load kwcoco files.
-    kwcoco_files = [kwcoco.CocoDataset(kwcoco_file_path) for kwcoco_file_path in kwcoco_file_paths]
+    kwcoco_files = [kwcoco.CocoDataset.coerce(p) for p in kwcoco_file_paths]
 
     ## Create output kwcoco by copying first kwcoco file.
     merge_kwcoco = kwcoco_files[0].copy()
 
     ## Load channel images from each viable image_id.
-    save_assest_dir = os.path.join(".".join(output_kwcoco_path.split(".")[:-2]), "_assests")
-    os.makedirs(save_assest_dir, exist_ok=True)
+    output_kwcoco_path = ub.Path(output_kwcoco_path)
+    save_assest_dir = (output_kwcoco_path.parent / '_assets').ensuredir()
+
+    input_channel_objs = [kwcoco.FusedChannelSpec.coerce(c) for c in channel_names]
+    output_channels = kwcoco.FusedChannelSpec.coerce(merged_channel_name)
+    assert ub.allsame(input_channel_objs), 'expecting same channels for now'
+    assert output_channels == input_channel_objs[0], 'expecting same channels for now'
+
     pbar = tqdm(merge_kwcoco.index.imgs.items(), desc="Merging images", colour="green")
     for image_id, image_info in pbar:
         # If sensor name spacified, only merge channels for images from this sensor.
@@ -72,37 +129,43 @@ def merge_kwcoco_channels(
             if image_info["sensor_coarse"] != sensor_name:
                 continue
 
-        # Load channel image from each kwcoco file.
-        weighted_images = []
+        # Find which asset the merged channels will belong to
+        merge_coco_img = merge_kwcoco.coco_image(image_id)
+        output_obj = None
+        for cand_obj in merge_coco_img.iter_asset_objs():
+            cand_channels = kwcoco.FusedChannelSpec.coerce(cand_obj['channels'])
+            if output_channels == cand_channels:
+                output_obj = cand_obj
+                break
+        assert output_obj is not None, 'missing, todo: make more flexible'
+
+        # Find which assets will be inputs
+        input_objs = []
+        input_dpaths = []
         for kwcoco_index, kwcoco_file in enumerate(kwcoco_files):
-            # Get the channel band.
-            delayed_image = kwcoco_file.delayed_load(image_id, channels=channel_names[kwcoco_index], space="video")
-            image = delayed_image.finalize(as_xarray=False)
-            weighted_images.append(image * weights[kwcoco_index])
+            coco_img = kwcoco_file.coco_image(image_id)
+            input_obj = None
+            for cand_obj in coco_img.iter_asset_objs():
+                cand_channels = kwcoco.FusedChannelSpec.coerce(cand_obj['channels'])
+                if output_channels == cand_channels:
+                    input_obj = cand_obj
+            assert input_obj is not None, 'missing, todo: be flexible'
+            input_dpaths.append(kwcoco_file.bundle_dpath)
+            input_objs.append(input_obj)
 
-        # Combine images using weight factors.
-        merged_image = np.add.reduce(weighted_images) / sum(weights)  # [height, width, n_channels]
+        average_imdata = average_auxiliary_datas(
+            input_objs, input_dpaths, weights)
 
-        # Save merged image to disk and onto kwcoco file.
-        ## Save merged image onto disk.
-        save_path = os.path.join(save_assest_dir, str(image_id) + "_merged.tif")
-        kwimage.imwrite(save_path, merged_image, backend="gdal")
+        # TODO: better backend name
+        path_chan = output_channels.path_sanitize()
+        img_name = merge_coco_img.img.get('name', '')
+        average_fname = f'merged_{img_name}_{path_chan}.tif'
+        average_fpath = save_assest_dir / average_fname
 
-        ## Get project and geo info.
-        unmerged_image = merge_kwcoco.index.imgs[image_id]
-        vid_from_img = kwimage.Affine.coerce(unmerged_image["warp_img_to_vid"])
-        img_from_vid = vid_from_img.inv()
-        unmerged_image.get("auxiliary", []).append(
-            {
-                "file_name": save_path,
-                "channels": merged_channel_name,
-                "height": merged_image.shape[0],
-                "width": merged_image.shape[1],
-                "num_bands": 2,
-                "warp_aux_to_img": img_from_vid.concise(),
-            }
-        )
-        merge_kwcoco.index.imgs[image_id] = unmerged_image
+        # Overwrite the data in the output auxiliary item
+        output_obj['file_name'] = os.fspath(average_fpath)
+
+        kwimage.imwrite(average_fpath, average_imdata, backend="gdal")
 
         # Update all channels with projection info.
         transfer_geo_metadata(merge_kwcoco, image_id)
@@ -111,6 +174,42 @@ def merge_kwcoco_channels(
     merge_kwcoco.validate()
     merge_kwcoco.dump(output_kwcoco_path)
     print(f"Saved merged kwcoco file to: {output_kwcoco_path}")
+
+
+# output_obj, output_dpath, weights, save_assest_dir):
+
+def average_auxiliary_datas(input_objs, input_dpaths, weights):
+    """
+    Args:
+        input_objs (list[dict]): list of input auxiliary items with same channels
+        input_dpaths (list[str]): directory each input obj is relative to
+        weights (list[float]): weight for each input obj
+
+    Returns:
+        np.ndarray : averaged heatmap in auxiliary space
+    """
+    accum_imdata = None
+    accum_weights = None
+    for obj, dpath, weight in zip(input_objs, input_dpaths, weights):
+        # Assuming auxiliary data is perfectly alignable
+        fpath = os.path.join(dpath, obj['file_name'])
+        imdata = kwimage.imread(fpath, nodata='float')
+        mask = np.isnan(imdata)
+        imweights = np.full(imdata.shape, fill_value=weight)
+        imweights[mask] = 0
+        imdata[mask] = 0
+        if accum_imdata is None:
+            accum_imdata = imdata
+            accum_weights = imweights
+        else:
+            accum_imdata += imdata
+            accum_weights += imweights
+    import warnings
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', 'invalid value')
+        average_imdata = accum_imdata / accum_weights
+
+    return average_imdata
 
 
 def main(cmdline=True):
