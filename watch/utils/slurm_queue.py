@@ -207,6 +207,16 @@ class SlurmQueue:
             stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP))
         return self.fpath
 
+    def submit(self, command, **kwargs):
+        name = kwargs.get('name', None)
+        if name is None:
+            name = kwargs['name'] = self.name + '-job-{}'.format(len(self.jobs))
+        if 'output_fpath' not in kwargs:
+            kwargs['output_fpath'] = self.log_dpath / (name + '.sh')
+        job = SlurmJob(command, **kwargs)
+        self.jobs.append(job)
+        return job
+
     def order_jobs(self):
         import networkx as nx
         graph = nx.DiGraph()
@@ -223,16 +233,6 @@ class SlurmQueue:
             job = graph.nodes[node]['job']
             new_order.append(job)
         return new_order
-
-    def submit(self, command, **kwargs):
-        name = kwargs.get('name', None)
-        if name is None:
-            name = kwargs['name'] = self.name + '-job-{}'.format(len(self.jobs))
-        if 'output_fpath' not in kwargs:
-            kwargs['output_fpath'] = self.log_dpath / (name + '.sh')
-        job = SlurmJob(command, **kwargs)
-        self.jobs.append(job)
-        return job
 
     def finalize_text(self):
         new_order = self.order_jobs()

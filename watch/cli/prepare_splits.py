@@ -60,6 +60,7 @@ def main(cmdline=False, **kwargs):
     if config['virtualenv_cmd']:
         tq.add_header_command(config['virtualenv_cmd'])
 
+    split_jobs = {}
     # Perform train/validation splits with and without worldview
     command = ub.codeblock(
         fr'''
@@ -68,7 +69,7 @@ def main(cmdline=False, **kwargs):
             --dst {splits['train']} \
             --select_videos '.name | startswith("KR_") | not'
         ''')
-    tq.submit(command, index=0)
+    split_jobs['train'] = tq.submit(command)
 
     command = ub.codeblock(
         fr'''
@@ -77,7 +78,7 @@ def main(cmdline=False, **kwargs):
             --dst {splits['nowv_train']} \
             --select_images '.sensor_coarse != "WV"'
         ''')
-    tq.submit(command, index=0)
+    tq.submit(command, depends=[split_jobs['train']])
 
     command = ub.codeblock(
         fr'''
@@ -86,7 +87,7 @@ def main(cmdline=False, **kwargs):
             --dst {splits['wv_train']} \
             --select_images '.sensor_coarse == "WV"'
         ''')
-    tq.submit(command, index=0)
+    tq.submit(command, depends=[split_jobs['train']])
 
     # Perform vali/validation splits with and without worldview
     command = ub.codeblock(
@@ -96,7 +97,7 @@ def main(cmdline=False, **kwargs):
             --dst {splits['vali']} \
             --select_videos '.name | startswith("KR_")'
         ''')
-    tq.submit(command, index=1)
+    split_jobs['vali'] = tq.submit(command)
 
     command = ub.codeblock(
         fr'''
@@ -105,7 +106,7 @@ def main(cmdline=False, **kwargs):
             --dst {splits['nowv_vali']} \
             --select_images '.sensor_coarse != "WV"'
         ''')
-    tq.submit(command, index=1)
+    tq.submit(command, depends=[split_jobs['vali']])
 
     command = ub.codeblock(
         fr'''
@@ -114,7 +115,7 @@ def main(cmdline=False, **kwargs):
             --dst {splits['wv_vali']} \
             --select_images '.sensor_coarse == "WV"'
         ''')
-    tq.submit(command, index=1)
+    tq.submit(command, depends=[split_jobs['vali']])
 
     # Add in additional no-worldview full dataset
     command = ub.codeblock(
@@ -124,7 +125,7 @@ def main(cmdline=False, **kwargs):
             --dst {splits['nowv']} \
             --select_images '.sensor_coarse != "WV"'
         ''')
-    tq.submit(command, index=1)
+    tq.submit(command)
 
     tq.rprint()
 

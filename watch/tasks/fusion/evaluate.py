@@ -1010,6 +1010,30 @@ if __name__ == '__main__':
           --score_space=video \
           --draw_curves=1 \
           --draw_heatmaps=1
+
+
+    python -m watch.tasks.fusion.predict \
+        --write_probs=True \
+        --write_preds=False \
+        --with_class=auto \
+        --with_saliency=auto \
+        --with_change=False \
+        --package_fpath=/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/packages/BOTH_TA1_COMBO_TINY_p1_v0100/BOTH_TA1_COMBO_TINY_p1_v0100_epoch=4-step=5119-v2.pt \
+        --pred_dataset=/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/pred/BOTH_TA1_COMBO_TINY_p1_v0100/pred_BOTH_TA1_COMBO_TINY_p1_v0100_epoch=4-step=5119-v2/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/unknown_pred_cfg/pred.kwcoco.json \
+        --test_dataset=/home/joncrall/data/dvc-repos/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/combo_DILM_nowv_vali.kwcoco.json \
+        --num_workers=5 \
+        --compress=DEFLATE \
+        --gpus=0, \
+        --batch_size=1
+    python -m watch.tasks.fusion.evaluate \
+        --true_dataset=/home/joncrall/data/dvc-repos/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/combo_DILM_nowv_vali.kwcoco.json \
+        --pred_dataset=/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/pred/BOTH_TA1_COMBO_TINY_p1_v0100/pred_BOTH_TA1_COMBO_TINY_p1_v0100_epoch=4-step=5119-v2/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/unknown_pred_cfg/pred.kwcoco.json \
+          --eval_dpath=/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/eval/BOTH_TA1_COMBO_TINY_p1_v0100/pred_BOTH_TA1_COMBO_TINY_p1_v0100_epoch=4-step=5119-v2/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/unknown_pred_cfg/eval \
+          --score_space=video \
+          --draw_curves=1 \
+          --draw_heatmaps=1
+
+
     """
     # import xdev
     # xdev.make_warnings_print_tracebacks()

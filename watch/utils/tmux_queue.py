@@ -44,6 +44,16 @@ import json
 import uuid
 
 
+class Job(ub.NiceRepr):
+    def __init__(self, command, name=None, depends=None):
+        self.name = name
+        self.command = command
+        self.depends = depends
+
+    def __nice__(self):
+        return self.name
+
+
 class PathIdentifiable(ub.NiceRepr):
     """
     An object that has an name, unique-rootid (to indicate the parent object),
@@ -217,21 +227,22 @@ class TMUXMultiQueue(PathIdentifiable):
         >>> from watch.utils.tmux_queue import *  # NOQA
         >>> self = TMUXMultiQueue(2, 'foo')
         >>> print('self = {!r}'.format(self))
-        >>> self.submit('echo hello && sleep 0.5')
-        >>> self.submit('echo world && sleep 0.5')
-        >>> self.submit('echo foo && sleep 0.5')
-        >>> self.submit('echo bar && sleep 0.5')
-        >>> self.submit('echo spam && sleep 0.5')
-        >>> self.submit('echo spam && sleep 0.5')
-        >>> self.submit('echo err && false')
-        >>> self.submit('echo spam && sleep 0.5')
-        >>> self.submit('echo eggs && sleep 0.5')
-        >>> self.submit('echo bazbiz && sleep 0.5')
+        >>> job1 = self.submit('echo hello && sleep 0.5')
+        >>> job2 = self.submit('echo world && sleep 0.5', depends=[job1])
+        >>> job3 = self.submit('echo foo && sleep 0.5')
+        >>> job4 = self.submit('echo bar && sleep 0.5')
+        >>> job5 = self.submit('echo spam && sleep 0.5', depends=[job1])
+        >>> job6 = self.submit('echo spam && sleep 0.5')
+        >>> job7 = self.submit('echo err && false')
+        >>> job8 = self.submit('echo spam && sleep 0.5')
+        >>> job9 = self.submit('echo eggs && sleep 0.5', depends=[job8])
+        >>> job10 = self.submit('echo bazbiz && sleep 0.5', depends=[job9])
         >>> self.write()
         >>> self.rprint()
         >>> if ub.find_exe('tmux'):
         >>>     self.run()
         >>>     self.monitor()
+        >>>     self.kill()
     """
     def __init__(self, size=1, name=None, dpath=None, rootid=None, environ=None,
                  gres=None):
@@ -243,6 +254,8 @@ class TMUXMultiQueue(PathIdentifiable):
         self.environ = environ
         self.fpath = self.dpath / f'run_queues_{self.name}.sh'
         self.gres = gres
+
+        self.jobs = []
 
         self._init_workers()
 
@@ -273,16 +286,65 @@ class TMUXMultiQueue(PathIdentifiable):
     def __iter__(self):
         yield from self._worker_cycle
 
-    def submit(self, command, index=None):
+    def submit(self, command, **kwargs):
         """
         Args:
             index (int): if True, forces this job into a particular queue
         """
-        if index is None:
-            worker = next(self._worker_cycle)
-        else:
-            worker = self.workers[index]
-        return worker.submit(command)
+        name = kwargs.get('name', None)
+        if name is None:
+            name = kwargs['name'] = self.name + '-job-{}'.format(len(self.jobs))
+        job = Job(command, **kwargs)
+        self.jobs.append(job)
+        return job
+        # if index is None:
+        #     worker = next(self._worker_cycle)
+        # else:
+        #     worker = self.workers[index]
+        # return worker.submit(command)
+
+    def order_jobs(self):
+        import networkx as nx
+        graph = nx.DiGraph()
+        for index, job in enumerate(self.jobs):
+            graph.add_node(job.name, job=job, index=index)
+        for index, job in enumerate(self.jobs):
+            if job.depends:
+                for dep in job.depends:
+                    graph.add_edge(dep.name, job.name)
+
+        # Determine what jobs need to be grouped together
+        wcc_groups = []
+        for wcc in list(nx.weakly_connected_components(graph)):
+            sub = graph.subgraph(wcc)
+            if 0:
+                print(nx.forest_str(nx.minimum_spanning_arborescence(sub)))
+            wcc_order = list(nx.topological_sort(sub))
+            wcc_groups.append(wcc_order)
+
+        # Solve a bin packing problem to partition these into self.size groups
+        from watch.utils.util_kwarray import balanced_number_partitioning
+        group_weights = list(map(len, wcc_groups))
+        groupxs = balanced_number_partitioning(group_weights, num_parts=self.size)
+        node_groups = [list(ub.take(wcc_groups, gxs)) for gxs in groupxs]
+
+        # Reorder each group to better agree with submission order
+        final_orders = []
+        for group in node_groups:
+            priorities = []
+            for nodes in group:
+                nodes_index = min(graph.nodes[n]['index'] for n in nodes)
+                priorities.append(nodes_index)
+
+            final_queue_order = list(ub.flatten(ub.take(group, ub.argsort(priorities))))
+            final_queue_jobs = [graph.nodes[n]['job'] for n in final_queue_order]
+            final_orders.append(final_queue_jobs)
+
+        # Submit each job to the linear queue in the correct order
+        for worker, jobs in zip(self.workers, final_orders):
+            worker.commands.clear()
+            for job in jobs:
+                worker.submit(job.command)
 
     def add_header_command(self, command):
         """
@@ -293,9 +355,11 @@ class TMUXMultiQueue(PathIdentifiable):
 
     @property
     def total_jobs(self):
-        return sum(len(worker.commands) for worker in self.workers)
+        return len(self.jobs)
+        # sum(len(worker.commands) for worker in self.workers)
 
     def finalize_text(self):
+        self.order_jobs()
         # Create a driver script
         driver_lines = [ub.codeblock(
             '''
@@ -317,6 +381,7 @@ class TMUXMultiQueue(PathIdentifiable):
         return driver_text
 
     def write(self):
+        self.order_jobs()
         for queue in self.workers:
             queue.write()
         text = self.finalize_text()
@@ -340,6 +405,7 @@ class TMUXMultiQueue(PathIdentifiable):
         Hack to run everything without tmux. This really should be a different
         "queue" backend.
         """
+        self.order_jobs()
         queue_fpaths = []
         for queue in self.workers:
             fpath = queue.write()
@@ -436,6 +502,7 @@ class TMUXMultiQueue(PathIdentifiable):
         from rich.panel import Panel
         from rich.syntax import Syntax
         from rich.console import Console
+        self.order_jobs()
         console = Console()
         for queue in self.workers:
             code = queue.finalize_text(with_status=with_status)

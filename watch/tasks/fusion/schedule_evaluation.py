@@ -2,6 +2,20 @@
 Helper for scheduling a set of prediction + evaluation jobs
 
 python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation
+
+
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+EXPT_PATTERN="*"
+VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_nowv_vali.kwcoco.json
+python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+        --gpus="0,1" \
+        --model_globstr="$DVC_DPATH/models/fusion/eval3_candidates/packages/${EXPT_PATTERN}/*.pt" \
+        --test_dataset="$VALI_FPATH" \
+        --run=0 --skip_existing=True
+
+
 """
 import ubelt as ub
 from watch.utils import tmux_queue
@@ -250,16 +264,23 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
     tq = tmux_queue.TMUXMultiQueue(
         name=stamp, size=len(GPUS), environ=environ, gres=GPUS,
         dpath=tmux_schedule_dpath)
+
     if virtualenv_cmd:
         tq.add_header_command(virtualenv_cmd)
 
     recompute_pred = recompute
     recompute_eval = recompute or 0
 
+    pred_cfg = {}
+
     for info, queue in zip(packages_to_eval, tq):
         package_fpath = info['fpath']
-        suggestions = organize.suggest_paths(package_fpath=package_fpath, test_dataset=test_dataset_fpath)
-        suggestions = json.loads(suggestions)
+        suggestions = organize.suggest_paths(
+            package_fpath=package_fpath,
+            test_dataset=test_dataset_fpath,
+            sidecar2=True, as_json=False,
+            pred_cfg=pred_cfg,
+        )
 
         pred_dataset_fpath = ub.Path(suggestions['pred_dataset'])  # NOQA
         eval_metrics_fpath = ub.Path(suggestions['eval_dpath']) / 'curves/measures2.json'

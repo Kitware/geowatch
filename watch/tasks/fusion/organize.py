@@ -4,9 +4,13 @@ Helper script for organizing experimental directory structures
 python -m watch.tasks.fusion.organize
 
 """
+import ubelt as ub
+import json
+import os
 
 
-def suggest_paths(test_dataset=None, package_fpath=None, pred_root=None):
+def suggest_paths(test_dataset=None, package_fpath=None, pred_root=None,
+                  sidecar2=False, as_json=True, pred_cfg=None):
     """
     Suggest an organized set of paths for where data should be written.
 
@@ -29,12 +33,10 @@ def suggest_paths(test_dataset=None, package_fpath=None, pred_root=None):
     Example:
         >>> from watch.tasks.fusion.organize import *  # NOQA
         >>> test_dataset = 'vali.kwcoco.json'
-        >>> package_fpath = '/foo/package_abc.pt'
-        >>> suggestion_text = suggest_paths(test_dataset, package_fpath)
-        >>> print(suggestion_text)
+        >>> package_fpath = '/models/fusion/eval1_cand/packages/expt1/package_abc.pt'
+        >>> suggestions = suggest_paths(test_dataset, package_fpath, sidecar2=1, as_json=False)
+        >>> print('suggestions = {}'.format(ub.repr2(suggestions, nl=1, align=':', sort=0)))
     """
-    import ubelt as ub
-    import json
 
     suggestions = {}
 
@@ -48,32 +50,61 @@ def suggest_paths(test_dataset=None, package_fpath=None, pred_root=None):
         test_dset_name = 'unknown_test_dset'
 
     if package_fpath is not None:
+
+        if pred_cfg is None:
+            pred_cfg_dname = 'predcfg_unknown'
+        else:
+            pred_cfg_dname = 'predcfg_' + ub.hash_data(pred_cfg)[0:8]
+
         package_fpath = ub.Path(package_fpath)
         pred_dname = 'pred_' + package_fpath.stem
 
-        if pred_root is None:
-            pred_root = package_fpath.parent
-        else:
-            pred_root = ub.Path(pred_root)
+        if sidecar2:
+            # Make assumptions about directory structure
+            expt_name = package_fpath.parent.name
+            pkg_dpath = package_fpath.parent.parent
+            candidate_dpath = pkg_dpath.parent
+            # package_name = package_fpath.stem
 
-        pred_dpath = pred_root / pred_dname / test_dset_name
+            if pkg_dpath.name != 'packages':
+                print('Warning: might not have the right dir structure')
+
+            pred_root = candidate_dpath / 'pred' / expt_name
+            pred_dpath = pred_root / pred_dname / test_dset_name / pred_cfg_dname
+
+            eval_root = candidate_dpath / 'eval' / expt_name
+            eval_dpath = eval_root / pred_dname / test_dset_name / pred_cfg_dname / 'eval'
+        else:
+            if pred_root is None:
+                pred_root = package_fpath.parent
+            else:
+                pred_root = ub.Path(pred_root)
+
+            pred_dpath = pred_root / pred_dname / test_dset_name
+            eval_dpath = pred_dpath / 'eval'
+
         pred_dataset = pred_dpath / 'pred.kwcoco.json'
 
-        suggestions['pred_dpath'] = str(pred_dpath)
+        suggestions['package_fpath'] = os.fspath(package_fpath)
 
-        suggestions['pred_dataset'] = str(pred_dataset)
+        suggestions['pred_dpath'] = os.fspath(pred_dpath)
 
-        suggestions['eval_dpath'] = str(pred_dpath / 'eval')
+        suggestions['pred_dataset'] = os.fspath(pred_dataset)
+
+        suggestions['eval_dpath'] = os.fspath(eval_dpath)
 
     # TODO: make this return a dict, and handle jsonification
     # in the CLI main
-    suggestion_text = json.dumps(suggestions)
-    return suggestion_text
+    if as_json:
+        suggestion_text = json.dumps(suggestions)
+        return suggestion_text
+    else:
+        return suggestions
 
 
 def make_nice_dirs():
+    # DEPRECATE
     from watch.utils import util_data
-    import ubelt as ub
     dvc_dpath = util_data.find_smart_dvc_dpath()
     train_base = dvc_dpath / 'training'
     dataset_names = [
@@ -106,9 +137,9 @@ def make_nice_dirs():
 
 def make_eval_symlinks():
     """
+    DEPRECATE
     """
     from watch.utils import util_data
-    import ubelt as ub
     dvc_dpath = util_data.find_smart_dvc_dpath()
 
     # HACK: HARD CODED
@@ -127,9 +158,9 @@ def make_eval_symlinks():
 
 def make_pred_symlinks():
     """
+    DEPRECATE
     """
     from watch.utils import util_data
-    import ubelt as ub
     dvc_dpath = util_data.find_smart_dvc_dpath()
 
     # HACK: HARD CODED
