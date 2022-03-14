@@ -296,6 +296,8 @@ def main(cmdline=False, **kwargs):
         site_model_dpath = (dvc_dpath / 'annotations/site_models').shrinkuser(home='$HOME')
         region_model_dpath = (dvc_dpath / 'annotations/region_models').shrinkuser(home='$HOME')
 
+        viz_part = '--viz_dpath=auto' if config['visualize'] else ''
+
         queue.submit(ub.codeblock(
             rf'''
             # Update to whatever the state of the annotations submodule is
@@ -303,7 +305,7 @@ def main(cmdline=False, **kwargs):
                 --src "{aligned_kwcoco_fpath}" \
                 --dst "{aligned_kwcoco_fpath}" \
                 --site_models="{site_model_dpath}/*.geojson" \
-                --region_models="{region_model_dpath}/*.geojson"
+                --region_models="{region_model_dpath}/*.geojson" {viz_part}
             '''))
 
     if config['visualize']:
