@@ -75,12 +75,12 @@ def merge_kwcoco_channels(
         >>> dpath = ub.Path.appdir('watch/test/coco_merge_features')
         >>> base_dset = watch.demo.coerce_kwcoco('watch-msi')
         >>> # Construct two copies of the same data with slightly different heatmaps
-        >>> dset1 = perterb_coco(base_dset.copy(), box_noise=0.5, cls_noise=0.5, n_fp=10, n_fn=10)
-        >>> dset2 = perterb_coco(base_dset.copy())
+        >>> dset1 = perterb_coco(base_dset.copy(), box_noise=0.5, cls_noise=0.5, n_fp=10, n_fn=10, rng=32)
+        >>> dset2 = base_dset.copy()
         >>> dset1.fpath = ub.Path(dset1.fpath).augment(suffix='_heatmap1')
         >>> dset2.fpath = ub.Path(dset2.fpath).augment(suffix='_heatmap2')
-        >>> watch.demo.smart_kwcoco_demodata.hack_in_heatmaps(dset1, heatmap_dname='dummy_heatmap1', with_nan=True, rng=423432)
-        >>> watch.demo.smart_kwcoco_demodata.hack_in_heatmaps(dset2, heatmap_dname='dummy_heatmap2', with_nan=True, rng=132129)
+        >>> watch.demo.smart_kwcoco_demodata.hack_in_heatmaps(dset1, heatmap_dname='dummy_heatmap1', with_nan=0, rng=423432)
+        >>> watch.demo.smart_kwcoco_demodata.hack_in_heatmaps(dset2, heatmap_dname='dummy_heatmap2', with_nan=0, rng=132129)
         >>> dset1.dump(dset1.fpath)
         >>> dset2.dump(dset2.fpath)
         >>> # Build method args
@@ -97,9 +97,10 @@ def merge_kwcoco_channels(
         >>>                       sensor_name)
         >>> # Check results
         >>> output_dset = kwcoco.CocoDataset(output_kwcoco_path)
-        >>> imdata1 = dset1.coco_image(1).delay('salient').finalize()
-        >>> imdata2 = dset2.coco_image(1).delay('salient').finalize()
-        >>> imdataM = output_dset.coco_image(1).delay('salient').finalize()
+        >>> gid = 1
+        >>> imdata1 = dset1.coco_image(gid).delay('salient').finalize()
+        >>> imdata2 = dset2.coco_image(gid).delay('salient').finalize()
+        >>> imdataM = output_dset.coco_image(gid).delay('salient').finalize()
         >>> import kwplot
         >>> kwplot.autompl()
         >>> kwplot.imshow(kwimage.normalize_intensity(imdata1), title='img1', pnum=(1, 3, 1), fnum=1)
@@ -198,11 +199,12 @@ def average_auxiliary_datas(input_objs, input_dpaths, weights):
         imweights = np.full(imdata.shape, fill_value=weight)
         imweights[mask] = 0
         imdata[mask] = 0
+        weighted_imdata = imdata * imweights
         if accum_imdata is None:
-            accum_imdata = imdata
+            accum_imdata = weighted_imdata
             accum_weights = imweights
         else:
-            accum_imdata += imdata
+            accum_imdata += weighted_imdata
             accum_weights += imweights
     import warnings
     with warnings.catch_warnings():
