@@ -1,4 +1,8 @@
 #!/bin/bash
+__doc__="
+See Also:
+    ~/code/watch/watch/cli/prepare_ta2_dataset.py
+"
 
 
 DVC_DPATH=$(python -m watch.cli.find_dvc)

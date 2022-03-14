@@ -5,6 +5,9 @@ An end-to-end script for calling all the scripts needed to
 * Creates a virtual Uncropped kwcoco dataset that points to the large image tiles
 * Crops the dataset to create an aligned TA2 dataset
 
+See Also:
+    ~/code/watch/scripts/prepare_drop3.sh
+
 
 TODO:
     - [ ] Rename to schedule_ta2_dataset

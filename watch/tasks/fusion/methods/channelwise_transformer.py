@@ -1033,11 +1033,12 @@ class MultimodalTransformer(pl.LightningModule):
         batch_head_probs = {k: [] for k in self.heads.keys()}
 
         for item in batch:
-            probs, item_loss_parts, item_truths = self.forward_item(item)
-            if with_loss:
-                item_losses.append(item_loss_parts)
-                for k, v in batch_head_truths.items():
-                    v.append(item_truths[k])
+            probs, item_loss_parts, item_truths = self.forward_item(item, with_loss=with_loss)
+            with xdev.embed_on_exception_context:
+                if with_loss:
+                    item_losses.append(item_loss_parts)
+                    for k, v in batch_head_truths.items():
+                        v.append(item_truths[k])
             # Append the item result to the batch outputs
             for k, v in probs.items():
                 batch_head_probs[k].append(v)
@@ -1152,8 +1153,8 @@ class MultimodalTransformer(pl.LightningModule):
                     'sensor': sensor,
                 })
 
-        if 1 and __debug__:
-            print(nh.data.collate._debug_inbatch_shapes(tokenized))
+        # if 1 and __debug__:
+        #     print(nh.data.collate._debug_inbatch_shapes(tokenized))
 
         _tokens = torch.concat(tokenized, dim=0)
         tokens = _tokens[None, None, None, None, ...]

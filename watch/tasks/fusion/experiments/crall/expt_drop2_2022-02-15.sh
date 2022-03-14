@@ -3969,7 +3969,7 @@ python -m watch.tasks.fusion.fit \
     --time_sampling=hardish \
     --arch_name=smt_it_stm_p4 \
     --num_draw=8 \
-    --draw_interval=1m \
+    --draw_interval=100m \
     --dist_weight=True \
     --modulate_class_weights="positive*0,negative*0,background*0.001,No Activity*0.0,Post Construction*0.0001" \
     --init="$INITIAL_STATE" 
@@ -4012,7 +4012,7 @@ python -m watch.tasks.fusion.fit \
     --time_sampling=hardish \
     --arch_name=smt_it_stm_p2 \
     --num_draw=8 \
-    --draw_interval=1m \
+    --draw_interval=100m \
     --dist_weight=True \
-    --modulate_class_weights="positive*0,negative*0,background*0.0001,No Activity*0.0,Post Construction*0.0001" \
+    --modulate_class_weights="positive*0,negative*0,background*0.001,No Activity*0.0,Post Construction*0.0001" \
     --init="$INITIAL_STATE" 

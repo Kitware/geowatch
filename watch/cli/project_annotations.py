@@ -203,6 +203,8 @@ def main(cmdline=False, **kwargs):
     coco_dset.dump(coco_dset.fpath)
 
     viz_dpath = config['viz_dpath']
+    if viz_dpath == 'auto':
+        viz_dpath = (coco_dset.fpath.parent / '_viz_project_anns')
     if viz_dpath:
         import kwplot
         kwplot.autoplt()
