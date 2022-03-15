@@ -108,10 +108,10 @@
         "type": {"const": "observation", "type": "string"},
         "observation_date": {"oneOf": [{"type": "null"}, {"type": "string", "format": "date"}]},
         "source": {"oneOf": [{"type": "null"}, {"type": "string"}]},
-        "sensor_name": {"enum": ["null", "Landsat 8", "Sentinel-2", "WorldView", "Planet"]},
-        "current_phase": {"type": "string", "pattern": "^((No Activity|Site Preparation|Active Construction|Post Construction|Unknown),* *)+$"},
-        "is_occluded": {"type": "string", "pattern": "^((True|False),* *)+$"},
-        "is_site_boundary": {"type": "string", "pattern": "^((True|False),* *)+$"},
+        "sensor_name": {"oneOf": [{"type": "null"}, {"enum": ["Landsat 8", "Sentinel-2", "WorldView", "Planet"]}]},
+        "current_phase": {"oneOf": [{"type": "null"}, {"type": "string", "pattern": "^((No Activity|Site Preparation|Active Construction|Post Construction|Unknown),* *)+$"}]},
+        "is_occluded": {"oneOf": [{"type": "null"}, {"type": "string", "pattern": "^((True|False),* *)+$"}]},
+        "is_site_boundary": {"oneOf": [{"type": "null"}, {"type": "string", "pattern": "^((True|False),* *)+$"}]},
         "score": {"type": "number", "minimum": 0, "maximum": 1},
         "misc_info": {"type": "object"}
       },
@@ -135,9 +135,7 @@
                   {"$ref": "#/definitions/unassociated_site_properties"},
                   {"$ref": "#/definitions/associated_site_properties"}
                 ]},
-              "geometry": {
-                "$ref": "#/definitions/polygon"
-              }
+              "geometry": {"$ref": "#/definitions/polygon"}
             },
             "required": [
               "type", "geometry", "properties"
@@ -153,7 +151,10 @@
                 "$ref": "#/definitions/observation_properties"
               },
               "geometry": {
-                "$ref": "#/definitions/multipolygon"
+                "oneOf": [
+                  {"$ref": "#/definitions/polygon"},
+                  {"$ref": "#/definitions/multipolygon"}
+                ]
               }
             },
             "required": [

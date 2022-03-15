@@ -11,6 +11,7 @@ Prereq:
 
 References:
     https://smartgitlab.com/TE/annotations/-/issues/17
+    https://smartgitlab.com/TE/standards/-/snippets/18
 """
 
 import ubelt as ub
