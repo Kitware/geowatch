@@ -202,10 +202,10 @@ def demo_kwcoco_with_heatmaps(num_videos=1, num_frames=20, image_size=(512, 512)
     return coco_dset
 
 
-def hack_in_heatmaps(coco_dset, rng=None):
+def hack_in_heatmaps(coco_dset, heatmap_dname='dummy_heatmaps', with_nan=False, rng=None):
     rng = kwarray.ensure_rng(rng)
     asset_dpath = ub.Path(coco_dset.assets_dpath)
-    dummy_heatmap_dpath = asset_dpath / 'dummy_heatmaps'
+    dummy_heatmap_dpath = asset_dpath / heatmap_dname
     dummy_heatmap_dpath.mkdir(exist_ok=1, parents=True)
 
     channels = 'notsalient|salient'
@@ -247,11 +247,15 @@ def hack_in_heatmaps(coco_dset, rng=None):
             chan_datas.append(chan_data)
         hwc_probs = np.stack(chan_datas, axis=2)
 
+        if with_nan:
+            invalid_mask = (rng.rand(*hwc_probs.shape) > 0.95)
+            hwc_probs[invalid_mask] = np.nan
+
         # TODO do something with __WIP_add_auxiliary to make this clear and
         # concise
         heatmap_fpath = dummy_heatmap_dpath / 'dummy_heatmap_{}.tif'.format(img['id'])
-        kwimage.imwrite(heatmap_fpath, hwc_probs, backend='gdal', compress='NONE',
-                        blocksize=96)
+        kwimage.imwrite(heatmap_fpath, hwc_probs, backend='gdal', compress='DEFLATE',
+                        blocksize=128)
         aux_height, aux_width = hwc_probs.shape[0:2]
 
         auxlist = img['auxiliary']
