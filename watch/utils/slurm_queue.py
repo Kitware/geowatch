@@ -20,7 +20,7 @@ Example:
     >>> job2 = queue.submit(f'echo "result=42" > {dpath}/test.txt ', depends=[job1])
     >>> job3 = queue.submit(f'cat {dpath}/test.txt', depends=[job2])
     >>> queue.rprint()
-    >>> # xdoctest +REQUIRES(--run)
+    >>> # xdoctest: +REQUIRES(--run)
     >>> queue.run()
 """
 import ubelt as ub
@@ -55,10 +55,7 @@ class SlurmJob(ub.NiceRepr):
     Represents a slurm job that hasn't been submitted yet
 
     Example:
-        >>> import sys, ubelt
-        >>> sys.path.append(ubelt.expandpath('~/code/watch'))
         >>> from watch.utils.slurm_queue import *  # NOQA
-        >>> from watch.utils.slurm_queue import _coerce_mem
         >>> self = SlurmJob('python -c print("hello world")', 'hi', cpus=5, gpus=1, mem='10GB')
         >>> command = self._build_sbatch_args()
         >>> print('command = {!r}'.format(command))
@@ -184,8 +181,8 @@ class SlurmQueue:
         >>> job7 = self.submit('echo "hi from $SLURM_JOBID"', depends=[job5, job6])
         >>> self.write()
         >>> self.rprint()
-        >>> # xdoctest +REQUIRES(--run)
-        >>> queue.run()
+        >>> # xdoctest: +REQUIRES(--run)
+        >>> self.run()
         >>> #if ub.find_exe('slurm'):
         >>> #    self.run()
     """

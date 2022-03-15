@@ -327,12 +327,10 @@ def draw_truth_borders(true_dets, canvas, alpha=1.0, color=None):
 
     canvas = kwimage.ensure_float01(canvas)
     if alpha < 1.0:
-        empty_canvas = np.zeros_like(canvas)
+        empty_canvas = np.zeros_like(canvas, shape=(canvas.shape[0:2] + (4,)))
         overlay_canvas = true_sseg.draw_on(empty_canvas, fill=False,
                                            border=True, color=color, alpha=1.0)
-        (overlay_canvas > 0).
-
-        overlay_canvas = kwimage.ensure_alpha_channel(overlay_canvas, alpha=alpha)
+        overlay_canvas[..., 3] *= alpha
         canvas = kwimage.overlay_alpha_images(overlay_canvas, canvas)
     else:
         canvas = true_sseg.draw_on(canvas, fill=False, border=True,
@@ -701,7 +699,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     chunk_size = 4
     # thresh_bins = 256 * 256
     thresh_bins = 64 * 64
-    thresh_bins = np.linspace(0, 1, 64 * 64)
+    # thresh_bins = np.linspace(0, 1, 64 * 64)
 
     if draw_curves == 'auto':
         draw_curves = bool(eval_dpath is not None)
