@@ -36,9 +36,11 @@ python -m watch.cli.prepare_ta2_dataset \
     --collated=True \
     --requester_pays=True \
     --ignore_duplicates=True \
-    --debug=False \
+    --fields_workers=0 \
     --align_workers=0 \
-    --serial=True --run=0
+    --convert_workers=0 \
+    --debug=False \
+    --serial=True --run=0 --cache=False
 
         --select_images '.id % 1200 == 0'  \
 
@@ -78,6 +80,9 @@ class PrepareTA2Config(scfg.Config):
         'collated': scfg.Value([True], nargs='+', help='set to false if the input data is not collated'),
         'serial': scfg.Value(True, help='if True use serial mode'),
         'aws_profile': scfg.Value('iarpa', help='AWS profile to use for remote data access'),
+
+        'convert_workers': scfg.Value('min(avail,8)', help='workers for stac-to-kwcoco script'),
+        'fields_workers': scfg.Value('min(avail,max(all/2,8))', help='workers for add-watch-fields script'),
         'align_workers': scfg.Value(0, help='workers for align script'),
 
         'ignore_duplicates': scfg.Value(0, help='workers for align script'),
@@ -216,7 +221,7 @@ def main(cmdline=False, **kwargs):
                 "{uncropped_catalog_fpath}" \
                 --outpath="{uncropped_kwcoco_fpath}" \
                 {convert_options_str} \
-                --jobs "min(avail,8)"
+                --jobs "{config['convert_workers']}"
             '''))
 
         uncropped_coco_paths.append(uncropped_kwcoco_fpath)
@@ -237,11 +242,7 @@ def main(cmdline=False, **kwargs):
             # COMBINE Uncropped datasets
             {cache_prefix}python -m kwcoco union \
                 --src {uncropped_multi_src_part} \
-                --dst "{uncropped_final_kwcoco_fpath}" \
-                --workers="min(avail,max(all/2,8))" \
-                --enable_video_stats=False \
-                --overwrite=warp \
-                --target_gsd=10
+                --dst "{uncropped_final_kwcoco_fpath}"
             '''))
 
     uncropped_prep_kwcoco_fpath = uncropped_dpath / 'data_prepped.kwcoco.json'
@@ -276,7 +277,7 @@ def main(cmdline=False, **kwargs):
         {cache_prefix}AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.coco_add_watch_fields \
             --src "{uncropped_final_kwcoco_fpath}" \
             --dst "{uncropped_prep_kwcoco_fpath}" \
-            --workers="min(avail,max(all/2,8))" \
+            --workers="{config['fields_workers']}" \
             --enable_video_stats=False \
             --overwrite=warp \
             --target_gsd=10
@@ -290,12 +291,8 @@ def main(cmdline=False, **kwargs):
     else:
         align_keep = 'none'
 
-    # align_workers = '"min(avail,max(all/2,8))"'
-    align_workers = config['align_workers']
-
     debug_valid_regions = config['debug']
     align_visualize = config['debug']
-
     # PROJ_DEBUG=3
     job_environ_str = ' '.join([
         # 'PROJ_DEBUG=3',
@@ -311,7 +308,7 @@ def main(cmdline=False, **kwargs):
             --src "{uncropped_prep_kwcoco_fpath}" \
             --dst "{aligned_kwcoco_fpath}" \
             --regions "{region_dpath / '*.geojson'}" \
-            --workers={align_workers} \
+            --workers={config['align_workers']} \
             --context_factor=1 \
             --geo_preprop=auto \
             --keep={align_keep} \
