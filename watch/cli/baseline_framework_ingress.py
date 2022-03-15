@@ -177,7 +177,9 @@ def ingress_item(feature,
                         parsed_asset_href.netloc,
                         parsed_asset_href.path)
                 elif parsed_asset_href.scheme in {'http', 'https'}:
-                    asset['href'] = '/vsicurl/{}'.format(asset_href)
+                    asset['href'] = '/vsicurl/{}{}'.format(
+                        parsed_asset_href.netloc,
+                        parsed_asset_href.path)
                 else:
                     print("* Unsupported URI scheme '{}' for virtual ingress; "
                           "not updating href: {}".format(
