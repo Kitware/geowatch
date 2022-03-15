@@ -44,7 +44,10 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
     pred_gid = pred_coco_img.img['id']
 
     if thresh_bins is not None:
-        left_bin_edges = np.linspace(0, 1, thresh_bins)
+        if isinstance(thresh_bins, int):
+            left_bin_edges = np.linspace(0, 1, thresh_bins)
+        else:
+            left_bin_edges = thresh_bins
 
     img1 = true_coco_img.img
 
@@ -124,8 +127,6 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
                     catname_to_true[true_catname] = np.zeros(shape, dtype=np.float32)
                 catname_to_true[true_catname] = true_sseg.fill(catname_to_true[true_catname], value=1)
 
-    thresh_bins
-
     if classes_of_interest:
         try:
             # handle multiclass case
@@ -156,7 +157,7 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
                     # is_true denotes if the true class of the item is the
                     # category of interest.
                     'is_true': is_true.ravel(),
-                    'pred_score': score.ravel(),
+                    'pred_score': pred_score,
                     'weight': weights.ravel(),
                 }
                 bin_data = kwarray.DataFrameArray(bin_data)
@@ -329,6 +330,8 @@ def draw_truth_borders(true_dets, canvas, alpha=1.0, color=None):
         empty_canvas = np.zeros_like(canvas)
         overlay_canvas = true_sseg.draw_on(empty_canvas, fill=False,
                                            border=True, color=color, alpha=1.0)
+        (overlay_canvas > 0).
+
         overlay_canvas = kwimage.ensure_alpha_channel(overlay_canvas, alpha=alpha)
         canvas = kwimage.overlay_alpha_images(overlay_canvas, canvas)
     else:
@@ -698,6 +701,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     chunk_size = 4
     # thresh_bins = 256 * 256
     thresh_bins = 64 * 64
+    thresh_bins = np.linspace(0, 1, 64 * 64)
 
     if draw_curves == 'auto':
         draw_curves = bool(eval_dpath is not None)
