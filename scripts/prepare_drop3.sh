@@ -12,7 +12,8 @@ python -m watch.cli.prepare_ta2_dataset \
     --s3_fpath \
         s3://kitware-smart-watch-data/processed/ta1/iMERIT_20220120/iMERIT_COMBINED.unique.input \
         s3://kitware-smart-watch-data/processed/ta1/ALL_ANNOTATED_REGIONS_TA-1_PROCESSED_20220222.unique.input \
-    --collated False True \
+        s3://kitware-smart-watch-data/processed/ta1/TA-1_PROCESSED_TA-2_SUPERREGIONS_WV_ONLY.unique.input \
+    --collated False True True \
     --dvc_dpath="$DVC_DPATH" \
     --align_workers=4 \
     --aws_profile=iarpa \

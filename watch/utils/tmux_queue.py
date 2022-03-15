@@ -44,8 +44,14 @@ import json
 import uuid
 
 
-class Job(ub.NiceRepr):
-    def __init__(self, command, name=None, depends=None):
+class BashJob(ub.NiceRepr):
+    """
+    A job meant to run inside of a larger bash file. Analog of SlurmJob
+    """
+    def __init__(self, command, name=None, depends=None, gpus=None, cpus=None):
+        if depends is not None and not ub.iterable(depends):
+            depends = [depends]
+
         self.name = name
         self.command = command
         self.depends = depends
@@ -294,7 +300,7 @@ class TMUXMultiQueue(PathIdentifiable):
         name = kwargs.get('name', None)
         if name is None:
             name = kwargs['name'] = self.name + '-job-{}'.format(len(self.jobs))
-        job = Job(command, **kwargs)
+        job = BashJob(command, **kwargs)
         self.jobs.append(job)
         return job
         # if index is None:

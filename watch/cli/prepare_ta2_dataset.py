@@ -23,14 +23,24 @@ S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/eval2/master_collation_work
 DVC_DPATH=$(python -m watch.cli.find_dvc)
 S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/ALL_ANNOTATED_REGIONS_TA-1_PROCESSED_20220222.unique.input
 DATASET_SUFFIX=Drop2-TA1-2022-02-24
+
+
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/ALL_ANNOTATED_REGIONS_TA-1_PROCESSED_20220222.unique.input.l1.mini
+DATASET_SUFFIX=foobar
+
 python -m watch.cli.prepare_ta2_dataset \
     --dataset_suffix=$DATASET_SUFFIX \
     --s3_fpath=$S3_FPATH \
     --dvc_dpath=$DVC_DPATH \
     --collated=True \
-    --debug=False --select_images '.id % 1200 == 0'  \
+    --requester_pays=True \
+    --ignore_duplicates=True \
+    --debug=False \
     --align_workers=0 \
-    --serial=True --run=1
+    --serial=True --run=0
+
+        --select_images '.id % 1200 == 0'  \
 
 
 DVC_DPATH=$(python -m watch.cli.find_dvc)
@@ -70,7 +80,12 @@ class PrepareTA2Config(scfg.Config):
         'aws_profile': scfg.Value('iarpa', help='AWS profile to use for remote data access'),
         'align_workers': scfg.Value(0, help='workers for align script'),
 
+        'ignore_duplicates': scfg.Value(0, help='workers for align script'),
+
         'visualize': scfg.Value(0, help='if True runs visualize'),
+
+        # '--requester_pays'
+        'requester_pays': scfg.Value(0, help='if True, turn on requester_pays in ingress'),
 
         'debug': scfg.Value(False, help='if enabled, turns on debug visualizations'),
         'select_images': scfg.Value(False, help='if enabled only uses select images')
@@ -153,31 +168,40 @@ def main(cmdline=False, **kwargs):
             [[ -f {uncropped_query_fpath} ]] || aws s3 --profile {aws_profile} cp "{s3_fpath}" "{uncropped_query_dpath}"
             '''))
 
+        ingress_options = [
+            '--virtual',
+        ]
+        if config['requester_pays']:
+            ingress_options.append('--requester_pays')
+        ingress_options_str = ' '.join(ingress_options)
+
         queue.submit(ub.codeblock(
             rf'''
             [[ -f {uncropped_catalog_fpath} ]] || python -m watch.cli.baseline_framework_ingress \
                 --aws_profile {aws_profile} \
                 --jobs avail \
-                --virtual \
+                {ingress_options_str} \
                 --outdir "{uncropped_ingress_dpath}" \
                 --catalog_fpath "{uncropped_catalog_fpath}" \
                 "{uncropped_query_fpath}"
             '''))
 
-        if collated:
-            collated_str = '--from-collated'
-        else:
-            collated_str = ''
-
         uncropped_kwcoco_fpath = uncropped_dpath / f'data_{s3_name}.kwcoco.json'
         uncropped_kwcoco_fpath = uncropped_kwcoco_fpath.shrinkuser(home='$HOME')
+
+        convert_options = []
+        if collated:
+            convert_options.append('--from-collated')
+        if config['ignore_duplicates']:
+            convert_options.append('--ignore-duplicates')
+        convert_options_str = ' '.join(convert_options)
 
         queue.submit(ub.codeblock(
             rf'''
             [[ -f {uncropped_kwcoco_fpath} ]] || AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.ta1_stac_to_kwcoco \
                 "{uncropped_catalog_fpath}" \
                 --outpath="{uncropped_kwcoco_fpath}" \
-                {collated_str} \
+                {convert_options_str} \
                 --jobs "min(avail,8)"
             '''))
 

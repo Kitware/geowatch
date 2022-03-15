@@ -666,7 +666,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     image_matches = matches['image']
     rows = []
     chunk_size = 5
-    thresh_bins = 256 * 256
+    # thresh_bins = 256 * 256
+    thresh_bins = 64 * 64
 
     if draw_curves == 'auto':
         draw_curves = bool(eval_dpath is not None)

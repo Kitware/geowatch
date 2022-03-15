@@ -168,6 +168,9 @@ def ingress_item(feature,
             else:
                 asset_href_for_download = asset_href
 
+            # Need to reparse the href if it switched from http to s3
+            parsed_asset_href = urlparse(asset_href_for_download)
+
             if virtual:
                 if parsed_asset_href.scheme == 's3':
                     asset['href'] = '/vsis3/{}{}'.format(

@@ -43,6 +43,7 @@ import numpy as np
 import ubelt as ub
 import yaml
 import shutil
+import kwarray
 import scriptconfig as scfg
 
 
@@ -670,12 +671,13 @@ def gather_measures(cmdline=False, **kwargs):
     # mean_df['title'].apply(lambda x: int(x.split('epoch=')[1].split('-')[0]))
     def group_by_best(mean_df, metric_key, shrink=False):
         bests = []
-        for t, subdf in mean_df.groupby('expt_name'):
-            idx = subdf[[metric_key]].idxmax()
-            import math
-            if not math.isnan(idx.item()):
-                best = subdf.loc[idx]
-                bests.append(best)
+        if len(mean_df):
+            for t, subdf in mean_df.groupby('expt_name'):
+                idx = subdf[[metric_key]].idxmax()
+                import math
+                if not math.isnan(idx.item()):
+                    best = subdf.loc[idx]
+                    bests.append(best)
         best_per_expt = pd.concat(bests)
         if shrink:
             best_per_expt = shrink_notations(best_per_expt, drop=1)
@@ -712,197 +714,51 @@ def gather_measures(cmdline=False, **kwargs):
         print('\nBest Salient Models')
         best_per_expt = group_by_best(mean_df, salient_metric, shrink=True)
         print(best_per_expt.sort_values(salient_metric).to_string())
-    except ValueError:
+    except (ValueError, KeyError):
         pass
 
     import kwplot
-    sns = kwplot.autosns()
+    sns = kwplot.autosns()  # NOQA
     plt = kwplot.autoplt()  # NOQA
 
     dataset_title_part = "-".join(dataset_keys)
-
-    def plot_summary_over_epochs(y):
-        data = mean_df[~mean_df[y].isnull()]
-        ax = sns.lineplot(data=data, x='epoch', y=y, hue='expt_name', marker='o', style='channels')
-        h, ell = ax.get_legend_handles_labels()
-        ax.legend(h, ell, loc='lower right')
-        ax.set_title(f'Pixelwise {y} metrics: {dataset_title_part}')  # todo: add train name
-        # ax.set_title('Pixelwise mAP AC metrics: KR_R001 + KR_R002')
-        fig = ax.figure
-        return fig
 
     figsize = 'auto'
     verbose = 1
     if figsize == 'auto':
         figsize = (9, 7)
 
-    kwplot.figure(fnum=1, doclf=True)
-    y = class_metric
-    fig1 = plot_summary_over_epochs(y)
-    _writefig(fig1, out_dpath, 'epoch_summary_class.png', figsize, verbose, tight=True)
+    if len(mean_df):
+        kwplot.figure(fnum=1, doclf=True)
+        y = class_metric
+        fig1 = plot_summary_over_epochs(y, mean_df, dataset_title_part)
+        _writefig(fig1, out_dpath, 'epoch_summary_class.png', figsize, verbose, tight=True)
 
-    kwplot.figure(fnum=2, doclf=True)
-    y = salient_metric
-    fig2 = plot_summary_over_epochs(y)
-    _writefig(fig2, out_dpath, 'epoch_summary_salient.png', figsize, verbose, tight=True)
+        kwplot.figure(fnum=2, doclf=True)
+        y = salient_metric
+        fig2 = plot_summary_over_epochs(y, mean_df, dataset_title_part)
+        _writefig(fig2, out_dpath, 'epoch_summary_salient.png', figsize, verbose, tight=True)
 
-    # kwplot.figure(fnum=2, doclf=True)
-    # ax = sns.lineplot(data=mean_df, x='epoch', y='class_mAUC', hue='expt_name', marker='o', style='channels')
-    # ax.set_title('Pixelwise mAUC AC metrics: KR_R001 + KR_R002')
+        # kwplot.figure(fnum=2, doclf=True)
+        # ax = sns.lineplot(data=mean_df, x='epoch', y='class_mAUC', hue='expt_name', marker='o', style='channels')
+        # ax.set_title('Pixelwise mAUC AC metrics: KR_R001 + KR_R002')
 
-    # import kwimage
-    import kwarray
-    # distinct_colors_selection = kwimage.Color.distinct(255)
+    if len(all_results):
+        fnum = 3
+        catname = 'Active Construction'
+        fig3 = plot_individual_class_curves(all_results, dataset_title_part, catname, fnum, 'ap')
+        _writefig(fig3, out_dpath, f'{catname}_ap_curve.png', figsize, verbose, tight=True)
 
-    def hash_color(data):
-        import distinctipy
-        key_hash = ub.hash_data(data, hasher='blake3')
-        key_tensor = np.frombuffer(memoryview(key_hash.encode()), dtype=np.int32)
-        rng = kwarray.ensure_rng(rng=key_tensor.sum(), api='python')
-        color = distinctipy.get_random_color(rng=rng)
-        return color
+        fnum = 4
+        catname = 'Site Preparation'
+        fig4: mpl.figure.Figure = plot_individual_class_curves(all_results, dataset_title_part, catname, fnum, 'ap')
+        _writefig(fig4, out_dpath, f'{catname}_ap_curve.png', figsize, verbose, tight=True)
 
-    def plot_individual_class_curves(catname, fnum, metric='ap'):
-        from kwcoco.metrics import drawing
-        max_num_curves = 16
-        max_per_expt = None
-        max_per_expt = 10
-        fig = kwplot.figure(fnum=fnum, doclf=True)
-
-        def lookup_metric(x):
-            return x.ovr_measures[catname][metric]
-
-        relevant_results = [r for r in all_results if catname in r.ovr_measures]
-        # ub.group_items(relevant_results)
-
-        if 1:
-            # Take best per experiment
-            groups = ub.group_items(relevant_results, key=lambda x: x.meta['fit_config']['name'])
-            ordered_groups = []
-            for name, group in groups.items():
-                # if not ('v53' in name or 'v54' in name):
-                #     continue
-                ordered_group = sorted(group, key=lookup_metric)[::-1][:max_per_expt]
-                ordered_groups.append(ordered_group)
-            ordered_groups = sorted(ordered_groups, key=lambda g: lookup_metric(g[0]))[::-1]
-            import itertools as it
-            sorted_results = [x for x in ub.flatten(it.zip_longest(*ordered_groups)) if x is not None]
-        else:
-            sorted_results = sorted(relevant_results, key=lookup_metric)[::-1]
-
-        results_to_plot = sorted_results[0:max_num_curves]
-        results_to_plot = sorted(results_to_plot, key=lookup_metric)[::-1]
-        # sorted_results = sorted(relevant_results, key=lookup_metric)[::-1]
-        results_to_plot = sorted_results[0:max_num_curves]
-        colors = kwplot.Color.distinct(len(results_to_plot))
-        for idx, result in enumerate(results_to_plot):
-            color = colors[idx]
-            color = [kwplot.Color(color).as01()]
-            measure = result.ovr_measures[catname]
-            if 'package_name' in result.meta:
-                prefix = result.meta['package_name']
-            elif 'title' in result.meta:
-                prefix = result.meta['title']
-            else:
-                prefix = '?label-unknown?'
-
-            color = hash_color(prefix)
-
-            kw = {'fnum': fnum}
-            if metric == 'ap':
-                drawing.draw_prcurve(measure, prefix=prefix, color=color, **kw)
-            elif metric == 'auc':
-                drawing.draw_roc(measure, prefix=prefix, color=color, **kw)
-            else:
-                raise KeyError
-        fig.gca().set_title(f'Comparison of runs {metric}: {catname} -\n{dataset_title_part}')
-        return fig
-
-    def plot_individual_salient_curves(fnum, metric='ap'):
-        from kwcoco.metrics import drawing
-        max_num_curves = 16
-        max_per_expt = None
-        max_per_expt = 10
-        fig = kwplot.figure(fnum=fnum, doclf=True)
-        relevant_results = [r for r in all_results if r.nocls_measures and r.nocls_measures['nsupport'] > 0]
-
-        for result in relevant_results:
-            if 'package_name' in result.meta:
-                prefix = result.meta['package_name']
-            elif 'title' in result.meta:
-                prefix = result.meta['title']
-            else:
-                prefix = '?label-unknown?'
-            result.meta['prefix'] = prefix
-
-        def lookup_metric(x):
-            return x.nocls_measures[metric]
-
-        if 1:
-            # Take best per experiment
-            groups = ub.group_items(relevant_results, key=lambda x: x.meta['fit_config']['name'])
-
-            if 0:
-                # HACK!!!!
-                groups2 = {}
-                for name in groups.keys():
-                    group = groups[name]
-                    if not ('v53' in name or 'v54' in name):
-                        continue
-                    group2 = []
-                    for g in group:
-                        flag1 = 'v53_epoch=15' in g.meta['prefix']
-                        flag2 = 'v54_epoch=13' in g.meta['prefix']
-                        if flag2 or flag1:
-                            group2.append(g)
-                    group = group2
-                    if group:
-                        groups2[name] = group
-                groups = groups2
-            ordered_groups = []
-            for name, group in groups.items():
-                ordered_group = sorted(group, key=lookup_metric)[::-1][:max_per_expt]
-                ordered_groups.append(ordered_group)
-            ordered_groups = sorted(ordered_groups, key=lambda g: lookup_metric(g[0]))[::-1]
-            import itertools as it
-            sorted_results = [x for x in ub.flatten(it.zip_longest(*ordered_groups)) if x is not None]
-        else:
-            sorted_results = sorted(relevant_results, key=lookup_metric)[::-1]
-
-        results_to_plot = sorted_results[0:max_num_curves]
-        results_to_plot = sorted(results_to_plot, key=lookup_metric)[::-1]
-
-        colors = kwplot.Color.distinct(len(results_to_plot))
-        for idx, result in enumerate(results_to_plot):
-            color = colors[idx]
-            color = [kwplot.Color(color).as01()]
-            measure = result.nocls_measures
-            prefix = result.meta['prefix']
-            color = hash_color(prefix)
-            kw = {'fnum': fnum}
-            if metric == 'ap':
-                drawing.draw_prcurve(measure, prefix=prefix, color=color, **kw)
-            elif metric == 'auc':
-                drawing.draw_roc(measure, prefix=prefix, color=color, **kw)
-            else:
-                raise KeyError
-        fig.gca().set_title(f'Comparison of runs {metric}: Salient -\n{dataset_title_part}')
-        return fig
-
-    fnum = 3
-    catname = 'Active Construction'
-    fig3 = plot_individual_class_curves(catname, fnum, 'ap')
-    _writefig(fig3, out_dpath, f'{catname}_ap_curve.png', figsize, verbose, tight=True)
-
-    fnum = 4
-    catname = 'Site Preparation'
-    fig4: mpl.figure.Figure = plot_individual_class_curves(catname, fnum, 'ap')
-    _writefig(fig4, out_dpath, f'{catname}_ap_curve.png', figsize, verbose, tight=True)
-
-    fnum = 5
-    fig5 = plot_individual_salient_curves(fnum, metric='ap')
-    _writefig(fig5, out_dpath, 'salient_ap_curve.png', figsize, verbose, tight=True)
-    # print(best_per_expt.sort_values('mAP').to_string())
+    if len(all_results):
+        fnum = 5
+        fig5 = plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric='ap')
+        _writefig(fig5, out_dpath, 'salient_ap_curve.png', figsize, verbose, tight=True)
+        # print(best_per_expt.sort_values('mAP').to_string())
 
     # # if 1:
     #     # fig3.set_size_inches(np.array([6.4, 4.8]) * 2.0)
@@ -916,6 +772,158 @@ def gather_measures(cmdline=False, **kwargs):
 
     if config['show']:
         plt.show()
+
+
+def hash_color(data):
+    import distinctipy
+    key_hash = ub.hash_data(data, hasher='blake3')
+    key_tensor = np.frombuffer(memoryview(key_hash.encode()), dtype=np.int32)
+    rng = kwarray.ensure_rng(rng=key_tensor.sum(), api='python')
+    color = distinctipy.get_random_color(rng=rng)
+    return color
+
+
+def plot_summary_over_epochs(y, mean_df, dataset_title_part):
+    import seaborn as sns
+    data = mean_df[~mean_df[y].isnull()]
+    ax = sns.lineplot(data=data, x='epoch', y=y, hue='expt_name', marker='o', style='channels')
+    h, ell = ax.get_legend_handles_labels()
+    ax.legend(h, ell, loc='lower right')
+    ax.set_title(f'Pixelwise {y} metrics: {dataset_title_part}')  # todo: add train name
+    # ax.set_title('Pixelwise mAP AC metrics: KR_R001 + KR_R002')
+    fig = ax.figure
+    return fig
+
+
+def plot_individual_class_curves(all_results, dataset_title_part, catname, fnum, metric='ap'):
+    from kwcoco.metrics import drawing
+    import kwplot
+    max_num_curves = 16
+    max_per_expt = None
+    max_per_expt = 10
+    fig = kwplot.figure(fnum=fnum, doclf=True)
+
+    def lookup_metric(x):
+        return x.ovr_measures[catname][metric]
+
+    relevant_results = [r for r in all_results if catname in r.ovr_measures]
+    # ub.group_items(relevant_results)
+
+    if 1:
+        # Take best per experiment
+        groups = ub.group_items(relevant_results, key=lambda x: x.meta['fit_config']['name'])
+        ordered_groups = []
+        for name, group in groups.items():
+            # if not ('v53' in name or 'v54' in name):
+            #     continue
+            ordered_group = sorted(group, key=lookup_metric)[::-1][:max_per_expt]
+            ordered_groups.append(ordered_group)
+        ordered_groups = sorted(ordered_groups, key=lambda g: lookup_metric(g[0]))[::-1]
+        import itertools as it
+        sorted_results = [x for x in ub.flatten(it.zip_longest(*ordered_groups)) if x is not None]
+    else:
+        sorted_results = sorted(relevant_results, key=lookup_metric)[::-1]
+
+    results_to_plot = sorted_results[0:max_num_curves]
+    results_to_plot = sorted(results_to_plot, key=lookup_metric)[::-1]
+    # sorted_results = sorted(relevant_results, key=lookup_metric)[::-1]
+    results_to_plot = sorted_results[0:max_num_curves]
+    colors = kwplot.Color.distinct(len(results_to_plot))
+    for idx, result in enumerate(results_to_plot):
+        color = colors[idx]
+        color = [kwplot.Color(color).as01()]
+        measure = result.ovr_measures[catname]
+        if 'package_name' in result.meta:
+            prefix = result.meta['package_name']
+        elif 'title' in result.meta:
+            prefix = result.meta['title']
+        else:
+            prefix = '?label-unknown?'
+
+        color = hash_color(prefix)
+
+        kw = {'fnum': fnum}
+        if metric == 'ap':
+            drawing.draw_prcurve(measure, prefix=prefix, color=color, **kw)
+        elif metric == 'auc':
+            drawing.draw_roc(measure, prefix=prefix, color=color, **kw)
+        else:
+            raise KeyError
+    fig.gca().set_title(f'Comparison of runs {metric}: {catname} -\n{dataset_title_part}')
+    return fig
+
+
+def plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric='ap'):
+    from kwcoco.metrics import drawing
+    import kwplot
+    max_num_curves = 16
+    max_per_expt = None
+    max_per_expt = 10
+    fig = kwplot.figure(fnum=fnum, doclf=True)
+    relevant_results = [r for r in all_results if r.nocls_measures and r.nocls_measures['nsupport'] > 0]
+
+    for result in relevant_results:
+        if 'package_name' in result.meta:
+            prefix = result.meta['package_name']
+        elif 'title' in result.meta:
+            prefix = result.meta['title']
+        else:
+            prefix = '?label-unknown?'
+        result.meta['prefix'] = prefix
+
+    def lookup_metric(x):
+        return x.nocls_measures[metric]
+
+    if 1:
+        # Take best per experiment
+        groups = ub.group_items(relevant_results, key=lambda x: x.meta['fit_config']['name'])
+
+        if 0:
+            # HACK!!!!
+            groups2 = {}
+            for name in groups.keys():
+                group = groups[name]
+                if not ('v53' in name or 'v54' in name):
+                    continue
+                group2 = []
+                for g in group:
+                    flag1 = 'v53_epoch=15' in g.meta['prefix']
+                    flag2 = 'v54_epoch=13' in g.meta['prefix']
+                    if flag2 or flag1:
+                        group2.append(g)
+                group = group2
+                if group:
+                    groups2[name] = group
+            groups = groups2
+        ordered_groups = []
+        for name, group in groups.items():
+            ordered_group = sorted(group, key=lookup_metric)[::-1][:max_per_expt]
+            ordered_groups.append(ordered_group)
+        ordered_groups = sorted(ordered_groups, key=lambda g: lookup_metric(g[0]))[::-1]
+        import itertools as it
+        sorted_results = [x for x in ub.flatten(it.zip_longest(*ordered_groups)) if x is not None]
+    else:
+        sorted_results = sorted(relevant_results, key=lookup_metric)[::-1]
+
+    results_to_plot = sorted_results[0:max_num_curves]
+    results_to_plot = sorted(results_to_plot, key=lookup_metric)[::-1]
+
+    colors = kwplot.Color.distinct(len(results_to_plot))
+    for idx, result in enumerate(results_to_plot):
+        color = colors[idx]
+        color = [kwplot.Color(color).as01()]
+        measure = result.nocls_measures
+        prefix = result.meta['prefix']
+        color = hash_color(prefix)
+        kw = {'fnum': fnum}
+        if metric == 'ap':
+            drawing.draw_prcurve(measure, prefix=prefix, color=color, **kw)
+        elif metric == 'auc':
+            drawing.draw_roc(measure, prefix=prefix, color=color, **kw)
+        else:
+            raise KeyError
+    fig.gca().set_title(f'Comparison of runs {metric}: Salient -\n{dataset_title_part}')
+    return fig
 
 
 if __name__ == '__main__':

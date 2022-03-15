@@ -69,10 +69,12 @@ class SlurmJob(ub.NiceRepr):
     """
     def __init__(self, command, name=None, output_fpath=None, depends=None,
                  partition=None, cpus=None, gpus=None, mem=None, begin=None):
-        self.command = command
         if name is None:
             import uuid
             name = 'job-' + str(uuid.uuid4())
+        if depends is not None and not ub.iterable(depends):
+            depends = [depends]
+        self.command = command
         self.name = name
         self.output_fpath = output_fpath
         self.depends = depends
@@ -108,7 +110,7 @@ class SlurmJob(ub.NiceRepr):
                 if isinstance(gpus, str):
                     gres = gpus
                 elif isinstance(gpus, int):
-                    gres = f'gres:{gpus}'
+                    gres = f'gpu:{gpus}'
                 else:
                     raise TypeError(type(self.gpus))
                 return gres
@@ -222,6 +224,10 @@ class SlurmQueue:
         self.jobs.append(job)
         return job
 
+    def add_header_command(self, command):
+        raise NotImplementedError
+        self.header_commands.append(command)
+
     def order_jobs(self):
         import networkx as nx
         graph = nx.DiGraph()
@@ -269,7 +275,47 @@ class SlurmQueue:
         """
         Monitor progress until the jobs are done
         """
-        # ub.cmd('watch squeue')
+
+        import time
+        from rich.live import Live
+        from rich.table import Table
+        import io
+        import pandas as pd
+        jobid_history = set()
+
+        def update_status_table():
+            # https://rich.readthedocs.io/en/stable/live.html
+            info = ub.cmd('squeue --format="%i %P %j %u %t %M %D %R"')
+            stream = io.StringIO(info['out'])
+            df = pd.read_csv(stream, sep=' ')
+            jobid_history.update(df['JOBID'])
+
+            num_running = (df['ST'] == 'R').sum()
+            num_in_queue = len(df)
+            num_total = len(jobid_history)
+
+            table = Table(*['num_running', 'num_in_queue', 'total_monitored'],
+                          title='slurm-monitor')
+
+            # TODO: determine if slurm has accounting on, and if we can
+            # figure out how many jobs errored / passed
+
+            table.add_row(
+                f'{num_running}',
+                f'{num_in_queue}',
+                f'{num_total}'
+            )
+
+            finished = (num_in_queue == 0)
+            return table, finished
+
+        table, finished = update_status_table()
+        refresh_rate = 0.4
+        with Live(table, refresh_per_second=4) as live:
+            while not finished:
+                time.sleep(refresh_rate)
+                table, finished = update_status_table()
+                live.update(table)
 
     def rprint(self, with_status=False, with_rich=0):
         """

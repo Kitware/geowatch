@@ -30,23 +30,25 @@ repackage_checkpoints_and_evaluate(){
 
     DVC_DPATH=$(python -m watch.cli.find_dvc)
     DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+    EXPT_GROUP_CODE=eval3_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
     python -m watch.tasks.fusion.repackage gather_checkpoints \
         --dvc_dpath="$DVC_DPATH" \
-        --storage_dpath="$DVC_DPATH/models/fusion/$DATASET_CODE" \
+        --storage_dpath="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages" \
         --train_dpath="$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE" \
         --mode=commit
 
 
     DVC_DPATH=$(python -m watch.cli.find_dvc)
     DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+    EXPT_GROUP_CODE=eval3_candidates
     KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
     VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_nowv_vali.kwcoco.json
     python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="0,1,2,3" \
-            --model_globstr="$DVC_DPATH/models/fusion/$DATASET_CODE/*/*.pt" \
+            --gpus="0,1" \
+            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
             --test_dataset="$VALI_FPATH" \
-            --run=0 --skip_existing=True
+            --run=1 --skip_existing=True --backend=slurm
     
 }
 
@@ -59,12 +61,12 @@ aggregate_multiple_evaluations(){
     "
 
     DVC_DPATH=$(python -m watch.cli.find_dvc)
-    DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
     EXPT_NAME_PAT="*"
     #EXPT_NAME_PAT="BOTH_TA1_COMBO_TINY_p2w_raw*"
     MODEL_EPOCH_PAT="*"
     PRED_DSET_PAT="*"
-    MEASURE_GLOBSTR=${DVC_DPATH}/models/fusion/${DATASET_CODE}/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/eval/curves/measures2.json
+    PRED_CFG_PAT="*"
+    MEASURE_GLOBSTR=${DVC_DPATH}/models/fusion/${EXPT_GROUP_CODE}/eval/${EXPT_NAME_PAT}/${MODEL_EPOCH_PAT}/${PRED_DSET_PAT}/${PRED_CFG_PAT}/eval/curves/measures2.json
 
     python -m watch.tasks.fusion.gather_results \
         --measure_globstr="$MEASURE_GLOBSTR" \

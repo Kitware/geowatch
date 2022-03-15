@@ -18,12 +18,12 @@ python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
 
 """
 import ubelt as ub
-from watch.utils import tmux_queue
 
 
 def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
                         run=False, with_rich=0, with_status=True,
-                        virtualenv_cmd=None, skip_existing=False):
+                        virtualenv_cmd=None, skip_existing=False,
+                        backend='tmux'):
     """
     First ensure that models have been copied to the DVC repo in the
     appropriate path. (as noted by model_dpath)
@@ -175,7 +175,7 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
 
     with_pred = True  # TODO: allow caching
     with_eval = True
-    workers_per_queue = 5
+    workers_per_queue = 4
     recompute = False
 
     # HARD CODED
@@ -187,8 +187,6 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
     # test_dataset_fpath = dvc_dpath / 'Drop1-Aligned-L1/combo_vali_nowv.kwcoco.json'
     test_dataset_fpath = ub.Path(test_dataset)
     assert test_dataset_fpath.exists()
-
-    stamp = ub.timestamp() + '_' + ub.hash_data([])[0:8]
 
     def package_metadata(package_fpath):
         # Hack for choosing one model from this "type"
@@ -261,19 +259,32 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
         'DVC_DPATH': dvc_dpath,
     }
 
-    tq = tmux_queue.TMUXMultiQueue(
-        name=stamp, size=len(GPUS), environ=environ, gres=GPUS,
-        dpath=tmux_schedule_dpath)
+    # queue = tmux_queue.TMUXMultiQueue(
+    #     size=len(GPUS), environ=environ, gres=GPUS,
+    #     dpath=tmux_schedule_dpath)
+
+    # queue = tmux_queue.TMUXMultiQueue(name='watch-splits', size=2)
+    config = {'backend': backend}
+    if config['backend'] == 'slurm':
+        from watch.utils import slurm_queue
+        queue = slurm_queue.SlurmQueue(name='schedule-eval')
+    elif config['backend'] == 'tmux':
+        from watch.utils import tmux_queue
+        queue = tmux_queue.TMUXMultiQueue(name='schedule-eval',
+                                          size=len(GPUS), environ=environ,
+                                          dpath=tmux_schedule_dpath)
+    else:
+        raise KeyError(config['backend'])
 
     if virtualenv_cmd:
-        tq.add_header_command(virtualenv_cmd)
+        queue.add_header_command(virtualenv_cmd)
 
     recompute_pred = recompute
     recompute_eval = recompute or 0
 
     pred_cfg = {}
 
-    for info, queue in zip(packages_to_eval, tq):
+    for info in packages_to_eval:
         package_fpath = info['fpath']
         suggestions = organize.suggest_paths(
             package_fpath=package_fpath,
@@ -304,6 +315,7 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
         print('has_eval = {!r}'.format(has_eval))
         print('has_pred = {!r}'.format(has_pred))
 
+        pred_job = None
         if with_pred:
             pred_command = ub.codeblock(
                 r'''
@@ -327,10 +339,9 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
                     '[[ -f "{pred_dataset}" ]] || '.format(**suggestions) +
                     pred_command
                 )
-
             if recompute_pred or not (skip_existing and (has_pred or has_eval)):
                 if not has_eval:
-                    queue.submit(pred_command)
+                    pred_job = queue.submit(pred_command, gpus=1, cpus=workers_per_queue)
 
         if with_eval:
             eval_command = ub.codeblock(
@@ -341,7 +352,8 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
                       --eval_dpath={eval_dpath} \
                       --score_space=video \
                       --draw_curves=1 \
-                      --draw_heatmaps=1
+                      --draw_heatmaps=1 \
+                      --workers=0
                 ''').format(**suggestions)
             if not recompute_eval:
                 # TODO: use a real stamp file
@@ -351,21 +363,22 @@ def schedule_evaluation(model_globstr=None, test_dataset=None, gpus='auto',
                     eval_command
                 )
             if recompute_eval or not (skip_existing and has_eval):
-                queue.submit(eval_command)
+                print('queue.submit = {!r}'.format(queue.submit))
+                queue.submit(eval_command, depends=pred_job, cpus=6)   # TODO: memory
 
-    print('tq = {!r}'.format(tq))
-    # print(f'{len(tq)=}')
-    tq.rprint(with_status=with_status, with_rich=with_rich)
+    print('queue = {!r}'.format(queue))
+    # print(f'{len(queue)=}')
+    queue.rprint(with_status=with_status, with_rich=with_rich)
 
     # RUN
     if run:
         # ub.cmd('bash ' + str(driver_fpath), verbose=3, check=True)
-        tq.run()
-        agg_state = tq.monitor()
+        queue.run()
+        agg_state = queue.monitor()
         if not agg_state['errored']:
-            tq.kill()
+            queue.kill()
     else:
-        driver_fpath = tq.write()
+        driver_fpath = queue.write()
         print('Wrote script: to run execute:\n{}'.format(driver_fpath))
 
     """
