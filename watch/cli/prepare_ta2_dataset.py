@@ -278,7 +278,7 @@ def main(cmdline=False, **kwargs):
     add_fields_job = queue.submit(ub.codeblock(
         rf'''
         # PREPARE Uncropped datasets (usually for debugging)
-        {cache_prefix}{job_environ_str}AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.coco_add_watch_fields \
+        {cache_prefix}{job_environ_str}python -m watch.cli.coco_add_watch_fields \
             --src "{uncropped_final_kwcoco_fpath}" \
             --dst "{uncropped_prep_kwcoco_fpath}" \
             --workers="{config['fields_workers']}" \
