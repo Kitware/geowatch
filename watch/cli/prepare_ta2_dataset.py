@@ -90,7 +90,7 @@ class PrepareTA2Config(scfg.Config):
         'visualize': scfg.Value(0, help='if True runs visualize'),
 
         # '--requester_pays'
-        'requester_pays': scfg.Value(0, help='if True, turn on requester_pays in ingress'),
+        'requester_pays': scfg.Value(0, help='if True, turn on requester_pays in ingress. Needed for official L1/L2 catalogs.'),
 
         'debug': scfg.Value(False, help='if enabled, turns on debug visualizations'),
         'select_images': scfg.Value(False, help='if enabled only uses select images'),
@@ -271,10 +271,14 @@ def main(cmdline=False, **kwargs):
         cache_prefix = '[[ -f {uncropped_prep_kwcoco_fpath} ]] || '
     else:
         cache_prefix = ''
+    if config['requester_pays']:
+        requester_pays_str = "AWS_REQUEST_PAYER='requester'"
+    else:
+        requester_pays_str = ''
     queue.submit(ub.codeblock(
         rf'''
         # PREPARE Uncropped datasets (usually for debugging)
-        {cache_prefix}AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.coco_add_watch_fields \
+        {requester_pays_str} {cache_prefix}AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.coco_add_watch_fields \
             --src "{uncropped_final_kwcoco_fpath}" \
             --dst "{uncropped_prep_kwcoco_fpath}" \
             --workers="{config['fields_workers']}" \
@@ -298,6 +302,8 @@ def main(cmdline=False, **kwargs):
         # 'PROJ_DEBUG=3',
         f'AWS_DEFAULT_PROFILE={aws_profile}',
     ])
+    if config['requester_pays']:
+        job_environ_str.append(" AWS_REQUEST_PAYER='requester'")
     if job_environ_str:
         job_environ_str += ' '
     queue.submit(ub.codeblock(
