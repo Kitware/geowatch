@@ -203,7 +203,7 @@ def main(cmdline=False, **kwargs):
         if collated:
             convert_options.append('--from-collated')
         if config['ignore_duplicates']:
-            convert_options.append('--ignore-duplicates')
+            convert_options.append('--ignore_duplicates')
         convert_options_str = ' '.join(convert_options)
 
         if config['cache']:
