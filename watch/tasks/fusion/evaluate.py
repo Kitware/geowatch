@@ -704,8 +704,10 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         total_images = None
 
     # Prepare job pools
+    print('workers = {!r}'.format(workers))
+    print('draw_workers = {!r}'.format(draw_workers))
     metrics_executor = ub.Executor(mode='process', max_workers=workers)
-    draw_executor = ub.Executor(mode='process', max_workers=workers)
+    draw_executor = ub.Executor(mode='process', max_workers=draw_workers)
 
     prog = ub.ProgIter(total=total_images, desc='submit scoring jobs', adjust=False, freq=1)
     prog.begin()
@@ -773,13 +775,15 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                 '''))
     prog.end()
 
-    from rich.progress import Progress, BarColumn, TimeRemainingColumn, TimeElapsedColumn
-    progress = Progress(
+    import rich
+    import rich.progress
+    progress = rich.progress.Progress(
         "[progress.description]{task.description}",
-        BarColumn(),
-        "[progress.percentage]{task.percentage:>3.0f}%",
-        TimeRemainingColumn(),
-        TimeElapsedColumn(),
+        rich.progress.BarColumn(),
+        rich.progress.MofNCompleteColumn(),
+        # "[progress.percentage]{task.percentage:>3.0f}%",
+        rich.progress.TimeRemainingColumn(),
+        rich.progress.TimeElapsedColumn(),
     )
     with progress:
 
@@ -1025,13 +1029,14 @@ if __name__ == '__main__':
         --compress=DEFLATE \
         --gpus=0, \
         --batch_size=1
+
     python -m watch.tasks.fusion.evaluate \
         --true_dataset=/home/joncrall/data/dvc-repos/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/combo_DILM_nowv_vali.kwcoco.json \
         --pred_dataset=/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/pred/BOTH_TA1_COMBO_TINY_p1_v0100/pred_BOTH_TA1_COMBO_TINY_p1_v0100_epoch=4-step=5119-v2/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/unknown_pred_cfg/pred.kwcoco.json \
           --eval_dpath=/home/joncrall/data/dvc-repos/smart_watch_dvc/models/fusion/eval3_candidates/eval/BOTH_TA1_COMBO_TINY_p1_v0100/pred_BOTH_TA1_COMBO_TINY_p1_v0100_epoch=4-step=5119-v2/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/unknown_pred_cfg/eval \
           --score_space=video \
           --draw_curves=1 \
-          --draw_heatmaps=1
+          --draw_heatmaps=1 --workers=2
 
 
     """

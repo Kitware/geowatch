@@ -17,7 +17,8 @@ class PrepareSplitsConfig(scfg.Config):
         'keep_sessions': scfg.Value(False, help='if True does not close tmux sessions'),
         'run': scfg.Value(True, help='if True execute the pipeline'),
         'cache': scfg.Value(True, help='if True skip completed results'),
-        'serial': scfg.Value(False, help='if True use serial mode')
+        'serial': scfg.Value(False, help='if True use serial mode'),
+        'backend': scfg.Value('tmux', help=None),
     }
 
 
@@ -30,8 +31,6 @@ def main(cmdline=False, **kwargs):
     TODO:
         - [ ] Option to just dump the serial bash script that does everything.
     """
-    from watch.utils import tmux_queue
-
     config = PrepareSplitsConfig(cmdline=cmdline)
     config.update(kwargs)
 
@@ -56,9 +55,18 @@ def main(cmdline=False, **kwargs):
     }
     print('splits = {!r}'.format(splits))
 
-    tq = tmux_queue.TMUXMultiQueue(name='watch-splits', size=2)
+    # queue = tmux_queue.TMUXMultiQueue(name='watch-splits', size=2)
+    if config['backend'] == 'slurm':
+        from watch.utils import slurm_queue
+        queue = slurm_queue.SlurmQueue(name='watch-splits')
+    elif config['backend'] == 'tmux':
+        from watch.utils import tmux_queue
+        queue = tmux_queue.TMUXMultiQueue(name='watch-splits', size=2)
+    else:
+        raise KeyError(config['backend'])
+
     if config['virtualenv_cmd']:
-        tq.add_header_command(config['virtualenv_cmd'])
+        queue.add_header_command(config['virtualenv_cmd'])
 
     split_jobs = {}
     # Perform train/validation splits with and without worldview
@@ -69,7 +77,7 @@ def main(cmdline=False, **kwargs):
             --dst {splits['train']} \
             --select_videos '.name | startswith("KR_") | not'
         ''')
-    split_jobs['train'] = tq.submit(command)
+    split_jobs['train'] = queue.submit(command, begin=10)
 
     command = ub.codeblock(
         fr'''
@@ -78,7 +86,7 @@ def main(cmdline=False, **kwargs):
             --dst {splits['nowv_train']} \
             --select_images '.sensor_coarse != "WV"'
         ''')
-    tq.submit(command, depends=[split_jobs['train']])
+    queue.submit(command, depends=[split_jobs['train']])
 
     command = ub.codeblock(
         fr'''
@@ -87,7 +95,7 @@ def main(cmdline=False, **kwargs):
             --dst {splits['wv_train']} \
             --select_images '.sensor_coarse == "WV"'
         ''')
-    tq.submit(command, depends=[split_jobs['train']])
+    queue.submit(command, depends=[split_jobs['train']])
 
     # Perform vali/validation splits with and without worldview
     command = ub.codeblock(
@@ -97,7 +105,7 @@ def main(cmdline=False, **kwargs):
             --dst {splits['vali']} \
             --select_videos '.name | startswith("KR_")'
         ''')
-    split_jobs['vali'] = tq.submit(command)
+    split_jobs['vali'] = queue.submit(command)
 
     command = ub.codeblock(
         fr'''
@@ -106,7 +114,7 @@ def main(cmdline=False, **kwargs):
             --dst {splits['nowv_vali']} \
             --select_images '.sensor_coarse != "WV"'
         ''')
-    tq.submit(command, depends=[split_jobs['vali']])
+    queue.submit(command, depends=[split_jobs['vali']])
 
     command = ub.codeblock(
         fr'''
@@ -115,7 +123,7 @@ def main(cmdline=False, **kwargs):
             --dst {splits['wv_vali']} \
             --select_images '.sensor_coarse == "WV"'
         ''')
-    tq.submit(command, depends=[split_jobs['vali']])
+    queue.submit(command, depends=[split_jobs['vali']])
 
     # Add in additional no-worldview full dataset
     command = ub.codeblock(
@@ -125,19 +133,22 @@ def main(cmdline=False, **kwargs):
             --dst {splits['nowv']} \
             --select_images '.sensor_coarse != "WV"'
         ''')
-    tq.submit(command)
+    queue.submit(command)
 
-    tq.rprint()
+    queue.rprint()
 
     if config['run']:
         if config['serial']:
-            tq.serial_run()
+            queue.serial_run()
         else:
-            tq.run()
-        agg_state = tq.monitor()
-        if not config['keep_sessions']:
-            if not agg_state['errored']:
-                tq.kill()
+            queue.run()
+        agg_state = queue.monitor()
+        try:
+            if not config['keep_sessions']:
+                if not agg_state['errored']:
+                    queue.kill()
+        except Exception:
+            pass
 
 
 if __name__ == '__main__':
@@ -147,5 +158,10 @@ if __name__ == '__main__':
         python -m watch.cli.prepare_splits \
             --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
             --run=0 --serial=True
+
+        DVC_DPATH=$(python -m watch.cli.find_dvc)
+        python -m watch.cli.prepare_splits \
+            --base_fpath=$DVC_DPATH/Drop1-Aligned-L1-2022-01/data.kwcoco.json \
+            --run=1 --backend=slurm
     """
     main(cmdline=True)

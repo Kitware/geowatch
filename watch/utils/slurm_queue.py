@@ -124,7 +124,7 @@ class SlurmJob(ub.NiceRepr):
         if self.depends:
             # TODO: other depends parts
             type_to_dependencies = {
-                'after': [],
+                'afterok': [],
             }
             depends = self.depends if ub.iterable(self.depends) else [self.depends]
 
@@ -136,14 +136,14 @@ class SlurmJob(ub.NiceRepr):
                             jobid = '${%s}' % jobname_to_varname[item.name]
                         else:
                             jobid = f"$(squeue --noheader --format %i --name '{item.name}')"
-                    type_to_dependencies['after'].append(jobid)
+                    type_to_dependencies['afterok'].append(jobid)
                 else:
                     # if isinstance(item, int):
-                    #     type_to_dependencies['after'].append(item)
+                    #     type_to_dependencies['afterok'].append(item)
                     # elif isinstance(item, str):
                     #     name = item
                     #     item = f"$(squeue --noheader --format %i --name '{name}')"
-                    #     type_to_dependencies['after'].append(item)
+                    #     type_to_dependencies['afterok'].append(item)
                     # else:
                     raise TypeError(type(item))
 
@@ -182,18 +182,22 @@ class SlurmQueue:
         >>> job7 = self.submit('echo "hi from $SLURM_JOBID"', depends=[job5, job6])
         >>> self.write()
         >>> self.rprint()
+        >>> # xdoctest +REQUIRES(--run)
+        >>> queue.run()
         >>> #if ub.find_exe('slurm'):
         >>> #    self.run()
     """
-    def __init__(self):
+    def __init__(self, name=None):
         import uuid
         import time
         self.jobs = []
+        if name is None:
+            name = 'SQ'
         stamp = time.strftime('%Y%m%dT%H%M%S')
-        self.name = 'SQ-' + stamp + '-' + ub.hash_data(uuid.uuid4())[0:8]
-        self.dpath = ub.Path.appdir('slurm_queue') / self.name
+        self.queue_id = name + '-' + stamp + '-' + ub.hash_data(uuid.uuid4())[0:8]
+        self.dpath = ub.Path.appdir('slurm_queue') / self.queue_id
         self.log_dpath = self.dpath / 'logs'
-        self.fpath = self.dpath / (self.name + '.sh')
+        self.fpath = self.dpath / (self.queue_id + '.sh')
 
     def write(self):
         import os
@@ -210,7 +214,8 @@ class SlurmQueue:
     def submit(self, command, **kwargs):
         name = kwargs.get('name', None)
         if name is None:
-            name = kwargs['name'] = self.name + '-job-{}'.format(len(self.jobs))
+            name = kwargs['name'] = f'J{len(self.jobs):04d}-{self.queue_id}'
+            # + '-job-{}'.format(len(self.jobs))
         if 'output_fpath' not in kwargs:
             kwargs['output_fpath'] = self.log_dpath / (name + '.sh')
         job = SlurmJob(command, **kwargs)
