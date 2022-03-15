@@ -1,0 +1,177 @@
+source /home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/_tmp_tmux_schedule/queue_2022-03-04T112733+5_abd043ec_2_2022-03-04T112733+5_528d4e00.sh                    [266/266]
+(pyenv3.9.9) jon.crall@horologic:~$ source /home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/_tmp_tmux_schedule/queue_2022-03-04T112733+5_abd043ec_2_2022-03-04T112733+5_528d
+4e00.sh                                                                                                                                                                             
+{"status": "init", "finished": 0, "errored": 0, "total": 48, "name": "queue_2022-03-04T112733+5_abd043ec_2", "rootid": "2022-03-04T112733+5_528d4e00"}                              
+{"status": "set_environ", "finished": 0, "errored": 0, "total": 48, "name": "queue_2022-03-04T112733+5_abd043ec_2", "rootid": "2022-03-04T112733+5_528d4e00"}                       
+++ export DVC_DPATH=/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc                                                                                                        
+++ DVC_DPATH=/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc                                                                                                               
+++ export CUDA_VISIBLE_DEVICES=2                                                                                                                                                    
+++ CUDA_VISIBLE_DEVICES=2                                                                                                                                                           
+++ set +x                                                                                                                                                                           
+{"status": "run", "finished": 0, "errored": 0, "total": 48, "name": "queue_2022-03-04T112733+5_abd043ec_2", "rootid": "2022-03-04T112733+5_528d4e00"}                               
+++ [[ -f /home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/models/fusion/Drop2-Aligned-TA1-2022-02-15/FUSION_EXPERIMENT_matearly_nowv_p2w_V115/pred_FUSION_EXPERIMENT_matearl
+y_nowv_p2w_V115_epoch=11-step=12287/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/pred.kwcoco.json ]]                                                                    
+++ python -m watch.tasks.fusion.predict --write_probs=True --write_preds=False --with_class=auto --with_saliency=auto --with_change=False --package_fpath=/home/local/KHQ/jon.crall/
+data/dvc-repos/smart_watch_dvc/models/fusion/Drop2-Aligned-TA1-2022-02-15/FUSION_EXPERIMENT_matearly_nowv_p2w_V115/FUSION_EXPERIMENT_matearly_nowv_p2w_V115_epoch=11-step=12287.pt -
+-pred_dataset=/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/models/fusion/Drop2-Aligned-TA1-2022-02-15/FUSION_EXPERIMENT_matearly_nowv_p2w_V115/pred_FUSION_EXPERIMENT_ma
+tearly_nowv_p2w_V115_epoch=11-step=12287/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/pred.kwcoco.json --test_dataset=/home/local/KHQ/jon.crall/data/dvc-repos/smart_wat
+ch_dvc/Drop2-Aligned-TA1-2022-02-15/combo_DILM_nowv_vali.kwcoco.json --num_workers=5 --compress=DEFLATE --gpus=0, --batch_size=1                                                    
+args.__dict__ = {                                                                                                                                                                   
+    'batch_size': 1,                                                                                                                                                                
+    'channels': 'auto',                                                                                                                                                             
+    'chip_overlap': 0.3,                                                                                                                                                            
+    'chip_size': 'auto',                                                                                                                                                            
+    'compress': 'DEFLATE',                                                                                                                                                          
+    'config_file': None,                                                                                                                                                            
+    'datamodule': 'KWCocoVideoDataModule',                                                                                                                                          
+    'datamodule_defaults': {                                                                                                                                                        
+        'channels': None,                                                                                                                                                           
+        'chip_size': 128,                                                                                                                                                           
+        'time_sampling': 'contiguous',                                                                                                                                              
+        'time_span': '2y',                                                                                                                                                          
+        'time_steps': 2,                                                                                                                                                            
+    },                                                                                                                                                                              
+    'diff_inputs': False,                                                                                                                                                           
+    'exclude_sensors': None,                                                                                                                                                        
+    'gpus': '0,',                                                                                                                                                                   
+    'ignore_dilate': 11,                                                                                                                                                            
+    'match_histograms': False,                                                                                                                                                      
+    'max_epoch_length': None,                                                                                                                                                       
+    'min_spacetime_weight': 0.1,                                                                                                                                                    
+    'neg_to_pos_ratio': 1.0,                                                                                                                                                        
+    'normalize_inputs': True,                                                                                                                                                       
+    'normalize_perframe': False,                                                                                                                                                    
+    'num_workers': '5',                                                                                                                                                             
+    'package_fpath': PosixPath('/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/models/fusion/Drop2-Aligned-TA1-2022-02-15/FUSION_EXPERIMENT_matearly_nowv_p2w_V115/FUSION_
+EXPERIMENT_matearly_nowv_p2w_V115_epoch=11-step=12287.pt'),                                                                                                                         
+    'pred_dataset': '/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/models/fusion/Drop2-Aligned-TA1-2022-02-15/FUSION_EXPERIMENT_matearly_nowv_p2w_V115/pred_FUSION_EXPERI
+MENT_matearly_nowv_p2w_V115_epoch=11-step=12287/Drop2-Aligned-TA1-2022-02-15_combo_DILM_nowv_vali.kwcoco/pred.kwcoco.json',                                                         
+    'pred_dpath': None,                                                                                                                                                             
+    'resample_invalid_frames': True,                                                                                                                                                
+    'temporal_dropout': 0.0,                                                                                                                                                        
+    'test_dataset': '/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/combo_DILM_nowv_vali.kwcoco.json',                                       
+    'thresh': 0.01,                                                                                                                                                                 
+    'time_overlap': 0.0,                                                                                                                                                            
+    'time_sampling': 'auto',                 
+    'time_span': 'auto',                     
+    'time_steps': 'auto',                    
+    'torch_sharing_strategy': 'default',                                                  
+    'torch_start_method': 'default',                                                      
+    'track_emissions': True,                                                              
+    'train_dataset': None,                   
+    'true_multimodal': True,                 
+    'upweight_centers': True,                
+    'use_centered_positives': False,         
+    'use_conditional_classes': True,         
+    'use_grid_positives': True,              
+    'vali_dataset': None,                    
+    'with_change': False,                    
+    'with_class': 'auto',                    
+    'with_saliency': 'auto',                 
+    'write_out_config_file_to_this_path': None,                                           
+    'write_preds': False,                                                                 
+    'write_probs': True,                                                                  
+}                                            
+able_to_infer = {                            
+    'channels': <ChannelSpec(blue|green|red|nir|swir16|swir22|matseg_0|matseg_1|matseg_2|matseg_3) at 0x7fbb0122e8b0>,
+    'chip_size': 380,                                                                                                                                                               
+    'time_sampling': 'soft+distribute',                                                                                                                                             
+    'time_span': '7m',                       
+    'time_steps': 5,                         
+}                                            
+unable_to_infer = {}                         
+overloads = {                                
+    'channels': <ChannelSpec(blue|green|red|nir|swir16|swir22|matseg_0|matseg_1|matseg_2|matseg_3) at 0x7fbb0122e8b0>,
+    'chip_size': 380,                                                                                                                                                               
+    'time_sampling': 'soft+distribute',                                                                                                                                             
+    'time_span': '7m',                       
+    'time_steps': 5,                         
+}                                            
+
+
+deviation from fit->predict settings = {                                                  
+    'channels': {'blue|green|red|nir|swir16|swir22|matseg_0|matseg_1|matseg_2|matseg_3', <ChannelSpec(blue|green|red|nir|swir16|swir22|matseg_0|matseg_1|matseg_2|matseg_3) at 0x7fb
+b0122e8b0>},                                                                                                                                                                        
+    'chip_overlap': {0.3, 0.5},                                                                                                                                                     
+    'max_epoch_length': {1024, None},        
+    'normalize_inputs': {True, 1024},        
+    'num_workers': {'5', '8'},               
+    'test_dataset': {'/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/combo_DILM_nowv_vali.kwcoco.json', '/home/local/KHQ/jon.crall/data/dvc-r
+epos/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/data_nowv_vali.kwcoco.json'},
+    'train_dataset': {'/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/data_nowv_train.kwcoco.json', None},
+    'vali_dataset': {'/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/data_nowv_vali.kwcoco.json', None},
+}                                            
+Init KWCocoVideoDataModule                   
+self.train_kwcoco = None                     
+self.vali_kwcoco = None                      
+self.test_kwcoco = '/home/local/KHQ/jon.crall/data/dvc-repos/smart_watch_dvc/Drop2-Aligned-TA1-2022-02-15/combo_DILM_nowv_vali.kwcoco.json'
+self.time_steps = 5                          
+self.chip_size = 380                         
+self.channels = <ChannelSpec(blue|green|red|nir|swir16|swir22|matseg_0|matseg_1|matseg_2|matseg_3) at 0x7fbb0122e8b0>
+Setup DataModule: stage = 'test'             
+Requesting FileLimit = 8192                  
+ * Before FileLimit: soft=1024, hard=1048576                                              
+ * After FileLimit: soft=8192, hard=1048576                                               
+Build test kwcoco dataset                    
+window_time_dims = 5                         
+sample video regions 0/2... rate=0 Hz, eta=?, total=0:00:00                               
+Sliding window 6/6... rate=43.85 Hz, eta=0:00:00, total=0:00:00                           
+sample video regions 1/2... rate=5.84 Hz, eta=0:00:00, total=0:00:00                      
+Sliding window 9/9... rate=56.52 Hz, eta=0:00:00, total=0:00:00                           
+sample video regions 2/2... rate=5.69 Hz, eta=0:00:00, total=0:00:00                      
+Found 2337 targets                           
+self.torch_datasets = {                      
+    'test': <watch.tasks.fusion.datamodules.kwcoco_video_data.KWCocoVideoDataset object at 0x7fbaff1b7e20>,
+}                                            
+args.gpus = '0,'                             
+devices = [device(type='cuda', index=0)]                                                  
+Predict on device = device(type='cuda', index=0)                                          
+Expected outputs: {'saliency'}               
+/home/local/KHQ/jon.crall/.pyenv/versions/3.9.9/envs/pyenv3.9.9/lib/python3.9/site-packages/apscheduler/util.py:95: PytzUsageWarning: The zone attribute is specific to pytz's inter
+face; please migrate to a new time zone provider. For more details on how to do so, see https://pytz-deprecation-shim.readthedocs.io/en/latest/migration.html
+  if obj.zone == 'local':                    
+/home/local/KHQ/jon.crall/.pyenv/versions/3.9.9/envs/pyenv3.9.9/lib/python3.9/site-packages/apscheduler/triggers/interval.py:66: PytzUsageWarning: The normalize method is no longer
+ necessary, as this time zone supports the fold attribute (PEP 495). For more details on migrating to a PEP 495-compliant implementation, see https://pytz-deprecation-shim.readthed
+ocs.io/en/latest/migration.html              
+  return self.timezone.normalize(next_fire_time)                                          
+predicting    0/2337... rate=0 Hz, eta=?, total=0:00:00Traceback (most recent call last):
+  File "/home/local/KHQ/jon.crall/.pyenv/versions/3.9.9/lib/python3.9/runpy.py", line 197, in _run_module_as_main
+    return _run_code(code, main_globals, None,                                            
+  File "/home/local/KHQ/jon.crall/.pyenv/versions/3.9.9/lib/python3.9/runpy.py", line 87, in _run_code
+    exec(code, run_globals)                  
+  File "/home/local/KHQ/jon.crall/code/watch/watch/tasks/fusion/predict.py", line 969, in <module>
+    main()                                   
+  File "/home/local/KHQ/jon.crall/code/watch/watch/tasks/fusion/predict.py", line 948, in main
+    predict(cmdline=cmdline, **kwargs)       
+  File "/home/local/KHQ/jon.crall/code/watch/watch/tasks/fusion/predict.py", line 520, in predict
+    outputs = method.forward_step(batch, with_loss=False)                                 
+  File "<torch_package_0>.watch/tasks/fusion/methods/channelwise_transformer.py", line 991, in forward_step
+RuntimeError: stack expects a non-empty TensorList                                        
+Exception in thread Thread-1:                
+Traceback (most recent call last):           
+  File "/home/local/KHQ/jon.crall/.pyenv/versions/3.9.9/lib/python3.9/threading.py", line 973, in _bootstrap_inner
+    self.run()                               
+  File "/home/local/KHQ/jon.crall/.pyenv/versions/3.9.9/lib/python3.9/threading.py", line 910, in run
+    self._target(*self._args, **self._kwargs)                                             
+  File "/home/local/KHQ/jon.crall/.pyenv/versions/3.9.9/envs/pyenv3.9.9/lib/python3.9/site-packages/torch/utils/data/_utils/pin_memory.py", line 28, in _pin_memory_loop
+    r = in_queue.get(timeout=MP_STATUS_CHECK_INTERVAL)                                    
+  File "/home/local/KHQ/jon.crall/.pyenv/versions/3.9.9/lib/python3.9/multiprocessing/queues.py", line 122, in get
+    return _ForkingPickler.loads(res)        
+  File "/home/local/KHQ/jon.crall/.pyenv/versions/3.9.9/envs/pyenv3.9.9/lib/python3.9/site-packages/torch/multiprocessing/reductions.py", line 289, in rebuild_storage_fd
+    fd = df.detach()                         
+  File "/home/local/KHQ/jon.crall/.pyenv/versions/3.9.9/lib/python3.9/multiprocessing/resource_sharer.py", line 57, in detach
+    with _resource_sharer.get_connection(self._id) as conn:                               
+  File "/home/local/KHQ/jon.crall/.pyenv/versions/3.9.9/lib/python3.9/multiprocessing/resource_sharer.py", line 86, in get_connection
+    c = Client(address, authkey=process.current_process().authkey)                        
+  File "/home/local/KHQ/jon.crall/.pyenv/versions/3.9.9/lib/python3.9/multiprocessing/connection.py", line 513, in Client
+    answer_challenge(c, authkey)             
+  File "/home/local/KHQ/jon.crall/.pyenv/versions/3.9.9/lib/python3.9/multiprocessing/connection.py", line 762, in answer_challenge
+    response = connection.recv_bytes(256)        # reject large message                   
+  File "/home/local/KHQ/jon.crall/.pyenv/versions/3.9.9/lib/python3.9/multiprocessing/connection.py", line 221, in recv_bytes
+    buf = self._recv_bytes(maxlength)        
+  File "/home/local/KHQ/jon.crall/.pyenv/versions/3.9.9/lib/python3.9/multiprocessing/connection.py", line 419, in _recv_bytes
+    buf = self._recv(4)                      
+  File "/home/local/KHQ/jon.crall/.pyenv/versions/3.9.9/lib/python3.9/multiprocessing/connection.py", line 384, in _recv
+    chunk = read(handle, remaining)          
+ConnectionResetError: [Errno 104] Connection reset by peer                                
+

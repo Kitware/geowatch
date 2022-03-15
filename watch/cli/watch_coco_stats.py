@@ -77,14 +77,17 @@ class WatchCocoStats(scfg.Config):
 
         import math
         all_sensors = sorted(all_sensors)
-        video_sensor_df = pd.DataFrame(video_sensor_rows)
-        piv = video_sensor_df.pivot(index=['name', 'dset'], columns=[], values=all_sensors)
-        piv = piv.sort_index()
-        piv = piv.astype(object)
-        piv = piv.applymap(lambda x: None if math.isnan(x) else int(x))
-        piv['total'] = piv.sum(axis=1)
-        print('Per-Video Sensor Frequency')
-        print(piv.to_string(float_format='%0.0f'))
+        if video_sensor_rows:
+            video_sensor_df = pd.DataFrame(video_sensor_rows)
+            piv = video_sensor_df.pivot(index=['name', 'dset'], columns=[], values=all_sensors)
+            piv = piv.sort_index()
+            piv = piv.astype(object)
+            piv = piv.applymap(lambda x: None if math.isnan(x) else int(x))
+            piv['total'] = piv.sum(axis=1)
+            print('Per-Video Sensor Frequency')
+            print(piv.to_string(float_format='%0.0f'))
+        else:
+            print('No per-video stats')
 
         print('collatables = {}'.format(ub.repr2(collatables, nl=2)))
         summary = pd.DataFrame(collatables)

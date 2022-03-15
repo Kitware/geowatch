@@ -62,7 +62,7 @@ TODO:
     - [ ] Add method for extracting "negative ROIs" that are nearby
         "positive ROIs".
 
-    - [ ] Diagnose and Fix PROJ errors:
+    - [X] Diagnose and Fix PROJ errors:
 
         ```
         ERROR 1: PROJ: proj_create: unrecognized format / unknown name
@@ -83,6 +83,8 @@ from watch.utils import util_gis
 from watch.utils import util_time
 from watch.utils import util_gdal
 from watch.utils import kwcoco_extensions  # NOQA
+
+from tempenv import TemporaryEnvironment  # NOQA
 
 
 try:
@@ -788,6 +790,8 @@ class SimpleDataCube(object):
         from shapely import geometry
         # from watch.utils import util_raster
         from watch.utils import util_gis
+        from shapely.ops import unary_union
+        import shapely
         # import watch
         coco_dset = cube.coco_dset
 
@@ -841,7 +845,7 @@ class SimpleDataCube(object):
         frame_index = 0
 
         # parallelize over images
-        pool = ub.JobPool(mode='thread', max_workers=max_workers)
+        jobs = ub.JobPool(mode='thread', max_workers=max_workers)
 
         sh_space_region_crs84 = space_region.to_shapely()
         space_region_crs84 = gpd.GeoDataFrame(
@@ -926,10 +930,11 @@ class SimpleDataCube(object):
                     # Output a visualization of this group and its overlaps but
                     # only if we have that info
                     can_vis_geos = any(row['geometry'] is not None for row in rows)
+                    if debug_valid_regions:
+                        print('debug_valid_regions = {!r}'.format(debug_valid_regions))
+                        print('can_vis_geos = {!r}'.format(can_vis_geos))
                     if debug_valid_regions and can_vis_geos:
                         import kwplot
-                        from shapely.ops import unary_union
-                        import shapely
                         group_local_df = gpd.GeoDataFrame(rows, crs=local_epsg)
                         print('\n\n')
                         print(group_local_df)
@@ -1015,6 +1020,7 @@ class SimpleDataCube(object):
                                 if __name__ == '__main__':
                                     main()
                                 ''').format(datastr=datastr)
+                            print('write debug_fpath = {!r}'.format(debug_fpath))
                             with open(debug_fpath, 'w') as file:
                                 file.write(debug_text + '\n')
 
@@ -1049,7 +1055,7 @@ class SimpleDataCube(object):
                 # Construct a name for the subregion to extract.
                 name = 'crop_{}_{}_{}_{}'.format(iso_time, space_str, sensor_coarse, num)
 
-                job = pool.submit(
+                job = jobs.submit(
                     extract_image_job,
                     img, anns, bundle_dpath, new_bundle_dpath, name, datetime_,
                     num, frame_index, new_vidid, rpc_align_method,
@@ -1064,7 +1070,7 @@ class SimpleDataCube(object):
 
         sub_new_gids = []
         sub_new_aids = []
-        for job in pool.as_completed(desc='collect extract jobs'):
+        for job in jobs.as_completed(desc='collect extract jobs'):
             new_img, new_anns = job.result()
 
             # Hack, the next ids dont update when new images are added
@@ -1174,8 +1180,21 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
     """
     Threaded worker function for :func:`SimpleDataCube.extract_overlaps`.
     """
-    from watch.utils.kwcoco_extensions import _populate_canvas_obj
-    from watch.utils.kwcoco_extensions import _recompute_auxiliary_transforms
+    # Does this resolve import issues?
+    # with TemporaryEnvironment({'PROJ_LIB': None, 'PROJ_DEBUG': '3'}):
+
+    # Hacks around projdb issue? Seems to force the proj_lib to be set
+    # in some global variable such that we can access it later.
+    # Attempt at MWE in dev/devcheck_coordinate_transform.py but
+    # is not fully working for the thread case yet.
+    # Removing this get will result in
+    #     ```
+    #     ERROR 1: PROJ: proj_create: unrecognized format / unknown name
+    #     ERROR 1: PROJ: proj_create_from_database: Cannot find proj.db
+    #     ```
+    # When the cache is not computed and workers > 0
+    from osgeo import osr
+    osr.GetPROJSearchPaths()
     from kwcoco.coco_image import CocoImage
 
     coco_img = CocoImage(img)
@@ -1259,8 +1278,8 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
             # TODO:
             # We need to remove all spatial metadata from the base image that a
             # crop would invalidate, otherwise we will propogate bad info.
-            _populate_canvas_obj(bundle_dpath, dst,
-                                 overwrite={'warp'}, with_wgs=True)
+            kwcoco_extensions._populate_canvas_obj(
+                bundle_dpath, dst, overwrite={'warp'}, with_wgs=True)
 
     new_gid = start_gid
 
@@ -1289,7 +1308,7 @@ def extract_image_job(img, anns, bundle_dpath, new_bundle_dpath, name,
 
     if len(aux_dst):
         new_img['auxiliary'] = aux_dst
-        _recompute_auxiliary_transforms(new_img)
+        kwcoco_extensions._recompute_auxiliary_transforms(new_img)
 
     carry_over = ub.dict_isect(img, {
         'date_captured',

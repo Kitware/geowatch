@@ -137,6 +137,13 @@ class ResultAnalysis:
         metrics (List[str]):
             only consider these metrics
 
+        abalation_orders (Set[int]):
+            The number of parameters to be held constant in each statistical
+            grouping. Defaults to 1, so it groups together results where 1
+            variable is held constant. Including 2 will include pairwise
+            settings of parameters to be held constant. Using -1 or -2 means
+            all but 1 or 2 parameters will be held constant, repsectively.
+
     Example:
         >>> from watch.utils.result_analysis import *  # NOQA
         >>> self = ResultAnalysis.demo()
@@ -144,7 +151,8 @@ class ResultAnalysis:
     """
 
     def __init__(self, results, metrics=None, ignore_params=None,
-                 ignore_metrics=None, metric_objectives=None):
+                 ignore_metrics=None, metric_objectives=None,
+                 abalation_orders={1}):
         self.results = results
         if ignore_metrics is None:
             ignore_metrics = set()
@@ -152,6 +160,8 @@ class ResultAnalysis:
             ignore_params = set()
         self.ignore_params = ignore_params
         self.ignore_metrics = ignore_metrics
+
+        self.abalation_orders = abalation_orders
 
         # encode if we want to maximize or minimize a metric
         default_metric_to_objective = {
@@ -189,6 +199,8 @@ class ResultAnalysis:
         self.report()
 
     def build(self):
+        import itertools as it
+        import warnings
         if len(self.results) < 2:
             raise Exception('need at least 2 results')
 
@@ -198,11 +210,25 @@ class ResultAnalysis:
         config_rows = [r.params for r in self.results]
         sentinel = object()
         # pd.DataFrame(config_rows).channels
-        varied = ub.varied_values(config_rows, default=sentinel, min_variations=1)
+        varied = dict(ub.varied_values(config_rows, default=sentinel, min_variations=1))
         if self.ignore_params:
             for k in self.ignore_params:
                 varied.pop(k, None)
         self.varied = varied
+
+        # Experimental:
+        # Find Auto-abalation groups
+        # TODO: when the group size is -1, instead of showing all of the group
+        # settings, for each group setting do the k=1 analysis within that
+        # group
+        varied_param_names = list(varied.keys())
+        num_varied_params = len(varied)
+        held_constant_orders = {num_varied_params + i if i < 0 else i for i in self.abalation_orders}
+        held_constant_orders = [i for i in held_constant_orders if i > 0]
+        held_constant_groups = []
+        for k in held_constant_orders:
+            held_constant_groups.extend(
+                list(map(list, it.combinations(varied_param_names, k))))
 
         if self.metrics is None:
             avail_metrics = set.intersection(*[set(r.metrics.keys()) for r in self.results])
@@ -210,18 +236,28 @@ class ResultAnalysis:
 
         # Analyze the impact of each parameter
         self.statistics = statistics = []
-        for param_name in varied.keys():
+        for param_group in held_constant_groups:
             for metric_key in self.metrics:
-                param_values = varied[param_name]
+                # group_values = ub.dict_isect(varied, param_group)
+                for param_value, group in table.groupby(param_group):
+                    metric_group = group[['name', metric_key] + param_group]
+
+        # Analyze the impact of each parameter
+        self.statistics = statistics = []
+        for param_group in held_constant_groups:
+            for metric_key in self.metrics:
+                # param_values = varied[param_name]
+                param_group_name = ','.join(param_group)
+
                 stats_row = {
-                    'param_name': param_name,
-                    'param_values': param_values,
+                    'param_name': param_group_name,
+                    # 'param_values': param_values,
                     'metric': metric_key,
                 }
 
                 objective = self.metric_objectives.get(metric_key, None)
                 if objective is None:
-                    print(f'warning assume ascending for {metric_key=}')
+                    warnings.warn(f'warning assume ascending for {metric_key=}')
                     objective = 'max'
 
                 ascending = objective == 'min'
@@ -230,8 +266,8 @@ class ResultAnalysis:
                 value_to_metric_group = {}
                 value_to_metric_stats = {}
                 value_to_metric = {}
-                for param_value, group in table.groupby(param_name):
-                    metric_group = group[['name', metric_key, param_name]]
+                for param_value, group in table.groupby(param_group):
+                    metric_group = group[['name', metric_key] + param_group]
                     metric_vals = metric_group[metric_key]
                     metric_vals = metric_vals.dropna()
                     metric_stats = metric_vals.describe()
@@ -242,7 +278,7 @@ class ResultAnalysis:
                     #     'min': metric_vals.min(),
                     #     'num': len(metric_vals),
                     # })
-                    metric_stats['best'] = metric_stats[objective]
+                    # metric_stats['best'] = metric_stats[objective]
                     value_to_metric_stats[param_value] = metric_stats
                     value_to_metric_group[param_value] = metric_group
 
@@ -250,7 +286,7 @@ class ResultAnalysis:
 
                 moments = pd.DataFrame(value_to_metric_stats).T
                 moments = moments.sort_values(objective, ascending=ascending)
-                moments.index.name = param_name
+                moments.index.name = param_group_name
                 moments.columns.name = metric_key
 
                 # Determine a set of value pairs to do pairwise comparisons on

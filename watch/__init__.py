@@ -21,8 +21,7 @@ WATCH_HACK_IMPORT_ORDER=variant1 python -X importtime -c "import watch"
 if 1:
     # hack for sanity
     os.environ['KWIMAGE_DISABLE_TRANSFORM_WARNINGS'] = 'True'
-
-    os.environ['PROJ_DEBUG'] = '3'
+    # os.environ['PROJ_DEBUG'] = '3'
 
 WATCH_AUTOHACK_IMPORT_VARIANTS = {
     'variant1': ['geopandas', 'pyproj', 'gdal'],  # align-crs on horologic

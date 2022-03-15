@@ -18,8 +18,15 @@ except Exception:
     profile = ub.identity
 
 
+class MetadataNotFound(Exception):
+    """
+    Thrown when metadata does not exist
+    """
+    pass
+
+
 @profile
-def geotiff_metadata(gpath, elevation='gtop30'):
+def geotiff_metadata(gpath, elevation='gtop30', strict=False):
     """
     Extract all relevant metadata we know how to extract.
 
@@ -58,7 +65,9 @@ def geotiff_metadata(gpath, elevation='gtop30'):
     infos['fname'] = geotiff_filepath_info(gpath)
     try:
         infos['crs'] = geotiff_crs_info(ref, elevation=elevation)
-    except Exception as ex:
+    except MetadataNotFound as ex:
+        if strict:
+            raise
         infos['crs'] = {'crs_error': str(ex)}
     infos['header'] = geotiff_header_info(ref)
 
@@ -253,10 +262,10 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
                 aff_wld_crs_type = 'assume-rpc-wgs84-reverse'
                 aff_geo_transform = (0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
                 if force_affine:
-                    raise Exception(
+                    raise MetadataNotFound(
                         'cant force affine without dataset or gcp ref')
             else:
-                raise Exception('no dataset or gcps refs or rpc')
+                raise MetadataNotFound('no dataset or gcps refs or rpc')
         else:
             # gcp_ids = [p.Id for p in gcps]
             aff_geo_transform = gdal.GCPsToGeoTransform(gcps)
@@ -265,7 +274,7 @@ def geotiff_crs_info(gpath_or_ref, force_affine=False,
             aff_wld_crs = osr.SpatialReference()
             aff_wld_crs.ImportFromWkt(aff_proj)
             aff_wld_crs_type = 'unknown?affine-projection-maybe?'
-            raise NotImplementedError('can this ever happen?')
+            raise AssertionError('can this ever happen?')
         else:
             # mark the aff_wld crs as coming from the dataset
             # is there a better name for this?

@@ -10,6 +10,9 @@ log = logging.getLogger(__name__)
 
 
 class _CocoTorchDataset(torch.utils.data.Dataset):
+    """
+    Base dataset for landcover and depth tasks
+    """
 
     def __init__(self, dset):
         if isinstance(dset, kwcoco.CocoDataset):

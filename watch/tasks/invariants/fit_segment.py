@@ -10,11 +10,10 @@ def main(args):
     if type(args) == dict:
         args = Namespace(**args)
 
-    log_dir = '{}/{}/{}/{}/{}/{}'.format(
+    log_dir = '{}/{}/{}/{}/{}'.format(
         args.save_dir,
         args.dataset,
         'multi_image_segment',
-        'attention_layers_' + str(args.num_attention_layers),
         'position_' + str(args.positional_encoding),
         str(date.today()),
         )
@@ -22,7 +21,6 @@ def main(args):
     logger = TensorBoardLogger(log_dir)
 
     model = segmentation_model(hparams=args)
-    model.save_package()
 
     checkpoint_callback = ModelCheckpoint(monitor='val_epoch_f1', mode='max', save_top_k=1, save_last=True)
     lr_logger = LearningRateMonitor(logging_interval='step')
@@ -78,12 +76,14 @@ if __name__ == '__main__':
     parser.add_argument('--num_channels', type=int, default=6)
     parser.add_argument('--pos_class_weight', type=float, help='Weight on positive class for segmentation. Only used on binary labels.', default=1)
     parser.add_argument('--num_images', type=int, default=2)
-    parser.add_argument('--num_attention_layers', type=int, default=4)
+    parser.add_argument('--attention_layers', type=int, nargs='+', default=[1, 2, 3, 4])
     parser.add_argument('--positional_encoding', action='store_true')
     parser.add_argument('--positional_encoding_mode', type=str, help='addition or concatenation', default='concatenation')
     parser.add_argument('--binary', help='Condense annotations to binary as opposed to site classification. Choose 0 to use classification labels.', type=int, default=1)
-    parser.add_argument('--check_val_every_n_epoch', type=int, default=10)
+    parser.add_argument('--check_val_every_n_epoch', type=int, default=1)
     parser.add_argument('--dataset_style', type=str, default='gridded')
+    parser.add_argument('--ignore_boundary', type=int, default=3)
+    parser.add_argument('--bas', type=int, default=1)
 
     args = parser.parse_args()
     main(args)

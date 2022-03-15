@@ -52,6 +52,10 @@ def grab_landsat_product(product_id=None, demo_index=0):
     SeeAlso:
         watch.gis.geotiff.parse_landsat_product_id
 
+    Ignore:
+        # Use console page for the first data
+        https://console.cloud.google.com/storage/browser/gcp-public-data-landsat/LC08/01/037/029/LC08_L1TP_037029_20130602_20170310_01_T1
+
     TODO:
         - [ ] parametarize scene name / identifier
         - [ ] bundle bands in a single file (gdal VRT?)
@@ -135,7 +139,8 @@ def grab_landsat_product(product_id=None, demo_index=0):
     item_suffixes = sat_code_to_suffixes[sat_code]
 
     # By default cache to the $XDG_CACHE_HOME/smart_watch
-    dset_dpath = ub.ensure_app_cache_dir('smart_watch')
+    # dset_dpath = ub.ensure_app_cache_dir('smart_watch')
+    dset_dpath = ub.ensure_app_cache_dir('watch/demo/landsat')
 
     # Cache the scene using the same path used by google cloud storage
     scene_dpath = ub.ensuredir((dset_dpath, scene_path))
@@ -151,6 +156,17 @@ def grab_landsat_product(product_id=None, demo_index=0):
         uri_suffix = join(scene_path, fname)
         item_uri = join(uri_prefix, uri_suffix)
         fpath = ub.grabdata(item_uri, dpath=scene_dpath)
+
+        stamp = ub.CacheStamp(fname + '.nodata.stamp', depends=[],
+                              dpath=scene_dpath)
+        if stamp.expired():
+            import rasterio
+            # TODO: cache this step
+            with rasterio.open(fpath, 'r+') as img:
+                if img.nodata is None:
+                    img.nodata = 0
+            stamp.renew()
+
         product['bands'].append(fpath)
 
     # Download meta product-items

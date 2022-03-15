@@ -123,14 +123,18 @@ def normalizeRGB(img, percent_range=(2, 98)):
     min_val, max_val = percent_range
 
     img = img.astype(np.float32)
-
     img_dim = len(img.shape)
     if (img_dim < 3):
         img = np.expand_dims(img, axis=2)
 
     for b in range(img.shape[2]):
         img_b = img[:, :, b]
-        min, max = np.percentile(img_b.ravel(), (min_val, max_val))
+        valid_values = img_b[~np.isnan(img_b)]
+
+        if valid_values.size == 0:
+            min = max = 0
+        else:
+            min, max = np.percentile(valid_values, (min_val, max_val))
 
         img[:, :, b] -= min
         if min != max:

@@ -1,7 +1,7 @@
 # Core dependencies needed at runtime that that should install without much issue
 
 # Numeric
-kwarray>=0.5.21
+kwarray>=0.6.0
 numpy>=1.20.0
 scipy>=1.6.3
 shapely>=1.7.1
@@ -46,8 +46,8 @@ fire>=0.4.0
 
 # Imaging
 distinctipy>=1.2.1
-kwimage>=0.8.0
-kwcoco>=0.2.21
+kwimage>=0.8.2
+kwcoco>=0.2.23
 Pillow>=8.0.1
 albumentations>=1.0.0
 scikit_image>=0.18.1

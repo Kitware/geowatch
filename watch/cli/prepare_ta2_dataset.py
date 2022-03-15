@@ -25,30 +25,28 @@ python -m watch.cli.prepare_ta2_dataset \
     --s3_fpath=$S3_FPATH \
     --dvc_dpath=$DVC_DPATH \
     --collated=True \
+    --debug=False --select_images '.id % 1200 == 0'  \
+    --align_workers=0 \
+    --serial=True --run=1
+
+
+DVC_DPATH=$(python -m watch.cli.find_dvc)
+S3_FPATH=s3://kitware-smart-watch-data/processed/ta1/iMERIT_20220120/iMERIT_COMBINED.unique.input
+DATASET_SUFFIX=Drop2-TA1-2022-03-07
+python -m watch.cli.prepare_ta2_dataset \
+    --dataset_suffix=$DATASET_SUFFIX \
+    --s3_fpath=$S3_FPATH \
+    --dvc_dpath=$DVC_DPATH \
+    --collated=False \
+    --align_workers=4 \
     --serial=True --run=0
 
 
-python -m watch.cli.coco_add_watch_fields \
-    --src $INPUT_COCO_FPATH \
-    --dst $INPUT_COCO_FPATH.prepped \
-    --workers 16 \
-    --target_gsd=10
 
-kwcoco subset \
-    --src="$HOME/data/dvc-repos/smart_watch_dvc/Uncropped-Drop2-TA1-2022-02-24/data.kwcoco.json" \
-    --dst="$HOME/data/dvc-repos/smart_watch_dvc/Uncropped-Drop2-TA1-2022-02-24/small_data.kwcoco.json" \
-    --select_images '.id < 20'
 
-AWS_DEFAULT_PROFILE=iarpa python -m watch.cli.coco_align_geotiffs \
-    --src "$HOME/data/dvc-repos/smart_watch_dvc/Uncropped-Drop2-TA1-2022-02-24/small_data.kwcoco.json" \
-    --dst "$HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop2-TA1-2022-02-24/small_data.kwcoco.json" \
-    --regions "$HOME/data/dvc-repos/smart_watch_dvc/annotations/region_models/*.geojson" \
-    --workers="min(avail,max(all/2,8))" \
-    --context_factor=1 \
-    --geo_preprop=auto \
-    --visualize False \
-    --keep img \
-    --rpc_align_method affine_warp
+jq .images[0] $HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop2-TA1-2022-02-24/data.kwcoco_c9ea8bb9.json
+
+kwcoco visualize $HOME/data/dvc-repos/smart_watch_dvc/Aligned-Drop2-TA1-2022-02-24/data.kwcoco_c9ea8bb9.json
 
 """
 
@@ -64,7 +62,14 @@ class PrepareTA2Config(scfg.Config):
         'dvc_dpath': scfg.Value('auto', help=''),
         'run': scfg.Value('0', help=''),
         'collated': scfg.Value(True, help='set to false if the input data is not collated'),
-        'serial': scfg.Value(False, help='if True use serial mode'),
+        'serial': scfg.Value(True, help='if True use serial mode'),
+        'aws_profile': scfg.Value('iarpa', help='AWS profile to use for remote data access'),
+        'align_workers': scfg.Value(0, help='workers for align script'),
+
+        'visualize': scfg.Value(0, help='if True runs visualize'),
+
+        'debug': scfg.Value(False, help='if enabled, turns on debug visualizations'),
+        'select_images': scfg.Value(False, help='if enabled only uses select images')
     }
 
 
@@ -94,6 +99,7 @@ def main(cmdline=False, **kwargs):
         dvc_dpath = watch.find_smart_dvc_dpath()
     dvc_dpath = ub.Path(dvc_dpath)
 
+    aws_profile = config['aws_profile']
     s3_fpath = config['s3_fpath']
 
     aligned_bundle_name = f'Aligned-{config["dataset_suffix"]}'
@@ -131,8 +137,6 @@ def main(cmdline=False, **kwargs):
     # queue = tmux_queue.SerialQueue()
     queue = tmux_queue.TMUXMultiQueue(name='teamfeat', size=1, gres=None)
 
-    aws_profile = 'iarpa'
-
     queue.submit(ub.codeblock(
         f'''
         mkdir -p {uncropped_query_dpath}
@@ -159,10 +163,27 @@ def main(cmdline=False, **kwargs):
         [[ -f {uncropped_kwcoco_fpath} ]] || AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.ta1_stac_to_kwcoco \
             "{uncropped_catalog_fpath}" \
             --outpath="{uncropped_kwcoco_fpath}" \
-            --populate-watch-fields \
             {collated_str} \
             --jobs "min(avail,8)"
         '''))
+
+    select_images_query = config['select_images']
+    if select_images_query:
+        suffix = '_' + ub.hash_data(select_images_query)[0:8]
+        # Debugging
+        small_uncropped_kwcoco_fpath = uncropped_kwcoco_fpath.augment(suffix=suffix)
+        queue.submit(ub.codeblock(
+            rf'''
+            python -m kwcoco subset \
+                --src="{uncropped_kwcoco_fpath}" \
+                --dst="{small_uncropped_kwcoco_fpath}" \
+                --select_images='{select_images_query}'
+            '''))
+
+        uncropped_kwcoco_fpath = small_uncropped_kwcoco_fpath
+        uncropped_prep_kwcoco_fpath = uncropped_prep_kwcoco_fpath.augment(suffix=suffix)
+        aligned_kwcoco_fpath = aligned_kwcoco_fpath.augment(suffix=suffix)
+        # --populate-watch-fields \
 
     queue.submit(ub.codeblock(
         rf'''
@@ -177,17 +198,30 @@ def main(cmdline=False, **kwargs):
 
     # region_model_str = ' '.join([shlex.quote(str(p)) for p in region_models])
 
+    cache_crops = 1
+    if cache_crops:
+        align_keep = 'img'
+    else:
+        align_keep = 'none'
+
+    # align_workers = '"min(avail,max(all/2,8))"'
+    align_workers = config['align_workers']
+
+    debug_valid_regions = config['debug']
+    align_visualize = config['debug']
     queue.submit(ub.codeblock(
         rf'''
-        AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.coco_align_geotiffs \
+        # Crop big images to the geojson regions
+        PROJ_DEBUG=3 AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.coco_align_geotiffs \
             --src "{uncropped_prep_kwcoco_fpath}" \
             --dst "{aligned_kwcoco_fpath}" \
             --regions "{region_dpath / '*.geojson'}" \
-            --workers="min(avail,max(all/2,8))" \
+            --workers={align_workers} \
             --context_factor=1 \
             --geo_preprop=auto \
-            --visualize False \
-            --keep img \
+            --keep={align_keep} \
+            --visualize={align_visualize} \
+            --debug_valid_regions={debug_valid_regions} \
             --rpc_align_method affine_warp
         '''))
 
@@ -196,24 +230,38 @@ def main(cmdline=False, **kwargs):
     # Prepare splits
     # Add baseline datasets to DVC
 
-    '''
-    # Update to whatever the state of the annotations submodule is
-    DVC_DPATH=$HOME/data/dvc-repos/smart_watch_dvc
-    python -m watch project_annotations \
-        --src $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
-        --dst $DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
-        --site_models="$DVC_DPATH/annotations/site_models/*.geojson"
+    if config['visualize']:
+        queue.submit(ub.codeblock(
+            rf'''
+            # Update to whatever the state of the annotations submodule is
+            python -m watch visualize \
+                --src "{aligned_kwcoco_fpath}" \
+                --draw_anns=False \
+                --draw_imgs=True \
+                --channels="red|green|blue" \
+                --animate=True --workers=auto
+            '''))
 
-    DVC_DPATH=$(python -m watch.cli.find_dvc)
-    python -m watch.cli.prepare_splits \
-        --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
-        --run=1 --serial=True
+    if 1:
 
-    dvc add Drop2-Aligned-TA1-2022-02-15/data_*.kwcoco.json
+        site_model_dpath = (dvc_dpath / 'annotations/site_models').shrinkuser(home='$HOME')
 
+        queue.submit(ub.codeblock(
+            rf'''
+            # Update to whatever the state of the annotations submodule is
+            python -m watch project_annotations \
+                --src "{aligned_kwcoco_fpath}" \
+                --dst "{aligned_kwcoco_fpath}" \
+                --site_models="{site_model_dpath}/*.geojson"
+            '''))
 
-
-    '''
+    # queue.submit(ub.codeblock(
+    #     '''
+    #     DVC_DPATH=$(python -m watch.cli.find_dvc)
+    #     python -m watch.cli.prepare_splits \
+    #         --base_fpath=$DVC_DPATH/Drop2-Aligned-TA1-2022-02-15/data.kwcoco.json \
+    #         --run=1 --serial=True
+    #     '''))
 
     queue.rprint()
 
@@ -223,11 +271,11 @@ def main(cmdline=False, **kwargs):
             queue.serial_run()
         else:
             queue.run()
-        if config['follow']:
-            agg_state = queue.monitor()
-        if not config['keep_sessions']:
-            if agg_state is not None and not agg_state['errored']:
-                queue.kill()
+        # if config['follow']:
+        agg_state = queue.monitor()
+        # if not config['keep_sessions']:
+        if agg_state is not None and not agg_state['errored']:
+            queue.kill()
 
 
 # dvc_dpath=$home/data/dvc-repos/smart_watch_dvc
