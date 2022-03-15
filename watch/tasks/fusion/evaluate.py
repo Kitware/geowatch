@@ -30,14 +30,21 @@ except Exception:
 @profile
 def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
                                       true_classes, true_dets, video1=None,
-                                      score_space='video'):
+                                      score_space='video', thresh_bins=None):
     """
     Args:
         true_coco_img (kwcoco.CocoImage): detatched true coco image
+
         pred_coco_img (kwcoco.CocoImage): detatched predicted coco image
+
+        thresh_bins (int): if specified rounds scores into this many bins
+            to make calculating metrics more efficient
     """
     true_gid = true_coco_img.img['id']
     pred_gid = pred_coco_img.img['id']
+
+    if thresh_bins is not None:
+        left_bin_edges = np.linspace(0, 1, thresh_bins)
 
     img1 = true_coco_img.img
 
@@ -117,6 +124,8 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
                     catname_to_true[true_catname] = np.zeros(shape, dtype=np.float32)
                 catname_to_true[true_catname] = true_sseg.fill(catname_to_true[true_catname], value=1)
 
+    thresh_bins
+
     if classes_of_interest:
         try:
             # handle multiclass case
@@ -135,6 +144,12 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
                 weights = class_weights.copy()
                 weights[invalid_mask] = 0
                 score[invalid_mask] = 0
+
+                pred_score = score.ravel()
+                if thresh_bins is not None:
+                    rounded_idx = np.searchsorted(left_bin_edges, pred_score)
+                    pred_score = left_bin_edges[rounded_idx]
+
                 catname_to_prob[cname] = score
                 # pred_score.data.ravel()
                 bin_data = {
@@ -172,9 +187,14 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
             salient_prob[invalid_mask] = 0
             saliency_weights[invalid_mask] = 0
 
+            pred_score = salient_prob.ravel()
+            if thresh_bins is not None:
+                rounded_idx = np.searchsorted(left_bin_edges, pred_score)
+                pred_score = left_bin_edges[rounded_idx]
+
             bin_cfns = BinaryConfusionVectors(kwarray.DataFrameArray({
                 'is_true': true_saliency.ravel(),
-                'pred_score': salient_prob.ravel(),
+                'pred_score': pred_score,
                 'weight': saliency_weights.ravel().astype(np.float32),
             }))
             salient_measures = bin_cfns.measures()
@@ -238,6 +258,7 @@ def _memo_legend(label_to_color):
     return legend_img
 
 
+@profile
 def colorize_class_probs(probs, classes):
     """
     probs = pred_cat_ohe
@@ -289,6 +310,31 @@ def colorize_class_probs(probs, classes):
         layers, keepalpha=False, dtype=canvas_dtype)
 
     return colormask
+
+
+@profile
+def draw_truth_borders(true_dets, canvas, alpha=1.0, color=None):
+    true_sseg = true_dets.data['segmentations']
+    true_cidxs = true_dets.data['class_idxs']
+    _classes = true_dets.data['classes']
+
+    if color is None:
+        _nodes = ub.take(_classes.idx_to_node, true_cidxs)
+        _node_data = ub.take(_classes.graph.nodes, _nodes)
+        _node_colors = [d['color'] for d in _node_data]
+        color = _node_colors
+
+    canvas = kwimage.ensure_float01(canvas)
+    if alpha < 1.0:
+        empty_canvas = np.zeros_like(canvas)
+        overlay_canvas = true_sseg.draw_on(empty_canvas, fill=False,
+                                           border=True, color=color, alpha=1.0)
+        overlay_canvas = kwimage.ensure_alpha_channel(overlay_canvas, alpha=alpha)
+        canvas = kwimage.overlay_alpha_images(overlay_canvas, canvas)
+    else:
+        canvas = true_sseg.draw_on(canvas, fill=False, border=True,
+                                   color=color, alpha=alpha)
+    return canvas
 
 
 @profile
@@ -384,22 +430,6 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
 
             true_dets = info['true_dets']
             true_dets.data['classes'] = full_classes
-
-            def draw_truth_borders(true_dets, canvas, alpha=1.0, color=None):
-                true_sseg = true_dets.data['segmentations']
-                true_cidxs = true_dets.data['class_idxs']
-                _classes = true_dets.data['classes']
-
-                if color is None:
-                    _nodes = ub.take(_classes.idx_to_node, true_cidxs)
-                    _node_data = ub.take(_classes.graph.nodes, _nodes)
-                    _node_colors = [d['color'] for d in _node_data]
-                    color = _node_colors
-
-                canvas = kwimage.ensure_float01(canvas)
-                canvas = true_sseg.draw_on(canvas, fill=False, border=True,
-                                           color=color, alpha=alpha)
-                return canvas
 
             # from watch import heuristics
             pred_classes = kwcoco.CategoryTree.coerce(list(info['catname_to_prob'].keys()))
@@ -665,7 +695,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     video_matches = matches['video']
     image_matches = matches['image']
     rows = []
-    chunk_size = 5
+    chunk_size = 4
     # thresh_bins = 256 * 256
     thresh_bins = 64 * 64
 
@@ -738,7 +768,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
             job = metrics_executor.submit(
                 single_image_segmentation_metrics, pred_coco_img,
                 true_coco_img, true_classes, true_dets, video1,
-                score_space=score_space)
+                score_space=score_space, thresh_bins=thresh_bins)
 
             if len(current_chunk) >= chunk_size:
                 job_chunks.append(current_chunk)
@@ -755,14 +785,14 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         gids2 = image_matches['match_gids2']
 
         for gid1, gid2 in zip(gids1, gids2):
-            pred_coco_img = pred_coco.coco_image(gid1)
-            true_coco_img = true_coco.coco_image(gid2)
+            pred_coco_img = pred_coco.coco_image(gid1).detach()
+            true_coco_img = true_coco.coco_image(gid2).detach()
             true_dets = true_coco.annots(gid=gid1).detections
             video1 = None
             job = metrics_executor.submit(
                 single_image_segmentation_metrics, pred_coco_img,
                 true_coco_img, true_classes, true_dets, video1,
-                score_space=score_space)
+                score_space=score_space, thresh_bins=thresh_bins)
             prog.update()
             job_chunks.append([job])
     else:

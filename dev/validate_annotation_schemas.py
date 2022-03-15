@@ -1,4 +1,7 @@
 """
+CommandLine:
+    python ~/code/watch/dev/validate_annotation_schemas.py
+
 Prereq:
 
     TEST_DPATH=$HOME/tmp/test_smart_schema
@@ -39,6 +42,9 @@ def main():
 
     site_model_fpaths = list(site_model_dpath.glob('*.geojson'))
     region_model_fpaths = list(region_model_dpath.glob('*.geojson'))
+
+    #  hack to remove known invalid site models
+    site_model_fpaths = [s for s in site_model_fpaths if 'Rxxx' not in s.stem]
 
     validate_schemas(site_model_fpaths, region_model_fpaths, site_model_schema,
                      region_model_schema)
