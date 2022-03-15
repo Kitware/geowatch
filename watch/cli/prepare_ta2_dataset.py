@@ -159,6 +159,16 @@ def main(cmdline=False, **kwargs):
     if len(collated_list) != len(s3_fpath_list):
         print('Indicate if each s3 path is collated or not')
 
+    job_environs = [
+        # 'PROJ_DEBUG=3',
+        f'AWS_DEFAULT_PROFILE={aws_profile}',
+    ]
+    if config['requester_pays']:
+        job_environs.append("AWS_REQUEST_PAYER='requester'")
+    job_environ_str = ' '.join(job_environs)
+    if job_environ_str:
+        job_environ_str += ' '
+
     uncropped_coco_paths = []
     for s3_fpath, collated in zip(s3_fpath_list, collated_list):
         s3_name = ub.Path(s3_fpath).name
@@ -217,7 +227,7 @@ def main(cmdline=False, **kwargs):
             cache_prefix = ''
         queue.submit(ub.codeblock(
             rf'''
-            {cache_prefix}AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.ta1_stac_to_kwcoco \
+            {cache_prefix}{job_environ_str}python -m watch.cli.ta1_stac_to_kwcoco \
                 "{uncropped_catalog_fpath}" \
                 --outpath="{uncropped_kwcoco_fpath}" \
                 {convert_options_str} \
@@ -240,7 +250,7 @@ def main(cmdline=False, **kwargs):
         queue.submit(ub.codeblock(
             rf'''
             # COMBINE Uncropped datasets
-            {cache_prefix}python -m kwcoco union \
+            {cache_prefix}{job_environ_str}python -m kwcoco union \
                 --src {uncropped_multi_src_part} \
                 --dst "{uncropped_final_kwcoco_fpath}"
             '''))
@@ -267,15 +277,6 @@ def main(cmdline=False, **kwargs):
         aligned_kwcoco_fpath = aligned_kwcoco_fpath.augment(suffix=suffix)
         # --populate-watch-fields \
 
-    job_environs = [
-        # 'PROJ_DEBUG=3',
-        f'AWS_DEFAULT_PROFILE={aws_profile}',
-    ]
-    if config['requester_pays']:
-        job_environs.append("AWS_REQUEST_PAYER='requester'")
-    job_environ_str = ' '.join(job_environs)
-    if job_environ_str:
-        job_environ_str += ' '
     if config['cache']:
         cache_prefix = '[[ -f {uncropped_prep_kwcoco_fpath} ]] || '
     else:
@@ -283,7 +284,7 @@ def main(cmdline=False, **kwargs):
     queue.submit(ub.codeblock(
         rf'''
         # PREPARE Uncropped datasets (usually for debugging)
-        {job_environ_str}{cache_prefix}AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.coco_add_watch_fields \
+        {cache_prefix}{job_environ_str}AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.coco_add_watch_fields \
             --src "{uncropped_final_kwcoco_fpath}" \
             --dst "{uncropped_prep_kwcoco_fpath}" \
             --workers="{config['fields_workers']}" \
