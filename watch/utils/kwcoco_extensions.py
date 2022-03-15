@@ -147,7 +147,9 @@ def populate_watch_fields(coco_dset, target_gsd=10.0, vidids=None,
     """
     # Load your KW-COCO dataset (conform populates information like image size)
     if conform:
-        coco_dset.conform(pycocotools_info=False)
+        # Note: we will handle imgsize in a later part
+        coco_dset.conform(pycocotools_info=False, workers=workers,
+                          ensure_imgsize=False)
 
     if vidids is None:
         vidids = list(coco_dset.index.videos.keys())
