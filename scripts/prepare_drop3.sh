@@ -17,6 +17,10 @@ python -m watch.cli.prepare_ta2_dataset \
     --dvc_dpath="$DVC_DPATH" \
     --align_workers=4 \
     --aws_profile=iarpa \
+    --fields_workers=0 \
+    --align_workers=0 \
+    --convert_workers=0 \
+    --cache=0 \
     --serial=True --run=0
 
 

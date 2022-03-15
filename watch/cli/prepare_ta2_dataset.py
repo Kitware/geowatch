@@ -140,7 +140,8 @@ def main(cmdline=False, **kwargs):
     uncropped_ingress_dpath = uncropped_dpath / 'ingress'
 
     aligned_kwcoco_bundle = dvc_dpath / aligned_bundle_name
-    aligned_kwcoco_fpath = aligned_kwcoco_bundle / 'data.kwcoco.json'
+    aligned_imgonly_kwcoco_fpath = aligned_kwcoco_bundle / 'imgonly.kwcoco.json'
+    aligned_imganns_kwcoco_fpath = aligned_kwcoco_bundle / 'data.kwcoco.json'
 
     region_dpath = region_dpath.shrinkuser(home='$HOME')
     uncropped_dpath = uncropped_dpath.shrinkuser(home='$HOME')
@@ -149,7 +150,8 @@ def main(cmdline=False, **kwargs):
     uncropped_query_dpath = uncropped_query_dpath.shrinkuser(home='$HOME')
     uncropped_ingress_dpath = uncropped_ingress_dpath.shrinkuser(home='$HOME')
     aligned_kwcoco_bundle = aligned_kwcoco_bundle.shrinkuser(home='$HOME')
-    aligned_kwcoco_fpath = aligned_kwcoco_fpath.shrinkuser(home='$HOME')
+    aligned_imgonly_kwcoco_fpath = aligned_imgonly_kwcoco_fpath.shrinkuser(home='$HOME')
+    aligned_imganns_kwcoco_fpath = aligned_imganns_kwcoco_fpath.shrinkuser(home='$HOME')
 
     # queue = tmux_queue.SerialQueue()
     queue = tmux_queue.TMUXMultiQueue(name='teamfeat', size=1, gres=None)
@@ -170,6 +172,7 @@ def main(cmdline=False, **kwargs):
         job_environ_str += ' '
 
     uncropped_coco_paths = []
+    convert_jobs = []
     for s3_fpath, collated in zip(s3_fpath_list, collated_list):
         s3_name = ub.Path(s3_fpath).name
         uncropped_query_fpath = uncropped_query_dpath / ub.Path(s3_fpath).name
@@ -178,11 +181,8 @@ def main(cmdline=False, **kwargs):
         uncropped_catalog_fpath = uncropped_ingress_dpath / f'catalog_{s3_name}.json'
         uncropped_ingress_dpath = uncropped_ingress_dpath.shrinkuser(home='$HOME')
 
-        if config['cache']:
-            cache_prefix = '[[ -f {uncropped_query_fpath} ]] || '
-        else:
-            cache_prefix = ''
-        queue.submit(ub.codeblock(
+        cache_prefix = '[[ -f {uncropped_query_fpath} ]] || ' if config['cache'] else ''
+        grab_job = queue.submit(ub.codeblock(
             f'''
             # GRAB Input STAC List
             mkdir -p {uncropped_query_dpath}
@@ -196,11 +196,8 @@ def main(cmdline=False, **kwargs):
             ingress_options.append('--requester_pays')
         ingress_options_str = ' '.join(ingress_options)
 
-        if config['cache']:
-            cache_prefix = '[[ -f {uncropped_catalog_fpath} ]] || '
-        else:
-            cache_prefix = ''
-        queue.submit(ub.codeblock(
+        cache_prefix = '[[ -f {uncropped_catalog_fpath} ]] || ' if config['cache'] else ''
+        ingress_job = queue.submit(ub.codeblock(
             rf'''
             {cache_prefix}python -m watch.cli.baseline_framework_ingress \
                 --aws_profile {aws_profile} \
@@ -209,7 +206,7 @@ def main(cmdline=False, **kwargs):
                 --outdir "{uncropped_ingress_dpath}" \
                 --catalog_fpath "{uncropped_catalog_fpath}" \
                 "{uncropped_query_fpath}"
-            '''))
+            '''), depends=[grab_job])
 
         uncropped_kwcoco_fpath = uncropped_dpath / f'data_{s3_name}.kwcoco.json'
         uncropped_kwcoco_fpath = uncropped_kwcoco_fpath.shrinkuser(home='$HOME')
@@ -221,67 +218,64 @@ def main(cmdline=False, **kwargs):
             convert_options.append('--ignore_duplicates')
         convert_options_str = ' '.join(convert_options)
 
-        if config['cache']:
-            cache_prefix = '[[ -f {uncropped_kwcoco_fpath} ]] || '
-        else:
-            cache_prefix = ''
-        queue.submit(ub.codeblock(
+        cache_prefix = '[[ -f {uncropped_kwcoco_fpath} ]] || ' if config['cache'] else ''
+        convert_job = queue.submit(ub.codeblock(
             rf'''
             {cache_prefix}{job_environ_str}python -m watch.cli.ta1_stac_to_kwcoco \
                 "{uncropped_catalog_fpath}" \
                 --outpath="{uncropped_kwcoco_fpath}" \
                 {convert_options_str} \
                 --jobs "{config['convert_workers']}"
-            '''))
+            '''), depends=[ingress_job])
 
         uncropped_coco_paths.append(uncropped_kwcoco_fpath)
+        convert_jobs.append(convert_job)
 
     if len(uncropped_coco_paths) == 1:
         uncropped_final_kwcoco_fpath = uncropped_coco_paths[0]
+        uncropped_final_jobs = convert_jobs
     else:
         union_suffix = ub.hash_data([p.name for p in uncropped_coco_paths])[0:8]
         uncropped_final_kwcoco_fpath = uncropped_dpath / f'data_{union_suffix}.kwcoco.json'
         uncropped_final_kwcoco_fpath = uncropped_final_kwcoco_fpath.shrinkuser(home='$HOME')
         uncropped_multi_src_part = ' '.join(['"{}"'.format(p) for p in uncropped_coco_paths])
-        if config['cache']:
-            cache_prefix = '[[ -f {uncropped_final_kwcoco_fpath} ]] || '
-        else:
-            cache_prefix = ''
-        queue.submit(ub.codeblock(
+        cache_prefix = '[[ -f {uncropped_final_kwcoco_fpath} ]] || ' if config['cache'] else ''
+        union_job = queue.submit(ub.codeblock(
             rf'''
             # COMBINE Uncropped datasets
             {cache_prefix}{job_environ_str}python -m kwcoco union \
                 --src {uncropped_multi_src_part} \
                 --dst "{uncropped_final_kwcoco_fpath}"
-            '''))
+            '''), depends=convert_jobs)
+        uncropped_final_jobs = [union_job]
 
     uncropped_prep_kwcoco_fpath = uncropped_dpath / 'data_prepped.kwcoco.json'
     uncropped_prep_kwcoco_fpath = uncropped_prep_kwcoco_fpath.shrinkuser(home='$HOME')
 
     select_images_query = config['select_images']
+
     if select_images_query:
         suffix = '_' + ub.hash_data(select_images_query)[0:8]
         # Debugging
         small_uncropped_kwcoco_fpath = uncropped_kwcoco_fpath.augment(suffix=suffix)
-        queue.submit(ub.codeblock(
+        subset_job = queue.submit(ub.codeblock(
             rf'''
             # SUBSET Uncropped datasets (usually for debugging)
             python -m kwcoco subset \
                 --src="{uncropped_final_kwcoco_fpath}" \
                 --dst="{small_uncropped_kwcoco_fpath}" \
                 --select_images='{select_images_query}'
-            '''))
-
+            '''), jobs=uncropped_final_jobs)
+        # --populate-watch-fields \
+        add_fields_depends = [subset_job]
         uncropped_final_kwcoco_fpath = small_uncropped_kwcoco_fpath
         uncropped_prep_kwcoco_fpath = uncropped_prep_kwcoco_fpath.augment(suffix=suffix)
-        aligned_kwcoco_fpath = aligned_kwcoco_fpath.augment(suffix=suffix)
-        # --populate-watch-fields \
-
-    if config['cache']:
-        cache_prefix = '[[ -f {uncropped_prep_kwcoco_fpath} ]] || '
+        aligned_imgonly_kwcoco_fpath = aligned_imgonly_kwcoco_fpath.augment(suffix=suffix)
     else:
-        cache_prefix = ''
-    queue.submit(ub.codeblock(
+        add_fields_depends = uncropped_final_jobs
+
+    cache_prefix = '[[ -f {uncropped_prep_kwcoco_fpath} ]] || ' if config['cache'] else ''
+    add_fields_job = queue.submit(ub.codeblock(
         rf'''
         # PREPARE Uncropped datasets (usually for debugging)
         {cache_prefix}{job_environ_str}AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.coco_add_watch_fields \
@@ -291,7 +285,7 @@ def main(cmdline=False, **kwargs):
             --enable_video_stats=False \
             --overwrite=warp \
             --target_gsd=10
-        '''))
+        '''), depends=add_fields_depends)
 
     # region_model_str = ' '.join([shlex.quote(str(p)) for p in region_models])
 
@@ -303,13 +297,13 @@ def main(cmdline=False, **kwargs):
 
     debug_valid_regions = config['debug']
     align_visualize = config['debug']
-    queue.submit(ub.codeblock(
+    align_job = queue.submit(ub.codeblock(
         rf'''
         # MAIN WORKHORSE CROP IMAGES
         # Crop big images to the geojson regions
         {job_environ_str}python -m watch.cli.coco_align_geotiffs \
             --src "{uncropped_prep_kwcoco_fpath}" \
-            --dst "{aligned_kwcoco_fpath}" \
+            --dst "{aligned_imgonly_kwcoco_fpath}" \
             --regions "{region_dpath / '*.geojson'}" \
             --workers={config['align_workers']} \
             --context_factor=1 \
@@ -318,7 +312,7 @@ def main(cmdline=False, **kwargs):
             --visualize={align_visualize} \
             --debug_valid_regions={debug_valid_regions} \
             --rpc_align_method affine_warp
-        '''))
+        '''), depends=[add_fields_job])
 
     # TODO:
     # Project annotation from latest annotations subdir
@@ -330,41 +324,39 @@ def main(cmdline=False, **kwargs):
             rf'''
             # Update to whatever the state of the annotations submodule is
             python -m watch visualize \
-                --src "{aligned_kwcoco_fpath}" \
+                --src "{aligned_imgonly_kwcoco_fpath}" \
                 --draw_anns=False \
                 --draw_imgs=True \
                 --channels="red|green|blue" \
                 --animate=True --workers=auto
-            '''))
+            '''), depends=[align_job])
 
     if 1:
-
         site_model_dpath = (dvc_dpath / 'annotations/site_models').shrinkuser(home='$HOME')
         region_model_dpath = (dvc_dpath / 'annotations/region_models').shrinkuser(home='$HOME')
 
         viz_part = '--viz_dpath=auto' if config['visualize'] else ''
-
-        queue.submit(ub.codeblock(
+        project_anns_job = queue.submit(ub.codeblock(
             rf'''
             # Update to whatever the state of the annotations submodule is
             python -m watch project_annotations \
-                --src "{aligned_kwcoco_fpath}" \
-                --dst "{aligned_kwcoco_fpath}" \
+                --src "{aligned_imgonly_kwcoco_fpath}" \
+                --dst "{aligned_imganns_kwcoco_fpath}" \
                 --site_models="{site_model_dpath}/*.geojson" \
                 --region_models="{region_model_dpath}/*.geojson" {viz_part}
-            '''))
+            '''), depends=[align_job])
 
     if config['visualize']:
         queue.submit(ub.codeblock(
             rf'''
             # Update to whatever the state of the annotations submodule is
             python -m watch visualize \
-                --src "{aligned_kwcoco_fpath}" \
+                --src "{aligned_imganns_kwcoco_fpath}" \
                 --draw_anns=True \
                 --draw_imgs=False \
                 --channels="red|green|blue" \
                 --animate=True --workers=auto
-            '''))
+            '''), depends=[project_anns_job])
 
     # queue.submit(ub.codeblock(
     #     '''
