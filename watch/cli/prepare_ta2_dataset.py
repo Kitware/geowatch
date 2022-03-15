@@ -267,18 +267,23 @@ def main(cmdline=False, **kwargs):
         aligned_kwcoco_fpath = aligned_kwcoco_fpath.augment(suffix=suffix)
         # --populate-watch-fields \
 
+    job_environs = [
+        # 'PROJ_DEBUG=3',
+        f'AWS_DEFAULT_PROFILE={aws_profile}',
+    ]
+    if config['requester_pays']:
+        job_environs.append("AWS_REQUEST_PAYER='requester'")
+    job_environ_str = ' '.join(job_environs)
+    if job_environ_str:
+        job_environ_str += ' '
     if config['cache']:
         cache_prefix = '[[ -f {uncropped_prep_kwcoco_fpath} ]] || '
     else:
         cache_prefix = ''
-    if config['requester_pays']:
-        requester_pays_str = "AWS_REQUEST_PAYER='requester'"
-    else:
-        requester_pays_str = ''
     queue.submit(ub.codeblock(
         rf'''
         # PREPARE Uncropped datasets (usually for debugging)
-        {requester_pays_str} {cache_prefix}AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.coco_add_watch_fields \
+        {job_environ_str}{cache_prefix}AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.coco_add_watch_fields \
             --src "{uncropped_final_kwcoco_fpath}" \
             --dst "{uncropped_prep_kwcoco_fpath}" \
             --workers="{config['fields_workers']}" \
@@ -297,20 +302,11 @@ def main(cmdline=False, **kwargs):
 
     debug_valid_regions = config['debug']
     align_visualize = config['debug']
-    # PROJ_DEBUG=3
-    job_environ_str = ' '.join([
-        # 'PROJ_DEBUG=3',
-        f'AWS_DEFAULT_PROFILE={aws_profile}',
-    ])
-    if config['requester_pays']:
-        job_environ_str.append(" AWS_REQUEST_PAYER='requester'")
-    if job_environ_str:
-        job_environ_str += ' '
     queue.submit(ub.codeblock(
         rf'''
         # MAIN WORKHORSE CROP IMAGES
         # Crop big images to the geojson regions
-        {job_environ_str} python -m watch.cli.coco_align_geotiffs \
+        {job_environ_str}python -m watch.cli.coco_align_geotiffs \
             --src "{uncropped_prep_kwcoco_fpath}" \
             --dst "{aligned_kwcoco_fpath}" \
             --regions "{region_dpath / '*.geojson'}" \
