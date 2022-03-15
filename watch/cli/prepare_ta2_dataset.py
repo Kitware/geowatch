@@ -88,7 +88,9 @@ class PrepareTA2Config(scfg.Config):
         'requester_pays': scfg.Value(0, help='if True, turn on requester_pays in ingress'),
 
         'debug': scfg.Value(False, help='if enabled, turns on debug visualizations'),
-        'select_images': scfg.Value(False, help='if enabled only uses select images')
+        'select_images': scfg.Value(False, help='if enabled only uses select images'),
+
+        'cache': scfg.Value(1, help='if enabled check cache'),
     }
 
 
@@ -161,11 +163,15 @@ def main(cmdline=False, **kwargs):
         uncropped_catalog_fpath = uncropped_ingress_dpath / f'catalog_{s3_name}.json'
         uncropped_ingress_dpath = uncropped_ingress_dpath.shrinkuser(home='$HOME')
 
+        if config['cache']:
+            cache_prefix = '[[ -f {uncropped_query_fpath} ]] || '
+        else:
+            cache_prefix = ''
         queue.submit(ub.codeblock(
             f'''
             # GRAB Input STAC List
             mkdir -p {uncropped_query_dpath}
-            [[ -f {uncropped_query_fpath} ]] || aws s3 --profile {aws_profile} cp "{s3_fpath}" "{uncropped_query_dpath}"
+            {cache_prefix}aws s3 --profile {aws_profile} cp "{s3_fpath}" "{uncropped_query_dpath}"
             '''))
 
         ingress_options = [
@@ -175,9 +181,13 @@ def main(cmdline=False, **kwargs):
             ingress_options.append('--requester_pays')
         ingress_options_str = ' '.join(ingress_options)
 
+        if config['cache']:
+            cache_prefix = '[[ -f {uncropped_catalog_fpath} ]] || '
+        else:
+            cache_prefix = ''
         queue.submit(ub.codeblock(
             rf'''
-            [[ -f {uncropped_catalog_fpath} ]] || python -m watch.cli.baseline_framework_ingress \
+            {cache_prefix}python -m watch.cli.baseline_framework_ingress \
                 --aws_profile {aws_profile} \
                 --jobs avail \
                 {ingress_options_str} \
@@ -196,9 +206,13 @@ def main(cmdline=False, **kwargs):
             convert_options.append('--ignore-duplicates')
         convert_options_str = ' '.join(convert_options)
 
+        if config['cache']:
+            cache_prefix = '[[ -f {uncropped_kwcoco_fpath} ]] || '
+        else:
+            cache_prefix = ''
         queue.submit(ub.codeblock(
             rf'''
-            [[ -f {uncropped_kwcoco_fpath} ]] || AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.ta1_stac_to_kwcoco \
+            {cache_prefix}AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.ta1_stac_to_kwcoco \
                 "{uncropped_catalog_fpath}" \
                 --outpath="{uncropped_kwcoco_fpath}" \
                 {convert_options_str} \
@@ -214,10 +228,14 @@ def main(cmdline=False, **kwargs):
         uncropped_final_kwcoco_fpath = uncropped_dpath / f'data_{union_suffix}.kwcoco.json'
         uncropped_final_kwcoco_fpath = uncropped_final_kwcoco_fpath.shrinkuser(home='$HOME')
         uncropped_multi_src_part = ' '.join(['"{}"'.format(p) for p in uncropped_coco_paths])
+        if config['cache']:
+            cache_prefix = '[[ -f {uncropped_final_kwcoco_fpath} ]] || '
+        else:
+            cache_prefix = ''
         queue.submit(ub.codeblock(
             rf'''
             # COMBINE Uncropped datasets
-            [[ -f {uncropped_final_kwcoco_fpath} ]] || python -m kwcoco union \
+            {cache_prefix}python -m kwcoco union \
                 --src {uncropped_multi_src_part} \
                 --dst "{uncropped_final_kwcoco_fpath}" \
                 --workers="min(avail,max(all/2,8))" \
@@ -248,10 +266,14 @@ def main(cmdline=False, **kwargs):
         aligned_kwcoco_fpath = aligned_kwcoco_fpath.augment(suffix=suffix)
         # --populate-watch-fields \
 
+    if config['cache']:
+        cache_prefix = '[[ -f {uncropped_prep_kwcoco_fpath} ]] || '
+    else:
+        cache_prefix = ''
     queue.submit(ub.codeblock(
         rf'''
         # PREPARE Uncropped datasets (usually for debugging)
-        [[ -f {uncropped_prep_kwcoco_fpath} ]] || AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.coco_add_watch_fields \
+        {cache_prefix}AWS_DEFAULT_PROFILE={aws_profile} python -m watch.cli.coco_add_watch_fields \
             --src "{uncropped_final_kwcoco_fpath}" \
             --dst "{uncropped_prep_kwcoco_fpath}" \
             --workers="min(avail,max(all/2,8))" \
