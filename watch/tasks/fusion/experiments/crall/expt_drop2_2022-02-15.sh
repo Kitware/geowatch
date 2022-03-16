@@ -38,6 +38,21 @@ repackage_checkpoints_and_evaluate(){
         --train_dpath="$DVC_DPATH/training/$HOSTNAME/$USER/$DATASET_CODE" \
         --mode=commit
 
+    # Note: change backend to tmux if slurm is not installed
+    DVC_DPATH=$(python -m watch.cli.find_dvc)
+    DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
+    EXPT_GROUP_CODE=eval3_candidates
+    KWCOCO_BUNDLE_DPATH=$DVC_DPATH/$DATASET_CODE
+    VALI_FPATH=$KWCOCO_BUNDLE_DPATH/combo_DILM_nowv_vali.kwcoco.json
+    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
+            --gpus="0,1" \
+            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
+            --test_dataset="$VALI_FPATH" \
+            --run=1 --skip_existing=True --backend=slurm 
+
+    #####
+    # Alternative invocations : only schedule prediction, then evaluate independently
+    #####
 
     DVC_DPATH=$(python -m watch.cli.find_dvc)
     DATASET_CODE=Drop2-Aligned-TA1-2022-02-15
@@ -48,23 +63,7 @@ repackage_checkpoints_and_evaluate(){
             --gpus="0,1" \
             --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
             --test_dataset="$VALI_FPATH" \
-            --run=1 --skip_existing=True --backend=slurm --enable_eval=False
-
-
-    #####
-    # Alternative invocation: only schedule prediction, then evaluate independently
-    #####
-    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="0,1" \
-            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
-            --test_dataset="$VALI_FPATH" \
-            --run=1 --skip_existing=True --backend=slurm --enable_eval=False
-
-    python -m watch.tasks.fusion.schedule_evaluation schedule_evaluation \
-            --gpus="0,1" \
-            --model_globstr="$DVC_DPATH/models/fusion/$EXPT_GROUP_CODE/packages/*/*.pt" \
-            --test_dataset="$VALI_FPATH" \
-            --run=0 --skip_existing=0 --backend=tmux --enable_pred=False
+            --run=0 --skip_existing=0 --backend=slurm --enable_pred=False
     
 }
 
@@ -77,6 +76,7 @@ aggregate_multiple_evaluations(){
     "
 
     DVC_DPATH=$(python -m watch.cli.find_dvc)
+    EXPT_GROUP_CODE=eval3_candidates
     EXPT_NAME_PAT="*"
     #EXPT_NAME_PAT="BOTH_TA1_COMBO_TINY_p2w_raw*"
     MODEL_EPOCH_PAT="*"
@@ -86,8 +86,8 @@ aggregate_multiple_evaluations(){
 
     python -m watch.tasks.fusion.gather_results \
         --measure_globstr="$MEASURE_GLOBSTR" \
-        --out_dpath="$DVC_DPATH/agg_results/$MEASURE_GLOBSTR" \
-        --dset_group_key="*_vali.kwcoco" --show=True
+        --out_dpath="$DVC_DPATH/agg_results/$EXPT_GROUP_CODE" \
+        --dset_group_key="*" --show=True
 }
 
 

@@ -34,7 +34,7 @@ CommandLine:
 
     python -m watch.tasks.fusion.gather_results \
         --measure_globstr="$MEASURE_GLOBSTR" \
-        --out_dpath="$DVC_DPATH/agg_results/$MEASURE_GLOBSTR" \
+        --out_dpath="$DVC_DPATH/agg_results/" \
         --dset_group_key="*_vali.kwcoco" --show=True
 """
 import json
@@ -505,17 +505,30 @@ def gather_measures(cmdline=False, **kwargs):
         measure_fpaths = util_path.coerce_patterned_paths(measure_globstr)
 
     measure_fpaths = [ub.Path(p) for p in measure_fpaths]
-    # HACK: relies on directory structure
-    # dset_groups = ub.group_items(
-    #     measure_fpaths,
-    #     lambda x: x.parent.parent.parent.name
-    # )
-    dset_groups = ub.group_items(
-        measure_fpaths,
-        lambda x: x.parent.parent.parent.parent.name
-    )
 
-    measure_fpaths[0].parent.parent.parent.parent
+    # FIXME
+    # HACK: relies on directory structure
+    HACK = 'EVAL2'
+    HACK = 'EVAL3'
+    if HACK == 'EVAL2':
+        dset_groups = ub.group_items(
+            measure_fpaths,
+            lambda x: x.parent.parent.parent.name
+        )
+    elif HACK == 'EVAL3':
+        dset_groups = ub.group_items(
+            measure_fpaths,
+            lambda x: x.parent.parent.parent.parent.name
+        )
+    else:
+        raise NotImplementedError('fixme')
+    # measure_fpaths[0].parent.parent.parent.parent
+
+    # dset_glob = config['dset_glob']
+    # dset_glob = ''
+    # measure_fpaths
+    # import xdev
+    # xdev.embed()
 
     print('dset_groups = {}'.format(ub.repr2(dset_groups, nl=2)))
 
@@ -524,43 +537,11 @@ def gather_measures(cmdline=False, **kwargs):
     print('TODO: need to choose exactly 1 or a compatible set of them')
     print('predict_group_freq = {}'.format(ub.repr2(predict_group_freq, nl=1)))
 
-    # measure_fpaths = dset_groups['combo_train_US_R001_small_nowv.kwcoco']
-    # measure_fpaths = dset_groups['combo_vali_nowv.kwcoco']
-    # measure_fpaths = dset_groups['combo_DILM_nowv_vali.kwcoco']
-
-    # dataset_key = 'Drop1-Aligned-TA1-2022-01_vali_data_nowv.kwcoco'
-    # dataset_key = 'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco'
-    # dataset_key = 'combo_DILM.kwcoco_vali'
-    # dataset_key = 'Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco'
-
-    # TODO: this makes this script non-portable. Need to parameterize
-
-    # dataset_key = 'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco'
-    # dataset_keys = [
-
-    #     # 'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco',
-    #     # 'Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco',
-    #     # 'Drop1-Aligned-TA1-2022-01_vali_data_nowv.kwcoco',
-    #     # 'Drop1-Aligned-L1-2022-01_vali_data_nowv.kwcoco',
-    #     # 'Drop1-Aligned-L1-2022-01_combo_DILM_nowv_vali.kwcoco'
-    #     # 'Drop1-Aligned-TA1-2022-01_vali_data_nowv.kwcoco',
-    #     # 'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco',
-
-    #     # 'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco',
-    #     'Drop2-Aligned-TA1-2022-01_combo_L_nowv_vali.kwcoco',
-    #     # 'Drop2-Aligned-TA1-2022-01_combo_L_nowv.kwcoco',
-    # ]
-
     dset_group_key = util_pattern.MultiPattern.coerce(
         config['dset_group_key'], hint='glob')
     dataset_keys = [k for k in dset_groups.keys()
                     if dset_group_key.match(k)]
-
-    # dataset_key = 'combo_vali_nowv.kwcoco'
-
     measure_fpaths = list(ub.flatten([dset_groups[k] for k in dataset_keys]))
-    # dataset_key = 'Drop2-Aligned-TA1-2022-01_data_nowv_vali.kwcoco'
-    # measure_fpaths = dset_groups[dataset_key]
 
     print(len(measure_fpaths))
     # dataset_to_evals = ub.group_items(eval_dpaths, lambda x: x.parent.name)

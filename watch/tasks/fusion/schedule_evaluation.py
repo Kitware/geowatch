@@ -338,6 +338,11 @@ def schedule_evaluation(cmdline=False, **kwargs):
         print('has_eval = {!r}'.format(has_eval))
         print('has_pred = {!r}'.format(has_pred))
 
+        # import ubelt as ub
+        # ub.util_hash._HASHABLE_EXTENSIONS.register(pathlib.Path)( lambda x: (b'PATH', str))
+        # import os
+        name_suffix = '_' + ub.hash_data(str(package_fpath))[0:8]
+
         pred_job = None
         if with_pred:
             pred_command = ub.codeblock(
@@ -359,12 +364,15 @@ def schedule_evaluation(cmdline=False, **kwargs):
             if not recompute_pred:
                 # Only run the command if its expected output does not exist
                 pred_command = (
-                    '[[ -f "{pred_dataset}" ]] || '.format(**suggestions) +
+                    'test -f "{pred_dataset}" || '.format(**suggestions) +
                     pred_command
                 )
             if recompute_pred or not (skip_existing and (has_pred or has_eval)):
                 if not has_eval:
-                    pred_job = queue.submit(pred_command, gpus=1, cpus=workers_per_queue)
+                    name = 'pred' + name_suffix
+                    from math import ceil
+                    # FIXME: slurm cpu arg seems to be cut in half
+                    pred_job = queue.submit(pred_command, gpus=1, name=name, cpus=int(ceil(workers_per_queue / 2)))
 
         if with_eval:
             if not with_pred:
@@ -387,12 +395,13 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 # TODO: use a real stamp file
                 # Only run the command if its expected output does not exist
                 eval_command = (
-                    '[[ -f "{eval_metrics}" ]] || '.format(**suggestions) +
+                    'test -f "{eval_metrics}" || '.format(**suggestions) +
                     eval_command
                 )
             if recompute_eval or not (skip_existing and has_eval):
-                print('queue.submit = {!r}'.format(queue.submit))
-                queue.submit(eval_command, depends=pred_job, cpus=6)   # TODO: memory
+                name = 'eval' + name_suffix
+                queue.submit(eval_command, depends=pred_job, name=name, cpus=1)
+            # TODO: memory
 
     print('queue = {!r}'.format(queue))
     # print(f'{len(queue)=}')

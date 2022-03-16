@@ -167,8 +167,8 @@ class MultiPattern(PatternBase, ub.NiceRepr):
     def match(self, text):
         return self.predicate(p.match(text) for p in self.patterns)
 
-    def search(self, text):
-        return self.predicate(p.search(text) for p in self.patterns)
+    # def search(self, text):
+    #     return self.predicate(p.search(text) for p in self.patterns)
 
     def _squeeze(self):
         if self.predicate in {any, all}:

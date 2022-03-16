@@ -8,6 +8,10 @@ Notes:
     See git@github.com:Erotemic/local.git init/setup_slurm.sh
     Or ~/local/init/setup_slurm.sh in my local checkout
 
+    SUBMIT COMMANDS WILL USE /bin/sh by default, not sure how to fix that
+    properly. There are workarounds though.
+
+
 CommandLine:
    xdoctest -m watch.utils.slurm_queue __doc__
 
@@ -280,7 +284,10 @@ class SlurmQueue:
         import pandas as pd
         jobid_history = set()
 
+        num_at_start = None
+
         def update_status_table():
+            nonlocal num_at_start
             # https://rich.readthedocs.io/en/stable/live.html
             info = ub.cmd('squeue --format="%i %P %j %u %t %M %D %R"')
             stream = io.StringIO(info['out'])
@@ -289,9 +296,12 @@ class SlurmQueue:
 
             num_running = (df['ST'] == 'R').sum()
             num_in_queue = len(df)
-            num_total = len(jobid_history)
+            total_monitored = len(jobid_history)
 
-            table = Table(*['num_running', 'num_in_queue', 'total_monitored'],
+            if num_at_start is None:
+                num_at_start = len(df)
+
+            table = Table(*['num_running', 'num_in_queue', 'total_monitored', 'num_at_start'],
                           title='slurm-monitor')
 
             # TODO: determine if slurm has accounting on, and if we can
@@ -300,7 +310,8 @@ class SlurmQueue:
             table.add_row(
                 f'{num_running}',
                 f'{num_in_queue}',
-                f'{num_total}'
+                f'{total_monitored}',
+                f'{num_at_start}',
             )
 
             finished = (num_in_queue == 0)

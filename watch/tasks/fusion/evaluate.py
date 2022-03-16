@@ -847,30 +847,40 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                 '''))
     prog.end()
 
-    import rich
-    import rich.progress
-    progress = rich.progress.Progress(
-        "[progress.description]{task.description}",
-        rich.progress.BarColumn(),
-        rich.progress.MofNCompleteColumn(),
-        # "[progress.percentage]{task.percentage:>3.0f}%",
-        rich.progress.TimeRemainingColumn(),
-        rich.progress.TimeElapsedColumn(),
-    )
-    if 1:
-    # with progress:
+    num_jobs = sum(map(len, job_chunks))
 
-        num_jobs = sum(map(len, job_chunks))
+    RICH_PROG = 0
+    if RICH_PROG:
+        import rich
+        import rich.progress
+        progress = rich.progress.Progress(
+            "[progress.description]{task.description}",
+            rich.progress.BarColumn(),
+            rich.progress.MofNCompleteColumn(),
+            # "[progress.percentage]{task.percentage:>3.0f}%",
+            rich.progress.TimeRemainingColumn(),
+            rich.progress.TimeElapsedColumn(),
+        )
+    else:
+        score_prog = ub.ProgIter(desc='Scoring',  total=num_jobs)
+        num_draw_finished = 1
+        progress = score_prog  # Hack
 
-        score_task = progress.add_task("[cyan] Scoring...", total=num_jobs)
-        if draw_heatmaps:
-            draw_task = progress.add_task("[green] Drawing...", total=len(job_chunks))
+    with progress:
+        if RICH_PROG:
+            score_task = progress.add_task("[cyan] Scoring...", total=num_jobs)
+            if draw_heatmaps:
+                draw_task = progress.add_task("[green] Drawing...", total=len(job_chunks))
 
         for job_chunk in job_chunks:
             chunk_info = []
             for job in job_chunk:
                 info = job.result()
-                progress.update(score_task, advance=1)
+
+                if RICH_PROG:
+                    progress.update(score_task, advance=1)
+                else:
+                    score_prog.update(1)
                 rows.append(info['row'])
 
                 class_measures = info.get('class_measures', None)
@@ -898,7 +908,12 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
                 for draw_job in draw_jobs:
                     if draw_job.done():
                         draw_job.result()
-                        progress.update(draw_task, advance=1)
+                        if RICH_PROG:
+                            progress.update(draw_task, advance=1)
+                        else:
+                            num_draw_finished += 1
+                            score_prog.set_extra(f'Drawing : {num_draw_finished}')
+                            pass
                     else:
                         remaining_draw_jobs.append(draw_job)
                 draw_job = None
@@ -922,7 +937,12 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
             while draw_jobs:
                 job = draw_jobs.pop()
                 job.result()
-                progress.update(draw_task, advance=1)
+                if RICH_PROG:
+                    progress.update(draw_task, advance=1)
+                else:
+                    # draw_prog.update()
+                    num_draw_finished += 1
+                    score_prog.set_extra(f'Drawing : {num_draw_finished}')
             draw_executor.shutdown()
 
     # Finalize all of the aggregated measures
