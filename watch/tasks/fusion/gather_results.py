@@ -777,7 +777,8 @@ def plot_summary_over_epochs(y, mean_df, dataset_title_part):
 def plot_individual_class_curves(all_results, dataset_title_part, catname, fnum, metric='ap'):
     from kwcoco.metrics import drawing
     import kwplot
-    max_num_curves = 16
+    # max_num_curves = 16
+    max_num_curves = 32
     max_per_expt = None
     max_per_expt = 10
     fig = kwplot.figure(fnum=fnum, doclf=True)
@@ -835,7 +836,8 @@ def plot_individual_class_curves(all_results, dataset_title_part, catname, fnum,
 def plot_individual_salient_curves(all_results, dataset_title_part, fnum, metric='ap'):
     from kwcoco.metrics import drawing
     import kwplot
-    max_num_curves = 16
+    max_num_curves = 32
+    # max_num_curves = 16
     max_per_expt = None
     max_per_expt = 10
     fig = kwplot.figure(fnum=fnum, doclf=True)

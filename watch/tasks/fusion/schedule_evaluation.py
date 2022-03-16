@@ -370,9 +370,11 @@ def schedule_evaluation(cmdline=False, **kwargs):
             if recompute_pred or not (skip_existing and (has_pred or has_eval)):
                 if not has_eval:
                     name = 'pred' + name_suffix
-                    from math import ceil
+                    # from math import ceil
                     # FIXME: slurm cpu arg seems to be cut in half
-                    pred_job = queue.submit(pred_command, gpus=1, name=name, cpus=int(ceil(workers_per_queue / 2)))
+                    # int(ceil(workers_per_queue / 2))
+                    pred_cpus = workers_per_queue
+                    pred_job = queue.submit(pred_command, gpus=1, name=name, cpus=pred_cpus)
 
         if with_eval:
             if not with_pred:
@@ -389,7 +391,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                       --score_space=video \
                       --draw_curves=1 \
                       --draw_heatmaps=1 \
-                      --workers=0
+                      --workers=2
                 ''').format(**suggestions)
             if not recompute_eval:
                 # TODO: use a real stamp file
@@ -400,7 +402,7 @@ def schedule_evaluation(cmdline=False, **kwargs):
                 )
             if recompute_eval or not (skip_existing and has_eval):
                 name = 'eval' + name_suffix
-                queue.submit(eval_command, depends=pred_job, name=name, cpus=1)
+                queue.submit(eval_command, depends=pred_job, name=name, cpus=2)
             # TODO: memory
 
     print('queue = {!r}'.format(queue))
