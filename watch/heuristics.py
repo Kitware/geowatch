@@ -250,7 +250,9 @@ CATEGORIES_UNSCORED = [c for c in CATEGORIES if not c.get('scored', False)]
 # UNDISTINGUISHED_CLASSES =  {c['name'] for c in CATEGORIES if 'saliency' in c.get('tags', {})}
 IGNORE_CLASSNAMES = {'ignore', 'Unknown'}
 BACKGROUND_CLASSES = {'background'}
+NEGATIVE_CLASSES = {'negative'}
 UNDISTINGUISHED_CLASSES =  {'positive'}
+CONTEXT_CLASSES = {'No Activity', 'Post Construction'}
 # 'background',
 # 'No Activity',
 # 'Post Construction',

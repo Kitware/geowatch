@@ -48,6 +48,8 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
             left_bin_edges = np.linspace(0, 1, thresh_bins)
         else:
             left_bin_edges = thresh_bins
+    else:
+        left_bin_edges = None
 
     img1 = true_coco_img.img
 
@@ -75,32 +77,40 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
     ignore_classes = heuristics.IGNORE_CLASSNAMES
     background_classes = heuristics.BACKGROUND_CLASSES
     undistinguished_classes = heuristics.UNDISTINGUISHED_CLASSES
+    context_classes = heuristics.CONTEXT_CLASSES
+    negative_classes = heuristics.NEGATIVE_CLASSES
+    # HACK! FIXME: There needs to be a clear definition of what classes are
+    # scored and which are not.
+    background_classes = background_classes | negative_classes
+    """
+    The above heuristics should roughtly be:
+
+        * ignore_classes - ignore, Unknown
+        * background_classes - background, negative
+        * undistinguished_classes - positive
+        * context_classes - No Activity Post Construction
+
+        inferred:
+
+        * class_scored_classes - Site Preperation, Active Construction
+        * salient_scored_classes - positive, Site Preperation, Active Construction
+    """
 
     # Determine what true/predicted categories are in common
     predicted_classes = []
     for stream in pred_coco_img.channels.streams():
         have = stream.intersection(true_classes)
         predicted_classes.extend(have.parsed)
+
     classes_of_interest = ub.oset(predicted_classes) - (
-        background_classes | ignore_classes | undistinguished_classes)
+        negative_classes | background_classes | ignore_classes |
+        undistinguished_classes)
 
     # Determine if saliency has been predicted
     salient_class = 'salient'
     has_saliency = salient_class in pred_coco_img.channels
 
-    # Create a truth "panoptic segmentation" style mask
-
-    # Truth for saliency-task
-    true_saliency = np.zeros(shape, dtype=np.uint8)
-    saliency_weights = np.ones(shape, dtype=np.float32)
-
-    # Truth for class-task
-    catname_to_true: Dict[str, np.ndarray] = {
-        catname: np.zeros(shape, dtype=np.float32)
-        for catname in classes_of_interest
-    }
-    class_weights = np.ones(shape, dtype=np.float32)
-
+    # Load ground truth annotations
     if score_space == 'video':
         warp_img_to_vid = kwimage.Affine.coerce(
             true_coco_img.img['warp_img_to_vid'])
@@ -108,24 +118,56 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
     true_cidxs = true_dets.data['class_idxs']
     true_ssegs = true_dets.data['segmentations']
     true_catnames = list(ub.take(true_dets.classes.idx_to_node, true_cidxs))
-
     info['true_dets'] = true_dets
 
-    for true_sseg, true_catname in zip(true_ssegs, true_catnames):
-        if true_catname in background_classes:
-            pass
-        elif true_catname in ignore_classes:
-            # "classless" foreground binary problem
-            saliency_weights = true_sseg.fill(saliency_weights, value=0)
-        else:
-            true_saliency = true_sseg.fill(true_saliency, value=1)
-            if true_catname in undistinguished_classes:
-                # Ignore for class scores, but not saliency / foreground
-                class_weights = true_sseg.fill(class_weights, value=0)
-            else:
-                if true_catname not in catname_to_true:
-                    catname_to_true[true_catname] = np.zeros(shape, dtype=np.float32)
-                catname_to_true[true_catname] = true_sseg.fill(catname_to_true[true_catname], value=1)
+    # NOTE: The exact definition of how we build the "truth" segmentation mask
+    # is up for debate. I think this is a reasonable definition, but this needs
+    # to be reviewed. It also likely needs updating to become general and
+    # remove the need for heuristics.
+
+    # We might need to:
+    #     * add in a per-category weight canvas. This lets us say we can ignore
+    #     clas A when scoring class B. Is there an example where this is
+    #     relevant?
+
+    # Does negative get moved to the background or scored?
+    # Currently I'm just moving it to the background
+
+    # How do we distinguish that
+
+    # Create a truth "panoptic segmentation" style mask for each task
+    if has_saliency:
+        # Truth for saliency-task
+        true_saliency = np.zeros(shape, dtype=np.uint8)
+        saliency_weights = np.ones(shape, dtype=np.float32)
+        for true_sseg, true_catname in zip(true_ssegs, true_catnames):
+            if true_catname not in background_classes:
+                if true_catname in ignore_classes:
+                    # background should be background
+                    saliency_weights = true_sseg.fill(saliency_weights, value=0)
+                elif true_catname in context_classes:
+                    # Ignore context classes in saliency
+                    # Ignore no-activity and post-construction, ignore, and Unknown
+                    saliency_weights = true_sseg.fill(saliency_weights, value=0)
+                else:
+                    # Score positive, site prep, and active construction.
+                    true_saliency = true_sseg.fill(true_saliency, value=1)
+
+    if classes_of_interest:
+        # Truth for class-task
+        catname_to_true: Dict[str, np.ndarray] = {
+            catname: np.zeros(shape, dtype=np.float32)
+            for catname in classes_of_interest
+        }
+        class_weights = np.ones(shape, dtype=np.float32)
+        for true_sseg, true_catname in zip(true_ssegs, true_catnames):
+            if true_catname not in background_classes:
+                if true_catname in ignore_classes:
+                    class_weights = true_sseg.fill(class_weights, value=0)
+                elif true_catname in undistinguished_classes:
+                    class_weights = true_sseg.fill(class_weights, value=0)
+                else:
+                    catname_to_true[true_catname] = true_sseg.fill(catname_to_true[true_catname], value=1)
 
     if classes_of_interest:
         try:
@@ -147,12 +189,12 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
                 score[invalid_mask] = 0
 
                 pred_score = score.ravel()
-                if thresh_bins is not None:
+                if left_bin_edges is not None:
+                    # round scores down to the nearest bin
                     rounded_idx = np.searchsorted(left_bin_edges, pred_score)
                     pred_score = left_bin_edges[rounded_idx]
 
                 catname_to_prob[cname] = score
-                # pred_score.data.ravel()
                 bin_data = {
                     # is_true denotes if the true class of the item is the
                     # category of interest.
@@ -163,8 +205,8 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
                 bin_data = kwarray.DataFrameArray(bin_data)
                 bin_cfsn = BinaryConfusionVectors(bin_data, cx, classes_of_interest)
                 # TODO: use me?
-                bin_measures = bin_cfsn.measures()
-                bin_measures.summary()
+                # bin_measures = bin_cfsn.measures()
+                # bin_measures.summary()
                 cx_to_binvecs[cname] = bin_cfsn
             ovr_cfns = OneVsRestConfusionVectors(cx_to_binvecs, classes_of_interest)
             class_measures = ovr_cfns.measures()
@@ -189,7 +231,7 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
             saliency_weights[invalid_mask] = 0
 
             pred_score = salient_prob.ravel()
-            if thresh_bins is not None:
+            if left_bin_edges is not None:
                 rounded_idx = np.searchsorted(left_bin_edges, pred_score)
                 pred_score = left_bin_edges[rounded_idx]
 
@@ -217,7 +259,7 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
             if 1:
                 maximized_info = salient_measures.maximized_thresholds()
 
-                # NOTE: This cherry-picks a threshold!
+                # This cherry-picks a threshold per image!
                 cherry_picked_thresh = maximized_info['f1']['thresh']
                 pred_saliency = salient_prob > cherry_picked_thresh
 
@@ -236,19 +278,15 @@ def single_image_segmentation_metrics(pred_coco_img, true_coco_img,
 
     # TODO: look at the category ranking at each pixel by score.
     # Is there a generalization of a confusion matrix to a ranking tensor?
-
     # if 0:
     #     # TODO: Reintroduce hard-polygon segmentation scoring?
-
     #     # Score hard-threshold predicted annotations
-
     #     # SCORE PREDICTED ANNOTATIONS
     #     # Create a pred "panoptic segmentation" style mask
     #     pred_saliency = np.zeros(shape, dtype=np.uint8)
     #     pred_dets = pred_coco.annots(gid=gid2).detections
     #     for pred_sseg in pred_dets.data['segmentations']:
     #         pred_saliency = pred_sseg.fill(pred_saliency, value=1)
-
     return info
 
 
@@ -327,6 +365,7 @@ def draw_truth_borders(true_dets, canvas, alpha=1.0, color=None):
 
     canvas = kwimage.ensure_float01(canvas)
     if alpha < 1.0:
+        # remove this condition when kwimage 0.8.3 is released always take else
         empty_canvas = np.zeros_like(canvas, shape=(canvas.shape[0:2] + (4,)))
         overlay_canvas = true_sseg.draw_on(empty_canvas, fill=False,
                                            border=True, color=color, alpha=1.0)
@@ -696,7 +735,7 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
     video_matches = matches['video']
     image_matches = matches['image']
     rows = []
-    chunk_size = 4
+    chunk_size = 5
     # thresh_bins = 256 * 256
     thresh_bins = 64 * 64
     # thresh_bins = np.linspace(0, 1, 64 * 64)
@@ -818,7 +857,8 @@ def evaluate_segmentations(true_coco, pred_coco, eval_dpath=None,
         rich.progress.TimeRemainingColumn(),
         rich.progress.TimeElapsedColumn(),
     )
-    with progress:
+    if 1:
+    # with progress:
 
         num_jobs = sum(map(len, job_chunks))
 

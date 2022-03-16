@@ -487,9 +487,9 @@ def gather_measures(cmdline=False, **kwargs):
             remote_dpath = ub.Path(ub.shrinkuser(dvc_dpath, home=ub.expandpath(f'$HOME/remote/{remote}')))
             dvc_dpath = remote_dpath
     """
-    import watch
     from watch.utils import result_analysis
     from watch.utils import util_path
+    from watch.utils import util_pattern
     import matplotlib as mpl
 
     config = GatherResultsConfig(cmdline=cmdline, data=kwargs)
@@ -501,20 +501,22 @@ def gather_measures(cmdline=False, **kwargs):
     # TODO: high level results for a model should be serialized to DVC
     if measure_globstr is None:
         raise ValueError('Must specify a coercable glob pattern to locate the measures2.json files')
-        # model_dpath = ub.Path(dvc_dpath) / 'models/fusion/unevaluated-activity-2021-11-12'
-        # model_dpath = fusion_model_dpath / 'unevaluated-activity-2021-11-12'
-        # fusion_model_dpath = dvc_dpath / 'models/fusion/'
-        # model_dpath = fusion_model_dpath / 'SC-20201117'
-        # measure_fpaths = list(model_dpath.glob('eval_links/*/curves/measures2.json'))
-        dvc_dpath = watch.find_smart_dvc_dpath()
-        measure_globstr = 'models/fusion/SC-20201117/*/*/*/eval/curves/measures2.json'
-        measure_fpaths = list(dvc_dpath.glob(measure_globstr))
     else:
         measure_fpaths = util_path.coerce_patterned_paths(measure_globstr)
 
     measure_fpaths = [ub.Path(p) for p in measure_fpaths]
+    # HACK: relies on directory structure
+    # dset_groups = ub.group_items(
+    #     measure_fpaths,
+    #     lambda x: x.parent.parent.parent.name
+    # )
+    dset_groups = ub.group_items(
+        measure_fpaths,
+        lambda x: x.parent.parent.parent.parent.name
+    )
 
-    dset_groups = ub.group_items(measure_fpaths, lambda x: x.parent.parent.parent.name)
+    measure_fpaths[0].parent.parent.parent.parent
+
     print('dset_groups = {}'.format(ub.repr2(dset_groups, nl=2)))
 
     predict_group_freq = ub.map_vals(len, dset_groups)
@@ -549,14 +551,10 @@ def gather_measures(cmdline=False, **kwargs):
     #     # 'Drop2-Aligned-TA1-2022-01_combo_L_nowv.kwcoco',
     # ]
 
-    # import
-    # TODO: xdev pattern
-    dset_group_key = config['dset_group_key']
-    import fnmatch
-    dataset_keys = []
-    for k in dset_groups.keys():
-        if fnmatch.fnmatch(k, dset_group_key):
-            dataset_keys.append(k)
+    dset_group_key = util_pattern.MultiPattern.coerce(
+        config['dset_group_key'], hint='glob')
+    dataset_keys = [k for k in dset_groups.keys()
+                    if dset_group_key.match(k)]
 
     # dataset_key = 'combo_vali_nowv.kwcoco'
 

@@ -1,5 +1,8 @@
 """
 An encapsulation of regex and glob (and maybe other) patterns.
+
+TODO:
+    rectify with xdev / whatever package this goes in
 """
 
 import re
@@ -13,9 +16,39 @@ else:
     RE_Pattern = type(re.compile('.*'))
 
 
-class Pattern(ub.NiceRepr):
+class PatternBase:
+
+    def match(self, text):
+        raise NotImplementedError
+
+    def search(self, text):
+        raise NotImplementedError
+
+    def sub(self, repl, text):
+        raise NotImplementedError
+
+
+class Pattern(PatternBase, ub.NiceRepr):
     """
+    Provides a common API to several common pattern matching syntaxes.
+
     A general patterns class, which can be strict, regex, or glob.
+
+    Args:
+        pattern (str | object):
+            The pattern text or a precompiled backend pattern object
+
+        backend (str):
+            Code indicating what backend the pattern text should be
+            interpereted with. Current modes are: strict, regex, and glob.
+
+    Notes:
+        The glob backend uses the :module:`fnmatch` module [fnmatch_docs]_.
+        The regex backend uses the Python :module:`re` module.
+        The strict backend uses the "==" string equality testing.
+
+    References:
+        ..[fnmatch_docs] https://docs.python.org/3/library/fnmatch.html
 
     Example:
         >>> from watch.utils.util_pattern import *  # NOQA
@@ -25,31 +58,18 @@ class Pattern(ub.NiceRepr):
         >>> globpat = Pattern.coerce('foo*', 'glob')
         >>> assert globpat.match('foobar')
         >>> assert not globpat.match('barfoo')
+        >>> globpat = Pattern.coerce('[foo|bar]', 'glob')
+        >>> globpat.match('foo')
     """
     def __init__(self, pattern, backend):
-        if backend == 'regex' and isinstance(pattern, str):
-            pattern = re.compile(pattern)
+        if backend == 'regex':
+            if isinstance(pattern, str):
+                pattern = re.compile(pattern)
         self.pattern = pattern
         self.backend = backend
 
     def __nice__(self):
         return '{}, {}'.format(self.pattern, self.backend)
-
-    @classmethod
-    def coerce(cls, data, hint='glob'):
-        """
-        from xdev.search_replace import *  # NOQA
-        pat = Pattern.coerce('foo*', 'glob')
-        pat2 = Pattern.coerce(pat, 'regex')
-        print('pat = {}'.format(ub.repr2(pat, nl=1)))
-        print('pat2 = {}'.format(ub.repr2(pat2, nl=1)))
-        """
-        if isinstance(data, cls) or type(data).__name__ == cls.__name__:
-            self = data
-        else:
-            backend = cls.coerce_backend(data, hint=hint)
-            self = cls(data, backend)
-        return self
 
     @classmethod
     def from_regex(cls, data, flags=0, multiline=False, dotall=False,
@@ -110,3 +130,84 @@ class Pattern(ub.NiceRepr):
             return text.replace(self.pattern, repl)
         else:
             raise KeyError(self.backend)
+
+    @classmethod
+    def coerce(cls, data, hint='glob'):
+        """
+        Example:
+            >>> from watch.utils.util_pattern import *  # NOQA
+            >>> pat = Pattern.coerce('foo*', 'glob')
+            >>> pat2 = Pattern.coerce(pat, 'regex')
+            >>> print('pat = {}'.format(ub.repr2(pat, nl=1)))
+            >>> print('pat2 = {}'.format(ub.repr2(pat2, nl=1)))
+
+            Pattern.coerce(['a', 'b', 'c'])
+        """
+        if isinstance(data, cls) or type(data).__name__ == cls.__name__:
+            self = data
+        else:
+            # string
+            backend = cls.coerce_backend(data, hint=hint)
+            self = cls(data, backend)
+        return self
+
+
+class MultiPattern(PatternBase, ub.NiceRepr):
+    """
+    Example:
+        MultiPattern.coerce(['.*', 'fds*'])
+    """
+    def __init__(self, patterns, predicate):
+        self.predicate = predicate
+        self.patterns = patterns
+
+    def __nice__(self):
+        return f'{self.predicate.__name__}({[str(p) for p in self.patterns]})'
+
+    def match(self, text):
+        return self.predicate(p.match(text) for p in self.patterns)
+
+    def search(self, text):
+        return self.predicate(p.search(text) for p in self.patterns)
+
+    def _squeeze(self):
+        if self.predicate in {any, all}:
+            if len(self.patterns) == 1:
+                new = self.patterns[0]
+            else:
+                new = self
+        else:
+            raise NotImplementedError
+        return new
+
+    @classmethod
+    def coerce(cls, data, hint='glob', predicate='any'):
+        """
+        Example:
+            >>> from watch.utils.util_pattern import *  # NOQA
+            >>> pat = MultiPattern.coerce('foo*', 'glob')
+            >>> pat2 = MultiPattern.coerce(pat, 'regex')
+            >>> pat3 = MultiPattern.coerce([pat, pat], 'regex')
+            >>> print('pat = {}'.format(ub.repr2(pat, nl=1)))
+            >>> print('pat2 = {}'.format(ub.repr2(pat2, nl=1)))
+            >>> print('pat3 = {!r}'.format(pat3))
+
+            Pattern.coerce(['a', 'b', 'c'])
+        """
+        if isinstance(data, cls) or type(data).__name__ == cls.__name__:
+            self = data
+        else:
+            # coerce predicate
+            if predicate == 'any':
+                predicate = any
+            else:
+                raise NotImplementedError
+            if isinstance(data, str):
+                backend = Pattern.coerce_backend(data, hint=hint)
+                pat = Pattern.coerce(data, backend)
+                patterns = [pat]
+                self = MultiPattern(patterns, predicate)
+            else:
+                self = MultiPattern([
+                    MultiPattern.coerce(d, hint)._squeeze() for d in data], predicate)
+        return self
