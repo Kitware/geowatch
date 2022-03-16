@@ -364,6 +364,7 @@ def convert_to_cog(input_filepath, resampling='AVERAGE'):
                     '-q',  # quiet
                     '-of', 'cog',
                     '-co', 'COMPRESS=DEFLATE',
+                    '-co', 'BIGTIFF=IF_SAFER',
                     '-co', 'BLOCKSIZE=256',
                     '-co', 'OVERVIEW_RESAMPLING={}'.format(resampling.upper()),
                     '--config', 'GDAL_TIFF_OVR_BLOCKSIZE', '128'], check=True)
