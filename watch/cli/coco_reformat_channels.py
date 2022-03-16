@@ -235,7 +235,8 @@ def schedule_quantization():
     dvc_dpath = watch.find_smart_dvc_dpath()
     dvc_dpath / 'models/fusion/eval3_candidates/pred'
 
-    pred_globpat = dvc_dpath / 'models/fusion/Drop2-Aligned-TA1-2022-02-15/*/*/*/pred.kwcoco.json'
+    pred_globpat = dvc_dpath / 'models/fusion/eval3_candidates/pred/*/*/*/*/pred.kwcoco.json'
+    # pred_globpat = dvc_dpath / 'models/fusion/Drop2-Aligned-TA1-2022-02-15/*/*/*/pred.kwcoco.json'
 
     import glob
     pred_fpaths = glob.glob(str(pred_globpat))

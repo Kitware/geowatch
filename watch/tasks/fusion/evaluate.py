@@ -623,7 +623,7 @@ def dump_chunked_confusion(full_classes, true_coco_imgs, chunk_info,
 
     heatmap_dpath = ub.Path(str(heatmap_dpath))
     vid_plot_dpath = (heatmap_dpath / vidname_part).ensuredir()
-    plot_fpath = vid_plot_dpath / (plot_fstem + '.png')
+    plot_fpath = vid_plot_dpath / (plot_fstem + '.jpg')
     kwimage.imwrite(str(plot_fpath), plot_canvas)
 
 

@@ -1034,11 +1034,11 @@ class MultimodalTransformer(pl.LightningModule):
 
         for item in batch:
             probs, item_loss_parts, item_truths = self.forward_item(item, with_loss=with_loss)
-            with xdev.embed_on_exception_context:
-                if with_loss:
-                    item_losses.append(item_loss_parts)
-                    for k, v in batch_head_truths.items():
-                        v.append(item_truths[k])
+            # with xdev.embed_on_exception_context:
+            if with_loss:
+                item_losses.append(item_loss_parts)
+                for k, v in batch_head_truths.items():
+                    v.append(item_truths[k])
             # Append the item result to the batch outputs
             for k, v in probs.items():
                 batch_head_probs[k].append(v)
@@ -1153,14 +1153,23 @@ class MultimodalTransformer(pl.LightningModule):
                     'sensor': sensor,
                 })
 
-        # if 1 and __debug__:
-        #     print(nh.data.collate._debug_inbatch_shapes(tokenized))
-
         _tokens = torch.concat(tokenized, dim=0)
-        tokens = _tokens[None, None, None, None, ...]
-        # TODO: maybe make the encoder return a sequence of 1 less?
-        # Rather than just ignoring the first output?
-        encoded_tokens = self.encoder(tokens)[0, 0, 0, 0]
+
+        HACK_FOR_OLD_WEIGHTS = 1
+        if HACK_FOR_OLD_WEIGHTS:
+            # The encoder does seem to be making use of the fact that we can
+            # put space and modality on different dimensions
+            num_time_modes = len(recon_info)
+            input_feat_dim = _tokens.shape[-1]
+            tokens = _tokens.view(1, 1, num_time_modes, 1, -1, input_feat_dim)
+            encoded_tokens = self.encoder(tokens)
+            enc_feat_dim = encoded_tokens.shape[-1]
+            encoded_tokens = encoded_tokens.view(-1, enc_feat_dim)
+        else:
+            tokens = _tokens[None, None, None, None, ...]
+            # TODO: maybe make the encoder return a sequence of 1 less?
+            # Rather than just ignoring the first output?
+            encoded_tokens = self.encoder(tokens)[0, 0, 0, 0]
 
         token_split_points = np.cumsum([t.shape[0] for t in tokenized])
         token_split_sizes = np.diff(np.r_[[0], token_split_points]).tolist()

@@ -419,6 +419,11 @@ def predict(cmdline=False, **kwargs):
         head_keep_classes = list(ub.take(head_classes, head_keep_idxs))
         chan_code = '|'.join(head_keep_classes)
         task_keep_indices[task_name] = head_keep_idxs
+        print('task_name = {!r}'.format(task_name))
+        print('head_classes = {!r}'.format(head_classes))
+        print('head_keep_classes = {!r}'.format(head_keep_classes))
+        print('chan_code = {!r}'.format(chan_code))
+        print('head_keep_idxs = {!r}'.format(head_keep_idxs))
         stitch_managers[task_name] = CocoStitchingManager(
             result_dataset,
             chan_code=chan_code,
@@ -444,8 +449,12 @@ def predict(cmdline=False, **kwargs):
             if catname not in ignore_classes]
         head_keep_classes = list(ub.take(head_classes, head_keep_idxs))
         task_keep_indices[task_name] = head_keep_idxs
-
         chan_code = '|'.join(list(head_keep_classes))
+        print('task_name = {!r}'.format(task_name))
+        print('head_classes = {!r}'.format(head_classes))
+        print('head_keep_classes = {!r}'.format(head_keep_classes))
+        print('chan_code = {!r}'.format(chan_code))
+        print('head_keep_idxs = {!r}'.format(head_keep_idxs))
         stitch_managers[task_name] = CocoStitchingManager(
             result_dataset,
             chan_code=chan_code,
@@ -465,6 +474,11 @@ def predict(cmdline=False, **kwargs):
         head_keep_classes = list(ub.take(head_classes, head_keep_idxs))
         task_keep_indices[task_name] = head_keep_idxs
         chan_code = '|'.join(head_keep_classes)
+        print('task_name = {!r}'.format(task_name))
+        print('head_classes = {!r}'.format(head_classes))
+        print('head_keep_classes = {!r}'.format(head_keep_classes))
+        print('chan_code = {!r}'.format(chan_code))
+        print('head_keep_idxs = {!r}'.format(head_keep_idxs))
         stitch_managers[task_name] = CocoStitchingManager(
             result_dataset,
             chan_code=chan_code,
@@ -545,6 +559,12 @@ def predict(cmdline=False, **kwargs):
                     frame['modes'] = filtered_modes
                     filtered_frames.append(frame)
                 item['frames'] = filtered_frames
+
+            # self = method
+            # with_loss = 0
+            # item = batch[0]
+            # import xdev
+            # xdev.embed()
 
             # Predict on the batch
             outputs = method.forward_step(batch, with_loss=False)
@@ -825,9 +845,9 @@ class CocoStitchingManager(object):
             stitch_weights = subweights
         else:
             # Normal case
-            stitch_slice = subslice
-            stitch_data = subdata
-            stitch_weights = subweights
+            stitch_slice = space_slice
+            stitch_data = data
+            stitch_weights = weights
 
         # Handle stitching nan values
         invalid_output_mask = np.isnan(stitch_data)
