@@ -556,7 +556,6 @@ def normalize_phases(coco_dset,
     #
     # Fixup phase prediction
     #
-    # import xdev; xdev.embed()
 
     # TODO do something with transition preds for phases which were altered
     FIXUP_TRANSITION_PRED = 0
